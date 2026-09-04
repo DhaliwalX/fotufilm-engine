@@ -818,36 +818,8 @@ public:
 
             Expr grain = clump;
             if (use_discs) {
-                // The Boolean path carries its own dependence on density — the covered fraction is
-                // what fluctuates — so it takes no modulation of its own. What it does take is the
-                // relation between the two: the model's premise is that opaque grains hide one
-                // another, so coverage follows Nutting rather than tracking density linearly, and
-                // the fluctuation in covered area is worth `1 / ((1 - a) ln 10)` in density. Both
-                // ends of that were missing, and together they are what makes the path saturate
-                // where the film is dense instead of going quiet there.
-                Expr disc_radius = configuration_(FOTUFILM_CONFIG_GRAIN_DISC_RADIUS);
-                Expr fog = configuration_(FOTUFILM_CONFIG_GRAIN_FOG + c);
-                Expr own_coverage = nutting_coverage(amount * range + fog);
-                // The field shared between layers is taken at the green record's coverage so that
-                // it is one field for all three and the stated correlation survives; on a
-                // monochrome stock, where the correlation is forced to one, all three records
-                // carry that density anyway.
-                Expr green_base = Expr(FOTUFILM_CONFIG_CURVES + 6);
-                Expr green_net = Halide::clamp(
-                    density(x, y, 1) - configuration_(green_base), 0.0f,
-                    film_curve_range(configuration_, 1));
-                Expr green_coverage = nutting_coverage(
-                    green_net + configuration_(FOTUFILM_CONFIG_GRAIN_FOG + 1));
-                Expr disc = configuration_(FOTUFILM_CONFIG_GRAIN_DISC + c)
-                    * nutting_density_gain(own_coverage)
-                    * grain_mix(configuration_,
-                                boolean_coverage(x + origin_x_, y + origin_y_,
-                                                 own_coverage,
-                                                 disc_radius, seed_, c),
-                                boolean_coverage(x + origin_x_, y + origin_y_,
-                                                 green_coverage,
-                                                 disc_radius, seed_,
-                                                 Expr(kGrainSharedLayer)));
+                Expr disc = disc_grain(configuration_, density, amount * range,
+                                       x, y, c, origin_x_, origin_y_, seed_);
                 grain = Halide::select(grain_mode_ != 0, disc, clump);
             }
             output(x, y, c) = density(x, y, c) + grain;

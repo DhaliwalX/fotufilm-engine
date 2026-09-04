@@ -6,5 +6,11 @@
 <p>Source builds run without activation and contain synthetic negative, monochrome, and reversal film examples and analytic print receivers. The demo image is a generated color chart.</p>
 <p>Persisted print-medium identifiers are retained for format compatibility; source builds display them as <strong>Example Photo Print</strong> or <strong>Example Projection</strong> variants. Those variants use analytic receiver curves with different contrast.</p>
 <p>Run <code>resolve/build.sh --test</code> for the OFX harness and <code>finalcut/build.sh --test</code> for the FxPlug harness. Building the actual Final Cut plugin requires the separately installed Apple FxPlug SDK.</p>
+<h2>Resolve controls</h2>
+<p>The inspector groups controls under Setup, Film, Exposure &amp; Colour, Lens &amp; Filters, Development, Grain, Halation, Colour Separation, and Output. <strong>Resolved Format</strong>, <strong>Resolved Medium</strong>, and <strong>Effective Renderer</strong> show the choices in use.</p>
+<p><strong>Film Frame Coverage (%)</strong> changes how much of the film frame is used. <strong>Grain Animation</strong> can follow the timeline or stay frozen; <strong>Grain Seed</strong> makes the pattern repeatable. <strong>Mottle</strong> controls coarse grain clumping, and <strong>Return Spectrum</strong> adjusts halation across seven wavelength bands. Controls are disabled when the film or pipeline stage cannot use them.</p>
+<p>Use <strong>Render Mode</strong> to choose Realtime or Reference rendering. Disc grain requires a silver-image stock and Reference rendering. Match development settings across split Negative Only and Print Only nodes, including <strong>Long Exposure (s)</strong>.</p>
+<p>Resolve and Final Cut fit finished prints to narrower timeline color primaries before encoding them. Colors already inside the target gamut stay unchanged. Density data and Texture Only output are not treated as finished prints.</p>
+<p>See the <a href="../resolve/README.md">Resolve guide</a> and <a href="../finalcut/README.md">Final Cut guide</a> for installation and setup.</p>
 <p><a href="support.html">Build support</a> · <a href="../README.md">Repository guide</a></p>
 </body></html>

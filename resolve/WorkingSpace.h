@@ -38,8 +38,34 @@ struct Transform {
     float toWorking[9];
     float fromWorking[9];
     float fromScene[9];
+    /// CIE Y weights for the host's own primaries — row two of its RGB-to-XYZ matrix. The gamut
+    /// fit holds this quantity constant, so it has to be the destination's luminance and not the
+    /// delivery basis's.
+    float luminance[3];
 };
 Transform transformFor(Encoding encoding);
+
+/// Whether a finished print delivered into this encoding can land outside it.
+///
+/// The print comes back in Display P3. An encoding whose primaries enclose P3 — every wide-gamut
+/// and log space here — can hold any colour the print makes, and needs no fit. Rec.709's primaries
+/// do not enclose P3, so a saturated print colour lands outside the container even though it is
+/// well inside the print's own range.
+bool deliveryLeavesGamut(Encoding encoding);
+
+/// Pulls one linear RGB pixel, already in the host's primaries, back inside the host's gamut
+/// without moving its luminance. In-gamut pixels are returned untouched, bit for bit.
+///
+/// A warm highlight a colour paper can actually make lands above 1.0 in red once it is expressed
+/// in Rec.709 primaries: inside the print's range, outside the container's. Clipping it flattens
+/// the highlight and breaks its hue. A per-channel shoulder would bound it, but it also darkens
+/// every value under the knee — including the paper white the print's whole scale is anchored on —
+/// and it cannot tell a colour that is merely out of gamut from a transparency highlight that is
+/// deliberately above white. Holding luminance and moving the colour toward the neutral axis by
+/// the least amount that fits separates the two: below white the excursion is a gamut problem and
+/// gets fixed, at and above white there is no in-gamut colour to move to and the pixel is left as
+/// the print made it, for the host to do what it will with a level it cannot hold.
+void fitToGamut(const float *luminance, float *pixel);
 
 /// Decodes one channel to scene-linear, and encodes it back.
 float toLinear(Encoding encoding, float value);
@@ -50,8 +76,11 @@ float fromLinear(Encoding encoding, float value);
 /// non-finite alpha with one; false reports that at least one repair was made.
 bool decodeRow(Encoding encoding, const Transform &transform,
                float *pixels, int count);
+/// `fitGamut` runs `fitToGamut` between the matrix and the transfer. Ask for it on a finished
+/// print bound for a container that cannot hold the print's gamut, and only there: scene-basis
+/// texture output and density output are not display colour and must pass through untouched.
 void encodeRow(Encoding encoding, const Transform &transform,
-               float *pixels, int count);
+               float *pixels, int count, bool fitGamut = false);
 
 /// What one decode pass noticed on the way past.
 struct DecodeReport {
@@ -74,7 +103,8 @@ DecodeReport decodePixels(Encoding encoding, const Transform &transform,
 /// encode, and optional re-premultiplication. Alpha is copied through untouched. `in` and `out`
 /// may be the same pointer; they may not otherwise overlap.
 void encodePixels(Encoding encoding, const Transform &transform,
-                  const float *in, float *out, int count, bool premultiplied);
+                  const float *in, float *out, int count, bool premultiplied,
+                  bool fitGamut = false);
 
 /// Coefficient form of `encodePixels` for the engine kernel, avoiding one GPU branch per colour space.
 ///

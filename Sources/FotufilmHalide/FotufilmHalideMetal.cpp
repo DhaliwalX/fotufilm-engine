@@ -1106,6 +1106,8 @@ public:
             feature_mask & FOTUFILM_FRAME_COUPLER_DIFFUSION;
         const bool use_adjacency = feature_mask & FOTUFILM_FRAME_ADJACENCY;
         const bool use_grain = feature_mask & FOTUFILM_FRAME_GRAIN;
+        const bool use_discs = use_grain && !realtime_
+            && (feature_mask & FOTUFILM_FRAME_DISC_GRAIN);
         const bool monochrome = feature_mask & FOTUFILM_FRAME_MONOCHROME;
 
         Var x("x"), y("y"), channel("channel");
@@ -2061,7 +2063,14 @@ public:
                 clump = clump + configuration_(FOTUFILM_CONFIG_MOTTLE + channel)
                     * modulation * mottle_field(x, y, layer);
             }
-            grained(x, y, channel) = density(x, y, channel) + clump;
+            Expr grain = clump;
+            if (use_discs) {
+                Expr disc = disc_grain(configuration_, density, amount * range,
+                                       x, y, channel, origin_x_, origin_y_, seed_);
+                grain = Halide::select(
+                    configuration_(FOTUFILM_CONFIG_GRAIN_MODE) != 0.0f, disc, clump);
+            }
+            grained(x, y, channel) = density(x, y, channel) + grain;
             developed = grained;
         }
 

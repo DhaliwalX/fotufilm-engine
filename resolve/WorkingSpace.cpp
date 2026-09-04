@@ -1,5 +1,6 @@
 #include "WorkingSpace.h"
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 
@@ -260,7 +261,77 @@ Transform transformFor(Encoding encoding) {
         result.fromWorking[i] = static_cast<float>(fromWorking[i]);
         result.fromScene[i] = static_cast<float>(fromScene[i]);
     }
+    // Row two of the host's own RGB-to-XYZ is its CIE Y, which is the quantity the gamut fit
+    // holds. Taken before the chromatic adaptation above, because it weighs the host's channels
+    // as the host's own primaries define them.
+    for (int i = 0; i < 3; ++i) {
+        result.luminance[i] = static_cast<float>(sourceToXYZ[3 + i]);
+    }
     return result;
+}
+
+bool deliveryLeavesGamut(Encoding encoding) {
+    // Only the Rec.709 primaries are narrower than the Display P3 the print arrives in. Every
+    // other encoding here is either P3 itself or a space that encloses it, and a colour inside
+    // P3 cannot leave those.
+    switch (encoding) {
+    case Encoding::Rec709Gamma24:
+    case Encoding::SRGB:
+    case Encoding::LinearRec709:
+        return true;
+    case Encoding::DaVinciIntermediate:
+    case Encoding::ACEScct:
+    case Encoding::ACEScg:
+    case Encoding::LinearDisplayP3:
+    case Encoding::LinearRec2020:
+    case Encoding::Count:
+        break;
+    }
+    return false;
+}
+
+void fitToGamut(const float *luminance, float *pixel) {
+    // Most of a frame is inside the container and wants nothing done to it, so the cheap test
+    // comes first: four comparisons to leave those pixels alone, ahead of the luminance the rest
+    // of this needs. It also states the property the fit is built on — in gamut is the identity —
+    // in a form the compiler can see.
+    const float lo = std::min(std::min(pixel[0], pixel[1]), pixel[2]);
+    const float hi = std::max(std::max(pixel[0], pixel[1]), pixel[2]);
+    if (lo >= 0.0f && hi <= 1.0f) return;
+
+    const float y = luminance[0] * pixel[0] + luminance[1] * pixel[1]
+                  + luminance[2] * pixel[2];
+    if (!(y > 0.0f)) {
+        // At or below black there is no chroma to hold and no axis to move along; a negative
+        // luminance is only reachable from a colour already far outside, and black is the only
+        // in-gamut answer for it.
+        for (int c = 0; c < 3; ++c) pixel[c] = std::max(pixel[c], 0.0f);
+        return;
+    }
+    if (!(y < 1.0f)) {
+        // At and above white there is no in-gamut colour to move to: the cube pinches to white
+        // at Y = 1 and stops, so any chroma up there is outside whatever this function does to
+        // it. A transparency highlight that goes above white means it, and what the container
+        // makes of a level it cannot hold is the host's business — this function's is the
+        // gamut, not the level. A negative channel is still never right.
+        for (int c = 0; c < 3; ++c) pixel[c] = std::max(pixel[c], 0.0f);
+        return;
+    }
+    // The least move toward the neutral axis that brings every channel inside [0, 1], which
+    // holds Y because the axis it moves along is the one Y is constant on. As Y approaches white
+    // the fit approaches neutral, and that is the cube's own shape rather than a choice: at
+    // Y = 1 the only in-gamut colour left is white itself.
+    float scale = 1.0f;
+    for (int c = 0; c < 3; ++c) {
+        const float v = pixel[c];
+        // Both denominators are strictly positive: v > 1 > y in the first, and y > 0 > v in
+        // the second.
+        if (v > 1.0f) scale = std::min(scale, (1.0f - y) / (v - y));
+        else if (v < 0.0f) scale = std::min(scale, y / (y - v));
+    }
+    if (scale >= 1.0f) return;   // in gamut, and returned bit-identical
+    scale = std::max(scale, 0.0f);
+    for (int c = 0; c < 3; ++c) pixel[c] = y + (pixel[c] - y) * scale;
 }
 
 namespace {
@@ -468,11 +539,14 @@ inline void repremultiply(float *pixel) {
 /// Split on the same reasoning as `decodeSpan`.
 template <Encoding E>
 void encodeSpan(const Transform &transform, const float *in, float *out, int count,
-                bool premultiplied) {
+                bool premultiplied, bool fitGamut) {
     const float *m = transform.fromWorking;
     for (int i = 0; i < count; ++i) {
         float *pixel = out + static_cast<size_t>(i) * 4;
         matrixOut(m, in + static_cast<size_t>(i) * 4, pixel);
+        // Between the matrix and the transfer: the fit is defined on linear light in the host's
+        // own primaries, which is exactly what the matrix has just produced.
+        if (fitGamut) fitToGamut(transform.luminance, pixel);
         if constexpr (kIsLinear<E>) {
             if (premultiplied) repremultiply(pixel);
         }
@@ -514,9 +588,9 @@ struct EncodeOp {
     const float *in;
     float *out;
     int count;
-    bool premultiplied;
+    bool premultiplied, fitGamut;
     template <Encoding E> int operator()() const {
-        encodeSpan<E>(transform, in, out, count, premultiplied);
+        encodeSpan<E>(transform, in, out, count, premultiplied, fitGamut);
         return 0;
     }
 };
@@ -537,8 +611,8 @@ bool decodeRow(Encoding encoding, const Transform &transform,
 }
 
 void encodeRow(Encoding encoding, const Transform &transform,
-               float *pixels, int count) {
-    encodePixels(encoding, transform, pixels, pixels, count, false);
+               float *pixels, int count, bool fitGamut) {
+    encodePixels(encoding, transform, pixels, pixels, count, false, fitGamut);
 }
 
 DecodeReport decodePixels(Encoding encoding, const Transform &transform,
@@ -549,8 +623,9 @@ DecodeReport decodePixels(Encoding encoding, const Transform &transform,
 }
 
 void encodePixels(Encoding encoding, const Transform &transform,
-                  const float *in, float *out, int count, bool premultiplied) {
-    withEncoding(encoding, EncodeOp{transform, in, out, count, premultiplied});
+                  const float *in, float *out, int count, bool premultiplied,
+                  bool fitGamut) {
+    withEncoding(encoding, EncodeOp{transform, in, out, count, premultiplied, fitGamut});
 }
 
 OutputTransform outputTransformFor(Encoding encoding) {

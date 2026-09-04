@@ -36,8 +36,23 @@ Source builds include synthetic example films and print models. They do not need
 activation. Some controls are unavailable when the selected film does not support them.
 The status line explains why.
 
-A smaller film gauge makes grain and other spatial effects larger in the image.
-**Output Medium** selects how the developed film is viewed or printed.
+The inspector groups controls under Setup, Film, Exposure & Colour, Lens & Filters,
+Development, Grain, Halation, Colour Separation, and Output. Start with these settings:
+
+| Setting | What it controls |
+| --- | --- |
+| Film Format / Resolved Format | Film size and the format selected by Match Film. |
+| Film Frame Coverage (%) | How much of the film frame is used by the image. |
+| Push / Pull | Development conditions offered by the selected stock. |
+| Long Exposure (s) | Reciprocity correction, when the stock provides the data. |
+| Grain Animation / Grain Seed | Moving or frozen grain and its repeatable pattern. |
+| Mottle | The amount of coarse clumping in the grain. |
+| Return Spectrum | Halation strength across seven wavelength bands. |
+| Render Mode / Effective Renderer | Realtime or Reference rendering. |
+
+A smaller film format makes grain and other spatial effects larger in the image.
+**Output Medium** selects how the developed film is viewed or printed. The status
+fields show the format, medium, and renderer actually in use.
 
 ## Match the input color space
 
@@ -45,6 +60,9 @@ A smaller film gauge makes grain and other spatial effects larger in the image.
 line to see the space it selected. In an unmanaged Resolve YRGB project, an image
 tagged Raw is treated as DaVinci Wide Gamut / Intermediate. Select the input space
 manually if your node receives a different space.
+
+Finished prints are fitted to narrower timeline primaries before output encoding.
+Colors already inside that gamut are unchanged.
 
 Unknown named spaces produce an error. Hosts without color tags use Rec.709 Gamma
 2.4. Log or linear footage can retain highlight detail that an SDR image has lost.

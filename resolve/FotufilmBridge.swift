@@ -125,7 +125,27 @@ private enum Parameter {
     static let diffusionGrade = 26
     static let focalLength = 27
     static let negativeViewing = 28
-    static let count = 29
+    static let mottleOverride = 29
+    static let mottleShare = 30
+    static let couplerReach = 31
+    static let couplerSelf = 32
+    static let sceneIlluminant = 33
+    static let halation400 = 34
+    static let halation450 = 35
+    static let halation500 = 36
+    static let halation550 = 37
+    static let halation600 = 38
+    static let halation650 = 39
+    static let halation700 = 40
+    static let filterCoating = 41
+    static let frameCoverage = 42
+    static let grainModel = 43
+    static let shutterSeconds = 44
+    static let renderMode = 45
+    static let grainFrozen = 46
+    static let couplerRedGreen = 47
+    static let couplerGreenBlue = 48
+    static let count = 49
 }
 
 /// The filter drawer, in the order a host's menu indexes it. The catalogue is the engine's, so
@@ -217,7 +237,7 @@ private func options(_ parameters: UnsafePointer<Float>?,
     result.halationScale = max(0, value(Parameter.halationScale))
     result.couplerScale = max(0, value(Parameter.couplerScale))
     result.printCorrection = max(0, value(Parameter.printCorrection))
-    result.developmentEV = clamp(value(Parameter.pushPull), -2, 2)
+    result.developmentEV = value(Parameter.pushPull)
     result.bleachBypass = clamp(value(Parameter.bleachBypass), 0, 1)
     result.expiredYears = max(0, value(Parameter.expiredYears))
     // Zero is each lever's off position, so a slot the host never filled
@@ -247,14 +267,15 @@ private func options(_ parameters: UnsafePointer<Float>?,
     // Each slot's zero is its off position. Three empty threads, no mist and no stated focal
     // length are what every render made before these existed, so a host that never filled the
     // block develops exactly the frame it always did.
+    let coating: FilterCoating = value(Parameter.filterCoating) == 1 ? .singleLayer
+        : (value(Parameter.filterCoating) == 2 ? .uncoated : .multiCoated)
     var fitted: [LensFilter] = []
     for slot in [Parameter.lensFilter1, Parameter.lensFilter2, Parameter.lensFilter3] {
         let choice = Int(whole(value(slot))) - 1
         guard lensFilters.indices.contains(choice) else { continue }
         var filter = lensFilters[choice]
-        // The coating is the plugin's one editorial choice here, and it is the modern one: a
-        // filter bought this decade is multicoated, and the command line's own default agrees.
-        filter.coating = .multiCoated
+        // Zero retains the multicoated glass used by every existing project.
+        filter.coating = coating
         fitted.append(filter)
     }
     if !fitted.isEmpty {
@@ -274,8 +295,26 @@ private func options(_ parameters: UnsafePointer<Float>?,
             diffusionFamilies[family],
             grade: diffusionGrades.indices.contains(grade)
                 ? diffusionGrades[grade] : defaultDiffusionGrade,
-            coating: .multiCoated)
+            coating: coating)
     }
+    if value(Parameter.mottleOverride) != 0 {
+        result.grainMottleShare = clamp(value(Parameter.mottleShare), 0, 0.9)
+        result.completeDeliveryMottle()
+    }
+    result.couplerRangeScale = clamp(1 + value(Parameter.couplerReach), 0, 3)
+    if value(Parameter.couplerRedGreen) != 0 || value(Parameter.couplerGreenBlue) != 0 {
+        result.couplerGapReachScales = [Parameter.couplerRedGreen, Parameter.couplerGreenBlue]
+            .map { clamp(1 + value($0), 0, 3) * result.couplerRangeScale }
+    }
+    result.couplerSelfScale = clamp(1 + value(Parameter.couplerSelf), 0, 3)
+    let sceneLight = value(Parameter.sceneIlluminant)
+    if sceneLight > 0 { result.sceneIlluminantKelvin = sceneLight }
+    result.halationReturnGain = HalationSpectrum.resampled(
+        (Parameter.halation400...Parameter.halation700).map { value($0) })
+    result.frameCoverage = clamp(1 + value(Parameter.frameCoverage), 0.05, 1)
+    result.grainModel = value(Parameter.grainModel) == 1 ? .discs : .clumpField
+    let shutter = value(Parameter.shutterSeconds)
+    if shutter > 0 { result.shutterSeconds = shutter }
     let focal = value(Parameter.focalLength)
     if focal > 0 { result.focalLengthMM = focal }
     // Only where the negative medium was named. A stated viewing mode is the engine's instruction
@@ -640,15 +679,79 @@ func fotufilm_bridge_stock_prints(_ stockIndex: Int32) -> Int32 {
     return stock.isReversal ? 0 : 1
 }
 
+@_cdecl("fotufilm_bridge_control_capabilities")
+func fotufilm_bridge_control_capabilities(_ stockIndex: Int32, _ paperIndex: Int32) -> Int32 {
+    guard let stock = stock(at: stockIndex) else { return 0 }
+    let paper = resolvedPaper(stock: stock, index: paperIndex)
+    var flags: Int32 = 0
+    if !stock.isMonochrome && !stock.isReversal { flags |= 1 }
+    if stock.couplerGeometry != nil { flags |= 2 }
+    if stock.grainDensityLaw == .silver { flags |= 32 }
+    if stock.couplerInhibition.contains(where: { $0.contains(where: { $0 != 0 }) })
+        || stock.adjacencyStrength > 0 {
+        flags |= 64
+    }
+    if stock.reciprocityFailure != nil { flags |= 4 }
+    if paper.acceptsViewingIlluminant && !stock.isReversal { flags |= 8 }
+    if paper.acceptsPrintCorrection && !stock.isMonochrome && !stock.isReversal { flags |= 16 }
+    return flags
+}
+
+private func resolvedPaper(stock: FilmStock, index: Int32) -> PrintPaper {
+    let requested = papers.indices.contains(Int(index)) ? papers[Int(index)] : nil
+    return requested?.resolved(for: stock) ?? PrintPaper.default(for: stock)
+}
+
+@_cdecl("fotufilm_bridge_resolved_format")
+func fotufilm_bridge_resolved_format(_ stockIndex: Int32, _ format: Int32,
+                                   _ out: UnsafeMutablePointer<CChar>?, _ capacity: Int32) -> Int32 {
+    guard stockIDs.indices.contains(Int(stockIndex)) else { return -1 }
+    let presets = FilmFormat.presets
+    let resolved = presets.indices.contains(Int(format)) ? presets[Int(format)].format
+        : FilmFormat.native(forStockID: stockIDs[Int(stockIndex)])
+    return copyOut(resolved.name, out, capacity)
+}
+
+@_cdecl("fotufilm_bridge_resolved_paper")
+func fotufilm_bridge_resolved_paper(_ stockIndex: Int32, _ paperIndex: Int32,
+                                  _ out: UnsafeMutablePointer<CChar>?, _ capacity: Int32) -> Int32 {
+    guard let stock = stock(at: stockIndex) else { return -1 }
+    return copyOut(resolvedPaper(stock: stock, index: paperIndex).name, out, capacity)
+}
+
+@_cdecl("fotufilm_bridge_development_count")
+func fotufilm_bridge_development_count(_ stockIndex: Int32) -> Int32 {
+    guard let stock = stock(at: stockIndex) else { return 0 }
+    return Int32(stock.supportedDevelopmentStops.count + 1)
+}
+
+@_cdecl("fotufilm_bridge_development_stop")
+func fotufilm_bridge_development_stop(_ stockIndex: Int32, _ index: Int32) -> Float {
+    guard let stock = stock(at: stockIndex) else { return .nan }
+    let stops = ([Float(0)] + stock.supportedDevelopmentStops).sorted()
+    return stops.indices.contains(Int(index)) ? stops[Int(index)] : .nan
+}
+
+/// Disc grain cannot run in the realtime family. This policy is also queried by the OFX
+/// decoder, so a per-node override changes every pass together, including striped frames.
+@_cdecl("fotufilm_bridge_effective_realtime")
+func fotufilm_bridge_effective_realtime(_ parameters: UnsafePointer<Float>?) -> Int32 {
+    if parameters?[Parameter.grainModel] == 1 { return 0 }
+    switch whole(parameters?[Parameter.renderMode] ?? 0) {
+    case 1: return 1
+    case 2: return 0
+    default: return realtimeRenderingEnabled ? 1 : 0
+    }
+}
+
 @_cdecl("fotufilm_bridge_stock_pushes")
 func fotufilm_bridge_stock_pushes(_ stockIndex: Int32) -> Int32 {
     guard let stock = stock(at: stockIndex) else { return 0 }
     return stock.hasMeasuredDevelopmentResponse ? 1 : 0
 }
 
-/// Resolve exposes a numeric parameter because OFX choices cannot change their entries with the
-/// selected stock. Keep that parameter on the stock's actual measurements, preferring the less
-/// developed condition where a typed value is exactly between two of them.
+/// Keep the persisted numeric development condition on the stock's measurements. The visible
+/// OFX menu is derived from these conditions; the number preserves older projects.
 @_cdecl("fotufilm_bridge_stock_snap_push")
 func fotufilm_bridge_stock_snap_push(_ stockIndex: Int32, _ requested: Float) -> Float {
     guard requested.isFinite, let stock = stock(at: stockIndex) else { return 0 }
@@ -757,8 +860,8 @@ func fotufilm_bridge_encodes_output(_ opaque: UnsafeMutableRawPointer?,
     guard validateDevelopment(settings, stock: stock, context: context) else { return 0 }
     let answer: Int32 = renderer.carriesOutputTransform(
         stock: stock, options: settings, width: Int(width), height: Int(height),
-        realtime: realtimeRenderingEnabled,
-        measuresGlareOnDevice: staged && (realtimeRenderingEnabled || interactive != 0)) ? 1 : 0
+        realtime: fotufilm_bridge_effective_realtime(parameters) != 0,
+        measuresGlareOnDevice: staged && (fotufilm_bridge_effective_realtime(parameters) != 0 || interactive != 0)) ? 1 : 0
     context.outputQuery = OutputTransformQuery(key: key, answer: answer)
     return answer
 }
@@ -805,7 +908,8 @@ func fotufilm_bridge_decode_staged(
     _ width: Int32, _ height: Int32,
     _ transformIn: UnsafeRawPointer?,
     _ peak: UnsafeMutablePointer<Float>?,
-    _ repaired: UnsafeMutablePointer<Int32>?
+    _ repaired: UnsafeMutablePointer<Int32>?,
+    _ realtime: Int32
 ) -> Int32 {
     guard let context = context(opaque) else { return 0 }
     context.lock.lock()
@@ -820,7 +924,7 @@ func fotufilm_bridge_decode_staged(
     guard let report = context.withMetalContext({
         renderer.decodeStaged(
             staging, width: Int(width), height: Int(height), transform: transform,
-            realtime: realtimeRenderingEnabled)
+            realtime: realtime != 0)
     }) else { return 0 }
 
     peak?.pointee = report.peak
@@ -834,14 +938,15 @@ func fotufilm_bridge_decode_rows(
     _ width: Int32, _ rows: Int32,
     _ transformIn: UnsafeRawPointer?,
     _ peak: UnsafeMutablePointer<Float>?,
-    _ repaired: UnsafeMutablePointer<Int32>?
+    _ repaired: UnsafeMutablePointer<Int32>?,
+    _ realtime: Int32
 ) -> Int32 {
     guard width > 0, rows > 0, let input, let output,
           let renderer = HalideMetalFilmRenderer.shared,
           let transform = inputTransform(transformIn),
           let report = renderer.decodeRows(input, into: output, width: Int(width),
                                            rows: Int(rows), transform: transform,
-                                           realtime: realtimeRenderingEnabled)
+                                           realtime: realtime != 0)
     else { return 0 }
 
     peak?.pointee = report.peak
@@ -901,12 +1006,12 @@ func fotufilm_bridge_render_staged(
             staging, width: Int(width), height: Int(height), stock: stock,
             options: settings,
             outputTransform: &transform,
-            frameIndex: frame,
-            realtime: realtimeRenderingEnabled,
+            frameIndex: parameters?[Parameter.grainFrozen] == 1 ? 0 : frame,
+            realtime: fotufilm_bridge_effective_realtime(parameters) != 0,
             // The realtime output variant carries this reduction in the same schedule. Reference
             // rendering retains the earlier rule: only disposable viewer frames accept its
             // sub-LSB reduction difference, while deliveries use the host measurement.
-            measuresGlareOnDevice: realtimeRenderingEnabled || interactive != 0,
+            measuresGlareOnDevice: fotufilm_bridge_effective_realtime(parameters) != 0 || interactive != 0,
             shouldContinue: shouldContinue.map { keepGoing in
                 { keepGoing(abortContext) != 0 }
             })
@@ -987,8 +1092,8 @@ func fotufilm_bridge_render(_ opaque: UnsafeMutableRawPointer?,
         renderer.developStreaming(
             width: Int(width), height: Int(height), stock: stock, options: settings,
             outputTransform: &transform,
-            frameIndex: frame,
-            realtime: realtimeRenderingEnabled,
+            frameIndex: parameters?[Parameter.grainFrozen] == 1 ? 0 : frame,
+            realtime: fotufilm_bridge_effective_realtime(parameters) != 0,
             shouldContinue: shouldContinue.map { keepGoing in
                 { keepGoing(abortContext) != 0 }
             },

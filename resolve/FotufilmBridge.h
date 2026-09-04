@@ -85,6 +85,30 @@ enum {
     /// look: to the engine a stated one *is* the instruction to show the negative, so carrying
     /// this slot into a print render would replace the print with the film.
     FOTUFILM_BRIDGE_NEGATIVE_VIEWING,
+    // Appended controls: zero preserves the previous render. Reach/self/gap values and
+    // frame coverage are offsets from 1; spectral handles are stops. Coating is
+    // 0 multicoated, 1 single-coated, 2 uncoated. Render mode is 0 host default,
+    // 1 realtime, 2 reference; disc grain always requires reference rendering.
+    FOTUFILM_BRIDGE_MOTTLE_OVERRIDE,
+    FOTUFILM_BRIDGE_MOTTLE_SHARE,
+    FOTUFILM_BRIDGE_COUPLER_REACH,
+    FOTUFILM_BRIDGE_COUPLER_SELF,
+    FOTUFILM_BRIDGE_SCENE_ILLUMINANT,
+    FOTUFILM_BRIDGE_HALATION_400,
+    FOTUFILM_BRIDGE_HALATION_450,
+    FOTUFILM_BRIDGE_HALATION_500,
+    FOTUFILM_BRIDGE_HALATION_550,
+    FOTUFILM_BRIDGE_HALATION_600,
+    FOTUFILM_BRIDGE_HALATION_650,
+    FOTUFILM_BRIDGE_HALATION_700,
+    FOTUFILM_BRIDGE_FILTER_COATING,
+    FOTUFILM_BRIDGE_FRAME_COVERAGE,
+    FOTUFILM_BRIDGE_GRAIN_MODEL,
+    FOTUFILM_BRIDGE_SHUTTER_SECONDS,
+    FOTUFILM_BRIDGE_RENDER_MODE,
+    FOTUFILM_BRIDGE_GRAIN_FROZEN,
+    FOTUFILM_BRIDGE_COUPLER_RED_GREEN,
+    FOTUFILM_BRIDGE_COUPLER_GREEN_BLUE,
     FOTUFILM_BRIDGE_PARAMETER_COUNT,
 };
 
@@ -149,6 +173,24 @@ int32_t fotufilm_bridge_stock_pushes(int32_t stock);
 /// The nearest measured condition, including reference development at zero. This keeps Resolve's
 /// numeric OFX parameter from creating an interpolated process the engine does not carry.
 float fotufilm_bridge_stock_snap_push(int32_t stock, float requested);
+
+/// Capabilities of the effective stock/output, for control availability.
+enum {
+    FOTUFILM_CONTROL_COLOUR_NEGATIVE = 1,
+    FOTUFILM_CONTROL_COUPLER_GEOMETRY = 2,
+    FOTUFILM_CONTROL_RECIPROCITY = 4,
+    FOTUFILM_CONTROL_VIEWING_LIGHT = 8,
+    FOTUFILM_CONTROL_PRINT_CORRECTION = 16,
+    FOTUFILM_CONTROL_DISC_GRAIN = 32,
+    FOTUFILM_CONTROL_COUPLERS = 64,
+};
+int32_t fotufilm_bridge_control_capabilities(int32_t stock, int32_t paper);
+int32_t fotufilm_bridge_resolved_format(int32_t stock, int32_t format, char *out, int32_t capacity);
+int32_t fotufilm_bridge_resolved_paper(int32_t stock, int32_t paper, char *out, int32_t capacity);
+int32_t fotufilm_bridge_development_count(int32_t stock);
+float fotufilm_bridge_development_stop(int32_t stock, int32_t index);
+/// Uses the same per-node policy for decoding, kernel selection, and development.
+int32_t fotufilm_bridge_effective_realtime(const float *parameters);
 
 /// Point the engine at the resources it ships with, before anything else is called.
 int32_t fotufilm_bridge_initialize(const char *resources);
@@ -313,11 +355,12 @@ struct FotufilmInputTransform {
 /// Decodes tightly packed host pixels from staging output into scene-linear staging input.
 /// `peak` receives the largest finite pre-repair RGB value; `repaired` reports any non-finite
 /// replacement. Either may be NULL. Returns 1 on success and 0 when staging, Metal, or the kernel
-/// is unavailable. Arithmetic order matches `fotufilm::decodePixels` but GPU transcendentals may differ.
+/// is unavailable. `realtime` must use the same effective policy as the following render.
+/// Arithmetic order matches `fotufilm::decodePixels` but GPU transcendentals may differ.
 int32_t fotufilm_bridge_decode_staged(FotufilmBridgeContext context,
                                      int32_t width, int32_t height,
                                      const struct FotufilmInputTransform *transform,
-                                     float *peak, int32_t *repaired);
+                                     float *peak, int32_t *repaired, int32_t realtime);
 
 /// Decodes a non-overlapping band of tightly packed, top-first RGBA host rows with the staged
 /// decode kernel. Results are independent of band size. Combine per-band `peak` by maximum and
@@ -325,7 +368,7 @@ int32_t fotufilm_bridge_decode_staged(FotufilmBridgeContext context,
 int32_t fotufilm_bridge_decode_rows(const float *in, float *out,
                                    int32_t width, int32_t rows,
                                    const struct FotufilmInputTransform *transform,
-                                   float *peak, int32_t *repaired);
+                                   float *peak, int32_t *repaired, int32_t realtime);
 
 /// Develops borrowed staging input into output with the same status codes as
 /// `fotufilm_bridge_render`. Nonzero `interactive` enables a faster float32 GPU glare reduction

@@ -270,6 +270,15 @@ OfxStatus paramSetValue(OfxParamHandle handle, ...) {
     return kOfxStatOK;
 }
 
+OfxStatus propReset(OfxPropertySetHandle handle, const char *name) {
+    auto *properties = setOf(handle);
+    properties->strings.erase(name);
+    properties->ints.erase(name);
+    properties->doubles.erase(name);
+    properties->pointers.erase(name);
+    return kOfxStatOK;
+}
+
 OfxParameterSuiteV1 gParameterSuite = {};
 
 struct Clip {
@@ -436,6 +445,7 @@ const void *fetchSuite(OfxPropertySetHandle, const char *name, int) {
 }
 
 void buildSuites() {
+    gPropertySuite.propReset = propReset;
     gPropertySuite.propSetPointer = propSetPointer;
     gPropertySuite.propSetString = propSetString;
     gPropertySuite.propSetDouble = propSetDouble;
@@ -541,6 +551,104 @@ size_t optionCount(ParamSet &set, const char *name) {
     return options == strings.end() ? 0 : options->second.size();
 }
 
+/// The gamut fit: the step that keeps a print the paper can make from leaving the container the
+/// timeline hands it. Every claim here is one the fix would be worthless without.
+void testGamutFit() {
+    // Only Rec.709's primaries are narrower than the Display P3 the print is delivered in.
+    check(fotufilm::deliveryLeavesGamut(fotufilm::Encoding::Rec709Gamma24) &&
+          fotufilm::deliveryLeavesGamut(fotufilm::Encoding::SRGB) &&
+          fotufilm::deliveryLeavesGamut(fotufilm::Encoding::LinearRec709),
+          "Rec.709 primaries are named as unable to hold the print's gamut");
+    check(!fotufilm::deliveryLeavesGamut(fotufilm::Encoding::LinearDisplayP3) &&
+          !fotufilm::deliveryLeavesGamut(fotufilm::Encoding::LinearRec2020) &&
+          !fotufilm::deliveryLeavesGamut(fotufilm::Encoding::ACEScg) &&
+          !fotufilm::deliveryLeavesGamut(fotufilm::Encoding::ACEScct) &&
+          !fotufilm::deliveryLeavesGamut(fotufilm::Encoding::DaVinciIntermediate),
+          "every space that encloses Display P3 is left alone");
+
+    const fotufilm::Transform rec709 =
+        fotufilm::transformFor(fotufilm::Encoding::LinearRec709);
+    const float *luma = rec709.luminance;
+    check(std::fabs(luma[0] - 0.2126f) < 2e-3f &&
+          std::fabs(luma[1] - 0.7152f) < 2e-3f &&
+          std::fabs(luma[2] - 0.0722f) < 2e-3f,
+          "the fit weighs luminance by the destination's own primaries");
+
+    // In gamut is the identity, and bit-identical rather than merely close: anything else would
+    // move every pixel of every frame to fix the few that are outside.
+    bool untouched = true;
+    for (float value : {0.0f, 0.02f, 0.18f, 0.5f, 0.9f, 0.999f, 1.0f}) {
+        float pixel[4] = {value, value * 0.7f, value * 0.4f, 1.0f};
+        const float before[3] = {pixel[0], pixel[1], pixel[2]};
+        fotufilm::fitToGamut(luma, pixel);
+        for (int c = 0; c < 3; ++c) untouched = untouched && pixel[c] == before[c];
+    }
+    check(untouched, "an in-gamut pixel comes back bit-identical");
+
+    // The measured defect: a warm print highlight, inside the paper's own range, that lands
+    // above 1.0 in red once it is written in Rec.709 primaries.
+    {
+        float pixel[4] = {1.018f, 0.921f, 0.704f, 1.0f};
+        const float y = luma[0] * pixel[0] + luma[1] * pixel[1] + luma[2] * pixel[2];
+        fotufilm::fitToGamut(luma, pixel);
+        const float after = luma[0] * pixel[0] + luma[1] * pixel[1] + luma[2] * pixel[2];
+        check(pixel[0] <= 1.0f + 1e-6f && pixel[1] <= 1.0f + 1e-6f &&
+              pixel[2] <= 1.0f + 1e-6f,
+              "the measured overshoot lands inside the container");
+        check(std::fabs(after - y) < 1e-5f, "the fit holds luminance");
+        check(pixel[0] > pixel[1] && pixel[1] > pixel[2],
+              "the fit keeps the highlight warm rather than flattening its channel order");
+    }
+
+    // A transparency above white is the print working as intended. The fit must not read it as
+    // an excursion and pull it down — its own level is the ceiling.
+    {
+        float pixel[4] = {1.5f, 1.5f, 1.5f, 1.0f};
+        fotufilm::fitToGamut(luma, pixel);
+        check(pixel[0] == 1.5f && pixel[1] == 1.5f && pixel[2] == 1.5f,
+              "a neutral highlight above white is left alone");
+    }
+    {
+        // A coloured highlight above white keeps its colour as well as its level. Flattening it
+        // to neutral would hold luminance and stay inside every bound the checks above name,
+        // which is exactly why this one asks for the channels themselves.
+        float pixel[4] = {1.9f, 1.2f, 1.1f, 1.0f};
+        fotufilm::fitToGamut(luma, pixel);
+        check(pixel[0] == 1.9f && pixel[1] == 1.2f && pixel[2] == 1.1f,
+              "a coloured highlight above white is left as the print made it");
+    }
+    {
+        // The pinch: just under white the cube has almost no room off the neutral axis, so a
+        // colour there is nearly white by the cube's own geometry, not by choice.
+        float pixel[4] = {1.10f, 0.97f, 0.90f, 1.0f};
+        const float y = luma[0] * pixel[0] + luma[1] * pixel[1] + luma[2] * pixel[2];
+        fotufilm::fitToGamut(luma, pixel);
+        const float after = luma[0] * pixel[0] + luma[1] * pixel[1] + luma[2] * pixel[2];
+        check(std::fabs(after - y) < 1e-5f && pixel[0] <= 1.0f + 1e-6f,
+              "a pixel just under white is fitted without moving its luminance");
+    }
+
+    // Negatives are the other side of the same excursion and clip just as hard.
+    {
+        float pixel[4] = {0.6f, 0.5f, -0.08f, 1.0f};
+        fotufilm::fitToGamut(luma, pixel);
+        check(pixel[2] >= -1e-6f, "a negative channel is brought back to the gamut floor");
+    }
+
+    // End to end through the encode, which is where the plugin actually takes it: the same pixel
+    // with and without the fit, in the encoding the defect was measured in.
+    {
+        const fotufilm::Transform t =
+            fotufilm::transformFor(fotufilm::Encoding::Rec709Gamma24);
+        float bare[4] = {1.018f, 0.921f, 0.704f, 1.0f};
+        float fitted[4] = {1.018f, 0.921f, 0.704f, 1.0f};
+        fotufilm::encodeRow(fotufilm::Encoding::Rec709Gamma24, t, bare, 1, false);
+        fotufilm::encodeRow(fotufilm::Encoding::Rec709Gamma24, t, fitted, 1, true);
+        check(bare[0] > 1.0f, "without the fit the encode still hands the host a value over 1.0");
+        check(fitted[0] <= 1.0f + 1e-6f, "with the fit the encoded print fits the container");
+    }
+}
+
 void testWorkingSpace() {
     std::printf("working space\n");
     // A Transform's two matrices are inverses of two different paths: toWorking carries
@@ -607,6 +715,8 @@ void testWorkingSpace() {
                       fotufilm::encodingLabel(encoding), spread);
         check(spread < 1e-3f, label);
     }
+
+    testGamutFit();
 
     // Blackmagic's DI curve branches on the signed value. These negative references catch the
     // tempting but incorrect implementation that takes abs(), runs the positive log branch, and
@@ -826,6 +936,41 @@ int testPlugin() {
         check(explained, "explains assumed Auto values in the status tooltip");
     }
 
+    {
+        const std::pair<const char *, const char *> groups[] = {
+            {"stageGroup", "Setup"}, {"filmGroup", "Film"},
+            {"exposureGroup", "Exposure & Colour"}, {"lensGroup", "Lens & Filters"},
+            {"labGroup", "Development"}, {"filmResponseGroup", "Grain"},
+            {"halationGroup", "Halation"}, {"couplerGroup", "Colour Separation"},
+            {"outputGroup", "Output"},
+        };
+        bool grouped = true;
+        for (const auto &group : groups) {
+            auto found = instance.params.params.find(group.first);
+            if (found == instance.params.params.end()) { grouped = false; continue; }
+            char *label = nullptr;
+            propGetString(handleOf(found->second->properties), kOfxPropLabel, 0, &label);
+            int open = -1;
+            propGetInt(handleOf(found->second->properties), kOfxParamPropGroupOpen, 0, &open);
+            const bool initiallyOpen = std::strcmp(group.first, "stageGroup") == 0 ||
+                std::strcmp(group.first, "filmGroup") == 0 || std::strcmp(group.first, "outputGroup") == 0;
+            grouped &= label && std::strcmp(label, group.second) == 0 && open == (initiallyOpen ? 1 : 0);
+        }
+        check(grouped, "defines nine workflow groups with Setup, Film and Output initially open");
+        auto parentIs = [&](const char *name, const char *wanted) {
+            char *parent = nullptr;
+            propGetString(handleOf(instance.params.params.at(name)->properties), kOfxParamPropParent, 0, &parent);
+            return parent && std::strcmp(parent, wanted) == 0;
+        };
+        check(parentIs("flare", "lensGroup") && parentIs("halation", "halationGroup") &&
+              parentIs("couplers", "couplerGroup") && parentIs("colorSpace", "stageGroup"),
+              "moves existing parameter identities into their intended groups");
+        int hidden = 0, persistent = 1;
+        propGetInt(handleOf(instance.params.params.at("push")->properties), kOfxParamPropSecret, 0, &hidden);
+        propGetInt(handleOf(instance.params.params.at("pushCondition")->properties), kOfxParamPropPersistant, 0, &persistent);
+        check(hidden == 1 && persistent == 0,
+              "the measured menu is derived while legacy numeric development remains saved");
+    }
     applyDefaults(instance.params);
     check(getInt(instance.params, "paper") >= fotufilm_bridge_paper_count(),
           "the output medium defaults to Match Film");
@@ -1996,7 +2141,9 @@ int testPlugin() {
         // is encoded into has to be named. Refused rather than guessed.
         {
             const int before = gMessagesPosted;
-            setParam(instance.params, "colorSpace", 7);
+            setChoice(plugin, instanceHandle, instance.params, "colorSpace", 7);
+            check(getString(instance.params, "colorSpaceStatus").find("Required:") == 0,
+                  "Print Only Auto shows the missing output-space requirement in the panel");
             check(plugin->mainEntry(kOfxImageEffectActionRender, instanceHandle,
                                     handleOf(renderArgs), nullptr) == kOfxStatFailed,
                   "the print span refuses to guess its output space");
@@ -2194,7 +2341,8 @@ int testPlugin() {
             std::vector<int> order;
             for (size_t st = 0; st < stocks; ++st) {
                 const auto index = static_cast<int32_t>(st);
-                if (fotufilm_bridge_stock_prints(index) != 0 &&
+                if ((fotufilm_bridge_control_capabilities(index, 0) &
+                     FOTUFILM_CONTROL_COLOUR_NEGATIVE) != 0 &&
                     fotufilm_bridge_texture_stage_available(index, halationStage) != 0 &&
                     fotufilm_bridge_texture_stage_available(index, adjacencyStage) != 0) {
                     order.push_back(static_cast<int>(st));
@@ -2304,6 +2452,19 @@ int testPlugin() {
                 // Focal length is read by the diffusion filter and by nothing else: the halo is
                 // focal length times scattering angle.
                 {"focalLength", 200, "diffusion", 1},
+                {"mottleShare", 80, "mottleOverride", 1},
+                {"mottleOverride", 1, "mottleShare", 80},
+                {"couplerReach", 0, nullptr, 0},
+                {"couplerSelf", 0, nullptr, 0},
+                {"couplerRedGreen", 0, nullptr, 0},
+                {"couplerGreenBlue", 0, nullptr, 0},
+                {"sceneLight", 3, nullptr, 0},
+                {"sceneLightKelvin", 2856, "sceneLight", 5},
+                {"halation550", 6, "halation", 10},
+                {"halation650", 6, "halation", 10},
+                {"filterCoating", 2, "lensFilter1", static_cast<double>(deepRed)},
+                {"frameCoverage", 25, nullptr, 0},
+                {"shutterSeconds", 3600, nullptr, 0},
             };
             bool everyControlRead = true;
             const size_t sizeCount = sizeof(sizes) / sizeof(*sizes);
@@ -2322,6 +2483,8 @@ int testPlugin() {
                         // A film with no measured push condition is right to ignore the
                         // control, exactly as the lab sweep above treats it.
                         if (isPush && fotufilm_bridge_stock_pushes(stock) == 0) continue;
+                        if (std::strcmp(lever.name, "shutterSeconds") == 0 &&
+                            !(fotufilm_bridge_control_capabilities(stock, 0) & FOTUFILM_CONTROL_RECIPROCITY)) continue;
                         rest(stock);
                         if (lever.companion) {
                             setParam(instance.params, lever.companion, lever.companionValue);
@@ -2455,6 +2618,8 @@ int testPlugin() {
             // veiling-glare feature bit and no compiled kernel pairs that bit with a span that
             // ends at, or begins from, the developed negative. Measured below rather than argued.
             rest(order[0]);
+            setChoice(plugin, instanceHandle, instance.params, "lensFilter1", deepRed);
+            setChoice(plugin, instanceHandle, instance.params, "diffusion", 1);
             const char *const absorbing[] = {"lensFilter1", "lensFilter2", "lensFilter3",
                                              "metering"};
             const char *const scattering[] = {"diffusion", "diffusionGrade", "focalLength"};
@@ -2475,6 +2640,164 @@ int testPlugin() {
                   "the absorbing half of the lens is live only in the span that exposes film "
                   "through it, and the scattering half wherever the scene still exists");
 
+            if (const char *directory = std::getenv("FOTUFILM_CONTROL_PREVIEW_DIR")) {
+                layOut(384, 256);
+                const Lever previews[] = {
+                    {"baseline", 0, nullptr, 0},
+                    {"mottleShare", 80, "mottleOverride", 1},
+                    {"halation650", 6, "halation", 10},
+                    {"couplerReach", 0, nullptr, 0},
+                    {"sceneLight", 3, nullptr, 0},
+                    {"filterCoating", 2, "lensFilter1", static_cast<double>(deepRed)},
+                };
+                for (const auto &preview : previews) {
+                    rest(order[0]);
+                    setParam(instance.params, "format", 0);
+                    setString(instance.params, "formatID", "super8");
+                    if (preview.companion) setParam(instance.params, preview.companion, preview.companionValue);
+                    if (std::strcmp(preview.name, "baseline") != 0) setParam(instance.params, preview.name, preview.value);
+                    const std::string path = std::string(directory) + "/" + preview.name + ".bin";
+                    check(renderNow() && parity::writeDump(path.c_str(), output->pixels.data(), 384, 256),
+                          "writes a representative control render for visual inspection");
+                }
+                layOut(sizes[0].first, sizes[0].second);
+            }
+
+            std::printf("contextual controls and saved state\n");
+            rest(order[0]);
+            check(enabledOf("diffusionGrade") == 0 && enabledOf("focalLength") == 0 &&
+                  enabledOf("metering") == 0 && enabledOf("filterCoating") == 0,
+                  "empty lens accessories disable their dependent controls");
+            setChoice(plugin, instanceHandle, instance.params, "diffusion", 1);
+            check(enabledOf("diffusionGrade") == 1 && enabledOf("focalLength") == 1 &&
+                  enabledOf("filterCoating") == 1, "fitting diffusion enables its controls");
+            setChoice(plugin, instanceHandle, instance.params, "highlights", -1);
+            check(enabledOf("localTone") == 1, "regional tone becomes available when shaping light");
+            setChoice(plugin, instanceHandle, instance.params, "highlights", 0);
+            check(enabledOf("localTone") == 0, "neutral tone disables its regional mask");
+            setChoice(plugin, instanceHandle, instance.params, "grain", 0);
+            check(enabledOf("seed") == 0 && enabledOf("newSeed") == 0 &&
+                  enabledOf("mottleOverride") == 0, "zero grain disables grain dependencies");
+            setChoice(plugin, instanceHandle, instance.params, "grain", 1);
+            setChoice(plugin, instanceHandle, instance.params, "mottleOverride", 1);
+            check(enabledOf("mottleShare") == 1, "custom mottle enables its amount in Full");
+            setChoice(plugin, instanceHandle, instance.params, "stage", FOTUFILM_BRIDGE_STAGE_TEXTURE);
+            check(enabledOf("mottleOverride") == 0 && enabledOf("mottleShare") == 0,
+                  "Texture Only does not offer unsupported mottle");
+            int secret = 1;
+            auto textureProperties = handleOf(instance.params.params.at("texture_grain")->properties);
+            propGetInt(textureProperties, kOfxParamPropSecret, 0, &secret);
+            check(secret == 0, "texture selectors are visible in Texture Only");
+            setChoice(plugin, instanceHandle, instance.params, "texture_grain", 0);
+            check(enabledOf("grain") == 0, "a deselected texture stage disables its strength");
+            setChoice(plugin, instanceHandle, instance.params, "stage", FOTUFILM_BRIDGE_STAGE_FULL);
+            propGetInt(textureProperties, kOfxParamPropSecret, 0, &secret);
+            check(secret == 1, "texture selectors are hidden in Full");
+            setChoice(plugin, instanceHandle, instance.params, "stage", FOTUFILM_BRIDGE_STAGE_PRINT);
+            check(enabledOf("estimatedHalation") == 0 && enabledOf("halationColour") == 0 &&
+                  enabledOf("flare") == 0 && enabledOf("halation650") == 0,
+                  "Print Only disables every camera-side halation and glare control");
+            rest(order[0]);
+            check(!getString(instance.params, "resolvedFormat").empty() &&
+                  !getString(instance.params, "resolvedPaper").empty(),
+                  "Match Film reports the resolved format and output medium");
+            int digital = -1;
+            for (int i = 0; i < fotufilm_bridge_paper_count(); ++i) {
+                char id[80]; fotufilm_bridge_paper_id(i, id, sizeof(id));
+                if (std::strcmp(id, "screen") == 0) digital = i;
+            }
+            check(digital >= 0, "finds Digital Reference by identity");
+            if (digital >= 0) setChoice(plugin, instanceHandle, instance.params, "paper", digital);
+            check(enabledOf("printLight") == 0, "Digital Reference disables the viewing lamp");
+            int measuredStocks = 0, silverStock = -1;
+            for (int st : order) {
+                setChoice(plugin, instanceHandle, instance.params, "stock", st);
+                const int flags = fotufilm_bridge_control_capabilities(st, digital);
+                if ((flags & FOTUFILM_CONTROL_DISC_GRAIN) && silverStock < 0) silverStock = st;
+                check(enabledOf("bleachBypass") == ((flags & FOTUFILM_CONTROL_COLOUR_NEGATIVE) ? 1 : 0),
+                      "bleach availability follows the film's material");
+                if (!(flags & FOTUFILM_CONTROL_DISC_GRAIN))
+                    check(enabledOf("grainModel") == 0, "dye-cloud stocks do not offer silver disc grain");
+                if (fotufilm_bridge_stock_pushes(st)) {
+                    ++measuredStocks;
+                    auto &menu = instance.params.params.at("pushCondition")->properties->strings[kOfxParamPropChoiceOption];
+                    const int count = fotufilm_bridge_development_count(st);
+                    check(static_cast<int>(menu.size()) == count, "development menu contains exactly the measured conditions");
+                    setChoice(plugin, instanceHandle, instance.params, "pushCondition", count - 1);
+                    check(std::abs(instance.params.params.at("push")->doubleValue -
+                                   fotufilm_bridge_development_stop(st, count - 1)) < 1e-4,
+                          "selecting a condition updates the durable stop value");
+                    setChoice(plugin, instanceHandle, instance.params, "push", 0);
+                    check(getInt(instance.params, "pushCondition") >= 0 &&
+                          getString(instance.params, "developmentStatus").find("stops") != std::string::npos,
+                          "legacy stop edits synchronize the measured menu and status");
+                }
+            }
+            if (std::getenv("FOTUFILM_REQUIRE_ADVANCED_STOCKS")) {
+                check(measuredStocks > 0, "exercises at least one measured development menu");
+                check(silverStock >= 0, "finds a silver-image stock for the disc render test");
+            }
+            if (silverStock >= 0) {
+                layOut(384, 256);
+                rest(silverStock);
+                setChoice(plugin, instanceHandle, instance.params, "format", 0);
+                setChoice(plugin, instanceHandle, instance.params, "frameCoverage", 5);
+                setChoice(plugin, instanceHandle, instance.params, "halation", 0);
+                setChoice(plugin, instanceHandle, instance.params, "couplers", 0);
+                if (digital >= 0) setChoice(plugin, instanceHandle, instance.params, "paper", digital);
+                setChoice(plugin, instanceHandle, instance.params, "renderMode", 2);
+                check(enabledOf("grainModel") == 1 && renderNow(), "renders clump-field silver grain on Reference");
+                const auto silverClumps = output->pixels;
+                setChoice(plugin, instanceHandle, instance.params, "grainModel", 1);
+                check(renderNow() && rmsAgainst(silverClumps) > moved,
+                      "resolved silver discs change the actual grain, not just the renderer selection");
+                if (const char *directory = std::getenv("FOTUFILM_CONTROL_PREVIEW_DIR")) {
+                    const std::string base = std::string(directory) + "/";
+                    check(parity::writeDump((base + "silverClumps.bin").c_str(), silverClumps.data(), 384, 256) &&
+                          parity::writeDump((base + "silverDiscs.bin").c_str(), output->pixels.data(), 384, 256),
+                          "writes silver grain model previews");
+                }
+                layOut(sizes[0].first, sizes[0].second);
+            }
+            rest(order[0]);
+            setChoice(plugin, instanceHandle, instance.params, "renderMode", 2);
+            check(getString(instance.params, "renderStatus") == "Reference", "Reference is an explicit node setting");
+            check(renderNow(), "renders Reference from the node control");
+            const auto referenceMode = output->pixels;
+            setChoice(plugin, instanceHandle, instance.params, "renderMode", 1);
+            check(getString(instance.params, "renderStatus") == "Realtime", "Realtime overrides the launch default");
+            check(renderNow(), "renders Realtime from the node control");
+            setChoice(plugin, instanceHandle, instance.params, "renderMode", 2);
+            check(renderNow() && output->pixels == referenceMode,
+                  "switching back to Reference restores the same frame, including cached tables");
+            setChoice(plugin, instanceHandle, instance.params, "grainModel", 1);
+            check(getInt(instance.params, "renderMode") == 2, "selecting discs selects Reference rendering");
+            setChoice(plugin, instanceHandle, instance.params, "renderMode", 1);
+            check(getInt(instance.params, "grainModel") == 0, "selecting Realtime restores supported clump grain");
+            rest(order[0]);
+            setChoice(plugin, instanceHandle, instance.params, "grainAnimation", 1);
+            PropertySet *frozenPreferences = newPropertySet();
+            plugin->mainEntry(kOfxImageEffectActionGetClipPreferences, instanceHandle, nullptr, handleOf(frozenPreferences));
+            int varying = 1;
+            propGetInt(handleOf(frozenPreferences), kOfxImageEffectFrameVarying, 0, &varying);
+            check(varying == 0, "frozen grain clears the frame-varying cache declaration");
+            double savedTime = 0;
+            propGetDouble(handleOf(renderArgs), kOfxPropTime, 0, &savedTime);
+            propSetDouble(handleOf(renderArgs), kOfxPropTime, 0, 10);
+            check(renderNow(), "renders frozen grain at frame 10");
+            const auto frozenFrame = output->pixels;
+            propSetDouble(handleOf(renderArgs), kOfxPropTime, 0, 11);
+            check(renderNow() && output->pixels == frozenFrame, "frozen grain is identical across timeline frames");
+            const int oldSeed = getInt(instance.params, "seed");
+            setChoice(plugin, instanceHandle, instance.params, "newSeed", 0);
+            check(getInt(instance.params, "seed") != oldSeed, "New Seed changes the saved grain field");
+            check(renderNow() && output->pixels != frozenFrame, "New Seed reaches the frozen render");
+            setChoice(plugin, instanceHandle, instance.params, "seed", oldSeed);
+            check(renderNow() && output->pixels == frozenFrame, "restoring the seed restores identical grain");
+            setChoice(plugin, instanceHandle, instance.params, "grainAnimation", 0);
+            propSetDouble(handleOf(renderArgs), kOfxPropTime, 0, savedTime);
+            rest(order[0]);
+
             // The scattering half's side of that, measured. Texture Only develops the frame twice
             // — once with the spatial stages it was asked for and once with none of them — and
             // returns what the two densities differ by, so a lens control reaches it only through
@@ -2486,10 +2809,24 @@ int testPlugin() {
                 double value;
                 const char *companion;
                 double companionValue;
+                bool active = true;
             };
             const TextureProbe probes[] = {
                 {"diffusion", 1, nullptr, 0},
                 {"focalLength", 200, "diffusion", 1},
+                {"mottleShare", 80, "mottleOverride", 1, false},
+                {"mottleOverride", 1, "mottleShare", 80, false},
+                {"couplerReach", 0, nullptr, 0},
+                {"couplerSelf", 0, nullptr, 0},
+                {"couplerRedGreen", 0, nullptr, 0},
+                {"couplerGreenBlue", 0, nullptr, 0},
+                {"sceneLight", 3, nullptr, 0},
+                {"sceneLightKelvin", 2856, "sceneLight", 5},
+                {"halation550", 6, "halation", 10},
+                {"halation650", 6, "halation", 10},
+                {"filterCoating", 2, "lensFilter1", static_cast<double>(deepRed), false},
+                {"frameCoverage", 25, nullptr, 0},
+                {"shutterSeconds", 3600, nullptr, 0},
             };
             for (const TextureProbe &probe : probes) {
                 rest(order[0]);
@@ -2505,8 +2842,9 @@ int testPlugin() {
                 const double survived = rendered ? rmsAgainst(reference) : 0;
                 std::printf("       %s through the texture span: RMS %.6f\n",
                             probe.name, survived);
-                check(rendered && survived > moved,
-                      "the scattering half of the lens reaches the texture span");
+                check(rendered && (probe.active ? survived > moved : survived == 0),
+                      probe.active ? "supported controls reach the texture span"
+                                   : "Full-only controls leave texture output unchanged");
             }
             layOut(sizes[0].first, sizes[0].second);
 

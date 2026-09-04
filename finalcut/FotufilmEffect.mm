@@ -2114,7 +2114,7 @@ writesInterchange:(bool)writesInterchange
         // leave the result depending on which kernel the scheduler ran first.
         read(source, stagedOutput);
         if (fotufilm_bridge_decode_staged(_bridge, width, height, &inputTransform,
-                                         &peak, &repaired) != 1) {
+                                         &peak, &repaired, fotufilm_bridge_realtime_enabled()) != 1) {
             if (error) *error = FotufilmError(kFotufilmError_Render,
                                               @"Fotufilm could not decode the frame: %@",
                                               FotufilmBridgeError(_bridge));
@@ -2133,7 +2133,7 @@ writesInterchange:(bool)writesInterchange
             float bandPeak = 0;
             int32_t bandRepaired = 0;
             if (fotufilm_bridge_decode_rows(from, scratch.data(), width, rows, &inputTransform,
-                                           &bandPeak, &bandRepaired) != 1) {
+                                           &bandPeak, &bandRepaired, fotufilm_bridge_realtime_enabled()) != 1) {
                 if (error) *error = FotufilmError(kFotufilmError_Render,
                                                   @"Fotufilm could not decode the frame: %@",
                                                   FotufilmBridgeError(_bridge));
@@ -2166,8 +2166,21 @@ writesInterchange:(bool)writesInterchange
     // one whatever the host said about the session. Passing the ungated flag would ask about a
     // road this frame is not taking.
     const bool interactive = state.quality < (uint32_t)kFotufilmDeliveryQuality;
+    // A finished print delivered into Rec.709's primaries can leave them: the print arrives in
+    // Display P3, which Rec.709 does not enclose, so a colour the paper can make lands outside
+    // the container and the host clips it. `fotufilm::fitToGamut` is the answer and it needs all
+    // three channels of a pixel at once — the kernel's encode is written per output channel and
+    // cannot express it — so a delivery that needs the fit takes the host encode instead. Only a
+    // print: texture output stays in the scene basis and density output is not colour, and
+    // neither is bounded by a display gamut. The OFX plugin makes the same choice the same way.
+    // Read from the settings rather than passed in: `writesInterchange` is this method's
+    // parameter but the texture span is not, and both are the one stage number.
+    const bool deliversSceneBasis =
+        (int)state.parameters[FOTUFILM_BRIDGE_STAGE] == FOTUFILM_BRIDGE_STAGE_TEXTURE;
+    const bool fitGamut = !writesInterchange && !deliversSceneBasis &&
+                          fotufilm::deliveryLeavesGamut(encoding);
     const bool encodeInKernel =
-        !writesInterchange &&
+        !writesInterchange && !fitGamut &&
         fotufilm_bridge_encodes_output(_bridge, state.stock, state.format, state.paper,
                                       state.parameters, width, height,
                                       (staged && interactive) ? 1 : 0) != 0;
@@ -2261,7 +2274,8 @@ writesInterchange:(bool)writesInterchange
 
     float *result = staged ? stagedOutput : _output.data();
     if (!verbatim) {
-        fotufilm::encodePixels(encoding, outputBasis, result, result, (int)pixels, premultiplied);
+        fotufilm::encodePixels(encoding, outputBasis, result, result, (int)pixels, premultiplied,
+                              fitGamut);
     }
 
     if (into) {

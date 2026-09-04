@@ -61,6 +61,48 @@ final class PipelineStageMetalTests: XCTestCase {
         }
     }
 
+    func testResolvedSilverDiscsMatchCPUAndChangeWithTheSeed() throws {
+        let gpu = try XCTUnwrap(HalideMetalFilmRenderer.shared)
+        var stock = TestStocks.monochrome
+        stock.grainDensityLaw = .silver
+        var selected = options(stage: .negative)
+        selected.format = FilmFormat(name: "resolved grain bench", frameHeightMM: 0.15)
+        selected.halationScale = 0
+        selected.couplerScale = 0
+        selected.grainModel = .discs
+        let invocation = FilmEngineInvocation(
+            stock: stock, options: selected, width: width, height: height)
+        XCTAssertNotEqual(invocation.featureMask & FilmEngineFeature.discGrain, 0)
+
+        var input = [Float](repeating: 0.18, count: width * height * 4)
+        for pixel in 0..<(width * height) { input[pixel * 4 + 3] = 1 }
+        var linear = ImageBuffer(width: width, height: height)
+        for channel in 0..<3 {
+            linear.planes[channel] = [Float](repeating: 0.18, count: width * height)
+        }
+        let cpu = FotufilmEngine(stock: stock, options: selected)
+            .developNegative(linearRGB: linear)
+        func render(_ options: FotufilmEngine.Options) throws -> [Float] {
+            try XCTUnwrap(gpu.processLinearFloat(
+                input, width: width, height: height, stock: stock, options: options))
+        }
+        let discs = try render(selected)
+        XCTAssertEqual(discs, try render(selected))
+        for pixel in 0..<(width * height) {
+            for channel in 0..<3 {
+                XCTAssertEqual(discs[pixel * 4 + channel], cpu.planes[channel][pixel],
+                               accuracy: 2e-5, "pixel \(pixel), channel \(channel)")
+            }
+        }
+        selected.seed += 1
+        XCTAssertNotEqual(discs, try render(selected))
+        selected.seed -= 1
+        selected.grainModel = .clumpField
+        let clumps = try render(selected)
+        XCTAssertGreaterThan(zip(discs, clumps).map { abs($0 - $1) }.max() ?? 0, 1e-4,
+                             "the Metal disc variant must evaluate resolved coverage")
+    }
+
     func testTheInterchangeCarriesAlphaThrough() throws {
         guard let gpu = HalideMetalFilmRenderer.shared else {
             throw XCTSkip("Halide Metal unavailable")

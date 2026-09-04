@@ -1320,6 +1320,32 @@ inline Halide::Expr grain_mix(Halide::ImageParam &configuration,
     return Halide::sqrt(1.0f - rho) * own + Halide::sqrt(rho) * shared;
 }
 
+/// Resolved silver-grain coverage, shared by the CPU and Metal schedules. Density includes
+/// base fog for the Nutting coverage law; the green record supplies one shared field so the
+/// configured inter-layer correlation is preserved.
+inline Halide::Expr disc_grain(Halide::ImageParam &configuration,
+                               Halide::Func density, Halide::Expr net_density,
+                               Halide::Expr x, Halide::Expr y, Halide::Expr channel,
+                               Halide::Expr origin_x, Halide::Expr origin_y,
+                               Halide::Param<uint32_t> &seed) {
+    using Halide::Expr;
+    Expr radius = configuration(FOTUFILM_CONFIG_GRAIN_DISC_RADIUS);
+    Expr coverage = nutting_coverage(
+        net_density + configuration(FOTUFILM_CONFIG_GRAIN_FOG + channel));
+    Expr green_net = Halide::clamp(
+        density(x, y, 1) - configuration(Expr(FOTUFILM_CONFIG_CURVES + 6)),
+        0.0f, film_curve_range(configuration, 1));
+    Expr green_coverage = nutting_coverage(
+        green_net + configuration(FOTUFILM_CONFIG_GRAIN_FOG + 1));
+    return configuration(FOTUFILM_CONFIG_GRAIN_DISC + channel)
+        * nutting_density_gain(coverage)
+        * grain_mix(configuration,
+                    boolean_coverage(x + origin_x, y + origin_y, coverage,
+                                     radius, seed, channel),
+                    boolean_coverage(x + origin_x, y + origin_y, green_coverage,
+                                     radius, seed, Expr(kGrainSharedLayer)));
+}
+
 inline Halide::Expr grain_correlate(Halide::ImageParam &configuration,
                                     Halide::Func base_noise, Halide::Expr x,
                                     Halide::Expr y, Halide::Expr channel) {

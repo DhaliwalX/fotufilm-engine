@@ -233,7 +233,10 @@ const char *const kParameterNames[FOTUFILM_BRIDGE_PARAMETER_COUNT] = {
     "printLight", nullptr, nullptr, "flare", "estimatedHalation",
     "halationColour", "lensFilter1", "lensFilter2", "lensFilter3",
     "metering", "diffusion", "diffusionGrade", "focalLength",
-    "negativeViewing",
+    "negativeViewing", "mottleOverride", "mottleShare", "couplerReach", "couplerSelf",
+    nullptr, "halation400", "halation450", "halation500", "halation550", "halation600",
+    "halation650", "halation700", "filterCoating", "frameCoverage", "grainModel",
+    "shutterSeconds", "renderMode", "grainAnimation", "couplerRedGreen", "couplerGreenBlue",
 };
 
 /// The Lens group's slots that a choice parameter fills, and how the menu's index becomes the
@@ -246,6 +249,12 @@ const char *const kParameterNames[FOTUFILM_BRIDGE_PARAMETER_COUNT] = {
 /// number, and only the two whose entries come straight out of an engine enum need the one added.
 /// The grade is the one bare index here, gated by its family being chosen rather than by a zero
 /// of its own, so it is read as it stands.
+bool isDirectChoice(int slot) {
+    return slot == FOTUFILM_BRIDGE_MOTTLE_OVERRIDE || slot == FOTUFILM_BRIDGE_FILTER_COATING ||
+           slot == FOTUFILM_BRIDGE_GRAIN_MODEL || slot == FOTUFILM_BRIDGE_RENDER_MODE ||
+           slot == FOTUFILM_BRIDGE_GRAIN_FROZEN;
+}
+
 bool isOffsetChoice(int slot) {
     return slot == FOTUFILM_BRIDGE_LENS_METERING ||
            slot == FOTUFILM_BRIDGE_NEGATIVE_VIEWING;
@@ -347,6 +356,13 @@ struct Instance {
     OfxParamHandle diffusionID = nullptr;
     OfxParamHandle colorSpaceStatus = nullptr;
     OfxParamHandle stageStatus = nullptr;
+    OfxParamHandle resolvedFormat = nullptr, resolvedPaper = nullptr;
+    OfxParamHandle developmentStatus = nullptr, pushCondition = nullptr;
+    OfxParamHandle sceneLight = nullptr, sceneLightKelvin = nullptr;
+    OfxParamHandle renderStatus = nullptr, grainStatus = nullptr, newSeed = nullptr;
+    OfxParamSetHandle parameterSet = nullptr;
+    std::vector<float> developmentStops;
+    bool updatingControls = false;
 
     /// The decoded input, reused between frames. Only a frame the engine will not stage — one too
     /// large to develop in a single pass — is decoded into here; the rest go straight into the
@@ -709,6 +725,8 @@ OfxStatus describe(OfxImageEffectHandle effect) {
         gProperty->propSetString(properties, kOfxImageEffectPropClipPreferencesSlaveParam,
                                  static_cast<int>(2 + i), gTextureParams[i].c_str());
     }
+    gProperty->propSetString(properties, kOfxImageEffectPropClipPreferencesSlaveParam,
+                             static_cast<int>(2 + gTextureParams.size()), "grainAnimation");
     // OFX 1.5 colour management. Resolve exposes its timeline conversion in Full native mode;
     // ask for that mode, then request the exact linear Rec.2020 space the engine wants below.
     // The render still checks the selected tag instead of assuming the request was honoured.
@@ -752,22 +770,25 @@ OfxPropertySetHandle defineDouble(OfxParamSetHandle set, const char *name,
     return properties;
 }
 
-void defineChoice(OfxParamSetHandle set, const char *name, const char *label,
+OfxPropertySetHandle defineChoice(OfxParamSetHandle set, const char *name, const char *label,
                   const char *hint, const char *parent,
                   const std::vector<std::string> &options, int value) {
     OfxPropertySetHandle properties =
         define(set, kOfxParamTypeChoice, name, label, hint, parent);
-    if (!properties) return;
+    if (!properties) return nullptr;
     for (size_t i = 0; i < options.size(); ++i) {
         gProperty->propSetString(properties, kOfxParamPropChoiceOption,
                                  static_cast<int>(i), options[i].c_str());
     }
     gProperty->propSetInt(properties, kOfxParamPropDefault, 0, value);
     gProperty->propSetInt(properties, kOfxParamPropAnimates, 0, 0);
+    return properties;
 }
 
-void defineGroup(OfxParamSetHandle set, const char *name, const char *label) {
-    define(set, kOfxParamTypeGroup, name, label, nullptr, nullptr);
+void defineGroup(OfxParamSetHandle set, const char *name, const char *label,
+                 const char *parent = nullptr, bool open = false) {
+    auto properties = define(set, kOfxParamTypeGroup, name, label, nullptr, parent);
+    if (properties) gProperty->propSetInt(properties, kOfxParamPropGroupOpen, 0, open ? 1 : 0);
 }
 
 /// A parameter the user never sees but the project file keeps.
@@ -829,7 +850,27 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
                                                       : gInitializationError);
     }
 
-    defineGroup(set, "stageGroup", "Pipeline");
+    defineGroup(set, "stageGroup", "Setup", nullptr, true);
+    defineChoice(set, kColorSpaceParam, "Timeline Color Space",
+                 "What this node is being handed — the one control that is not "
+                 "taste. The film model is scene-referred in linear Rec.2020: "
+                 "mid-grey at 0.18, specular highlights above 1.0. The input is "
+                 "decoded to that and the result encoded back, so a wrong "
+                 "setting shows the emulsion the wrong light and lands the "
+                 "characteristic curves whole stops off. Auto reads the space "
+                 "the host tags the clip with, where the host says. A "
+                 "display-referred space (Rec.709, sRGB) clips at diffuse "
+                 "white, leaving halation nothing bright to scatter; a "
+                 "wide-gamut log or linear timeline keeps the highlights the "
+                 "model was built for.",
+                 "stageGroup", spaces, kColorSpaceAuto);
+    defineLabel(set, kColorSpaceStatusParam, "Decoded Input", "stageGroup",
+                "Not yet examined",
+                "The input encoding Fotufilm will decode. Host means Resolve supplied an "
+                "exact OFX colour-space tag. Assumed means Resolve supplied Raw or no tag; "
+                "select Timeline Color Space explicitly if that assumption does not match "
+                "the image arriving at this node.");
+
     std::vector<std::string> spans = gStageLabels;
     if (spans.empty()) spans.push_back("Full");
     gDescribedStages = static_cast<int>(spans.size());
@@ -863,7 +904,14 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
         if (selected) gProperty->propSetInt(selected, kOfxParamPropDefault, 0, 1);
     }
 
-    defineGroup(set, "filmGroup", "Film");
+    defineGroup(set, "renderGroup", "Rendering", "stageGroup");
+    defineChoice(set, "renderMode", "Render Mode",
+                 "Default preserves the launch-time renderer setting. Realtime and Reference "
+                 "override it for this node, for both preview and delivery. Disc grain uses Reference.",
+                 "renderGroup", {"Default", "Realtime", "Reference"}, 0);
+    defineLabel(set, "renderStatus", "Effective Renderer", "renderGroup", "Not yet examined");
+
+    defineGroup(set, "filmGroup", "Film", nullptr, true);
     gDescribedStocks = static_cast<int>(stocks.size());
     defineChoice(set, kStockParam, "Stock",
                  "The emulsion. Each is a measured stock: its own spectral "
@@ -875,86 +923,65 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
     const int matchFilm = static_cast<int>(formats.size());
     formats.push_back("Match Film");
     gDescribedFormats = static_cast<int>(formats.size());
-    defineChoice(set, kFormatParam, "Format",
+    defineChoice(set, kFormatParam, "Film Format",
                  "The gauge the frame is exposed on. The image height maps onto "
                  "the gauge's frame height, so a smaller format is enlarged more "
                  "and shows coarser grain, wider halation and stronger adjacency "
                  "— the same emulsion at a different magnification. Match Film "
                  "takes the gauge the chosen stock is known on.",
                  "filmGroup", formats, matchFilm);
-    defineChoice(set, kColorSpaceParam, "Timeline Color Space",
-                 "What this node is being handed — the one control that is not "
-                 "taste. The film model is scene-referred in linear Rec.2020: "
-                 "mid-grey at 0.18, specular highlights above 1.0. The input is "
-                 "decoded to that and the result encoded back, so a wrong "
-                 "setting shows the emulsion the wrong light and lands the "
-                 "characteristic curves whole stops off. Auto reads the space "
-                 "the host tags the clip with, where the host says. A "
-                 "display-referred space (Rec.709, sRGB) clips at diffuse "
-                 "white, leaving halation nothing bright to scatter; a "
-                 "wide-gamut log or linear timeline keeps the highlights the "
-                 "model was built for.",
-                 "filmGroup", spaces, kColorSpaceAuto);
-    defineLabel(set, kColorSpaceStatusParam, "Decoded Input", "filmGroup",
-                "Not yet examined",
-                "The input encoding Fotufilm will decode. Host means Resolve supplied an "
-                "exact OFX colour-space tag. Assumed means Resolve supplied Raw or no tag; "
-                "select Timeline Color Space explicitly if that assumption does not match "
-                "the image arriving at this node.");
+    defineLabel(set, "resolvedFormat", "Resolved Format", "filmGroup", "Not yet examined");
+    defineDouble(set, "frameCoverage", "Film Frame Coverage (%)",
+                 "Short edge of the film frame retained after cropping. 100 uses the full frame; "
+                 "50 enlarges half the frame. Changes grain, halation and other spatial scales, "
+                 "without cropping pixels. Account for any upstream resize yourself.",
+                 "filmGroup", 5, 100, 100);
 
-    defineGroup(set, "outputGroup", "Output");
-    std::vector<std::string> papers = gPaperLabels.empty()
-        ? std::vector<std::string>{"Match Film"} : gPaperLabels;
-    const int matchPaper = static_cast<int>(papers.size()) - 1;
-    gDescribedPapers = static_cast<int>(papers.size());
-    defineChoice(set, kPaperParam, "Output Medium",
-                 "Choose where the finished image lives. Match Film uses RA-4 paper for a still "
-                 "negative, the stock's native release print for a motion negative, and the "
-                 "direct positive for reversal film. Digital Reference is the HDR path; paper, "
-                 "projection, Lab Scan, Telecine and Negative are SDR. Negative is available "
-                 "only for negative film.",
-                 "outputGroup", papers, matchPaper);
-    defineChoice(set, "printLight", "Viewing Illuminant",
-                 "Choose the light used to judge a physical print. Medium Reference means D50 "
-                 "for photo paper or calibrated 5400 K xenon for a projected release print. "
-                 "Digital Reference, Lab Scan, Telecine and Negative ignore this control.",
-                 "outputGroup",
-                 {"Medium Reference · Auto", "Proofing Booth · D50",
-                  "Tungsten · 2856 K", "Daylight · D65"}, 0);
-    defineDouble(set, "printCorrection", "Channel Contrast Match",
-                 "Balances how the film's colour layers print together. The medium's own "
-                 "calibration is already applied; raise this only for a more neutral crossover.",
-                 "outputGroup", 0, 1, 0.05);
-    std::vector<std::string> viewings = gNegativeViewingLabels.empty()
-        ? std::vector<std::string>{"Light Box"} : gNegativeViewingLabels;
-    defineChoice(set, kNegativeViewingParam, "Negative Viewing",
-                 "How the developed negative is read, when Output Medium is Negative. "
-                 "Light Box normalises on the viewing light, so the film base keeps its own "
-                 "orange. Scanner normalises on the film's own D-min, so the base reads white "
-                 "and what is left is only the image's inversion. Every other medium ignores "
-                 "this control, having a print or a scan of its own.",
-                 "outputGroup", viewings, 0);
-
-    // The identity behind each menu above; see the comment on kStockIDParam.
-    defineHiddenString(set, kStockIDParam);
-    defineHiddenString(set, kFormatIDParam);
-    defineHiddenString(set, kPaperIDParam);
-
-    defineGroup(set, "exposureGroup", "Exposure");
+    defineGroup(set, "exposureGroup", "Exposure & Colour");
     defineDouble(set, "exposure", "Exposure", "Camera exposure, in stops.",
                  "exposureGroup", -5, 5, 0);
-    defineDouble(set, "temperature", "Temperature",
-                 "The illuminant the scene was lit by, in kelvin. Adapted to the "
-                 "renderer's white before the emulsion sees the light, which is "
-                 "where a camera does it too.",
+    defineDouble(set, "temperature", "Temperature (K)",
+                 "White balance before the film responds, in kelvin. Separate from Scene "
+                 "Illuminant, which sets the spectral light integrated against the emulsion.",
                  "exposureGroup", 2000, 12000, 6504);
     defineDouble(set, "tint", "Tint", "Green/magenta balance of the illuminant.",
                  "exposureGroup", -100, 100, 0);
 
-    // The lens. Everything here sits ahead of the emulsion, in the order the light meets it: the
-    // absorbing glass, then how the exposure was set behind it, then the diffusion filter and the
-    // focal length its scattering is imaged through.
-    defineGroup(set, "lensGroup", "Lens");
+    defineDouble(set, "highlights", "Highlights",
+                 "Scene-referred highlight recovery, applied before the film "
+                 "model. Keyed to each pixel's regional brightness, so pulling a "
+                 "sky down moves the sky as one piece.",
+                 "exposureGroup", -1, 1, 0);
+    defineDouble(set, "shadows", "Shadows",
+                 "The same shift, fading in below mid-grey.", "exposureGroup", -1, 1, 0);
+    OfxPropertySetHandle localTone =
+        define(set, kOfxParamTypeBoolean, "localTone", "Regional Tone Mask",
+               "Off, the highlight and shadow shifts key to each pixel's own "
+               "luminance instead of to the region it sits in. Identical output "
+               "when both rest at zero.",
+               "exposureGroup");
+    if (localTone) gProperty->propSetInt(localTone, kOfxParamPropDefault, 0, 1);
+    defineDouble(set, "saturation", "Saturation",
+                 "Chroma multiplier applied to the scene before the film "
+                 "responds. 1 leaves it untouched.",
+                 "exposureGroup", 0, 2, 1);
+    defineDouble(set, "vibrance", "Vibrance",
+                 "Chroma boost weighted toward the least colourful pixels; "
+                 "already-vivid colours are left alone.",
+                 "exposureGroup", -1, 1, 0);
+
+    defineGroup(set, "sceneLightGroup", "Spectral Scene Light", "exposureGroup");
+    defineChoice(set, "sceneLight", "Scene Illuminant",
+                 "Spectral lighting presented to the film, separate from white balance. "
+                 "Stock Reference preserves existing renders. Custom sources use a daylight or "
+                 "Planckian spectrum, not a measured LED spectrum.", "sceneLightGroup",
+                 {"Stock Reference", "Daylight · D65", "Daylight · 5500 K",
+                  "Tungsten · 3200 K", "Incandescent · 2856 K", "Custom"}, 0);
+    defineDouble(set, "sceneLightKelvin", "Scene Illuminant (K)",
+                 "Custom spectral scene light; does not replace Temperature or Tint.",
+                 "sceneLightGroup", 2000, 12000, 6504);
+
+    defineGroup(set, "lensGroup", "Lens & Filters");
     std::vector<std::string> filters = gLensFilterLabels.empty()
         ? std::vector<std::string>{"None"} : gLensFilterLabels;
     gDescribedLensFilters = static_cast<int>(filters.size());
@@ -964,7 +991,7 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
         "chosen film's own three layer sensitivities, which is why the same filter is a "
         "different filter on a different stock — an 85B is a correction on tungsten film and a "
         "heavy warm cast on daylight film. It also adds the veiling glare of two more air-glass "
-        "faces, whatever the Lens Flare slider says — and that added glare is why this control "
+        "faces, whatever the Veiling Glare slider says — and that added glare is why this control "
         "is live only on the Full stage: no kernel this build carries can measure it in a span "
         "that ends at the developed negative.",
         "A second filter, behind the first. They stack in the order given: their transmittances "
@@ -1022,34 +1049,94 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
     for (int i = 0; i < 3; ++i) defineHiddenString(set, kLensFilterIDParams[i]);
     defineHiddenString(set, kDiffusionIDParam);
 
-    defineGroup(set, "toneGroup", "Tone");
-    defineDouble(set, "highlights", "Highlights",
-                 "Scene-referred highlight recovery, applied before the film "
-                 "model. Keyed to each pixel's regional brightness, so pulling a "
-                 "sky down moves the sky as one piece.",
-                 "toneGroup", -1, 1, 0);
-    defineDouble(set, "shadows", "Shadows",
-                 "The same shift, fading in below mid-grey.", "toneGroup", -1, 1, 0);
-    OfxPropertySetHandle localTone =
-        define(set, kOfxParamTypeBoolean, "localTone", "Regional Tone Mask",
-               "Off, the highlight and shadow shifts key to each pixel's own "
-               "luminance instead of to the region it sits in. Identical output "
-               "when both rest at zero.",
-               "toneGroup");
-    if (localTone) gProperty->propSetInt(localTone, kOfxParamPropDefault, 0, 1);
-    defineDouble(set, "saturation", "Saturation",
-                 "Chroma multiplier applied to the scene before the film "
-                 "responds. 1 leaves it untouched.",
-                 "toneGroup", 0, 2, 1);
-    defineDouble(set, "vibrance", "Vibrance",
-                 "Chroma boost weighted toward the least colourful pixels; "
-                 "already-vivid colours are left alone.",
-                 "toneGroup", -1, 1, 0);
+    defineDouble(set, "flare", "Veiling Glare",
+                 "Veiling glare from the taking lens, as a multiplier on the "
+                 "stock's figure. It defaults to 0 because a photographed clip "
+                 "already carries the glare of the lens that shot it, and this "
+                 "stage would veil the shadows a second time. Raise it for light "
+                 "that has met no glass — a render or a synthetic chart — or to "
+                 "stand in for glass worse than the camera's.",
+                 "lensGroup", 0, 2, 0);
+    defineGroup(set, "lensAdvancedGroup", "Advanced", "lensGroup");
+    defineChoice(set, "filterCoating", "Filter Coating",
+                 "Coating on every fitted absorbing and diffusion filter. Changes transmission "
+                 "and added glare. Multicoated preserves the existing filter look.",
+                 "lensAdvancedGroup", {"Multi-coated", "Single-coated", "Uncoated"}, 0);
 
-    defineGroup(set, "filmResponseGroup", "Film Response");
+    defineGroup(set, "labGroup", "Development");
+    OfxPropertySetHandle push = defineDouble(
+        set, "push", "Push / Pull",
+        "Measured push or pull conditions for this film's stated developer, "
+        "dilution, temperature and agitation. The control is disabled when "
+        "the stock pack has no measured response.",
+        "labGroup", -2, 2, 0);
+    // Interpolation between keyframes would be an unmeasured development condition. The instance
+    // change handler also snaps typed and dragged values to the selected stock's measurements.
+    if (push) {
+        gProperty->propSetInt(push, kOfxParamPropAnimates, 0, 0);
+        gProperty->propSetInt(push, kOfxParamPropSecret, 0, 1);
+    }
+    auto conditionMenu = defineChoice(set, "pushCondition", "Push / Pull",
+                 "Measured development conditions for this stock. The saved stop value is "
+                 "preserved when the menu is rebuilt. Pair a push with the intended camera exposure.",
+                 "labGroup", {"Reference · 0 stops"}, 0);
+    if (conditionMenu) gProperty->propSetInt(conditionMenu, kOfxParamPropPersistant, 0, 0);
+    defineLabel(set, "developmentStatus", "Measured Conditions", "labGroup", "Not yet examined");
+    defineDouble(set, "bleachBypass", "Bleach Bypass",
+                 "How much of the developed silver the bleach leaves in the "
+                 "negative. The retained silver is a black-and-white image "
+                 "over the colour one: contrast up, chroma down, together.",
+                 "labGroup", 0, 1, 0);
+    defineDouble(set, "expired", "Film Age (years)",
+                 "Years the roll sat past its process-by date. Speed falls a "
+                 "stop a decade with the blue-sensitive layer going first, "
+                 "base fog rises, and grain rises with the fog — the muddy, "
+                 "crossed toe of an old roll.",
+                 "labGroup", 0, 30, 0);
+    defineDouble(set, "shutterSeconds", "Long Exposure (s)",
+                 "Exposure duration for the stock's measured reciprocity response. 0 disables "
+                 "the override. Corrections stop at the last measured duration; no motion blur "
+                 "is added. Use the same value in paired Negative Only and Print Only nodes.",
+                 "labGroup", 0, 3600, 0);
+
+    defineGroup(set, "filmResponseGroup", "Grain");
     defineDouble(set, "grain", "Grain",
                  "Multiplier on the stock's measured granularity. 0 disables it.",
                  "filmResponseGroup", 0, 2, 1);
+    defineChoice(set, "mottleOverride", "Mottle",
+                 "Use the stock's coarse grain mixture, or set a custom share. Full mode only.",
+                 "filmResponseGroup", {"Stock Default", "Custom"}, 0);
+    defineDouble(set, "mottleShare", "Mottle Amount (%)",
+                 "Share of grain variance carried by coarse clumping. Total calibrated "
+                 "granularity is preserved. Custom mottle uses the engine's video delivery size.",
+                 "filmResponseGroup", 0, 90, 0);
+    defineChoice(set, "grainAnimation", "Grain Animation",
+                 "Timeline changes grain each frame. Frozen uses the same field at every time; "
+                 "the texture still responds to changes in the image.",
+                 "filmResponseGroup", {"Timeline", "Frozen"}, 0);
+    defineGroup(set, "grainAdvancedGroup", "Advanced", "filmResponseGroup");
+    defineChoice(set, "grainModel", "Grain Model",
+                 "Disc grain is available on silver-image stocks and requires Reference rendering, "
+                 "selected automatically. Subpixel "
+                 "grain uses the clump field; coarse mottle is suppressed where discs render.",
+                 "grainAdvancedGroup", {"Clump Field", "Discs"}, 0);
+    OfxPropertySetHandle seed =
+        define(set, kOfxParamTypeInteger, kSeedParam, "Grain Seed",
+               "Same seed and same frame give the same grain. Grain also "
+               "advances with the timeline, so a still frame is still, and a "
+               "moving one is not.",
+               "grainAdvancedGroup");
+    if (seed) {
+        gProperty->propSetInt(seed, kOfxParamPropDefault, 0, 0x46494C4D);
+        gProperty->propSetInt(seed, kOfxParamPropAnimates, 0, 0);
+    }
+
+    define(set, kOfxParamTypePushButton, "newSeed", "New Seed",
+           "Choose a different deterministic grain field. Included in Undo with Grain Seed.",
+           "grainAdvancedGroup");
+    defineLabel(set, "grainStatus", "Grain Status", "grainAdvancedGroup", "Not yet examined");
+
+    defineGroup(set, "halationGroup", "Halation");
     OfxPropertySetHandle halation = defineDouble(
                  set, "halation", "Halation",
                  "Multiplier on the fraction of light the base returns. On the "
@@ -1063,7 +1150,7 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
                  "absorber densities and are all but invisible on their own. "
                  "The measured film survives at 1 over the look scale (0.025 "
                  "on a rem-jet stock). Typing past the slider reaches 100.",
-                 "filmResponseGroup", 0, 10, 1);
+                 "halationGroup", 0, 10, 1);
     // The slider stays 0–10; the hard range admits typed values to 100 so a
     // pack's authored look can still be pushed well past itself without
     // touching the calibrated sheets.
@@ -1076,7 +1163,7 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
                "no independently calibrated profile exists. Off is the legacy "
                "Gaussian model and the render every existing project made; the "
                "annular road costs roughly half again as much frame time.",
-               "filmResponseGroup");
+               "halationGroup");
     if (estimatedHalation) {
         gProperty->propSetInt(estimatedHalation, kOfxParamPropDefault, 0, 0);
     }
@@ -1087,51 +1174,78 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
                  "the light was; raising this lifts the dimmer records to the "
                  "strongest record's return, and the ring brightens toward the "
                  "light's colour. 0 is the film.",
-                 "filmResponseGroup", 0, 1, 0);
-    defineDouble(set, "flare", "Lens Flare",
-                 "Veiling glare from the taking lens, as a multiplier on the "
-                 "stock's figure. It defaults to 0 because a photographed clip "
-                 "already carries the glare of the lens that shot it, and this "
-                 "stage would veil the shadows a second time. Raise it for light "
-                 "that has met no glass — a render or a synthetic chart — or to "
-                 "stand in for glass worse than the camera's.",
-                 "filmResponseGroup", 0, 2, 0);
+                 "halationGroup", 0, 1, 0);
+    defineGroup(set, "halationSpectrumGroup", "Return Spectrum", "halationGroup");
+    const char *spectralNames[] = {"halation400", "halation450", "halation500", "halation550",
+                                   "halation600", "halation650", "halation700"};
+    const char *spectralLabels[] = {"400 nm (stops)", "450 nm (stops)", "500 nm (stops)",
+                                    "550 nm (stops)", "600 nm (stops)", "650 nm (stops)",
+                                    "700 nm (stops)"};
+    for (int i = 0; i < 7; ++i) {
+        defineDouble(set, spectralNames[i], spectralLabels[i],
+                     "Gain over the stock's halation return spectrum. 0 preserves the stock; "
+                     "positive values strengthen this band. Does not create return in an absent band.",
+                     "halationSpectrumGroup", -6, 6, 0);
+    }
+
+    defineGroup(set, "couplerGroup", "Colour Separation");
     defineDouble(set, "couplers", "DIR Couplers",
                  "Multiplier on inter-image inhibition, the mechanism behind the "
                  "stock's colour separation and its Mackie lines. 0 disables it.",
-                 "filmResponseGroup", 0, 2, 1);
-    OfxPropertySetHandle seed =
-        define(set, kOfxParamTypeInteger, kSeedParam, "Grain Seed",
-               "Same seed and same frame give the same grain. Grain also "
-               "advances with the timeline, so a still frame is still, and a "
-               "moving one is not.",
-               "filmResponseGroup");
-    if (seed) {
-        gProperty->propSetInt(seed, kOfxParamPropDefault, 0, 0x46494C4D);
-        gProperty->propSetInt(seed, kOfxParamPropAnimates, 0, 0);
-    }
+                 "couplerGroup", 0, 2, 1);
+    defineDouble(set, "couplerReach", "Separation",
+                 "Interlayer inhibitor reach. 1 preserves the stock; 0 seals the layers off.",
+                 "couplerGroup", 0, 3, 1);
+    defineDouble(set, "couplerSelf", "Edge Contrast",
+                 "Within-layer inhibition. 1 preserves the stock's retained self-inhibition.",
+                 "couplerGroup", 0, 3, 1);
+    defineGroup(set, "couplerAdvancedGroup", "Interlayer Reach", "couplerGroup");
+    defineDouble(set, "couplerRedGreen", "Red–Green Reach",
+                 "Additional multiplier on Separation for the red–green interlayer.",
+                 "couplerAdvancedGroup", 0, 3, 1);
+    defineDouble(set, "couplerGreenBlue", "Green–Blue Reach",
+                 "Additional multiplier on Separation for the green–blue interlayer.",
+                 "couplerAdvancedGroup", 0, 3, 1);
 
-    defineGroup(set, "labGroup", "The Lab");
-    OfxPropertySetHandle push = defineDouble(
-        set, "push", "Push / Pull",
-        "Measured push or pull conditions for this film's stated developer, "
-        "dilution, temperature and agitation. The control is disabled when "
-        "the stock pack has no measured response.",
-        "labGroup", -2, 2, 0);
-    // Interpolation between keyframes would be an unmeasured development condition. The instance
-    // change handler also snaps typed and dragged values to the selected stock's measurements.
-    if (push) gProperty->propSetInt(push, kOfxParamPropAnimates, 0, 0);
-    defineDouble(set, "bleachBypass", "Bleach Bypass",
-                 "How much of the developed silver the bleach leaves in the "
-                 "negative. The retained silver is a black-and-white image "
-                 "over the colour one: contrast up, chroma down, together.",
-                 "labGroup", 0, 1, 0);
-    defineDouble(set, "expired", "Expired",
-                 "Years the roll sat past its process-by date. Speed falls a "
-                 "stop a decade with the blue-sensitive layer going first, "
-                 "base fog rises, and grain rises with the fog — the muddy, "
-                 "crossed toe of an old roll.",
-                 "labGroup", 0, 30, 0);
+    defineGroup(set, "outputGroup", "Output", nullptr, true);
+    std::vector<std::string> papers = gPaperLabels.empty()
+        ? std::vector<std::string>{"Match Film"} : gPaperLabels;
+    const int matchPaper = static_cast<int>(papers.size()) - 1;
+    gDescribedPapers = static_cast<int>(papers.size());
+    defineChoice(set, kPaperParam, "Output Medium",
+                 "Choose where the finished image lives. Match Film uses RA-4 paper for a still "
+                 "negative, the stock's native release print for a motion negative, and the "
+                 "direct positive for reversal film. Digital Reference is the HDR path; paper, "
+                 "projection, Lab Scan, Telecine and Negative are SDR. Negative is available "
+                 "only for negative film.",
+                 "outputGroup", papers, matchPaper);
+    defineLabel(set, "resolvedPaper", "Resolved Medium", "outputGroup", "Not yet examined");
+    defineChoice(set, "printLight", "Viewing Illuminant",
+                 "Choose the light used to judge a physical print. Medium Reference means D50 "
+                 "for photo paper or calibrated 5400 K xenon for a projected release print. "
+                 "Digital Reference, Lab Scan, Telecine and Negative ignore this control.",
+                 "outputGroup",
+                 {"Medium Reference · Auto", "Proofing Booth · D50",
+                  "Tungsten · 2856 K", "Daylight · D65"}, 0);
+    defineDouble(set, "printCorrection", "Channel Contrast Match",
+                 "Balances how the film's colour layers print together. The medium's own "
+                 "calibration is already applied; raise this only for a more neutral crossover.",
+                 "outputGroup", 0, 1, 0.05);
+    std::vector<std::string> viewings = gNegativeViewingLabels.empty()
+        ? std::vector<std::string>{"Light Box"} : gNegativeViewingLabels;
+    defineChoice(set, kNegativeViewingParam, "Negative Viewing",
+                 "How the developed negative is read, when Output Medium is Negative. "
+                 "Light Box normalises on the viewing light, so the film base keeps its own "
+                 "orange. Scanner normalises on the film's own D-min, so the base reads white "
+                 "and what is left is only the image's inversion. Every other medium ignores "
+                 "this control, having a print or a scan of its own.",
+                 "outputGroup", viewings, 0);
+
+    // The identity behind each menu above; see the comment on kStockIDParam.
+    defineHiddenString(set, kStockIDParam);
+    defineHiddenString(set, kFormatIDParam);
+    defineHiddenString(set, kPaperIDParam);
+
     return kOfxStatOK;
 }
 
@@ -1230,6 +1344,160 @@ void enableParameter(OfxParamHandle parameter, bool enabled) {
     gProperty->propSetInt(properties, kOfxParamPropEnabled, 0, enabled ? 1 : 0);
 }
 
+void showParameter(OfxParamHandle parameter, bool visible) {
+    OfxPropertySetHandle properties = nullptr;
+    if (parameter && gParameter->paramGetPropertySet(parameter, &properties) == kOfxStatOK) {
+        gProperty->propSetInt(properties, kOfxParamPropSecret, 0, visible ? 0 : 1);
+    }
+}
+
+/// Parameter reads for UI state use the event time, so keyframed amounts gate their dependents
+/// at the frame the user is editing. Rendering reads values independently and never edits the UI.
+double controlValue(Instance *instance, int slot, OfxTime time) {
+    double value = 0;
+    if (instance->parameters[slot]) {
+        gParameter->paramGetValueAtTime(instance->parameters[slot], time, &value);
+    }
+    return value;
+}
+
+int choiceValue(OfxParamHandle parameter, OfxTime time = 0) {
+    int value = 0;
+    if (parameter) gParameter->paramGetValueAtTime(parameter, time, &value);
+    return value;
+}
+
+void readParameters(Instance *, OfxTime, float *);
+
+void updateContextControls(Instance *instance, OfxTime time) {
+    const int stage = effectiveStage(instance, time);
+    const bool scene = stage != FOTUFILM_BRIDGE_STAGE_PRINT;
+    const bool full = stage == FOTUFILM_BRIDGE_STAGE_FULL;
+    const bool texture = stage == FOTUFILM_BRIDGE_STAGE_TEXTURE;
+    const bool print = full || stage == FOTUFILM_BRIDGE_STAGE_PRINT;
+    const int stock = effectiveStockChoice(instance, time);
+    const int paper = effectiveChoice(instance->paperID, gPaperIDs,
+                                      choiceValue(instance->paper, time), time);
+    const int capabilities = fotufilm_bridge_control_capabilities(stock, paper);
+    const bool colourNegative = (capabilities & FOTUFILM_CONTROL_COLOUR_NEGATIVE) != 0;
+    const int selection = textureSelection(instance, time);
+    auto carries = [&](const char *id) {
+        for (size_t i = 0; i < gTextureIDs.size(); ++i) {
+            if (gTextureIDs[i] == id) return fotufilm_bridge_texture_stage_available(stock, i) != 0 &&
+                (!texture || (selection & gTextureMasks[i]) != 0);
+        }
+        return false;
+    };
+    auto enable = [&](int slot, bool active) { enableParameter(instance->parameters[slot], active); };
+    const bool grain = scene && carries("grain");
+    const bool grainOn = grain && controlValue(instance, FOTUFILM_BRIDGE_GRAIN_SCALE, time) > 0;
+    const bool halo = scene && carries("halation");
+    const bool haloOn = halo && controlValue(instance, FOTUFILM_BRIDGE_HALATION_SCALE, time) > 0;
+    const bool couplers = scene && (capabilities & FOTUFILM_CONTROL_COUPLERS) != 0 &&
+        (!texture || carries("adjacency"));
+    const bool geometry = couplers && (capabilities & FOTUFILM_CONTROL_COUPLER_GEOMETRY) != 0 &&
+        controlValue(instance, FOTUFILM_BRIDGE_COUPLER_SCALE, time) > 0;
+    const bool silver = (capabilities & FOTUFILM_CONTROL_DISC_GRAIN) != 0;
+    const bool discs = silver && choiceValue(instance->parameters[FOTUFILM_BRIDGE_GRAIN_MODEL], time) == 1;
+    enable(FOTUFILM_BRIDGE_GRAIN_SCALE, grain);
+    enableParameter(instance->seed, grainOn);
+    enableParameter(instance->newSeed, grainOn);
+    enable(FOTUFILM_BRIDGE_GRAIN_FROZEN, grainOn);
+    enable(FOTUFILM_BRIDGE_GRAIN_MODEL, grainOn && silver);
+    enable(FOTUFILM_BRIDGE_MOTTLE_OVERRIDE, full && grainOn && !discs);
+    enable(FOTUFILM_BRIDGE_MOTTLE_SHARE, full && grainOn && !discs &&
+           choiceValue(instance->parameters[FOTUFILM_BRIDGE_MOTTLE_OVERRIDE], time) == 1);
+    enable(FOTUFILM_BRIDGE_HALATION_SCALE, halo);
+    enable(FOTUFILM_BRIDGE_ESTIMATED_HALATION, haloOn);
+    enable(FOTUFILM_BRIDGE_HALATION_COLOUR, haloOn && colourNegative);
+    for (int slot = FOTUFILM_BRIDGE_HALATION_400; slot <= FOTUFILM_BRIDGE_HALATION_700; ++slot) {
+        enable(slot, haloOn);
+    }
+    enable(FOTUFILM_BRIDGE_COUPLER_SCALE, couplers);
+    for (int slot : {FOTUFILM_BRIDGE_COUPLER_REACH, FOTUFILM_BRIDGE_COUPLER_SELF,
+                     FOTUFILM_BRIDGE_COUPLER_RED_GREEN, FOTUFILM_BRIDGE_COUPLER_GREEN_BLUE}) enable(slot, geometry);
+    enable(FOTUFILM_BRIDGE_BLEACH_BYPASS, colourNegative);
+    enable(FOTUFILM_BRIDGE_SHUTTER_SECONDS, (capabilities & FOTUFILM_CONTROL_RECIPROCITY) != 0);
+    enable(FOTUFILM_BRIDGE_PRINT_LIGHT, print && (capabilities & FOTUFILM_CONTROL_VIEWING_LIGHT) != 0);
+    enable(FOTUFILM_BRIDGE_PRINT_CORRECTION, print && (capabilities & FOTUFILM_CONTROL_PRINT_CORRECTION) != 0);
+    enableParameter(instance->paper, (print || texture) && fotufilm_bridge_stock_prints(stock) != 0);
+    enable(FOTUFILM_BRIDGE_NEGATIVE_VIEWING, print && fotufilm_bridge_stock_prints(stock) != 0 &&
+           fotufilm_bridge_paper_is_negative(paper) != 0);
+    enable(FOTUFILM_BRIDGE_LOCAL_TONE, scene &&
+           (controlValue(instance, FOTUFILM_BRIDGE_HIGHLIGHTS, time) != 0 ||
+            controlValue(instance, FOTUFILM_BRIDGE_SHADOWS, time) != 0));
+    enable(FOTUFILM_BRIDGE_FLARE_SCALE, full);
+    const bool mist = effectiveChoice(instance->diffusionID, gDiffusionIDs,
+                                      choiceValue(instance->diffusion, time), time) > 0;
+    enable(FOTUFILM_BRIDGE_DIFFUSION_GRADE, scene && mist);
+    enable(FOTUFILM_BRIDGE_FOCAL_LENGTH, scene && mist);
+    bool filters = false;
+    for (int i = 0; i < 3; ++i) {
+        filters |= effectiveChoice(instance->lensFilterIDs[i], gLensFilterIDs,
+                                    choiceValue(instance->lensFilters[i], time), time) > 0;
+    }
+    enable(FOTUFILM_BRIDGE_LENS_METERING, full && filters);
+    enable(FOTUFILM_BRIDGE_FILTER_COATING, full && (filters || mist));
+    enableParameter(instance->sceneLight, scene);
+    enableParameter(instance->sceneLightKelvin, scene && choiceValue(instance->sceneLight, time) == 5);
+    for (auto parameter : instance->textureStages) showParameter(parameter, texture);
+
+    char text[512];
+    const int format = effectiveChoice(instance->formatID, gFormatIDs,
+                                       choiceValue(instance->format, time), time);
+    if (instance->resolvedFormat && fotufilm_bridge_resolved_format(stock, format, text, sizeof(text)) >= 0)
+        gParameter->paramSetValue(instance->resolvedFormat, text);
+    if (instance->resolvedPaper && fotufilm_bridge_resolved_paper(stock, paper, text, sizeof(text)) >= 0) {
+        std::string label = text;
+        if (fotufilm_bridge_stock_prints(stock) == 0) label += " · reversal film";
+        gParameter->paramSetValue(instance->resolvedPaper, label.c_str());
+    }
+
+    std::vector<float> stops;
+    for (int i = 0; i < fotufilm_bridge_development_count(stock); ++i)
+        stops.push_back(fotufilm_bridge_development_stop(stock, i));
+    if (stops.empty()) stops.push_back(0);
+    OfxPropertySetHandle pushProperties = nullptr;
+    if (instance->parameters[FOTUFILM_BRIDGE_PUSH_PULL] &&
+        gParameter->paramGetPropertySet(instance->parameters[FOTUFILM_BRIDGE_PUSH_PULL], &pushProperties) == kOfxStatOK) {
+        gProperty->propSetDouble(pushProperties, kOfxParamPropMin, 0, stops.front());
+        gProperty->propSetDouble(pushProperties, kOfxParamPropMax, 0, stops.back());
+    }
+    if (instance->pushCondition && stops != instance->developmentStops) {
+        OfxPropertySetHandle properties = nullptr;
+        gParameter->paramGetPropertySet(instance->pushCondition, &properties);
+        if (gProperty->propReset) gProperty->propReset(properties, kOfxParamPropChoiceOption);
+        for (size_t i = 0; i < stops.size(); ++i) {
+            std::snprintf(text, sizeof(text), stops[i] == 0 ? "Reference · 0 stops" : "%+.2g stops", stops[i]);
+            gProperty->propSetString(properties, kOfxParamPropChoiceOption, static_cast<int>(i), text);
+        }
+        instance->developmentStops = stops;
+    }
+    int selected = 0;
+    const double push = controlValue(instance, FOTUFILM_BRIDGE_PUSH_PULL, time);
+    std::string conditions;
+    for (size_t i = 0; i < stops.size(); ++i) {
+        if (std::abs(stops[i] - push) < 1e-4) selected = static_cast<int>(i);
+        std::snprintf(text, sizeof(text), "%+.2g", stops[i]);
+        if (!conditions.empty()) conditions += ", ";
+        conditions += text;
+    }
+    conditions += stops.size() == 1 ? " stops · reference only" : " stops";
+    if (instance->developmentStatus) gParameter->paramSetValue(instance->developmentStatus, conditions.c_str());
+    if (instance->pushCondition && choiceValue(instance->pushCondition) != selected)
+        gParameter->paramSetValue(instance->pushCondition, selected);
+    enableParameter(instance->pushCondition, stops.size() > 1);
+
+    float parameters[FOTUFILM_BRIDGE_PARAMETER_COUNT] = {};
+    readParameters(instance, time, parameters);
+    if (instance->renderStatus) gParameter->paramSetValue(instance->renderStatus,
+        fotufilm_bridge_effective_realtime(parameters) != 0 ? "Realtime" : "Reference");
+    if (instance->grainStatus) gParameter->paramSetValue(instance->grainStatus,
+        !silver ? "Dye clouds · clump field grain"
+        : discs ? "Discs · Reference required; subpixel grains use clump field"
+              : (full ? "Clump field · custom mottle available" : "Clump field · mottle requires Full"));
+}
+
 /// Greys out the controls the chosen span does not read, and says in the status line what the
 /// node is now reading and writing.
 ///
@@ -1241,7 +1509,12 @@ void enableParameter(OfxParamHandle parameter, bool enabled) {
 /// bleach, expiry — and the gauge change the *stock as developed*, which both halves of a split
 /// read: the print node needs the same curves the negative node exposed, so it needs the same
 /// settings, and hiding them on one side would make the pair impossible to keep in step.
-void updateStageControls(Instance *instance) {
+void updateColourSpaceStatus(Instance *instance);
+
+void updateStageControls(Instance *instance, OfxTime time = 0) {
+    if (instance->updatingControls) return;
+    instance->updatingControls = true;
+    struct Finish { bool &flag; ~Finish() { flag = false; } } finish{instance->updatingControls};
     const int stage = effectiveStage(instance, 0);
     const bool scene = stage != FOTUFILM_BRIDGE_STAGE_PRINT;
     const bool print = stage == FOTUFILM_BRIDGE_STAGE_FULL ||
@@ -1282,7 +1555,7 @@ void updateStageControls(Instance *instance) {
     // The absorbing filters and the metering are live in Full and nowhere else, and not because
     // they are too small to see anywhere else: a filter is two more air-glass faces, so a fitted
     // one raises the veiling-glare feature bit (`FilmEngine.swift`, where
-    // `lensFilters.addedVeilingGlare` enters the glare term whatever the Lens Flare slider says).
+    // `lensFilters.addedVeilingGlare` enters the glare term whatever the Veiling Glare slider says).
     // No compiled variant in FotufilmHalide.h pairs FOTUFILM_FRAME_FLARE with either of the two
     // spans that would need it — FOTUFILM_AOT_TEXTURE_SPAN has no flare, and neither does any
     // variant built on FOTUFILM_AOT_NEGATIVE_SPAN, which carries FOTUFILM_FRAME_DENSITY_OUT — and
@@ -1343,6 +1616,7 @@ void updateStageControls(Instance *instance) {
         }
     }
 
+    updateContextControls(instance, time);
     if (!instance->stageStatus) return;
     std::string line;
     const char *text = "Stage: Full — scene in, finished output out";
@@ -1356,8 +1630,9 @@ void updateStageControls(Instance *instance) {
     switch (stage) {
     case FOTUFILM_BRIDGE_STAGE_NEGATIVE:
         text = "Negative Only: scene in, developed negative out — per-layer density, not a "
-               "picture. Feed it straight into a Print Only node on the same stock and lab "
-               "settings; do not grade, resize or convert in between.";
+               "display image. Values above 1 can look clipped in the viewer. Feed Print Only "
+               "directly with matching stock and development settings. To view a negative, "
+               "use Stage: Full and Output Medium: Negative.";
         break;
     case FOTUFILM_BRIDGE_STAGE_PRINT:
         // A reversal stock is its own positive. This is still the right span to put after a
@@ -1393,6 +1668,7 @@ void updateStageControls(Instance *instance) {
         text = line.c_str();
     }
     gParameter->paramSetValue(instance->stageStatus, text);
+    updateColourSpaceStatus(instance);
 }
 
 /// Rewrites the read-only line under the colour space menu with what the plugin would actually do
@@ -1403,8 +1679,16 @@ void updateColourSpaceStatus(Instance *instance) {
     int choice = kColorSpaceAuto;
     if (instance->colorSpace) gParameter->paramGetValue(instance->colorSpace, &choice);
 
+    const bool printOnly = effectiveStage(instance, 0) == FOTUFILM_BRIDGE_STAGE_PRINT;
+    OfxPropertySetHandle properties = nullptr;
+    if (gParameter->paramGetPropertySet(instance->colorSpaceStatus, &properties) == kOfxStatOK) {
+        gProperty->propSetString(properties, kOfxPropLabel, 0,
+                                 printOnly ? "Output Encoding" : "Decoded Input");
+    }
     char text[512];
-    if (menuEncoding(choice) != fotufilm::Encoding::Count) {
+    if (printOnly && menuEncoding(choice) == fotufilm::Encoding::Count) {
+        std::snprintf(text, sizeof(text), "Required: select Timeline Color Space");
+    } else if (menuEncoding(choice) != fotufilm::Encoding::Count) {
         const auto encoding = menuEncoding(choice);
         const bool displayReferred = encoding == fotufilm::Encoding::Rec709Gamma24 ||
                                      encoding == fotufilm::Encoding::SRGB;
@@ -1461,6 +1745,11 @@ OfxStatus getClipPreferences(OfxImageEffectHandle effect, OfxPropertySetHandle o
     if (instance && stage == FOTUFILM_BRIDGE_STAGE_TEXTURE) {
         varying = (textureSelection(instance, 0) & textureGrainMask()) != 0;
     }
+    int frozen = 0;
+    if (instance && instance->parameters[FOTUFILM_BRIDGE_GRAIN_FROZEN]) {
+        gParameter->paramGetValue(instance->parameters[FOTUFILM_BRIDGE_GRAIN_FROZEN], &frozen);
+    }
+    if (frozen == 1) varying = false;
     gProperty->propSetInt(outArgs, kOfxImageEffectFrameVarying, 0, varying ? 1 : 0);
 
     // Best effort, and the action succeeds either way: the property is OFX 1.5's, and a host
@@ -1615,6 +1904,15 @@ OfxStatus createInstance(OfxImageEffectHandle effect) {
 
     OfxParamSetHandle set = nullptr;
     gEffect->getParamSet(effect, &set);
+    instance->parameterSet = set;
+    const std::pair<const char *, OfxParamHandle *> extraHandles[] = {
+        {"resolvedFormat", &instance->resolvedFormat}, {"resolvedPaper", &instance->resolvedPaper},
+        {"developmentStatus", &instance->developmentStatus}, {"pushCondition", &instance->pushCondition},
+        {"sceneLight", &instance->sceneLight}, {"sceneLightKelvin", &instance->sceneLightKelvin},
+        {"renderStatus", &instance->renderStatus}, {"grainStatus", &instance->grainStatus},
+        {"newSeed", &instance->newSeed},
+    };
+    for (const auto &entry : extraHandles) gParameter->paramGetHandle(set, entry.first, entry.second, nullptr);
     for (int i = 0; i < FOTUFILM_BRIDGE_PARAMETER_COUNT; ++i) {
         if (!kParameterNames[i]) continue;
         gParameter->paramGetHandle(set, kParameterNames[i],
@@ -1681,6 +1979,39 @@ OfxStatus instanceChanged(OfxImageEffectHandle effect, OfxPropertySetHandle inAr
     gProperty->propGetString(inArgs, kOfxPropName, 0, &name);
     if (!name) return kOfxStatReplyDefault;
 
+    if (instance->updatingControls) return kOfxStatOK;
+    OfxTime time = 0;
+    gProperty->propGetDouble(inArgs, kOfxPropTime, 0, &time);
+    if (std::strcmp(name, "newSeed") == 0) {
+        int current = choiceValue(instance->seed);
+        // A full-period deterministic permutation makes every click different without relying
+        // on process-global randomness. The seed itself is saved and undoable.
+        const uint32_t next = static_cast<uint32_t>(current) * 1664525u + 1013904223u;
+        int nextSeed;
+        std::memcpy(&nextSeed, &next, sizeof(nextSeed));
+        if (gParameter->paramEditBegin) gParameter->paramEditBegin(instance->parameterSet, "New Grain Seed");
+        gParameter->paramSetValue(instance->seed, nextSeed);
+        if (gParameter->paramEditEnd) gParameter->paramEditEnd(instance->parameterSet);
+        return kOfxStatOK;
+    }
+    if (std::strcmp(name, "pushCondition") == 0) {
+        const int index = choiceValue(instance->pushCondition);
+        if (index >= 0 && index < static_cast<int>(instance->developmentStops.size())) {
+            gParameter->paramSetValue(instance->parameters[FOTUFILM_BRIDGE_PUSH_PULL],
+                                      static_cast<double>(instance->developmentStops[index]));
+        }
+        updateStageControls(instance, time);
+        return kOfxStatOK;
+    }
+    if (std::strcmp(name, "grainModel") == 0 &&
+        choiceValue(instance->parameters[FOTUFILM_BRIDGE_GRAIN_MODEL]) == 1) {
+        gParameter->paramSetValue(instance->parameters[FOTUFILM_BRIDGE_RENDER_MODE], 2);
+    }
+    if (std::strcmp(name, "renderMode") == 0 &&
+        choiceValue(instance->parameters[FOTUFILM_BRIDGE_RENDER_MODE]) != 2 &&
+        choiceValue(instance->parameters[FOTUFILM_BRIDGE_GRAIN_MODEL]) == 1) {
+        gParameter->paramSetValue(instance->parameters[FOTUFILM_BRIDGE_GRAIN_MODEL], 0);
+    }
     if (std::strcmp(name, kColorSpaceParam) == 0) {
         updateColourSpaceStatus(instance);
         return kOfxStatOK;
@@ -1697,6 +2028,7 @@ OfxStatus instanceChanged(OfxImageEffectHandle effect, OfxPropertySetHandle inAr
         if (std::abs(requested - measured) > 1e-4) {
             gParameter->paramSetValue(parameter, measured);
         }
+        updateStageControls(instance, time);
         return kOfxStatOK;
     }
 
@@ -1721,13 +2053,11 @@ OfxStatus instanceChanged(OfxImageEffectHandle effect, OfxPropertySetHandle inAr
         // nothing behind is not offered — and on the output medium, since only the negative
         // medium reads a negative-viewing mode. So the panel follows any of the three. Done after
         // the id is written, because that is what the render, and this, resolve against.
-        if (entry.choice == instance->stage || entry.choice == instance->stock ||
-            entry.choice == instance->paper) {
-            updateStageControls(instance);
-        }
+        updateStageControls(instance, time);
         return kOfxStatOK;
     }
-    return kOfxStatReplyDefault;
+    updateStageControls(instance, time);
+    return kOfxStatOK;
 }
 
 OfxStatus destroyInstance(OfxImageEffectHandle effect) {
@@ -1900,7 +2230,7 @@ void readParameters(Instance *instance, OfxTime time,
             int value = i == FOTUFILM_BRIDGE_LOCAL_TONE ? 1 : 0;
             gParameter->paramGetValueAtTime(instance->parameters[i], time, &value);
             parameters[i] = static_cast<float>(value);
-        } else if (isOffsetChoice(i) || i == FOTUFILM_BRIDGE_DIFFUSION_GRADE) {
+        } else if (isOffsetChoice(i) || isDirectChoice(i) || i == FOTUFILM_BRIDGE_DIFFUSION_GRADE) {
             // A choice param appears as an int, and the bridge wants a position in the engine's
             // own list: the menu's own for the grade, and one less than the menu's for the menus
             // that open with a None or a default this side owns. The offset is added back on the
@@ -1921,6 +2251,25 @@ void readParameters(Instance *instance, OfxTime time,
             gParameter->paramGetValueAtTime(instance->parameters[i], time, &value);
             parameters[i] = static_cast<float>(value);
         }
+    }
+    // New multiplicative controls encode offsets so a zero-filled legacy block remains neutral.
+    for (int slot : {FOTUFILM_BRIDGE_COUPLER_REACH, FOTUFILM_BRIDGE_COUPLER_SELF,
+                     FOTUFILM_BRIDGE_COUPLER_RED_GREEN, FOTUFILM_BRIDGE_COUPLER_GREEN_BLUE}) {
+        if (instance->parameters[slot]) parameters[slot] -= 1;
+    }
+    if (instance->parameters[FOTUFILM_BRIDGE_FRAME_COVERAGE]) {
+        parameters[FOTUFILM_BRIDGE_FRAME_COVERAGE] =
+            parameters[FOTUFILM_BRIDGE_FRAME_COVERAGE] / 100 - 1;
+    }
+    parameters[FOTUFILM_BRIDGE_MOTTLE_SHARE] /= 100;
+    int light = 0;
+    if (instance->sceneLight) gParameter->paramGetValueAtTime(instance->sceneLight, time, &light);
+    const float sceneLights[] = {0, 6504, 5500, 3200, 2856};
+    if (light >= 0 && light < 5) parameters[FOTUFILM_BRIDGE_SCENE_ILLUMINANT] = sceneLights[light];
+    else if (light == 5 && instance->sceneLightKelvin) {
+        double kelvin = 6504;
+        gParameter->paramGetValueAtTime(instance->sceneLightKelvin, time, &kelvin);
+        parameters[FOTUFILM_BRIDGE_SCENE_ILLUMINANT] = static_cast<float>(kelvin);
     }
     // The two composed slots. The span comes from its persisted id rather than its menu index,
     // and the texture selection is the OR of the booleans, each carrying the bit the bridge
@@ -1967,7 +2316,8 @@ void readParameters(Instance *instance, OfxTime time,
     const int stage = static_cast<int>(parameters[FOTUFILM_BRIDGE_STAGE]);
     if (stage != FOTUFILM_BRIDGE_STAGE_FULL) {
         for (int slot : {FOTUFILM_BRIDGE_LENS_FILTER_1, FOTUFILM_BRIDGE_LENS_FILTER_2,
-                         FOTUFILM_BRIDGE_LENS_FILTER_3, FOTUFILM_BRIDGE_LENS_METERING}) {
+                         FOTUFILM_BRIDGE_LENS_FILTER_3, FOTUFILM_BRIDGE_LENS_METERING,
+                         FOTUFILM_BRIDGE_FLARE_SCALE}) {
             parameters[slot] = 0;
         }
     }
@@ -2038,6 +2388,9 @@ struct WriteState {
     /// Copy rows without further conversion. Used when the kernel applied the output transform or
     /// when a stage returns density data. Disabled during resampling, which must average linear light.
     bool verbatim;
+    /// Fit the finished print to the timeline's gamut on the way out. Set only for a print bound
+    /// for a container narrower than the Display P3 the print is delivered in.
+    bool fitGamut;
 };
 
 /// One strip of finished rows, as handed over by the bridge.
@@ -2078,7 +2431,7 @@ void writeStripRows(int begin, int end, void *context) {
                 // encode and the re-premultiplication are one pass, where copying the span first
                 // and then walking it three more times was four.
                 fotufilm::encodePixels(state.encoding, *state.transform, from, span, x2 - x1,
-                                      state.premultiplied);
+                                      state.premultiplied, state.fitGamut);
             }
         } else {
             for (int x = x1; x < x2; ++x) {
@@ -2100,7 +2453,7 @@ void writeStripRows(int begin, int end, void *context) {
             }
             // Resampled in place, then encoded in place over the same span.
             fotufilm::encodePixels(state.encoding, *state.transform, span, span, x2 - x1,
-                                  state.premultiplied);
+                                  state.premultiplied, state.fitGamut);
         }
     }
 }
@@ -2213,7 +2566,7 @@ int decodeBandRows(int width) {
 /// `peak` and `repaired` aggregate results across all bands.
 bool decodeThroughKernel(const Image &source, float *scene, int width, int height,
                          const FotufilmInputTransform &transform, std::vector<float> &scratch,
-                         float &peak, bool &repaired) {
+                         float &peak, bool &repaired, int realtime) {
     const int bandRows = decodeBandRows(width);
     scratch.resize(static_cast<size_t>(bandRows) * width * 4);
     for (int begin = 0; begin < height; begin += bandRows) {
@@ -2224,7 +2577,7 @@ bool decodeThroughKernel(const Image &source, float *scene, int width, int heigh
         int32_t bandRepaired = 0;
         if (fotufilm_bridge_decode_rows(
                 scratch.data(), scene + static_cast<size_t>(begin) * width * 4, width,
-                end - begin, &transform, &bandPeak, &bandRepaired) != 1) {
+                end - begin, &transform, &bandPeak, &bandRepaired, realtime) != 1) {
             return false;
         }
         peak = std::max(peak, bandPeak);
@@ -2497,12 +2850,12 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
             int32_t reportedRepair = 0;
             decodedOnDevice = fotufilm_bridge_decode_staged(
                 instance->bridge, processWidth, height, &inputTransform,
-                &devicePeak, &reportedRepair) == 1;
+                &devicePeak, &reportedRepair, fotufilm_bridge_effective_realtime(parameters)) == 1;
             deviceRepaired = reportedRepair != 0;
         } else {
             decodedOnDevice = decodeThroughKernel(source, scene, width, height, inputTransform,
                                                   instance->decodeScratch, devicePeak,
-                                                  deviceRepaired);
+                                                  deviceRepaired, fotufilm_bridge_effective_realtime(parameters));
         }
         if (decodedOnDevice) {
             if (watchRange) peak.store(devicePeak, std::memory_order_relaxed);
@@ -2564,8 +2917,17 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
     // measures that way, so a striped frame is asked about as a delivered one whatever the host
     // said about the session. The bridge checks the same thing against the staging it holds, so
     // the two cannot be asked different questions.
+    // A finished print delivered into Rec.709's primaries can leave them: the print arrives in
+    // Display P3, which Rec.709 does not enclose, so a colour the paper can make lands outside
+    // the container and the host clips it. `fotufilm::fitToGamut` is the answer and it needs all
+    // three channels of a pixel at once — the kernel's encode is written per output channel and
+    // cannot express it — so a delivery that needs the fit takes the host encode instead. Only a
+    // print: texture output stays in the scene basis and density output is not colour, and
+    // neither is bounded by a display gamut.
+    const bool fitGamut = !writesInterchange && !deliversSceneBasis
+                          && fotufilm::deliveryLeavesGamut(encoding);
     const bool encodeInKernel =
-        !writesInterchange && processWidth == source.width()
+        !writesInterchange && !fitGamut && processWidth == source.width()
         && fotufilm_bridge_encodes_output(instance->bridge, stock, format, paper,
                                          parameters, processWidth, height,
                                          (staged && viewerFrame) ? 1 : 0) != 0;
@@ -2580,7 +2942,7 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
 
     WriteState state{&source, &output, renderWindow, processWidth, encoding,
                      &outputBasis, premultiplied,
-                     encodeInKernel || writesInterchange};
+                     encodeInKernel || writesInterchange, fitGamut};
 
     // FOTUFILM_TRACE_BRIDGE: everything this plugin is about to hand the engine, in one line per
     // frame. The Final Cut plugin prints the same line in the same format, so two hosts developing

@@ -14,6 +14,8 @@ swift build
 swift test -c release --parallel
 ```
 
+CI runs only when started manually in GitHub Actions.
+
 If Halide is installed elsewhere, set `HALIDE_ROOT` to its installation folder.
 
 List the included films or process an image from the command line:

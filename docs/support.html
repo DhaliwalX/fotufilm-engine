@@ -4,6 +4,8 @@
 <p>The Final Cut plugin needs Apple's FxPlug SDK. Without that SDK, the Mac app builds with the Resolve plugin only. The FxPlug host harness does not need the SDK.</p>
 <p>Custom pack builds must supply both <code>FOTUFILM_PACK_KEY_SOURCE</code> and <code>FOTUFILM_SEALED_PACKS</code> as absolute paths outside this checkout. Supplying only one is an error. Keep pack key material outside version control.</p>
 <p>Check proposed source files with <code>python3 tools/check-source-boundary.py</code>. New images, data files and third-party headers require documented provenance in <code>SOURCE_ASSETS.json</code>.</p>
+<p>If a Resolve control is disabled, check Stage, Resolved Format, Resolved Medium, and Effective Renderer. Custom Mottle needs Full and clump-field grain. Discs needs a silver-image stock and Reference rendering. Negative Only outputs density data; use Full with Output Medium set to Negative to view a negative image.</p>
+<p>CI is started manually in GitHub Actions. Rendering and plugin tests require a working Metal device.</p>
 <p><a href="documentation.html">Documentation</a> · <a href="../LICENSING.md">Current licensing</a></p>
 <p>Source builds use separate Mac bundle, custom-pack storage and Keychain identifiers and do not subscribe to product updates or register the product activation URL scheme.</p>
 </body></html>
