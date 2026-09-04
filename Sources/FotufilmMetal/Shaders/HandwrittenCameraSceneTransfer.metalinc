@@ -1,0 +1,22 @@
+// Shared scene-referred camera transfer functions. The values come from FotufilmCore through
+// MTLCompileOptions.preprocessorMacros, so Swift and Metal cannot silently drift apart.
+static inline float hlg_scene_light(float signal) {
+    constexpr float a = FOTUFILM_HLG_A;
+    constexpr float b = FOTUFILM_HLG_B;
+    constexpr float c = FOTUFILM_HLG_C;
+    float encoded = clamp(signal, 0.0f, 1.0f);
+    return encoded <= 0.5f ? encoded * encoded / 3.0f
+        : (exp((encoded - c) / a) + b) / 12.0f;
+}
+
+static inline float apple_log_to_linear(float code) {
+    constexpr float r0 = FOTUFILM_APPLE_LOG_R0;
+    constexpr float c = FOTUFILM_APPLE_LOG_C;
+    constexpr float beta = FOTUFILM_APPLE_LOG_BETA;
+    constexpr float gamma_ = FOTUFILM_APPLE_LOG_GAMMA;
+    constexpr float delta = FOTUFILM_APPLE_LOG_DELTA;
+    constexpr float threshold = FOTUFILM_APPLE_LOG_TOE_SIGNAL;
+    if (code >= threshold) return exp2((code - delta) / gamma_) - beta;
+    if (code >= 0.0f) return sqrt(code / c) + r0;
+    return r0;
+}

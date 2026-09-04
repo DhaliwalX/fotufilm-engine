@@ -1,0 +1,46 @@
+#!/bin/bash
+set -euo pipefail
+
+# Finder and the pro apps discover FxPlug extensions through PlugInKit. Register the extension
+# directly so the first Final Cut launch does not depend on opening the otherwise headless wrapper.
+install_volume="${3:-/}"
+install_root="${install_volume%/}"
+plugin="$install_root/Applications/Fotufilm for Final Cut Pro.app/Contents/PlugIns/Fotufilm.pluginkit"
+template_source="$install_root/Applications/Fotufilm for Final Cut Pro.app/Contents/Resources/MotionTemplate"
+
+if [[ -d "$plugin" ]]; then
+  console_user="$(/usr/bin/stat -f '%Su' /dev/console)"
+  if [[ -n "$console_user" && "$console_user" != "root" && "$console_user" != "loginwindow" ]]; then
+    console_uid="$(/usr/bin/id -u "$console_user")"
+    console_group="$(/usr/bin/id -gn "$console_user")"
+    console_home="$(/usr/bin/dscl . -read "/Users/$console_user" NFSHomeDirectory 2>/dev/null \
+      | /usr/bin/sed 's/^[^:]*:[[:space:]]*//' || true)"
+    if [[ -d "$template_source" && "$console_home" == /* ]]; then
+      movies_directory="$install_root$console_home/Movies"
+      templates_directory="$movies_directory/Motion Templates.localized"
+      effects_directory="$templates_directory/Effects.localized"
+      template_parent="$effects_directory/Fotufilm.localized"
+      template_destination="$template_parent/Fotufilm.localized"
+      template_staged="$template_parent/.Fotufilm.$$.installing"
+      /bin/mkdir -p "$template_parent"
+      # pkg scripts run as root. Own only the user-library directories this installer manages;
+      # a root-owned parent would prevent Motion and the app's repair path from writing here.
+      /usr/sbin/chown "$console_user:$console_group" \
+        "$movies_directory" "$templates_directory" "$effects_directory" "$template_parent"
+      /bin/rm -rf "$template_staged"
+      /usr/bin/ditto "$template_source" "$template_staged"
+      /usr/sbin/chown -R "$console_user:$console_group" "$template_staged"
+      /bin/rm -rf "$template_destination"
+      /bin/mv "$template_staged" "$template_destination"
+    fi
+    /bin/launchctl asuser "$console_uid" \
+      /usr/bin/sudo -u "$console_user" /usr/bin/pluginkit -a "$plugin" || true
+    /bin/launchctl asuser "$console_uid" \
+      /usr/bin/sudo -u "$console_user" /usr/bin/pluginkit \
+        -e use -i com.fotufilm.fxplug || true
+  else
+    # Headless/managed installs have no user registry to update. Launch Services will discover the
+    # containing application when a user next logs in.
+    /usr/bin/pluginkit -a "$plugin" || true
+  fi
+fi

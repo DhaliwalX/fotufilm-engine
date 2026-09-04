@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE ozxmlscene>
+<ozml version="5.13">
+  <displayversion>5.6.3.1</displayversion>
+
+  <factory id="1" uuid="46c844a813d311d8a438000a95af9f7e">
+    <description>Channel</description>
+    <manufacturer>Apple</manufacturer>
+    <version>1</version>
+  </factory>
+  <factory id="2" uuid="65cb4dc9d4504fa281921f5f751fba06">
+    <description>Widget</description>
+    <manufacturer>Apple</manufacturer>
+    <version>1</version>
+  </factory>
+  <factory id="3" uuid="66fc0d6af6a911d6a7a7000393670732">
+    <description>Image</description>
+    <manufacturer>Apple</manufacturer>
+    <version>1</version>
+  </factory>
+  <factory id="4" uuid="7d468273c013498e9806a0d7bc32fddf">
+    <description>Project</description>
+    <manufacturer>Apple</manufacturer>
+    <version>1</version>
+  </factory>
+  <factory id="5" uuid="dbca752470fd11d7980100039389b702">
+    <description>Channel</description>
+    <manufacturer>Apple</manufacturer>
+    <version>1</version>
+  </factory>
+  <factory id="6" uuid="deca4859b16011d7a12d0003936f6f92">
+    <description>ProPlugin Filter</description>
+    <manufacturer>Apple</manufacturer>
+    <version>1</version>
+  </factory>
+
+  <template><flags>1</flags></template>
+  <build></build>
+  <description>Fotufilm</description>
+
+  <scene>
+    <sceneSettings>
+      <width>1920</width>
+      <height>1080</height>
+      <duration>300</duration>
+      <shouldOverrideFCDuration>0</shouldOverrideFCDuration>
+      <frameRate>30</frameRate>
+      <NTSC>1</NTSC>
+      <pixelAspectRatio>1</pixelAspectRatio>
+      <workingGamut>1</workingGamut>
+      <viewGamut>-1</viewGamut>
+      <optimizeForDisplay>0</optimizeForDisplay>
+      <backgroundColor red="0" green="0" blue="0" alpha="1"/>
+      <audioChannels>2</audioChannels>
+      <audioBitsPerSample>32</audioBitsPerSample>
+      <fieldRenderingMode>0</fieldRenderingMode>
+      <motionBlurSamples>8</motionBlurSamples>
+      <motionBlurDuration>1</motionBlurDuration>
+      <sharpScaling>0</sharpScaling>
+      <startTimecode>0</startTimecode>
+      <backgroundMode>0</backgroundMode>
+      <reflectionRecursionLimit>2</reflectionRecursionLimit>
+      <glyphOSCMode>0</glyphOSCMode>
+      <animateFlag>0</animateFlag>
+      <parameterColorSpaceID>3</parameterColorSpaceID>
+      <savePreviewMovie>0</savePreviewMovie>
+      <Object3DEnvironments>100</Object3DEnvironments>
+      <DRTSupport>1</DRTSupport>
+    </sceneSettings>
+
+    <!-- Final Cut only shows controls explicitly published by the Motion template. The FxPlug
+         parameter ids are the persisted ABI declared in FotufilmEffect.h. -->
+    <publishSettings>
+      <version>2</version>
+      <target object="9001001" channel="./37" name="Status"/>
+      <target object="9001001" channel="./30/1" name="Stage"/>
+      <target object="9001001" channel="./30/40" name="Emulsion Diffusion"/>
+      <target object="9001001" channel="./30/41" name="Halation Stage"/>
+      <target object="9001001" channel="./30/42" name="Adjacency"/>
+      <target object="9001001" channel="./30/43" name="Grain Stage"/>
+      <target object="9001001" channel="./30/44" name="Enlarger"/>
+      <target object="9001001" channel="./31/2" name="Stock"/>
+      <target object="9001001" channel="./31/3" name="Format"/>
+      <target object="9001001" channel="./31/5" name="Timeline Color Space"/>
+      <target object="9001001" channel="./36/4" name="Output Medium"/>
+      <target object="9001001" channel="./36/25" name="Viewing Illuminant"/>
+      <target object="9001001" channel="./36/20" name="Channel Contrast Match"/>
+      <target object="9001001" channel="./36/80" name="Negative Viewing"/>
+      <target object="9001001" channel="./32/6" name="Exposure"/>
+      <target object="9001001" channel="./32/7" name="Temperature"/>
+      <target object="9001001" channel="./32/8" name="Tint"/>
+      <target object="9001001" channel="./72/73" name="Filter 1"/>
+      <target object="9001001" channel="./72/74" name="Filter 2"/>
+      <target object="9001001" channel="./72/75" name="Filter 3"/>
+      <target object="9001001" channel="./72/76" name="Metering"/>
+      <target object="9001001" channel="./72/77" name="Diffusion"/>
+      <target object="9001001" channel="./72/78" name="Diffusion Grade"/>
+      <target object="9001001" channel="./72/79" name="Focal Length"/>
+      <target object="9001001" channel="./33/9" name="Highlights"/>
+      <target object="9001001" channel="./33/10" name="Shadows"/>
+      <target object="9001001" channel="./33/11" name="Regional Tone Mask"/>
+      <target object="9001001" channel="./33/12" name="Saturation"/>
+      <target object="9001001" channel="./33/13" name="Vibrance"/>
+      <target object="9001001" channel="./34/14" name="Grain"/>
+      <target object="9001001" channel="./34/15" name="Halation"/>
+      <target object="9001001" channel="./34/16" name="Estimated Halation Shape"/>
+      <target object="9001001" channel="./34/17" name="Halo Colour"/>
+      <target object="9001001" channel="./34/18" name="Lens Flare"/>
+      <target object="9001001" channel="./34/19" name="DIR Couplers"/>
+      <target object="9001001" channel="./34/21" name="Grain Seed"/>
+      <target object="9001001" channel="./35/22" name="Push / Pull"/>
+      <target object="9001001" channel="./35/23" name="Bleach Bypass"/>
+      <target object="9001001" channel="./35/24" name="Expired"/>
+      <target object="9001001" channel="./10001" name="Mix"/>
+    </publishSettings>
+
+    <timeRange offset="0 1 1 0" duration="1201200 120000 1 0"/>
+    <playRange offset="0 1 1 0" duration="1201200 120000 1 0"/>
+    <flags>1</flags>
+    <audioTracks>0</audioTracks>
+    <timemarkerset/>
+    <guideset/>
+    <curvesets selected="1"/>
+
+    <scenenode name="Project" id="9000001" factoryID="4" version="5">
+      <scenenode name="Widget" id="9000002" factoryID="2" version="5">
+        <flags>0</flags>
+        <timing in="0 1 1 0" out="-4004 120000 1 0" offset="0 1 1 0"/>
+        <foldFlags>0</foldFlags>
+        <baseFlags>16</baseFlags>
+        <parameter name="Properties" id="1" flags="8589938704"/>
+        <parameter name="Object" id="2" flags="8589938704">
+          <parameter name="Options" id="103" flags="8589938688"/>
+          <parameter name="Hidden" id="102" flags="8589934608" default="0" value="1"/>
+          <parameter name="Snapshots" id="101" flags="8589938706"/>
+          <parameter name="Widget" id="100" flags="8589934608"
+                     default="1.7777777777777777" value="1.7777777777777777"/>
+        </parameter>
+      </scenenode>
+      <flags>0</flags>
+      <timing in="0 1 1 0" out="-4004 120000 1 0" offset="0 1 1 0"/>
+      <foldFlags>0</foldFlags>
+      <baseFlags>16</baseFlags>
+      <parameter name="Properties" id="1" flags="8589938704"/>
+      <parameter name="Object" id="2" flags="8589938704"/>
+    </scenenode>
+
+    <layer name="Group" id="9000003">
+      <scenenode name="Effect Source" id="9000004" factoryID="3" version="5">
+        <validTracks>1</validTracks>
+        <aspectRatio>1</aspectRatio>
+        <flags>0</flags>
+        <timing in="0 1 1 0" out="1197196 120000 1 0" offset="0 1 1 0"/>
+        <foldFlags>16384</foldFlags>
+        <baseFlags>524304</baseFlags>
+        <parameter name="Properties" id="1" flags="8589938704">
+          <parameter name="Media" id="324" flags="8589938704">
+            <foldFlags>4</foldFlags>
+            <parameter name="Source Media" id="300" flags="81621221392"
+                       default="9002001" value="9002001"/>
+            <parameter name="Source Media" id="325" flags="8590000146"/>
+          </parameter>
+          <parameter name="Page Number" id="301" flags="8589934610" default="1" value="1"/>
+          <parameter name="Retime Value" id="304" flags="8590066066" default="1" value="1"/>
+          <parameter name="Retime Value Cache" id="319" flags="8590065810"
+                     default="1" value="1"/>
+        </parameter>
+        <parameter name="Object" id="2" flags="8589938704">
+          <parameter name="Drop Zone" id="311" flags="8589934738" default="0" value="1"/>
+          <parameter name="Type" id="321" flags="8590000146" default="0" value="3"/>
+          <parameter name="Width" id="313" flags="8589934610" default="1" value="1920"/>
+          <parameter name="Height" id="314" flags="8589934610" default="1" value="1080"/>
+        </parameter>
+
+        <!-- Dynamic parameters must stay disabled here. With a static Motion channel tree, setting
+             this to 1 makes Final Cut's Ozone serializer dereference a missing folder. -->
+        <filter name="Fotufilm" id="9001001" factoryID="6"
+                pluginUUID="C4D9D06C-A2A7-48B4-830B-9AE81B970140"
+                pluginVersion="1" pluginName="FotufilmEffect" pluginDynamicParams="0">
+          <timing in="0 1 1 0" out="1197196 120000 1 0" offset="0 1 1 0"/>
+          <baseFlags>8589934608</baseFlags>
+
+          <!-- The read-only status line, outside every group because it is created before the
+               first startParameterSubGroup and belongs at the top of the inspector. It is a
+               string channel like the hidden identities, but unlike them it is published: it is
+               the one place the plugin can say why something it was asked for is not happening. -->
+          <parameter name="Status" id="37" flags="12901679104" default="" value=""/>
+
+          <!-- Parameter subgroups are channel folders in Motion's serializer. Their ids and
+               nesting must match startParameterSubGroup calls in the FxPlug. -->
+          <parameter name="Pipeline" id="30" flags="8594198560">
+            <foldFlags>15</foldFlags>
+            <parameter name="Stage" id="1" flags="12901744656" default="0" value="0"/>
+            <parameter name="Emulsion Diffusion" id="40" flags="12901679104"
+                       default="1" value="1"/>
+            <parameter name="Halation Stage" id="41" flags="12901679104"
+                       default="1" value="1"/>
+            <parameter name="Adjacency" id="42" flags="12901679104" default="1" value="1"/>
+            <parameter name="Grain Stage" id="43" flags="12901679104" default="1" value="1"/>
+            <parameter name="Enlarger" id="44" flags="12901679104" default="1" value="1"/>
+          </parameter>
+
+          <parameter name="Film" id="31" flags="8594198560">
+            <foldFlags>4</foldFlags>
+            <parameter name="Stock" id="2" flags="12901744656" default="0" value="0"/>
+            <parameter name="Format" id="3" flags="12901744656" default="9" value="9"/>
+            <parameter name="Timeline Color Space" id="5" flags="12901744656"
+                       default="7" value="7"/>
+          </parameter>
+
+          <parameter name="Output" id="36" flags="8594198560">
+            <foldFlags>4</foldFlags>
+            <parameter name="Output Medium" id="4" flags="12901744656"
+                       default="9" value="9"/>
+            <parameter name="Viewing Illuminant" id="25" flags="12901744656"
+                       default="0" value="0"/>
+            <parameter name="Channel Contrast Match" id="20" flags="12901679120"
+                       default="0.05" value="0.05"/>
+            <parameter name="Negative Viewing" id="80" flags="12901744656"
+                       default="0" value="0"/>
+          </parameter>
+
+          <!-- Hidden string channels persist durable menu identities. They are intentionally not
+               published, but must exist in the static channel tree for saved projects. -->
+          <parameter name="id" id="26" flags="12901679104" default="" value=""/>
+          <parameter name="id" id="27" flags="12901679104" default="" value=""/>
+          <parameter name="id" id="28" flags="12901679104" default="" value=""/>
+          <parameter name="id" id="29" flags="12901679104" default="" value=""/>
+
+          <parameter name="Exposure" id="32" flags="8594198560">
+            <foldFlags>4</foldFlags>
+            <parameter name="Exposure" id="6" flags="12901679120" default="0" value="0"/>
+            <parameter name="Temperature" id="7" flags="12901679120"
+                       default="6504" value="6504"/>
+            <parameter name="Tint" id="8" flags="12901679120" default="0" value="0"/>
+          </parameter>
+
+          <!-- The lens, in the order the light meets it. The grade menu opens on 1/4, which is
+               index 1 of DiffusionFilter.Grade, and the metering menu on entry 1, which is
+               through-the-lens: both are the engine's own defaults rather than the first entry
+               of a list. -->
+          <parameter name="Lens" id="72" flags="8594198560">
+            <foldFlags>15</foldFlags>
+            <parameter name="Filter 1" id="73" flags="12901744656" default="0" value="0"/>
+            <parameter name="Filter 2" id="74" flags="12901744656" default="0" value="0"/>
+            <parameter name="Filter 3" id="75" flags="12901744656" default="0" value="0"/>
+            <parameter name="Metering" id="76" flags="12901744656" default="1" value="1"/>
+            <parameter name="Diffusion" id="77" flags="12901744656" default="0" value="0"/>
+            <parameter name="Diffusion Grade" id="78" flags="12901744656"
+                       default="1" value="1"/>
+            <parameter name="Focal Length" id="79" flags="12901679120" default="0" value="0"/>
+          </parameter>
+
+          <!-- The durable identity of the four catalogue menus above, as 26...29 are for the
+               menus at the top of the panel. Not published; serialized so a saved project keeps
+               the filter it was graded through when the drawer is renumbered under it. -->
+          <parameter name="id" id="81" flags="12901679104" default="" value=""/>
+          <parameter name="id" id="82" flags="12901679104" default="" value=""/>
+          <parameter name="id" id="83" flags="12901679104" default="" value=""/>
+          <parameter name="id" id="84" flags="12901679104" default="" value=""/>
+
+          <parameter name="Tone" id="33" flags="8594198560">
+            <foldFlags>4</foldFlags>
+            <parameter name="Highlights" id="9" flags="12901679120" default="0" value="0"/>
+            <parameter name="Shadows" id="10" flags="12901679120" default="0" value="0"/>
+            <parameter name="Regional Tone Mask" id="11" flags="12901679104"
+                       default="1" value="1"/>
+            <parameter name="Saturation" id="12" flags="12901679120" default="1" value="1"/>
+            <parameter name="Vibrance" id="13" flags="12901679120" default="0" value="0"/>
+          </parameter>
+
+          <parameter name="Film Response" id="34" flags="8594198560">
+            <foldFlags>4</foldFlags>
+            <parameter name="Grain" id="14" flags="12901679120" default="1" value="1"/>
+            <parameter name="Halation" id="15" flags="12901679120" default="1" value="1"/>
+            <parameter name="Estimated Halation Shape" id="16" flags="12901679104"
+                       default="0" value="0"/>
+            <parameter name="Halo Colour" id="17" flags="12901679120" default="0" value="0"/>
+            <parameter name="Lens Flare" id="18" flags="12901679120" default="0" value="0"/>
+            <parameter name="DIR Couplers" id="19" flags="12901679120" default="1" value="1"/>
+            <parameter name="Grain Seed" id="21" flags="12901679121"
+                       default="1179208781" value="1179208781"/>
+          </parameter>
+
+          <parameter name="The Lab" id="35" flags="8594198560">
+            <foldFlags>15</foldFlags>
+            <parameter name="Push / Pull" id="22" flags="12901679120" default="0" value="0"/>
+            <parameter name="Bleach Bypass" id="23" flags="12901679120"
+                       default="0" value="0"/>
+            <parameter name="Expired" id="24" flags="12901679120" default="0" value="0"/>
+          </parameter>
+
+          <parameter name="Mix" id="10001" flags="12901679104" default="1" value="1"/>
+          <parameter name="Flip" id="10002" flags="12905938976" default="0" value="0"/>
+          <parameter name="Input Points" id="10003" flags="12905938976"
+                     default="1" value="1"/>
+        </filter>
+      </scenenode>
+
+      <aspectRatio>1</aspectRatio>
+      <flags>0</flags>
+      <timing in="0 1 1 0" out="1197196 120000 1 0" offset="0 1 1 0"/>
+      <foldFlags>0</foldFlags>
+      <baseFlags>524304</baseFlags>
+      <parameter name="Properties" id="1" flags="8589938704"/>
+      <parameter name="Object" id="2" flags="8589938704">
+        <parameter name="Fixed Width" id="302" flags="12884901908"
+                   default="1920" value="1920"/>
+        <parameter name="Fixed Height" id="303" flags="12884901908"
+                   default="1080" value="1080"/>
+        <parameter name="Flatten" id="311" flags="8589934610" default="0" value="0"/>
+        <parameter name="Layer Order" id="305" flags="8589934610" default="0" value="0"/>
+        <parameter name="Aperture Width" id="312" flags="12884901906"
+                   default="1920" value="1920"/>
+        <parameter name="Aperture Height" id="313" flags="12884901906"
+                   default="1080" value="1080"/>
+      </parameter>
+    </layer>
+
+    <footage name="Media Layer" id="9000005">
+      <clip name="Drop Zone" id="9002001">
+        <pathURL>Drop Zone.tiff</pathURL>
+        <missingWidth>1920</missingWidth>
+        <missingHeight>1080</missingHeight>
+        <missingDuration>0.033333333333333333</missingDuration>
+        <creationDuration>1</creationDuration>
+        <mediaID></mediaID>
+        <flags>0</flags>
+        <timing in="0 1 1 0" out="0 120000 1 0" offset="0 1 1 0"/>
+        <foldFlags>0</foldFlags>
+        <baseFlags>524304</baseFlags>
+        <parameter name="Properties" id="1" flags="8589938704"/>
+        <parameter name="Object" id="2" flags="8589938704">
+          <parameter name="Pixel Aspect Ratio" id="104" flags="12884901888"
+                     default="1" value="1"/>
+          <parameter name="Frame Rate" id="107" flags="8589934592" default="0" value="30"/>
+          <parameter name="Fixed Width" id="114" flags="12884901888"
+                     default="1920" value="1920"/>
+          <parameter name="Fixed Height" id="115" flags="12884901888"
+                     default="1080" value="1080"/>
+          <parameter name="Use Background Color" id="116" flags="8589934594"
+                     default="0" value="0"/>
+          <parameter name="Missing Is Still" id="128" flags="8589934610"
+                     default="0" value="1"/>
+        </parameter>
+      </clip>
+      <flags>0</flags>
+      <timing in="0 1 1 0" out="-4004 120000 1 0" offset="0 1 1 0"/>
+      <foldFlags>0</foldFlags>
+      <baseFlags>524304</baseFlags>
+      <parameter name="Properties" id="1" flags="8589938704"/>
+      <parameter name="Object" id="2" flags="8589938704"/>
+    </footage>
+  </scene>
+</ozml>

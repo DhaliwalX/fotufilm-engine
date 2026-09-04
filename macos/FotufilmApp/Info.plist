@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>Fotufilm</string>
+	<!-- The same identifier the phone and the iPad carry. One product, one
+	     id: it is what lets the Mac app and the iOS app be two builds of
+	     Fotufilm rather than two applications that happen to look alike. -->
+	<key>CFBundleIdentifier</key>
+	<string>com.muastudio.fotufilm</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<!-- The name on the app, in the menu bar and under the icon. Fotufilm is
+	     the engine and the repository; Fotufilm is the product, and it is what
+	     the phone and the iPad already call themselves. -->
+	<key>CFBundleName</key>
+	<string>Fotufilm</string>
+	<key>CFBundleDisplayName</key>
+	<string>Fotufilm</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.muastudio.fotufilm.activation</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fotufilm</string>
+			</array>
+		</dict>
+	</array>
+	<!-- Both names for the one icon macos/build.sh compiles: CFBundleIconName
+	     is the Assets.car entry macOS 26 lights as glass, CFBundleIconFile the
+	     .icns beside it that older systems and some Finder paths still read. -->
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<!-- Both are stamped at build time from project.yml's MARKETING_VERSION and
+	     CURRENT_PROJECT_VERSION, so the Mac bundle rides the one version line
+	     the phone and the iPad already ride. The literals below are only what a
+	     hand-assembled bundle would carry; macos/build.sh overwrites them. -->
+	<key>CFBundleShortVersionString</key>
+	<string>1.1</string>
+	<key>CFBundleVersion</key>
+	<string>5</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>FotufilmLicenseServerURL</key>
+	<string>https://license.fotufilm.com/api/licenses/activate</string>
+	<key>FotufilmLicensePurchaseURL</key>
+	<string>https://license.fotufilm.com/</string>
+	<!-- macos/build.sh can replace this raw Ed25519 production public key. The
+	     matching private key never enters the app. -->
+	<key>FotufilmLicensePublicKey</key>
+	<string>V3G93GNTOTU0zR3xMxKda6k7QlYV0ynm5iDH/ErLQCg=</string>
+	<!-- The Check for Updates command and the daily automatic pass read one JSON release
+	     document from here. It is uploaded beside the installer package it names, in the same
+	     downloads repo the website's download button already points at, so "latest" resolves
+	     for both in the same moment. -->
+	<key>FotufilmUpdateFeedURL</key>
+	<string>https://github.com/DhaliwalX/fotufilm-downloads/releases/latest/download/Fotufilm-macOS-update.json</string>
+	<!-- Finder advertises this for one selected photo or video. The provider routes the file URL
+	     through the same application:openURLs: path as Open With and double-clicking. -->
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Open in Fotufilm</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>openInFotufilm</string>
+			<key>NSPortName</key>
+			<string>Fotufilm</string>
+			<key>NSSendFileTypes</key>
+			<array>
+				<string>public.image</string>
+				<string>public.movie</string>
+			</array>
+			<key>NSRequiredContext</key>
+			<dict/>
+			<key>NSRestricted</key>
+			<false/>
+			<key>NSServiceDescription</key>
+			<string>Open the selected photo or video in Fotufilm.</string>
+		</dict>
+	</array>
+	<!-- The same declarations the iOS app carries, so a pack is one file type
+	     across the product rather than a type the phone knows and the Mac does
+	     not. Exported rather than imported: this app defines the format. -->
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.muastudio.fotufilm.pack</string>
+			<key>UTTypeDescription</key>
+			<string>Fotufilm Film Pack</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>fotufilmpack</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Film Pack</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<!-- Owner, because nothing else opens one. A pack is installed
+			     rather than edited, so the role is Viewer. -->
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.muastudio.fotufilm.pack</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Photo or Video</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.image</string>
+				<string>public.movie</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

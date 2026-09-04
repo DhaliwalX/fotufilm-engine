@@ -1,0 +1,53 @@
+# Symbols the plugin must keep to itself.
+#
+# The AOT kernels carry their own Halide runtime — 266 `halide_*` symbols. So
+# does DaVinci Resolve, which uses Halide internally and registers a runtime of
+# its own under the name GraphComputeRT. With both in one process and both
+# symbols global, our kernels bound to Resolve's runtime instead of the one
+# they were compiled against, and the first frame aborted inside
+# halide_metal_dispatch_kernel.
+#
+# Listing them here makes ld emit them as private externs: our references
+# resolve internally and cannot be interposed, and nothing of ours is visible
+# to interpose anything of the host's. It is the same isolation the iOS app
+# gets for free by being the only Halide in its process.
+#
+# Deliberately not a blanket hide: OfxGetPlugin and OfxGetNumberOfPlugins are
+# how the host finds the plugin at all, and they must stay exported. After this
+# list they are the only two symbols that are, which is the correct surface for
+# a plugin — everything else is reached through the OfxPlugin struct.
+#
+# The C runtime, the kernels' own entry points, and the runtime's C++ internals
+# are three separate naming conventions and all three have to be named; hiding
+# only the first left 59 symbols exported.
+_halide_*
+__ZN6Halide*
+__ZNK6Halide*
+# Guard variables, vtables and typeinfo for those same internals. They carry
+# their own mangling prefixes, so __ZN* does not reach them — the one that got
+# through on the first attempt was a guard variable for the Metal runtime's
+# compilation cache, which is precisely the state two Halides must not share.
+__ZGVN6Halide*
+__ZTVN6Halide*
+__ZTIN6Halide*
+__ZTSN6Halide*
+_fotufilm_*
+# The engine's Swift API. Keep this independent of the compiler's module name:
+# no Swift symbol is part of the OFX interface.
+_$s*
+_$S*
+# The plugin's own working-space helpers. No host has any business calling
+# them, and a plugin whose export table is exactly its two entry points is one
+# that cannot collide with anything.
+__ZN8fotufilm*
+# Two more of Halide's Metal runtime, which carry no `halide_` prefix at all.
+# They are the reason the export table is asserted exactly rather than grepped
+# for "halide": a substring search would never have found these, and they sit
+# in the same runtime whose duplication caused the abort.
+_copy_to_device_already_locked
+_metal_device_crop_from_offset
+# Halide 22's metal.cpp added this to tell a precompiled metallib from embedded source at kernel
+# init. It sits in an anonymous namespace in the runtime's own source, which is what C++ normally
+# uses for "this file only" — but Halide's own codegen path for its runtime .cpp files does not
+# carry that through, so the object still exports it. Same runtime, same reason it belongs here.
+_is_compiled_metallib

@@ -1,0 +1,34 @@
+name: Engine and desktop
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: engine-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild -version
+      - run: python3 tools/check-source-boundary.py
+      - run: python3 tools/test-source-boundary.py
+      - run: brew install halide
+      - run: swift test -c release --parallel
+      - run: swift build
+      - run: finalcut/build.sh --test
+      - run: macos/build.sh --test
+      - run: tools/verify-aot-parity.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: web

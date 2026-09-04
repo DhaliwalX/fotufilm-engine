@@ -1,0 +1,108 @@
+// Shared native camera-plane decode. Both the global measurement and spectral stages call these
+// functions, so tone metering cannot see a different scene from the film exposure kernel.
+
+static inline float3 fotufilm_decode_x420_scene_sample(
+    texture2d<float, access::sample> luma,
+    texture2d<float, access::sample> chroma,
+    float2 luma_uv, float2 chroma_offset,
+    uint transfer, float scene_scale) {
+    constexpr sampler bilinear(
+        coord::normalized, address::clamp_to_edge, filter::linear);
+    constexpr float to_code = 65535.0f / 64.0f;
+    float y10 = luma.sample(bilinear, luma_uv).r * to_code;
+    float2 c10 = chroma.sample(
+        bilinear, luma_uv + chroma_offset).rg * to_code;
+    float y = (y10 - 64.0f) / 876.0f;
+    float u = (c10.x - 512.0f) / 896.0f;
+    float v = (c10.y - 512.0f) / 896.0f;
+    float3 signal = float3(
+        y + 1.4746f * v,
+        y - 0.164553f * u - 0.571353f * v,
+        y + 1.8814f * u);
+    return max(float3(
+        capture_scene_light(signal.x, transfer),
+        capture_scene_light(signal.y, transfer),
+        capture_scene_light(signal.z, transfer)), 0.0f) * scene_scale;
+}
+
+static inline float3 fotufilm_decode_x420_scene(
+    texture2d<float, access::sample> luma,
+    texture2d<float, access::sample> chroma,
+    uint2 position, uint2 extent, float2 chroma_offset,
+    uint transfer, float scene_scale) {
+    float2 inverse_extent = 1.0f / float2(extent);
+    float2 center = (float2(position) + 0.5f) * inverse_extent;
+    if (luma.get_width() <= extent.x || luma.get_height() <= extent.y) {
+        return fotufilm_decode_x420_scene_sample(
+            luma, chroma, center, chroma_offset, transfer, scene_scale);
+    }
+
+    // A reduced spatial lattice represents an area of the native sensor, not one arbitrarily
+    // selected pixel. Four stratified bilinear taps reject camera-frequency aliases before the
+    // nonlinear spectral head while keeping the native-detail presentation path untouched.
+    float2 quarter = 0.25f * inverse_extent;
+    return 0.25f * (
+        fotufilm_decode_x420_scene_sample(
+            luma, chroma, center + float2(-quarter.x, -quarter.y),
+            chroma_offset, transfer, scene_scale)
+        + fotufilm_decode_x420_scene_sample(
+            luma, chroma, center + float2(quarter.x, -quarter.y),
+            chroma_offset, transfer, scene_scale)
+        + fotufilm_decode_x420_scene_sample(
+            luma, chroma, center + float2(-quarter.x, quarter.y),
+            chroma_offset, transfer, scene_scale)
+        + fotufilm_decode_x420_scene_sample(
+            luma, chroma, center + float2(quarter.x, quarter.y),
+            chroma_offset, transfer, scene_scale));
+}
+
+static inline float3 fotufilm_decode_nv12_scene_sample(
+    texture2d<float, access::sample> luma,
+    texture2d<float, access::sample> chroma,
+    texture1d<half, access::sample> decode,
+    float2 luma_uv, float2 chroma_offset,
+    uint range, uint gamut) {
+    constexpr sampler bilinear(
+        coord::normalized, address::clamp_to_edge, filter::linear);
+    float y_code = luma.sample(bilinear, luma_uv).r * 255.0f;
+    float2 c_code = chroma.sample(
+        bilinear, luma_uv + chroma_offset).rg * 255.0f;
+    bool full_range = range == 1u;
+    float y = full_range ? y_code / 255.0f : (y_code - 16.0f) / 219.0f;
+    float chroma_range = full_range ? 255.0f : 224.0f;
+    float u = (c_code.x - 128.0f) / chroma_range;
+    float v = (c_code.y - 128.0f) / chroma_range;
+    float3 signal = float3(
+        y + 1.5748f * v,
+        y - 0.187324f * u - 0.468124f * v,
+        y + 1.8556f * u);
+    return max(encoded_to_working(decode, signal, gamut), 0.0f);
+}
+
+static inline float3 fotufilm_decode_nv12_scene(
+    texture2d<float, access::sample> luma,
+    texture2d<float, access::sample> chroma,
+    texture1d<half, access::sample> decode,
+    uint2 position, uint2 extent, float2 chroma_offset,
+    uint range, uint gamut) {
+    float2 inverse_extent = 1.0f / float2(extent);
+    float2 center = (float2(position) + 0.5f) * inverse_extent;
+    if (luma.get_width() <= extent.x || luma.get_height() <= extent.y) {
+        return fotufilm_decode_nv12_scene_sample(
+            luma, chroma, decode, center, chroma_offset, range, gamut);
+    }
+    float2 quarter = 0.25f * inverse_extent;
+    return 0.25f * (
+        fotufilm_decode_nv12_scene_sample(
+            luma, chroma, decode, center + float2(-quarter.x, -quarter.y),
+            chroma_offset, range, gamut)
+        + fotufilm_decode_nv12_scene_sample(
+            luma, chroma, decode, center + float2(quarter.x, -quarter.y),
+            chroma_offset, range, gamut)
+        + fotufilm_decode_nv12_scene_sample(
+            luma, chroma, decode, center + float2(-quarter.x, quarter.y),
+            chroma_offset, range, gamut)
+        + fotufilm_decode_nv12_scene_sample(
+            luma, chroma, decode, center + float2(quarter.x, quarter.y),
+            chroma_offset, range, gamut));
+}

@@ -1,0 +1,183 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>stage walk</title>
+<!--
+  Develops one synthetic frame through every pipeline stage and checks the results against what
+  the physics says they must be. This is the only place the browser engine is exercised end to
+  end: everything upstream of it is a format, and a format that parses can still describe a stage
+  that develops to the wrong picture.
+
+  Served by the dev server at /test/stages.html, same-origin with the packs in public/, and not an
+  entry point so it never reaches a build. Open it in a browser, or drive it from
+  tools/check-stages.mjs.
+-->
+<body style="background:#111;color:#ddd;font:13px/1.6 ui-monospace,monospace;padding:24px">
+<pre id="out">running…</pre>
+<script type="module">
+import { createDeveloper, loadPack, loadStages } from '/src/engine.js'
+
+const out = document.getElementById('out')
+const lines = []
+let failures = 0
+
+const say = (text) => { lines.push(text); out.textContent = lines.join('\n') }
+const check = (ok, text) => {
+  if (!ok) failures += 1
+  say(`${ok ? '  ok  ' : ' FAIL '} ${text}`)
+}
+
+/// A frame with something for every stage to act on: a dark field so halation has somewhere to
+/// spill, a hard-edged highlight for the diffusion and the adjacency effect to work on, and a
+/// smooth ramp where grain and the H&D curve show up as texture rather than as an edge.
+function scene(width, height) {
+  const pixels = new Uint8ClampedArray(width * height * 4)
+  for (let y = 0; y < height; ++y) {
+    for (let x = 0; x < width; ++x) {
+      const i = (y * width + x) * 4
+      const ramp = Math.round((x / width) * 220)
+      const spot = (x - width * 0.72) ** 2 + (y - height * 0.4) ** 2 < (height * 0.12) ** 2
+      // Mid grey, where the H&D curve is steepest and grain is at its coarsest. A patch up at
+      // paper white measures the shoulder instead, and the finest-grained stocks barely register.
+      const bar = y > height * 0.62 && y < height * 0.72
+      pixels[i] = spot ? 255 : bar ? 128 : Math.round(ramp * 0.18)
+      pixels[i + 1] = spot ? 255 : bar ? 128 : Math.round(ramp * 0.12)
+      pixels[i + 2] = spot ? 255 : bar ? 128 : Math.round(ramp * 0.30)
+      pixels[i + 3] = 255
+    }
+  }
+  return pixels
+}
+
+const mean = (pixels) => {
+  let sum = 0
+  for (let i = 0; i < pixels.length; i += 4) sum += pixels[i] + pixels[i + 1] + pixels[i + 2]
+  return sum / (pixels.length / 4) / 3
+}
+
+/// Mean absolute difference between neighbouring pixels along a row, measured across the flat bar
+/// — the one part of this scene with no gradient of its own and enough exposure to carry grain.
+/// Grain is the only stage that puts high-frequency noise into a flat field, so this separates the
+/// stage that adds it from the one that does not. Read on the dark side of the frame it measures
+/// nothing on any stock, because there is no signal there for the grain to modulate.
+function roughness(pixels, width, height) {
+  let sum = 0
+  let n = 0
+  for (let y = Math.floor(height * 0.64); y < Math.floor(height * 0.70); ++y) {
+    for (let x = 4; x < width - 4; ++x) {
+      const i = (y * width + x) * 4
+      sum += Math.abs(pixels[i] - pixels[i - 4]) + Math.abs(pixels[i + 1] - pixels[i - 3])
+      n += 2
+    }
+  }
+  return sum / n
+}
+
+const differing = (a, b) => {
+  let n = 0
+  for (let i = 0; i < a.length; ++i) if (i % 4 !== 3 && a[i] !== b[i]) n += 1
+  return n
+}
+
+const query = new URLSearchParams(location.search)
+const stockID = query.get('stock') || 'example-negative-400'
+
+// ?engine=simd exercises the normal CPU fallback. GPU stages use configuration values, while CPU
+// stages select a precompiled feature-mask variant, so both paths require coverage.
+if (query.get('engine') === 'simd') {
+  Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true })
+}
+
+try {
+  const base = await loadPack(`/packs/${stockID}.pack`)
+  const stages = await loadStages(`/packs/${stockID}.stages`, base)
+  say(`${stockID}: ${base.width}×${base.height}, ${stages.length} stages`)
+
+  const developer = await createDeveloper(base)
+  say(`engine: ${developer.backend}`)
+  const source = scene(base.width, base.height)
+  const controls = { ev: 0, grain: 1, highlights: 0, shadows: 0, saturation: 1, vibrance: 0 }
+
+  developer.usePack(base)
+  const print = (await developer.develop(source, controls)).pixels
+
+  const frames = []
+  for (const stage of stages) {
+    developer.usePack(stage)
+    const { pixels, elapsed } = await developer.develop(source, controls)
+    frames.push(pixels)
+    say(`${stage.id.padEnd(15)} mean ${mean(pixels).toFixed(2).padStart(6)}` +
+        `  roughness ${roughness(pixels, base.width, base.height).toFixed(3)}` +
+        `  ${elapsed.toFixed(0)} ms`)
+  }
+
+  say('')
+  // The last stage is the film with nothing switched off. If the sidecar rebuilds it correctly it
+  // is not merely close to the plain pack's print, it is the same numbers through the same kernel.
+  check(differing(frames[frames.length - 1], print) === 0,
+        'the last stage develops to exactly the finished print')
+
+  // A stage that develops to the frame before it is a stage that did nothing — either the export
+  // never switched it off or the browser never applied the switch.
+  //
+  // Except where the two stages really are the same film. A reversal stock has no print stage to
+  // switch off: the slide is its own output medium, so the last two entries carry identical
+  // tables, and there the frames must match rather than differ.
+  const slotsMoved = (a, b) => {
+    const moved = []
+    for (let i = 0; i < a.configuration.length; ++i) {
+      if (!Object.is(a.configuration[i], b.configuration[i])) moved.push(b.configuration[i])
+    }
+    return moved
+  }
+  const sameFilm = (a, b) =>
+    a.exposure === b.exposure && a.film === b.film && a.paper === b.paper &&
+    a.featureMask === b.featureMask && a.seed === b.seed &&
+    slotsMoved(a, b).length === 0
+
+  // At σ = 0.30 px, the nearest-neighbor Gaussian weight is below 1/255, so diffusion cannot alter
+  // an 8-bit full-scale edge. Treat narrower active stages as subpixel rather than failed.
+  const SUBPIXEL = 0.30
+
+  for (let i = 1; i < stages.length; ++i) {
+    const changed = differing(frames[i], frames[i - 1])
+    const moved = slotsMoved(stages[i - 1], stages[i])
+    if (sameFilm(stages[i], stages[i - 1])) {
+      check(changed === 0,
+            `${stages[i].id} is the same film as ${stages[i - 1].id} and develops the same`)
+    } else if (changed === 0 &&
+               moved.every((v) => Number.isInteger(v) || (v > 0 && v < SUBPIXEL))) {
+      const sigmas = moved.filter((v) => !Number.isInteger(v))
+      say(`  --   ${stages[i].id} lands under a pixel at this size ` +
+          `(${sigmas.map((v) => v.toFixed(3)).join(', ')} px) and cannot show`)
+    } else {
+      check(changed > 0, `${stages[i].id} changes the frame (${changed} subpixels)`)
+    }
+  }
+
+  // Grain is the one stage whose signature is measurable without knowing the stock: switching it
+  // on has to put noise into a smooth ramp that was not there before.
+  const grainOff = stages.findIndex((s) => s.id === '07-development')
+  const grainOn = stages.findIndex((s) => s.id === '08-grain')
+  if (grainOff >= 0 && grainOn >= 0) {
+    const before = roughness(frames[grainOff], base.width, base.height)
+    const after = roughness(frames[grainOn], base.width, base.height)
+    // Measured across the seven published stocks the ratio runs from 1.59 on PRO 160NS to 5.62 on
+    // Kodachrome 200. A quarter again as much local variation sits below the quietest of those
+    // with room to spare, and nowhere near the 1.00 a stage that did nothing would leave.
+    check(after > before * 1.25,
+          `grain roughens the bar: ${before.toFixed(3)} → ${after.toFixed(3)}` +
+          ` (×${(after / before).toFixed(2)})`)
+  }
+
+  developer.dispose()
+} catch (e) {
+  failures += 1
+  say(`FAIL ${e.stack || e.message}`)
+}
+
+say('')
+say(failures === 0 ? 'ALL CHECKS PASSED' : `${failures} CHECK(S) FAILED`)
+document.title = failures === 0 ? 'pass' : 'fail'
+window.__done = true
+</script>
+</body>

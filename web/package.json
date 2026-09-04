@@ -1,0 +1,23 @@
+{
+  "name": "fotufilm-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "node server.js"
+  },
+  "dependencies": {
+    "@astryxdesign/core": "^0.3.0",
+    "@astryxdesign/theme-butter": "^0.3.0",
+    "@stylexjs/stylex": "^0.19.0",
+    "express": "^5.2.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "reicon-react": "^1.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.1",
+    "vite": "^8.2.2"
+  }
+}

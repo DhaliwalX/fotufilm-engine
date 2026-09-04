@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="1">
+    <title>Fotufilm</title>
+    <options customize="never" require-scripts="false" rootVolumeOnly="true"
+             hostArchitectures="arm64"/>
+    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+    <volume-check>
+        <allowed-os-versions>
+            <os-version min="14.0"/>
+        </allowed-os-versions>
+    </volume-check>
+    <choices-outline>
+        <line choice="default">
+            <line choice="com.muastudio.fotufilm.install"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="com.muastudio.fotufilm.install" visible="false">
+        <pkg-ref id="com.muastudio.fotufilm.install"/>
+    </choice>
+    <pkg-ref id="com.muastudio.fotufilm.install" onConclusion="none">
+        Fotufilm-component.pkg
+    </pkg-ref>
+</installer-gui-script>

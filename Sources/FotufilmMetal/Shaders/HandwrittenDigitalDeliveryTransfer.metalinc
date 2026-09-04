@@ -1,0 +1,96 @@
+// Shared RGB delivery from the optical engine's diffuse-white-relative, linear Display P3
+// Digital Reference HDR master. Keep container packing out of this file: video turns these RGB
+// signals into x420 while still capture writes them into a shader-readable RGB texture.
+
+static inline float fotufilm_delivery_shoulder(
+    float value, float ceiling, float knee) {
+    if (value <= knee) return value;
+    const float over = value - knee;
+    const float room = ceiling - knee;
+    return knee + room * over / (over + room);
+}
+
+static inline float3 fotufilm_delivery_master_light(half4 stored) {
+    const float4 pixel = float4(stored);
+    // Alpha above one is the master relight value; ordinary coverage never dims the print.
+    return max(pixel.xyz * max(pixel.w, 1.0f), float3(0.0f));
+}
+
+static inline float3 fotufilm_delivery_p3_to_rec2020(float3 value) {
+    return float3(
+        dot(float3(FOTUFILM_DELIVERY_P3_TO_2020_0,
+                   FOTUFILM_DELIVERY_P3_TO_2020_1,
+                   FOTUFILM_DELIVERY_P3_TO_2020_2), value),
+        dot(float3(FOTUFILM_DELIVERY_P3_TO_2020_3,
+                   FOTUFILM_DELIVERY_P3_TO_2020_4,
+                   FOTUFILM_DELIVERY_P3_TO_2020_5), value),
+        dot(float3(FOTUFILM_DELIVERY_P3_TO_2020_6,
+                   FOTUFILM_DELIVERY_P3_TO_2020_7,
+                   FOTUFILM_DELIVERY_P3_TO_2020_8), value));
+}
+
+static inline float3 fotufilm_delivery_p3_to_rec709(float3 value) {
+    return float3(
+        dot(float3(FOTUFILM_DELIVERY_P3_TO_709_0,
+                   FOTUFILM_DELIVERY_P3_TO_709_1,
+                   FOTUFILM_DELIVERY_P3_TO_709_2), value),
+        dot(float3(FOTUFILM_DELIVERY_P3_TO_709_3,
+                   FOTUFILM_DELIVERY_P3_TO_709_4,
+                   FOTUFILM_DELIVERY_P3_TO_709_5), value),
+        dot(float3(FOTUFILM_DELIVERY_P3_TO_709_6,
+                   FOTUFILM_DELIVERY_P3_TO_709_7,
+                   FOTUFILM_DELIVERY_P3_TO_709_8), value));
+}
+
+static inline float fotufilm_delivery_hlg_oetf(float value) {
+    const float scene = clamp(value / FOTUFILM_DELIVERY_HLG_HEADROOM, 0.0f, 1.0f);
+    return scene <= (1.0f / 12.0f)
+        ? sqrt(3.0f * scene)
+        : FOTUFILM_HLG_A * log(12.0f * scene - FOTUFILM_HLG_B) + FOTUFILM_HLG_C;
+}
+
+static inline float3 fotufilm_delivery_encode_hdr_rgb(float3 master) {
+    const float peak = max(master.x, max(master.y, master.z));
+    float3 rolled = float3(0.0f);
+    if (peak > 1.0e-6f) {
+        rolled = master * (fotufilm_delivery_shoulder(
+            peak, FOTUFILM_DELIVERY_HLG_DISPLAY_CEILING, 0.9f) / peak);
+    }
+
+    float3 wide = max(fotufilm_delivery_p3_to_rec2020(rolled), float3(0.0f));
+    const float luminance = dot(float3(0.2627f, 0.6780f, 0.0593f), wide);
+    if (luminance > 1.0e-6f) {
+        wide *= pow(luminance,
+            (1.0f - FOTUFILM_DELIVERY_HLG_GAMMA)
+                / FOTUFILM_DELIVERY_HLG_GAMMA);
+    } else {
+        wide = float3(0.0f);
+    }
+
+    return float3(
+        fotufilm_delivery_hlg_oetf(wide.x),
+        fotufilm_delivery_hlg_oetf(wide.y),
+        fotufilm_delivery_hlg_oetf(wide.z));
+}
+
+static inline float fotufilm_delivery_bt709_oetf(float linear) {
+    const float value = clamp(linear, 0.0f, 1.0f);
+    return value < 0.018f
+        ? 4.5f * value
+        : 1.099f * pow(value, 0.45f) - 0.099f;
+}
+
+static inline float3 fotufilm_delivery_encode_sdr_rgb(
+    float3 master, float shoulder_knee) {
+    // SDR remains a delivery from the HDR master: Rec.709 primaries, calibrated 0.9 knee, then
+    // the BT.709 OETF. No optical stage is re-run and no display-referred value feeds the film.
+    float3 rec709 = max(fotufilm_delivery_p3_to_rec709(master), float3(0.0f));
+    rec709 = float3(
+        fotufilm_delivery_shoulder(rec709.x, 1.0f, shoulder_knee),
+        fotufilm_delivery_shoulder(rec709.y, 1.0f, shoulder_knee),
+        fotufilm_delivery_shoulder(rec709.z, 1.0f, shoulder_knee));
+    return float3(
+        fotufilm_delivery_bt709_oetf(rec709.x),
+        fotufilm_delivery_bt709_oetf(rec709.y),
+        fotufilm_delivery_bt709_oetf(rec709.z));
+}

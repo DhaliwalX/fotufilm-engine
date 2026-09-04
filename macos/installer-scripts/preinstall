@@ -1,0 +1,12 @@
+#!/bin/bash
+set -euo pipefail
+
+# Fotufilm was the pre-Fotufilm bundle name. Installer payloads replace current bundles but do not
+# remove renamed ones, and leaving this copy behind makes Resolve load the effect twice.
+install_volume="${3:-/}"
+install_root="${install_volume%/}"
+legacy_plugin="$install_root/Library/OFX/Plugins/Fotufilm.ofx.bundle"
+
+if [[ -e "$legacy_plugin" ]]; then
+  /bin/rm -rf "$legacy_plugin"
+fi

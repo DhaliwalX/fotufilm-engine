@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "id": "example-reversal-64",
+  "name": "Example Reversal 64",
+  "subtitle": "Synthetic reversal example",
+  "sensitivity": [
+    [
+      0.92,
+      0.08,
+      0.0
+    ],
+    [
+      0.2,
+      0.73,
+      0.07
+    ],
+    [
+      0.0,
+      0.02,
+      0.98
+    ]
+  ],
+  "spectral": {
+    "kind": "color",
+    "peaksNM": [
+      640,
+      545,
+      445
+    ],
+    "widthsNM": [
+      50,
+      42,
+      38
+    ],
+    "dyeFamily": "kodachrome"
+  },
+  "curves": [
+    {
+      "dMin": 0.1,
+      "gamma": 3,
+      "toe": -1,
+      "toeWidth": 0.21,
+      "shoulder": 0.22,
+      "shoulderWidth": 0.4
+    },
+    {
+      "dMin": 0.1,
+      "gamma": 3.05,
+      "toe": -1.02,
+      "toeWidth": 0.19,
+      "shoulder": 0.12,
+      "shoulderWidth": 0.42
+    },
+    {
+      "dMin": 0.1,
+      "gamma": 3.2,
+      "toe": -1.06,
+      "toeWidth": 0.22,
+      "shoulder": -0.1,
+      "shoulderWidth": 0.48
+    }
+  ],
+  "flare": 0.008,
+  "emulsionDiffusionMM": [
+    0.004,
+    0.003,
+    0.0024
+  ],
+  "couplerInhibition": [
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ]
+  ],
+  "couplerReleaseGamma": [
+    1.8,
+    1.8,
+    1.8
+  ],
+  "couplerDiffusionMM": 0,
+  "adjacencyStrength": 0.12,
+  "adjacencyRadiusMM": 0.03,
+  "grainStrength": 0.01,
+  "grainSizeMM": 0.005,
+  "grainLayerWeights": [
+    0.7,
+    1.0,
+    1.35
+  ],
+  "halationStrength": [
+    0.03,
+    0.014,
+    0.006
+  ],
+  "paperCurve": {
+    "dMin": 0.07,
+    "gamma": 2.6,
+    "toe": -0.52,
+    "toeWidth": 0.16,
+    "shoulder": 0.42,
+    "shoulderWidth": 0.14
+  },
+  "reciprocityFailure": {
+    "thresholdSeconds": 1,
+    "lostStopsPerDecade": 1,
+    "statedThroughSeconds": 100
+  },
+  "isMonochrome": false,
+  "isReversal": true,
+  "isExample": true
+}

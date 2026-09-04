@@ -1,0 +1,10 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Fotufilm engine documentation</title></head><body>
+<h1>Fotufilm engine source builds</h1>
+<p>This repository contains the engine, CLI, Mac application, Resolve OFX plugin, and Final Cut Pro FxPlug plugin.</p>
+<h2>Build and run</h2>
+<p>Install Xcode 26 or newer and Halide, then run <code>swift build</code> and <code>swift test -c release --parallel</code>. Build the Mac app with <code>macos/build.sh --test</code>. Launch <code>build/macos/Fotufilm.app</code> and use <strong>Open</strong> to choose an image.</p>
+<p>Source builds run without activation and contain synthetic negative, monochrome, and reversal film examples and analytic print receivers. The demo image is a generated color chart.</p>
+<p>Persisted print-medium identifiers are retained for format compatibility; source builds display them as <strong>Example Photo Print</strong> or <strong>Example Projection</strong> variants. Those variants use analytic receiver curves with different contrast.</p>
+<p>Run <code>resolve/build.sh --test</code> for the OFX harness and <code>finalcut/build.sh --test</code> for the FxPlug harness. Building the actual Final Cut plugin requires the separately installed Apple FxPlug SDK.</p>
+<p><a href="support.html">Build support</a> · <a href="../README.md">Repository guide</a></p>
+</body></html>

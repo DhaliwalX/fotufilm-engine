@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "id": "example-monochrome-100",
+  "name": "Example Monochrome 100",
+  "subtitle": "Example \u00b7 B&W negative",
+  "sensitivity": [
+    [
+      0.3,
+      0.33,
+      0.37
+    ],
+    [
+      0.3,
+      0.33,
+      0.37
+    ],
+    [
+      0.3,
+      0.33,
+      0.37
+    ]
+  ],
+  "spectral": {
+    "kind": "monochrome",
+    "rgbWeights": [
+      0.3,
+      0.33,
+      0.37
+    ]
+  },
+  "curves": [
+    {
+      "dMin": 0.1,
+      "gamma": 0.62,
+      "toe": -1.0,
+      "toeWidth": 0.3,
+      "shoulder": 2.2,
+      "shoulderWidth": 0.3
+    },
+    {
+      "dMin": 0.1,
+      "gamma": 0.62,
+      "toe": -1.0,
+      "toeWidth": 0.3,
+      "shoulder": 2.2,
+      "shoulderWidth": 0.3
+    },
+    {
+      "dMin": 0.1,
+      "gamma": 0.62,
+      "toe": -1.0,
+      "toeWidth": 0.3,
+      "shoulder": 2.2,
+      "shoulderWidth": 0.3
+    }
+  ],
+  "flare": 0.008,
+  "emulsionDiffusionMM": [
+    0.0025,
+    0.0025,
+    0.0025
+  ],
+  "couplerInhibition": [
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      0
+    ]
+  ],
+  "couplerDiffusionMM": 0,
+  "adjacencyStrength": 0.15,
+  "adjacencyRadiusMM": 0.03,
+  "grainStrength": 0.008,
+  "grainSizeMM": 0.005,
+  "grainLayerWeights": [
+    1.0,
+    1.0,
+    1.0
+  ],
+  "halationStrength": [
+    0.02,
+    0.02,
+    0.02
+  ],
+  "paperCurve": {
+    "dMin": 0.05,
+    "gamma": 2.9,
+    "toe": -0.48,
+    "toeWidth": 0.15,
+    "shoulder": 0.4,
+    "shoulderWidth": 0.13
+  },
+  "reciprocityFailure": {
+    "thresholdSeconds": 0.1,
+    "lostStopsPerDecade": 1,
+    "statedThroughSeconds": 100
+  },
+  "isMonochrome": true,
+  "isReversal": false,
+  "isExample": true
+}

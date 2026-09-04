@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The wrapper. It does no work: an FxPlug 4 plug-in is an app extension, and macOS only registers
+  an extension that arrives inside an application it can see. Launching this once is what puts the
+  effect in Final Cut's browser.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>Fotufilm</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.fotufilm.fxhost</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Fotufilm for Final Cut Pro</string>
+	<key>CFBundleDisplayName</key>
+	<string>Fotufilm for Final Cut Pro</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.2</string>
+	<key>CFBundleVersion</key>
+	<string>2</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<!-- The same icon the Mac app uses, compiled into this bundle by finalcut/build.sh. Both
+	     names for the one icon: CFBundleIconName is the Assets.car entry macOS 26 lights as
+	     glass, CFBundleIconFile the .icns beside it that older systems and some Finder paths
+	     still read. Without them this wrapper shows the generic placeholder — which is what a
+	     user sees when it tells them the plug-in is installed. -->
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Fotufilm</string>
+</dict>
+</plist>

@@ -1,0 +1,27 @@
+.build/
+.swiftpm/
+DerivedData/
+.DS_Store
+node_modules/
+web/dist/
+build/
+__pycache__/
+.cache/
+xcuserdata/
+
+# The browser engine's build output, which tools/build-wasm.sh writes. It stays out of the tree:
+# what gets published is the built demo in docs/demo/, and committing this as well would carry the
+# same nineteen megabytes twice. A checkout runs tools/build-wasm.sh to develop against it.
+web/public/fotufilm.mjs
+web/public/fotufilm.wasm
+web/public/fotufilm-webgpu.mjs
+web/public/fotufilm-webgpu.wasm
+web/public/packs/
+web/public/test/
+web/public/scene.png
+web/public/fallback/
+
+# Local stock packs. The bundled example pack lives in
+# Sources/FotufilmCore/Stocks/ and is committed; a calibrated pack belongs
+# outside the repository, pointed at by FOTUFILM_STOCKS.
+/Stocks/

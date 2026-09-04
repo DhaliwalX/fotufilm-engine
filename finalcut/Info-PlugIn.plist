@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The extension Final Cut Pro and Motion actually load.
+
+  Two registries are at work here and they are not the same thing. `PlugInKit` and `XPCService`
+  are the system's: they say this bundle is an FxPlug extension, which class stands the process
+  up, and how it is run. `ProPlug*` is the pro apps' own: it says which effects live inside, what
+  they are called, and which group they file under in the effects browser.
+
+  The uuids are the identity a project keeps. Changing one loses the effect in every timeline that
+  already uses it, exactly as changing the OFX plugin identifier would; they are generated once
+  and then left alone.
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>Fotufilm</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.fotufilm.fxplug</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Fotufilm</string>
+	<key>CFBundlePackageType</key>
+	<string>XPC!</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.2</string>
+	<key>CFBundleVersion</key>
+	<string>2</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+
+	<!-- PlugInKit's half: what kind of extension this is and who stands it up. `FxPrincipal`
+	     comes from FxPlug.framework, which the bundle carries. -->
+	<key>PlugInKit</key>
+	<dict>
+		<key>Attributes</key>
+		<dict>
+			<key>com.apple.protocol</key>
+			<string>FxPlug</string>
+			<key>com.apple.version</key>
+			<string>1.1</string>
+		</dict>
+		<key>PrincipalClass</key>
+		<string>FxPrincipal</string>
+		<key>Protocol</key>
+		<string>PROXPCProtocol</string>
+		<key>Subsystems</key>
+		<array>
+			<string>NSViewService_PKSubsystem</string>
+		</array>
+	</dict>
+
+	<key>XPCService</key>
+	<dict>
+		<key>ServiceType</key>
+		<string>Application</string>
+		<key>JoinExistingSession</key>
+		<true/>
+		<key>RunLoopType</key>
+		<string>_NSApplicationMain</string>
+		<key>_AdditionalSubServices</key>
+		<dict>
+			<key>viewbridge</key>
+			<true/>
+		</dict>
+	</dict>
+
+	<key>ProPlugDictionaryVersion</key>
+	<string>1.0</string>
+	<key>ProPlugDynamicRegistration</key>
+	<false/>
+
+	<key>ProPlugPlugInGroupList</key>
+	<array>
+		<dict>
+			<key>groupName</key>
+			<string>Fotufilm</string>
+			<key>uuid</key>
+			<string>026A42CB-43CA-4B00-A80B-5911D6CB36A8</string>
+		</dict>
+	</array>
+
+	<key>ProPlugPlugInList</key>
+	<array>
+		<dict>
+			<key>className</key>
+			<string>FotufilmEffect</string>
+			<key>displayName</key>
+			<string>Fotufilm</string>
+			<key>infoString</key>
+			<string>Develops the image on a real film stock: the emulsion's own spectral response, its grain, its halation and its print.</string>
+			<key>protocolNames</key>
+			<array>
+				<string>FxFilter</string>
+			</array>
+			<!-- The plug-in's own uuid; `group` is the uuid of the group above. -->
+			<key>uuid</key>
+			<string>C4D9D06C-A2A7-48B4-830B-9AE81B970140</string>
+			<key>group</key>
+			<string>026A42CB-43CA-4B00-A80B-5911D6CB36A8</string>
+			<key>version</key>
+			<string>1.0</string>
+		</dict>
+	</array>
+
+</dict>
+</plist>

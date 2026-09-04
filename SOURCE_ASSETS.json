@@ -1,0 +1,358 @@
+{
+  "Sources/FotufilmCore/CameraProfiles/ARRI_D21_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "46637f7c575c6bcc93748d9e919d1e6583d4141d12fb85153ef269c1ac9234b2"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Arashi_Vision_Insta360_X5_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "c1bcb19c925dc6819d36e4cac425e18898198c664ee8e74fe555516d9400f8fa"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_Digital_Rebel_XTi_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "ea37526e815170e836bc920f7967266cef384ef831dd11fc0c992aff59561783"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS-1D_X_Mark_II_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "719e12a54d7eb467351ea166401d9a76c2a4faa0c31ae08d53ab18648d61f0a2"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS-1Ds_Mark_III_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "337420bff14a676aec6ffe7378e083fc22d1cf01237236cb3bd66ca7c8f2fe7a"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS-1Ds_Mark_II_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "f2b356ba91c51bd570db478f4dfce8d4a951b3cb8ff0dc8a539ee75a17436e1f"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_100D_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "a6a160d617f531430df9ee0d18dc7c84613a953a89f94e90e4b32c665fe898b9"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_200D_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "f9aaa157bf8c1499990b0c56f4f78636da650b6f4ef3fbfc6fd2a02daf7bcebc"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_200D_II_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "74eae917669a1791037861ab52ff43f7c22796d200964476cab1cfa21b3c6b7e"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_5DS_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "f624c3a2b90d4986070939c9d2ee3ed4d61100e123724e3090a5024dee533091"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_5D_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "cbb73ad5103aeb9a5f182b56c14e665af3036de02ad8493207d94085bb067d1d"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_5D_Mark_III_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "d8f9db387399dd6611edf5d1660764cf7b78f402e0a9bb68eeea9cdc64628e88"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_5D_Mark_II_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "3dd2394e07f00c3fff51de631394ff67b4b72463657f4383ac14855969b93c14"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_5D_Mark_IV_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "c3d5bc6a271fa2d0270386e27aa5dcf258c64223322a1730b03815497375be29"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_600D_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "9a4700eb7228c7731bcb4e92a3dae75a510dbbf1308d7f6fcb8ec7199e3d1adc"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_M_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "ceb7015727f88e13bcb486e688c1aefa5c7eae1e24fc0873c84d03f23a096686"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_R10_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "288a0398decdf65699c5c88a2dc48644dcd7389bb1d922969ac1e773ba18a282"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_R5_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "6d35746dc44a3e44f3cf7939e957c15bc3f3c62b07a674749b42c140fc00df29"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_R5m2_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "b58e96628aa2021eecb2bd3965dfe4fcc2af9a6543a35c739f0247f0687d705b"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_R6_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "8ff0f7329084addeafa433c832aec6e13c5125e7373cec34b4c7d42dfcb8eceb"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_R6m2_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "6819e47131dfdb1836f32970017aed7b7baa4889553936c23065dfabbb527d5d"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_RP_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "ed3df43361ff0f6e32075f544b0c72ad180e00234fb8c02d12c323c6c932cf7c"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_EOS_R_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "94069a205897ee46426e79816cca82cef641ed2ef5b4a5d1e94fbe89cacaa362"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Canon_PowerShot_S90_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "30da0d87505d58f63df9f165fca4b4d76aefc9c77b3a07fc97a872a3d273c5fa"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Fujifilm_GFX_100_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "d47bd7ec461fb9b0af29c248d5a1446df3db930d1f8e899debedf871b4d0939a"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Fujifilm_X-T3_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "2492e22b84228497c6602d279471cd8668eda3fb9673bc7bfa38e0c5d3b05c1e"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Fujifilm_X-T4_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "e36299929d3d307aed599085d571a04373fe67d08c7058ee9def9bb66892d16f"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Hasselblad_L1D-20c_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "9485b3f9783a4bb78aadfa141cd64562f930d08a35c0862567a7b44a443b19ff"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Hasselblad_L2D-20c_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "5f46bc969ececb7e020cec091471cae264cbff95228febd57cfde753ff5aa95e"
+  },
+  "Sources/FotufilmCore/CameraProfiles/LICENSE": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Nikon_D200_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "872cacb38513d81a332eb49731b4a98ba521c539e04685453318cd10d36db94b"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Nikon_D3300_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "c8b1ef05410719227066d4e214a949a867ff1d61ec12927cfd88b9c1a2bc3efc"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Nikon_D5100_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "0800c28a35256c1efd7039acff31064f7a778ee040f99fedcd0f13f393bb3ee4"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Nikon_D5300_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "a48420e76ccfcb60f8d0cad76dd64787e9416d44f71c99ce200a13776c6a9e29"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Nikon_D7000_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "4002530a868b45d11ddc2e11b8db144ae2011efdda04d25ff10a2f006494ed95"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Nikon_D700_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "28d4e1d91335bf2aa4d0486afe3abd676e856ba904c9c31715c9b2d172b4a211"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Nikon_D70_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "8fb861c9aeae2a338931edc2358ecaf99e154e0afe5f75167aebe6378110ba1b"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Nikon_D800E_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "8e8bd2ee474db73361bc4f37937966376ddc6dbcb19fd42dc63fa91bdb93ec40"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Nikon_D810_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "fe768979da5b732f3a9974ed04cc81d7446ee27500893bf456207624008d1206"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Nikon_D850_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "8a22f9092a4c19fc128f3f8fb0dae6d5e67e17b5d9c01f646024efaacdbed9d0"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Nikon_Z_f_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "0fafdf21d42b5873e2d2db77bfbb075120e01697111944d12ff0529ac44d3943"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Panasonic_DC-GX9_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "b354d7fb9b3df822e053505e784b9fbede21f0f5ae4c30e8c899497e826b3bb7"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Sony_DSC-RX100M4_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "73d081a99f4d7576a6cef75efb82ebb8398f5879ff7eb34d07c2aa30ab7e53bb"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Sony_ILCE-6400_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "9d44a700c154bc6fcdc63f2e8c8af7f1758e3181a0ccbf374b85461c8fc5fde6"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Sony_ILCE-7CM2_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "4d8843e19d7dd85099d7533e12db638c91586651102095ebc6319ce297fcb399"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Sony_ILCE-7M3_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "c6006a237e63e530bf23e4a8b000dce6875305c9c24e54d1410bbbbb8654195f"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Sony_ILCE-7M4_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "f7a8dc024ef923820c9d26ef4c31dd48deb28f0ea25cf70dd5a1bce3623576f8"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Sony_ILCE-7RM2_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "3a3d6650421e6ba835780b8879b885712d2d4f179788899ba0d735c619c5065c"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Sony_ILCE-7RM3_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "0359aad186a62ba8be765416c0fc764d9905aa47062961e8a2d447b02e349fa8"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Sony_ILCE-7RM4_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "2e2efe8ca7b92ba65e54029e751d8e363ba1e40dec513fd8d65f9357bc592033"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Sony_ILCE-7SM2_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "14570ed48d5e93d75433a96f3402398aa5f341f14ac5f6421440f7f97ea1b493"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Sony_ILCE-7SM3_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "de172c494bce62a65681d5451d13f34c3c6809663f07ec50d894acbd5a777d17"
+  },
+  "Sources/FotufilmCore/CameraProfiles/Sony_ILCE-9_380_780_5.json": {
+    "provenance": "Academy Software Foundation rawtoaces-data e9b8503cf8a0641f40e5345d9757bde60c15f423; Apache-2.0; licence included.",
+    "sha256": "60a9d16df752934ff0079667b7d1518228e941ca72a134e4914421667fce18d4"
+  },
+  "Sources/FotufilmCore/Resources/rec2020-reflectance-prior.coeff": {
+    "provenance": "Derived from open reflectance datasets; sources and terms listed in THIRD_PARTY_NOTICES.md.",
+    "sha256": "ce968baabeb0a78ffe3336a098af8d080a957909569f3dc036f2bc09f5fe18f2"
+  },
+  "Sources/FotufilmCore/Stocks/example-monochrome-100.json": {
+    "provenance": "Synthetic test curves and analytic sensitivity models. Example geometry uses explicitly chosen transmissions and releases; no fitted halation or receiver measurements.",
+    "sha256": "6724ab7af529825af825e7c14cb394c26d34ac3d0c2474de4b84a1fa5690f611"
+  },
+  "Sources/FotufilmCore/Stocks/example-negative-400.json": {
+    "provenance": "Synthetic test curves and analytic sensitivity models. Geometry and estimated halation use explicitly chosen illustrative parameters; no fitted measurements.",
+    "sha256": "446adb10e1bdcfbd8dcd26dc84a23807d104d828d9930302ce7c0b33325090e9"
+  },
+  "Sources/FotufilmCore/Stocks/example-reversal-64.json": {
+    "provenance": "Synthetic test curves and analytic sensitivity models. Example geometry uses explicitly chosen transmissions and releases; no fitted halation or receiver measurements.",
+    "sha256": "c339d81bac887681efde4a5b6ad9e718c145d723b81f1f4ef4f23cfe1fb43d58"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/example-monochrome-100.png": {
+    "provenance": "Generated by the engine GoldenImageTests from procedural reference charts and synthetic example stocks; no photographic input.",
+    "sha256": "f7b6033ab07d5967bf843adf51f6f821f1cc314e4843c97bc41aa28b0dc7a2ec"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/example-negative-400.png": {
+    "provenance": "Generated by the engine GoldenImageTests from procedural reference charts and synthetic example stocks; no photographic input.",
+    "sha256": "c7311a3037f660c0b563943dc4607cb5fa68c761b5b843256f4fd7a5f9a45022"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/example-reversal-64.png": {
+    "provenance": "Generated by the engine GoldenImageTests from procedural reference charts and synthetic example stocks; no photographic input.",
+    "sha256": "70a07cce6bbe748505cf9353e2d023fdc2676ce2a45f9492635961956cf253a4"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/example-monochrome-100.png": {
+    "provenance": "Generated by the engine GoldenImageTests from procedural reference charts and synthetic example stocks; no photographic input.",
+    "sha256": "fbadc0468e73fd2ee4d5020957a12dfb13d2c47bc977987dca53177b57b08cd8"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/example-negative-400.png": {
+    "provenance": "Generated by the engine GoldenImageTests from procedural reference charts and synthetic example stocks; no photographic input.",
+    "sha256": "5de17f6acf5b8cebd18c901ee69c83315a922eff083b641fbd2ca877a735d3a8"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/example-reversal-64.png": {
+    "provenance": "Generated by the engine GoldenImageTests from procedural reference charts and synthetic example stocks; no photographic input.",
+    "sha256": "ff616e25fd2566d7a0c94772b3d1772458f3adbd52f2a262ea7ef0400c857e8b"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/example-monochrome-100.png": {
+    "provenance": "Generated by the engine GoldenImageTests from procedural reference charts and synthetic example stocks; no photographic input.",
+    "sha256": "5354a0c4020e20c56107285ea50a4ef1b38ef111415ab603f29e893c22c190fd"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/example-negative-400.png": {
+    "provenance": "Generated by the engine GoldenImageTests from procedural reference charts and synthetic example stocks; no photographic input.",
+    "sha256": "05efd12dc5a0bec81e49ed6144195243a4550c8d0b7cc03290e057b923ec3276"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/example-reversal-64.png": {
+    "provenance": "Generated by the engine GoldenImageTests from procedural reference charts and synthetic example stocks; no photographic input.",
+    "sha256": "087828dad4fcc8e3f436d21991a055daa3760980fac04d423f1a63b17e626241"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/example-monochrome-100.png": {
+    "provenance": "Generated by the engine GoldenImageTests from procedural reference charts and synthetic example stocks; no photographic input.",
+    "sha256": "f47ab2e692b1c468e8e3825b3e3ffecbca447a60fa5a0d65798c00d19cbe6b45"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/example-negative-400.png": {
+    "provenance": "Generated by the engine GoldenImageTests from procedural reference charts and synthetic example stocks; no photographic input.",
+    "sha256": "dfac69f864dd42e238c851c5c0eae8a53c0fb266e49f7649ef8c39f6774c8692"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/example-reversal-64.png": {
+    "provenance": "Generated by the engine GoldenImageTests from procedural reference charts and synthetic example stocks; no photographic input.",
+    "sha256": "0c9f387b6f26a903d51e0d89545b56e6b783c15278ae053008c19273786ac29c"
+  },
+  "finalcut/MotionTemplate/Fotufilm.moef": {
+    "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
+    "sha256": "c135f027de2334bba6e2ba008ca95aee725a2ee0f00a68cd63e317e2b29b0aa0"
+  },
+  "macos/AppIcon.icon/Assets/Cyan.svg": {
+    "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
+    "sha256": "560b433e7336324e1d70722641e1f5a4cf98898a11511d138a2912cbf1c7e91e"
+  },
+  "macos/AppIcon.icon/Assets/FOTUFILM.svg": {
+    "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
+    "sha256": "6ef69c56958f3718a6eb5c5940826902e34e8f0697de3c4830dfecd95d944fe2"
+  },
+  "macos/AppIcon.icon/Assets/Lime.svg": {
+    "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
+    "sha256": "9b054350d082a4db5cd1542e1d41787e2ef5da397532992e0b5e4d015bedd12b"
+  },
+  "macos/AppIcon.icon/Assets/Red.svg": {
+    "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
+    "sha256": "338d8dffb9669a99eeaf19adb9876e20846c52718f831fd78095928de8e35188"
+  },
+  "macos/AppIcon.icon/Assets/Violet.svg": {
+    "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
+    "sha256": "9407bfe0a57eed7c37398f1bb2c02f870aefbb77d94a29b74d8bb3fbaecdbe2b"
+  },
+  "macos/Resources/FOTUFILM.svg": {
+    "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
+    "sha256": "ab8aca1bf4a81910e8087c37505cca56d8e733bd57c6774b178f891ab440611e"
+  },
+  "resolve/openfx/ofx-native-v1.5_aces-v1.3_ocio-v2.3.h": {
+    "provenance": "OpenFX interface headers; upstream BSD-3-Clause notices retained in each header.",
+    "sha256": "80309703dd0e105d80c3101fba57ad365add79eb407abb96e7d9ad2fd157da33"
+  },
+  "resolve/openfx/ofxColour.h": {
+    "provenance": "OpenFX interface headers; upstream BSD-3-Clause notices retained in each header.",
+    "sha256": "499dd57503a52588b27e8d7156f944632bf0b6a8ec84a388eff25471157b4d08"
+  },
+  "resolve/openfx/ofxCore.h": {
+    "provenance": "OpenFX interface headers; upstream BSD-3-Clause notices retained in each header.",
+    "sha256": "5decc35248460a8b205f58b8bd7ec160d5a73c36def3396c13000ccd4ec4428a"
+  },
+  "resolve/openfx/ofxImageEffect.h": {
+    "provenance": "OpenFX interface headers; upstream BSD-3-Clause notices retained in each header.",
+    "sha256": "e34c720875d0a73fb6ad1cfa3761a1d5d8f3a7050741027eccbb282bf11693cf"
+  },
+  "resolve/openfx/ofxInteract.h": {
+    "provenance": "OpenFX interface headers; upstream BSD-3-Clause notices retained in each header.",
+    "sha256": "24eab4c715147964c8cd067ffc3caa95956d62d75e6db5b34c13ddac9bce3f7c"
+  },
+  "resolve/openfx/ofxMemory.h": {
+    "provenance": "OpenFX interface headers; upstream BSD-3-Clause notices retained in each header.",
+    "sha256": "4b726356862cb4aa854e86bb8a036e63e752cacfa7484c6676e1082ce057e96c"
+  },
+  "resolve/openfx/ofxMessage.h": {
+    "provenance": "OpenFX interface headers; upstream BSD-3-Clause notices retained in each header.",
+    "sha256": "1c25bbcbb6ae9dcc09a34b0038c22e92d278b3416316c498ebf7ad7bdd5e9fbb"
+  },
+  "resolve/openfx/ofxMultiThread.h": {
+    "provenance": "OpenFX interface headers; upstream BSD-3-Clause notices retained in each header.",
+    "sha256": "e63c52c6772f923acc5ccdfb4874df7d0f0f49fee2b77d0df6e1b372bdc46364"
+  },
+  "resolve/openfx/ofxParam.h": {
+    "provenance": "OpenFX interface headers; upstream BSD-3-Clause notices retained in each header.",
+    "sha256": "1408cd974f4bd639c6eff01c3185402615aa5ccff794089f5a229092b2fd19eb"
+  },
+  "resolve/openfx/ofxProperty.h": {
+    "provenance": "OpenFX interface headers; upstream BSD-3-Clause notices retained in each header.",
+    "sha256": "c3f95bfdb7157963470ec05ecd1baf79168bbb53839f950baf30218a4735643a"
+  },
+  "web/public/app-icon.png": {
+    "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
+    "sha256": "1bf1b4ef994da2b9f93cbeae7da8e60f58feb232d85a827e082344fb25942d7d"
+  },
+  "web/public/fotufilm_tagline.png": {
+    "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
+    "sha256": "a6167773418f304d1ba22b050096b565eaa3ac7c55e37bd7ab983fea857003e7"
+  },
+  "web/src/assets/app-icon.png": {
+    "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
+    "sha256": "1bf1b4ef994da2b9f93cbeae7da8e60f58feb232d85a827e082344fb25942d7d"
+  }
+}

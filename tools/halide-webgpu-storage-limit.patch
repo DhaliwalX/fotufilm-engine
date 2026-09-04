@@ -1,0 +1,21 @@
+Ask the adapter's storage-buffer limit for, rather than settling for the default.
+
+create_webgpu_context raises five limits from what the adapter reports — buffer size, storage
+binding size, workgroup storage, invocations, workgroup dimensions — and omits this one, so a
+device is created with the specification's floor of eight storage buffers per compute stage
+however many the adapter would have allowed. The frame pipeline's combine kernel binds nine.
+
+Sent nowhere yet; it belongs upstream on Halide PR #8955, which this tree is a checkout of.
+diff --git a/src/runtime/webgpu.cpp b/src/runtime/webgpu.cpp
+index b819928..9c8bf5f 100644
+--- a/src/runtime/webgpu.cpp
++++ b/src/runtime/webgpu.cpp
+@@ -411,6 +411,8 @@ WEAK int create_webgpu_context(void *user_context) {
+             supportedLimits.maxComputeWorkgroupSizeY;
+         requestedLimits.maxComputeWorkgroupSizeZ =
+             supportedLimits.maxComputeWorkgroupSizeZ;
++        requestedLimits.maxStorageBuffersPerShaderStage =
++            supportedLimits.maxStorageBuffersPerShaderStage;
+     }
+ 
+     WGPUDeviceDescriptor device_desc = WGPU_DEVICE_DESCRIPTOR_INIT;
