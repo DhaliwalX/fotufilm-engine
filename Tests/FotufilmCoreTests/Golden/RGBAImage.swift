@@ -58,27 +58,26 @@ struct RGBAImage {
 
     func pngData() throws -> Data {
         var bytes = pixels
-        let context = try bytes.withUnsafeMutableBytes { raw -> CGContext in
+        // Keep the bitmap storage alive until ImageIO has finished encoding it.
+        return try bytes.withUnsafeMutableBytes { raw in
             guard let context = CGContext(
                 data: raw.baseAddress, width: width, height: height,
                 bitsPerComponent: 8, bytesPerRow: width * 4,
-                space: Self.colorSpace, bitmapInfo: Self.bitmapInfo.rawValue)
-            else { throw GoldenError.cannotEncode }
-            return context
+                space: Self.colorSpace, bitmapInfo: Self.bitmapInfo.rawValue),
+                  let image = context.makeImage() else {
+                throw GoldenError.cannotEncode
+            }
+            let data = NSMutableData()
+            guard let destination = CGImageDestinationCreateWithData(
+                data, UTType.png.identifier as CFString, 1, nil) else {
+                throw GoldenError.cannotEncode
+            }
+            CGImageDestinationAddImage(destination, image, nil)
+            guard CGImageDestinationFinalize(destination) else {
+                throw GoldenError.cannotEncode
+            }
+            return data as Data
         }
-        guard let image = context.makeImage() else {
-            throw GoldenError.cannotEncode
-        }
-        let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(
-            data, UTType.png.identifier as CFString, 1, nil) else {
-            throw GoldenError.cannotEncode
-        }
-        CGImageDestinationAddImage(destination, image, nil)
-        guard CGImageDestinationFinalize(destination) else {
-            throw GoldenError.cannotEncode
-        }
-        return data as Data
     }
 
     static func read(_ url: URL) throws -> RGBAImage {
