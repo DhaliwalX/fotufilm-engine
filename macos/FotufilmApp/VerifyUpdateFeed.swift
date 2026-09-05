@@ -22,7 +22,7 @@ enum VerifyUpdateFeed {
         }
 
         let digest64 = String(repeating: "a", count: 64)
-        let pkg = "https://github.com/DhaliwalX/fotufilm-downloads/releases/latest/download/Fotufilm-macOS.pkg"
+        let pkg = "https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS.pkg"
 
         // The rules. Validation refuses a document the app must not act on; the comparison is
         // the decision of whether the feed names a release worth walking the user to.

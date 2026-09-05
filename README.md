@@ -67,7 +67,7 @@ See [Build support](docs/support.html) for stock-pack setup.
 `SOURCE_ASSETS.json` records where assets came from and their file hashes. Before
 adding data or images, run `python3 tools/check-source-boundary.py`.
 
-[Download for Mac](https://github.com/DhaliwalX/fotufilm-downloads/releases/latest/download/Fotufilm-macOS.pkg) · [Download for iOS](https://apps.apple.com/app/id6792911908)
+[Download for Mac](https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS.pkg) · [Download for iOS](https://apps.apple.com/app/id6792911908)
 
 ## More information
 
