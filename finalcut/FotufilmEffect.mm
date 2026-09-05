@@ -1014,22 +1014,19 @@ struct FotufilmGating {
                                            pushMeasured:0]
                           parameterFlags:kFxParameterFlag_DISABLED | kFxParameterFlag_NOT_ANIMATABLE];
 
-    [api startParameterSubGroup:@"Pipeline"
-                         parameterID:kFotufilmParam_PipelineGroup
-                      parameterFlags:kFxParameterFlag_COLLAPSED];
-    [api addPopupMenuWithName:@"Stage"
-                       parameterID:kFotufilmParam_Stage
-                 defaultValue:0
-                  menuEntries:stages
+    // The panel reads top to bottom as the light does, in the same order as the Resolve
+    // plug-in: what arrives, the film it meets, how it is exposed, the glass in front of it,
+    // how it is developed, the emulsion's own character, and where the result is viewed. The
+    // pipeline controls come last, shut: they choose which part of that story this effect
+    // performs, and a first-time user should meet Timeline Color Space before Stage.
+    [api startParameterSubGroup:@"Input"
+                         parameterID:kFotufilmParam_InputGroup
+                      parameterFlags:kFxParameterFlag_DEFAULT];
+    [api addPopupMenuWithName:@"Timeline Color Space"
+                       parameterID:kFotufilmParam_ColorSpace
+                 defaultValue:kFotufilmColorSpaceAuto
+                  menuEntries:[self colorSpaceMenu]
                     parameterFlags:kFxParameterFlag_DEFAULT];
-    for (NSUInteger i = 0; i < engine.textureLabels.count; ++i) {
-        const bool offered = i < gating.offered.size() ? gating.offered[i] : true;
-        [api addToggleButtonWithName:engine.textureLabels[i]
-                              parameterID:(UInt32)(kFotufilmParam_TextureStageFirst + i)
-                        defaultValue:YES
-                           parameterFlags:offered ? kFxParameterFlag_DEFAULT
-                                                  : kFxParameterFlag_DISABLED];
-    }
     [api endParameterSubGroup];
 
     [api startParameterSubGroup:@"Film"
@@ -1047,38 +1044,6 @@ struct FotufilmGating {
                  defaultValue:(int)engine.matchFilmFormat
                   menuEntries:formats
                     parameterFlags:kFxParameterFlag_DEFAULT];
-    [api addPopupMenuWithName:@"Timeline Color Space"
-                       parameterID:kFotufilmParam_ColorSpace
-                 defaultValue:kFotufilmColorSpaceAuto
-                  menuEntries:[self colorSpaceMenu]
-                    parameterFlags:kFxParameterFlag_DEFAULT];
-    [api endParameterSubGroup];
-
-    [api startParameterSubGroup:@"Output"
-                         parameterID:kFotufilmParam_OutputGroup
-                      parameterFlags:kFxParameterFlag_DEFAULT];
-    [api addPopupMenuWithName:@"Output Medium"
-                       parameterID:kFotufilmParam_Paper
-                 defaultValue:(int)engine.matchFilmOutput
-                  menuEntries:papers
-                    parameterFlags:whenPrints];
-    [api addPopupMenuWithName:@"Viewing Illuminant"
-                       parameterID:kFotufilmParam_PrintLight
-                 defaultValue:0
-                  menuEntries:@[ @"Medium Reference · Auto", @"Proofing Booth · D50",
-                                 @"Tungsten · 2856 K", @"Daylight · D65" ]
-                    parameterFlags:whenPrints];
-    [self addSlider:api name:@"Channel Contrast Match"
-            parameterID:kFotufilmParam_PrintCorrection
-            value:0.05 min:0 max:1 delta:0.01 flags:whenPrints];
-    // How a developed negative is read, and it is read only where the negative *is* the output.
-    // The controls are created against the default medium, Match Film, which is not the negative,
-    // so it starts dimmed; `refreshControlsAtTime` follows the menu from there.
-    [api addPopupMenuWithName:@"Negative Viewing"
-                       parameterID:kFotufilmParam_NegativeViewing
-                 defaultValue:0
-                  menuEntries:viewings
-                    parameterFlags:kFxParameterFlag_DISABLED];
     [api endParameterSubGroup];
 
     // The durable identity of each menu choice, hidden. See kFotufilmParam_StageID.
@@ -1090,7 +1055,7 @@ struct FotufilmGating {
                               parameterFlags:kFxParameterFlag_HIDDEN];
     }
 
-    [api startParameterSubGroup:@"Exposure"
+    [api startParameterSubGroup:@"Light & Colour"
                          parameterID:kFotufilmParam_ExposureGroup
                       parameterFlags:kFxParameterFlag_DEFAULT];
     [self addSlider:api name:@"Exposure" parameterID:kFotufilmParam_Exposure
@@ -1099,11 +1064,23 @@ struct FotufilmGating {
             value:6504 min:2000 max:12000 delta:10];
     [self addSlider:api name:@"Tint" parameterID:kFotufilmParam_Tint
             value:0 min:-100 max:100 delta:0.5];
+    [self addSlider:api name:@"Highlights" parameterID:kFotufilmParam_Highlights
+            value:0 min:-1 max:1 delta:0.01];
+    [self addSlider:api name:@"Shadows" parameterID:kFotufilmParam_Shadows
+            value:0 min:-1 max:1 delta:0.01];
+    [api addToggleButtonWithName:@"Regional Tone Mask"
+                          parameterID:kFotufilmParam_LocalTone
+                    defaultValue:YES
+                       parameterFlags:kFxParameterFlag_DEFAULT];
+    [self addSlider:api name:@"Saturation" parameterID:kFotufilmParam_Saturation
+            value:1 min:0 max:2 delta:0.01];
+    [self addSlider:api name:@"Vibrance" parameterID:kFotufilmParam_Vibrance
+            value:0 min:-1 max:1 delta:0.01];
     [api endParameterSubGroup];
 
     // The lens, in the order the light meets it: the absorbing glass, how the exposure was set
     // behind it, then the diffusion filter and the focal length its scattering is imaged through.
-    [api startParameterSubGroup:@"Lens"
+    [api startParameterSubGroup:@"Lens & Filters"
                          parameterID:kFotufilmParam_LensGroup
                       parameterFlags:kFxParameterFlag_COLLAPSED];
     NSString *const filterNames[3] = { @"Filter 1", @"Filter 2", @"Filter 3" };
@@ -1139,6 +1116,9 @@ struct FotufilmGating {
     // is calibrated around.
     [self addSlider:api name:@"Focal Length" parameterID:kFotufilmParam_FocalLength
             value:0 min:0 max:300 delta:1];
+    // Zero leaves the stage out: a photographed clip already carries its own lens's glare.
+    [self addSlider:api name:@"Veiling Glare" parameterID:kFotufilmParam_Flare
+            value:0 min:0 max:2 delta:0.01];
     [api endParameterSubGroup];
 
     // The durable identity of the four catalogue menus above, hidden, as 26...29 are.
@@ -1152,28 +1132,40 @@ struct FotufilmGating {
                               parameterFlags:kFxParameterFlag_HIDDEN];
     }
 
-    [api startParameterSubGroup:@"Tone"
-                         parameterID:kFotufilmParam_ToneGroup
-                      parameterFlags:kFxParameterFlag_DEFAULT];
-    [self addSlider:api name:@"Highlights" parameterID:kFotufilmParam_Highlights
-            value:0 min:-1 max:1 delta:0.01];
-    [self addSlider:api name:@"Shadows" parameterID:kFotufilmParam_Shadows
-            value:0 min:-1 max:1 delta:0.01];
-    [api addToggleButtonWithName:@"Regional Tone Mask"
-                          parameterID:kFotufilmParam_LocalTone
-                    defaultValue:YES
-                       parameterFlags:kFxParameterFlag_DEFAULT];
-    [self addSlider:api name:@"Saturation" parameterID:kFotufilmParam_Saturation
-            value:1 min:0 max:2 delta:0.01];
-    [self addSlider:api name:@"Vibrance" parameterID:kFotufilmParam_Vibrance
-            value:0 min:-1 max:1 delta:0.01];
+    [api startParameterSubGroup:@"Development"
+                         parameterID:kFotufilmParam_LabGroup
+                      parameterFlags:kFxParameterFlag_COLLAPSED];
+    // A continuous slider over a set of measured conditions: the engine carries a film's response
+    // only at the developments it was measured at, and refuses anything between. The value is
+    // snapped to the nearest one on the way to the engine — not in the control, which animates —
+    // and the slider is disabled on a film that has none.
+    [self addSlider:api name:@"Push / Pull" parameterID:kFotufilmParam_Push
+            value:0 min:-1 max:3 delta:0.01 flags:whenPushes];
+    [self addSlider:api name:@"Bleach Bypass" parameterID:kFotufilmParam_BleachBypass
+            value:0 min:0 max:1 delta:0.01];
+    [self addSlider:api name:@"Film Age (years)" parameterID:kFotufilmParam_Expired
+            value:0 min:0 max:30 delta:0.1];
     [api endParameterSubGroup];
 
-    [api startParameterSubGroup:@"Film Response"
+    [api startParameterSubGroup:@"Grain"
                          parameterID:kFotufilmParam_ResponseGroup
                       parameterFlags:kFxParameterFlag_DEFAULT];
     [self addSlider:api name:@"Grain" parameterID:kFotufilmParam_Grain
             value:1 min:0 max:2 delta:0.01];
+    [api addIntSliderWithName:@"Grain Seed"
+                       parameterID:kFotufilmParam_Seed
+                 defaultValue:0x46494C4D
+                 parameterMin:0
+                 parameterMax:INT32_MAX
+                    sliderMin:0
+                    sliderMax:INT32_MAX
+                        delta:1
+                    parameterFlags:kFxParameterFlag_NOT_ANIMATABLE];
+    [api endParameterSubGroup];
+
+    [api startParameterSubGroup:@"Halation"
+                         parameterID:kFotufilmParam_HalationGroup
+                      parameterFlags:kFxParameterFlag_DEFAULT];
     // The slider stays 0-10; the hard range admits typed values to 100, so a pack's authored look
     // can be pushed well past itself without touching the calibrated sheets.
     [api addFloatSliderWithName:@"Halation"
@@ -1191,35 +1183,59 @@ struct FotufilmGating {
                        parameterFlags:kFxParameterFlag_DEFAULT];
     [self addSlider:api name:@"Halo Colour" parameterID:kFotufilmParam_HalationColour
             value:0 min:0 max:1 delta:0.01];
-    // Zero leaves the stage out: a photographed clip already carries its own lens's glare.
-    [self addSlider:api name:@"Lens Flare" parameterID:kFotufilmParam_Flare
-            value:0 min:0 max:2 delta:0.01];
-    [self addSlider:api name:@"DIR Couplers" parameterID:kFotufilmParam_Couplers
-            value:1 min:0 max:2 delta:0.01];
-    [api addIntSliderWithName:@"Grain Seed"
-                       parameterID:kFotufilmParam_Seed
-                 defaultValue:0x46494C4D
-                 parameterMin:0
-                 parameterMax:INT32_MAX
-                    sliderMin:0
-                    sliderMax:INT32_MAX
-                        delta:1
-                    parameterFlags:kFxParameterFlag_NOT_ANIMATABLE];
     [api endParameterSubGroup];
 
-    [api startParameterSubGroup:@"The Lab"
-                         parameterID:kFotufilmParam_LabGroup
+    [api startParameterSubGroup:@"Colour Separation"
+                         parameterID:kFotufilmParam_CouplerGroup
+                      parameterFlags:kFxParameterFlag_DEFAULT];
+    [self addSlider:api name:@"DIR Couplers" parameterID:kFotufilmParam_Couplers
+            value:1 min:0 max:2 delta:0.01];
+    [api endParameterSubGroup];
+
+    [api startParameterSubGroup:@"Output"
+                         parameterID:kFotufilmParam_OutputGroup
+                      parameterFlags:kFxParameterFlag_DEFAULT];
+    [api addPopupMenuWithName:@"Output Medium"
+                       parameterID:kFotufilmParam_Paper
+                 defaultValue:(int)engine.matchFilmOutput
+                  menuEntries:papers
+                    parameterFlags:whenPrints];
+    [api addPopupMenuWithName:@"Viewing Illuminant"
+                       parameterID:kFotufilmParam_PrintLight
+                 defaultValue:0
+                  menuEntries:@[ @"Medium Reference · Auto", @"Proofing Booth · D50",
+                                 @"Tungsten · 2856 K", @"Daylight · D65" ]
+                    parameterFlags:whenPrints];
+    [self addSlider:api name:@"Channel Contrast Match"
+            parameterID:kFotufilmParam_PrintCorrection
+            value:0.05 min:0 max:1 delta:0.01 flags:whenPrints];
+    // How a developed negative is read, and it is read only where the negative *is* the output.
+    // The controls are created against the default medium, Match Film, which is not the negative,
+    // so it starts dimmed; `refreshControlsAtTime` follows the menu from there.
+    [api addPopupMenuWithName:@"Negative Viewing"
+                       parameterID:kFotufilmParam_NegativeViewing
+                 defaultValue:0
+                  menuEntries:viewings
+                    parameterFlags:kFxParameterFlag_DISABLED];
+    [api endParameterSubGroup];
+
+    // Last, and shut: a clip is Full unless someone has read what the other spans are for.
+    [api startParameterSubGroup:@"Pipeline"
+                         parameterID:kFotufilmParam_PipelineGroup
                       parameterFlags:kFxParameterFlag_COLLAPSED];
-    // A continuous slider over a set of measured conditions: the engine carries a film's response
-    // only at the developments it was measured at, and refuses anything between. The value is
-    // snapped to the nearest one on the way to the engine — not in the control, which animates —
-    // and the slider is disabled on a film that has none.
-    [self addSlider:api name:@"Push / Pull" parameterID:kFotufilmParam_Push
-            value:0 min:-1 max:3 delta:0.01 flags:whenPushes];
-    [self addSlider:api name:@"Bleach Bypass" parameterID:kFotufilmParam_BleachBypass
-            value:0 min:0 max:1 delta:0.01];
-    [self addSlider:api name:@"Expired" parameterID:kFotufilmParam_Expired
-            value:0 min:0 max:30 delta:0.1];
+    [api addPopupMenuWithName:@"Stage"
+                       parameterID:kFotufilmParam_Stage
+                 defaultValue:0
+                  menuEntries:stages
+                    parameterFlags:kFxParameterFlag_DEFAULT];
+    for (NSUInteger i = 0; i < engine.textureLabels.count; ++i) {
+        const bool offered = i < gating.offered.size() ? gating.offered[i] : true;
+        [api addToggleButtonWithName:engine.textureLabels[i]
+                              parameterID:(UInt32)(kFotufilmParam_TextureStageFirst + i)
+                        defaultValue:YES
+                           parameterFlags:offered ? kFxParameterFlag_DEFAULT
+                                                  : kFxParameterFlag_DISABLED];
+    }
     [api endParameterSubGroup];
 
     return YES;

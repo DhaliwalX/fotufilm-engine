@@ -213,32 +213,23 @@ enum MainMenu {
         return item
     }
 
+    /// One flat list, grouped by host.
+    ///
+    /// The earlier version nested a submenu per host, each holding an "Install Fotufilm Plug-in…"
+    /// and a "Show Installed Plug-in in Finder" that read identically once the submenu was open.
+    /// Four items do not need two levels: each is named after its host, so the menu answers both
+    /// "which editors does this app plug into" and "what can I do about it" at a glance. The
+    /// install title still changes to "Reinstall" once the plug-in is in place, and the Finder
+    /// item stays grey until there is something to show — both handled in `validateMenuItem`.
     private static func pluginsMenu() -> NSMenuItem {
         let (item, menu) = submenu("Plugins")
-        menu.addItem(resolveMenu())
-        menu.addItem(finalCutMenu())
-        return item
-    }
-
-    private static func resolveMenu() -> NSMenuItem {
-        let (item, menu) = submenu("DaVinci Resolve")
-        menu.addItem(withTitle: "Install Fotufilm Plug-in…",
-                     action: #selector(AppDelegate.installOFXPlugin(_:)),
-                     keyEquivalent: "")
-        menu.addItem(withTitle: "Show Installed Plug-in in Finder",
-                     action: #selector(AppDelegate.showOFXPluginInFinder(_:)),
-                     keyEquivalent: "")
-        return item
-    }
-
-    private static func finalCutMenu() -> NSMenuItem {
-        let (item, menu) = submenu("Final Cut Pro")
-        menu.addItem(withTitle: "Install Fotufilm Plug-in…",
-                     action: #selector(AppDelegate.installFxPlugPlugin(_:)),
-                     keyEquivalent: "")
-        menu.addItem(withTitle: "Show Installed Plug-in in Finder",
-                     action: #selector(AppDelegate.showFxPlugPluginInFinder(_:)),
-                     keyEquivalent: "")
+        for (index, host) in PluginHost.allCases.enumerated() {
+            if index > 0 { menu.addItem(.separator()) }
+            menu.addItem(withTitle: host.installTitle(reinstall: false),
+                         action: host.installAction, keyEquivalent: "")
+            menu.addItem(withTitle: host.showInFinderTitle,
+                         action: host.showInFinderAction, keyEquivalent: "")
+        }
         return item
     }
 
@@ -369,6 +360,84 @@ private final class EditHistoryMenuDelegate: NSObject, NSMenuDelegate {
             return "Channel Contrast Match"
         }
         return "Edit"
+    }
+}
+
+/// The editors Fotufilm ships a plug-in for, as the Plugins menu names them.
+///
+/// Each host owns the wording of its two items and knows where its installer keeps the plug-in,
+/// so the menu builder and `validateMenuItem` agree without either spelling the titles twice.
+enum PluginHost: CaseIterable {
+    case resolve
+    case finalCut
+
+    /// The name as the menu shows it — the product the user knows, not the plug-in format.
+    var name: String {
+        switch self {
+        case .resolve: return "DaVinci Resolve"
+        case .finalCut: return "Final Cut Pro"
+        }
+    }
+
+    var installAction: Selector {
+        switch self {
+        case .resolve: return #selector(AppDelegate.installOFXPlugin(_:))
+        case .finalCut: return #selector(AppDelegate.installFxPlugPlugin(_:))
+        }
+    }
+
+    var showInFinderAction: Selector {
+        switch self {
+        case .resolve: return #selector(AppDelegate.showOFXPluginInFinder(_:))
+        case .finalCut: return #selector(AppDelegate.showFxPlugPluginInFinder(_:))
+        }
+    }
+
+    static func owning(_ action: Selector?) -> (host: PluginHost, isInstall: Bool)? {
+        for host in allCases {
+            if action == host.installAction { return (host, true) }
+            if action == host.showInFinderAction { return (host, false) }
+        }
+        return nil
+    }
+
+    var isBundled: Bool {
+        switch self {
+        case .resolve: return OFXPluginInstaller.bundledURL != nil
+        case .finalCut: return FxPlugInstaller.bundledURL != nil
+        }
+    }
+
+    var isInstalled: Bool {
+        switch self {
+        case .resolve: return OFXPluginInstaller.isInstalled
+        case .finalCut: return FxPlugInstaller.isInstalled
+        }
+    }
+
+    var installedPath: String {
+        switch self {
+        case .resolve: return OFXPluginInstaller.installedURL.path
+        case .finalCut: return FxPlugInstaller.installedURL.path
+        }
+    }
+
+    func installTitle(reinstall: Bool) -> String {
+        (reinstall ? "Reinstall " : "Install ") + name + " Plug-in…"
+    }
+
+    var showInFinderTitle: String { "Show \(name) Plug-in in Finder" }
+
+    /// Why an item is grey, for the pointer that lingers on it. A disabled item with no reason
+    /// looks broken; a disabled item that says the plug-in is not installed yet looks like a menu.
+    var installToolTip: String? {
+        isBundled ? nil
+            : "This copy of Fotufilm does not contain the \(name) plug-in."
+    }
+
+    var showInFinderToolTip: String {
+        isInstalled ? installedPath
+            : "The \(name) plug-in is not installed yet. Choose Install \(name) Plug-in… first."
     }
 }
 

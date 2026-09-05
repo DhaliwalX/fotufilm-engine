@@ -67,7 +67,7 @@ updated together; packs that need a newer version are skipped.
 2. Choose a film and gauge.
 3. Leave **Timeline Color Space** on **Auto (from host)** unless you need an override.
 4. Leave **Stage** on **Full** for the complete film and print process.
-5. Adjust exposure, output medium, lens filters, film response, and development.
+5. Adjust light and colour, lens filters, development, grain, halation, and output medium.
 
 The **Status** line explains input color handling, unavailable controls, and render
 errors. The plugin includes the three Starter films and needs no activation.

@@ -681,7 +681,7 @@ int main(int argc, const char *argv[]) {
         if (!effect) return 1;
 
         expect(host.openGroups == 0, "every parameter group is closed");
-        expect(host.balancedGroups == 8, "eight groups were opened and closed");
+        expect(host.balancedGroups == 10, "ten groups were opened and closed");
         expect(host.values[@(kFotufilmParam_Stock)] != nil, "the stock menu exists");
         expect(host.values[@(kFotufilmParam_Halation)] != nil, "the halation slider exists");
         expect([host.values[@(kFotufilmParam_Status)] isKindOfClass:NSString.class],

@@ -55,7 +55,9 @@ enum {
     kFotufilmParam_PipelineGroup = 30,
     kFotufilmParam_FilmGroup = 31,
     kFotufilmParam_ExposureGroup = 32,
-    kFotufilmParam_ToneGroup = 33,
+    /// Retired: the Tone controls now sit in the Exposure group, which the inspector titles
+    /// Light & Colour. The number is kept out of circulation, as every parameter id is.
+    kFotufilmParam_ToneGroup_Retired = 33,
     kFotufilmParam_ResponseGroup = 34,
     kFotufilmParam_LabGroup = 35,
     kFotufilmParam_OutputGroup = 36,
@@ -95,6 +97,14 @@ enum {
     kFotufilmParam_LensFilter2ID = 82,
     kFotufilmParam_LensFilter3ID = 83,
     kFotufilmParam_DiffusionID = 84,
+
+    /// Group headers added when the inspector was laid out to match the Resolve plug-in:
+    /// Input at the top, and Halation and Colour Separation split out of what was one
+    /// Film Response group. Groups hold no value, so only the order they are declared in
+    /// matters to a project.
+    kFotufilmParam_InputGroup = 85,
+    kFotufilmParam_HalationGroup = 86,
+    kFotufilmParam_CouplerGroup = 87,
 };
 
 /// The id the plugin writes for the "None" entry the filter and diffusion menus open with. The
