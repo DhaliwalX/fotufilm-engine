@@ -15,7 +15,9 @@ else
 fi
 
 SOURCE_BUILD_FLAGS=()
-if [[ "$FOTUFILM_SOURCE_BUILD" == 1 ]]; then
+# A distribution can add supplied packs while retaining the source app's bundle,
+# keychain, and imported-pack identity for existing installations.
+if [[ "$FOTUFILM_SOURCE_BUILD" == 1 || "${FOTUFILM_USE_SOURCE_IDENTITY:-0}" == 1 ]]; then
   SOURCE_BUILD_FLAGS=(-D FOTUFILM_SOURCE_BUILD)
 fi
 
