@@ -8,6 +8,12 @@
 extern "C" {
 #endif
 
+/// Per-instance execution contexts for the AOT plugin runtime.
+void *fotufilm_halide_metal_context_create(void);
+void fotufilm_halide_metal_context_destroy(void *context);
+void *fotufilm_halide_metal_context_bind(void *context);
+void fotufilm_halide_metal_context_restore(void *context);
+
 /// Samples per channel in the DIR coupler neutral-anchor warp table, and the
 /// log-exposure domain it spans.
 enum {

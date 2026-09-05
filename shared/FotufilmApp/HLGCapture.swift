@@ -98,50 +98,6 @@ final class HLGConverter {
         convert(pixelBuffer, into: destination, half: true)
     }
 
-    /// Fuses capture decode with the native HDR film transform, so a 4K linear intermediate is
-    /// never written and read back between the two kernels.
-    func developHalf(
-        _ pixelBuffer: CVPixelBuffer, into destination: MTLBuffer,
-        renderer: NativeRealtimeHDRFilmRenderer,
-        width: Int, height: Int, originX: Int, originY: Int,
-        key: String, frameIndex: UInt64, inputGain: Float
-    ) -> Bool {
-        guard let state = Self.metalState, ensureResources(state),
-              let textureCache,
-              Self.isCompatibleFrame(pixelBuffer, transfer: transfer)
-        else { return false }
-        let frameWidth = CVPixelBufferGetWidthOfPlane(pixelBuffer, 0)
-        let frameHeight = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
-        guard frameWidth > 0, frameHeight > 0 else { return false }
-        var lumaReference: CVMetalTexture?
-        var chromaReference: CVMetalTexture?
-        guard CVMetalTextureCacheCreateTextureFromImage(
-                kCFAllocatorDefault, textureCache, pixelBuffer, nil,
-                .r16Unorm, frameWidth, frameHeight, 0,
-                &lumaReference) == kCVReturnSuccess,
-              CVMetalTextureCacheCreateTextureFromImage(
-                kCFAllocatorDefault, textureCache, pixelBuffer, nil,
-                .rg16Unorm, CVPixelBufferGetWidthOfPlane(pixelBuffer, 1),
-                CVPixelBufferGetHeightOfPlane(pixelBuffer, 1), 1,
-                &chromaReference) == kCVReturnSuccess,
-              let lumaReference, let chromaReference,
-              let luma = CVMetalTextureGetTexture(lumaReference),
-              let chroma = CVMetalTextureGetTexture(chromaReference)
-        else { return false }
-        let developed = renderer.processCapturedHalf(
-            luma: luma, chroma: chroma, output: destination,
-            width: width, height: height,
-            frameWidth: frameWidth, frameHeight: frameHeight,
-            originX: originX, originY: originY,
-            chromaOffset: Self.chromaOffset(
-                for: pixelBuffer, width: frameWidth, height: frameHeight),
-            sceneScale: transfer.sceneScale,
-            appleLog: transfer == .appleLog,
-            key: key, frameIndex: frameIndex, inputGain: inputGain)
-        withExtendedLifetime((lumaReference, chromaReference)) {}
-        return developed
-    }
-
     private func convert(_ pixelBuffer: CVPixelBuffer,
                          into destination: MTLBuffer, half: Bool) -> Bool {
         guard let state = Self.metalState, ensureResources(state),

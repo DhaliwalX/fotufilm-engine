@@ -115,6 +115,7 @@ for ARCH in "${ARCHS[@]}"; do
   done
 
   xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
+    -ISources/FotufilmHalide/include \
     -sdk "$SDK" \
     -target "$TARGET" \
     -swift-version 5 \
@@ -220,8 +221,9 @@ if [[ " $* " == *" --test "* ]]; then
       -o "$OBJ/$source.o"
   done
   xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
+    -ISources/FotufilmHalide/include \
     -sdk "$SDK" -target "$ARCH-apple-macos$DEPLOYMENT" \
-    -swift-version 5 -O -parse-as-library -D FOTUFILM_LICENSE_TESTING \
+    -swift-version 5 -O -parse-as-library \
     "$FOTUFILM_CORE_SOURCE_DIR"/*.swift \
     Sources/FotufilmMetal/*.swift \
     "$FOTUFILM_PACK_KEY_SOURCE" \
@@ -233,13 +235,11 @@ if [[ " $* " == *" --test "* ]]; then
     -framework Metal -framework Foundation \
     -o "build/resolve/host-harness"
   env -u FOTUFILM_REALTIME \
-    FOTUFILM_LICENSE_TEST_BYPASS=1 \
     FOTUFILM_RESOURCES="$PWD/Sources/FotufilmCore/Resources" \
     FOTUFILM_STOCKS="$PWD/Sources/FotufilmCore/Stocks" \
     "build/resolve/host-harness"
   env -u FOTUFILM_BENCHMARK_4K \
     FOTUFILM_REALTIME=0 \
-    FOTUFILM_LICENSE_TEST_BYPASS=1 \
     FOTUFILM_RESOURCES="$PWD/Sources/FotufilmCore/Resources" \
     FOTUFILM_STOCKS="$PWD/Sources/FotufilmCore/Stocks" \
     "build/resolve/host-harness"
@@ -248,12 +248,11 @@ fi
 if [[ " $* " == *" --install "* ]]; then
   PLUGINS="/Library/OFX/Plugins"
   DESTINATION="$PLUGINS/Fotufilm.ofx.bundle"
-  LEGACY_DESTINATION="$PLUGINS/Fotufilm.ofx.bundle"
   if [[ -w "$PLUGINS" ]]; then
-    rm -rf "$DESTINATION" "$LEGACY_DESTINATION"
+    rm -rf "$DESTINATION"
     cp -R "$BUNDLE" "$DESTINATION"
   else
-    sudo rm -rf "$DESTINATION" "$LEGACY_DESTINATION"
+    sudo rm -rf "$DESTINATION"
     sudo cp -R "$BUNDLE" "$DESTINATION"
   fi
   echo "Installed $DESTINATION — restart Resolve to pick it up."

@@ -21,20 +21,6 @@ public struct ColorGrade: Equatable, Sendable, Codable {
             balanceX == 0 && balanceY == 0 && level == 0
         }
 
-        /// Written out rather than synthesised, so an absent number is the resting one instead of a
-        /// thrown error — the same forgiveness the stored edit as a whole is decoded with.
-        private enum CodingKeys: String, CodingKey {
-            case balanceX, balanceY, level
-        }
-
-        public init(from decoder: Decoder) throws {
-            self.init()
-            let c = try decoder.container(keyedBy: CodingKeys.self)
-            balanceX = try c.decodeIfPresent(Float.self, forKey: .balanceX) ?? 0
-            balanceY = try c.decodeIfPresent(Float.self, forKey: .balanceY) ?? 0
-            level = try c.decodeIfPresent(Float.self, forKey: .level) ?? 0
-        }
-
         /// The band's channel tilt: what its pad asks each channel to do,
         /// before the band's own scaling.
         var tilt: SIMD3<Float> {
@@ -60,20 +46,6 @@ public struct ColorGrade: Equatable, Sendable, Codable {
     }
 
     public static let neutral = ColorGrade()
-
-    /// Missing bands decode to their neutral values for backward compatibility.
-    private enum CodingKeys: String, CodingKey {
-        case shadows, midtones, highlights
-    }
-
-    public init(from decoder: Decoder) throws {
-        self.init()
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        shadows = try c.decodeIfPresent(Band.self, forKey: .shadows) ?? Band()
-        midtones = try c.decodeIfPresent(Band.self, forKey: .midtones) ?? Band()
-        highlights = try c.decodeIfPresent(Band.self, forKey: .highlights)
-            ?? Band()
-    }
 
     /// True when the grade would leave the print exactly as it found it.
     public var isNeutral: Bool {

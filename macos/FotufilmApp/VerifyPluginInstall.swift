@@ -63,7 +63,7 @@ enum VerifyPluginInstall {
         }
 
         // Resolve's system directory is normally writable by administrator accounts. This is the
-        // no-prompt path: copy atomically, remove the old Fotufilm name, and preserve the bundle.
+        // no-prompt path: replace an existing copy and preserve the bundle.
         if let source = OFXPluginInstaller.bundledURL {
             print("installing Resolve plug-in")
             let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
@@ -74,18 +74,18 @@ enum VerifyPluginInstall {
                 try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
                 let destination = root.appendingPathComponent(OFXPluginInstaller.bundleName,
                                                               isDirectory: true)
-                let legacy = root.appendingPathComponent(OFXPluginInstaller.legacyBundleName,
-                                                         isDirectory: true)
-                try FileManager.default.createDirectory(at: legacy,
+                try FileManager.default.createDirectory(at: destination,
                                                         withIntermediateDirectories: true)
-                try OFXPluginInstaller.install(from: source, to: destination, replacing: legacy)
+                let stale = destination.appendingPathComponent("stale-file")
+                try Data("old installation".utf8).write(to: stale)
+                try OFXPluginInstaller.install(from: source, to: destination)
                 expect(Bundle(url: destination)?.bundleIdentifier
                            == OFXPluginInstaller.bundleIdentifier,
                        "the Resolve plug-in arrived intact")
                 expect(PluginVersion.of(destination) == PluginVersion.of(source),
                        "the Resolve plug-in kept the bundled version")
-                expect(!FileManager.default.fileExists(atPath: legacy.path),
-                       "the legacy Fotufilm plug-in was removed")
+                expect(!FileManager.default.fileExists(atPath: stale.path),
+                       "the previous installation was replaced")
                 let leftovers = (try? FileManager.default.contentsOfDirectory(
                     atPath: root.path))?.filter { $0.hasPrefix(".") } ?? []
                 expect(leftovers.isEmpty, "the Resolve install left no staging directory")

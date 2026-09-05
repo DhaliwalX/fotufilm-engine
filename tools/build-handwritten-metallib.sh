@@ -107,8 +107,7 @@ compile_shader HandwrittenPointwise ffast-math \
   -DFOTUFILM_POINTWISE_TRANSFER_SAMPLES=1024 \
   -DFOTUFILM_POINTWISE_DECODE_SAMPLES=256
 compile_shader HandwrittenComposedPointwise ffast-math
-compile_shader HandwrittenHierarchicalCamera ffast-math \
-  -DFOTUFILM_HIERARCHICAL_DECODE_SAMPLES=256
+
 compile_shader HandwrittenFrameEndpoints ffast-math \
   -DFOTUFILM_ENDPOINT_CURVE_SAMPLES=2048 \
   -DFOTUFILM_ENDPOINT_TRANSFER_SAMPLES=1024

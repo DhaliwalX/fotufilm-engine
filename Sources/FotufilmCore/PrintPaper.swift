@@ -2,17 +2,11 @@ import Foundation
 
 /// The medium that turns developed film into a finished image, including the film itself.
 public enum PrintPaper: String, CaseIterable, Sendable {
-    /// Legacy profile identifier; source builds use an analytic example receiver.
     case ektacolorEdge = "ektacolor-edge"
-    /// Legacy profile identifier; source builds use an analytic example receiver.
     case enduraPremier = "endura-premier"
-    /// Legacy profile identifier; source builds use an analytic example receiver.
     case crystalArchive = "crystal-archive"
-    /// Legacy profile identifier; source builds use an analytic example receiver.
     case vision2383 = "vision-2383"
-    /// Legacy profile identifier; source builds use an analytic example receiver.
     case vision2393 = "vision-2393"
-    /// Legacy profile identifier; source builds use an analytic example receiver.
     case eternaCP = "eterna-cp"
     /// The minilab scanner's finished positive: a trichromatic LED read of the
     /// negative inverted in software, the way most real colour negative is
@@ -25,7 +19,6 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// An idealized direct digital reference, with no scanner or physical print stage.
     case screen
     /// The developed negative itself, viewed by transmission rather than printed or inverted.
-    /// Kept last because `allCases` order is a persisted host ABI.
     case negative
 
     /// Default for engine and headless callers.
@@ -91,78 +84,34 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         stock.isReversal ? [.screen] : allCases
     }
 
-    /// The medium a stock actually reaches when the edit asks for this one: the request where it
-    /// is available, the only entry where it is not.
+    /// Reversal film is viewed directly; negative film uses the requested medium.
     public func resolved(for stock: FilmStock) -> PrintPaper {
-        let available = Self.choices(for: stock)
-        return available.contains(self) ? self : available[0]
+        stock.isReversal ? .screen : self
     }
 
-    /// What this stock prints on when the caller expresses no preference: the medium the emulsion
-    /// was designed for where it names one, and the measured sheet where it does not.
-    ///
-    /// A motion-picture camera negative is timed onto a release print stock, and its mask density
-    /// and contrast assume that partner; developing one onto RA-4 paper is a choice a caller can
-    /// still make, but it is not what silence should mean.
+    /// Use the stock's stated medium, or the standard example photo print.
     public static func `default`(for stock: FilmStock) -> PrintPaper {
         (stock.nativePrintMedium ?? .default).resolved(for: stock)
     }
 
-    /// Whether Endura Premier is offered on this stock's film strip of preview looks.
-    /// Endura Premier is a professional portrait and commercial RA-4 paper with steeper
-    /// midtone contrast and deep blacks, matched to Portra, Ektar, Gold, UltraMax, and Pro 400H.
-    public static func supportsEnduraStrip(for stock: FilmStock) -> Bool {
-        if stock.nativePrintMedium == .enduraPremier { return true }
-        let name = stock.name.lowercased()
-        return name.contains("portra")
-            || name.contains("ektar")
-            || name.contains("gold")
-            || name.contains("ultramax")
-            || name.contains("pro 400h")
-            || name.contains("pro400h")
-    }
-
-    /// The media a strip of finished looks offers this stock on its own `gauge`, in the order it
-    /// shows them: only the ones that make sense for the film, the one it was made for first.
-    ///
-    /// A still negative is printed on RA-4 paper, so it gets the measured sheets. Ektacolor Edge
-    /// and Crystal Archive are offered for all still colour negatives, and Endura Premier is included
-    /// for matched portrait and commercial films (Portra, Ektar, Gold, UltraMax, Pro 400H). A
-    /// motion-picture negative is timed onto its maker's release print — Eterna-CP for a Fuji
-    /// negative, both Kodak prints for a Kodak one or for a cine stock that names none — and is
-    /// transferred to video, so it gets Telecine and never photo paper. Every film can be shown on
-    /// a display, so the digital reference closes each run. The minilab scan and the light-box
-    /// negative are left off: the first is a second digital reading of the same film, the second
-    /// is not a finished picture. A reversal stock has its one direct positive. A strip's tile
-    /// count is the sum of these over its films.
+    /// Preview media for the selected gauge, with an explicitly named native medium first.
+    /// Reversal film is viewed directly. Negative film offers the three analytic photo or
+    /// projection variants; motion-picture gauges also offer Telecine.
     public static func stripChoices(for stock: FilmStock,
                                     gauge: FilmFormat) -> [PrintPaper] {
-        if stock.isReversal { return [.screen] }
-        let native = `default`(for: stock)
-        var run: [PrintPaper]
-        if gauge.isMotionPicture {
-            let prints: [PrintPaper] = stock.nativePrintMedium == .eternaCP
-                ? [.eternaCP] : [.vision2383, .vision2393]
-            // A cine stock that names no print — Double-X — defaults to the RA-4 sheet, which is
-            // exactly what a motion-picture gauge must not lead with.
-            let lead = native.isProjected ? [native] : []
-            run = lead + prints.filter { $0 != native } + [.telecine]
-        } else {
-            let papers: [PrintPaper] = supportsEnduraStrip(for: stock)
-                ? [.ektacolorEdge, .enduraPremier, .crystalArchive]
-                : [.ektacolorEdge, .crystalArchive]
-            run = [native] + papers.filter { $0 != native }
+        guard !stock.isReversal else { return [.screen] }
+        var media: [PrintPaper] = gauge.isMotionPicture
+            ? [.vision2383, .vision2393, .eternaCP, .telecine]
+            : [.ektacolorEdge, .enduraPremier, .crystalArchive]
+        if let native = stock.nativePrintMedium,
+           let index = media.firstIndex(of: native) {
+            media.remove(at: index)
+            media.insert(native, at: 0)
         }
-        run.append(.screen)
-        let reachable = choices(for: stock)
-        return run.filter { reachable.contains($0) }
+        return media + [.screen]
     }
 
-    /// Veiling glare between the print and the eye, as a fraction of the
-    /// medium's own reference white. The papers are measured at 0/45, which
-    /// excludes the first-surface reflection a viewer gets back, so 1/400
-    /// carries their 2.10 D to the 1.98 D a glossy print reads in a booth. A
-    /// projection port is a darker surround than a room.
+    /// Illustrative viewing glare as a fraction of the medium's reference white.
     public var viewingFlare: Float {
         switch self {
         case .vision2383, .vision2393, .eternaCP: return 1.0 / 2000.0
@@ -171,12 +120,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         }
     }
 
-    /// Whether this finished positive is projected rather than held: a transparency on a screen
-    /// in a dark room, not a sheet under a room's light.
-    ///
-    /// It decides the reference lamp the print is read by. A paper hangs under whatever light the
-    /// viewer has and defaults to a D50 judging booth; a release print defaults to calibrated
-    /// 5400 K xenon screen light, which is the illuminant its published dye amounts target.
+    /// Projection uses the example xenon illuminant; photo prints use D50.
     public var isProjected: Bool {
         self == .vision2383 || self == .vision2393 || self == .eternaCP
     }
@@ -200,9 +144,6 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         }
     }
 
-    /// Whether the digital scan uses a fixed neutral analytical reference.
-    public var isReferenceAnchored: Bool { self == .labScan }
-
     /// Whether the scan's three channels leave the machine as a Rec.709 video signal rather than
     /// as an unrendered file. The engine's delivery basis is display-linear P3, which is wider, so
     /// the container is honoured by holding the timed colour inside the Rec.709 primaries (sRGB
@@ -210,35 +151,21 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// could not encode. Lab Scan writes a file and is limited only by its own bands.
     public var deliversRec709: Bool { self == .telecine }
 
-    /// Combined lens, focus, receiver, and scattering blur as Gaussian sigma in millimetres on film.
-    /// The lab-scan value is 7 µm versus a documented 5.3–6.6 µm sample pitch. Screen output has
-    /// no physical imaging stage and uses zero.
+    /// Illustrative output-stage blur, expressed as Gaussian sigma in millimetres on film.
     public var enlargerBlurMM: Float {
         switch self {
         case .ektacolorEdge, .enduraPremier, .crystalArchive: return 0.004
         case .vision2383, .vision2393, .eternaCP: return 0.003
         case .labScan: return 0.007
-        // The Spirit's documented geometry: a 1920-photosite detail array
-        // across the full Super 35 camera aperture it projects — 24.92 mm —
-        // is a 0.013 mm sample pitch on the film, and a Gaussian of half that
-        // pitch carries the pixel footprint with the imaging lens on top.
         case .telecine: return 0.0065
         case .screen, .negative: return 0
         }
     }
 
-    /// Fraction of pre-blur detail restored by the output medium, from 0 to 1. Optical papers use
-    /// 0. The lab-scan value of 0.65 is an illustrative detail setting after scanner
-    /// aperture blur and unsharp masking.
+    /// Fraction of pre-blur detail restored by the scan model.
     public var scanSharpening: Float {
         switch self {
         case .labScan: return 0.65
-        // A video chain runs aperture correction — the operator-adjustable
-        // detail peaking every telecine documented, applied film-relative
-        // before sizing — and no machine publishes a strength for it, so the
-        // figure is a stance: harder than the minilab's unsharp mask, because
-        // the electronically crisped grain is part of what a transfer looks
-        // like, and short of undoing the aperture entirely.
         case .telecine: return 0.8
         case .ektacolorEdge, .enduraPremier, .crystalArchive, .vision2383, .vision2393, .eternaCP,
              .screen, .negative:

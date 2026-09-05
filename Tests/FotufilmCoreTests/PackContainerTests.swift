@@ -46,6 +46,33 @@ final class PackContainerTests: XCTestCase {
                                                 shoulderWidth: 0.14)))
     }
 
+    func testOnlyTheCurrentSchemaAndSpectralGridAreAccepted() throws {
+        for version in [-1, 0, FilmStockDefinition.currentSchemaVersion + 1] {
+            var definition = sample(id: "bad-version")
+            definition.schemaVersion = version
+            XCTAssertThrowsError(try definition.validate())
+        }
+        for count in [41, 80, 82] {
+            var definition = sample(id: "bad-grid")
+            definition.spectral = .samples(
+                layerSensitivity: Array(repeating: Array(repeating: 0.1, count: count), count: 3),
+                imageDyeDensity: Array(repeating: Array(repeating: 0.1, count: count), count: 3))
+            let data = try JSONEncoder().encode(definition)
+            let decoded = try JSONDecoder().decode(FilmStockDefinition.self, from: data)
+            XCTAssertThrowsError(try decoded.validate())
+        }
+    }
+
+    func testCouplerGeometryRequiresExplicitInterlayerTransmission() throws {
+        let old = Data(#"{"rangeUM":4.2,"release":[0.8,0.7,0.5]}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(CouplerGeometry.self, from: old))
+        let malformed = Data(#"{"interlayerTransmission":[0.3],"release":[0.8,0.7,0.5]}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(CouplerGeometry.self, from: malformed))
+        let geometry = CouplerGeometry(interlayerTransmission: [0.3, 0.35], release: [0.8, 0.7, 0.5])
+        let data = try JSONEncoder().encode(geometry)
+        XCTAssertEqual(try JSONDecoder().decode(CouplerGeometry.self, from: data), geometry)
+    }
+
     func testRoundTrip() throws {
         var tungsten = sample(id: "one")
         tungsten.referenceIlluminantKelvin = 3200

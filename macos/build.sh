@@ -25,14 +25,7 @@ OBJ="build/macos/obj"
 EXECUTABLE="$APP/Contents/MacOS/Fotufilm"
 DSYM="build/macos/Fotufilm.app.dSYM"
 
-HALIDE_PREFIX="${HALIDE_ROOT:-}"
-if [[ -z "$HALIDE_PREFIX" ]] && command -v brew >/dev/null 2>&1; then
-  HALIDE_PREFIX="$(brew --prefix halide 2>/dev/null || true)"
-fi
-[[ -n "$HALIDE_PREFIX" && -f "$HALIDE_PREFIX/include/Halide.h" ]] || {
-  echo "Halide is required (brew install halide, or set HALIDE_ROOT)." >&2
-  exit 1
-}
+HALIDE_PREFIX="$(tools/resolve-halide-toolchain.sh)"
 
 rm -rf "$APP" "$OBJ" "$DSYM"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$OBJ"
@@ -77,6 +70,7 @@ for source in shared/FotufilmApp/*.swift; do
 done
 
 xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
+  -ISources/FotufilmHalide/include \
   -sdk "$SDK" \
   -target arm64-apple-macos14.0 \
   -swift-version 5 \

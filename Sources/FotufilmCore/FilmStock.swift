@@ -512,13 +512,10 @@ public struct FilmStock: Sendable {
     /// toward `SpectralRuntime.neutralPrintingBalance`.
     public func printingContrastScale(correction: Float,
                                       paper: PrintPaper = .default) -> [Float] {
-        if isMonochrome || !paper.acceptsPrintCorrection { return [1, 1, 1] }
-        // A reference-anchored medium's profile was solved once, on the
-        // reference stock; every emulsion rides that fixed alignment the way
-        // it rides the fixed mid-ratio in `referenceCastOffset`.
-        let balance = paper.isReferenceAnchored
-            ? PrintPaper.labScanReferenceBalance
-            : SpectralRuntime.neutralPrintingBalance(for: self, paper: paper)
+        guard !isMonochrome, paper.acceptsPrintCorrection, paper != .labScan else {
+            return [1, 1, 1]
+        }
+        let balance = SpectralRuntime.neutralPrintingBalance(for: self, paper: paper)
         return balance.map { 1 + correction * ($0 - 1) }
     }
 

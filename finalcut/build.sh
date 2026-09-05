@@ -111,8 +111,8 @@ if (( TEST )); then
   xcrun clang++ -std=c++17 -O2 -c -isysroot "$SDK" -target "$TARGET" \
     -Iresolve/tests resolve/tests/ParityFrame.cpp -o "$OBJ/ParityFrame.o"
   xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
+    -ISources/FotufilmHalide/include \
     -sdk "$SDK" -target "$TARGET" -swift-version 5 -O -parse-as-library \
-    -D FOTUFILM_LICENSE_TESTING \
     "$FOTUFILM_CORE_SOURCE_DIR"/*.swift Sources/FotufilmMetal/*.swift \
     "$FOTUFILM_PACK_KEY_SOURCE" resolve/FotufilmBridge.swift \
     "$OBJ/FotufilmHalideIOS.o" "$OBJ/WorkingSpace.o" \
@@ -125,7 +125,6 @@ if (( TEST )); then
   # The harness is the gate, not a footnote: `set -e` stops here if it fails, so nothing that
   # follows — including an install — can happen over a plugin that did not pass.
   env -u FOTUFILM_REALTIME \
-    FOTUFILM_LICENSE_TEST_BYPASS=1 \
     FOTUFILM_RESOURCES="$PWD/Sources/FotufilmCore/Resources" \
     FOTUFILM_STOCKS="$PWD/Sources/FotufilmCore/Stocks" \
     "build/finalcut/host-harness"
@@ -206,6 +205,7 @@ for ARCH in "${ARCHS[@]}"; do
     finalcut/WrapperMain.m -o "$OBJ/WrapperMain.o"
 
   xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
+    -ISources/FotufilmHalide/include \
     -sdk "$SDK" \
     -target "$TARGET" \
     -swift-version 5 \
@@ -224,6 +224,7 @@ for ARCH in "${ARCHS[@]}"; do
   # run this out of process so the collision is unlikely here, but the cost of keeping it private
   # is nothing and the failure it prevents is a crash on the first frame.
   xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
+    -ISources/FotufilmHalide/include \
     -sdk "$SDK" \
     -target "$TARGET" \
     "$OBJ/FotufilmSwift.o" \

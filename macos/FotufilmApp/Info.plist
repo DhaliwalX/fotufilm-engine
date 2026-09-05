@@ -29,7 +29,7 @@
 	<string>AppIcon</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
-	<!-- Both are stamped at build time from project.yml's MARKETING_VERSION and
+	<!-- Both are stamped at build time from version.env's MARKETING_VERSION and
 	     CURRENT_PROJECT_VERSION, so the Mac bundle rides the one version line
 	     the phone and the iPad already ride. The literals below are only what a
 	     hand-assembled bundle would carry; macos/build.sh overwrites them. -->

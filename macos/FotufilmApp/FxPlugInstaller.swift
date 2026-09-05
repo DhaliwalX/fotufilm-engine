@@ -8,7 +8,6 @@ enum FxPlugInstaller {
     static let appName = "Fotufilm for Final Cut Pro.app"
     static let bundleIdentifier = "com.fotufilm.fxhost"
     static let extensionIdentifier = "com.fotufilm.fxplug"
-    static let templateName = "Fotufilm"
 
     static var bundledURL: URL? {
         guard let resources = Bundle.main.resourceURL else { return nil }
@@ -29,7 +28,7 @@ enum FxPlugInstaller {
     }
 
     /// As `OFXPluginInstaller`'s: `finalcut/build.sh` stamps the wrapper and the extension inside
-    /// it from `project.yml` before signing, so a mismatch means the plug-in on disk is from
+    /// it from `version.env` before signing, so a mismatch means the plug-in on disk is from
     /// another build of the app.
     static var bundledVersion: String? {
         bundledURL.flatMap(PluginVersion.of)
@@ -78,24 +77,8 @@ enum FxPlugInstaller {
         enableExtension()
     }
 
-    /// The install itself, over paths rather than over the two the app happens to use. Written this
-    /// way so `--verify-plugin-install` can run the real copy and the real registration into a
-    /// temporary directory: the part most likely to be wrong is the part that touches the disk, and
-    /// a check that stops short of touching it is not checking that part.
     static func install(from source: URL, to destination: URL) throws {
-        let directory = destination.deletingLastPathComponent()
-        let staged = directory.appendingPathComponent(
-            ".\(appName).\(UUID().uuidString)", isDirectory: true)
-
-        // `/Applications` is group-writable by `admin` on a stock macOS, so the ordinary case needs
-        // no authorization at all. Asking for a password when none is needed teaches people to type
-        // one at anything that asks, so the prompt is the fallback rather than the route.
-        if FileManager.default.isWritableFile(atPath: directory.path) {
-            try installWithoutAuthorization(from: source, to: destination, staging: staged)
-        } else {
-            try installWithAuthorization(from: source, to: destination, staging: staged)
-        }
-
+        try PluginBundleCopy.install(from: source, to: destination)
         guard Bundle(url: destination)?.bundleIdentifier == bundleIdentifier else {
             throw Failure.installationMissing
         }
@@ -135,20 +118,7 @@ enum FxPlugInstaller {
     /// Motion templates are user-scoped even when the FxPlug wrapper is system-wide. Replace only
     /// Fotufilm's named effect directory and stage the copy so Final Cut never observes half of it.
     static func installMotionTemplate(from source: URL, to destination: URL) throws {
-        let manager = FileManager.default
-        let parent = destination.deletingLastPathComponent()
-        let staged = parent.appendingPathComponent(
-            ".\(templateName).\(UUID().uuidString)", isDirectory: true)
-        try manager.createDirectory(at: parent, withIntermediateDirectories: true)
-        try? manager.removeItem(at: staged)
-        do {
-            try run("/usr/bin/ditto", [source.path, staged.path])
-            try? manager.removeItem(at: destination)
-            try manager.moveItem(at: staged, to: destination)
-        } catch {
-            try? manager.removeItem(at: staged)
-            throw error
-        }
+        try PluginBundleCopy.install(from: source, to: destination)
         guard motionTemplateURLContents(at: destination) else {
             throw Failure.motionTemplateMissing
         }
@@ -168,7 +138,7 @@ enum FxPlugInstaller {
         let deadline = Date(timeIntervalSinceNow: 5)
         repeat {
             do {
-                try run("/usr/bin/pluginkit", ["-e", "use", "-i", extensionIdentifier])
+                try PluginBundleCopy.run("/usr/bin/pluginkit", ["-e", "use", "-i", extensionIdentifier])
                 return
             } catch {
                 if Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }
@@ -176,58 +146,6 @@ enum FxPlugInstaller {
         } while Date() < deadline
         NSLog("Fotufilm: PlugInKit did not enable %@ before registration completed.",
               extensionIdentifier)
-    }
-
-    private static func installWithoutAuthorization(from source: URL, to destination: URL,
-                                                    staging staged: URL) throws {
-        let manager = FileManager.default
-        try? manager.removeItem(at: staged)
-        do {
-            // ditto rather than copyItem: the wrapper carries a signed extension and two signed
-            // frameworks, and the copy has to leave every one of those seals intact.
-            try run("/usr/bin/ditto", [source.path, staged.path])
-            try? manager.removeItem(at: destination)
-            try manager.moveItem(at: staged, to: destination)
-        } catch {
-            try? manager.removeItem(at: staged)
-            throw error
-        }
-    }
-
-    private static func installWithAuthorization(from source: URL, to destination: URL,
-                                                 staging staged: URL) throws {
-        let appleScript = """
-        on run argv
-            set sourcePath to item 1 of argv
-            set destinationPath to item 2 of argv
-            set stagedPath to item 3 of argv
-            set cleanupCommand to "/bin/rm -rf " & quoted form of stagedPath
-            set installCommand to cleanupCommand & " && /usr/bin/ditto " & quoted form of sourcePath & " " & quoted form of stagedPath & " && /bin/rm -rf " & quoted form of destinationPath & " && /bin/mv " & quoted form of stagedPath & " " & quoted form of destinationPath & "; installStatus=$?; if [ $installStatus -ne 0 ]; then " & cleanupCommand & "; fi; exit $installStatus"
-            do shell script installCommand with administrator privileges
-        end run
-        """
-
-        do {
-            try run("/usr/bin/osascript",
-                    ["-e", appleScript, source.path, destination.path, staged.path])
-        } catch let Failure.commandFailed(detail) {
-            throw Failure.authorizationFailed(detail)
-        }
-    }
-
-    private static func run(_ tool: String, _ arguments: [String]) throws {
-        let process = Process()
-        let errors = Pipe()
-        process.executableURL = URL(fileURLWithPath: tool)
-        process.arguments = arguments
-        process.standardError = errors
-        try process.run()
-        let data = errors.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus != 0 else { return }
-        let detail = String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        throw Failure.commandFailed(detail ?? "")
     }
 
     /// Runs the installed wrapper once so PlugInKit sees the extension. Without this the
@@ -299,10 +217,8 @@ enum FxPlugInstaller {
     enum Failure: LocalizedError {
         case bundledPluginMissing
         case motionTemplateMissing
-        case authorizationFailed(String)
         case installationMissing
         case registrationFailed(String)
-        case commandFailed(String)
 
         var errorDescription: String? {
             switch self {
@@ -310,16 +226,11 @@ enum FxPlugInstaller {
                 return "This copy of Fotufilm does not contain the Final Cut Pro plug-in."
             case .motionTemplateMissing:
                 return "This copy of Fotufilm does not contain a complete Final Cut Pro effect template."
-            case let .authorizationFailed(detail):
-                return detail.isEmpty
-                    ? "Administrator authorization was not granted."
-                    : detail
             case .installationMissing:
                 return "The plug-in was copied but could not be verified."
             case let .registrationFailed(detail):
                 return "The plug-in was installed but macOS did not register it. \(detail)"
-            case let .commandFailed(detail):
-                return detail.isEmpty ? "The plug-in could not be copied." : detail
+
             }
         }
     }

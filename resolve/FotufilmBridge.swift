@@ -1,13 +1,6 @@
 import Foundation
 
-@_silgen_name("fotufilm_halide_metal_context_create")
-private func createMetalContext() -> UnsafeMutableRawPointer?
-@_silgen_name("fotufilm_halide_metal_context_destroy")
-private func destroyMetalContext(_ context: UnsafeMutableRawPointer?)
-@_silgen_name("fotufilm_halide_metal_context_bind")
-private func bindMetalContext(_ context: UnsafeMutableRawPointer?) -> UnsafeMutableRawPointer?
-@_silgen_name("fotufilm_halide_metal_context_restore")
-private func restoreMetalContext(_ context: UnsafeMutableRawPointer?)
+import FotufilmHalide
 
 /// Loading mutates the process-wide stock registry once. Rendering does not take this lock: each
 /// effect instance owns its mutable Metal arguments and LUT cache in the context below.
@@ -28,7 +21,7 @@ private final class BridgeContext {
     var outputQuery: OutputTransformQuery?
 
     init?(lastError: String) {
-        guard let metalContext = createMetalContext() else { return nil }
+        guard let metalContext = fotufilm_halide_metal_context_create() else { return nil }
         self.metalContext = metalContext
         self.lastError = lastError
     }
@@ -40,14 +33,14 @@ private final class BridgeContext {
     }
 
     func withMetalContext<Result>(_ body: () -> Result) -> Result {
-        let previous = bindMetalContext(metalContext)
-        defer { restoreMetalContext(previous) }
+        let previous = fotufilm_halide_metal_context_bind(metalContext)
+        defer { fotufilm_halide_metal_context_restore(previous) }
         return body()
     }
 
     deinit {
         releaseStaging()
-        destroyMetalContext(metalContext)
+        fotufilm_halide_metal_context_destroy(metalContext)
     }
 }
 

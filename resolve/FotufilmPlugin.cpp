@@ -23,7 +23,7 @@
 #include "FotufilmBridge.h"
 #include "WorkingSpace.h"
 
-/// The version the OfxPlugin struct carries. build.sh reads MARKETING_VERSION out of project.yml
+/// The version the OfxPlugin struct carries. build.sh reads MARKETING_VERSION out of version.env
 /// and passes both halves in, so the plugin, its Info.plist and the app agree on one line; the
 /// fallback only exists so a bare `clang++ resolve/FotufilmPlugin.cpp` still compiles. OFX treats a
 /// change of major as a different plugin — a host may refuse to open a project saved with the other
@@ -3160,7 +3160,7 @@ OfxPlugin gPlugin = {
     1,
     // Stable project identity: changing this makes existing Resolve timelines lose the effect.
     "com.fotufilm",
-    // From project.yml's MARKETING_VERSION, by way of build.sh; see the defines at the top.
+    // From version.env's MARKETING_VERSION, by way of build.sh; see the defines at the top.
     // Parameter identity is unchanged since 1.1, and the major must stay 1 while it is.
     FOTUFILM_VERSION_MAJOR,
     FOTUFILM_VERSION_MINOR,
