@@ -30,7 +30,7 @@ final class StockSidebarViewController: SessionViewController {
     private let list = ScrollColumn(inset: 8, pad: 4, bottom: 8, spacing: 2)
     private let strip = ScrollColumn(inset: 0, pad: 8, bottom: 8, spacing: 6,
                                      alignment: .center, showsScroller: false)
-    private let footer = makeStack(.vertical, spacing: 4, alignment: .fill)
+    private let footer = makeStack(.vertical, spacing: 4, alignment: .leading)
     private let emptyLabel = makeFootnote("")
     private let selection = CALayer()
     private lazy var makeFilm = SessionButton(
@@ -121,6 +121,9 @@ final class StockSidebarViewController: SessionViewController {
         footer.addArrangedSubview(loadPack)
         loadPack.heightAnchor.constraint(equalToConstant: 30).isActive = true
         #endif
+        for button in footer.arrangedSubviews {
+            button.widthAnchor.constraint(equalTo: footer.widthAnchor).isActive = true
+        }
         root.addSubview(footer)
 
         // The lit row is one layer that travels, rather than a fill that turns on in one row and
