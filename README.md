@@ -67,10 +67,7 @@ See [Build support](docs/support.html) for stock-pack setup.
 `SOURCE_ASSETS.json` records where assets came from and their file hashes. Before
 adding data or images, run `python3 tools/check-source-boundary.py`.
 
-[Download the desktop app](https://github.com/DhaliwalX/fotufilm-downloads/releases/latest/download/Fotufilm-macOS.pkg) for the Mac app, Resolve and Final Cut plugins,
-and all 40 film stocks in one free installer. The films work offline without a
-separate pack download or import. Restart your editor after updating its plugin.
-Optional custom packs can still be imported through **Load custom pack…**.
+[Download for Mac](https://github.com/DhaliwalX/fotufilm-downloads/releases/latest/download/Fotufilm-macOS.pkg) · [Download for iOS](https://apps.apple.com/app/id6792911908)
 
 ## More information
 
