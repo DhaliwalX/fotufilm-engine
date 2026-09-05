@@ -83,7 +83,7 @@ enum OFXPluginInstaller {
     }
 }
 
-/// The Resolve menu's two items. They sit on the app delegate rather than on the editor because
+/// The Plugins menu's DaVinci Resolve items. They sit on the app delegate rather than on the editor because
 /// they are about this copy of the app rather than about the open photograph.
 extension AppDelegate: NSMenuItemValidation {
     @objc func installOFXPlugin(_ sender: Any?) {
@@ -108,23 +108,18 @@ extension AppDelegate: NSMenuItemValidation {
     /// One class, one `validateMenuItem`, so the Final Cut items are answered here too rather than
     /// from beside their own installer.
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if let (host, isInstall) = PluginHost.owning(item.action) {
+            if isInstall {
+                // The title carries the state, the way the SwiftUI menu did: there is nothing
+                // else in a menu item to say the plug-in is already there.
+                item.title = host.installTitle(reinstall: host.isInstalled)
+                item.toolTip = host.installToolTip
+                return host.isBundled
+            }
+            item.toolTip = host.showInFinderToolTip
+            return host.isInstalled
+        }
         switch item.action {
-        case #selector(installOFXPlugin(_:)):
-            // The title carries the state, the way the SwiftUI menu did: there is nothing else in
-            // a menu item to say the plug-in is already there.
-            item.title = OFXPluginInstaller.isInstalled
-                ? "Reinstall Fotufilm Plug-in…"
-                : "Install Fotufilm Plug-in…"
-            return OFXPluginInstaller.bundledURL != nil
-        case #selector(showOFXPluginInFinder(_:)):
-            return OFXPluginInstaller.isInstalled
-        case #selector(installFxPlugPlugin(_:)):
-            item.title = FxPlugInstaller.isInstalled
-                ? "Reinstall Fotufilm Plug-in…"
-                : "Install Fotufilm Plug-in…"
-            return FxPlugInstaller.bundledURL != nil
-        case #selector(showFxPlugPluginInFinder(_:)):
-            return FxPlugInstaller.isInstalled
         case #selector(toggleAutomaticUpdateChecks(_:)):
             // The checkmark is read at the moment the menu opens, like every other state the
             // menu bar shows.

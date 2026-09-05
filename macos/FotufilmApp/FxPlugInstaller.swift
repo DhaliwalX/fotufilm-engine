@@ -236,7 +236,7 @@ enum FxPlugInstaller {
     }
 }
 
-/// The Final Cut Pro menu's two items. They sit on the app delegate rather than on the editor for
+/// The Plugins menu's Final Cut Pro items. They sit on the app delegate rather than on the editor for
 /// the same reason the Resolve ones do: they are about this copy of the app rather than about the
 /// open photograph.
 extension AppDelegate {
