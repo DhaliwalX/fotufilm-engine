@@ -97,6 +97,48 @@ final class PackContainerTests: XCTestCase {
         XCTAssertFalse(sealed.contains(Array("Sample one".utf8)))
     }
 
+    func testPackVersionsRoundTripAndRequireNewerApp() throws {
+        let manifest = FilmPackManifest(packID: "versioned", name: "Versioned",
+            version: "2.1.0", minimumMacAppVersion: "1.10", stocks: [sample(id: "one")])
+        let sealed = try FilmPackContainer.seal(manifest, kind: .community, keyID: 1, key: key)
+        for current in ["1.10", "1.10.0", "2.0"] {
+            let opened = try FilmPackContainer.open(sealed, keyring: keyring(), macAppVersion: current).manifest
+            XCTAssertEqual(opened.version, "2.1.0")
+            XCTAssertEqual(opened.minimumMacAppVersion, "1.10")
+        }
+        for current in ["1.9", "1.9.99", "", "unknown"] {
+            XCTAssertThrowsError(try FilmPackContainer.open(sealed, keyring: keyring(), macAppVersion: current)) {
+                guard case FilmPackRelease.Failure.requiresMacApp("1.10") = $0 else {
+                    return XCTFail("Expected an app update notice, got \($0)")
+                }
+            }
+        }
+    }
+
+    func testLegacyPacksRemainReadable() throws {
+        let manifest = FilmPackManifest(packID: "legacy", name: "Legacy", stocks: [sample(id: "one")])
+        let encoded = try JSONEncoder().encode(manifest)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        XCTAssertNil(json["version"])
+        XCTAssertNil(json["minimumMacAppVersion"])
+        let sealed = try FilmPackContainer.seal(manifest, kind: .community, keyID: 1, key: key)
+        XCTAssertNil(try FilmPackContainer.open(sealed, keyring: keyring(), macAppVersion: "1.0").manifest.version)
+    }
+
+    func testCompatibilityIsReadBeforeFutureStockSchema() throws {
+        // This structure deliberately cannot decode as a full FilmPackManifest.
+        let data = Data(#"{"version":"2.0","minimumMacAppVersion":"9.0","stocks":"future schema"}"#.utf8)
+        let release = try JSONDecoder().decode(FilmPackRelease.self, from: data)
+        XCTAssertThrowsError(try release.requireMacApp(version: "1.6"))
+    }
+
+    func testInvalidReleaseVersionsAreRefused() {
+        for version in ["", "1..2", "1.2.3.4", "-1", "1.beta", "１.２", "99999999999999999999999999"] {
+            XCTAssertThrowsError(try FilmPackRelease(version: version).validate())
+            XCTAssertThrowsError(try FilmPackRelease(minimumMacAppVersion: version).validate())
+        }
+    }
+
     func testWrongKeyIsRefused() throws {
         let sealed = try FilmPackContainer.seal(
             FilmPackManifest(packID: "test", name: "Test", stocks: [sample(id: "one")]),

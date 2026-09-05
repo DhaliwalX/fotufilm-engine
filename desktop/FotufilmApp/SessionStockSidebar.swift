@@ -46,6 +46,19 @@ final class StockSidebarViewController: SessionViewController {
     }
     #endif
 
+    #if os(macOS)
+    private lazy var buyPacks = SessionButton(
+        title: "Buy packs", symbol: "arrow.up.right", borderless: true
+    ) {
+        NSWorkspace.shared.open(URL(string: "https://packs.fotufilm.com")!)
+    }
+    private lazy var loadPack = SessionButton(
+        title: "Load custom pack…", symbol: "folder", borderless: true
+    ) {
+        NSApp.sendAction(#selector(AppDelegate.importFilmPack(_:)), to: NSApp.delegate, from: nil)
+    }
+    #endif
+
     private var listRows: [(id: String, view: StockRowView)] = []
     private var stripTiles: [(id: String, view: PreviewTileButton)] = []
     private var filter = ""
@@ -98,8 +111,16 @@ final class StockSidebarViewController: SessionViewController {
         footer.addArrangedSubview(upgrade)
         upgrade.heightAnchor.constraint(equalToConstant: 30).isActive = true
         #endif
+        #if os(macOS)
+        footer.addArrangedSubview(buyPacks)
+        buyPacks.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        #endif
         footer.addArrangedSubview(makeFilm)
         makeFilm.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        #if os(macOS)
+        footer.addArrangedSubview(loadPack)
+        loadPack.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        #endif
         root.addSubview(footer)
 
         // The lit row is one layer that travels, rather than a fill that turns on in one row and

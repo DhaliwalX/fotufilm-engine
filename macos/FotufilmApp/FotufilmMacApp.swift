@@ -65,6 +65,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         showEditor()
         scheduleUpdateChecks()
+        if !CustomStockStore.incompatiblePacks.isEmpty {
+            offerPackAppUpdate(CustomStockStore.incompatiblePacks.joined(separator: "\n\n"))
+        }
 
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -147,15 +150,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ? result.stockNames[0]
                 : "\(result.stockNames.count) films"
             alert.messageText = result.replacedExisting ? "Pack updated" : "Pack added"
-            alert.informativeText = "\(result.name) — \(films)"
+            alert.informativeText = "\(result.name)\(result.version.map { " v\($0)" } ?? "") — \(films)"
             // The film list is a list of what is installed, and something just was.
             windowController?.editor.reloadFilmLibrary()
+        } catch FilmPackRelease.Failure.requiresMacApp(let version) {
+            offerPackAppUpdate(FilmPackRelease.Failure.requiresMacApp(version).description)
+            return
         } catch {
             alert.messageText = "Pack not added"
             alert.informativeText = "\(error)"
             alert.alertStyle = .warning
         }
         alert.runModal()
+    }
+
+    @MainActor private func offerPackAppUpdate(_ message: String) {
+        let alert = NSAlert()
+        alert.messageText = "Update Fotufilm to use this pack"
+        alert.informativeText = message
+        alert.addButton(withTitle: "Check for Updates…")
+        alert.addButton(withTitle: "Later")
+        if alert.runModal() == .alertFirstButtonReturn {
+            Task { await UpdateCheck.runManual() }
+        }
     }
 
     // MARK: - Menu commands
