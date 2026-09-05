@@ -53,8 +53,6 @@ constant float kLn10 = 2.3025851f;
 
 struct SpatialParameters { uint4 extent; uint4 geometry; };
 struct CopyParameters { uint4 extent; float4 mean; };
-struct AccumulatorParameters { uint4 extent; float4 share; };
-struct ScaleMixParameters { uint4 extent; uint4 geometry; float4 mix; float4 ring; };
 struct PyramidParameters {
     uint4 extent;
     uint4 grid0;
@@ -207,15 +205,6 @@ kernel void fotufilm_spatial_copy(
     float flare = as_type<float>(p.extent.z);
     value.rgb = (1.0f - flare) * value.rgb + flare * flare_mean.rgb;
     destination.write(half4(value), position);
-}
-
-kernel void fotufilm_spatial_initialize(
-    texture2d<half, access::read> source [[texture(0)]],
-    texture2d<half, access::write> destination [[texture(1)]],
-    constant AccumulatorParameters &p [[buffer(0)]],
-    uint2 position [[thread_position_in_grid]]) {
-    if (any(position >= p.extent.xy)) return;
-    destination.write(half4(float4(source.read(position)) * p.share), position);
 }
 
 kernel void fotufilm_spatial_transform(
@@ -1145,41 +1134,6 @@ kernel void fotufilm_spatial_multires_joint_fields(
                     / max(couplerNormalization, 1.0e-12f)), quarterPosition);
         }
     }
-}
-
-kernel void fotufilm_spatial_accumulate(
-    texture2d<half, access::read> grid [[texture(0)]],
-    texture2d<half, access::read_write> accumulator [[texture(1)]],
-    constant ScaleMixParameters &p [[buffer(0)]],
-    uint2 position [[thread_position_in_grid]]) {
-    if (any(position >= p.extent.xy)) return;
-    float2 coordinate = (float2(position + p.geometry.yz) + 0.5f)
-        / float(p.geometry.x) - 0.5f;
-    float4 value = p.geometry.w != 0u
-        ? annular_sample(grid, coordinate, p.extent.zw,
-                         p.ring.x / float(p.geometry.x))
-        : grid_sample(grid, coordinate, p.extent.zw);
-    float4 accumulated = float4(accumulator.read(position));
-    accumulator.write(half4(accumulated + p.mix * value), position);
-}
-
-kernel void fotufilm_spatial_finish_halation(
-    texture2d<half, access::read> source [[texture(0)]],
-    texture2d<half, access::read_write> accumulator [[texture(1)]],
-    const device float *configuration [[buffer(0)]],
-    constant uint4 &extent [[buffer(1)]],
-    uint2 position [[thread_position_in_grid]]) {
-    if (any(position >= extent.xy)) return;
-    float4 direct = float4(source.read(position));
-    float3 returned = float3(accumulator.read(position).rgb) - direct.rgb;
-    float3 mixed;
-    for (uint channel = 0; channel < 3u; ++channel) {
-        uint row = kHalationMatrix + channel * 3u;
-        mixed[channel] = direct[channel]
-            + dot(float3(configuration[row], configuration[row + 1u],
-                         configuration[row + 2u]), returned);
-    }
-    accumulator.write(half4(half3(max(mixed, 0.0f)), half(direct.a)), position);
 }
 
 kernel void fotufilm_spatial_mtf(

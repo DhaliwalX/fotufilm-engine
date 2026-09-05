@@ -27,7 +27,7 @@ final class PrintMTFTests: XCTestCase {
 
     func testEnlargerSigmaIsThePapersFigureAtTheSamplingDensity() {
         let pxPerMM = Float(Self.side) / Self.frameMM
-        for paper in [PrintPaper.ektacolorEdge, .crystalArchive, .vision2383, .labScan,
+        for paper in [PrintPaper.photo, .photoSoft, .projection, .labScan,
                       .telecine] {
             let inv = invocation(paper: paper)
             XCTAssertNotEqual(inv.featureMask & FilmEngineFeature.printMTF, 0,
@@ -46,7 +46,7 @@ final class PrintMTFTests: XCTestCase {
                         & FilmEngineFeature.printMTF, 0)
         XCTAssertEqual(invocation(paper: .negative).featureMask
                         & FilmEngineFeature.printMTF, 0)
-        XCTAssertEqual(invocation(paper: .ektacolorEdge, viewing: .lightBox).featureMask
+        XCTAssertEqual(invocation(paper: .photo, viewing: .lightBox).featureMask
                         & FilmEngineFeature.printMTF, 0)
 
         var options = FotufilmEngine.Options()
@@ -89,14 +89,14 @@ final class PrintMTFTests: XCTestCase {
     func testPrintedGrainIsWiderThanTheNegativesOwn() throws {
         try requireEngine()
         let screen = correlationAtTwoPixels(paper: .screen)
-        let paper = correlationAtTwoPixels(paper: .ektacolorEdge)
+        let paper = correlationAtTwoPixels(paper: .photo)
         XCTAssertGreaterThan(paper, screen + 0.2,
                              "paper grain correlates \(paper) at two pixels and the "
                                  + "screen's \(screen); the enlarger did not spread it")
     }
 
     func testTheKeptShareIsThePapersOwn() {
-        for paper in [PrintPaper.ektacolorEdge, .crystalArchive, .vision2383, .labScan,
+        for paper in [PrintPaper.photo, .photoSoft, .projection, .labScan,
                       .telecine] {
             let inv = invocation(paper: paper)
             XCTAssertEqual(inv.configuration[FilmEngineInvocation.printSharpenOffset],
@@ -109,7 +109,7 @@ final class PrintMTFTests: XCTestCase {
     func testScanFinishKeepsTheGrainItsApertureSpreads() throws {
         try requireEngine()
         let scan = correlationAtTwoPixels(paper: .labScan)
-        let paper = correlationAtTwoPixels(paper: .ektacolorEdge)
+        let paper = correlationAtTwoPixels(paper: .photo)
         XCTAssertLessThan(scan, paper - 0.1,
                           "the scan finish correlates \(scan) at two pixels against the "
                               + "enlarger paper's \(paper); the minilab's sharpening is not "

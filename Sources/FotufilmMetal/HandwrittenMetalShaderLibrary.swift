@@ -16,7 +16,6 @@ enum HandwrittenMetalShaderLibrary {
     enum Shader: String {
         case pointwise = "HandwrittenPointwise"
         case composedPointwise = "HandwrittenComposedPointwise"
-        case hierarchicalCamera = "HandwrittenHierarchicalCamera"
         case frameEndpoints = "HandwrittenFrameEndpoints"
         case globalMeasurements = "HandwrittenGlobalMeasurements"
         case spectralHead = "HandwrittenSpectralHead"
@@ -28,12 +27,12 @@ enum HandwrittenMetalShaderLibrary {
 
         var insertsCameraSceneTransfer: Bool {
             self == .globalMeasurements || self == .spectralHead
-                || self == .hierarchicalCamera || self == .cameraPassThrough
+                || self == .cameraPassThrough
         }
 
         var insertsCameraYCbCr: Bool {
             self == .globalMeasurements || self == .spectralHead
-                || self == .hierarchicalCamera || self == .cameraPassThrough
+                || self == .cameraPassThrough
         }
 
         var insertsDigitalDeliveryTransfer: Bool {

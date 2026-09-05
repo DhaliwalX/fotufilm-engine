@@ -1,7 +1,7 @@
 import AppKit
 
 /// The version stamped into a plug-in bundle. `resolve/build.sh` and `finalcut/build.sh` both write
-/// it from `project.yml` before signing, so the copy inside the app and the copy on disk carry the
+/// it from `version.env` before signing, so the copy inside the app and the copy on disk carry the
 /// same number when they came from the same build — and differ when they did not.
 ///
 /// `CFBundleVersion` rather than the marketing string: it is the one that moves every build.

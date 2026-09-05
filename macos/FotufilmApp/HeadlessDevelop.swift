@@ -29,7 +29,7 @@ private func stillStageReporter() -> FilmRender.Reporter? {
 /// [--develop-out=/path/out.mov] \ [--develop-fps=18] [--develop-stock=id] \
 /// [--develop-codec=h264|hevc-main10|prores422-proxy|prores422-lt|prores422| \
 /// prores422-hq|prores4444|prores4444-xq] \
-/// [--develop-paper=ektacolor-edge|screen] \ [--develop-camera "Make Model"] [--develop-cct 3200]
+/// [--develop-paper=example-photo|screen] \ [--develop-camera "Make Model"] [--develop-cct 3200]
 /// Prints progress and exits with 0 on success, so a shell can assert on it.
 enum HeadlessDevelop {
     @discardableResult

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Image-dye families used by the wavelength-domain output model.
-public enum FilmDyeFamily: UInt8, Sendable {
+public enum FilmDyeFamily: String, Codable, Sendable {
     case kodakNegative
     case fujiNegative
     case motionNegative
@@ -501,15 +501,7 @@ public enum SpectralRuntime {
                                           neutralDensity: retainedSilverDensity(
                                               midDensity, dMin: dMin,
                                               fraction: bleachBypass))
-            // Dividing each channel by the stock's own mid energy is the
-            // per-stock filtration an enlarger operator dials in. A
-            // reference-anchored medium is profiled once instead: the frame is
-            // still auto-exposed (green stays the stock's own), but red and
-            // blue keep the distance this stock's mask and mid-scale colour
-            // put between themselves and the reference's — the cast a real
-            // minilab leaves in the file.
-            let castOffset = referenceCastOffset(midEnergy: midEnergy,
-                                                 stock: stock, paper: paper)
+            // Normalize print exposure against this stock's mid-grey energy.
             printing = buildDensityLUT(stock: stock) { density in
                 let energy = paperExposure(density: density,
                                            dyes: stock.spectralProfile.imageDyeDensity,
@@ -520,7 +512,7 @@ public enum SpectralRuntime {
                 return SIMD3<Float>(
                     log10(max(energy.x, 1e-12) / max(midEnergy.x, 1e-12)),
                     log10(max(energy.y, 1e-12) / max(midEnergy.y, 1e-12)),
-                    log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12))) + castOffset
+                    log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12)))
             }
         }
 
@@ -1752,52 +1744,6 @@ public enum SpectralRuntime {
         }
         return e
     }
-
-    /// The per-channel log-exposure cast a reference-anchored medium leaves in
-    /// this stock's positive: the stock's own mid-grey red/blue-over-green
-    /// read minus the reference's. Zero for the reference itself, for every
-    /// medium that times per stock, and for monochrome — one exposure, output
-    /// forced neutral, so a colour offset would be unreachable paint.
-    static func referenceCastOffset(midEnergy: SIMD3<Float>, stock: FilmStock,
-                                    paper: PrintPaper) -> SIMD3<Float> {
-        guard paper.isReferenceAnchored, !stock.isMonochrome else { return .zero }
-        let reference = PrintPaper.labScanReferenceMidRatio
-        var red = log10(max(midEnergy.x, 1e-12) / max(midEnergy.y, 1e-12))
-            - reference.x
-        var blue = log10(max(midEnergy.z, 1e-12) / max(midEnergy.y, 1e-12))
-            - reference.y
-        // The profile's correction authority: the machine's per-frame colour
-        // pass hands small casts through as film character and pulls anything
-        // larger back to this ceiling, direction kept. Calibrated against the
-        // same-lab corpus (`labScanCastCeiling`); without it a stock far from
-        // the reference — a Fuji mid-scale, a remjet-free cine negative —
-        // scans 2-9x warmer than the lab ever lets it.
-        let magnitude = (red * red + blue * blue).squareRoot()
-        if magnitude > PrintPaper.labScanCastCeiling {
-            let held = PrintPaper.labScanCastCeiling / magnitude
-            red *= held
-            blue *= held
-        }
-        return SIMD3(red, 0, blue)
-    }
-
-    /// The numbers `PrintPaper.labScanReferenceMidRatio` and
-    /// `labScanReferenceBalance` are committed from: the given stock's
-    /// mid-grey read through the lab scan's bands, and its solved balance on
-    /// that medium. Public so `fotufilm --dump-labscan-reference` can print
-    /// them for re-committing; the render path reads only the constants.
-    public static func labScanReferenceSolve(for stock: FilmStock)
-        -> (midRatioRed: Float, midRatioBlue: Float, balance: [Float]) {
-        let paper = PrintPaper.labScan
-        let midDensity = (0..<3).map { stock.curves[$0].density(logExposure: 0) }
-        let midEnergy = paperExposure(density: midDensity,
-                                      dyes: stock.spectralProfile.imageDyeDensity,
-                                      lamp: SpectralGrid.equalEnergy,
-                                      paperSensitivity: paper.sensitivity)
-        return (log10(max(midEnergy.x, 1e-12) / max(midEnergy.y, 1e-12)),
-                log10(max(midEnergy.z, 1e-12) / max(midEnergy.y, 1e-12)),
-                neutralPrintingBalance(for: stock, paper: paper))
-    }
 }
 
 extension SpectralRuntime {
@@ -1994,15 +1940,10 @@ extension SpectralRuntime {
                 let energy = paperExposure(density: density,
                                            dyes: stock.spectralProfile.imageDyeDensity,
                                            lamp: lamp, paperSensitivity: paperSensitivity)
-                // The same reference cast the printing LUT carries — this
-                // mirror walks a neutral wedge, and on a profiled medium a
-                // neutral wedge does not print neutral.
                 relative = SIMD3<Float>(
                     log10(max(energy.x, 1e-12) / max(midEnergy.x, 1e-12)),
                     log10(max(energy.y, 1e-12) / max(midEnergy.y, 1e-12)),
                     log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12)))
-                    + referenceCastOffset(midEnergy: midEnergy, stock: stock,
-                                          paper: paper)
             }
             let printed = (0..<3).map { channel in
                 curves[channel].density(
@@ -2241,11 +2182,6 @@ public enum SpectralGrid {
     public static let stepNM: Float = 5
     public static let wavelengths: [Float] = stride(from: Float(380), through: 780, by: stepNM).map { $0 }
     public static let count = 81
-    /// Bands of the grid every pack and table was written on before 5 nm: 380...780 at 10 nm.
-    public static let legacyCount = 41
-    /// Spacing of that grid.
-    static let legacyStepNM: Float = 10
-
     static let xBar: [Float] = [
         0.001368, 0.002236, 0.004243, 0.00765, 0.01431, 0.02319, 0.04351, 0.07763,
         0.13438, 0.21477, 0.2839, 0.3285, 0.34828, 0.34806, 0.3362, 0.3187,
@@ -2353,28 +2289,6 @@ public enum SpectralGrid {
             }
         }
         return result
-    }
-
-    /// Carries a row written on the 10 nm grid onto this one. A sensitivity row interpolates
-    /// in log10 between positive neighbours, which is how the datasheet traces were digitised
-    /// and what keeps a cut-off's slope, and stays zero beside a zero so the published span
-    /// does not grow by half a step; a density or partition row interpolates linearly. A row
-    /// already on this grid comes back untouched, and any other length is left for validation
-    /// to report.
-    public static func resampledFromLegacyGrid(_ row: [Float], logarithmic: Bool) -> [Float] {
-        guard row.count == legacyCount else { return row }
-        return wavelengths.map { wavelength in
-            let position = (wavelength - wavelengths[0]) / legacyStepNM
-            let low = min(Int(position), legacyCount - 1)
-            let fraction = position - Float(low)
-            guard fraction > 0, low + 1 < legacyCount else { return row[low] }
-            let a = row[low], b = row[low + 1]
-            if logarithmic {
-                guard a > 0, b > 0 else { return 0 }
-                return pow(10, log10(a) * (1 - fraction) + log10(b) * fraction)
-            }
-            return a * (1 - fraction) + b * fraction
-        }
     }
 
     static func normalizeSensitivities(_ layers: [[Float]]) -> [[Float]] {

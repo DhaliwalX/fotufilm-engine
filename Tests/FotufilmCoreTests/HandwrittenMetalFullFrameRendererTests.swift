@@ -173,7 +173,7 @@ final class HandwrittenMetalFullFrameRendererTests: XCTestCase {
         var stock = TestStocks.negative
         stock.flare = 0.2
         var requested = spatialOptions(grain: false)
-        requested.paper = .vision2383
+        requested.paper = .projection
         requested.highlights = 0.42
         requested.shadows = -0.18
         requested.localTone = true
@@ -276,7 +276,7 @@ final class HandwrittenMetalFullFrameRendererTests: XCTestCase {
         var stock = TestStocks.negative
         stock.flare = 0.2
         var requested = spatialOptions(grain: false)
-        requested.paper = .crystalArchive
+        requested.paper = .photoSoft
         requested.highlights = 0.38
         requested.shadows = -0.22
         requested.localTone = true

@@ -56,9 +56,9 @@ final class ColorGradeTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(ColorGrade.self, from: data),
                        grade)
 
-        let empty = try JSONDecoder().decode(ColorGrade.self,
-                                             from: Data("{}".utf8))
-        XCTAssertTrue(empty.isNeutral)
+        XCTAssertThrowsError(try JSONDecoder().decode(ColorGrade.self, from: Data("{}".utf8)))
+        XCTAssertThrowsError(try JSONDecoder().decode(ColorGrade.Band.self,
+                                                       from: Data("{}".utf8)))
     }
 
     func testNeutralGradeLeavesTheRenderByteIdentical() {

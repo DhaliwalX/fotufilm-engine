@@ -457,18 +457,6 @@ public final class HandwrittenMetalSpatialExecutor {
         var mean: SIMD4<Float>
     }
 
-    private struct AccumulatorParameters {
-        var extent: SIMD4<UInt32>
-        var share: SIMD4<Float>
-    }
-
-    private struct ScaleMixParameters {
-        var extent: SIMD4<UInt32>
-        var geometry: SIMD4<UInt32>
-        var mix: SIMD4<Float>
-        var ring: SIMD4<Float>
-    }
-
     private struct PyramidParameters {
         var extent: SIMD4<UInt32>
         var grid0: SIMD4<UInt32>
@@ -547,13 +535,10 @@ public final class HandwrittenMetalSpatialExecutor {
     private let timestampFrequency: UInt64?
     private let library: MTLLibrary
     private let copyPipeline: MTLComputePipelineState
-    private let initializePipeline: MTLComputePipelineState
     private let transformPipeline: MTLComputePipelineState
     private let downsamplePipeline: MTLComputePipelineState
     private let horizontalPipeline: MTLComputePipelineState
     private let verticalPipeline: MTLComputePipelineState
-    private let accumulatePipeline: MTLComputePipelineState
-    private let halationPipeline: MTLComputePipelineState
     private let pyramidPipeline: MTLComputePipelineState
     private let printPipeline: MTLComputePipelineState
     private let pyramidDownPairPipeline: MTLComputePipelineState
@@ -618,13 +603,10 @@ public final class HandwrittenMetalSpatialExecutor {
             }
             self.library = library
             copyPipeline = try pipeline("fotufilm_spatial_copy")
-            initializePipeline = try pipeline("fotufilm_spatial_initialize")
             transformPipeline = try pipeline("fotufilm_spatial_transform")
             downsamplePipeline = try pipeline("fotufilm_spatial_downsample")
             horizontalPipeline = try pipeline("fotufilm_spatial_blur_horizontal")
             verticalPipeline = try pipeline("fotufilm_spatial_blur_vertical")
-            accumulatePipeline = try pipeline("fotufilm_spatial_accumulate")
-            halationPipeline = try pipeline("fotufilm_spatial_finish_halation")
             pyramidPipeline = try pipeline("fotufilm_spatial_finish_pyramid")
             printPipeline = try pipeline("fotufilm_spatial_finish_print_mtf")
             pyramidDownPairPipeline = try pipeline("fotufilm_spatial_pyramid_down_pair")
@@ -1898,24 +1880,6 @@ public final class HandwrittenMetalSpatialExecutor {
         textureBarrier(encoder)
     }
 
-    private func encodeInitialize(
-        _ encoder: MTLComputeCommandEncoder, source: MTLTexture,
-        destination: MTLTexture, share: SIMD4<Float>, width: Int, height: Int
-    ) {
-        var parameters = AccumulatorParameters(
-            extent: SIMD4(UInt32(width), UInt32(height), 0, 0), share: share)
-        encoder.setComputePipelineState(initializePipeline)
-        encoder.setTexture(source, index: 0)
-        encoder.setTexture(destination, index: 1)
-        encoder.setBytes(
-            &parameters, length: MemoryLayout<AccumulatorParameters>.stride, index: 0)
-        dispatch(encoder, width: width, height: height)
-        textureBarrier(encoder)
-    }
-
-    /// Builds the same progressive box-average pyramid as the canonical schedule. Each retained
-    /// level is then replaced in place by its blurred field after the next levels have already
-    /// consumed the unblurred downsample, so one temporary texture serves all three scales.
     private func encodePyramid(
         _ encoder: MTLComputeCommandEncoder, source: MTLTexture,
         outputs: [MTLTexture], temporary: MTLTexture, plans: [ScalePlan],
@@ -2000,58 +1964,6 @@ public final class HandwrittenMetalSpatialExecutor {
         textureBarrier(encoder)
     }
 
-    private func encodeScale(
-        _ encoder: MTLComputeCommandEncoder, source: MTLTexture,
-        accumulator: MTLTexture, gridA: MTLTexture, gridB: MTLTexture,
-        plan: ScalePlan, mix: SIMD4<Float>, annular: Bool,
-        width: Int, height: Int, originX: Int, originY: Int,
-        configuration: MTLBuffer, curves: MTLTexture
-    ) {
-        let phaseX = originX % plan.stride
-        let phaseY = originY % plan.stride
-        let gridWidth = (width + phaseX + plan.stride - 1) / plan.stride
-        let gridHeight = (height + phaseY + plan.stride - 1) / plan.stride
-        let blurred: MTLTexture
-        if plan.stride > 1 {
-            encodeDownsample(
-                encoder, source: source, destination: gridA,
-                sourceWidth: width, sourceHeight: height,
-                destinationWidth: gridWidth, destinationHeight: gridHeight,
-                stride: plan.stride, phaseX: phaseX, phaseY: phaseY, transform: 0,
-                configuration: configuration, curves: curves)
-            encodeHorizontal(
-                encoder, source: gridA, destination: gridB, plan: plan.weights,
-                width: gridWidth, height: gridHeight, radius: plan.radius,
-                transform: 0, configuration: configuration, curves: curves)
-            encodeVertical(
-                encoder, source: gridB, destination: gridA, plan: plan.weights,
-                width: gridWidth, height: gridHeight, radius: plan.radius)
-            blurred = gridA
-        } else {
-            encodeHorizontal(
-                encoder, source: source, destination: gridA, plan: plan.weights,
-                width: width, height: height, radius: plan.radius,
-                transform: 0, configuration: configuration, curves: curves)
-            encodeVertical(
-                encoder, source: gridA, destination: gridB, plan: plan.weights,
-                width: width, height: height, radius: plan.radius)
-            blurred = gridB
-        }
-        var parameters = ScaleMixParameters(
-            extent: SIMD4(
-                UInt32(width), UInt32(height), UInt32(gridWidth), UInt32(gridHeight)),
-            geometry: SIMD4(
-                UInt32(plan.stride), UInt32(phaseX), UInt32(phaseY), annular ? 1 : 0),
-            mix: mix, ring: SIMD4(plan.ringRadius, 0, 0, 0))
-        encoder.setComputePipelineState(accumulatePipeline)
-        encoder.setTexture(blurred, index: 0)
-        encoder.setTexture(accumulator, index: 1)
-        encoder.setBytes(&parameters, length: MemoryLayout<ScaleMixParameters>.stride,
-                         index: 0)
-        dispatch(encoder, width: width, height: height)
-        textureBarrier(encoder)
-    }
-
     private func encodeMTF(
         _ encoder: MTLComputeCommandEncoder, source: MTLTexture,
         destination: MTLTexture, plan: MTFPlan, flare: Float,
@@ -2080,21 +1992,6 @@ public final class HandwrittenMetalSpatialExecutor {
                 width: (width + Self.tile - 1) / Self.tile,
                 height: (height + Self.tile - 1) / Self.tile, depth: 1),
             threadsPerThreadgroup: MTLSize(width: Self.tile, height: Self.tile, depth: 1))
-        textureBarrier(encoder)
-    }
-
-    private func encodeFinishHalation(
-        _ encoder: MTLComputeCommandEncoder, source: MTLTexture,
-        accumulator: MTLTexture, configuration: MTLBuffer,
-        width: Int, height: Int
-    ) {
-        var extent = SIMD4<UInt32>(UInt32(width), UInt32(height), 0, 0)
-        encoder.setComputePipelineState(halationPipeline)
-        encoder.setTexture(source, index: 0)
-        encoder.setTexture(accumulator, index: 1)
-        encoder.setBuffer(configuration, offset: 0, index: 0)
-        encoder.setBytes(&extent, length: MemoryLayout<SIMD4<UInt32>>.stride, index: 1)
-        dispatch(encoder, width: width, height: height)
         textureBarrier(encoder)
     }
 

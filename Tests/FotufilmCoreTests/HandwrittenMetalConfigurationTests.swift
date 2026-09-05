@@ -41,8 +41,6 @@ final class HandwrittenMetalConfigurationTests: XCTestCase {
                 HandwrittenMetalFilmRenderer.transferSamples,
             "FOTUFILM_POINTWISE_DECODE_SAMPLES":
                 HandwrittenMetalFilmRenderer.decodeSamples,
-            "FOTUFILM_HIERARCHICAL_DECODE_SAMPLES":
-                HandwrittenMetalHierarchicalFrameRenderer.decodeSamples,
             "FOTUFILM_ENDPOINT_CURVE_SAMPLES":
                 HandwrittenMetalFrameEndpoints.curveSamples,
             "FOTUFILM_ENDPOINT_TRANSFER_SAMPLES":

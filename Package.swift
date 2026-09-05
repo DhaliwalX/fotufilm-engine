@@ -26,13 +26,7 @@ let halideCXXSettings: [CXXSetting] = halideRoot.map { root in
 } ?? []
 let halideLinkerSettings: [LinkerSetting] = halideRoot.map { root in
     [
-        // Homebrew's libHalide carries its own install name as an absolute Cellar path, which
-        // needed nothing further here. A relocatable toolchain — the one this project's own
-        // scripts now build (tools/build-halide-toolchain.sh) and CI fetches — has to be
-        // @rpath-relative to be relocatable at all, and an @rpath the linker never resolves is
-        // an executable that finds nothing at launch: "Library not loaded: @rpath/libHalide….
-        // dylib". Harmless to add unconditionally — an absolute install name ignores an rpath
-        // that also happens to be true.
+        // Resolve relocatable Halide libraries as well as Homebrew installations.
         .unsafeFlags(
             ["-L\(root)/lib", "-Xlinker", "-rpath", "-Xlinker", "\(root)/lib"],
             .when(platforms: halidePlatforms)),
@@ -43,18 +37,8 @@ let halideLinkerSettings: [LinkerSetting] = halideRoot.map { root in
     ]
 } ?? []
 
-// The hand-written Metal kernels are Objective-C++ against Apple frameworks, so they cannot
-// compile where those frameworks do not exist. Everything else in the target is portable:
-// FotufilmHalideMetal.cpp carries the GPU pipeline for every backend, and on Linux it compiles
-// against CUDA (see FOTUFILM_HALIDE_CUDA below). FotufilmHalideIOS.cpp needs no exclusion — it is
-// already inert unless FOTUFILM_HALIDE_IOS_AOT is defined.
-//
-// `fotufilmbench` is a Linux-only tool, so it does not appear in an Apple build's target list at
-// all — `fotufilm` remains the only executable there.
 #if os(Linux)
-// The benchmark times the CUDA path against the CPU one, so it has nothing to measure in a build
-// with no Halide in it: without halideRoot the CUDA entry points are never compiled, and a target
-// that referenced them anyway would fail to link rather than fail to be useful.
+// CUDA benchmarking requires Halide. Objective-C++ Metal kernels require Apple frameworks.
 let benchmarkTargets: [Target] = halideRoot != nil ? [
     .executableTarget(name: "fotufilmbench",
                       dependencies: ["FotufilmCore", "FotufilmHalide"]),
@@ -67,11 +51,7 @@ let halideGPUCXXSettings: [CXXSetting] = halideRoot != nil
     ? [.define("FOTUFILM_HALIDE_CUDA", .when(platforms: [.linux]))]
     : []
 
-// What the engine's own test target cannot compile on a machine with no Apple frameworks. It is
-// a shorter list than it looks: FotufilmImaging and FotufilmMetal guard their Apple imports
-// internally and build as near-empty modules here, so a test may depend on either and still be
-// portable. `swift test --filter` is no substitute for this — SwiftPM builds every target before
-// it filters anything, so one unbuildable file takes the whole run down.
+// SwiftPM builds every test file before applying filters; exclude Apple-only fixtures on Linux.
 let appleOnlyTests = [
     // Unguarded CoreGraphics/CoreImage/ImageIO: these five reach Apple's frameworks directly.
     "Golden/RGBAImage.swift",
@@ -79,9 +59,7 @@ let appleOnlyTests = [
     "LensCorpusHarness.swift",
     "LensCorrectionFilterTests.swift",
     "UnitCropCoordinatesTests.swift",
-    // Portable Swift to a file, but all of it built on RGBAImage, which is not: the golden
-    // harness reads and writes PNGs through ImageIO. Porting that one file is what would bring
-    // the golden suite back here, and nothing else is in the way.
+    // Golden-image tests use ImageIO through RGBAImage.
     "Golden/PrintDifference.swift",
     "Golden/GoldenStore.swift",
     "Golden/GoldenStocks.swift",
@@ -113,8 +91,6 @@ let package = Package(
         .executable(name: "fotufilm", targets: ["fotufilm"]),
     ] + benchmarkProducts,
     targets: [
-        // Checking the Mac app for a new release: the feed document and the rule for deciding
-        // one version is newer than another, kept pure so the suite can hold it.
         .target(name: "FotufilmUpdate"),
         .target(
             name: "FotufilmHalide",
@@ -144,9 +120,7 @@ let package = Package(
         .target(name: "FotufilmImaging", dependencies: ["FotufilmCore"]),
         // Choosing the film a photograph opens on.
         .target(name: "FotufilmStockMatch", dependencies: ["FotufilmCore"]),
-        // The editor's control catalogue: what the app offers a photographer, described once so
-        // that the panel, the badges and the resets read the same list — and so that the list can
-        // be checked against the engine's own option set.
+        // Shared editor controls and their engine options.
         .target(name: "FotufilmEditModel", dependencies: ["FotufilmCore"]),
         .executableTarget(name: "fotufilm", dependencies: ["FotufilmCore", "FotufilmImaging"]),
         .testTarget(

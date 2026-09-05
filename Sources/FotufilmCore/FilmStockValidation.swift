@@ -37,9 +37,9 @@ public extension FilmStockDefinition {
             for row in rows { try check(field, row, count: shape.1, range) }
         }
 
-        guard schemaVersion <= FilmStockDefinition.currentSchemaVersion else {
+        guard schemaVersion == FilmStockDefinition.currentSchemaVersion else {
             throw fail("schemaVersion",
-                       "is \(schemaVersion); this build reads up to "
+                       "is \(schemaVersion); this build requires "
                            + "\(FilmStockDefinition.currentSchemaVersion)")
         }
         try Self.checkIdentifier(id, field: "id", limit: 64, fail: fail)

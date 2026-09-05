@@ -100,7 +100,7 @@ public struct FilmStockDefinition: Codable, Sendable {
     /// A direct positive that is the print — an integral instant sheet.
     public var isReflectionPrint: Bool?
     /// The id of the finished positive this emulsion was designed to be printed onto — a
-    /// `PrintPaper` raw value such as `"vision-2383"`. Absent means the stock states no
+    /// `PrintPaper` raw value such as `"example-projection"`. Absent means the stock states no
     /// preference and takes the engine's default sheet.
     public var nativePrintMedium: String?
     /// The loaded id of the stock whose sampled spectral record this definition's curves descend
@@ -182,23 +182,6 @@ public struct FilmStockDefinition: Codable, Sendable {
             inhibition = layer.inhibition
             releaseGamma = layer.releaseGamma
             depthUM = layer.depthUM
-        }
-
-        private enum CodingKeys: String, CodingKey {
-            case name, sensitivity, curve, inhibition, releaseGamma, depthUM
-        }
-
-        public init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            name = try container.decode(String.self, forKey: .name)
-            // A donor saved on the 10 nm grid is carried onto the current one like the
-            // dye-forming records in `SpectralSpec`.
-            sensitivity = SpectralGrid.resampledFromLegacyGrid(
-                try container.decode([Float].self, forKey: .sensitivity), logarithmic: true)
-            curve = try container.decode(CurveSpec.self, forKey: .curve)
-            inhibition = try container.decode([Float].self, forKey: .inhibition)
-            releaseGamma = try container.decodeIfPresent(Float.self, forKey: .releaseGamma)
-            depthUM = try container.decodeIfPresent(Float.self, forKey: .depthUM)
         }
 
         public var layer: DonorCaptureLayer {
@@ -299,19 +282,13 @@ public struct FilmStockDefinition: Codable, Sendable {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             let kind = try container.decode(String.self, forKey: .kind)
             switch kind {
-            // Rows written on the 10 nm grid every pack used before 5 nm are carried onto the
-            // current grid here, so a stock saved by an earlier build keeps loading, validating
-            // and rendering with the information it was saved with.
             case "samples":
                 self = .samples(
-                    layerSensitivity: try container.decode([[Float]].self, forKey: .layerSensitivity)
-                        .map { SpectralGrid.resampledFromLegacyGrid($0, logarithmic: true) },
-                    imageDyeDensity: try container.decode([[Float]].self, forKey: .imageDyeDensity)
-                        .map { SpectralGrid.resampledFromLegacyGrid($0, logarithmic: false) })
+                    layerSensitivity: try container.decode([[Float]].self, forKey: .layerSensitivity),
+                    imageDyeDensity: try container.decode([[Float]].self, forKey: .imageDyeDensity))
             case "measured":
                 self = .measured(
-                    layerSensitivity: try container.decode([[Float]].self, forKey: .layerSensitivity)
-                        .map { SpectralGrid.resampledFromLegacyGrid($0, logarithmic: true) },
+                    layerSensitivity: try container.decode([[Float]].self, forKey: .layerSensitivity),
                     dyeFamily: try container.decode(FilmDyeFamily.self, forKey: .dyeFamily))
             case "color":
                 self = .color(
@@ -367,30 +344,6 @@ public struct FilmStockDefinition: Codable, Sendable {
                 return .monochrome(rgbWeights: rgbWeights)
             }
         }
-    }
-}
-
-extension FilmDyeFamily: Codable {
-    private static let names: [FilmDyeFamily: String] = [
-        .kodakNegative: "kodakNegative", .fujiNegative: "fujiNegative",
-        .motionNegative: "motionNegative", .kodachrome: "kodachrome",
-        .monochrome: "monochrome",
-    ]
-
-    public init(from decoder: Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode(String.self)
-        guard let match = FilmDyeFamily.names.first(where: { $0.value == raw })?.key else {
-            throw DecodingError.dataCorruptedError(
-                in: try decoder.singleValueContainer(),
-                debugDescription: "unknown dye family '\(raw)'; expected one of "
-                    + FilmDyeFamily.names.values.sorted().joined(separator: ", "))
-        }
-        self = match
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(FilmDyeFamily.names[self]!)
     }
 }
 

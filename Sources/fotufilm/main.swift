@@ -102,17 +102,11 @@ Options:
                      the read adapts to the light — and the paper dyes'
                      metamerism moves. Default: D50 for paper, calibrated
                      5400 K xenon for cinema print, fixed D65 for screen
-  --paper <name>     Print stage for colour negatives: ektacolor-edge (the
-                     measured RA-4 sheet, default), endura-premier,
-                     crystal-archive, vision-2383, vision-2393, eterna-cp (the
-                     projected release prints), lab-scan (a trichromatic LED
-                     read inverted in software — the minilab scan most film is
-                     finished as: cleaner colour, a full black point, punchy
-                     contrast), telecine (the colour-timed video transfer:
-                     calibrated broad bands into Rec.709 — film black held
-                     above video black, gentler highlights) or screen
-                     (a direct read of the layers, neutral by construction). Reversal
-                     and monochrome stocks have no print stage and ignore it
+  --paper <name>     Output medium: example-photo (default), example-photo-contrast,
+                     example-photo-soft, example-projection, example-projection-contrast,
+                     example-projection-soft, lab-scan, telecine, screen or negative.
+                     Photo and projection variants use analytic example curves.
+                     Reversal stocks use screen regardless of the requested medium.
   --negative <how>   Show the developed negative instead of the print it would
                      make: 'lightbox' keeps the base its own orange, 'scanner'
                      divides the base out. Ignored by a reversal stock, which
@@ -200,20 +194,6 @@ if flags["--list-stocks"] != nil {
     for (key, stock) in FilmStock.presets.sorted(by: { $0.key < $1.key }) {
         print("\(key)\t\(stock.name)\t\(FilmFormat.nativeID(forStockID: key))")
     }
-    exit(0)
-}
-
-// The numbers `PrintPaper.labScanReferenceMidRatio`/`labScanReferenceBalance`
-// are committed from, for re-committing after a change to the reference
-// stock's sheet, the lab-scan bands, or the balance solve. The reference
-// lives in the private stock set, so run with FOTUFILM_STOCKS=stocks-private.
-if let stockID = flags["--dump-labscan-reference"] {
-    guard let stock = FilmStock.presets[stockID] else {
-        fail("Unknown stock '\(stockID)'. See --list-stocks")
-    }
-    let solved = SpectralRuntime.labScanReferenceSolve(for: stock)
-    print("labScanReferenceMidRatio = SIMD2<Float>(\(solved.midRatioRed), \(solved.midRatioBlue))")
-    print("labScanReferenceBalance = \(solved.balance)")
     exit(0)
 }
 

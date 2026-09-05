@@ -44,9 +44,7 @@ public struct CouplerGeometry: Sendable, Equatable, Codable {
 
     /// The per-gap transmissions an exponential decay of `rangeUM` through the stack implies.
     ///
-    /// This is how packs written before the field existed are read, and how `fit` reports its
-    /// one-dimensional sweep. A non-positive range seals the layers, which is what the decay form
-    /// did at its own lower limit.
+    /// A non-positive range seals the layers.
     public static func transmission(forRangeUM range: Float,
                                     layerDepthUM: [Float]
                                         = CouplerGeometry.colorNegativeDepthUM) -> [Float] {
@@ -103,16 +101,9 @@ public struct CouplerGeometry: Sendable, Equatable, Codable {
         case interlayerTransmission
         case release
         case selfRetention
-        /// Read, never written: the decay length packs carried before the barriers were named.
-        case rangeUM
     }
 
-    /// Validating decode, so a pack with the wrong number of layers is a decoding error naming the
-    /// field rather than a `precondition` trap somewhere inside a render.
-    ///
-    /// A pack stating `rangeUM` and no `interlayerTransmission` is read through
-    /// `transmission(forRangeUM:)`, which reproduces its matrix exactly — sealed packs and stocks a
-    /// user built before the change render identically.
+    /// Reject malformed layer counts before they reach the renderer.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let depths = try container.decodeIfPresent(
@@ -131,25 +122,11 @@ public struct CouplerGeometry: Sendable, Equatable, Codable {
                     "release needs one strength per layer (3), got \(release.count)")
         }
 
-        let transmission: [Float]
-        if let stated = try container.decodeIfPresent(
-            [Float].self, forKey: .interlayerTransmission) {
-            guard stated.count == depths.count - 1 else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: .interlayerTransmission, in: container,
-                    debugDescription:
-                        "interlayerTransmission needs one entry per gap "
-                        + "(\(depths.count - 1)), got \(stated.count)")
-            }
-            transmission = stated
-        } else if let range = try container.decodeIfPresent(Float.self, forKey: .rangeUM) {
-            transmission = Self.transmission(forRangeUM: range, layerDepthUM: depths)
-        } else {
-            throw DecodingError.keyNotFound(
-                CodingKeys.interlayerTransmission,
-                .init(codingPath: container.codingPath,
-                      debugDescription:
-                        "couplerGeometry needs interlayerTransmission (or a legacy rangeUM)"))
+        let transmission = try container.decode([Float].self, forKey: .interlayerTransmission)
+        guard transmission.count == depths.count - 1 else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .interlayerTransmission, in: container,
+                debugDescription: "interlayerTransmission needs two entries, got \(transmission.count)")
         }
 
         self.layerDepthUM = depths
@@ -157,15 +134,6 @@ public struct CouplerGeometry: Sendable, Equatable, Codable {
         self.release = release
         self.selfRetention = try container.decodeIfPresent(
             Float.self, forKey: .selfRetention) ?? Self.houseSelfRetention
-    }
-
-    /// Written in the canonical shape only; `rangeUM` is a read path, not a round trip.
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(layerDepthUM, forKey: .layerDepthUM)
-        try container.encode(interlayerTransmission, forKey: .interlayerTransmission)
-        try container.encode(release, forKey: .release)
-        try container.encode(selfRetention, forKey: .selfRetention)
     }
 }
 
