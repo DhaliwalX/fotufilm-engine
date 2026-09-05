@@ -28,8 +28,11 @@ call-site inspection, format checks, builds, and rendering regression tests.
 - Imported sampled spectra must contain 81 samples, and coupler geometry must
   contain two interlayer transmissions. Incomplete colour grades are rejected.
 - `FilmDyeFamily` now has string raw values matching its existing JSON values.
-- The removed renderer APIs and `labScanReferenceSolve` are no longer available.
-  Production camera and still processing use the full-frame and delivery renderers.
+- The removed renderer APIs are no longer available. Production camera and still
+  processing use the full-frame and delivery renderers. The lab-scan reference
+  profile hook (`isReferenceAnchored`, `referenceCastOffset`, `labScanReferenceSolve`
+  and `--dump-labscan-reference`), removed in the same pass, is back with an inert
+  neutral reference; calibrated builds supply their own numbers.
 - Flat Swift builds must include `Sources/FotufilmHalide/include` in their module
   search path. The supplied scripts do so. Packed numerical configuration offsets
   and the C calling conventions remain unchanged.
