@@ -35,9 +35,8 @@ The plugin is installed in `/Library/OFX/Plugins`. Restart Resolve, then find
 4. Leave **Stage** on **Full** to render the complete film and print process.
 5. Adjust exposure, output medium, lens filters, film response, and development.
 
-Source builds include synthetic example films and print models. They do not need
-activation. Some controls are unavailable when the selected film does not support them.
-The status line explains why.
+The plugin includes the three Starter films and example print models. No activation
+is needed. If a control is unavailable for your film, the status line explains why.
 
 The inspector groups controls under Setup, Film, Exposure & Colour, Lens & Filters,
 Development, Grain, Halation, Colour Separation, and Output. Start with these settings:

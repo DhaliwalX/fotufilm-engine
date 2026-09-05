@@ -196,6 +196,16 @@ static inline float decode_transfer(
     return float(table.sample(linear_table, (q + 0.5f) / float(kDecodeSamples)).r);
 }
 
+static inline float tone_grid_bilinear(
+    const device float *configuration, uint plane, int grid_width,
+    int x0, int y0, int x1, int y1, float fx, float fy) {
+    float c00 = configuration[plane + uint(y0 * grid_width + x0)];
+    float c10 = configuration[plane + uint(y0 * grid_width + x1)];
+    float c01 = configuration[plane + uint(y1 * grid_width + x0)];
+    float c11 = configuration[plane + uint(y1 * grid_width + x1)];
+    return mix(mix(c00, c10, fx), mix(c01, c11, fx), fy);
+}
+
 static inline float tone_base(
     const device float *configuration, float stops, uint2 position) {
     int grid_width = max(int(configuration[kToneGridSize]), 1);
@@ -214,14 +224,10 @@ static inline float tone_base(
     int y1 = min(y0 + 1, grid_height - 1);
     float fx = clamp(gx - float(x0), 0.0f, 1.0f);
     float fy = clamp(gy - float(y0), 0.0f, 1.0f);
-    auto bilinear = [&](uint plane) {
-        float c00 = configuration[plane + uint(y0 * grid_width + x0)];
-        float c10 = configuration[plane + uint(y0 * grid_width + x1)];
-        float c01 = configuration[plane + uint(y1 * grid_width + x0)];
-        float c11 = configuration[plane + uint(y1 * grid_width + x1)];
-        return mix(mix(c00, c10, fx), mix(c01, c11, fx), fy);
-    };
-    return bilinear(kToneGridA) * stops + bilinear(kToneGridB);
+    return tone_grid_bilinear(configuration, kToneGridA, grid_width,
+                              x0, y0, x1, y1, fx, fy) * stops
+        + tone_grid_bilinear(configuration, kToneGridB, grid_width,
+                             x0, y0, x1, y1, fx, fy);
 }
 
 static inline float3 creative_exposure(

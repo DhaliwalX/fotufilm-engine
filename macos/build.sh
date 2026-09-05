@@ -84,7 +84,6 @@ xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
   -file-prefix-map "$PWD=Fotufilm" \
     -file-prefix-map "$FOTUFILM_CORE_SOURCE_DIR=Fotufilm/Sources/FotufilmCore" \
   -module-name Fotufilm -emit-object \
-  Sources/FotufilmLicense/*.swift \
   Sources/FotufilmUpdate/*.swift \
   "$FOTUFILM_CORE_SOURCE_DIR"/*.swift \
   Sources/FotufilmMetal/*.swift \
@@ -129,29 +128,20 @@ fi
 cp macos/FotufilmApp/Info.plist "$APP/Contents/Info.plist"
 if [[ "$FOTUFILM_SOURCE_BUILD" == "1" ]]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.muastudio.fotufilm.source" "$APP/Contents/Info.plist"
-  for key in CFBundleURLTypes FotufilmUpdateFeedURL FotufilmLicenseServerURL FotufilmLicensePurchaseURL; do
+  for key in FotufilmUpdateFeedURL; do
     /usr/libexec/PlistBuddy -c "Delete :$key" "$APP/Contents/Info.plist"
   done
 fi
 
 
-# The activation certificate's public half belongs in the app; its private half stays in Firebase
-# Secret Manager. Local builds may omit it and will report that activation is not configured.
-if [[ -n "${FOTUFILM_LICENSE_PUBLIC_KEY:-}" ]]; then
-  /usr/libexec/PlistBuddy -c \
-    "Set :FotufilmLicensePublicKey $FOTUFILM_LICENSE_PUBLIC_KEY" "$APP/Contents/Info.plist"
-fi
-if [[ -n "${FOTUFILM_LICENSE_SERVER_URL:-}" ]]; then
-  /usr/libexec/PlistBuddy -c \
-    "Set :FotufilmLicenseServerURL $FOTUFILM_LICENSE_SERVER_URL" "$APP/Contents/Info.plist"
-fi
-if [[ -n "${FOTUFILM_LICENSE_PURCHASE_URL:-}" ]]; then
-  /usr/libexec/PlistBuddy -c \
-    "Set :FotufilmLicensePurchaseURL $FOTUFILM_LICENSE_PURCHASE_URL" "$APP/Contents/Info.plist"
-fi
 if [[ -n "${FOTUFILM_UPDATE_FEED_URL:-}" ]]; then
-  /usr/libexec/PlistBuddy -c \
-    "Set :FotufilmUpdateFeedURL $FOTUFILM_UPDATE_FEED_URL" "$APP/Contents/Info.plist"
+  if /usr/libexec/PlistBuddy -c "Print :FotufilmUpdateFeedURL" "$APP/Contents/Info.plist" >/dev/null 2>&1; then
+    /usr/libexec/PlistBuddy -c \
+      "Set :FotufilmUpdateFeedURL $FOTUFILM_UPDATE_FEED_URL" "$APP/Contents/Info.plist"
+  else
+    /usr/libexec/PlistBuddy -c \
+      "Add :FotufilmUpdateFeedURL string $FOTUFILM_UPDATE_FEED_URL" "$APP/Contents/Info.plist"
+  fi
 fi
 
 # One version line for the product. version.env drives the Xcode targets, and this bundle is
@@ -168,8 +158,7 @@ PROJECT_VERSION="$CURRENT_PROJECT_VERSION"
 /usr/libexec/PlistBuddy -c \
   "Set :CFBundleVersion $PROJECT_VERSION" "$APP/Contents/Info.plist"
 swift tools/generate-example-image.swift "$APP/Contents/Resources/sample.png"
-# The same outlined wordmark used by the purchase portal. Keeping the text as vector artwork avoids
-# a font dependency and keeps the blackout activation gate sharp on every display scale.
+# Bundle the outlined wordmark without a font dependency.
 cp macos/Resources/FOTUFILM.svg \
   "$APP/Contents/Resources/FOTUFILM.svg"
 tools/copy-shipping-resources.sh "$APP/Contents/Resources" --camera-profiles

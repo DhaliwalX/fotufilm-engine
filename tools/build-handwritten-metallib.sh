@@ -9,9 +9,9 @@ fi
 SDK_NAME="$1"
 OUTPUT="$2"
 case "$SDK_NAME" in
-  iphoneos) TARGET="air64-apple-ios18.0" ;;
-  iphonesimulator) TARGET="air64-apple-ios18.0-simulator" ;;
-  macosx) TARGET="air64-apple-macos13.0" ;;
+  iphoneos) TARGET="air64-apple-ios18.0"; METAL_STANDARD="metal3.2" ;;
+  iphonesimulator) TARGET="air64-apple-ios18.0-simulator"; METAL_STANDARD="metal3.2" ;;
+  macosx) TARGET="air64-apple-macos14.0"; METAL_STANDARD="metal3.1" ;;
   *) echo "unsupported Metal SDK: $SDK_NAME" >&2; exit 2 ;;
 esac
 
@@ -97,7 +97,7 @@ compile_shader() {
   local math_mode="$2"
   shift 2
   local air="$WORK/${source}.air"
-  "$METAL" -c -target "$TARGET" -std=metal3.2 -I "$SHADERS" \
+  "$METAL" -c -target "$TARGET" -std="$METAL_STANDARD" -I "$SHADERS" \
     "-${math_mode}" "${COMMON_DEFINES[@]}" "$@" \
     "$SHADERS/${source}.metal" -o "$air"
   AIR_FILES+=("$air")

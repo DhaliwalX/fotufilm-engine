@@ -8,17 +8,7 @@ import FotufilmCore
 import FotufilmEditModel
 #endif
 
-/// What this build has been paid for.
-///
-/// The decision table — which stocks are free, which surfaces the one-time purchase opens — is
-/// `ProUnlock` in FotufilmEditModel, where it is tested. This is the switch that table reads. The
-/// iOS app sets it from StoreKit at launch and on every transaction update, and the last known
-/// answer is held in defaults so a relaunch with no network still opens what was bought. The
-/// direct-download desktop build reads a signed, device-bound certificate from the Keychain and
-/// remains open without another network request until that certificate expires.
-///
-/// Lock-guarded rather than actor-bound, the way `StockPreset`'s cache is: the stock defaults are
-/// read wherever the caller happens to be, and an entitlement is a value, not a conversation.
+/// Mobile purchase state. Desktop features are always available.
 enum ProAccess {
     #if os(iOS)
     /// Open either because it was bought or because this is not a build anyone
@@ -77,12 +67,6 @@ enum ProAccess {
     private static let freeKey = "fotufilm.pro-complimentary"
     nonisolated(unsafe) private static var boughtCache: Bool?
     nonisolated(unsafe) private static var freeCache: Bool?
-    #elseif os(macOS)
-    /// Direct-download builds use a server-signed certificate stored in the Keychain. The app
-    /// never receives the purchaser's website account or password.
-    static var isPro: Bool { LicenseStore.isActive }
-    static var purchased: Bool { isPro }
-    static let isComplimentary = false
     #else
     static let isPro = true
     static let purchased = true
