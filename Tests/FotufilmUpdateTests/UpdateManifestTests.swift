@@ -7,7 +7,7 @@ final class UpdateManifestTests: XCTestCase {
 
     private func manifest(
         version: String = "1.6", build: String = "9",
-        downloadURL: String = "https://github.com/DhaliwalX/fotufilm-downloads/releases/latest/download/Fotufilm-macOS.pkg",
+        downloadURL: String = "https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS.pkg",
         sha256: String? = nil, releaseNotesURL: String? = nil
     ) -> UpdateManifest {
         UpdateManifest(version: version, build: build, downloadURL: downloadURL,
@@ -21,7 +21,7 @@ final class UpdateManifestTests: XCTestCase {
         {
           "version": "1.6",
           "build": "9",
-          "downloadURL": "https://github.com/DhaliwalX/fotufilm-downloads/releases/latest/download/Fotufilm-macOS.pkg",
+          "downloadURL": "https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS.pkg",
           "sha256": "\(String(repeating: "A", count: 64))",
           "releaseNotesURL": "https://fotufilm.com/blog/1.6.html"
         }

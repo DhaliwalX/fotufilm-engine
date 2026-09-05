@@ -48,7 +48,7 @@
 	     downloads repo the website's download button already points at, so "latest" resolves
 	     for both in the same moment. -->
 	<key>FotufilmUpdateFeedURL</key>
-	<string>https://github.com/DhaliwalX/fotufilm-downloads/releases/latest/download/Fotufilm-macOS-update.json</string>
+	<string>https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS-update.json</string>
 	<!-- Finder advertises this for one selected photo or video. The provider routes the file URL
 	     through the same application:openURLs: path as Open With and double-clicking. -->
 	<key>NSServices</key>
