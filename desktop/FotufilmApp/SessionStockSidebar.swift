@@ -47,11 +47,6 @@ final class StockSidebarViewController: SessionViewController {
     #endif
 
     #if os(macOS)
-    private lazy var buyPacks = SessionButton(
-        title: "Buy packs", symbol: "arrow.up.right", borderless: true
-    ) {
-        NSWorkspace.shared.open(URL(string: "https://packs.fotufilm.com")!)
-    }
     private lazy var loadPack = SessionButton(
         title: "Load custom pack…", symbol: "folder", borderless: true
     ) {
@@ -110,10 +105,6 @@ final class StockSidebarViewController: SessionViewController {
         #if canImport(UIKit)
         footer.addArrangedSubview(upgrade)
         upgrade.heightAnchor.constraint(equalToConstant: 30).isActive = true
-        #endif
-        #if os(macOS)
-        footer.addArrangedSubview(buyPacks)
-        buyPacks.heightAnchor.constraint(equalToConstant: 30).isActive = true
         #endif
         footer.addArrangedSubview(makeFilm)
         makeFilm.heightAnchor.constraint(equalToConstant: 30).isActive = true
