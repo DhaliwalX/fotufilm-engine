@@ -47,8 +47,8 @@ final class LensFilterTests: XCTestCase {
                                substrate: .crownGlass, coating: .uncoated)
         // (1 − R)² / (1 − R²) = (1 − R) / (1 + R) once the trapped reflections are summed.
         let r = ThinFilm.reflectance(wavelengthNM: 550, layers: [], substrate: .crownGlass)
-        XCTAssertEqual(clear.transmittance[17], (1 - r) / (1 + r), accuracy: 1e-5)
-        XCTAssertEqual(clear.transmittance[17], 0.9187, accuracy: 0.001)
+        XCTAssertEqual(clear.transmittance[34], (1 - r) / (1 + r), accuracy: 1e-5)
+        XCTAssertEqual(clear.transmittance[34], 0.9187, accuracy: 0.001)
     }
 
     func testSingleLayerCoatingMeetsItsClosedFormMinimum() {

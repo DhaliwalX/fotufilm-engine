@@ -184,6 +184,23 @@ public struct FilmStockDefinition: Codable, Sendable {
             depthUM = layer.depthUM
         }
 
+        private enum CodingKeys: String, CodingKey {
+            case name, sensitivity, curve, inhibition, releaseGamma, depthUM
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            name = try container.decode(String.self, forKey: .name)
+            // A donor saved on the 10 nm grid is carried onto the current one like the
+            // dye-forming records in `SpectralSpec`.
+            sensitivity = SpectralGrid.resampledFromLegacyGrid(
+                try container.decode([Float].self, forKey: .sensitivity), logarithmic: true)
+            curve = try container.decode(CurveSpec.self, forKey: .curve)
+            inhibition = try container.decode([Float].self, forKey: .inhibition)
+            releaseGamma = try container.decodeIfPresent(Float.self, forKey: .releaseGamma)
+            depthUM = try container.decodeIfPresent(Float.self, forKey: .depthUM)
+        }
+
         public var layer: DonorCaptureLayer {
             DonorCaptureLayer(name: name, sensitivity: sensitivity,
                               curve: curve.curve, inhibition: inhibition,
@@ -261,7 +278,7 @@ public struct FilmStockDefinition: Codable, Sendable {
     }
 
     /// How a pack describes the stock's wavelength-domain behaviour. `samples` is the exact form:
-    /// 41 values per layer on the 380...780 nm grid, which is what a pack calibrated from measured
+    /// `SpectralGrid.count` values per layer on the 380...780 nm grid, which is what a pack calibrated from measured
     /// data will carry.
     public enum SpectralSpec: Codable, Sendable {
         /// Fully specified: sensitivity and image-dye density per layer, already on `SpectralGrid`.
@@ -282,13 +299,19 @@ public struct FilmStockDefinition: Codable, Sendable {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             let kind = try container.decode(String.self, forKey: .kind)
             switch kind {
+            // Rows written on the 10 nm grid every pack used before 5 nm are carried onto the
+            // current grid here, so a stock saved by an earlier build keeps loading, validating
+            // and rendering with the information it was saved with.
             case "samples":
                 self = .samples(
-                    layerSensitivity: try container.decode([[Float]].self, forKey: .layerSensitivity),
-                    imageDyeDensity: try container.decode([[Float]].self, forKey: .imageDyeDensity))
+                    layerSensitivity: try container.decode([[Float]].self, forKey: .layerSensitivity)
+                        .map { SpectralGrid.resampledFromLegacyGrid($0, logarithmic: true) },
+                    imageDyeDensity: try container.decode([[Float]].self, forKey: .imageDyeDensity)
+                        .map { SpectralGrid.resampledFromLegacyGrid($0, logarithmic: false) })
             case "measured":
                 self = .measured(
-                    layerSensitivity: try container.decode([[Float]].self, forKey: .layerSensitivity),
+                    layerSensitivity: try container.decode([[Float]].self, forKey: .layerSensitivity)
+                        .map { SpectralGrid.resampledFromLegacyGrid($0, logarithmic: true) },
                     dyeFamily: try container.decode(FilmDyeFamily.self, forKey: .dyeFamily))
             case "color":
                 self = .color(

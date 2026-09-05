@@ -362,7 +362,7 @@ public enum SpectralRuntime {
     /// peak channel of the reconstruction's input.
     static let reconstructionAnchor: Float = 0.25
 
-    /// Direct 41-band reconstruction, exposed for validation and graph tools. `linearRGB` is in
+    /// Direct full-grid reconstruction, exposed for validation and graph tools. `linearRGB` is in
     /// the scene working space, linear Rec.2020.
     public static func reconstructedReflectance(linearRGB: SIMD3<Float>) -> [Float] {
         let rgb = SIMD3(max(linearRGB.x, 0), max(linearRGB.y, 0), max(linearRGB.z, 0))
@@ -2235,37 +2235,68 @@ extension SpectralRuntime {
 }
 
 public enum SpectralGrid {
-    public static let wavelengths: [Float] = stride(from: Float(380), through: 780, by: 10).map { $0 }
-    public static let count = 41
+    /// Spacing of the grid in nanometres. 5 nm since the 2026-09 audit: the film records'
+    /// sensitising-dye cut-offs fall a decade in 20 nm, and 10 nm point samples of them moved
+    /// a ColorChecker patch's layer exposure by up to 0.1 stop against the dense trace.
+    public static let stepNM: Float = 5
+    public static let wavelengths: [Float] = stride(from: Float(380), through: 780, by: stepNM).map { $0 }
+    public static let count = 81
+    /// Bands of the grid every pack and table was written on before 5 nm: 380...780 at 10 nm.
+    public static let legacyCount = 41
+    /// Spacing of that grid.
+    static let legacyStepNM: Float = 10
 
     static let xBar: [Float] = [
-        0.001368, 0.004243, 0.01431, 0.04351, 0.13438, 0.2839, 0.34828, 0.3362,
-        0.2908, 0.19536, 0.09564, 0.03201, 0.0049, 0.0093, 0.06327, 0.1655,
-        0.2904, 0.4334499, 0.5945, 0.7621, 0.9163, 1.0263, 1.0622, 1.0026,
-        0.8544499, 0.6424, 0.4479, 0.2835, 0.1649, 0.0874, 0.04677, 0.0227,
-        0.01135916, 0.005790346, 0.002899327, 0.001439971, 0.0006900786,
-        0.0003323011, 0.0001661505, 0.00008307527, 0.00004150994,
+        0.001368, 0.002236, 0.004243, 0.00765, 0.01431, 0.02319, 0.04351, 0.07763,
+        0.13438, 0.21477, 0.2839, 0.3285, 0.34828, 0.34806, 0.3362, 0.3187,
+        0.2908, 0.2511, 0.19536, 0.1421, 0.09564, 0.05795001, 0.03201, 0.0147,
+        0.0049, 0.0024, 0.0093, 0.0291, 0.06327, 0.1096, 0.1655, 0.2257499,
+        0.2904, 0.3597, 0.4334499, 0.5120501, 0.5945, 0.6784, 0.7621, 0.8425,
+        0.9163, 0.9786, 1.0263, 1.0567, 1.0622, 1.0456, 1.0026, 0.9384,
+        0.8544499, 0.7514, 0.6424, 0.5419, 0.4479, 0.3608, 0.2835, 0.2187,
+        0.1649, 0.1212, 0.0874, 0.0636, 0.04677, 0.0329, 0.0227, 0.01584,
+        0.01135916, 0.008110916, 0.005790346, 0.004109457, 0.002899327, 0.00204919, 0.001439971, 0.000999949,
+        0.000690079, 0.000476021, 0.000332301, 0.000234826, 0.000166151, 0.000117413, 8.3075e-05, 5.8707e-05,
+        4.151e-05,
     ]
     static let yBar: [Float] = [
-        0.000039, 0.00012, 0.000396, 0.00121, 0.004, 0.0116, 0.023, 0.038,
-        0.06, 0.09098, 0.13902, 0.20802, 0.323, 0.503, 0.71, 0.862,
-        0.954, 0.9949501, 0.995, 0.952, 0.87, 0.757, 0.631, 0.503,
-        0.381, 0.265, 0.175, 0.107, 0.061, 0.032, 0.017, 0.00821,
-        0.004102, 0.002091, 0.001047, 0.00052, 0.0002492, 0.00012,
-        0.00006, 0.00003, 0.00001499,
+        3.9e-05, 6.4e-05, 0.00012, 0.000217, 0.000396, 0.00064, 0.00121, 0.00218,
+        0.004, 0.0073, 0.0116, 0.01684, 0.023, 0.0298, 0.038, 0.048,
+        0.06, 0.0739, 0.09098, 0.1126, 0.13902, 0.1693, 0.20802, 0.2586,
+        0.323, 0.4073, 0.503, 0.6082, 0.71, 0.7932, 0.862, 0.9148501,
+        0.954, 0.9803, 0.9949501, 1, 0.995, 0.9786, 0.952, 0.9154,
+        0.87, 0.8163, 0.757, 0.6949, 0.631, 0.5668, 0.503, 0.4412,
+        0.381, 0.321, 0.265, 0.217, 0.175, 0.1382, 0.107, 0.0816,
+        0.061, 0.04458, 0.032, 0.0232, 0.017, 0.01192, 0.00821, 0.005723,
+        0.004102, 0.002929, 0.002091, 0.001484, 0.001047, 0.00074, 0.00052, 0.0003611,
+        0.0002492, 0.0001719, 0.00012, 8.48e-05, 6e-05, 4.24e-05, 3e-05, 2.12e-05,
+        1.499e-05,
     ]
     static let zBar: [Float] = [
-        0.006450001, 0.02005001, 0.06785001, 0.2074, 0.6456, 1.3856, 1.74706, 1.77211,
-        1.6692, 1.28764, 0.8129501, 0.46518, 0.272, 0.1582, 0.07824999, 0.04216,
-        0.0203, 0.008749999, 0.0039, 0.0021, 0.001650001, 0.0011, 0.0008, 0.00034,
-        0.00019, 0.00005, 0.00002, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0.006450001, 0.01054999, 0.02005001, 0.03621, 0.06785001, 0.1102, 0.2074, 0.3713,
+        0.6456, 1.0390501, 1.3856, 1.62296, 1.74706, 1.7826, 1.77211, 1.7441,
+        1.6692, 1.5281, 1.28764, 1.0419, 0.8129501, 0.6162, 0.46518, 0.3533,
+        0.272, 0.2123, 0.1582, 0.1117, 0.07824999, 0.05725001, 0.04216, 0.02984,
+        0.0203, 0.0134, 0.008749999, 0.005749999, 0.0039, 0.002749999, 0.0021, 0.0018,
+        0.001650001, 0.0014, 0.0011, 0.001, 0.0008, 0.0006, 0.00034, 0.00024,
+        0.00019, 0.0001, 5e-05, 3e-05, 2e-05, 1e-05, -0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0,
     ]
     public static let d65: [Float] = [
-        49.9755, 54.6482, 82.7549, 91.486, 93.4318, 86.6823, 104.865, 117.008,
-        117.812, 114.861, 115.923, 108.811, 109.354, 107.802, 104.79, 107.689,
-        104.405, 104.046, 100, 96.3342, 95.788, 88.6856, 90.0062, 89.5991,
-        87.6987, 83.2886, 83.6992, 80.0268, 80.2146, 82.2778, 78.2842, 69.7213,
-        71.6091, 74.349, 61.604, 69.8856, 75.087, 63.5927, 46.4182, 66.8054, 63.3828,
+        49.9755, 52.3118, 54.6482, 68.7015, 82.7549, 87.1204, 91.486, 92.4589,
+        93.4318, 90.057, 86.6823, 95.7736, 104.865, 110.936, 117.008, 117.41,
+        117.812, 116.336, 114.861, 115.392, 115.923, 112.367, 108.811, 109.082,
+        109.354, 108.578, 107.802, 106.296, 104.79, 106.239, 107.689, 106.047,
+        104.405, 104.225, 104.046, 102.023, 100, 98.1671, 96.3342, 96.0611,
+        95.788, 92.2368, 88.6856, 89.3459, 90.0062, 89.8026, 89.5991, 88.6489,
+        87.6987, 85.4936, 83.2886, 83.4939, 83.6992, 81.863, 80.0268, 80.1207,
+        80.2146, 81.2462, 82.2778, 80.281, 78.2842, 74.0027, 69.7213, 70.6652,
+        71.6091, 72.979, 74.349, 67.9765, 61.604, 65.7448, 69.8856, 72.4863,
+        75.087, 69.3398, 63.5927, 55.0054, 46.4182, 56.6118, 66.8054, 65.0941,
+        63.3828,
     ]
 
     static func asymmetricGaussian(peak: Float, leftSigma: Float,
@@ -2290,14 +2321,15 @@ public enum SpectralGrid {
         guard let low = support.first, let high = support.last, high > low else {
             return layer
         }
-        let step: Float = 10
+        let step = stepNM
         let cutoff = log10(peak) - tailDecades
         var result = layer
 
         /// Terminal slope in log10 per nm over up to 30 nm of trace, signed so that a positive
         /// value means the record is falling outward.
         func decay(from edge: Int, inward: Int) -> Float {
-            let anchor = inward > 0 ? min(high, edge + 3) : max(low, edge - 3)
+            let reach = Int((30 / stepNM).rounded())
+            let anchor = inward > 0 ? min(high, edge + reach) : max(low, edge - reach)
             guard anchor != edge else { return minimumTailDecayPerNM }
             let rise = log10(layer[edge]) - log10(layer[anchor])
             let span = Float(abs(edge - anchor)) * step
@@ -2321,6 +2353,28 @@ public enum SpectralGrid {
             }
         }
         return result
+    }
+
+    /// Carries a row written on the 10 nm grid onto this one. A sensitivity row interpolates
+    /// in log10 between positive neighbours, which is how the datasheet traces were digitised
+    /// and what keeps a cut-off's slope, and stays zero beside a zero so the published span
+    /// does not grow by half a step; a density or partition row interpolates linearly. A row
+    /// already on this grid comes back untouched, and any other length is left for validation
+    /// to report.
+    public static func resampledFromLegacyGrid(_ row: [Float], logarithmic: Bool) -> [Float] {
+        guard row.count == legacyCount else { return row }
+        return wavelengths.map { wavelength in
+            let position = (wavelength - wavelengths[0]) / legacyStepNM
+            let low = min(Int(position), legacyCount - 1)
+            let fraction = position - Float(low)
+            guard fraction > 0, low + 1 < legacyCount else { return row[low] }
+            let a = row[low], b = row[low + 1]
+            if logarithmic {
+                guard a > 0, b > 0 else { return 0 }
+                return pow(10, log10(a) * (1 - fraction) + log10(b) * fraction)
+            }
+            return a * (1 - fraction) + b * fraction
+        }
     }
 
     static func normalizeSensitivities(_ layers: [[Float]]) -> [[Float]] {
@@ -2396,7 +2450,7 @@ public enum SpectralGrid {
     /// nearest samples and held flat outside the grid.
     static func interpolate(_ curve: [Float], atWavelength wavelength: Float) -> Float {
         guard curve.count == count else { return 0 }
-        let position = (wavelength - wavelengths[0]) / 10
+        let position = (wavelength - wavelengths[0]) / stepNM
         if position <= 0 { return curve[0] }
         if position >= Float(count - 1) { return curve[count - 1] }
         let low = Int(position)
@@ -2500,7 +2554,7 @@ public enum SpectralGrid {
 ///
 /// The engine always evaluates recovery on a fixed-peak chromaticity ray. The resource therefore
 /// stores the three peak-channel faces of that anchored cube, each as a 33 x 33 grid of complete
-/// 41-band spectra. Face interpolation is stock-independent; each stock subsequently integrates
+/// full-grid spectra. Face interpolation is stock-independent; each stock subsequently integrates
 /// the same recovered spectrum against its own layers.
 private final class MeasuredReflectanceTable: @unchecked Sendable {
     static let shared: MeasuredReflectanceTable? = loadBundled()

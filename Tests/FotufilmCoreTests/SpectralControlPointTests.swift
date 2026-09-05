@@ -12,8 +12,8 @@ final class SpectralControlPointTests: XCTestCase {
         let row = SpectralCurve.resampled(points)
         XCTAssertEqual(row.count, SpectralGrid.count)
         XCTAssertEqual(row[0], 0, accuracy: 1e-6)
-        XCTAssertEqual(row[17], 0.8, accuracy: 1e-6)   // 550 nm is grid slot 17
-        XCTAssertEqual(row[40], 0.1, accuracy: 1e-6)
+        XCTAssertEqual(row[34], 0.8, accuracy: 1e-6)   // 550 nm is grid slot 34
+        XCTAssertEqual(row[80], 0.1, accuracy: 1e-6)
     }
 
     func testResampledNeverOvershoots() {
@@ -34,7 +34,7 @@ final class SpectralControlPointTests: XCTestCase {
                       SpectralControlPoint(nm: 600, value: 0.6)]
         let row = SpectralCurve.resampled(points)
         XCTAssertEqual(row[0], 0.4, accuracy: 1e-6)
-        XCTAssertEqual(row[40], 0.6, accuracy: 1e-6)
+        XCTAssertEqual(row[80], 0.6, accuracy: 1e-6)
     }
 
     func testResampledSortsAndSurvivesDegenerateInput() {
@@ -80,8 +80,8 @@ final class SpectralControlPointTests: XCTestCase {
                            "band \(index) drifted in the round trip")
         }
         // The two crests specifically survive.
-        XCTAssertEqual(rebuilt[22], scaled[22], accuracy: 0.02)   // 600 nm
-        XCTAssertEqual(rebuilt[27], scaled[27], accuracy: 0.02)   // 650 nm
+        XCTAssertEqual(rebuilt[44], scaled[44], accuracy: 0.02)   // 600 nm
+        XCTAssertEqual(rebuilt[54], scaled[54], accuracy: 0.02)   // 650 nm
     }
 
     func testPartitionedDyesSumToOneAndPassThroughUnchanged() {

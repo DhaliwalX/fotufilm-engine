@@ -12,7 +12,7 @@ public struct SpectralControlPoint: Codable, Equatable, Sendable {
     }
 }
 
-/// A hand-drawn spectral curve: the handles an author placed on one side, the 41-band record the
+/// A hand-drawn spectral curve: the handles an author placed on one side, the full-grid record the
 /// engine renders from on the other, and the two conversions between them.
 public enum SpectralCurve {
     /// The drawn curve on the engine's own grid.
