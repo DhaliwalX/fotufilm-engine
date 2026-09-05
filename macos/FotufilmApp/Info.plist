@@ -22,17 +22,6 @@
 	<string>Fotufilm</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>com.muastudio.fotufilm.activation</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>fotufilm</string>
-			</array>
-		</dict>
-	</array>
 	<!-- Both names for the one icon macos/build.sh compiles: CFBundleIconName
 	     is the Assets.car entry macOS 26 lights as glass, CFBundleIconFile the
 	     .icns beside it that older systems and some Finder paths still read. -->
@@ -54,14 +43,6 @@
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
-	<key>FotufilmLicenseServerURL</key>
-	<string>https://license.fotufilm.com/api/licenses/activate</string>
-	<key>FotufilmLicensePurchaseURL</key>
-	<string>https://license.fotufilm.com/</string>
-	<!-- macos/build.sh can replace this raw Ed25519 production public key. The
-	     matching private key never enters the app. -->
-	<key>FotufilmLicensePublicKey</key>
-	<string>V3G93GNTOTU0zR3xMxKda6k7QlYV0ynm5iDH/ErLQCg=</string>
 	<!-- The Check for Updates command and the daily automatic pass read one JSON release
 	     document from here. It is uploaded beside the installer package it names, in the same
 	     downloads repo the website's download button already points at, so "latest" resolves

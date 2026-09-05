@@ -125,9 +125,6 @@ final class SettingsSheetController: SessionViewController {
         if !ProAccess.purchased { result.append(proPurchase()) }
         #endif
         result += [newPhotos(), output(), negativePreview(), filmModel()]
-        #if os(macOS)
-        result.append(license())
-        #endif
         result.append(reset())
         return result
     }
@@ -146,24 +143,6 @@ final class SettingsSheetController: SessionViewController {
     }
     #endif
 
-    #if os(macOS)
-    private func license() -> FormSectionView {
-        let section = FormSectionView(title: "License")
-        let status = LicenseStore.status
-        section.add(ButtonRow(status.isActive ? "Change License Key…" : "Enter License Key…") {
-            [weak self] in
-            LicenseActivationPanel.present(from: self?.view.window) { self?.build() }
-        })
-        if let expiry = status.expiresAt, status.isActive {
-            section.add(NoteRow("Activated until \(expiry.formatted(date: .long, time: .omitted))."))
-        } else if let expiry = status.expiresAt {
-            section.add(NoteRow("This license expired on \(expiry.formatted(date: .long, time: .omitted))."))
-        } else {
-            section.add(NoteRow("Enter the key from your Fotufilm account. The app does not ask for your website login."))
-        }
-        return section
-    }
-    #endif
 
     // MARK: - New photos
 

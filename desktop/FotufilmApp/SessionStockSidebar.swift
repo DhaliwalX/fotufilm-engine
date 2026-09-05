@@ -81,7 +81,7 @@ final class StockSidebarViewController: SessionViewController {
 
     /// Opens the film workshop. Set by the editor, which owns presenting things.
     var onOpenWorkshop: (() -> Void)?
-    /// Opens the App Store purchase. The Mac uses its license sheet instead.
+    /// Opens the App Store purchase on iOS.
     var onUpgrade: (() -> Void)?
 
     override func loadView() {

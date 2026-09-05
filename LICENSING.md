@@ -3,7 +3,8 @@
 Project-authored source, documentation, synthetic stock examples, analytic print
 receivers, and artwork are governed by [LICENSE](LICENSE). Third-party components
 retain their respective terms, recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
-and accompanying file notices. These notices do not expand the permissions in LICENSE.
+and accompanying file notices. Project-authored material is licensed under
+Apache-2.0, except the three Starter profiles described below.
 
 ## Starter pack
 
@@ -32,6 +33,6 @@ Third-party names remain the trademarks of their respective owners.
 
 ## Contributions
 
-Contributions require an agreement with the project owner. Include only material
+Contributions are provided under Apache-2.0 unless explicitly agreed otherwise. Include only material
 whose provenance and redistribution rights can be verified, and preserve all
 required notices. See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidance.

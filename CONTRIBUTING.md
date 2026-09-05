@@ -1,7 +1,7 @@
 # Contributing
 
-Contributions require an agreement with the project owner. See [LICENSE](LICENSE)
-and [LICENSING.md](LICENSING.md) for the applicable terms.
+Contributions are provided under Apache-2.0 unless explicitly agreed otherwise.
+See [LICENSE](LICENSE) and [LICENSING.md](LICENSING.md) for the applicable terms.
 
 Keep portable simulation in FotufilmCore and shared image-formation physics in
 `Sources/FotufilmHalide/FotufilmHalideShared.h`. Keep stock behavior data-driven.

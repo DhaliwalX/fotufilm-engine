@@ -1,16 +1,30 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Fotufilm engine documentation</title></head><body>
-<h1>Fotufilm engine source builds</h1>
-<p>This repository contains the engine, CLI, Mac application, Resolve OFX plugin, and Final Cut Pro FxPlug plugin.</p>
-<h2>Build and run</h2>
-<p>Install Xcode 26 or newer and Halide, then run <code>swift build</code> and <code>swift test -c release --parallel</code>. Build the Mac app with <code>macos/build.sh --test</code>. Launch <code>build/macos/Fotufilm.app</code> and use <strong>Open</strong> to choose an image.</p>
-<p>Source builds run without activation. The Mac app and plugins bundle the free Starter pack: <strong>Gold 200</strong>, <strong>Tri-X 400</strong>, and <strong>Provia 100F</strong>. The three calibrated profiles use <a href="../licenses/STARTER-PACK.txt">CC BY-ND 4.0</a>. Synthetic films remain available to the CLI and tests. Print receivers are analytic examples, and the demo image is a generated color chart.</p>
-<p>Persisted print-medium identifiers are retained for format compatibility; source builds display them as <strong>Example Photo Print</strong> or <strong>Example Projection</strong> variants. Those variants use analytic receiver curves with different contrast.</p>
-<p>Run <code>resolve/build.sh --test</code> for the OFX harness and <code>finalcut/build.sh --test</code> for the FxPlug harness. Building the actual Final Cut plugin requires the separately installed Apple FxPlug SDK.</p>
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Fotufilm guide</title></head>
+<body>
+<h1>Fotufilm guide</h1>
+<p>Fotufilm adds a film look to photos and videos. This repository includes the engine, command-line tool, Mac app, Resolve and Final Cut plugins, and browser demo.</p>
+<h2>Build and open the app</h2>
+<p>Install Xcode 26 or newer and Halide. Run <code>swift build</code> to build the engine and <code>swift test -c release --parallel</code> to test it. Run <code>macos/build.sh --test</code> to build the Mac app.</p>
+<p>Open <code>build/macos/Fotufilm.app</code>. Choose <strong>File → Open…</strong>, select a photo or video, and choose a film.</p>
+<h2>Film packs</h2>
+<p>The free Starter pack includes <strong>Gold 200</strong>, <strong>Tri-X 400</strong>, and <strong>Provia 100F</strong>. The app and plugins need no activation.</p>
+<p>To add a downloaded pack, choose <strong>File → Import Film Pack…</strong> and select the <code>.fotufilmpack</code> file. You can then use its films offline.</p>
+<p>The Starter profiles use <a href="../licenses/STARTER-PACK.txt">CC BY-ND 4.0</a>. The code uses <a href="../LICENSE">Apache-2.0</a>.</p>
+<h2>Example print models</h2>
+<p><strong>Example Photo Print</strong> and <strong>Example Projection</strong> use calculated curves with different contrast. They are examples, not measured paper profiles. Saved print IDs stay compatible with existing files. The CLI and tests also include synthetic films and a generated colour chart.</p>
+<h2>Plugins</h2>
+<p>Run <code>resolve/build.sh --test</code> or <code>finalcut/build.sh --test</code> to test a plugin. Building the installable Final Cut plugin also requires Apple's FxPlug SDK. See the <a href="../resolve/README.md">Resolve guide</a> and <a href="../finalcut/README.md">Final Cut guide</a>.</p>
 <h2>Resolve controls</h2>
-<p>The inspector groups controls under Setup, Film, Exposure &amp; Colour, Lens &amp; Filters, Development, Grain, Halation, Colour Separation, and Output. <strong>Resolved Format</strong>, <strong>Resolved Medium</strong>, and <strong>Effective Renderer</strong> show the choices in use.</p>
-<p><strong>Film Frame Coverage (%)</strong> changes how much of the film frame is used. <strong>Grain Animation</strong> can follow the timeline or stay frozen; <strong>Grain Seed</strong> makes the pattern repeatable. <strong>Mottle</strong> controls coarse grain clumping, and <strong>Return Spectrum</strong> adjusts halation across seven wavelength bands. Controls are disabled when the film or pipeline stage cannot use them.</p>
-<p>Use <strong>Render Mode</strong> to choose Realtime or Reference rendering. Disc grain requires a silver-image stock and Reference rendering. Match development settings across split Negative Only and Print Only nodes, including <strong>Long Exposure (s)</strong>.</p>
-<p>Resolve and Final Cut fit finished prints to narrower timeline color primaries before encoding them. Colors already inside the target gamut stay unchanged. Density data and Texture Only output are not treated as finished prints.</p>
-<p>See the <a href="../resolve/README.md">Resolve guide</a> and <a href="../finalcut/README.md">Final Cut guide</a> for installation and setup.</p>
+<p>The inspector groups controls under Setup, Film, Exposure &amp; Colour, Lens &amp; Filters, Development, Grain, Halation, Colour Separation, and Output. <strong>Resolved Format</strong>, <strong>Resolved Medium</strong>, and <strong>Effective Renderer</strong> show the settings in use.</p>
+<ul>
+<li><strong>Film Frame Coverage (%)</strong> sets how much of the film frame you use.</li>
+<li><strong>Grain Animation</strong> follows the timeline or freezes the grain. <strong>Grain Seed</strong> lets you repeat a pattern.</li>
+<li><strong>Mottle</strong> changes coarse grain clumping. <strong>Return Spectrum</strong> adjusts halation across seven wavelength bands.</li>
+<li><strong>Render Mode</strong> selects Realtime or Reference. Disc grain needs a silver-image film and Reference mode.</li>
+</ul>
+<p>Some controls depend on the film or stage you choose. For separate Negative Only and Print Only nodes, match their development settings, including <strong>Long Exposure (s)</strong>.</p>
+<p>Resolve and Final Cut fit finished prints to the timeline's colour gamut. Colours already inside it stay unchanged. This adjustment does not apply to density data or Texture Only output.</p>
 <p><a href="support.html">Build support</a> · <a href="../README.md">Repository guide</a></p>
-</body></html>
+</body>
+</html>

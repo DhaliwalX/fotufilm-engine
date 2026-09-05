@@ -65,7 +65,7 @@ Resolve test host.
 5. Adjust exposure, output medium, lens filters, film response, and development.
 
 The **Status** line explains input color handling, unavailable controls, and render
-errors. Source builds include synthetic example films and do not need activation.
+errors. The plugin includes the three Starter films and needs no activation.
 A smaller film gauge makes grain and other spatial effects larger in the image.
 
 Final Cut supplies linear-light images. The color-space choices therefore select

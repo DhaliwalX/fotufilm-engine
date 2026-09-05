@@ -81,14 +81,6 @@ private func currentInitializationError() -> String {
     return initializationError
 }
 
-private func licenseAllowsDevelopment(_ context: BridgeContext) -> Bool {
-    guard FotufilmLicense.status().isActive else {
-        context.lastError = FotufilmLicense.inactiveMessage
-        return false
-    }
-    return true
-}
-
 /// The Resolve realtime schedule is the shipped default. Setting `FOTUFILM_REALTIME=0` before
 /// Resolve starts restores the reference decode, film arithmetic, glare measurement, and output
 /// encode for comparison without requiring a different plugin build.
@@ -455,11 +447,6 @@ func fotufilm_bridge_initialize(_ resources: UnsafePointer<CChar>?) -> Int32 {
     let environment = ProcessInfo.processInfo.environment
     realtimeRenderingEnabled = environment["FOTUFILM_REALTIME"] != "0"
 
-    guard FotufilmLicense.status().isActive else {
-        initializationError = FotufilmLicense.inactiveMessage
-        stockIDs = []
-        return -1
-    }
 
     if let resources {
         let directory = String(cString: resources)
@@ -803,7 +790,6 @@ func fotufilm_bridge_prepare(_ opaque: UnsafeMutableRawPointer?,
     context.lock.lock()
     defer { context.lock.unlock() }
 
-    guard licenseAllowsDevelopment(context) else { return 0 }
     guard let renderer = HalideMetalFilmRenderer.shared else {
         context.lastError = "no Metal device the Halide engine can use"
         return 0
@@ -969,7 +955,6 @@ func fotufilm_bridge_render_staged(
     context.lock.lock()
     defer { context.lock.unlock() }
 
-    guard licenseAllowsDevelopment(context) else { return 0 }
     guard let renderer = HalideMetalFilmRenderer.shared else {
         context.lastError = "no Metal device the Halide engine can use"
         return 0
@@ -1055,7 +1040,6 @@ func fotufilm_bridge_render(_ opaque: UnsafeMutableRawPointer?,
     context.lock.lock()
     defer { context.lock.unlock() }
 
-    guard licenseAllowsDevelopment(context) else { return 0 }
     guard let renderer = HalideMetalFilmRenderer.shared else {
         context.lastError = "no Metal device the Halide engine can use"
         return 0
