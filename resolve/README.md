@@ -29,6 +29,11 @@ The plugin is installed in `/Library/OFX/Plugins`. Restart Resolve, then find
 
 ## Use the plugin
 
+To add a pack, open the Fotufilm Mac app and choose **Load custom pack…**.
+Restart your video editor after importing or updating it. Its films appear in the
+plugin automatically on the same Mac and user account. Keep the app and plugins
+updated together; packs that need a newer version are skipped.
+
 1. Add **Fotufilm** to a node.
 2. Choose a film. **Match Film** selects that film's default gauge.
 3. Check **Timeline Color Space** and its status line.

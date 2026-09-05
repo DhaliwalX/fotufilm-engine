@@ -12,14 +12,7 @@ enum CustomStockStore {
 
     /// Application Support rather than Documents, which is what file sharing exposes.
     static var directory: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory,
-                                            in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        #if FOTUFILM_SOURCE_BUILD
-        let url = base.appendingPathComponent("FotufilmSource/CustomPacks", isDirectory: true)
-        #else
-        let url = base.appendingPathComponent("CustomPacks", isDirectory: true)
-        #endif
+        let url = FilmPackLibrary.directory
         try? FileManager.default.createDirectory(at: url,
                                                  withIntermediateDirectories: true)
         return url
