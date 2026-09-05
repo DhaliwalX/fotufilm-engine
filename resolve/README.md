@@ -27,6 +27,15 @@ resolve/build.sh --install
 The plugin is installed in `/Library/OFX/Plugins`. Restart Resolve, then find
 **Fotufilm** under **OpenFX**. You can also install it through the Fotufilm Mac app.
 
+## Existing Resolve projects
+
+The bundle exports both `com.fotufilm` and the older `com.fotufilm.filmsim`
+identifier. Effects saved under the older identifier appear as **Fotufilm (Legacy)**
+and use the same renderer and controls. Use **Fotufilm** for new nodes.
+
+If Resolve reports `com.fotufilm.filmsim` as unavailable, install version 1.7.1
+build 12 or newer, quit Resolve completely, and reopen the project.
+
 ## Use the plugin
 
 To add a pack, open the Fotufilm Mac app and choose **Load custom pack…**.

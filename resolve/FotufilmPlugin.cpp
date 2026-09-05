@@ -38,6 +38,10 @@
 namespace {
 
 OfxHost *gHost = nullptr;
+// Both project identifiers share the renderer and menus. Keep them alive until
+// the host unloads the last identifier, even when it scans them independently.
+std::mutex gLifecycleLock;
+unsigned int gLoadedPlugins = 0;
 const OfxImageEffectSuiteV1 *gEffect = nullptr;
 const OfxPropertySuiteV1 *gProperty = nullptr;
 const OfxParameterSuiteV1 *gParameter = nullptr;
@@ -475,6 +479,11 @@ std::string bridgeString(int32_t (*read)(int32_t, char *, int32_t), int32_t inde
 }
 
 OfxStatus load() {
+    std::lock_guard<std::mutex> held(gLifecycleLock);
+    if (gLoadedPlugins > 0) {
+        ++gLoadedPlugins;
+        return kOfxStatOK;
+    }
     if (gHost == nullptr) return kOfxStatErrMissingHostFeature;
     gEffect = static_cast<const OfxImageEffectSuiteV1 *>(
         gHost->fetchSuite(gHost->host, kOfxImageEffectSuite, 1));
@@ -500,6 +509,7 @@ OfxStatus load() {
         gResourcesPath = path + "/Resources";
     }
     initializeEngine();
+    gLoadedPlugins = 1;
     return kOfxStatOK;
 }
 
@@ -639,6 +649,8 @@ void initializeEngine() {
 }
 
 OfxStatus unload() {
+    std::lock_guard<std::mutex> held(gLifecycleLock);
+    if (gLoadedPlugins == 0 || --gLoadedPlugins > 0) return kOfxStatOK;
     gStockLabels.clear();
     gStockIDs.clear();
     gFormatLabels.clear();
@@ -3160,6 +3172,25 @@ OfxStatus mainEntry(const char *action, const void *handle,
     return kOfxStatReplyDefault;
 }
 
+// Restore projects saved by releases that used the filmsim identifier. The
+// parameter names and renderer are shared with the current identifier.
+OfxStatus legacyMainEntry(const char *action, const void *handle,
+                          OfxPropertySetHandle inArgs, OfxPropertySetHandle outArgs) {
+    const OfxStatus status = mainEntry(action, handle, inArgs, outArgs);
+    if (status == kOfxStatOK && std::strcmp(action, kOfxActionDescribe) == 0) {
+        auto effect = reinterpret_cast<OfxImageEffectHandle>(const_cast<void *>(handle));
+        OfxPropertySetHandle properties = nullptr;
+        if (gEffect->getPropertySet(effect, &properties) != kOfxStatOK) {
+            return kOfxStatErrBadHandle;
+        }
+        gProperty->propSetString(properties, kOfxPropLabel, 0, "Fotufilm (Legacy)");
+        gProperty->propSetString(properties, kOfxPropShortLabel, 0, "Fotufilm (Legacy)");
+        gProperty->propSetString(properties, kOfxPropLongLabel, 0,
+                                 "Fotufilm — legacy project compatibility");
+    }
+    return status;
+}
+
 void setHost(OfxHost *host) { gHost = host; }
 
 OfxPlugin gPlugin = {
@@ -3175,14 +3206,26 @@ OfxPlugin gPlugin = {
     mainEntry,
 };
 
+OfxPlugin gLegacyPlugin = {
+    kOfxImageEffectPluginApi,
+    1,
+    "com.fotufilm.filmsim",
+    FOTUFILM_VERSION_MAJOR,
+    FOTUFILM_VERSION_MINOR,
+    setHost,
+    legacyMainEntry,
+};
+
 }
 
 extern "C" {
 
-OfxExport int OfxGetNumberOfPlugins(void) { return 1; }
+OfxExport int OfxGetNumberOfPlugins(void) { return 2; }
 
 OfxExport OfxPlugin *OfxGetPlugin(int nth) {
-    return nth == 0 ? &gPlugin : nullptr;
+    if (nth == 0) return &gPlugin;
+    if (nth == 1) return &gLegacyPlugin;
+    return nullptr;
 }
 
 }

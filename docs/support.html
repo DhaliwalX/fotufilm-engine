@@ -13,6 +13,8 @@
 <p><a href="https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS.pkg">Download for Mac</a> · <a href="https://apps.apple.com/app/id6792911908">Download for iOS</a></p>
 <p>The build checks that the Starter folder contains only the released files. Import other packs through the app instead of adding files to that folder.</p>
 <p>Custom stock definitions require schema version 1. Sampled spectral rows must contain 81 values from 380 to 780 nm at 5 nm spacing. Coupler geometry must state its two <code>interlayerTransmission</code> values. Older 41-sample rows and range-only coupler definitions are no longer converted during import; export them again in the current format.</p>
+<h2>Resolve reports a missing plugin</h2>
+<p>If an existing project reports <code>com.fotufilm.filmsim</code> as unavailable, install Fotufilm 1.7.1 build 12 or newer, quit Resolve completely, and reopen the project. The older identifier is included as <strong>Fotufilm (Legacy)</strong>, alongside <strong>Fotufilm</strong> for new nodes.</p>
 <h2>Disabled Resolve controls</h2>
 <p>Check <strong>Stage</strong>, <strong>Resolved Format</strong>, <strong>Resolved Medium</strong>, and <strong>Effective Renderer</strong>. Custom Mottle needs Full and clump-field grain. Discs needs a silver-image film and Reference mode.</p>
 <p>The app and both plugins use the same paper and print-film names in <strong>Output Medium</strong>. In the source distribution, the model descriptions identify the analytic example receivers.</p>

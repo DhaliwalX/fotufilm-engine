@@ -36,6 +36,7 @@ int (*gGetNumberOfPlugins)(void) = OfxGetNumberOfPlugins;
 OfxPlugin *(*gGetPlugin)(int) = OfxGetPlugin;
 
 bool gLinkedIn = true;
+int gPluginIndex = 0;
 
 bool openBundle(const char *path) {
     void *handle = dlopen(path, RTLD_LAZY | RTLD_LOCAL);
@@ -779,9 +780,18 @@ int testPlugin() {
     OfxHost host = {handleOf(hostProperties), fetchSuite};
 
     std::printf("plugin\n");
-    check(gGetNumberOfPlugins() == 1, "exports exactly one plugin");
-    OfxPlugin *plugin = gGetPlugin(0);
-    check(plugin != nullptr, "OfxGetPlugin(0) returns a plugin");
+    check(gGetNumberOfPlugins() == 2, "exports current and legacy project identifiers");
+    const char *identifiers[] = {"com.fotufilm", "com.fotufilm.filmsim"};
+    for (int index = 0; index < 2; ++index) {
+        OfxPlugin *entry = gGetPlugin(index);
+        check(entry && std::strcmp(entry->pluginIdentifier, identifiers[index]) == 0 &&
+                  entry->pluginVersionMajor == 1,
+              "preserves the saved project identifier and major version");
+    }
+    check(gGetPlugin(-1) == nullptr && gGetPlugin(2) == nullptr,
+          "rejects plugin indices outside the exported list");
+    OfxPlugin *plugin = gGetPlugin(gPluginIndex);
+    check(plugin != nullptr, "the selected identifier exports a plugin");
     if (!plugin) return 1;
     check(std::strcmp(plugin->pluginApi, kOfxImageEffectPluginApi) == 0,
           "declares the image effect API");
@@ -803,7 +813,8 @@ int testPlugin() {
 
     char *label = nullptr;
     propGetString(handleOf(describer.properties), kOfxPropLabel, 0, &label);
-    check(label && std::strcmp(label, "Fotufilm") == 0, "labels itself Fotufilm");
+    check(label && std::strcmp(label, gPluginIndex == 0 ? "Fotufilm" : "Fotufilm (Legacy)") == 0,
+          "distinguishes the legacy entry in the effect browser");
     int tiles = 1;
     propGetInt(handleOf(describer.properties), kOfxImageEffectPropSupportsTiles, 0, &tiles);
     check(tiles == 0, "refuses tiles, as a whole-frame model must");
@@ -1077,6 +1088,35 @@ int testPlugin() {
         check(right[3] == 1.0f, "passes alpha through");
 
         const std::vector<float> smooth = output->pixels;
+        // Hosts may scan/unload one identifier while the other has live nodes.
+        OfxPlugin *sibling = gGetPlugin(1 - gPluginIndex);
+        if (sibling) {
+            sibling->setHost(&host);
+            check(sibling->mainEntry(kOfxActionLoad, nullptr, nullptr, nullptr) == kOfxStatOK,
+                  "loads the other identifier beside a live node");
+            Effect siblingEffect;
+            siblingEffect.properties = newPropertySet();
+            auto siblingHandle = reinterpret_cast<OfxImageEffectHandle>(&siblingEffect);
+            check(sibling->mainEntry(kOfxActionDescribe, siblingHandle, nullptr, nullptr) == kOfxStatOK &&
+                      sibling->mainEntry(kOfxImageEffectActionDescribeInContext, siblingHandle,
+                                         nullptr, nullptr) == kOfxStatOK,
+                  "describes the other identifier while the first is in use");
+            bool sameParameters = siblingEffect.params.params.size() == instance.params.params.size();
+            for (const auto &entry : instance.params.params) {
+                const auto other = siblingEffect.params.params.find(entry.first);
+                sameParameters &= other != siblingEffect.params.params.end() &&
+                    other->second->type == entry.second->type;
+            }
+            check(sameParameters, "both identifiers preserve the same saved parameter names and types");
+            check(sibling->mainEntry(kOfxActionUnload, nullptr, nullptr, nullptr) == kOfxStatOK,
+                  "unloads the other identifier while the first node remains alive");
+            std::fill(output->pixels.begin(), output->pixels.end(), -7.0f);
+            check(plugin->mainEntry(kOfxImageEffectActionRender, instanceHandle,
+                                    handleOf(renderArgs), nullptr) == kOfxStatOK &&
+                      output->pixels == smooth,
+                  "the surviving identifier renders the identical frame after the other unloads");
+        }
+
         setParam(instance.params, "grain", 1);
         if (plugin->mainEntry(kOfxImageEffectActionRender, instanceHandle,
                               handleOf(renderArgs), nullptr) == kOfxStatOK) {
@@ -3371,8 +3411,8 @@ int dumpParityFrame(const char *path) {
     OfxHost host = {handleOf(hostProperties), fetchSuite};
 
     if (gGetNumberOfPlugins() < 1) return fail("the plugin exports nothing");
-    OfxPlugin *plugin = gGetPlugin(0);
-    if (!plugin) return fail("OfxGetPlugin(0) returned nothing");
+    OfxPlugin *plugin = gGetPlugin(gPluginIndex);
+    if (!plugin) return fail("the selected identifier exports nothing");
     plugin->setHost(&host);
     if (plugin->mainEntry(kOfxActionLoad, nullptr, nullptr, nullptr) != kOfxStatOK) {
         return fail("the plugin refused to load");
@@ -3559,10 +3599,18 @@ int main(int argc, char **argv) {
                 return 2;
             }
             parityDump = argv[++i];
+        } else if (std::strcmp(argv[i], "--plugin-id") == 0 && i + 1 < argc) {
+            const char *identifier = argv[++i];
+            if (std::strcmp(identifier, "com.fotufilm") == 0) gPluginIndex = 0;
+            else if (std::strcmp(identifier, "com.fotufilm.filmsim") == 0) gPluginIndex = 1;
+            else {
+                std::fprintf(stderr, "unknown plugin identifier: %s\n", identifier);
+                return 2;
+            }
         } else if (!bundle && argv[i][0] != '-') {
             bundle = argv[i];
         } else {
-            std::fprintf(stderr, "usage: host-harness [bundle] [--parity-dump <path>]\n");
+            std::fprintf(stderr, "usage: host-harness [bundle] [--plugin-id <identifier>] [--parity-dump <path>]\n");
             return 2;
         }
     }
