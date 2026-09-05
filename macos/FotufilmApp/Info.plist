@@ -34,9 +34,9 @@
 	     the phone and the iPad already ride. The literals below are only what a
 	     hand-assembled bundle would carry; macos/build.sh overwrites them. -->
 	<key>CFBundleShortVersionString</key>
-	<string>1.1</string>
+	<string>1.7</string>
 	<key>CFBundleVersion</key>
-	<string>5</string>
+	<string>9</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>NSHighResolutionCapable</key>

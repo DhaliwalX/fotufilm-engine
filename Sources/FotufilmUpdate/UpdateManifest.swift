@@ -8,7 +8,7 @@ import Foundation
 /// release was cut from. The feed URL itself is build configuration (Info.plist), like the
 /// license server's; the digest is what makes the payload trustworthy once it arrives.
 public struct UpdateManifest: Codable, Sendable, Equatable {
-    /// The marketing version, `CFBundleShortVersionString` — "1.6".
+    /// The marketing version, `CFBundleShortVersionString` — "1.7".
     public let version: String
     /// The build number, `CFBundleVersion`. It moves on every build, including rebuilds that
     /// keep the marketing version.
