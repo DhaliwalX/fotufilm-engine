@@ -1,6 +1,7 @@
 # Image regression tests
 
-These tests render three synthetic films over four generated charts: color patches,
+These tests render the three Starter films and three synthetic films over four
+generated charts: color patches,
 a step wedge, gamut fields, and spatial detail. They compare the results with saved
 images, called goldens, to catch changes in rendering.
 

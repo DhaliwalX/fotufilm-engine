@@ -5,6 +5,14 @@ receivers, and artwork are governed by [LICENSE](LICENSE). Third-party component
 retain their respective terms, recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 and accompanying file notices. These notices do not expand the permissions in LICENSE.
 
+## Starter pack
+
+The Gold 200, Tri-X 400, and Provia 100F JSON profiles in
+`Sources/FotufilmCore/Stocks/` are licensed under CC BY-ND 4.0. See the
+[Starter notice](licenses/STARTER-PACK.txt) and [full licence](licenses/CC-BY-ND-4.0.txt).
+Their licence does not apply to engine code or other profiles. Using these profiles
+to render a photograph or video does not impose their licence on the rendered work.
+
 ## Third-party material
 
 Preserve upstream licence texts, copyright notices, and attribution when working

@@ -2455,7 +2455,7 @@ int testPlugin() {
                 {"mottleShare", 80, "mottleOverride", 1},
                 {"mottleOverride", 1, "mottleShare", 80},
                 {"couplerReach", 0, nullptr, 0},
-                {"couplerSelf", 0, nullptr, 0},
+                {"couplerSelf", 3, "couplers", 2},
                 {"couplerRedGreen", 0, nullptr, 0},
                 {"couplerGreenBlue", 0, nullptr, 0},
                 {"sceneLight", 3, nullptr, 0},
@@ -2817,7 +2817,7 @@ int testPlugin() {
                 {"mottleShare", 80, "mottleOverride", 1, false},
                 {"mottleOverride", 1, "mottleShare", 80, false},
                 {"couplerReach", 0, nullptr, 0},
-                {"couplerSelf", 0, nullptr, 0},
+                {"couplerSelf", 3, "couplers", 2},
                 {"couplerRedGreen", 0, nullptr, 0},
                 {"couplerGreenBlue", 0, nullptr, 0},
                 {"sceneLight", 3, nullptr, 0},
@@ -2829,20 +2829,37 @@ int testPlugin() {
                 {"shutterSeconds", 3600, nullptr, 0},
             };
             for (const TextureProbe &probe : probes) {
-                rest(order[0]);
-                setChoice(plugin, instanceHandle, instance.params, "stage",
-                          FOTUFILM_BRIDGE_STAGE_TEXTURE);
-                if (probe.companion) {
-                    setParam(instance.params, probe.companion, probe.companionValue);
+                double best = 0;
+                bool renderedAll = true;
+                int offered = 0;
+                // Test the control on a film that offers it. Short diffusion reaches
+                // need more pixels per millimetre to produce a measurable texture.
+                for (double coverage : {100.0, 25.0, 5.0}) {
+                  if (coverage != 100 && (!probe.active ||
+                      std::strcmp(probe.name, "frameCoverage") == 0)) continue;
+                  for (int stock : order) {
+                    if (std::strcmp(probe.name, "shutterSeconds") == 0 &&
+                        !(fotufilm_bridge_control_capabilities(stock, 0) & FOTUFILM_CONTROL_RECIPROCITY)) continue;
+                    rest(stock);
+                    setParam(instance.params, "frameCoverage", coverage);
+                    setChoice(plugin, instanceHandle, instance.params, "stage",
+                              FOTUFILM_BRIDGE_STAGE_TEXTURE);
+                    if (probe.companion) {
+                        setParam(instance.params, probe.companion, probe.companionValue);
+                    }
+                    ++offered;
+                    if (!renderNow()) { renderedAll = false; break; }
+                    const std::vector<float> reference = output->pixels;
+                    setParam(instance.params, probe.name, probe.value);
+                    if (!renderNow()) { renderedAll = false; break; }
+                    best = std::max(best, rmsAgainst(reference));
+                    if (probe.active && best > moved) break;
+                  }
+                  if (!renderedAll || (probe.active && best > moved)) break;
                 }
-                if (!renderNow()) { check(false, "renders a bare texture span"); continue; }
-                const std::vector<float> reference = output->pixels;
-                setParam(instance.params, probe.name, probe.value);
-                const bool rendered = renderNow();
-                const double survived = rendered ? rmsAgainst(reference) : 0;
                 std::printf("       %s through the texture span: RMS %.6f\n",
-                            probe.name, survived);
-                check(rendered && (probe.active ? survived > moved : survived == 0),
+                            probe.name, best);
+                check(offered > 0 && renderedAll && (probe.active ? best > moved : best == 0),
                       probe.active ? "supported controls reach the texture span"
                                    : "Full-only controls leave texture output unchanged");
             }

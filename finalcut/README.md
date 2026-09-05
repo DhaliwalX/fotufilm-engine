@@ -1,5 +1,8 @@
 # Fotufilm for Final Cut Pro
 
+Default builds include Gold 200, Tri-X 400, and Provia 100F from the free
+[Starter pack](../licenses/STARTER-PACK.txt).
+
 This plugin adds Fotufilm to a clip in Final Cut Pro or Motion. It shares the engine,
 stock files, and color-space conversions used by the Resolve plugin.
 

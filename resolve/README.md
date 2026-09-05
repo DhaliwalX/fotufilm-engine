@@ -1,5 +1,8 @@
 # Fotufilm for DaVinci Resolve
 
+Default builds include Gold 200, Tri-X 400, and Provia 100F from the free
+[Starter pack](../licenses/STARTER-PACK.txt).
+
 This plugin adds Fotufilm to a Resolve node. It uses the same engine and stock
 files as the Mac app and command-line tool.
 

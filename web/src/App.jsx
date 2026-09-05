@@ -385,6 +385,7 @@ function StaticPipeline() {
           />
         </aside>
       </main>
+      <p className="pipeline-note">Starter profiles © 2026 MUAStudio Inc. · <a href={assetUrl('packs/STARTER-PACK.txt')}>CC BY-ND 4.0</a></p>
     </div>
   )
 }
@@ -859,6 +860,7 @@ export default function App() {
           </div>
         </aside>
       </main>
+      <p className="pipeline-note">Starter profiles © 2026 MUAStudio Inc. · <a href={assetUrl('packs/STARTER-PACK.txt')}>CC BY-ND 4.0</a></p>
     </div>
   )
 }

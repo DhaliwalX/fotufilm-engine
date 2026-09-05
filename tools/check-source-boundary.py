@@ -12,6 +12,7 @@ ASSETS = json.loads((ROOT / 'SOURCE_ASSETS.json').read_text())
 PUBLIC_KEY = ROOT / 'shared/FotufilmApp/FilmPackKeyMaterial.swift'
 DENIED = ('stocks-private/', 'research/', 'ios/', 'ios-uikit/', 'android/',
           'license-server/', 'tools/calibration/', 'docs/calibration/', 'docs/accuracy/')
+STARTER_STOCKS = {'gold200', 'trix400', 'provia100f'}
 DENIED_NAMES = {'MeasuredSpectra.swift', 'CalibrationTests.swift',
                 'EnduraPremierPaperSpectra.swift', 'CrystalArchivePaperSpectra.swift',
                 'Vision2383PrintSpectra.swift', 'Vision2393PrintSpectra.swift',
@@ -61,8 +62,11 @@ def check():
                 errors.append(f'asset needs provenance review: {name}')
         if name.startswith('Sources/FotufilmCore/Stocks/') and path.suffix == '.json':
             pack = json.loads(raw)
-            if not pack.get('isExample') or not pack.get('id', '').startswith('example-'):
-                errors.append(f'non-example stock: {name}')
+            is_example = pack.get('isExample') and pack.get('id', '').startswith('example-')
+            is_starter = (path.stem in STARTER_STOCKS and pack.get('id') == path.stem
+                          and not pack.get('isExample'))
+            if not (is_example or is_starter):
+                errors.append(f'stock outside Starter/examples: {name}')
         if b'\0' not in raw:
             text = raw.decode('utf-8', errors='replace')
             if SECRET.search(text):

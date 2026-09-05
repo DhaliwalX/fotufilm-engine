@@ -53,11 +53,16 @@ npm run build
 The output is in `web/dist`. The demo uses the CPU when a WebGPU-compatible
 Halide toolchain is not available.
 
-## Included examples
+## Included films
 
-The app runs without activation. It includes three synthetic films, example print
-models, and a generated color chart. These examples show how the engine works.
-See [Build support](docs/support.html) to supply your own stock packs.
+The app runs without activation and bundles the free Starter pack: Gold 200,
+Tri-X 400, and Provia 100F. These calibrated profiles use
+[CC BY-ND 4.0](licenses/STARTER-PACK.txt); the engine code has separate terms.
+
+Synthetic films remain available for CLI experiments and tests. Print receivers
+are analytic examples, and the demo image is a generated color chart. A calibrated
+film profile does not make the example print receiver a measured paper profile.
+See [Build support](docs/support.html) for stock-pack setup.
 
 `SOURCE_ASSETS.json` records where assets came from and their file hashes. Before
 adding data or images, run `python3 tools/check-source-boundary.py`.

@@ -70,6 +70,7 @@ mkdir -p "$OUTPUT"
 echo "Exporting stock packs at ${PACK_SIZE}…"
 swift build -c release --product fotufilm >/dev/null
 mkdir -p web/public/packs
+cp licenses/STARTER-PACK.txt licenses/CC-BY-ND-4.0.txt web/public/packs/
 rm -f web/public/packs/*.pack web/public/packs/*.stages
 INDEX="web/public/packs/index.json"
 printf '[' > "$INDEX"
@@ -99,7 +100,7 @@ printf ']' >> "$INDEX"
 # nobody in that position asked for, and the point is to show what the pipeline does, not to offer
 # a choice that the working demo offers anyway. A colour negative, so the print stage has something
 # to do — on a reversal stock the slide is its own output medium and the last two frames match.
-FALLBACK_STOCK="${FOTUFILM_FALLBACK_STOCK:-example-negative-400}"
+FALLBACK_STOCK="${FOTUFILM_FALLBACK_STOCK:-gold200}"
 echo "Rendering the static fallback through ${FALLBACK_STOCK}…"
 SCENE_SOURCE="web/public/fotufilm_tagline.png"
 SCENE_WIDTH="${PACK_SIZE%x*}"

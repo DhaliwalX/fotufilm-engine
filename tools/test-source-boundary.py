@@ -20,6 +20,8 @@ with tempfile.TemporaryDirectory() as temporary:
         assert result.returncode == expected, result.stdout + result.stderr
     run(0)
     for name, contents in [('photo.jpg', b'private photograph'),
+                           ('tools/calibration/fit.py', b'# calibration code'),
+                           ('Sources/FotufilmCore/Stocks/extra.json', b'{}'),
                            ('unknown.dat', b'\x00\xffbinary'),
                            ('manufacturer.pdf', b'%PDF'),
                            ('stocks-private/test.json', b'{}'),

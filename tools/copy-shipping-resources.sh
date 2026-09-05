@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Copies only resources that a shipping Apple renderer reads. Source notes and plaintext stock
-# definitions deliberately stay behind: the public examples travel in bundled.fotufilmpack and
-# the calibrated films in fotufilm.fotufilmpack.
+# Copies runtime resources. Default desktop builds include the three Starter
+# profiles and their license notices. Configured builds use supplied sealed packs.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -24,13 +23,15 @@ source tools/desktop-build-config.sh
 KEY_MATERIAL="$FOTUFILM_PACK_KEY_SOURCE"
 PACK_NAMES=(bundled)
 if [[ "$FOTUFILM_SOURCE_BUILD" == 1 ]]; then
-  SEALED_DIRECTORY="build/example-packs"
-  mkdir -p "$SEALED_DIRECTORY"
-  swift build -c release --product fotufilm >/dev/null
-  FOTUFILM_PACK_KEY="$(printf '%064d' 0)" FOTUFILM_PACK_KEY_ID=0 \
-    .build/release/fotufilm --seal-pack Sources/FotufilmCore/Stocks \
-    --pack-out "$SEALED_DIRECTORY/bundled.fotufilmpack" \
-    --pack-kind vault --pack-id bundled --pack-name "Fotufilm Examples"
+  PACK_NAMES=()
+  rm -rf "$DESTINATION/Stocks"
+  rm -f "$DESTINATION/fotufilm.fotufilmpack" "$DESTINATION/bundled.fotufilmpack"
+  mkdir -p "$DESTINATION/Stocks"
+  for stock in gold200 trix400 provia100f; do
+    install -m 0644 "Sources/FotufilmCore/Stocks/$stock.json" "$DESTINATION/Stocks/$stock.json"
+  done
+  install -m 0644 licenses/STARTER-PACK.txt "$DESTINATION/Stocks/STARTER-PACK.txt"
+  install -m 0644 licenses/CC-BY-ND-4.0.txt "$DESTINATION/Stocks/CC-BY-ND-4.0.txt"
 else
   SEALED_DIRECTORY="$FOTUFILM_SEALED_PACKS"
   PACK_NAMES=(fotufilm bundled)
@@ -43,7 +44,7 @@ EXPECTED_VAULT_KEY_ID="$(sed -n \
   exit 1
 }
 
-for name in "${PACK_NAMES[@]}"; do
+for name in ${PACK_NAMES[@]+"${PACK_NAMES[@]}"}; do
   pack="$SEALED_DIRECTORY/$name.fotufilmpack"
   [[ -f "$pack" ]] || {
     echo "error: $pack is missing. Regenerate the supplied sealed packs and key material together." >&2

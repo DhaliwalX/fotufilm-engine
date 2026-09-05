@@ -2,12 +2,28 @@ import XCTest
 @testable import FotufilmCore
 
 final class ExamplePrintTests: XCTestCase {
-    func testSourceExamplesAreVisibleWithoutProductPacks() throws {
-        XCTAssertFalse(FilmStock.presetIDs.isEmpty)
-        XCTAssertEqual(Set(FilmStock.presetIDs), Set(FilmStock.allPresetIDs))
-        for id in FilmStock.presetIDs {
-            XCTAssertTrue(id.hasPrefix("example-"))
+    func testStarterProfilesAreAvailableAndExamplesRemainForTests() throws {
+        let starter = Set(["gold200", "trix400", "provia100f"])
+        XCTAssertEqual(Set(FilmStock.presetIDs), starter)
+        for id in starter {
+            let definition = try XCTUnwrap(FilmStock.presetDefinitions[id])
+            try definition.validate()
+            XCTAssertNotEqual(definition.isExample, true)
+            let stock = definition.stock
+            XCTAssertEqual(stock.grainDensityProfile, [5.1682, 0.117436, 0.421188])
+            XCTAssertTrue(stock.curves.allSatisfy { $0.secondary != nil })
+            XCTAssertEqual(stock.spectralProfile.layerSensitivity.count, 3)
+            for record in stock.spectralProfile.layerSensitivity {
+                XCTAssertEqual(record.count, SpectralGrid.count)
+                XCTAssertTrue(record.allSatisfy { $0.isFinite && $0 >= 0 })
+            }
+        }
+        XCTAssertTrue(try XCTUnwrap(FilmStock.named("trix400")).isMonochrome)
+        XCTAssertTrue(try XCTUnwrap(FilmStock.named("provia100f")).isReversal)
+        XCTAssertFalse(try XCTUnwrap(FilmStock.named("gold200")).isReversal)
+        for id in ["example-negative-400", "example-monochrome-100", "example-reversal-64"] {
             XCTAssertNotNil(FilmStock.named(id))
+            XCTAssertFalse(FilmStock.presetIDs.contains(id))
         }
     }
 
