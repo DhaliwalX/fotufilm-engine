@@ -35,4 +35,4 @@ Third-party names remain the trademarks of their respective owners.
 
 Contributions are provided under Apache-2.0 unless explicitly agreed otherwise. Include only material
 whose provenance and redistribution rights can be verified, and preserve all
-required notices. See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidance.
+required notices.

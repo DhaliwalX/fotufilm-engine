@@ -73,7 +73,6 @@ Imported films work offline.
 
 - [User guide](docs/documentation.html)
 - [Build support](docs/support.html)
-- [Contributing](CONTRIBUTING.md)
 - [Licensing](LICENSING.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 
