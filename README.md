@@ -1,6 +1,6 @@
 # Fotufilm engine
 
-Fotufilm simulates how film records light and how a print turns it into an image.
+Fotufilm adds a film look to photos and videos by simulating film and prints.
 This repository includes the engine, a command-line tool, a Mac app, plugins for
 DaVinci Resolve and Final Cut Pro, and a browser demo.
 
@@ -22,7 +22,7 @@ List the included films or process an image from the command line:
 
 ```sh
 swift run fotufilm --list-stocks
-swift run fotufilm input.jpg output.jpg --stock example-negative-400
+swift run fotufilm input.jpg output.jpg --stock gold200
 ```
 
 ## Build the Mac app and plugins
@@ -59,13 +59,15 @@ The app runs without activation and bundles the free Starter pack: Gold 200,
 Tri-X 400, and Provia 100F. These calibrated profiles use
 [CC BY-ND 4.0](licenses/STARTER-PACK.txt); the engine code has separate terms.
 
-Synthetic films remain available for CLI experiments and tests. Print receivers
-are analytic examples, and the demo image is a generated color chart. A calibrated
-film profile does not make the example print receiver a measured paper profile.
+The CLI and tests also include synthetic films. Print models use calculated
+example curves, not measured paper profiles. The demo uses a generated colour chart.
 See [Build support](docs/support.html) for stock-pack setup.
 
 `SOURCE_ASSETS.json` records where assets came from and their file hashes. Before
 adding data or images, run `python3 tools/check-source-boundary.py`.
+
+To add a downloaded pack, choose **File → Import Film Pack…** in the Mac app.
+Imported films work offline.
 
 ## More information
 
@@ -76,5 +78,4 @@ adding data or images, run `python3 tools/check-source-boundary.py`.
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 The engine, Mac app, and plugins use [Apache-2.0](LICENSE). Film profiles have
-[separate licences](LICENSING.md). The Mac app and plugins require no activation.
-Use **File → Import Film Pack…** in the Mac app to add a downloaded pack.
+[separate licences](LICENSING.md).

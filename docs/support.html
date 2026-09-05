@@ -1,13 +1,23 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Build support</title></head><body>
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Build support</title></head>
+<body>
 <h1>Build support</h1>
-<p>Use a full Xcode 26 or newer installation and select it with <code>xcode-select</code>. Install Halide with Homebrew or provide a compatible toolchain through <code>HALIDE_ROOT</code>.</p>
-<p>The Final Cut plugin needs Apple's FxPlug SDK. Without that SDK, the Mac app builds with the Resolve plugin only. The FxPlug host harness does not need the SDK.</p>
-<p>The Mac app and plugins include three Starter profiles as readable JSON, with their attribution and licence notices. They need no activation or download. The build verifies that only the released Starter files are bundled. Do not add other profiles to the Starter resource folder.</p>
-<p>Custom pack builds must supply both <code>FOTUFILM_PACK_KEY_SOURCE</code> and <code>FOTUFILM_SEALED_PACKS</code> as absolute paths outside this checkout. Supplying only one is an error. Keep pack key material outside version control.</p>
-<p>Check proposed source files with <code>python3 tools/check-source-boundary.py</code>. New images, data files and third-party headers require documented provenance in <code>SOURCE_ASSETS.json</code>.</p>
-<p>If a Resolve control is disabled, check Stage, Resolved Format, Resolved Medium, and Effective Renderer. Custom Mottle needs Full and clump-field grain. Discs needs a silver-image stock and Reference rendering. Negative Only outputs density data; use Full with Output Medium set to Negative to view a negative image.</p>
-<p>CI is started manually in GitHub Actions. Rendering and plugin tests require a working Metal device.</p>
-<p><a href="documentation.html">Documentation</a> · <a href="../LICENSING.md">Current licensing</a></p>
-<p>Source builds use separate Mac bundle, custom-pack storage and Keychain identifiers and do not subscribe to product updates.</p>
-<p>The Mac app has no licence keys, activation window, or device limit. For a purchased pack, download the file from your website account and choose <strong>File → Import Film Pack…</strong>. If import fails, download the file again and check that your app supports its format.</p>
-</body></html>
+<h2>Build requirements</h2>
+<p>Install Xcode 26 or newer and select it with <code>xcode-select</code>. Install Halide with Homebrew, or set <code>HALIDE_ROOT</code> to a compatible installation.</p>
+<p>The Final Cut plugin also needs Apple's FxPlug SDK. Without it, the Mac build includes only the Resolve plugin. You can still run the Final Cut test harness without the SDK.</p>
+<p>Start CI manually in GitHub Actions. Rendering and plugin tests need a working Metal device.</p>
+<h2>Film packs</h2>
+<p>The Mac app and plugins include the three Starter profiles and their licence notices. No licence key or activation is needed.</p>
+<p>To add a purchased pack, download it from your account and choose <strong>File → Import Film Pack…</strong>. If import fails, download it again and check that your app supports the pack format.</p>
+<p>The build checks that the Starter folder contains only the released files. Import other packs through the app instead of adding files to that folder.</p>
+<h2>Disabled Resolve controls</h2>
+<p>Check <strong>Stage</strong>, <strong>Resolved Format</strong>, <strong>Resolved Medium</strong>, and <strong>Effective Renderer</strong>. Custom Mottle needs Full and clump-field grain. Discs needs a silver-image film and Reference mode.</p>
+<p>Negative Only produces density data. To view a negative image, choose Full and set Output Medium to Negative.</p>
+<h2>Custom builds</h2>
+<p>For a custom pack build, set both <code>FOTUFILM_PACK_KEY_SOURCE</code> and <code>FOTUFILM_SEALED_PACKS</code> to absolute paths outside this checkout. Both are required. Keep secret pack keys out of version control.</p>
+<p>Run <code>python3 tools/check-source-boundary.py</code> before adding files. Record the source and hash of new images, data, and third-party headers in <code>SOURCE_ASSETS.json</code>.</p>
+<p>Source builds keep separate app, pack-storage, and Keychain IDs. They do not receive product updates automatically.</p>
+<p><a href="documentation.html">User guide</a> · <a href="../LICENSING.md">Licences</a></p>
+</body>
+</html>
