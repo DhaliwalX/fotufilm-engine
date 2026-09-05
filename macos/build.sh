@@ -135,8 +135,13 @@ fi
 
 
 if [[ -n "${FOTUFILM_UPDATE_FEED_URL:-}" ]]; then
-  /usr/libexec/PlistBuddy -c \
-    "Set :FotufilmUpdateFeedURL $FOTUFILM_UPDATE_FEED_URL" "$APP/Contents/Info.plist"
+  if /usr/libexec/PlistBuddy -c "Print :FotufilmUpdateFeedURL" "$APP/Contents/Info.plist" >/dev/null 2>&1; then
+    /usr/libexec/PlistBuddy -c \
+      "Set :FotufilmUpdateFeedURL $FOTUFILM_UPDATE_FEED_URL" "$APP/Contents/Info.plist"
+  else
+    /usr/libexec/PlistBuddy -c \
+      "Add :FotufilmUpdateFeedURL string $FOTUFILM_UPDATE_FEED_URL" "$APP/Contents/Info.plist"
+  fi
 fi
 
 # One version line for the product. version.env drives the Xcode targets, and this bundle is
