@@ -94,36 +94,6 @@ build/resolve/host-harness build/resolve/Fotufilm.ofx.bundle/Contents/MacOS/Fotu
 Use `--parity-dump <path>` to save the shared test frame for comparison with the
 Final Cut test host. These tests do not replace checking the plugin inside Resolve.
 
-## Measure inside Resolve
-
-See [recorded measurements](PERFORMANCE.md) for the baseline and test conditions.
-
-Use a dedicated 3840×2160 timeline with both timeline and playback rates set to
-30 fps. Disable render caching and proxies. Add Fotufilm to the first clip's Fusion
-composition, connect its Source input, and select the film and input color space
-explicitly. Resolve Studio's local scripting API can create the OFX tool using
-`comp.AddTool("ofx.com.fotufilm")`.
-
-With that project open, run:
-
-```sh
-python3 resolve/benchmark.py --project "Fotufilm 4K30 Baseline" \
-  --label "baseline-gold-full" --budget-ms 15 --output /tmp/fotufilm-baseline.json
-```
-
-The script clears Fusion's memory cache, warms up the plugin, and requests 60
-distinct frames. The JSON records controls, dimensions, median and p95 tool time,
-and the count at or above the requested frame budget (15 ms by default). Request time also includes
-source evaluation and scripting overhead. These are Fusion OFX processing timings;
-they do not establish Color-page or timeline playback frame rates. Use the same
-media, settings, hardware, and power conditions for comparisons, with builds and
-other GPU workloads stopped.
-
-For a delivery measurement, activate the composition and change a control through
-the scripting API before leaving the Fusion page so Resolve updates its timeline
-render graph. Verify the exported image contains the effect before accepting the
-timing. An unchanged source export is not a plugin performance result.
-
 ## Build for distribution
 
 `--universal` builds for Apple silicon and Intel Macs. Local builds use an ad-hoc
