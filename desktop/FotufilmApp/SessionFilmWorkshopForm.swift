@@ -136,7 +136,7 @@ extension FilmWorkshopController {
                                 + "handle below the plot to take it out. The "
                                 + "chips pick which curve is in hand. What the "
                                 + "engine renders is the drawn curve resampled "
-                                + "onto its 41-band grid — exactly what the "
+                                + "onto its 5 nm grid — exactly what the "
                                 + "graph strokes."))
             if let lineage = draft.spectralLineage {
                 section.add(NoteRow("These curves descend from \(lineage)'s "

@@ -119,8 +119,10 @@ final class CameraSpectralProfileTests: XCTestCase {
 
     func testResamplingDropsDataOutsideGridAndClampsNegatives() {
         // Data running past both grid ends is simply consumed by interpolation — nothing
-        // outside 380...780 survives into the 41 stored samples — and a negative excursion
-        // (measurement noise) clamps to zero instead of becoming negative sensitivity.
+        // outside 380...780 survives into the stored samples — and a negative excursion
+        // (measurement noise) clamps to zero instead of becoming negative sensitivity. The
+        // clamp happens before interpolation, so the grid points between the excursion and
+        // its 10 nm neighbours read halfway to zero.
         let wavelengths: [Float] = stride(from: Float(300), through: 860, by: 10).map { $0 }
         let samples = wavelengths.map { $0 == 500 ? Float(-0.5) : 0.25 }
         let profile = CameraSpectralProfile(
@@ -128,7 +130,8 @@ final class CameraSpectralProfileTests: XCTestCase {
             red: samples, green: samples, blue: samples)
         XCTAssertEqual(profile.sensitivity[0].count, SpectralGrid.count)
         for (i, wavelength) in SpectralGrid.wavelengths.enumerated() {
-            let expected: Float = wavelength == 500 ? 0 : 0.25
+            let expected: Float = wavelength == 500 ? 0
+                : (abs(wavelength - 500) < 10 ? 0.25 * (abs(wavelength - 500) / 10) : 0.25)
             XCTAssertEqual(profile.sensitivity[0][i], expected, "at \(wavelength) nm")
             XCTAssertGreaterThanOrEqual(profile.sensitivity[0][i], 0)
         }

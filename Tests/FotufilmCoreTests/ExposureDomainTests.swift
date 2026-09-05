@@ -18,7 +18,7 @@ final class ExposureDomainTests: XCTestCase {
 
     /// Monochromatic light at one observer band, scaled to `luminance`, in linear Rec.2020.
     private func laser(nm: Float, luminance target: Float) -> SIMD3<Float> {
-        let band = Int((nm - 380) / 10)
+        let band = Int((nm - 380) / SpectralGrid.stepNM)
         let rgb = SpectralGrid.linearRec2020(fromXYZ: SIMD3(
             SpectralGrid.xBar[band], SpectralGrid.yBar[band], SpectralGrid.zBar[band]))
         return rgb * (target / luminance(rgb))
@@ -168,7 +168,7 @@ final class ExposureDomainTests: XCTestCase {
     func testMonochromaticGreenExposesLikeItsOwnSpectrum() {
         let stock = TestStocks.negative
         let illuminant = SpectralRuntime.filmReferenceIlluminant(for: stock)
-        let band = 14  // 520 nm
+        let band = Int((520 - 380) / SpectralGrid.stepNM)  // 520 nm
         let rgb = laser(nm: 520, luminance: 0.18)
         let direct = SpectralRuntime.domainExposure(
             ColorScience.linearRec2020ToExposureDomain(rgb), stock: stock,

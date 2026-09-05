@@ -21,8 +21,8 @@ final class HalationSpectrumTests: XCTestCase {
         handles[green] = 3
         let row = HalationSpectrum.resampled(handles)
         XCTAssertEqual(row.count, SpectralGrid.count)
-        XCTAssertEqual(row[17], 8, accuracy: 1e-5,
-                       "550 nm is grid slot 17, and three stops is eight times")
+        XCTAssertEqual(row[34], 8, accuracy: 1e-5,
+                       "550 nm is grid slot 34, and three stops is eight times")
         // Monotone interpolation stays inside its handles, so the lobe does not ring above the
         // travel the row actually offers.
         XCTAssertLessThanOrEqual(row.max() ?? 0, 8 + 1e-4)
@@ -43,8 +43,8 @@ final class HalationSpectrumTests: XCTestCase {
         handles[HalationSpectrum.handleNM.firstIndex(of: 650)!] = -3
         handles[HalationSpectrum.handleNM.firstIndex(of: 700)!] = -3
         let row = HalationSpectrum.resampled(handles)
-        XCTAssertEqual(row[27], 0.125, accuracy: 1e-5,
-                       "650 nm is grid slot 27, and minus three stops is an eighth")
+        XCTAssertEqual(row[54], 0.125, accuracy: 1e-5,
+                       "650 nm is grid slot 54, and minus three stops is an eighth")
         XCTAssertLessThan(row.min() ?? 1, 1)
     }
 

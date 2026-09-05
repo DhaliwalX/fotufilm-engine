@@ -1,6 +1,6 @@
 import Foundation
 
-/// Synthetic three-layer receiver on the 380...780 nm grid at 10 nm intervals.
+/// Synthetic three-layer receiver on the 380...780 nm grid at its 5 nm interval.
 /// These analytic curves are illustrative, not measurements of a commercial paper.
 enum PrintPaperSpectra {
     static let neutralAmounts: [Float] = [1, 1, 1]
@@ -9,8 +9,7 @@ enum PrintPaperSpectra {
 
     private static func bands(width: Float) -> [[Float]] {
         [Float(650), 550, 450].map { center in
-            (0..<41).map { index in
-                let wavelength = Float(380 + index * 10)
+            SpectralGrid.wavelengths.map { wavelength in
                 return exp(-0.5 * pow((wavelength - center) / width, 2))
             }
         }

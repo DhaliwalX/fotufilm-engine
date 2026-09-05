@@ -26,7 +26,7 @@ public enum HalationSpectrum {
         return handles.allSatisfy { abs($0 - neutralStops) < 1e-4 }
     }
 
-    /// Resamples handles onto the 41-band grid and returns linear gain, or an empty array for a
+    /// Resamples handles onto the spectral grid and returns linear gain, or an empty array for a
     /// neutral curve. Interpolation occurs in stops before exponentiation. A constant offset keeps
     /// negative stop values above `SpectralCurve`'s zero floor without changing the fitted shape.
     public static func resampled(_ handles: [Float]) -> [Float] {
@@ -42,7 +42,7 @@ public enum HalationSpectrum {
 
     /// Reduces spectral gain to one factor per record using
     /// `sum(illuminant × sensitivity × gain) / sum(illuminant × sensitivity)`. `sensitivity` must
-    /// contain 41-band spectral rows, not the legacy 3×3 matrix. Invalid or zero-weight input
+    /// contain full-grid spectral rows, not the legacy 3×3 matrix. Invalid or zero-weight input
     /// returns a factor of 1.
     public static func recordGain(spectrum: [Float], sensitivity: [[Float]],
                                   illuminant: [Float] = SpectralGrid.d65) -> [Float] {

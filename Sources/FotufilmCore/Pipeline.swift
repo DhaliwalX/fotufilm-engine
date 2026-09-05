@@ -64,7 +64,7 @@ public struct FotufilmEngine {
         /// the scattered light then carries the source's own balance, a pronounced ring the
         /// colour of the light. A look choice, not a stock property: 0 is the film.
         public var halationSourceColour: Float = 0
-        /// Per-wavelength gain on the 41-band halation return spectrum. Empty preserves the stock
+        /// Per-wavelength gain on the full-grid halation return spectrum. Empty preserves the stock
         /// spectrum. The engine reduces the curve through each record's sensitivity;
         /// `halationSourceColour` and `halationScale` apply separately.
         public var halationReturnGain: [Float] = []

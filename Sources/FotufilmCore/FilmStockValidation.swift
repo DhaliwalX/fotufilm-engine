@@ -100,7 +100,7 @@ public extension FilmStockDefinition {
             guard donor.sensitivity.count == SpectralGrid.count else {
                 throw fail("\(field).sensitivity",
                            "has \(donor.sensitivity.count) samples; expected "
-                           + "\(SpectralGrid.count), 380...780 nm at 10 nm")
+                           + "\(SpectralGrid.count), 380...780 nm at 5 nm")
             }
             for value in donor.sensitivity {
                 guard value.isFinite, (0...1e4).contains(value) else {
@@ -414,7 +414,7 @@ extension FilmStockDefinition.SpectralSpec {
                 guard row.count == SpectralGrid.count else {
                     throw fail("\(field)[\(index)]",
                                "has \(row.count) samples; expected \(SpectralGrid.count), "
-                                   + "380...780 nm at 10 nm")
+                                   + "380...780 nm at 5 nm")
                 }
                 for value in row {
                     guard value.isFinite else {
