@@ -273,10 +273,32 @@ inline Halide::Expr host_output_encode(Halide::ImageParam &configuration,
                                        Halide::Expr b, int row,
                                        bool approximate = false,
                                        int transfer_shape = -1) {
-    Halide::Expr in_host_primaries =
-        configuration(FOTUFILM_CONFIG_OUTPUT_MATRIX + 3 * row) * r
-        + configuration(FOTUFILM_CONFIG_OUTPUT_MATRIX + 3 * row + 1) * g
-        + configuration(FOTUFILM_CONFIG_OUTPUT_MATRIX + 3 * row + 2) * b;
+    Halide::Expr host[3];
+    for (int c = 0; c < 3; ++c) {
+        host[c] = configuration(FOTUFILM_CONFIG_OUTPUT_MATRIX + 3 * c) * r
+            + configuration(FOTUFILM_CONFIG_OUTPUT_MATRIX + 3 * c + 1) * g
+            + configuration(FOTUFILM_CONFIG_OUTPUT_MATRIX + 3 * c + 2) * b;
+    }
+    // Same neutral-axis fit as the plugin's CPU fallback (fotufilm::fitToGamut).
+    // Select operands are evaluated eagerly: bound unused denominators away from zero.
+    Halide::Expr y = configuration(FOTUFILM_CONFIG_OUTPUT_GAMUT + 1) * host[0]
+        + configuration(FOTUFILM_CONFIG_OUTPUT_GAMUT + 2) * host[1]
+        + configuration(FOTUFILM_CONFIG_OUTPUT_GAMUT + 3) * host[2];
+    Halide::Expr scale = 1.0f;
+    for (const Halide::Expr &v : host) {
+        scale = Halide::min(scale, Halide::select(
+            v > 1.0f, (1.0f - y) / Halide::max(v - y, 1.0e-20f),
+            v < 0.0f, y / Halide::max(y - v, 1.0e-20f), 1.0f));
+    }
+    Halide::Expr fitted = Halide::select(
+        !(y > 0.0f && y < 1.0f), Halide::max(host[row], 0.0f),
+        scale >= 1.0f, host[row],
+        y + (host[row] - y) * Halide::max(scale, 0.0f));
+    Halide::Expr inside = Halide::min(host[0], Halide::min(host[1], host[2])) >= 0.0f
+        && Halide::max(host[0], Halide::max(host[1], host[2])) <= 1.0f;
+    Halide::Expr in_host_primaries = Halide::select(
+        configuration(FOTUFILM_CONFIG_OUTPUT_GAMUT) == 0.0f || inside,
+        host[row], fitted);
     Halide::Expr knee = configuration(FOTUFILM_CONFIG_OUTPUT_SHOULDER);
     Halide::Expr shouldered = Halide::select(
         knee < 0.0f, in_host_primaries,

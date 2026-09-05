@@ -4,6 +4,24 @@ import XCTest
 final class PackContainerTests: XCTestCase {
     private let key = FilmPackKey.random()
 
+    func testPluginStockDirectoryIsLoadedOutsideTheMainBundle() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let previous = FilmStockPack.embeddedStockDirectories
+        defer {
+            FilmStockPack.embeddedStockDirectories = previous
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let id = "plugin-resource-" + UUID().uuidString
+        try JSONEncoder().encode(sample(id: id))
+            .write(to: directory.appendingPathComponent("film.json"))
+        FilmStockPack.embeddedStockDirectories = [directory]
+        XCTAssertEqual(FilmStockPack.searchPaths.last, directory)
+        let pack = try FilmStockPack.load(sealed: [], bundled: [])
+        XCTAssertEqual(pack.stocks[id]?.name, "Sample \(id)")
+    }
+
     private func keyring() -> FilmPackKeyring {
         let ring = FilmPackKeyring()
         for kind in [FilmPackKind.vault, .community, .local] {

@@ -50,10 +50,17 @@ int main(int argc, char **argv) {
         const char *name;
         int features;
         bool runtime;
+        bool windowed;
     };
 #define FOTUFILM_AOT_GENERATOR_ENTRY(variant_name, variant_mask) \
-    {"fotufilm_halide_ios_" #variant_name, (variant_mask), false},
-    Variant variants[] = {FOTUFILM_AOT_VARIANTS(FOTUFILM_AOT_GENERATOR_ENTRY)};
+    {"fotufilm_halide_ios_" #variant_name, (variant_mask), false, false},
+#define FOTUFILM_AOT_WINDOWED_ENTRY(variant_name, variant_mask) \
+    {"fotufilm_halide_ios_" #variant_name "_windowed", (variant_mask), false, true},
+    Variant variants[] = {
+        FOTUFILM_AOT_VARIANTS(FOTUFILM_AOT_GENERATOR_ENTRY)
+        FOTUFILM_AOT_BASIC_VARIANTS(FOTUFILM_AOT_WINDOWED_ENTRY)
+    };
+#undef FOTUFILM_AOT_WINDOWED_ENTRY
 #undef FOTUFILM_AOT_GENERATOR_ENTRY
     variants[0].runtime = true;
     const int variant_count = static_cast<int>(std::size(variants));
@@ -147,7 +154,7 @@ int main(int argc, char **argv) {
         }
         try {
             MetalFramePipeline pipeline(variant.features,
-                                        "_v" + std::to_string(index));
+                                        "_v" + std::to_string(index), variant.windowed);
             pipeline.compile_aot((output / variant.name).string(), variant.name,
                                  variant.runtime, target);
         } catch (const Halide::CompileError &error) {

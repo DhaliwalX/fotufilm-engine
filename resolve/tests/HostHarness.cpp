@@ -1871,7 +1871,7 @@ int testPlugin() {
                     const float ramp = 5.5f * (x + y) / (width + height);
                     const int wedge = (3 * x) / width;
                     for (int c = 0; c < 3; ++c) pixel[c] = ramp * (c == wedge ? 1.0f : 0.25f);
-                    pixel[3] = 1.0f;
+                    pixel[3] = (x % 3) * 0.5f;
                 }
             }
 
@@ -1890,6 +1890,8 @@ int testPlugin() {
             bool everyCurveCarried = true, everyCurveAgrees = true;
             double worstEncode = 0;
             const char *worstEncodeWhere = "none";
+            for (bool fit : {false, true}) {
+            for (bool premultiplied : {false, true}) {
             for (int e = 0; !light.empty() && e < static_cast<int>(fotufilm::Encoding::Count);
                  ++e) {
                 const auto encoding = static_cast<fotufilm::Encoding>(e);
@@ -1897,10 +1899,15 @@ int testPlugin() {
                 const fotufilm::OutputTransform curve = fotufilm::outputTransformFor(encoding);
                 FotufilmOutputTransform wanted{};
                 wanted.transfer = curve.shape;
-                wanted.premultiplied = 0;
+                wanted.premultiplied = premultiplied ? 1 : 0;
                 std::memcpy(wanted.matrix, transform.fromWorking, sizeof(wanted.matrix));
                 std::memcpy(wanted.coefficients, curve.coefficients,
                             sizeof(wanted.coefficients));
+
+                if (fit) {
+                    std::memcpy(wanted.gamutLuminance, transform.luminance,
+                                sizeof(wanted.gamutLuminance));
+                }
 
                 if (fotufilm_bridge_encodes_output(
                         bridgeContext, 0, 0, 0, parameters, width, height, 0) != 1) {
@@ -1917,7 +1924,7 @@ int testPlugin() {
                 // — `light` is already what the host would have been handed.
                 std::vector<float> reference(light.size());
                 fotufilm::encodePixels(encoding, transform, light.data(), reference.data(),
-                                      count, false);
+                                      count, premultiplied, fit);
                 for (size_t i = 0; i < reference.size(); ++i) {
                     const double gap = std::fabs(
                         static_cast<double>(reference[i]) - developedPixels[i]);
@@ -1927,7 +1934,9 @@ int testPlugin() {
                     }
                 }
             }
-            check(everyCurveCarried, "carries every one of the eight curves");
+            }
+            }
+            check(everyCurveCarried, "carries every curve with and without gamut fitting and alpha");
             check(everyCurveAgrees, "and develops a frame through each");
             std::printf("       kernel vs libm: max |d| %.3e (16-bit LSB %.3e, worst %s)\n",
                         worstEncode, 1.0 / 65535.0, worstEncodeWhere);
@@ -1987,6 +1996,11 @@ int testPlugin() {
         if (const char *requested = std::getenv("FOTUFILM_BENCHMARK_4K")) {
             const int frames = std::max(1, std::min(120, std::atoi(requested)));
             std::printf("4K benchmark\n");
+            double savedTime = 0;
+            propGetDouble(handleOf(renderArgs), kOfxPropTime, 0, &savedTime);
+            const char *budgetSetting = std::getenv("FOTUFILM_BENCHMARK_BUDGET_MS");
+            const double budgetMs = budgetSetting ? std::atof(budgetSetting) : 15.0;
+            std::vector<double> timings;
             provision(3840, 2160, 0, 0, true);
             setChoice(plugin, instanceHandle, instance.params, "stock", 0);
             // Match the plugin's normal 35 mm default. Smaller gauges deliberately render
@@ -2010,14 +2024,29 @@ int testPlugin() {
                     std::chrono::steady_clock::now() - began).count();
                 total += elapsed;
                 best = std::min(best, elapsed);
+                timings.push_back(elapsed * 1000.0);
             }
+            propSetDouble(handleOf(renderArgs), kOfxPropTime, 0, savedTime);
+            std::sort(timings.begin(), timings.end());
+            const double medianMs = (timings[(frames - 1) / 2] + timings[frames / 2]) * 0.5;
+            const double p95Ms = timings[static_cast<size_t>(std::ceil(frames * 0.95)) - 1];
+            const int overBudget = static_cast<int>(std::count_if(timings.begin(), timings.end(),
+                [&](double ms) { return ms >= budgetMs; }));
             const double averageMs = 1000.0 * total / frames;
-            std::printf("       %d frames: %.2f ms average (%.1f fps), "
-                        "%.2f ms best (%.1f fps); 30 fps budget 33.33 ms\n",
-                        frames, averageMs, frames / total, best * 1000.0, 1.0 / best);
+            std::printf("       %d frames: %.2f ms average, %.2f ms median, %.2f ms p95, "
+                        "%.2f ms best; %d at/over %.2f ms budget\n",
+                        frames, averageMs, medianMs, p95Ms, best * 1000.0,
+                        overBudget, budgetMs);
+            if (const char *dumpPath = std::getenv("FOTUFILM_BENCHMARK_DUMP")) {
+                FILE *dump = std::fopen(dumpPath, "wb");
+                const bool written = dump && std::fwrite(output->pixels.data(), sizeof(float),
+                    output->pixels.size(), dump) == output->pixels.size();
+                if (dump) std::fclose(dump);
+                check(written, "writes the last measured 4K frame");
+            }
             check(complete, "renders every 4K benchmark frame");
-            check(averageMs <= 1000.0 / 30.0,
-                  "sustains the 30 fps 4K frame budget");
+            check(std::isfinite(budgetMs) && budgetMs > 0 && overBudget == 0,
+                  "keeps every measured 4K frame under the requested budget");
         }
 
         // The pipeline spans. The claim worth checking here is not that each renders, but that
