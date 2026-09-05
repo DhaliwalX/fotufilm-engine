@@ -58,6 +58,11 @@ Resolve test host.
 
 ## Use the plugin
 
+To add a pack, open the Fotufilm Mac app and choose **Load custom pack…**.
+Restart your video editor after importing or updating it. Its films appear in the
+plugin automatically on the same Mac and user account. Keep the app and plugins
+updated together; packs that need a newer version are skipped.
+
 1. Add **Fotufilm** to a clip.
 2. Choose a film and gauge.
 3. Leave **Timeline Color Space** on **Auto (from host)** unless you need an override.

@@ -411,7 +411,6 @@ private func openSealedPacks(in directory: String) {
     let packs = entries.filter {
         $0.pathExtension.lowercased() == FilmStockPack.sealedPathExtension
     }
-    guard !packs.isEmpty else { return }
 
     let keyring = FilmPackKeyring.shared
     if let vault = try? FilmPackKey(bytes: FilmPackKeyMaterial.vaultKey) {
@@ -422,6 +421,12 @@ private func openSealedPacks(in directory: String) {
     }
 
     FilmStockPack.embeddedSealedPackURLs = packs
+    // Bundle.main belongs to the video host. Read this plugin's own release version.
+    let bundleURL = resources.deletingLastPathComponent().deletingLastPathComponent()
+    let version = Bundle(url: bundleURL)?.object(
+        forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+    FilmStockPack.installedSealedPackURLs = FilmPackLibrary.compatibleCommunityPacks(
+        macAppVersion: version)
 }
 
 @_cdecl("fotufilm_bridge_context_create")

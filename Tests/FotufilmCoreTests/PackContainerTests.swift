@@ -41,6 +41,30 @@ final class PackContainerTests: XCTestCase {
         XCTAssertEqual(overridden.stocks[id]?.name, "Custom override")
     }
 
+    func testSharedPluginLibraryFiltersPackKindsVersionsAndDamagedFiles() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let ring = keyring()
+        for (id, kind, minimum) in [("current", FilmPackKind.community, "1.7"),
+                                    ("legacy", .community, nil),
+                                    ("future", .community, "99.0"),
+                                    ("private", .vault, nil), ("mine", .local, nil)] {
+            let manifest = FilmPackManifest(packID: id, name: id, minimumMacAppVersion: minimum,
+                                            stocks: [sample(id: "one")])
+            let bytes = try FilmPackContainer.seal(manifest, kind: kind, keyID: 1, key: key)
+            try bytes.write(to: directory.appendingPathComponent("\(id).fotufilmpack"))
+        }
+        try Data("damaged".utf8).write(to: directory.appendingPathComponent("broken.fotufilmpack"))
+        let packs = FilmPackLibrary.compatibleCommunityPacks(
+            in: directory, macAppVersion: "1.7", keyring: ring)
+        XCTAssertEqual(packs.map { $0.deletingPathExtension().lastPathComponent }, ["current", "legacy"])
+        XCTAssertEqual(FilmPackLibrary.compatibleCommunityPacks(
+            in: directory, macAppVersion: "1.6", keyring: ring).count, 1)
+        XCTAssertTrue(FilmPackLibrary.compatibleCommunityPacks(
+            in: directory.appendingPathComponent("missing"), macAppVersion: "1.7").isEmpty)
+    }
+
     private func keyring() -> FilmPackKeyring {
         let ring = FilmPackKeyring()
         for kind in [FilmPackKind.vault, .community, .local] {

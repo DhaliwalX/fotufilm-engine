@@ -151,6 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 : "\(result.stockNames.count) films"
             alert.messageText = result.replacedExisting ? "Pack updated" : "Pack added"
             alert.informativeText = "\(result.name)\(result.version.map { " v\($0)" } ?? "") — \(films)"
+            alert.informativeText += "\n\nRestart Resolve or Final Cut Pro to use this pack in the Fotufilm plugin."
             // The film list is a list of what is installed, and something just was.
             windowController?.editor.reloadFilmLibrary()
         } catch FilmPackRelease.Failure.requiresMacApp(let version) {
