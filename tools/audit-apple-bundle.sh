@@ -54,11 +54,17 @@ while IFS= read -r coefficient; do
   done
 done < <(find "$BUNDLE" -type f -name rec2020-reflectance-prior.coeff -print)
 
-# Camera JSON is public upstream data. Xcode also emits version.json inside signed App Intents
-# metadata directories; it describes the generated metadata format, not repository content.
+# Camera JSON is public upstream data. It keeps its CameraProfiles directory only where the
+# resources are copied; SwiftPM's .process flattens them into the root of the generated
+# Fotufilm_FotufilmCore.bundle, which is what an app consuming FotufilmCore as a package embeds.
+# BundledCameraProfiles.swift reads them from exactly there under SWIFT_PACKAGE, so a flat layout
+# is the shipping arrangement rather than a packaging slip. Xcode also emits version.json inside
+# signed App Intents metadata directories; it describes the generated metadata format, not
+# repository content.
 while IFS= read -r json; do
   [[ ( "${FOTUFILM_SOURCE_BUILD:-0}" == 1 && "$json" == */Stocks/*.json ) || \
      "$json" == */CameraProfiles/*.json || \
+     "$json" == *_FotufilmCore.bundle/*.json || \
      "$json" == */Metadata.appintents/version.json ]] || \
     report "unexpected plaintext JSON reached the bundle: $json"
 done < <(find "$BUNDLE" -type f -name '*.json' -print)
