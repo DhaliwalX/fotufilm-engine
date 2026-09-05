@@ -938,11 +938,11 @@ int testPlugin() {
 
     {
         const std::pair<const char *, const char *> groups[] = {
-            {"stageGroup", "Setup"}, {"filmGroup", "Film"},
-            {"exposureGroup", "Exposure & Colour"}, {"lensGroup", "Lens & Filters"},
+            {"inputGroup", "Input"}, {"filmGroup", "Film"},
+            {"exposureGroup", "Light & Colour"}, {"lensGroup", "Lens & Filters"},
             {"labGroup", "Development"}, {"filmResponseGroup", "Grain"},
             {"halationGroup", "Halation"}, {"couplerGroup", "Colour Separation"},
-            {"outputGroup", "Output"},
+            {"outputGroup", "Output"}, {"stageGroup", "Pipeline"},
         };
         bool grouped = true;
         for (const auto &group : groups) {
@@ -952,18 +952,19 @@ int testPlugin() {
             propGetString(handleOf(found->second->properties), kOfxPropLabel, 0, &label);
             int open = -1;
             propGetInt(handleOf(found->second->properties), kOfxParamPropGroupOpen, 0, &open);
-            const bool initiallyOpen = std::strcmp(group.first, "stageGroup") == 0 ||
+            const bool initiallyOpen = std::strcmp(group.first, "inputGroup") == 0 ||
                 std::strcmp(group.first, "filmGroup") == 0 || std::strcmp(group.first, "outputGroup") == 0;
             grouped &= label && std::strcmp(label, group.second) == 0 && open == (initiallyOpen ? 1 : 0);
         }
-        check(grouped, "defines nine workflow groups with Setup, Film and Output initially open");
+        check(grouped, "defines ten workflow groups with Input, Film and Output initially open");
         auto parentIs = [&](const char *name, const char *wanted) {
             char *parent = nullptr;
             propGetString(handleOf(instance.params.params.at(name)->properties), kOfxParamPropParent, 0, &parent);
             return parent && std::strcmp(parent, wanted) == 0;
         };
         check(parentIs("flare", "lensGroup") && parentIs("halation", "halationGroup") &&
-              parentIs("couplers", "couplerGroup") && parentIs("colorSpace", "stageGroup"),
+              parentIs("couplers", "couplerGroup") && parentIs("colorSpace", "inputGroup") &&
+              parentIs("stage", "stageGroup") && parentIs("flare", "lensGroup"),
               "moves existing parameter identities into their intended groups");
         int hidden = 0, persistent = 1;
         propGetInt(handleOf(instance.params.params.at("push")->properties), kOfxParamPropSecret, 0, &hidden);

@@ -36,15 +36,17 @@ updated together; packs that need a newer version are skipped.
 
 1. Add **Fotufilm** to a node.
 2. Choose a film. **Match Film** selects that film's default gauge.
-3. Check **Timeline Color Space** and its status line.
-4. Leave **Stage** on **Full** to render the complete film and print process.
-5. Adjust exposure, output medium, lens filters, film response, and development.
+3. Check **Timeline Color Space** and its status line under **Input**.
+4. Leave **Stage** (under **Pipeline**) on **Full** to render the complete film and print process.
+5. Adjust light and colour, lens filters, development, grain, halation, and output medium.
 
 The plugin includes the three Starter films and example print models. No activation
 is needed. If a control is unavailable for your film, the status line explains why.
 
-The inspector groups controls under Setup, Film, Exposure & Colour, Lens & Filters,
-Development, Grain, Halation, Colour Separation, and Output. Start with these settings:
+The inspector groups controls in the order the light passes through them: Input, Film,
+Light & Colour, Lens & Filters, Development, Grain, Halation, Colour Separation, Output, and
+Pipeline. Input, Film, and Output start open; Pipeline holds **Stage** and **Render Mode** and
+starts closed. Start with these settings:
 
 | Setting | What it controls |
 | --- | --- |

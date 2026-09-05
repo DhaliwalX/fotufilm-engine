@@ -850,7 +850,12 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
                                                       : gInitializationError);
     }
 
-    defineGroup(set, "stageGroup", "Setup", nullptr, true);
+    // The panel reads top to bottom as the light does: what arrives, the film it meets, how it
+    // is exposed, the glass in front of it, how it is developed, the emulsion's own character,
+    // and where the result is viewed. The pipeline controls come last: they are about which
+    // part of that story a node performs, not about the picture, and a first-time user should
+    // meet Timeline Color Space before Stage.
+    defineGroup(set, "inputGroup", "Input", nullptr, true);
     defineChoice(set, kColorSpaceParam, "Timeline Color Space",
                  "What this node is being handed — the one control that is not "
                  "taste. The film model is scene-referred in linear Rec.2020: "
@@ -863,53 +868,13 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
                  "white, leaving halation nothing bright to scatter; a "
                  "wide-gamut log or linear timeline keeps the highlights the "
                  "model was built for.",
-                 "stageGroup", spaces, kColorSpaceAuto);
-    defineLabel(set, kColorSpaceStatusParam, "Decoded Input", "stageGroup",
+                 "inputGroup", spaces, kColorSpaceAuto);
+    defineLabel(set, kColorSpaceStatusParam, "Decoded Input", "inputGroup",
                 "Not yet examined",
                 "The input encoding Fotufilm will decode. Host means Resolve supplied an "
                 "exact OFX colour-space tag. Assumed means Resolve supplied Raw or no tag; "
                 "select Timeline Color Space explicitly if that assumption does not match "
                 "the image arriving at this node.");
-
-    std::vector<std::string> spans = gStageLabels;
-    if (spans.empty()) spans.push_back("Full");
-    gDescribedStages = static_cast<int>(spans.size());
-    defineChoice(set, kStageParam, "Stage",
-                 "Which span of the pipeline this node performs. Full is the whole "
-                 "thing and is what every other setting here describes. Negative Only "
-                 "stops at the developed negative and writes its per-layer densities "
-                 "— data, not a picture — and Print Only takes exactly that back and "
-                 "finishes it on the selected medium, so the two in series reproduce "
-                 "Full. Texture Only lays "
-                 "the film's spatial character over the frame it is handed and leaves "
-                 "its colour alone.\n\n"
-                 "A Negative Only node must feed a Print Only node directly, with the "
-                 "same stock and lab settings and nothing in between: the densities "
-                 "are not colour and anything that grades, resamples or transforms "
-                 "them is not editing a picture.",
-                 "stageGroup", spans, 0);
-    defineLabel(set, kStageStatusParam, " ", "stageGroup",
-                "Stage: Full — scene in, finished output out");
-    defineHiddenString(set, kStageIDParam);
-    // Nothing here when the engine has not come up: the bridge hands out the spatial stages, and
-    // a toggle cannot be invented for one whose bit is unknown. `createInstance` records that the
-    // panel has none, because a texture selection that cannot be read is not a selection of none.
-    for (size_t i = 0; i < gTextureParams.size(); ++i) {
-        OfxPropertySetHandle selected = define(
-            set, kOfxParamTypeBoolean, gTextureParams[i].c_str(),
-            gTextureLabels[i].c_str(),
-            "Whether Texture Only carries this stage. Ignored by every other stage, "
-            "where the strength controls below select what runs.",
-            "stageGroup");
-        if (selected) gProperty->propSetInt(selected, kOfxParamPropDefault, 0, 1);
-    }
-
-    defineGroup(set, "renderGroup", "Rendering", "stageGroup");
-    defineChoice(set, "renderMode", "Render Mode",
-                 "Default preserves the launch-time renderer setting. Realtime and Reference "
-                 "override it for this node, for both preview and delivery. Disc grain uses Reference.",
-                 "renderGroup", {"Default", "Realtime", "Reference"}, 0);
-    defineLabel(set, "renderStatus", "Effective Renderer", "renderGroup", "Not yet examined");
 
     defineGroup(set, "filmGroup", "Film", nullptr, true);
     gDescribedStocks = static_cast<int>(stocks.size());
@@ -937,7 +902,7 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
                  "without cropping pixels. Account for any upstream resize yourself.",
                  "filmGroup", 5, 100, 100);
 
-    defineGroup(set, "exposureGroup", "Exposure & Colour");
+    defineGroup(set, "exposureGroup", "Light & Colour");
     defineDouble(set, "exposure", "Exposure", "Camera exposure, in stops.",
                  "exposureGroup", -5, 5, 0);
     defineDouble(set, "temperature", "Temperature (K)",
@@ -1240,6 +1205,48 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
                  "and what is left is only the image's inversion. Every other medium ignores "
                  "this control, having a print or a scan of its own.",
                  "outputGroup", viewings, 0);
+
+    // Last, and shut: a node is Full unless someone has read what the other spans are for.
+    defineGroup(set, "stageGroup", "Pipeline");
+    std::vector<std::string> spans = gStageLabels;
+    if (spans.empty()) spans.push_back("Full");
+    gDescribedStages = static_cast<int>(spans.size());
+    defineChoice(set, kStageParam, "Stage",
+                 "Which span of the pipeline this node performs. Full is the whole "
+                 "thing and is what every other setting here describes. Negative Only "
+                 "stops at the developed negative and writes its per-layer densities "
+                 "— data, not a picture — and Print Only takes exactly that back and "
+                 "finishes it on the selected medium, so the two in series reproduce "
+                 "Full. Texture Only lays "
+                 "the film's spatial character over the frame it is handed and leaves "
+                 "its colour alone.\n\n"
+                 "A Negative Only node must feed a Print Only node directly, with the "
+                 "same stock and lab settings and nothing in between: the densities "
+                 "are not colour and anything that grades, resamples or transforms "
+                 "them is not editing a picture.",
+                 "stageGroup", spans, 0);
+    defineLabel(set, kStageStatusParam, " ", "stageGroup",
+                "Stage: Full — scene in, finished output out");
+    defineHiddenString(set, kStageIDParam);
+    // Nothing here when the engine has not come up: the bridge hands out the spatial stages, and
+    // a toggle cannot be invented for one whose bit is unknown. `createInstance` records that the
+    // panel has none, because a texture selection that cannot be read is not a selection of none.
+    for (size_t i = 0; i < gTextureParams.size(); ++i) {
+        OfxPropertySetHandle selected = define(
+            set, kOfxParamTypeBoolean, gTextureParams[i].c_str(),
+            gTextureLabels[i].c_str(),
+            "Whether Texture Only carries this stage. Ignored by every other stage, "
+            "where the strength controls below select what runs.",
+            "stageGroup");
+        if (selected) gProperty->propSetInt(selected, kOfxParamPropDefault, 0, 1);
+    }
+
+    defineGroup(set, "renderGroup", "Rendering", "stageGroup");
+    defineChoice(set, "renderMode", "Render Mode",
+                 "Default preserves the launch-time renderer setting. Realtime and Reference "
+                 "override it for this node, for both preview and delivery. Disc grain uses Reference.",
+                 "renderGroup", {"Default", "Realtime", "Reference"}, 0);
+    defineLabel(set, "renderStatus", "Effective Renderer", "renderGroup", "Not yet examined");
 
     // The identity behind each menu above; see the comment on kStockIDParam.
     defineHiddenString(set, kStockIDParam);
