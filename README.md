@@ -1,6 +1,7 @@
 # Fotufilm engine
 
-Fotufilm adds a film look to photos and videos by simulating film and prints.
+Fotufilm is an open-source film simulation engine built to be as physically
+accurate as possible.
 This repository includes the engine, a command-line tool, a Mac app, plugins for
 DaVinci Resolve and Final Cut Pro, and a browser demo.
 
@@ -66,9 +67,10 @@ See [Build support](docs/support.html) for stock-pack setup.
 `SOURCE_ASSETS.json` records where assets came from and their file hashes. Before
 adding data or images, run `python3 tools/check-source-boundary.py`.
 
-Use **Buy packs** in the Mac sidebar to visit [the pack store](https://packs.fotufilm.com).
-Choose **Load custom pack…** to import a download. Imported films work offline.
-Newer versions of the same pack update its films; incompatible packs ask for a Mac app update.
+Download the full pack with all 39 films for free at
+[packs.fotufilm.com](https://packs.fotufilm.com). No account is needed.
+Choose **Load custom pack…** in the Mac sidebar to import the download.
+The films work offline in the app and plugins; restart your editor after importing.
 
 ## More information
 
