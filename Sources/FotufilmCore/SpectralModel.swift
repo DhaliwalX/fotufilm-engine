@@ -501,7 +501,15 @@ public enum SpectralRuntime {
                                           neutralDensity: retainedSilverDensity(
                                               midDensity, dMin: dMin,
                                               fraction: bleachBypass))
-            // Normalize print exposure against this stock's mid-grey energy.
+            // Dividing each channel by the stock's own mid energy is the
+            // per-stock filtration an enlarger operator dials in. A
+            // reference-anchored medium is profiled once instead: the frame is
+            // still auto-exposed (green stays the stock's own), but red and
+            // blue keep the distance this stock's mask and mid-scale colour
+            // put between themselves and the reference's — the cast a real
+            // minilab leaves in the file.
+            let castOffset = referenceCastOffset(midEnergy: midEnergy,
+                                                 stock: stock, paper: paper)
             printing = buildDensityLUT(stock: stock) { density in
                 let energy = paperExposure(density: density,
                                            dyes: stock.spectralProfile.imageDyeDensity,
@@ -512,7 +520,7 @@ public enum SpectralRuntime {
                 return SIMD3<Float>(
                     log10(max(energy.x, 1e-12) / max(midEnergy.x, 1e-12)),
                     log10(max(energy.y, 1e-12) / max(midEnergy.y, 1e-12)),
-                    log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12)))
+                    log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12))) + castOffset
             }
         }
 
@@ -1744,6 +1752,55 @@ public enum SpectralRuntime {
         }
         return e
     }
+
+    /// The per-channel log-exposure cast a reference-anchored medium leaves in
+    /// this stock's positive: the stock's own mid-grey red/blue-over-green
+    /// read minus the reference's. Zero for the reference itself, for every
+    /// medium that times per stock, and for monochrome — one exposure, output
+    /// forced neutral, so a colour offset would be unreachable paint. The reference and the
+    /// ceiling default to the medium's committed profile; a test hands in its own.
+    static func referenceCastOffset(midEnergy: SIMD3<Float>, stock: FilmStock,
+                                    paper: PrintPaper,
+                                    reference: SIMD2<Float> = PrintPaper.labScanReferenceMidRatio,
+                                    ceiling: Float = PrintPaper.labScanCastCeiling)
+        -> SIMD3<Float> {
+        guard paper.isReferenceAnchored, !stock.isMonochrome else { return .zero }
+        var red = log10(max(midEnergy.x, 1e-12) / max(midEnergy.y, 1e-12))
+            - reference.x
+        var blue = log10(max(midEnergy.z, 1e-12) / max(midEnergy.y, 1e-12))
+            - reference.y
+        // The profile's correction authority: the machine's per-frame colour
+        // pass hands small casts through as film character and pulls anything
+        // larger back to this ceiling, direction kept. Calibrated against the
+        // same-lab corpus (`labScanCastCeiling`); without it a stock far from
+        // the reference — a Fuji mid-scale, a remjet-free cine negative —
+        // scans 2-9x warmer than the lab ever lets it.
+        let magnitude = (red * red + blue * blue).squareRoot()
+        if magnitude > ceiling {
+            let held = ceiling / magnitude
+            red *= held
+            blue *= held
+        }
+        return SIMD3(red, 0, blue)
+    }
+
+    /// The numbers `PrintPaper.labScanReferenceMidRatio` and
+    /// `labScanReferenceBalance` are committed from: the given stock's
+    /// mid-grey read through the lab scan's bands, and its solved balance on
+    /// that medium. Public so `fotufilm --dump-labscan-reference` can print
+    /// them for re-committing; the render path reads only the constants.
+    public static func labScanReferenceSolve(for stock: FilmStock)
+        -> (midRatioRed: Float, midRatioBlue: Float, balance: [Float]) {
+        let paper = PrintPaper.labScan
+        let midDensity = (0..<3).map { stock.curves[$0].density(logExposure: 0) }
+        let midEnergy = paperExposure(density: midDensity,
+                                      dyes: stock.spectralProfile.imageDyeDensity,
+                                      lamp: SpectralGrid.equalEnergy,
+                                      paperSensitivity: paper.sensitivity)
+        return (log10(max(midEnergy.x, 1e-12) / max(midEnergy.y, 1e-12)),
+                log10(max(midEnergy.z, 1e-12) / max(midEnergy.y, 1e-12)),
+                neutralPrintingBalance(for: stock, paper: paper))
+    }
 }
 
 extension SpectralRuntime {
@@ -1940,10 +1997,15 @@ extension SpectralRuntime {
                 let energy = paperExposure(density: density,
                                            dyes: stock.spectralProfile.imageDyeDensity,
                                            lamp: lamp, paperSensitivity: paperSensitivity)
+                // The same reference cast the printing LUT carries — this
+                // mirror walks a neutral wedge, and on a profiled medium a
+                // neutral wedge does not print neutral.
                 relative = SIMD3<Float>(
                     log10(max(energy.x, 1e-12) / max(midEnergy.x, 1e-12)),
                     log10(max(energy.y, 1e-12) / max(midEnergy.y, 1e-12)),
                     log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12)))
+                    + referenceCastOffset(midEnergy: midEnergy, stock: stock,
+                                          paper: paper)
             }
             let printed = (0..<3).map { channel in
                 curves[channel].density(

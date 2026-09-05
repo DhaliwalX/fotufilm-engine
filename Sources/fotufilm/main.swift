@@ -18,6 +18,9 @@ Usage:
   fotufilm <a> <b> --diff <output>         Write A | B | amplified difference
   fotufilm --make-chart <f> --scene spectrum  Write the demo's spectrum scene
   fotufilm --list-stocks                   List stocks and the gauge each is known on
+  fotufilm --dump-labscan-reference <stock>
+                                           Print the lab-scan reference profile a calibrated
+                                           build commits for this stock
   fotufilm --dump-wasm-pack <f>            Export a stock's kernel inputs for the browser engine
   fotufilm --dump-wasm-stages <f>          Export the same, once per pipeline stage
   fotufilm --dump-spectra                  Write spectral profiles as JSON
@@ -196,6 +199,20 @@ if flags["--list-stocks"] != nil {
     for (key, stock) in FilmStock.presets.sorted(by: { $0.key < $1.key }) {
         print("\(key)\t\(stock.name)\t\(FilmFormat.nativeID(forStockID: key))")
     }
+    exit(0)
+}
+
+// The numbers `PrintPaper.labScanReferenceMidRatio`/`labScanReferenceBalance`
+// are committed from, for re-committing after a change to the reference
+// stock's sheet, the lab-scan bands, or the balance solve. A calibrated build
+// keeps its reference in its own stock set, so point FOTUFILM_STOCKS at it.
+if let stockID = flags["--dump-labscan-reference"] {
+    guard let stock = FilmStock.presets[stockID] else {
+        fail("Unknown stock '\(stockID)'. See --list-stocks")
+    }
+    let solved = SpectralRuntime.labScanReferenceSolve(for: stock)
+    print("labScanReferenceMidRatio = SIMD2<Float>(\(solved.midRatioRed), \(solved.midRatioBlue))")
+    print("labScanReferenceBalance = \(solved.balance)")
     exit(0)
 }
 

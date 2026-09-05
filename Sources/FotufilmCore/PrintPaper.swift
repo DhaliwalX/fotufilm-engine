@@ -144,6 +144,20 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         }
     }
 
+    /// Whether this output path's colour is profiled once, on a reference negative, rather than
+    /// re-timed for the stock in the carrier.
+    ///
+    /// An enlarger operator dials filtration for the negative in front of them, so every physical
+    /// paper solves its own neutral per stock. A minilab's inversion is a fixed profile: the
+    /// machine auto-exposes each frame but does not re-solve its colour for the emulsion, so each
+    /// stock keeps the cast its mask and mid-scale colour put between it and the reference. The
+    /// profile is `labScanReferenceMidRatio`, `labScanReferenceBalance` and `labScanCastCeiling`.
+    /// This repository carries a neutral reference and a zero ceiling, which leaves the lab scan
+    /// timing every stock neutral; a calibrated build supplies its own numbers. The telecine
+    /// keeps per-stock timing: its chain is timed per programme by a colourist, not left to a
+    /// profile.
+    public var isReferenceAnchored: Bool { self == .labScan }
+
     /// Whether the scan's three channels leave the machine as a Rec.709 video signal rather than
     /// as an unrendered file. The engine's delivery basis is display-linear P3, which is wider, so
     /// the container is honoured by holding the timed colour inside the Rec.709 primaries (sRGB

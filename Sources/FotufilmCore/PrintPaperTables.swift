@@ -31,6 +31,17 @@ extension PrintPaper {
         }
         return [curve, curve, curve]
     }
+
+    /// The fixed lab-scan profile `isReferenceAnchored` names: the reference negative's
+    /// log10(red/green, blue/green) read at mid-grey through the scan's bands, its solved printing
+    /// balance on that medium, and the largest cast magnitude, in log paper exposure, that the
+    /// machine's per-frame colour pass hands through before pulling a stock back toward the
+    /// reference. A neutral reference and a zero ceiling make `referenceCastOffset` inert here, so
+    /// every stock scans neutral; a calibrated build commits the numbers that
+    /// `fotufilm --dump-labscan-reference <stock>` prints for its reference stock.
+    static let labScanReferenceMidRatio = SIMD2<Float>(0, 0)
+    static let labScanReferenceBalance: [Float] = [1, 1, 1]
+    static let labScanCastCeiling: Float = 0
 }
 
 extension SpectralGrid {
