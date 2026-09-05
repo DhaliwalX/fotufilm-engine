@@ -120,7 +120,7 @@ if [[ -n "$EXPORTED" ]]; then
 fi
 
 cp macos/FotufilmApp/Info.plist "$APP/Contents/Info.plist"
-if [[ "$FOTUFILM_SOURCE_BUILD" == "1" ]]; then
+if [[ "$FOTUFILM_SOURCE_BUILD" == "1" || "${FOTUFILM_USE_SOURCE_IDENTITY:-0}" == "1" ]]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.muastudio.fotufilm.source" "$APP/Contents/Info.plist"
   for key in FotufilmUpdateFeedURL; do
     /usr/libexec/PlistBuddy -c "Delete :$key" "$APP/Contents/Info.plist"

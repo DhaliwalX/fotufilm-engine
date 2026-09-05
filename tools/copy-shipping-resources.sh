@@ -38,6 +38,9 @@ if [[ "$FOTUFILM_SOURCE_BUILD" == 1 ]]; then
 else
   SEALED_DIRECTORY="$FOTUFILM_SEALED_PACKS"
   PACK_NAMES=(fotufilm bundled)
+  mkdir -p "$DESTINATION/licenses"
+  install -m 0644 licenses/STARTER-PACK.txt "$DESTINATION/licenses/STARTER-PACK.txt"
+  install -m 0644 licenses/CC-BY-ND-4.0.txt "$DESTINATION/licenses/CC-BY-ND-4.0.txt"
 fi
 EXPECTED_VAULT_KEY_ID="$(sed -n \
   's/^ *static let vaultKeyID: UInt16 = \([0-9][0-9]*\) *$/\1/p' \

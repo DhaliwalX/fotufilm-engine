@@ -56,7 +56,7 @@ Halide toolchain is not available.
 
 ## Included films
 
-The app runs without activation and bundles the free Starter pack: Gold 200,
+Default source builds run without activation and bundle the free Starter pack: Gold 200,
 Tri-X 400, and Provia 100F. These calibrated profiles use
 [CC BY-ND 4.0](licenses/STARTER-PACK.txt); the engine code has separate terms.
 
@@ -67,10 +67,10 @@ See [Build support](docs/support.html) for stock-pack setup.
 `SOURCE_ASSETS.json` records where assets came from and their file hashes. Before
 adding data or images, run `python3 tools/check-source-boundary.py`.
 
-Download the full pack with all 39 films for free at
-[packs.fotufilm.com](https://packs.fotufilm.com). No account is needed.
-Choose **Load custom pack…** in the Mac sidebar to import the download.
-The films work offline in the app and plugins; restart your editor after importing.
+[Download the desktop app](https://github.com/DhaliwalX/fotufilm-downloads/releases/latest/download/Fotufilm-macOS.pkg) for the Mac app, Resolve and Final Cut plugins,
+and all 40 film stocks in one free installer. The films work offline without a
+separate pack download or import. Restart your editor after updating its plugin.
+Optional custom packs can still be imported through **Load custom pack…**.
 
 ## More information
 

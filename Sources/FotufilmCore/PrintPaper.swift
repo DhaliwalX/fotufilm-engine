@@ -32,12 +32,12 @@ public enum PrintPaper: String, CaseIterable, Sendable {
 
     public var name: String {
         switch self {
-        case .ektacolorEdge: return "Kodak Ektacolor Edge Paper (example)"
-        case .enduraPremier: return "Kodak Professional Endura Premier Paper (example)"
-        case .crystalArchive: return "Fujicolor Crystal Archive Paper Type CA (example)"
-        case .vision2383: return "Kodak Vision Color Print Film 2383 (example)"
-        case .vision2393: return "Kodak Vision Premier Color Print Film 2393 (example)"
-        case .eternaCP: return "Fujifilm ETERNA-CP Color Positive Film 3513DI (example)"
+        case .ektacolorEdge: return "Kodak Ektacolor Edge Paper"
+        case .enduraPremier: return "Kodak Professional Endura Premier Paper"
+        case .crystalArchive: return "Fujicolor Crystal Archive Paper Type CA"
+        case .vision2383: return "Kodak Vision Color Print Film 2383"
+        case .vision2393: return "Kodak Vision Premier Color Print Film 2393"
+        case .eternaCP: return "Fujifilm ETERNA-CP Color Positive Film 3513DI"
         case .labScan: return "Lab Scan"
         case .telecine: return "Telecine"
         case .screen: return "Digital Reference"

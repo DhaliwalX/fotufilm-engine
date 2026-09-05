@@ -9,16 +9,17 @@
 <p>Start CI manually in GitHub Actions. Rendering and plugin tests need a working Metal device.</p>
 <h2>Film packs</h2>
 <p>Packs loaded in the Mac app are also available in the Fotufilm plugins on the same Mac and user account. Restart Resolve or Final Cut Pro after loading or updating a pack. Install matching app and plugin versions; older plugins skip packs that require a newer release.</p>
-<p>The Mac app and plugins include the three Starter profiles and their licence notices. No licence key or activation is needed.</p>
-<p>Download the full pack for free from <a href="https://packs.fotufilm.com">Fotufilm packs</a>, then choose <strong>File → Import Film Pack…</strong>. If import fails, download it again and check that your app supports the pack format.</p>
+<p>Default source builds include the three Starter profiles and their licence notices. No licence key or activation is needed.</p>
+<p>The <a href="https://github.com/DhaliwalX/fotufilm-downloads/releases/latest/download/Fotufilm-macOS.pkg">desktop installer</a> includes all 40 films in the app and both plugins. No separate pack download or import is required.</p>
 <p>The build checks that the Starter folder contains only the released files. Import other packs through the app instead of adding files to that folder.</p>
 <p>Custom stock definitions require schema version 1. Sampled spectral rows must contain 81 values from 380 to 780 nm at 5 nm spacing. Coupler geometry must state its two <code>interlayerTransmission</code> values. Older 41-sample rows and range-only coupler definitions are no longer converted during import; export them again in the current format.</p>
 <h2>Disabled Resolve controls</h2>
 <p>Check <strong>Stage</strong>, <strong>Resolved Format</strong>, <strong>Resolved Medium</strong>, and <strong>Effective Renderer</strong>. Custom Mottle needs Full and clump-field grain. Discs needs a silver-image film and Reference mode.</p>
-<p>The app and both plugins use the same paper and print-film names in <strong>Output Medium</strong>. The <strong>(example)</strong> label identifies an analytic model, not a measured commercial calibration.</p>
+<p>The app and both plugins use the same paper and print-film names in <strong>Output Medium</strong>. In the source distribution, the model descriptions identify the analytic example receivers.</p>
 <p>Negative Only produces density data. To view a negative image, choose Full and set Output Medium to Negative.</p>
 <h2>Custom builds</h2>
 <p>For a custom pack build, set both <code>FOTUFILM_PACK_KEY_SOURCE</code> and <code>FOTUFILM_SEALED_PACKS</code> to absolute paths outside this checkout. Both are required. Keep secret pack keys out of version control.</p>
+<p>To add supplied packs while retaining the source app’s bundle identifier, keychain service, and imported-pack library, set <code>FOTUFILM_USE_SOURCE_IDENTITY=1</code>. This changes identity selection only; the configured sealed packs still determine the bundled catalogue.</p>
 <p>Run <code>python3 tools/check-source-boundary.py</code> before adding files. Record the source and hash of new images, data, and third-party headers in <code>SOURCE_ASSETS.json</code>.</p>
 <p>Flat Swift builds must add <code>-ISources/FotufilmHalide/include</code> to import the C bridge declarations. The supplied Mac and plugin scripts already do this; Swift Package Manager discovers the module automatically.</p>
 <p><a href="documentation.html">User guide</a> · <a href="../LICENSING.md">Licences</a></p>
