@@ -57,6 +57,7 @@ public enum FilmPackContainer {
                             keyID: UInt16,
                             key: FilmPackKey) throws -> Data {
         #if canImport(CryptoKit)
+        try manifest.release.validate()
         let json = try JSONEncoder().encode(manifest)
         guard let payload = deflate(json) else { throw Failure.compressionFailed }
 
@@ -98,7 +99,8 @@ public enum FilmPackContainer {
 
     /// Opens whatever it is handed if the keyring has the key.
     public static func open(_ data: Data,
-                            keyring: FilmPackKeyring = .shared)
+                            keyring: FilmPackKeyring = .shared,
+                            macAppVersion: String? = nil)
         throws -> (manifest: FilmPackManifest, head: Head) {
         #if canImport(CryptoKit)
         let head = try peek(data)
@@ -122,6 +124,10 @@ public enum FilmPackContainer {
         }
 
         guard let json = inflate(plaintext) else { throw Failure.compressionFailed }
+        // Read compatibility before stocks: a newer pack may use stock fields this app cannot decode.
+        let release = try JSONDecoder().decode(FilmPackRelease.self, from: json)
+        try release.validate()
+        if let macAppVersion { try release.requireMacApp(version: macAppVersion) }
         do {
             return (try JSONDecoder().decode(FilmPackManifest.self, from: json), head)
         } catch {
@@ -327,10 +333,18 @@ public struct FilmPackManifest: Codable, Sendable {
     public var notes: String?
     /// Presentation only; nothing trusts it.
     public var created: Date
+    /// Release versions are independent of the container and manifest schemas.
+    public var version: String?
+    public var minimumMacAppVersion: String?
     public var stocks: [FilmStockDefinition]
+
+    public var release: FilmPackRelease {
+        FilmPackRelease(version: version, minimumMacAppVersion: minimumMacAppVersion)
+    }
 
     public init(packID: String, name: String, author: String? = nil,
                 notes: String? = nil, created: Date = Date(),
+                version: String? = nil, minimumMacAppVersion: String? = nil,
                 stocks: [FilmStockDefinition]) {
         self.manifestVersion = 1
         self.packID = packID
@@ -338,6 +352,55 @@ public struct FilmPackManifest: Codable, Sendable {
         self.author = author
         self.notes = notes
         self.created = created
+        self.version = version
+        self.minimumMacAppVersion = minimumMacAppVersion
         self.stocks = stocks
+    }
+}
+
+/// Optional for packs created before release versioning was introduced.
+public struct FilmPackRelease: Codable, Sendable {
+    public var version: String?
+    public var minimumMacAppVersion: String?
+
+    public init(version: String? = nil, minimumMacAppVersion: String? = nil) {
+        self.version = version
+        self.minimumMacAppVersion = minimumMacAppVersion
+    }
+
+    public enum Failure: Error, CustomStringConvertible {
+        case invalidVersion(String)
+        case requiresMacApp(String)
+
+        public var description: String {
+            switch self {
+            case .invalidVersion(let value):
+                return "Invalid pack version: \(value). Use numbers such as 1.2.0."
+            case .requiresMacApp(let version):
+                return "This pack needs Fotufilm \(version) or later. Please update to the latest version, then load the pack again."
+            }
+        }
+    }
+
+    private static func components(_ value: String) throws -> [Int] {
+        let parts = value.split(separator: ".", omittingEmptySubsequences: false)
+        guard (1...3).contains(parts.count), parts.allSatisfy({
+            !$0.isEmpty && $0.utf8.allSatisfy { (48...57).contains($0) } && Int($0) != nil
+        }) else { throw Failure.invalidVersion(value) }
+        return parts.map { Int($0)! } + Array(repeating: 0, count: 3 - parts.count)
+    }
+
+    public func validate() throws {
+        if let version { _ = try Self.components(version) }
+        if let minimumMacAppVersion { _ = try Self.components(minimumMacAppVersion) }
+    }
+
+    public func requireMacApp(version current: String) throws {
+        guard let minimumMacAppVersion else { return }
+        let required = try Self.components(minimumMacAppVersion)
+        guard let running = try? Self.components(current),
+              !running.lexicographicallyPrecedes(required) else {
+            throw Failure.requiresMacApp(minimumMacAppVersion)
+        }
     }
 }

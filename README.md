@@ -66,8 +66,9 @@ See [Build support](docs/support.html) for stock-pack setup.
 `SOURCE_ASSETS.json` records where assets came from and their file hashes. Before
 adding data or images, run `python3 tools/check-source-boundary.py`.
 
-To add a downloaded pack, choose **File → Import Film Pack…** in the Mac app.
-Imported films work offline.
+Use **Buy packs** in the Mac sidebar to visit [the pack store](https://packs.fotufilm.com).
+Choose **Load custom pack…** to import a download. Imported films work offline.
+Newer versions of the same pack update its films; incompatible packs ask for a Mac app update.
 
 ## More information
 

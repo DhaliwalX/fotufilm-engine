@@ -20,5 +20,8 @@
 <p>Run <code>python3 tools/check-source-boundary.py</code> before adding files. Record the source and hash of new images, data, and third-party headers in <code>SOURCE_ASSETS.json</code>.</p>
 <p>Flat Swift builds must add <code>-ISources/FotufilmHalide/include</code> to import the C bridge declarations. The supplied Mac and plugin scripts already do this; Swift Package Manager discovers the module automatically.</p>
 <p><a href="documentation.html">User guide</a> · <a href="../LICENSING.md">Licences</a></p>
+<h2>Pack versions</h2>
+<p>Pack releases can include <code>version</code> and <code>minimumMacAppVersion</code>, using one to three numbers separated by dots. Packs without these fields still work.</p>
+<p>When sealing a pack, use <code>--pack-version 1.0.0 --minimum-mac-app-version 1.6</code>. Keep the same pack ID for updates. Increase the pack version when its films change, and increase the minimum Mac version when those changes need a newer app. App releases before this check ignore the new tag.</p>
 </body>
 </html>

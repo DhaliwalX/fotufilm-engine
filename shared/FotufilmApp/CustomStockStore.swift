@@ -34,8 +34,29 @@ enum CustomStockStore {
     }
 
     /// Called by `StockPacks`, which owns when a reload happens.
+    static var incompatiblePacks: [String] = []
+
+    static var macAppVersion: String? {
+        #if os(macOS)
+        return Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        #else
+        return nil
+        #endif
+    }
+
     static func publish() {
-        FilmStockPack.installedSealedPackURLs = packFiles()
+        incompatiblePacks = []
+        FilmStockPack.installedSealedPackURLs = packFiles().filter { url in
+            do {
+                _ = try FilmPackContainer.open(Data(contentsOf: url), macAppVersion: macAppVersion)
+                return true
+            } catch let error as FilmPackRelease.Failure {
+                incompatiblePacks.append("\(url.deletingPathExtension().lastPathComponent): \(error)")
+                return false
+            } catch {
+                return true // Normal loader reports other errors; local keys may arrive later.
+            }
+        }
     }
 
     enum StoreError: Error, CustomStringConvertible {
@@ -98,6 +119,7 @@ enum CustomStockStore {
         var packID: String
         var name: String
         var stockNames: [String]
+        var version: String?
         var replacedExisting: Bool
     }
 
@@ -120,7 +142,7 @@ enum CustomStockStore {
                     : "That pack was made for a single device and cannot be moved.")
         }
 
-        let manifest = try FilmPackContainer.open(data).manifest
+        let manifest = try FilmPackContainer.open(data, macAppVersion: macAppVersion).manifest
         guard !manifest.stocks.isEmpty else {
             throw StoreError.unreadable("That pack has no films in it.")
         }
@@ -136,7 +158,7 @@ enum CustomStockStore {
         StockPacks.refresh()
 
         return ImportResult(packID: manifest.packID, name: manifest.name,
-                            stockNames: manifest.stocks.map(\.name),
+                            stockNames: manifest.stocks.map(\.name), version: manifest.version,
                             replacedExisting: replaced)
     }
 

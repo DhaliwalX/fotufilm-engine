@@ -154,6 +154,8 @@ Pack options (--seal-pack / --open-pack):
   --pack-out <path>  Output file when sealing; output directory when opening
   --pack-kind <k>    vault, community or local (default: community)
   --pack-id <id>     Pack identity; imported stock ids are qualified with it
+  --pack-version <v> Release version, e.g. 1.0.0
+  --minimum-mac-app-version <v> Minimum Mac app version, e.g. 1.6
   --pack-name <s>    Display name
   --pack-author <s>  Credit
   --pack-notes <s>   Free text carried with the pack
@@ -333,6 +335,8 @@ if let directory = flags["--seal-pack"] {
         name: flags["--pack-name"] ?? packID,
         author: flags["--pack-author"],
         notes: flags["--pack-notes"],
+        version: flags["--pack-version"],
+        minimumMacAppVersion: flags["--minimum-mac-app-version"],
         stocks: definitions.keys.sorted().compactMap { definitions[$0] })
     do {
         let sealed = try FilmPackContainer.seal(manifest, kind: kind,
@@ -363,6 +367,8 @@ if let path = flags["--open-pack"] {
         let (manifest, head) = try FilmPackContainer.open(data, keyring: keyring)
         print("pack \(manifest.packID) — \(manifest.name)")
         print("kind \(head.kind), key \(head.keyID), sealed \(manifest.created)")
+        if let version = manifest.version { print("version \(version)") }
+        if let minimum = manifest.minimumMacAppVersion { print("minimum Mac app \(minimum)") }
         if let author = manifest.author { print("by \(author)") }
         for stock in manifest.stocks {
             print("  \(stock.id)\t\(stock.name)")
