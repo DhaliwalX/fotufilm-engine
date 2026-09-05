@@ -117,8 +117,10 @@ int main(int argc, char **argv) {
         const std::string mode = mode_name != nullptr ? mode_name : "safe";
         const std::string math_flag =
             mode == "fast" ? std::string() : " -fmetal-math-mode=" + mode;
+        // Match the Mac app's minimum OS instead of inheriting the installed SDK's target.
+        const std::string deployment_flag = macos ? " -mmacosx-version-min=14.0" : "";
         Halide::set_metal_compiler_and_linker(
-            std::string("xcrun -sdk ") + metal_sdk + " metal" + math_flag,
+            std::string("xcrun -sdk ") + metal_sdk + " metal" + deployment_flag + math_flag,
             std::string("xcrun -sdk ") + metal_sdk + " metallib");
     }
 #endif
