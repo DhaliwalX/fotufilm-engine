@@ -18,7 +18,12 @@ jobs:
       - run: python3 tools/check-source-boundary.py
       - run: python3 tools/test-source-boundary.py
       - run: brew install halide
-      - run: swift test -c release --parallel
+      # Compile the largest Metal grain pipeline without other test processes competing
+      # for the hosted runner's GPU resources. It remains part of the required suite.
+      - name: Resolved silver grain on Metal
+        run: swift test -c release --filter testResolvedSilverDiscsMatchCPUAndChangeWithTheSeed
+      - name: Remaining release tests
+        run: swift test -c release --parallel --num-workers 2 --skip testResolvedSilverDiscsMatchCPUAndChangeWithTheSeed
       - run: swift build
       - run: finalcut/build.sh --test
       - run: macos/build.sh --test
