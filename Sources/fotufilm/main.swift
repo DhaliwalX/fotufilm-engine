@@ -102,9 +102,9 @@ Options:
                      the read adapts to the light — and the paper dyes'
                      metamerism moves. Default: D50 for paper, calibrated
                      5400 K xenon for cinema print, fixed D65 for screen
-  --paper <name>     Output medium: example-photo (default), example-photo-contrast,
-                     example-photo-soft, example-projection, example-projection-contrast,
-                     example-projection-soft, lab-scan, telecine, screen or negative.
+  --paper <name>     Output medium: ektacolor-edge (default), endura-premier,
+                     crystal-archive, vision-2383, vision-2393,
+                     eterna-cp, lab-scan, telecine, screen or negative.
                      Photo and projection variants use analytic example curves.
                      Reversal stocks use screen regardless of the requested medium.
   --negative <how>   Show the developed negative instead of the print it would

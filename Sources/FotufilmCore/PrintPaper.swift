@@ -2,12 +2,12 @@ import Foundation
 
 /// The medium that turns developed film into a finished image, including the film itself.
 public enum PrintPaper: String, CaseIterable, Sendable {
-    case photo = "example-photo"
-    case photoContrast = "example-photo-contrast"
-    case photoSoft = "example-photo-soft"
-    case projection = "example-projection"
-    case projectionContrast = "example-projection-contrast"
-    case projectionSoft = "example-projection-soft"
+    case ektacolorEdge = "ektacolor-edge"
+    case enduraPremier = "endura-premier"
+    case crystalArchive = "crystal-archive"
+    case vision2383 = "vision-2383"
+    case vision2393 = "vision-2393"
+    case eternaCP = "eterna-cp"
     /// The minilab scanner's finished positive: a trichromatic LED read of the
     /// negative inverted in software, the way most real colour negative is
     /// finished today.
@@ -22,7 +22,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     case negative
 
     /// Default for engine and headless callers.
-    public static let `default`: PrintPaper = .photo
+    public static let `default`: PrintPaper = .ektacolorEdge
 
     /// The default output for editor edits and the direct-positive destination for reversal film.
     /// The engine's unstated, physically matched path remains `default(for:)`.
@@ -32,12 +32,12 @@ public enum PrintPaper: String, CaseIterable, Sendable {
 
     public var name: String {
         switch self {
-        case .photo: return "Example Photo Print"
-        case .photoContrast: return "Example Photo Print — Contrast"
-        case .photoSoft: return "Example Photo Print — Soft"
-        case .projection: return "Example Projection"
-        case .projectionContrast: return "Example Projection — Contrast"
-        case .projectionSoft: return "Example Projection — Soft"
+        case .ektacolorEdge: return "Example Photo Print"
+        case .enduraPremier: return "Example Photo Print 2"
+        case .crystalArchive: return "Example Photo Print 3"
+        case .vision2383: return "Example Projection"
+        case .vision2393: return "Example Projection 2"
+        case .eternaCP: return "Example Projection 3"
         case .labScan: return "Lab Scan"
         case .telecine: return "Telecine"
         case .screen: return "Digital Reference"
@@ -47,8 +47,8 @@ public enum PrintPaper: String, CaseIterable, Sendable {
 
     public var detail: String {
         switch self {
-        case .photo, .photoContrast, .photoSoft,
-             .projection, .projectionContrast, .projectionSoft:
+        case .ektacolorEdge, .enduraPremier, .crystalArchive,
+             .vision2383, .vision2393, .eternaCP:
             return "An analytic example receiver, not a calibration of a commercial print material."
         case .labScan:
             return "A clean digital scan of the negative, with the full black point and punchy "
@@ -101,8 +101,8 @@ public enum PrintPaper: String, CaseIterable, Sendable {
                                     gauge: FilmFormat) -> [PrintPaper] {
         guard !stock.isReversal else { return [.screen] }
         var media: [PrintPaper] = gauge.isMotionPicture
-            ? [.projection, .projectionContrast, .projectionSoft, .telecine]
-            : [.photo, .photoContrast, .photoSoft]
+            ? [.vision2383, .vision2393, .eternaCP, .telecine]
+            : [.ektacolorEdge, .enduraPremier, .crystalArchive]
         if let native = stock.nativePrintMedium,
            let index = media.firstIndex(of: native) {
             media.remove(at: index)
@@ -114,15 +114,15 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// Illustrative viewing glare as a fraction of the medium's reference white.
     public var viewingFlare: Float {
         switch self {
-        case .projection, .projectionContrast, .projectionSoft: return 1.0 / 2000.0
-        case .photo, .photoContrast, .photoSoft: return 1.0 / 400.0
+        case .vision2383, .vision2393, .eternaCP: return 1.0 / 2000.0
+        case .ektacolorEdge, .enduraPremier, .crystalArchive: return 1.0 / 400.0
         case .labScan, .telecine, .screen, .negative: return 0
         }
     }
 
     /// Projection uses the example xenon illuminant; photo prints use D50.
     public var isProjected: Bool {
-        self == .projection || self == .projectionContrast || self == .projectionSoft
+        self == .vision2383 || self == .vision2393 || self == .eternaCP
     }
 
     /// Whether this finished positive is a scanner's file rather than a physical
@@ -137,7 +137,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// second viewing-light transform.
     public var acceptsViewingIlluminant: Bool {
         switch self {
-        case .photo, .photoContrast, .photoSoft, .projection, .projectionContrast, .projectionSoft:
+        case .ektacolorEdge, .enduraPremier, .crystalArchive, .vision2383, .vision2393, .eternaCP:
             return true
         case .labScan, .telecine, .screen, .negative:
             return false
@@ -154,8 +154,8 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// Illustrative output-stage blur, expressed as Gaussian sigma in millimetres on film.
     public var enlargerBlurMM: Float {
         switch self {
-        case .photo, .photoContrast, .photoSoft: return 0.004
-        case .projection, .projectionContrast, .projectionSoft: return 0.003
+        case .ektacolorEdge, .enduraPremier, .crystalArchive: return 0.004
+        case .vision2383, .vision2393, .eternaCP: return 0.003
         case .labScan: return 0.007
         case .telecine: return 0.0065
         case .screen, .negative: return 0
@@ -167,7 +167,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         switch self {
         case .labScan: return 0.65
         case .telecine: return 0.8
-        case .photo, .photoContrast, .photoSoft, .projection, .projectionContrast, .projectionSoft,
+        case .ektacolorEdge, .enduraPremier, .crystalArchive, .vision2383, .vision2393, .eternaCP,
              .screen, .negative:
             return 0
         }

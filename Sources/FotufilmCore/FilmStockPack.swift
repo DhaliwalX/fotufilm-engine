@@ -100,7 +100,7 @@ public struct FilmStockDefinition: Codable, Sendable {
     /// A direct positive that is the print — an integral instant sheet.
     public var isReflectionPrint: Bool?
     /// The id of the finished positive this emulsion was designed to be printed onto — a
-    /// `PrintPaper` raw value such as `"example-projection"`. Absent means the stock states no
+    /// `PrintPaper` raw value such as `"vision-2383"`. Absent means the stock states no
     /// preference and takes the engine's default sheet.
     public var nativePrintMedium: String?
     /// The loaded id of the stock whose sampled spectral record this definition's curves descend

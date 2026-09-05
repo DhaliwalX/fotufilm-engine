@@ -6,11 +6,11 @@ final class FilmStripMediaTests: XCTestCase {
         for stock in [TestStocks.negative, TestStocks.monochrome] {
             for gauge in [FilmFormat.still35, .mediumFormat120] {
                 XCTAssertEqual(PrintPaper.stripChoices(for: stock, gauge: gauge),
-                               [.photo, .photoContrast, .photoSoft, .screen])
+                               [.ektacolorEdge, .enduraPremier, .crystalArchive, .screen])
             }
             for gauge in [FilmFormat.super35, .sixteenMM, .super8] {
                 XCTAssertEqual(PrintPaper.stripChoices(for: stock, gauge: gauge),
-                               [.projection, .projectionContrast, .projectionSoft,
+                               [.vision2383, .vision2393, .eternaCP,
                                 .telecine, .screen])
             }
         }
@@ -27,14 +27,14 @@ final class FilmStripMediaTests: XCTestCase {
 
     func testNativeMediumLeadsOnlyWhenItBelongsToTheGauge() {
         var stock = TestStocks.negative
-        stock.nativePrintMedium = .projectionSoft
+        stock.nativePrintMedium = .eternaCP
         XCTAssertEqual(PrintPaper.stripChoices(for: stock, gauge: .super35),
-                       [.projectionSoft, .projection, .projectionContrast, .telecine, .screen])
+                       [.eternaCP, .vision2383, .vision2393, .telecine, .screen])
         XCTAssertEqual(PrintPaper.stripChoices(for: stock, gauge: .still35),
-                       [.photo, .photoContrast, .photoSoft, .screen])
-        stock.nativePrintMedium = .photoContrast
+                       [.ektacolorEdge, .enduraPremier, .crystalArchive, .screen])
+        stock.nativePrintMedium = .enduraPremier
         XCTAssertEqual(PrintPaper.stripChoices(for: stock, gauge: .still35),
-                       [.photoContrast, .photo, .photoSoft, .screen])
+                       [.enduraPremier, .ektacolorEdge, .crystalArchive, .screen])
     }
 
     func testStripsAreUniqueAndEndOnTheDisplay() {

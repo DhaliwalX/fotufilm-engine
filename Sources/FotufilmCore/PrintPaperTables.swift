@@ -19,11 +19,11 @@ extension PrintPaper {
             // Simple, distinct contrast variants, not commercial calibrations.
             let gamma: Float
             switch self {
-            case .photoContrast: gamma = 2.8
-            case .photoSoft: gamma = 2.2
-            case .projection: gamma = 3
-            case .projectionContrast: gamma = 3.5
-            case .projectionSoft: gamma = 2.7
+            case .enduraPremier: gamma = 2.8
+            case .crystalArchive: gamma = 2.2
+            case .vision2383: gamma = 3
+            case .vision2393: gamma = 3.5
+            case .eternaCP: gamma = 2.7
             default: gamma = 2.5
             }
             curve = CharacteristicCurve(dMin: 0.05, gamma: gamma,

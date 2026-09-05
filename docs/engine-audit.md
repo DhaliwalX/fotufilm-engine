@@ -13,17 +13,15 @@ call-site inspection, format checks, builds, and rendering regression tests.
 | Spatial Metal | Removed three unreachable dispatch helpers, their parameter structures, shaders, and pipeline creation. |
 | C bridge | Added a Clang module map and imported the actual C declarations, including AOT plugin contexts. Removed manually duplicated Swift function declarations. |
 | Stock formats | Removed automatic 41-to-81-sample conversion and range-only coupler decoding. Require the current schema version. Use synthesized dye-family and colour-grade serialization. |
-| Print models | Replaced commercial identifiers with example-model identifiers. Removed film-name matching from the preview strip and the permanently zero lab-scan cast calculation and calibration command. |
+| Print models | Preserved existing paper names and identifiers. Removed film-name matching from the preview strip and the permanently zero lab-scan cast calculation and calibration command. |
 | Installation | Shared bundle copying between OFX, FxPlug, and Motion templates. Removed duplicate deletion of the current OFX bundle under its supposed legacy name, including the obsolete preinstall script. Fixed the installation check to verify removal of an actual stale file. |
 | Build and tests | Removed unused activation-test switches and the unreachable activation test. Reused Halide discovery and removed lookup of a nonexistent fetch script. Shortened obsolete build commentary. |
 | Asset audit | Corrected 21 stale hashes after verifying the files were byte-identical to the existing merged source. Asset contents and golden images were unchanged. |
 
-## Intentional interface changes
+## Interfaces and formats
 
-- `PrintPaper` uses `photo`, `photoContrast`, `photoSoft`, `projection`,
-  `projectionContrast`, and `projectionSoft`. Their CLI and JSON identifiers
-  start with `example-photo` or `example-projection`; see the user guide.
-  Each variant keeps its existing numerical model.
+- `PrintPaper` retains its original Swift cases, CLI/JSON IDs, and display names.
+  Each paper keeps its existing numerical model and saved selections still resolve.
 - Still-film strips offer all three photo variants. Motion-picture strips offer
   all three projection variants and Telecine. An applicable declared native
   medium comes first. Reversal film uses Digital Reference.

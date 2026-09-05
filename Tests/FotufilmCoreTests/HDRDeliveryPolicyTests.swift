@@ -12,7 +12,7 @@ final class HDRDeliveryPolicyTests: XCTestCase {
     }
 
     func testPhysicalMediumDisablesHDREvenForReversalFilm() {
-        XCTAssertFalse(PrintPaper.photo.supportsHDRDelivery(
+        XCTAssertFalse(PrintPaper.ektacolorEdge.supportsHDRDelivery(
             for: TestStocks.reversal))
     }
 }

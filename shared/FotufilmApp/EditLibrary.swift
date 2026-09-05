@@ -491,7 +491,7 @@ extension EditState: Codable {
         printCorrection = try c.decodeIfPresent(
             Double.self, forKey: .printCorrection) ?? printCorrection
         paper = try c.decodeIfPresent(String.self, forKey: .paper)
-            .flatMap(PrintPaper.preset(id:)) ?? .photo
+            .flatMap(PrintPaper.preset(id:)) ?? .ektacolorEdge
         // Older records stored a concrete medium and therefore preserve that choice. New edits
         // write the following flag explicitly.
         paperFollowsStock = try c.decodeIfPresent(
