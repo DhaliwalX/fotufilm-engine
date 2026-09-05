@@ -15,6 +15,7 @@
 <p>Custom stock definitions require schema version 1. Sampled spectral rows must contain 81 values from 380 to 780 nm at 5 nm spacing. Coupler geometry must state its two <code>interlayerTransmission</code> values. Older 41-sample rows and range-only coupler definitions are no longer converted during import; export them again in the current format.</p>
 <h2>Disabled Resolve controls</h2>
 <p>Check <strong>Stage</strong>, <strong>Resolved Format</strong>, <strong>Resolved Medium</strong>, and <strong>Effective Renderer</strong>. Custom Mottle needs Full and clump-field grain. Discs needs a silver-image film and Reference mode.</p>
+<p>The app and both plugins use the same paper and print-film names in <strong>Output Medium</strong>. The <strong>(example)</strong> label identifies an analytic model, not a measured commercial calibration.</p>
 <p>Negative Only produces density data. To view a negative image, choose Full and set Output Medium to Negative.</p>
 <h2>Custom builds</h2>
 <p>For a custom pack build, set both <code>FOTUFILM_PACK_KEY_SOURCE</code> and <code>FOTUFILM_SEALED_PACKS</code> to absolute paths outside this checkout. Both are required. Keep secret pack keys out of version control.</p>
