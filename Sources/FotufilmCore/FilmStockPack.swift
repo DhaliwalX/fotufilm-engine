@@ -536,6 +536,7 @@ public struct FilmStockPack: Sendable {
         if let bundled = Bundle.main.url(forResource: "Stocks", withExtension: nil) {
             paths.append(bundled)
         }
+        paths.append(contentsOf: embeddedStockDirectories)
         paths.append(URL(fileURLWithPath: "Stocks", isDirectory: true))
         if let configured = ProcessInfo.processInfo.environment["FOTUFILM_STOCKS"] {
             paths.append(contentsOf: configured.split(separator: ":")
@@ -543,6 +544,13 @@ public struct FilmStockPack: Sendable {
                 .map { URL(fileURLWithPath: String($0), isDirectory: true) })
         }
         return paths
+    }
+
+    /// Stock directories owned by a plugin bundle, whose `Bundle.main` is the host.
+    /// Searched with bundled JSON stocks, before local and explicitly configured overrides.
+    public static var embeddedStockDirectories: [URL] {
+        get { embeddedStockStorage.withLock { $0 } }
+        set { embeddedStockStorage.withLock { $0 = newValue } }
     }
 
     /// Read every `*.json` in `directory`.
@@ -749,6 +757,7 @@ public struct FilmStockPack: Sendable {
     private static let generationStorage = Mutex<Int>(0)
     private static let installedSealedStorage = Mutex<[URL]>([])
     private static let embeddedSealedStorage = Mutex<[URL]>([])
+    private static let embeddedStockStorage = Mutex<[URL]>([])
 }
 
 public extension FilmStockPack {

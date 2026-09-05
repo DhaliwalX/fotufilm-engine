@@ -1,5 +1,9 @@
 #if defined(FOTUFILM_HALIDE_IOS_AOT)
 
+#ifndef FOTUFILM_AOT_WINDOWED_HOST
+#define FOTUFILM_AOT_WINDOWED_HOST 0
+#endif
+
 #include "fotufilm_halide_ios_color.h"
 #include "fotufilm_halide_ios_color_disc.h"
 #include "fotufilm_halide_ios_monochrome.h"
@@ -196,10 +200,29 @@
 #include "fotufilm_halide_ios_no_film_float_encode.h"
 #include "fotufilm_halide_ios_no_film_float_exact.h"
 #include "fotufilm_halide_ios_no_film_float_exact_encode.h"
+#include "fotufilm_halide_ios_color_float_realtime_basic.h"
+#include "fotufilm_halide_ios_color_float_realtime_encode_linear_basic.h"
+#include "fotufilm_halide_ios_color_float_realtime_encode_power_basic.h"
+#include "fotufilm_halide_ios_color_float_realtime_encode_log_basic.h"
+#include "fotufilm_halide_ios_monochrome_float_realtime_basic.h"
+#include "fotufilm_halide_ios_monochrome_float_realtime_encode_linear_basic.h"
+#include "fotufilm_halide_ios_monochrome_float_realtime_encode_power_basic.h"
+#include "fotufilm_halide_ios_monochrome_float_realtime_encode_log_basic.h"
+#if FOTUFILM_AOT_WINDOWED_HOST
+#include "fotufilm_halide_ios_color_float_realtime_basic_windowed.h"
+#include "fotufilm_halide_ios_color_float_realtime_encode_linear_basic_windowed.h"
+#include "fotufilm_halide_ios_color_float_realtime_encode_power_basic_windowed.h"
+#include "fotufilm_halide_ios_color_float_realtime_encode_log_basic_windowed.h"
+#include "fotufilm_halide_ios_monochrome_float_realtime_basic_windowed.h"
+#include "fotufilm_halide_ios_monochrome_float_realtime_encode_linear_basic_windowed.h"
+#include "fotufilm_halide_ios_monochrome_float_realtime_encode_power_basic_windowed.h"
+#include "fotufilm_halide_ios_monochrome_float_realtime_encode_log_basic_windowed.h"
+#endif
 #include <HalideBuffer.h>
 #include <HalideRuntimeMetal.h>
 
 #include "FotufilmHalide.h"
+#include "FotufilmHalideGeometry.h"
 
 #include <TargetConditionals.h>
 
@@ -300,6 +323,7 @@ struct ExecutionState {
     Buffer<float> extended_configuration;
     uint64_t extended_configuration_id = 0;
     int32_t extended_configuration_floats = 0;
+    int32_t last_windowed_trace_mask = 0;
     Buffer<float> measure_configuration{FOTUFILM_FRAME_CONFIGURATION_COUNT};
     Buffer<float> unused_measure_exposure{kLutValueCount};
 
@@ -556,8 +580,51 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     diffusion_stride[0], diffusion_stride[1], diffusion_stride[2],          \
     diffusion_strided_radius[0], diffusion_strided_radius[1],               \
     diffusion_strided_radius[2]
-    const FrameFunction pipeline = select_variant(feature_mask);
+    FrameFunction pipeline = select_variant(feature_mask);
     if (!pipeline) return -3;
+#if FOTUFILM_AOT_WINDOWED_HOST
+    const FrameFunction general_pipeline = pipeline;
+    // Each full-resolution field needs 256 output rows plus its spatial apron.
+    // Decimated fields need fewer rows. Two grid samples cover box alignment and
+    // bilinear interpolation; the three-box halation kernel spans 3*r samples.
+    int64_t halo_reach = 0;
+    for (int scale = 0; scale < 3; ++scale) {
+        halo_reach = std::max(halo_reach,
+            fotufilm::resampled_grid_reach(
+                fotufilm::kTripleBoxPasses * int64_t(strided_radius[scale]), stride[scale]));
+    }
+    const int64_t image_reach = std::max({radius0, radius1, radius2})
+        + halo_reach
+        + std::max(fotufilm::gaussian_grid_reach(coupler_sigma, coupler_radius),
+                   fotufilm::gaussian_grid_reach(adjacency_sigma, adjacency_radius))
+        + int64_t(print_mtf_radius);
+    const int64_t grain_reach = int64_t(grain_radius) + print_mtf_radius;
+    static const bool windowed_enabled = [] {
+        const char *setting = std::getenv("FOTUFILM_AOT_WINDOWED");
+        return !setting || std::strcmp(setting, "0") != 0;
+    }();
+    if (windowed_enabled && width >= 32 && height >= fotufilm::kWindowStorageRows
+        && origin_x == 0 && origin_y == 0 && !wants_extended
+        && in->dim[0].min == 0 && in->dim[1].min == 0
+        && out->dim[0].min == 0 && out->dim[1].min == 0
+        && in->dim[0].extent == width && in->dim[1].extent == height
+        && out->dim[0].extent == width && out->dim[1].extent == height
+        && std::max(image_reach, grain_reach) <= fotufilm::kWindowMaximumReach) {
+#define FOTUFILM_PICK_WINDOWED(variant_name, variant_mask) \
+        if (pipeline == fotufilm_halide_ios_##variant_name) \
+            pipeline = fotufilm_halide_ios_##variant_name##_windowed;
+        FOTUFILM_AOT_BASIC_VARIANTS(FOTUFILM_PICK_WINDOWED)
+#undef FOTUFILM_PICK_WINDOWED
+    }
+    if (pipeline != general_pipeline && state.last_windowed_trace_mask != feature_mask) {
+        state.last_windowed_trace_mask = feature_mask;
+        const char *tracing = std::getenv("FOTUFILM_TRACE_VARIANT");
+        if (tracing && std::atoi(tracing)) {
+            std::fprintf(stderr, "Fotufilm AOT: 256-row windows, spatial reach %lld pixels\n",
+                         static_cast<long long>(std::max(image_reach, grain_reach)));
+        }
+    }
+#endif
     return pipeline(FOTUFILM_ARGUMENTS, out);
 #undef FOTUFILM_ARGUMENTS
 }

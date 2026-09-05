@@ -45,6 +45,7 @@ echo "Halide: $HALIDE_PREFIX"
 
 SOURCES=(
   tools/generate_halide_ios.cpp
+  Sources/FotufilmHalide/FotufilmHalideGeometry.h
   Sources/FotufilmHalide/FotufilmHalideShared.h
   Sources/FotufilmHalide/FotufilmHalideMetal.cpp
   Sources/FotufilmHalide/include/FotufilmHalide.h

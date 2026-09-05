@@ -2917,17 +2917,12 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
     // measures that way, so a striped frame is asked about as a delivered one whatever the host
     // said about the session. The bridge checks the same thing against the staging it holds, so
     // the two cannot be asked different questions.
-    // A finished print delivered into Rec.709's primaries can leave them: the print arrives in
-    // Display P3, which Rec.709 does not enclose, so a colour the paper can make lands outside
-    // the container and the host clips it. `fotufilm::fitToGamut` is the answer and it needs all
-    // three channels of a pixel at once — the kernel's encode is written per output channel and
-    // cannot express it — so a delivery that needs the fit takes the host encode instead. Only a
-    // print: texture output stays in the scene basis and density output is not colour, and
-    // neither is bounded by a display gamut.
+    // Fit a finished print into the host gamut in Halide before its transfer. The CPU
+    // fallback uses the same fit when a frame needs resampling or lacks an encode variant.
     const bool fitGamut = !writesInterchange && !deliversSceneBasis
                           && fotufilm::deliveryLeavesGamut(encoding);
     const bool encodeInKernel =
-        !writesInterchange && !fitGamut && processWidth == source.width()
+        !writesInterchange && processWidth == source.width()
         && fotufilm_bridge_encodes_output(instance->bridge, stock, format, paper,
                                          parameters, processWidth, height,
                                          (staged && viewerFrame) ? 1 : 0) != 0;
@@ -2939,6 +2934,11 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
                 sizeof(outputTransform.matrix));
     std::memcpy(outputTransform.coefficients, curve.coefficients,
                 sizeof(outputTransform.coefficients));
+
+    if (fitGamut) {
+        std::memcpy(outputTransform.gamutLuminance, outputBasis.luminance,
+                    sizeof(outputTransform.gamutLuminance));
+    }
 
     WriteState state{&source, &output, renderWindow, processWidth, encoding,
                      &outputBasis, premultiplied,

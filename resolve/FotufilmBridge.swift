@@ -322,7 +322,8 @@ private func options(_ parameters: UnsafePointer<Float>?,
 }
 
 /// `struct FotufilmOutputTransform` as this side sees it: two int32 fields — transfer shape and
-/// premultiplication — then a row-major 3x3 and six transfer coefficients, tightly packed.
+/// premultiplication — then a row-major 3x3, six transfer coefficients, and three gamut
+/// luminance weights, tightly packed.
 /// Spelled out field by field because this side of the bridge does not see the plugin's C
 /// header, so the two declarations have to be kept beside each other.
 private enum OutputTransformField {
@@ -330,11 +331,12 @@ private enum OutputTransformField {
     static let premultiplied = 1
     static let matrix = 0
     static let coefficients = 9
+    static let gamutLuminance = 15
     static let firstFloat = 2 * MemoryLayout<Int32>.size
 }
 
-/// `struct FotufilmInputTransform` as this side sees it, laid out exactly as the output transform
-/// is and spelled out here for the same reason: this side does not see the plugin's C header.
+/// `struct FotufilmInputTransform` as this side sees it: the output layout without gamut
+/// weights. This side does not see the plugin's C header.
 private enum InputTransformField {
     static let transfer = 0
     static let premultiplied = 1
@@ -368,11 +370,14 @@ private func outputTransform(_ pointer: UnsafeRawPointer?) -> FilmOutputTransfor
         rawValue: flags[OutputTransformField.transfer]) else { return nil }
     let matrix = OutputTransformField.matrix
     let coefficients = OutputTransformField.coefficients
+    let gamut = OutputTransformField.gamutLuminance
+    let luminance = SIMD3(floats[gamut], floats[gamut + 1], floats[gamut + 2])
     return FilmOutputTransform(
         matrix: (matrix..<(matrix + 9)).map { floats[$0] },
         transfer: transfer,
         coefficients: (coefficients..<(coefficients + 6)).map { floats[$0] },
-        premultiplied: flags[OutputTransformField.premultiplied] != 0)
+        premultiplied: flags[OutputTransformField.premultiplied] != 0,
+        gamutLuminance: luminance == .zero ? nil : luminance)
 }
 
 /// The stock an index names, or nil when the pack has changed under the host.
@@ -417,7 +422,6 @@ private func openSealedPacks(in directory: String) {
     }
 
     FilmStockPack.embeddedSealedPackURLs = packs
-    FilmStockPack.reload()
 }
 
 @_cdecl("fotufilm_bridge_context_create")
@@ -446,11 +450,14 @@ func fotufilm_bridge_initialize(_ resources: UnsafePointer<CChar>?) -> Int32 {
         if environment["FOTUFILM_RESOURCES"] == nil {
             setenv("FOTUFILM_RESOURCES", directory, 1)
         }
-        // The plugin's own stocks are the sealed packs beside it, opened below; nothing is added
-        // to the engine's plain-JSON search path, so `FOTUFILM_STOCKS` is the engine's business
-        // and is left exactly as the host's environment set it.
+        // Bundle.main is Resolve or the FxPlug host, not this plugin. Register its Starter
+        // directory explicitly without changing the host's custom-stock environment.
+        FilmStockPack.embeddedStockDirectories = [URL(fileURLWithPath: directory,
+            isDirectory: true).appendingPathComponent("Stocks", isDirectory: true)]
         openSealedPacks(in: directory)
     }
+
+    FilmStockPack.reload()
 
     if let error = FilmStockPack.loadError {
         initializationError = "\(error)"

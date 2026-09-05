@@ -329,8 +329,23 @@ Expr sample_transfer(Buffer<float> table, Expr position) {
     return low + fraction * (table(index + 1) - low);
 }
 
+// Active only while constructing an AOT windowed graph. JIT and general AOT
+// graphs retain their existing schedules. Scoped/thread-local state also makes
+// independent pipeline construction safe on different threads.
+struct WindowedFrameSchedule;
+thread_local WindowedFrameSchedule *windowed_frame_schedule = nullptr;
+struct WindowedFrameSchedule {
+    WindowedFrameSchedule *previous;
+    std::vector<Func> stores;
+    explicit WindowedFrameSchedule(bool enabled) : previous(windowed_frame_schedule) {
+        windowed_frame_schedule = enabled ? this : nullptr;
+    }
+    ~WindowedFrameSchedule() { windowed_frame_schedule = previous; }
+};
+
 void gpu_pointwise(Func function, Var x, Var y, Var channel, int channels) {
     Var block_x, block_y, thread_x, thread_y;
+    if (windowed_frame_schedule) windowed_frame_schedule->stores.push_back(function);
     function.compute_root()
         .bound(channel, 0, channels)
         .reorder(channel, x, y)
@@ -472,7 +487,7 @@ Func gpu_triple_box_blur(Func source, Expr radius, Expr width, Expr height,
 
     Func bounded = constant_exterior(
         source, typed_zero(source), {{0, width}, {0, height}, {0, channels}});
-    RDom horizontal_taps(-radius * 3, radius * 6 + 1, name + "_horizontal_taps");
+    RDom horizontal_taps(-radius * kTripleBoxPasses, radius * (2 * kTripleBoxPasses) + 1, name + "_horizontal_taps");
     Func horizontal(name + "_horizontal");
     Expr horizontal_weight = Halide::sum(
         Halide::select(x + horizontal_taps.x >= 0
@@ -484,7 +499,7 @@ Func gpu_triple_box_blur(Func source, Expr radius, Expr width, Expr height,
             * kernel(horizontal_taps.x),
         name + "_horizontal_sum") / Halide::max(horizontal_weight, 1.0e-12f);
     Func horizontal_view = store_frame(horizontal, half, channels);
-    RDom vertical_taps(-radius * 3, radius * 6 + 1, name + "_vertical_taps");
+    RDom vertical_taps(-radius * kTripleBoxPasses, radius * (2 * kTripleBoxPasses) + 1, name + "_vertical_taps");
     Func vertical(name);
     Expr vertical_weight = Halide::sum(
         Halide::select(y + vertical_taps.x >= 0
@@ -1019,7 +1034,8 @@ private:
 
 class MetalFramePipeline {
 public:
-    MetalFramePipeline(int32_t feature_mask, const std::string &suffix)
+    MetalFramePipeline(int32_t feature_mask, const std::string &suffix,
+                       bool windowed = false)
         : float_io_((feature_mask & FOTUFILM_FRAME_FLOAT_IO) != 0),
           realtime_(!float_io_
                     || (feature_mask & FOTUFILM_FRAME_REALTIME) != 0),
@@ -1092,6 +1108,7 @@ public:
           reversal_("frame_reversal" + suffix),
           origin_x_("frame_origin_x" + suffix),
           origin_y_("frame_origin_y" + suffix) {
+        WindowedFrameSchedule window_schedule(windowed);
         feature_mask &= ~ablated_features();
         const bool use_flare = feature_mask & FOTUFILM_FRAME_FLARE;
         const bool use_mtf = feature_mask & FOTUFILM_FRAME_MTF;
@@ -2219,6 +2236,13 @@ public:
             final_linear = textured;
         }
 
+        // Host delivery mixes all three channels. Materialize the float film result once so
+        // the matrix and gamut fit do not inline the film/print calculation into every channel.
+        // This is a float32 storage boundary, with no quantization or change to the film model.
+        if (float_io_ && encode_out_) {
+            gpu_pointwise(final_linear, x, y, channel, 3);
+        }
+
         Func output("frame_output" + suffix);
         Expr safe_channel = Halide::min(channel, 2);
         if (density_out_) {
@@ -2295,7 +2319,28 @@ public:
         output.output_buffer().dim(0).set_stride(4);
         output.output_buffer().dim(2).set_stride(1);
         output.output_buffer().dim(2).set_bounds(0, 4);
-        gpu_pointwise(output, x, y, channel, 4);
+        if (windowed) {
+            // The AOT shim checks the complete spatial reach before selecting this
+            // graph. Global coordinates and the original boundary rules remain in
+            // every expression; only when and where rows are stored changes.
+            Var window, row, block_x, block_y, thread_x, thread_y;
+            output.compute_root().bound(channel, 0, 4)
+                .reorder(channel, x, y).unroll(channel)
+                .split(y, window, row, kWindowRows, Halide::TailStrategy::GuardWithIf)
+                .gpu_tile(x, row, block_x, block_y, thread_x, thread_y,
+                          gpu_tile_x(), gpu_tile_y(),
+                          Halide::TailStrategy::GuardWithIf, gpu_device_api());
+            for (Func stage : window_schedule.stores) {
+                stage.store_root().compute_at(output, window).fold_storage(y, kWindowStorageRows);
+            }
+        } else {
+            gpu_pointwise(output, x, y, channel, 4);
+        }
+        // Specialize on the host-visible configuration before dispatch. This removes
+        // the gamut dot product and divisions entirely when fitting is disabled.
+        if (float_io_ && encode_out_) {
+            output.specialize(configuration_(FOTUFILM_CONFIG_OUTPUT_GAMUT) == 0.0f);
+        }
         pipeline_ = Pipeline(output);
 #if !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
         pipeline_.compile_jit(gpu_target());

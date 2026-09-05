@@ -92,13 +92,15 @@ for ARCH in "${ARCHS[@]}"; do
 
   rm -rf "$OBJ"; mkdir -p "$OBJ"
 
+  WINDOWED_HOST=0
+  if [[ "$ARCH" == "arm64" ]]; then WINDOWED_HOST=1; fi
   xcrun clang++ -std=c++17 -O2 -gline-tables-only -flto=thin \
     -fvisibility=hidden -fvisibility-inlines-hidden \
     -ffile-prefix-map="$PWD"=Fotufilm -fdebug-prefix-map="$PWD"=Fotufilm \
     -fmacro-prefix-map="$PWD"=Fotufilm \
     -ffunction-sections -fdata-sections -c \
     -isysroot "$SDK" -target "$TARGET" \
-    -DFOTUFILM_HALIDE_IOS_AOT=1 \
+    -DFOTUFILM_HALIDE_IOS_AOT=1 -DFOTUFILM_AOT_WINDOWED_HOST="$WINDOWED_HOST" \
     -I"$KERNELS" -ISources/FotufilmHalide/include \
     Sources/FotufilmHalide/FotufilmHalideIOS.cpp \
     -o "$OBJ/FotufilmHalideIOS.o"

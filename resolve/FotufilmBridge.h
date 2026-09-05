@@ -289,6 +289,8 @@ struct FotufilmOutputTransform {
     /// Row-major, out of the print's Display P3 delivery basis into the host's primaries.
     float matrix[9];
     float coefficients[6];
+    /// Host-primary luminance weights for gamut fitting; all zero disables the fit.
+    float gamutLuminance[3];
 };
 
 /// Returns whether the render call this frame will take can apply an output transform for these

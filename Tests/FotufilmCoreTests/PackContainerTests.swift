@@ -4,6 +4,43 @@ import XCTest
 final class PackContainerTests: XCTestCase {
     private let key = FilmPackKey.random()
 
+    func testPluginStockDirectoryIsLoadedOutsideTheMainBundle() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let previous = FilmStockPack.embeddedStockDirectories
+        defer {
+            FilmStockPack.embeddedStockDirectories = previous
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let id = "plugin-resource-" + UUID().uuidString
+        try JSONEncoder().encode(sample(id: id))
+            .write(to: directory.appendingPathComponent("film.json"))
+        FilmStockPack.embeddedStockDirectories = [directory]
+        let paths = FilmStockPack.searchPaths
+        let embeddedIndex = try XCTUnwrap(paths.firstIndex(of: directory))
+        let localIndex = try XCTUnwrap(paths.firstIndex(of:
+            URL(fileURLWithPath: "Stocks", isDirectory: true)))
+        XCTAssertLessThan(embeddedIndex, localIndex)
+        let pack = try FilmStockPack.load(sealed: [], bundled: [])
+        XCTAssertEqual(pack.stocks[id]?.name, "Sample \(id)")
+
+        let customDirectory = directory.appendingPathComponent("custom", isDirectory: true)
+        try FileManager.default.createDirectory(at: customDirectory, withIntermediateDirectories: true)
+        var custom = sample(id: id)
+        custom.name = "Custom override"
+        try JSONEncoder().encode(custom)
+            .write(to: customDirectory.appendingPathComponent("film.json"))
+        let previousEnvironment = ProcessInfo.processInfo.environment["FOTUFILM_STOCKS"]
+        defer {
+            if let previousEnvironment { setenv("FOTUFILM_STOCKS", previousEnvironment, 1) }
+            else { unsetenv("FOTUFILM_STOCKS") }
+        }
+        setenv("FOTUFILM_STOCKS", customDirectory.path, 1)
+        let overridden = try FilmStockPack.load(sealed: [], bundled: [])
+        XCTAssertEqual(overridden.stocks[id]?.name, "Custom override")
+    }
+
     private func keyring() -> FilmPackKeyring {
         let ring = FilmPackKeyring()
         for kind in [FilmPackKind.vault, .community, .local] {

@@ -124,16 +124,20 @@ public struct FilmOutputTransform: Sendable, Equatable {
     /// is what a linear space and an unshouldered encode both want; `FilmSDRDelivery` names the
     /// two knees a print delivery uses. Mirrors FOTUFILM_CONFIG_OUTPUT_SHOULDER.
     public var shoulderKnee: Float?
+    /// Optional luminance weights in the host's primaries. Enables a neutral-axis gamut fit
+    /// after the matrix and before the shoulder and transfer; nil preserves wide-gamut light.
+    public var gamutLuminance: SIMD3<Float>?
 
     public init(matrix: [Float], transfer: Transfer,
                 coefficients: [Float], premultiplied: Bool,
-                shoulderKnee: Float? = nil) {
+                shoulderKnee: Float? = nil, gamutLuminance: SIMD3<Float>? = nil) {
         precondition(matrix.count == 9 && coefficients.count == 6)
         self.matrix = matrix
         self.transfer = transfer
         self.coefficients = coefficients
         self.premultiplied = premultiplied
         self.shoulderKnee = shoulderKnee
+        self.gamutLuminance = gamutLuminance
     }
 }
 
@@ -334,7 +338,7 @@ public struct FilmEngineInvocation {
     public static let toneGridCells =
         ToneBaseMeasurement.gridEdge * ToneBaseMeasurement.gridEdge
 
-    public static let configurationCount = 228 + 3 * couplerWarpSamples
+    public static let configurationCount = 232 + 3 * couplerWarpSamples
         + 2 * toneGridCells
     /// Index of the grading-space switch; mirrors FOTUFILM_CONFIG_GRADE_SPACE.
     /// After it, appended in order so that adding each renumbered nothing:
@@ -408,9 +412,10 @@ public struct FilmEngineInvocation {
     /// FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE.
     public static let grainDensityProfileOffset = developComplementOffset + 1
     /// Index of the SDR shoulder knee the host output transform carries, a negative value
-    /// meaning none; mirrors FOTUFILM_CONFIG_OUTPUT_SHOULDER. Appended last so that adding it
-    /// renumbered nothing.
+    /// meaning none; mirrors FOTUFILM_CONFIG_OUTPUT_SHOULDER. Appended without
+    /// renumbering earlier fields.
     public static let outputShoulderOffset = grainDensityProfileOffset + 3
+    public static let outputGamutOffset = outputShoulderOffset + 1
     /// Index of the three aperture-calibrated grain strengths; mirrors FOTUFILM_CONFIG_GRAIN.
     public static let grainOffset = 30
 
@@ -1323,6 +1328,7 @@ public struct FilmEngineInvocation {
         // No shoulder until a delivery asks for one, matching the identity the rest of the
         // output transform is initialized to.
         configuration += [-1]
+        configuration += [0, 0, 0, 0] // optional output gamut fit
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0
@@ -1478,6 +1484,11 @@ public struct FilmEngineInvocation {
         }
         configuration[Self.outputPremultipliedOffset] = transform.premultiplied ? 1 : 0
         configuration[Self.outputShoulderOffset] = transform.shoulderKnee ?? -1
+        configuration[Self.outputGamutOffset] = transform.gamutLuminance == nil ? 0 : 1
+        let luminance = transform.gamutLuminance ?? .zero
+        for channel in 0..<3 {
+            configuration[Self.outputGamutOffset + 1 + channel] = luminance[channel]
+        }
     }
 
     public var flareMean: SIMD3<Float>? {
