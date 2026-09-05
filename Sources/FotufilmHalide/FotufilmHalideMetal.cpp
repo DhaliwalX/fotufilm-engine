@@ -487,7 +487,7 @@ Func gpu_triple_box_blur(Func source, Expr radius, Expr width, Expr height,
 
     Func bounded = constant_exterior(
         source, typed_zero(source), {{0, width}, {0, height}, {0, channels}});
-    RDom horizontal_taps(-radius * 3, radius * 6 + 1, name + "_horizontal_taps");
+    RDom horizontal_taps(-radius * kTripleBoxPasses, radius * (2 * kTripleBoxPasses) + 1, name + "_horizontal_taps");
     Func horizontal(name + "_horizontal");
     Expr horizontal_weight = Halide::sum(
         Halide::select(x + horizontal_taps.x >= 0
@@ -499,7 +499,7 @@ Func gpu_triple_box_blur(Func source, Expr radius, Expr width, Expr height,
             * kernel(horizontal_taps.x),
         name + "_horizontal_sum") / Halide::max(horizontal_weight, 1.0e-12f);
     Func horizontal_view = store_frame(horizontal, half, channels);
-    RDom vertical_taps(-radius * 3, radius * 6 + 1, name + "_vertical_taps");
+    RDom vertical_taps(-radius * kTripleBoxPasses, radius * (2 * kTripleBoxPasses) + 1, name + "_vertical_taps");
     Func vertical(name);
     Expr vertical_weight = Halide::sum(
         Halide::select(y + vertical_taps.x >= 0
@@ -2326,15 +2326,20 @@ public:
             Var window, row, block_x, block_y, thread_x, thread_y;
             output.compute_root().bound(channel, 0, 4)
                 .reorder(channel, x, y).unroll(channel)
-                .split(y, window, row, 256, Halide::TailStrategy::GuardWithIf)
+                .split(y, window, row, kWindowRows, Halide::TailStrategy::GuardWithIf)
                 .gpu_tile(x, row, block_x, block_y, thread_x, thread_y,
                           gpu_tile_x(), gpu_tile_y(),
                           Halide::TailStrategy::GuardWithIf, gpu_device_api());
             for (Func stage : window_schedule.stores) {
-                stage.store_root().compute_at(output, window).fold_storage(y, 512);
+                stage.store_root().compute_at(output, window).fold_storage(y, kWindowStorageRows);
             }
         } else {
             gpu_pointwise(output, x, y, channel, 4);
+        }
+        // Specialize on the host-visible configuration before dispatch. This removes
+        // the gamut dot product and divisions entirely when fitting is disabled.
+        if (float_io_ && encode_out_) {
+            output.specialize(configuration_(FOTUFILM_CONFIG_OUTPUT_GAMUT) == 0.0f);
         }
         pipeline_ = Pipeline(output);
 #if !defined(FOTUFILM_HALIDE_AOT_GENERATOR)

@@ -9,7 +9,7 @@ fi
 KERNELS="${FOTUFILM_PARITY_KERNELS:-build/halide-macos}"
 OUT="build/aot-window-tests"
 mkdir -p "$OUT"
-xcrun clang++ -std=c++17 -O2 -DFOTUFILM_HALIDE_IOS_AOT=1 \
+xcrun clang++ -std=c++17 -O2 -DFOTUFILM_HALIDE_IOS_AOT=1 -DFOTUFILM_AOT_WINDOWED_HOST=1 \
   -I"$KERNELS" -ISources/FotufilmHalide/include \
   tools/aot-window-tests.cpp Sources/FotufilmHalide/FotufilmHalideIOS.cpp \
   "$KERNELS"/*.a -framework Metal -framework Foundation -o "$OUT/runner"
@@ -23,9 +23,9 @@ import sys
 root = Path(sys.argv[1])
 general = sorted((root / "0").glob("*.f32"))
 windowed = sorted((root / "1").glob("*.f32"))
-assert len(general) == len(windowed) == 18, "missing comparison frames"
+assert len(general) == len(windowed) == 22, "missing comparison frames"
 for left, right in zip(general, windowed):
     assert left.name == right.name
     assert left.read_bytes() == right.read_bytes(), f"output differs: {left.name}"
-print("PASS: all 18 general/windowed AOT frames match byte for byte")
+print("PASS: all 22 general/windowed AOT frames match byte for byte")
 PY

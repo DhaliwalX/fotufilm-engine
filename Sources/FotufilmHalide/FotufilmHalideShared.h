@@ -2,6 +2,7 @@
 #define FOTUFILM_HALIDE_SHARED_H
 
 #include "FotufilmHalide.h"
+#include "FotufilmHalideGeometry.h"
 
 #include <Halide.h>
 #include <cmath>
@@ -114,9 +115,9 @@ inline Halide::Expr diffusion_mix(Halide::ImageParam &configuration,
 
 /// Largest power of two keeping a Gaussian's decimated sigma at one sample or more.
 inline Halide::Expr gaussian_stride(Halide::Expr sigma) {
-    return Halide::select(sigma >= 8.0f, 8,
-                          sigma >= 4.0f, 4,
-                          sigma >= 2.0f, 2, 1);
+    return gaussian_grid_stride(sigma, [](Halide::Expr condition, Halide::Expr yes, Halide::Expr no) {
+        return Halide::select(condition, yes, no);
+    });
 }
 
 /// Sigma to blur with on a grid decimated by `stride`.
@@ -131,7 +132,9 @@ inline Halide::Expr decimated_gaussian_sigma(Halide::Expr sigma,
 
 inline Halide::Expr decimated_gaussian_radius(Halide::Expr radius,
                                               Halide::Expr stride) {
-    return Halide::max((radius + stride - 1) / stride, 1);
+    return gaussian_grid_radius(radius, stride, [](Halide::Expr a, Halide::Expr b) {
+        return Halide::max(a, b);
+    });
 }
 
 /// Transcendental policy.

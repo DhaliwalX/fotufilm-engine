@@ -42,6 +42,7 @@ int main(int argc, char **argv) {
         const char *name;
         int width, height, origin;
         int print_radius, grain_radius;
+        int coupler_radius = 2;
     };
     const Case cases[] = {
         {"first-window", 32, 512, 0, 1, 1},
@@ -53,13 +54,26 @@ int main(int argc, char **argv) {
         {"grain-reach-limit", 65, 769, 0, 1, 126},
         {"grain-reach-fallback", 65, 769, 0, 1, 127},
         {"offset-fallback", 65, 769, 7, 1, 1},
+        {"stride-one-limit", 65, 769, 0, 1, 1, 12},
+        {"stride-one-fallback", 65, 769, 0, 1, 1, 13},
     };
     for (const Case &test : cases) {
         auto c = configuration;
         c[FOTUFILM_CONFIG_FRAME_WIDTH] = float(test.width);
+        c[FOTUFILM_CONFIG_FRAME_HEIGHT] = float(test.height);
+        // Exercise changing tone over every row, including each window boundary.
+        c[FOTUFILM_CONFIG_TONE_GRID_WIDTH] = FOTUFILM_TONE_GRID_EDGE;
+        c[FOTUFILM_CONFIG_TONE_GRID_HEIGHT] = FOTUFILM_TONE_GRID_EDGE;
+        for (int gy = 0; gy < FOTUFILM_TONE_GRID_EDGE; ++gy) {
+            for (int gx = 0; gx < FOTUFILM_TONE_GRID_EDGE; ++gx) {
+                const int i = gy * FOTUFILM_TONE_GRID_EDGE + gx;
+                c[FOTUFILM_CONFIG_TONE_GRID_A + i] = 0.8f + 0.4f * gy / 63;
+                c[FOTUFILM_CONFIG_TONE_GRID_B + i] = 0.05f * gx / 63;
+            }
+        }
         for (int i = 0; i < 3; ++i) c[FOTUFILM_CONFIG_MTF_RADIUS + i] = 1;
         c[FOTUFILM_CONFIG_COUPLER_SIGMA] = 0.81f;
-        c[FOTUFILM_CONFIG_COUPLER_RADIUS] = 2;
+        c[FOTUFILM_CONFIG_COUPLER_RADIUS] = float(test.coupler_radius);
         c[FOTUFILM_CONFIG_ADJACENCY_SIGMA] = 2.7f;
         c[FOTUFILM_CONFIG_ADJACENCY_RADIUS] = 8;
         const float halo[] = {13, 23, 39};
@@ -71,9 +85,7 @@ int main(int argc, char **argv) {
         c[FOTUFILM_CONFIG_OUTPUT_PREMULTIPLIED] = 0;
         c[FOTUFILM_CONFIG_OUTPUT_GAMUT] = 0;
         c[FOTUFILM_CONFIG_OUTPUT_SHOULDER] = -1;
-        const int mask = (FOTUFILM_AOT_ALL_STAGES
-            & ~(FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_DIFFUSION))
-            | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_REALTIME
+        const int mask = FOTUFILM_AOT_BASIC_STAGES
             | FOTUFILM_FRAME_ENCODE_OUT | FOTUFILM_FRAME_OUTPUT_LINEAR
             | (header[4] & (FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_REVERSAL));
         std::vector<float> input(size_t(test.width) * test.height * 4), output(input.size());

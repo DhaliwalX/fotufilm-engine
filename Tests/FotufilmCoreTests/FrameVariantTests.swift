@@ -50,6 +50,22 @@ final class FrameVariantTests: XCTestCase {
         | densityOut | densityIn | FilmEngineFeature.discGrain
         | FilmEngineFeature.texture | FilmEngineFeature.donorLayer
 
+    private static let encodeOut: Int32 = 1 << 19
+    private static let outputLinear: Int32 = 1 << 22
+    private static let outputPower: Int32 = 1 << 23
+    private static let outputLog: Int32 = 1 << 24
+    private static let outputBits = encodeOut | outputLinear | outputPower | outputLog
+    private static let basic = (allStages & ~(FilmEngineFeature.mtfLuma
+        | FilmEngineFeature.diffusion)) | FilmEngineFeature.floatIO | FilmEngineFeature.realtime
+    private static let basicVariants: [Int32] = [
+        basic, basic | encodeOut | outputLinear, basic | encodeOut | outputPower,
+        basic | encodeOut | outputLog,
+        basic | FilmEngineFeature.monochrome,
+        basic | FilmEngineFeature.monochrome | encodeOut | outputLinear,
+        basic | FilmEngineFeature.monochrome | encodeOut | outputPower,
+        basic | FilmEngineFeature.monochrome | encodeOut | outputLog,
+    ]
+
     private static let variants: [Int32] = [
         allStages,
         allStages | FilmEngineFeature.discGrain,
@@ -221,12 +237,12 @@ final class FrameVariantTests: XCTestCase {
         // span has its own twins.
         mottle(tail),
         mottle(tail | FilmEngineFeature.monochrome),
-    ]
+    ] + basicVariants
 
     private func selected(for mask: Int32) -> Int32? {
         let exact = FilmEngineFeature.monochrome | FilmEngineFeature.floatIO
             | FilmEngineFeature.realtime | FilmEngineFeature.exactMath
-            | Self.densityOut | Self.densityIn | FilmEngineFeature.texture
+            | Self.densityOut | Self.densityIn | FilmEngineFeature.texture | Self.outputBits
         return Self.variants
             .filter { $0 & exact == mask & exact && $0 & mask == mask }
             .min { ($0 & ~mask).nonzeroBitCount < ($1 & ~mask).nonzeroBitCount }
@@ -260,6 +276,13 @@ final class FrameVariantTests: XCTestCase {
             + ", running stages it does not use. Add its mask to "
             + "FOTUFILM_AOT_VARIANTS in FotufilmHalide.h (and the mirror in "
             + "this test).", file: file, line: line)
+    }
+
+    func testBasicRealtimeVariantsSelectWithoutExtraStages() {
+        for mask in Self.basicVariants {
+            XCTAssertEqual(selected(for: mask), mask)
+            assertVariantIsTight(mask, "basic realtime")
+        }
     }
 
     func testEveryInstalledStockHasItsOwnVariant() {

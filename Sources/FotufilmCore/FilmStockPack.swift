@@ -583,18 +583,18 @@ public struct FilmStockPack: Sendable {
         if let bundled = Bundle.main.url(forResource: "Stocks", withExtension: nil) {
             paths.append(bundled)
         }
+        paths.append(contentsOf: embeddedStockDirectories)
         paths.append(URL(fileURLWithPath: "Stocks", isDirectory: true))
         if let configured = ProcessInfo.processInfo.environment["FOTUFILM_STOCKS"] {
             paths.append(contentsOf: configured.split(separator: ":")
                 .filter { !$0.isEmpty }
                 .map { URL(fileURLWithPath: String($0), isDirectory: true) })
         }
-        paths.append(contentsOf: embeddedStockDirectories)
         return paths
     }
 
     /// Stock directories owned by a plugin bundle, whose `Bundle.main` is the host.
-    /// Like bundled sealed packs, these take precedence over custom stock definitions.
+    /// Searched with bundled JSON stocks, before local and explicitly configured overrides.
     public static var embeddedStockDirectories: [URL] {
         get { embeddedStockStorage.withLock { $0 } }
         set { embeddedStockStorage.withLock { $0 = newValue } }

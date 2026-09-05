@@ -213,7 +213,7 @@ enum {
     /// into the kernel so the encode variants can carry a shouldered delivery rather than only a
     /// bare one. Negative means no shoulder, which is the identity a linear or unshouldered space
     /// wants; 0.9 is the standard print knee and 0.7 the reversal one. Read only under
-    /// FOTUFILM_FRAME_ENCODE_OUT; appended last so that adding it renumbered nothing.
+    /// FOTUFILM_FRAME_ENCODE_OUT; appended without renumbering earlier fields.
     FOTUFILM_CONFIG_OUTPUT_SHOULDER = FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE + 3,
     /// Enabled flag followed by three host-primary luminance weights. Fits chroma after the
     /// output matrix while preserving luminance and above-white highlights; zero disables it.
@@ -1082,17 +1082,18 @@ enum {
 
 /// Common float video graphs. AOT windowed twins keep the same arguments and physics,
 /// with their intermediate rows stored in bounded circular buffers.
+#define FOTUFILM_AOT_BASIC_STAGES ((FOTUFILM_AOT_ALL_STAGES & ~(FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_DIFFUSION)) | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_REALTIME)
 #define FOTUFILM_AOT_BASIC_VARIANTS(X) \
     /* Full float video with ordinary emulsion MTF and no lens diffusion. The selector only
        chooses these when those extra stages are absent; active features retain their variants. */ \
-    X(color_float_realtime_basic, (FOTUFILM_AOT_ALL_STAGES & ~(FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_DIFFUSION)) | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_REALTIME) \
-    X(color_float_realtime_encode_linear_basic, (FOTUFILM_AOT_ALL_STAGES & ~(FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_DIFFUSION)) | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_REALTIME | FOTUFILM_FRAME_ENCODE_OUT | FOTUFILM_FRAME_OUTPUT_LINEAR) \
-    X(color_float_realtime_encode_power_basic, (FOTUFILM_AOT_ALL_STAGES & ~(FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_DIFFUSION)) | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_REALTIME | FOTUFILM_FRAME_ENCODE_OUT | FOTUFILM_FRAME_OUTPUT_POWER) \
-    X(color_float_realtime_encode_log_basic, (FOTUFILM_AOT_ALL_STAGES & ~(FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_DIFFUSION)) | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_REALTIME | FOTUFILM_FRAME_ENCODE_OUT | FOTUFILM_FRAME_OUTPUT_LOG) \
-    X(monochrome_float_realtime_basic, (FOTUFILM_AOT_ALL_STAGES & ~(FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_DIFFUSION)) | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_REALTIME | FOTUFILM_FRAME_MONOCHROME) \
-    X(monochrome_float_realtime_encode_linear_basic, (FOTUFILM_AOT_ALL_STAGES & ~(FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_DIFFUSION)) | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_REALTIME | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_ENCODE_OUT | FOTUFILM_FRAME_OUTPUT_LINEAR) \
-    X(monochrome_float_realtime_encode_power_basic, (FOTUFILM_AOT_ALL_STAGES & ~(FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_DIFFUSION)) | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_REALTIME | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_ENCODE_OUT | FOTUFILM_FRAME_OUTPUT_POWER) \
-    X(monochrome_float_realtime_encode_log_basic, (FOTUFILM_AOT_ALL_STAGES & ~(FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_DIFFUSION)) | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_REALTIME | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_ENCODE_OUT | FOTUFILM_FRAME_OUTPUT_LOG)
+    X(color_float_realtime_basic, FOTUFILM_AOT_BASIC_STAGES) \
+    X(color_float_realtime_encode_linear_basic, FOTUFILM_AOT_BASIC_STAGES | FOTUFILM_FRAME_ENCODE_OUT | FOTUFILM_FRAME_OUTPUT_LINEAR) \
+    X(color_float_realtime_encode_power_basic, FOTUFILM_AOT_BASIC_STAGES | FOTUFILM_FRAME_ENCODE_OUT | FOTUFILM_FRAME_OUTPUT_POWER) \
+    X(color_float_realtime_encode_log_basic, FOTUFILM_AOT_BASIC_STAGES | FOTUFILM_FRAME_ENCODE_OUT | FOTUFILM_FRAME_OUTPUT_LOG) \
+    X(monochrome_float_realtime_basic, FOTUFILM_AOT_BASIC_STAGES | FOTUFILM_FRAME_MONOCHROME) \
+    X(monochrome_float_realtime_encode_linear_basic, FOTUFILM_AOT_BASIC_STAGES | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_ENCODE_OUT | FOTUFILM_FRAME_OUTPUT_LINEAR) \
+    X(monochrome_float_realtime_encode_power_basic, FOTUFILM_AOT_BASIC_STAGES | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_ENCODE_OUT | FOTUFILM_FRAME_OUTPUT_POWER) \
+    X(monochrome_float_realtime_encode_log_basic, FOTUFILM_AOT_BASIC_STAGES | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_ENCODE_OUT | FOTUFILM_FRAME_OUTPUT_LOG)
 
 /// The bits that select a variant. An allow-list — and since the `_mottle`
 /// twins, the grain mixture is one of them: a mottle request must be served

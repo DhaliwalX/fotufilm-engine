@@ -412,8 +412,8 @@ public struct FilmEngineInvocation {
     /// FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE.
     public static let grainDensityProfileOffset = developComplementOffset + 1
     /// Index of the SDR shoulder knee the host output transform carries, a negative value
-    /// meaning none; mirrors FOTUFILM_CONFIG_OUTPUT_SHOULDER. Appended last so that adding it
-    /// renumbered nothing.
+    /// meaning none; mirrors FOTUFILM_CONFIG_OUTPUT_SHOULDER. Appended without
+    /// renumbering earlier fields.
     public static let outputShoulderOffset = grainDensityProfileOffset + 3
     public static let outputGamutOffset = outputShoulderOffset + 1
     /// Index of the three aperture-calibrated grain strengths; mirrors FOTUFILM_CONFIG_GRAIN.
