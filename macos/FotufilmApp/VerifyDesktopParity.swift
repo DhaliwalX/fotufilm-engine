@@ -341,7 +341,9 @@ enum VerifyDesktopParity {
             // With the frame cropped, a mask read off the decoded *file* and stretched to the
             // print no longer lines up with it — the phone's takeover has that bug. Reading it
             // off the scene's own plain develop is what makes this check pass.
-            model.edit.crop = CGRect(x: 0.08, y: 0.08, width: 0.44, height: 0.44)
+            // Crop coordinates start at the bottom. Keep both probes in the coloured
+            // upper half of the demo chart; its lower gray ramp has identical chroma.
+            model.edit.crop = CGRect(x: 0.08, y: 0.52, width: 0.44, height: 0.44)
             _ = await settle(model)
             model.isSelectiveMode = true
             defer {
