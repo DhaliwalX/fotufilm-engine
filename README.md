@@ -74,3 +74,7 @@ adding data or images, run `python3 tools/check-source-boundary.py`.
 - [Contributing](CONTRIBUTING.md)
 - [Licensing](LICENSING.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
+
+The engine, Mac app, and plugins use [Apache-2.0](LICENSE). Film profiles have
+[separate licences](LICENSING.md). The Mac app and plugins require no activation.
+Use **File → Import Film Pack…** in the Mac app to add a downloaded pack.

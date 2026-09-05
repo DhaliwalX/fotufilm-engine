@@ -113,7 +113,6 @@ if (( TEST )); then
   xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
     -sdk "$SDK" -target "$TARGET" -swift-version 5 -O -parse-as-library \
     -D FOTUFILM_LICENSE_TESTING \
-    Sources/FotufilmLicense/*.swift \
     "$FOTUFILM_CORE_SOURCE_DIR"/*.swift Sources/FotufilmMetal/*.swift \
     "$FOTUFILM_PACK_KEY_SOURCE" resolve/FotufilmBridge.swift \
     "$OBJ/FotufilmHalideIOS.o" "$OBJ/WorkingSpace.o" \
@@ -214,7 +213,6 @@ for ARCH in "${ARCHS[@]}"; do
     -file-prefix-map "$PWD=Fotufilm" \
     -file-prefix-map "$FOTUFILM_CORE_SOURCE_DIR=Fotufilm/Sources/FotufilmCore" \
     -module-name FotufilmFxPlug -emit-object \
-    Sources/FotufilmLicense/*.swift \
     "$FOTUFILM_CORE_SOURCE_DIR"/*.swift \
     Sources/FotufilmMetal/*.swift \
     "$FOTUFILM_PACK_KEY_SOURCE" \

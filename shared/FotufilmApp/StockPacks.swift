@@ -7,8 +7,7 @@ import Security
 import FotufilmCore
 #endif
 
-/// Shipping apps call `bootstrap()` before presenting stocks; it unlocks both built-in sealed
-/// packs without an account or network request. Swift package clients may also see source JSON.
+/// Register container keys and load bundled and imported profiles without network access.
 enum StockPacks {
     private static var booted = false
     private static let lock = NSLock()

@@ -11,14 +11,9 @@ import AppKit
 /// that change while the app is running, so each has a delegate that builds it the moment it is
 /// pulled down — the alternative is a menu that is right at launch and wrong by lunchtime.
 enum MainMenu {
-    static func build(isActivated: Bool) -> NSMenu {
+    static func build() -> NSMenu {
         let main = NSMenu()
-        main.addItem(applicationMenu(isActivated: isActivated))
-        guard isActivated else {
-            main.addItem(windowMenu())
-            main.addItem(helpMenu())
-            return main
-        }
+        main.addItem(applicationMenu())
         main.addItem(fileMenu())
         main.addItem(editMenu())
         main.addItem(filmMenu())
@@ -49,25 +44,18 @@ enum MainMenu {
         return item
     }
 
-    private static func applicationMenu(isActivated: Bool) -> NSMenuItem {
+    private static func applicationMenu() -> NSMenuItem {
         let (item, menu) = submenu("Fotufilm")
         menu.addItem(withTitle: "About Fotufilm",
                      action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
                      keyEquivalent: "")
         menu.addItem(.separator())
-        // Available before activation too: an unactivated copy is an installed copy, and it is
-        // the one most likely to be behind.
         add(menu, "Check for Updates…", #selector(AppDelegate.checkForUpdates(_:)))
         add(menu, "Check for Updates Automatically",
             #selector(AppDelegate.toggleAutomaticUpdateChecks(_:)))
         menu.addItem(.separator())
-        if isActivated {
-            add(menu, "Settings…",
-                #selector(DesktopEditorViewController.openSettings(_:)), key: ",")
-            add(menu, "License…", #selector(AppDelegate.openLicense(_:)))
-        } else {
-            add(menu, "Activate Fotufilm…", #selector(AppDelegate.openLicense(_:)))
-        }
+        add(menu, "Settings…",
+            #selector(DesktopEditorViewController.openSettings(_:)), key: ",")
         menu.addItem(.separator())
 
         let services = NSMenu(title: "Services")

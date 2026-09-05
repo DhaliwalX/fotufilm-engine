@@ -3,7 +3,7 @@
 <p>This repository contains the engine, CLI, Mac application, Resolve OFX plugin, and Final Cut Pro FxPlug plugin.</p>
 <h2>Build and run</h2>
 <p>Install Xcode 26 or newer and Halide, then run <code>swift build</code> and <code>swift test -c release --parallel</code>. Build the Mac app with <code>macos/build.sh --test</code>. Launch <code>build/macos/Fotufilm.app</code> and use <strong>Open</strong> to choose an image.</p>
-<p>Source builds run without activation. The Mac app and plugins bundle the free Starter pack: <strong>Gold 200</strong>, <strong>Tri-X 400</strong>, and <strong>Provia 100F</strong>. The three calibrated profiles use <a href="../licenses/STARTER-PACK.txt">CC BY-ND 4.0</a>. Synthetic films remain available to the CLI and tests. Print receivers are analytic examples, and the demo image is a generated color chart.</p>
+<p>The Mac app and plugins run without activation. The Mac app and plugins bundle the free Starter pack: <strong>Gold 200</strong>, <strong>Tri-X 400</strong>, and <strong>Provia 100F</strong>. The three calibrated profiles use <a href="../licenses/STARTER-PACK.txt">CC BY-ND 4.0</a>. Synthetic films remain available to the CLI and tests. Print receivers are analytic examples, and the demo image is a generated color chart.</p>
 <p>Persisted print-medium identifiers are retained for format compatibility; source builds display them as <strong>Example Photo Print</strong> or <strong>Example Projection</strong> variants. Those variants use analytic receiver curves with different contrast.</p>
 <p>Run <code>resolve/build.sh --test</code> for the OFX harness and <code>finalcut/build.sh --test</code> for the FxPlug harness. Building the actual Final Cut plugin requires the separately installed Apple FxPlug SDK.</p>
 <h2>Resolve controls</h2>
@@ -13,4 +13,5 @@
 <p>Resolve and Final Cut fit finished prints to narrower timeline color primaries before encoding them. Colors already inside the target gamut stay unchanged. Density data and Texture Only output are not treated as finished prints.</p>
 <p>See the <a href="../resolve/README.md">Resolve guide</a> and <a href="../finalcut/README.md">Final Cut guide</a> for installation and setup.</p>
 <p><a href="support.html">Build support</a> · <a href="../README.md">Repository guide</a></p>
+<p>To add downloaded profiles, choose <strong>File → Import Film Pack…</strong> in the Mac app and select the <code>.fotufilmpack</code> file. Installed packs work offline. Purchasing profiles does not unlock or limit app features.</p>
 </body></html>

@@ -105,7 +105,6 @@ let package = Package(
     platforms: [.macOS(.v13), .iOS(.v17)],
     products: [
         .library(name: "FotufilmCore", targets: ["FotufilmCore"]),
-        .library(name: "FotufilmLicense", targets: ["FotufilmLicense"]),
         .library(name: "FotufilmUpdate", targets: ["FotufilmUpdate"]),
         .library(name: "FotufilmMetal", targets: ["FotufilmMetal"]),
         .library(name: "FotufilmImaging", targets: ["FotufilmImaging"]),
@@ -114,7 +113,6 @@ let package = Package(
         .executable(name: "fotufilm", targets: ["fotufilm"]),
     ] + benchmarkProducts,
     targets: [
-        .target(name: "FotufilmLicense"),
         // Checking the Mac app for a new release: the feed document and the rule for deciding
         // one version is newer than another, kept pure so the suite can hold it.
         .target(name: "FotufilmUpdate"),
@@ -163,10 +161,6 @@ let package = Package(
         .testTarget(
             name: "FotufilmEditModelTests",
             dependencies: ["FotufilmEditModel", "FotufilmCore"]
-        ),
-        .testTarget(
-            name: "FotufilmLicenseTests",
-            dependencies: ["FotufilmLicense"]
         ),
         .testTarget(
             name: "FotufilmUpdateTests",

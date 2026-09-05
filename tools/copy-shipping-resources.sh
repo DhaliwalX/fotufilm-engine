@@ -16,6 +16,9 @@ if [[ $# == 2 ]]; then
 fi
 
 mkdir -p "$DESTINATION"
+install -m 0644 LICENSE "$DESTINATION/LICENSE"
+install -m 0644 NOTICE "$DESTINATION/NOTICE"
+install -m 0644 THIRD_PARTY_NOTICES.md "$DESTINATION/ThirdPartyNotices.txt"
 install -m 0644 Sources/FotufilmCore/Resources/rec2020-reflectance-prior.coeff \
   "$DESTINATION/rec2020-reflectance-prior.coeff"
 
