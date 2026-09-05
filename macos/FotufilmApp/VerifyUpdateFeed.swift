@@ -31,7 +31,7 @@ enum VerifyUpdateFeed {
             try? JSONDecoder().decode(UpdateManifest.self, from: Data(json.utf8))
         }
         let good = """
-        {"version": "1.6", "build": "9", "downloadURL": "\(pkg)", "sha256": "\(digest64)"}
+        {"version": "1.7", "build": "9", "downloadURL": "\(pkg)", "sha256": "\(digest64)"}
         """
         func validates(_ json: String) -> Bool {
             guard let manifest = decode(json) else { return false }
@@ -47,7 +47,7 @@ enum VerifyUpdateFeed {
             }
             expect((try? manifest.validate()) == nil, "\(what) is refused")
         }
-        rejects(good.replacingOccurrences(of: "\"1.6\"", with: "\"\""), "an empty version")
+        rejects(good.replacingOccurrences(of: "\"1.7\"", with: "\"\""), "an empty version")
         rejects(good.replacingOccurrences(of: "\"9\"", with: "\"\""), "an empty build")
         rejects(good.replacingOccurrences(of: pkg, with: "Fotufilm-macOS.pkg"),
                 "a relative download address")
@@ -58,9 +58,9 @@ enum VerifyUpdateFeed {
 
         expect(decode(good)?.isNewer(thanVersion: "1.5", build: "99") == true,
                "a newer release is an update even from a higher build")
-        expect(decode(good)?.isNewer(thanVersion: "1.6", build: "9") == false,
+        expect(decode(good)?.isNewer(thanVersion: "1.7", build: "9") == false,
                "the same release is not an update")
-        expect(decode(good.replacingOccurrences(of: "\"1.6\"", with: "\"1.4\""))?
+        expect(decode(good.replacingOccurrences(of: "\"1.7\"", with: "\"1.4\""))?
             .isNewer(thanVersion: "1.5", build: "1") == false,
                "an older release is never an update")
 
