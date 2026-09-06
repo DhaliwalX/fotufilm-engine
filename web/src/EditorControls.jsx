@@ -4,47 +4,10 @@ import { NumberInput } from '@astryxdesign/core/NumberInput'
 import { useEffect, useRef, useState } from 'react'
 import { SLIDERS, validCrop } from './editor-state.js'
 import { clamp } from './color-controls.js'
+import { Icon } from './icons.jsx'
 
-const paths = {
-  film: 'M4 3h16v18H4z M8 3v18 M16 3v18 M4 8h4 M4 16h4 M16 8h4 M16 16h4',
-  open: 'M12 5v14 M5 12h14',
-  minus: 'M5 12h14',
-  plus: 'M12 5v14 M5 12h14',
-  fit: 'M8 3H3v5 M16 3h5v5 M3 16v5h5 M21 16v5h-5',
-  undo: 'M8 4 3 9l5 5 M3 9h10a7 7 0 0 1 7 7v3',
-  redo: 'm16 4 5 5-5 5 M21 9H11a7 7 0 0 0-7 7v3',
-  reset: 'M4 4v6h6 M4 10a8 8 0 1 1 0 5',
-  export: 'M12 15V3 m-4 4 4-4 4 4 M5 12v8h14v-8',
-  histogram: 'M3 19h18 M5 16v-4 M9 16V5 M13 16V9 M17 16V3 M21 16v-5',
-  adjustments: 'M3 6h7 m4 0h7 M3 12h12 m4 0h2 M3 18h3 m4 0h11 M10 3v6 M15 9v6 M6 15v6',
-  crop: 'M6 3v15h15 M3 6h15v15',
-  compare: 'M12 3v18 M9 4H4v16h5 M15 4h5v16h-5',
-  sidebar: 'M3 4h18v16H3z M9 4v16',
-  inspector: 'M3 4h18v16H3z M15 4v16',
-  more: 'M5 12h.01 M12 12h.01 M19 12h.01',
-  close: 'm6 6 12 12 M6 18 18 6',
-  search: 'M16 16l5 5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
-  rotate: 'M4 7h11a5 5 0 0 1 5 5v5 M8 3 4 7l4 4 M5 15v6h6v-6z',
-  flip: 'M12 3v18 M9 6 3 18h6z M15 6l6 12h-6z',
-  check: 'm5 12 4 4L19 6',
-}
-export function Icon({ name }) {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d={paths[name] || paths.film} />
-    </svg>
-  )
-}
+export { Icon } from './icons.jsx'
+
 export function ToolButton({ icon, label, active, children, disabled, ...props }) {
   return (
     <Button

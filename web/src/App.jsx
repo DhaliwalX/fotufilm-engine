@@ -818,7 +818,7 @@ export default function App() {
               }}
             />
             <button aria-label="Dismiss error" onClick={() => setError(null)}>
-              ×
+              <Icon name="close" size={14} />
             </button>
           </div>
         )}
@@ -878,7 +878,7 @@ export default function App() {
                   aria-label={`Close ${file.name}`}
                   onClick={() => removeFile(file)}
                 >
-                  ×
+                  <Icon name="close" size={14} />
                 </button>
               </div>
             ))}

@@ -694,6 +694,8 @@ select {
   object-fit: contain;
 }
 .close-photo {
+  display: grid;
+  place-items: center;
   position: absolute;
   right: -5px;
   top: -5px;
@@ -703,7 +705,6 @@ select {
   background: var(--field);
   border: 1px solid var(--border);
   border-radius: 50%;
-  font-size: 13px;
   opacity: 0;
 }
 .filmstrip-item:hover .close-photo,
