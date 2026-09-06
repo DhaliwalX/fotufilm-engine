@@ -2,9 +2,25 @@ import XCTest
 @testable import FotufilmCore
 
 final class ExamplePrintTests: XCTestCase {
-    func testStarterProfilesAreAvailableAndExamplesRemainForTests() throws {
+    func testReleasedProfilesAreAvailableAndExamplesRemainForTests() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let manifest = try JSONDecoder().decode([String: String].self, from: Data(
+            contentsOf: root.appendingPathComponent("licenses/FILM-PROFILES.json")))
+        XCTAssertEqual(manifest.count, 40)
+        XCTAssertEqual(Set(FilmStock.presetIDs), Set(manifest.keys))
+        for id in manifest.keys.sorted() {
+            let definition = try XCTUnwrap(FilmStock.presetDefinitions[id], id)
+            try definition.validate()
+            XCTAssertNotEqual(definition.isExample, true, id)
+            XCTAssertNotNil(definition.grainDensityProfile, "\(id) must state its runtime grain parameters")
+            XCTAssertEqual(definition.stock.spectralProfile.layerSensitivity.count, 3, id)
+            for record in definition.stock.spectralProfile.layerSensitivity {
+                XCTAssertEqual(record.count, SpectralGrid.count, id)
+                XCTAssertTrue(record.allSatisfy { $0.isFinite && $0 >= 0 }, id)
+            }
+        }
         let starter = Set(["gold200", "trix400", "provia100f"])
-        XCTAssertEqual(Set(FilmStock.presetIDs), starter)
         for id in starter {
             let definition = try XCTUnwrap(FilmStock.presetDefinitions[id])
             try definition.validate()

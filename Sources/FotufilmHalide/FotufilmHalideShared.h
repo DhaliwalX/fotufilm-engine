@@ -377,14 +377,47 @@ inline Halide::Expr curve_component_density(Halide::ImageParam &configuration,
         Halide::max(toe_term - shoulder_term, 0.0f), shoulder - toe);
 }
 
+inline Halide::Expr sampled_film_density(Halide::ImageParam &configuration,
+                                        Halide::Expr channel, Halide::Expr x) {
+    using namespace Halide;
+    Expr base = FOTUFILM_CONFIG_SAMPLED_CURVES + channel * FOTUFILM_SAMPLED_CURVE_STRIDE;
+    Expr count = clamp(cast<int32_t>(configuration(base)), 2, FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES);
+    Expr low = 0, high = count - 1;
+    // Fixed-depth binary search over nonuniform knots, shared by CPU and GPU.
+    for (int step = 0; step < 10; ++step) {
+        Expr mid = (low + high) / 2;
+        Expr right = configuration(base + 1 + mid * 3) <= x;
+        low = select(right, mid, low);
+        high = select(right, high, mid);
+    }
+    Expr i = base + 1 + low * 3, j = base + 1 + high * 3;
+    Expr h = max(configuration(j) - configuration(i), 1.0e-12f);
+    Expr t = clamp((x - configuration(i)) / h, 0.0f, 1.0f);
+    Expr y0 = configuration(i + 1), y1 = configuration(j + 1);
+    Expr a = h * configuration(i + 2), b = h * configuration(j + 2);
+    Expr delta = y1 - y0;
+    Expr y = y0 + t * (a + t * (3 * delta - 2 * a - b + t * (-2 * delta + a + b)));
+    return select(x <= configuration(base + 1), configuration(base + 2),
+                  x >= configuration(base + 1 + (count - 1) * 3),
+                  configuration(base + 2 + (count - 1) * 3), y);
+}
+
+inline Halide::Expr has_sampled_film_curve(Halide::ImageParam &configuration,
+                                          Halide::Expr channel) {
+    return configuration(FOTUFILM_CONFIG_SAMPLED_CURVES
+        + channel * FOTUFILM_SAMPLED_CURVE_STRIDE) >= 2.0f;
+}
+
 inline Halide::Expr film_density(Halide::ImageParam &configuration,
                                  Halide::Expr channel, Halide::Expr log_exposure,
                                  bool approximate = false) {
-    return curve_density(configuration, FOTUFILM_CONFIG_CURVES + channel * 6,
+    Halide::Expr analytic = curve_density(configuration, FOTUFILM_CONFIG_CURVES + channel * 6,
                          log_exposure, approximate)
         + curve_component_density(
             configuration, FOTUFILM_CONFIG_CURVE_SECONDARY + channel * 5,
             log_exposure, approximate);
+    return Halide::select(has_sampled_film_curve(configuration, channel),
+                           sampled_film_density(configuration, channel, log_exposure), analytic);
 }
 
 /// Sampling grid for the tabulated H&D curves below.
@@ -502,6 +535,13 @@ inline Halide::Expr sample_curve(Halide::Func table, Halide::Expr log_exposure,
 }
 
 /// dMax - dMin for the curve at `base`: gamma * (shoulder - toe).
+inline Halide::Expr sample_film_curve(Halide::ImageParam &configuration,
+                                     Halide::Func table, Halide::Expr x,
+                                     Halide::Expr channel) {
+    return Halide::select(has_sampled_film_curve(configuration, channel),
+        sampled_film_density(configuration, channel, x), sample_curve(table, x, channel));
+}
+
 inline Halide::Expr curve_range(Halide::ImageParam &configuration, Halide::Expr base) {
     return configuration(base + 1) * (configuration(base + 4) - configuration(base + 2));
 }

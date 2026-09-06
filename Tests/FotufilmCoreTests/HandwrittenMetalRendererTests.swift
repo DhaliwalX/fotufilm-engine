@@ -6,6 +6,16 @@ import Metal
 
 final class HandwrittenMetalRendererTests: XCTestCase {
     func testPointwiseUniformColoursTrackHalideByteSchedule() throws {
+        try checkPointwiseUniformColours(TestStocks.negative)
+    }
+
+    func testSampledPointwiseColoursTrackHalide() throws {
+        for id in ["gold200", "trix400", "provia100f"] {
+            try checkPointwiseUniformColours(try XCTUnwrap(FilmStock.named(id)))
+        }
+    }
+
+    private func checkPointwiseUniformColours(_ stock: FilmStock) throws {
         let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
         let handwritten = try XCTUnwrap(HandwrittenMetalFilmRenderer.shared)
         let oracle = try XCTUnwrap(HalideMetalFilmRenderer.shared)
@@ -17,7 +27,7 @@ final class HandwrittenMetalRendererTests: XCTestCase {
         options.localTone = false
         let key = "pointwise-uniform-negative"
         let prepared = handwritten.prepare(
-            key: key, stock: TestStocks.negative, options: options,
+            key: key, stock: stock, options: options,
             frameWidth: width, frameHeight: height)
         XCTAssertTrue(prepared)
         guard prepared else { return }
@@ -49,7 +59,7 @@ final class HandwrittenMetalRendererTests: XCTestCase {
                 key: key, frameIndex: frame))
             XCTAssertTrue(oracle.processRGBA8(
                 input: source, output: oracleOutput, width: width, height: height,
-                stock: TestStocks.negative, options: options, frameIndex: frame))
+                stock: stock, options: options, frameIndex: frame))
             let actual = nativeOutput.contents().assumingMemoryBound(to: UInt8.self)
             let expected = oracleOutput.contents().assumingMemoryBound(to: UInt8.self)
             for offset in stride(from: 0, to: count, by: 4) {

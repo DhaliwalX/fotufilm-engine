@@ -18,18 +18,32 @@ final class GoldenImageTests: XCTestCase {
         """
     }
 
-    func testEveryStockMatchesItsGolden() throws {
-        try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable,
-                          "the Halide engine is the only processing backend")
-        let mode = GoldenStore.Mode.current
+    func testEveryStockRendersAndExistingGoldensMatch() throws {
         let stocks = GoldenStocks.all
-
         XCTAssertEqual(stocks.count, GoldenStocks.fileCount,
                        "the sweep loaded \(stocks.count) stocks but there are "
                        + "\(GoldenStocks.fileCount) stock files on disk — a "
                        + "stock that fails to load silently leaves the "
                        + "catalogue untested")
         XCTAssertGreaterThan(stocks.count, 1, "no stock pack loaded at all")
+        try checkGoldens(stocks)
+    }
+
+    func testSampledProfilesMatchExistingGoldens() throws {
+        let stocks = GoldenStocks.all.filter { ["gold200", "trix400", "provia100f"].contains($0.id) }
+        XCTAssertEqual(stocks.count, 3)
+        try checkGoldens(stocks)
+    }
+
+    func testGold200MatchesItsGoldens() throws {
+        let stock = try XCTUnwrap(GoldenStocks.all.first { $0.id == "gold200" })
+        try checkGoldens([stock])
+    }
+
+    private func checkGoldens(_ stocks: [GoldenStocks.Entry]) throws {
+        try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable,
+                          "the Halide engine is the only processing backend")
+        let mode = GoldenStore.Mode.current
 
         let charts = ReferenceChart.all
         var entries: [ContactSheet.Entry] = []
@@ -40,7 +54,10 @@ final class GoldenImageTests: XCTestCase {
         for chart in charts {
             for entry in stocks {
                 let (id, stock) = (entry.id, entry.stock)
-                let current = RGBAImage(print: develop(chart, with: stock))
+                let rendered = develop(chart, with: stock)
+                XCTAssertTrue(rendered.planes.allSatisfy { $0.allSatisfy(\.isFinite) },
+                              "\(chart.name)/\(id) produced non-finite pixels")
+                let current = RGBAImage(print: rendered)
                 let golden = try GoldenStore.read(
                     visibility: entry.visibility, chart: chart.name, stock: id)
                 let label = "\(chart.name)/\(id)"
@@ -50,7 +67,7 @@ final class GoldenImageTests: XCTestCase {
                         try GoldenStore.write(current, visibility: entry.visibility,
                                               chart: chart.name, stock: id)
                         rewritten += 1
-                    } else {
+                    } else if GoldenStocks.requiredGoldenIDs.contains(id) {
                         missing.append(label)
                     }
                     entries.append(.init(

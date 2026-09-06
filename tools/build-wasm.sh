@@ -70,7 +70,7 @@ mkdir -p "$OUTPUT"
 echo "Exporting stock packs at ${PACK_SIZE}…"
 swift build -c release --product fotufilm >/dev/null
 mkdir -p web/public/packs
-cp licenses/STARTER-PACK.txt licenses/CC-BY-ND-4.0.txt web/public/packs/
+cp licenses/FILM-PROFILES.txt licenses/CC-BY-SA-4.0.txt web/public/packs/
 rm -f web/public/packs/*.pack web/public/packs/*.stages
 INDEX="web/public/packs/index.json"
 printf '[' > "$INDEX"

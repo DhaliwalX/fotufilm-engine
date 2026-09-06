@@ -2978,6 +2978,10 @@ public final class HandwrittenMetalSpatialExecutor {
                         configuration: configuration,
                         base: Configuration.curveSecondary + row * 5,
                         exposure: exposure)
+                    if let sampled = FilmEngineInvocation.sampledFilmDensity(
+                        configuration: configuration, channel: row, logExposure: exposure) {
+                        value = sampled
+                    }
                 }
                 table[row * Self.curveSamples + sample] = value
             }

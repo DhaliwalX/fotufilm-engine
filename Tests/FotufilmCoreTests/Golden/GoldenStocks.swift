@@ -2,6 +2,13 @@ import Foundation
 @testable import FotufilmCore
 
 enum GoldenStocks {
+    // Preserve the established image baselines. Other released profiles are rendered
+    // into the review sheet and covered by catalogue-wide CPU/Metal parity tests.
+    static let requiredGoldenIDs: Set<String> = [
+        "gold200", "trix400", "provia100f",
+        "example-negative-400", "example-monochrome-100", "example-reversal-64",
+    ]
+
     struct Entry {
         let id: String
         let stock: FilmStock

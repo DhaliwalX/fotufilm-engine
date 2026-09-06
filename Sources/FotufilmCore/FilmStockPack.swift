@@ -117,6 +117,7 @@ public struct FilmStockDefinition: Codable, Sendable {
         public var shoulderWidth: Float
         /// A second coated speed group. Absent preserves the original six-parameter curve.
         public var secondary: ComponentSpec?
+        public var sampled: SampledCharacteristicCurve?
 
         public struct ComponentSpec: Codable, Sendable {
             public var gamma: Float
@@ -148,13 +149,14 @@ public struct FilmStockDefinition: Codable, Sendable {
             shoulder = curve.shoulder
             shoulderWidth = curve.shoulderWidth
             secondary = curve.secondary.map(ComponentSpec.init)
+            sampled = curve.sampled
         }
 
         public var curve: CharacteristicCurve {
             CharacteristicCurve(dMin: dMin, gamma: gamma, toe: toe,
                                 toeWidth: toeWidth, shoulder: shoulder,
                                 shoulderWidth: shoulderWidth,
-                                secondary: secondary?.component)
+                                secondary: secondary?.component, sampled: sampled)
         }
     }
 
@@ -348,7 +350,7 @@ public struct FilmStockDefinition: Codable, Sendable {
 }
 
 public extension FilmStockDefinition {
-    static let currentSchemaVersion = 1
+    static let currentSchemaVersion = 2
 
     /// Materialise the definition into a renderable stock. `FilmStock.init` re-normalises the RGB
     /// matrix and validates layer counts, so a malformed pack fails here rather than part-way

@@ -338,8 +338,9 @@ public struct FilmEngineInvocation {
     public static let toneGridCells =
         ToneBaseMeasurement.gridEdge * ToneBaseMeasurement.gridEdge
 
-    public static let configurationCount = 232 + 3 * couplerWarpSamples
-        + 2 * toneGridCells
+    public static let sampledCurveStride = 1 + 3 * SampledCharacteristicCurve.maximumSamples
+    public static let sampledCurvesOffset = 232 + 3 * couplerWarpSamples + 2 * toneGridCells
+    public static let configurationCount = sampledCurvesOffset + 3 * sampledCurveStride
     /// Index of the grading-space switch; mirrors FOTUFILM_CONFIG_GRADE_SPACE.
     /// After it, appended in order so that adding each renumbered nothing:
     /// the six grain-mottle entries, the paper's red and blue records and
@@ -1329,6 +1330,18 @@ public struct FilmEngineInvocation {
         // output transform is initialized to.
         configuration += [-1]
         configuration += [0, 0, 0, 0] // optional output gamut fit
+        for curve in stock.curves {
+            var record = [Float](repeating: 0, count: Self.sampledCurveStride)
+            if let sampled = curve.sampled {
+                record[0] = Float(sampled.logExposure.count)
+                for i in sampled.logExposure.indices {
+                    record[1 + i * 3] = sampled.logExposure[i]
+                    record[2 + i * 3] = sampled.density[i]
+                    record[3 + i * 3] = sampled.slopes[i]
+                }
+            }
+            configuration += record
+        }
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0
@@ -1703,7 +1716,10 @@ public struct FilmEngineInvocation {
     public static let exposureGainOffset = 61
 
     private static func parameters(_ curve: CharacteristicCurve) -> [Float] {
-        [curve.dMin, curve.gamma, curve.toe, curve.toeWidth,
+        // Legacy range consumers still read gamma * (shoulder - toe).
+        let gamma = curve.sampled == nil ? curve.gamma
+            : (curve.dMax - curve.dMin) / (curve.shoulder - curve.toe)
+        return [curve.dMin, gamma, curve.toe, curve.toeWidth,
          curve.shoulder, curve.shoulderWidth]
     }
 
@@ -1720,9 +1736,35 @@ public struct FilmEngineInvocation {
     }
 
     private static func secondaryParameters(_ curve: CharacteristicCurve) -> [Float] {
+        if curve.sampled != nil { return [0, 0, 1, 0, 1] }
         guard let secondary = curve.secondary else { return [0, 0, 1, 0, 1] }
         return [secondary.gamma, secondary.toe, secondary.toeWidth,
                 secondary.shoulder, secondary.shoulderWidth]
+    }
+
+    /// Shared host evaluator for packed sampled film records used by Metal table builders.
+    public static func sampledFilmDensity(configuration: [Float], channel: Int,
+                                          logExposure x: Float) -> Float? {
+        guard (0..<3).contains(channel), configuration.count == configurationCount else { return nil }
+        let base = sampledCurvesOffset + channel * sampledCurveStride
+        guard configuration[base].isFinite,
+              configuration[base] >= 2,
+              configuration[base] <= Float(SampledCharacteristicCurve.maximumSamples) else { return nil }
+        let count = Int(configuration[base])
+        func value(_ index: Int, _ field: Int) -> Float {
+            configuration[base + 1 + index * 3 + field]
+        }
+        if x <= value(0, 0) { return value(0, 1) }
+        if x >= value(count - 1, 0) { return value(count - 1, 1) }
+        var low = 0, high = count - 1
+        while high - low > 1 {
+            let mid = (low + high) / 2
+            if value(mid, 0) <= x { low = mid } else { high = mid }
+        }
+        return SampledCharacteristicCurve.hermite(
+            x: x, x0: value(low, 0), x1: value(high, 0),
+            y0: value(low, 1), y1: value(high, 1),
+            m0: value(low, 2), m1: value(high, 2))
     }
 
     /// Solves the neutral anchor for the DIR coupler stage. `donor` joins the release sum the

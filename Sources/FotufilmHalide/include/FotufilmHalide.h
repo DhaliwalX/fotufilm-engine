@@ -32,8 +32,10 @@ enum {
 /// Number of floats in the packed configuration. Offsets are defined by the enum below; append new
 /// fields without renumbering existing entries.
 enum {
+    FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES = 1024,
+    FOTUFILM_SAMPLED_CURVE_STRIDE = 1 + 3 * FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES,
     FOTUFILM_FRAME_CONFIGURATION_COUNT = 232 + 3 * FOTUFILM_COUPLER_WARP_SAMPLES
-        + 2 * FOTUFILM_TONE_GRID_CELLS,
+        + 2 * FOTUFILM_TONE_GRID_CELLS + 3 * FOTUFILM_SAMPLED_CURVE_STRIDE,
 };
 
 /// Offsets into the packed configuration.
@@ -224,6 +226,8 @@ enum {
     /// Enabled flag followed by three host-primary luminance weights. Fits chroma after the
     /// output matrix while preserving luminance and above-white highlights; zero disables it.
     FOTUFILM_CONFIG_OUTPUT_GAMUT = FOTUFILM_CONFIG_OUTPUT_SHOULDER + 1,
+    /// Three records: sample count, then (log exposure, density, tangent) triples.
+    FOTUFILM_CONFIG_SAMPLED_CURVES = FOTUFILM_CONFIG_OUTPUT_GAMUT + 4,
 };
 
 /// Decode-kernel parameters: row-major scene-space matrix, transfer, and premultiplication flag.

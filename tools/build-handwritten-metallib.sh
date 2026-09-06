@@ -37,6 +37,9 @@ trap 'rm -rf "$WORK"' EXIT
 # compiler command: changing that ABI changes this script's content hash and therefore rebuilds
 # the metallib. HandwrittenMetalConfigurationTests hold them against the Swift authority.
 COMMON_DEFINES=(
+  -DFOTUFILM_CFG_SAMPLED_CURVES=8808
+  -DFOTUFILM_SAMPLED_CURVE_STRIDE=3073
+  -DFOTUFILM_CFG_DEVELOP_COMPLEMENT=8799
   -DFOTUFILM_CFG_CURVE_SECONDARY=8768
   -DFOTUFILM_CFG_COUPLER_RELEASE_GAMMA=8792
   -DFOTUFILM_CFG_DONOR_RELEASE_GAMMA=8795

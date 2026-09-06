@@ -1189,7 +1189,7 @@ public:
         }
         auto film_curve = [&](Expr channel_index, Expr log_exposure) {
             return tabulated_curves
-                ? sample_curve(film_curves, log_exposure, channel_index)
+                ? sample_film_curve(configuration_, film_curves, log_exposure, channel_index)
                 : film_density(configuration_, channel_index, log_exposure,
                                approximate_);
         };

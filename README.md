@@ -56,9 +56,16 @@ Halide toolchain is not available.
 
 ## Included films
 
-Default source builds run without activation and bundle the free Starter pack: Gold 200,
-Tri-X 400, and Provia 100F. These calibrated profiles use
-[CC BY-ND 4.0](licenses/STARTER-PACK.txt); the engine code has separate terms.
+Default source builds include all 40 film profiles, free to use without activation.
+The runtime JSON profiles are available in `Sources/FotufilmCore/Stocks/` under
+[CC BY-SA 4.0](licenses/FILM-PROFILES.txt). You may modify and redistribute them
+with attribution and ShareAlike terms. This licence does not apply to rendered
+photos or videos. The engine code uses Apache-2.0.
+
+Thirty-three profiles carry sampled characteristic curves with smooth interpolation
+through every validated digitized point. Source tracing variations are retained;
+response outside each published range is extrapolated. These schema version 2
+profiles require a build with sampled-curve support. Schema version 1 remains supported.
 
 The CLI and tests also include synthetic films. Print models use calculated
 example curves, not measured paper profiles. The demo uses a generated colour chart.
