@@ -2330,6 +2330,181 @@ int testPlugin() {
         setChoice(plugin, instanceHandle, instance.params, "stage", 0);
         setParam(instance.params, "grain", 0);
 
+        // Output Medium: Negative on a colour negative. Checks that the light-box and scanner
+        // readings are finite, stay at or below the lamp level, invert the print, keep the base
+        // orange at the engine's lamp level on the light box, and read the base as white on the
+        // scanner. The raw negative span is rendered alongside for the preview dump only.
+        std::printf("negative medium\n");
+        {
+            int colourNegative = -1;
+            for (size_t st = 0; st < stocks && colourNegative < 0; ++st) {
+                const auto index = static_cast<int32_t>(st);
+                if ((fotufilm_bridge_control_capabilities(index, 0) &
+                     FOTUFILM_CONTROL_COLOUR_NEGATIVE) != 0) {
+                    colourNegative = index;
+                }
+            }
+            int negativeMedium = -1;
+            for (int32_t i = 0; i < fotufilm_bridge_paper_count() && negativeMedium < 0; ++i) {
+                if (fotufilm_bridge_paper_is_negative(i) != 0) negativeMedium = i;
+            }
+            check(colourNegative >= 0 && negativeMedium >= 0,
+                  "a colour negative and the negative medium are installed");
+            if (colourNegative >= 0 && negativeMedium >= 0) {
+                applyDefaults(instance.params);
+                setChoice(plugin, instanceHandle, instance.params, "stock", colourNegative);
+                setChoice(plugin, instanceHandle, instance.params, "format",
+                          static_cast<int>(fotufilm_bridge_format_count()));
+                setChoice(plugin, instanceHandle, instance.params, "stage", 0);
+                // Linear Display P3 is the delivery basis, so the levels read back are the
+                // engine's own rather than a matrix's rendering of them.
+                setParam(instance.params, "colorSpace",
+                         spaceMenuIndex(fotufilm::Encoding::LinearDisplayP3));
+                setParam(instance.params, "grain", 0);
+                const int width = 320, height = 180;
+                provision(width, height, 0, 0, true);
+                // The left margin is unexposed film (no scene light), where the two readings of
+                // the base can be measured. The ramp's own left edge carries the tilt's blue and
+                // green, about a stop under mid-grey, so it is not the base.
+                const int margin = std::max(1, width / 20);
+                for (int y = 0; y < height; ++y) {
+                    for (int x = 0; x < margin; ++x) {
+                        float *pixel =
+                            source->pixels.data() + (static_cast<size_t>(y) * width + x) * 4;
+                        pixel[0] = pixel[1] = pixel[2] = 0.0f;
+                        pixel[3] = 1.0f;
+                    }
+                }
+
+                setChoice(plugin, instanceHandle, instance.params, "paper",
+                          static_cast<int>(fotufilm_bridge_paper_count()));
+                check(renderNow(), "renders the print the negative medium is measured against");
+                const std::vector<float> printed = output->pixels;
+                setChoice(plugin, instanceHandle, instance.params, "paper", negativeMedium);
+                setChoice(plugin, instanceHandle, instance.params, "negativeViewing", 0);
+                check(renderNow(), "renders the negative on the light box");
+                const std::vector<float> lightBox = output->pixels;
+                setChoice(plugin, instanceHandle, instance.params, "negativeViewing", 1);
+                check(renderNow(), "and on the scanner");
+                const std::vector<float> scanned = output->pixels;
+                setChoice(plugin, instanceHandle, instance.params, "negativeViewing", 0);
+                setChoice(plugin, instanceHandle, instance.params, "stage", 1);
+                check(renderNow(), "and the raw negative span beside them");
+                const std::vector<float> densities = output->pixels;
+                setChoice(plugin, instanceHandle, instance.params, "stage", 0);
+
+                struct Stats { float low[3], high[3]; double mean[3]; bool finite; };
+                auto statsOf = [&](const std::vector<float> &frame) {
+                    Stats s{{1e9f, 1e9f, 1e9f}, {-1e9f, -1e9f, -1e9f}, {0, 0, 0}, true};
+                    const size_t pixels = frame.size() / 4;
+                    for (size_t p = 0; p < pixels; ++p) {
+                        for (int c = 0; c < 3; ++c) {
+                            const float v = frame[p * 4 + c];
+                            if (!std::isfinite(v)) { s.finite = false; continue; }
+                            s.low[c] = std::min(s.low[c], v);
+                            s.high[c] = std::max(s.high[c], v);
+                            s.mean[c] += v;
+                        }
+                    }
+                    for (int c = 0; c < 3; ++c) s.mean[c] /= static_cast<double>(pixels);
+                    return s;
+                };
+                auto report = [&](const char *name, const std::vector<float> &frame) {
+                    const Stats s = statsOf(frame);
+                    std::printf("       %-18s min %.4f %.4f %.4f  max %.4f %.4f %.4f  "
+                                "mean %.4f %.4f %.4f%s\n", name,
+                                s.low[0], s.low[1], s.low[2], s.high[0], s.high[1], s.high[2],
+                                s.mean[0], s.mean[1], s.mean[2],
+                                s.finite ? "" : "  NON-FINITE");
+                    return s;
+                };
+                report("print", printed);
+                const Stats box = report("negative/light box", lightBox);
+                const Stats scan = report("negative/scanner", scanned);
+                report("negative span", densities);
+
+                // Nothing on the film transmits more than the lamp, so neither reading exceeds
+                // its own white.
+                check(box.finite && scan.finite, "the viewed negative is finite everywhere");
+                float peak = 0;
+                for (const std::vector<float> *frame : {&lightBox, &scanned}) {
+                    for (size_t i = 0; i < frame->size(); ++i) {
+                        if (i % 4 != 3) peak = std::max(peak, (*frame)[i]);
+                    }
+                }
+                check(peak <= 1.0f + 1e-3f,
+                      "and stays at or below white, unlike the raw densities");
+
+                // Inversion: the unexposed left margin is the negative's clear base and reads
+                // bright; the bright right edge is dense and reads dark. The print reads the
+                // other way.
+                auto edgeMean = [&](const std::vector<float> &frame, bool left, int channel) {
+                    double total = 0;
+                    int counted = 0;
+                    for (int y = 0; y < height; ++y) {
+                        for (int x = left ? 0 : width - margin;
+                             x < (left ? margin : width); ++x) {
+                            total += frame[(static_cast<size_t>(y) * width + x) * 4 + channel];
+                            ++counted;
+                        }
+                    }
+                    return total / counted;
+                };
+                auto edgeLuminance = [&](const std::vector<float> &frame, bool left) {
+                    return 0.2627 * edgeMean(frame, left, 0) + 0.6780 * edgeMean(frame, left, 1)
+                        + 0.0593 * edgeMean(frame, left, 2);
+                };
+                check(edgeLuminance(printed, true) < edgeLuminance(printed, false),
+                      "the print keeps the scene's polarity");
+                check(edgeLuminance(lightBox, true) > edgeLuminance(lightBox, false),
+                      "the light box shows the negative's, inverted");
+                check(edgeLuminance(scanned, true) > edgeLuminance(scanned, false),
+                      "and so does the scanner");
+                // The base: orange on the light box, and read out to white by the scanner.
+                check(edgeMean(lightBox, true, 0) > edgeMean(lightBox, true, 1) &&
+                          edgeMean(lightBox, true, 1) > edgeMean(lightBox, true, 2),
+                      "the light box keeps the film base's orange");
+                // The engine's `SpectralRuntime.lightBoxBaseLevel`, 0.9, in the base's brightest
+                // channel. Measured over the unexposed margin, so only spill from the ramp
+                // separates the reading from the constant.
+                const double brightestBase = std::max({edgeMean(lightBox, true, 0),
+                                                       edgeMean(lightBox, true, 1),
+                                                       edgeMean(lightBox, true, 2)});
+                check(std::abs(brightestBase - 0.9) < 0.02,
+                      "and puts the base just under white");
+                bool baseWhite = true;
+                for (int c = 0; c < 3; ++c) {
+                    if (std::abs(edgeMean(scanned, true, c) - 1.0) > 0.05) baseWhite = false;
+                }
+                check(baseWhite, "the scanner reads the film base as white");
+                std::printf("       base on the light box: %.4f %.4f %.4f; scanned: "
+                            "%.4f %.4f %.4f\n",
+                            edgeMean(lightBox, true, 0), edgeMean(lightBox, true, 1),
+                            edgeMean(lightBox, true, 2), edgeMean(scanned, true, 0),
+                            edgeMean(scanned, true, 1), edgeMean(scanned, true, 2));
+
+                if (const char *directory = std::getenv("FOTUFILM_CONTROL_PREVIEW_DIR")) {
+                    const std::string base = std::string(directory) + "/";
+                    check(parity::writeDump((base + "print.bin").c_str(), printed.data(),
+                                            width, height) &&
+                              parity::writeDump((base + "negativeLightBox.bin").c_str(),
+                                                lightBox.data(), width, height) &&
+                              parity::writeDump((base + "negativeScanner.bin").c_str(),
+                                                scanned.data(), width, height) &&
+                              parity::writeDump((base + "negativeSpan.bin").c_str(),
+                                                densities.data(), width, height),
+                          "writes the negative medium previews");
+                }
+            }
+            applyDefaults(instance.params);
+            setChoice(plugin, instanceHandle, instance.params, "stock", 0);
+            setChoice(plugin, instanceHandle, instance.params, "paper", 0);
+            setChoice(plugin, instanceHandle, instance.params, "stage", 0);
+            setParam(instance.params, "colorSpace",
+                     spaceMenuIndex(fotufilm::Encoding::LinearRec2020));
+            setParam(instance.params, "grain", 0);
+        }
+
         // Every control, moved from its default, has to change the developed frame — a slider
         // wired to nothing is the one failure a panel cannot show. Judged on a frame with
         // something for each to act on: a ramp that varies both ways, and a patch three stops

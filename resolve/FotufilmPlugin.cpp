@@ -1199,11 +1199,10 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
     std::vector<std::string> viewings = gNegativeViewingLabels.empty()
         ? std::vector<std::string>{"Light Box"} : gNegativeViewingLabels;
     defineChoice(set, kNegativeViewingParam, "Negative Viewing",
-                 "How the developed negative is read, when Output Medium is Negative. "
-                 "Light Box normalises on the viewing light, so the film base keeps its own "
-                 "orange. Scanner normalises on the film's own D-min, so the base reads white "
-                 "and what is left is only the image's inversion. Every other medium ignores "
-                 "this control, having a print or a scan of its own.",
+                 "How the developed negative is read when Output Medium is Negative. "
+                 "Light Box sets the lamp so the clear film base sits just under white and "
+                 "keeps its orange. Scanner divides by the film base, so the base reads "
+                 "white. Other output media ignore this control.",
                  "outputGroup", viewings, 0);
 
     // Last, and shut: a node is Full unless someone has read what the other spans are for.

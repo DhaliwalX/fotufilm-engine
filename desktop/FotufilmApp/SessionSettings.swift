@@ -235,7 +235,7 @@ final class SettingsSheetController: SessionViewController {
             },
             get: { AppSettings.shared.negativeViewing },
             set: { AppSettings.shared.negativeViewing = $0 }))
-        section.add(NoteRow("Controls negative output and Show Negative in the editor. A light box normalises on the viewing light; a scanner normalises on the film’s own base, so the orange mask reads white."))
+        section.add(NoteRow("Controls negative output and Show Negative in the editor. A light box sets its lamp so the clear film base sits just under white and keeps the orange mask; a scanner divides by the film base, so the orange mask reads white."))
         return section
     }
 

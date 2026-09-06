@@ -12,12 +12,17 @@ final class NegativeViewingTests: XCTestCase {
 
     /// The table is indexed by the negative's own activation, because the kernel hands it the
     /// negative's own density: FOTUFILM_CONFIG_DEVELOP_COMPLEMENT is zero for a negative however
-    /// it is viewed, so nothing is inverted on the way in and nothing is inverted back.
+    /// it is viewed, so nothing is inverted on the way in and nothing is inverted back. The light
+    /// box's lamp is one gain over the whole table; dividing it out recovers the film's own
+    /// transmission at every node.
     func testActivationRecoversTheTrueDensity() {
         let stock = TestStocks.negative
         let table = SpectralRuntime.negativeViewing(for: stock, look: .lightBox)
         let dyes = stock.spectralProfile.imageDyeDensity
         let nodes = SpectralRuntime.lutDimension - 1
+        let base = SpectralRuntime.transmissionRGB(density: stock.curves.map(\.dMin),
+                                                   dyes: dyes)
+        let lamp = max(base.x, base.y, base.z) / SpectralRuntime.lightBoxBaseLevel
 
         for step in stride(from: 0, through: nodes, by: 4) {
             let a = Float(step) / Float(nodes)
@@ -33,9 +38,29 @@ final class NegativeViewingTests: XCTestCase {
             let direct = SpectralRuntime.transmissionRGB(density: density,
                                                          dyes: dyes)
             for channel in 0..<3 {
-                XCTAssertEqual(sampled[channel], direct[channel], accuracy: 1e-6,
+                XCTAssertEqual(sampled[channel], direct[channel] / lamp, accuracy: 1e-6,
                                "channel \(channel) at activation \(a)")
             }
+        }
+    }
+
+    /// The light-box table at activation 0 is the clear base: just under white in its brightest
+    /// channel, orange, and no node of the table brighter than it.
+    func testLightBoxPutsTheBaseJustUnderWhite() {
+        let stock = TestStocks.negative
+        let table = SpectralRuntime.negativeViewing(for: stock, look: .lightBox)
+        let atBase = table.sample(SIMD3<Float>(repeating: 0))
+        XCTAssertEqual(max(atBase.x, atBase.y, atBase.z), SpectralRuntime.lightBoxBaseLevel,
+                       accuracy: 1e-4)
+        XCTAssertGreaterThan(atBase.x, atBase.y)
+        XCTAssertGreaterThan(atBase.y, atBase.z)
+        let nodes = SpectralRuntime.lutDimension - 1
+        for step in stride(from: 0, through: nodes, by: 4) {
+            let a = Float(step) / Float(nodes)
+            let sampled = table.sample(SIMD3<Float>(repeating: a))
+            XCTAssertLessThanOrEqual(max(sampled.x, sampled.y, sampled.z),
+                                     SpectralRuntime.lightBoxBaseLevel + 1e-4,
+                                     "activation \(a)")
         }
     }
 
