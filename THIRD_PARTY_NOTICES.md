@@ -101,3 +101,11 @@ Print receivers and projection illumination are project-authored analytic models
 The 10 nm samples in `SpectralModel.swift` are drawn from the CIE open data
 sets “CIE 1931 colour-matching functions, 2 degree observer” and “CIE standard
 illuminant D65”, published by the International Commission on Illumination.
+
+## App Store badge
+
+`docs/assets/download-on-the-app-store.svg` is the unmodified "Download on the
+App Store" badge artwork that Apple provides for linking to an app's App Store
+listing, used here under Apple's App Store Marketing Guidelines. Apple, the
+Apple logo and App Store are trademarks of Apple Inc., registered in the U.S.
+and other countries and regions.
