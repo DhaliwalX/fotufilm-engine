@@ -128,7 +128,7 @@ extension EditorControlField {
         // MARK: The frame
 
         case .crop:
-            return .bespoke { $0.crop != nil }
+            return .bespoke { $0.crop != nil || $0.cornerCrop != nil }
         case .straighten:
             return .number(read: { $0.straighten },
                            write: { $0.straighten = $1 })

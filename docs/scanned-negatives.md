@@ -4,7 +4,8 @@
 An explicit `ScanDensityCalibration` maps those measurements into the film-record
 density format consumed by the engine's existing print stage.
 
-This is a library API. The app and CLI do not yet expose scanned-negative conversion.
+The Mac app offers an approximate import workflow described below. The CLI does not
+yet expose scanned-negative conversion.
 No scanner profiles or automatic calibration fitting are bundled. A supplied affine
 profile is an approximation: validate its colour accuracy over the density range you
 use. Some capture setups need a nonlinear profile beyond this API.
@@ -83,3 +84,43 @@ the dark reference, mismatched reference kinds, and calibrated densities outside
 `NegativeInterchange.range` throw `ScannedNegativeError`. Densities are not clipped
 to hide measurement errors. Samples brighter than the reference may produce negative
 scanner densities, which is useful with a film-border reference.
+
+## Mac app import
+
+Choose **File → Import Scanned Negative…** and open an unconverted negative with
+its developed, unexposed film border visible. Supported camera RAW files are decoded
+with Core Image; TIFF, PNG and other ImageIO images use their file colour profile.
+Choose **Linear Samples** only for a scan exported with a linear transfer curve.
+Sixteen-bit storage alone does not establish this. Use unadjusted scans: automatic
+levels, local contrast, clipping and prior inversion cannot be undone by the importer.
+
+Drag a rectangle over clear film, avoiding the holder, sprocket holes, edge numbers
+and image detail. The importer takes a median RGB sample of that patch. Choose the
+closest installed negative film, then **Preview Positive**. Use **Show Negative** to
+sample again. **Import Positive** converts at full resolution and opens the Crop tool.
+Cancel leaves the current photo unchanged.
+
+The conversion is approximate. RAW decoding disables tone boosts, highlight recovery,
+lens correction and noise reduction, but retains the decoder's colour processing.
+File profiles are converted to linear sRGB. These are not sensor-channel measurements.
+The importer assumes zero remaining black offset, divides by the sampled film base,
+and maps RGB densities independently to the selected film model, restoring its base
+density. Monochrome uses the green density for all records. No measured scanner profile
+is fitted or included. Uneven backlighting, flare and colour cross-talk remain uncorrected.
+Nonpositive, nonfinite and out-of-range pixels, commonly the holder, are excluded and
+painted black; they are not assigned invented densities. Crop away the holder and
+check that image detail is not being excluded before accepting the conversion.
+
+The positive is imported as a full-resolution 16-bit Display P3 TIFF in memory, with
+**Normal** selected to avoid adding another film simulation. Existing exposure, colour
+and export controls then apply to that positive. The original negative is unchanged.
+Border sampling and film choice are baked into this positive; reimport the original to
+change them. Crop edits remain editable and are saved with the photograph.
+
+In **Crop**, drag each of the four circular handles independently. The selection must
+remain convex and cannot cross itself. Leaving Crop (or pressing Return) straightens
+the selected quadrilateral into a rectangle. Preview and full-resolution export use
+the same normalized corners. **Four-Corner Crop** also enables this mode for ordinary
+photos; choosing an aspect ratio returns to a rectangular crop. Reset Crop clears the
+selection. Rotating or flipping clears four-corner selections to avoid reusing corners
+from a different orientation. Undo and redo restore corner edits.

@@ -29,6 +29,7 @@ final class CropCanvasView: DragTarget {
         case edge(Side)
     }
 
+    private var cornerGrip: Int?
     private var grip: Grip?
     private var dragActive = false
     private var startRect = CGRect.zero
@@ -82,6 +83,7 @@ final class CropCanvasView: DragTarget {
     }
 
     func imageChanged() {
+        setAXLabel(model.edit.cornerCrop == nil ? "Crop rectangle" : "Four-corner crop")
         redraw()
     }
 
@@ -135,7 +137,7 @@ final class CropCanvasView: DragTarget {
         guard let image = model.processed else { return nil }
         let stage = stageRect
         guard stage.width > 1, stage.height > 1 else { return nil }
-        return Presentation(imageSize: image.size, stage: stage, focus: focusCrop)
+        return Presentation(imageSize: image.size, stage: stage, focus: model.edit.cornerCrop == nil ? focusCrop : CGRect(x: 0, y: 0, width: 1, height: 1))
     }
 
     private func write(_ rect: CGRect, presentation: Presentation) {
@@ -157,6 +159,30 @@ final class CropCanvasView: DragTarget {
         let rect = presentation.display(unitCrop)
 
         image.draw(into: presentation.imageRect)
+        if let corners = model.edit.cornerCrop {
+            let points = corners.points.map { point in
+                CGPoint(x: presentation.imageRect.minX + point.x * presentation.imageRect.width,
+                        y: presentation.imageRect.minY + point.y * presentation.imageRect.height)
+            }
+            context.addRect(bounds)
+            context.addLines(between: points)
+            context.closePath()
+            context.setFillColor(PlatformColor.black.withAlphaComponent(0.45).cgColor)
+            context.fillPath(using: .evenOdd)
+            context.addLines(between: points)
+            context.closePath()
+            context.setStrokeColor(PlatformColor.white.cgColor)
+            context.setLineWidth(2)
+            context.strokePath()
+            for point in points {
+                let handle = CGRect(x: point.x - 7, y: point.y - 7, width: 14, height: 14)
+                context.setFillColor(PlatformColor.white.cgColor)
+                context.fillEllipse(in: handle)
+                context.setStrokeColor(PlatformColor.black.cgColor)
+                context.strokeEllipse(in: handle)
+            }
+            return
+        }
 
         // Everything outside the chosen rectangle, held back.
         context.setFillColor(PlatformColor.black.withAlphaComponent(0.45).cgColor)
@@ -216,6 +242,17 @@ final class CropCanvasView: DragTarget {
 
     private func began(at location: CGPoint) {
         guard let presentation else { return }
+        if let corners = model.edit.cornerCrop {
+            cornerGrip = corners.points.indices.min { a, b in
+                distance(corners.points[a], to: location, frame: presentation.imageRect)
+                    < distance(corners.points[b], to: location, frame: presentation.imageRect)
+            }
+            if let index = cornerGrip,
+               distance(corners.points[index], to: location, frame: presentation.imageRect) <= handleReach {
+                model.beginContinuousEdit()
+            } else { cornerGrip = nil }
+            return
+        }
         let rect = presentation.display(unitCrop)
         dragActive = true
         startLocation = location
@@ -227,7 +264,20 @@ final class CropCanvasView: DragTarget {
         }
     }
 
+    private func distance(_ unit: CGPoint, to location: CGPoint, frame: CGRect) -> CGFloat {
+        hypot(frame.minX + unit.x * frame.width - location.x,
+              frame.minY + unit.y * frame.height - location.y)
+    }
+
     private func moved(to location: CGPoint) {
+        if let index = cornerGrip, let corners = model.edit.cornerCrop, let presentation {
+            let frame = presentation.imageRect
+            model.edit.cornerCrop = corners.movingCorner(index, to: CGPoint(
+                x: (location.x - frame.minX) / frame.width,
+                y: (location.y - frame.minY) / frame.height))
+            redraw()
+            return
+        }
         guard dragActive, let grip, let presentation else { return }
         apply(grip,
               translation: CGSize(width: location.x - startLocation.x,
@@ -237,6 +287,12 @@ final class CropCanvasView: DragTarget {
     }
 
     private func ended() {
+        if cornerGrip != nil {
+            cornerGrip = nil
+            model.endContinuousEdit()
+            redraw()
+            return
+        }
         if grip != nil {
             model.endContinuousEdit()
             setThirds(visible: false)

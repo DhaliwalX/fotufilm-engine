@@ -88,6 +88,8 @@ enum MainMenu {
         add(menu, "Open…", #selector(DesktopEditorViewController.openDocument(_:)),
             key: "o")
 
+        add(menu, "Import Scanned Negative…", #selector(AppDelegate.importScannedNegative(_:)))
+
         let (recentItem, recentMenu) = submenu("Open Recent")
         recentMenu.delegate = recentDocuments
         menu.addItem(recentItem)

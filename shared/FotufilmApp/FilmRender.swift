@@ -82,6 +82,7 @@ enum FilmRender {
         var perspectiveV: Double
         var perspectiveH: Double
         var crop: CGRect?
+        var cornerCrop: QuadrilateralCrop?
         var longEdge: Int?
         var viewport: PreviewViewport? = nil
         var sourceInterpretation: FilmSourceInterpretation
@@ -102,6 +103,7 @@ enum FilmRender {
             perspectiveV = state.perspectiveV
             perspectiveH = state.perspectiveH
             crop = state.crop
+            cornerCrop = state.cornerCrop
             self.longEdge = longEdge
             self.viewport = viewport
             sourceInterpretation = state.sourceInterpretation
@@ -296,7 +298,7 @@ enum FilmRender {
             return value
         }
 
-        let decodeLongEdge = state.crop == nil && requestedViewport == nil
+        let decodeLongEdge = state.crop == nil && state.cornerCrop == nil && requestedViewport == nil
             ? longEdge : nil
         let fixedCaptureIlluminant = source.isRaw
             ? state.captureIlluminantKelvin.map(Float.init) : nil
@@ -1180,6 +1182,10 @@ enum FilmRender {
             if let output = filter.outputImage {
                 working = atOrigin(output.cropped(to: extent))
             }
+        }
+
+        if let corners = state.cornerCrop {
+            working = corners.applying(to: working)
         }
 
         if let crop = state.crop {

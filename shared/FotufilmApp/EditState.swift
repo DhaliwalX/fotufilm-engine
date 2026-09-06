@@ -1,5 +1,8 @@
 import Foundation
 import CoreGraphics
+#if canImport(FotufilmImaging)
+import FotufilmImaging
+#endif
 
 #if canImport(FotufilmCore)
 import FotufilmCore
@@ -372,6 +375,7 @@ struct EditState: Equatable {
     var perspectiveH = 0.0
     /// Unit-space crop in the straightened frame; nil = full frame.
     var crop: CGRect? = nil
+    var cornerCrop: QuadrilateralCrop? = nil
 
     /// Whether to apply lens correction. Disabled by default because correction resamples the image.
     var lensCorrectionEnabled = false
@@ -395,7 +399,7 @@ struct EditState: Equatable {
 
     var hasGeometryEdits: Bool {
         rotation != 0 || flipH || straighten != 0
-            || perspectiveV != 0 || perspectiveH != 0 || crop != nil
+            || perspectiveV != 0 || perspectiveH != 0 || crop != nil || cornerCrop != nil
     }
 
     /// Everything about the lens correction that changes the pixels, gathered so that the render
@@ -592,7 +596,7 @@ struct EditState: Equatable {
     /// that shape.
     var hasGeometry: Bool {
         rotation != 0 || flipH || straighten != 0
-            || perspectiveV != 0 || perspectiveH != 0 || crop != nil
+            || perspectiveV != 0 || perspectiveH != 0 || crop != nil || cornerCrop != nil
     }
 
     mutating func resetGeometry() {
@@ -602,6 +606,7 @@ struct EditState: Equatable {
         perspectiveV = 0
         perspectiveH = 0
         crop = nil
+        cornerCrop = nil
     }
 
     mutating func rerollGrain() {

@@ -686,6 +686,15 @@ final class DesktopEditorViewController: SessionViewController {
 
     private var lastPanel = InspectorPanel.film
 
+    func showImportedNegativeCrop() {
+        inspector.panel = .crop
+        setPanels(animated: true) { wanted in
+            wanted.inspector = true
+            if fit != .desk { wanted.stocksListed = false }
+        }
+        syncCropMode()
+    }
+
     private func commitCrop() -> Bool {
         guard model.isCropMode else { return false }
         inspector.panel = panelBeforeCrop

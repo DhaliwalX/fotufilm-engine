@@ -1,5 +1,8 @@
 import CoreGraphics
 import Foundation
+#if canImport(FotufilmImaging)
+import FotufilmImaging
+#endif
 import QuartzCore
 
 #if canImport(UIKit)
@@ -683,6 +686,14 @@ final class InspectorViewController: SessionViewController {
         ]))
 
         let crop = FormSectionView(title: "Crop")
+        crop.add(ButtonRow("Four-Corner Crop", enabled: { [model] in model.hasPhoto }) { [model] in
+            var next = model.edit
+            next.cornerCrop = QuadrilateralCrop(rect: UnitCropCoordinates.verticallyFlipped(
+                next.crop ?? CGRect(x: 0, y: 0, width: 1, height: 1)))
+            next.crop = nil
+            model.edit = next
+            model.cropAspect = .free
+        })
         crop.add(PopUpRow<AspectOption>(
             "Aspect",
             options: AspectOption.allCases.map { ($0.rawValue, $0) },
@@ -719,7 +730,7 @@ final class InspectorViewController: SessionViewController {
                             }) { [model] in model.resetGeometry() })
 
         let hint = FormSectionView(title: nil)
-        hint.add(NoteRow("Drag the photo’s frame edges to resize it, or drag inside the frame to move it. Choosing an aspect ratio keeps that shape locked."))
+        hint.add(NoteRow("Drag the frame to crop. Four-Corner Crop lets you move each corner independently and straightens the selection when you leave Crop. Choose an aspect ratio to return to a rectangular crop."))
 
         return [orientation, crop, perspective, reset, hint]
     }

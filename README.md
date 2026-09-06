@@ -69,6 +69,11 @@ adding data or images, run `python3 tools/check-source-boundary.py`.
 
 [Download for Mac](https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS.pkg) · [![Download on the App Store](docs/assets/download-on-the-app-store.svg)](https://apps.apple.com/app/id6792911908)
 
+To convert a scan, choose **File → Import Scanned Negative…**, sample its clear film
+border and preview the positive. Import it to adjust all four crop corners independently.
+See the [scan import guide](docs/scanned-negatives.md) for input requirements and
+the approximate conversion’s limits.
+
 ## More information
 
 - [User guide](docs/documentation.html)
