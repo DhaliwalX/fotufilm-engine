@@ -445,6 +445,7 @@ extension EditState: Codable {
              couplers, couplerGapReach, couplerSelf,
              printCorrection, paper, paperFollowsStock, seed,
              push, bleach, expiredYears, shutterSeconds, printLightKelvin,
+             enlarger,
              rotation, flipH, straighten, perspectiveV, perspectiveH,
              crop, cornerCrop, grade, encodedGrade,
              lensCorrectionEnabled, lensProfileID, lensProfileAmount,
@@ -508,6 +509,10 @@ extension EditState: Codable {
                                                forKey: .shutterSeconds)
         printLightKelvin = try c.decodeIfPresent(
             Double.self, forKey: .printLightKelvin)
+        // Every record written before the lamp house existed is a diffuser print, which is what
+        // the engine rendered it as.
+        enlarger = try c.decodeIfPresent(String.self, forKey: .enlarger)
+            .flatMap(Enlarger.preset(id:)) ?? .default
         // Folded back into the quarter turn it means, because nothing downstream
         // survives a rotation outside 0...3: the frame panel's reading multiplies
         // it by 90, which traps on a record carrying anything near Int's ends. A
@@ -579,6 +584,7 @@ extension EditState: Codable {
         try c.encode(expiredYears, forKey: .expiredYears)
         try c.encodeIfPresent(shutterSeconds, forKey: .shutterSeconds)
         try c.encodeIfPresent(printLightKelvin, forKey: .printLightKelvin)
+        try c.encode(enlarger.id, forKey: .enlarger)
         try c.encode(rotation, forKey: .rotation)
         try c.encode(flipH, forKey: .flipH)
         try c.encode(straighten, forKey: .straighten)

@@ -108,6 +108,8 @@ extension EditorControlField {
             return .bespoke { !$0.paperFollowsStock }
         case .printLight:
             return .bespoke { $0.printLightKelvin != nil }
+        case .enlarger:
+            return .bespoke { $0.enlarger != .default }
         case .printCorrection:
             return .number(read: { $0.printCorrection },
                            write: { $0.printCorrection = $1 })

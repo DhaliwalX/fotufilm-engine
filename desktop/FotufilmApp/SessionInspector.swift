@@ -199,6 +199,12 @@ final class InspectorViewController: SessionViewController {
             && model.edit.resolvedPaper.acceptsViewingIlluminant
     }
 
+    /// Only an optically enlarged reflection print has a lamp house to choose.
+    private var showsEnlarger: Bool {
+        guard model.edit.hasFilm, let stock = model.edit.stock else { return false }
+        return Enlarger.illuminates(stock: stock, paper: model.edit.resolvedPaper)
+    }
+
     private var showsPrintCorrection: Bool {
         model.edit.hasFilm && !(model.edit.stock?.isReversal ?? false)
             && !(model.edit.stock?.isMonochrome ?? false)
@@ -509,6 +515,14 @@ final class InspectorViewController: SessionViewController {
                 options: Self.viewingLightChoices(for: model.edit.resolvedPaper),
                 get: { [model] in model.edit.printLightKelvin },
                 set: { [model] in model.edit.printLightKelvin = $0 }))
+        }
+        if showsEnlarger {
+            print.add(PopUpRow<Enlarger>(
+                "Enlarger",
+                options: Enlarger.allCases.map { ($0.name, $0) },
+                get: { [model] in model.edit.enlarger },
+                set: { [model] in model.edit.enlarger = $0 }))
+            print.add(NoteRow { [model] in model.edit.enlarger.detail })
         }
         if showsPrintCorrection {
             print.add(adjustment("Channel Contrast Match", range: 0...1,

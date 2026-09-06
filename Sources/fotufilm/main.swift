@@ -110,6 +110,12 @@ Options:
                      eterna-cp, lab-scan, telecine, screen or negative.
                      Photo and projection variants use analytic example curves.
                      Reversal stocks use screen regardless of the requested medium.
+  --enlarger <head>  Lamp house over the negative: diffuser (default, the
+                     diffuse density the sheets are measured in) or condenser
+                     (collimated light: the Callier effect reads a silver
+                     negative's densities ~1.4x higher, a dye negative's ~1.05x,
+                     re-timed through mid-grey, so the print gains contrast).
+                     Only an enlarged reflection print has one
   --negative <how>   Show the developed negative instead of the print it would
                      make: 'lightbox' keeps the base its own orange, 'scanner'
                      divides the base out. Ignored by a reversal stock, which
@@ -1168,6 +1174,13 @@ if let p = flags["--paper"] {
 // exported pack cannot carry. Turning it off here is what makes a native render comparable to the
 // browser's.
 if let t = flags["--local-tone"] { options.localTone = t != "0" }
+if let head = flags["--enlarger"] {
+    guard let choice = Enlarger.preset(id: head) else {
+        fail("Unknown enlarger '\(head)'. Choices: "
+             + Enlarger.allCases.map(\.id).joined(separator: ", "))
+    }
+    options.enlarger = choice
+}
 if let n = flags["--negative"] {
     switch n {
     case "lightbox": options.negativeViewing = .lightBox

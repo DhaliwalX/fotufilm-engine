@@ -126,6 +126,13 @@ public struct FotufilmEngine {
         public var bleachBypass: Float = 0
         /// Optional *additional* correction of film channel-contrast mismatch.
         public var printCorrection: Float = 0.05
+        /// The lamp house the negative is enlarged under. `.diffuser` — the default, and the
+        /// diffuse densitometry every stock sheet is read in — changes nothing. `.condenser`
+        /// applies the Callier effect: the negative's densities read at their specular values,
+        /// so a silver negative prints harder (`Enlarger.silverCallierCoefficient`) and a dye
+        /// negative only slightly so, with the print re-timed through the scaled mid-grey. Read
+        /// only where a reflection sheet is optically enlarged; see `Enlarger.illuminates`.
+        public var enlarger: Enlarger = .diffuser
         /// Where the developed image is finished. `nil` — the default — takes the medium the
         /// loaded stock was designed for, so a motion-picture camera negative reaches its release
         /// print stock and a still negative reaches the measured sheet, without the caller naming

@@ -366,6 +366,10 @@ struct EditState: Equatable {
     /// to RA-4 paper, motion negative to its native release print, and reversal to its direct
     /// positive. New edits instead use the HDR-capable digital reference selected above.
     var paperFollowsStock = false
+    /// The lamp house a reflection print is enlarged under. `.diffuser` is the sheets' own
+    /// diffuse read and changes nothing; `.condenser` prints a silver negative harder through
+    /// the Callier effect. Read only where `Enlarger.illuminates` the medium.
+    var enlarger = Enlarger.default
 
     var rotation = 0  // clockwise quarter turns, 0...3
     var flipH = false
@@ -581,6 +585,7 @@ struct EditState: Equatable {
         o.expiredYears = Float(expiredYears)
         o.shutterSeconds = shutterSeconds.map(Float.init)
         o.printViewingKelvin = printLightKelvin.map(Float.init)
+        o.enlarger = enlarger
         let outputMedium = resolvedPaper
         o.paper = outputMedium
         if outputMedium.isNegative {

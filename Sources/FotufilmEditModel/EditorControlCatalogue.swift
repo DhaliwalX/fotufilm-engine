@@ -220,6 +220,10 @@ public enum EditorControlCatalogue {
             detail: "Choose the light used to judge a physical print",
             section: .printPaper, kind: .menu, availability: .printStage),
         EditorControl(
+            .enlarger, title: "Enlarger",
+            detail: "Choose the lamp house the negative is printed under",
+            section: .printPaper, kind: .menu, availability: .printStage),
+        EditorControl(
             .printCorrection, title: "Channel Contrast Match",
             detail: "Balance how the film's colour layers print together",
             section: .printPaper,
@@ -397,6 +401,7 @@ public extension EngineOptionCoverage {
         "developmentEV": .control([.push]),
         "bleachBypass": .control([.bleach]),
         "printCorrection": .control([.printCorrection]),
+        "enlarger": .control([.enlarger]),
         "paper": .control([.paper]),
         "printViewingKelvin": .control([.printLight]),
         "grade": .control([.gradeShadowsWarmth, .gradeShadowsTint,
