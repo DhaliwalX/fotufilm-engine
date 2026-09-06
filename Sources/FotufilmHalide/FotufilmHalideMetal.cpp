@@ -1899,6 +1899,10 @@ public:
                 d_min + range - (flat_formed - d_min), flat_formed);
         }
 
+        // Resolved discs reuse density throughout the unrolled coverage calculation.
+        // Materialize it once per pixel to keep sampled-curve searches out of that large
+        // expression. Float32 storage preserves the previously inline density precision.
+        if (use_discs) density = store_frame(density, false);
         Func developed = density;
         if (use_grain) {
             Func noise("frame_poisson_noise" + suffix);
