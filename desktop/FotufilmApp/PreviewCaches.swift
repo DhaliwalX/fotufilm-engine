@@ -19,6 +19,14 @@ final class StockPreviewCache {
     /// Long edge of a preview.
     private nonisolated static let longEdge = 192
 
+    /// Keep existing tiles visible while the canvas owns an interactive crop.
+    func pause() {
+        guard task != nil else { return }
+        task?.cancel()
+        task = nil
+        key = nil
+    }
+
     func refresh(source: PhotoSource?, state: EditState, token: UUID) {
         guard let source else {
             task?.cancel()

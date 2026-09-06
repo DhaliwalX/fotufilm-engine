@@ -39,6 +39,7 @@ enum FotufilmMac {
 /// Opens the window, owns the menu bar, and takes delivery of a film pack opened from the Finder.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowController: EditorWindowController?
+    private var negativeImporter: NegativeImportController?
     private var updateCheckTimer: Timer?
     private var pendingURLs: [URL] = []
     private var didRunPluginInstallation = false
@@ -177,6 +178,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // MARK: - Menu commands
+
+    @MainActor @objc func importScannedNegative(_ sender: Any?) {
+        guard negativeImporter == nil, let editorWindow = windowController?.window,
+              let model = windowController?.editor.model else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image, .rawImage]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Choose an unconverted negative scan with its film border visible."
+        panel.beginSheetModal(for: editorWindow) { [weak self] response in
+            guard response == .OK, let url = panel.url, let self else { return }
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let importer = NegativeImportController(data: try Data(contentsOf: url),
+                    filename: url.lastPathComponent, model: model)
+                self.negativeImporter = importer
+                importer.onImport = { [weak self] in self?.windowController?.editor.showImportedNegativeCrop() }
+                importer.onClose = { [weak self] in self?.negativeImporter = nil }
+                if let sheet = importer.window { editorWindow.beginSheet(sheet) }
+            } catch { model.errorMessage = error.localizedDescription }
+        }
+    }
 
     @MainActor @objc func checkForUpdates(_ sender: Any?) {
         Task { await UpdateCheck.runManual() }

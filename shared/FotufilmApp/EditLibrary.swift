@@ -1,5 +1,8 @@
 import CoreGraphics
 import Foundation
+#if canImport(FotufilmImaging)
+import FotufilmImaging
+#endif
 import ImageIO
 import Observation
 import UniformTypeIdentifiers
@@ -443,7 +446,7 @@ extension EditState: Codable {
              printCorrection, paper, paperFollowsStock, seed,
              push, bleach, expiredYears, shutterSeconds, printLightKelvin,
              rotation, flipH, straighten, perspectiveV, perspectiveH,
-             crop, grade, encodedGrade,
+             crop, cornerCrop, grade, encodedGrade,
              lensCorrectionEnabled, lensProfileID, lensProfileAmount,
              lensAdjustment,
              lensFilterIDs, lensFilterMetering
@@ -520,6 +523,8 @@ extension EditState: Codable {
         perspectiveH = try c.decodeIfPresent(
             Double.self, forKey: .perspectiveH) ?? perspectiveH
         crop = try c.decodeIfPresent(CGRect.self, forKey: .crop)
+        cornerCrop = try c.decodeIfPresent(QuadrilateralCrop.self, forKey: .cornerCrop)
+        if cornerCrop?.isValid == false { cornerCrop = nil }
         grade = try c.decodeIfPresent(ColorGrade.self, forKey: .grade) ?? grade
         encodedGrade = try c.decodeIfPresent(
             Bool.self, forKey: .encodedGrade) ?? encodedGrade
@@ -580,6 +585,7 @@ extension EditState: Codable {
         try c.encode(perspectiveV, forKey: .perspectiveV)
         try c.encode(perspectiveH, forKey: .perspectiveH)
         try c.encodeIfPresent(crop, forKey: .crop)
+        try c.encodeIfPresent(cornerCrop, forKey: .cornerCrop)
         try c.encode(grade, forKey: .grade)
         try c.encode(encodedGrade, forKey: .encodedGrade)
         try c.encode(lensCorrectionEnabled, forKey: .lensCorrectionEnabled)

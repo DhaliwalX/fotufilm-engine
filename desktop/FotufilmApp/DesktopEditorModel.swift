@@ -1,4 +1,7 @@
 import AVFoundation
+#if canImport(FotufilmImaging)
+import FotufilmImaging
+#endif
 import CoreGraphics
 import CoreImage
 import CryptoKit
@@ -393,6 +396,8 @@ final class DesktopEditorModel {
             var before = old, after = edit
             before.crop = nil
             after.crop = nil
+            before.cornerCrop = nil
+            after.cornerCrop = nil
             if before == after { return }
         }
         submit(draft: editSession.isContinuousEditActive)
@@ -532,7 +537,8 @@ final class DesktopEditorModel {
 
     /// Opens photo bytes that may have come from anywhere — a file, the photo
     /// library, the bundled sample.
-    func openPhoto(data: Data, name: String?, rawHint: String?) {
+    func openPhoto(data: Data, name: String?, rawHint: String?,
+                   initialEdit: EditState? = nil) {
         editSession.flushPersistence()
         closeVideo()
         resetRenderLoop()
@@ -547,7 +553,7 @@ final class DesktopEditorModel {
         documentName = name
         canvasResetToken = UUID()
         clearHistory()
-        setEditWithoutHistory(EditState())
+        setEditWithoutHistory(initialEdit ?? EditState())
         cropAspect = .free
         rerender(debounce: true)
 
@@ -561,14 +567,14 @@ final class DesktopEditorModel {
             self.sourceOriginID = origin
             if let entry = EditLibrary.shared.entry(forAsset: origin),
                let stored = await EditLibrary.shared.load(id: entry.id),
-               self.canvasResetToken == token, self.edit == EditState() {
+               self.canvasResetToken == token, self.edit == (initialEdit ?? EditState()) {
                 self.storeEntryID = entry.id
                 self.editSession.armPersistence()
                 self.setEditWithoutHistory(stored.edit)
                 self.rerender(debounce: true)
                 return
             }
-            self.beginAutoStock(source: source, token: token)
+            if initialEdit == nil { self.beginAutoStock(source: source, token: token) }
         }
 
         if source.isRaw {
@@ -722,18 +728,22 @@ final class DesktopEditorModel {
         submit(draft: false)
     }
 
-    /// A quarter turn counter-clockwise, the phone's way: the crop does not survive it, because a
-    /// rect chosen for one orientation is not a choice about the other.
+    /// Turn the photo and its four-corner selection together. The legacy rectangular
+    /// aspect crop is reset because its locked ratio belongs to the old orientation.
     func rotateLeft() {
         var next = edit
         next.rotation = (next.rotation + 3) % 4
         next.crop = nil
+        next.cornerCrop = next.cornerCrop?.rotatedLeft(mirrored: next.flipH)
         edit = next
         cropAspect = .free
     }
 
     func flipHorizontal() {
-        edit.flipH.toggle()
+        var next = edit
+        next.flipH.toggle()
+        next.cornerCrop = next.cornerCrop?.flippedHorizontally()
+        edit = next
     }
 
     func resetGeometry() {
@@ -777,13 +787,15 @@ final class DesktopEditorModel {
     /// Locks an aspect by cutting the largest centered crop that has it — the
     /// same arithmetic as the phone's crop panel.
     func applyAspect(_ option: AspectOption) {
+        var next = edit
+        next.cornerCrop = nil
         cropAspect = option
         var size = sourcePixelSize
         if edit.rotation % 2 == 1 {
             size = CGSize(width: size.height, height: size.width)
         }
         guard size.width > 0, size.height > 0,
-              let ratio = option.ratio(for: size) else { return }
+              let ratio = option.ratio(for: size) else { edit = next; return }
         let imageRatio = size.width / size.height
         var w: CGFloat = 1, h: CGFloat = 1
         if ratio < imageRatio {
@@ -791,8 +803,9 @@ final class DesktopEditorModel {
         } else {
             h = imageRatio / ratio
         }
-        edit.crop = (w > 0.999 && h > 0.999) ? nil
+        next.crop = (w > 0.999 && h > 0.999) ? nil
             : CGRect(x: (1 - w) / 2, y: (1 - h) / 2, width: w, height: h)
+        edit = next
     }
 
     /// Sizes the moving-control proxy to the pixels it is actually displayed at
@@ -854,7 +867,7 @@ final class DesktopEditorModel {
         pending = nil
         isRendering = true
         var stripped = next.state
-        if isCropMode { stripped.crop = nil }
+        if isCropMode { stripped.crop = nil; stripped.cornerCrop = nil }
         let state = stripped
         let strip = isCropMode
         let draft = next.draft
