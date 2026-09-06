@@ -5,6 +5,15 @@ import FotufilmMetal
 
 final class ReleasedProfileRenderingTests: XCTestCase {
     func testEveryReleasedProfileMatchesCPUOnMetal() throws {
+        XCTAssertEqual(FilmStock.presetIDs.count, 40)
+        try checkCPUAndMetal(FilmStock.presetIDs)
+    }
+
+    func testGold200MatchesCPUOnMetal() throws {
+        try checkCPUAndMetal(["gold200"])
+    }
+
+    private func checkCPUAndMetal(_ ids: [String]) throws {
         try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable, "Halide engine required")
         let gpu = try XCTUnwrap(HalideMetalFilmRenderer.shared, "Halide Metal unavailable")
         let side = 32
@@ -23,8 +32,7 @@ final class ReleasedProfileRenderingTests: XCTestCase {
         }
         var options = FotufilmEngine.Options()
         options.grainScale = 0
-        XCTAssertEqual(FilmStock.presetIDs.count, 40)
-        for id in FilmStock.presetIDs {
+        for id in ids {
             let stock = try XCTUnwrap(FilmStock.named(id), id)
             let cpu = FotufilmEngine(stock: stock, options: options).process(linearRGB: scene)
             let metal = try XCTUnwrap(gpu.processLinearFloat(

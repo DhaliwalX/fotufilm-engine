@@ -19,17 +19,25 @@ final class GoldenImageTests: XCTestCase {
     }
 
     func testEveryStockRendersAndExistingGoldensMatch() throws {
-        try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable,
-                          "the Halide engine is the only processing backend")
-        let mode = GoldenStore.Mode.current
         let stocks = GoldenStocks.all
-
         XCTAssertEqual(stocks.count, GoldenStocks.fileCount,
                        "the sweep loaded \(stocks.count) stocks but there are "
                        + "\(GoldenStocks.fileCount) stock files on disk — a "
                        + "stock that fails to load silently leaves the "
                        + "catalogue untested")
         XCTAssertGreaterThan(stocks.count, 1, "no stock pack loaded at all")
+        try checkGoldens(stocks)
+    }
+
+    func testGold200MatchesItsGoldens() throws {
+        let stock = try XCTUnwrap(GoldenStocks.all.first { $0.id == "gold200" })
+        try checkGoldens([stock])
+    }
+
+    private func checkGoldens(_ stocks: [GoldenStocks.Entry]) throws {
+        try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable,
+                          "the Halide engine is the only processing backend")
+        let mode = GoldenStore.Mode.current
 
         let charts = ReferenceChart.all
         var entries: [ContactSheet.Entry] = []

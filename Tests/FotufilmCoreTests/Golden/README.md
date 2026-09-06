@@ -26,5 +26,8 @@ The update run fails on purpose so the new images must be reviewed. Open the rev
 page in `.build/golden-review`, check the images, and update their hashes and
 provenance in `SOURCE_ASSETS.json`. Then rerun the tests without `FOTUFILM_GOLDEN`.
 
+For a change limited to Gold 200, use `--filter testGold200MatchesItsGoldens`
+in both commands to render only its four reference charts.
+
 These tests detect changes; they do not prove a match to physical film. Use generated
 charts for new tests. Do not add personal photographs or manufacturer artwork.

@@ -38,48 +38,48 @@
   ],
   "curves": [
     {
-      "dMin": 0.249701,
-      "gamma": 0.544627,
-      "shoulder": 1.170078,
-      "shoulderWidth": 0.127115,
-      "toe": -1.228385,
-      "toeWidth": 0.177374,
+      "dMin": 0.251334,
+      "gamma": 0.537631,
+      "shoulder": 1.258305,
+      "shoulderWidth": 0.168067,
+      "toe": -1.234858,
+      "toeWidth": 0.168067,
       "secondary": {
-        "gamma": 0.300002,
-        "shoulder": 2.911564,
-        "shoulderWidth": 0.050016,
-        "toe": 1.091675,
-        "toeWidth": 0.176671
-      }
-    },
-    {
-      "dMin": 0.656867,
-      "gamma": 0.281976,
-      "shoulder": 1.214561,
-      "shoulderWidth": 0.106929,
-      "toe": -1.488076,
-      "toeWidth": 0.111537,
-      "secondary": {
-        "gamma": 0.28718,
+        "gamma": 0.413459,
         "shoulder": 2.996864,
-        "shoulderWidth": 0.050012,
-        "toe": -1.064264,
-        "toeWidth": 0.13523
+        "shoulderWidth": 0.367037,
+        "toe": 1.478143,
+        "toeWidth": 0.367037
       }
     },
     {
-      "dMin": 0.972769,
-      "gamma": 0.827204,
-      "shoulder": 1.218009,
-      "shoulderWidth": 1.089678,
-      "toe": -1.213179,
-      "toeWidth": 0.246299,
+      "dMin": 0.650111,
+      "gamma": 0.573321,
+      "shoulder": 1.070829,
+      "shoulderWidth": 0.192064,
+      "toe": -1.277495,
+      "toeWidth": 0.192064,
       "secondary": {
-        "gamma": 0.90224,
-        "shoulder": 0.819901,
-        "shoulderWidth": 0.181018,
-        "toe": 0.701414,
-        "toeWidth": 0.150816
+        "gamma": 0.264754,
+        "shoulder": 2.996864,
+        "shoulderWidth": 0.15,
+        "toe": 0.863579,
+        "toeWidth": 0.15
+      }
+    },
+    {
+      "dMin": 0.964061,
+      "gamma": 0.624686,
+      "shoulder": 1.333925,
+      "shoulderWidth": 0.15,
+      "toe": -1.200789,
+      "toeWidth": 0.15,
+      "secondary": {
+        "gamma": 0.381277,
+        "shoulder": 2.996864,
+        "shoulderWidth": 0.192352,
+        "toe": 1.5,
+        "toeWidth": 0.192352
       }
     }
   ],
