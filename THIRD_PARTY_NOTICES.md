@@ -109,3 +109,19 @@ App Store" badge artwork that Apple provides for linking to an app's App Store
 listing, used here under Apple's App Store Marketing Guidelines. Apple, the
 Apple logo and App Store are trademarks of Apple Inc., registered in the U.S.
 and other countries and regions.
+
+## Browser RAW decoder
+
+The browser RAW decoder is built from unmodified [LibRaw 0.22.2 source](https://www.libraw.org/data/LibRaw-0.22.2.tar.gz),
+Copyright (C) 2008–2025 LibRaw LLC and the contributors listed in its `COPYRIGHT`.
+Fotufilm distributes this component under LibRaw's CDDL 1.0 option. The build
+copies `LICENSE.CDDL` and `COPYRIGHT` beside the decoder in `web/public/raw`;
+they must remain in deployments. LibRaw's source and individual source-file
+notices are available in the linked release archive. The wrapper and build
+recipe are in `web/engine/raw_wasm.cpp` and `tools/build-raw-wasm.sh`.
+
+The decoder also uses Emscripten's libjpeg and zlib ports. This software is
+based in part on the work of the Independent JPEG Group. The build copies
+the ports' licence notices into the same deployment directory. LibRaw,
+libjpeg and zlib sources and build outputs are downloaded into ignored build
+and toolchain caches; they are not vendored into the engine repository.

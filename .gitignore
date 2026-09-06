@@ -24,3 +24,6 @@ web/public/fallback/
 # Local stock packs. The released profiles and synthetic examples live in
 # Sources/FotufilmCore/Stocks/. Point FOTUFILM_STOCKS at other local packs.
 /Stocks/
+
+# Built local RAW decoder and third-party notices.
+web/public/raw/

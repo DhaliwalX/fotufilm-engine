@@ -1,3 +1,4 @@
+import { IMAGE_ACCEPT, isRawFile, importRaw } from './raw-import.js'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { assetUrl } from './engine.js'
 import { RenderSession, loadStockIndex } from './render-session.js'
@@ -127,7 +128,8 @@ export default function App() {
     [dragOver, setDragOver] = useState(false)
   const [result, setResult] = useState(null),
     [status, setStatus] = useState('Loading films'),
-    [error, setError] = useState(null)
+    [error, setError] = useState(null),
+    [importStatus, setImportStatus] = useState(null)
   const [dialog, setDialog] = useState(null),
     [exporting, setExporting] = useState(false),
     [exportType, setExportType] = useState('image/png'),
@@ -142,7 +144,8 @@ export default function App() {
     editInput = useRef(null),
     histories = useRef(new Map()),
     urls = useRef(new Set()),
-    loadGeneration = useRef(0)
+    loadGeneration = useRef(0),
+    importController = useRef(null)
   const cropMode = panel === 'crop' && inspectorOpen
   const [zoomReadout, setZoomReadout] = useState(100)
   const previewEditJSON = JSON.stringify(
@@ -178,6 +181,8 @@ export default function App() {
     setSession(renderer)
     return () => {
       renderer.dispose()
+      importController.current?.abort()
+      loadGeneration.current++
       for (const url of urls.current) URL.revokeObjectURL(url)
       urls.current.clear()
     }
@@ -303,11 +308,29 @@ export default function App() {
   async function acceptFiles(incoming) {
     if (exporting) return
     const generation = ++loadGeneration.current
+    importController.current?.abort()
+    const controller = new AbortController()
+    importController.current = controller
     const loaded = [],
       errors = []
     for (const file of Array.from(incoming || [])) {
+      if (controller.signal.aborted) break
+      if (isRawFile(file)) {
+        try {
+          const decoded = await importRaw(file, {
+            signal: controller.signal,
+            onProgress: (text) => {
+              if (!controller.signal.aborted) setImportStatus(`${text}: ${file.name}`)
+            },
+          })
+          loaded.push({ id: crypto.randomUUID(), name: file.name, ...decoded })
+        } catch (e) {
+          if (e.name !== 'AbortError') errors.push(`${file.name}: ${e.message}`)
+        }
+        continue
+      }
       if (!file.type.startsWith('image/') && !/\.(png|jpe?g|webp|avif|gif|bmp)$/i.test(file.name)) {
-        errors.push(`${file.name}: choose a browser-readable image.`)
+        errors.push(`${file.name}: choose an image or camera RAW file.`)
         continue
       }
       const url = URL.createObjectURL(file)
@@ -327,6 +350,8 @@ export default function App() {
       loaded.forEach((file) => URL.revokeObjectURL(file.url))
       return
     }
+    setImportStatus(null)
+    importController.current = null
     if (loaded.length) {
       loaded.forEach((file) => urls.current.add(file.url))
       if (activeId) histories.current.set(activeId, history)
@@ -358,7 +383,9 @@ export default function App() {
       ctx.fillStyle = gradient
       ctx.fillRect(70, 750, 1460, 180)
       await acceptFiles([
-        new File([await canvasBlob(canvas)], 'Color chart.png', { type: 'image/png' }),
+        new File([await canvasBlob(canvas)], 'Color chart.png', {
+          type: 'image/png',
+        }),
       ])
     } catch (e) {
       setError(e.message)
@@ -407,7 +434,9 @@ export default function App() {
   }
   function saveEdit() {
     download(
-      new Blob([JSON.stringify({ version: 1, edit }, null, 2)], { type: 'application/json' }),
+      new Blob([JSON.stringify({ version: 1, edit }, null, 2)], {
+        type: 'application/json',
+      }),
       `${cleanName(active?.name || 'photo')}.fotufilm-web.json`,
     )
     setDialog(null)
@@ -559,6 +588,7 @@ export default function App() {
             disabled={!active || zoom === 1}
           />
           <span className="pixel-readout">
+            {active?.image.raw ? 'RAW · ' : ''}
             {active ? `${((rawWidth * rawHeight) / 1000000).toFixed(1)} MP` : ''}
           </span>
         </div>
@@ -703,7 +733,20 @@ export default function App() {
             <button className="text-button" onClick={openSample}>
               Open sample chart
             </button>
-            <small>JPEG, PNG, WebP, AVIF · processed on this device</small>
+            <small>RAW, JPEG, PNG, WebP, AVIF · processed on this device</small>
+          </div>
+        )}
+        {importStatus && (
+          <div className="import-status" role="status">
+            <span>{importStatus}</span>
+            <button
+              onClick={() => {
+                importController.current?.abort()
+                setImportStatus(null)
+              }}
+            >
+              Cancel
+            </button>
           </div>
         )}
         {dragOver && <div className="drop-label">Drop images to open</div>}
@@ -831,7 +874,11 @@ export default function App() {
                     {adjustments('Character')}
                     <button
                       className="secondary full-width"
-                      onClick={() => patch({ seed: crypto.getRandomValues(new Uint32Array(1))[0] })}
+                      onClick={() =>
+                        patch({
+                          seed: crypto.getRandomValues(new Uint32Array(1))[0],
+                        })
+                      }
                     >
                       New Grain Pattern
                     </button>
@@ -926,7 +973,12 @@ export default function App() {
                     </button>
                     <button
                       className="secondary"
-                      onClick={() => patch({ flip: !edit.flip, crop: flippedCrop(edit.crop) })}
+                      onClick={() =>
+                        patch({
+                          flip: !edit.flip,
+                          crop: flippedCrop(edit.crop),
+                        })
+                      }
                     >
                       <Icon name="flip" />
                       Flip
@@ -1008,7 +1060,8 @@ export default function App() {
                 </label>
                 {result?.delta && (
                   <p className="inspector-hint">
-                    {result.delta.gain.toFixed(1)}× gain · {result.delta.peak}/255 peak
+                    {result.delta.gain.toFixed(1)}× gain · {result.delta.peak}
+                    /255 peak
                   </p>
                 )}
               </>
@@ -1019,7 +1072,7 @@ export default function App() {
       <input
         ref={input}
         type="file"
-        accept="image/*"
+        accept={IMAGE_ACCEPT}
         multiple
         hidden
         onChange={(e) => {
@@ -1169,12 +1222,13 @@ export default function App() {
             </p>
             <p>
               The browser supports film selection, grain, light and color adjustments, three-way
-              grading, crop, rotation and flip. It reads image formats supported by your browser.
+              grading, crop, rotation and flip. Camera RAW files decode locally with LibRaw, using
+              as-shot white balance and 16-bit linear data. Other images use the browser decoder.
             </p>
             <p>
-              RAW and video processing, scanned-negative conversion, spectral film and lens
-              controls, selective adjustments, custom packs, and HDR / 16-bit export are available
-              in the Mac app.
+              Video processing, scanned-negative conversion, spectral film and lens controls,
+              selective adjustments, custom packs, and HDR / 16-bit export are available in the Mac
+              app.
             </p>
           </div>
         </Modal>

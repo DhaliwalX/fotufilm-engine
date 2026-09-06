@@ -277,8 +277,17 @@ for (let i = 0; i < 256; ++i) srgbToLinearTable[i] = srgbToLinear(i / 255)
 /// `stride` floats per pixel starting at `offsets`. The two paths want the same numbers in
 /// different orders — planar for the CPU kernels, interleaved RGBA for the GPU ones.
 function decodeInto(destination, source, plane, stride, offsets) {
-  const m = SRGB_TO_2020
   const [o0, o1, o2] = offsets
+  if (source instanceof Float32Array) {
+    // RAW geometry already supplies scene-linear Rec.2020; do not decode gamma twice.
+    for (let p = 0; p < plane; p++) {
+      destination[p * stride + o0] = source[p * 4]
+      destination[p * stride + o1] = source[p * 4 + 1]
+      destination[p * stride + o2] = source[p * 4 + 2]
+    }
+    return
+  }
+  const m = SRGB_TO_2020
   for (let p = 0, i = 0; p < plane; ++p, i += 4) {
     const r = srgbToLinearTable[source[i]]
     const g = srgbToLinearTable[source[i + 1]]
@@ -395,7 +404,7 @@ export function planTiles(width, height, apron, budget) {
   return tiles
 }
 
-/// A frame the developer reads a rectangle at a time, as the sRGB RGBA bytes a canvas hands over.
+/// Rectangle input: Uint8 RGBA is encoded sRGB; Float32 RGBA is linear Rec.2020.
 /// Reading by rectangle is what lets a hundred-megapixel frame develop without its float form
 /// ever existing whole: only a tile's worth is decoded at once.
 export function pixelSource({ data, width, height }) {
@@ -404,7 +413,7 @@ export function pixelSource({ data, width, height }) {
     height,
     read(x, y, w, h) {
       if (x === 0 && y === 0 && w === width && h === height) return data
-      const out = new Uint8ClampedArray(w * h * 4)
+      const out = new data.constructor(w * h * 4)
       for (let row = 0; row < h; ++row) {
         const from = ((y + row) * width + x) * 4
         out.set(data.subarray(from, from + w * 4), row * w * 4)
@@ -793,6 +802,7 @@ export async function createDeveloper(pack) {
 }
 
 function decodeRGBA(bytes) {
+  if (bytes instanceof Float32Array) return bytes.slice()
   const linear = new Float32Array(bytes.length)
   decodeInto(linear, bytes, bytes.length / 4, 4, [0, 1, 2])
   return linear

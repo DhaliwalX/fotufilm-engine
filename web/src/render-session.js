@@ -1,3 +1,5 @@
+import { rawSource } from './raw-source.js'
+import { defaultEdit } from './editor-state.js'
 import {
   assetUrl,
   createDeveloper,
@@ -88,9 +90,11 @@ export class RenderSession {
         entry.stages ??= await loadStages(assetUrl(`packs/${stock}.stages`), entry.pack)
       }
       if (stale()) return null
-      const oriented = orientImage(image, edit, maxEdge)
-      const sourceCanvas = cropMode ? oriented : await cropImage(oriented, edit)
-      const source = imageSource(sourceCanvas)
+      const oriented = image.raw ? null : orientImage(image, edit, maxEdge)
+      const sourceCanvas = image.raw ? null : cropMode ? oriented : await cropImage(oriented, edit)
+      const source = image.raw
+        ? rawSource(image, edit, maxEdge, cropMode)
+        : imageSource(sourceCanvas)
       const controls = {
         ...edit.params,
         gradeSpace: edit.gradeSpace,
@@ -122,7 +126,18 @@ export class RenderSession {
       canvas.height = source.height
       canvas.getContext('2d').putImageData(new ImageData(pixels, source.width, source.height), 0, 0)
       const blob = await canvasBlob(canvas)
-      const original = await canvasBlob(sourceCanvas)
+      let original
+      if (sourceCanvas) original = await canvasBlob(sourceCanvas)
+      else {
+        const baseline = await developNormal(source, defaultEdit().params)
+        const comparison = document.createElement('canvas')
+        comparison.width = source.width
+        comparison.height = source.height
+        comparison
+          .getContext('2d')
+          .putImageData(new ImageData(baseline.pixels, source.width, source.height), 0, 0)
+        original = await canvasBlob(comparison)
+      }
       return {
         canvas,
         blob,
