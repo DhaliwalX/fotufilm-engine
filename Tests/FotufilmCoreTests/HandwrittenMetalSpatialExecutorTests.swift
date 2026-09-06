@@ -169,6 +169,63 @@ final class HandwrittenMetalSpatialExecutorTests: XCTestCase {
             grainScale: 0, paper: .screen)
     }
 
+    func testSampledFusedCameraTailMatchesSeparateDensityAndPrint() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let queue = try XCTUnwrap(device.makeCommandQueue())
+        let executor = try XCTUnwrap(HandwrittenMetalSpatialExecutor(
+            device: device, maximumInFlightFrames: 1,
+            optimizationVariant: .exactSpecialized))
+        let tail = try XCTUnwrap(HandwrittenMetalCompositeTail(
+            device: device, lookupLayout: .baseline3D))
+        let width = 160, height = 96
+        var stock = try fastPathFixtureStock()
+        stock.curves = try XCTUnwrap(FilmStock.named("gold200")).curves
+        XCTAssertTrue(stock.curves.allSatisfy { $0.sampled != nil })
+        let options = multiresOptions(height: height)
+        let key = #function
+        try executor.prepareChecked(key: key, stock: stock, options: options,
+                                    frameWidth: width, frameHeight: height)
+        XCTAssertEqual(executor.executionPlan(forKey: key)?.name,
+                       "exact-specialized-no-print-no-grain")
+        let invocation = FilmEngineInvocation(stock: stock, options: options,
+                                             width: width, height: height)
+        try tail.prepareChecked(key: key, invocation: invocation,
+                                mode: .linearRec2020RGBA16Float,
+                                frameWidth: width, frameHeight: height)
+        let binding = try XCTUnwrap(tail.linearHDRBinding(forKey: key))
+        var input = [Float16](repeating: 1, count: width * height * 4)
+        for pixel in 0..<(width * height) {
+            for channel in 0..<3 {
+                let exposure = -4 + Float((pixel * 37 + channel * 173) % 4096) / 1024
+                input[pixel * 4 + channel] = Float16(powf(10, exposure))
+            }
+        }
+        let source = try texture(device: device, width: width, height: height,
+                                 usage: .shaderRead, values: input)
+        let density = try texture(device: device, width: width, height: height,
+                                  usage: [.shaderRead, .shaderWrite])
+        let fused = try texture(device: device, width: width, height: height,
+                                usage: [.shaderRead, .shaderWrite])
+        let separate = try texture(device: device, width: width, height: height,
+                                   usage: [.shaderRead, .shaderWrite])
+        let reference = try XCTUnwrap(queue.makeCommandBuffer())
+        XCTAssertTrue(executor.encodeDevelopedDensity(
+            recordExposure: source, densityOutput: density, key: key,
+            frameIndex: 0, commandBuffer: reference))
+        XCTAssertTrue(tail.encodeTail(developedDensity: density, output: separate,
+                                     key: key, frameIndex: 0, commandBuffer: reference))
+        reference.commit(); reference.waitUntilCompleted()
+        XCTAssertEqual(reference.status, .completed)
+        let optimized = try XCTUnwrap(queue.makeCommandBuffer())
+        XCTAssertTrue(executor.encodeLinearHDR(
+            recordExposure: source, workingTexture: density, output: fused,
+            tail: binding, key: key, frameIndex: 0, commandBuffer: optimized))
+        optimized.commit(); optimized.waitUntilCompleted()
+        XCTAssertEqual(optimized.status, .completed)
+        XCTAssertEqual(values(fused), values(separate),
+                       "fusing the camera tail must preserve sampled density exactly")
+    }
+
     func testPerceptualMultiresScreenNoGrainGraphTracksGenericGraph() throws {
         try assertVariant(
             .perceptualMultires,
