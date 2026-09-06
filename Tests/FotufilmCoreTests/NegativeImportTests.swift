@@ -68,7 +68,7 @@ final class NegativeImportTests: XCTestCase {
     }
 
     func testImporterPrintsAndMasksHolderWithoutChangingValidPixels() throws {
-        let stock = FilmStock.named("gold200")!
+        let stock = TestStocks.negative
         let film = CIImage(color: CIColor(red: 0.2, green: 0.3, blue: 0.1,
             colorSpace: NegativeScanImport.linearSpace)!).cropped(to: CGRect(x: 0, y: 0, width: 32, height: 32))
         let holder = CIImage(color: .black).cropped(to: CGRect(x: 0, y: 0, width: 4, height: 32))
