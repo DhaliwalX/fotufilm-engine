@@ -382,14 +382,18 @@ inline Halide::Expr sampled_film_density(Halide::ImageParam &configuration,
     using namespace Halide;
     Expr base = FOTUFILM_CONFIG_SAMPLED_CURVES + channel * FOTUFILM_SAMPLED_CURVE_STRIDE;
     Expr count = clamp(cast<int32_t>(configuration(base)), 2, FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES);
-    Expr low = 0, high = count - 1;
-    // Fixed-depth binary search over nonuniform knots, shared by CPU and GPU.
-    for (int step = 0; step < 10; ++step) {
-        Expr mid = (low + high) / 2;
-        Expr right = configuration(base + 1 + mid * 3) <= x;
-        low = select(right, mid, low);
-        high = select(right, high, mid);
+    Expr low = 0;
+    // Binary lifting tracks only the lower knot. Carrying both bounds through ten
+    // nested selects makes Halide's let substitution expand an exponential DAG
+    // in several AOT schedules. Constant strides keep the same exact interval
+    // search while greatly reducing the expression passed to the compiler.
+    for (int stride = FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES / 2; stride > 0; stride /= 2) {
+        Expr candidate = min(low + stride, count - 1);
+        low = unsafe_promise_clamped(
+            select(configuration(base + 1 + candidate * 3) <= x, candidate, low),
+            0, FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES - 1);
     }
+    Expr high = min(low + 1, count - 1);
     Expr i = base + 1 + low * 3, j = base + 1 + high * 3;
     Expr h = max(configuration(j) - configuration(i), 1.0e-12f);
     Expr t = clamp((x - configuration(i)) / h, 0.0f, 1.0f);
