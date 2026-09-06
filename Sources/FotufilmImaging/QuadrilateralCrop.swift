@@ -47,6 +47,36 @@ public struct QuadrilateralCrop: Codable, Equatable, Sendable {
         return next.isValid ? next : self
     }
 
+    /// Reorder the handles as the image turns, retaining their locations on the subject.
+    /// A horizontal reflection after orientation reverses the visible turn direction.
+    public func rotatedLeft(mirrored: Bool = false) -> Self {
+        var result = self
+        if mirrored {
+            func turn(_ p: CGPoint) -> CGPoint { CGPoint(x: 1 - p.y, y: p.x) }
+            result.topLeft = turn(bottomLeft)
+            result.topRight = turn(topLeft)
+            result.bottomRight = turn(topRight)
+            result.bottomLeft = turn(bottomRight)
+        } else {
+            func turn(_ p: CGPoint) -> CGPoint { CGPoint(x: p.y, y: 1 - p.x) }
+            result.topLeft = turn(topRight)
+            result.topRight = turn(bottomRight)
+            result.bottomRight = turn(bottomLeft)
+            result.bottomLeft = turn(topLeft)
+        }
+        return result
+    }
+
+    public func flippedHorizontally() -> Self {
+        func flip(_ p: CGPoint) -> CGPoint { CGPoint(x: 1 - p.x, y: p.y) }
+        var result = self
+        result.topLeft = flip(topRight)
+        result.topRight = flip(topLeft)
+        result.bottomRight = flip(bottomLeft)
+        result.bottomLeft = flip(bottomRight)
+        return result
+    }
+
     #if canImport(CoreImage)
     public func applying(to image: CIImage) -> CIImage {
         guard isValid, let filter = CIFilter(name: "CIPerspectiveCorrection") else { return image }

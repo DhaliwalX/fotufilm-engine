@@ -728,13 +728,13 @@ final class DesktopEditorModel {
         submit(draft: false)
     }
 
-    /// A quarter turn counter-clockwise, the phone's way: the crop does not survive it, because a
-    /// rect chosen for one orientation is not a choice about the other.
+    /// Turn the photo and its four-corner selection together. The legacy rectangular
+    /// aspect crop is reset because its locked ratio belongs to the old orientation.
     func rotateLeft() {
         var next = edit
         next.rotation = (next.rotation + 3) % 4
         next.crop = nil
-        next.cornerCrop = nil
+        next.cornerCrop = next.cornerCrop?.rotatedLeft(mirrored: next.flipH)
         edit = next
         cropAspect = .free
     }
@@ -742,7 +742,7 @@ final class DesktopEditorModel {
     func flipHorizontal() {
         var next = edit
         next.flipH.toggle()
-        next.cornerCrop = nil
+        next.cornerCrop = next.cornerCrop?.flippedHorizontally()
         edit = next
     }
 

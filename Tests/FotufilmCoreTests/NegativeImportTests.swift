@@ -5,6 +5,22 @@ import FotufilmCore
 import FotufilmImaging
 
 final class NegativeImportTests: XCTestCase {
+    func testCornerRotationAndFlipKeepTheSelectedSubject() throws {
+        var crop = QuadrilateralCrop(rect: CGRect(x: 0.125, y: 0.25, width: 0.75, height: 0.5))
+        crop = crop.movingCorner(0, to: CGPoint(x: 0.25, y: 0.375))
+        let left = crop.rotatedLeft()
+        XCTAssertEqual(left.topLeft, CGPoint(x: crop.topRight.y, y: 1 - crop.topRight.x))
+        XCTAssertEqual(left.bottomLeft, CGPoint(x: crop.topLeft.y, y: 1 - crop.topLeft.x))
+        XCTAssertTrue(left.isValid)
+        XCTAssertEqual(left.rotatedLeft().rotatedLeft().rotatedLeft(), crop)
+        XCTAssertEqual(crop.flippedHorizontally().flippedHorizontally(), crop)
+        // Image orientation runs before horizontal mirroring in FilmRender.geometry.
+        XCTAssertEqual(crop.flippedHorizontally().rotatedLeft(mirrored: true),
+                       crop.rotatedLeft().flippedHorizontally())
+        XCTAssertEqual(try JSONDecoder().decode(QuadrilateralCrop.self,
+            from: JSONEncoder().encode(left)), left)
+    }
+
     func testCornerMovementRejectsCrossingAndRoundTrips() throws {
         let crop = QuadrilateralCrop()
         let moved = crop.movingCorner(0, to: CGPoint(x: 0.2, y: 0.15))

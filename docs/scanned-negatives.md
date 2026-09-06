@@ -122,5 +122,7 @@ remain convex and cannot cross itself. Leaving Crop (or pressing Return) straigh
 the selected quadrilateral into a rectangle. Preview and full-resolution export use
 the same normalized corners. **Four-Corner Crop** also enables this mode for ordinary
 photos; choosing an aspect ratio returns to a rectangular crop. Reset Crop clears the
-selection. Rotating or flipping clears four-corner selections to avoid reusing corners
-from a different orientation. Undo and redo restore corner edits.
+selection. Rotating and flipping move the four corners with the image. Undo and redo
+restore corner edits. While dragging, the crop uses a cached display preview and
+keeps changes local to the canvas. Releasing the handle commits one undoable edit;
+film thumbnails refresh after leaving Crop. Export uses the full-resolution source.

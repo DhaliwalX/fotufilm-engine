@@ -29,6 +29,18 @@ final class CropCanvasView: DragTarget {
         case edge(Side)
     }
 
+    // A drag changes only this view. Publishing each pointer event to EditState wakes
+    // the whole editor, including thumbnail generation and persistence.
+    private var draftRectangle: CGRect?
+    private var draftCorners: QuadrilateralCrop?
+    private var dragStartEdit: EditState?
+    private var dragSourceToken: UUID?
+    private weak var previewSource: PlatformImage?
+    private var previewImage: PlatformImage?
+    private var previewGeneration = UUID()
+
+    private var corners: QuadrilateralCrop? { draftCorners ?? model.edit.cornerCrop }
+
     private var cornerGrip: Int?
     private var grip: Grip?
     private var dragActive = false
@@ -84,7 +96,45 @@ final class CropCanvasView: DragTarget {
 
     func imageChanged() {
         setAXLabel(model.edit.cornerCrop == nil ? "Crop rectangle" : "Four-corner crop")
+        preparePreview()
         redraw()
+    }
+
+    /// Rasterize a bounded display copy once per print, off the UI thread. Drag frames
+    /// reuse it instead of repeatedly scaling a full-resolution scan. Export keeps the original.
+    private func preparePreview() {
+        guard previewSource !== model.processed else { return }
+        previewSource = model.processed
+        previewImage = nil
+        let generation = UUID()
+        previewGeneration = generation
+        guard let source = model.processed else { return }
+        #if canImport(UIKit)
+        let cg = source.cgImage
+        #else
+        let cg = source.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        #endif
+        guard let cg, max(cg.width, cg.height) > 2048 else {
+            previewImage = source
+            return
+        }
+        Task { [weak self] in
+            let reduced = await Task.detached(priority: .userInitiated) { () -> CGImage? in
+                let scale = 2048 / Double(max(cg.width, cg.height))
+                let width = max(1, Int(Double(cg.width) * scale))
+                let height = max(1, Int(Double(cg.height) * scale))
+                guard let context = CGContext(data: nil, width: width, height: height,
+                    bitsPerComponent: 8, bytesPerRow: width * 4,
+                    space: CGColorSpace(name: CGColorSpace.displayP3)!,
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+                context.interpolationQuality = .high
+                context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
+                return context.makeImage()
+            }.value
+            guard let self, self.previewGeneration == generation, let reduced else { return }
+            self.previewImage = PlatformImage.from(reduced)
+            self.redraw()
+        }
     }
 
     // MARK: - Geometry
@@ -129,7 +179,7 @@ final class CropCanvasView: DragTarget {
     }
 
     private var unitCrop: CGRect {
-        UnitCropCoordinates.verticallyFlipped(
+        draftRectangle ?? UnitCropCoordinates.verticallyFlipped(
             model.edit.crop ?? CGRect(x: 0, y: 0, width: 1, height: 1))
     }
 
@@ -137,13 +187,11 @@ final class CropCanvasView: DragTarget {
         guard let image = model.processed else { return nil }
         let stage = stageRect
         guard stage.width > 1, stage.height > 1 else { return nil }
-        return Presentation(imageSize: image.size, stage: stage, focus: model.edit.cornerCrop == nil ? focusCrop : CGRect(x: 0, y: 0, width: 1, height: 1))
+        return Presentation(imageSize: image.size, stage: stage, focus: corners == nil ? focusCrop : CGRect(x: 0, y: 0, width: 1, height: 1))
     }
 
     private func write(_ rect: CGRect, presentation: Presentation) {
-        let unit = presentation.unit(rect)
-        model.edit.crop = unit.width > 0.999 && unit.height > 0.999
-            ? nil : UnitCropCoordinates.verticallyFlipped(unit)
+        draftRectangle = presentation.unit(rect)
     }
 
     private var lockedRatio: CGFloat? {
@@ -158,8 +206,8 @@ final class CropCanvasView: DragTarget {
               let context = Draw.context else { return }
         let rect = presentation.display(unitCrop)
 
-        image.draw(into: presentation.imageRect)
-        if let corners = model.edit.cornerCrop {
+        (previewImage ?? image).draw(into: presentation.imageRect)
+        if let corners {
             let points = corners.points.map { point in
                 CGPoint(x: presentation.imageRect.minX + point.x * presentation.imageRect.width,
                         y: presentation.imageRect.minY + point.y * presentation.imageRect.height)
@@ -242,14 +290,18 @@ final class CropCanvasView: DragTarget {
 
     private func began(at location: CGPoint) {
         guard let presentation else { return }
-        if let corners = model.edit.cornerCrop {
+        focusTravel = nil
+        if let corners {
             cornerGrip = corners.points.indices.min { a, b in
                 distance(corners.points[a], to: location, frame: presentation.imageRect)
                     < distance(corners.points[b], to: location, frame: presentation.imageRect)
             }
             if let index = cornerGrip,
                distance(corners.points[index], to: location, frame: presentation.imageRect) <= handleReach {
-                model.beginContinuousEdit()
+                draftCorners = corners
+                dragActive = true
+                dragStartEdit = model.edit
+                dragSourceToken = model.canvasResetToken
             } else { cornerGrip = nil }
             return
         }
@@ -259,7 +311,9 @@ final class CropCanvasView: DragTarget {
         startRect = rect
         grip = hitTest(location, rect: rect)
         if grip != nil {
-            model.beginContinuousEdit()
+            draftRectangle = unitCrop
+            dragStartEdit = model.edit
+            dragSourceToken = model.canvasResetToken
             setThirds(visible: true)
         }
     }
@@ -270,9 +324,9 @@ final class CropCanvasView: DragTarget {
     }
 
     private func moved(to location: CGPoint) {
-        if let index = cornerGrip, let corners = model.edit.cornerCrop, let presentation {
+        if let index = cornerGrip, let corners = draftCorners, let presentation {
             let frame = presentation.imageRect
-            model.edit.cornerCrop = corners.movingCorner(index, to: CGPoint(
+            draftCorners = corners.movingCorner(index, to: CGPoint(
                 x: (location.x - frame.minX) / frame.width,
                 y: (location.y - frame.minY) / frame.height))
             redraw()
@@ -287,19 +341,34 @@ final class CropCanvasView: DragTarget {
     }
 
     private func ended() {
-        if cornerGrip != nil {
-            cornerGrip = nil
-            model.endContinuousEdit()
-            redraw()
-            return
-        }
-        if grip != nil {
-            model.endContinuousEdit()
-            setThirds(visible: false)
-            travel(to: unitCrop)
-        }
+        let rectangle = draftRectangle, quadrilateral = draftCorners
+        let initial = dragStartEdit, token = dragSourceToken
+        draftRectangle = nil
+        draftCorners = nil
+        dragStartEdit = nil
+        dragSourceToken = nil
+        cornerGrip = nil
         grip = nil
         dragActive = false
+
+        // An undo or another photograph arriving during a drag supersedes the local draft.
+        if token == model.canvasResetToken, let initial, model.edit == initial {
+            var next = initial
+            if let quadrilateral {
+                next.cornerCrop = quadrilateral
+            } else if let rectangle {
+                next.crop = rectangle.width > 0.999 && rectangle.height > 0.999
+                    ? nil : UnitCropCoordinates.verticallyFlipped(rectangle)
+            }
+            if next != initial {
+                model.beginContinuousEdit()
+                model.edit = next
+                model.endContinuousEdit()
+            }
+        }
+        setThirds(visible: false)
+        if corners == nil { travel(to: unitCrop) }
+        redraw()
     }
 
     #if !canImport(UIKit)

@@ -340,6 +340,12 @@ final class StockSidebarViewController: SessionViewController {
         }
         moveSelection(to: selectedID)
 
+        if model.isCropMode {
+            debounce.cancel()
+            previews.pause()
+            lastKey = nil
+            return
+        }
         let key = PreviewKey(state: model.edit, token: model.canvasResetToken,
                              hasSource: model.previewSource != nil)
         guard key != lastKey else { return }
@@ -348,7 +354,7 @@ final class StockSidebarViewController: SessionViewController {
         // pass after it waits for the controls to settle.
         let wait = previews.images.isEmpty ? 0 : 650
         debounce.run(milliseconds: wait) { [weak self] in
-            guard let self else { return }
+            guard let self, !model.isCropMode else { return }
             previews.refresh(source: model.previewSource, state: model.edit,
                              token: model.canvasResetToken)
         }
