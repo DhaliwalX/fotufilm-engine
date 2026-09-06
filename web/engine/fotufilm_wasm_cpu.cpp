@@ -19,10 +19,13 @@
 #include "print_1.h"
 #include "print_2.h"
 #include "print_3.h"
+#include "plain_float.h"
 
 #include <emscripten/emscripten.h>
 
 extern "C" {
+
+EMSCRIPTEN_KEEPALIVE int fotufilm_wasm_plain_supported() { return 1; }
 
 static const float kSigmaFloor = 0.151f;
 static const int32_t kLutCount = 33 * 33 * 33 * 4;
@@ -106,6 +109,9 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
     init_flat(&exposure_buf, ed, exposure_lut, kLutCount);
     init_flat(&film_buf, fd, film_lut, kLutCount);
     init_flat(&paper_buf, pd, paper_lut, kLutCount);
+
+    if (feature_mask & FOTUFILM_FRAME_NO_FILM)
+        return plain_float(&in_r, &in_g, &in_b, &config_buf, origin_x, origin_y, &out_buf);
 
     const float *c = configuration;
     const float mtf_sigma_0 = max_f(c[FOTUFILM_CONFIG_MTF_SIGMA], kSigmaFloor);

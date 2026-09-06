@@ -1,3 +1,4 @@
+import { yieldToBrowser } from './yield.js'
 // ToneBaseMeasurement.swift: whole-frame guided tone masks, measured before tiling.
 export function boxMean(values, width, height, radius) {
   const sat = new Float64Array((width + 1) * (height + 1))
@@ -48,7 +49,7 @@ export async function measureTone(source, controls, decode, balance) {
         sums[cell] += Math.log2(Math.max(metered, 1e-6))
         counts[cell]++
       }
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await yieldToBrowser()
   }
   const g = sums.map((v, i) => (counts[i] ? v / counts[i] : 0)),
     radius = Math.min(12, Math.max(gw, gh) - 1)

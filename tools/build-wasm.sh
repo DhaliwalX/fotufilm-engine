@@ -188,7 +188,7 @@ echo "Linking the WebAssembly module…"
 source "$EMSDK/emsdk_env.sh" >/dev/null 2>&1
 mkdir -p web/public
 em++ -O3 web/engine/fotufilm_wasm_cpu.cpp \
-  "$OUTPUT"/cpu/develop_*.a "$OUTPUT"/cpu/print_*.a \
+  "$OUTPUT"/cpu/develop_*.a "$OUTPUT"/cpu/print_*.a "$OUTPUT"/cpu/plain_float.a \
   -I Sources/FotufilmHalide/include -I "$OUTPUT/cpu" \
   -msimd128 -sALLOW_MEMORY_GROWTH=1 \
   -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,worker \

@@ -3,6 +3,9 @@ import { defaultEdit } from './editor-state.js'
 import {
   assetUrl,
   createDeveloper,
+  createCpuDeveloper,
+  createNormalDeveloper,
+  linearSource,
   developNormal,
   imageSource,
   loadPack,
@@ -32,6 +35,9 @@ export class RenderSession {
     this.running = false
     this.packs = new Map()
     this.developer = null
+    this.normal = null
+    this.thumbnail = null
+    this.sources = []
     this.closed = false
   }
   enqueue(work, background = false) {
@@ -67,7 +73,52 @@ export class RenderSession {
     if (this.packs.size > 4) this.packs.delete(this.packs.keys().next().value)
     return entry
   }
-  render({
+  async renderer(pack, background = false) {
+    const name = background ? 'thumbnailReady' : pack ? 'filmReady' : 'normalReady'
+    // A thumbnail must not hold foreground work behind GPU shader compilation.
+    this[name] ??= (
+      background ? createCpuDeveloper(pack) : pack ? createDeveloper(pack) : createNormalDeveloper()
+    )
+      .then((developer) => {
+        if (this.closed) {
+          developer?.dispose()
+          return null
+        }
+        if (background) this.thumbnail = developer
+        else if (pack) this.developer = developer
+        else this.normal = developer
+        return developer
+      })
+      .catch((error) => {
+        this[name] = null
+        throw error
+      })
+    return this[name]
+  }
+  async source(image, edit, maxEdge, cropMode) {
+    const key = JSON.stringify([
+      maxEdge,
+      cropMode,
+      edit.rotation,
+      edit.flip,
+      cropMode ? null : edit.crop,
+      cropMode ? 0 : edit.straighten,
+    ])
+    const cached = this.sources.find((item) => item.image === image && item.key === key)
+    if (cached) return cached
+    const oriented = image.raw ? null : orientImage(image, edit, maxEdge)
+    const canvas = image.raw ? null : cropMode ? oriented : await cropImage(oriented, edit)
+    const source = linearSource(
+      image.raw ? rawSource(image, edit, maxEdge, cropMode) : imageSource(canvas),
+    )
+    const entry = { image, key, canvas, source, original: null }
+    if (maxEdge <= 2400) {
+      this.sources.unshift(entry)
+      this.sources.length = Math.min(3, this.sources.length)
+    }
+    return entry
+  }
+  async render({
     image,
     edit,
     stock,
@@ -76,25 +127,24 @@ export class RenderSession {
     difference = false,
     cropMode = false,
     background = false,
+    comparison = !background,
     stale = () => false,
     onProgress = () => {},
   }) {
+    if (this.closed || stale()) return null
+    onProgress('Loading film')
+    const entry = edit.stock === null ? null : await this.pack(stock)
+    if (this.closed || stale()) return null
+    const developer = await this.renderer(entry?.pack, background && !!entry)
     return this.enqueue(async () => {
       if (this.closed || stale()) return null
-      onProgress('Loading film')
-      const entry = edit.stock === null ? null : await this.pack(stock)
-      if (this.closed || stale()) return null
-      if (entry && !this.developer) this.developer = await createDeveloper(entry.pack)
-      const developer = this.developer
+      const started = performance.now()
       if (entry && stage !== null) {
         entry.stages ??= await loadStages(assetUrl(`packs/${stock}.stages`), entry.pack)
       }
       if (stale()) return null
-      const oriented = image.raw ? null : orientImage(image, edit, maxEdge)
-      const sourceCanvas = image.raw ? null : cropMode ? oriented : await cropImage(oriented, edit)
-      const source = image.raw
-        ? rawSource(image, edit, maxEdge, cropMode)
-        : imageSource(sourceCanvas)
+      const prepared = await this.source(image, edit, maxEdge, cropMode)
+      const { source, canvas: sourceCanvas } = prepared
       const controls = {
         ...edit.params,
         gradeSpace: edit.gradeSpace,
@@ -108,7 +158,9 @@ export class RenderSession {
       if (pack) developer.usePack(pack)
       let { pixels, elapsed } = pack
         ? await developer.develop(source, controls)
-        : await developNormal(source, controls)
+        : developer
+          ? await developer.develop(source, controls)
+          : await developNormal(source, controls)
       let delta = null
       if (difference && selected > 0) {
         developer.usePack(entry.stages[selected - 1])
@@ -126,9 +178,9 @@ export class RenderSession {
       canvas.height = source.height
       canvas.getContext('2d').putImageData(new ImageData(pixels, source.width, source.height), 0, 0)
       const blob = await canvasBlob(canvas)
-      let original
-      if (sourceCanvas) original = await canvasBlob(sourceCanvas)
-      else {
+      let original = prepared.original
+      if (comparison && !original && sourceCanvas) original = await canvasBlob(sourceCanvas)
+      else if (comparison && !original) {
         const baseline = await developNormal(source, defaultEdit().params)
         const comparison = document.createElement('canvas')
         comparison.width = source.width
@@ -138,11 +190,13 @@ export class RenderSession {
           .putImageData(new ImageData(baseline.pixels, source.width, source.height), 0, 0)
         original = await canvasBlob(comparison)
       }
+      prepared.original = original
       return {
         canvas,
         blob,
         original,
         elapsed,
+        renderMilliseconds: performance.now() - started,
         delta,
         backend: pack ? developer.backend : 'normal',
         width: canvas.width,
@@ -161,6 +215,11 @@ export class RenderSession {
     this.closed = true
     return this.enqueue(() => {
       this.developer?.dispose()
+      this.normal?.dispose()
+      this.thumbnail?.dispose()
+      this.sources = []
+      this.normal = null
+      this.thumbnail = null
       this.developer = null
       this.packs.clear()
     })

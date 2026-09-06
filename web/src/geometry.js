@@ -1,3 +1,4 @@
+import { yieldToBrowser } from './yield.js'
 import { clamp } from './color-controls.js'
 import { validCrop } from './editor-state.js'
 
@@ -84,7 +85,7 @@ export async function cropImage(canvas, edit) {
             (a + (b - a) * fx) * (1 - fy) + (d + (e - d) * fx) * fy
         }
       }
-      if (y % 128 === 0) await new Promise((resolve) => setTimeout(resolve, 0))
+      if (y % 128 === 0) await yieldToBrowser()
     }
     ctx.putImageData(output, 0, 0)
   }

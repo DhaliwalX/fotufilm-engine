@@ -278,7 +278,11 @@ export function ImageCanvas({
   }, [zoom])
   const width = result?.width || original?.naturalWidth || 1,
     height = result?.height || original?.naturalHeight || 1
-  const fit = Math.min((room[0] - 48) / width, (room[1] - 48) / height, 1)
+  const fit = Math.min(
+    (room[0] - 48) / width,
+    (room[1] - 48) / height,
+    Math.max(1, (outputWidth || width) / width),
+  )
   const displayWidth = Math.max(1, width * fit),
     displayHeight = Math.max(1, height * fit)
   const displayUrl = compare ? result?.originalUrl || original?.src : result?.url || original?.src

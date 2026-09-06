@@ -1,3 +1,4 @@
+import { PreviewQueue } from './preview-queue.js'
 import { IMAGE_ACCEPT, isRawFile, importRaw } from './raw-import.js'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { assetUrl } from './engine.js'
@@ -146,14 +147,22 @@ export default function App() {
     urls = useRef(new Set()),
     loadGeneration = useRef(0),
     importController = useRef(null)
-  const cropMode = panel === 'crop' && inspectorOpen
+  const [cropPreview, setCropPreview] = useState(false)
+  const cropMode = panel === 'crop' && inspectorOpen && !cropPreview
   const [zoomReadout, setZoomReadout] = useState(100)
   const previewEditJSON = JSON.stringify(
     cropMode ? { ...edit, crop: fullCrop(), ratio: 'free', straighten: 0 } : edit,
   )
+  const [settledEdit, setSettledEdit] = useState(previewEditJSON)
+  useEffect(() => {
+    const timer = setTimeout(() => setSettledEdit(previewEditJSON), 250)
+    return () => clearTimeout(timer)
+  }, [previewEditJSON])
+  const interacting = !!history.group || settledEdit !== previewEditJSON
+  const [interactiveEdge, setInteractiveEdge] = useState(512)
   const previewEdge = Math.min(
     Math.max(active?.image.naturalWidth || 1600, active?.image.naturalHeight || 1600),
-    cropMode ? 1600 : Math.round(1600 * zoom),
+    cropMode ? 1600 : interacting ? interactiveEdge : Math.round(1600 * zoom),
   )
   const previewKey = JSON.stringify([
     activeId,
@@ -172,14 +181,23 @@ export default function App() {
   const setInspector = (value) => {
     endEdit()
     setPanel(value)
+    if (value === 'crop') setCropPreview(false)
     setInspectorOpen(true)
     setCompare(false)
   }
 
+  const alive = useRef(false)
+  const previewQueue = useRef(null)
+  const currentPreview = useRef(null)
+  currentPreview.current = { activeId, key: previewKey, exporting, cropMode }
   useEffect(() => {
     const renderer = new RenderSession()
+    alive.current = true
+    previewQueue.current = new PreviewQueue()
     setSession(renderer)
     return () => {
+      alive.current = false
+      previewQueue.current.close()
       renderer.dispose()
       importController.current?.abort()
       loadGeneration.current++
@@ -224,8 +242,7 @@ export default function App() {
   }, [])
   useEffect(() => {
     if (!active || !stockId || !session || exporting) return
-    let cancelled = false
-    setStatus('Updating preview')
+    const currentFile = () => alive.current && currentPreview.current?.activeId === active.id
     const request = {
       image: active.image,
       edit: previewEdit,
@@ -234,49 +251,60 @@ export default function App() {
       stage,
       difference,
       cropMode,
-      stale: () => cancelled,
+      stale: () => !currentFile() || currentPreview.current.exporting,
       onProgress: (text) => {
-        if (!cancelled) setStatus(text)
+        if (currentFile()) setStatus(text)
       },
     }
-    const timer = setTimeout(
-      () =>
-        session
-          .render(request)
-          .then((next) => {
-            if (!next || cancelled) return
-            const url = URL.createObjectURL(next.blob),
-              originalUrl = URL.createObjectURL(next.original)
-            urls.current.add(url)
-            urls.current.add(originalUrl)
-            replaceResult({
-              ...next,
-              url,
-              originalUrl,
-              key: previewKey,
-              fileId: active.id,
-              stock: edit.stock,
-              stage,
-            })
-            setStatus(null)
-            setError(null)
+    setStatus('Updating preview')
+    const frame = requestAnimationFrame(() =>
+      previewQueue.current
+        .submit(() => session.render(request))
+        .then((next) => {
+          if (
+            !next ||
+            !currentFile() ||
+            currentPreview.current.exporting ||
+            currentPreview.current.cropMode !== cropMode
+          )
+            return
+          if (interacting) {
+            if (next.renderMilliseconds > 65)
+              setInteractiveEdge((edge) => Math.max(256, Math.round(edge * 0.8)))
+            else if (next.renderMilliseconds < 25)
+              setInteractiveEdge((edge) => Math.min(800, Math.round(edge * 1.1)))
+          }
+          const url = URL.createObjectURL(next.blob),
+            originalUrl = URL.createObjectURL(next.original)
+          urls.current.add(url)
+          urls.current.add(originalUrl)
+          replaceResult({
+            ...next,
+            url,
+            originalUrl,
+            key: previewKey,
+            fileId: active.id,
+            stock: previewEdit.stock,
+            stage,
           })
-          .catch((e) => {
-            if (!cancelled) {
-              setError(e.message)
-              setStatus(null)
-            }
-          }),
-      120,
+          setStatus(
+            !interacting && currentPreview.current.key === previewKey ? null : 'Updating preview',
+          )
+          setError(null)
+        })
+        .catch((error) => {
+          if (currentFile()) {
+            setError(error.message)
+            setStatus(null)
+          }
+        }),
     )
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
+    return () => cancelAnimationFrame(frame)
   }, [
     active,
     previewEdit,
     previewEdge,
+    interacting,
     previewKey,
     stockId,
     session,
@@ -466,6 +494,7 @@ export default function App() {
         edit,
         stock: stockId,
         maxEdge: exportSize === 'full' ? Infinity : Number(exportSize),
+        comparison: false,
         onProgress: setStatus,
       })
       if (!next) throw new Error('Export was cancelled.')
@@ -509,6 +538,7 @@ export default function App() {
       } else if (!command && event.key.toLowerCase() === 'h') setHistogram((v) => !v)
       else if (!command && event.key.toLowerCase() === 'c') {
         setPanel('crop')
+        setCropPreview(false)
         setInspectorOpen(true)
       } else if (event.key === '0') setZoom(1)
       else if (event.key === '+' || event.key === '=') setZoom((z) => Math.min(8, z + 0.25))
@@ -939,6 +969,25 @@ export default function App() {
                   <p>Drag the corners to set the frame.</p>
                 </div>
                 <Section title="Frame">
+                  <div className="crop-actions">
+                    <button
+                      className="secondary"
+                      aria-pressed={!cropPreview}
+                      onClick={() => setCropPreview(false)}
+                    >
+                      Edit corners
+                    </button>
+                    <button
+                      className="secondary"
+                      aria-pressed={cropPreview}
+                      onClick={() => {
+                        endEdit()
+                        setCropPreview(true)
+                      }}
+                    >
+                      Preview crop
+                    </button>
+                  </div>
                   <label className="select-row">
                     Aspect ratio
                     <select
@@ -995,7 +1044,10 @@ export default function App() {
                       unit: '°',
                     }}
                     value={edit.straighten}
-                    onChange={(straighten) => patch({ straighten }, 'straighten')}
+                    onChange={(straighten) => {
+                      setCropPreview(true)
+                      patch({ straighten }, 'straighten')
+                    }}
                     onEnd={endEdit}
                   />
                   <div className="info-row">

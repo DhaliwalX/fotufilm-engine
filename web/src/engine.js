@@ -1,3 +1,4 @@
+import { yieldToBrowser } from './yield.js'
 import { measureTone, toneKey } from './tone-base.js'
 import { CONFIG } from './engine-constants.js'
 import { packedGrade, whiteBalanceGains, applyColorControls } from './color-controls.js'
@@ -27,6 +28,16 @@ const ENGINES = {
 export const assetUrl = (name) => new URL(import.meta.env.BASE_URL + name, window.location.href).href
 
 const modulePromises = new Map()
+const toneMeasurements = new WeakMap()
+const preparedSources = new WeakSet()
+async function measuredTone(source, controls, balance) {
+  const key = JSON.stringify([controls.ev || 0, ...balance])
+  const cached = preparedSources.has(source) ? toneMeasurements.get(source) : null
+  if (cached?.key === key) return cached.grid
+  const grid = await measureTone(source, controls, decodeRGBA, balance)
+  if (preparedSources.has(source)) toneMeasurements.set(source, { key, grid })
+  return grid
+}
 
 function loadModule(kind) {
   if (!modulePromises.has(kind)) {
@@ -474,9 +485,6 @@ function encodeTileInto(pixels, frameWidth, output, tile, seed, stride, offsets)
   }
 }
 
-/// Lets the browser paint between tiles: a status, a progress bar, the previous frame.
-const yieldToBrowser = () => new Promise((resolve) => setTimeout(resolve, 0))
-
 /// What the two paths share: a pack, a frame size, and the way a frame is cut into tiles and
 /// developed one at a time. A subclass owns the wasm-side buffers in its kernel's own layout and
 /// runs the kernel over one region.
@@ -577,7 +585,7 @@ class Developer {
     }
     this.applyControls(controls)
     if (controls.localTone && (controls.highlights || controls.shadows)) {
-      const grid = await measureTone(source, controls, decodeRGBA, whiteBalanceGains(controls.temperature, controls.tint))
+      const grid = await measuredTone(source, controls, whiteBalanceGains(controls.temperature, controls.tint))
       const offset = this.configPtr / 4
       this.module.HEAPF32[offset + CONFIG.TONE_GRID_WIDTH] = grid.width
       this.module.HEAPF32[offset + CONFIG.TONE_GRID_HEIGHT] = grid.height
@@ -809,13 +817,13 @@ function decodeRGBA(bytes) {
 }
 
 // PlainDevelop.swift, for Normal. A pipeline's bypass diagnostic is still a film model.
-export async function developNormal(source, controls) {
+export async function developNormalReference(source, controls) {
   const { width, height } = source, started = performance.now()
   const balance = whiteBalanceGains(controls.temperature, controls.tint), grade = packedGrade(controls)
   const exposure = 2 ** (controls.ev || 0), weights = [0.2627002, 0.6779981, 0.0593017]
   const matrix = [1.343578253, -0.282179671, -0.061398582, -0.065297453, 1.075787916, -0.010490463, 0.002821787, -0.019598495, 1.016776707]
   const grid = controls.localTone && (controls.highlights || controls.shadows)
-    ? await measureTone(source, controls, decodeRGBA, balance) : null
+    ? await measuredTone(source, controls, balance) : null
   const pixels = new Uint8ClampedArray(width * height * 4)
   const encode = v => v <= 0.0031308 ? v * 12.92 : v >= 1 ? 1 + (v - 1) * (1.055 / 2.4) : 1.055 * v ** (1 / 2.4) - 0.055
   const decode = v => v <= 0.04045 ? v / 12.92 : v >= 1 ? 1 + (v - 1) / (1.055 / 2.4) : ((v + 0.055) / 1.055) ** 2.4
@@ -844,4 +852,39 @@ export async function developNormal(source, controls) {
     await yieldToBrowser()
   }
   return { pixels, elapsed: performance.now() - started }
+}
+
+export async function createCpuDeveloper(pack) {
+  return new SimdDeveloper(await loadModule('simd'), pack)
+}
+
+export async function createNormalDeveloper() {
+  const module = await loadModule('simd')
+  if (!module._fotufilm_wasm_plain_supported) return null
+  const configuration = new Float32Array(CONFIG.FOTUFILM_FRAME_CONFIGURATION_COUNT)
+  configuration[CONFIG.TONE_GRID_WIDTH] = configuration[CONFIG.TONE_GRID_HEIGHT] = 1
+  configuration[CONFIG.TONE_GRID_A] = 1
+  const cube = new Float32Array(LUT_COUNT)
+  return new SimdDeveloper(module, {
+    configuration, exposure: cube, film: cube, paper: cube, seed: 0,
+    width: 1600, height: 1600, featureMask: 1 << 29,
+    ladder: [{ shortEdge: 1600, featureMask: 1 << 29, seed: 0, spatialSupport: 0,
+      slots: new Int32Array(0), values: new Float32Array(0) }],
+  })
+}
+// Import previews get their own buffers; live sessions keep a persistent developer.
+export async function developNormal(source, controls) {
+  if (typeof window === 'undefined') return developNormalReference(source, controls)
+  const developer = await createNormalDeveloper()
+  if (!developer) return developNormalReference(source, controls)
+  try { return await developer.develop(source, controls) }
+  finally { developer.dispose() }
+}
+
+export function linearSource(source) {
+  if (source.width * source.height > 4_000_000) return source
+  const prepared = pixelSource({ width: source.width, height: source.height,
+    data: decodeRGBA(source.read(0, 0, source.width, source.height)) })
+  preparedSources.add(prepared)
+  return prepared
 }
