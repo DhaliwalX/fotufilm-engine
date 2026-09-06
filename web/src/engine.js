@@ -1,3 +1,7 @@
+import { measureTone, toneKey } from './tone-base.js'
+import { CONFIG } from './engine-constants.js'
+import { packedGrade, whiteBalanceGains, applyColorControls } from './color-controls.js'
+
 // The browser half of the film engine.
 //
 // The WebAssembly module holds the same Halide kernels the phones run, but none of the physics
@@ -291,6 +295,9 @@ function decodeInto(destination, source, plane, stride, offsets) {
 /// than left to develop a frame that is merely wrong.
 function checkConfigurationCount(module, pack) {
   const expected = module.ccall('fotufilm_wasm_configuration_count', 'number', [], [])
+  if (expected !== CONFIG.FOTUFILM_FRAME_CONFIGURATION_COUNT) {
+    throw new Error('The browser engine is out of date. Rebuild the runtime and film files together.')
+  }
   if (pack.configuration.length !== expected) {
     throw new Error(
       `pack carries ${pack.configuration.length} configuration slots, engine wants ${expected}`)
@@ -542,6 +549,14 @@ class Developer {
                  [this.configPtr, highlights, shadows, saturation, vibrance])
     module.ccall('fotufilm_wasm_set_grain', null, ['number', 'number', 'number'],
                  [this.configPtr, this.grainPtr, grain])
+    const configuration = module.HEAPF32.subarray(this.configPtr / 4,
+      this.configPtr / 4 + this.configuration.length)
+    applyColorControls(configuration, controls)
+    // Keep coarse and resolved grain at the same strength as the clump field.
+    for (const offset of [CONFIG.MOTTLE, CONFIG.GRAIN_DISC]) {
+      for (let c = 0; c < 3; c++) configuration[offset + c] *= grain
+    }
+    this.seed = ((controls.seed ?? 0) + this.pack.seed) >>> 0
   }
 
   /// Develops one frame. `source` is a `pixelSource` or `imageSource` at the frame's size; the
@@ -552,6 +567,14 @@ class Developer {
       this.setFrame(source.width, source.height)
     }
     this.applyControls(controls)
+    if (controls.localTone && (controls.highlights || controls.shadows)) {
+      const grid = await measureTone(source, controls, decodeRGBA, whiteBalanceGains(controls.temperature, controls.tint))
+      const offset = this.configPtr / 4
+      this.module.HEAPF32[offset + CONFIG.TONE_GRID_WIDTH] = grid.width
+      this.module.HEAPF32[offset + CONFIG.TONE_GRID_HEIGHT] = grid.height
+      this.module.HEAPF32.set(grid.a, offset + CONFIG.TONE_GRID_A)
+      this.module.HEAPF32.set(grid.b, offset + CONFIG.TONE_GRID_B)
+    }
     const pixels = new Uint8ClampedArray(this.width * this.height * 4)
     let elapsed = 0
     for (let t = 0; t < this.tiles.length; ++t) {
@@ -751,17 +774,64 @@ export class SimdDeveloper extends Developer {
 /// Builds the fastest developer this browser will actually run: WebGPU when the adapter can
 /// create the kernel's pipelines, and the SIMD path otherwise.
 export async function createDeveloper(pack) {
+  if (typeof WebAssembly !== 'object') throw new Error('This browser cannot process film profiles. Use a browser with WebAssembly support.')
   if (navigator.gpu) {
+    let developer
     try {
-      const developer = new WebgpuDeveloper(await loadModule('webgpu'), pack)
+      developer = new WebgpuDeveloper(await loadModule('webgpu'), pack)
       await developer.probe()
       return developer
     } catch (error) {
       // An aborted Emscripten module cannot be called again, so the promise goes with it and the
       // next pack loads a fresh one.
+      if (developer && !developer.module.ABORT) developer.dispose()
       modulePromises.delete('webgpu')
       console.warn('WebGPU engine unavailable, developing on the CPU instead:', error)
     }
   }
   return new SimdDeveloper(await loadModule('simd'), pack)
+}
+
+function decodeRGBA(bytes) {
+  const linear = new Float32Array(bytes.length)
+  decodeInto(linear, bytes, bytes.length / 4, 4, [0, 1, 2])
+  return linear
+}
+
+// PlainDevelop.swift, for Normal. A pipeline's bypass diagnostic is still a film model.
+export async function developNormal(source, controls) {
+  const { width, height } = source, started = performance.now()
+  const balance = whiteBalanceGains(controls.temperature, controls.tint), grade = packedGrade(controls)
+  const exposure = 2 ** (controls.ev || 0), weights = [0.2627002, 0.6779981, 0.0593017]
+  const matrix = [1.343578253, -0.282179671, -0.061398582, -0.065297453, 1.075787916, -0.010490463, 0.002821787, -0.019598495, 1.016776707]
+  const grid = controls.localTone && (controls.highlights || controls.shadows)
+    ? await measureTone(source, controls, decodeRGBA, balance) : null
+  const pixels = new Uint8ClampedArray(width * height * 4)
+  const encode = v => v <= 0.0031308 ? v * 12.92 : v >= 1 ? 1 + (v - 1) * (1.055 / 2.4) : 1.055 * v ** (1 / 2.4) - 0.055
+  const decode = v => v <= 0.04045 ? v / 12.92 : v >= 1 ? 1 + (v - 1) / (1.055 / 2.4) : ((v + 0.055) / 1.055) ** 2.4
+  for (let top = 0; top < height; top += 32) {
+    const rows = Math.min(32, height - top), linear = decodeRGBA(source.read(0, top, width, rows))
+    for (let y = 0; y < rows; y++) for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4
+      const rgb = [0, 1, 2].map(c => linear[i + c] * balance[c])
+      const luma = rgb.reduce((sum, v, c) => sum + v * weights[c], 0)
+      const stops = toneKey(grid, Math.log2(Math.max(luma * exposure / 0.18, 1e-6)), x, top + y, width, height)
+      const high = clamp01(stops / 6), low = clamp01(-stops / 6)
+      const gain = 2 ** (3 * ((controls.highlights || 0) * high * high * (3 - 2 * high) + (controls.shadows || 0) * low * low * (3 - 2 * low)))
+      const peak = Math.max(...rgb), colourfulness = (peak - Math.min(...rgb)) / Math.max(peak, 1e-6)
+      const chroma = (controls.saturation ?? 1) * (1 + (controls.vibrance || 0) * (1 - colourfulness))
+      const lit = rgb.map(v => (luma + chroma * (v - luma)) * gain * exposure)
+      for (let c = 0; c < 3; c++) {
+        let value = matrix[c * 3] * lit[0] + matrix[c * 3 + 1] * lit[1] + matrix[c * 3 + 2] * lit[2]
+        if (controls.gradeSpace) value = encode(value)
+        value = value * (grade[c + 3] - grade[c]) + grade[c]
+        if (grade[c + 6] !== 1) value = Math.max(value, 0) ** grade[c + 6]
+        linear[i + c] = controls.gradeSpace ? decode(value) : value
+      }
+    }
+    const tile = { x: 0, y: top, width, height: rows, region: { x: 0, y: top, width, height: rows } }
+    encodeTileInto(pixels, width, linear, tile, 0, 4, [0, 1, 2])
+    await yieldToBrowser()
+  }
+  return { pixels, elapsed: performance.now() - started }
 }
