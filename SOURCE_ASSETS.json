@@ -228,15 +228,15 @@
     "sha256": "c339d81bac887681efde4a5b6ad9e718c145d723b81f1f4ef4f23cfe1fb43d58"
   },
   "Sources/FotufilmCore/Stocks/gold200.json": {
-    "provenance": "Fotufilm Starter pack runtime profile by MUAStudio Inc.; released under CC BY-ND 4.0. Includes fitted parameters and spectral samples; no source documents or extraction code. See licenses/STARTER-PACK.txt. Content reviewed at merged source commit 5df7b09.",
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
     "sha256": "e5ef5eb4683b69cf80c871271a904e58e6a606ec0072abb8ef4a7a3ddaeeb635"
   },
   "Sources/FotufilmCore/Stocks/provia100f.json": {
-    "provenance": "Fotufilm Starter pack runtime profile by MUAStudio Inc.; released under CC BY-ND 4.0. Includes fitted parameters and spectral samples; no source documents or extraction code. See licenses/STARTER-PACK.txt. Content reviewed at merged source commit 5df7b09.",
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
     "sha256": "99d9f097d4105bcaa9ef4d4013453446d9962f020d0ec2afd76d09623b205e9e"
   },
   "Sources/FotufilmCore/Stocks/trix400.json": {
-    "provenance": "Fotufilm Starter pack runtime profile by MUAStudio Inc.; released under CC BY-ND 4.0. Includes fitted parameters and spectral samples; no source documents or extraction code. See licenses/STARTER-PACK.txt. Content reviewed at merged source commit 5df7b09.",
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
     "sha256": "ea2d342524de6264ab9d37212078c8f9f9c2443bf590ea0ce4aa9bf9800d0c6c"
   },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/example-monochrome-100.png": {
@@ -418,5 +418,153 @@
   "web/src/assets/app-icon.png": {
     "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
     "sha256": "1bf1b4ef994da2b9f93cbeae7da8e60f58feb232d85a827e082344fb25942d7d"
+  },
+  "Sources/FotufilmCore/Stocks/acros100.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "97d45658d2913cddcf7489f858646978a482b01ced4c8048315cdfe772ee777e"
+  },
+  "Sources/FotufilmCore/Stocks/aerocolor2460.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "5f049028ee1e4a8bb3a2df39b4a387ef3151a58fbb369473aaaa0fcd83431719"
+  },
+  "Sources/FotufilmCore/Stocks/agfachrome100.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "e10e0aa4ddbd4379af1b45d217956364835d7cab061478758788dfa8dee4d877"
+  },
+  "Sources/FotufilmCore/Stocks/agfachrome200.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "90ecb69a189bb6ca43d4e62052ed809872a8852c5b73b8ee0e7badc868de6b55"
+  },
+  "Sources/FotufilmCore/Stocks/agfachrome50.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "8522fa5da95aae74ef7d1f1ccc3759cd53e7354756698deed7a1778a4292adaa"
+  },
+  "Sources/FotufilmCore/Stocks/astia100f.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "80ada1cac1e3368928b04d0d758edf964992323822e676ecc97610f39d1b51f4"
+  },
+  "Sources/FotufilmCore/Stocks/c200.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "1ad90b471654ff8b19d73347510ba394e5a1a7a277d67087fb76112e866ba2f7"
+  },
+  "Sources/FotufilmCore/Stocks/cinestill400d.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "a0024ddda955b308a6264bb70435d04ae1ff7cca07088dc7a4ff7c286a0467de"
+  },
+  "Sources/FotufilmCore/Stocks/cinestill800t.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "c0b9626f9b2319d1a5ae1918a4519d8e87b2af3d3bbdd3746407484e247d1641"
+  },
+  "Sources/FotufilmCore/Stocks/delta3200.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "e299c0cf9c8e9db8fc997774a16d02931f47842927fd676b109ed85344845e76"
+  },
+  "Sources/FotufilmCore/Stocks/doublex5222.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "91d8c94248b17dca37c1712b97e78f08bf105695943b8f892ae9f93f4a92b8b2"
+  },
+  "Sources/FotufilmCore/Stocks/ektachromee100.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "a3e9b9bdd4b2aa807d1528be0c7cdca749da01aa76c3b0e93efbb4705ddac3d2"
+  },
+  "Sources/FotufilmCore/Stocks/ektar100.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "f6cabf31d93e06f072bc3ebbb51132b427539c923e6838d75847e364ce409aae"
+  },
+  "Sources/FotufilmCore/Stocks/eterna500.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "afe1f74fa9de6c13a89d48041468934e224817b4ba1cdf2ca4d7443fa07aac1b"
+  },
+  "Sources/FotufilmCore/Stocks/eternavivid500.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "d2ce74f115d4b6ba9293fa4d6d9eb2f80cd884b4ae6bf3250fda2324b9e5969b"
+  },
+  "Sources/FotufilmCore/Stocks/f64d.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "74c7f56ec941c0f3299dce6b80978f1435aa1b0e24b6e861a3c6ea6de17524b0"
+  },
+  "Sources/FotufilmCore/Stocks/fp4plus125.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "95152fea1e299b8edd8d639bea9a51c2605aa749c881f16a92f2366653b570ef"
+  },
+  "Sources/FotufilmCore/Stocks/hp5plus400.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "328439cb5ce473f5357fad6d0e66d881a2d358f6be29c33a5b91f8a761535781"
+  },
+  "Sources/FotufilmCore/Stocks/instaxmini.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "1bd3ee9e64823efa8056e48629aa392a93f1d230c501663311bee4a7dbb55de1"
+  },
+  "Sources/FotufilmCore/Stocks/instaxwide.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "7bc4f574b84ce3610a06dec506236f0f33556ea79e01329b87ebf45b6c9eb7e9"
+  },
+  "Sources/FotufilmCore/Stocks/kodachrome200.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "694515ab158af408ecde7fe51dc0de6067219790e264f73f168810c9eb41aa31"
+  },
+  "Sources/FotufilmCore/Stocks/kodachrome25.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "943177206a648e191a8b3d4e5605e13b12cfc0c18cc1a5a36c3d62e70fece060"
+  },
+  "Sources/FotufilmCore/Stocks/kodachrome64.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "07da0759e6a5d631f2ebe0c29a020b20cffc23a0bcd10bd85ae38fb5e3d2d856"
+  },
+  "Sources/FotufilmCore/Stocks/kodacolor100.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "8ad671f8d46e0635fb8e4ce0df8c2805208aaf49e0cde8be6ed10aa1b8970af2"
+  },
+  "Sources/FotufilmCore/Stocks/lomocolor100.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "a6e925983702d484c41c7fcd2b82fbc64c593d62ec4bbe5e7001c87e96b8d718"
+  },
+  "Sources/FotufilmCore/Stocks/portra400.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "a8464845ada2bd789f26678eb8b4ef3a06fbe054826f26fb24eec4c2540f9787"
+  },
+  "Sources/FotufilmCore/Stocks/pro160ns.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "531101e8f93242900750c6d3e50bafa362cecf8dde4728c6fb31e543d62596a3"
+  },
+  "Sources/FotufilmCore/Stocks/pro400h.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "973190ecebf77500fe04f678ba7384c4c5e6d18fadfb41d1a6597f467f7cb036"
+  },
+  "Sources/FotufilmCore/Stocks/reala500d.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "ab63fb1911e58d8d9e137bcead897db8b9deb2cf058ec0a4f2c10b86c8585a1d"
+  },
+  "Sources/FotufilmCore/Stocks/superia200.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "4e7469aefa7b61704429c03a5fbf5e606d433815bd4820afa5aceb568edd6b00"
+  },
+  "Sources/FotufilmCore/Stocks/superia400.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "5dfe3d35d38fd410a9fae1c46f075807e1116df309696e89fae3997cd0c11c32"
+  },
+  "Sources/FotufilmCore/Stocks/tmax100.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "ec231c76868361beaebe7732da570519236969d8f48a94ef552579615b5ff919"
+  },
+  "Sources/FotufilmCore/Stocks/ultramax400.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "96ae95e4f528125ebba194b27a620b38d27e5ba517e6c5a4f6c7677036c0eefe"
+  },
+  "Sources/FotufilmCore/Stocks/velvia50.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "67bdff97cb5261776fda443949ed918b0c937bcda1dd2f210912a7c92f55394a"
+  },
+  "Sources/FotufilmCore/Stocks/verita200d.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "865990cdf98f9770d7da392c66bb89e0305f1f213203cc273a75f4e9c21818e3"
+  },
+  "Sources/FotufilmCore/Stocks/vision250d.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "b0a8cac4762ed30c50ec3ccb744838ec39947b8a06d2fc371f80afdce475bf4a"
+  },
+  "Sources/FotufilmCore/Stocks/vision500t.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "00cbf1f24d8cb706f45d374500b3d3766169de64d69e3a932adc6d1742dd3f8e"
   }
 }

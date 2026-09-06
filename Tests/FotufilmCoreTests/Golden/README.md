@@ -1,9 +1,12 @@
 # Image regression tests
 
-These tests render the three Starter films and three synthetic films over four
-generated charts: color patches,
-a step wedge, gamut fields, and spatial detail. They compare the results with saved
-images, called goldens, to catch changes in rendering.
+These tests render all 40 film profiles and three synthetic films over four
+generated charts: color patches, a step wedge, gamut fields, and spatial detail.
+Every render must contain finite pixels and appears in the generated review sheet.
+Gold 200, Tri-X 400, Provia 100F, and the three synthetic films also have saved
+image baselines, called goldens, that catch changes in rendering. Missing baselines
+for those six films fail the test. Other films need no committed render images;
+`ReleasedProfileRenderingTests` checks CPU/Metal agreement across all 40 profiles.
 
 Run from the repository root:
 

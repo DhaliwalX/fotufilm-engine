@@ -18,7 +18,7 @@ final class GoldenImageTests: XCTestCase {
         """
     }
 
-    func testEveryStockMatchesItsGolden() throws {
+    func testEveryStockRendersAndExistingGoldensMatch() throws {
         try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable,
                           "the Halide engine is the only processing backend")
         let mode = GoldenStore.Mode.current
@@ -40,7 +40,10 @@ final class GoldenImageTests: XCTestCase {
         for chart in charts {
             for entry in stocks {
                 let (id, stock) = (entry.id, entry.stock)
-                let current = RGBAImage(print: develop(chart, with: stock))
+                let rendered = develop(chart, with: stock)
+                XCTAssertTrue(rendered.planes.allSatisfy { $0.allSatisfy(\.isFinite) },
+                              "\(chart.name)/\(id) produced non-finite pixels")
+                let current = RGBAImage(print: rendered)
                 let golden = try GoldenStore.read(
                     visibility: entry.visibility, chart: chart.name, stock: id)
                 let label = "\(chart.name)/\(id)"
@@ -50,7 +53,7 @@ final class GoldenImageTests: XCTestCase {
                         try GoldenStore.write(current, visibility: entry.visibility,
                                               chart: chart.name, stock: id)
                         rewritten += 1
-                    } else {
+                    } else if GoldenStocks.requiredGoldenIDs.contains(id) {
                         missing.append(label)
                     }
                     entries.append(.init(

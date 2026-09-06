@@ -455,7 +455,7 @@ func fotufilm_bridge_initialize(_ resources: UnsafePointer<CChar>?) -> Int32 {
         if environment["FOTUFILM_RESOURCES"] == nil {
             setenv("FOTUFILM_RESOURCES", directory, 1)
         }
-        // Bundle.main is Resolve or the FxPlug host, not this plugin. Register its Starter
+        // Bundle.main is Resolve or the FxPlug host, not this plugin. Register its bundled
         // directory explicitly without changing the host's custom-stock environment.
         FilmStockPack.embeddedStockDirectories = [URL(fileURLWithPath: directory,
             isDirectory: true).appendingPathComponent("Stocks", isDirectory: true)]

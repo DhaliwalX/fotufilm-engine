@@ -17,7 +17,7 @@ jobs:
       - run: xcodebuild -version
       - run: python3 tools/check-source-boundary.py
       - run: python3 tools/test-source-boundary.py
-      - run: python3 tools/test-starter-pack.py
+      - run: python3 tools/test-film-profiles.py
       - run: brew install halide
       # Compile the largest Metal grain pipeline without other test processes competing
       # for the hosted runner's GPU resources. It remains part of the required suite.

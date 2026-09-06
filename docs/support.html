@@ -9,9 +9,9 @@
 <p>Start CI manually in GitHub Actions. Rendering and plugin tests need a working Metal device.</p>
 <h2>Film packs</h2>
 <p>Packs loaded in the Mac app are also available in the Fotufilm plugins on the same Mac and user account. Restart Resolve or Final Cut Pro after loading or updating a pack. Install matching app and plugin versions; older plugins skip packs that require a newer release.</p>
-<p>Default source builds include the three Starter profiles and their licence notices. No licence key or activation is needed.</p>
+<p>Default source builds include all 40 film profiles and their CC BY-SA 4.0 licence notices. No licence key or activation is needed.</p>
 <p><a href="https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS.pkg">Download for Mac</a> · <a href="https://apps.apple.com/app/id6792911908" aria-label="Download Fotufilm on the App Store"><img src="assets/download-on-the-app-store.svg" alt="Download on the App Store" width="120" height="40" style="vertical-align: middle"></a></p>
-<p>The build checks that the Starter folder contains only the released files. Import other packs through the app instead of adding files to that folder.</p>
+<p>The build verifies the Stocks folder against the released profile manifest and file hashes. For a modified source distribution, update the manifest and provenance hashes along with the profiles, and identify your changes under CC BY-SA 4.0. You can also import custom packs through the app.</p>
 <p>Custom stock definitions require schema version 1. Sampled spectral rows must contain 81 values from 380 to 780 nm at 5 nm spacing. Coupler geometry must state its two <code>interlayerTransmission</code> values. Older 41-sample rows and range-only coupler definitions are no longer converted during import; export them again in the current format.</p>
 <h2>Disabled Resolve controls</h2>
 <p>Check <strong>Stage</strong>, <strong>Resolved Format</strong>, <strong>Resolved Medium</strong>, and <strong>Effective Renderer</strong>. Custom Mottle needs Full and clump-field grain. Discs needs a silver-image film and Reference mode.</p>
