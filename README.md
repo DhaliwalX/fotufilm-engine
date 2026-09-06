@@ -51,8 +51,13 @@ npm ci
 npm run build
 ```
 
-The output is in `web/dist`. The demo uses the CPU when a WebGPU-compatible
-Halide toolchain is not available.
+The output is in `web/dist`. The demo develops an image at its own size, up
+to about 120 megapixels, cutting it into tiles the kernel runs one at a time;
+the pack carries its spatial parameters for a ladder of frame sizes so grain
+and halation stay the size the emulsion makes them. The demo uses the CPU when
+a WebGPU-compatible Halide toolchain is not available. To build one, install Homebrew's `llvm` and
+`lld` and run `tools/build-halide.sh --webgpu` first; it fetches the Halide
+pull request the browser runtime needs and applies the patches in `tools/`.
 
 ## Included films
 

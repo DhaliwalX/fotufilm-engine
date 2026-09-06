@@ -9,7 +9,7 @@ import GalleryAddIcon from 'reicon-react/icons/GalleryAdd'
 import LoaderIcon from 'reicon-react/icons/Loader'
 import UploadIcon from 'reicon-react/icons/Upload'
 import WarningIcon from 'reicon-react/icons/Warning'
-import { assetUrl, createDeveloper, loadPack, loadStages } from './engine.js'
+import { assetUrl, createDeveloper, imageSource, loadPack, loadStages } from './engine.js'
 import appIconUrl from './assets/app-icon.png'
 
 // Include only controls that directly update configuration slots. Halation and coupler range
@@ -112,34 +112,32 @@ function PipelineSteps({ stages, stageIndex, setStageIndex, disabled, includePri
   )
 }
 
-/// Fits an image within the pack's fixed frame without enlarging it. Fill margins with a blurred,
-/// cover-scaled copy instead of black so whole-frame flare and edge halation remain representative.
-/// `frame` identifies the source region to crop from the developed result.
-function fitToPack(image, width, height) {
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  const context = canvas.getContext('2d', { willReadFrequently: true })
+/// The most pixels a frame is developed at. The engine tiles a frame of any size, so this is a
+/// budget for the browser rather than the kernel: the finished print is held as RGBA bytes, the
+/// picture on screen is one more copy, and a hundred-megapixel frame is four hundred megabytes of
+/// each. Beyond it the source is scaled down to fit.
+const MAX_PROCESS_PIXELS = 120_000_000
 
-  const contain = Math.min(1, width / image.width, height / image.height)
-  const drawWidth = Math.round(image.width * contain)
-  const drawHeight = Math.round(image.height * contain)
-  const x = Math.round((width - drawWidth) / 2)
-  const y = Math.round((height - drawHeight) / 2)
-
-  if (drawWidth < width || drawHeight < height) {
-    const cover = Math.max(width / image.width, height / image.height)
-    context.filter = `blur(${Math.round(Math.min(width, height) / 24)}px)`
-    context.drawImage(image, (width - image.width * cover) / 2,
-                      (height - image.height * cover) / 2,
-                      image.width * cover, image.height * cover)
-    context.filter = 'none'
+/// The frame an image develops as: the image itself, at its own size, read a tile at a time. A
+/// pack develops any size — it carries its spatial parameters for a ladder of frame sizes — so
+/// nothing is fitted to a fixed frame any more; `frame` is simply the whole of it.
+function fitSource(image) {
+  let width = image.naturalWidth || image.width
+  let height = image.naturalHeight || image.height
+  let drawable = image
+  if (width * height > MAX_PROCESS_PIXELS) {
+    const scale = Math.sqrt(MAX_PROCESS_PIXELS / (width * height))
+    width = Math.max(1, Math.floor(width * scale))
+    height = Math.max(1, Math.floor(height * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    canvas.getContext('2d').drawImage(image, 0, 0, width, height)
+    drawable = canvas
   }
-  context.drawImage(image, x, y, drawWidth, drawHeight)
-
   return {
-    data: context.getImageData(0, 0, width, height).data,
-    frame: { x, y, width: drawWidth, height: drawHeight },
+    source: imageSource(drawable),
+    frame: { x: 0, y: 0, width, height },
   }
 }
 
@@ -170,14 +168,21 @@ function differenceFrame(after, before, width, crop) {
   return { pixels, gain, peak }
 }
 
-/// A PNG blob URL for one developed frame, cut back to the rectangle the photograph landed in.
+/// Frames up to this many pixels are shown losslessly; above it a PNG of the print would take
+/// seconds to encode and hundreds of megabytes to hold, so the picture on screen is a JPEG at a
+/// quality the grain survives. What the engine developed is `pixels` either way.
+const LOSSLESS_PREVIEW_PIXELS = 16_000_000
+
+/// A blob URL for one developed frame, cut back to the rectangle the photograph landed in.
 async function frameUrl(pixels, width, height, crop) {
   const canvas = document.createElement('canvas')
   canvas.width = crop.width
   canvas.height = crop.height
-  // Negative offsets: the surrounding fill is drawn outside the canvas and clipped away.
+  // Negative offsets: anything outside the crop is drawn outside the canvas and clipped away.
   canvas.getContext('2d').putImageData(new ImageData(pixels, width, height), -crop.x, -crop.y)
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
+  const lossless = crop.width * crop.height <= LOSSLESS_PREVIEW_PIXELS
+  const blob = await new Promise((resolve) =>
+    canvas.toBlob(resolve, lossless ? 'image/png' : 'image/jpeg', lossless ? undefined : 0.95))
   return URL.createObjectURL(blob)
 }
 
@@ -564,7 +569,7 @@ export default function App() {
     const cached = framesRef.current.get(id)
     if (cached) return cached
     developer.usePack(at == null ? basePackRef.current : stages[at])
-    const { pixels, elapsed: ms } = await developer.develop(fitted.data, params)
+    const { pixels, elapsed: ms } = await developer.develop(fitted.source, params)
     const url = await frameUrl(pixels, developer.width, developer.height, fitted.frame)
     const entry = { pixels, url, ms }
     framesRef.current.set(id, entry)
@@ -582,7 +587,7 @@ export default function App() {
         framesRef.current.clear()
         framesKeyRef.current = frameKey
       }
-      const fitted = fitToPack(source, developer.width, developer.height)
+      const fitted = fitSource(source)
       // Yield before synchronous conversion or CPU development so the browser can paint status.
       // Use a timeout because background tabs do not receive animation frames.
       await new Promise((resolve) => setTimeout(resolve, 32))

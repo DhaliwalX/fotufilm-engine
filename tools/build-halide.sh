@@ -30,10 +30,13 @@ if [[ "${1:-}" == "--webgpu" ]]; then
   fi
   git -C "$SOURCE" fetch --quiet origin "refs/pull/$WEBGPU_PR/head"
   git -C "$SOURCE" checkout --quiet --force FETCH_HEAD
-  # --force above puts the checkout back to the PR's own content, so the patch always applies to
-  # an unpatched tree however many times this is run.
-  git -C "$SOURCE" apply "$PWD/tools/halide-webgpu-storage-limit.patch"
-  echo "Halide PR #$WEBGPU_PR at $(git -C "$SOURCE" rev-parse --short HEAD), plus the limit patch"
+  # --force above puts the checkout back to the PR's own content, so the patches always apply to
+  # an unpatched tree however many times this is run. In this order: each patch was written on
+  # top of the one before it. Each file explains what it carries and why.
+  for patch in halide-webgpu-storage-limit halide-webgpu-pipeline-cache halide-webgpu-release-handles; do
+    git -C "$SOURCE" apply "$PWD/tools/$patch.patch"
+  done
+  echo "Halide PR #$WEBGPU_PR at $(git -C "$SOURCE" rev-parse --short HEAD), plus the three tools/halide-webgpu-*.patch files"
 fi
 
 [[ -f "$SOURCE/CMakeLists.txt" ]] || {

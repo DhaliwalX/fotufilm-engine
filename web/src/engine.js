@@ -36,6 +36,11 @@ function loadModule(kind) {
 
 /// Parses the little-endian pack written by the CLI. The layout is fixed by
 /// `--dump-wasm-pack` in Sources/fotufilm/main.swift; the two must be changed together.
+///
+/// A pack is sealed for one frame size — every spatial slot is millimetres of emulsion times
+/// that frame's pixels per millimetre — and since version 2 it also carries a ladder: for each
+/// of a range of short edges, the slots that would differ, the feature mask, and the apron a
+/// tile needs. `sizeEntryFor` picks the rung for a frame; a version 1 pack has one rung, its own.
 export async function loadPack(url) {
   const response = await fetch(url)
   if (!response.ok) throw new Error(`no pack at ${url} (${response.status})`)
@@ -45,7 +50,7 @@ export async function loadPack(url) {
   const magic = String.fromCharCode(...new Uint8Array(bytes, 0, 4))
   if (magic !== PACK_MAGIC) throw new Error(`not a film pack: ${magic}`)
   const version = view.getUint32(4, true)
-  if (version !== 1) throw new Error(`unsupported pack version ${version}`)
+  if (version !== 1 && version !== 2) throw new Error(`unsupported pack version ${version}`)
 
   const width = view.getInt32(8, true)
   const height = view.getInt32(12, true)
@@ -65,6 +70,34 @@ export async function loadPack(url) {
     return values
   }
 
+  const configuration = take(configCount)
+  const exposure = take(lutCount)
+  const film = take(lutCount)
+  const paper = take(lutCount)
+
+  const ladder = []
+  if (version >= 2) {
+    const rungs = view.getInt32(offset, true)
+    offset += 4
+    for (let r = 0; r < rungs; ++r) {
+      const shortEdge = view.getInt32(offset, true)
+      const rungMask = view.getInt32(offset + 4, true)
+      const rungSeed = view.getUint32(offset + 8, true)
+      const spatialSupport = view.getInt32(offset + 12, true)
+      const changed = view.getInt32(offset + 16, true)
+      offset += 20
+      const slots = new Int32Array(changed)
+      const values = new Float32Array(changed)
+      for (let c = 0; c < changed; ++c) {
+        slots[c] = view.getInt32(offset, true)
+        values[c] = view.getFloat32(offset + 4, true)
+        offset += 8
+      }
+      ladder.push({ shortEdge, featureMask: rungMask, seed: rungSeed, spatialSupport, slots, values })
+    }
+  }
+  if (offset !== bytes.byteLength) throw new Error(`pack has ${bytes.byteLength - offset} trailing bytes`)
+
   return {
     width,
     height,
@@ -72,10 +105,14 @@ export async function loadPack(url) {
     seed,
     lutDimension,
     hasPaper,
-    configuration: take(configCount),
-    exposure: take(lutCount),
-    film: take(lutCount),
-    paper: take(lutCount),
+    configuration,
+    // The slots as the CLI sealed them. A stage replaces `configuration` with its own; the ladder
+    // lays its size over whichever slots the stage left alone, and this is how it tells.
+    baseConfiguration: configuration,
+    ladder,
+    exposure,
+    film,
+    paper,
   }
 }
 
@@ -153,6 +190,7 @@ export async function loadStages(url, base) {
     ...base,
     ...stage,
     featureMask: dispatchMask(base.featureMask, stage.featureMask),
+    ownFeatureMask: stage.featureMask,
     exposure: indices[0] < 0 ? base.exposure : cubes[indices[0]],
     film: indices[1] < 0 ? base.film : cubes[indices[1]],
     paper: indices[2] < 0 ? base.paper : cubes[indices[2]],
@@ -248,28 +286,6 @@ function decodeInto(destination, source, plane, stride, offsets) {
   }
 }
 
-/// The print, encoded for a canvas. The shoulder and the clip belong to the print, so they
-/// happen in P3 where the CLI does them; only then does the result change primaries.
-function encodeFrom(output, plane, seed, stride, offsets) {
-  const n = P3_TO_SRGB
-  const [o0, o1, o2] = offsets
-  const result = new Uint8ClampedArray(plane * 4)
-  for (let p = 0, i = 0; p < plane; ++p, i += 4) {
-    const at = p * stride
-    const r = clamp01(displayShoulder(output[at + o0]))
-    const g = clamp01(displayShoulder(output[at + o1]))
-    const b = clamp01(displayShoulder(output[at + o2]))
-    result[i] = linearToSrgb(n[0] * r + n[1] * g + n[2] * b) * 255 + 0.5 +
-      triangularDither(p, 0, seed)
-    result[i + 1] = linearToSrgb(n[3] * r + n[4] * g + n[5] * b) * 255 + 0.5 +
-      triangularDither(p, 1, seed)
-    result[i + 2] = linearToSrgb(n[6] * r + n[7] * g + n[8] * b) * 255 + 0.5 +
-      triangularDither(p, 2, seed)
-    result[i + 3] = 255
-  }
-  return result
-}
-
 /// A pack exported against a different build of the engine has a configuration of the wrong
 /// length, and every slot after the first mismatch means something else. Caught here rather
 /// than left to develop a frame that is merely wrong.
@@ -281,74 +297,314 @@ function checkConfigurationCount(module, pack) {
   }
 }
 
-/// Rewrites the configuration slots that are a pure function of a control. Anything that
-/// re-enters the film model — halation, coupler range — is not adjustable here and needs a
-/// pack exported at that setting.
-function applyControlsTo(module, pack, configPtr, grainPtr, controls) {
-  const { ev = 0, grain = 1, highlights = 0, shadows = 0,
-          saturation = 1, vibrance = 0 } = controls
-  module.HEAPF32.set(pack.configuration, configPtr / 4)
-  module.ccall('fotufilm_wasm_set_exposure', null, ['number', 'number'],
-               [configPtr, Math.pow(2, ev)])
-  module.ccall('fotufilm_wasm_set_scene', null,
-               ['number', 'number', 'number', 'number', 'number'],
-               [configPtr, highlights, shadows, saturation, vibrance])
-  module.ccall('fotufilm_wasm_set_grain', null, ['number', 'number', 'number'],
-               [configPtr, grainPtr, grain])
-}
-
 /// The pack's own grain amplitudes, kept aside so the grain slider can rescale them without the
 /// browser having to know how they were calibrated. The slot is fixed by FotufilmHalide.h, where
-/// later additions are appended so that adding one renumbers nothing.
+/// later additions are appended so that adding one renumbers nothing. Read from the configuration
+/// for the frame's size rather than the pack's: the amplitude is set per pixel of emulsion.
 const GRAIN_OFFSET = 30
 
-function writeBaseGrain(module, pack, ptr) {
-  module.HEAPF32.set(pack.configuration.slice(GRAIN_OFFSET, GRAIN_OFFSET + 3), ptr / 4)
+function writeBaseGrain(module, configuration, ptr) {
+  module.HEAPF32.set(configuration.slice(GRAIN_OFFSET, GRAIN_OFFSET + 3), ptr / 4)
 }
 
-/// Develops through the fused GPU kernel — the same schedule the phones run — over WGSL compute
-/// shaders. Holds the wasm-side buffers for one frame size and pack, so dragging a slider does
-/// not re-upload five megabytes of spectral cube on every frame.
-class WebgpuDeveloper {
-  constructor(module, pack) {
-    this.backend = 'webgpu'
+/// The rung of the pack's size ladder nearest to a frame: the one whose short edge is closest to
+/// the frame's, in ratio. Rungs sit 3% apart, so every spatial parameter lands within 1.5% of
+/// where a pack sealed for exactly this frame would put it. A pack with no ladder has one rung,
+/// its own size, with no apron to speak of — a frame then develops in one piece.
+export function sizeEntryFor(pack, width, height) {
+  const shortEdge = Math.max(1, Math.min(width, height))
+  if (!pack.ladder?.length) {
+    return {
+      shortEdge: Math.min(pack.width, pack.height),
+      featureMask: pack.featureMask,
+      seed: pack.seed,
+      spatialSupport: null,
+      slots: new Int32Array(0),
+      values: new Float32Array(0),
+    }
+  }
+  let best = pack.ladder[0]
+  let distance = Infinity
+  for (const rung of pack.ladder) {
+    const d = Math.abs(Math.log(rung.shortEdge / shortEdge))
+    if (d < distance) {
+      best = rung
+      distance = d
+    }
+  }
+  return best
+}
+
+/// The configuration a frame of this size develops with: the pack's slots with the rung's laid
+/// over them, and the frame's own size where the kernel reads it. A stage pack has moved slots of
+/// its own — a radius zeroed to switch halation off — and the rung leaves those alone, or the
+/// stage would come back with the size.
+export function configurationFor(pack, rung, width, height, frameSizeSlot) {
+  const configuration = pack.configuration.slice()
+  const base = pack.baseConfiguration ?? pack.configuration
+  for (let i = 0; i < rung.slots.length; ++i) {
+    const slot = rung.slots[i]
+    if (pack.configuration[slot] === base[slot]) configuration[slot] = rung.values[i]
+  }
+  configuration[frameSizeSlot] = width
+  configuration[frameSizeSlot + 1] = height
+  return configuration
+}
+
+/// Pixels a kernel run may cover, apron included. The GPU kernel keeps dozens of intermediates
+/// of the region's size alive at once, and a browser's adapter is not asked for more than a few
+/// gigabytes; the CPU kernel holds the thread for the length of the run.
+const TILE_BUDGET = { webgpu: 6_000_000, simd: 2_000_000 }
+const MIN_TILE_SIDE = 64
+
+/// Cuts a frame into the tiles it develops as. Each tile is an interior rectangle of finished
+/// pixels and the region around it — the interior grown by `apron` on every side, clipped to the
+/// frame — that the kernel is actually run over; the apron is what the interior's pixels read
+/// from their neighbours, so the interior comes out exactly as it would in one piece. A frame that
+/// fits the budget whole is one tile with no apron to cut away.
+export function planTiles(width, height, apron, budget) {
+  const a = Math.max(0, apron | 0)
+  const tiles = []
+  if (width * height <= budget) {
+    tiles.push({ x: 0, y: 0, width, height, region: { x: 0, y: 0, width, height } })
+    return tiles
+  }
+  const side = Math.max(MIN_TILE_SIDE, Math.floor(Math.sqrt(budget)) - 2 * a)
+  for (let y = 0; y < height; y += side) {
+    for (let x = 0; x < width; x += side) {
+      const w = Math.min(side, width - x)
+      const h = Math.min(side, height - y)
+      const rx = Math.max(0, x - a)
+      const ry = Math.max(0, y - a)
+      const region = {
+        x: rx,
+        y: ry,
+        width: Math.min(width, x + w + a) - rx,
+        height: Math.min(height, y + h + a) - ry,
+      }
+      tiles.push({ x, y, width: w, height: h, region })
+    }
+  }
+  return tiles
+}
+
+/// A frame the developer reads a rectangle at a time, as the sRGB RGBA bytes a canvas hands over.
+/// Reading by rectangle is what lets a hundred-megapixel frame develop without its float form
+/// ever existing whole: only a tile's worth is decoded at once.
+export function pixelSource({ data, width, height }) {
+  return {
+    width,
+    height,
+    read(x, y, w, h) {
+      if (x === 0 && y === 0 && w === width && h === height) return data
+      const out = new Uint8ClampedArray(w * h * 4)
+      for (let row = 0; row < h; ++row) {
+        const from = ((y + row) * width + x) * 4
+        out.set(data.subarray(from, from + w * 4), row * w * 4)
+      }
+      return out
+    },
+  }
+}
+
+/// The same, over a decoded image — an <img>, an ImageBitmap, a canvas — drawn a rectangle at a
+/// time into a scratch canvas no larger than the biggest tile.
+export function imageSource(image) {
+  const width = image.naturalWidth || image.width
+  const height = image.naturalHeight || image.height
+  let canvas = null
+  let context = null
+  return {
+    width,
+    height,
+    read(x, y, w, h) {
+      if (!canvas || canvas.width < w || canvas.height < h) {
+        canvas = typeof OffscreenCanvas !== 'undefined'
+          ? new OffscreenCanvas(w, h)
+          : Object.assign(document.createElement('canvas'), { width: w, height: h })
+        context = canvas.getContext('2d', { willReadFrequently: true })
+      }
+      context.clearRect(0, 0, w, h)
+      context.drawImage(image, x, y, w, h, 0, 0, w, h)
+      return context.getImageData(0, 0, w, h).data
+    },
+  }
+}
+
+/// The print's interior of one tile, encoded for a canvas into its place in the frame. The
+/// shoulder and the clip belong to the print, so they happen in P3 where the CLI does them; only
+/// then does the result change primaries. The dither is indexed by the pixel's place in the frame,
+/// not in the tile, so how the frame was cut leaves no trace in it.
+function encodeTileInto(pixels, frameWidth, output, tile, seed, stride, offsets) {
+  const n = P3_TO_SRGB
+  const [o0, o1, o2] = offsets
+  const { region } = tile
+  for (let y = tile.y; y < tile.y + tile.height; ++y) {
+    for (let x = tile.x; x < tile.x + tile.width; ++x) {
+      const at = ((y - region.y) * region.width + (x - region.x)) * stride
+      const r = clamp01(displayShoulder(output[at + o0]))
+      const g = clamp01(displayShoulder(output[at + o1]))
+      const b = clamp01(displayShoulder(output[at + o2]))
+      const p = y * frameWidth + x
+      const i = p * 4
+      pixels[i] = linearToSrgb(n[0] * r + n[1] * g + n[2] * b) * 255 + 0.5 +
+        triangularDither(p, 0, seed)
+      pixels[i + 1] = linearToSrgb(n[3] * r + n[4] * g + n[5] * b) * 255 + 0.5 +
+        triangularDither(p, 1, seed)
+      pixels[i + 2] = linearToSrgb(n[6] * r + n[7] * g + n[8] * b) * 255 + 0.5 +
+        triangularDither(p, 2, seed)
+      pixels[i + 3] = 255
+    }
+  }
+}
+
+/// Lets the browser paint between tiles: a status, a progress bar, the previous frame.
+const yieldToBrowser = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+/// What the two paths share: a pack, a frame size, and the way a frame is cut into tiles and
+/// developed one at a time. A subclass owns the wasm-side buffers in its kernel's own layout and
+/// runs the kernel over one region.
+class Developer {
+  constructor(module, pack, backend) {
+    this.backend = backend
     this.module = module
     this.pack = pack
-    this.width = pack.width
-    this.height = pack.height
     checkConfigurationCount(module, pack)
-
-    const plane = this.width * this.height
-    this.plane = plane
-    // Interleaved RGBA float at both ends: this kernel's own layout.
-    this.inputPtr = module._malloc(plane * 4 * 4)
-    this.outputPtr = module._malloc(plane * 4 * 4)
-
-    // The film and paper cubes ride behind the configuration in one buffer. A WebGPU compute
-    // stage is promised only eight storage buffers and the combine kernel binds nine as it is;
-    // with the cubes on their own it bound eleven, which no adapter here would create.
-    this.configPtr = module._malloc((pack.configuration.length + 2 * LUT_COUNT) * 4)
-    this.exposurePtr = module._malloc(LUT_COUNT * 4)
+    this.frameSizeSlot = module.ccall('fotufilm_wasm_frame_size_slot', 'number', [], [])
+    this.width = 0
+    this.height = 0
+    // Region pixels the frame buffers hold; they grow to the largest tile and stay.
+    this.capacity = 0
+    this.tileBudget = TILE_BUDGET[backend]
     this.grainPtr = module._malloc(3 * 4)
     this.uploaded = {}
-    this.usePack(pack)
+  }
 
-    // Asynchronous: the kernel suspends through JSPI while the device works.
-    this.renderCall = module.cwrap('fotufilm_wasm_render', 'number',
-                                   ['number', 'number', 'number', 'number',
-                                    'number', 'number', 'number', 'number'],
-                                   { async: true })
+  /// The frame every develop from here on is the size of. Picks the rung of the size ladder,
+  /// lays out the configuration, cuts the tiles, and grows the buffers to the largest of them.
+  setFrame(width, height) {
+    if (width === this.width && height === this.height) return
+    if (!(width > 0 && height > 0)) throw new Error(`cannot develop a ${width}×${height} frame`)
+    this.width = width
+    this.height = height
+    this.plan()
   }
 
   /// Develops through a different set of tables from here on — a pipeline stage of the same stock,
-  /// which shares the frame size and the slot layout and usually two of the three cubes.
+  /// which shares the slot layout and usually two of the three cubes.
   ///
   /// A cube is compared by identity, not by contents: the loader hands back the base pack's own
   /// array for a table the stage did not re-solve, so an unchanged cube is the same object and
   /// skips a half-megabyte copy into the heap.
   usePack(pack) {
-    const { module } = this
     this.pack = pack
+    this.uploadTables(pack)
+    this.uploaded = { film: pack.film, paper: pack.paper, exposure: pack.exposure }
+    if (this.width) this.plan()
+  }
+
+  plan() {
+    const rung = sizeEntryFor(this.pack, this.width, this.height)
+    this.rung = rung
+    this.configuration = configurationFor(this.pack, rung, this.width, this.height, this.frameSizeSlot)
+    // Browser CPU kernels exist only for finished-stock masks, so a stage keeps the rung's stage
+    // bits and contributes only its film-type bits; see dispatchMask.
+    this.featureMask = this.pack.ownFeatureMask == null
+      ? rung.featureMask
+      : dispatchMask(rung.featureMask, this.pack.ownFeatureMask)
+    this.seed = this.pack.seed >>> 0
+    this.apron = rung.spatialSupport ?? 0
+    this.tiles = rung.spatialSupport == null
+      ? planTiles(this.width, this.height, 0, Infinity)
+      : planTiles(this.width, this.height, this.apron, this.tileBudget)
+    let needed = 0
+    for (const tile of this.tiles) needed = Math.max(needed, tile.region.width * tile.region.height)
+    if (needed > this.capacity) {
+      this.freeFrame()
+      this.allocateFrame(needed)
+      this.capacity = needed
+    }
+    writeBaseGrain(this.module, this.configuration, this.grainPtr)
+  }
+
+  /// Rewrites the configuration slots that are a pure function of a control. Anything that
+  /// re-enters the film model — halation, coupler range — is not adjustable here and needs a
+  /// pack exported at that setting.
+  applyControls(controls) {
+    const { module } = this
+    const { ev = 0, grain = 1, highlights = 0, shadows = 0,
+            saturation = 1, vibrance = 0 } = controls
+    module.HEAPF32.set(this.configuration, this.configPtr / 4)
+    module.ccall('fotufilm_wasm_set_exposure', null, ['number', 'number'],
+                 [this.configPtr, Math.pow(2, ev)])
+    module.ccall('fotufilm_wasm_set_scene', null,
+                 ['number', 'number', 'number', 'number', 'number'],
+                 [this.configPtr, highlights, shadows, saturation, vibrance])
+    module.ccall('fotufilm_wasm_set_grain', null, ['number', 'number', 'number'],
+                 [this.configPtr, this.grainPtr, grain])
+  }
+
+  /// Develops one frame. `source` is a `pixelSource` or `imageSource` at the frame's size; the
+  /// result is sRGB RGBA8 of the same size. `elapsed` is the kernels' own time, summed over the
+  /// tiles; the conversions at either end are not in it.
+  async develop(source, controls) {
+    if (source.width !== this.width || source.height !== this.height) {
+      this.setFrame(source.width, source.height)
+    }
+    this.applyControls(controls)
+    const pixels = new Uint8ClampedArray(this.width * this.height * 4)
+    let elapsed = 0
+    for (let t = 0; t < this.tiles.length; ++t) {
+      const tile = this.tiles[t]
+      const { region } = tile
+      this.decodeRegion(source.read(region.x, region.y, region.width, region.height), region)
+      const started = performance.now()
+      const status = await this.run(region)
+      elapsed += performance.now() - started
+      if (status === -2) throw new Error('no kernel was built for this stock at this size')
+      if (status !== 0) throw new Error(`engine returned ${status}`)
+      // Read the heap after the call, not before: the module can grow its memory mid-render,
+      // which detaches any view taken earlier.
+      encodeTileInto(pixels, this.width, this.regionOutput(region), tile, this.seed,
+                     this.outputStride, this.outputOffsets(region))
+      if (t + 1 < this.tiles.length) await yieldToBrowser()
+    }
+    return { pixels, elapsed }
+  }
+
+  dispose() {
+    this.freeFrame()
+    this.module._free(this.grainPtr)
+    this.disposeTables()
+  }
+}
+
+/// Develops through the fused GPU kernel — the same schedule the phones run — over WGSL compute
+/// shaders. Holds the wasm-side buffers for one frame size and pack, so dragging a slider does
+/// not re-upload five megabytes of spectral cube on every frame.
+export class WebgpuDeveloper extends Developer {
+  constructor(module, pack) {
+    super(module, pack, 'webgpu')
+    // The film and paper cubes ride behind the configuration in one buffer. A WebGPU compute
+    // stage is promised only eight storage buffers and the combine kernel binds nine as it is;
+    // with the cubes on their own it bound eleven, which no adapter here would create.
+    this.configPtr = module._malloc((pack.configuration.length + 2 * LUT_COUNT) * 4)
+    this.exposurePtr = module._malloc(LUT_COUNT * 4)
+    this.inputPtr = 0
+    this.outputPtr = 0
+    // Interleaved RGBA float at both ends: this kernel's own layout.
+    this.outputStride = 4
+    this.usePack(pack)
+
+    // Asynchronous: the kernel suspends through JSPI while the device works.
+    this.renderCall = module.cwrap('fotufilm_wasm_render', 'number',
+                                   ['number', 'number', 'number', 'number', 'number',
+                                    'number', 'number', 'number', 'number', 'number'],
+                                   { async: true })
+  }
+
+  uploadTables(pack) {
+    const { module } = this
     const count = pack.configuration.length
     if (this.uploaded.film !== pack.film) {
       module.HEAPF32.set(pack.film, this.configPtr / 4 + count)
@@ -359,10 +615,44 @@ class WebgpuDeveloper {
     if (this.uploaded.exposure !== pack.exposure) {
       module.HEAPF32.set(pack.exposure, this.exposurePtr / 4)
     }
-    // Re-read for this pack rather than kept from the first: a stage with grain switched off
-    // stores zero amplitudes, and rescaling the finished film's would put the grain back.
-    writeBaseGrain(module, pack, this.grainPtr)
-    this.uploaded = { film: pack.film, paper: pack.paper, exposure: pack.exposure }
+  }
+
+  allocateFrame(pixels) {
+    this.inputPtr = this.module._malloc(pixels * 4 * 4)
+    this.outputPtr = this.module._malloc(pixels * 4 * 4)
+  }
+
+  freeFrame() {
+    if (this.inputPtr) this.module._free(this.inputPtr)
+    if (this.outputPtr) this.module._free(this.outputPtr)
+    this.inputPtr = 0
+    this.outputPtr = 0
+  }
+
+  disposeTables() {
+    this.module._free(this.configPtr)
+    this.module._free(this.exposurePtr)
+  }
+
+  decodeRegion(bytes, region) {
+    const n = region.width * region.height
+    decodeInto(this.module.HEAPF32.subarray(this.inputPtr / 4, this.inputPtr / 4 + n * 4),
+               bytes, n, 4, [0, 1, 2])
+  }
+
+  run(region) {
+    return this.renderCall(
+      this.inputPtr, this.outputPtr, region.width, region.height, region.x, region.y,
+      this.configPtr, this.exposurePtr, this.featureMask, this.seed)
+  }
+
+  regionOutput(region) {
+    const n = region.width * region.height
+    return this.module.HEAPF32.subarray(this.outputPtr / 4, this.outputPtr / 4 + n * 4)
+  }
+
+  outputOffsets() {
+    return [0, 1, 2]
   }
 
   /// Develops a small frame to find out whether this adapter can actually run the kernel.
@@ -371,124 +661,90 @@ class WebgpuDeveloper {
   /// combine kernel fits inside the adapter's per-stage storage-buffer budget is not known until
   /// a compute pipeline is created, and the runtime aborts the module when it is not. So the
   /// caller confirms the path by walking a few metres of it, and discards the module if it ends.
+  /// It is also where the kernels are compiled, once per page: the first frame after this is
+  /// as quick as every frame after it.
   async probe() {
     const side = 16
-    const inputPtr = this.module._malloc(side * side * 4 * 4)
-    const outputPtr = this.module._malloc(side * side * 4 * 4)
-    this.module.HEAPF32.fill(0.18, inputPtr / 4, inputPtr / 4 + side * side * 4)
-    this.module.HEAPF32.set(this.pack.configuration, this.configPtr / 4)
-    const status = await this.renderCall(
-      inputPtr, outputPtr, side, side, this.configPtr, this.exposurePtr,
-      this.pack.featureMask, this.pack.seed)
-    // Only reached when the module is still alive, so freeing is safe; an abort took the whole
-    // module with it and the caller throws this instance away.
-    this.module._free(inputPtr)
-    this.module._free(outputPtr)
-    if (status !== 0) throw new Error(`engine returned ${status}`)
-  }
-
-  dispose() {
-    for (const ptr of [this.inputPtr, this.outputPtr, this.configPtr,
-                       this.exposurePtr, this.grainPtr]) {
-      this.module._free(ptr)
-    }
-  }
-
-  /// Develops one frame. `source` is sRGB RGBA8 at the pack's size; the result is the same.
-  async develop(source, controls) {
-    const { module, plane } = this
-    decodeInto(module.HEAPF32.subarray(this.inputPtr / 4, this.inputPtr / 4 + plane * 4),
-               source, plane, 4, [0, 1, 2])
-    applyControlsTo(module, this.pack, this.configPtr, this.grainPtr, controls)
-
-    const started = performance.now()
-    const status = await this.renderCall(
-      this.inputPtr, this.outputPtr, this.width, this.height, this.configPtr,
-      this.exposurePtr, this.pack.featureMask, this.pack.seed)
-    const elapsed = performance.now() - started
-    if (status !== 0) throw new Error(`engine returned ${status}`)
-
-    // Read the heap after the call, not before: the module can grow its memory mid-render, which
-    // detaches any view taken earlier.
-    const output = module.HEAPF32.subarray(this.outputPtr / 4, this.outputPtr / 4 + plane * 4)
-    return { pixels: encodeFrom(output, plane, this.pack.seed >>> 0, 4, [0, 1, 2]), elapsed }
+    const grey = new Uint8ClampedArray(side * side * 4).fill(118)
+    for (let i = 3; i < grey.length; i += 4) grey[i] = 255
+    await this.develop(pixelSource({ data: grey, width: side, height: side }), {})
   }
 }
 
 /// Develops on the CPU, through the same physics compiled to SIMD WebAssembly. This is what a
 /// browser without a WebGPU adapter gets, and what the GPU path falls back to.
-class SimdDeveloper {
+export class SimdDeveloper extends Developer {
   constructor(module, pack) {
-    this.backend = 'simd'
-    this.module = module
-    this.pack = pack
-    this.width = pack.width
-    this.height = pack.height
-    checkConfigurationCount(module, pack)
-
-    // These kernels work planar — three width*height planes — and carry a density field between
-    // the develop and print stages.
-    const plane = this.width * this.height
-    this.plane = plane
-    this.inputPtr = module._malloc(plane * 3 * 4)
-    this.outputPtr = module._malloc(plane * 3 * 4)
-    this.densityPtr = module._malloc(plane * 3 * 4)
+    super(module, pack, 'simd')
     this.configPtr = module._malloc(pack.configuration.length * 4)
     this.exposurePtr = module._malloc(LUT_COUNT * 4)
     this.filmPtr = module._malloc(LUT_COUNT * 4)
     this.paperPtr = module._malloc(LUT_COUNT * 4)
-    this.grainPtr = module._malloc(3 * 4)
-    this.uploaded = {}
+    // These kernels work planar — three width*height planes — and carry a density field between
+    // the develop and print stages.
+    this.inputPtr = 0
+    this.outputPtr = 0
+    this.densityPtr = 0
+    this.outputStride = 1
     this.usePack(pack)
 
     this.renderCall = module.cwrap('fotufilm_wasm_cpu_render', 'number', [
       'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number',
-      'number', 'number', 'number',
+      'number', 'number', 'number', 'number', 'number',
     ])
   }
 
-  /// As on the GPU path: swap in a stage's tables, copying only the cubes it actually re-solved.
-  usePack(pack) {
+  uploadTables(pack) {
     const { module } = this
-    this.pack = pack
     for (const [name, ptr] of [['exposure', this.exposurePtr], ['film', this.filmPtr],
                                ['paper', this.paperPtr]]) {
       if (this.uploaded[name] !== pack[name]) module.HEAPF32.set(pack[name], ptr / 4)
     }
-    writeBaseGrain(module, pack, this.grainPtr)
-    this.uploaded = { film: pack.film, paper: pack.paper, exposure: pack.exposure }
   }
 
-  dispose() {
-    for (const ptr of [this.inputPtr, this.outputPtr, this.densityPtr, this.configPtr,
-                       this.exposurePtr, this.filmPtr, this.paperPtr, this.grainPtr]) {
+  allocateFrame(pixels) {
+    this.inputPtr = this.module._malloc(pixels * 3 * 4)
+    this.outputPtr = this.module._malloc(pixels * 3 * 4)
+    this.densityPtr = this.module._malloc(pixels * 3 * 4)
+  }
+
+  freeFrame() {
+    for (const ptr of [this.inputPtr, this.outputPtr, this.densityPtr]) {
+      if (ptr) this.module._free(ptr)
+    }
+    this.inputPtr = 0
+    this.outputPtr = 0
+    this.densityPtr = 0
+  }
+
+  disposeTables() {
+    for (const ptr of [this.configPtr, this.exposurePtr, this.filmPtr, this.paperPtr]) {
       this.module._free(ptr)
     }
   }
 
-  /// Develops one frame. Asynchronous only to match the GPU path — the kernel itself runs on
-  /// this thread and holds it for the length of the develop.
-  async develop(source, controls) {
-    const { module, plane } = this
-    decodeInto(module.HEAPF32.subarray(this.inputPtr / 4, this.inputPtr / 4 + plane * 3),
-               source, plane, 1, [0, plane, 2 * plane])
-    applyControlsTo(module, this.pack, this.configPtr, this.grainPtr, controls)
+  decodeRegion(bytes, region) {
+    const n = region.width * region.height
+    decodeInto(this.module.HEAPF32.subarray(this.inputPtr / 4, this.inputPtr / 4 + n * 3),
+               bytes, n, 1, [0, n, 2 * n])
+  }
 
-    const started = performance.now()
-    const status = this.renderCall(
-      this.inputPtr, this.outputPtr, this.width, this.height, this.configPtr,
-      this.exposurePtr, this.filmPtr, this.paperPtr, this.densityPtr,
-      this.pack.featureMask, this.pack.seed,
-    )
-    const elapsed = performance.now() - started
-    if (status === -2) throw new Error('no kernel was built for this stock')
-    if (status !== 0) throw new Error(`engine returned ${status}`)
+  /// Synchronous: the kernel runs on this thread and holds it for the length of the tile.
+  run(region) {
+    return this.renderCall(
+      this.inputPtr, this.outputPtr, region.width, region.height, region.x, region.y,
+      this.configPtr, this.exposurePtr, this.filmPtr, this.paperPtr, this.densityPtr,
+      this.featureMask, this.seed)
+  }
 
-    const output = module.HEAPF32.subarray(this.outputPtr / 4, this.outputPtr / 4 + plane * 3)
-    return {
-      pixels: encodeFrom(output, plane, this.pack.seed >>> 0, 1, [0, plane, 2 * plane]),
-      elapsed,
-    }
+  regionOutput(region) {
+    const n = region.width * region.height
+    return this.module.HEAPF32.subarray(this.outputPtr / 4, this.outputPtr / 4 + n * 3)
+  }
+
+  outputOffsets(region) {
+    const n = region.width * region.height
+    return [0, n, 2 * n]
   }
 }
 

@@ -14,7 +14,7 @@
 <body style="background:#111;color:#ddd;font:13px/1.6 ui-monospace,monospace;padding:24px">
 <pre id="out">running…</pre>
 <script type="module">
-import { createDeveloper, loadPack, loadStages } from '/src/engine.js'
+import { createDeveloper, loadPack, loadStages, pixelSource } from '/src/engine.js'
 
 const out = document.getElementById('out')
 const lines = []
@@ -94,7 +94,7 @@ try {
 
   const developer = await createDeveloper(base)
   say(`engine: ${developer.backend}`)
-  const source = scene(base.width, base.height)
+  const source = pixelSource({ data: scene(base.width, base.height), width: base.width, height: base.height })
   const controls = { ev: 0, grain: 1, highlights: 0, shadows: 0, saturation: 1, vibrance: 0 }
 
   developer.usePack(base)

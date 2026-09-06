@@ -62,8 +62,14 @@ static void init_flat(halide_buffer_t *buffer, halide_dimension_t *dim,
     buffer->type = halide_type_t(halide_type_float, 32);
 }
 
-/// Develops one frame. `input` and `output` are interleaved linear RGBA floats, scene-referred
-/// in and print-referred out — the sRGB encode belongs to the caller.
+/// Develops one frame, or one tile of a larger one. `input` and `output` are interleaved linear
+/// RGBA floats, scene-referred in and print-referred out — the sRGB encode belongs to the caller.
+///
+/// `width` and `height` are the buffers' own size and `origin_x`, `origin_y` where they sit in
+/// the frame, as the native strip path passes them: everything that depends on position — the
+/// grain's seed, the decimated pyramids' phase — reads global coordinates, so a tile developed
+/// here matches the same pixels developed in one piece once its apron is cut away. The apron a
+/// tile needs is the pack's `spatialSupport` for the frame's size.
 ///
 /// `configuration` is the packed buffer: the frame's scalars, then the film cube, then the paper
 /// cube, laid out exactly as `fotufilm_wasm_packed_count` describes. WebGPU allows a compute stage
@@ -74,6 +80,7 @@ static void init_flat(halide_buffer_t *buffer, halide_dimension_t *dim,
 /// Returns the Halide error code: 0 on success.
 EMSCRIPTEN_KEEPALIVE
 int fotufilm_wasm_render(float *input, float *output, int32_t width, int32_t height,
+                        int32_t origin_x, int32_t origin_y,
                         float *configuration, float *exposure_lut,
                         int32_t feature_mask, uint32_t seed) {
     halide_buffer_t in_buf, out_buf, config_buf, exposure_buf;
@@ -104,7 +111,12 @@ int fotufilm_wasm_render(float *input, float *output, int32_t width, int32_t hei
     const int32_t mtf_radius_0 = max_i(0, (int32_t)c[FOTUFILM_CONFIG_MTF_RADIUS]);
     const int32_t mtf_radius_1 = max_i(0, (int32_t)c[FOTUFILM_CONFIG_MTF_RADIUS + 1]);
     const int32_t mtf_radius_2 = max_i(0, (int32_t)c[FOTUFILM_CONFIG_MTF_RADIUS + 2]);
-    const int32_t mtf_luma_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_MTF_LUMA_RADIUS]);
+    // The luma blur is also the widest of the secondary MTF taps, as in the native runner.
+    int32_t mtf_luma_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_MTF_LUMA_RADIUS]);
+    for (int scale = 0; scale < 3; ++scale) {
+        mtf_luma_radius = max_i(
+            mtf_luma_radius, (int32_t)c[FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS + scale]);
+    }
 
     int32_t halation_radius[3], halation_stride[3], halation_strided_radius[3];
     for (int scale = 0; scale < 3; ++scale) {
@@ -122,7 +134,23 @@ int fotufilm_wasm_render(float *input, float *output, int32_t width, int32_t hei
     const float grain_sigma = max_f(c[FOTUFILM_CONFIG_GRAIN_SIGMA], kSigmaFloor);
     const int32_t grain_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_GRAIN_RADIUS]);
     const float grain_lambda = c[FOTUFILM_CONFIG_GRAIN_LAMBDA];
+    // Read by the `_mottle` twins alone; this kernel takes them as the unused parameters the
+    // shared signature is built from.
+    const float mottle_lambda = c[FOTUFILM_CONFIG_MOTTLE_LAMBDA];
+    const int32_t mottle_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_MOTTLE_RADIUS]);
+    // Zero when the paper has no blur to give; the stage then collapses to a unit tap.
+    const int32_t print_mtf_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_PRINT_MTF_RADIUS]);
     const int32_t reversal = (feature_mask & FOTUFILM_FRAME_REVERSAL) ? 1 : 0;
+
+    // The diffusion filter's pyramid, decimated by the same rule the native paths use. The slots
+    // hold zero radii whenever no mist is fitted, which collapses the stage to a copy.
+    int32_t diffusion_stride[3], diffusion_strided_radius[3];
+    for (int scale = 0; scale < 3; ++scale) {
+        const int32_t radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_DIFFUSION_RADIUS + scale]);
+        diffusion_stride[scale] = fotufilm_diffusion_stride(radius);
+        diffusion_strided_radius[scale] =
+            fotufilm_halation_strided_radius(radius, diffusion_stride[scale]);
+    }
 
     // Call kernels directly so Asyncify can instrument the WebGPU adapter and buffer-map waits.
     // Its call-graph analysis cannot trace indirect function-pointer dispatch.
@@ -132,9 +160,12 @@ int fotufilm_wasm_render(float *input, float *output, int32_t width, int32_t hei
         mtf_radius_1, mtf_radius_2, mtf_luma_radius, halation_radius[0],             \
         halation_radius[1], halation_radius[2], coupler_sigma, coupler_radius,       \
         adjacency_sigma, adjacency_radius, grain_sigma, grain_radius, grain_lambda,  \
-        seed, reversal, /*origin_x=*/0, /*origin_y=*/0, halation_stride[0],          \
-        halation_stride[1], halation_stride[2], halation_strided_radius[0],          \
-        halation_strided_radius[1], halation_strided_radius[2], &out_buf
+        mottle_lambda, mottle_radius, print_mtf_radius, seed, reversal,              \
+        origin_x, origin_y, halation_stride[0], halation_stride[1],                  \
+        halation_stride[2], halation_strided_radius[0], halation_strided_radius[1],  \
+        halation_strided_radius[2], diffusion_stride[0], diffusion_stride[1],        \
+        diffusion_stride[2], diffusion_strided_radius[0],                            \
+        diffusion_strided_radius[1], diffusion_strided_radius[2], &out_buf
 
     int status;
     if (feature_mask & FOTUFILM_FRAME_MONOCHROME) {
@@ -163,6 +194,14 @@ int fotufilm_wasm_render(float *input, float *output, int32_t width, int32_t hei
 /// slider can be rewritten in place — no physics, just the value the engine already stores.
 /// Anything that changes the halation kernel or the coupler matrix is not here on purpose: those
 /// re-enter the film model and must come from a freshly exported pack.
+/// The slot the frame's width lives in; its height is the next one. The browser writes the
+/// frame it is actually developing there, because a pack is sealed for one size and the kernel
+/// reads these for everything that spans the whole frame — the tone grid, the print's dither.
+EMSCRIPTEN_KEEPALIVE
+int32_t fotufilm_wasm_frame_size_slot(void) {
+    return FOTUFILM_CONFIG_FRAME_WIDTH;
+}
+
 EMSCRIPTEN_KEEPALIVE
 void fotufilm_wasm_set_exposure(float *configuration, float gain) {
     configuration[FOTUFILM_CONFIG_EXPOSURE_GAIN] = gain;
