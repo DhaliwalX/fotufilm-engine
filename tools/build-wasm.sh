@@ -44,10 +44,13 @@ echo "Halide: $HALIDE_PREFIX"
 # It has to speak the promise-based webgpu.h that a current Emscripten's emdawnwebgpu port
 # provides — Halide's released runtime still wants the pre-Future header, which pins the link to
 # Emscripten 3.1.x, whose bundled binaryen then rejects the wasm features Halide's own LLVM emits.
-# Halide PR #8955 is what breaks that triangle. It also needs one line the PR does not carry: the
-# runtime raises five adapter limits and omits maxStorageBuffersPerShaderStage, so the combine
-# kernel's nine storage buffers are refused against a default of eight. See
-# tools/halide-webgpu-storage-limit.patch.
+# Halide PR #8955 is what breaks that triangle. It also needs three things the PR does not carry.
+# The runtime raises five adapter limits and omits maxStorageBuffersPerShaderStage, so the combine
+# kernel's nine storage buffers are refused against a default of eight; it compiles a compute
+# pipeline for every dispatch and throws it away, which on the colour kernel's 64 dispatches came
+# to eight seconds a frame; and it never releases the command buffers it submits, so a page slows
+# down frame by frame. See the tools/halide-webgpu-*.patch files; tools/build-halide.sh --webgpu
+# applies all three.
 WEBGPU_HALIDE="${FOTUFILM_WEBGPU_HALIDE:-}"
 if [[ -z "$WEBGPU_HALIDE" && -f build/halide-pr-install/include/Halide.h ]]; then
   WEBGPU_HALIDE=build/halide-pr-install
@@ -85,15 +88,36 @@ while IFS=$'\t' read -r id name _; do
   # pipeline apart, so it rides alongside the pack rather than inside it.
   ./.build/release/fotufilm --dump-wasm-stages "web/public/packs/$id.stages" \
     --stock "$id" --pack-size "$PACK_SIZE" >/dev/null
-  # The pack header keeps the feature mask at byte 16; see --dump-wasm-pack in main.swift.
-  mask="$(od -An -td4 -j16 -N4 "web/public/packs/$id.pack" | tr -d ' ')"
-  MASKS+=("$mask")
+  # The pack header keeps the feature mask at byte 16, and the size ladder behind the cubes
+  # carries one per rung: a stock switches stages on as the frame grows — the emulsion MTF is
+  # below a pixel at 240 px and several at 12000 — so the browser needs a kernel for each. See
+  # --dump-wasm-pack in main.swift for the layout.
+  masks="$(python3 - "web/public/packs/$id.pack" <<'PY'
+import struct, sys
+b = open(sys.argv[1], 'rb').read()
+n = struct.unpack_from('<i', b, 24)[0]
+lut = struct.unpack_from('<i', b, 32)[0]
+masks = {struct.unpack_from('<i', b, 16)[0]}
+off = 40 + 4 * (n + 3 * lut)
+count = struct.unpack_from('<i', b, off)[0]
+off += 4
+for _ in range(count):
+    edge, mask, seed, support, changed = struct.unpack_from('<iiIii', b, off)
+    masks.add(mask)
+    off += 20 + 8 * changed
+assert off == len(b), 'pack has trailing bytes'
+print(' '.join(str(m) for m in sorted(masks)))
+PY
+)"
+  for mask in $masks; do MASKS+=("$mask"); done
   [[ $FIRST -eq 1 ]] || printf ',' >> "$INDEX"
   FIRST=0
   printf '{"id":"%s","name":"%s"}' "$id" "$name" >> "$INDEX"
-  echo "  $id  mask $mask"
+  echo "  $id  masks $masks"
 done < <(./.build/release/fotufilm --list-stocks)
 printf ']' >> "$INDEX"
+# One kernel per distinct mask, however many stocks and sizes ask for it.
+MASKS=($(printf '%s\n' "${MASKS[@]}" | sort -un))
 
 # The scene the demo opens on, and the same scene already developed stage by stage for a browser
 # with no WebAssembly to develop it in. One stock only: seven of these would be seven downloads
@@ -169,7 +193,7 @@ em++ -O3 web/engine/fotufilm_wasm_cpu.cpp \
   -msimd128 -sALLOW_MEMORY_GROWTH=1 \
   -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,worker \
   -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,HEAPF32 \
-  -sEXPORTED_FUNCTIONS=_fotufilm_wasm_cpu_render,_fotufilm_wasm_set_exposure,_fotufilm_wasm_set_scene,_fotufilm_wasm_set_white_balance,_fotufilm_wasm_set_grain,_fotufilm_wasm_configuration_count,_fotufilm_wasm_lut_count,_malloc,_free \
+  -sEXPORTED_FUNCTIONS=_fotufilm_wasm_cpu_render,_fotufilm_wasm_frame_size_slot,_fotufilm_wasm_set_exposure,_fotufilm_wasm_set_scene,_fotufilm_wasm_set_white_balance,_fotufilm_wasm_set_grain,_fotufilm_wasm_configuration_count,_fotufilm_wasm_lut_count,_malloc,_free \
   -o web/public/fotufilm.mjs
 
 # The WebGPU road. One generator for every stock rather than one per mask: the fused kernel takes
@@ -199,7 +223,7 @@ if [[ -n "$WEBGPU_HALIDE" && -f "$WEBGPU_HALIDE/include/Halide.h" ]]; then
     --use-port=emdawnwebgpu -sJSPI -sJSPI_EXPORTS=fotufilm_wasm_render \
     -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,worker \
     -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,HEAPF32 \
-    -sEXPORTED_FUNCTIONS=_fotufilm_wasm_render,_fotufilm_wasm_set_exposure,_fotufilm_wasm_set_scene,_fotufilm_wasm_set_white_balance,_fotufilm_wasm_set_grain,_fotufilm_wasm_configuration_count,_fotufilm_wasm_lut_count,_fotufilm_wasm_packed_count,_malloc,_free \
+    -sEXPORTED_FUNCTIONS=_fotufilm_wasm_render,_fotufilm_wasm_frame_size_slot,_fotufilm_wasm_set_exposure,_fotufilm_wasm_set_scene,_fotufilm_wasm_set_white_balance,_fotufilm_wasm_set_grain,_fotufilm_wasm_configuration_count,_fotufilm_wasm_lut_count,_fotufilm_wasm_packed_count,_malloc,_free \
     -o web/public/fotufilm-webgpu.mjs
 else
   rm -f web/public/fotufilm-webgpu.mjs web/public/fotufilm-webgpu.wasm
@@ -212,3 +236,4 @@ echo
 echo "Wrote web/public/fotufilm.{mjs,wasm}$([[ -f web/public/fotufilm-webgpu.mjs ]] && echo ', fotufilm-webgpu.{mjs,wasm}') and $(ls web/public/packs/*.pack | wc -l | tr -d ' ') packs."
 
 node tools/test-wasm.mjs
+node tools/test-wasm-tiles.mjs

@@ -1238,7 +1238,7 @@ if let packPath = flags["--dump-wasm-pack"] {
 
     var pack = Data()
     pack.append(contentsOf: Array("FSWP".utf8))
-    pack.appendUInt32(1)
+    pack.appendUInt32(2)
     pack.appendInt32(Int32(packWidth))
     pack.appendInt32(Int32(packHeight))
     pack.appendInt32(invocation.featureMask)
@@ -1254,6 +1254,53 @@ if let packPath = flags["--dump-wasm-pack"] {
     // bound, so it goes across as zeros rather than as a missing buffer.
     pack.appendFloats(tables.paperOutput?.values ?? [Float](repeating: 0, count: lutCount))
 
+    // The size ladder, new in version 2. Every spatial slot above is millimetres of emulsion
+    // times this frame's pixels per millimetre, so a pack sealed for 1600x900 would develop a
+    // 100-megapixel frame with grain and halation seven times too coarse. Rather than teach the
+    // browser the physics, the pack carries the slots that move — some 35 of the 8808 — for a
+    // ladder of short edges 3% apart, each sealed by the same code that sealed the base, along
+    // with the feature mask and the apron a tile needs at that size. The browser takes the
+    // nearest rung, which puts every spatial parameter within 1.5% of where a native render
+    // would put it. The short edge sets pixels per millimetre; the long edge follows the pack's
+    // own aspect so the rung at the pack's size is the pack.
+    let baseShortEdge = min(packWidth, packHeight)
+    let baseLongEdge = max(packWidth, packHeight)
+    var shortEdges: Set<Int> = [baseShortEdge]
+    var edge = 240.0
+    while edge <= 12288 {
+        shortEdges.insert(Int(edge.rounded()))
+        edge *= 1.03
+    }
+    let ladder = shortEdges.sorted()
+    pack.appendInt32(Int32(ladder.count))
+    var masks: Set<Int32> = [invocation.featureMask]
+    for shortEdge in ladder {
+        let longEdge = shortEdge == baseShortEdge
+            ? baseLongEdge : Int((Double(shortEdge) * Double(baseLongEdge) / Double(baseShortEdge)).rounded())
+        let rung = FilmEngineInvocation(stock: stock, options: options,
+                                        width: max(longEdge, shortEdge), height: shortEdge)
+        // Compared by bit pattern, as the stage sidecar does, so a signed zero or a NaN the
+        // engine writes the same way at every size stays unchanged.
+        var changed: [(Int32, Float)] = []
+        for (index, value) in rung.configuration.enumerated()
+        where value.bitPattern != invocation.configuration[index].bitPattern {
+            changed.append((Int32(index), value))
+        }
+        if shortEdge == baseShortEdge && !changed.isEmpty {
+            fail("The pack's own size moved \(changed.count) slots on the ladder.")
+        }
+        masks.insert(rung.featureMask)
+        pack.appendInt32(Int32(shortEdge))
+        pack.appendInt32(rung.featureMask)
+        pack.appendUInt32(rung.seed)
+        pack.appendInt32(Int32(rung.spatialSupport))
+        pack.appendInt32(Int32(changed.count))
+        for (index, value) in changed {
+            pack.appendInt32(index)
+            pack.appendFloats([value])
+        }
+    }
+
     do {
         try pack.write(to: URL(fileURLWithPath: packPath))
     } catch {
@@ -1261,8 +1308,9 @@ if let packPath = flags["--dump-wasm-pack"] {
     }
     print("""
     \(stockID) on \(options.paper(for: stock).id) at \(packWidth)x\(packHeight): \
-    \(pack.count / 1024) KiB, features 0x\(String(invocation.featureMask, radix: 16)) \
-    -> \(packPath)
+    \(pack.count / 1024) KiB, features 0x\(String(invocation.featureMask, radix: 16)), \
+    \(ladder.count) sizes from \(ladder.first ?? 0) to \(ladder.last ?? 0) px across \
+    \(masks.count) feature masks -> \(packPath)
     """)
     exit(0)
 }

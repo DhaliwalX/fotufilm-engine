@@ -1,0 +1,93 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>frames of any size</title>
+<!--
+  Develops frames the pack was not sealed for through whatever developer this browser builds —
+  WebGPU where it can — and checks two things the CPU test in tools/test-wasm-tiles.mjs cannot:
+  that the GPU kernel's tiles match its whole-frame develop byte for byte, and how long a
+  hundred-megapixel frame takes end to end. Served by the dev server at /test/large.html; not an
+  entry point, so it never reaches a build. ?stock=ID picks the stock, ?megapixels=N the big frame.
+-->
+<body style="background:#111;color:#ddd;font:13px/1.6 ui-monospace,monospace;padding:24px">
+<pre id="out">running…</pre>
+<script type="module">
+import { createDeveloper, loadPack, pixelSource, sizeEntryFor } from '/src/engine.js'
+
+const out = document.getElementById('out')
+const lines = []
+const say = (text) => { lines.push(text); out.textContent = lines.join('\n'); console.log(text) }
+const query = new URLSearchParams(location.search)
+const stockID = query.get('stock') || 'gold200'
+const megapixels = Number(query.get('megapixels') || 100)
+
+/// A scene generated where it is read: a gradient with a hard-edged highlight every so often, so
+/// no frame-sized source ever exists and every tile edge has something to disagree about.
+function synthetic(width, height) {
+  return {
+    width, height,
+    read(x, y, w, h) {
+      const data = new Uint8ClampedArray(w * h * 4)
+      for (let row = 0; row < h; ++row) {
+        const fy = y + row
+        for (let col = 0; col < w; ++col) {
+          const fx = x + col
+          const i = (row * w + col) * 4
+          const spot = ((fx % 613) < 90) && ((fy % 431) < 70)
+          data[i] = spot ? 250 : 20 + (200 * fx) / width
+          data[i + 1] = spot ? 245 : 30 + (150 * fy) / height
+          data[i + 2] = spot ? 230 : 40 + 60 * (((fx >> 5) + (fy >> 5)) & 1)
+          data[i + 3] = 255
+        }
+      }
+      return data
+    },
+  }
+}
+
+try {
+  const pack = await loadPack(`/packs/${stockID}.pack`)
+  const developer = await createDeveloper(pack)
+  say(`${stockID}: ${developer.backend}, ladder of ${pack.ladder.length} rungs`)
+
+  // Whole against tiled on this backend.
+  {
+    const width = 640, height = 400
+    const source = synthetic(width, height)
+    developer.tileBudget = Infinity
+    const whole = await developer.develop(source, { ev: 0.2 })
+    developer.tileBudget = 200 * 200
+    developer.width = 0
+    const tiled = await developer.develop(source, { ev: 0.2 })
+    let differing = 0
+    for (let i = 0; i < whole.pixels.length; ++i) if (whole.pixels[i] !== tiled.pixels[i]) differing++
+    say(`${differing === 0 ? '  ok  ' : ' FAIL '} ${developer.tiles.length} tiles match the whole frame `
+      + `(${differing} bytes differ, apron ${developer.apron})`)
+  }
+
+  // The big one.
+  {
+    const height = Math.round(Math.sqrt(megapixels * 1e6 / 1.5))
+    const width = Math.round(height * 1.5)
+    const rung = sizeEntryFor(pack, width, height)
+    developer.tileBudget = undefined
+    developer.tileBudget = developer.backend === 'webgpu' ? 6_000_000 : 2_000_000
+    developer.width = 0
+    const started = performance.now()
+    const { pixels, elapsed } = await developer.develop(synthetic(width, height), { ev: 0.2, grain: 1 })
+    const total = performance.now() - started
+    // Developed, not flat: the print spans a real range of tones across the frame.
+    let low = 255, high = 0
+    for (let i = 0; i < pixels.length; i += 4 * 997) {
+      const luma = (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3
+      low = Math.min(low, luma)
+      high = Math.max(high, luma)
+    }
+    say(`${high - low > 40 ? '  ok  ' : ' FAIL '} ${width}×${height} (${(width * height / 1e6).toFixed(1)} MP): `
+      + `${developer.tiles.length} tiles, rung ${rung.shortEdge} px, apron ${rung.spatialSupport}, mask ${rung.featureMask}; `
+      + `kernels ${(elapsed / 1000).toFixed(1)} s, end to end ${(total / 1000).toFixed(1)} s, tones ${low.toFixed(0)}–${high.toFixed(0)}`)
+  }
+  say('DONE')
+} catch (error) {
+  say('ERROR ' + (error.stack || error))
+}
+</script>

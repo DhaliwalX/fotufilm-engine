@@ -77,13 +77,17 @@ static int develop_variant_for(int32_t feature_mask) {
         | ((spatial & FOTUFILM_FRAME_DISC_GRAIN) ? 256 : 0);
 }
 
-/// Develops one frame. Input and output are planar float RGB — three width*height planes — and
-/// scene-referred at both ends; the sRGB transfer belongs to the caller.
+/// Develops one frame, or one tile of a larger one. Input and output are planar float RGB —
+/// three width*height planes — and scene-referred at both ends; the sRGB transfer belongs to the
+/// caller. `origin_x` and `origin_y` say where the buffers sit in the frame, so a tile carrying
+/// the pack's `spatialSupport` as apron develops exactly as it would inside the whole frame; see
+/// fotufilm_wasm_render.
 ///
 /// Returns 0 on success, or the Halide error code. -2 means no kernel was generated for this
 /// stock's feature mask.
 EMSCRIPTEN_KEEPALIVE
 int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t height,
+                            int32_t origin_x, int32_t origin_y,
                             float *configuration, float *exposure_lut, float *film_lut,
                             float *paper_lut, float *density, int32_t feature_mask,
                             uint32_t seed) {
@@ -137,7 +141,7 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
         mtf_radius_2, mtf_luma_radius, stride[0], stride[1], stride[2],               \
         strided_radius[0], strided_radius[1], strided_radius[2], coupler_sigma,       \
         coupler_radius, adjacency_sigma, adjacency_radius, grain_sigma, grain_radius, \
-        grain_lambda, print_mtf_radius, seed, reversal, monochrome, /*origin_x=*/0, /*origin_y=*/0,     \
+        grain_lambda, print_mtf_radius, seed, reversal, monochrome, origin_x, origin_y,  \
         &density_buf
 
     int status;
@@ -158,6 +162,14 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
 
 // The configuration slots that are a pure function of a control. Anything that re-enters the film
 // model — halation, coupler range — needs a pack exported at that setting instead.
+/// The slot the frame's width lives in; its height is the next one. The browser writes the
+/// frame it is actually developing there, because a pack is sealed for one size and the kernel
+/// reads these for everything that spans the whole frame — the tone grid, the print's dither.
+EMSCRIPTEN_KEEPALIVE
+int32_t fotufilm_wasm_frame_size_slot(void) {
+    return FOTUFILM_CONFIG_FRAME_WIDTH;
+}
+
 EMSCRIPTEN_KEEPALIVE
 void fotufilm_wasm_set_exposure(float *configuration, float gain) {
     configuration[FOTUFILM_CONFIG_EXPOSURE_GAIN] = gain;
