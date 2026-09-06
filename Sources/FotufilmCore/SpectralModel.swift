@@ -11,7 +11,9 @@ public enum FilmDyeFamily: String, Codable, Sendable {
 
 /// How a negative is shown when the reader asks for the film instead of the print.
 public enum NegativeViewing: String, Sendable, CaseIterable, Identifiable {
-    /// Normalised on the viewing light.
+    /// The lamp set so the clear film base sits just under white, at
+    /// `SpectralRuntime.lightBoxBaseLevel` in its brightest channel. The base keeps its colour and
+    /// the image reads below it.
     case lightBox = "light-box"
     /// Normalised on the film's own D-min, so the base reads white and what
     /// is left is only the image's inversion.
@@ -975,6 +977,13 @@ public enum SpectralRuntime {
         }
     }
 
+    /// The light box's lamp level: the clear film base sits at this fraction of display white in
+    /// its brightest channel, so an orange mask keeps its colour and the image reads below it. A
+    /// lamp normalised to display white left an orange-masked colour negative under 0.4 in every
+    /// channel, too dark to read in a host viewer. Below white rather than at it so grain
+    /// excursions under D-min stay in range.
+    public static let lightBoxBaseLevel: Float = 0.9
+
     /// The negative's own dyes viewed by transmission: density -> display RGB, which is the same
     /// integration `buildTables` gives a transparency, run over a stock that would otherwise have
     /// gone to paper.
@@ -995,14 +1004,17 @@ public enum SpectralRuntime {
         let dyes = stock.spectralProfile.imageDyeDensity
         let dMin = stock.curves.map(\.dMin)
         let ranges = stock.curves.map { $0.dMax - $0.dMin }
+        // The base carries no developed silver, so both readings measure it without the bleach's
+        // retained silver; only the image inverts.
+        let base = transmissionRGB(density: dMin, dyes: dyes)
         let divisor: SIMD3<Float>
         switch look {
         case .lightBox:
-            divisor = SIMD3(repeating: 1)
+            // One gain for all three channels: the base's brightest channel sits at
+            // `lightBoxBaseLevel` and the other two keep their ratio to it.
+            let brightest = max(base.x, base.y, base.z, 1e-6)
+            divisor = SIMD3(repeating: brightest / lightBoxBaseLevel)
         case .scanner:
-            // The base carries no development, so the divisor is silver-free
-            // whatever the bleach did: only the image inverts, as before.
-            let base = transmissionRGB(density: dMin, dyes: dyes)
             divisor = SIMD3(max(base.x, 1e-6), max(base.y, 1e-6),
                             max(base.z, 1e-6))
         }
