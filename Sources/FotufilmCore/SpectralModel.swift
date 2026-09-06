@@ -416,6 +416,11 @@ public enum SpectralRuntime {
         for curve in stock.curves {
             add(curve.dMin); add(curve.gamma); add(curve.toe); add(curve.toeWidth)
             add(curve.shoulder); add(curve.shoulderWidth)
+            if let sampled = curve.sampled {
+                add(Float(sampled.logExposure.count))
+                for value in sampled.logExposure { add(value) }
+                for value in sampled.density { add(value) }
+            }
             if let secondary = curve.secondary {
                 add(1)
                 add(secondary.gamma); add(secondary.toe); add(secondary.toeWidth)

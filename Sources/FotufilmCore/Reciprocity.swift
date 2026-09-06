@@ -55,6 +55,7 @@ extension FilmStock {
             let lost = stated.lostStopsPerDecade * decades * weight * perStop
             met.curves[layer].toe += lost
             met.curves[layer].shoulder += lost
+            met.curves[layer].sampled = curves[layer].sampled?.shifted(logExposure: lost)
         }
         return met
     }

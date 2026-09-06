@@ -600,7 +600,7 @@ public:
             Func activation("develop_activation" + suffix);
             Expr base = FOTUFILM_CONFIG_CURVES + c * 6;
             activation(x, y, c) =
-                (sample_curve(curves, log_exposure(x, y, c), c)
+                (sample_film_curve(configuration_, curves, log_exposure(x, y, c), c)
                  - configuration_(base)) / film_curve_range(configuration_, c);
             cpu_pointwise(activation, x, y, c);
             Func released("develop_released" + suffix);
@@ -692,7 +692,7 @@ public:
         // scanner past the paper, and such a negative is developed as a negative, so everything
         // downstream — the grain's density law included — reads its own density.
         auto developed_density = [&](Func log_exposure_source) {
-            Expr formed = sample_curve(curves, log_exposure_source(x, y, c), c);
+            Expr formed = sample_film_curve(configuration_, curves, log_exposure_source(x, y, c), c);
             return Halide::select(
                 configuration_(FOTUFILM_CONFIG_DEVELOP_COMPLEMENT) > 0.5f,
                 d_min + range - (formed - d_min), formed);
@@ -720,7 +720,7 @@ public:
                 if (use_couplers) {
                     Func flat_activation("develop_flat_activation" + suffix);
                     flat_activation(x, y, c) =
-                        (sample_curve(curves, flat_log(x, y, c), c)
+                        (sample_film_curve(configuration_, curves, flat_log(x, y, c), c)
                          - configuration_(density_base)) / range;
                     cpu_pointwise(flat_activation, x, y, c);
                     Func flat_released("develop_flat_released" + suffix);

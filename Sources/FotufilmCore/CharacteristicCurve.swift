@@ -33,7 +33,7 @@ public struct CharacteristicCurveComponent: Sendable {
     }
 }
 
-/// Analytic Hurter–Driffield (H&D) characteristic curve: dye density as a
+/// Hurter–Driffield (H&D) characteristic curve: dye density as a
 /// function of log10 exposure.
 public struct CharacteristicCurve: Sendable {
     /// Minimum density: film base + fog (+ mask for color negative layers).
@@ -54,10 +54,13 @@ public struct CharacteristicCurve: Sendable {
     /// A second coated speed group where the publication resolves one. `nil` is the original
     /// single-population curve and remains bit-identical.
     public var secondary: CharacteristicCurveComponent?
+    /// Optional point-based formation record. Takes precedence over the analytic fit.
+    public var sampled: SampledCharacteristicCurve?
 
     public init(dMin: Float, gamma: Float, toe: Float, toeWidth: Float,
                 shoulder: Float, shoulderWidth: Float,
-                secondary: CharacteristicCurveComponent? = nil) {
+                secondary: CharacteristicCurveComponent? = nil,
+                sampled: SampledCharacteristicCurve? = nil) {
         precondition(shoulder > toe, "shoulder must sit above the toe on the log-exposure axis")
         self.dMin = dMin
         self.gamma = gamma
@@ -66,24 +69,28 @@ public struct CharacteristicCurve: Sendable {
         self.shoulder = shoulder
         self.shoulderWidth = shoulderWidth
         self.secondary = secondary
+        self.sampled = sampled
     }
 
     /// Maximum achievable density.
     public var dMax: Float {
-        dMin + gamma * (shoulder - toe) + (secondary?.densityRange ?? 0)
+        if let sampled { return sampled.density[sampled.density.count - 1] }
+        return dMin + gamma * (shoulder - toe) + (secondary?.densityRange ?? 0)
     }
 
     public func density(logExposure x: Float) -> Float {
+        if let sampled { return sampled.value(at: x) }
         let t = toeWidth * softplus((x - toe) / toeWidth)
         let s = shoulderWidth * softplus((x - shoulder) / shoulderWidth)
         return dMin + gamma * min(max(t - s, 0), shoulder - toe)
             + (secondary?.density(logExposure: x) ?? 0)
     }
 
-    /// Inverse of `density(logExposure:)` via bisection.
+    /// Finds an exposure for the requested density via bisection. Sampled records can
+    /// retain local extrema, so more than one exposure may produce the same density.
     public func logExposure(density target: Float) -> Float {
-        var lo: Float = toe - 6
-        var hi: Float = shoulder + 6
+        var lo: Float = sampled?.logExposure.first ?? (toe - 6)
+        var hi: Float = sampled?.logExposure.last ?? (shoulder + 6)
         for _ in 0..<60 {
             let mid = (lo + hi) / 2
             if density(logExposure: mid) < target { lo = mid } else { hi = mid }

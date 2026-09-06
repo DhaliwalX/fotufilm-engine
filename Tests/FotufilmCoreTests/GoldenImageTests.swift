@@ -29,6 +29,12 @@ final class GoldenImageTests: XCTestCase {
         try checkGoldens(stocks)
     }
 
+    func testSampledProfilesMatchExistingGoldens() throws {
+        let stocks = GoldenStocks.all.filter { ["gold200", "trix400", "provia100f"].contains($0.id) }
+        XCTAssertEqual(stocks.count, 3)
+        try checkGoldens(stocks)
+    }
+
     func testGold200MatchesItsGoldens() throws {
         let stock = try XCTUnwrap(GoldenStocks.all.first { $0.id == "gold200" })
         try checkGoldens([stock])

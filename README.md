@@ -62,6 +62,11 @@ The runtime JSON profiles are available in `Sources/FotufilmCore/Stocks/` under
 with attribution and ShareAlike terms. This licence does not apply to rendered
 photos or videos. The engine code uses Apache-2.0.
 
+Thirty-three profiles carry sampled characteristic curves with smooth interpolation
+through every validated digitized point. Source tracing variations are retained;
+response outside each published range is extrapolated. These schema version 2
+profiles require a build with sampled-curve support. Schema version 1 remains supported.
+
 The CLI and tests also include synthetic films. Print models use calculated
 example curves, not measured paper profiles. The demo uses a generated colour chart.
 See [Build support](docs/support.html) for stock-pack setup.

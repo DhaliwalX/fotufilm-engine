@@ -266,6 +266,9 @@ enum HandwrittenMetalShaderLibrary {
     /// the source files readable and makes a renamed or removed ABI field fail at Swift compile
     /// time instead of silently changing a shader literal.
     private static let sharedConfigurationMacros: [String: NSNumber] = [
+        "FOTUFILM_CFG_SAMPLED_CURVES": NSNumber(value: FilmEngineInvocation.sampledCurvesOffset),
+        "FOTUFILM_SAMPLED_CURVE_STRIDE": NSNumber(value: FilmEngineInvocation.sampledCurveStride),
+        "FOTUFILM_CFG_DEVELOP_COMPLEMENT": NSNumber(value: FilmEngineInvocation.developComplementOffset),
         "FOTUFILM_CFG_CURVE_SECONDARY": NSNumber(
             value: FilmEngineInvocation.curveSecondaryOffset),
         "FOTUFILM_CFG_COUPLER_RELEASE_GAMMA": NSNumber(
