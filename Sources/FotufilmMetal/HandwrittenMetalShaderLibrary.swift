@@ -102,7 +102,7 @@ enum HandwrittenMetalShaderLibrary {
     private static let exactCameraTailMarker =
         "#include \"HandwrittenExactCameraTail.metal\""
 
-    private static func assembledSource(for shader: Shader) throws -> String {
+    static func assembledSource(for shader: Shader) throws -> String {
         var shaderSource = try source(named: shader.rawValue, extension: "metal")
         if shader == .spatial {
             guard shaderSource.components(
@@ -265,7 +265,7 @@ enum HandwrittenMetalShaderLibrary {
     /// FilmEngineInvocation is an append-only Swift ABI. Supplying every shared offset here keeps
     /// the source files readable and makes a renamed or removed ABI field fail at Swift compile
     /// time instead of silently changing a shader literal.
-    private static let sharedConfigurationMacros: [String: NSNumber] = [
+    static let sharedConfigurationMacros: [String: NSNumber] = [
         "FOTUFILM_CFG_SAMPLED_CURVES": NSNumber(value: FilmEngineInvocation.sampledCurvesOffset),
         "FOTUFILM_SAMPLED_CURVE_STRIDE": NSNumber(value: FilmEngineInvocation.sampledCurveStride),
         "FOTUFILM_CFG_DEVELOP_COMPLEMENT": NSNumber(value: FilmEngineInvocation.developComplementOffset),

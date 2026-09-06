@@ -22,6 +22,9 @@ constant int FIELD_COUPLER_RADIUS [[function_constant(17)]];
 constant int FIELD_ADJACENCY_RADIUS [[function_constant(18)]];
 constant bool DEVELOP_MULTIRES [[function_constant(19)]];
 
+// Optional specialization: analytic, complete cubic cache, or general sampled lookup.
+constant uint FILM_CURVE_MODE [[function_constant(20)]];
+
 constant uint kFeatureCouplers = 1u << 3;
 constant uint kFeatureDonor = 1u << 27;
 
@@ -116,6 +119,21 @@ static inline float inhibitor_release(float activation, float gamma) {
 static inline float sample_film_curve(
     const device float *configuration, texture2d<float, access::read> curves,
     float exposure, uint channel) {
+    if (is_function_constant_defined(FILM_CURVE_MODE)) {
+        if (FILM_CURVE_MODE == 0u) return sample_curve(curves, exposure, channel);
+    } else if (curves.get_height() == 4u) return sample_curve(curves, exposure, channel);
+    float x = clamp(exposure, -8.0f, 8.0f);
+    uint width = curves.get_width();
+    uint bin = min(uint((x + 8.0f) * (float(width) / 16.0f)), width - 1u);
+    float4 anchor = curves.read(uint2(bin, 4u + 2u * channel));
+    if ((is_function_constant_defined(FILM_CURVE_MODE) && FILM_CURVE_MODE == 1u)
+        || (exposure >= -8.0f && exposure <= 8.0f
+            && as_type<uint>(anchor.x) != 0x7fc00000u)) {
+        float4 pair = curves.read(uint2(bin, 5u + 2u * channel));
+        float dx = x - anchor.x;
+        float2 cubic = dx < 0.0f ? pair.xy : pair.zw;
+        return anchor.y + dx * (anchor.z + dx * (cubic.x + dx * cubic.y));
+    }
     uint base = kSampledCurves + channel * kSampledCurveStride;
     uint count = uint(configuration[base]);
     if (count < 2u) return sample_curve(curves, exposure, channel);
@@ -128,13 +146,14 @@ static inline float sample_film_curve(
         if (configuration[base + 1u + mid * 3u] <= exposure) low = mid;
         else high = mid;
     }
-    uint i = base + 1u + low * 3u, j = base + 1u + high * 3u;
-    float h = configuration[j] - configuration[i];
+    uint i = base + 1u + low * 3u;
+    float h = configuration[i + 3u] - configuration[i];
     float t = clamp((exposure - configuration[i]) / h, 0.0f, 1.0f);
-    float y0 = configuration[i + 1u], delta = configuration[j + 1u] - y0;
-    float a = h * configuration[i + 2u], b = h * configuration[j + 2u];
-    return y0 + t * (a + t * (3.0f * delta - 2.0f * a - b
-                              + t * (-2.0f * delta + a + b)));
+    float delta = configuration[i + 4u] - configuration[i + 1u];
+    float a = h * configuration[i + 2u], b = h * configuration[i + 5u];
+    return configuration[i + 1u] + t * (a + t * (3.0f * delta - 2.0f * a - b
+        + t * (-2.0f * delta + a + b)));
+
 }
 
 static inline float4 stored_log_exposure(float4 light) {

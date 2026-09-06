@@ -327,6 +327,7 @@ public final class HandwrittenMetalSpatialExecutor {
     }
 
     private struct GrainPipelineKey: Hashable {
+        let curveMode: Int
         let radius: Int
         let enabled: Bool
         let mottle: Bool
@@ -342,6 +343,7 @@ public final class HandwrittenMetalSpatialExecutor {
     }
 
     private struct FusedHDRPipelineKey: Hashable {
+        let curveMode: Int
         let donor: Bool
         let nonlinearWarp: Bool
         let complement: Bool
@@ -586,9 +588,8 @@ public final class HandwrittenMetalSpatialExecutor {
             let library = try HandwrittenMetalShaderLibrary.makeLibrary(
                 device: device, shader: .spatial, options: options)
             func pipeline(_ name: String) throws -> MTLComputePipelineState {
-                guard let function = library.makeFunction(name: name) else {
-                    throw PreparationError.metalCompilation("missing \(name)")
-                }
+                let function = try library.makeFunction(
+                    name: name, constantValues: MTLFunctionConstantValues())
                 return try device.makeComputePipelineState(function: function)
             }
             func booleanPipeline(
@@ -2380,6 +2381,7 @@ public final class HandwrittenMetalSpatialExecutor {
             throw PreparationError.allocationFailed("grain tables")
         }
         let pipeline = try specializedGrainPipeline(
+            curveMode: Self.curveMode(configuration),
             radius: radius, enabled: enabled, mottle: mottle,
             monochrome: monochrome, printTransmittance: printTransmittance,
             inputLog: false)
@@ -2539,6 +2541,7 @@ public final class HandwrittenMetalSpatialExecutor {
             } || configuration[Configuration.donorReleaseGamma] != 1
             let complement = configuration[Configuration.developComplement] != 0
             let develop = try specializedGrainPipeline(
+                curveMode: Self.curveMode(configuration),
                 radius: grain.radius, enabled: false, mottle: false,
                 monochrome: false, printTransmittance: false,
                 inputLog: true, exactSpecialized: true,
@@ -2546,6 +2549,7 @@ public final class HandwrittenMetalSpatialExecutor {
                 donor: donor, nonlinearWarp: nonlinearWarp,
                 complement: complement)
             let fusedHDR = try specializedFusedHDRPipeline(
+                curveMode: Self.curveMode(configuration),
                 donor: donor, nonlinearWarp: nonlinearWarp, complement: complement)
             let developBytes = grain.threadgroupBytes
                 + (6 * 6 + 10 * 10) * half4Bytes
@@ -2573,6 +2577,7 @@ public final class HandwrittenMetalSpatialExecutor {
            configuration[Configuration.printSharpen] == 0,
            printMTF.fusedPipeline != nil {
             let develop = try specializedGrainPipeline(
+                curveMode: Self.curveMode(configuration),
                 radius: grain.radius, enabled: grainEnabled, mottle: mottle,
                 monochrome: monochrome, printTransmittance: true,
                 inputLog: true,
@@ -2696,6 +2701,7 @@ public final class HandwrittenMetalSpatialExecutor {
         guard jointBytes <= device.maxThreadgroupMemoryLength else { return nil }
 
         let develop = try specializedGrainPipeline(
+            curveMode: Self.curveMode(configuration),
             radius: 0, enabled: false, mottle: false, monochrome: false,
             printTransmittance: false, inputLog: false,
             exactSpecialized: true, dyeCloud: true,
@@ -2841,10 +2847,61 @@ public final class HandwrittenMetalSpatialExecutor {
         return pipeline
     }
 
+    private static let curveCellPadding: Double = 0.000002
+
+    private static func curveCacheWidth(_ configuration: [Float]) -> Int {
+        var minimumSpacing = Float.infinity
+        for channel in 0..<3 {
+            let base = FilmEngineInvocation.sampledCurvesOffset
+                + channel * FilmEngineInvocation.sampledCurveStride
+            let count = Int(configuration[base])
+            if count >= 2 {
+                for knot in 1..<count {
+                    minimumSpacing = min(minimumSpacing, configuration[base + 1 + knot * 3]
+                        - configuration[base + 1 + (knot - 1) * 3])
+                }
+            }
+        }
+        var width = 4_096
+        while width < 16_384 && 16 / Float(width) + Float(2 * curveCellPadding) >= minimumSpacing {
+            width *= 2
+        }
+        return width
+    }
+
+    // 0: analytic; 1: every channel is covered by the branch-free cubic cache;
+    // 2: mixed, unusually dense, or out-of-range records keep the general evaluator.
+    static func curveMode(_ configuration: [Float]) -> Int {
+        let cellWidth = 16 / Float(curveCacheWidth(configuration))
+        var sampled = 0
+        var complete = true
+        for channel in 0..<3 {
+            let base = FilmEngineInvocation.sampledCurvesOffset
+                + channel * FilmEngineInvocation.sampledCurveStride
+            let count = Int(configuration[base])
+            guard count >= 2 else { complete = false; continue }
+            sampled += 1
+            // Extreme values use the general evaluator rather than overflowing cached coefficients.
+            for knot in 0..<count {
+                complete = complete && abs(configuration[base + 2 + knot * 3]) < 1e20
+                    && abs(configuration[base + 3 + knot * 3]) < 1e20
+            }
+            complete = complete && configuration[base + 1] > -8
+                && configuration[base + 1 + (count - 1) * 3] < 8
+            for knot in 1..<count {
+                complete = complete && configuration[base + 1 + knot * 3]
+                    - configuration[base + 1 + (knot - 1) * 3] > cellWidth + Float(2 * curveCellPadding)
+            }
+        }
+        return sampled == 0 ? 0 : complete ? 1 : 2
+    }
+
     private func specializedFusedHDRPipeline(
+        curveMode: Int,
         donor: Bool, nonlinearWarp: Bool, complement: Bool
     ) throws -> MTLComputePipelineState {
         let key = FusedHDRPipelineKey(
+            curveMode: curveMode,
             donor: donor, nonlinearWarp: nonlinearWarp, complement: complement)
         lock.lock()
         if let hit = fusedHDRPipelines[key] {
@@ -2853,6 +2910,8 @@ public final class HandwrittenMetalSpatialExecutor {
         }
         lock.unlock()
         let values = MTLFunctionConstantValues()
+        var curveModeValue = UInt32(curveMode)
+        values.setConstantValue(&curveModeValue, type: .uint, index: 20)
         var cachedFields = true
         var donorValue = donor
         var nonlinearWarpValue = nonlinearWarp
@@ -2870,6 +2929,7 @@ public final class HandwrittenMetalSpatialExecutor {
     }
 
     private func specializedGrainPipeline(
+        curveMode: Int,
         radius: Int, enabled: Bool, mottle: Bool, monochrome: Bool,
         printTransmittance: Bool, inputLog: Bool,
         exactSpecialized: Bool = false, dyeCloud: Bool = false,
@@ -2877,6 +2937,7 @@ public final class HandwrittenMetalSpatialExecutor {
         complement: Bool = false, multires: Bool = false
     ) throws -> MTLComputePipelineState {
         let key = GrainPipelineKey(
+            curveMode: curveMode,
             radius: radius, enabled: enabled, mottle: mottle,
             monochrome: monochrome, printTransmittance: printTransmittance,
             inputLog: inputLog, exactSpecialized: exactSpecialized,
@@ -2889,6 +2950,8 @@ public final class HandwrittenMetalSpatialExecutor {
         }
         lock.unlock()
         let values = MTLFunctionConstantValues()
+        var curveModeValue = UInt32(curveMode)
+        values.setConstantValue(&curveModeValue, type: .uint, index: 20)
         var radius32 = Int32(radius)
         var enabledValue = enabled
         var mottleValue = mottle
@@ -2956,41 +3019,103 @@ public final class HandwrittenMetalSpatialExecutor {
         }
     }
 
-    private func makeCurveTexture(configuration: [Float]) -> MTLTexture? {
+    // Each cell selects a knot and stores both adjacent Hermite cubics around that knot.
+    // At the knot, dx is zero and evaluation returns its original Float32 density exactly.
+    // Cells containing multiple knots are marked for the canonical general evaluator.
+    func makeCurveTexture(configuration: [Float]) -> MTLTexture? {
+        let hasSamples = (0..<3).contains {
+            configuration[FilmEngineInvocation.sampledCurvesOffset
+                + $0 * FilmEngineInvocation.sampledCurveStride] >= 2
+        }
+        let width = hasSamples ? Self.curveCacheWidth(configuration) : Self.curveSamples
+        let height = hasSamples ? 10 : 4
+        let components = hasSamples ? 4 : 1
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .r32Float, width: Self.curveSamples, height: 4,
-            mipmapped: false)
+            pixelFormat: hasSamples ? .rgba32Float : .r32Float,
+            width: width, height: height, mipmapped: false)
         descriptor.storageMode = .shared
         descriptor.usage = [.shaderRead]
         guard let texture = device.makeTexture(descriptor: descriptor) else { return nil }
-        var table = [Float](repeating: 0, count: Self.curveSamples * 4)
+        var table = [Float](repeating: 0, count: width * height * components)
         for row in 0..<4 {
-            let base = row < 3 ? Configuration.curves + row * 6
-                : Configuration.donorCurve
+            let base = row < 3 ? Configuration.curves + row * 6 : Configuration.donorCurve
             for sample in 0..<Self.curveSamples {
                 let t = Float(sample) / Float(Self.curveSamples - 1)
-                let exposure = Self.curveMinimum
-                    + (Self.curveMaximum - Self.curveMinimum) * t
-                var value = Self.curveDensity(
-                    configuration: configuration, base: base, exposure: exposure)
+                let exposure = Self.curveMinimum + (Self.curveMaximum - Self.curveMinimum) * t
+                var value = Self.curveDensity(configuration: configuration, base: base, exposure: exposure)
                 if row < 3 {
-                    value += Self.curveComponentDensity(
-                        configuration: configuration,
-                        base: Configuration.curveSecondary + row * 5,
-                        exposure: exposure)
+                    value += Self.curveComponentDensity(configuration: configuration,
+                        base: Configuration.curveSecondary + row * 5, exposure: exposure)
                     if let sampled = FilmEngineInvocation.sampledFilmDensity(
                         configuration: configuration, channel: row, logExposure: exposure) {
                         value = sampled
                     }
                 }
-                table[row * Self.curveSamples + sample] = value
+                table[(row * width + sample) * components] = value
             }
         }
+        if hasSamples {
+            func put(_ row: Int, _ column: Int, _ value: SIMD4<Float>) {
+                let index = (row * width + column) * 4
+                for component in 0..<4 { table[index + component] = value[component] }
+            }
+            for channel in 0..<3 {
+                let base = FilmEngineInvocation.sampledCurvesOffset
+                    + channel * FilmEngineInvocation.sampledCurveStride
+                let count = Int(configuration[base])
+                guard count >= 2 else {
+                    for bin in 0..<width { put(4 + 2 * channel, bin, SIMD4(.nan, 0, 0, 0)) }
+                    continue
+                }
+                var pairs: [(SIMD4<Float>, SIMD4<Float>)] = []
+                for knot in 0..<count {
+                    let i = base + 1 + knot * 3
+                    let x = configuration[i], y = configuration[i + 1], m = configuration[i + 2]
+                    var leftA = 0.0, leftB = 0.0, rightA = 0.0, rightB = 0.0
+                    if knot > 0 {
+                        let h = Double(x) - Double(configuration[i - 3])
+                        let secant = (Double(y) - Double(configuration[i - 2])) / h
+                        let previous = Double(configuration[i - 1])
+                        leftA = (-3 * secant + previous + 2 * Double(m)) / h
+                        leftB = (previous + Double(m) - 2 * secant) / (h * h)
+                    }
+                    if knot + 1 < count {
+                        let h = Double(configuration[i + 3]) - Double(x)
+                        let secant = (Double(configuration[i + 4]) - Double(y)) / h
+                        let next = Double(configuration[i + 5])
+                        rightA = (3 * secant - 2 * Double(m) - next) / h
+                        rightB = (Double(m) + next - 2 * secant) / (h * h)
+                    }
+                    pairs.append((SIMD4(x, y, m, 0), SIMD4(
+                        Float(leftA), Float(leftB), Float(rightA), Float(rightB))))
+                }
+                var nextKnot = 0
+                for bin in 0..<width {
+                    let cellWidth = 16 / Double(width)
+                    let origin = Double(bin) * cellWidth - 8
+                    // Covers Float32 rounding of (exposure + 8) at either cell edge.
+                    let left = origin - Self.curveCellPadding
+                    let right = origin + cellWidth + Self.curveCellPadding
+                    while nextKnot < count && Double(configuration[base + 1 + nextKnot * 3]) < left {
+                        nextKnot += 1
+                    }
+                    let containsKnot = nextKnot < count
+                        && Double(configuration[base + 1 + nextKnot * 3]) <= right
+                    let multiple = containsKnot && nextKnot + 1 < count
+                        && Double(configuration[base + 1 + (nextKnot + 1) * 3]) <= right
+                    let anchor = containsKnot ? nextKnot : max(0, nextKnot - 1)
+                    let pair = pairs[anchor]
+                    let finite = (0..<4).allSatisfy { pair.1[$0].isFinite }
+                    put(4 + 2 * channel, bin, multiple || !finite ? SIMD4(.nan, 0, 0, 0) : pair.0)
+                    put(5 + 2 * channel, bin, pair.1)
+                }
+            }
+        }
+
         table.withUnsafeBytes { bytes in
-            texture.replace(
-                region: MTLRegionMake2D(0, 0, Self.curveSamples, 4),
+            texture.replace(region: MTLRegionMake2D(0, 0, width, height),
                 mipmapLevel: 0, withBytes: bytes.baseAddress!,
-                bytesPerRow: Self.curveSamples * MemoryLayout<Float>.stride)
+                bytesPerRow: width * components * MemoryLayout<Float>.stride)
         }
         return texture
     }
