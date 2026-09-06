@@ -77,7 +77,7 @@ test('WebGPU and CPU agree with white balance, regional masks and grading', asyn
 test('four crop corners move independently; rotate and flip undo cleanly', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Open sample chart' }).click()
-  await expect(page.locator('.viewer-status [role=status]')).toContainText('1600 × 1000')
+  await expect(page.locator('.viewer-status > [role=status]')).toContainText('1600 × 1000')
   await page.getByRole('tab', { name: 'Crop', exact: true }).click()
   const corner = page.getByRole('button', { name: 'Top left crop corner', exact: true })
   const original = await page.locator('.crop-overlay polygon').getAttribute('points')
@@ -112,7 +112,7 @@ test('export retains original dimensions above the preview limit', async ({ page
   await page
     .locator('input[type=file][multiple]')
     .setInputFiles({ name: 'large.png', mimeType: 'image/png', buffer: Buffer.from(source) })
-  await expect(page.locator('.viewer-status [role=status]')).toContainText('1600 × 1200')
+  await expect(page.locator('.viewer-status > [role=status]')).toContainText('1600 × 1200')
   await page.getByRole('button', { name: 'Export (⌘S)', exact: true }).click()
   const downloaded = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Export', exact: true }).click()

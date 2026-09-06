@@ -59,12 +59,12 @@ for (const stock of [null, 'Gold 200'])
   test(`continuous edits publish frames before release: ${stock || 'Normal'}`, async ({ page }) => {
     await page.goto('/')
     await page.getByRole('button', { name: 'Open sample chart' }).click()
-    await expect(page.locator('.viewer-status [role=status]')).toContainText('1600 × 1000')
+    await expect(page.locator('.viewer-status > [role=status]')).toContainText('1600 × 1000')
     if (stock) {
       await page.getByRole('searchbox').fill(stock)
       await page.getByTitle(stock, { exact: true }).click()
       await expect(page.locator('.backend-label')).toHaveText('WebGPU')
-      await expect(page.locator('.viewer-status [role=status]')).toContainText('1600 × 1000')
+      await expect(page.locator('.viewer-status > [role=status]')).toContainText('1600 × 1000')
     }
     await page.getByRole('tab', { name: 'Light & Color' }).click()
     await page.evaluate(() => {
@@ -77,7 +77,7 @@ for (const stock of [null, 'Gold 200'])
     const drag = async (name) => {
       const slider = page.getByRole('slider', { name, exact: true })
       await slider.scrollIntoViewIfNeeded()
-      const box = await slider.boundingBox()
+      const box = await slider.locator('..').boundingBox()
       const beforeSize = await page.locator('.photo-plane').boundingBox()
       await page.evaluate(() => {
         window.previewFrames = []
@@ -94,7 +94,7 @@ for (const stock of [null, 'Gold 200'])
       const duringSize = await page.locator('.photo-plane').boundingBox()
       expect(Math.abs(duringSize.width - beforeSize.width)).toBeLessThanOrEqual(2)
       await page.mouse.up()
-      await expect(page.locator('.viewer-status [role=status]')).toContainText('1600 × 1000')
+      await expect(page.locator('.viewer-status > [role=status]')).toContainText('1600 × 1000')
     }
     for (const name of ['Exposure', 'Shadows', 'Temperature']) await drag(name)
     if (stock) {
@@ -102,7 +102,7 @@ for (const stock of [null, 'Gold 200'])
       await drag('Grain')
     }
     await page.getByRole('tab', { name: 'Crop', exact: true }).click()
-    await expect(page.locator('.viewer-status [role=status]')).toContainText('1600 × 1000')
+    await expect(page.locator('.viewer-status > [role=status]')).toContainText('1600 × 1000')
     await drag('Straighten')
     await expect(page.getByRole('button', { name: 'Preview crop', exact: true })).toHaveAttribute(
       'aria-pressed',

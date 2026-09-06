@@ -54,6 +54,7 @@ export const fullCrop = () => [
 ]
 export const defaultEdit = (stock = null) => ({
   stock,
+  medium: null,
   params: Object.fromEntries(SLIDERS.map((s) => [s.key, s.def])),
   gradeSpace: false,
   localTone: true,
@@ -155,6 +156,8 @@ export function parseEdit(json, stockIDs) {
     )
   )
     throw new Error('Invalid adjustment values.')
+  if (edit.medium != null && (typeof edit.medium !== 'string' || !/^[a-z0-9-]+$/.test(edit.medium)))
+    throw new Error('Invalid output medium.')
   if (
     !validCrop(edit.crop) ||
     ![0, 1, 2, 3].includes(edit.rotation) ||
@@ -172,6 +175,7 @@ export function parseEdit(json, stockIDs) {
   return {
     ...base,
     ...Object.fromEntries(Object.keys(base).map((key) => [key, edit[key]])),
+    medium: edit.medium ?? null,
     params: Object.fromEntries(SLIDERS.map((s) => [s.key, edit.params[s.key]])),
   }
 }

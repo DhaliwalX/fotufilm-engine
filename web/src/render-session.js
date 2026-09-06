@@ -1,3 +1,4 @@
+import { loadMediumBytes } from './output-media.js'
 import { rawSource } from './raw-source.js'
 import { defaultEdit } from './editor-state.js'
 import {
@@ -9,6 +10,7 @@ import {
   developNormal,
   imageSource,
   loadPack,
+  parsePack,
   loadStages,
 } from './engine.js'
 import { canvasBlob, cropImage, orientImage } from './geometry.js'
@@ -25,7 +27,16 @@ export async function loadStockIndex() {
     index.some((s) => !s.id || !s.name || !/^[a-z0-9_-]+$/i.test(s.id))
   )
     throw new Error('Invalid film library.')
-  return index
+  const mediaResponse = await fetch(assetUrl('packs/media.json'))
+  if (!mediaResponse.ok)
+    throw new Error('Output media could not be loaded. Rebuild the browser packs.')
+  const media = await mediaResponse.json()
+  return index.map((stock) => {
+    const entry = media.find((item) => item.id === stock.id)
+    if (!entry || !Array.isArray(entry.choices) || !entry.choices.length)
+      throw new Error('Invalid output-medium catalog.')
+    return { ...stock, media: entry.choices, defaultMedium: entry.default }
+  })
 }
 
 // WASM instances share a heap. Serialize stock changes, renders, exports and disposal.
@@ -60,16 +71,32 @@ export class RenderSession {
     }
     this.running = false
   }
-  async pack(id) {
-    if (this.packs.has(id)) {
-      const value = this.packs.get(id)
-      this.packs.delete(id)
-      this.packs.set(id, value)
+  async pack(id, medium = null) {
+    const key = `${id}:${medium || 'default'}`
+    if (this.packs.has(key)) {
+      const value = this.packs.get(key)
+      this.packs.delete(key)
+      this.packs.set(key, value)
       return value
     }
-    const pack = await loadPack(assetUrl(`packs/${id}.pack`))
-    const entry = { pack, stages: null }
-    this.packs.set(id, entry)
+    let pack,
+      stagesUrl = null
+    if (medium) {
+      this.catalog ??= loadStockIndex().catch((error) => {
+        this.catalog = null
+        throw error
+      })
+      const stock = (await this.catalog).find((item) => item.id === id)
+      const choice = stock?.media.find((item) => item.id === medium)
+      if (!choice) throw new Error('This output medium is unavailable for the selected film.')
+      const base = await this.pack(id)
+      pack = choice.pack
+        ? parsePack(await loadMediumBytes(base.pack.bytes, assetUrl(`packs/${choice.pack}`)))
+        : base.pack
+      stagesUrl = choice.stages ? assetUrl(`packs/${choice.stages}`) : null
+    } else pack = await loadPack(assetUrl(`packs/${id}.pack`))
+    const entry = { pack, stages: null, stagesUrl }
+    this.packs.set(key, entry)
     if (this.packs.size > 4) this.packs.delete(this.packs.keys().next().value)
     return entry
   }
@@ -133,14 +160,18 @@ export class RenderSession {
   }) {
     if (this.closed || stale()) return null
     onProgress('Loading film')
-    const entry = edit.stock === null ? null : await this.pack(stock)
+    const entry = edit.stock === null ? null : await this.pack(stock, edit.medium)
     if (this.closed || stale()) return null
     const developer = await this.renderer(entry?.pack, background && !!entry)
     return this.enqueue(async () => {
       if (this.closed || stale()) return null
       const started = performance.now()
       if (entry && stage !== null) {
-        entry.stages ??= await loadStages(assetUrl(`packs/${stock}.stages`), entry.pack)
+        entry.stages ??= await loadStages(
+          assetUrl(`packs/${stock}.stages`),
+          entry.pack,
+          entry.stagesUrl,
+        )
       }
       if (stale()) return null
       const prepared = await this.source(image, edit, maxEdge, cropMode)
@@ -204,10 +235,14 @@ export class RenderSession {
       }
     }, background)
   }
-  stages(stock) {
+  stages(stock, medium = null) {
     return this.enqueue(async () => {
-      const entry = await this.pack(stock)
-      entry.stages ??= await loadStages(assetUrl(`packs/${stock}.stages`), entry.pack)
+      const entry = await this.pack(stock, medium)
+      entry.stages ??= await loadStages(
+        assetUrl(`packs/${stock}.stages`),
+        entry.pack,
+        entry.stagesUrl,
+      )
       return entry.stages.map((s) => ({ id: s.id, label: s.label }))
     })
   }

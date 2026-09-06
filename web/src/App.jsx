@@ -1,7 +1,11 @@
+import { Button } from '@astryxdesign/core/Button'
+import { TextInput } from '@astryxdesign/core/TextInput'
+import { Switch } from '@astryxdesign/core/Switch'
+import { TabList, Tab } from '@astryxdesign/core/TabList'
+import { Selector } from '@astryxdesign/core/Selector'
 import { PreviewQueue } from './preview-queue.js'
 import { IMAGE_ACCEPT, isRawFile, importRaw } from './raw-import.js'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { assetUrl } from './engine.js'
 import { RenderSession, loadStockIndex } from './render-session.js'
 import {
   defaultEdit,
@@ -39,7 +43,10 @@ const stageNames = [
 const ratios = ['free', 'original', '1:1', '3:2', '2:3', '4:3', '3:4', '16:9', '9:16']
 const isTyping = (target) =>
   target instanceof HTMLElement &&
-  (!!target.closest('input, select, textarea, dialog') || target.isContentEditable)
+  (!!target.closest(
+    'input, select, textarea, dialog, [role=slider], [role=combobox], [role=switch]',
+  ) ||
+    target.isContentEditable)
 const cleanName = (name) =>
   name
     .replace(/\.[^.]+$/, '')
@@ -321,7 +328,7 @@ export default function App() {
     let cancelled = false
     setStages([])
     session
-      .stages(stockId)
+      .stages(stockId, edit.medium)
       .then((next) => {
         if (!cancelled) setStages(next)
       })
@@ -331,7 +338,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [panel, session, stockId])
+  }, [panel, session, stockId, edit.medium])
 
   async function acceptFiles(incoming) {
     if (exporting) return
@@ -456,7 +463,10 @@ export default function App() {
   }
   function selectStock(id) {
     if (exporting) return
-    patch({ stock: id })
+    const medium = stocks.find((s) => s.id === id)?.media.some((m) => m.id === edit.medium)
+      ? edit.medium
+      : null
+    patch({ stock: id, medium })
     setStage(null)
     setDifference(false)
   }
@@ -503,7 +513,10 @@ export default function App() {
           ? next.blob
           : await canvasBlob(next.canvas, exportType, quality / 100)
       const extension = exportType === 'image/jpeg' ? 'jpg' : exportType.split('/')[1]
-      download(blob, `${cleanName(active.name)}-${edit.stock || 'normal'}.${extension}`)
+      download(
+        blob,
+        `${cleanName(active.name)}-${edit.stock || 'normal'}${edit.medium ? `-${edit.medium}` : ''}.${extension}`,
+      )
       setDialog(null)
     } catch (e) {
       setError(e.message)
@@ -574,7 +587,13 @@ export default function App() {
     exportSize === 'full' ? 1 : Math.min(1, Number(exportSize) / Math.max(width, height))
   const shownResult = result?.fileId === activeId ? result : null
   const adjustments = (group) => (
-    <Adjustments group={group} params={edit.params} onChange={setParam} onEnd={endEdit} />
+    <Adjustments
+      group={group}
+      params={edit.params}
+      onChange={setParam}
+      onEnd={endEdit}
+      disabled={exporting || !active}
+    />
   )
 
   return (
@@ -673,16 +692,19 @@ export default function App() {
           <span>Film</span>
           <small>{stocks.length}</small>
         </div>
-        <label className="search-field">
-          <Icon name="search" />
-          <input
-            type="search"
+        <div className="search-field">
+          <TextInput
+            label="Search films"
+            isLabelHidden
+            role="searchbox"
+            size="sm"
             placeholder="Search films"
-            aria-label="Search films"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={setSearch}
+            startIcon={<Icon name="search" />}
+            width="100%"
           />
-        </label>
+        </div>
         <div className="stock-list">
           <button
             className={`stock-row normal-row ${edit.stock === null ? 'selected' : ''}`}
@@ -712,12 +734,6 @@ export default function App() {
             <p className="empty-search">No matching films.</p>
           )}
         </div>
-        <footer className="sidebar-footer">
-          <span>{stocks.length} films installed</span>
-          <a href={assetUrl('packs/FILM-PROFILES.txt')} target="_blank" rel="noreferrer">
-            Profile licence
-          </a>
-        </footer>
       </aside>
       <main
         className={`viewer ${dragOver ? 'drag-over' : ''}`}
@@ -757,40 +773,50 @@ export default function App() {
             <Icon name="open" />
             <h1>Open a photo</h1>
             <p>Drop images here or choose files.</p>
-            <button className="primary" onClick={() => input.current?.click()}>
-              Open images
-            </button>
-            <button className="text-button" onClick={openSample}>
-              Open sample chart
-            </button>
+            <Button
+              label="Open images"
+              variant="primary"
+              size="sm"
+              className="primary"
+              onClick={() => input.current?.click()}
+            />
+            <Button
+              label="Open sample chart"
+              variant="ghost"
+              size="sm"
+              className="text-button"
+              onClick={openSample}
+            />
             <small>RAW, JPEG, PNG, WebP, AVIF · processed on this device</small>
           </div>
         )}
         {importStatus && (
           <div className="import-status" role="status">
             <span>{importStatus}</span>
-            <button
+            <Button
+              label="Cancel"
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 importController.current?.abort()
                 setImportStatus(null)
               }}
-            >
-              Cancel
-            </button>
+            />
           </div>
         )}
         {dragOver && <div className="drop-label">Drop images to open</div>}
         {error && (
           <div className="error-banner" role="alert">
             <span>{error}</span>
-            <button
+            <Button
+              label="Retry"
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 setError(null)
                 setRetry((v) => v + 1)
               }}
-            >
-              Retry
-            </button>
+            />
             <button aria-label="Dismiss error" onClick={() => setError(null)}>
               ×
             </button>
@@ -810,7 +836,10 @@ export default function App() {
                 : '')}
           </span>
           {active && (
-            <button
+            <Button
+              label="Compare"
+              variant="ghost"
+              size="sm"
               className={`compare-button ${compare ? 'active' : ''}`}
               onPointerDown={(e) => {
                 e.currentTarget.setPointerCapture(e.pointerId)
@@ -827,10 +856,8 @@ export default function App() {
               onKeyUp={() => setCompare(false)}
               onBlur={() => setCompare(false)}
               aria-label="Hold to compare with original"
-            >
-              <Icon name="compare" />
-              Compare
-            </button>
+              icon={<Icon name="compare" />}
+            />
           )}
           <span className="backend-label">
             {shownResult?.backend === 'webgpu' ? 'WebGPU' : shownResult ? 'CPU' : ''}
@@ -859,25 +886,30 @@ export default function App() {
         )}
       </main>
       <aside className="inspector" aria-label="Adjustments">
-        <div className="inspector-tabs" role="tablist" aria-label="Adjustment panels">
+        <TabList
+          role="tablist"
+          className="inspector-tabs"
+          aria-label="Adjustment panels"
+          value={panel}
+          onChange={setInspector}
+          layout="fill"
+          size="sm"
+          hasDivider={false}
+        >
           {[
             ['film', 'film', 'Film'],
             ['light', 'adjustments', 'Light & Color'],
             ['crop', 'crop', 'Crop'],
           ].map(([id, icon, title]) => (
-            <button
+            <Tab
               key={id}
-              role="tab"
-              aria-selected={panel === id}
-              aria-controls="inspector-content"
-              title={title}
-              onClick={() => setInspector(id)}
-            >
-              <Icon name={icon} />
-              <span>{title}</span>
-            </button>
+              value={id}
+              label={title}
+              icon={<Icon name={icon} />}
+              panelId="inspector-content"
+            />
           ))}
-        </div>
+        </TabList>
         <div
           id="inspector-content"
           className="inspector-content"
@@ -902,23 +934,45 @@ export default function App() {
                 {edit.stock && (
                   <Section title="Character">
                     {adjustments('Character')}
-                    <button
+                    <Button
+                      label="New Grain Pattern"
+                      variant="secondary"
+                      size="sm"
                       className="secondary full-width"
                       onClick={() =>
                         patch({
                           seed: crypto.getRandomValues(new Uint32Array(1))[0],
                         })
                       }
-                    >
-                      New Grain Pattern
-                    </button>
+                    />
                   </Section>
                 )}
                 <Section title="Output">
-                  <div className="info-row">
-                    <span>Medium</span>
-                    <span>{edit.stock ? 'Match Film' : 'Digital'}</span>
-                  </div>
+                  <Selector
+                    label="Output medium"
+                    size="sm"
+                    width="100%"
+                    isDisabled={exporting || !active || !edit.stock}
+                    value={edit.medium || selectedStock?.defaultMedium || 'screen'}
+                    options={(
+                      selectedStock?.media || [{ id: 'screen', name: 'Digital Reference' }]
+                    ).map((medium) => ({ value: medium.id, label: medium.name }))}
+                    onChange={(medium) => {
+                      endEdit()
+                      patch({ medium })
+                      setStage(null)
+                      setDifference(false)
+                    }}
+                  />
+                  {selectedStock && (
+                    <p className="medium-detail">
+                      {(edit.medium || selectedStock.defaultMedium) === 'screen'
+                        ? 'Direct display rendering without paper or scanning. Export is 8-bit sRGB.'
+                        : selectedStock.media.find(
+                            (m) => m.id === (edit.medium || selectedStock.defaultMedium),
+                          )?.detail}
+                    </p>
+                  )}
                   <div className="info-row">
                     <span>Color space</span>
                     <span>sRGB</span>
@@ -933,26 +987,28 @@ export default function App() {
               <>
                 <Section title="Light">
                   {adjustments('Light')}
-                  <label className="toggle-row">
-                    <span>Regional</span>
-                    <input
-                      type="checkbox"
-                      checked={edit.localTone}
-                      onChange={(e) => patch({ localTone: e.target.checked })}
-                    />
-                  </label>
+                  <Switch
+                    label="Regional"
+                    value={edit.localTone}
+                    onChange={(value) => patch({ localTone: value })}
+                    isDisabled={exporting || !active}
+                    labelPosition="start"
+                    labelSpacing="spread"
+                    size="sm"
+                  />
                 </Section>
                 <Section title="White Balance">{adjustments('White Balance')}</Section>
                 <Section title="Color">{adjustments('Color')}</Section>
                 <Section title="Grade">
-                  <label className="toggle-row">
-                    <span>Encoded Grade</span>
-                    <input
-                      type="checkbox"
-                      checked={edit.gradeSpace}
-                      onChange={(e) => patch({ gradeSpace: e.target.checked })}
-                    />
-                  </label>
+                  <Switch
+                    label="Encoded Grade"
+                    value={edit.gradeSpace}
+                    onChange={(value) => patch({ gradeSpace: value })}
+                    isDisabled={exporting || !active}
+                    labelPosition="start"
+                    labelSpacing="spread"
+                    size="sm"
+                  />
                   {['Shadows', 'Midtones', 'Highlights'].map((band) => (
                     <div className="grade-band" key={band} role="group" aria-label={band}>
                       <h3>{band}</h3>
@@ -970,45 +1026,43 @@ export default function App() {
                 </div>
                 <Section title="Frame">
                   <div className="crop-actions">
-                    <button
+                    <Button
+                      label="Edit corners"
+                      variant="secondary"
+                      size="sm"
                       className="secondary"
                       aria-pressed={!cropPreview}
                       onClick={() => setCropPreview(false)}
-                    >
-                      Edit corners
-                    </button>
-                    <button
+                    />
+                    <Button
+                      label="Preview crop"
+                      variant="secondary"
+                      size="sm"
                       className="secondary"
                       aria-pressed={cropPreview}
                       onClick={() => {
                         endEdit()
                         setCropPreview(true)
                       }}
-                    >
-                      Preview crop
-                    </button>
+                    />
                   </div>
-                  <label className="select-row">
-                    Aspect ratio
-                    <select
-                      aria-label="Aspect ratio"
-                      value={edit.ratio}
-                      onChange={(e) =>
-                        patch({
-                          ratio: e.target.value,
-                          crop: cropForRatio(e.target.value, width, height),
-                        })
-                      }
-                    >
-                      {ratios.map((ratio) => (
-                        <option key={ratio} value={ratio}>
-                          {ratio === 'free' ? 'Free' : ratio === 'original' ? 'Original' : ratio}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <Selector
+                    label="Aspect ratio"
+                    size="sm"
+                    width="100%"
+                    isDisabled={exporting || !active}
+                    value={edit.ratio}
+                    options={ratios.map((ratio) => ({
+                      value: ratio,
+                      label: ratio === 'free' ? 'Free' : ratio === 'original' ? 'Original' : ratio,
+                    }))}
+                    onChange={(ratio) => patch({ ratio, crop: cropForRatio(ratio, width, height) })}
+                  />
                   <div className="crop-actions">
-                    <button
+                    <Button
+                      label="Rotate Left"
+                      variant="secondary"
+                      size="sm"
                       className="secondary"
                       onClick={() =>
                         patch({
@@ -1016,11 +1070,12 @@ export default function App() {
                           crop: rotatedCrop(edit.crop, edit.flip),
                         })
                       }
-                    >
-                      <Icon name="rotate" />
-                      Rotate Left
-                    </button>
-                    <button
+                      icon={<Icon name="rotate" />}
+                    />
+                    <Button
+                      label="Flip"
+                      variant="secondary"
+                      size="sm"
                       className="secondary"
                       onClick={() =>
                         patch({
@@ -1028,10 +1083,8 @@ export default function App() {
                           crop: flippedCrop(edit.crop),
                         })
                       }
-                    >
-                      <Icon name="flip" />
-                      Flip
-                    </button>
+                      icon={<Icon name="flip" />}
+                    />
                   </div>
                   <Adjustment
                     slider={{
@@ -1049,6 +1102,7 @@ export default function App() {
                       patch({ straighten }, 'straighten')
                     }}
                     onEnd={endEdit}
+                    disabled={exporting || !active}
                   />
                   <div className="info-row">
                     <span>Crop size</span>
@@ -1056,21 +1110,23 @@ export default function App() {
                       {cropSize.width} × {cropSize.height}
                     </span>
                   </div>
-                  <button
+                  <Button
+                    label="Reset Crop"
+                    variant="secondary"
+                    size="sm"
                     className="secondary full-width"
                     onClick={() => patch({ crop: fullCrop(), ratio: 'free', straighten: 0 })}
-                  >
-                    Reset Crop
-                  </button>
-                  <button
+                  />
+                  <Button
+                    label="Done"
+                    variant="primary"
+                    size="sm"
                     className="primary full-width"
                     onClick={() => {
                       endEdit()
                       setPanel('film')
                     }}
-                  >
-                    Done
-                  </button>
+                  />
                 </Section>
               </>
             )}
@@ -1080,15 +1136,16 @@ export default function App() {
                   <h2>Pipeline</h2>
                 </div>
                 <div className="pipeline-list">
-                  <button
+                  <Button
+                    label="Finished print"
+                    variant="ghost"
+                    size="sm"
                     className={stage === null ? 'selected' : ''}
                     onClick={() => {
                       setStage(null)
                       setDifference(false)
                     }}
-                  >
-                    Finished print
-                  </button>
+                  />
                   {stages.map((item, i) => (
                     <button
                       key={item.id}
@@ -1186,6 +1243,7 @@ export default function App() {
                   def: 95,
                   unit: '%',
                 }}
+                disabled={exporting}
                 value={quality}
                 onChange={setQuality}
               />
@@ -1200,40 +1258,65 @@ export default function App() {
           </fieldset>
           {exporting && <p role="status">{status || 'Exporting'}</p>}
           <div className="dialog-actions">
-            <button className="secondary" onClick={() => setDialog(null)} disabled={exporting}>
-              Cancel
-            </button>
-            <button className="primary" onClick={exportImage} disabled={exporting}>
-              {exporting ? 'Exporting…' : 'Export'}
-            </button>
+            <Button
+              label="Cancel"
+              variant="secondary"
+              size="sm"
+              className="secondary"
+              onClick={() => setDialog(null)}
+              isDisabled={exporting}
+            />
+            <Button
+              label={exporting ? 'Exporting…' : 'Export'}
+              variant="primary"
+              size="sm"
+              onClick={exportImage}
+              isDisabled={exporting}
+            />
           </div>
         </Modal>
       )}
       {dialog === 'more' && (
         <Modal title="Options" onClose={() => setDialog(null)}>
           <div className="menu-options">
-            <button onClick={saveEdit} disabled={!active}>
-              Save edits…
-            </button>
-            <button
+            <Button
+              label="Save edits…"
+              variant="secondary"
+              size="sm"
+              onClick={saveEdit}
+              isDisabled={!active}
+            />
+            <Button
+              label="Load edits…"
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 setDialog(null)
                 editInput.current?.click()
               }}
-              disabled={!active}
-            >
-              Load edits…
-            </button>
-            <button
+              isDisabled={!active}
+            />
+            <Button
+              label="Inspect pipeline"
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 setInspector('pipeline')
                 setDialog(null)
               }}
-            >
-              Inspect pipeline
-            </button>
-            <button onClick={() => setDialog('shortcuts')}>Keyboard shortcuts</button>
-            <button onClick={() => setDialog('support')}>Browser support</button>
+            />
+            <Button
+              label="Keyboard shortcuts"
+              variant="ghost"
+              size="sm"
+              onClick={() => setDialog('shortcuts')}
+            />
+            <Button
+              label="Browser support"
+              variant="ghost"
+              size="sm"
+              onClick={() => setDialog('support')}
+            />
           </div>
         </Modal>
       )}

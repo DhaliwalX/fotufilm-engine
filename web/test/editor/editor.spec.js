@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
 async function ready(page) {
-  await expect(page.locator(".viewer-status [role=status]")).toContainText(
+  await expect(page.locator(".viewer-status > [role=status]")).toContainText(
     /\d+ × \d+/,
   );
 }
@@ -78,10 +78,11 @@ test("real WebGPU editor: normal, film, adjustments, history, crop and full-size
   await ready(page);
   await page
     .getByRole("combobox", { name: "Aspect ratio", exact: true })
-    .selectOption("1:1");
+    .click();
+  await page.getByRole("option", { name: "1:1", exact: true }).click();
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await ready(page);
-  await expect(page.locator(".viewer-status [role=status]")).toContainText(
+  await expect(page.locator(".viewer-status > [role=status]")).toContainText(
     "1000 × 1000",
   );
   await page.getByRole("button", { name: "Export (⌘S)", exact: true }).click();

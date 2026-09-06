@@ -1,3 +1,4 @@
+import { loadMediumBytes } from './output-media.js'
 import { yieldToBrowser } from './yield.js'
 import { measureTone, toneKey } from './tone-base.js'
 import { CONFIG } from './engine-constants.js'
@@ -59,7 +60,10 @@ function loadModule(kind) {
 export async function loadPack(url) {
   const response = await fetch(url)
   if (!response.ok) throw new Error(`no pack at ${url} (${response.status})`)
-  const bytes = await response.arrayBuffer()
+  return parsePack(await response.arrayBuffer())
+}
+
+export function parsePack(bytes) {
   const view = new DataView(bytes)
 
   const magic = String.fromCharCode(...new Uint8Array(bytes, 0, 4))
@@ -114,6 +118,7 @@ export async function loadPack(url) {
   if (offset !== bytes.byteLength) throw new Error(`pack has ${bytes.byteLength - offset} trailing bytes`)
 
   return {
+    bytes,
     width,
     height,
     featureMask,
@@ -138,10 +143,11 @@ export async function loadPack(url) {
 /// it moves, and an index into a pool of colour cubes for the tables it re-solved. Everything else
 /// is handed straight back from `base`, arrays included, so ten stages cost one extra configuration
 /// each rather than ten copies of five megabytes.
-export async function loadStages(url, base) {
+export async function loadStages(url, base, mediumUrl = null) {
   const response = await fetch(url)
   if (!response.ok) throw new Error(`no stages at ${url} (${response.status})`)
-  const bytes = await response.arrayBuffer()
+  let bytes = await response.arrayBuffer()
+  if (mediumUrl) bytes = await loadMediumBytes(bytes, mediumUrl)
   const view = new DataView(bytes)
 
   const magic = String.fromCharCode(...new Uint8Array(bytes, 0, 4))

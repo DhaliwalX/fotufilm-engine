@@ -116,6 +116,10 @@ PY
   echo "  $id  masks $masks"
 done < <(./.build/release/fotufilm --list-stocks)
 printf ']' >> "$INDEX"
+python3 tools/export-web-media.py --pack-size "$PACK_SIZE"
+for mask in $(python3 -c 'import json; print(*json.load(open("web/public/packs/media/masks.json")))'); do
+  MASKS+=("$mask")
+done
 # One kernel per distinct mask, however many stocks and sizes ask for it.
 MASKS=($(printf '%s\n' "${MASKS[@]}" | sort -un))
 

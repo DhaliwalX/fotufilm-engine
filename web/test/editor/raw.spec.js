@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { makeDNG } from './raw-fixture.js'
 
 async function ready(page) {
-  await expect(page.locator('.viewer-status [role=status]')).toContainText(/\d+ × \d+/)
+  await expect(page.locator('.viewer-status > [role=status]')).toContainText(/\d+ × \d+/)
 }
 
 test('RAW worker decodes sensor pixels at 16 bits without shared memory, honoring orientation', async ({
@@ -56,7 +56,8 @@ test('RAW import, film, exposure, crop and export use the full original', async 
   await ready(page)
   await page.getByRole('tab', { name: 'Crop', exact: true }).click()
   await ready(page)
-  await page.getByRole('combobox', { name: 'Aspect ratio', exact: true }).selectOption('1:1')
+  await page.getByRole('combobox', { name: 'Aspect ratio', exact: true }).click()
+  await page.getByRole('option', { name: '1:1', exact: true }).click()
   await page.getByRole('button', { name: 'Done', exact: true }).click()
   await ready(page)
   await page.getByRole('button', { name: 'Export (⌘S)', exact: true }).click()

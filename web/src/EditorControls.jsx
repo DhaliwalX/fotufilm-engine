@@ -1,3 +1,6 @@
+import { Button } from '@astryxdesign/core/Button'
+import { Slider } from '@astryxdesign/core/Slider'
+import { NumberInput } from '@astryxdesign/core/NumberInput'
 import { useEffect, useRef, useState } from 'react'
 import { SLIDERS, validCrop } from './editor-state.js'
 import { clamp } from './color-controls.js'
@@ -42,19 +45,22 @@ export function Icon({ name }) {
     </svg>
   )
 }
-export function ToolButton({ icon, label, active, children, ...props }) {
+export function ToolButton({ icon, label, active, children, disabled, ...props }) {
   return (
-    <button
-      type="button"
+    <Button
+      label={label}
+      variant="ghost"
+      size="sm"
+      icon={<Icon name={icon} />}
+      isIconOnly={!children}
+      isDisabled={disabled}
       className={`tool-button ${active ? 'active' : ''}`}
       title={label}
-      aria-label={label}
       aria-pressed={active}
       {...props}
     >
-      <Icon name={icon} />
       {children}
-    </button>
+    </Button>
   )
 }
 export function Section({ title, children, open = true }) {
@@ -65,49 +71,47 @@ export function Section({ title, children, open = true }) {
     </details>
   )
 }
-export function Adjustment({ slider, value, onChange, onEnd }) {
+export function Adjustment({ slider, value, onChange, onEnd, disabled = false }) {
   const accessibleLabel = slider.key.startsWith('grade')
     ? `${slider.group} ${slider.label}`
     : slider.label
   const temperature = slider.key === 'temperature'
   const rangeValue = temperature ? 1e6 / value : value
-  const id = `control-${slider.key}`
   return (
     <div className="adjustment">
       <div className="adjustment-label">
-        <label htmlFor={id}>{slider.label}</label>
+        <span>{slider.label}</span>
         <div className="number-field">
-          <input
-            aria-label={`${accessibleLabel} value`}
-            type="number"
+          <NumberInput
+            label={`${accessibleLabel} value`}
+            isLabelHidden
+            isDisabled={disabled}
+            size="sm"
+            width={88}
+            hasNumberSteppers={false}
+            isWheelEnabled={false}
+            units={slider.unit}
             value={Number(value.toFixed(3))}
             min={slider.min}
             max={slider.max}
             step={slider.step}
-            onChange={(e) => {
-              if (e.target.value !== '' && Number.isFinite(e.target.valueAsNumber))
-                onChange(clamp(e.target.valueAsNumber, slider.min, slider.max))
-            }}
+            onChange={(next) => onChange(clamp(next, slider.min, slider.max))}
             onBlur={onEnd}
           />
-          {slider.unit && <span>{slider.unit}</span>}
         </div>
       </div>
-      <input
-        id={id}
-        aria-label={accessibleLabel}
-        type="range"
+      <Slider
+        label={accessibleLabel}
+        isLabelHidden
+        isDisabled={disabled}
+        valueDisplay="none"
         min={temperature ? 1e6 / slider.max : slider.min}
         max={temperature ? 1e6 / slider.min : slider.max}
         step={temperature ? 0.1 : slider.step}
         value={rangeValue}
-        aria-valuetext={temperature ? `${Math.round(value)} K` : undefined}
-        onChange={(e) =>
-          onChange(temperature ? Math.round(1e6 / Number(e.target.value)) : Number(e.target.value))
-        }
-        onPointerUp={onEnd}
-        onPointerCancel={onEnd}
-        onKeyUp={onEnd}
+        formatValue={temperature ? (v) => `${Math.round(1e6 / v)} K` : undefined}
+        onChange={(next) => onChange(temperature ? Math.round(1e6 / next) : next)}
+        onChangeEnd={onEnd}
         onBlur={onEnd}
         onDoubleClick={() => {
           onChange(slider.def)
@@ -117,11 +121,12 @@ export function Adjustment({ slider, value, onChange, onEnd }) {
     </div>
   )
 }
-export function Adjustments({ group, params, onChange, onEnd }) {
+export function Adjustments({ group, params, onChange, onEnd, disabled }) {
   return SLIDERS.filter((s) => s.group === group).map((slider) => (
     <Adjustment
       key={slider.key}
       slider={slider}
+      disabled={disabled}
       value={params[slider.key]}
       onChange={(value) => onChange(slider.key, value)}
       onEnd={onEnd}

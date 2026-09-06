@@ -11,6 +11,9 @@
     "check:engine": "python3 ../tools/export-web-constants.py --check"
   },
   "dependencies": {
+    "@astryxdesign/core": "0.5.3",
+    "@astryxdesign/theme-neutral": "0.5.3",
+    "@stylexjs/stylex": "0.19.0",
     "express": "^5.2.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
