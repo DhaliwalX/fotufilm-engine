@@ -46,12 +46,15 @@ Attribution-ShareAlike 4.0 International (CC BY-SA 4.0).
   vision250d.json
   vision500t.json
 
+Attribution name: Fotufilm
+Attribution website: https://fotufilm.com
 Source and profile manifest: https://github.com/DhaliwalX/fotufilm-engine
 License: https://creativecommons.org/licenses/by-sa/4.0/
 The full license is included in CC-BY-SA-4.0.txt.
 
 You may use, copy, modify, and redistribute these profiles, including
-commercially, with attribution, a license link, and an indication of changes.
+commercially, with attribution to Fotufilm (https://fotufilm.com), a license
+link, and an indication of changes. Retain the copyright and license notices.
 If you distribute adapted profiles, you must license the adaptations under
 CC BY-SA 4.0 or an officially compatible license. See the full license for
 its terms and exceptions. Private modifications need not be published.

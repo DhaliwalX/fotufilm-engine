@@ -12,6 +12,8 @@ The 40 runtime film profiles listed in the [release manifest](licenses/FILM-PROF
 in `Sources/FotufilmCore/Stocks/` are licensed under CC BY-SA 4.0. See the
 [profile notice](licenses/FILM-PROFILES.txt) and [full licence](licenses/CC-BY-SA-4.0.txt).
 You may use, modify, and redistribute them, including commercially, with attribution.
+Credit the profiles to **Fotufilm** and link to **https://fotufilm.com**;
+retain the MUAStudio Inc. copyright notice and identify any changes.
 Distributed adaptations must use CC BY-SA 4.0 or an officially compatible licence.
 
 This licence covers the listed profiles, including their rendering parameters and
