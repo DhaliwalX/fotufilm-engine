@@ -2419,7 +2419,8 @@ public enum SpectralGrid {
         return result
     }
 
-    /// The receiver supplied by PrintPaperSpectra (analytic examples in this repository).
+    /// The receiver supplied by PrintPaperSpectra, digitised from KODAK EKTACOLOR EDGE
+    /// publication E-7020.
     static let paperDyes: [[Float]] = partition(
         zip(PrintPaperSpectra.dyeDensity, PrintPaperSpectra.neutralAmounts)
             .map { record, amount in record.map { $0 * amount } })
