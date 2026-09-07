@@ -1,4 +1,5 @@
 import { loadMediumBytes } from './output-media.js'
+import { loadSceneExposure } from './scene-light.js'
 import { rawSource } from './raw-source.js'
 import { defaultEdit } from './editor-state.js'
 import {
@@ -50,6 +51,7 @@ export class RenderSession {
     this.normal = null
     this.thumbnail = null
     this.sources = []
+    this.scenePacks = new WeakMap()
     this.closed = false
   }
   notifyWaiting() {
@@ -156,6 +158,16 @@ export class RenderSession {
     }
     return entry
   }
+  async capturePack(pack, stock, kelvin, report) {
+    if (!pack || !Number.isFinite(kelvin) || kelvin <= 0) return pack
+    const key = pack.id === '01-bypassed' ? stock + '@bypassed' : stock
+    const exposure = await loadSceneExposure(key, kelvin, report)
+    const cached = this.scenePacks.get(pack)
+    if (cached?.exposure === exposure) return cached
+    const corrected = { ...pack, exposure }
+    this.scenePacks.set(pack, corrected)
+    return corrected
+  }
   async render({
     image,
     edit,
@@ -209,7 +221,10 @@ export class RenderSession {
         localTone: edit.localTone,
       }
       const selected = edit.stock === null ? null : stage
-      const pack = entry ? (selected === null ? entry.pack : entry.stages[selected]) : null
+      const pack = await this.capturePack(
+        entry ? (selected === null ? entry.pack : entry.stages[selected]) : null,
+        stock, image.raw?.sceneKelvin, report,
+      )
       if (entry && !pack) throw new Error('This pipeline stage is unavailable.')
       if (pack) developer.usePack(pack)
       let { pixels, elapsed } = developer
@@ -218,7 +233,7 @@ export class RenderSession {
       let delta = null
       if (difference && selected > 0) {
         report('Rendering previous stage for comparison')
-        developer.usePack(entry.stages[selected - 1])
+        developer.usePack(await this.capturePack(entry.stages[selected - 1], stock, image.raw?.sceneKelvin, report))
         const before = await developer.develop(source, controls)
         let peak = 0
         for (let i = 0; i < pixels.length; i++)

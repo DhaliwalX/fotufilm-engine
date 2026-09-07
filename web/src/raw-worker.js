@@ -1,4 +1,4 @@
-import { loadCameraProfiles, resolveCameraProfile } from './camera-profile.js'
+import { loadCameraProfiles, resolveCameraProfile, estimateAsShotKelvin } from './camera-profile.js'
 
 // One worker per import releases the decoder's entire WASM heap on completion.
 self.onmessage = async ({ data: { bytes, decoderURL } }) => {
@@ -48,6 +48,7 @@ self.onmessage = async ({ data: { bytes, decoderURL } }) => {
     self.postMessage({ status: 'Loading camera spectral profiles' })
     const catalog = await loadCameraProfiles(new URL('camera-profiles.json', decoderURL))
     const profile = resolveCameraProfile(camera, catalog)
+    const sceneKelvin = estimateAsShotKelvin(camera, catalog.whiteLocus)
     self.postMessage({
       status: profile
         ? `Preparing ${camera.make} ${camera.model} spectral correction · estimated ${Math.round(profile.kelvin)} K`
@@ -64,7 +65,9 @@ self.onmessage = async ({ data: { bytes, decoderURL } }) => {
     self.postMessage({ status: 'Copying decoded RAW pixels' })
     const start = module._raw_pixels() / 2
     const pixels = module.HEAPU16.slice(start, start + width * height * colors)
-    self.postMessage({ width, height, colors, sceneScale, profile, pixels }, [pixels.buffer])
+    self.postMessage({ width, height, colors, sceneScale, profile, sceneKelvin, pixels }, [
+      pixels.buffer,
+    ])
   } catch (error) {
     self.postMessage({ error: error.message || 'Could not decode RAW image.' })
   } finally {

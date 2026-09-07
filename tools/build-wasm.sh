@@ -240,6 +240,7 @@ echo
 echo "Wrote web/public/fotufilm.{mjs,wasm}$([[ -f web/public/fotufilm-webgpu.mjs ]] && echo ', fotufilm-webgpu.{mjs,wasm}') and $(ls web/public/packs/*.pack | wc -l | tr -d ' ') packs."
 
 tools/build-raw-wasm.sh
+bash tools/build-web-scene.sh
 
 node tools/test-wasm.mjs
 node tools/test-wasm-tiles.mjs

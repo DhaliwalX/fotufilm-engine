@@ -20,6 +20,8 @@ Usage:
   fotufilm --list-stocks                   List stocks and the gauge each is known on
   fotufilm --list-web-media                Export browser output-medium choices as JSON
   fotufilm --dump-web-camera-profiles <f>  Export native camera correction anchors (or - for stdout)
+  fotufilm --dump-web-scene <directory>    Export scene-light spectral reconstruction for the browser
+  fotufilm --dump-scene-exposure <f>        Export the native exposure table (requires --scene-kelvin)
   fotufilm --dump-labscan-reference <stock>
                                            Print the lab-scan reference profile a calibrated
                                            build commits for this stock
@@ -47,6 +49,7 @@ Options:
   --wb <kelvin>      Scene illuminant, 2000-12000 K (default: 6504, D65).
                      On camera raw this is relative to the file's as-shot
                      balance, so 6504 is "as the camera saw it"
+  --scene-kelvin <K> Film capture light, 1000-25000 K; defaults to RAW metadata.
   --tint <n>         Green/magenta off the locus, -100...100 (default: 0)
   --background <c>  Scene-linear Rec.2020 background for associated-alpha input:
                      black, white, or R,G,B (default: black). The source is
@@ -215,6 +218,27 @@ if flags["--list-web-media"] != nil {
         let data = try JSONSerialization.data(withJSONObject: records, options: [.sortedKeys])
         print(String(decoding: data, as: UTF8.self))
     } catch { fail("Could not encode output media: \(error.localizedDescription)") }
+    exit(0)
+}
+
+if let destination = flags["--dump-web-scene"] {
+    guard let values = WebSceneLight.geometry() else { fail("Spectral reconstruction is unavailable") }
+    do {
+        let folder = URL(fileURLWithPath: destination, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var bytes = Data()
+        bytes.appendFloats(values)
+        try bytes.write(to: folder.appendingPathComponent("geometry.f32"), options: .atomic)
+        let records: [(String, FilmStock)] = FilmStock.presetIDs.flatMap { id -> [(String, FilmStock)] in
+            guard let stock = FilmStock.named(id) else { return [] }
+            var bare = stock
+            bare.spectralProfile = idealizedCapture(stock.spectralProfile)
+            return [(id, stock), (id + "@bypassed", bare)]
+        }
+        let catalog = try JSONSerialization.data(withJSONObject: WebSceneLight.catalog(stocks: records),
+                                                 options: [.sortedKeys])
+        try catalog.write(to: folder.appendingPathComponent("index.json"), options: .atomic)
+    } catch { fail("Could not export scene-light assets: \(error.localizedDescription)") }
     exit(0)
 }
 
@@ -1074,7 +1098,8 @@ func writeStageSequence(linear: ImageBuffer, alpha: [Float], stock: FilmStock,
 }
 
 guard positional.count == 2 || flags["--dump-wasm-pack"] != nil
-    || flags["--dump-wasm-stages"] != nil else { fail(usage) }
+    || flags["--dump-wasm-stages"] != nil
+    || flags["--dump-scene-exposure"] != nil else { fail(usage) }
 
 if FilmStock.allPresetIDs.isEmpty {
     if let error = FilmStockPack.loadError {
@@ -1101,6 +1126,12 @@ if let requested = flags["--stock"] {
 }
 
 var options = FotufilmEngine.Options()
+if let stated = flags["--scene-kelvin"] {
+    guard let kelvin = Float(stated), kelvin.isFinite, (1000...25000).contains(kelvin) else {
+        fail("--scene-kelvin takes a temperature from 1000 to 25000 K")
+    }
+    options.sceneIlluminantKelvin = kelvin
+}
 options.format = FilmFormat.native(forStockID: stockID)
 if let formatID = flags["--format"] {
     // `sensor` is the frame the input file says it was exposed on, cut from the film the stock
@@ -1273,6 +1304,15 @@ extension Data {
         append(contentsOf: bytes)
         append(contentsOf: [UInt8](repeating: 0, count: (4 - bytes.count % 4) % 4))
     }
+}
+
+if let path = flags["--dump-scene-exposure"] {
+    guard let kelvin = options.sceneIlluminantKelvin else { fail("--scene-kelvin is required") }
+    var bytes = Data()
+    bytes.appendFloats(SpectralRuntime.sceneExposure(for: stock, cct: kelvin).values)
+    do { try bytes.write(to: URL(fileURLWithPath: path), options: .atomic) }
+    catch { fail("Could not write scene exposure table") }
+    exit(0)
 }
 
 if let packPath = flags["--dump-wasm-pack"] {
@@ -1485,7 +1525,7 @@ PremultipliedAlpha.flatten(&rgba, over: background)
 options.whiteBalance = remaining
 // The film-side scene light, from the raw file's as-shot record — the same wiring as the
 // app's still path. The gate inside the engine decides whether it does anything.
-options.sceneIlluminantKelvin = sceneKelvin
+options.sceneIlluminantKelvin = options.sceneIlluminantKelvin ?? sceneKelvin
 // And the declared range, the other clip-side fact the app attaches: recorded light above
 // diffuse white is metered into the film's latitude instead of flattening to paper white.
 options.sceneHeadroom = contentHeadroom

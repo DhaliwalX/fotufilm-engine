@@ -43,10 +43,10 @@ export const isRawFile = (file) =>
 // React/devtools state inspection, which can otherwise enumerate millions of samples.
 class RawImage {
   #pixels
-  constructor(width, height, data, colors, sceneScale, profile) {
+  constructor(width, height, data, colors, sceneScale, profile, sceneKelvin) {
     this.naturalWidth = width
     this.naturalHeight = height
-    this.#pixels = { data, colors, sceneScale, profile }
+    this.#pixels = { data, colors, sceneScale, profile, sceneKelvin }
   }
   get raw() {
     return this.#pixels
@@ -100,6 +100,8 @@ export function decodeRaw(file, { signal, onProgress = () => {} } = {}) {
         ![1, 3].includes(data.colors) ||
         !Number.isFinite(data.sceneScale) ||
         data.sceneScale <= 0 ||
+        (data.sceneKelvin != null &&
+          (!Number.isFinite(data.sceneKelvin) || data.sceneKelvin <= 0)) ||
         (data.profile != null &&
           (typeof data.profile.id !== 'string' ||
             !Number.isFinite(data.profile.kelvin) ||
@@ -126,6 +128,7 @@ export function decodeRaw(file, { signal, onProgress = () => {} } = {}) {
           data.colors,
           data.sceneScale,
           data.profile,
+          data.sceneKelvin,
         ),
       )
     }

@@ -24,6 +24,8 @@ test('RAW worker decodes sensor pixels at 16 bits without shared memory, honorin
         codes: new Set(image.raw.data).size,
         isolated: crossOriginIsolated,
         colors: image.raw.colors,
+        sceneKelvin: image.raw.sceneKelvin,
+        profile: image.raw.profile,
         progress,
       }
     },
@@ -37,6 +39,9 @@ test('RAW worker decodes sensor pixels at 16 bits without shared memory, honorin
     isolated: false,
   })
   expect(report.codes).toBeGreaterThan(256)
+  expect(report.profile).toBeNull()
+  expect(report.sceneKelvin).toBeGreaterThan(1000)
+  expect(report.sceneKelvin).toBeLessThan(25000)
   expect(report.progress).toEqual(
     expect.arrayContaining([
       'Loading RAW decoder',

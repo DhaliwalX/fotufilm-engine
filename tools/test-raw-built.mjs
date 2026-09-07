@@ -10,9 +10,10 @@ const base = new URL(process.argv[2] || 'http://127.0.0.1:5757/')
 const browser = await chromium.launch({ channel: 'chrome' })
 try {
   const page = await browser.newPage()
-  const errors = [], decoderRequests = [], mediumRequests = []
+  const errors = [], decoderRequests = [], mediumRequests = [], sceneRequests = []
   page.on('pageerror', error => errors.push(error.message))
   page.on('request', request => {
+    if (request.url().includes('/packs/scene/')) sceneRequests.push(request.url())
     if (request.url().includes('/raw/')) decoderRequests.push(request.url())
     if (request.url().includes('/packs/media/')) mediumRequests.push(request.url())
   })
@@ -32,6 +33,8 @@ try {
   await page.waitForFunction(() => /1600 × 960/.test(document.querySelector('.viewer-status > [role=status]')?.textContent), null, { timeout: 60000 })
   assert.ok(mediumRequests.some(url => url === new URL('packs/media/gold200/lab-scan.pack.delta', base).href))
   await page.getByRole('button', { name: 'Export (⌘S)', exact: true }).click()
+  assert.ok(sceneRequests.some(url => url === new URL('packs/scene/index.json', base).href))
+  assert.ok(sceneRequests.some(url => url === new URL('packs/scene/geometry.spectra', base).href))
   const downloaded = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Export', exact: true }).click()
   const file = await downloaded
