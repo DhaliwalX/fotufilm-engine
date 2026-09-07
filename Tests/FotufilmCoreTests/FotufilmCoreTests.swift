@@ -61,17 +61,22 @@ final class CharacteristicCurveTests: XCTestCase {
         }
     }
 
-    func testPresetCurvesNeverDipBelowBaseFogAndAreMonotone() {
+    func testPresetCurvesStayAboveBaseFogAndAnalyticCurvesAreMonotone() {
         for (key, stock) in FilmStock.presets {
             for (layer, c) in stock.curves.enumerated() {
                 var previous = -Float.infinity
                 var x: Float = -12
                 while x <= 12 {
                     let d = c.density(logExposure: x)
+                    XCTAssertTrue(d.isFinite, "\(key) layer \(layer) is not finite at x=\(x)")
                     XCTAssertGreaterThanOrEqual(d, c.dMin - 1e-5,
                         "\(key) layer \(layer) fell below dMin at x=\(x)")
-                    XCTAssertGreaterThanOrEqual(d, previous - 1e-5,
-                        "\(key) layer \(layer) density decreased at x=\(x)")
+                    // Sampled records deliberately retain measured local extrema. Their
+                    // interpolation and exact samples are checked by SampledCharacteristicCurveTests.
+                    if c.sampled == nil {
+                        XCTAssertGreaterThanOrEqual(d, previous - 1e-5,
+                            "\(key) layer \(layer) density decreased at x=\(x)")
+                    }
                     previous = d
                     x += 0.01
                 }
