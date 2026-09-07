@@ -90,16 +90,15 @@ final class SpectralSceneLightTests: XCTestCase {
     // MARK: - The measured chromatic effect
 
     func testRedPatchExposureUnderAversusD65IsTheMeasuredMetamerism() {
-        let stock = TestStocks.negative
+        var stock = TestStocks.negative
+        stock.referenceIlluminantKelvin = 5500 // Retain the measured fixture's calibration.
         let red = SIMD3<Float>(0.25, 0.04, 0.03)
         let d65 = SpectralRuntime.spectralExposure(red, stock: stock)
         let a = SpectralRuntime.spectralExposure(red, stock: stock,
                                                  illuminant: Illuminant.a)
-        // Pinned on the 5 nm grid with the 81-band reflectance prior (2026-09). The 10 nm
-        // pins were (0.39490974, 0.068814635, 0.038927667) and (0.78205204, 0.093152195,
-        // 0.01069099): every record moved under 0.4%, the blue record the most.
-        let expectedD65 = SIMD3<Float>(0.39500523, 0.06885621, 0.039055474)
-        let expectedA = SIMD3<Float>(0.78232014, 0.093152195, 0.010687468)
+        // 81-band reflectance prior; equal-Y illuminant normalization (2026-09).
+        let expectedD65 = SIMD3<Float>(0.39287642, 0.06848511, 0.03884498)
+        let expectedA = SIMD3<Float>(0.76209617, 0.090766735, 0.010411177)
         for channel in 0..<3 {
             XCTAssertEqual(d65[channel], expectedD65[channel],
                            accuracy: abs(expectedD65[channel]) * 1e-3)

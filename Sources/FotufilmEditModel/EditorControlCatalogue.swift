@@ -411,6 +411,7 @@ public extension EngineOptionCoverage {
         "negativeViewing": .globalSetting(
             "Settings chooses the lightbox or scanner reading used by negative output and preview"),
         "sceneIlluminantKelvin": .derived("capture metadata"),
+        "sceneIlluminantChromaticity": .derived("capture chromaticity"),
         "sceneIlluminantSpectrum": .derived(
             "capture metadata when a source supplies a measured illuminant spectrum; its CCT "
             + "is the fallback when only a correlated temperature is available"),

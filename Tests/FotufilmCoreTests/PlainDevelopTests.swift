@@ -87,9 +87,9 @@ final class PlainDevelopTests: XCTestCase {
     func testWhiteBalanceAppliesTheSameGainsTheEngineIsGiven() {
         var options = FotufilmEngine.Options()
         options.whiteBalance = WhiteBalance(kelvin: 3200, tint: 0)
-        let gains = options.whiteBalance.gains
+        let gains = options.sceneLightGains
         XCTAssertNotEqual(gains.r, gains.b, accuracy: 0,
-                          "a 3200K correction should not be neutral")
+                          "a 3200K lamp should not be neutral")
 
         var pixels = flat((0.2, 0.2, 0.2), width: 4, height: 4)
         develop(&pixels, width: 4, height: 4, options: options)
@@ -292,9 +292,11 @@ final class PlainDevelopTests: XCTestCase {
 // MARK: - The chroma controls read the balanced scene
 
 extension PlainDevelopTests {
-    /// A grey card as the sensor saw it under the declared illuminant: exactly what the gains undo.
+    /// A subject chosen to render neutral after the no-film colorimetric lamp approximation.
     private func greyCard(under balance: WhiteBalance) -> SIMD3<Float> {
-        let g = balance.gains
+        var lighting = FotufilmEngine.Options()
+        lighting.whiteBalance = balance
+        let g = lighting.sceneLightGains
         return SIMD3(0.2 / g.r, 0.2 / g.g, 0.2 / g.b)
     }
 
@@ -332,7 +334,9 @@ extension PlainDevelopTests {
         // Under a warm declaration every recorded pixel is orange, so a colourfulness read
         // before the balance would call this near-neutral pixel vivid and leave it alone.
         let balance = WhiteBalance(kelvin: 3200)
-        let g = balance.gains
+        var lighting = FotufilmEngine.Options()
+        lighting.whiteBalance = balance
+        let g = lighting.sceneLightGains
         let dull = SIMD3<Float>(0.30 / g.r, 0.28 / g.g, 0.26 / g.b)
         var options = FotufilmEngine.Options()
         options.whiteBalance = balance

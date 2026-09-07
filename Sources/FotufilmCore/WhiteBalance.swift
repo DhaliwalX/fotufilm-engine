@@ -5,7 +5,7 @@ import Foundation
 public struct WhiteBalance: Equatable, Codable, Sendable {
     /// Correlated colour temperature of the scene illuminant, in kelvin.
     public var kelvin: Float
-    /// Displacement perpendicular to the locus in CIE 1960 uv, x10000 — so one unit is a Duv of
+    /// Displacement perpendicular to the hybrid locus in CIE 1960 uv, x10000 — one unit is
     /// 0.0001 and the slider's ends are +/-0.01.
     public var tint: Float
 
@@ -77,17 +77,9 @@ public struct WhiteBalance: Equatable, Codable, Sendable {
         return xyFromUV(uv + signed * (tint / 10000))
     }
 
-    /// The reference locus: a Planckian radiator up to 4000 K, the CIE daylight series from 5000 K,
-    /// crossfaded in uv between.
+    /// The chromaticity of the same spectrum used for film exposure.
     static func locusXY(_ kelvin: Float) -> SIMD2<Float> {
-        let t = clamp(kelvin, 1000, 25000)
-        if t <= 4000 { return planckianXY(t) }
-        if t >= 5000 { return daylightXY(t) }
-        let s = (t - 4000) / 1000
-        let blend = s * s * (3 - 2 * s)
-        let planckian = uvFromXY(planckianXY(t))
-        let daylight = uvFromXY(daylightXY(t))
-        return xyFromUV(planckian + (daylight - planckian) * blend)
+        Illuminant.chromaticity(Illuminant.atLocus(kelvin: kelvin))
     }
 
     /// CIE 15 daylight locus, valid 4000-25000 K.
@@ -104,7 +96,7 @@ public struct WhiteBalance: Equatable, Codable, Sendable {
     }
 
     /// Planckian locus by direct integration of Planck's law against the CIE 1931 observer on the
-    /// renderer's own 10 nm grid — the same tables the film model integrates everything else
+    /// renderer's own 5 nm grid — the same tables the film model integrates everything else
     /// against, so a tungsten balance and a tungsten enlarger agree by construction.
     static func planckianXY(_ kelvin: Float) -> SIMD2<Float> {
         let spectrum = SpectralGrid.blackbody(kelvinK: kelvin)

@@ -11,7 +11,9 @@ public struct FotufilmEngine {
         /// Source range above diffuse white as a linear multiple. One is SDR identity. HDR values
         /// drive `AutoAdjustment.headroomHighlights` to fit declared range into measured latitude.
         public var sceneHeadroom: Float = 1
-        /// The illuminant the scene was lit by.
+        /// Spectral scene-light edit: Kelvin is a mired displacement from D65 when capture
+        /// light is supplied; tint adds locus-relative delta-uv units. Input RGB must already
+        /// be neutralized for its capture light. These controls never apply RGB correction.
         public var whiteBalance: WhiteBalance = .neutral
         /// Scene-referred highlight shaping, -1...1: an exposure shift of up to 3 EV that fades in
         /// over the six stops above mid-grey, applied before the film model so the emulsion sees
@@ -174,18 +176,60 @@ public struct FotufilmEngine {
         /// Which spatial stages `stage == .texture` lays over the frame. Ignored by every other
         /// stage, where the selection is the ordinary strength levers.
         public var textureStages: TextureStages = .all
-        /// The scene's correlated colour temperature in kelvin, when the source states one —
-        /// the film-side half of the physical-light system. A warm temperature swaps the
-        /// spectral exposure table for one integrated against the exact CIE-locus SPD
-        /// (`SpectralRuntime.sceneExposure`), retaining both film colour balance and metamerism.
-        /// nil — the default for a source without capture metadata — uses the loaded stock's fixed
-        /// `referenceIlluminantKelvin` as both the assumed scene light and exposure reference.
-        /// An explicit scene light changes only the numerator; film balance remains fixed stock data.
+        /// Capture illuminant. Nil assumes D65 independently of the selected stock.
+        /// `whiteBalance` edits this light; the stock reference remains fixed calibration data.
         public var sceneIlluminantKelvin: Float? = nil
-        /// An explicit spectral power distribution on `SpectralGrid` (380...780 nm, 10 nm steps).
-        /// This takes precedence over CCT and allows fluorescent, LED, and measured sources whose
-        /// spectra cannot be recovered from chromaticity. Empty uses `sceneIlluminantKelvin`.
+        /// Exact capture white, when a decoder reports xy. Avoids converting vendor tint units.
+        public var sceneIlluminantChromaticity: SIMD2<Float>? = nil
+        /// Measured scene SPD on 380...780 nm in 5 nm steps (81 samples). Overrides both
+        /// capture chromaticity and temperature/tint edits. Arbitrary scale; equal-Y normalization.
         public var sceneIlluminantSpectrum: [Float] = []
+
+        public var resolvedSceneIlluminant: WhiteBalance {
+            let base = sceneIlluminantKelvin ?? WhiteBalance.neutralKelvin
+            precondition(base.isFinite && base > 0 && whiteBalance.kelvin.isFinite
+                         && whiteBalance.kelvin > 0 && whiteBalance.tint.isFinite, "invalid scene illuminant")
+            let displacement = whiteBalance.mired - WhiteBalance.neutral.mired
+            return WhiteBalance(
+                kelvin: WhiteBalance.miredToKelvin(WhiteBalance.kelvinToMired(base) + displacement),
+                tint: whiteBalance.tint)
+        }
+
+        public var resolvedSceneSpectrum: [Float] {
+            if !sceneIlluminantSpectrum.isEmpty {
+                precondition(sceneIlluminantSpectrum.count == SpectralGrid.count
+                             && sceneIlluminantSpectrum.allSatisfy { $0.isFinite && $0 >= 0 },
+                             "scene SPD must have 81 finite nonnegative samples")
+                _ = Illuminant.luminance(sceneIlluminantSpectrum)
+                return sceneIlluminantSpectrum
+            }
+            let edited = resolvedSceneIlluminant
+            guard let white = sceneIlluminantChromaticity else {
+                return Illuminant.spectrum(edited)
+            }
+            // Carry the measured off-locus chromaticity directly; only UI temperature movement
+            // uses mired. The original decoder white is never rounded through a tint coordinate.
+            let original = WhiteBalance.chromaticity(
+                kelvin: sceneIlluminantKelvin ?? WhiteBalance.neutralKelvin, tint: 0)
+            let offset = WhiteBalance.uvFromXY(white) - WhiteBalance.uvFromXY(original)
+            let target = WhiteBalance.uvFromXY(WhiteBalance.chromaticity(
+                kelvin: edited.kelvin, tint: edited.tint)) + offset
+            return Illuminant.matching(WhiteBalance.xyFromUV(target),
+                                       base: Illuminant.atLocus(kelvin: edited.kelvin))
+        }
+
+        /// Colorimetric approximation when no film is loaded; the film path integrates the
+        /// complete spectrum against its own sensitivities instead of multiplying RGB.
+        public var sceneLightGains: (r: Float, g: Float, b: Float) {
+            if sceneIlluminantSpectrum.isEmpty && sceneIlluminantChromaticity == nil
+                && resolvedSceneIlluminant.isNeutral {
+                return (1, 1, 1)
+            }
+            let source = WhiteBalance.workingRGB(fromXY: Illuminant.chromaticity(resolvedSceneSpectrum))
+            let reference = WhiteBalance.workingRGB(fromXY: WhiteBalance.chromaticity(kelvin: 6504, tint: 0))
+            let gain = source / reference
+            return (gain.x, gain.y, gain.z)
+        }
         /// What is screwed onto the front of the lens, and how the exposure was set with it
         /// there. A filter is the one accessory that sits ahead of the whole engine, so it
         /// reaches only two things: the light the emulsion integrates — spectrally, against the

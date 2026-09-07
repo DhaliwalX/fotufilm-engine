@@ -279,14 +279,13 @@ struct EditState: Equatable {
     var exposure = 0.0  // EV
     /// Scene illuminant, in mireds so the slider is perceptually even.
     var temperatureMired = Double(WhiteBalance.kelvinToMired(WhiteBalance.neutralKelvin))
-    /// Fixed acquisition illuminant recorded by the camera path. Nil lets an imported RAW use its
-    /// own as-shot record; camera captures persist the same emulsion-reference lock used by live
-    /// Metal, so the decode reproduces the sensor's neutralization exactly.
+    /// Capture white recorded by the camera. Nil preserves an imported RAW's as-shot white.
+    /// Camera captures use the same scene-white neutralization in live preview and RAW decode.
     var captureIlluminantKelvin: Double? = nil
     /// The light the film integrates against, when the camera named one. Nil falls back to the
     /// acquisition illuminant, which is what every imported source has.
     var filmLightKelvin: Double? = nil
-    /// Green/magenta offset from the locus, in units of 0.0001 Duv.
+    /// Green/magenta offset from the locus, in units of 0.0001 delta-uv.
     var tint = 0.0
     /// Scene-referred tone shaping, -1...1 (0 = untouched).
     var highlights = 0.0
