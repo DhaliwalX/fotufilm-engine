@@ -22,15 +22,16 @@ KERNELS_ONLY=false
 [[ "${3:-}" == "--kernels" ]] && KERNELS_ONLY=true
 {
   # Every Halide-side source and the generator. Sorted so the hash does not follow the
-  # filesystem's mood.
+  # filesystem's mood. Follow the consumer's engine links: changing a pinned header or kernel
+  # must invalidate the cache just as changing a regular file does.
   if $KERNELS_ONLY; then
     # Neither excluded file is included by the generator — the archives are emitted from
     # `FotufilmHalideMetal.cpp` alone — so neither can change what generation produces.
-    find Sources/FotufilmHalide -type f \
+    find -L Sources/FotufilmHalide -type f \
       \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) \
       ! -name 'FotufilmHalideIOS.cpp' ! -name 'FotufilmMetalGrain.mm' -print0
   else
-    find Sources/FotufilmHalide -type f \
+    find -L Sources/FotufilmHalide -type f \
       \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) -print0
   fi | sort -z | xargs -0 shasum -a 256
   shasum -a 256 tools/generate_halide_ios.cpp
