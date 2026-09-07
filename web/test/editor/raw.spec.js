@@ -37,12 +37,14 @@ test('RAW worker decodes sensor pixels at 16 bits without shared memory, honorin
     isolated: false,
   })
   expect(report.codes).toBeGreaterThan(256)
-  expect(report.progress).toEqual(expect.arrayContaining([
-    'Loading RAW decoder',
-    'Applying camera white balance',
-    'Converting to linear working color',
-    'Copying decoded RAW pixels',
-  ]))
+  expect(report.progress).toEqual(
+    expect.arrayContaining([
+      'Loading RAW decoder',
+      'Applying camera white balance',
+      'Converting to linear working color',
+      'Copying decoded RAW pixels',
+    ]),
+  )
   expect(report.progress.some((stage) => stage.startsWith('Demosaicing sensor colors'))).toBe(true)
 })
 
@@ -131,48 +133,73 @@ test('optional camera RAW smoke test', async ({ page }) => {
   console.log('Camera RAW import:', metadata)
 })
 
-test('RAW linear pixels agree between CPU and WebGPU after exposure and regional adjustments', async ({
+test('RAW highlight headroom agrees between CPU and WebGPU after exposure and regional adjustments', async ({
   page,
 }) => {
   await page.goto('/')
-  const report = await page.evaluate(async (bytes) => {
-    const { decodeRaw } = await import('/src/raw-import.js')
-    const { rawSource } = await import('/src/raw-source.js')
-    const { defaultEdit } = await import('/src/editor-state.js')
-    const { loadPack, createDeveloper, SimdDeveloper } = await import('/src/engine.js')
-    const image = await decodeRaw(new File([new Uint8Array(bytes)], 'linear.dng'))
-    const source = rawSource(image, defaultEdit())
-    const pack = await loadPack('/packs/gold200.pack')
-    const gpu = await createDeveloper(pack)
-    const { default: create } = await import('/fotufilm.mjs')
-    const cpu = new SimdDeveloper(await create(), pack)
-    const controls = {
-      ...defaultEdit().params,
-      ev: 1.5,
-      shadows: 0.4,
-      highlights: -0.3,
-      grain: 0,
-      temperature: 5500,
-      localTone: true,
-    }
-    try {
-      const a = await gpu.develop(source, controls),
-        b = await cpu.develop(source, controls)
-      let peak = 0,
-        sum = 0
-      a.pixels.forEach((v, i) => {
-        const difference = Math.abs(v - b.pixels[i])
-        peak = Math.max(peak, difference)
-        sum += difference
-      })
-      return { backend: gpu.backend, peak, mean: sum / a.pixels.length }
-    } finally {
-      gpu.dispose()
-      cpu.dispose()
-    }
-  }, Array.from(makeDNG()))
+  const report = await page.evaluate(
+    async (bytes) => {
+      const { decodeRaw } = await import('/src/raw-import.js')
+      const { rawSource } = await import('/src/raw-source.js')
+      const { defaultEdit } = await import('/src/editor-state.js')
+      const { loadPack, createDeveloper, SimdDeveloper } = await import('/src/engine.js')
+      const image = await decodeRaw(new File([new Uint8Array(bytes)], 'linear.dng'))
+      const source = rawSource(image, defaultEdit())
+      const pack = await loadPack('/packs/gold200.pack')
+      const gpu = await createDeveloper(pack)
+      const { default: create } = await import('/fotufilm.mjs')
+      const cpu = new SimdDeveloper(await create(), pack)
+      const controls = {
+        ...defaultEdit().params,
+        ev: 1.5,
+        shadows: 0.4,
+        highlights: -0.3,
+        grain: 0,
+        temperature: 5500,
+        localTone: true,
+      }
+      try {
+        const a = await gpu.develop(source, controls),
+          b = await cpu.develop(source, controls)
+        let peak = 0,
+          sum = 0
+        a.pixels.forEach((v, i) => {
+          const difference = Math.abs(v - b.pixels[i])
+          peak = Math.max(peak, difference)
+          sum += difference
+        })
+        const samples = source.read(0, 0, source.width, source.height)
+        let scenePeak = 0
+        for (let i = 0; i < samples.length; i++)
+          if (i % 4 !== 3) scenePeak = Math.max(scenePeak, samples[i])
+        return {
+          backend: gpu.backend,
+          peak,
+          mean: sum / a.pixels.length,
+          scenePeak,
+        }
+      } finally {
+        gpu.dispose()
+        cpu.dispose()
+      }
+    },
+    Array.from(
+      makeDNG({
+        asShotNeutral: [0.5, 1, 0.625],
+        baselineExposure: 0.4,
+        patches: [
+          [0.18, 0.18, 0.18],
+          [0.6, 0.1, 0.05],
+          [0.05, 0.6, 0.1],
+          [1.5, 1.5, 1.5],
+          [3, 3, 3],
+        ],
+      }),
+    ),
+  )
   console.log('RAW CPU/WebGPU comparison:', report)
   expect(report.backend).toBe('webgpu')
+  expect(report.scenePeak).toBeGreaterThan(1)
   expect(report.peak).toBeLessThanOrEqual(3)
   expect(report.mean).toBeLessThan(0.25)
 })

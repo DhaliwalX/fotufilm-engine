@@ -1,5 +1,6 @@
 #include <libraw/libraw.h>
 #include <cstdint>
+#include <cmath>
 #include <memory>
 #include <emscripten.h>
 
@@ -12,6 +13,7 @@ namespace {
 std::unique_ptr<LibRaw> decoder;
 libraw_processed_image_t *image = nullptr;
 int status = 0;
+float sceneScale = 1;
 constexpr uint64_t maxPixels = 120000000;
 
 int progress(void *, LibRaw_progress stage, int iteration, int expected) {
@@ -31,7 +33,7 @@ int progress(void *, LibRaw_progress stage, int iteration, int expected) {
         case LIBRAW_PROGRESS_INTERPOLATE: label = "Demosaicing sensor colors"; break;
         case LIBRAW_PROGRESS_MIX_GREEN: label = "Combining green channels"; break;
         case LIBRAW_PROGRESS_MEDIAN_FILTER: label = "Reducing color artifacts"; break;
-        case LIBRAW_PROGRESS_HIGHLIGHTS: label = "Processing highlights"; break;
+        case LIBRAW_PROGRESS_HIGHLIGHTS: label = "Blending clipped highlights"; break;
         case LIBRAW_PROGRESS_FUJI_ROTATE:
         case LIBRAW_PROGRESS_FLIP: label = "Applying camera orientation"; break;
         case LIBRAW_PROGRESS_APPLY_PROFILE: label = "Applying camera color profile"; break;
@@ -49,6 +51,7 @@ void raw_close() {
     if (image) LibRaw::dcraw_clear_mem(image);
     image = nullptr;
     decoder.reset();
+    sceneScale = 1;
 }
 int raw_open(void *bytes, unsigned length) {
     raw_close();
@@ -60,9 +63,12 @@ int raw_open(void *bytes, unsigned length) {
     p.output_bps = 16;
     p.gamm[0] = p.gamm[1] = 1;
     p.no_auto_bright = 1;
+    p.adjust_maximum_thr = 0; // Keep the camera's white level, not the frame's peak.
     p.use_camera_wb = 1;
     p.use_camera_matrix = 1;
-    p.highlight = 1;
+    // Repair chroma where sensor channels clip at different white-balance gains.
+    // Unclip (1) leaves those unequal channels magenta after color conversion.
+    p.highlight = 2;
     p.user_qual = 3;
     p.user_flip = -1; // Apply the file's orientation exactly once.
     status = decoder->open_buffer(bytes, length);
@@ -85,11 +91,32 @@ int raw_process() {
         || (image->colors != 3 && image->colors != 1)
         || uint64_t(image->width) * image->height > maxPixels))
         status = LIBRAW_DATA_ERROR;
+    if (!status) {
+        const auto &color = decoder->imgdata.color;
+        // LibRaw normalizes camera multipliers to their maximum to fit RGB16.
+        // Restore the camera's green-channel exposure reference later, in float,
+        // so daylight and tungsten white balance keep the same scene grey level.
+        int reference = 1;
+        for (int channel = 0; channel < 4; ++channel)
+            if (decoder->imgdata.idata.cdesc[channel] == 'G') {
+                reference = channel;
+                break;
+            }
+        sceneScale = image->colors == 1 ? 1 : 1 / color.pre_mul[reference];
+        const float baseline = color.dng_levels.baseline_exposure;
+        // -999 is LibRaw's missing-value sentinel. Vendor RAWs need no guessed
+        // baseline; honor the explicit DNG tag when the file supplies one.
+        if (decoder->imgdata.idata.dng_version && baseline != -999.f)
+            sceneScale *= std::exp2(baseline);
+        if (!std::isfinite(sceneScale) || sceneScale <= 0)
+            status = LIBRAW_DATA_ERROR;
+    }
     return status;
 }
 unsigned raw_width() { return image ? image->width : 0; }
 unsigned raw_height() { return image ? image->height : 0; }
 unsigned raw_colors() { return image ? image->colors : 0; }
+float raw_scene_scale() { return sceneScale; }
 void *raw_pixels() { return image ? image->data : nullptr; }
 const char *raw_error() { return libraw_strerror(status); }
 }

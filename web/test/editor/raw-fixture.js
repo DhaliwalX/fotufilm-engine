@@ -1,5 +1,13 @@
 // Project-authored uncompressed DNG. No camera photos or calibration data are fixtures.
-export function makeDNG({ width = 320, height = 192, orientation = 1, mosaic = true } = {}) {
+export function makeDNG({
+  width = 320,
+  height = 192,
+  orientation = 1,
+  mosaic = true,
+  asShotNeutral = [1, 1, 1],
+  baselineExposure = 0,
+  patches = null,
+} = {}) {
   const channels = mosaic ? 1 : 3
   const tags = []
   const add = (tag, type, values) => tags.push({ tag, type, values })
@@ -32,9 +40,10 @@ export function makeDNG({ width = 320, height = 192, orientation = 1, mosaic = t
     [
       3.2404542, -1.5371385, -0.4985314, -0.969266, 1.8760108, 0.041556, 0.0556434, -0.2040259,
       1.0572252,
-    ],
+    ].map((value, i) => value * asShotNeutral[Math.floor(i / 3)]),
   )
-  add(50728, 5, [1, 1, 1])
+  add(50728, 5, asShotNeutral)
+  add(50730, 10, [baselineExposure])
   add(50778, 3, [21])
   tags.sort((a, b) => a.tag - b.tag)
   const sizes = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 10: 8 }
@@ -80,8 +89,16 @@ export function makeDNG({ width = 320, height = 192, orientation = 1, mosaic = t
       for (let c = 0; c < channels; c++) {
         const channel = mosaic ? color : c
         // Dark linear ramp with enough codes to expose an accidental RGBA8 intermediate.
-        const value = 512 + 1200 + x * 11 + y * 7 + [100, 40, 0][channel]
-        view.setUint16(next + ((y * width + x) * channels + c) * 2, Math.min(value, 65000), true)
+        const patch =
+          patches?.[Math.min(patches.length - 1, Math.floor((x * patches.length) / width))]
+        const value = patch
+          ? 512 + Math.round((65535 - 512) * patch[channel] * asShotNeutral[channel])
+          : 512 + 1200 + x * 11 + y * 7 + [100, 40, 0][channel]
+        view.setUint16(
+          next + ((y * width + x) * channels + c) * 2,
+          Math.max(512, Math.min(value, patch ? 65535 : 65000)),
+          true,
+        )
       }
     }
   return bytes

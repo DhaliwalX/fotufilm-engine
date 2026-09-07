@@ -1,7 +1,8 @@
 import { fullCrop } from './editor-state.js'
 import { homography, mapPoint, outputSize } from './geometry.js'
 
-// RAW storage remains RGB16. Geometry reads linear Rec.2020 float tiles directly;
+// RAW storage remains RGB16 with an exposure scale. Geometry restores scene-linear
+// Rec.2020 float tiles, including values above display white;
 // a canvas is used only for display, never as an intermediate for film or export.
 export function rawSource(image, edit, maxEdge = Infinity, cropMode = false) {
   const originalWidth = image.naturalWidth,
@@ -22,7 +23,8 @@ export function rawSource(image, edit, maxEdge = Infinity, cropMode = false) {
     (width * cos + height * Math.abs(sin)) / width,
     (height * cos + width * Math.abs(sin)) / height,
   )
-  const { data, colors } = image.raw
+  const { data, colors, sceneScale = 1 } = image.raw
+  const sampleScale = sceneScale / 65535
   function point(u, v) {
     const px = ((u - 0.5) * width) / cover,
       py = ((v - 0.5) * height) / cover
@@ -66,7 +68,7 @@ export function rawSource(image, edit, maxEdge = Infinity, cropMode = false) {
             const b = data[(iy * originalWidth + nx) * colors + channel]
             const d = data[(ny * originalWidth + ix) * colors + channel]
             const e = data[(ny * originalWidth + nx) * colors + channel]
-            output[i + c] = ((a + (b - a) * fx) * (1 - fy) + (d + (e - d) * fx) * fy) / 65535
+            output[i + c] = ((a + (b - a) * fx) * (1 - fy) + (d + (e - d) * fx) * fy) * sampleScale
           }
           output[i + 3] = 1
         }

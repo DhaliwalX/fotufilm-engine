@@ -8,7 +8,10 @@ import { isRawFile, IMAGE_ACCEPT } from '../../src/raw-import.js'
 const image = {
   naturalWidth: 3,
   naturalHeight: 2,
-  raw: { colors: 1, data: new Uint16Array([1000, 1001, 1002, 2000, 2001, 2002]) },
+  raw: {
+    colors: 1,
+    data: new Uint16Array([1000, 1001, 1002, 2000, 2001, 2002]),
+  },
 }
 const codes = (source) =>
   Array.from(source.read(0, 0, source.width, source.height))
@@ -47,7 +50,11 @@ test('RAW crop and tile reads preserve source coordinates and precision', () => 
   const source = rawSource(image, defaultEdit())
   const tiled = [...source.read(0, 0, 3, 1), ...source.read(0, 1, 3, 1)]
   assert.deepEqual(tiled, Array.from(source.read(0, 0, 3, 2)))
-  const floats = pixelSource({ width: 3, height: 2, data: source.read(0, 0, 3, 2) })
+  const floats = pixelSource({
+    width: 3,
+    height: 2,
+    data: source.read(0, 0, 3, 2),
+  })
   assert.ok(floats.read(1, 1, 1, 1) instanceof Float32Array)
   assert.ok(Math.abs(floats.read(1, 1, 1, 1)[0] - 2001 / 65535) < 1e-8)
 })
@@ -64,4 +71,37 @@ test('RAW extensions work with absent or generic file MIME types', () => {
     assert.ok(IMAGE_ACCEPT.includes(`.${name.split('.').at(-1).toLowerCase()}`))
   }
   assert.equal(isRawFile({ name: 'photo.jpg', type: 'image/jpeg' }), false)
+})
+
+test('RAW exposure scale preserves above-white light through crop and tile reads', () => {
+  const scaled = {
+    naturalWidth: 2,
+    naturalHeight: 2,
+    raw: {
+      colors: 3,
+      sceneScale: 3,
+      data: new Uint16Array([
+        32768, 32768, 32768, 65535, 65535, 65535, 12000, 12000, 12000, 40000, 40000, 40000,
+      ]),
+    },
+  }
+  const source = rawSource(scaled, {
+    ...defaultEdit(),
+    rotation: 1,
+    flip: true,
+  })
+  const full = Array.from(source.read(0, 0, 2, 2))
+  assert.deepEqual([...source.read(0, 0, 2, 1), ...source.read(0, 1, 2, 1)], full)
+  assert.equal(Math.max(...full), 3)
+  const cropped = rawSource(scaled, {
+    ...defaultEdit(),
+    crop: [
+      [0.5, 0],
+      [1, 0],
+      [1, 1],
+      [0.5, 1],
+    ],
+  })
+  assert.equal(cropped.read(0, 0, 1, 1)[0], 3)
+  assert.ok(full.every(Number.isFinite))
 })

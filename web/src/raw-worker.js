@@ -2,19 +2,26 @@
 self.onmessage = async ({ data: { bytes, decoderURL } }) => {
   let module, input
   try {
-    let lastStage, lastPercent = -1
+    let lastStage,
+      lastPercent = -1
     globalThis.onRawProgress = (stage, iteration, expected) => {
       // LibRaw uses (0, 2)/(1, 2) as start/end sentinels for whole operations.
       // Percentages are useful only for callbacks that count actual rows or passes.
-      const percent = expected > 2 ? Math.floor(100 * iteration / expected) : -1
+      const percent = expected > 2 ? Math.floor((100 * iteration) / expected) : -1
       if (stage === lastStage && percent === lastPercent) return
       lastStage = stage
       lastPercent = percent
-      self.postMessage({ status: percent >= 0 ? `${stage} · ${percent}%` : stage })
+      self.postMessage({
+        status: percent >= 0 ? `${stage} · ${percent}%` : stage,
+      })
     }
     self.postMessage({ status: 'Loading RAW decoder' })
     const factory = (await import(/* @vite-ignore */ decoderURL)).default
     module = await factory()
+    if (typeof module._raw_scene_scale !== 'function')
+      throw new Error(
+        'The RAW decoder is out of date. Rebuild the RAW runtime and reload the editor.',
+      )
     input = module._malloc(bytes.byteLength)
     if (!input) throw new Error('Not enough memory to open this RAW image.')
     module.HEAPU8.set(new Uint8Array(bytes), input)
@@ -26,11 +33,12 @@ self.onmessage = async ({ data: { bytes, decoderURL } }) => {
     if (module._raw_process()) throw new Error(module.UTF8ToString(module._raw_error()))
     const width = module._raw_width(),
       height = module._raw_height(),
-      colors = module._raw_colors()
+      colors = module._raw_colors(),
+      sceneScale = module._raw_scene_scale()
     self.postMessage({ status: 'Copying decoded RAW pixels' })
     const start = module._raw_pixels() / 2
     const pixels = module.HEAPU16.slice(start, start + width * height * colors)
-    self.postMessage({ width, height, colors, pixels }, [pixels.buffer])
+    self.postMessage({ width, height, colors, sceneScale, pixels }, [pixels.buffer])
   } catch (error) {
     self.postMessage({ error: error.message || 'Could not decode RAW image.' })
   } finally {
