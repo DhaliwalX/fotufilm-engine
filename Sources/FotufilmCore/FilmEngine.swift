@@ -1209,7 +1209,7 @@ public struct FilmEngineInvocation {
             scale: (couplersActive || donorActive) ? couplerScale : 0,
             releaseGamma: stock.couplerReleaseGamma,
             donor: donorActive ? donor : nil)
-        let balance = options.whiteBalance.gains
+        let balance = noFilm ? options.sceneLightGains : (r: Float(1), g: Float(1), b: Float(1))
         configuration += [balance.r, balance.g, balance.b]
         // A source that declares recorded light above diffuse white has that range metered
         // into the film's window with the highlight shaping the one-tap solve drives — the
@@ -1423,47 +1423,22 @@ public struct FilmEngineInvocation {
                 bleachBypass: options.bleachBypass,
                 printViewingKelvin: options.printViewingKelvin)
         }
-        // The scene's own light, when the source stated one and the gate passed: only the
-        // exposure table changes — development and printing happen in the dark — and the
-        // cache identity moves with it so the GPU re-uploads rather than serves the D65-scene table.
-        let sceneKelvin = SpectralRuntime.sceneLightKelvin(options.sceneIlluminantKelvin)
-        let sceneIlluminant: [Float]? = options.sceneIlluminantSpectrum.isEmpty
-            ? sceneKelvin.map(Illuminant.atLocus(kelvin:))
-            : options.sceneIlluminantSpectrum
-        if !options.sceneIlluminantSpectrum.isEmpty {
-            precondition(options.sceneIlluminantSpectrum.count == SpectralGrid.count,
-                         "scene illuminant SPD must have \(SpectralGrid.count) samples")
-        }
-        if !options.lensFilters.isEmpty {
-            // A filter is upstream of the emulsion and downstream of nothing, so it lands in
-            // the same table the scene's light does — and it has to be built *with* that light
-            // rather than after it, because the filter and the sensitivities are integrated
-            // against each other band by band. One table carries both.
+        // One resolved spectrum controls both integration and upload identity. Source pixels
+        // have already been neutralized at capture; applying RGB WB here would count light twice.
+        if !noFilm {
+            let illuminant = options.resolvedSceneSpectrum
+            let exposure = options.lensFilters.isEmpty
+                ? SpectralRuntime.sceneExposure(for: stock, illuminant: illuminant)
+                : SpectralRuntime.filteredExposure(for: stock, illuminant: illuminant,
+                                                   stack: options.lensFilters)
             self.spectral = SpectralPipelineTables(
-                exposure: SpectralRuntime.filteredExposure(
-                    for: stock, illuminant: sceneIlluminant,
-                    stack: options.lensFilters),
-                filmOutput: self.spectral.filmOutput,
+                exposure: exposure, filmOutput: self.spectral.filmOutput,
                 paperOutput: self.spectral.paperOutput)
             self.spectralCacheID = (self.spectralCacheID
-                ^ options.lensFilters.signature) &* 0x100000001b3
-            if let sceneKelvin {
+                ^ SpectralRuntime.illuminantSignature(illuminant)) &* 0x100000001b3
+            if !options.lensFilters.isEmpty {
                 self.spectralCacheID = (self.spectralCacheID
-                    ^ UInt64(sceneKelvin.bitPattern)) &* 0x100000001b3
-                SpectralRuntime.traceSceneLight(stock: stock, cct: sceneKelvin)
-            }
-        } else if let sceneIlluminant {
-            self.spectral = SpectralPipelineTables(
-                exposure: SpectralRuntime.sceneExposure(
-                    for: stock, illuminant: sceneIlluminant),
-                filmOutput: self.spectral.filmOutput,
-                paperOutput: self.spectral.paperOutput)
-            self.spectralCacheID = (self.spectralCacheID
-                ^ sceneIlluminant.reduce(UInt64(0xcbf29ce484222325)) {
-                    ($0 ^ UInt64($1.bitPattern)) &* 0x100000001b3
-                }) &* 0x100000001b3
-            if let sceneKelvin {
-                SpectralRuntime.traceSceneLight(stock: stock, cct: sceneKelvin)
+                    ^ options.lensFilters.signature) &* 0x100000001b3
             }
         }
         self.featureMask = featureMask

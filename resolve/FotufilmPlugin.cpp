@@ -906,8 +906,8 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
     defineDouble(set, "exposure", "Exposure", "Camera exposure, in stops.",
                  "exposureGroup", -5, 5, 0);
     defineDouble(set, "temperature", "Temperature (K)",
-                 "White balance before the film responds, in kelvin. Separate from Scene "
-                 "Illuminant, which sets the spectral light integrated against the emulsion.",
+                 "Spectral scene temperature. Lower Kelvin adds warm light. Relative in mired "
+                 "to Scene Illuminant when a base lamp is selected; 6504 leaves that lamp unchanged.",
                  "exposureGroup", 2000, 12000, 6504);
     defineDouble(set, "tint", "Tint", "Green/magenta balance of the illuminant.",
                  "exposureGroup", -100, 100, 0);

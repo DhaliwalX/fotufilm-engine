@@ -168,8 +168,7 @@ final class AppSettings: ObservableObject {
         UserDefaults.standard.set(enabled, forKey: Key.cameraGrain)
     }
 
-    /// The camera never runs automatic white balance. It assumes the illuminant the loaded
-    /// emulsion was designed for, or the light the photographer names.
+    /// The camera uses the declared scene light, with a stock-independent D65 default.
     enum CameraFilmBalance: String, CaseIterable, Identifiable, Sendable {
         case film, household, tungsten, mixed, daylight, overcast
 
@@ -177,7 +176,7 @@ final class AppSettings: ObservableObject {
 
         var label: String {
             switch self {
-            case .film: return "DEFAULT"
+            case .film: return "D65"
             case .household: return "2856K"
             case .tungsten: return "3200K"
             case .mixed: return "4300K"
@@ -197,13 +196,10 @@ final class AppSettings: ObservableObject {
             }
         }
 
-        func kelvin(filmReference: Float?) -> Float {
-            fixedKelvin ?? filmReference ?? 5500
-        }
+        var kelvin: Float { fixedKelvin ?? WhiteBalance.neutralKelvin }
     }
 
-    /// Follow Film is the physical default: expose a daylight stock under 5500 K and a tungsten
-    /// stock under 3200 K until the photographer explicitly names the other lighting condition.
+    /// The persisted default case retains its identifier while assuming D65 for every stock.
     nonisolated static var storedCameraFilmBalance: CameraFilmBalance {
         UserDefaults.standard.string(forKey: Key.cameraFilmBalance)
             .flatMap(CameraFilmBalance.init(rawValue:)) ?? .film

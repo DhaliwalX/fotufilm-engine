@@ -44,7 +44,7 @@ Options:
   --autoexpose       Anchor the log-average scene luminance on mid-gray
   --wb <kelvin>      Scene illuminant, 2000-12000 K (default: 6504, D65).
                      On camera raw this is relative to the file's as-shot
-                     balance, so 6504 is "as the camera saw it"
+                     light; 6504 preserves the capture illuminant
   --tint <n>         Green/magenta off the locus, -100...100 (default: 0)
   --background <c>  Scene-linear Rec.2020 background for associated-alpha input:
                      black, white, or R,G,B (default: black). The source is
@@ -433,16 +433,15 @@ func associatedOpenEXRColor(url: URL) -> CIImage? {
 
 /// Loads any supported image as associated scene-referred linear Rec.2020 RGBA, preserving values
 /// above 1 for HDR/raw sources. Association is retained until the caller composites the scene.
-func loadLinear(path: String, balance: WhiteBalance)
-    -> (rgba: [Float], width: Int, height: Int, remaining: WhiteBalance,
-        sceneKelvin: Float?, contentHeadroom: Float) {
+func loadLinear(path: String)
+    -> (rgba: [Float], width: Int, height: Int, sceneKelvin: Float?, sceneChromaticity: SIMD2<Float>?, contentHeadroom: Float) {
     let url = URL(fileURLWithPath: path)
     let isRaw = RawDecode.isRaw(url: url)
     let declaredHeadroom = isRaw ? nil : GainMapHeadroom.declared(url: url)
     let context = CIContext(options: [.useSoftwareRenderer: true, .cacheIntermediates: false])
     var image: CIImage?
-    var remaining = balance
     var sceneKelvin: Float?
+    var sceneChromaticity: SIMD2<Float>?
     var contentHeadroom: Float = 1
     var profileCorrection: CameraProfileCorrection.Resolved?
     var associatedEXRColor: CIImage?
@@ -450,24 +449,14 @@ func loadLinear(path: String, balance: WhiteBalance)
         guard let raw = CIRAWFilter(imageURL: url) else {
             fail("Could not read raw file: \(path)")
         }
-        let displacement = balance.mired
-            - WhiteBalance.kelvinToMired(WhiteBalance.neutralKelvin)
-        let asShot = raw.neutralTemperature > 0
-            ? WhiteBalance.kelvinToMired(raw.neutralTemperature) : nil
-        let placement = asShot.map {
-            RawDecode.placement(displacementMired: displacement, asShotMired: $0)
+        // Decode at the file's complete as-shot white once. Edits change the spectral lamp.
+        let white = raw.neutralChromaticity
+        let xy = SIMD2<Float>(Float(white.x), Float(white.y))
+        if xy.x > 0 && xy.y > 0 && xy.x + xy.y < 1 {
+            sceneChromaticity = xy
         }
-        RawDecode.configure(
-            raw,
-            recipe: RawDecode.Recipe(neutralKelvin: placement?.neutralKelvin ?? nil))
-        remaining = RawDecode.remainingBalance(displacementMired: displacement,
-                                               tint: balance.tint,
-                                               bakedMired: placement?.bakedMired)
-        // The illuminant-aware profile delta — the same wiring as the app's still path: the
-        // demosaic is already colorimetric under the as-shot balance, so only the delta of
-        // the profile's matrix against its daylight anchor may be applied, and only when the
-        // camera resolves and the scene was warm enough for it to differ from identity.
-        sceneKelvin = asShot.map(WhiteBalance.miredToKelvin)
+        sceneKelvin = raw.neutralTemperature > 0 ? raw.neutralTemperature : nil
+        RawDecode.configure(raw, recipe: RawDecode.Recipe())
         profileCorrection = CameraProfileCorrection.resolve(
             camera: RawDecode.cameraIdentity(url: url),
             sceneKelvin: sceneKelvin)
@@ -533,7 +522,7 @@ func loadLinear(path: String, balance: WhiteBalance)
         print(String(format: "Camera profile: %@ at %.0f K, max deviation %.4f",
                      corrected.profileID, corrected.cct, corrected.maxDeviation))
     }
-    return (rgba, width, height, remaining, sceneKelvin, contentHeadroom)
+    return (rgba, width, height, sceneKelvin, sceneChromaticity, contentHeadroom)
 }
 
 func parseLinearBackground(_ value: String?) -> SIMD3<Float> {
@@ -769,8 +758,8 @@ if let diffPath = flags["--diff"] {
     guard positional.count == 2 else {
         fail("--diff <out> takes two rendered images: fotufilm <a> <b> --diff <out>")
     }
-    let a = loadLinear(path: positional[0], balance: .neutral)
-    let b = loadLinear(path: positional[1], balance: .neutral)
+    let a = loadLinear(path: positional[0])
+    let b = loadLinear(path: positional[1])
     guard a.width == b.width, a.height == b.height else {
         fail("Images differ in size: \(a.width)x\(a.height) vs \(b.width)x\(b.height)")
     }
@@ -1428,13 +1417,14 @@ let balance = WhiteBalance(
     tint: flags["--tint"].flatMap { Float($0) } ?? 0)
 let background = parseLinearBackground(flags["--background"])
 
-var (rgba, width, height, remaining, sceneKelvin, contentHeadroom) =
-    loadLinear(path: positional[0], balance: balance)
+var (rgba, width, height, sceneKelvin, sceneChromaticity, contentHeadroom) =
+    loadLinear(path: positional[0])
 PremultipliedAlpha.flatten(&rgba, over: background)
-options.whiteBalance = remaining
+options.whiteBalance = balance
 // The film-side scene light, from the raw file's as-shot record — the same wiring as the
 // app's still path. The gate inside the engine decides whether it does anything.
 options.sceneIlluminantKelvin = sceneKelvin
+options.sceneIlluminantChromaticity = sceneChromaticity
 // And the declared range, the other clip-side fact the app attaches: recorded light above
 // diffuse white is metered into the film's latitude instead of flattening to paper white.
 options.sceneHeadroom = contentHeadroom

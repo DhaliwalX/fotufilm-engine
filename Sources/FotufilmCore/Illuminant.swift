@@ -1,12 +1,12 @@
 import Foundation
 
 /// Reference spectral power distributions on `SpectralGrid`'s 380–780 nm axis.
-/// Generated SPDs are normalized to 1 at 560 nm. `d65` retains its published normalization of
-/// 100 at 560 nm; matrix derivation normalizes each solve by the illuminant white.
+/// Locus spectra use the CIE 560 nm table convention; tinted spectra have arbitrary scale.
+/// Film exposure normalizes every spectrum to equal photometric Y.
 public enum Illuminant {
     /// Index of 560 nm on the grid: (560 − 380) / 5. The CIE anchors both the daylight
     /// component tables and the published D65 at this wavelength, so it is where every SPD
-    /// here pins its normalization.
+    /// in the locus generators pins its tabular normalization.
     static let anchorIndex = 36
 
     /// Returns a Planckian SPD normalized to 1 at 560 nm.
@@ -40,15 +40,81 @@ public enum Illuminant {
         return values
     }
 
-    /// Returns a Planckian SPD through 4000 K, a daylight SPD from 5000 K, and a linear blend
-    /// between them. This matches `WhiteBalance.locusXY`.
+    /// Returns a Planckian SPD through 4000 K, a daylight SPD from 5000 K, and a smooth blend
+    /// between them. White balance derives its locus by integrating this spectrum.
     public static func atLocus(kelvin: Float) -> [Float] {
         let t = clamp(kelvin, 1000, 25000)
         if t <= 4000 { return planckian(kelvin: t) }
         if t >= 5000 { return daylight(kelvin: t) }
-        let mix = (t - 4000) / 1000
+        let s = (t - 4000) / 1000
+        let mix = s * s * (3 - 2 * s)
         let warm = planckian(kelvin: t), cool = daylight(kelvin: t)
         return (0..<SpectralGrid.count).map { (1 - mix) * warm[$0] + mix * cool[$0] }
+    }
+
+    /// Smooth, positive approximation to a lamp of the stated chromaticity. Tint changes the
+    /// spectrum, not the image's RGB channels. A chromaticity cannot identify a measured lamp's
+    /// spectrum; this is a minimum-relative-entropy deformation of the chosen locus spectrum.
+    public static func spectrum(_ balance: WhiteBalance) -> [Float] {
+        let base = atLocus(kelvin: balance.kelvin)
+        guard balance.tint != 0 else { return base }
+        return matching(WhiteBalance.chromaticity(kelvin: balance.kelvin, tint: balance.tint),
+                        base: base)
+    }
+
+    static func matching(_ xy: SIMD2<Float>, base: [Float]) -> [Float] {
+        precondition(xy.x.isFinite && xy.y.isFinite && xy.x > 0 && xy.y > 0
+                     && xy.x + xy.y < 1, "invalid illuminant chromaticity")
+        let x = Double(xy.x / xy.y), z = Double((1 - xy.x - xy.y) / xy.y)
+        let u = (0..<SpectralGrid.count).map {
+            Double(SpectralGrid.xBar[$0]) - x * Double(SpectralGrid.yBar[$0])
+        }
+        let v = (0..<SpectralGrid.count).map {
+            Double(SpectralGrid.zBar[$0]) - z * Double(SpectralGrid.yBar[$0])
+        }
+        var a = 0.0, b = 0.0
+        var result = base.map(Double.init)
+        for _ in 0..<32 {
+            var f = 0.0, g = 0.0, aa = 0.0, ab = 0.0, bb = 0.0
+            for i in result.indices {
+                result[i] = Double(base[i]) * exp(a * u[i] + b * v[i])
+                f += result[i] * u[i]
+                g += result[i] * v[i]
+                aa += result[i] * u[i] * u[i]
+                ab += result[i] * u[i] * v[i]
+                bb += result[i] * v[i] * v[i]
+            }
+            if max(abs(f), abs(g)) < 1e-10 { break }
+            let determinant = aa * bb - ab * ab
+            precondition(determinant > 0, "illuminant chromaticity is outside the spectral support")
+            let da = (bb * f - ab * g) / determinant
+            let db = (aa * g - ab * f) / determinant
+            let scale = min(1, 1 / max(abs(da), abs(db)))
+            a -= scale * da
+            b -= scale * db
+        }
+        let values = result.map(Float.init)
+        let white = chromaticity(values)
+        precondition(abs(white.x - xy.x) < 1e-5 && abs(white.y - xy.y) < 1e-5,
+                     "illuminant chromaticity solve did not converge")
+        return values
+    }
+
+    public static func chromaticity(_ spectrum: [Float]) -> SIMD2<Float> {
+        let xyz = SpectralGrid.xyz(spectrum: spectrum)
+        precondition(xyz.sum().isFinite && xyz.sum() > 0, "illuminant must contain visible energy")
+        return SIMD2(xyz.x, xyz.y) / xyz.sum()
+    }
+
+    /// Relative photometric normalization. Equal-Y lights keep exposure independent of the
+    /// arbitrary SPD scale, including lamps with no energy at the old 560 nm anchor.
+    static func luminance(_ spectrum: [Float]) -> Float {
+        precondition(spectrum.count == SpectralGrid.count)
+        let y = zip(spectrum, SpectralGrid.yBar).reduce(Double(0)) {
+            $0 + Double($1.0) * Double($1.1)
+        }
+        precondition(y.isFinite && y > 0, "illuminant must contain visible energy")
+        return Float(y)
     }
 
     /// CIE standard illuminant A — the 2856 K tungsten lamp — as the Planckian radiator the
