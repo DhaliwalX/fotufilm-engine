@@ -18,6 +18,7 @@ Usage:
   fotufilm <a> <b> --diff <output>         Write A | B | amplified difference
   fotufilm --make-chart <f> --scene spectrum  Write the demo's spectrum scene
   fotufilm --list-stocks                   List stocks and the gauge each is known on
+  fotufilm --list-web-media                Export browser output-medium choices as JSON
   fotufilm --dump-labscan-reference <stock>
                                            Print the lab-scan reference profile a calibrated
                                            build commits for this stock
@@ -177,7 +178,7 @@ var flags: [String: String] = [:]
 var args = Array(CommandLine.arguments.dropFirst())
 while !args.isEmpty {
     let a = args.removeFirst()
-    if a == "--list-stocks" || a == "--list-formats" || a == "--dump-curves"
+    if a == "--list-web-media" || a == "--list-stocks" || a == "--list-formats" || a == "--dump-curves"
         || a == "--dump-spectra" || a == "--help" || a == "-h"
         || a == "--autoexpose" || a == "--check-stocks" || a == "--make-pack-key"
         || a == "--stages" || a == "--estimated-halation" || a == "--hlg" {
@@ -199,6 +200,20 @@ if flags["--list-stocks"] != nil {
     for (key, stock) in FilmStock.presets.sorted(by: { $0.key < $1.key }) {
         print("\(key)\t\(stock.name)\t\(FilmFormat.nativeID(forStockID: key))")
     }
+    exit(0)
+}
+
+if flags["--list-web-media"] != nil {
+    let records: [[String: Any]] = FilmStock.presets.sorted(by: { $0.key < $1.key }).map { id, stock in
+        ["id": id, "default": PrintPaper.default(for: stock).id,
+         "choices": PrintPaper.choices(for: stock).map {
+             ["id": $0.id, "name": $0.name, "detail": $0.detail]
+         }]
+    }
+    do {
+        let data = try JSONSerialization.data(withJSONObject: records, options: [.sortedKeys])
+        print(String(decoding: data, as: UTF8.self))
+    } catch { fail("Could not encode output media: \(error.localizedDescription)") }
     exit(0)
 }
 

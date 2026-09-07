@@ -116,6 +116,10 @@ PY
   echo "  $id  masks $masks"
 done < <(./.build/release/fotufilm --list-stocks)
 printf ']' >> "$INDEX"
+python3 tools/export-web-media.py --pack-size "$PACK_SIZE"
+for mask in $(python3 -c 'import json; print(*json.load(open("web/public/packs/media/masks.json")))'); do
+  MASKS+=("$mask")
+done
 # One kernel per distinct mask, however many stocks and sizes ask for it.
 MASKS=($(printf '%s\n' "${MASKS[@]}" | sort -un))
 
@@ -188,7 +192,7 @@ echo "Linking the WebAssembly module…"
 source "$EMSDK/emsdk_env.sh" >/dev/null 2>&1
 mkdir -p web/public
 em++ -O3 web/engine/fotufilm_wasm_cpu.cpp \
-  "$OUTPUT"/cpu/develop_*.a "$OUTPUT"/cpu/print_*.a \
+  "$OUTPUT"/cpu/develop_*.a "$OUTPUT"/cpu/print_*.a "$OUTPUT"/cpu/plain_float.a \
   -I Sources/FotufilmHalide/include -I "$OUTPUT/cpu" \
   -msimd128 -sALLOW_MEMORY_GROWTH=1 \
   -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,worker \
@@ -234,6 +238,8 @@ fi
 
 echo
 echo "Wrote web/public/fotufilm.{mjs,wasm}$([[ -f web/public/fotufilm-webgpu.mjs ]] && echo ', fotufilm-webgpu.{mjs,wasm}') and $(ls web/public/packs/*.pack | wc -l | tr -d ' ') packs."
+
+tools/build-raw-wasm.sh
 
 node tools/test-wasm.mjs
 node tools/test-wasm-tiles.mjs

@@ -3,175 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>fotufilm — Physical Film Development &amp; Simulation</title>
-
-    <!-- Primary Meta Tags -->
+    <title>Fotufilm — Photo editor</title>
     <meta
       name="description"
-      content="Physically modelled film simulation engine in WebAssembly. Develop digital photos through authentic emulsion physics: spectral sensitivity, halation, grain, and darkroom printing."
+      content="Edit photos with Fotufilm film profiles, light and color controls, and crop tools. Processing stays on your device."
     />
-    <meta
-      name="keywords"
-      content="film simulation, analog photography, physically modelled film, Kodachrome, PRO 400H, PRO 160NS, darkroom development, spectral sensitivity, halation, film grain, WebAssembly, WebGPU"
-    />
-    <meta name="author" content="MUAStudio Inc." />
-    <meta name="creator" content="MUAStudio Inc." />
-    <meta name="publisher" content="MUAStudio Inc." />
-    <meta
-      name="robots"
-      content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
-    />
-    <meta name="theme-color" content="#fdfbe4" />
-    <meta name="application-name" content="fotufilm" />
-    <meta name="apple-mobile-web-app-title" content="fotufilm" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-
-    <!-- Canonical URL -->
-    <link rel="canonical" href="https://fotufilm.com/" />
-
-    <!-- Open Graph / Facebook / LinkedIn -->
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://fotufilm.com/" />
-    <meta
-      property="og:title"
-      content="fotufilm — Physical Film Development &amp; Simulation"
-    />
-    <meta
-      property="og:description"
-      content="Physically modelled film simulation engine in WebAssembly. Authentic spectral sensitivities, halation, H&amp;D curves, Poisson clump grain, and optical printing."
-    />
-    <meta property="og:image" content="https://fotufilm.com/fotufilm_tagline.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="fotufilm — Physical film development" />
-    <meta property="og:site_name" content="fotufilm" />
-    <meta property="og:locale" content="en_US" />
-
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta
-      name="twitter:title"
-      content="fotufilm — Physical Film Development &amp; Simulation"
-    />
-    <meta
-      name="twitter:description"
-      content="Physically modelled film simulation engine in WebAssembly. Develop digital photos through authentic emulsion physics."
-    />
-    <meta name="twitter:image" content="https://fotufilm.com/fotufilm_tagline.png" />
-    <meta name="twitter:image:alt" content="fotufilm — Physical film development" />
-
-    <!-- Favicons & Manifest -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/app-icon.png" />
-    <link rel="apple-touch-icon" href="/app-icon.png" />
-    <link rel="manifest" href="/site.webmanifest" />
-
-    <!-- Font Preconnect -->
-    <link rel="preconnect" href="https://api.fontshare.com" />
-    <link rel="dns-prefetch" href="https://api.fontshare.com" />
-    <link
-      href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&amp;display=swap"
-      rel="stylesheet"
-    />
-
-    <!-- Structured Data (Schema.org JSON-LD) -->
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "WebApplication",
-        "name": "fotufilm",
-        "alternateName": "Fotufilm",
-        "url": "https://fotufilm.com/",
-        "description": "Physically modelled film simulation engine in WebAssembly. Transform digital photos with authentic emulsion physics, spectral sensitivity, halation, grain, and darkroom printing.",
-        "author": {
-          "@type": "Organization",
-          "name": "MUAStudio Inc."
-        },
-        "creator": {
-          "@type": "Organization",
-          "name": "MUAStudio Inc."
-        },
-        "publisher": {
-          "@type": "Organization",
-          "name": "MUAStudio Inc."
-        },
-        "applicationCategory": "MultimediaApplication",
-        "operatingSystem": "Any (WebAssembly / WebGPU)",
-        "browserRequirements": "Requires WebAssembly or modern browser with JavaScript enabled",
-        "image": "https://fotufilm.com/fotufilm_tagline.png",
-        "screenshot": "https://fotufilm.com/fotufilm_tagline.png",
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD"
-        },
-        "featureList": [
-          "Physical 8-stage image formation pipeline",
-          "Spectral exposure integration via a bounded measured-reflectance prior",
-          "Lens veiling glare and flare modelling",
-          "Emulsion turbidity and light diffusion",
-          "Base reflection and Fresnel halation point spread",
-          "DIR coupler adjacency and Mackie lines",
-          "Analytic Hurter & Driffield (H&D) characteristic curves",
-          "Stochastic Poisson clump film grain",
-          "Optical printing and Beer-Lambert image dye absorption",
-          "Calibrated stocks: Kodachrome 25, Kodachrome 64, Kodachrome 200, PRO 400H, PRO 160NS"
-        ]
-      }
-    </script>
+    <meta name="theme-color" content="#f4f4f5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#292a2d" media="(prefers-color-scheme: dark)" />
+    <meta name="application-name" content="Fotufilm" />
+    <link rel="icon" type="image/png" href="%BASE_URL%app-icon.png" />
+    <link rel="apple-touch-icon" href="%BASE_URL%app-icon.png" />
+    <link rel="manifest" href="%BASE_URL%site.webmanifest" />
   </head>
   <body>
-    <div id="root">
-      <!-- Semantic Static Fallback for Search Engine Crawlers -->
-      <main style="display: none;" aria-hidden="true">
-        <h1>fotufilm — Physical Film Development &amp; Simulation</h1>
-        <p>
-          A physically modelled film simulation engine in WebAssembly and Swift.
-          Rather than applying a superficial look or color lookup tables (LUTs),
-          fotufilm models the complete chain of physical processes between scene
-          light and a finished print or transparency.
-        </p>
-
-        <h2>The Physical Emulsion Pipeline</h2>
-        <ol>
-          <li><strong>Exposure:</strong> bounded RGB-to-reflectance recovery fitted to 28,665 open measured spectra, with per-layer sensitivities integrated under CIE D65.</li>
-          <li><strong>Flare:</strong> Lens veiling glare scattering scene light uniformly.</li>
-          <li><strong>Emulsion Diffusion:</strong> Light scattering inside the emulsion pack (turbidity / MTF).</li>
-          <li><strong>Halation:</strong> Base reflection, Fresnel reflectance, and angle-dependent bounce exposure.</li>
-          <li><strong>DIR Couplers &amp; Adjacency:</strong> Development inhibitor diffusion between layers and edge Mackie lines.</li>
-          <li><strong>Development:</strong> Silver/dye density via analytic Hurter &amp; Driffield (H&amp;D) characteristic curves.</li>
-          <li><strong>Grain:</strong> Stochastic Poisson clump field scaling physically with format size.</li>
-          <li><strong>Output Medium:</strong> Optical enlarger printing, Beer–Lambert dye absorption, and paper tone reproduction.</li>
-        </ol>
-
-        <h2>Calibrated Film Stocks</h2>
-        <ul>
-          <li>Kodachrome 25 (Reversal slide film)</li>
-          <li>Kodachrome 64 (Reversal slide film)</li>
-          <li>Kodachrome 200 (Reversal slide film)</li>
-          <li>Fujifilm Fujicolor PRO 400H (Color negative)</li>
-          <li>Fujifilm Fujicolor PRO 160NS (Color negative)</li>
-          <li>Synthetic Panchromatic Monochrome 100 &amp; Negative 400</li>
-        </ul>
-      </main>
-    </div>
-
-    <!-- Fallback for JavaScript Disabled Browsers -->
-    <noscript>
-      <div style="padding: 2rem; font-family: system-ui, sans-serif; max-width: 720px; margin: 0 auto; line-height: 1.6;">
-        <h1>fotufilm — Physical Film Development</h1>
-        <p>
-          JavaScript is required to run the interactive WebAssembly film darkroom.
-        </p>
-        <p>
-          fotufilm is a physically modelled film simulation engine that simulates
-          the complete physics of photochemical imaging: spectral sensitivity, lens flare,
-          turbidity, halation, DIR coupler inter-image effects, H&amp;D curves, grain clumps,
-          and paper printing.
-        </p>
-      </div>
-    </noscript>
-
+    <div id="root"></div>
+    <noscript><p>Enable JavaScript to use the Fotufilm photo editor.</p></noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

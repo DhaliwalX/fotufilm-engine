@@ -1,3 +1,9 @@
+import { loadMediumBytes } from './output-media.js'
+import { yieldToBrowser } from './yield.js'
+import { measureTone, toneKey } from './tone-base.js'
+import { CONFIG } from './engine-constants.js'
+import { packedGrade, whiteBalanceGains, applyColorControls } from './color-controls.js'
+
 // The browser half of the film engine.
 //
 // The WebAssembly module holds the same Halide kernels the phones run, but none of the physics
@@ -23,6 +29,16 @@ const ENGINES = {
 export const assetUrl = (name) => new URL(import.meta.env.BASE_URL + name, window.location.href).href
 
 const modulePromises = new Map()
+const toneMeasurements = new WeakMap()
+const preparedSources = new WeakSet()
+async function measuredTone(source, controls, balance) {
+  const key = JSON.stringify([controls.ev || 0, ...balance])
+  const cached = preparedSources.has(source) ? toneMeasurements.get(source) : null
+  if (cached?.key === key) return cached.grid
+  const grid = await measureTone(source, controls, decodeRGBA, balance)
+  if (preparedSources.has(source)) toneMeasurements.set(source, { key, grid })
+  return grid
+}
 
 function loadModule(kind) {
   if (!modulePromises.has(kind)) {
@@ -44,7 +60,10 @@ function loadModule(kind) {
 export async function loadPack(url) {
   const response = await fetch(url)
   if (!response.ok) throw new Error(`no pack at ${url} (${response.status})`)
-  const bytes = await response.arrayBuffer()
+  return parsePack(await response.arrayBuffer())
+}
+
+export function parsePack(bytes) {
   const view = new DataView(bytes)
 
   const magic = String.fromCharCode(...new Uint8Array(bytes, 0, 4))
@@ -99,6 +118,7 @@ export async function loadPack(url) {
   if (offset !== bytes.byteLength) throw new Error(`pack has ${bytes.byteLength - offset} trailing bytes`)
 
   return {
+    bytes,
     width,
     height,
     featureMask,
@@ -123,10 +143,11 @@ export async function loadPack(url) {
 /// it moves, and an index into a pool of colour cubes for the tables it re-solved. Everything else
 /// is handed straight back from `base`, arrays included, so ten stages cost one extra configuration
 /// each rather than ten copies of five megabytes.
-export async function loadStages(url, base) {
+export async function loadStages(url, base, mediumUrl = null) {
   const response = await fetch(url)
   if (!response.ok) throw new Error(`no stages at ${url} (${response.status})`)
-  const bytes = await response.arrayBuffer()
+  let bytes = await response.arrayBuffer()
+  if (mediumUrl) bytes = await loadMediumBytes(bytes, mediumUrl)
   const view = new DataView(bytes)
 
   const magic = String.fromCharCode(...new Uint8Array(bytes, 0, 4))
@@ -273,8 +294,17 @@ for (let i = 0; i < 256; ++i) srgbToLinearTable[i] = srgbToLinear(i / 255)
 /// `stride` floats per pixel starting at `offsets`. The two paths want the same numbers in
 /// different orders — planar for the CPU kernels, interleaved RGBA for the GPU ones.
 function decodeInto(destination, source, plane, stride, offsets) {
-  const m = SRGB_TO_2020
   const [o0, o1, o2] = offsets
+  if (source instanceof Float32Array) {
+    // RAW geometry already supplies scene-linear Rec.2020; do not decode gamma twice.
+    for (let p = 0; p < plane; p++) {
+      destination[p * stride + o0] = source[p * 4]
+      destination[p * stride + o1] = source[p * 4 + 1]
+      destination[p * stride + o2] = source[p * 4 + 2]
+    }
+    return
+  }
+  const m = SRGB_TO_2020
   for (let p = 0, i = 0; p < plane; ++p, i += 4) {
     const r = srgbToLinearTable[source[i]]
     const g = srgbToLinearTable[source[i + 1]]
@@ -291,6 +321,9 @@ function decodeInto(destination, source, plane, stride, offsets) {
 /// than left to develop a frame that is merely wrong.
 function checkConfigurationCount(module, pack) {
   const expected = module.ccall('fotufilm_wasm_configuration_count', 'number', [], [])
+  if (expected !== CONFIG.FOTUFILM_FRAME_CONFIGURATION_COUNT) {
+    throw new Error('The browser engine is out of date. Rebuild the runtime and film files together.')
+  }
   if (pack.configuration.length !== expected) {
     throw new Error(
       `pack carries ${pack.configuration.length} configuration slots, engine wants ${expected}`)
@@ -388,7 +421,7 @@ export function planTiles(width, height, apron, budget) {
   return tiles
 }
 
-/// A frame the developer reads a rectangle at a time, as the sRGB RGBA bytes a canvas hands over.
+/// Rectangle input: Uint8 RGBA is encoded sRGB; Float32 RGBA is linear Rec.2020.
 /// Reading by rectangle is what lets a hundred-megapixel frame develop without its float form
 /// ever existing whole: only a tile's worth is decoded at once.
 export function pixelSource({ data, width, height }) {
@@ -397,7 +430,7 @@ export function pixelSource({ data, width, height }) {
     height,
     read(x, y, w, h) {
       if (x === 0 && y === 0 && w === width && h === height) return data
-      const out = new Uint8ClampedArray(w * h * 4)
+      const out = new data.constructor(w * h * 4)
       for (let row = 0; row < h; ++row) {
         const from = ((y + row) * width + x) * 4
         out.set(data.subarray(from, from + w * 4), row * w * 4)
@@ -457,9 +490,6 @@ function encodeTileInto(pixels, frameWidth, output, tile, seed, stride, offsets)
     }
   }
 }
-
-/// Lets the browser paint between tiles: a status, a progress bar, the previous frame.
-const yieldToBrowser = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 /// What the two paths share: a pack, a frame size, and the way a frame is cut into tiles and
 /// developed one at a time. A subclass owns the wasm-side buffers in its kernel's own layout and
@@ -542,21 +572,42 @@ class Developer {
                  [this.configPtr, highlights, shadows, saturation, vibrance])
     module.ccall('fotufilm_wasm_set_grain', null, ['number', 'number', 'number'],
                  [this.configPtr, this.grainPtr, grain])
+    const configuration = module.HEAPF32.subarray(this.configPtr / 4,
+      this.configPtr / 4 + this.configuration.length)
+    applyColorControls(configuration, controls)
+    // Keep coarse and resolved grain at the same strength as the clump field.
+    for (const offset of [CONFIG.MOTTLE, CONFIG.GRAIN_DISC]) {
+      for (let c = 0; c < 3; c++) configuration[offset + c] *= grain
+    }
+    this.seed = ((controls.seed ?? 0) + this.pack.seed) >>> 0
   }
 
   /// Develops one frame. `source` is a `pixelSource` or `imageSource` at the frame's size; the
   /// result is sRGB RGBA8 of the same size. `elapsed` is the kernels' own time, summed over the
   /// tiles; the conversions at either end are not in it.
-  async develop(source, controls) {
+  async develop(source, controls, onProgress = () => {}) {
     if (source.width !== this.width || source.height !== this.height) {
       this.setFrame(source.width, source.height)
     }
     this.applyControls(controls)
+    if (controls.localTone && (controls.highlights || controls.shadows)) {
+      onProgress('Measuring local highlights and shadows')
+      const grid = await measuredTone(source, controls, whiteBalanceGains(controls.temperature, controls.tint))
+      const offset = this.configPtr / 4
+      this.module.HEAPF32[offset + CONFIG.TONE_GRID_WIDTH] = grid.width
+      this.module.HEAPF32[offset + CONFIG.TONE_GRID_HEIGHT] = grid.height
+      this.module.HEAPF32.set(grid.a, offset + CONFIG.TONE_GRID_A)
+      this.module.HEAPF32.set(grid.b, offset + CONFIG.TONE_GRID_B)
+    }
     const pixels = new Uint8ClampedArray(this.width * this.height * 4)
     let elapsed = 0
     for (let t = 0; t < this.tiles.length; ++t) {
       const tile = this.tiles[t]
       const { region } = tile
+      const operation = this.featureMask === 1 << 29 ? 'Applying light and color' : 'Rendering film and output medium'
+      onProgress(`${operation} · tile ${t + 1} of ${this.tiles.length}`)
+      // Let a long CPU tile show its current operation before it occupies the main thread.
+      if (this.tiles.length > 1) await yieldToBrowser()
       this.decodeRegion(source.read(region.x, region.y, region.width, region.height), region)
       const started = performance.now()
       const status = await this.run(region)
@@ -750,18 +801,106 @@ export class SimdDeveloper extends Developer {
 
 /// Builds the fastest developer this browser will actually run: WebGPU when the adapter can
 /// create the kernel's pipelines, and the SIMD path otherwise.
-export async function createDeveloper(pack) {
+export async function createDeveloper(pack, onProgress = () => {}) {
+  if (typeof WebAssembly !== 'object') throw new Error('This browser cannot process film profiles. Use a browser with WebAssembly support.')
   if (navigator.gpu) {
+    let developer
     try {
-      const developer = new WebgpuDeveloper(await loadModule('webgpu'), pack)
+      onProgress('Loading WebGPU engine')
+      developer = new WebgpuDeveloper(await loadModule('webgpu'), pack)
+      onProgress('Compiling WebGPU shaders')
       await developer.probe()
       return developer
     } catch (error) {
       // An aborted Emscripten module cannot be called again, so the promise goes with it and the
       // next pack loads a fresh one.
+      if (developer && !developer.module.ABORT) developer.dispose()
       modulePromises.delete('webgpu')
       console.warn('WebGPU engine unavailable, developing on the CPU instead:', error)
     }
   }
+  onProgress('Loading CPU engine')
   return new SimdDeveloper(await loadModule('simd'), pack)
+}
+
+function decodeRGBA(bytes) {
+  if (bytes instanceof Float32Array) return bytes.slice()
+  const linear = new Float32Array(bytes.length)
+  decodeInto(linear, bytes, bytes.length / 4, 4, [0, 1, 2])
+  return linear
+}
+
+// PlainDevelop.swift, for Normal. A pipeline's bypass diagnostic is still a film model.
+export async function developNormalReference(source, controls, onProgress = () => {}) {
+  const { width, height } = source, started = performance.now()
+  const balance = whiteBalanceGains(controls.temperature, controls.tint), grade = packedGrade(controls)
+  const exposure = 2 ** (controls.ev || 0), weights = [0.2627002, 0.6779981, 0.0593017]
+  const matrix = [1.343578253, -0.282179671, -0.061398582, -0.065297453, 1.075787916, -0.010490463, 0.002821787, -0.019598495, 1.016776707]
+  const grid = controls.localTone && (controls.highlights || controls.shadows)
+    ? await measuredTone(source, controls, balance) : null
+  const pixels = new Uint8ClampedArray(width * height * 4)
+  const encode = v => v <= 0.0031308 ? v * 12.92 : v >= 1 ? 1 + (v - 1) * (1.055 / 2.4) : 1.055 * v ** (1 / 2.4) - 0.055
+  const decode = v => v <= 0.04045 ? v / 12.92 : v >= 1 ? 1 + (v - 1) / (1.055 / 2.4) : ((v + 0.055) / 1.055) ** 2.4
+  for (let top = 0; top < height; top += 32) {
+    onProgress(`Applying light and color · rows ${top + 1}–${Math.min(top + 32, height)} of ${height}`)
+    const rows = Math.min(32, height - top), linear = decodeRGBA(source.read(0, top, width, rows))
+    for (let y = 0; y < rows; y++) for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4
+      const rgb = [0, 1, 2].map(c => linear[i + c] * balance[c])
+      const luma = rgb.reduce((sum, v, c) => sum + v * weights[c], 0)
+      const stops = toneKey(grid, Math.log2(Math.max(luma * exposure / 0.18, 1e-6)), x, top + y, width, height)
+      const high = clamp01(stops / 6), low = clamp01(-stops / 6)
+      const gain = 2 ** (3 * ((controls.highlights || 0) * high * high * (3 - 2 * high) + (controls.shadows || 0) * low * low * (3 - 2 * low)))
+      const peak = Math.max(...rgb), colourfulness = (peak - Math.min(...rgb)) / Math.max(peak, 1e-6)
+      const chroma = (controls.saturation ?? 1) * (1 + (controls.vibrance || 0) * (1 - colourfulness))
+      const lit = rgb.map(v => (luma + chroma * (v - luma)) * gain * exposure)
+      for (let c = 0; c < 3; c++) {
+        let value = matrix[c * 3] * lit[0] + matrix[c * 3 + 1] * lit[1] + matrix[c * 3 + 2] * lit[2]
+        if (controls.gradeSpace) value = encode(value)
+        value = value * (grade[c + 3] - grade[c]) + grade[c]
+        if (grade[c + 6] !== 1) value = Math.max(value, 0) ** grade[c + 6]
+        linear[i + c] = controls.gradeSpace ? decode(value) : value
+      }
+    }
+    const tile = { x: 0, y: top, width, height: rows, region: { x: 0, y: top, width, height: rows } }
+    encodeTileInto(pixels, width, linear, tile, 0, 4, [0, 1, 2])
+    await yieldToBrowser()
+  }
+  return { pixels, elapsed: performance.now() - started }
+}
+
+export async function createCpuDeveloper(pack) {
+  return new SimdDeveloper(await loadModule('simd'), pack)
+}
+
+export async function createNormalDeveloper() {
+  const module = await loadModule('simd')
+  if (!module._fotufilm_wasm_plain_supported) return null
+  const configuration = new Float32Array(CONFIG.FOTUFILM_FRAME_CONFIGURATION_COUNT)
+  configuration[CONFIG.TONE_GRID_WIDTH] = configuration[CONFIG.TONE_GRID_HEIGHT] = 1
+  configuration[CONFIG.TONE_GRID_A] = 1
+  const cube = new Float32Array(LUT_COUNT)
+  return new SimdDeveloper(module, {
+    configuration, exposure: cube, film: cube, paper: cube, seed: 0,
+    width: 1600, height: 1600, featureMask: 1 << 29,
+    ladder: [{ shortEdge: 1600, featureMask: 1 << 29, seed: 0, spatialSupport: 0,
+      slots: new Int32Array(0), values: new Float32Array(0) }],
+  })
+}
+// Import previews get their own buffers; live sessions keep a persistent developer.
+export async function developNormal(source, controls, onProgress = () => {}) {
+  if (typeof window === 'undefined') return developNormalReference(source, controls, onProgress)
+  onProgress('Preparing light and color engine')
+  const developer = await createNormalDeveloper()
+  if (!developer) return developNormalReference(source, controls, onProgress)
+  try { return await developer.develop(source, controls, onProgress) }
+  finally { developer.dispose() }
+}
+
+export function linearSource(source) {
+  if (source.width * source.height > 4_000_000) return source
+  const prepared = pixelSource({ width: source.width, height: source.height,
+    data: decodeRGBA(source.read(0, 0, source.width, source.height)) })
+  preparedSources.add(prepared)
+  return prepared
 }

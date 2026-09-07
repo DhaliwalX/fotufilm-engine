@@ -1,871 +1,1383 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@astryxdesign/core/Button'
-import { Slider } from '@astryxdesign/core/Slider'
+import { TextInput } from '@astryxdesign/core/TextInput'
 import { Switch } from '@astryxdesign/core/Switch'
-import BlendIcon from 'reicon-react/icons/Blend'
-import DownloadIcon from 'reicon-react/icons/Download'
-import FlaskIcon from 'reicon-react/icons/Flask'
-import GalleryAddIcon from 'reicon-react/icons/GalleryAdd'
-import LoaderIcon from 'reicon-react/icons/Loader'
-import UploadIcon from 'reicon-react/icons/Upload'
-import WarningIcon from 'reicon-react/icons/Warning'
-import { assetUrl, createDeveloper, imageSource, loadPack, loadStages } from './engine.js'
-import appIconUrl from './assets/app-icon.png'
+import { TabList, Tab } from '@astryxdesign/core/TabList'
+import { Selector } from '@astryxdesign/core/Selector'
+import { PreviewQueue, previewLabel } from './preview-queue.js'
+import { IMAGE_ACCEPT, isRawFile, importRaw } from './raw-import.js'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { RenderSession, loadStockIndex } from './render-session.js'
+import {
+  defaultEdit,
+  fullCrop,
+  historyReducer,
+  initialHistory,
+  cropForRatio,
+  rotatedCrop,
+  flippedCrop,
+  parseEdit,
+} from './editor-state.js'
+import { canvasBlob, outputSize } from './geometry.js'
+import {
+  Adjustment,
+  Adjustments,
+  Icon,
+  ImageCanvas,
+  Modal,
+  Section,
+  ToolButton,
+} from './EditorControls.jsx'
 
-// Include only controls that directly update configuration slots. Halation and coupler range
-// require exporting a new pack because they reshape model data.
-const SLIDERS = [
-  { key: 'ev', label: 'Exposure', unit: 'ev', min: -3, max: 3, step: 0.25, def: 0 },
-  { key: 'grain', label: 'Grain', unit: '×', min: 0, max: 2.5, step: 0.05, def: 1 },
-  { key: 'highlights', label: 'Highlights', unit: '', min: -1, max: 1, step: 0.05, def: 0 },
-  { key: 'shadows', label: 'Shadows', unit: '', min: -1, max: 1, step: 0.05, def: 0 },
-  { key: 'saturation', label: 'Saturation', unit: '×', min: 0, max: 2, step: 0.05, def: 1 },
-  { key: 'vibrance', label: 'Vibrance', unit: '', min: -1, max: 1, step: 0.05, def: 0 },
+const stageNames = [
+  'Bypass',
+  'Exposure',
+  'Flare',
+  'Diffusion',
+  'Halation',
+  'Couplers',
+  'Development',
+  'Grain',
+  'Negative',
+  'Output',
 ]
-
-/// The engine is WebAssembly and nothing else, so a browser without it cannot develop anything.
-/// Rather than offer controls that would do nothing, such a browser is shown the pipeline already
-/// developed — the same scene through the same stages, rendered by the CLI and shipped as pictures.
-const HAS_WASM = typeof WebAssembly === 'object' &&
-  typeof WebAssembly.instantiate === 'function'
-
-/// What the demo opens on: a hue sweep, a neutral ramp two stops over mid grey, and a
-/// hue/saturation wheel, on black. Every stage of the pipeline has something to act on here —
-/// flare has black to lift, halation has a bright edge to bloom off, the couplers have saturated
-/// colour to inhibit — which a photograph will not reliably give you.
-const DEFAULT_SCENE = 'fotufilm_tagline.png'
-
-async function loadJson(url, missingMessage) {
-  const response = await fetch(url)
-  const contentType = response.headers.get('content-type') || ''
-  if (!response.ok || !contentType.includes('application/json')) {
-    throw new Error(missingMessage)
-  }
-  return response.json()
+const ratios = ['free', 'original', '1:1', '3:2', '2:3', '4:3', '3:4', '16:9', '9:16']
+const isTyping = (target) =>
+  target instanceof HTMLElement &&
+  (!!target.closest(
+    'input, select, textarea, dialog, [role=slider], [role=combobox], [role=switch]',
+  ) ||
+    target.isContentEditable)
+const cleanName = (name) =>
+  name
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^\p{L}\p{N}_-]+/gu, '-')
+    .slice(0, 100) || 'photo'
+function download(blob, name) {
+  const url = URL.createObjectURL(blob),
+    link = document.createElement('a')
+  link.href = url
+  link.download = name
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 60000)
 }
-
-const STOCK_NOTES = {
-  'example-monochrome-100': 'panchromatic B&W · example calibration',
-  'example-negative-400': 'colour negative · example calibration',
-  kodachrome25: 'reversal · the slowest, finest Kodachrome',
-  kodachrome64: 'reversal · the classic slide',
-  kodachrome200: 'reversal · the fast one, grain and all',
-  pro160ns: 'colour negative · soft, neutral skin',
-  pro400h: 'colour negative · cool & airy · fine grain',
-}
-
-const STAGE_NAMES = {
-  '01-bypassed': 'Bypass',
-  '02-exposure': 'Exposure',
-  '03-flare': 'Flare',
-  '04-diffusion': 'Diffusion',
-  '05-halation': 'Halation',
-  '06-couplers': 'Couplers',
-  '07-development': 'H&D curve',
-  '08-grain': 'Grain',
-  '09-negative': 'Negative',
-  '10-print': 'Output',
-}
-
-function stageName(stage) {
-  return STAGE_NAMES[stage.id] || stage.label.replace(/^Stage \d+( input)? — /, '')
-}
-
-function PanelTitle({ eyebrow, title, detail }) {
-  return (
-    <div className="panel-title">
-      <div>
-        <span className="eyebrow">{eyebrow}</span>
-        <h2>{title}</h2>
-      </div>
-      {detail && <span className="panel-detail">{detail}</span>}
-    </div>
-  )
-}
-
-function PipelineSteps({ stages, stageIndex, setStageIndex, disabled, includePrint = true }) {
-  const sequence = includePrint
-    ? [{ id: '#print', label: 'Finished print' }, ...stages]
-    : stages
-
-  return (
-    <div className="stage-grid" style={{ '--stage-count': sequence.length }}>
-      {sequence.map((item, i) => {
-        const itemIndex = includePrint ? i - 1 : i
-        const isPrint = includePrint && i === 0
-        const selected = isPrint ? stageIndex == null : itemIndex === stageIndex
-        return (
-          <button
-            key={item.id}
-            className={`stage-step ${selected ? 'selected' : ''}`}
-            onClick={() => setStageIndex(isPrint ? null : itemIndex)}
-            disabled={disabled}
-            title={item.label}
-            aria-pressed={selected}
-          >
-            <span className="stage-number">{isPrint ? 'P' : String(i).padStart(2, '0')}</span>
-            <span className="stage-name">{isPrint ? 'Print' : stageName(item)}</span>
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-/// The most pixels a frame is developed at. The engine tiles a frame of any size, so this is a
-/// budget for the browser rather than the kernel: the finished print is held as RGBA bytes, the
-/// picture on screen is one more copy, and a hundred-megapixel frame is four hundred megabytes of
-/// each. Beyond it the source is scaled down to fit.
-const MAX_PROCESS_PIXELS = 120_000_000
-
-/// The frame an image develops as: the image itself, at its own size, read a tile at a time. A
-/// pack develops any size — it carries its spatial parameters for a ladder of frame sizes — so
-/// nothing is fitted to a fixed frame any more; `frame` is simply the whole of it.
-function fitSource(image) {
-  let width = image.naturalWidth || image.width
-  let height = image.naturalHeight || image.height
-  let drawable = image
-  if (width * height > MAX_PROCESS_PIXELS) {
-    const scale = Math.sqrt(MAX_PROCESS_PIXELS / (width * height))
-    width = Math.max(1, Math.floor(width * scale))
-    height = Math.max(1, Math.floor(height * scale))
-    const canvas = document.createElement('canvas')
-    canvas.width = width
-    canvas.height = height
-    canvas.getContext('2d').drawImage(image, 0, 0, width, height)
-    drawable = canvas
-  }
-  return {
-    source: imageSource(drawable),
-    frame: { x: 0, y: 0, width, height },
-  }
-}
-
-/// What one stage added, drawn on its own.
-///
-/// Most stages move the print by a fraction of a code value — halation is a glow a few counts deep
-/// around a highlight, adjacency is a line one pixel wide — and side by side the two frames look
-/// identical. So the difference is amplified until its largest excursion just reaches the end of
-/// the scale, and drawn around mid grey: lighter where the stage added, darker where it took away.
-/// The gain is reported with it, because an amplified difference means nothing without one.
-/// `crop` is the photograph's own rectangle within the frame: the gain is set by the largest
-/// change inside it, so what happens out in the fill — which is never shown — cannot flatten it.
-function differenceFrame(after, before, width, crop) {
-  let peak = 0
-  for (let y = crop.y; y < crop.y + crop.height; ++y) {
-    for (let x = crop.x; x < crop.x + crop.width; ++x) {
-      const i = (y * width + x) * 4
-      for (let c = 0; c < 3; ++c) peak = Math.max(peak, Math.abs(after[i + c] - before[i + c]))
-    }
-  }
-  // Use neutral grey when the stage produces no measurable difference.
-  const gain = peak < 0.5 ? 1 : Math.min(128, 127 / peak)
-  const pixels = new Uint8ClampedArray(after.length)
-  for (let i = 0; i < after.length; i += 4) {
-    for (let c = 0; c < 3; ++c) pixels[i + c] = 128 + (after[i + c] - before[i + c]) * gain
-    pixels[i + 3] = 255
-  }
-  return { pixels, gain, peak }
-}
-
-/// Frames up to this many pixels are shown losslessly; above it a PNG of the print would take
-/// seconds to encode and hundreds of megabytes to hold, so the picture on screen is a JPEG at a
-/// quality the grain survives. What the engine developed is `pixels` either way.
-const LOSSLESS_PREVIEW_PIXELS = 16_000_000
-
-/// A blob URL for one developed frame, cut back to the rectangle the photograph landed in.
-async function frameUrl(pixels, width, height, crop) {
-  const canvas = document.createElement('canvas')
-  canvas.width = crop.width
-  canvas.height = crop.height
-  // Negative offsets: anything outside the crop is drawn outside the canvas and clipped away.
-  canvas.getContext('2d').putImageData(new ImageData(pixels, width, height), -crop.x, -crop.y)
-  const lossless = crop.width * crop.height <= LOSSLESS_PREVIEW_PIXELS
-  const blob = await new Promise((resolve) =>
-    canvas.toBlob(resolve, lossless ? 'image/png' : 'image/jpeg', lossless ? undefined : 0.95))
-  return URL.createObjectURL(blob)
-}
-
-const ZOOM_MIN = 1
-const ZOOM_MAX = 4
-const ZOOM_STEP = 0.25
-
-/// The image stays at its natural aspect ratio while the surface handles inspection. The film
-/// engine only renders one frame at a time, so zooming here is deliberately display-only: it does
-/// not re-run the pipeline or change the exported pixels.
-function ZoomableImage({ src, alt }) {
-  const [zoom, setZoom] = useState(ZOOM_MIN)
-  const [offset, setOffset] = useState({ x: 0, y: 0 })
-  const [dragging, setDragging] = useState(false)
-  const dragRef = useRef(null)
-
+function StockRow({ stock, active, image, session, onSelect }) {
+  const ref = useRef(null),
+    [url, setUrl] = useState(null)
   useEffect(() => {
-    setZoom(ZOOM_MIN)
-    setOffset({ x: 0, y: 0 })
-  }, [src])
-
-  const setZoomLevel = useCallback((next) => {
-    const level = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next))
-    setZoom(level)
-    if (level === ZOOM_MIN) setOffset({ x: 0, y: 0 })
-  }, [])
-
-  const reset = useCallback(() => {
-    setZoom(ZOOM_MIN)
-    setOffset({ x: 0, y: 0 })
-  }, [])
-
-  const onPointerDown = (event) => {
-    if (zoom === ZOOM_MIN) return
-    event.currentTarget.setPointerCapture(event.pointerId)
-    dragRef.current = { x: event.clientX, y: event.clientY, offset }
-    setDragging(true)
-  }
-
-  const onPointerMove = (event) => {
-    const drag = dragRef.current
-    if (!drag) return
-    setOffset({
-      x: drag.offset.x + event.clientX - drag.x,
-      y: drag.offset.y + event.clientY - drag.y,
+    if (!image || !session) return
+    let cancelled = false,
+      objectUrl
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return
+      observer.disconnect()
+      // Wait until the main preview has been queued before thumbnail work.
+      timer = setTimeout(
+        () =>
+          session
+            .render({
+              image,
+              stock: stock.id,
+              edit: defaultEdit(stock.id),
+              maxEdge: 160,
+              background: true,
+              stale: () => cancelled,
+            })
+            .then((result) => {
+              if (!result || cancelled) return
+              objectUrl = URL.createObjectURL(result.blob)
+              setUrl(objectUrl)
+            })
+            .catch(() => {}),
+        400,
+      )
     })
-  }
-
-  const endPointerDrag = (event) => {
-    if (dragRef.current && event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
+    let timer
+    observer.observe(ref.current)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+      observer.disconnect()
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+      setUrl(null)
     }
-    dragRef.current = null
-    setDragging(false)
-  }
-
-  const onWheel = (event) => {
-    event.preventDefault()
-    setZoomLevel(zoom + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP))
-  }
-
-  const onKeyDown = (event) => {
-    if (event.key === '+' || event.key === '=') {
-      event.preventDefault()
-      setZoomLevel(zoom + ZOOM_STEP)
-    } else if (event.key === '-' || event.key === '_') {
-      event.preventDefault()
-      setZoomLevel(zoom - ZOOM_STEP)
-    } else if (event.key === '0') {
-      event.preventDefault()
-      reset()
-    }
-  }
-
+  }, [image, session, stock.id])
   return (
-    <div
-      className={`zoom-surface ${zoom > ZOOM_MIN ? 'is-zoomed' : ''} ${dragging ? 'is-panning' : ''}`}
-      onWheel={onWheel}
-      onDoubleClick={() => setZoomLevel(zoom === ZOOM_MIN ? 2 : ZOOM_MIN)}
-      onKeyDown={onKeyDown}
-      tabIndex={0}
-      aria-label="Image inspection surface. Use the mouse wheel or controls to zoom, and drag when zoomed in."
+    <button
+      ref={ref}
+      className={`stock-row ${active ? 'selected' : ''}`}
+      aria-pressed={active}
+      onClick={onSelect}
+      title={stock.name}
     >
-      <img
-        className="zoom-image"
-        src={src}
-        alt={alt}
-        draggable="false"
-        style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endPointerDrag}
-        onPointerCancel={endPointerDrag}
-      />
-      <div className="zoom-controls" aria-label="Image zoom controls">
-        <button
-          type="button"
-          onClick={() => setZoomLevel(zoom - ZOOM_STEP)}
-          disabled={zoom === ZOOM_MIN}
-          aria-label="Zoom out"
-          title="Zoom out"
-        >
-          −
-        </button>
-        <output aria-live="polite">{Math.round(zoom * 100)}%</output>
-        <button
-          type="button"
-          onClick={() => setZoomLevel(zoom + ZOOM_STEP)}
-          disabled={zoom === ZOOM_MAX}
-          aria-label="Zoom in"
-          title="Zoom in"
-        >
-          +
-        </button>
-        <button
-          type="button"
-          className="zoom-reset"
-          onClick={reset}
-          disabled={zoom === ZOOM_MIN && offset.x === 0 && offset.y === 0}
-          aria-label="Reset zoom"
-          title="Reset zoom"
-        >
-          Reset
-        </button>
-      </div>
-    </div>
-  )
-}
-
-/// What a browser with no WebAssembly gets: the same pipeline, already developed.
-///
-/// There is no engine to run here and so nothing to upload a photograph to — offering the upload
-/// anyway would be offering a button that cannot work. The frames come from the same
-/// `fotufilm --stages` run the working demo reproduces in the tab, through one stock, and the
-/// difference view is the one the CLI amplified when it wrote them.
-function StaticPipeline() {
-  const [index, setIndex] = useState(null)
-  const [at, setAt] = useState(0)
-  const [showDelta, setShowDelta] = useState(false)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    loadJson(assetUrl('fallback/index.json'), 'no rendered pipeline to fall back to')
-      .then(setIndex)
-      .catch((e) => setError(e.message))
-  }, [])
-
-  const stage = index?.stages[at]
-  const file = stage && showDelta && stage.delta ? stage.delta : stage?.file
-
-  return (
-    <div className="studio-shell">
-      <AppHeader backend="Preview" />
-      <main className="workspace static-workspace">
-        <aside className="control-panel panel">
-          <PanelTitle eyebrow="About" title="Rendered preview" />
-          <div className="fallback-message">
-            <WarningIcon aria-hidden="true" />
-            <p>
-              This browser cannot run WebAssembly, so this is a pre-rendered {index?.name || 'film'}
-              pipeline. Every stage is still available to inspect.
-            </p>
-          </div>
-        </aside>
-
-        <section className="viewer panel">
-          {file ? (
-            <figure className="image-frame">
-              <div className="image-stage">
-                <ZoomableImage src={assetUrl(`fallback/${file}`)} alt={stage.label} />
-              </div>
-              <figcaption className="viewer-bar">
-                <span className="viewer-label">
-                  {showDelta && stage.delta ? `Difference · ${stageName(stage)}` : stageName(stage)}
-                </span>
-              </figcaption>
-            </figure>
-          ) : (
-            <div className="loading-state">
-              {error ? <WarningIcon /> : <LoaderIcon className="spin" />}
-              <p>{error ? 'Nothing to show' : 'Loading preview'}</p>
-            </div>
-          )}
-        </section>
-
-        <aside className="pipeline-panel panel">
-          <PanelTitle eyebrow="Pipeline" title="All stages" detail={`${index?.stages.length || 0} steps`} />
-          <PipelineSteps
-            stages={index?.stages || []}
-            stageIndex={at}
-            setStageIndex={setAt}
-            disabled={!index}
-            includePrint={false}
-          />
-          <Switch
-            className="delta-switch"
-            label="Show stage difference"
-            labelPosition="start"
-            labelSpacing="spread"
-            size="sm"
-            value={showDelta}
-            onChange={setShowDelta}
-            isDisabled={!stage?.delta}
-            width="100%"
-          />
-        </aside>
-      </main>
-      <p className="pipeline-note">Film profiles © 2026 MUAStudio Inc. · <a href={assetUrl('packs/FILM-PROFILES.txt')}>CC BY-SA 4.0</a></p>
-    </div>
-  )
-}
-
-function AppHeader({ backend, developing = false, onUpload }) {
-  return (
-    <header className="app-header">
-      <div className="brand-mark" aria-hidden="true">
-        <img src={appIconUrl} alt="" />
-      </div>
-      <div className="brand-copy">
-        <h1>fotufilm</h1>
-        <p>Physical film development</p>
-      </div>
-      <div className="engine-pill">
-        <span className={`engine-dot ${developing ? 'active' : ''}`} />
-        {developing ? 'Developing' : backend || 'Starting'}
-      </div>
-      {onUpload && (
-        <Button
-          className="header-upload"
-          label="Open image"
-          size="md"
-          variant="secondary"
-          icon={<UploadIcon aria-hidden="true" />}
-          isIconOnly
-          tooltip="Open image"
-          onClick={onUpload}
-        />
-      )}
-    </header>
+      <span className="stock-thumb">{url ? <img src={url} alt="" /> : <Icon name="film" />}</span>
+      <span className="stock-copy">
+        <span>{stock.name}</span>
+        <small>{stock.kind || 'Film'}</small>
+      </span>
+      {active && <Icon name="check" />}
+    </button>
   )
 }
 
 export default function App() {
-  const [stocks, setStocks] = useState([])
-  const [stock, setStock] = useState(null)
-  const [params, setParams] = useState(Object.fromEntries(SLIDERS.map((s) => [s.key, s.def])))
-  const [source, setSource] = useState(null)
-  const [originalUrl, setOriginalUrl] = useState(null)
-  const [resultUrl, setResultUrl] = useState(null)
-  // Stock used for the displayed print; selection may change before the next develop completes.
-  const [printedStock, setPrintedStock] = useState(null)
-  const [developing, setDeveloping] = useState(false)
-  const [status, setStatus] = useState('starting the engine…')
-  const [error, setError] = useState(null)
-  const [elapsed, setElapsed] = useState(null)
-  const [showOriginal, setShowOriginal] = useState(false)
-  const [dragOver, setDragOver] = useState(false)
-  const [backend, setBackend] = useState(null)
-  // The pipeline walk. `stages` are the packs the sidecar describes, in the order the light meets
-  // them; the last of them is the finished print, which is why it doubles as the ordinary result.
-  const [stages, setStages] = useState([])
-  const [stageIndex, setStageIndex] = useState(null)
-  const [showDelta, setShowDelta] = useState(false)
-  const [delta, setDelta] = useState(null)
-  const inputRef = useRef(null)
-  const developerRef = useRef(null)
-  // The finished film, kept apart from the stages so the print can still be developed by a stock
-  // that has no sidecar.
-  const basePackRef = useRef(null)
-  // Developed frames, by stage id. Walking back and forth through the pipeline should not
-  // re-develop what has already been developed, and the difference view needs the frame before
-  // this one as pixels rather than as a picture on screen.
-  const framesRef = useRef(new Map())
-  const framesKeyRef = useRef(null)
-
-  // Load the default scene only if the user has not selected an image while it was fetching.
+  const [history, dispatch] = useReducer(historyReducer, initialHistory)
+  const edit = history.present
+  const [stocks, setStocks] = useState([]),
+    [files, setFiles] = useState([]),
+    [activeId, setActiveId] = useState(null)
+  const active = files.find((file) => file.id === activeId)
+  const [panel, setPanel] = useState('film'),
+    [filmOpen, setFilmOpen] = useState(() => window.innerWidth > 620),
+    [inspectorOpen, setInspectorOpen] = useState(true)
+  const [search, setSearch] = useState(''),
+    [zoom, setZoom] = useState(1),
+    [compare, setCompare] = useState(false)
+  const [histogram, setHistogram] = useState(false),
+    [dragOver, setDragOver] = useState(false)
+  const [result, setResult] = useState(null),
+    [status, setStatus] = useState('Loading films'),
+    [error, setError] = useState(null),
+    [importStatus, setImportStatus] = useState(null)
+  const [dialog, setDialog] = useState(null),
+    [exporting, setExporting] = useState(false),
+    [exportType, setExportType] = useState('image/png'),
+    [exportSize, setExportSize] = useState('full'),
+    [quality, setQuality] = useState(95)
+  const [stage, setStage] = useState(null),
+    [stages, setStages] = useState([]),
+    [difference, setDifference] = useState(false)
+  const [session, setSession] = useState(null),
+    [retry, setRetry] = useState(0)
+  const input = useRef(null),
+    editInput = useRef(null),
+    histories = useRef(new Map()),
+    urls = useRef(new Set()),
+    loadGeneration = useRef(0),
+    importController = useRef(null)
+  const [cropPreview, setCropPreview] = useState(false)
+  const cropMode = panel === 'crop' && inspectorOpen && !cropPreview
+  const [zoomReadout, setZoomReadout] = useState(100)
+  const previewEditJSON = JSON.stringify(
+    cropMode ? { ...edit, crop: fullCrop(), ratio: 'free', straighten: 0 } : edit,
+  )
+  const [settledEdit, setSettledEdit] = useState(previewEditJSON)
   useEffect(() => {
-    if (!HAS_WASM) return
-    const url = assetUrl(DEFAULT_SCENE)
-    const image = new Image()
-    image.onload = () => {
-      setSource((current) => current ?? image)
-      setOriginalUrl((current) => current ?? url)
-    }
-    image.onerror = () => console.warn('no default scene at', url)
-    image.src = url
-  }, [])
+    const timer = setTimeout(() => setSettledEdit(previewEditJSON), 250)
+    return () => clearTimeout(timer)
+  }, [previewEditJSON])
+  const interacting = !!history.group || settledEdit !== previewEditJSON
+  const [interactiveEdge, setInteractiveEdge] = useState(512)
+  const previewEdge = Math.min(
+    Math.max(active?.image.naturalWidth || 1600, active?.image.naturalHeight || 1600),
+    cropMode ? 1600 : interacting ? interactiveEdge : Math.round(1600 * zoom),
+  )
+  const previewKey = JSON.stringify([
+    activeId,
+    previewEditJSON,
+    stage,
+    difference,
+    cropMode,
+    previewEdge,
+  ])
+  const previewEdit = useMemo(() => JSON.parse(previewEditJSON), [previewEditJSON])
+  const selectedStock = stocks.find((stock) => stock.id === edit.stock)
+  const stockId = edit.stock || stocks[0]?.id
+  const patch = useCallback((value, group) => dispatch({ type: 'edit', patch: value, group }), [])
+  const endEdit = useCallback(() => dispatch({ type: 'end' }), [])
+  const setParam = (key, value) => patch({ params: { ...edit.params, [key]: value } }, key)
+  const setInspector = (value) => {
+    endEdit()
+    setPanel(value)
+    if (value === 'crop') setCropPreview(false)
+    setInspectorOpen(true)
+    setCompare(false)
+  }
 
+  const alive = useRef(false)
+  const previewQueue = useRef(null)
+  const lastRenderedPreview = useRef(null)
+  const currentPreview = useRef(null)
+  currentPreview.current = { activeId, key: previewKey, exporting, cropMode }
   useEffect(() => {
-    if (!HAS_WASM) return
-    let cancelled = false
-    loadJson(assetUrl('packs/index.json'), 'no packs — run tools/build-wasm.sh')
-      .then((index) => {
-        if (cancelled) return
-        setStocks(index)
-        setStock((current) => current ?? index[0]?.id ?? null)
-        setStatus(null)
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          setError(e.message)
-          setStatus(null)
-        }
-      })
+    const renderer = new RenderSession()
+    alive.current = true
+    previewQueue.current = new PreviewQueue((text) => {
+      if (alive.current && !currentPreview.current?.exporting) setStatus(text)
+    })
+    setSession(renderer)
     return () => {
-      cancelled = true
+      alive.current = false
+      previewQueue.current.close()
+      renderer.dispose()
+      importController.current?.abort()
+      loadGeneration.current++
+      for (const url of urls.current) URL.revokeObjectURL(url)
+      urls.current.clear()
     }
   }, [])
-
-  // Keep one developer per stock to retain WASM buffers and the 5 MB spectral cube. Kernel loading
-  // also determines whether that stock can use the GPU path.
   useEffect(() => {
-    if (!stock || !HAS_WASM) return
     let cancelled = false
-    setStatus(`loading ${stock}…`)
-    loadPack(assetUrl(`packs/${stock}.pack`))
-      .then(async (pack) => {
-        // The sidecar is the optional half: without it the demo is still a darkroom, just one
-        // that cannot be taken apart. A stock exported before it existed should not fail to load.
-        const sequence = await loadStages(assetUrl(`packs/${stock}.stages`), pack)
-          .catch((e) => {
-            console.warn(`no pipeline stages for ${stock}:`, e.message)
-            return []
-          })
-        return { pack, developer: await createDeveloper(pack), sequence }
-      })
-      .then(({ pack, developer, sequence }) => {
-        if (cancelled) {
-          developer.dispose()
-          return
-        }
-        developerRef.current?.dispose()
-        developerRef.current = developer
-        basePackRef.current = pack
-        setStages(sequence)
-        setStageIndex(null)
-        setBackend(developer.backend)
-        setStatus(null)
-        setError(null)
-      })
-      .catch((e) => {
-        if (!cancelled) {
-          setError(e.message)
-          setStatus(null)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [stock])
-
-  // Everything a developed frame depends on. When it changes the cache is stale by definition,
-  // and the walk starts again from whatever is developed next.
-  const frameKey = useMemo(
-    () => `${stock}|${originalUrl}|${SLIDERS.map((s) => params[s.key]).join(',')}`,
-    [stock, originalUrl, params])
-
-  const acceptFile = useCallback((file) => {
-    if (!file || !file.type.startsWith('image/')) return
     setError(null)
-    const url = URL.createObjectURL(file)
-    const image = new Image()
-    image.onload = () => {
-      setSource(image)
-      setOriginalUrl((old) => {
-        // The default scene is a file on the server, not a blob, and outlives every upload.
-        if (old?.startsWith('blob:')) URL.revokeObjectURL(old)
-        return url
+    setStatus('Loading films')
+    loadStockIndex()
+      .then((index) => {
+        if (!cancelled) {
+          setStocks(index)
+          setStatus(null)
+        }
       })
-      setResultUrl(null)
-      setDelta(null)
+      .catch((e) => {
+        if (!cancelled) {
+          setError(e.message)
+          setStatus(null)
+        }
+      })
+    return () => {
+      cancelled = true
     }
-    image.onerror = () => setError('could not decode that image')
-    image.src = url
+  }, [retry])
+  useEffect(() => {
+    if (activeId) histories.current.set(activeId, history)
+  }, [history, activeId])
+
+  const replaceResult = useCallback((next) => {
+    setResult((previous) => {
+      for (const url of [previous?.url, previous?.originalUrl])
+        if (url) {
+          URL.revokeObjectURL(url)
+          urls.current.delete(url)
+        }
+      return next
+    })
   }, [])
+  useEffect(() => {
+    if (!active || !stockId || !session || exporting) return
+    const currentFile = () => alive.current && currentPreview.current?.activeId === active.id
+    const request = {
+      image: active.image,
+      edit: previewEdit,
+      stock: stockId,
+      maxEdge: previewEdge,
+      stage,
+      difference,
+      cropMode,
+      stale: () => !currentFile() || currentPreview.current.exporting,
+    }
+    const frame = requestAnimationFrame(() => {
+      const stock = stocks.find((item) => item.id === previewEdit.stock)
+      const queued = {
+        fileId: active.id, filename: active.name, edit: previewEdit,
+        stockName: stock?.name,
+        mediumName: stock?.media.find((medium) => medium.id === previewEdit.medium)?.name,
+        edge: previewEdge, cropMode, stage, difference,
+        stageLabel: stages[stage]?.label,
+      }
+      const label = previewLabel(queued, lastRenderedPreview.current)
+      previewQueue.current
+        .submit((onProgress) => session.render({ ...request, onProgress }), label)
+        .then((next) => {
+          if (
+            !next ||
+            !currentFile() ||
+            currentPreview.current.exporting ||
+            currentPreview.current.cropMode !== cropMode
+          )
+            return
+          if (interacting) {
+            if (next.renderMilliseconds > 65)
+              setInteractiveEdge((edge) => Math.max(256, Math.round(edge * 0.8)))
+            else if (next.renderMilliseconds < 25)
+              setInteractiveEdge((edge) => Math.min(800, Math.round(edge * 1.1)))
+          }
+          const url = URL.createObjectURL(next.blob),
+            originalUrl = URL.createObjectURL(next.original)
+          urls.current.add(url)
+          urls.current.add(originalUrl)
+          replaceResult({
+            ...next,
+            url,
+            originalUrl,
+            key: previewKey,
+            fileId: active.id,
+            stock: previewEdit.stock,
+            stage,
+          })
+          lastRenderedPreview.current = queued
+          setError(null)
+        })
+        .catch((error) => {
+          if (currentFile()) {
+            setError(error.message)
+            if (!previewQueue.current.running) setStatus(null)
+          }
+        })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [
+    active,
+    previewEdit,
+    previewEdge,
+    interacting,
+    previewKey,
+    stockId,
+    session,
+    stage,
+    difference,
+    cropMode,
+    exporting,
+    retry,
+    replaceResult,
+  ])
 
-  /// One developed frame, kept. The cache is keyed by stage because the walk goes back and forth
-  /// and because the difference view needs the frame before this one as pixels.
-  const frameFor = useCallback(async (developer, fitted, index) => {
-    // The last stage is the film with nothing switched off, so it and the plain print are the same
-    // frame; sharing the entry keeps the walk from developing it twice.
-    const at = index == null && stages.length > 0 ? stages.length - 1 : index
-    const id = at == null ? '#print' : stages[at].id
-    const cached = framesRef.current.get(id)
-    if (cached) return cached
-    developer.usePack(at == null ? basePackRef.current : stages[at])
-    const { pixels, elapsed: ms } = await developer.develop(fitted.source, params)
-    const url = await frameUrl(pixels, developer.width, developer.height, fitted.frame)
-    const entry = { pixels, url, ms }
-    framesRef.current.set(id, entry)
-    return entry
-  }, [stages, params])
+  useEffect(() => {
+    if (panel !== 'pipeline' || !session || !stockId) return
+    let cancelled = false
+    setStages([])
+    session
+      .stages(stockId, edit.medium)
+      .then((next) => {
+        if (!cancelled) setStages(next)
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e.message)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [panel, session, stockId, edit.medium])
 
-  const developView = useCallback(async (index) => {
-    const developer = developerRef.current
-    if (!source || !developer || developing) return
-    setDeveloping(true)
+  async function acceptFiles(incoming) {
+    if (exporting) return
+    const generation = ++loadGeneration.current
+    importController.current?.abort()
+    const controller = new AbortController()
+    importController.current = controller
+    const loaded = [],
+      errors = []
+    for (const file of Array.from(incoming || [])) {
+      if (controller.signal.aborted) break
+      if (isRawFile(file)) {
+        try {
+          const decoded = await importRaw(file, {
+            signal: controller.signal,
+            onProgress: (text) => {
+              if (!controller.signal.aborted) setImportStatus(`${text}: ${file.name}`)
+            },
+          })
+          loaded.push({ id: crypto.randomUUID(), name: file.name, ...decoded })
+        } catch (e) {
+          if (e.name !== 'AbortError') errors.push(`${file.name}: ${e.message}`)
+        }
+        continue
+      }
+      if (!file.type.startsWith('image/') && !/\.(png|jpe?g|webp|avif|gif|bmp)$/i.test(file.name)) {
+        errors.push(`${file.name}: choose an image or camera RAW file.`)
+        continue
+      }
+      const url = URL.createObjectURL(file)
+      try {
+        const image = new Image()
+        image.src = url
+        await image.decode()
+        if (image.naturalWidth * image.naturalHeight > 120000000)
+          throw new Error('Images above 120 megapixels are not supported.')
+        loaded.push({ id: crypto.randomUUID(), name: file.name, image, url })
+      } catch (e) {
+        URL.revokeObjectURL(url)
+        errors.push(`${file.name}: ${e.message || 'Could not decode image.'}`)
+      }
+    }
+    if (generation !== loadGeneration.current) {
+      loaded.forEach((file) => URL.revokeObjectURL(file.url))
+      return
+    }
+    setImportStatus(null)
+    importController.current = null
+    if (loaded.length) {
+      loaded.forEach((file) => urls.current.add(file.url))
+      if (activeId) histories.current.set(activeId, history)
+      setFiles((current) => [...current, ...loaded])
+      setActiveId(loaded[0].id)
+      dispatch({ type: 'load', edit: defaultEdit(edit.stock) })
+      replaceResult(null)
+      setStage(null)
+      setDifference(false)
+    }
+    setError(errors.length ? errors.join(' ') : null)
+  }
+  async function openSample() {
+    try {
+      const canvas = document.createElement('canvas')
+      canvas.width = 1600
+      canvas.height = 1000
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#202124'
+      ctx.fillRect(0, 0, 1600, 1000)
+      for (let row = 0; row < 4; row++)
+        for (let column = 0; column < 8; column++) {
+          ctx.fillStyle = `hsl(${column * 45} ${85 - row * 20}% ${65 - row * 12}%)`
+          ctx.fillRect(70 + column * 185, 70 + row * 160, 165, 140)
+        }
+      const gradient = ctx.createLinearGradient(70, 0, 1530, 0)
+      gradient.addColorStop(0, '#000')
+      gradient.addColorStop(1, '#fff')
+      ctx.fillStyle = gradient
+      ctx.fillRect(70, 750, 1460, 180)
+      await acceptFiles([
+        new File([await canvasBlob(canvas)], 'Color chart.png', {
+          type: 'image/png',
+        }),
+      ])
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+  function selectFile(file) {
+    if (file.id === activeId || exporting) return
+    histories.current.set(activeId, history)
+    setActiveId(file.id)
+    dispatch({
+      type: 'restore',
+      history: histories.current.get(file.id) || {
+        ...initialHistory,
+        present: defaultEdit(edit.stock),
+      },
+    })
+    replaceResult(null)
+    setStage(null)
+    setDifference(false)
+  }
+  function removeFile(file) {
+    if (exporting) return
+    const remaining = files.filter((item) => item.id !== file.id)
+    if (file.id === activeId) {
+      const next = remaining[Math.max(0, files.indexOf(file) - 1)]
+      setActiveId(next?.id || null)
+      dispatch({
+        type: 'restore',
+        history: histories.current.get(next?.id) || {
+          ...initialHistory,
+          present: defaultEdit(edit.stock),
+        },
+      })
+      replaceResult(null)
+    }
+    histories.current.delete(file.id)
+    setFiles(remaining)
+    URL.revokeObjectURL(file.url)
+    urls.current.delete(file.url)
+  }
+  function selectStock(id) {
+    if (exporting) return
+    const medium = stocks.find((s) => s.id === id)?.media.some((m) => m.id === edit.medium)
+      ? edit.medium
+      : null
+    patch({ stock: id, medium })
+    setStage(null)
+    setDifference(false)
+  }
+  function saveEdit() {
+    download(
+      new Blob([JSON.stringify({ version: 1, edit }, null, 2)], {
+        type: 'application/json',
+      }),
+      `${cleanName(active?.name || 'photo')}.fotufilm-web.json`,
+    )
+    setDialog(null)
+  }
+  async function restoreEdit(file) {
+    if (!file) return
+    try {
+      const restored = parseEdit(
+        await file.text(),
+        stocks.map((s) => s.id),
+      )
+      patch(restored)
+      setStage(null)
+      setDifference(false)
+      setError(null)
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+  async function exportImage() {
+    if (!active || !session || !stockId || exporting) return
+    setExporting(true)
     setError(null)
     try {
-      if (framesKeyRef.current !== frameKey) {
-        for (const entry of framesRef.current.values()) URL.revokeObjectURL(entry.url)
-        framesRef.current.clear()
-        framesKeyRef.current = frameKey
-      }
-      const fitted = fitSource(source)
-      // Yield before synchronous conversion or CPU development so the browser can paint status.
-      // Use a timeout because background tabs do not receive animation frames.
-      await new Promise((resolve) => setTimeout(resolve, 32))
-
-      const entry = await frameFor(developer, fitted, index)
-      setResultUrl(entry.url)
-      setElapsed(entry.ms)
-      setPrintedStock(stock)
-
-      // The first stage has nothing before it to differ from: it is the whole pipeline switched
-      // off, which is the baseline rather than a step.
-      if (showDelta && index != null && index > 0) {
-        const id = `${stages[index].id}#delta`
-        let difference = framesRef.current.get(id)
-        if (!difference) {
-          const before = await frameFor(developer, fitted, index - 1)
-          const shown = differenceFrame(entry.pixels, before.pixels,
-                                       developer.width, fitted.frame)
-          difference = {
-            ...shown,
-            url: await frameUrl(shown.pixels, developer.width, developer.height, fitted.frame),
-          }
-          framesRef.current.set(id, difference)
-        }
-        setDelta(difference)
-      } else {
-        setDelta(null)
-      }
+      const next = await session.render({
+        image: active.image,
+        edit,
+        stock: stockId,
+        maxEdge: exportSize === 'full' ? Infinity : Number(exportSize),
+        comparison: false,
+        purpose: 'export',
+        onProgress: setStatus,
+      })
+      if (!next) throw new Error('Export was cancelled.')
+      setStatus(`Encoding ${exportType.split('/')[1].toUpperCase()} export`)
+      const blob =
+        exportType === 'image/png'
+          ? next.blob
+          : await canvasBlob(next.canvas, exportType, quality / 100)
+      const extension = exportType === 'image/jpeg' ? 'jpg' : exportType.split('/')[1]
+      download(
+        blob,
+        `${cleanName(active.name)}-${edit.stock || 'normal'}${edit.medium ? `-${edit.medium}` : ''}.${extension}`,
+      )
+      setDialog(null)
     } catch (e) {
       setError(e.message)
     } finally {
-      setDeveloping(false)
+      setExporting(false)
+      setStatus(null)
     }
-  }, [source, developing, params, stock, frameKey, frameFor, showDelta, stages])
-
-  // Stepping through the pipeline, or turning the difference on, re-develops on its own: the
-  // frames are usually cached by then, so it costs a canvas rather than a kernel run. Only once
-  // something has been developed at these settings, though — before that the button is the way in.
-  useEffect(() => {
-    if (framesKeyRef.current === frameKey && framesRef.current.size > 0) developView(stageIndex)
-    // developView changes identity on every develop; following it here would loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stageIndex, showDelta, frameKey])
-
-  const onDrop = (e) => {
-    e.preventDefault()
-    setDragOver(false)
-    acceptFile(e.dataTransfer.files?.[0])
   }
+  useEffect(() => {
+    function keydown(event) {
+      if (isTyping(event.target) || exporting) return
+      const command = event.metaKey || event.ctrlKey
+      if (command && event.key.toLowerCase() === 'o') {
+        event.preventDefault()
+        input.current?.click()
+      } else if (command && event.key.toLowerCase() === 'z') {
+        event.preventDefault()
+        dispatch({ type: event.shiftKey ? 'redo' : 'undo' })
+      } else if (command && event.key.toLowerCase() === 's' && active) {
+        event.preventDefault()
+        setDialog('export')
+      } else if (event.code === 'Space' && active) {
+        event.preventDefault()
+        setCompare(true)
+      } else if (event.key === 'Escape') {
+        setCompare(false)
+        setZoom(1)
+        if (cropMode) setPanel('film')
+      } else if (event.key === 'Enter' && cropMode) {
+        setPanel('film')
+        endEdit()
+      } else if (!command && event.key.toLowerCase() === 'h') setHistogram((v) => !v)
+      else if (!command && event.key.toLowerCase() === 'c') {
+        setPanel('crop')
+        setCropPreview(false)
+        setInspectorOpen(true)
+      } else if (event.key === '0') setZoom(1)
+      else if (event.key === '+' || event.key === '=') setZoom((z) => Math.min(8, z + 0.25))
+      else if (event.key === '-') setZoom((z) => Math.max(1, z - 0.25))
+      else if (event.key === 'Tab') return
+    }
+    const release = (event) => {
+      if (event.code === 'Space') setCompare(false)
+    }
+    const blur = () => {
+      setCompare(false)
+      endEdit()
+    }
+    window.addEventListener('keydown', keydown)
+    window.addEventListener('keyup', release)
+    window.addEventListener('blur', blur)
+    return () => {
+      window.removeEventListener('keydown', keydown)
+      window.removeEventListener('keyup', release)
+      window.removeEventListener('blur', blur)
+    }
+  }, [active, exporting, cropMode, endEdit])
 
-  // Every hook above has run, so this is a stable branch: HAS_WASM is fixed for the session.
-  if (!HAS_WASM) return <StaticPipeline />
-
-  const stage = stageIndex == null ? null : stages[stageIndex]
-  const shownUrl = showOriginal
-    ? originalUrl
-    : (delta ? delta.url : resultUrl) || originalUrl
-  const shownLabel = !originalUrl
-    ? null
-    : showOriginal || !resultUrl
-      ? 'source · digital'
-      : delta
-        ? `what ${stage.label} added · ×${delta.gain.toFixed(1)}`
-        : stage
-          ? `${stage.label} · ${printedStock}`
-          : `print · ${printedStock}`
-
-  const selectedStock = stocks.find((item) => item.id === stock)
-  const backendLabel = backend === 'webgpu'
-    ? 'WebGPU'
-    : backend === 'simd'
-      ? 'WASM · SIMD'
-      : backend
-        ? 'WebAssembly'
-        : null
+  const visibleStocks = stocks.filter((stock) =>
+    stock.name.toLowerCase().includes(search.toLowerCase()),
+  )
+  const rawWidth = active?.image.naturalWidth || 0,
+    rawHeight = active?.image.naturalHeight || 0
+  const width = edit.rotation % 2 ? rawHeight : rawWidth,
+    height = edit.rotation % 2 ? rawWidth : rawHeight
+  const cropSize = outputSize(edit.crop, width, height)
+  const exportScale =
+    exportSize === 'full' ? 1 : Math.min(1, Number(exportSize) / Math.max(width, height))
+  const shownResult = result?.fileId === activeId ? result : null
+  const adjustments = (group) => (
+    <Adjustments
+      group={group}
+      params={edit.params}
+      onChange={setParam}
+      onEnd={endEdit}
+      disabled={exporting || !active}
+    />
+  )
 
   return (
-    <div className={`studio-shell ${developing ? 'is-developing' : ''}`}>
-      <AppHeader
-        backend={backendLabel}
-        developing={developing}
-        onUpload={() => inputRef.current?.click()}
-      />
-
-      <main className="workspace">
-        <aside className="control-panel panel">
-          <PanelTitle eyebrow="Film setup" title="Build the look" detail="7 controls" />
-
-          <label className="stock-field">
-            <span>Film stock</span>
-            <select value={stock || ''} onChange={(event) => setStock(event.target.value)}>
-              {stocks.map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
-            </select>
-            <small>{STOCK_NOTES[stock] || selectedStock?.name || 'Loading stock library'}</small>
-          </label>
-
-          <div className="adjustment-grid">
-            {SLIDERS.map((slider) => {
-              const signed = ['ev', 'highlights', 'shadows', 'vibrance'].includes(slider.key)
-              const value = params[slider.key]
-              return (
-                <div className="adjustment" key={slider.key}>
-                  <div className="adjustment-label">
-                    <span>{slider.label}</span>
-                    <output>
-                      {signed && value > 0 ? '+' : ''}{Number(value).toFixed(2)}{slider.unit ? ` ${slider.unit}` : ''}
-                    </output>
-                  </div>
-                  <Slider
-                    className="compact-slider"
-                    label={slider.label}
-                    isLabelHidden
-                    valueDisplay="none"
-                    min={slider.min}
-                    max={slider.max}
-                    step={slider.step}
-                    value={value}
-                    onChange={(nextValue) =>
-                      setParams((current) => ({ ...current, [slider.key]: nextValue }))
-                    }
-                    width="100%"
-                  />
-                </div>
-              )
-            })}
-          </div>
-
-          <div className="develop-block">
-            <Button
-              className="develop-button"
-              label={developing ? 'Developing image' : 'Develop print'}
-              variant="primary"
-              size="lg"
-              icon={developing
-                ? <LoaderIcon className="spin" aria-hidden="true" />
-                : <FlaskIcon aria-hidden="true" />}
-              width="100%"
-              onClick={() => {
-                setStageIndex(null)
-                developView(null)
-              }}
-              isDisabled={!source || developing || !!status}
+    <div
+      className={`editor ${filmOpen ? '' : 'film-collapsed'} ${inspectorOpen ? '' : 'inspector-collapsed'}`}
+    >
+      <header className="toolbar" aria-label="Editor toolbar">
+        <div className="toolbar-leading">
+          <ToolButton
+            icon="sidebar"
+            label="Toggle film sidebar"
+            active={filmOpen}
+            onClick={() => setFilmOpen((v) => !v)}
+          />
+          <span className="app-name">Fotufilm</span>
+          <ToolButton
+            icon="open"
+            label="Open images (⌘O)"
+            onClick={() => input.current?.click()}
+            disabled={exporting}
+          />
+        </div>
+        <div className="toolbar-zoom">
+          <ToolButton
+            icon="minus"
+            label="Zoom out"
+            onClick={() => setZoom((z) => Math.max(1, z - 0.25))}
+            disabled={!active || zoom === 1 || cropMode}
+          />
+          <span className="zoom-readout">{zoom === 1 ? 'Fit' : `${zoomReadout}%`}</span>
+          <ToolButton
+            icon="plus"
+            label="Zoom in"
+            onClick={() => setZoom((z) => Math.min(8, z + 0.25))}
+            disabled={!active || zoom === 8 || cropMode}
+          />
+          <ToolButton
+            icon="fit"
+            label="Zoom to fit (0)"
+            onClick={() => setZoom(1)}
+            disabled={!active || zoom === 1}
+          />
+          <span className="pixel-readout">
+            {active?.image.raw ? 'RAW · ' : ''}
+            {active ? `${((rawWidth * rawHeight) / 1000000).toFixed(1)} MP` : ''}
+          </span>
+        </div>
+        <div className="toolbar-trailing">
+          <ToolButton
+            icon="histogram"
+            label="Histogram (H)"
+            active={histogram}
+            onClick={() => setHistogram((v) => !v)}
+            disabled={!active}
+          />
+          <span className="toolbar-divider" />
+          <ToolButton
+            icon="undo"
+            label="Undo (⌘Z)"
+            onClick={() => dispatch({ type: 'undo' })}
+            disabled={!history.past.length || exporting}
+          />
+          <ToolButton
+            icon="redo"
+            label="Redo (⇧⌘Z)"
+            onClick={() => dispatch({ type: 'redo' })}
+            disabled={!history.future.length || exporting}
+          />
+          <ToolButton
+            icon="reset"
+            label="Reset all edits"
+            onClick={() => {
+              patch(defaultEdit(edit.stock))
+              setStage(null)
+              setDifference(false)
+            }}
+            disabled={!active || exporting}
+          />
+          <ToolButton
+            icon="export"
+            label="Export (⌘S)"
+            onClick={() => setDialog('export')}
+            disabled={!active || !stocks.length || exporting}
+          />
+          <ToolButton icon="more" label="More options" onClick={() => setDialog('more')} />
+          <ToolButton
+            icon="inspector"
+            label="Toggle adjustments"
+            active={inspectorOpen}
+            onClick={() => setInspectorOpen((v) => !v)}
+          />
+        </div>
+      </header>
+      <aside className="film-sidebar" aria-label="Film library" inert={exporting}>
+        <div className="sidebar-heading">
+          <span>Film</span>
+          <small>{stocks.length}</small>
+        </div>
+        <div className="search-field">
+          <TextInput
+            label="Search films"
+            isLabelHidden
+            role="searchbox"
+            size="sm"
+            placeholder="Search films"
+            value={search}
+            onChange={setSearch}
+            startIcon={<Icon name="search" />}
+            width="100%"
+          />
+        </div>
+        <div className="stock-list">
+          <button
+            className={`stock-row normal-row ${edit.stock === null ? 'selected' : ''}`}
+            aria-pressed={edit.stock === null}
+            onClick={() => selectStock(null)}
+          >
+            <span className="stock-thumb">
+              {active ? <img src={active.url} alt="" /> : <Icon name="film" />}
+            </span>
+            <span className="stock-copy">
+              <span>Normal</span>
+              <small>No film</small>
+            </span>
+            {edit.stock === null && <Icon name="check" />}
+          </button>
+          {visibleStocks.map((stock) => (
+            <StockRow
+              key={stock.id}
+              stock={stock}
+              active={edit.stock === stock.id}
+              image={active?.image}
+              session={session}
+              onSelect={() => selectStock(stock.id)}
             />
-            <div className="process-status" role="status">
-              {error ? (
-                <span className="error"><WarningIcon /> {error}</span>
-              ) : status ? (
-                <span>{status}</span>
-              ) : elapsed != null ? (
-                <span>{elapsed.toFixed(0)} ms · {selectedStock?.name || printedStock}</span>
-              ) : (
-                <span>Ready to develop</span>
-              )}
-            </div>
-          </div>
-        </aside>
-
-        <section
-          className={`viewer panel ${dragOver ? 'drag' : ''}`}
-          onDragOver={(event) => {
-            event.preventDefault()
-            setDragOver(true)
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={onDrop}
-          onClick={() => !originalUrl && inputRef.current?.click()}
-        >
-          {shownUrl ? (
-            <figure className="image-frame">
-              <div className="image-stage">
-                <ZoomableImage src={shownUrl} alt="fotufilm preview" />
-                {developing && (
-                  <div className="developing-overlay">
-                    <LoaderIcon className="spin" />
-                    <span>Developing</span>
-                  </div>
-                )}
-              </div>
-              <figcaption className="viewer-bar">
-                <span className="viewer-label">{shownLabel}</span>
-                {developer && <span className="viewer-resolution">{developer.width} × {developer.height}px process</span>}
-                <div className="viewer-actions">
-                  {resultUrl && (
-                    <button
-                      className="icon-action compare-action"
-                      onPointerDown={() => setShowOriginal(true)}
-                      onPointerUp={() => setShowOriginal(false)}
-                      onPointerCancel={() => setShowOriginal(false)}
-                      onPointerLeave={() => setShowOriginal(false)}
-                      title="Hold to compare with the source"
-                      aria-label="Hold to compare with the source"
-                    >
-                      <BlendIcon />
-                      <span>Compare</span>
-                    </button>
-                  )}
-                  <button
-                    className="icon-action"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      inputRef.current?.click()
-                    }}
-                    title="Open a new image"
-                  >
-                    <GalleryAddIcon />
-                    <span>Replace</span>
-                  </button>
-                  {resultUrl && (
-                    <a
-                      className="icon-action"
-                      href={shownUrl}
-                      download={`fotufilm-${printedStock}-${stage ? stage.id : 'print'}.png`}
-                      title="Download current image"
-                    >
-                      <DownloadIcon />
-                      <span>Export</span>
-                    </a>
-                  )}
-                </div>
-              </figcaption>
-            </figure>
-          ) : (
-            <div className="upload-state">
-              <div className="upload-icon"><GalleryAddIcon /></div>
-              <h2>Open a digital negative</h2>
-              <p>Drop an image here or choose a JPEG, PNG, or WebP file.</p>
-              <Button
-                label="Choose image"
-                variant="primary"
-                icon={<UploadIcon aria-hidden="true" />}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  inputRef.current?.click()
-                }}
-              />
-            </div>
+          ))}
+          {!visibleStocks.length && !!stocks.length && (
+            <p className="empty-search">No matching films.</p>
           )}
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*"
-            hidden
-            onChange={(event) => acceptFile(event.target.files?.[0])}
+        </div>
+      </aside>
+      <main
+        className={`viewer ${dragOver ? 'drag-over' : ''}`}
+        aria-label="Image editor"
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragOver(true)
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(false)
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragOver(false)
+          acceptFiles(e.dataTransfer.files)
+        }}
+      >
+        {active ? (
+          <ImageCanvas
+            result={shownResult}
+            original={active.image}
+            sourceKey={active.id}
+            zoom={zoom}
+            outputWidth={cropMode ? width : cropSize.width}
+            onZoomReadout={setZoomReadout}
+            setZoom={setZoom}
+            compare={compare}
+            setCompare={setCompare}
+            cropMode={cropMode}
+            crop={edit.crop}
+            onCrop={(crop) => patch({ crop, ratio: 'free' }, 'crop')}
+            onEnd={endEdit}
+            showHistogram={histogram ? () => setHistogram(false) : null}
           />
-        </section>
-
-        <aside className="pipeline-panel panel">
-          <PanelTitle eyebrow="Pipeline" title="All stages" detail={`${stages.length + 1} views`} />
-          <p className="pipeline-note">Select any point in the physical image-formation chain.</p>
-          <PipelineSteps
-            stages={stages}
-            stageIndex={stageIndex}
-            setStageIndex={setStageIndex}
-            disabled={!resultUrl || developing}
-          />
-          <div className="delta-control">
-            <Switch
-              className="delta-switch"
-              label="Show stage difference"
-              labelPosition="start"
-              labelSpacing="spread"
+        ) : (
+          <div className="empty-canvas">
+            <Icon name="open" />
+            <h1>Open a photo</h1>
+            <p>Drop images here or choose files.</p>
+            <Button
+              label="Open images"
+              variant="primary"
               size="sm"
-              value={showDelta}
-              onChange={setShowDelta}
-              isDisabled={!resultUrl || developing || stageIndex == null || stageIndex === 0}
-              width="100%"
+              className="primary"
+              onClick={() => input.current?.click()}
             />
-            {delta && (
-              <span className="delta-readout">
-                ×{delta.gain.toFixed(1)} gain · {delta.peak.toFixed(0)}/255 peak
-              </span>
-            )}
+            <Button
+              label="Open sample chart"
+              variant="ghost"
+              size="sm"
+              className="text-button"
+              onClick={openSample}
+            />
+            <small>RAW, JPEG, PNG, WebP, AVIF · processed on this device</small>
           </div>
-        </aside>
+        )}
+        {importStatus && (
+          <div className="import-status" role="status">
+            <span>{importStatus}</span>
+            <Button
+              label="Cancel"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                importController.current?.abort()
+                setImportStatus(null)
+              }}
+            />
+          </div>
+        )}
+        {dragOver && <div className="drop-label">Drop images to open</div>}
+        {error && (
+          <div className="error-banner" role="alert">
+            <span>{error}</span>
+            <Button
+              label="Retry"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setError(null)
+                setRetry((v) => v + 1)
+              }}
+            />
+            <button aria-label="Dismiss error" onClick={() => setError(null)}>
+              <Icon name="close" size={14} />
+            </button>
+          </div>
+        )}
+        <div className="viewer-status">
+          <span className="document-name">{active?.name || 'No photo open'}</span>
+          <span role="status">
+            {status ||
+              (active && shownResult?.key !== previewKey
+                ? error
+                  ? 'Preview unavailable'
+                  : interacting
+                    ? 'Waiting for adjustments to settle before full-detail preview'
+                    : 'Waiting for the next display frame'
+                : null) ||
+              (shownResult
+                ? `${shownResult.width} × ${shownResult.height} · ${shownResult.elapsed.toFixed(0)} ms`
+                : '')}
+          </span>
+          {active && (
+            <Button
+              label="Compare"
+              variant="ghost"
+              size="sm"
+              className={`compare-button ${compare ? 'active' : ''}`}
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId)
+                setCompare(true)
+              }}
+              onPointerUp={() => setCompare(false)}
+              onPointerCancel={() => setCompare(false)}
+              onKeyDown={(e) => {
+                if (e.key === ' ' || e.key === 'Enter') {
+                  e.preventDefault()
+                  setCompare(true)
+                }
+              }}
+              onKeyUp={() => setCompare(false)}
+              onBlur={() => setCompare(false)}
+              aria-label="Hold to compare with original"
+              icon={<Icon name="compare" />}
+            />
+          )}
+          <span className="backend-label">
+            {shownResult?.backend === 'webgpu' ? 'WebGPU' : shownResult ? 'CPU' : ''}
+          </span>
+        </div>
+        {files.length > 1 && (
+          <div className="filmstrip" aria-label="Open photos">
+            {files.map((file) => (
+              <div
+                className={`filmstrip-item ${file.id === activeId ? 'selected' : ''}`}
+                key={file.id}
+              >
+                <button aria-label={`Select ${file.name}`} onClick={() => selectFile(file)}>
+                  <img src={file.url} alt={file.name} />
+                </button>
+                <button
+                  className="close-photo"
+                  aria-label={`Close ${file.name}`}
+                  onClick={() => removeFile(file)}
+                >
+                  <Icon name="close" size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </main>
-      <p className="pipeline-note">Film profiles © 2026 MUAStudio Inc. · <a href={assetUrl('packs/FILM-PROFILES.txt')}>CC BY-SA 4.0</a></p>
+      <aside className="inspector" aria-label="Adjustments">
+        <TabList
+          role="tablist"
+          className="inspector-tabs"
+          aria-label="Adjustment panels"
+          value={panel}
+          onChange={setInspector}
+          layout="fill"
+          size="sm"
+          hasDivider={false}
+        >
+          {[
+            ['film', 'film', 'Film'],
+            ['light', 'adjustments', 'Light & Color'],
+            ['crop', 'crop', 'Crop'],
+          ].map(([id, icon, title]) => (
+            <Tab
+              key={id}
+              value={id}
+              label={title}
+              icon={<Icon name={icon} />}
+              panelId="inspector-content"
+            />
+          ))}
+        </TabList>
+        <div
+          id="inspector-content"
+          className="inspector-content"
+          role="tabpanel"
+          aria-label={
+            panel === 'light'
+              ? 'Light & Color'
+              : panel === 'crop'
+                ? 'Crop'
+                : panel === 'pipeline'
+                  ? 'Pipeline'
+                  : 'Film'
+          }
+        >
+          <fieldset disabled={exporting || !active}>
+            {panel === 'film' && (
+              <>
+                <div className="inspector-title">
+                  <h2>{selectedStock?.name || 'Normal'}</h2>
+                  <p>{selectedStock ? 'Film settings' : 'No film selected'}</p>
+                </div>
+                {edit.stock && (
+                  <Section title="Character">
+                    {adjustments('Character')}
+                    <Button
+                      label="New Grain Pattern"
+                      variant="secondary"
+                      size="sm"
+                      className="secondary full-width"
+                      onClick={() =>
+                        patch({
+                          seed: crypto.getRandomValues(new Uint32Array(1))[0],
+                        })
+                      }
+                    />
+                  </Section>
+                )}
+                <Section title="Output">
+                  <Selector
+                    label="Output medium"
+                    size="sm"
+                    width="100%"
+                    isDisabled={exporting || !active || !edit.stock}
+                    value={edit.medium || selectedStock?.defaultMedium || 'screen'}
+                    options={(
+                      selectedStock?.media || [{ id: 'screen', name: 'Digital Reference' }]
+                    ).map((medium) => ({ value: medium.id, label: medium.name }))}
+                    onChange={(medium) => {
+                      endEdit()
+                      patch({ medium })
+                      setStage(null)
+                      setDifference(false)
+                    }}
+                  />
+                  {selectedStock && (
+                    <p className="medium-detail">
+                      {(edit.medium || selectedStock.defaultMedium) === 'screen'
+                        ? 'Direct display rendering without paper or scanning. Export is 8-bit sRGB.'
+                        : selectedStock.media.find(
+                            (m) => m.id === (edit.medium || selectedStock.defaultMedium),
+                          )?.detail}
+                    </p>
+                  )}
+                  <div className="info-row">
+                    <span>Color space</span>
+                    <span>sRGB</span>
+                  </div>
+                </Section>
+                <p className="inspector-hint">
+                  Click and hold the photo to compare with the original.
+                </p>
+              </>
+            )}
+            {panel === 'light' && (
+              <>
+                <Section title="Light">
+                  {adjustments('Light')}
+                  <Switch
+                    label="Regional"
+                    value={edit.localTone}
+                    onChange={(value) => patch({ localTone: value })}
+                    isDisabled={exporting || !active}
+                    labelPosition="start"
+                    labelSpacing="spread"
+                    size="sm"
+                  />
+                </Section>
+                <Section title="White Balance">{adjustments('White Balance')}</Section>
+                <Section title="Color">{adjustments('Color')}</Section>
+                <Section title="Grade">
+                  <Switch
+                    label="Encoded Grade"
+                    value={edit.gradeSpace}
+                    onChange={(value) => patch({ gradeSpace: value })}
+                    isDisabled={exporting || !active}
+                    labelPosition="start"
+                    labelSpacing="spread"
+                    size="sm"
+                  />
+                  {['Shadows', 'Midtones', 'Highlights'].map((band) => (
+                    <div className="grade-band" key={band} role="group" aria-label={band}>
+                      <h3>{band}</h3>
+                      {adjustments(band)}
+                    </div>
+                  ))}
+                </Section>
+              </>
+            )}
+            {panel === 'crop' && (
+              <>
+                <div className="inspector-title">
+                  <h2>Crop</h2>
+                  <p>Drag the corners to set the frame.</p>
+                </div>
+                <Section title="Frame">
+                  <div className="crop-actions">
+                    <Button
+                      label="Edit corners"
+                      variant="secondary"
+                      size="sm"
+                      className="secondary"
+                      aria-pressed={!cropPreview}
+                      onClick={() => setCropPreview(false)}
+                    />
+                    <Button
+                      label="Preview crop"
+                      variant="secondary"
+                      size="sm"
+                      className="secondary"
+                      aria-pressed={cropPreview}
+                      onClick={() => {
+                        endEdit()
+                        setCropPreview(true)
+                      }}
+                    />
+                  </div>
+                  <Selector
+                    label="Aspect ratio"
+                    size="sm"
+                    width="100%"
+                    isDisabled={exporting || !active}
+                    value={edit.ratio}
+                    options={ratios.map((ratio) => ({
+                      value: ratio,
+                      label: ratio === 'free' ? 'Free' : ratio === 'original' ? 'Original' : ratio,
+                    }))}
+                    onChange={(ratio) => patch({ ratio, crop: cropForRatio(ratio, width, height) })}
+                  />
+                  <div className="crop-actions">
+                    <Button
+                      label="Rotate Left"
+                      variant="secondary"
+                      size="sm"
+                      className="secondary"
+                      onClick={() =>
+                        patch({
+                          rotation: (edit.rotation + 1) % 4,
+                          crop: rotatedCrop(edit.crop, edit.flip),
+                        })
+                      }
+                      icon={<Icon name="rotate" />}
+                    />
+                    <Button
+                      label="Flip"
+                      variant="secondary"
+                      size="sm"
+                      className="secondary"
+                      onClick={() =>
+                        patch({
+                          flip: !edit.flip,
+                          crop: flippedCrop(edit.crop),
+                        })
+                      }
+                      icon={<Icon name="flip" />}
+                    />
+                  </div>
+                  <Adjustment
+                    slider={{
+                      key: 'straighten',
+                      label: 'Straighten',
+                      min: -15,
+                      max: 15,
+                      step: 0.1,
+                      def: 0,
+                      unit: '°',
+                    }}
+                    value={edit.straighten}
+                    onChange={(straighten) => {
+                      setCropPreview(true)
+                      patch({ straighten }, 'straighten')
+                    }}
+                    onEnd={endEdit}
+                    disabled={exporting || !active}
+                  />
+                  <div className="info-row">
+                    <span>Crop size</span>
+                    <span>
+                      {cropSize.width} × {cropSize.height}
+                    </span>
+                  </div>
+                  <Button
+                    label="Reset Crop"
+                    variant="secondary"
+                    size="sm"
+                    className="secondary full-width"
+                    onClick={() => patch({ crop: fullCrop(), ratio: 'free', straighten: 0 })}
+                  />
+                  <Button
+                    label="Done"
+                    variant="primary"
+                    size="sm"
+                    className="primary full-width"
+                    onClick={() => {
+                      endEdit()
+                      setPanel('film')
+                    }}
+                  />
+                </Section>
+              </>
+            )}
+            {panel === 'pipeline' && (
+              <>
+                <div className="inspector-title">
+                  <h2>Pipeline</h2>
+                </div>
+                <div className="pipeline-list">
+                  <Button
+                    label="Finished print"
+                    variant="ghost"
+                    size="sm"
+                    className={stage === null ? 'selected' : ''}
+                    onClick={() => {
+                      setStage(null)
+                      setDifference(false)
+                    }}
+                  />
+                  {stages.map((item, i) => (
+                    <button
+                      key={item.id}
+                      className={stage === i ? 'selected' : ''}
+                      onClick={() => setStage(i)}
+                      disabled={!edit.stock}
+                    >
+                      <span>{String(i + 1).padStart(2, '0')}</span>
+                      {stageNames[i] || item.label}
+                    </button>
+                  ))}
+                </div>
+                <label className="toggle-row">
+                  <span>Show stage difference</span>
+                  <input
+                    type="checkbox"
+                    checked={difference}
+                    onChange={(e) => setDifference(e.target.checked)}
+                    disabled={stage === null || stage === 0}
+                  />
+                </label>
+                {result?.delta && (
+                  <p className="inspector-hint">
+                    {result.delta.gain.toFixed(1)}× gain · {result.delta.peak}
+                    /255 peak
+                  </p>
+                )}
+              </>
+            )}
+          </fieldset>
+        </div>
+      </aside>
+      <input
+        ref={input}
+        type="file"
+        accept={IMAGE_ACCEPT}
+        multiple
+        hidden
+        onChange={(e) => {
+          acceptFiles(e.target.files)
+          e.target.value = ''
+        }}
+      />
+      <input
+        ref={editInput}
+        type="file"
+        accept=".json"
+        hidden
+        onChange={(e) => {
+          restoreEdit(e.target.files?.[0])
+          e.target.value = ''
+        }}
+      />
+      {dialog === 'export' && (
+        <Modal
+          title="Export image"
+          onClose={() => {
+            if (!exporting) setDialog(null)
+          }}
+        >
+          <fieldset disabled={exporting}>
+            <label className="select-row">
+              Format
+              <select
+                aria-label="Format"
+                value={exportType}
+                onChange={(e) => setExportType(e.target.value)}
+              >
+                <option value="image/png">PNG</option>
+                <option value="image/jpeg">JPEG</option>
+                <option value="image/webp">WebP</option>
+              </select>
+            </label>
+            <label className="select-row">
+              Size
+              <select
+                aria-label="Size"
+                value={exportSize}
+                onChange={(e) => setExportSize(e.target.value)}
+              >
+                <option value="full">Full resolution</option>
+                <option value="3840">3840 px long edge</option>
+                <option value="2048">2048 px long edge</option>
+                <option value="1600">1600 px long edge</option>
+              </select>
+            </label>
+            {exportType !== 'image/png' && (
+              <Adjustment
+                slider={{
+                  key: 'quality',
+                  label: 'Quality',
+                  min: 1,
+                  max: 100,
+                  step: 1,
+                  def: 95,
+                  unit: '%',
+                }}
+                disabled={exporting}
+                value={quality}
+                onChange={setQuality}
+              />
+            )}
+            <p className="export-detail">
+              {Math.max(1, Math.round(cropSize.width * exportScale))} ×{' '}
+              {Math.max(1, Math.round(cropSize.height * exportScale))} pixels · sRGB · 8-bit
+            </p>
+            <p className="export-detail">
+              Exports the finished image with the current crop and adjustments.
+            </p>
+          </fieldset>
+          {exporting && <p role="status">{status || 'Preparing export'}</p>}
+          <div className="dialog-actions">
+            <Button
+              label="Cancel"
+              variant="secondary"
+              size="sm"
+              className="secondary"
+              onClick={() => setDialog(null)}
+              isDisabled={exporting}
+            />
+            <Button
+              label={exporting ? 'Exporting…' : 'Export'}
+              variant="primary"
+              size="sm"
+              onClick={exportImage}
+              isDisabled={exporting}
+            />
+          </div>
+        </Modal>
+      )}
+      {dialog === 'more' && (
+        <Modal title="Options" onClose={() => setDialog(null)}>
+          <div className="menu-options">
+            <Button
+              label="Save edits…"
+              variant="secondary"
+              size="sm"
+              onClick={saveEdit}
+              isDisabled={!active}
+            />
+            <Button
+              label="Load edits…"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setDialog(null)
+                editInput.current?.click()
+              }}
+              isDisabled={!active}
+            />
+            <Button
+              label="Inspect pipeline"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setInspector('pipeline')
+                setDialog(null)
+              }}
+            />
+            <Button
+              label="Keyboard shortcuts"
+              variant="ghost"
+              size="sm"
+              onClick={() => setDialog('shortcuts')}
+            />
+            <Button
+              label="Browser support"
+              variant="ghost"
+              size="sm"
+              onClick={() => setDialog('support')}
+            />
+          </div>
+        </Modal>
+      )}
+      {dialog === 'shortcuts' && (
+        <Modal title="Keyboard shortcuts" onClose={() => setDialog(null)}>
+          <dl className="shortcuts">
+            {[
+              ['Open images', '⌘ / Ctrl O'],
+              ['Export', '⌘ / Ctrl S'],
+              ['Undo', '⌘ / Ctrl Z'],
+              ['Redo', '⇧ ⌘ / Ctrl Z'],
+              ['Compare', 'Hold Space'],
+              ['Histogram', 'H'],
+              ['Crop', 'C'],
+              ['Apply crop', 'Return'],
+              ['Zoom', '+ / −'],
+              ['Fit', '0'],
+              ['Reset adjustment', 'Double-click slider'],
+            ].map(([action, keys]) => (
+              <div key={action}>
+                <dt>{action}</dt>
+                <dd>{keys}</dd>
+              </div>
+            ))}
+          </dl>
+        </Modal>
+      )}
+      {dialog === 'support' && (
+        <Modal title="Browser support" onClose={() => setDialog(null)}>
+          <div className="support-copy">
+            <p>
+              Photos are processed on this device. WebGPU is used when available, with WebAssembly
+              CPU fallback.
+            </p>
+            <p>
+              Fit preview uses up to 1600 pixels on the long edge; zooming requests more detail.
+              Export develops the original at the selected size.
+            </p>
+            <p>
+              The browser supports film selection, grain, light and color adjustments, three-way
+              grading, crop, rotation and flip. Camera RAW files decode locally with LibRaw, using
+              as-shot white balance and 16-bit linear data. Other images use the browser decoder.
+            </p>
+            <p>
+              Video processing, scanned-negative conversion, spectral film and lens controls,
+              selective adjustments, custom packs, and HDR / 16-bit export are available in the Mac
+              app.
+            </p>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

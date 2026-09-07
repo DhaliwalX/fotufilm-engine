@@ -1,10 +1,8 @@
 // Emits the reference CPU pipeline as WebAssembly.
 //
 // This is the same schedule the command line runs, so a frame developed in a browser tab and a
-// frame developed by `fotufilm` come off the same code. It needs no GPU runtime, which is what
-// makes it buildable today: the WebGPU path (tools/generate_halide_wasm.cpp) generates valid WGSL
-// but cannot be linked, because Halide's WebGPU runtime, Halide's own LLVM and Emscripten's
-// Asyncify have no mutually compatible versions.
+// frame developed by `fotufilm` come off the same code. It provides the CPU fallback and
+// the plain pipeline used for Normal; the WebGPU generator supplies the GPU film renderer.
 //
 // The develop stage is compiled per spatial feature mask and the print stage per
 // (reversal, monochrome) pair, matching `develop_pipeline_for` and `print_pipeline_for` — the
@@ -51,7 +49,7 @@ constexpr int32_t kSpatialBits = FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF
 
 int main(int argc, char **argv) {
     if (argc < 3) {
-        std::cerr << "usage: generate_halide_wasm_cpu OUTPUT_DIRECTORY MASK [MASK...]\n"
+        std::cerr << "usage: generate_halide_wasm_cpu OUTPUT_DIRECTORY MASK [MASK...] | --plain-only\n"
                      "  MASK is a stock's feature mask, as printed by --dump-wasm-pack\n";
         return 2;
     }
@@ -59,7 +57,8 @@ int main(int argc, char **argv) {
     std::filesystem::create_directories(output);
 
     std::vector<int> variants;
-    for (int i = 2; i < argc; ++i) {
+    const bool plain_only = std::string(argv[2]) == "--plain-only";
+    for (int i = 2; !plain_only && i < argc; ++i) {
         const int32_t features = int32_t(strtol(argv[i], nullptr, 0)) & kSpatialBits;
         const int variant = develop_variant(features);
         if (std::find(variants.begin(), variants.end(), variant) != variants.end()) continue;
@@ -75,7 +74,7 @@ int main(int argc, char **argv) {
     }
 
     // All four print variants: there are only four, and they are cheap next to the develop stage.
-    for (int variant = 0; variant < 4; ++variant) {
+    for (int variant = 0; !plain_only && variant < 4; ++variant) {
         const bool reversal = (variant & 1) != 0;
         const bool monochrome = (variant & 2) != 0;
         const std::string name = "print_" + std::to_string(variant);
@@ -85,5 +84,7 @@ int main(int argc, char **argv) {
         pipeline.compile_aot((output / name).string(), name, false, wasm_target());
         std::cout << " ok\n";
     }
+    PlainPipeline plain(false, "_browser_plain", false, 0);
+    plain.compile_aot((output / "plain_float").string(), "plain_float", false, wasm_target());
     return 0;
 }

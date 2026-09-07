@@ -5,19 +5,24 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "serve": "node server.js"
+    "serve": "node server.js",
+    "test": "node --test test/editor/*.test.js",
+    "test:browser": "playwright test",
+    "check:engine": "python3 ../tools/export-web-constants.py --check"
   },
   "dependencies": {
-    "@astryxdesign/core": "^0.3.0",
-    "@astryxdesign/theme-butter": "^0.3.0",
-    "@stylexjs/stylex": "^0.19.0",
+    "@astryxdesign/core": "0.5.3",
+    "@astryxdesign/theme-neutral": "0.5.3",
+    "@stylexjs/stylex": "0.19.0",
     "express": "^5.2.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "reicon-react": "^1.2.0"
+    "reicon-react": "1.2.5"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "@vitejs/plugin-react": "^6.1.1",
+    "prettier": "3.6.2",
     "vite": "^8.2.2"
   }
 }
