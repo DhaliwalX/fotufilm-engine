@@ -128,6 +128,10 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
     const int32_t coupler_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_COUPLER_RADIUS]);
     const float adjacency_sigma = max_f(c[FOTUFILM_CONFIG_ADJACENCY_SIGMA], kSigmaFloor);
     const int32_t adjacency_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_ADJACENCY_RADIUS]);
+    const float adjacency_secondary_sigma = max_f(c[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA], kSigmaFloor);
+    const int32_t adjacency_secondary_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS]);
+    const float fringe_sigma = max_f(c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA], kSigmaFloor);
+    const int32_t fringe_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS]);
     const float grain_sigma = max_f(c[FOTUFILM_CONFIG_GRAIN_SIGMA], kSigmaFloor);
     const int32_t grain_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_GRAIN_RADIUS]);
     const float grain_lambda = c[FOTUFILM_CONFIG_GRAIN_LAMBDA];
@@ -140,7 +144,7 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
         mtf_sigma_1, mtf_sigma_2, mtf_luma_sigma, mtf_radius_0, mtf_radius_1,         \
         mtf_radius_2, mtf_luma_radius, stride[0], stride[1], stride[2],               \
         strided_radius[0], strided_radius[1], strided_radius[2], coupler_sigma,       \
-        coupler_radius, adjacency_sigma, adjacency_radius, grain_sigma, grain_radius, \
+        coupler_radius, adjacency_sigma, adjacency_radius, adjacency_secondary_sigma, adjacency_secondary_radius, fringe_sigma, fringe_radius, grain_sigma, grain_radius, \
         grain_lambda, print_mtf_radius, seed, reversal, monochrome, origin_x, origin_y,  \
         &density_buf
 

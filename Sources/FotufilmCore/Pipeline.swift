@@ -84,6 +84,14 @@ public struct FotufilmEngine {
         /// stock). Creative overdrive above 1 is compressed so the 2 endpoint applies 1.5 physical
         /// doses rather than letting spatial inhibition grow without bound.
         public var couplerScale: Float = 1
+        /// Optional adjacency-model override, leaving the stock's authored model as the default.
+        public var adjacencyModel: AdjacencyModel? = nil
+        /// Fraction of inter-layer inhibition carried by the broad spatial component, 0...1.
+        /// Nil uses the stock; zero preserves its original transport. Uniform colors are unchanged.
+        public var chromaticFringeAmount: Float? = nil
+        /// Broad transport sigma in millimeters on the film. Nil uses the stock (normally 0.1 mm).
+        /// A radius at or below the stock's core transport radius adds no fringe.
+        public var chromaticFringeRadiusMM: Float? = nil
         /// Multiplier on how far the released inhibitor reaches through the layer stack, applied to
         /// every interlayer alike (`CouplerGeometry.interlayerTransmission`). 0 seals the layers off
         /// from each other; above 1 crosses more.

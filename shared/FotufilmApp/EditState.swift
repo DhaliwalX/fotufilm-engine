@@ -322,6 +322,9 @@ struct EditState: Equatable {
     /// catalogue's ladder. Flat at 1 is the film's own return trip.
     var halationSpectrum = EditState.restingHalationSpectrum
     var couplers = 1.0
+    var chromaticFringeAmount = 0.0
+    /// Gaussian sigma on the film, displayed and persisted in micrometers.
+    var chromaticFringeRadius = 100.0
     /// How far the released inhibitor crosses each interlayer, as a multiple of the stock's own
     /// geometry: index 0 is the red–green scavenger, index 1 the green–blue yellow filter layer.
     /// Seeded from the app-wide barriers, which is where this lived before it moved onto the edit.
@@ -555,6 +558,8 @@ struct EditState: Equatable {
             HalationSpectrum.resampled(halationSpectrum.map(Float.init))
         o.useEstimatedHalationProfile = AppSettings.storedEstimatedHalationEnabled
         o.couplerScale = Float(couplers)
+        o.chromaticFringeAmount = Float(chromaticFringeAmount)
+        o.chromaticFringeRadiusMM = Float(chromaticFringeRadius / 1000)
         // Per-gap only: each barrier already stands for itself, so setting `couplerRangeScale` as
         // well would be a value the engine never reads.
         o.couplerGapReachScales = couplerGapReach.map(Float.init)
