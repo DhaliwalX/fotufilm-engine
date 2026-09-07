@@ -157,6 +157,10 @@ public struct FilmStock: Sendable {
     }
     /// Diffusion distance of the inhibitors in millimeters on the film.
     public var couplerDiffusionMM: Float
+    /// Broad fraction of off-diagonal DIR transport. Zero is the original single Gaussian.
+    public var chromaticFringeAmount: Float
+    /// Broad Gaussian sigma on the film, in millimeters; only radii above couplerDiffusionMM act.
+    public var chromaticFringeRadiusMM: Float
 
     /// Strength of intra-layer adjacency. Gaussian mode shifts log exposure by
     /// `strength * (a - blur(a))`. Screened diffusion adds
@@ -293,6 +297,8 @@ public struct FilmStock: Sendable {
         couplerReleaseGamma: [Float] = [1, 1, 1],
         couplerGeometry: CouplerGeometry? = nil,
         couplerDiffusionMM: Float,
+        chromaticFringeAmount: Float = 0,
+        chromaticFringeRadiusMM: Float = 0.1,
         adjacencyStrength: Float = 0,
         adjacencyModel: AdjacencyModel = .gaussian,
         adjacencyRadiusMM: Float = 0,
@@ -351,6 +357,8 @@ public struct FilmStock: Sendable {
         self.couplerInhibition = couplerGeometry?.matrix() ?? couplerInhibition
         self.couplerReleaseGamma = couplerReleaseGamma
         self.couplerDiffusionMM = couplerDiffusionMM
+        self.chromaticFringeAmount = chromaticFringeAmount
+        self.chromaticFringeRadiusMM = chromaticFringeRadiusMM
         self.adjacencyStrength = adjacencyStrength
         self.adjacencyModel = adjacencyModel
         self.adjacencyRadiusMM = adjacencyRadiusMM

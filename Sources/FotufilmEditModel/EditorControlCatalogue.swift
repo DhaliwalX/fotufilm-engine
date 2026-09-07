@@ -87,6 +87,18 @@ public enum EditorControlCatalogue {
                                              unit: .multiplier)),
             availability: .film),
         EditorControl(
+            .chromaticFringeAmount, title: "Fringe Amount",
+            detail: "Spread some inter-layer inhibition farther around color boundaries",
+            section: .filmEmulsion,
+            kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
+            availability: .interlayerInhibition),
+        EditorControl(
+            .chromaticFringeRadius, title: "Fringe Radius",
+            detail: "Broad spread on the film; active when Fringe Amount is above zero",
+            section: .filmEmulsion,
+            kind: .slider(EditorControlScale(20...300, neutral: 100, unit: .micrometers)),
+            availability: .interlayerInhibition),
+        EditorControl(
             .couplerReach, title: "Separation",
             detail: "How far the released inhibitor crosses each interlayer",
             section: .filmEmulsion,
@@ -390,6 +402,8 @@ public extension EngineOptionCoverage {
             + "here would veil the shadows a second time. The CLI and the Resolve plugin "
             + "expose it, because those can be handed a render that has met no glass"),
         "couplerScale": .control([.couplers]),
+        "chromaticFringeAmount": .control([.chromaticFringeAmount]),
+        "chromaticFringeRadiusMM": .control([.chromaticFringeRadius]),
         "couplerRangeScale": .unexposed(
             "the app sets the per-gap reaches instead, so the engine never reads this one"),
         "couplerGapReachScales": .control([.couplerReach]),

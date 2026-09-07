@@ -103,6 +103,11 @@ bool read_pack(const char *path, Pack &pack) {
 /// identical on both paths, which is all a parity fixture owes.
 void arm_configuration(std::vector<float> &configuration) {
     float *c = configuration.data();
+    // Keep the broad inter-layer transport active in the variants that include diffusion,
+    // so the AOT/JIT comparison exercises the added arguments and field instead of only zero.
+    c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT] = 0.2f;
+    c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA] = 9.0f;
+    c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS] = 27.0f;
 
     // A measured veiling-glare mean, which the non-measuring FLARE variants are promised and
     // refuse to run without (`valid_flare_mean`).

@@ -618,6 +618,20 @@ inline Halide::Expr coupler_inhibition(Halide::ImageParam &configuration,
     return released * configuration(FOTUFILM_CONFIG_COUPLER_SCALE);
 }
 
+/// Redistribute only inter-layer inhibitor transport. Normalized core and broad fields agree
+/// on constants, so the DC matrix and neutral anchor remain unchanged.
+inline Halide::Expr chromatic_fringe_inhibition(Halide::ImageParam &configuration,
+                                                Halide::Expr channel,
+                                                Halide::Expr delta0, Halide::Expr delta1,
+                                                Halide::Expr delta2) {
+    Halide::Expr base = FOTUFILM_CONFIG_COUPLER + channel * 3;
+    Halide::Expr residual = Halide::select(channel != 0, configuration(base) * delta0, 0.0f)
+                         + Halide::select(channel != 1, configuration(base + 1) * delta1, 0.0f)
+                         + Halide::select(channel != 2, configuration(base + 2) * delta2, 0.0f);
+    return residual * configuration(FOTUFILM_CONFIG_COUPLER_SCALE)
+                    * configuration(FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT);
+}
+
 /// Neutral anchor for the coupler stage: the log-exposure offset that undoes the inhibition a
 /// neutral subject of the same luminance would have released.
 inline Halide::Expr coupler_warp(Halide::ImageParam &configuration,

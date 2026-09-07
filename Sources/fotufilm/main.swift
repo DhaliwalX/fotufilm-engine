@@ -76,6 +76,9 @@ Options:
                      photographed source already carries its own lens's glare)
   --couplers <scale> DIR + adjacency strength; 1 calibrated, overdrive compressed (default: 1)
   --adjacency-model <m> gaussian or screened-diffusion (default: stock's model)
+  --fringe-amount <f> Broad inter-layer transport fraction, 0-1 (default: stock, normally 0)
+  --fringe-radius <um> Broad transport Gaussian sigma on the film, 0-2000 micrometers
+                     (default: stock, normally 100; must exceed the stock's core radius)
   --bleach-bypass <f> Fraction of the developed silver the bleach leaves in the
                      negative, 0-1 (default: 0). The print re-times on the
                      denser mid-grey, so what changes is contrast and chroma.
@@ -1091,6 +1094,18 @@ options.useEstimatedHalationProfile = flags["--estimated-halation"] != nil
 // Capture veiling glare, off unless asked for: see Options.flareScale.
 if let f = flags["--flare"] { options.flareScale = Float(f) ?? 1 }
 if let c = flags["--couplers"] { options.couplerScale = Float(c) ?? 1 }
+if let value = flags["--fringe-amount"] {
+    guard let amount = Float(value), amount.isFinite, (0...1).contains(amount) else {
+        fail("Invalid --fringe-amount '\(value)'; expected a finite fraction from 0 to 1.")
+    }
+    options.chromaticFringeAmount = amount
+}
+if let value = flags["--fringe-radius"] {
+    guard let radius = Float(value), radius.isFinite, (0...2000).contains(radius) else {
+        fail("Invalid --fringe-radius '\(value)'; expected 0 to 2000 micrometers.")
+    }
+    options.chromaticFringeRadiusMM = radius / 1000
+}
 if let model = flags["--adjacency-model"] {
     guard let adjacency = AdjacencyModel(rawValue: model) else {
         FileHandle.standardError.write(Data("unknown adjacency model '\(model)'; expected gaussian or screened-diffusion\n".utf8))

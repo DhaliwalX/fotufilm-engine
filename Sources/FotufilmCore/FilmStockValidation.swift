@@ -184,6 +184,8 @@ public extension FilmStockDefinition {
             try check("couplerGeometry.selfRetention", couplerGeometry.selfRetention, 0...1)
         }
         try check("couplerDiffusionMM", couplerDiffusionMM, 0...2)
+        try check("chromaticFringeAmount", chromaticFringeAmount ?? 0, 0...1)
+        try check("chromaticFringeRadiusMM", chromaticFringeRadiusMM ?? 0.1, 0...2)
         try check("adjacencyStrength", adjacencyStrength ?? 0, 0...4)
         try check("adjacencyRadiusMM", adjacencyRadiusMM ?? 0, 0...2)
 

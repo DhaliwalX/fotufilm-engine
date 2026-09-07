@@ -43,6 +43,8 @@ public struct FilmStockDefinition: Codable, Sendable {
     /// renders.
     public var couplerGeometry: CouplerGeometry?
     public var couplerDiffusionMM: Float
+    public var chromaticFringeAmount: Float? = nil
+    public var chromaticFringeRadiusMM: Float? = nil
     public var adjacencyStrength: Float?
     public var adjacencyModel: AdjacencyModel? = nil
     public var adjacencyRadiusMM: Float?
@@ -374,6 +376,8 @@ public extension FilmStockDefinition {
             couplerReleaseGamma: couplerReleaseGamma ?? [1, 1, 1],
             couplerGeometry: couplerGeometry,
             couplerDiffusionMM: couplerDiffusionMM,
+            chromaticFringeAmount: chromaticFringeAmount ?? 0,
+            chromaticFringeRadiusMM: chromaticFringeRadiusMM ?? 0.1,
             adjacencyStrength: adjacencyStrength ?? 0,
             adjacencyModel: adjacencyModel ?? .gaussian,
             adjacencyRadiusMM: adjacencyRadiusMM ?? 0,
@@ -429,6 +433,8 @@ public extension FilmStockDefinition {
         self.couplerReleaseGamma = stock.couplerReleaseGamma
         self.couplerGeometry = stock.couplerGeometry
         self.couplerDiffusionMM = stock.couplerDiffusionMM
+        self.chromaticFringeAmount = stock.chromaticFringeAmount == 0 ? nil : stock.chromaticFringeAmount
+        self.chromaticFringeRadiusMM = stock.chromaticFringeRadiusMM == 0.1 ? nil : stock.chromaticFringeRadiusMM
         self.adjacencyStrength = stock.adjacencyStrength
         self.adjacencyModel = stock.adjacencyModel == .gaussian ? nil : stock.adjacencyModel
         self.adjacencyRadiusMM = stock.adjacencyRadiusMM

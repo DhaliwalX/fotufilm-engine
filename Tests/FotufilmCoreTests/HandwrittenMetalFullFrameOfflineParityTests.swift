@@ -475,6 +475,11 @@ final class HandwrittenMetalFullFrameOfflineParityTests: XCTestCase {
         screenedOptions.adjacencyModel = .screenedDiffusion
         var screenedReversal = TestStocks.reversal
         screenedReversal.adjacencyModel = .screenedDiffusion
+        var fringeOptions = options(couplers: true)
+        fringeOptions.chromaticFringeAmount = 0.25
+        fringeOptions.chromaticFringeRadiusMM = 0.1
+        var fringeScreenedOptions = fringeOptions
+        fringeScreenedOptions.adjacencyModel = .screenedDiffusion
         return [
             ParityCase(
                 name: "spectral-tail", stock: stock(), options: options(),
@@ -497,6 +502,14 @@ final class HandwrittenMetalFullFrameOfflineParityTests: XCTestCase {
             ParityCase(
                 name: "screened-adjacency", stock: stock(interimage: true),
                 options: screenedOptions,
+                requiredMask: interimageMask, expectsLocalTone: false),
+            ParityCase(
+                name: "chromatic-fringe", stock: stock(interimage: true),
+                options: fringeOptions,
+                requiredMask: interimageMask, expectsLocalTone: false),
+            ParityCase(
+                name: "chromatic-fringe-screened", stock: stock(interimage: true),
+                options: fringeScreenedOptions,
                 requiredMask: interimageMask, expectsLocalTone: false),
             ParityCase(
                 name: "screened-reversal", stock: screenedReversal,

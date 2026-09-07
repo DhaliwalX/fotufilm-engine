@@ -384,6 +384,8 @@ public:
           adjacency_radius_("develop_adjacency_radius" + suffix),
           adjacency_secondary_sigma_("develop_adjacency_secondary_sigma" + suffix),
           adjacency_secondary_radius_("develop_adjacency_secondary_radius" + suffix),
+          fringe_sigma_("develop_fringe_sigma" + suffix),
+          fringe_radius_("develop_fringe_radius" + suffix),
           grain_sigma_("develop_grain_sigma" + suffix),
           grain_radius_("develop_grain_radius" + suffix),
           grain_lambda_("develop_grain_lambda" + suffix),
@@ -612,12 +614,17 @@ public:
                 cpu_pointwise(released, x, y, c);
             }
             Func coupler_diffused = released;
+            Func fringe_diffused = released;
             Func adjacency_diffused = activation;
             if (use_coupler_diffusion && use_couplers) {
                 coupler_diffused = cpu_gaussian_decimated(
                     released, coupler_sigma_, coupler_radius_,
                     origin_x_, origin_y_, width_, height_,
                     "develop_coupler_diffused" + suffix);
+                fringe_diffused = cpu_gaussian_decimated(
+                    released, fringe_sigma_, fringe_radius_,
+                    origin_x_, origin_y_, width_, height_,
+                    "develop_fringe_diffused" + suffix);
             }
             if (use_adjacency) {
                 adjacency_diffused = cpu_gaussian_decimated(
@@ -672,6 +679,15 @@ public:
                     inhibition = coupler_inhibition(
                         configuration_, c, coupler_diffused(x, y, 0),
                         coupler_diffused(x, y, 1), coupler_diffused(x, y, 2));
+                    if (use_coupler_diffusion) {
+                        Expr fringe = chromatic_fringe_inhibition(
+                            configuration_, c,
+                            fringe_diffused(x, y, 0) - coupler_diffused(x, y, 0),
+                            fringe_diffused(x, y, 1) - coupler_diffused(x, y, 1),
+                            fringe_diffused(x, y, 2) - coupler_diffused(x, y, 2));
+                        inhibition = Halide::select(fringe_radius_ > 0,
+                            inhibition + fringe, inhibition);
+                    }
                 }
                 if (use_donor) {
                     inhibition = inhibition
@@ -973,6 +989,8 @@ public:
         adjacency_radius_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_ADJACENCY_RADIUS])));
         adjacency_secondary_sigma_.set(std::max(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA], 0.151f));
         adjacency_secondary_radius_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS])));
+        fringe_sigma_.set(std::max(configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA], 0.151f));
+        fringe_radius_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS])));
         grain_sigma_.set(std::max(configuration[FOTUFILM_CONFIG_GRAIN_SIGMA], 0.151f));
         grain_radius_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_GRAIN_RADIUS])));
         grain_lambda_.set(configuration[FOTUFILM_CONFIG_GRAIN_LAMBDA]);
@@ -1003,6 +1021,7 @@ public:
             halation_strided_radius_2_,
             coupler_sigma_, coupler_radius_, adjacency_sigma_, adjacency_radius_,
             adjacency_secondary_sigma_, adjacency_secondary_radius_,
+            fringe_sigma_, fringe_radius_,
             grain_sigma_, grain_radius_, grain_lambda_, print_mtf_radius_,
             seed_, reversal_, monochrome_, origin_x_, origin_y_,
         };
@@ -1029,6 +1048,8 @@ private:
     Param<int32_t> diffusion_stride_0_, diffusion_stride_1_, diffusion_stride_2_;
     Param<int32_t> diffusion_strided_radius_0_, diffusion_strided_radius_1_,
                    diffusion_strided_radius_2_;
+    Param<float> fringe_sigma_;
+    Param<int32_t> fringe_radius_;
     Param<float> adjacency_secondary_sigma_;
     Param<int32_t> adjacency_secondary_radius_;
     Param<float> coupler_sigma_, adjacency_sigma_, grain_sigma_, grain_lambda_;

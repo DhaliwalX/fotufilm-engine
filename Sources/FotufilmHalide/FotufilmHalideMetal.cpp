@@ -1100,6 +1100,8 @@ public:
           adjacency_radius_("frame_adjacency_radius" + suffix),
           adjacency_secondary_sigma_("frame_adjacency_secondary_sigma" + suffix),
           adjacency_secondary_radius_("frame_adjacency_secondary_radius" + suffix),
+          fringe_sigma_("frame_fringe_sigma" + suffix),
+          fringe_radius_("frame_fringe_radius" + suffix),
           grain_sigma_("frame_grain_sigma" + suffix),
           grain_radius_("frame_grain_radius" + suffix),
           grain_lambda_("frame_grain_lambda" + suffix),
@@ -1730,6 +1732,7 @@ public:
                 configuration_, channel, activation_view(x, y, channel));
             Func released_view = store_frame(released, half_store);
             Func coupler_diffused = released_view;
+            Func fringe_diffused = released_view;
             Func adjacency_diffused = activation_view;
             // Release is nonlinear and happens before inhibitor diffusion. Adjacency still acts on
             // developed activation, so the two spatial stages deliberately no longer share a grid.
@@ -1738,6 +1741,10 @@ public:
                     released_view, coupler_sigma_, coupler_radius_,
                     origin_x_, origin_y_, width_, height_, half_store,
                     "frame_coupler_diffused" + suffix);
+                fringe_diffused = gpu_gaussian_decimated(
+                    released_view, fringe_sigma_, fringe_radius_,
+                    origin_x_, origin_y_, width_, height_, half_store,
+                    "frame_fringe_diffused" + suffix);
             }
             if (use_adjacency) {
                 adjacency_diffused = gpu_gaussian_decimated(
@@ -1802,6 +1809,15 @@ public:
                     inhibition = coupler_inhibition(
                         configuration_, channel, coupler_diffused(x, y, 0),
                         coupler_diffused(x, y, 1), coupler_diffused(x, y, 2));
+                    if (use_coupler_diffusion) {
+                        Expr fringe = chromatic_fringe_inhibition(
+                            configuration_, channel,
+                            fringe_diffused(x, y, 0) - coupler_diffused(x, y, 0),
+                            fringe_diffused(x, y, 1) - coupler_diffused(x, y, 1),
+                            fringe_diffused(x, y, 2) - coupler_diffused(x, y, 2));
+                        inhibition = Halide::select(fringe_radius_ > 0,
+                            inhibition + fringe, inhibition);
+                    }
                 }
                 if (use_donor) {
                     inhibition = inhibition
@@ -2424,6 +2440,7 @@ public:
             halation_radius_0_, halation_radius_1_, halation_radius_2_,
             coupler_sigma_, coupler_radius_, adjacency_sigma_, adjacency_radius_,
             adjacency_secondary_sigma_, adjacency_secondary_radius_,
+            fringe_sigma_, fringe_radius_,
             // The mottle pair is read by the `_mottle` twins alone; everywhere else they are
             // the same harmless unused parameters the diffusion strides already are, kept in
             // every signature so the shim's single FrameFunction shape holds.
@@ -2647,6 +2664,8 @@ private:
         adjacency_radius_.set(std::max(0, int(configuration[kAdjacencyRadiusOffset])));
         adjacency_secondary_sigma_.set(std::max(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA], 0.151f));
         adjacency_secondary_radius_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS])));
+        fringe_sigma_.set(std::max(configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA], 0.151f));
+        fringe_radius_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS])));
         grain_sigma_.set(std::max(configuration[kGrainSigmaOffset], 0.151f));
         grain_radius_.set(std::max(0, int(configuration[kGrainRadiusOffset])));
         grain_lambda_.set(configuration[kGrainLambdaOffset]);
@@ -2715,6 +2734,8 @@ private:
                    diffusion_strided_radius_2_;
     Param<int32_t> halation_strided_radius_0_, halation_strided_radius_1_,
                    halation_strided_radius_2_;
+    Param<float> fringe_sigma_;
+    Param<int32_t> fringe_radius_;
     Param<float> adjacency_secondary_sigma_;
     Param<int32_t> adjacency_secondary_radius_;
     Param<float> coupler_sigma_, adjacency_sigma_, grain_sigma_, grain_lambda_,

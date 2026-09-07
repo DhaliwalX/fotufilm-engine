@@ -340,7 +340,7 @@ public struct FilmEngineInvocation {
 
     public static let sampledCurveStride = 1 + 3 * SampledCharacteristicCurve.maximumSamples
     public static let sampledCurvesOffset = 232 + 3 * couplerWarpSamples + 2 * toneGridCells
-    public static let configurationCount = sampledCurvesOffset + 3 * sampledCurveStride + 3
+    public static let configurationCount = sampledCurvesOffset + 3 * sampledCurveStride + 6
     /// Index of the grading-space switch; mirrors FOTUFILM_CONFIG_GRADE_SPACE.
     /// After it, appended in order so that adding each renumbered nothing:
     /// the six grain-mottle entries, the paper's red and blue records and
@@ -420,6 +420,9 @@ public struct FilmEngineInvocation {
     public static let adjacencyModelOffset = sampledCurvesOffset + 3 * sampledCurveStride
     public static let adjacencySecondarySigmaOffset = adjacencyModelOffset + 1
     public static let adjacencySecondaryRadiusOffset = adjacencyModelOffset + 2
+    public static let chromaticFringeAmountOffset = adjacencyModelOffset + 3
+    public static let chromaticFringeSigmaOffset = adjacencyModelOffset + 4
+    public static let chromaticFringeRadiusOffset = adjacencyModelOffset + 5
     /// Index of the three aperture-calibrated grain strengths; mirrors FOTUFILM_CONFIG_GRAIN.
     public static let grainOffset = 30
 
@@ -1145,6 +1148,19 @@ public struct FilmEngineInvocation {
         let couplerScale = Self.effectiveCouplerScale(options.couplerScale)
         let couplersActive = couplerScale > 0
             && inhibition.contains { $0.contains { $0 != 0 } }
+        let requestedFringeAmount = options.chromaticFringeAmount ?? stock.chromaticFringeAmount
+        let requestedFringeMM = options.chromaticFringeRadiusMM ?? stock.chromaticFringeRadiusMM
+        let fringeAmount = requestedFringeAmount.isFinite ? min(max(requestedFringeAmount, 0), 1) : 0
+        let fringeMM = requestedFringeMM.isFinite ? min(max(requestedFringeMM, 0), 2) : 0
+        let hasCrossLayerInhibition = inhibition.enumerated().contains { receiver, row in
+            row.enumerated().contains { donor, value in receiver != donor && value != 0 }
+        }
+        let fringeActive = selected(.adjacency) && couplersActive && !stock.isMonochrome
+            && hasCrossLayerInhibition && fringeAmount > 0
+            && fringeMM > stock.couplerDiffusionMM
+            && Self.gaussianRadius(fringeMM * pxPerMM) > 0
+        let fringeSigma = fringeActive ? fringeMM * pxPerMM : Self.noSpatialReachPixels
+        let fringeRadius = fringeActive ? Self.gaussianRadius(fringeSigma) : 0
         if couplersActive { featureMask |= FilmEngineFeature.couplers }
         // The donor capture layer rides the coupler stage: its release row joins the
         // inhibition sum, its activation joins the diffusion blur, and `couplerScale` scales
@@ -1164,7 +1180,7 @@ public struct FilmEngineInvocation {
             // no disc donor twin to serve a mask no real material forms.
             && !stock.isMonochrome && stock.grainDensityLaw != .silver
         if donorActive { featureMask |= FilmEngineFeature.donorLayer }
-        if (couplersActive || donorActive) && couplerRadius > 0 {
+        if (couplersActive || donorActive) && max(couplerRadius, fringeRadius) > 0 {
             featureMask |= FilmEngineFeature.couplerDiffusion
         }
         if couplerScale > 0 && adjacencyStrength > 0
@@ -1353,6 +1369,7 @@ public struct FilmEngineInvocation {
         }
         configuration += [screenedAdjacency ? 1 : 0,
                           adjacencySecondarySigma, Float(adjacencySecondaryRadius)]
+        configuration += [fringeActive ? fringeAmount : 0, fringeSigma, Float(fringeRadius)]
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0
@@ -1381,7 +1398,7 @@ public struct FilmEngineInvocation {
         }
         var diffusion = 0
         if featureMask & FilmEngineFeature.couplers != 0 {
-            diffusion = max(diffusion, couplerRadius)
+            diffusion = max(diffusion, couplerRadius, fringeRadius)
         }
         if featureMask & FilmEngineFeature.adjacency != 0 {
             diffusion = max(diffusion, adjacencyRadius, adjacencySecondaryRadius)

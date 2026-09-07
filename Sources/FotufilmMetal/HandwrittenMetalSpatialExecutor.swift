@@ -443,6 +443,7 @@ public final class HandwrittenMetalSpatialExecutor {
         let coupler: GaussianPlan?
         let adjacency: GaussianPlan?
         let adjacencySecondary: GaussianPlan?
+        let chromaticFringe: GaussianPlan?
         let printMTF: PrintPlan?
         let mtf: MTFPlan?
         let grain: GrainPlan
@@ -520,6 +521,7 @@ public final class HandwrittenMetalSpatialExecutor {
         var phases: SIMD4<UInt32>
         var grain: SIMD4<Float>
         var adjacencySecondary = SIMD4<UInt32>.zero
+        var chromaticFringe = SIMD4<UInt32>.zero
     }
 
     private struct ExactCameraTailParameters {
@@ -738,6 +740,12 @@ public final class HandwrittenMetalSpatialExecutor {
                 sigma: max(configuration[FilmEngineInvocation.adjacencySecondarySigmaOffset], 0.151),
                 radius: max(Int(configuration[FilmEngineInvocation.adjacencySecondaryRadiusOffset]), 0))
             : nil
+        let chromaticFringe = mask & FilmEngineFeature.couplers != 0
+            && configuration[FilmEngineInvocation.chromaticFringeAmountOffset] > 0
+            ? try makeGaussianPlan(
+                sigma: max(configuration[FilmEngineInvocation.chromaticFringeSigmaOffset], 0.151),
+                radius: max(Int(configuration[FilmEngineInvocation.chromaticFringeRadiusOffset]), 0))
+            : nil
         let fastPath = try makeFastPathPlan(
             featureMask: mask, configuration: configuration,
             diffusion: diffusion, halation: halation,
@@ -757,6 +765,7 @@ public final class HandwrittenMetalSpatialExecutor {
             halfResponseLUT: halfResponseLUT,
             diffusion: diffusion, halation: halation, coupler: coupler,
             adjacency: adjacency, adjacencySecondary: adjacencySecondary,
+            chromaticFringe: chromaticFringe,
             printMTF: printMTF, mtf: mtf, grain: grain,
             fastPath: fastPath, multiresPath: multiresPath)
         lock.lock()
@@ -1084,6 +1093,7 @@ public final class HandwrittenMetalSpatialExecutor {
         var couplerGeometry = SIMD4<UInt32>.zero
         var adjacencyGeometry = SIMD4<UInt32>.zero
         var adjacencySecondaryGeometry = SIMD4<UInt32>.zero
+        var fringeGeometry = SIMD4<UInt32>.zero
         let couplerGrid = frameScratch.work
         let releaseActive = state.featureMask
             & (FilmEngineFeature.couplers | FilmEngineFeature.donorLayer) != 0
@@ -1106,6 +1116,15 @@ public final class HandwrittenMetalSpatialExecutor {
                 couplerGeometry = SIMD4(
                     UInt32(width), UInt32(height), 1, 0)
             }
+        }
+
+        if let plan = state.chromaticFringe {
+            fringeGeometry = encodeGaussianField(
+                encoder, source: densityOutput, destination: frameScratch.scales[1],
+                temporaryA: frameScratch.gridA, temporaryB: frameScratch.gridB,
+                plan: plan, transform: 2, width: width, height: height,
+                originX: originX, originY: originY,
+                configuration: state.configurationBuffer, curves: state.curves)
         }
 
         let adjacencyGrid = state.adjacencySecondary == nil
@@ -1131,6 +1150,7 @@ public final class HandwrittenMetalSpatialExecutor {
             encoder, io: densityOutput, coupler: couplerGrid,
             adjacency: adjacencyGrid, printOutput: frameScratch.gridB, state: state,
             adjacencySecondary: frameScratch.gridA,
+            chromaticFringe: frameScratch.scales[1], fringeGeometry: fringeGeometry,
             couplerGeometry: couplerGeometry,
             adjacencyGeometry: adjacencyGeometry,
             adjacencySecondaryGeometry: adjacencySecondaryGeometry,
@@ -1298,6 +1318,9 @@ public final class HandwrittenMetalSpatialExecutor {
         }
         if let secondary = state.adjacencySecondary {
             dispatches += secondary.stride == 1 || secondary.fusedPipeline == nil ? 3 : 2
+        }
+        if let fringe = state.chromaticFringe {
+            dispatches += fringe.stride == 1 || fringe.fusedPipeline == nil ? 3 : 2
         }
         dispatches += 1
         if let print = state.printMTF {
@@ -2184,6 +2207,7 @@ public final class HandwrittenMetalSpatialExecutor {
         coupler: MTLTexture, adjacency: MTLTexture, printOutput: MTLTexture,
         state: Prepared,
         adjacencySecondary: MTLTexture,
+        chromaticFringe: MTLTexture, fringeGeometry: SIMD4<UInt32>,
         couplerGeometry: SIMD4<UInt32>, adjacencyGeometry: SIMD4<UInt32>,
         adjacencySecondaryGeometry: SIMD4<UInt32>,
         seed: UInt32, originX: Int, originY: Int
@@ -2207,7 +2231,8 @@ public final class HandwrittenMetalSpatialExecutor {
                 state.configuration[Configuration.grainLambda],
                 state.configuration[Configuration.mottleLambda],
                 state.configuration[Configuration.grainCorrelation], 0),
-            adjacencySecondary: adjacencySecondaryGeometry)
+            adjacencySecondary: adjacencySecondaryGeometry,
+            chromaticFringe: fringeGeometry)
         encoder.setComputePipelineState(state.grain.pipeline)
         encoder.setTexture(state.curves, index: 0)
         encoder.setTexture(coupler, index: 1)
@@ -2215,6 +2240,7 @@ public final class HandwrittenMetalSpatialExecutor {
         encoder.setTexture(io, index: 3)
         encoder.setTexture(printOutput, index: 4)
         encoder.setTexture(adjacencySecondary, index: 7)
+        encoder.setTexture(chromaticFringe, index: 8)
         encoder.setBuffer(state.configurationBuffer, offset: 0, index: 0)
         encoder.setBuffer(state.grain.finePoisson, offset: 0, index: 1)
         encoder.setBuffer(state.grain.normal, offset: 0, index: 2)
@@ -2525,6 +2551,7 @@ public final class HandwrittenMetalSpatialExecutor {
     ) throws -> FastPathPlan? {
         guard Self.enableNineDispatchFastPath else { return nil }
         guard configuration[FilmEngineInvocation.adjacencyModelOffset] < 0.5 else { return nil }
+        guard configuration[FilmEngineInvocation.chromaticFringeAmountOffset] == 0 else { return nil }
         // `.perceptualMultires` is all-or-nothing. Unsupported topology executes the strict
         // generic graph instead of falling into a differently specialized schedule.
         guard optimizationVariant != .perceptualMultires else { return nil }
@@ -2678,6 +2705,7 @@ public final class HandwrittenMetalSpatialExecutor {
     ) throws -> MultiresPathPlan? {
         guard optimizationVariant == .perceptualMultires else { return nil }
         guard configuration[FilmEngineInvocation.adjacencyModelOffset] < 0.5 else { return nil }
+        guard configuration[FilmEngineInvocation.chromaticFringeAmountOffset] == 0 else { return nil }
 
         // This is a hard topology gate, not feature ablation. If a stock asks for any field that
         // this schedule cannot carry, preparation keeps the strict generic graph instead of
@@ -3307,6 +3335,12 @@ public final class HandwrittenMetalSpatialExecutor {
         if state.adjacencySecondary != nil {
             widths[0] = state.width
             heights[0] = state.height
+        }
+        // The optical fields are dead at development. Retain the broad inhibitor field in
+        // the second pyramid surface while the adjacency fields use the other scratch grids.
+        if let fringe = state.chromaticFringe {
+            widths[1] = max(widths[1], (state.width + 2 * fringe.stride - 2) / fringe.stride)
+            heights[1] = max(heights[1], (state.height + 2 * fringe.stride - 2) / fringe.stride)
         }
         return ScratchKey(
             width: state.width, height: state.height,

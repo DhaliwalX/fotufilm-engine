@@ -27,9 +27,9 @@ assert "Fotufilm AOT:" not in (root / "0.trace").read_text(), "general path used
 assert "Fotufilm AOT:" in (root / "1.trace").read_text(), "windowed path was not exercised"
 general = sorted((root / "0").glob("*.f32"))
 windowed = sorted((root / "1").glob("*.f32"))
-assert len(general) == len(windowed) == 22, "missing comparison frames"
+assert len(general) == len(windowed) == 26, "missing comparison frames"
 for left, right in zip(general, windowed):
     assert left.name == right.name
     assert left.read_bytes() == right.read_bytes(), f"output differs: {left.name}"
-print("PASS: all 22 general/windowed AOT frames match byte for byte")
+print("PASS: all 26 general/windowed AOT frames match byte for byte")
 PY

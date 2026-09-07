@@ -36,6 +36,7 @@ constant uint kGrain = 30u;
 constant uint kCouplerScale = 58u;
 constant uint kAdjacencyStrength = 59u;
 constant uint kAdjacencyModel = kSampledCurves + 3u * kSampledCurveStride;
+constant uint kChromaticFringeAmount = kAdjacencyModel + 3u;
 constant uint kCouplerWarp = 66u;
 constant uint kHalationKernel = 457u;
 constant uint kMottle = 8684u;
@@ -89,6 +90,7 @@ struct DevelopParameters {
     uint4 phases;
     float4 grain;
     uint4 adjacencySecondary;
+    uint4 chromaticFringe;
 };
 struct PrintParameters { uint4 extent; float4 values; };
 
@@ -1495,6 +1497,7 @@ kernel void fotufilm_spatial_develop(
     texture2d_array<float, access::read> halfResponse [[texture(5)]],
     texture2d<half, access::read> multiresCorrection [[texture(6)]],
     texture2d<half, access::read> adjacencySecondary [[texture(7)]],
+    texture2d<half, access::read> chromaticFringe [[texture(8)]],
     const device float *configuration [[buffer(0)]],
     const device float *finePoisson [[buffer(1)]],
     const device float *fineNormal [[buffer(2)]],
@@ -1696,6 +1699,13 @@ kernel void fotufilm_spatial_develop(
             inhibitor_release(activation.z, configuration[kCouplerReleaseGamma + 2u]),
             inhibitor_release(activation.w, configuration[kDonorReleaseGamma])));
     }
+    float3 fringeResidual = 0.0f;
+    if (couplers && p.chromaticFringe.z != 0u) {
+        float3 broad = sample_develop_grid(chromaticFringe, position, p.chromaticFringe,
+            p.extent.w % max(p.chromaticFringe.z, 1u)).rgb;
+        fringeResidual = (broad - released.rgb)
+            * configuration[kChromaticFringeAmount] * configuration[kCouplerScale];
+    }
     float3 effective = logarithmic;
     if (couplers || donor) {
         for (uint channel = 0u; channel < 3u; ++channel) {
@@ -1705,6 +1715,12 @@ kernel void fotufilm_spatial_develop(
                 inhibition += dot(float3(configuration[row], configuration[row + 1u],
                                           configuration[row + 2u]), released.rgb)
                     * configuration[kCouplerScale];
+                if (p.chromaticFringe.z != 0u) {
+                    for (uint donorChannel = 0u; donorChannel < 3u; ++donorChannel) {
+                        if (donorChannel != channel)
+                            inhibition += configuration[row + donorChannel] * fringeResidual[donorChannel];
+                    }
+                }
             }
             if (donor) {
                 inhibition += configuration[kDonorRelease + channel] * released.w
