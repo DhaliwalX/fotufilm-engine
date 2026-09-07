@@ -91,10 +91,59 @@ file beside them — travel inside every binary that links `FotufilmCore`. The
 apps' acknowledgements screens carry the attribution and point at that
 bundled copy of the licence.
 
-## Synthetic films and print receivers
+## Film profiles and print receivers
 
-`Sources/FotufilmCore/Stocks/` contains only project-authored synthetic examples.
-Print receivers and projection illumination are project-authored analytic models.
+`Sources/FotufilmCore/Stocks/` holds the released film profiles and the
+project-authored synthetic examples. The print receivers in `PrintPaperTables.swift`
+and the `*PaperSpectra.swift` / `*PrintSpectra.swift` files are this project's own
+digitisations of the manufacturers' publicly published datasheets. The datasheets
+themselves are not redistributed. Product names identify which material each
+measurement describes and are the trademarks of their respective owners.
+
+The one table here that is not our own measurement is the xenon projector spectrum,
+covered below.
+
+## Kinoton 75P projector spectrum (colour-science)
+
+`Illuminant.measuredXenonProjection` in `Sources/FotufilmCore/Illuminant.swift` is
+transcribed from `colour.SDS_LIGHT_SOURCES["Kinoton 75P"]` in the colour-science
+library (<https://github.com/colour-science/colour>). Upstream, the measurement's
+provenance is a private communication (Jim Houston to Thomas Mansencal, 2015).
+
+colour-science is distributed under the BSD 3-Clause License. Its copyright notice,
+conditions and disclaimer are reproduced here in full, which is what the licence
+requires of a source redistribution:
+
+> Copyright 2013 Colour Developers
+>
+> Redistribution and use in source and binary forms, with or without modification,
+> are permitted provided that the following conditions are met:
+>
+> 1. Redistributions of source code must retain the above copyright notice, this
+>    list of conditions and the following disclaimer.
+>
+> 2. Redistributions in binary form must reproduce the above copyright notice, this
+>    list of conditions and the following disclaimer in the documentation and/or
+>    other materials provided with the distribution.
+>
+> 3. Neither the name of the copyright holder nor the names of its contributors may
+>    be used to endorse or promote products derived from this software without
+>    specific prior written permission.
+>
+> THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+> ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+> WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+> IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+> INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+> NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+> PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+> WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+> ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+> POSSIBILITY OF SUCH DAMAGE.
+
+Naming colour-science and its upstream source is factual attribution. Under the
+licence's third clause it is not an endorsement by the Colour Developers or their
+contributors.
 
 ## CIE colorimetric data
 

@@ -13,9 +13,11 @@ PUBLIC_KEY = ROOT / 'shared/FotufilmApp/FilmPackKeyMaterial.swift'
 DENIED = ('stocks-private/', 'research/', 'ios/', 'ios-uikit/', 'android/',
           'license-server/', 'tools/calibration/', 'docs/calibration/', 'docs/accuracy/')
 RELEASED_STOCKS = json.loads((ROOT / 'licenses/FILM-PROFILES.json').read_text())
-# The print-receiver calibrations are published here deliberately: they are digitised from the
-# manufacturers' own public datasheets and their provenance is recorded in SOURCE_ASSETS.json.
-# Film-stock sensitivities (MeasuredSpectra.swift) remain private.
+# The print receivers and the projection illuminant are published here deliberately. The
+# receivers are this project's own digitisations of the manufacturers' public datasheets; the
+# xenon projector spectrum is third-party and is attributed in THIRD_PARTY_NOTICES.md. What
+# stays out is the calibration harness, its recorded baseline, and the sheet-reading tables it
+# consumes, which describe unpublished measurement runs.
 DENIED_NAMES = {'MeasuredSpectra.swift', 'CalibrationTests.swift',
                 'accuracy-baseline.json'}
 BINARY_SUFFIXES = {'.png', '.jpg', '.jpeg', '.heic', '.tif', '.tiff', '.exr', '.mp4',

@@ -21,7 +21,7 @@ spectral samples. Synthetic examples and engine code remain Apache-2.0. Using a
 profile to render a photograph or video does not impose the profile licence or an
 attribution requirement on that rendered work.
 
-## Print receivers
+## Measured spectral data
 
 The print media in `PrintPaperTables.swift` and the `*PaperSpectra.swift` /
 `*PrintSpectra.swift` files are digitised by this project from the manufacturers'
@@ -34,6 +34,11 @@ redistributed here. Product names are the trademarks of their respective owners 
 are used only to identify which material each measurement describes; see
 **Trademarks** below. Nothing here is endorsed by or affiliated with Kodak or
 Fujifilm.
+
+One table is not ours: the xenon projector spectrum in `Illuminant.swift` is
+transcribed from the colour-science library and carries that project's BSD 3-Clause
+terms. Its copyright notice, conditions and disclaimer are reproduced in full in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Third-party material
 
