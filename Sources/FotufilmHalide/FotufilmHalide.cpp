@@ -410,6 +410,7 @@ public:
         const bool use_halation = !density_in && (features & FOTUFILM_FRAME_HALATION);
         const bool use_annular = use_halation
             && (features & FOTUFILM_FRAME_HALATION_ANNULAR);
+        const bool use_analytical = !density_in && (features & FOTUFILM_FRAME_ANALYTICAL_DEVELOPMENT);
         const bool use_couplers = !density_in && (features & FOTUFILM_FRAME_COUPLERS);
         const bool use_donor = !density_in && (features & FOTUFILM_FRAME_DONOR_LAYER);
         const bool use_coupler_diffusion =
@@ -591,6 +592,20 @@ public:
         log_exposure(x, y, c) = Halide::log(
             Halide::max(light(x, y, c), 1.0e-6f)) / Halide::log(10.0f);
 
+        auto analytical_solve = [&](Func source, bool spatial, const std::string &name) {
+            return analytical_development(configuration_, source, x, y, c,
+                [&](Func state) { cpu_pointwise(state, x, y, c); return state; },
+                [&](Func state, const std::string &step) {
+                    return spatial ? cpu_gaussian_decimated(
+                        state, coupler_sigma_, coupler_radius_,
+                        origin_x_, origin_y_, width_, height_, step + "_diffused") : state;
+                }, name);
+        };
+        Func analytical;
+        if (use_analytical) {
+            analytical = analytical_solve(log_exposure, use_coupler_diffusion,
+                                           "develop_analytical" + suffix);
+        }
         Func effective_log = log_exposure;
         Func donor_activation("develop_donor_activation" + suffix);
         Func donor_released("develop_donor_released" + suffix);
@@ -701,7 +716,9 @@ public:
             density(x, y, c) = Halide::mux(
                 c, {input_r_(x, y), input_g_(x, y), input_b_(x, y)});
         } else {
-            density(x, y, c) = developed_density(effective_log);
+            density(x, y, c) = use_analytical
+                ? d_min + range * analytical(x, y, c)
+                : developed_density(effective_log);
         }
 
         // The other development `texture` differences against: the same curve, the same couplers'
@@ -745,7 +762,13 @@ public:
                 flat_shifted(x, y, c) = u + coupler_warp(configuration_, c, u);
                 flat_effective = flat_shifted;
             }
-            flat_density(x, y, c) = developed_density(flat_effective);
+            if (use_analytical) {
+                Func flat_analytical = analytical_solve(flat_log, false,
+                                                       "develop_flat_analytical" + suffix);
+                flat_density(x, y, c) = d_min + range * flat_analytical(x, y, c);
+            } else {
+                flat_density(x, y, c) = developed_density(flat_effective);
+            }
             cpu_pointwise(flat_density, x, y, c);
         }
 
@@ -1338,7 +1361,8 @@ DevelopPipeline *develop_pipeline_for(int32_t feature_mask) {
         | FOTUFILM_FRAME_DISC_GRAIN | FOTUFILM_FRAME_GRAIN_MOTTLE
         | FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_DENSITY_IN
         | FOTUFILM_FRAME_TEXTURE | FOTUFILM_FRAME_DIFFUSION
-        | FOTUFILM_FRAME_DONOR_LAYER | FOTUFILM_FRAME_HALATION_ANNULAR;
+        | FOTUFILM_FRAME_DONOR_LAYER | FOTUFILM_FRAME_HALATION_ANNULAR
+        | FOTUFILM_FRAME_ANALYTICAL_DEVELOPMENT;
     const int32_t features = feature_mask & spatial_bits;
     constexpr int32_t stage_bits = FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF
         | FOTUFILM_FRAME_HALATION | FOTUFILM_FRAME_COUPLERS
@@ -1353,8 +1377,9 @@ DevelopPipeline *develop_pipeline_for(int32_t feature_mask) {
         | ((features & FOTUFILM_FRAME_TEXTURE) ? 4096 : 0)
         | ((features & FOTUFILM_FRAME_DIFFUSION) ? 8192 : 0)
         | ((features & FOTUFILM_FRAME_DONOR_LAYER) ? 16384 : 0)
-        | ((features & FOTUFILM_FRAME_HALATION_ANNULAR) ? 32768 : 0);
-    static std::unique_ptr<DevelopPipeline> pipelines[65536];
+        | ((features & FOTUFILM_FRAME_HALATION_ANNULAR) ? 32768 : 0)
+        | ((features & FOTUFILM_FRAME_ANALYTICAL_DEVELOPMENT) ? 65536 : 0);
+    static std::unique_ptr<DevelopPipeline> pipelines[131072];
     static std::mutex pipelines_mutex;
     std::lock_guard<std::mutex> lock(pipelines_mutex);
     if (!pipelines[variant]) {

@@ -165,7 +165,8 @@ public final class HandwrittenMetalFilmRenderer {
         let invocation = FilmEngineInvocation(
             stock: stock, options: options, width: frameWidth, height: frameHeight)
         let originalMask = invocation.featureMask
-        guard !invocation.localToneActive,
+        guard originalMask & FilmEngineFeature.analyticalDevelopment == 0,
+              !invocation.localToneActive,
               originalMask & FilmEngineFeature.flare == 0 else { return false }
         let reversal = originalMask & FilmEngineFeature.reversal != 0
         let donor = originalMask & FilmEngineFeature.donorLayer != 0

@@ -34,7 +34,7 @@ enum {
 enum {
     FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES = 1024,
     FOTUFILM_SAMPLED_CURVE_STRIDE = 1 + 3 * FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES,
-    FOTUFILM_FRAME_CONFIGURATION_COUNT = 232 + 3 * FOTUFILM_COUPLER_WARP_SAMPLES
+    FOTUFILM_FRAME_CONFIGURATION_COUNT = 254 + 3 * FOTUFILM_COUPLER_WARP_SAMPLES
         + 2 * FOTUFILM_TONE_GRID_CELLS + 3 * FOTUFILM_SAMPLED_CURVE_STRIDE,
 };
 
@@ -228,6 +228,10 @@ enum {
     FOTUFILM_CONFIG_OUTPUT_GAMUT = FOTUFILM_CONFIG_OUTPUT_SHOULDER + 1,
     /// Three records: sample count, then (log exposure, density, tangent) triples.
     FOTUFILM_CONFIG_SAMPLED_CURVES = FOTUFILM_CONFIG_OUTPUT_GAMUT + 4,
+    /// Enabled, slope[3], midpoint[3], budget[3], capacity[3], receiver-major inhibition[9].
+    FOTUFILM_CONFIG_ANALYTICAL_DEVELOPMENT = FOTUFILM_CONFIG_SAMPLED_CURVES
+        + 3 * FOTUFILM_SAMPLED_CURVE_STRIDE,
+    FOTUFILM_ANALYTICAL_ITERATIONS = 64,
 };
 
 /// Decode-kernel parameters: row-major scene-space matrix, transfer, and premultiplication flag.
@@ -343,6 +347,7 @@ enum {
     /// replaced, not switched off: there is no setting of the film and paper cubes that turns
     /// the spectral path into a matrix.
     FOTUFILM_FRAME_NO_FILM = 1 << 29,
+    FOTUFILM_FRAME_ANALYTICAL_DEVELOPMENT = 1 << 30,
 };
 
 /// Full spatial-stage mask, including post-grain enlarger blur. Zero radius makes enlarger blur
@@ -1122,7 +1127,8 @@ enum {
      FOTUFILM_FRAME_OUTPUT_LINEAR | FOTUFILM_FRAME_OUTPUT_POWER |             \
      FOTUFILM_FRAME_OUTPUT_LOG | FOTUFILM_FRAME_LIGHT_OUT |                   \
      FOTUFILM_FRAME_FIELDS_IN | FOTUFILM_FRAME_TEXTURE |                      \
-     FOTUFILM_FRAME_DONOR_LAYER | FOTUFILM_FRAME_NO_FILM)
+     FOTUFILM_FRAME_DONOR_LAYER | FOTUFILM_FRAME_NO_FILM |                     \
+     FOTUFILM_FRAME_ANALYTICAL_DEVELOPMENT)
 
 /// Sigma of the Gaussian that three iterated box blurs of `radius` approximate.
 static inline float fotufilm_halation_box_sigma(int32_t radius) {

@@ -1117,6 +1117,8 @@ public:
         const bool use_halation = feature_mask & FOTUFILM_FRAME_HALATION;
         const bool use_annular = use_halation
             && (feature_mask & FOTUFILM_FRAME_HALATION_ANNULAR);
+        const bool use_analytical = !density_in_
+            && (feature_mask & FOTUFILM_FRAME_ANALYTICAL_DEVELOPMENT);
         const bool use_couplers = feature_mask & FOTUFILM_FRAME_COUPLERS;
         const bool use_donor = feature_mask & FOTUFILM_FRAME_DONOR_LAYER;
         const bool use_coupler_diffusion =
@@ -1706,6 +1708,20 @@ public:
         log_exposure(x, y, channel) = fs_log(
             Halide::max(light(x, y, channel), 1.0e-6f), approximate_)
             * (1.0f / 2.3025851f);
+        auto analytical_solve = [&](Func source, bool spatial, const std::string &name) {
+            return analytical_development(configuration_, source, x, y, channel,
+                [&](Func state) { return store_frame(state, false); },
+                [&](Func state, const std::string &step) {
+                    return spatial ? gpu_gaussian_decimated(
+                        state, coupler_sigma_, coupler_radius_,
+                        origin_x_, origin_y_, width_, height_, false, step + "_diffused") : state;
+                }, name);
+        };
+        Func analytical;
+        if (use_analytical) {
+            analytical = analytical_solve(log_exposure, use_coupler_diffusion,
+                                           "frame_analytical" + suffix);
+        }
         Func effective_log = log_exposure;
         Func donor_activation("frame_donor_activation" + suffix);
         Func donor_released("frame_donor_released" + suffix);
@@ -1843,7 +1859,9 @@ public:
             // Complemented only on a genuine reversal stock; see FOTUFILM_CONFIG_DEVELOP_COMPLEMENT.
             Expr complement =
                 configuration_(FOTUFILM_CONFIG_DEVELOP_COMPLEMENT) > 0.5f;
-            Expr formed = film_curve(channel, effective_log(x, y, channel));
+            Expr formed = use_analytical
+                ? d_min + range * analytical(x, y, channel)
+                : film_curve(channel, effective_log(x, y, channel));
             density(x, y, channel) = Halide::select(
                 complement, d_min + range - (formed - d_min), formed);
         }
@@ -1893,7 +1911,14 @@ public:
                     u + coupler_warp(configuration_, channel, u);
                 flat_effective = flat_shifted;
             }
-            Expr flat_formed = film_curve(channel, flat_effective(x, y, channel));
+            Func flat_analytical;
+            if (use_analytical) {
+                flat_analytical = analytical_solve(flat_log, false,
+                                                  "frame_flat_analytical" + suffix);
+            }
+            Expr flat_formed = use_analytical
+                ? d_min + range * flat_analytical(x, y, channel)
+                : film_curve(channel, flat_effective(x, y, channel));
             flat_density(x, y, channel) = Halide::select(
                 configuration_(FOTUFILM_CONFIG_DEVELOP_COMPLEMENT) > 0.5f,
                 d_min + range - (flat_formed - d_min), flat_formed);

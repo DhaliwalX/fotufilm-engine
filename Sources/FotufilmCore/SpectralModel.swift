@@ -429,6 +429,9 @@ public enum SpectralRuntime {
                 add(0)
             }
         }
+        if let model = stock.analyticalDevelopment {
+            for value in model.configuration { add(value) }
+        }
         add(stock.paperCurve.dMin); add(stock.paperCurve.gamma)
         add(stock.paperCurve.toe); add(stock.paperCurve.toeWidth)
         add(stock.paperCurve.shoulder); add(stock.paperCurve.shoulderWidth)
@@ -615,7 +618,7 @@ public enum SpectralRuntime {
         let mid = neutralDensity(stock, 0)
         return (0..<3).map { layer in
             let curve = stock.curves[layer]
-            let range = curve.dMax - curve.dMin
+            let range = stock.densityRanges[layer]
             return (0...screenReadingSamples).map { i in
                 let density = curve.dMin
                     + range * Float(i) / Float(screenReadingSamples)
@@ -745,7 +748,7 @@ public enum SpectralRuntime {
                 density: curve.dMin + paper.anchorDensity(stock.paperMidDensity))
             let masking = stock.printingContrastScale(
                 correction: FotufilmEngine.Options().printCorrection, paper: paper)
-            let filmRanges = stock.curves.map { $0.dMax - $0.dMin }
+            let filmRanges = stock.densityRanges
             let response = SpectralRuntime.buildLUT { scene in
                 let records = exposure.sample(scene) / 0.18
                 let filmDensity = (0..<3).map { channel in
@@ -1009,7 +1012,7 @@ public enum SpectralRuntime {
 
         let dyes = stock.spectralProfile.imageDyeDensity
         let dMin = stock.curves.map(\.dMin)
-        let ranges = stock.curves.map { $0.dMax - $0.dMin }
+        let ranges = stock.densityRanges
         // The base carries no developed silver, so both readings measure it without the bleach's
         // retained silver; only the image inverts.
         let base = transmissionRGB(density: dMin, dyes: dyes)
@@ -1049,8 +1052,10 @@ public enum SpectralRuntime {
     /// be served a table built for the old ones.
     private static func densitySignature(of stock: FilmStock) -> UInt64 {
         var h: UInt64 = 0xcbf29ce484222325
-        for curve in stock.curves {
-            for value in [curve.dMin, curve.dMax] {
+        for (i, curve) in stock.curves.enumerated() {
+            let maximum = stock.analyticalDevelopment.map { curve.dMin + $0.capacity[i] }
+                ?? curve.dMax
+            for value in [curve.dMin, maximum] {
                 h = (h ^ UInt64(value.bitPattern)) &* 0x100000001b3
             }
         }
@@ -1194,7 +1199,7 @@ public enum SpectralRuntime {
         stock: FilmStock,
         _ evaluate: ([Float]) -> SIMD3<Float>
     ) -> SpectralLUT {
-        let ranges = stock.curves.map { $0.dMax - $0.dMin }
+        let ranges = stock.densityRanges
         return buildLUT { p in
             evaluate([
                 stock.curves[0].dMin + p.x * ranges[0],

@@ -92,6 +92,8 @@ public enum FilmEngineFeature {
     public static let donorLayer: Int32 = 1 << 27
     /// Legacy annular halation basis. New physical profiles use continuous centered fields.
     public static let annularHalation: Int32 = 1 << 28
+    /// Finite-capacity coupled development; currently a Halide reference-backend variant.
+    public static let analyticalDevelopment: Int32 = 1 << 30
 }
 
 /// The step out of the print's delivery basis and into a host's own space, for a caller that
@@ -340,7 +342,7 @@ public struct FilmEngineInvocation {
 
     public static let sampledCurveStride = 1 + 3 * SampledCharacteristicCurve.maximumSamples
     public static let sampledCurvesOffset = 232 + 3 * couplerWarpSamples + 2 * toneGridCells
-    public static let configurationCount = sampledCurvesOffset + 3 * sampledCurveStride
+    public static let configurationCount = analyticalDevelopmentOffset + 22
     /// Index of the grading-space switch; mirrors FOTUFILM_CONFIG_GRADE_SPACE.
     /// After it, appended in order so that adding each renumbered nothing:
     /// the six grain-mottle entries, the paper's red and blue records and
@@ -417,6 +419,7 @@ public struct FilmEngineInvocation {
     /// renumbering earlier fields.
     public static let outputShoulderOffset = grainDensityProfileOffset + 3
     public static let outputGamutOffset = outputShoulderOffset + 1
+    public static let analyticalDevelopmentOffset = sampledCurvesOffset + 3 * sampledCurveStride
     /// Index of the three aperture-calibrated grain strengths; mirrors FOTUFILM_CONFIG_GRAIN.
     public static let grainOffset = 30
 
@@ -812,6 +815,7 @@ public struct FilmEngineInvocation {
         // schedule gates the stage on `!density_in`. Without it here the print span would ask
         // for a variant carrying a stage it cannot run.
         | FilmEngineFeature.donorLayer | FilmEngineFeature.annularHalation
+        | FilmEngineFeature.analyticalDevelopment
 
     /// The finished feature mask for one span of the pipeline.
     ///
@@ -847,6 +851,14 @@ public struct FilmEngineInvocation {
         // Every table key below sees the final developed roll.
         let stock = developed.expired(years: max(options.expiredYears, 0))
             .reciprocity(shutterSeconds: options.shutterSeconds ?? 0)
+        if let model = stock.analyticalDevelopment {
+            precondition((try? model.validate()) != nil, "invalid analytical development parameters")
+            precondition(!stock.isReversal && !stock.isMonochrome && stock.donorLayers.isEmpty,
+                         "analytical development requires a three-record colour negative")
+            precondition(options.developmentEV == 0 && options.expiredYears == 0
+                         && options.shutterSeconds == nil,
+                         "analytical development requires its own process calibration")
+        }
         // Resolved once, against the developed roll: every stage below reads the medium the
         // picture actually lands on rather than the request, which may name one this stock
         // cannot reach or may name none at all.
@@ -1134,7 +1146,9 @@ public struct FilmEngineInvocation {
                                    selfScale: options.couplerSelfScale)
         } ?? stock.couplerInhibition
         let couplerScale = Self.effectiveCouplerScale(options.couplerScale)
-        let couplersActive = couplerScale > 0
+        let analytical = stock.analyticalDevelopment != nil
+        if analytical { featureMask |= FilmEngineFeature.analyticalDevelopment }
+        let couplersActive = !analytical && couplerScale > 0
             && inhibition.contains { $0.contains { $0 != 0 } }
         if couplersActive { featureMask |= FilmEngineFeature.couplers }
         // The donor capture layer rides the coupler stage: its release row joins the
@@ -1155,10 +1169,10 @@ public struct FilmEngineInvocation {
             // no disc donor twin to serve a mask no real material forms.
             && !stock.isMonochrome && stock.grainDensityLaw != .silver
         if donorActive { featureMask |= FilmEngineFeature.donorLayer }
-        if (couplersActive || donorActive) && couplerRadius > 0 {
+        if (couplersActive || donorActive || (analytical && couplerScale > 0)) && couplerRadius > 0 {
             featureMask |= FilmEngineFeature.couplerDiffusion
         }
-        if couplerScale > 0 && adjacencyStrength > 0
+        if !analytical && couplerScale > 0 && adjacencyStrength > 0
             && adjacencyRadius > 0 {
             featureMask |= FilmEngineFeature.adjacency
         }
@@ -1342,6 +1356,8 @@ public struct FilmEngineInvocation {
             }
             configuration += record
         }
+        configuration += stock.analyticalDevelopment?.configuration
+            ?? [Float](repeating: 0, count: 22)
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0
@@ -1371,6 +1387,11 @@ public struct FilmEngineInvocation {
         var diffusion = 0
         if featureMask & FilmEngineFeature.couplers != 0 {
             diffusion = max(diffusion, couplerRadius)
+        }
+        if featureMask & FilmEngineFeature.analyticalDevelopment != 0,
+           featureMask & FilmEngineFeature.couplerDiffusion != 0 {
+            // Every feedback update extends the dependency by one inhibitor blur.
+            diffusion = max(diffusion, AnalyticalDevelopment.iterations * couplerRadius)
         }
         if featureMask & FilmEngineFeature.adjacency != 0 {
             diffusion = max(diffusion, adjacencyRadius)
