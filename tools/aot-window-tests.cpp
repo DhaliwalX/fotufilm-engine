@@ -44,6 +44,7 @@ int main(int argc, char **argv) {
         int print_radius, grain_radius;
         int coupler_radius = 2;
         float fringe_sigma = 0;
+        bool screened = false;
     };
     const Case cases[] = {
         {"first-window", 32, 512, 0, 1, 1},
@@ -57,8 +58,9 @@ int main(int argc, char **argv) {
         {"offset-fallback", 65, 769, 7, 1, 1},
         {"stride-one-limit", 65, 769, 0, 1, 1, 12},
         {"stride-one-fallback", 65, 769, 0, 1, 1, 13},
-        {"chromatic-fringe-window", 65, 769, 0, 1, 1, 2, 2.0f},
+        {"chromatic-fringe-small-fallback", 65, 769, 0, 1, 1, 2, 2.0f},
         {"chromatic-fringe-fallback", 65, 769, 0, 1, 1, 2, 50.0f},
+        {"screened-adjacency-fallback", 65, 769, 0, 1, 1, 2, 0, true},
     };
     for (const Case &test : cases) {
         auto c = configuration;
@@ -79,6 +81,9 @@ int main(int argc, char **argv) {
         c[FOTUFILM_CONFIG_COUPLER_RADIUS] = float(test.coupler_radius);
         c[FOTUFILM_CONFIG_ADJACENCY_SIGMA] = 2.7f;
         c[FOTUFILM_CONFIG_ADJACENCY_RADIUS] = 8;
+        c[FOTUFILM_CONFIG_ADJACENCY_MODEL] = test.screened ? 1 : 0;
+        c[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA] = test.screened ? 5.0f : 0.151f;
+        c[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS] = test.screened ? 15 : 0;
         c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT] = test.fringe_sigma > 0 ? 0.2f : 0;
         c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA] = test.fringe_sigma;
         c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS] = 3 * test.fringe_sigma;

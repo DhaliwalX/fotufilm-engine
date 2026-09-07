@@ -617,7 +617,12 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
         const char *setting = std::getenv("FOTUFILM_AOT_WINDOWED");
         return !setting || std::strcmp(setting, "0") != 0;
     }();
-    if (windowed_enabled && width >= 32 && height >= fotufilm::kWindowStorageRows
+    // The optimized folded schedule carries the original single-field adjacency only.
+    // Screened adjacency and broad inter-layer transport use the general spatial graph.
+    const bool supports_windowed_transport = configuration[FOTUFILM_CONFIG_ADJACENCY_MODEL] < 0.5f
+        && configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT] == 0;
+    if (windowed_enabled && supports_windowed_transport
+        && width >= 32 && height >= fotufilm::kWindowStorageRows
         && origin_x == 0 && origin_y == 0 && !wants_extended
         && in->dim[0].min == 0 && in->dim[1].min == 0
         && out->dim[0].min == 0 && out->dim[1].min == 0

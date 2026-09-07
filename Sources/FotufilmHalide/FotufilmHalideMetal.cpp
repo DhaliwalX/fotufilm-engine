@@ -1741,21 +1741,28 @@ public:
                     released_view, coupler_sigma_, coupler_radius_,
                     origin_x_, origin_y_, width_, height_, half_store,
                     "frame_coupler_diffused" + suffix);
-                fringe_diffused = gpu_gaussian_decimated(
-                    released_view, fringe_sigma_, fringe_radius_,
-                    origin_x_, origin_y_, width_, height_, half_store,
-                    "frame_fringe_diffused" + suffix);
+                // Conditional auxiliary fields do not satisfy the folded-window schedule's
+                // monotone-access contract. The host routes those models to the general graph.
+                if (!windowed) {
+                    fringe_diffused = gpu_gaussian_decimated(
+                        released_view, fringe_sigma_, fringe_radius_,
+                        origin_x_, origin_y_, width_, height_, half_store,
+                        "frame_fringe_diffused" + suffix);
+                }
             }
             if (use_adjacency) {
                 adjacency_diffused = gpu_gaussian_decimated(
                     activation_view, adjacency_sigma_, adjacency_radius_,
                     origin_x_, origin_y_, width_, height_, half_store,
                     "frame_adjacency_diffused" + suffix);
-                Func secondary = gpu_gaussian_decimated(
-                    activation_view,
-                    adjacency_secondary_sigma_, adjacency_secondary_radius_,
-                    origin_x_, origin_y_, width_, height_, half_store,
-                    "frame_adjacency_secondary" + suffix);
+                Func secondary = adjacency_diffused;
+                if (!windowed) {
+                    secondary = gpu_gaussian_decimated(
+                        activation_view,
+                        adjacency_secondary_sigma_, adjacency_secondary_radius_,
+                        origin_x_, origin_y_, width_, height_, half_store,
+                        "frame_adjacency_secondary" + suffix);
+                }
                 adjacency_residual = activation_view(x, y, channel) - adjacency_transport(
                     configuration_, adjacency_diffused(x, y, channel), secondary(x, y, channel));
             }
@@ -1809,7 +1816,7 @@ public:
                     inhibition = coupler_inhibition(
                         configuration_, channel, coupler_diffused(x, y, 0),
                         coupler_diffused(x, y, 1), coupler_diffused(x, y, 2));
-                    if (use_coupler_diffusion) {
+                    if (use_coupler_diffusion && !windowed) {
                         Expr fringe = chromatic_fringe_inhibition(
                             configuration_, channel,
                             fringe_diffused(x, y, 0) - coupler_diffused(x, y, 0),
