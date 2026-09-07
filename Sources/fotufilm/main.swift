@@ -90,6 +90,10 @@ Options:
                      frozen past the table's last row; a sheet that states no
                      table holds the law. The print re-times the mid; shadows
                      slide into the toe and any unequal failure casts the ends
+  --development-model <json>
+                     Load coupled-development parameters for a colour negative.
+                     Uses the Halide reference backend. Existing curves remain
+                     the output medium's timing reference.
   --push <stops>     Push (positive) or pull (negative) development, in stops
                      (default: 0). Must name an exact condition measured for
                      this stock's stated developer, dilution, temperature and
@@ -1025,7 +1029,7 @@ if FilmStock.allPresetIDs.isEmpty {
     """)
 }
 
-let stock: FilmStock
+var stock: FilmStock
 let stockID: String
 if let requested = flags["--stock"] {
     guard let match = FilmStock.named(requested) else {
@@ -1036,6 +1040,25 @@ if let requested = flags["--stock"] {
 } else {
     stockID = FilmStock.presetIDs.first ?? FilmStock.allPresetIDs.first!
     stock = FilmStock.named(stockID)!
+}
+
+if let path = flags["--development-model"] {
+    guard !stock.isReversal, !stock.isMonochrome, stock.donorLayers.isEmpty else {
+        fail("--development-model requires a three-record colour negative")
+    }
+    guard flags["--push"] == nil, flags["--expired"] == nil,
+          flags["--shutter"] == nil,
+          flags["--dump-wasm-pack"] == nil, flags["--dump-wasm-stages"] == nil else {
+        fail("--development-model requires its own process calibration and the reference backend")
+    }
+    do {
+        let model = try JSONDecoder().decode(
+            AnalyticalDevelopment.self, from: Data(contentsOf: URL(fileURLWithPath: path)))
+        try model.validate()
+        stock.analyticalDevelopment = model
+    } catch {
+        fail("Could not load development model: \(error)")
+    }
 }
 
 var options = FotufilmEngine.Options()
