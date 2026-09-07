@@ -75,6 +75,7 @@ Options:
   --flare <scale>    Taking-lens veiling glare, 1 enables (default: 0 — a
                      photographed source already carries its own lens's glare)
   --couplers <scale> DIR + adjacency strength; 1 calibrated, overdrive compressed (default: 1)
+  --adjacency-model <m> gaussian or screened-diffusion (default: stock's model)
   --bleach-bypass <f> Fraction of the developed silver the bleach leaves in the
                      negative, 0-1 (default: 0). The print re-times on the
                      denser mid-grey, so what changes is contrast and chroma.
@@ -1090,6 +1091,13 @@ options.useEstimatedHalationProfile = flags["--estimated-halation"] != nil
 // Capture veiling glare, off unless asked for: see Options.flareScale.
 if let f = flags["--flare"] { options.flareScale = Float(f) ?? 1 }
 if let c = flags["--couplers"] { options.couplerScale = Float(c) ?? 1 }
+if let model = flags["--adjacency-model"] {
+    guard let adjacency = AdjacencyModel(rawValue: model) else {
+        FileHandle.standardError.write(Data("unknown adjacency model '\(model)'; expected gaussian or screened-diffusion\n".utf8))
+        exit(1)
+    }
+    options.adjacencyModel = adjacency
+}
 if let b = flags["--bleach-bypass"] { options.bleachBypass = Float(b) ?? 0 }
 if let m = flags["--mottle"] { options.grainMottleShare = Float(m) }
 if let s = flags["--shutter"] { options.shutterSeconds = Float(s) }

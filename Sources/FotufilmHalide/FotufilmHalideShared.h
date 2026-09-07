@@ -571,6 +571,29 @@ inline Halide::Expr inhibitor_release(Halide::Expr activation, Halide::Expr gamm
     return Halide::select(gamma == 1.0f, a, nonlinear);
 }
 
+/// Positive Gaussian mixture for the isotropic screened-diffusion transport kernel.
+inline Halide::Expr adjacency_transport(Halide::ImageParam &configuration,
+                                        Halide::Expr primary, Halide::Expr secondary) {
+    constexpr float share = 0.2753401713f;
+    return Halide::select(configuration(FOTUFILM_CONFIG_ADJACENCY_MODEL) > 0.5f,
+                          share * primary + (1.0f - share) * secondary, primary);
+}
+
+/// Nelson's density-weighted response, with a normalized source activation and the stock's
+/// finite development capacity. Applied before reversal complementation and grain. Local DIR
+/// inhibition is already in `formed`; only its spatial adjacency residual enters here.
+inline Halide::Expr adjacency_density(Halide::ImageParam &configuration,
+                                      Halide::Expr channel, Halide::Expr formed,
+                                      Halide::Expr residual) {
+    Halide::Expr base = configuration(FOTUFILM_CONFIG_CURVES + channel * 6);
+    Halide::Expr net = Halide::max(formed - base, 0.0f);
+    Halide::Expr corrected = base + Halide::clamp(
+        net + configuration(FOTUFILM_CONFIG_ADJACENCY_STRENGTH) * net * residual,
+        0.0f, film_curve_range(configuration, channel));
+    return Halide::select(configuration(FOTUFILM_CONFIG_ADJACENCY_MODEL) > 0.5f,
+                          corrected, formed);
+}
+
 inline Halide::Expr coupler_release(Halide::ImageParam &configuration,
                                     Halide::Expr donor, Halide::Expr activation) {
     return inhibitor_release(

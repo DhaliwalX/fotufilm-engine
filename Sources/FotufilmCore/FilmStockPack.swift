@@ -44,6 +44,7 @@ public struct FilmStockDefinition: Codable, Sendable {
     public var couplerGeometry: CouplerGeometry?
     public var couplerDiffusionMM: Float
     public var adjacencyStrength: Float?
+    public var adjacencyModel: AdjacencyModel? = nil
     public var adjacencyRadiusMM: Float?
 
     public var grainStrength: Float
@@ -374,6 +375,7 @@ public extension FilmStockDefinition {
             couplerGeometry: couplerGeometry,
             couplerDiffusionMM: couplerDiffusionMM,
             adjacencyStrength: adjacencyStrength ?? 0,
+            adjacencyModel: adjacencyModel ?? .gaussian,
             adjacencyRadiusMM: adjacencyRadiusMM ?? 0,
             grainStrength: grainStrength,
             grainSizeMM: grainSizeMM,
@@ -428,6 +430,7 @@ public extension FilmStockDefinition {
         self.couplerGeometry = stock.couplerGeometry
         self.couplerDiffusionMM = stock.couplerDiffusionMM
         self.adjacencyStrength = stock.adjacencyStrength
+        self.adjacencyModel = stock.adjacencyModel == .gaussian ? nil : stock.adjacencyModel
         self.adjacencyRadiusMM = stock.adjacencyRadiusMM
         self.grainStrength = stock.grainStrength
         self.grainSizeMM = stock.grainSizeMM

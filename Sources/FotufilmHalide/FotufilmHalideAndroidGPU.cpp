@@ -249,6 +249,8 @@ extern "C" int32_t fotufilm_halide_android_gpu_process_rgba8(
     sigma(FOTUFILM_CONFIG_COUPLER_SIGMA), radius(FOTUFILM_CONFIG_COUPLER_RADIUS), \
     sigma(FOTUFILM_CONFIG_ADJACENCY_SIGMA),                                   \
     radius(FOTUFILM_CONFIG_ADJACENCY_RADIUS),                                 \
+    sigma(FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA),                          \
+    radius(FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS),                        \
     sigma(FOTUFILM_CONFIG_GRAIN_SIGMA), radius(FOTUFILM_CONFIG_GRAIN_RADIUS),  \
     configuration[FOTUFILM_CONFIG_GRAIN_LAMBDA],                              \
     mottle_lambda, mottle_radius,                                            \

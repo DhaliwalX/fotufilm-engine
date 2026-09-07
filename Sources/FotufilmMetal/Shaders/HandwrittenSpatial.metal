@@ -35,6 +35,7 @@ constant uint kCoupler = 21u;
 constant uint kGrain = 30u;
 constant uint kCouplerScale = 58u;
 constant uint kAdjacencyStrength = 59u;
+constant uint kAdjacencyModel = kSampledCurves + 3u * kSampledCurveStride;
 constant uint kCouplerWarp = 66u;
 constant uint kHalationKernel = 457u;
 constant uint kMottle = 8684u;
@@ -87,6 +88,7 @@ struct DevelopParameters {
     uint4 adjacency;
     uint4 phases;
     float4 grain;
+    uint4 adjacencySecondary;
 };
 struct PrintParameters { uint4 extent; float4 values; };
 
@@ -1492,6 +1494,7 @@ kernel void fotufilm_spatial_develop(
     texture2d<half, access::write> printOutput [[texture(4)]],
     texture2d_array<float, access::read> halfResponse [[texture(5)]],
     texture2d<half, access::read> multiresCorrection [[texture(6)]],
+    texture2d<half, access::read> adjacencySecondary [[texture(7)]],
     const device float *configuration [[buffer(0)]],
     const device float *finePoisson [[buffer(1)]],
     const device float *fineNormal [[buffer(2)]],
@@ -1675,6 +1678,7 @@ kernel void fotufilm_spatial_develop(
         ? DEVELOP_DONOR : (p.state.y & kFeatureDonor) != 0u;
     bool diffused = DEVELOP_CACHE_FIELDS || p.state.z != 0u;
     float4 released;
+    float3 adjacencyResidual = 0.0f;
     if (DEVELOP_CACHE_FIELDS) {
         float2 coordinate = (float2(position)
                 + float2(p.coupler.w, p.phases.x) + 0.5f)
@@ -1721,7 +1725,14 @@ kernel void fotufilm_spatial_develop(
     } else if (p.state.w != 0u) {
         float3 adjacent = sample_develop_grid(
             adjacencyGrid, position, p.adjacency, p.phases.y).rgb;
-        effective -= configuration[kAdjacencyStrength] * (adjacent - activation.rgb);
+        if (configuration[kAdjacencyModel] > 0.5f) {
+            float3 secondary = sample_develop_grid(
+                adjacencySecondary, position, p.adjacencySecondary, p.phases.w).rgb;
+            constexpr float share = 0.2753401713f;
+            adjacencyResidual = activation.rgb - (share * adjacent + (1.0f - share) * secondary);
+        } else {
+            effective -= configuration[kAdjacencyStrength] * (adjacent - activation.rgb);
+        }
     }
 
     float3 density;
@@ -1733,6 +1744,12 @@ kernel void fotufilm_spatial_develop(
         float formed = sample_film_curve(configuration, curves, effective[channel], channel);
         float dMin = configuration[kCurves + channel * 6u];
         float range = film_curve_range(configuration, channel);
+        // Mirrors adjacency_density in FotufilmHalideShared.h, before complement and grain.
+        if (configuration[kAdjacencyModel] > 0.5f && p.state.w != 0u) {
+            float net = max(formed - dMin, 0.0f);
+            formed = dMin + clamp(net + configuration[kAdjacencyStrength]
+                * net * adjacencyResidual[channel], 0.0f, range);
+        }
         density[channel] = complement ? dMin + range - (formed - dMin) : formed;
         if (DEVELOP_GRAIN) {
             float amount = clamp((density[channel] - dMin) / max(range, 1.0e-6f),

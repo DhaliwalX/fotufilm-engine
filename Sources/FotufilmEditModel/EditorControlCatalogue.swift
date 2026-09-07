@@ -373,6 +373,8 @@ public extension EngineOptionCoverage {
             + "delivery ratio (`FotufilmEngine.Options.completeDeliveryMottle`) that lands in "
             + "the band a video frame and its encoder can hold"),
         "grainModel": .control([.grainModel]),
+        "adjacencyModel": .unexposed(
+            "Experimental transport selection is available through the library, CLI, and stock pack."),
         "halationScale": .control([.halation]),
         "halationSourceColour": .control([.halationColour]),
         "halationReturnGain": .control([.halationSpectrum]),

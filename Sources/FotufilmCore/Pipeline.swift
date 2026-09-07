@@ -84,6 +84,8 @@ public struct FotufilmEngine {
         /// stock). Creative overdrive above 1 is compressed so the 2 endpoint applies 1.5 physical
         /// doses rather than letting spatial inhibition grow without bound.
         public var couplerScale: Float = 1
+        /// Optional adjacency-model override, leaving the stock's authored model as the default.
+        public var adjacencyModel: AdjacencyModel? = nil
         /// Multiplier on how far the released inhibitor reaches through the layer stack, applied to
         /// every interlayer alike (`CouplerGeometry.interlayerTransmission`). 0 seals the layers off
         /// from each other; above 1 crosses more.

@@ -382,6 +382,8 @@ public:
           coupler_radius_("develop_coupler_radius" + suffix),
           adjacency_sigma_("develop_adjacency_sigma" + suffix),
           adjacency_radius_("develop_adjacency_radius" + suffix),
+          adjacency_secondary_sigma_("develop_adjacency_secondary_sigma" + suffix),
+          adjacency_secondary_radius_("develop_adjacency_secondary_radius" + suffix),
           grain_sigma_("develop_grain_sigma" + suffix),
           grain_radius_("develop_grain_radius" + suffix),
           grain_lambda_("develop_grain_lambda" + suffix),
@@ -592,6 +594,7 @@ public:
             Halide::max(light(x, y, c), 1.0e-6f)) / Halide::log(10.0f);
 
         Func effective_log = log_exposure;
+        Expr adjacency_residual = 0.0f;
         Func donor_activation("develop_donor_activation" + suffix);
         Func donor_released("develop_donor_released" + suffix);
         Func donor_diffused = donor_released;
@@ -621,6 +624,13 @@ public:
                     activation, adjacency_sigma_, adjacency_radius_,
                     origin_x_, origin_y_, width_, height_,
                     "develop_adjacency_diffused" + suffix);
+                Func secondary = cpu_gaussian_decimated(
+                    activation,
+                    adjacency_secondary_sigma_, adjacency_secondary_radius_,
+                    origin_x_, origin_y_, width_, height_,
+                    "develop_adjacency_secondary" + suffix);
+                adjacency_residual = activation(x, y, c) - adjacency_transport(
+                    configuration_, adjacency_diffused(x, y, c), secondary(x, y, c));
             }
             // The donor's development: its own curve on its own exposure, diffused with the
             // other inhibitors — the released species travels the same gelatin.
@@ -674,8 +684,9 @@ public:
             }
             Expr shift = 0.0f;
             if (use_adjacency) {
-                shift += configuration_(FOTUFILM_CONFIG_ADJACENCY_STRENGTH)
-                    * (adjacency_diffused(x, y, c) - activation(x, y, c));
+                shift = Halide::select(
+                    configuration_(FOTUFILM_CONFIG_ADJACENCY_MODEL) > 0.5f, 0.0f,
+                    -configuration_(FOTUFILM_CONFIG_ADJACENCY_STRENGTH) * adjacency_residual);
             }
             shifted(x, y, c) = inhibited - shift;
             effective_log = shifted;
@@ -691,8 +702,11 @@ public:
         // than on FOTUFILM_FRAME_REVERSAL: that bit also routes a negative shown on a light box or
         // scanner past the paper, and such a negative is developed as a negative, so everything
         // downstream — the grain's density law included — reads its own density.
-        auto developed_density = [&](Func log_exposure_source) {
+        auto developed_density = [&](Func log_exposure_source, bool spatial) {
             Expr formed = sample_film_curve(configuration_, curves, log_exposure_source(x, y, c), c);
+            if (use_adjacency && spatial) {
+                formed = adjacency_density(configuration_, c, formed, adjacency_residual);
+            }
             return Halide::select(
                 configuration_(FOTUFILM_CONFIG_DEVELOP_COMPLEMENT) > 0.5f,
                 d_min + range - (formed - d_min), formed);
@@ -701,7 +715,7 @@ public:
             density(x, y, c) = Halide::mux(
                 c, {input_r_(x, y), input_g_(x, y), input_b_(x, y)});
         } else {
-            density(x, y, c) = developed_density(effective_log);
+            density(x, y, c) = developed_density(effective_log, true);
         }
 
         // The other development `texture` differences against: the same curve, the same couplers'
@@ -745,7 +759,7 @@ public:
                 flat_shifted(x, y, c) = u + coupler_warp(configuration_, c, u);
                 flat_effective = flat_shifted;
             }
-            flat_density(x, y, c) = developed_density(flat_effective);
+            flat_density(x, y, c) = developed_density(flat_effective, false);
             cpu_pointwise(flat_density, x, y, c);
         }
 
@@ -957,6 +971,8 @@ public:
         coupler_radius_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_COUPLER_RADIUS])));
         adjacency_sigma_.set(std::max(configuration[FOTUFILM_CONFIG_ADJACENCY_SIGMA], 0.151f));
         adjacency_radius_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_ADJACENCY_RADIUS])));
+        adjacency_secondary_sigma_.set(std::max(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA], 0.151f));
+        adjacency_secondary_radius_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS])));
         grain_sigma_.set(std::max(configuration[FOTUFILM_CONFIG_GRAIN_SIGMA], 0.151f));
         grain_radius_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_GRAIN_RADIUS])));
         grain_lambda_.set(configuration[FOTUFILM_CONFIG_GRAIN_LAMBDA]);
@@ -986,6 +1002,7 @@ public:
             halation_strided_radius_0_, halation_strided_radius_1_,
             halation_strided_radius_2_,
             coupler_sigma_, coupler_radius_, adjacency_sigma_, adjacency_radius_,
+            adjacency_secondary_sigma_, adjacency_secondary_radius_,
             grain_sigma_, grain_radius_, grain_lambda_, print_mtf_radius_,
             seed_, reversal_, monochrome_, origin_x_, origin_y_,
         };
@@ -1012,6 +1029,8 @@ private:
     Param<int32_t> diffusion_stride_0_, diffusion_stride_1_, diffusion_stride_2_;
     Param<int32_t> diffusion_strided_radius_0_, diffusion_strided_radius_1_,
                    diffusion_strided_radius_2_;
+    Param<float> adjacency_secondary_sigma_;
+    Param<int32_t> adjacency_secondary_radius_;
     Param<float> coupler_sigma_, adjacency_sigma_, grain_sigma_, grain_lambda_;
     Param<int32_t> coupler_radius_, adjacency_radius_, grain_radius_, grain_mode_;
     Param<float> mottle_sigma_, mottle_lambda_;

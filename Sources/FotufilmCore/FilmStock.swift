@@ -158,11 +158,13 @@ public struct FilmStock: Sendable {
     /// Diffusion distance of the inhibitors in millimeters on the film.
     public var couplerDiffusionMM: Float
 
-    /// Strength of the intra-layer adjacency effect: each layer's development is shifted by
-    /// `-adjacencyStrength * (blur(a) - a)` in log exposure, where `a` is the layer's development
-    /// activation.
+    /// Strength of intra-layer adjacency. Gaussian mode shifts log exposure by
+    /// `strength * (a - blur(a))`. Screened diffusion adds
+    /// `strength * netDensity * (a - transport(a))` to formed density, bounded by capacity.
+    /// The two responses require separate stock calibration; their gains are not equivalent.
     public var adjacencyStrength: Float
-    /// Diffusion distance of the adjacency mechanism in millimeters.
+    public var adjacencyModel: AdjacencyModel
+    /// Reference Gaussian sigma in millimeters. Screened diffusion uses ell = sigma / sqrt(2).
     public var adjacencyRadiusMM: Float
 
     /// RMS granularity: the standard deviation of density measured through the standard
@@ -292,6 +294,7 @@ public struct FilmStock: Sendable {
         couplerGeometry: CouplerGeometry? = nil,
         couplerDiffusionMM: Float,
         adjacencyStrength: Float = 0,
+        adjacencyModel: AdjacencyModel = .gaussian,
         adjacencyRadiusMM: Float = 0,
         grainStrength: Float,
         grainSizeMM: Float,
@@ -349,6 +352,7 @@ public struct FilmStock: Sendable {
         self.couplerReleaseGamma = couplerReleaseGamma
         self.couplerDiffusionMM = couplerDiffusionMM
         self.adjacencyStrength = adjacencyStrength
+        self.adjacencyModel = adjacencyModel
         self.adjacencyRadiusMM = adjacencyRadiusMM
         self.grainStrength = grainStrength
         self.grainSizeMM = grainSizeMM

@@ -340,7 +340,7 @@ public struct FilmEngineInvocation {
 
     public static let sampledCurveStride = 1 + 3 * SampledCharacteristicCurve.maximumSamples
     public static let sampledCurvesOffset = 232 + 3 * couplerWarpSamples + 2 * toneGridCells
-    public static let configurationCount = sampledCurvesOffset + 3 * sampledCurveStride
+    public static let configurationCount = sampledCurvesOffset + 3 * sampledCurveStride + 3
     /// Index of the grading-space switch; mirrors FOTUFILM_CONFIG_GRADE_SPACE.
     /// After it, appended in order so that adding each renumbered nothing:
     /// the six grain-mottle entries, the paper's red and blue records and
@@ -417,6 +417,9 @@ public struct FilmEngineInvocation {
     /// renumbering earlier fields.
     public static let outputShoulderOffset = grainDensityProfileOffset + 3
     public static let outputGamutOffset = outputShoulderOffset + 1
+    public static let adjacencyModelOffset = sampledCurvesOffset + 3 * sampledCurveStride
+    public static let adjacencySecondarySigmaOffset = adjacencyModelOffset + 1
+    public static let adjacencySecondaryRadiusOffset = adjacencyModelOffset + 2
     /// Index of the three aperture-calibrated grain strengths; mirrors FOTUFILM_CONFIG_GRAIN.
     public static let grainOffset = 30
 
@@ -946,8 +949,14 @@ public struct FilmEngineInvocation {
         let couplerSigma = selected(.adjacency)
             ? stock.couplerDiffusionMM * pxPerMM : Self.noSpatialReachPixels
         let couplerRadius = Self.gaussianRadius(couplerSigma)
-        let adjacencySigma = selected(.adjacency)
+        let adjacencyReferenceSigma = selected(.adjacency)
             ? stock.adjacencyRadiusMM * pxPerMM : Self.noSpatialReachPixels
+        let screenedAdjacency = (options.adjacencyModel ?? stock.adjacencyModel) == .screenedDiffusion
+        let adjacencySigma = adjacencyReferenceSigma * (screenedAdjacency
+            ? AdjacencyModel.screenedPrimarySigma : 1)
+        let adjacencySecondarySigma = screenedAdjacency
+            ? adjacencyReferenceSigma * AdjacencyModel.screenedSecondarySigma : 0
+        let adjacencySecondaryRadius = Self.gaussianRadius(adjacencySecondarySigma)
         let adjacencyRadius = Self.gaussianRadius(adjacencySigma)
         let adjacencyStrength = selected(.adjacency) ? stock.adjacencyStrength : 0
         let grainScale = selected(.grain) ? options.grainScale : 0
@@ -1159,7 +1168,7 @@ public struct FilmEngineInvocation {
             featureMask |= FilmEngineFeature.couplerDiffusion
         }
         if couplerScale > 0 && adjacencyStrength > 0
-            && adjacencyRadius > 0 {
+            && max(adjacencyRadius, adjacencySecondaryRadius) > 0 {
             featureMask |= FilmEngineFeature.adjacency
         }
         if grainScale > 0 && stock.grainStrength > 0 {
@@ -1342,6 +1351,8 @@ public struct FilmEngineInvocation {
             }
             configuration += record
         }
+        configuration += [screenedAdjacency ? 1 : 0,
+                          adjacencySecondarySigma, Float(adjacencySecondaryRadius)]
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0
@@ -1373,7 +1384,7 @@ public struct FilmEngineInvocation {
             diffusion = max(diffusion, couplerRadius)
         }
         if featureMask & FilmEngineFeature.adjacency != 0 {
-            diffusion = max(diffusion, adjacencyRadius)
+            diffusion = max(diffusion, adjacencyRadius, adjacencySecondaryRadius)
         }
         optical += diffusion
         let grainSupport = featureMask & FilmEngineFeature.grain != 0 ? grainRadius : 0
