@@ -33,6 +33,21 @@ final class SceneIlluminantTests: XCTestCase {
                              WhiteBalance.uvFromXY(actual).y)
     }
 
+    func testCaptureRelativeControlExtremesStayRepresentable() {
+        for capture: Float in [2000, 2856, 3200, 4300, 6504, 12000] {
+            for edit: Float in [2000, 6504, 12000] {
+                for tint: Float in [-100, 0, 100] {
+                    var options = FotufilmEngine.Options()
+                    options.sceneIlluminantKelvin = capture
+                    options.whiteBalance = WhiteBalance(kelvin: edit, tint: tint)
+                    XCTAssertTrue(options.resolvedSceneSpectrum.allSatisfy { $0.isFinite && $0 >= 0 })
+                    options.sceneIlluminantChromaticity = WhiteBalance.chromaticity(kelvin: capture, tint: 35)
+                    XCTAssertTrue(options.resolvedSceneSpectrum.allSatisfy { $0.isFinite && $0 >= 0 })
+                }
+            }
+        }
+    }
+
     func testLightControlsChangeSpectralExposureWithoutRGBAdaptation() {
         var options = FotufilmEngine.Options()
         let neutral = FilmEngineInvocation(stock: TestStocks.negative, options: options,
@@ -53,6 +68,8 @@ final class SceneIlluminantTests: XCTestCase {
         let options = FotufilmEngine.Options()
         var tungsten = TestStocks.negative
         tungsten.referenceIlluminantKelvin = 3200
+        let reference = SpectralRuntime.tables(for: tungsten).exposure.sample(SIMD3(repeating: 0.18))
+        for channel in 0..<3 { XCTAssertEqual(reference[channel], 0.18, accuracy: 1e-4) }
         let invocation = FilmEngineInvocation(stock: tungsten, options: options, width: 8, height: 8)
         XCTAssertEqual(invocation.spectral.exposure.values, SpectralRuntime.sceneExposure(
             for: tungsten, cct: 6504).values)

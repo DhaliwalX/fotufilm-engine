@@ -63,8 +63,11 @@ public enum Illuminant {
     }
 
     static func matching(_ xy: SIMD2<Float>, base: [Float]) -> [Float] {
-        precondition(xy.x.isFinite && xy.y.isFinite && xy.x > 0 && xy.y > 0
-                     && xy.x + xy.y < 1, "invalid illuminant chromaticity")
+        precondition(xy.x.isFinite && xy.y.isFinite && xy.x > 0 && xy.y > 0,
+                     "invalid illuminant chromaticity")
+        let origin = WhiteBalance.uvFromXY(chromaticity(base))
+        let xy = WhiteBalance.boundedChromaticity(
+            fromUV: origin, displacement: WhiteBalance.uvFromXY(xy) - origin)
         let x = Double(xy.x / xy.y), z = Double((1 - xy.x - xy.y) / xy.y)
         let u = (0..<SpectralGrid.count).map {
             Double(SpectralGrid.xBar[$0]) - x * Double(SpectralGrid.yBar[$0])
@@ -74,7 +77,7 @@ public enum Illuminant {
         }
         var a = 0.0, b = 0.0
         var result = base.map(Double.init)
-        for _ in 0..<32 {
+        for _ in 0..<128 {
             var f = 0.0, g = 0.0, aa = 0.0, ab = 0.0, bb = 0.0
             for i in result.indices {
                 result[i] = Double(base[i]) * exp(a * u[i] + b * v[i])

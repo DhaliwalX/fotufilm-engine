@@ -74,7 +74,32 @@ public struct WhiteBalance: Equatable, Codable, Sendable {
         tangent /= length
         let normal = SIMD2<Float>(-tangent.y, tangent.x)
         let signed = normal.y >= 0 ? normal : -normal
-        return xyFromUV(uv + signed * (tint / 10000))
+        let displacement = signed * (tint / 10000)
+        return boundedChromaticity(fromUV: uv, displacement: displacement)
+    }
+
+    static func boundedChromaticity(fromUV uv: SIMD2<Float>,
+                                    displacement: SIMD2<Float>) -> SIMD2<Float> {
+        // Capture-relative edits can reach very warm light, where a requested tint leaves
+        // the spectral locus. Keep the white inside the spectra the engine can represent.
+        let boundary = (0..<SpectralGrid.count).map { i -> SIMD2<Float> in
+            let xyz = SIMD3(SpectralGrid.xBar[i], SpectralGrid.yBar[i], SpectralGrid.zBar[i])
+            return uvFromXY(SIMD2(xyz.x, xyz.y) / xyz.sum())
+        }
+        func cross(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float { a.x * b.y - a.y * b.x }
+        var fraction: Float = 1
+        for i in boundary.indices {
+            let a = boundary[i] - uv
+            let edge = boundary[(i + 1) % boundary.count] - boundary[i]
+            let denominator = cross(displacement, edge)
+            guard abs(denominator) > 1e-12 else { continue }
+            let distance = cross(a, edge) / denominator
+            let along = cross(a, displacement) / denominator
+            if distance >= 0 && distance < 1 && along >= 0 && along <= 1 {
+                fraction = min(fraction, distance * 0.95)
+            }
+        }
+        return xyFromUV(uv + displacement * fraction)
     }
 
     /// The chromaticity of the same spectrum used for film exposure.

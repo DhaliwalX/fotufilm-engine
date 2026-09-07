@@ -460,7 +460,9 @@ public enum SpectralRuntime {
                                     paper: PrintPaper,
                                     bleachBypass: Float = 0,
                                     printViewingKelvin: Float? = nil) -> SpectralPipelineTables {
-        let exposure = exposureTable(for: stock, illuminant: Illuminant.atLocus(kelvin: 6504))
+        // Output characterization is fixed at the stock's reference light. The invocation
+        // replaces this exposure table with the scene spectrum after calibration is built.
+        let exposure = exposureTable(for: stock, illuminant: filmReferenceIlluminant(for: stock))
         if stock.isReversal {
             let basis = neutralDensityBasis(for: stock)
             func aligned(_ density: [Float]) -> [Float] { basis(density) }
