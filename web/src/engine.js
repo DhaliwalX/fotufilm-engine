@@ -480,12 +480,14 @@ function encodeTileInto(pixels, frameWidth, output, tile, seed, stride, offsets)
       const b = clamp01(displayShoulder(output[at + o2]))
       const p = y * frameWidth + x
       const i = p * 4
-      pixels[i] = linearToSrgb(n[0] * r + n[1] * g + n[2] * b) * 255 + 0.5 +
-        triangularDither(p, 0, seed)
-      pixels[i + 1] = linearToSrgb(n[3] * r + n[4] * g + n[5] * b) * 255 + 0.5 +
-        triangularDither(p, 1, seed)
-      pixels[i + 2] = linearToSrgb(n[6] * r + n[7] * g + n[8] * b) * 255 + 0.5 +
-        triangularDither(p, 2, seed)
+      // Native UInt8 conversion truncates after the half-step and dither.
+      // Uint8ClampedArray rounds instead, so floor first to avoid a second round.
+      pixels[i] = Math.floor(linearToSrgb(n[0] * r + n[1] * g + n[2] * b) * 255 + 0.5 +
+        triangularDither(p, 0, seed))
+      pixels[i + 1] = Math.floor(linearToSrgb(n[3] * r + n[4] * g + n[5] * b) * 255 + 0.5 +
+        triangularDither(p, 1, seed))
+      pixels[i + 2] = Math.floor(linearToSrgb(n[6] * r + n[7] * g + n[8] * b) * 255 + 0.5 +
+        triangularDither(p, 2, seed))
       pixels[i + 3] = 255
     }
   }
