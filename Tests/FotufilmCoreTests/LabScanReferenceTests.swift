@@ -2,9 +2,10 @@ import XCTest
 @testable import FotufilmCore
 
 /// The lab scan is profiled once, on a reference negative, and every other stock keeps the cast
-/// its own mask puts between it and that reference. This repository ships the mechanism with a
-/// neutral reference and a zero ceiling; a calibrated build commits real numbers. These cases
-/// hold the mechanism itself, so a simplification cannot drop it without a test noticing.
+/// its own mask puts between it and that reference. The profile committed here is solved from
+/// Portra 400, the stock the same-lab corpus puts closest to neutral. These cases hold both the
+/// mechanism and the committed numbers, so neither a simplification nor an unreviewed re-solve
+/// can move them without a test noticing.
 final class LabScanReferenceTests: XCTestCase {
     private static var negative: FilmStock { TestStocks.negative }
 
@@ -14,16 +15,27 @@ final class LabScanReferenceTests: XCTestCase {
         }
     }
 
-    func testThisRepositorysReferenceIsNeutralAndInert() {
-        XCTAssertEqual(PrintPaper.labScanReferenceMidRatio, .zero)
-        XCTAssertEqual(PrintPaper.labScanReferenceBalance, [1, 1, 1])
-        XCTAssertEqual(PrintPaper.labScanCastCeiling, 0)
-        // Whatever the stock's own mid-grey read is, a zero ceiling hands none of it through.
+    /// The committed profile. Regenerating it is a deliberate act with a stated command, so the
+    /// numbers are pinned rather than merely asserted finite.
+    func testTheCommittedProfileIsThePortraSolve() {
+        XCTAssertEqual(PrintPaper.labScanReferenceMidRatio.x, 0.5609019, accuracy: 1e-6)
+        XCTAssertEqual(PrintPaper.labScanReferenceMidRatio.y, -0.444564, accuracy: 1e-6)
+        XCTAssertEqual(PrintPaper.labScanReferenceBalance.count, 3)
+        XCTAssertEqual(PrintPaper.labScanReferenceBalance[0], 1.0579212, accuracy: 1e-6)
+        XCTAssertEqual(PrintPaper.labScanReferenceBalance[1], 1, accuracy: 1e-6)
+        XCTAssertEqual(PrintPaper.labScanReferenceBalance[2], 0.880968, accuracy: 1e-6)
+        XCTAssertEqual(PrintPaper.labScanCastCeiling, 0.029, accuracy: 1e-6)
+    }
+
+    /// A stock away from the reference keeps a cast, and it is the one the profile describes:
+    /// green is never moved, and the magnitude never exceeds the committed ceiling.
+    func testAStockAwayFromTheReferenceKeepsABoundedCast() {
         let offset = SpectralRuntime.referenceCastOffset(
             midEnergy: SIMD3(2, 1, 0.5), stock: Self.negative, paper: .labScan)
-        XCTAssertEqual(offset, .zero)
-        XCTAssertEqual(Self.negative.printingContrastScale(correction: 1, paper: .labScan),
-                       [1, 1, 1])
+        XCTAssertEqual(offset.y, 0, "the timing record is never offset")
+        let magnitude = (offset.x * offset.x + offset.z * offset.z).squareRoot()
+        XCTAssertGreaterThan(magnitude, 0, "a calibrated reference must hand a cast through")
+        XCTAssertLessThanOrEqual(magnitude, PrintPaper.labScanCastCeiling + 1e-6)
     }
 
     /// The profile's correction authority: a cast inside the ceiling passes as film character,
@@ -81,10 +93,10 @@ final class LabScanReferenceTests: XCTestCase {
         XCTAssertTrue(solved.midRatioRed.isFinite && solved.midRatioBlue.isFinite)
     }
 
-    /// The printing table is where the profile reaches a pixel. With a neutral reference the
-    /// stock's own mid-grey must still print at the anchor, the same neutral every per-stock
-    /// medium hits, or the offset has picked up a sign or a scale it should not have.
-    func testNeutralReferenceLeavesMidGreyOnTheAnchor() {
+    /// The printing table is where the profile reaches a pixel. The machine auto-exposes every
+    /// frame, so the timing record still lands on the anchor; red and blue carry the stock's
+    /// distance from the reference, and no further than the ceiling allows.
+    func testMidGreyIsTimedOnGreenAndCarriesOnlyTheBoundedCast() {
         let stock = Self.negative
         let tables = SpectralRuntime.tables(for: stock, paper: .labScan)
         let ranges = stock.curves.map { $0.dMax - $0.dMin }
@@ -92,9 +104,19 @@ final class LabScanReferenceTests: XCTestCase {
             (stock.curves[$0].density(logExposure: 0) - stock.curves[$0].dMin) / ranges[$0]
         })
         let relative = tables.filmOutput.sample(mid)
+        XCTAssertEqual(relative[1], 0, accuracy: 1e-3,
+                       "the timing record left the anchor: \(relative)")
+        for channel in [0, 2] {
+            XCTAssertLessThanOrEqual(
+                abs(relative[channel]), PrintPaper.labScanCastCeiling + 1e-3,
+                "channel \(channel) exceeded the profile's authority: \(relative)")
+        }
+        // A per-stock-timed medium re-solves its own neutral, so it keeps no cast at all.
+        let paper = SpectralRuntime.tables(for: stock, paper: .ektacolorEdge)
+        let printed = paper.filmOutput.sample(mid)
         for channel in 0..<3 {
-            XCTAssertEqual(relative[channel], 0, accuracy: 1e-3,
-                           "mid-grey left the anchor on channel \(channel): \(relative)")
+            XCTAssertEqual(printed[channel], 0, accuracy: 1e-3,
+                           "mid-grey left the anchor on channel \(channel): \(printed)")
         }
     }
 }

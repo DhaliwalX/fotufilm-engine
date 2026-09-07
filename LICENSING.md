@@ -1,7 +1,7 @@
 # Licensing
 
-Project-authored source, documentation, synthetic stock examples, analytic print
-receivers, and artwork are governed by [LICENSE](LICENSE). Third-party components
+Project-authored source, documentation, synthetic stock examples, print receiver
+measurements, and artwork are governed by [LICENSE](LICENSE). Third-party components
 retain their respective terms, recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 and accompanying file notices. Project-authored material is licensed under
 Apache-2.0, except the 40 film profiles described below.
@@ -20,6 +20,20 @@ This licence covers the listed profiles, including their rendering parameters an
 spectral samples. Synthetic examples and engine code remain Apache-2.0. Using a
 profile to render a photograph or video does not impose the profile licence or an
 attribution requirement on that rendered work.
+
+## Print receivers
+
+The print media in `PrintPaperTables.swift` and the `*PaperSpectra.swift` /
+`*PrintSpectra.swift` files are digitised by this project from the manufacturers'
+publicly published datasheets: Kodak E-7020, E-4070, H-1-2383 and the 2393 curve
+sheets, and Fujifilm AF3-0250U2 and the ETERNA-CP 3513DI brochure. The digitised
+coordinates and the code that reads them are project-authored and Apache-2.0.
+
+The underlying publications remain the property of their publishers and are not
+redistributed here. Product names are the trademarks of their respective owners and
+are used only to identify which material each measurement describes; see
+**Trademarks** below. Nothing here is endorsed by or affiliated with Kodak or
+Fujifilm.
 
 ## Third-party material
 
