@@ -108,7 +108,8 @@ Options:
   --paper <name>     Output medium: ektacolor-edge (default), endura-premier,
                      crystal-archive, vision-2383, vision-2393,
                      eterna-cp, lab-scan, telecine, screen or negative.
-                     Photo and projection variants use analytic example curves.
+                     Photo and projection variants are digitised from the
+                     manufacturers' published datasheets.
                      Reversal stocks use screen regardless of the requested medium.
   --negative <how>   Show the developed negative instead of the print it would
                      make: 'lightbox' keeps the base its own orange, 'scanner'
