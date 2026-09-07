@@ -260,10 +260,10 @@ export default function App() {
       cropMode,
       stale: () => !currentFile() || currentPreview.current.exporting,
       onProgress: (text) => {
-        if (currentFile()) setStatus(text)
+        if (currentFile() && !currentPreview.current.exporting) setStatus(text)
       },
     }
-    setStatus('Updating preview')
+    setStatus('Queuing latest adjustments')
     const frame = requestAnimationFrame(() =>
       previewQueue.current
         .submit(() => session.render(request))
@@ -295,7 +295,7 @@ export default function App() {
             stage,
           })
           setStatus(
-            !interacting && currentPreview.current.key === previewKey ? null : 'Updating preview',
+            !interacting && currentPreview.current.key === previewKey ? null : 'Preparing full-detail preview',
           )
           setError(null)
         })
@@ -505,9 +505,11 @@ export default function App() {
         stock: stockId,
         maxEdge: exportSize === 'full' ? Infinity : Number(exportSize),
         comparison: false,
+        purpose: 'export',
         onProgress: setStatus,
       })
       if (!next) throw new Error('Export was cancelled.')
+      setStatus(`Encoding ${exportType.split('/')[1].toUpperCase()} export`)
       const blob =
         exportType === 'image/png'
           ? next.blob
@@ -829,7 +831,7 @@ export default function App() {
               (active && shownResult?.key !== previewKey
                 ? error
                   ? 'Preview unavailable'
-                  : 'Updating preview'
+                  : 'Queuing latest adjustments'
                 : null) ||
               (shownResult
                 ? `${shownResult.width} × ${shownResult.height} · ${shownResult.elapsed.toFixed(0)} ms`
@@ -1256,7 +1258,7 @@ export default function App() {
               Exports the finished image with the current crop and adjustments.
             </p>
           </fieldset>
-          {exporting && <p role="status">{status || 'Exporting'}</p>}
+          {exporting && <p role="status">{status || 'Preparing export'}</p>}
           <div className="dialog-actions">
             <Button
               label="Cancel"

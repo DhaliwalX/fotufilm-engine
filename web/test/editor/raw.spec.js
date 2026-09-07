@@ -13,7 +13,10 @@ test('RAW worker decodes sensor pixels at 16 bits without shared memory, honorin
   const report = await page.evaluate(
     async (bytes) => {
       const { decodeRaw } = await import('/src/raw-import.js')
-      const image = await decodeRaw(new File([new Uint8Array(bytes)], 'test.dng'))
+      const progress = []
+      const image = await decodeRaw(new File([new Uint8Array(bytes)], 'test.dng'), {
+        onProgress: (stage) => progress.push(stage),
+      })
       return {
         width: image.naturalWidth,
         height: image.naturalHeight,
@@ -21,6 +24,7 @@ test('RAW worker decodes sensor pixels at 16 bits without shared memory, honorin
         codes: new Set(image.raw.data).size,
         isolated: crossOriginIsolated,
         colors: image.raw.colors,
+        progress,
       }
     },
     Array.from(makeDNG({ orientation: 6 })),
@@ -33,6 +37,13 @@ test('RAW worker decodes sensor pixels at 16 bits without shared memory, honorin
     isolated: false,
   })
   expect(report.codes).toBeGreaterThan(256)
+  expect(report.progress).toEqual(expect.arrayContaining([
+    'Loading RAW decoder',
+    'Applying camera white balance',
+    'Converting to linear working color',
+    'Copying decoded RAW pixels',
+  ]))
+  expect(report.progress.some((stage) => stage.startsWith('Demosaicing sensor colors'))).toBe(true)
 })
 
 test('RAW import, film, exposure, crop and export use the full original', async ({ page }) => {

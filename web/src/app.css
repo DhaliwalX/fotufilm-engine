@@ -307,9 +307,10 @@ svg {
 }
 .viewer-status [role='status'] {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.4;
+  white-space: normal;
 }
 .document-name {
   overflow: hidden;

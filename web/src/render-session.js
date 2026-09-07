@@ -100,11 +100,11 @@ export class RenderSession {
     if (this.packs.size > 4) this.packs.delete(this.packs.keys().next().value)
     return entry
   }
-  async renderer(pack, background = false) {
+  async renderer(pack, background = false, onProgress = () => {}) {
     const name = background ? 'thumbnailReady' : pack ? 'filmReady' : 'normalReady'
     // A thumbnail must not hold foreground work behind GPU shader compilation.
     this[name] ??= (
-      background ? createCpuDeveloper(pack) : pack ? createDeveloper(pack) : createNormalDeveloper()
+      background ? createCpuDeveloper(pack) : pack ? createDeveloper(pack, onProgress) : createNormalDeveloper()
     )
       .then((developer) => {
         if (this.closed) {
@@ -155,18 +155,26 @@ export class RenderSession {
     cropMode = false,
     background = false,
     comparison = !background,
+    purpose = 'preview',
     stale = () => false,
     onProgress = () => {},
   }) {
     if (this.closed || stale()) return null
-    onProgress('Loading film')
+    const report = (text) => {
+      if (!this.closed && !stale()) onProgress(text)
+    }
+    if (edit.stock !== null && !this.packs.has(`${stock}:${edit.medium || 'default'}`))
+      report(edit.medium ? 'Loading film and output-medium profile' : 'Loading film profile')
     const entry = edit.stock === null ? null : await this.pack(stock, edit.medium)
     if (this.closed || stale()) return null
-    const developer = await this.renderer(entry?.pack, background && !!entry)
+    if (!entry && !this.normalReady) report('Loading light and color engine')
+    const developer = await this.renderer(entry?.pack, background && !!entry, report)
+    if (this.running) report('Waiting for the current render to finish')
     return this.enqueue(async () => {
       if (this.closed || stale()) return null
       const started = performance.now()
       if (entry && stage !== null) {
+        report('Loading pipeline inspection stages')
         entry.stages ??= await loadStages(
           assetUrl(`packs/${stock}.stages`),
           entry.pack,
@@ -174,8 +182,10 @@ export class RenderSession {
         )
       }
       if (stale()) return null
+      report(cropMode ? 'Preparing crop canvas' : 'Preparing crop and image pixels')
       const prepared = await this.source(image, edit, maxEdge, cropMode)
       const { source, canvas: sourceCanvas } = prepared
+      const rendering = (text) => report(`${text} · ${source.width}×${source.height} ${purpose}`)
       const controls = {
         ...edit.params,
         gradeSpace: edit.gradeSpace,
@@ -185,15 +195,13 @@ export class RenderSession {
       const selected = edit.stock === null ? null : stage
       const pack = entry ? (selected === null ? entry.pack : entry.stages[selected]) : null
       if (entry && !pack) throw new Error('This pipeline stage is unavailable.')
-      onProgress('Developing')
       if (pack) developer.usePack(pack)
-      let { pixels, elapsed } = pack
-        ? await developer.develop(source, controls)
-        : developer
-          ? await developer.develop(source, controls)
-          : await developNormal(source, controls)
+      let { pixels, elapsed } = developer
+        ? await developer.develop(source, controls, rendering)
+        : await developNormal(source, controls, rendering)
       let delta = null
       if (difference && selected > 0) {
+        report('Rendering previous stage for comparison')
         developer.usePack(entry.stages[selected - 1])
         const before = await developer.develop(source, controls)
         let peak = 0
@@ -204,12 +212,14 @@ export class RenderSession {
         delta = { peak, gain }
       }
       if (stale()) return null
+      report(`Encoding ${purpose} image`)
       const canvas = document.createElement('canvas')
       canvas.width = source.width
       canvas.height = source.height
       canvas.getContext('2d').putImageData(new ImageData(pixels, source.width, source.height), 0, 0)
       const blob = await canvasBlob(canvas)
       let original = prepared.original
+      if (comparison && !original) report('Preparing original for comparison')
       if (comparison && !original && sourceCanvas) original = await canvasBlob(sourceCanvas)
       else if (comparison && !original) {
         const baseline = await developNormal(source, defaultEdit().params)

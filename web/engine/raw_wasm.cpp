@@ -1,12 +1,47 @@
 #include <libraw/libraw.h>
 #include <cstdint>
 #include <memory>
+#include <emscripten.h>
+
+EM_JS(void, report_raw_progress, (const char *stage, int iteration, int expected), {
+    if (globalThis.onRawProgress)
+        globalThis.onRawProgress(UTF8ToString(stage), iteration, expected);
+});
 
 namespace {
 std::unique_ptr<LibRaw> decoder;
 libraw_processed_image_t *image = nullptr;
 int status = 0;
 constexpr uint64_t maxPixels = 120000000;
+
+int progress(void *, LibRaw_progress stage, int iteration, int expected) {
+    const char *label = nullptr;
+    switch (stage) {
+        case LIBRAW_PROGRESS_OPEN: label = "Reading camera metadata"; break;
+        case LIBRAW_PROGRESS_IDENTIFY: label = "Identifying camera and sensor"; break;
+        case LIBRAW_PROGRESS_SIZE_ADJUST: label = "Reading sensor dimensions"; break;
+        case LIBRAW_PROGRESS_LOAD_RAW: label = "Unpacking RAW sensor data"; break;
+        case LIBRAW_PROGRESS_RAW2_IMAGE: label = "Preparing sensor pixels"; break;
+        case LIBRAW_PROGRESS_REMOVE_ZEROES:
+        case LIBRAW_PROGRESS_BAD_PIXELS: label = "Correcting sensor pixels"; break;
+        case LIBRAW_PROGRESS_DARK_FRAME: label = "Subtracting dark frame"; break;
+        case LIBRAW_PROGRESS_SCALE_COLORS: label = "Applying camera white balance"; break;
+        case LIBRAW_PROGRESS_PRE_INTERPOLATE: label = "Preparing demosaic"; break;
+        case LIBRAW_PROGRESS_FOVEON_INTERPOLATE:
+        case LIBRAW_PROGRESS_INTERPOLATE: label = "Demosaicing sensor colors"; break;
+        case LIBRAW_PROGRESS_MIX_GREEN: label = "Combining green channels"; break;
+        case LIBRAW_PROGRESS_MEDIAN_FILTER: label = "Reducing color artifacts"; break;
+        case LIBRAW_PROGRESS_HIGHLIGHTS: label = "Processing highlights"; break;
+        case LIBRAW_PROGRESS_FUJI_ROTATE:
+        case LIBRAW_PROGRESS_FLIP: label = "Applying camera orientation"; break;
+        case LIBRAW_PROGRESS_APPLY_PROFILE: label = "Applying camera color profile"; break;
+        case LIBRAW_PROGRESS_CONVERT_RGB: label = "Converting to linear working color"; break;
+        case LIBRAW_PROGRESS_STRETCH: label = "Correcting pixel aspect ratio"; break;
+        default: break;
+    }
+    if (label) report_raw_progress(label, iteration, expected);
+    return 0;
+}
 }
 
 extern "C" {
@@ -18,6 +53,7 @@ void raw_close() {
 int raw_open(void *bytes, unsigned length) {
     raw_close();
     decoder = std::make_unique<LibRaw>();
+    decoder->set_progress_handler(progress, nullptr);
     decoder->imgdata.rawparams.max_raw_memory_mb = 768;
     auto &p = decoder->imgdata.params;
     p.output_color = 8; // Linear Rec.2020, the film engine's scene space.

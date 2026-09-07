@@ -585,12 +585,13 @@ class Developer {
   /// Develops one frame. `source` is a `pixelSource` or `imageSource` at the frame's size; the
   /// result is sRGB RGBA8 of the same size. `elapsed` is the kernels' own time, summed over the
   /// tiles; the conversions at either end are not in it.
-  async develop(source, controls) {
+  async develop(source, controls, onProgress = () => {}) {
     if (source.width !== this.width || source.height !== this.height) {
       this.setFrame(source.width, source.height)
     }
     this.applyControls(controls)
     if (controls.localTone && (controls.highlights || controls.shadows)) {
+      onProgress('Measuring local highlights and shadows')
       const grid = await measuredTone(source, controls, whiteBalanceGains(controls.temperature, controls.tint))
       const offset = this.configPtr / 4
       this.module.HEAPF32[offset + CONFIG.TONE_GRID_WIDTH] = grid.width
@@ -603,6 +604,10 @@ class Developer {
     for (let t = 0; t < this.tiles.length; ++t) {
       const tile = this.tiles[t]
       const { region } = tile
+      const operation = this.featureMask === 1 << 29 ? 'Applying light and color' : 'Rendering film and output medium'
+      onProgress(`${operation} · tile ${t + 1} of ${this.tiles.length}`)
+      // Let a long CPU tile show its current operation before it occupies the main thread.
+      if (this.tiles.length > 1) await yieldToBrowser()
       this.decodeRegion(source.read(region.x, region.y, region.width, region.height), region)
       const started = performance.now()
       const status = await this.run(region)
@@ -796,12 +801,14 @@ export class SimdDeveloper extends Developer {
 
 /// Builds the fastest developer this browser will actually run: WebGPU when the adapter can
 /// create the kernel's pipelines, and the SIMD path otherwise.
-export async function createDeveloper(pack) {
+export async function createDeveloper(pack, onProgress = () => {}) {
   if (typeof WebAssembly !== 'object') throw new Error('This browser cannot process film profiles. Use a browser with WebAssembly support.')
   if (navigator.gpu) {
     let developer
     try {
+      onProgress('Loading WebGPU engine')
       developer = new WebgpuDeveloper(await loadModule('webgpu'), pack)
+      onProgress('Compiling WebGPU shaders')
       await developer.probe()
       return developer
     } catch (error) {
@@ -812,6 +819,7 @@ export async function createDeveloper(pack) {
       console.warn('WebGPU engine unavailable, developing on the CPU instead:', error)
     }
   }
+  onProgress('Loading CPU engine')
   return new SimdDeveloper(await loadModule('simd'), pack)
 }
 
@@ -823,7 +831,7 @@ function decodeRGBA(bytes) {
 }
 
 // PlainDevelop.swift, for Normal. A pipeline's bypass diagnostic is still a film model.
-export async function developNormalReference(source, controls) {
+export async function developNormalReference(source, controls, onProgress = () => {}) {
   const { width, height } = source, started = performance.now()
   const balance = whiteBalanceGains(controls.temperature, controls.tint), grade = packedGrade(controls)
   const exposure = 2 ** (controls.ev || 0), weights = [0.2627002, 0.6779981, 0.0593017]
@@ -834,6 +842,7 @@ export async function developNormalReference(source, controls) {
   const encode = v => v <= 0.0031308 ? v * 12.92 : v >= 1 ? 1 + (v - 1) * (1.055 / 2.4) : 1.055 * v ** (1 / 2.4) - 0.055
   const decode = v => v <= 0.04045 ? v / 12.92 : v >= 1 ? 1 + (v - 1) / (1.055 / 2.4) : ((v + 0.055) / 1.055) ** 2.4
   for (let top = 0; top < height; top += 32) {
+    onProgress(`Applying light and color · rows ${top + 1}–${Math.min(top + 32, height)} of ${height}`)
     const rows = Math.min(32, height - top), linear = decodeRGBA(source.read(0, top, width, rows))
     for (let y = 0; y < rows; y++) for (let x = 0; x < width; x++) {
       const i = (y * width + x) * 4
@@ -879,11 +888,12 @@ export async function createNormalDeveloper() {
   })
 }
 // Import previews get their own buffers; live sessions keep a persistent developer.
-export async function developNormal(source, controls) {
-  if (typeof window === 'undefined') return developNormalReference(source, controls)
+export async function developNormal(source, controls, onProgress = () => {}) {
+  if (typeof window === 'undefined') return developNormalReference(source, controls, onProgress)
+  onProgress('Preparing light and color engine')
   const developer = await createNormalDeveloper()
-  if (!developer) return developNormalReference(source, controls)
-  try { return await developer.develop(source, controls) }
+  if (!developer) return developNormalReference(source, controls, onProgress)
+  try { return await developer.develop(source, controls, onProgress) }
   finally { developer.dispose() }
 }
 
