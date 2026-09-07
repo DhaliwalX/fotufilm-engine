@@ -38,6 +38,7 @@ public struct FilmStockDefinition: Codable, Sendable {
     /// Per-donor Hill exponents for inhibitor release. Absent is [1, 1, 1], preserving the
     /// historical linear law for older and third-party packs.
     public var couplerReleaseGamma: [Float]? = nil
+    public var analyticalDevelopment: AnalyticalDevelopment? = nil
     /// Optional, and where it is present it is what the engine actually uses — `couplerInhibition`
     /// above is then the matrix this produces, written out so the file still says plainly what it
     /// renders.
@@ -398,7 +399,8 @@ public extension FilmStockDefinition {
             isMonochrome: isMonochrome ?? false,
             isReversal: isReversal ?? false,
             isReflectionPrint: isReflectionPrint ?? false,
-            nativePrintMedium: nativePrintMedium.flatMap(PrintPaper.preset(id:)))
+            nativePrintMedium: nativePrintMedium.flatMap(PrintPaper.preset(id:)),
+            analyticalDevelopment: analyticalDevelopment)
     }
 
     /// Capture a stock in its exact rendered form.
@@ -425,6 +427,7 @@ public extension FilmStockDefinition {
         self.lumaDiffusionMM = stock.lumaDiffusionMM
         self.couplerInhibition = stock.couplerInhibition
         self.couplerReleaseGamma = stock.couplerReleaseGamma
+        self.analyticalDevelopment = stock.analyticalDevelopment
         self.couplerGeometry = stock.couplerGeometry
         self.couplerDiffusionMM = stock.couplerDiffusionMM
         self.adjacencyStrength = stock.adjacencyStrength

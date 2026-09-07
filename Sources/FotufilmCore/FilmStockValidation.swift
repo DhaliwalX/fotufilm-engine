@@ -63,6 +63,14 @@ public extension FilmStockDefinition {
         }
 
         try spectral.validate(fail: fail)
+        if let model = analyticalDevelopment {
+            do { try model.validate() }
+            catch { throw fail("analyticalDevelopment", String(describing: error)) }
+            guard isReversal != true, isMonochrome != true,
+                  donorLayers?.isEmpty != false else {
+                throw fail("analyticalDevelopment", "requires a three-record colour negative")
+            }
+        }
 
         // `curves` declares how many capture layers the emulsion has; every other per-layer
         // field is then checked against that count rather than against a literal, so a stock

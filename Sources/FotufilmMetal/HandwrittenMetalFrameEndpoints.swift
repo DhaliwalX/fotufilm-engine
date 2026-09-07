@@ -214,7 +214,8 @@ public final class HandwrittenMetalFrameEndpoints {
         guard Int(source.configuration[FilmEngineInvocation.frameSizeOffset]) == frameWidth,
               Int(source.configuration[FilmEngineInvocation.frameSizeOffset + 1]) == frameHeight
         else { throw PreparationError.invocationSizeMismatch }
-        guard source.featureMask & Self.fullSpanBits == 0 else {
+        guard source.featureMask & Self.fullSpanBits == 0,
+              source.configuration[FilmEngineInvocation.analyticalDevelopmentOffset] == 0 else {
             throw PreparationError.unsupportedPipelineSpan
         }
 

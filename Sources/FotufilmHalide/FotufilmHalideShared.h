@@ -555,9 +555,46 @@ inline Halide::Expr film_curve_range(Halide::ImageParam &configuration,
                                      Halide::Expr channel) {
     Halide::Expr base = FOTUFILM_CONFIG_CURVES + channel * 6;
     Halide::Expr secondary = FOTUFILM_CONFIG_CURVE_SECONDARY + channel * 5;
-    return curve_range(configuration, base)
+    return Halide::select(configuration(FOTUFILM_CONFIG_ANALYTICAL_DEVELOPMENT) > 0.5f,
+        configuration(FOTUFILM_CONFIG_ANALYTICAL_DEVELOPMENT + 10 + channel),
+        curve_range(configuration, base)
         + configuration(secondary)
-            * (configuration(secondary + 3) - configuration(secondary + 1));
+            * (configuration(secondary + 3) - configuration(secondary + 1)));
+}
+
+/// Simultaneous finite-budget development. Positive, normalized diffusion keeps the same
+/// contraction bound as the pointwise model. Hosts validate it before constructing a frame.
+/// Store callbacks retain float32 states on both schedules, including realtime Metal.
+template<typename Store, typename Diffuse>
+inline Halide::Func analytical_development(
+    Halide::ImageParam &configuration, Halide::Func log_exposure,
+    Halide::Var x, Halide::Var y, Halide::Var c, Store store, Diffuse diffuse,
+    const std::string &name) {
+    const int base = FOTUFILM_CONFIG_ANALYTICAL_DEVELOPMENT;
+    Halide::Func latent(name + "_latent");
+    Halide::Expr z = configuration(base + 1 + c)
+        * (log_exposure(x, y, c) - configuration(base + 4 + c));
+    latent(x, y, c) = 1.0f / (1.0f + Halide::exp(-Halide::clamp(z, -80.0f, 80.0f)));
+    latent = store(latent);
+    Halide::Func developed(name + "_initial");
+    developed(x, y, c) = latent(x, y, c)
+        * (1.0f - Halide::exp(-configuration(base + 7 + c)));
+    developed = store(developed);
+    for (int iteration = 0; iteration < FOTUFILM_ANALYTICAL_ITERATIONS; ++iteration) {
+        const std::string step = name + "_" + std::to_string(iteration);
+        Halide::Func transported = diffuse(developed, step);
+        Halide::Expr inhibitor = 0.0f;
+        for (int donor = 0; donor < 3; ++donor) {
+            inhibitor += configuration(base + 13 + c * 3 + donor)
+                * transported(x, y, donor);
+        }
+        Halide::Func next(step);
+        next(x, y, c) = latent(x, y, c) * (1.0f - Halide::exp(
+            -configuration(base + 7 + c)
+            / (1.0f + configuration(FOTUFILM_CONFIG_COUPLER_SCALE) * inhibitor)));
+        developed = store(next);
+    }
+    return developed;
 }
 
 /// Normalized Hill law for development-inhibitor release. It is applied before diffusion because

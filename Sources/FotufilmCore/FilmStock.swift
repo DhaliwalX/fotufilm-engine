@@ -149,6 +149,13 @@ public struct FilmStock: Sendable {
     /// Per-donor exponents for the normalized inhibitor-release curve. 1 is linear; values above
     /// 1 model the chemical threshold and saturation before the released inhibitor diffuses.
     public var couplerReleaseGamma: [Float]
+    /// Optional finite-capacity negative development, replacing the exposure-shift couplers.
+    public var analyticalDevelopment: AnalyticalDevelopment?
+
+    /// Density domain shared by development, grain, and the spectral print/negative tables.
+    public var densityRanges: [Float] {
+        analyticalDevelopment?.capacity ?? curves.map { $0.dMax - $0.dMin }
+    }
     /// Where `couplerInhibition` came from, when it came from somewhere.
     public var couplerGeometry: CouplerGeometry? {
         didSet {
@@ -316,7 +323,8 @@ public struct FilmStock: Sendable {
         isMonochrome: Bool = false,
         isReversal: Bool = false,
         isReflectionPrint: Bool = false,
-        nativePrintMedium: PrintPaper? = nil
+        nativePrintMedium: PrintPaper? = nil,
+        analyticalDevelopment: AnalyticalDevelopment? = nil
     ) {
         self.name = name
         self.sensitivity = FilmStock.rowNormalized(sensitivity)
@@ -325,6 +333,7 @@ public struct FilmStock: Sendable {
             sensitivity: self.sensitivity, monochrome: isMonochrome,
             reversal: isReversal)
         self.curves = curves
+        self.analyticalDevelopment = analyticalDevelopment
         self.donorLayers = donorLayers
         self.flare = flare
         self.emulsionDiffusionMM = emulsionDiffusionMM
@@ -453,14 +462,14 @@ public struct FilmStock: Sendable {
     public func granularityAnchorDensity(layer: Int) -> Float {
         let curve = curves[layer]
         let net: Float = isReversal ? 1 - curve.dMin : 1
-        let range = curve.dMax - curve.dMin
+        let range = densityRanges[layer]
         guard range > 0 else { return 0.5 }
         return min(max(net, 0.05 * range), 0.9 * range)
     }
 
     /// The activation (normalized density above base) the published granularity is read at.
     public func granularityAnchorActivation(layer: Int) -> Float {
-        let range = curves[layer].dMax - curves[layer].dMin
+        let range = densityRanges[layer]
         guard range > 0 else { return 0.5 }
         return granularityAnchorDensity(layer: layer) / range
     }
@@ -501,7 +510,13 @@ public struct FilmStock: Sendable {
         return max(ratio, 0).squareRoot()
     }
 
+    /// Neutral exposure response at the calibrated development strength. Analytical development
+    /// evaluates all three records together; selective exposures require the vector model.
     public func developedDensity(layer: Int, logExposure: Float) -> Float {
+        if let model = analyticalDevelopment {
+            let fraction = model.developedFraction(logExposure: [Float](repeating: logExposure, count: 3))
+            return curves[layer].dMin + model.capacity[layer] * fraction[layer]
+        }
         let curve = curves[layer]
         let formed = curve.density(logExposure: logExposure)
         return isReversal ? curve.dMin + curve.dMax - formed : formed
