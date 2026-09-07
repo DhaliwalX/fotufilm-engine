@@ -19,6 +19,7 @@ Usage:
   fotufilm --make-chart <f> --scene spectrum  Write the demo's spectrum scene
   fotufilm --list-stocks                   List stocks and the gauge each is known on
   fotufilm --list-web-media                Export browser output-medium choices as JSON
+  fotufilm --dump-web-camera-profiles <f>  Export native camera correction anchors (or - for stdout)
   fotufilm --dump-labscan-reference <stock>
                                            Print the lab-scan reference profile a calibrated
                                            build commits for this stock
@@ -214,6 +215,41 @@ if flags["--list-web-media"] != nil {
         let data = try JSONSerialization.data(withJSONObject: records, options: [.sortedKeys])
         print(String(decoding: data, as: UTF8.self))
     } catch { fail("Could not encode output media: \(error.localizedDescription)") }
+    exit(0)
+}
+
+if let destination = flags["--dump-web-camera-profiles"] {
+    func flatten(_ rows: [SIMD3<Float>]) -> [Float] {
+        rows.flatMap { [$0.x, $0.y, $0.z] }
+    }
+    let referenceKelvin = flags["--camera-kelvin"].flatMap(Float.init)
+    let records: [[String: Any]] = CameraSpectralProfileStore.bundledProfiles.map { profile in
+        let anchors = profile.dualIlluminantMatrices()
+        var record: [String: Any] = [
+            "id": profile.id, "make": profile.make ?? "", "model": profile.model ?? "",
+            "tungsten": flatten(anchors.tungsten), "daylight": flatten(anchors.daylight)
+        ]
+        // Optional native reference for browser parity checks; production assets omit it.
+        if let kelvin = referenceKelvin, kelvin.isFinite, kelvin > 0 {
+            record["reference"] = flatten(anchors.correction(cct: kelvin))
+        }
+        return record
+    }
+    let locus: [[Float]] = (40...1000).map { mired in
+        let kelvin = 1e6 / Float(mired)
+        let xy = WhiteBalance.chromaticity(kelvin: kelvin, tint: 0)
+        let denominator = -2 * xy.x + 12 * xy.y + 3
+        return [kelvin, 4 * xy.x / denominator, 6 * xy.y / denominator]
+    }
+    do {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "version": 1, "tungstenKelvin": DualIlluminantMatrices.tungstenKelvin,
+            "daylightKelvin": DualIlluminantMatrices.daylightKelvin,
+            "profiles": records, "whiteLocus": locus
+        ], options: [.sortedKeys])
+        if destination == "-" { print(String(decoding: data, as: UTF8.self)) }
+        else { try data.write(to: URL(fileURLWithPath: destination), options: .atomic) }
+    } catch { fail("Could not export camera profiles: \(error.localizedDescription)") }
     exit(0)
 }
 

@@ -13,7 +13,7 @@ try {
   const errors = [], decoderRequests = [], mediumRequests = []
   page.on('pageerror', error => errors.push(error.message))
   page.on('request', request => {
-    if (request.url().includes('/raw/decoder.')) decoderRequests.push(request.url())
+    if (request.url().includes('/raw/')) decoderRequests.push(request.url())
     if (request.url().includes('/packs/media/')) mediumRequests.push(request.url())
   })
   await page.goto(base.href)
@@ -23,6 +23,7 @@ try {
   assert.match(await page.locator('.pixel-readout').innerText(), /RAW/)
   assert.ok(decoderRequests.some(url => url === new URL('raw/decoder.mjs', base).href))
   assert.ok(decoderRequests.some(url => url === new URL('raw/decoder.wasm', base).href))
+  assert.ok(decoderRequests.some(url => url === new URL('raw/camera-profiles.json', base).href))
   assert.deepEqual(errors, [])
   await page.getByRole('searchbox').fill('Gold 200')
   await page.getByTitle('Gold 200', { exact: true }).click()

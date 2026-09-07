@@ -1,3 +1,5 @@
+import { loadCameraProfiles, resolveCameraProfile } from './camera-profile.js'
+
 // One worker per import releases the decoder's entire WASM heap on completion.
 self.onmessage = async ({ data: { bytes, decoderURL } }) => {
   let module, input
@@ -18,7 +20,16 @@ self.onmessage = async ({ data: { bytes, decoderURL } }) => {
     self.postMessage({ status: 'Loading RAW decoder' })
     const factory = (await import(/* @vite-ignore */ decoderURL)).default
     module = await factory()
-    if (typeof module._raw_scene_scale !== 'function')
+    if (
+      [
+        '_raw_scene_scale',
+        '_raw_make',
+        '_raw_model',
+        '_raw_camera_channels',
+        '_raw_camera_wb',
+        '_raw_camera_to_xyz',
+      ].some((name) => typeof module[name] !== 'function')
+    )
       throw new Error(
         'The RAW decoder is out of date. Rebuild the RAW runtime and reload the editor.',
       )
@@ -27,6 +38,21 @@ self.onmessage = async ({ data: { bytes, decoderURL } }) => {
     module.HEAPU8.set(new Uint8Array(bytes), input)
     if (module._raw_open(input, bytes.byteLength))
       throw new Error(module.UTF8ToString(module._raw_error()))
+    const camera = {
+      make: module.UTF8ToString(module._raw_make()),
+      model: module.UTF8ToString(module._raw_model()),
+      channels: module._raw_camera_channels(),
+      whiteBalance: [0, 1, 2].map((c) => module._raw_camera_wb(c)),
+      cameraToXYZ: Array.from({ length: 9 }, (_, i) => module._raw_camera_to_xyz(i)),
+    }
+    self.postMessage({ status: 'Loading camera spectral profiles' })
+    const catalog = await loadCameraProfiles(new URL('camera-profiles.json', decoderURL))
+    const profile = resolveCameraProfile(camera, catalog)
+    self.postMessage({
+      status: profile
+        ? `Preparing ${camera.make} ${camera.model} spectral correction · estimated ${Math.round(profile.kelvin)} K`
+        : 'No matching spectral correction · using RAW decoder color',
+    })
     self.postMessage({ status: 'Unpacking RAW sensor data' })
     if (module._raw_unpack()) throw new Error(module.UTF8ToString(module._raw_error()))
     self.postMessage({ status: 'Preparing sensor pixels' })
@@ -38,7 +64,7 @@ self.onmessage = async ({ data: { bytes, decoderURL } }) => {
     self.postMessage({ status: 'Copying decoded RAW pixels' })
     const start = module._raw_pixels() / 2
     const pixels = module.HEAPU16.slice(start, start + width * height * colors)
-    self.postMessage({ width, height, colors, sceneScale, pixels }, [pixels.buffer])
+    self.postMessage({ width, height, colors, sceneScale, profile, pixels }, [pixels.buffer])
   } catch (error) {
     self.postMessage({ error: error.message || 'Could not decode RAW image.' })
   } finally {

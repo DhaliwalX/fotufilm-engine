@@ -13,6 +13,9 @@ SHA256=de86b035655accff8d4010f1a221fdf50d353cb7b1422ba26f14a0db92612cfa
 BUILD="$ROOT/build/raw"
 SOURCE="$BUILD/LibRaw-$VERSION"
 mkdir -p "$BUILD" "$ROOT/web/public/raw"
+swift build -c release --product fotufilm >/dev/null
+./.build/release/fotufilm --dump-web-camera-profiles web/public/raw/camera-profiles.json
+cp Sources/FotufilmCore/CameraProfiles/LICENSE web/public/raw/CAMERA-PROFILES-LICENSE.txt
 if [[ ! -f "$SOURCE/configure" ]]; then
   curl --fail --location --retry 3 "https://www.libraw.org/data/LibRaw-$VERSION.tar.gz" -o "$BUILD/source.tar.gz"
   python3 - "$BUILD/source.tar.gz" "$SHA256" <<'PY'
@@ -39,7 +42,7 @@ fi
 em++ -O3 -fexceptions -I"$SOURCE" web/engine/raw_wasm.cpp "$SOURCE/lib/.libs/libraw.a" \
   -sUSE_LIBJPEG=1 -sUSE_ZLIB=1 -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=2GB \
   -sINITIAL_MEMORY=32MB -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=worker \
-  -sEXPORTED_FUNCTIONS=_raw_open,_raw_unpack,_raw_process,_raw_width,_raw_height,_raw_colors,_raw_scene_scale,_raw_pixels,_raw_close,_raw_error,_malloc,_free \
+  -sEXPORTED_FUNCTIONS=_raw_open,_raw_unpack,_raw_process,_raw_width,_raw_height,_raw_colors,_raw_make,_raw_model,_raw_camera_channels,_raw_camera_wb,_raw_camera_to_xyz,_raw_scene_scale,_raw_pixels,_raw_close,_raw_error,_malloc,_free \
   -sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPU16,UTF8ToString \
   -o web/public/raw/decoder.mjs
 cp "$SOURCE/LICENSE.CDDL" "$SOURCE/COPYRIGHT" web/public/raw/

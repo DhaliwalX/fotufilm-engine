@@ -116,6 +116,28 @@ int raw_process() {
 unsigned raw_width() { return image ? image->width : 0; }
 unsigned raw_height() { return image ? image->height : 0; }
 unsigned raw_colors() { return image ? image->colors : 0; }
+const char *raw_make() { return decoder ? decoder->imgdata.idata.make : ""; }
+const char *raw_model() { return decoder ? decoder->imgdata.idata.model : ""; }
+unsigned raw_camera_channels() { return decoder ? decoder->imgdata.idata.colors : 0; }
+float raw_camera_wb(unsigned channel) {
+    return decoder && channel < 3 ? decoder->imgdata.color.cam_mul[channel] : 0;
+}
+float raw_camera_to_xyz(unsigned index) {
+    if (!decoder || index >= 9) return 0;
+    // Read before dcraw_process normalizes pre_mul. rgb_cam incorporates the
+    // active DNG matrix/calibration, unlike cam_xyz (which may hold a fallback).
+    constexpr float xyzRGB[3][3] = {
+        {0.412453f, 0.357580f, 0.180423f},
+        {0.212671f, 0.715160f, 0.072169f},
+        {0.019334f, 0.119193f, 0.950227f}
+    };
+    const auto &color = decoder->imgdata.color;
+    unsigned row = index / 3, column = index % 3;
+    float value = 0;
+    for (unsigned k = 0; k < 3; ++k)
+        value += xyzRGB[row][k] * color.rgb_cam[k][column];
+    return value * color.pre_mul[column];
+}
 float raw_scene_scale() { return sceneScale; }
 void *raw_pixels() { return image ? image->data : nullptr; }
 const char *raw_error() { return libraw_strerror(status); }

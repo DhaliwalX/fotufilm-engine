@@ -23,7 +23,7 @@ export function rawSource(image, edit, maxEdge = Infinity, cropMode = false) {
     (width * cos + height * Math.abs(sin)) / width,
     (height * cos + width * Math.abs(sin)) / height,
   )
-  const { data, colors, sceneScale = 1 } = image.raw
+  const { data, colors, sceneScale = 1, profile } = image.raw
   const sampleScale = sceneScale / 65535
   function point(u, v) {
     const px = ((u - 0.5) * width) / cover,
@@ -69,6 +69,17 @@ export function rawSource(image, edit, maxEdge = Infinity, cropMode = false) {
             const d = data[(ny * originalWidth + ix) * colors + channel]
             const e = data[(ny * originalWidth + nx) * colors + channel]
             output[i + c] = ((a + (b - a) * fx) * (1 - fy) + (d + (e - d) * fx) * fy) * sampleScale
+          }
+          // This linear transform commutes with interpolation. Apply it once,
+          // after RGB16 expansion, preserving negative colors and values above 1.
+          if (profile) {
+            const m = profile.matrix,
+              r = output[i],
+              g = output[i + 1],
+              b = output[i + 2]
+            output[i] = m[0] * r + m[1] * g + m[2] * b
+            output[i + 1] = m[3] * r + m[4] * g + m[5] * b
+            output[i + 2] = m[6] * r + m[7] * g + m[8] * b
           }
           output[i + 3] = 1
         }

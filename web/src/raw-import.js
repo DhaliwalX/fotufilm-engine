@@ -43,10 +43,10 @@ export const isRawFile = (file) =>
 // React/devtools state inspection, which can otherwise enumerate millions of samples.
 class RawImage {
   #pixels
-  constructor(width, height, data, colors, sceneScale) {
+  constructor(width, height, data, colors, sceneScale, profile) {
     this.naturalWidth = width
     this.naturalHeight = height
-    this.#pixels = { data, colors, sceneScale }
+    this.#pixels = { data, colors, sceneScale, profile }
   }
   get raw() {
     return this.#pixels
@@ -100,6 +100,13 @@ export function decodeRaw(file, { signal, onProgress = () => {} } = {}) {
         ![1, 3].includes(data.colors) ||
         !Number.isFinite(data.sceneScale) ||
         data.sceneScale <= 0 ||
+        (data.profile != null &&
+          (typeof data.profile.id !== 'string' ||
+            !Number.isFinite(data.profile.kelvin) ||
+            data.profile.kelvin <= 0 ||
+            !Array.isArray(data.profile.matrix) ||
+            data.profile.matrix.length !== 9 ||
+            !data.profile.matrix.every(Number.isFinite))) ||
         !Number.isInteger(data.width) ||
         !Number.isInteger(data.height) ||
         data.width < 1 ||
@@ -110,7 +117,17 @@ export function decodeRaw(file, { signal, onProgress = () => {} } = {}) {
         finish(new Error('The RAW decoder returned an invalid image.'))
         return
       }
-      finish(null, new RawImage(data.width, data.height, data.pixels, data.colors, data.sceneScale))
+      finish(
+        null,
+        new RawImage(
+          data.width,
+          data.height,
+          data.pixels,
+          data.colors,
+          data.sceneScale,
+          data.profile,
+        ),
+      )
     }
     onProgress('Reading RAW file')
     file

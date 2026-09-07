@@ -644,7 +644,11 @@ export default function App() {
             onClick={() => setZoom(1)}
             disabled={!active || zoom === 1}
           />
-          <span className="pixel-readout">
+          <span className="pixel-readout" title={active?.image.raw
+            ? active.image.raw.profile
+              ? `Camera spectral profile: ${active.image.raw.profile.name} · estimated ${Math.round(active.image.raw.profile.kelvin)} K`
+              : 'RAW decoder color · no matching camera spectral correction'
+            : undefined}>
             {active?.image.raw ? 'RAW · ' : ''}
             {active ? `${((rawWidth * rawHeight) / 1000000).toFixed(1)} MP` : ''}
           </span>

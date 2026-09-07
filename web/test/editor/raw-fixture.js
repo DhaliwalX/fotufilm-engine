@@ -7,6 +7,9 @@ export function makeDNG({
   asShotNeutral = [1, 1, 1],
   baselineExposure = 0,
   patches = null,
+  make = 'Fotufilm',
+  model = 'Synthetic DNG',
+  xyzToCamera = null,
 } = {}) {
   const channels = mosaic ? 1 : 3
   const tags = []
@@ -17,8 +20,8 @@ export function makeDNG({
   add(258, 3, Array(channels).fill(16))
   add(259, 3, [1])
   add(262, 3, [mosaic ? 32803 : 34892])
-  add(271, 2, 'Fotufilm')
-  add(272, 2, 'Synthetic DNG')
+  add(271, 2, make)
+  add(272, 2, model)
   add(273, 4, [0])
   add(274, 3, [orientation])
   add(277, 3, [channels])
@@ -37,7 +40,7 @@ export function makeDNG({
   add(
     50721,
     10,
-    [
+    xyzToCamera ?? [
       3.2404542, -1.5371385, -0.4985314, -0.969266, 1.8760108, 0.041556, 0.0556434, -0.2040259,
       1.0572252,
     ].map((value, i) => value * asShotNeutral[Math.floor(i / 3)]),
