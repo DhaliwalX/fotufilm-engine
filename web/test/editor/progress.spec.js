@@ -1,5 +1,45 @@
 import { test, expect } from '@playwright/test'
 
+test('queued edits keep the active operation visible and replace the pending edit', async ({ page }) => {
+  await page.goto('/')
+  const status = page.locator('.viewer-status > [role=status]')
+  await page.getByRole('button', { name: 'Open sample chart' }).click()
+  await expect(status).toContainText(/1600 × 1000 · \d+ ms/)
+  await page.getByRole('tab', { name: 'Light & Color', exact: true }).click()
+  // Hold one real render before it starts to make the queue deterministic.
+  await page.evaluate(async () => {
+    const { RenderSession } = await import('/src/render-session.js')
+    const render = RenderSession.prototype.render
+    let held = false
+    RenderSession.prototype.render = async function (request) {
+      if (!held && !request.background) {
+        held = true
+        window.reportHeldRender = request.onProgress
+        request.onProgress('Measuring local highlights and shadows')
+        await new Promise((resolve) => { window.releaseHeldRender = resolve })
+      }
+      return render.call(this, request)
+    }
+  })
+  const exposure = page.getByRole('spinbutton', { name: 'Exposure value', exact: true })
+  await exposure.fill('0.5')
+  await exposure.press('Tab')
+  await expect(status).toContainText('Measuring local highlights and shadows')
+  await exposure.fill('1')
+  await exposure.press('Tab')
+  await expect(status).toContainText('Next: Exposure +1 EV')
+  await exposure.fill('1.25')
+  await exposure.press('Tab')
+  await expect(status).toContainText('Measuring local highlights and shadows · Next: Exposure +1.25 EV')
+  await page.evaluate(() => window.reportHeldRender('Encoding preview image'))
+  await expect(status).toContainText('Encoding preview image · Next: Exposure +1.25 EV')
+  await exposure.press('Tab')
+  await expect(status).toContainText('1600px preview')
+  await page.evaluate(() => window.releaseHeldRender())
+  await expect(status).toContainText(/1600 × 1000 · \d+ ms/)
+  await expect(status).not.toContainText('Next:')
+})
+
 test('export progress follows actual preparation, render tiles and encoding', async ({ page }) => {
   await page.goto('/')
   const report = await page.evaluate(async () => {

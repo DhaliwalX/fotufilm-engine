@@ -44,6 +44,7 @@ export class RenderSession {
   constructor() {
     this.pending = []
     this.running = false
+    this.activeWork = null
     this.packs = new Map()
     this.developer = null
     this.normal = null
@@ -51,9 +52,16 @@ export class RenderSession {
     this.sources = []
     this.closed = false
   }
-  enqueue(work, background = false) {
+  notifyWaiting() {
+    if (!this.activeWork) return
+    const { label, stage } = this.activeWork
+    for (const item of this.pending)
+      item.details.onWait?.(`Waiting for ${label}${stage ? ` · ${stage}` : ''}`)
+  }
+  enqueue(work, background = false, details = { label: 'engine work' }) {
     return new Promise((resolve, reject) => {
-      this.pending.push({ work, background, resolve, reject })
+      this.pending.push({ work, background, details, resolve, reject })
+      this.notifyWaiting()
       this.drain()
     })
   }
@@ -63,12 +71,15 @@ export class RenderSession {
     while (this.pending.length) {
       const firstForeground = this.pending.findIndex((item) => !item.background)
       const [item] = this.pending.splice(Math.max(0, firstForeground), 1)
+      this.activeWork = item.details
+      this.notifyWaiting()
       try {
         item.resolve(await item.work())
       } catch (error) {
         item.reject(error)
       }
     }
+    this.activeWork = null
     this.running = false
   }
   async pack(id, medium = null) {
@@ -160,7 +171,12 @@ export class RenderSession {
     onProgress = () => {},
   }) {
     if (this.closed || stale()) return null
+    const work = { label: background ? 'film thumbnail' : purpose }
     const report = (text) => {
+      if (this.activeWork === work) {
+        work.stage = text
+        this.notifyWaiting()
+      }
       if (!this.closed && !stale()) onProgress(text)
     }
     if (edit.stock !== null && !this.packs.has(`${stock}:${edit.medium || 'default'}`))
@@ -169,7 +185,7 @@ export class RenderSession {
     if (this.closed || stale()) return null
     if (!entry && !this.normalReady) report('Loading light and color engine')
     const developer = await this.renderer(entry?.pack, background && !!entry, report)
-    if (this.running) report('Waiting for the current render to finish')
+    work.onWait = report
     return this.enqueue(async () => {
       if (this.closed || stale()) return null
       const started = performance.now()
@@ -243,7 +259,7 @@ export class RenderSession {
         width: canvas.width,
         height: canvas.height,
       }
-    }, background)
+    }, background, work)
   }
   stages(stock, medium = null) {
     return this.enqueue(async () => {
@@ -254,7 +270,7 @@ export class RenderSession {
         entry.stagesUrl,
       )
       return entry.stages.map((s) => ({ id: s.id, label: s.label }))
-    })
+    }, false, { label: 'pipeline inspection profiles' })
   }
   dispose() {
     this.closed = true

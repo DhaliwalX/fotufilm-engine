@@ -131,17 +131,25 @@ test('foreground renders run before pending thumbnails, without overlapping heap
   const { RenderSession } = await import('../../src/render-session.js')
   const session = new RenderSession(),
     order = []
+  const waiting = []
   let release
   const gate = new Promise((resolve) => {
     release = resolve
   })
+  const firstWork = { label: 'film thumbnail', stage: 'Rendering tile 1 of 2' }
   const first = session.enqueue(async () => {
     order.push('start')
     await gate
     order.push('end')
-  })
+  }, true, firstWork)
   const background = session.enqueue(() => order.push('thumbnail'), true)
-  const preview = session.enqueue(() => order.push('preview'))
+  const preview = session.enqueue(() => order.push('preview'), false, {
+    label: 'preview', onWait: (status) => waiting.push(status),
+  })
+  assert.equal(waiting.at(-1), 'Waiting for film thumbnail · Rendering tile 1 of 2')
+  firstWork.stage = 'Encoding thumbnail'
+  session.notifyWaiting()
+  assert.equal(waiting.at(-1), 'Waiting for film thumbnail · Encoding thumbnail')
   release()
   await Promise.all([first, background, preview])
   assert.deepEqual(order, ['start', 'end', 'preview', 'thumbnail'])

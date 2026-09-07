@@ -3,7 +3,7 @@ import { TextInput } from '@astryxdesign/core/TextInput'
 import { Switch } from '@astryxdesign/core/Switch'
 import { TabList, Tab } from '@astryxdesign/core/TabList'
 import { Selector } from '@astryxdesign/core/Selector'
-import { PreviewQueue } from './preview-queue.js'
+import { PreviewQueue, previewLabel } from './preview-queue.js'
 import { IMAGE_ACCEPT, isRawFile, importRaw } from './raw-import.js'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { RenderSession, loadStockIndex } from './render-session.js'
@@ -195,12 +195,15 @@ export default function App() {
 
   const alive = useRef(false)
   const previewQueue = useRef(null)
+  const lastRenderedPreview = useRef(null)
   const currentPreview = useRef(null)
   currentPreview.current = { activeId, key: previewKey, exporting, cropMode }
   useEffect(() => {
     const renderer = new RenderSession()
     alive.current = true
-    previewQueue.current = new PreviewQueue()
+    previewQueue.current = new PreviewQueue((text) => {
+      if (alive.current && !currentPreview.current?.exporting) setStatus(text)
+    })
     setSession(renderer)
     return () => {
       alive.current = false
@@ -259,14 +262,19 @@ export default function App() {
       difference,
       cropMode,
       stale: () => !currentFile() || currentPreview.current.exporting,
-      onProgress: (text) => {
-        if (currentFile() && !currentPreview.current.exporting) setStatus(text)
-      },
     }
-    setStatus('Queuing latest adjustments')
-    const frame = requestAnimationFrame(() =>
+    const frame = requestAnimationFrame(() => {
+      const stock = stocks.find((item) => item.id === previewEdit.stock)
+      const queued = {
+        fileId: active.id, filename: active.name, edit: previewEdit,
+        stockName: stock?.name,
+        mediumName: stock?.media.find((medium) => medium.id === previewEdit.medium)?.name,
+        edge: previewEdge, cropMode, stage, difference,
+        stageLabel: stages[stage]?.label,
+      }
+      const label = previewLabel(queued, lastRenderedPreview.current)
       previewQueue.current
-        .submit(() => session.render(request))
+        .submit((onProgress) => session.render({ ...request, onProgress }), label)
         .then((next) => {
           if (
             !next ||
@@ -294,18 +302,16 @@ export default function App() {
             stock: previewEdit.stock,
             stage,
           })
-          setStatus(
-            !interacting && currentPreview.current.key === previewKey ? null : 'Preparing full-detail preview',
-          )
+          lastRenderedPreview.current = queued
           setError(null)
         })
         .catch((error) => {
           if (currentFile()) {
             setError(error.message)
-            setStatus(null)
+            if (!previewQueue.current.running) setStatus(null)
           }
-        }),
-    )
+        })
+    })
     return () => cancelAnimationFrame(frame)
   }, [
     active,
@@ -831,7 +837,9 @@ export default function App() {
               (active && shownResult?.key !== previewKey
                 ? error
                   ? 'Preview unavailable'
-                  : 'Queuing latest adjustments'
+                  : interacting
+                    ? 'Waiting for adjustments to settle before full-detail preview'
+                    : 'Waiting for the next display frame'
                 : null) ||
               (shownResult
                 ? `${shownResult.width} × ${shownResult.height} · ${shownResult.elapsed.toFixed(0)} ms`
