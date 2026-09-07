@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
     if (!pack) return 2;
     uint32_t header[10];
     if (std::fread(header, sizeof(header), 1, pack) != 1
-        || std::memcmp(header, "FSWP", 4) || header[1] != 1
+        || std::memcmp(header, "FSWP", 4) || (header[1] != 1 && header[1] != 2)
         || header[6] != FOTUFILM_FRAME_CONFIGURATION_COUNT
         || header[7] != 33 || header[8] != 33 * 33 * 33 * 4) {
         std::fclose(pack);
