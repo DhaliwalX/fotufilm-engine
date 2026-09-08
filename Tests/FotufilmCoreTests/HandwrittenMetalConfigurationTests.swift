@@ -12,6 +12,7 @@ final class HandwrittenMetalConfigurationTests: XCTestCase {
             "FOTUFILM_CFG_SAMPLED_CURVES": FilmEngineInvocation.sampledCurvesOffset,
             "FOTUFILM_SAMPLED_CURVE_STRIDE": FilmEngineInvocation.sampledCurveStride,
             "FOTUFILM_CFG_DEVELOP_COMPLEMENT": FilmEngineInvocation.developComplementOffset,
+            "FOTUFILM_CFG_GRAIN_REVERSAL_PROFILE": FilmEngineInvocation.grainReversalProfileOffset,
             "FOTUFILM_CFG_CURVE_SECONDARY": FilmEngineInvocation.curveSecondaryOffset,
             "FOTUFILM_CFG_COUPLER_RELEASE_GAMMA":
                 FilmEngineInvocation.couplerReleaseGammaOffset,

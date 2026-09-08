@@ -6,6 +6,36 @@ import UniformTypeIdentifiers
 
 final class GrainABTool: XCTestCase {
 
+    func testRenderReversalGrainAB() throws {
+        guard let out = ProcessInfo.processInfo.environment["FOTUFILM_REVERSAL_GRAIN_AB_OUT"]
+        else { throw XCTSkip("set FOTUFILM_REVERSAL_GRAIN_AB_OUT for the reversal comparison") }
+        try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable, "Halide required")
+        let directory = URL(fileURLWithPath: out)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let side = 768
+        var stock = TestStocks.reversal
+        var options = FotufilmEngine.Options()
+        options.format = FilmFormat(name: "grain comparison", frameHeightMM: 3)
+        options.halationScale = 0
+        options.paper = .screen
+        options.seed = 0x5EED
+        var input = ImageBuffer(width: side, height: side)
+        let curve = stock.curves[1]
+        for y in 0..<side {
+            let net: Float = [0.25, 0.9, 2.8][min(2, y * 3 / side)]
+            let exposure = 0.18 * pow(10, curve.logExposure(density: curve.dMax - net))
+            for x in 0..<side {
+                for c in 0..<3 { input.planes[c][y * side + x] = exposure }
+            }
+        }
+        for (name, law) in [("before", GrainDensityLaw.dyeCloudSelwyn),
+                            ("after", .dyeCloudReversal)] {
+            stock.grainDensityLaw = law
+            try write(FotufilmEngine(stock: stock, options: options).process(linearRGB: input),
+                      to: directory.appendingPathComponent("reversal-\(name).png"))
+        }
+    }
+
     private static let patchMM: Float = 6
 
     private static let ladder: [(pxPerMM: Float, paper: PrintPaper?)] = [

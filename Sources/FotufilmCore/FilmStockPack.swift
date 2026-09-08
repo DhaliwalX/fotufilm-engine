@@ -62,13 +62,16 @@ public struct FilmStockDefinition: Codable, Sendable {
     public var grainLayerSizeRatio: [Float]?
     /// Which granularity-against-density law the emulsion obeys. Absent reads it off the
     /// material: silver for a monochrome stock, the measured chromogenic negative shape for a
-    /// colour negative, Selwyn for a reversal. Stated only where the material and the law
+    /// colour negative, saturating power law for a dye reversal. Stated where the material and the law
     /// cross, as they do for a chromogenic black-and-white stock.
     public var grainDensityLaw: GrainDensityLaw?
     /// `[amplitude, toeDensity, decayDensity]` of the chromogenic negative's
     /// granularity-against-density shape. Absent uses the embedding's shared default;
     /// this source repository supplies an illustrative analytic profile.
     public var grainDensityProfile: [Float]?
+    /// `[exponent p, shoulder density Ds]` of the dye reversal's saturating power law.
+    /// Absent uses the provisional family profile [1.1, 3].
+    public var grainReversalProfile: [Float]? = nil
     /// Developed fog, in density above the base's own dye. Absent is the shared default.
     public var grainFogDensity: Float?
     public var halationStrength: [Float]
@@ -393,6 +396,7 @@ public extension FilmStockDefinition {
             grainLayerSizeRatio: grainLayerSizeRatio ?? [1, 1, 1],
             grainDensityLaw: grainDensityLaw,
             grainDensityProfile: grainDensityProfile,
+            grainReversalProfile: grainReversalProfile ?? FilmStock.defaultGrainReversalProfile,
             grainFogDensity: grainFogDensity ?? FilmStock.defaultGrainFogDensity,
             halationStrength: halationStrength,
             halationLookScale: halationLookScale ?? 1,
@@ -452,6 +456,7 @@ public extension FilmStockDefinition {
         self.grainLayerSizeRatio = stock.grainLayerSizeRatio
         self.grainDensityLaw = stock.grainDensityLaw
         self.grainDensityProfile = stock.grainDensityProfile
+        self.grainReversalProfile = stock.grainReversalProfile
         self.grainFogDensity = stock.grainFogDensity
         self.halationStrength = stock.halationStrength
         self.halationLookScale = stock.halationLookScale

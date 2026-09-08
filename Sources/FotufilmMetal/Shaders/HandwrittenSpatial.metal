@@ -54,6 +54,7 @@ constant uint kDiffusionKernel = 8735u;
 constant uint kDonorDiffusionKernel = 8796u;
 constant uint kDevelopComplement = FOTUFILM_CFG_DEVELOP_COMPLEMENT;
 constant uint kGrainDensityProfile = 8800u;
+constant uint kGrainReversalProfile = FOTUFILM_CFG_GRAIN_REVERSAL_PROFILE;
 
 constant float kInverseLn10 = 1.0f / 2.3025851f;
 constant float kLn10 = 2.3025851f;
@@ -1465,13 +1466,21 @@ static inline float silver_variance(float density) {
                          0.21004f * density + 0.06114f * density * density);
 }
 
+// Mirrors reversal_granularity_variance in FotufilmHalideShared.h.
+static inline float reversal_variance(const device float *configuration, float density) {
+    float exponent = configuration[kGrainReversalProfile];
+    float shoulder = max(configuration[kGrainReversalProfile + 1u], 1.0e-4f);
+    float power = pow(density / shoulder, 2.0f * exponent);
+    return power / (1.0f + power);
+}
+
 static inline float grain_modulation(
     const device float *configuration, uint channel, float netDensity) {
     float fog = configuration[kGrainFog + channel];
     float anchor = max(configuration[kGrainAnchor + channel] + fog, 1.0e-4f);
     float here = max(netDensity, 0.0f) + fog;
     // DEVELOP_DYE_CLOUD is only meaningful on the specialized path that sets it; elsewhere the
-    // law is read from the configuration, where 2 is the reversal that keeps Selwyn's √D.
+    // law is read from the configuration (2 = legacy Selwyn, 3 = dye reversal).
     if (DEVELOP_CACHE_FIELDS && DEVELOP_DYE_CLOUD) {
         return sqrt(max(dye_cloud_variance(configuration, here)
                             / max(dye_cloud_variance(configuration, anchor), 1.0e-6f),
@@ -1482,6 +1491,10 @@ static inline float grain_modulation(
         return sqrt(max(dye_cloud_variance(configuration, here)
                             / max(dye_cloud_variance(configuration, anchor), 1.0e-6f),
                         0.0f));
+    }
+    if (law > 2.5f) {
+        return sqrt(max(reversal_variance(configuration, here)
+            / max(reversal_variance(configuration, anchor), 1.0e-20f), 0.0f));
     }
     if (law > 1.5f) return sqrt(max(here / anchor, 0.0f));
     return sqrt(max(silver_variance(here)
