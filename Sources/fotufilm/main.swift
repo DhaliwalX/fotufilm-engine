@@ -42,9 +42,11 @@ Options:
                      its camera exposed. See --list-formats
   --ev <stops>       Exposure compensation in stops (default: 0)
   --autoexpose       Anchor the log-average scene luminance on mid-gray
-  --wb <kelvin>      Scene illuminant, 2000-12000 K (default: 6504, D65).
-                     On camera raw this is relative to the file's as-shot
-                     light; 6504 preserves the capture illuminant
+  --wb <kelvin>      Scene illuminant, 2000-12000 K. Unset, an already
+                     white-balanced file is lit at the stock's own balance,
+                     so a neutral renders neutral. On camera raw this is
+                     relative to the file's as-shot light; 6504 preserves
+                     the capture illuminant
   --tint <n>         Green/magenta off the locus, -100...100 (default: 0)
   --background <c>  Scene-linear Rec.2020 background for associated-alpha input:
                      black, white, or R,G,B (default: black). The source is
@@ -1444,10 +1446,17 @@ let background = parseLinearBackground(flags["--background"])
 var (rgba, width, height, sceneKelvin, sceneChromaticity, contentHeadroom) =
     loadLinear(path: positional[0])
 PremultipliedAlpha.flatten(&rgba, over: background)
-options.whiteBalance = balance
-// The film-side scene light, from the raw file's as-shot record — the same wiring as the
-// app's still path. The gate inside the engine decides whether it does anything.
-options.sceneIlluminantKelvin = sceneKelvin
+// A file with an as-shot record takes `--wb` as an edit against that light. A file without
+// one is already white balanced, so a stated `--wb` *is* the scene light and an unstated one
+// leaves the engine on the stock's own balance, where a neutral renders neutral.
+if sceneKelvin == nil, let stated = flags["--wb"].flatMap({ Float($0) }) {
+    options.sceneIlluminantKelvin = stated
+    options.whiteBalance = WhiteBalance(kelvin: WhiteBalance.neutralKelvin,
+                                        tint: balance.tint)
+} else {
+    options.whiteBalance = balance
+    options.sceneIlluminantKelvin = sceneKelvin
+}
 options.sceneIlluminantChromaticity = sceneChromaticity
 // And the declared range, the other clip-side fact the app attaches: recorded light above
 // diffuse white is metered into the film's latitude instead of flattening to paper white.

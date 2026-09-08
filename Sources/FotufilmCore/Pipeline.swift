@@ -184,7 +184,9 @@ public struct FotufilmEngine {
         /// Which spatial stages `stage == .texture` lays over the frame. Ignored by every other
         /// stage, where the selection is the ordinary strength levers.
         public var textureStages: TextureStages = .all
-        /// Capture illuminant. Nil assumes D65 independently of the selected stock.
+        /// Capture illuminant, from a decoder that records one. Nil means the source carries no
+        /// as-shot light — an already white-balanced file — and the scene light falls back to the
+        /// stock's own `referenceIlluminantKelvin`, so a neutral in renders neutral out.
         /// `whiteBalance` edits this light; the stock reference remains fixed calibration data.
         public var sceneIlluminantKelvin: Float? = nil
         /// Exact capture white, when a decoder reports xy. Avoids converting vendor tint units.
@@ -194,7 +196,11 @@ public struct FotufilmEngine {
         public var sceneIlluminantSpectrum: [Float] = []
 
         public var resolvedSceneIlluminant: WhiteBalance {
-            let base = sceneIlluminantKelvin ?? WhiteBalance.neutralKelvin
+            resolvedSceneIlluminant(referenceKelvin: WhiteBalance.neutralKelvin)
+        }
+
+        public func resolvedSceneIlluminant(referenceKelvin: Float) -> WhiteBalance {
+            let base = sceneIlluminantKelvin ?? referenceKelvin
             precondition(base.isFinite && base > 0 && whiteBalance.kelvin.isFinite
                          && whiteBalance.kelvin > 0 && whiteBalance.tint.isFinite, "invalid scene illuminant")
             let displacement = whiteBalance.mired - WhiteBalance.neutral.mired
@@ -204,6 +210,10 @@ public struct FotufilmEngine {
         }
 
         public var resolvedSceneSpectrum: [Float] {
+            resolvedSceneSpectrum(referenceKelvin: WhiteBalance.neutralKelvin)
+        }
+
+        public func resolvedSceneSpectrum(referenceKelvin: Float) -> [Float] {
             if !sceneIlluminantSpectrum.isEmpty {
                 precondition(sceneIlluminantSpectrum.count == SpectralGrid.count
                              && sceneIlluminantSpectrum.allSatisfy { $0.isFinite && $0 >= 0 },
@@ -211,14 +221,14 @@ public struct FotufilmEngine {
                 _ = Illuminant.luminance(sceneIlluminantSpectrum)
                 return sceneIlluminantSpectrum
             }
-            let edited = resolvedSceneIlluminant
+            let edited = resolvedSceneIlluminant(referenceKelvin: referenceKelvin)
             guard let white = sceneIlluminantChromaticity else {
                 return Illuminant.spectrum(edited)
             }
             // Carry the measured off-locus chromaticity directly; only UI temperature movement
             // uses mired. The original decoder white is never rounded through a tint coordinate.
             let original = WhiteBalance.chromaticity(
-                kelvin: sceneIlluminantKelvin ?? WhiteBalance.neutralKelvin, tint: 0)
+                kelvin: sceneIlluminantKelvin ?? referenceKelvin, tint: 0)
             let offset = WhiteBalance.uvFromXY(white) - WhiteBalance.uvFromXY(original)
             let target = WhiteBalance.uvFromXY(WhiteBalance.chromaticity(
                 kelvin: edited.kelvin, tint: edited.tint)) + offset
