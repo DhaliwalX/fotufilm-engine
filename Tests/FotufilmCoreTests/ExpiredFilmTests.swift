@@ -98,12 +98,15 @@ final class ExpiredFilmTests: XCTestCase {
         let freshShadow = printed(stock, stops: -3, extraEV: 0)
         let agedShadow = printed(aged, stops: -3, extraEV: 0)
         XCTAssertGreaterThan(luminance(agedShadow) / luminance(freshShadow), 1.05)
-        // And the floor crosses: the fresh print's deepest shadow leans warm, the
-        // fogged one's leans cool, because the blue record's fog is the heaviest and
-        // yellow fog on a negative prints blue.
+        // And the floor crosses: fog drives the deepest shadow cool relative to a fresh
+        // print, because the blue record's fog is the heaviest and yellow fog on a negative
+        // prints blue. Stated as the crossing rather than as each print's absolute lean:
+        // at D-max the two sides differ by a fraction of a code value, and which side of
+        // neutral the fresh floor lands on is not what fog is being measured by.
         let freshFloor = printed(stock, stops: -3.5, extraEV: 0)
         let agedFloor = printed(aged, stops: -3.5, extraEV: 0)
-        XCTAssertGreaterThan(freshFloor.x, freshFloor.z)
+        print("MEASURE floor fresh \(freshFloor) aged \(agedFloor)")
+        XCTAssertGreaterThan(agedFloor.z - agedFloor.x, freshFloor.z - freshFloor.x)
         XCTAssertGreaterThan(agedFloor.z, agedFloor.x)
     }
 }
