@@ -5,6 +5,48 @@ import Metal
 import FotufilmMetal
 
 final class LayeredPlatformTests: XCTestCase {
+    func testEncodedSelectionPreservesAlphaAndDeliveryBasis() throws {
+        let renderer = try XCTUnwrap(HalideMetalFilmRenderer.shared)
+        let w = 17, h = 13
+        var bytes = [UInt8](repeating: 0, count: w*h*4)
+        var scene = ImageBuffer(width: w, height: h)
+        for i in 0..<w*h {
+            let alpha: UInt8 = i % 3 == 0 ? 128 : 255
+            let rgb = i % w > w/2 ? SIMD3<Float>(1, 0.9, 0.7) : SIMD3<Float>(0.08, 0.03, 0.1)
+            for c in 0..<3 { bytes[4*i+c] = UInt8((rgb[c]*Float(alpha)).rounded()) }
+            bytes[4*i+3] = alpha
+            let decoded = SIMD3<Float>((0..<3).map {
+                ColorScience.srgbToLinear(Float(bytes[4*i+$0])/Float(alpha))
+            })
+            let working = ColorScience.linearSRGBToRec2020(decoded)
+            for c in 0..<3 { scene.planes[c][i] = working[c] }
+        }
+        for stock in [TestStocks.negative, TestStocks.reversal] {
+            for stage in [PipelineStage.full, .texture] {
+                var options = TransportFixtures.quiet
+                options.halationModel = .layered; options.stage = stage
+                options.textureStages = []
+                let actual = try XCTUnwrap(renderer.processSRGB8(bytes, width: w, height: h,
+                    stock: stock, options: options))
+                let developed = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: scene)
+                var maximum = 0
+                for i in 0..<w*h {
+                    var rgb = SIMD3(developed.planes[0][i], developed.planes[1][i], developed.planes[2][i])
+                    if stage == .texture { rgb = ColorScience.linearRec2020ToDisplayP3(rgb) }
+                    rgb = ColorScience.linearDisplayP3ToSRGB(rgb)
+                    for c in 0..<3 {
+                        let encoded = ColorScience.linearToSrgb(ColorScience.displayShoulder(
+                            rgb[c], knee: stock.isReversal ? 0.7 : 0.9))
+                        let expected = Int(min(max((encoded*Float(bytes[4*i+3])).rounded(), 0), 255))
+                        maximum = max(maximum, abs(Int(actual[4*i+c])-expected))
+                    }
+                    XCTAssertEqual(actual[4*i+3], bytes[4*i+3])
+                }
+                XCTAssertLessThanOrEqual(maximum, 1, "\(stock.name), \(stage)")
+            }
+        }
+    }
+
     func testExportBrowserReferenceWhenRequested() throws {
         guard let path = ProcessInfo.processInfo.environment["FOTUFILM_WASM_REFERENCE_OUTPUT"] else { return }
         let parts = (ProcessInfo.processInfo.environment["FOTUFILM_WASM_PACK_SIZE"] ?? "160x90").split(separator: "x").compactMap { Int($0) }
@@ -17,7 +59,7 @@ final class LayeredPlatformTests: XCTestCase {
             for c in 0..<3 { source.planes[c][y*w+x] = scene[c] }
         } }
         var references: [String: [Float]] = [:]
-        for id in FilmStock.allPresetIDs {
+        for id in ["example-monochrome-100", "example-negative-400", "example-reversal-64", "gold200", "provia100f", "trix400"] {
             let stock = try XCTUnwrap(FilmStock.named(id))
             var options = FotufilmEngine.Options()
             options.format = FilmFormat.native(forStockID: id)

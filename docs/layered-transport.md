@@ -43,7 +43,7 @@ error convention.
 
 Spectral fields accept either one constant or all 81 samples. Three-row fields
 use one spectrum per receiver. A `FilmStockDefinition` carrying a construction
-uses schema 2. Schema 1 rejects that field; schema 2 requires it and rejects
+uses schema 3. Schemas 1 and 2 reject that field; schema 3 requires it and rejects
 conflicting legacy halation profiles and return matrices. Other stock data and
 the developed/printed response remain available.
 
@@ -131,12 +131,17 @@ The reference API retains CPU and Metal JIT convolution for validation. Native z
 previews currently develop the complete virtual frame before cropping to preserve
 transport tails and reduction-grid alignment. This increases memory use at high zoom.
 
-`--halation-model legacy|layered` selects the CLI model. Browser pack version 2 adds
+`--halation-model legacy|layered` selects the CLI model. Browser pack version 3 adds
 head/tail configurations, component exposure LUTs and positive weighted stencils to
-the version 1 base layout. `tools/build-wasm.sh` exports both `.pack` and
-`.layered.pack`. Layered packs use the SIMD backend, including when WebGPU is available;
+the version 2 size-ladder layout. `tools/build-wasm.sh` exports both `.pack` and
+`.layered.pack` for supported stocks. The index declares `layeredTransport: false` for
+donor-layer stocks, which currently require Legacy on every host. The browser reports
+that limitation without substituting models. Layered packs use the SIMD backend,
+including when WebGPU is available;
 Legacy keeps its existing WebGPU/SIMD selection. Runtime exposure, colour and grain
 controls work with either model. Layered stage-sequence exports and browser lens
 flare/diffusion pack overrides are rejected explicitly. Rebuild every AOT kernel and
 browser pack after the appended record-exposure configuration slot; old pack/config
-length mismatches are rejected by the runtime.
+length mismatches are rejected by the runtime. Browser transport develops a complete
+frame to preserve convolution support and reduction-grid alignment; its memory use
+therefore grows with the full image, even when Legacy would render in tiles.

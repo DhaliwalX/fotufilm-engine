@@ -390,6 +390,10 @@ private func stock(at index: Int32) -> FilmStock? {
 
 private func validateDevelopment(_ settings: FotufilmEngine.Options,
                                  stock: FilmStock, context: BridgeContext) -> Bool {
+    if settings.transportConstruction(for: stock) != nil && !stock.donorLayers.isEmpty {
+        context.lastError = "Layered Transport does not yet support donor-layer stocks; select Legacy for this stock"
+        return false
+    }
     do {
         _ = try stock.pushed(stops: settings.developmentEV)
         return true

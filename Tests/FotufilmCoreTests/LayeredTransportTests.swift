@@ -175,6 +175,25 @@ final class LayeredTransportTests: XCTestCase {
         XCTAssertThrowsError(try bad.validate())
     }
 
+    func testSceneSpectrumWithNo560nmEnergyKeepsCalibratedExposure() throws {
+        guard TransportBackend.cpu.isAvailable else { throw XCTSkip("Halide unavailable") }
+        var options = TransportFixtures.quiet
+        var lamp = SpectralGrid.d65
+        lamp[Illuminant.anchorIndex] = 0
+        options.sceneIlluminantSpectrum = lamp
+        let source = ImageBuffer(width: 9, height: 7,
+            planes: [Float(0.4), 0.15, 0.08].map { Array(repeating: $0, count: 63) })
+        let legacy = try FotufilmEngine(stock: TestStocks.negative, options: options).processChecked(linearRGB: source)
+        options.halationModel = .layered
+        for scale: Float in [1, 7] {
+            options.sceneIlluminantSpectrum = lamp.map { $0 * scale }
+            let layered = try FotufilmEngine(stock: TestStocks.negative, options: options).processChecked(linearRGB: source)
+            for c in 0..<3 {
+                XCTAssertEqual(layered.planes[c][0], legacy.planes[c][0], accuracy: 0.00005)
+            }
+        }
+    }
+
     func testRenderedUniformColoursAreIndependentOfAmount() throws {
         guard TransportBackend.cpu.isAvailable else { throw XCTSkip("Halide unavailable") }
         var stock = TestStocks.negative; stock.adjacencyStrength = 0

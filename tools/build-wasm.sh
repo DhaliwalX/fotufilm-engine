@@ -79,12 +79,14 @@ INDEX="web/public/packs/index.json"
 printf '[' > "$INDEX"
 FIRST=1
 MASKS=(1048576)
-while IFS=$'\t' read -r id name _; do
+while IFS=$'\t' read -r id name format layered; do
   [[ -n "$id" ]] || continue
   ./.build/release/fotufilm --dump-wasm-pack "web/public/packs/$id.pack" \
     --stock "$id" --pack-size "$PACK_SIZE" >/dev/null
-  ./.build/release/fotufilm --dump-wasm-pack "web/public/packs/$id.layered.pack" \
-    --halation-model layered --stock "$id" --pack-size "$PACK_SIZE" >/dev/null
+  if [[ "$layered" == true ]]; then
+    ./.build/release/fotufilm --dump-wasm-pack "web/public/packs/$id.layered.pack" \
+      --halation-model layered --stock "$id" --pack-size "$PACK_SIZE" >/dev/null
+  fi
   # The sidecar the pipeline walk reads: the same export once per stage, stored as what each
   # stage does not share with the finished film. It is fetched only when someone takes the
   # pipeline apart, so it rides alongside the pack rather than inside it.
@@ -114,9 +116,9 @@ PY
   for mask in $masks; do MASKS+=("$mask"); done
   [[ $FIRST -eq 1 ]] || printf ',' >> "$INDEX"
   FIRST=0
-  printf '{"id":"%s","name":"%s"}' "$id" "$name" >> "$INDEX"
+  printf '{"id":"%s","name":"%s","layeredTransport":%s}' "$id" "$name" "$layered" >> "$INDEX"
   echo "  $id  masks $masks"
-done < <(./.build/release/fotufilm --list-stocks)
+done < <(./.build/release/fotufilm --list-stock-capabilities)
 printf ']' >> "$INDEX"
 # One kernel per distinct mask, however many stocks and sizes ask for it.
 MASKS=($(printf '%s\n' "${MASKS[@]}" | sort -un))

@@ -499,6 +499,17 @@ export default function App() {
   useEffect(() => {
     if (!stock || !HAS_WASM) return
     let cancelled = false
+    developerRef.current?.dispose()
+    developerRef.current = null
+    basePackRef.current = null
+    setStages([])
+    setResultUrl(null)
+    setDelta(null)
+    if (halationModel === 'layered' && stocks.find(item => item.id === stock)?.layeredTransport === false) {
+      setError('Layered Transport does not yet support donor-layer stocks. Select Legacy for this stock.')
+      setStatus(null)
+      return
+    }
     setStatus(`loading ${stock}…`)
     loadPack(assetUrl(`packs/${stock}${halationModel === "layered" ? ".layered" : ""}.pack`))
       .then(async (pack) => {
@@ -534,7 +545,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [stock, halationModel])
+  }, [stock, halationModel, stocks])
 
   // Everything a developed frame depends on. When it changes the cache is stale by definition,
   // and the walk starts again from whatever is developed next.
@@ -658,6 +669,7 @@ export default function App() {
           : `print · ${printedStock}`
 
   const selectedStock = stocks.find((item) => item.id === stock)
+  const developer = developerRef.current
   const backendLabel = backend === 'webgpu'
     ? 'WebGPU'
     : backend === 'simd'
@@ -680,7 +692,7 @@ export default function App() {
 
           <label className="stock-field">
             <span>Film stock</span>
-            <select value={stock || ''} onChange={(event) => setStock(event.target.value)}>
+            <select value={stock || ''} disabled={developing} onChange={(event) => setStock(event.target.value)}>
               {stocks.map((item) => (
                 <option key={item.id} value={item.id}>{item.name}</option>
               ))}

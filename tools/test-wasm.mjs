@@ -12,6 +12,7 @@ const { default: create } = await import(new URL('fotufilm.mjs', assets));
 const engine = await create();
 const stocks = JSON.parse(await readFile(new URL('packs/index.json', assets)));
 assert.ok(stocks.length > 0, 'No exported stock packs');
+assert.ok(stocks.some(stock => stock.layeredTransport), 'No layered transport packs exported');
 
 for (const { id } of stocks) {
   const bytes = await readFile(new URL(`packs/${id}.pack`, assets));
@@ -77,10 +78,10 @@ for (const { id } of stocks) {
 
 // Exercise the shipped parser and browser orchestrator, including component convolution and
 // record-exposure continuation. The selected model must change an edge and remain deterministic.
-const { loadPack, SimdDeveloper } = await import('../web/src/engine.js');
+const { loadPack, SimdDeveloper, pixelSource } = await import('../web/src/engine.js');
 const references = process.env.FOTUFILM_WASM_REFERENCE_OUTPUT
   ? JSON.parse(await readFile(process.env.FOTUFILM_WASM_REFERENCE_OUTPUT)) : null;
-for (const { id } of stocks) {
+for (const { id } of stocks.filter(stock => stock.layeredTransport)) {
   const legacyPack = await loadPack(new URL(`packs/${id}.pack`, assets));
   const layeredPack = await loadPack(new URL(`packs/${id}.layered.pack`, assets));
   assert.ok(layeredPack.transport?.components.length > 0, `${id}: no transport components`);
@@ -90,13 +91,14 @@ for (const { id } of stocks) {
     const bright = p % layeredPack.width > layeredPack.width / 2;
     source.set([bright ? 255 : 20, bright ? 255 : 15, bright ? 255 : 10, 255], p * 4);
   }
+  const framedSource = pixelSource({ data: source, width: layeredPack.width, height: layeredPack.height });
   const legacy = new SimdDeveloper(engine, legacyPack);
   const layered = new SimdDeveloper(engine, layeredPack);
   try {
-    const a = await legacy.develop(source, { grain: 0 });
-    const b = await layered.develop(source, { grain: 0 });
+    const a = await legacy.develop(framedSource, { grain: 0 });
+    const b = await layered.develop(framedSource, { grain: 0 });
     assert.notDeepEqual(b.pixels, a.pixels, `${id}: selector did not change the image`);
-    if (references) {
+    if (references?.[id]) {
       const actual = engine.HEAPF32.slice(layered.outputPtr / 4, layered.outputPtr / 4 + count * 3);
       const expected = references[id];
       assert.equal(actual.length, expected.length);
@@ -105,9 +107,9 @@ for (const { id } of stocks) {
       assert.ok(error < 0.0001, `${id}: CPU/WASM maximum error ${error}`);
       console.log(`${id}: CPU/WASM max error ${error}`);
     }
-    assert.deepEqual((await layered.develop(source, { grain: 0 })).pixels, b.pixels,
+    assert.deepEqual((await layered.develop(framedSource, { grain: 0 })).pixels, b.pixels,
       `${id}: layered render was not deterministic`);
-    const exposed = await layered.develop(source, { grain: 0, ev: 1 });
+    const exposed = await layered.develop(framedSource, { grain: 0, ev: 1 });
     assert.notDeepEqual(exposed.pixels, b.pixels, `${id}: layered exposure control did nothing`);
     console.log(`${id}: Legacy/Layered browser selection, determinism and exposure passed`);
   } finally { legacy.dispose(); layered.dispose(); }

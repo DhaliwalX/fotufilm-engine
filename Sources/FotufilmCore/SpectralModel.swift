@@ -1643,17 +1643,12 @@ public enum SpectralRuntime {
             throw TransportError.unsupported("spectral reconstruction data is unavailable")
         }
         let reference = filmReferenceIlluminant(for: stock)
-        let light = options.sceneIlluminantSpectrum.isEmpty
-            ? (sceneLightKelvin(options.sceneIlluminantKelvin).map(Illuminant.atLocus(kelvin:)) ?? reference)
-            : options.sceneIlluminantSpectrum
-        guard light.count == SpectralGrid.count, light.allSatisfy({ $0.isFinite && $0 >= 0 }),
-              light[Illuminant.anchorIndex] > 0 else {
-            throw TransportError.invalid("scene spectrum must be finite, nonnegative and positive at its 560 nm normalization anchor")
-        }
+        let light = options.resolvedSceneSpectrum
         let filter = options.lensFilters.isEmpty ? nil
             : spectralFilter(for: stock, stack: options.lensFilters, illuminant: light)
-        let sourceLight = light.map { $0 / light[Illuminant.anchorIndex] }
-        let referenceLight = reference.map { $0 / reference[Illuminant.anchorIndex] }
+        let sceneY = Illuminant.luminance(light), referenceY = Illuminant.luminance(reference)
+        let sourceLight = light.map { $0 / sceneY }
+        let referenceLight = reference.map { $0 / referenceY }
         let sensitivity = stock.spectralProfile.layerSensitivity
         let denominator = (0..<3).map { c in
             zip(referenceLight, sensitivity[c]).reduce(Float(0)) { $0 + $1.0 * $1.1 }

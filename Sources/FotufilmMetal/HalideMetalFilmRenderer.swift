@@ -1848,10 +1848,12 @@ public final class HalideMetalFilmRenderer {
             var bytes = pixels
             for i in 0..<width*height {
                 var rgb = SIMD3(developed[4*i], developed[4*i+1], developed[4*i+2])
+                if options.stage == .texture { rgb = ColorScience.linearRec2020ToDisplayP3(rgb) }
                 if srgb { rgb = ColorScience.linearDisplayP3ToSRGB(rgb) }
                 let alpha = Float(pixels[i*4+3])/255
                 for c in 0..<3 {
-                    let value = ColorScience.linearToSrgb(ColorScience.displayShoulder(rgb[c])) * alpha
+                    let value = ColorScience.linearToSrgb(ColorScience.displayShoulder(
+                        rgb[c], knee: stock.isReversal ? 0.7 : 0.9)) * alpha
                     bytes[4*i+c] = UInt8(min(max((255*value).rounded(),0),255))
                 }
             }

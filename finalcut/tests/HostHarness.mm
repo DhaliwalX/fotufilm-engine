@@ -769,6 +769,8 @@ int main(int argc, const char *argv[]) {
                 {kFotufilmParam_Vibrance, FOTUFILM_BRIDGE_VIBRANCE, @0.5, 0.5f, "vibrance"},
                 {kFotufilmParam_Grain, FOTUFILM_BRIDGE_GRAIN_SCALE, @0.25, 0.25f, "grain"},
                 {kFotufilmParam_Halation, FOTUFILM_BRIDGE_HALATION_SCALE, @4.0, 4.0f, "halation"},
+                {kFotufilmParam_HalationModel, FOTUFILM_BRIDGE_HALATION_MODEL, @1, 1.0f,
+                 "halation model"},
                 {kFotufilmParam_HalationColour, FOTUFILM_BRIDGE_HALATION_COLOUR, @0.7, 0.7f,
                  "halo colour"},
                 {kFotufilmParam_Flare, FOTUFILM_BRIDGE_FLARE_SCALE, @1.25, 1.25f, "lens flare"},

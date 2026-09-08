@@ -185,7 +185,7 @@ var flags: [String: String] = [:]
 var args = Array(CommandLine.arguments.dropFirst())
 while !args.isEmpty {
     let a = args.removeFirst()
-    if a == "--list-stocks" || a == "--list-formats" || a == "--dump-curves"
+    if a == "--list-stocks" || a == "--list-stock-capabilities" || a == "--list-formats" || a == "--dump-curves"
         || a == "--dump-spectra" || a == "--help" || a == "-h"
         || a == "--autoexpose" || a == "--check-stocks" || a == "--make-pack-key"
         || a == "--stages" || a == "--estimated-halation" || a == "--hlg" {
@@ -203,9 +203,11 @@ if flags["--help"] != nil || flags["-h"] != nil {
     exit(0)
 }
 
-if flags["--list-stocks"] != nil {
+if flags["--list-stocks"] != nil || flags["--list-stock-capabilities"] != nil {
     for (key, stock) in FilmStock.presets.sorted(by: { $0.key < $1.key }) {
-        print("\(key)\t\(stock.name)\t\(FilmFormat.nativeID(forStockID: key))")
+        let capability = flags["--list-stock-capabilities"] != nil
+            ? "\t\(stock.donorLayers.isEmpty ? "true" : "false")" : ""
+        print("\(key)\t\(stock.name)\t\(FilmFormat.nativeID(forStockID: key))\(capability)")
     }
     exit(0)
 }

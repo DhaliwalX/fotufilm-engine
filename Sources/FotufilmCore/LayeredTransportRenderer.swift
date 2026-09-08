@@ -35,7 +35,7 @@ public enum LayeredTransportRenderer {
         for byte in try encoder.encode(model) { key = (key ^ UInt64(byte)) &* 0x100000001b3 }
         key ^= SpectralRuntime.cacheIdentifier(for: stock)
         key ^= options.lensFilters.signature
-        for values in [options.sceneIlluminantSpectrum, options.halationReturnGain,
+        for values in [options.resolvedSceneSpectrum, options.halationReturnGain,
                        [options.sceneIlluminantKelvin ?? 0, options.halationSourceColour, options.halationHazeMM ?? 0]] {
             key = (key ^ UInt64(values.count)) &* 0x100000001b3
             for value in values { key = (key ^ UInt64(value.bitPattern)) &* 0x100000001b3 }
@@ -54,7 +54,10 @@ public enum LayeredTransportRenderer {
     /// Solved inputs for portable AOT hosts. The browser stores these alongside its base pack.
     public static func renderPlan(stock: FilmStock, options: FotufilmEngine.Options,
                                   width: Int, height: Int) throws -> TransportRenderPlan {
-        guard let model = options.transportConstruction(for: stock), stock.donorLayers.isEmpty,
+        guard stock.donorLayers.isEmpty else {
+            throw TransportError.unsupported("Layered Transport does not yet support donor-layer stocks; select Legacy for this stock")
+        }
+        guard let model = options.transportConstruction(for: stock),
               options.stage == .full, !options.localTone else {
             throw TransportError.unsupported("transport pack requires full stage without image-dependent local tone")
         }
@@ -85,7 +88,9 @@ public enum LayeredTransportRenderer {
         guard execution != nil || (HalideBackend.isAvailable && options.transportBackend.isAvailable) else {
             throw TransportError.backend("requested transport backend is unavailable")
         }
-        guard stock.donorLayers.isEmpty else { throw TransportError.unsupported("donor capture layers") }
+        guard stock.donorLayers.isEmpty else {
+            throw TransportError.unsupported("Layered Transport does not yet support donor-layer stocks; select Legacy for this stock")
+        }
         guard image.width > 0 && image.height > 0, image.planes.count == 3,
               image.planes.allSatisfy({ $0.count == image.pixelCount && $0.allSatisfy(\.isFinite) }),
               options.halationScale.isFinite && options.halationScale >= 0,
@@ -155,6 +160,7 @@ public enum LayeredTransportRenderer {
             var reference = continuation
             reference.featureMask &= ~(FilmEngineFeature.grain | FilmEngineFeature.adjacency
                 | FilmEngineFeature.couplerDiffusion | FilmEngineFeature.printMTF)
+            reference.configuration[Int(FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT)] = 0
             reference.configuration[Int(FOTUFILM_CONFIG_PRINT_MTF_RADIUS)] = 0
             reference.configuration[Int(FOTUFILM_CONFIG_GRAIN_RADIUS)] = 0
             reference.configuration[Int(FOTUFILM_CONFIG_ADJACENCY_STRENGTH)] = 0

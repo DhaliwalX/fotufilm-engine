@@ -252,7 +252,7 @@ final class SettingsSheetController: SessionViewController {
             options: HalationModel.allCases.map { (title: $0.name, value: $0) },
             get: { AppSettings.shared.halationModel },
             set: { AppSettings.shared.halationModel = $0 }))
-        section.add(NoteRow("Layered Transport traces light through the film stack. Films without a measured construction use an illustrative model. Estimated Halation Shape applies to Legacy."))
+        section.add(NoteRow("Layered Transport traces light through the film stack. Films without a measured construction use an illustrative model. Donor-layer films require Legacy. Estimated Halation Shape applies to Legacy."))
         section.add(ToggleRow(
             "Estimated Halation Shape",
             get: { AppSettings.shared.estimatedHalationEnabled },
