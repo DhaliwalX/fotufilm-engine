@@ -487,8 +487,7 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     }
     const size_t configuration_bytes =
         FOTUFILM_FRAME_CONFIGURATION_COUNT * sizeof(float);
-    if (!wants_extended &&
-        std::memcmp(state.configuration.data(), configuration, configuration_bytes) != 0) {
+    if (!wants_extended) {
         std::memcpy(state.configuration.data(), configuration, configuration_bytes);
         state.configuration.set_host_dirty();
     }
@@ -1060,12 +1059,9 @@ int32_t run_measure(
     const float *configuration) {
     const size_t configuration_bytes =
         FOTUFILM_FRAME_CONFIGURATION_COUNT * sizeof(float);
-    if (std::memcmp(state.measure_configuration.data(), configuration,
-                    configuration_bytes) != 0) {
-        std::memcpy(state.measure_configuration.data(), configuration,
-                    configuration_bytes);
-        state.measure_configuration.set_host_dirty();
-    }
+    std::memcpy(state.measure_configuration.data(), configuration,
+                configuration_bytes);
+    state.measure_configuration.set_host_dirty();
     Buffer<float> input_buffer = Buffer<float>::make_interleaved(
         wrap ? static_cast<float *>(nullptr) : const_cast<float *>(rows_in),
         width, rows, 4);
