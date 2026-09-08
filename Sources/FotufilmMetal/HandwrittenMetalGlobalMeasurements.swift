@@ -160,6 +160,7 @@ public final class HandwrittenMetalGlobalMeasurements {
         }
     }
 
+    static let decodeSamples = Int(UInt8.max) + 1
     static let reductionThreads = 256
     static let flareItemsPerThread = 8
 
@@ -217,6 +218,7 @@ public final class HandwrittenMetalGlobalMeasurements {
             let library = try HandwrittenMetalShaderLibrary.makeLibrary(
                 device: device, shader: .globalMeasurements, options: options,
                 preprocessorMacros: [
+                    "FOTUFILM_MEASUREMENT_DECODE_SAMPLES": NSNumber(value: Self.decodeSamples),
                     "FOTUFILM_MEASUREMENT_REDUCTION_THREADS": NSNumber(
                         value: Self.reductionThreads),
                     "FOTUFILM_MEASUREMENT_FLARE_ITEMS": NSNumber(
@@ -601,9 +603,9 @@ public final class HandwrittenMetalGlobalMeasurements {
     }
 
     private static func makeDecodeTexture(device: MTLDevice) -> MTLTexture? {
-        var values = [Float16](repeating: 0, count: 256)
+        var values = [Float16](repeating: 0, count: Self.decodeSamples)
         for index in values.indices {
-            let value = ColorScience.srgbToLinear(Float(index) / 255)
+            let value = ColorScience.srgbToLinear(Float(index) / Float(Self.decodeSamples - 1))
             let half = Float16(value)
             guard value.isFinite, half.isFinite else { return nil }
             values[index] = half

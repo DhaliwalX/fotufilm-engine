@@ -1,10 +1,11 @@
 import Foundation
+import FotufilmHalide
 
 /// A runtime density record with C1 Hermite interpolation through every sample.
 /// Local extrema are retained; interpolation does not overshoot adjacent samples.
 /// The endpoint tangents are zero, joining constant extrapolation continuously.
 public struct SampledCharacteristicCurve: Codable, Sendable {
-    public static let maximumSamples = 1024
+    public static let maximumSamples = Int(FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES)
     public let logExposure: [Float]
     public let density: [Float]
     public let slopes: [Float]

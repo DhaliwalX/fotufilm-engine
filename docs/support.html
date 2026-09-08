@@ -22,6 +22,7 @@
 <p>To add supplied packs while retaining the source app’s bundle identifier, keychain service, and imported-pack library, set <code>FOTUFILM_USE_SOURCE_IDENTITY=1</code>. This changes identity selection only; the configured sealed packs still determine the bundled catalogue.</p>
 <p>Run <code>python3 tools/check-source-boundary.py</code> before adding files. Record the source and hash of new images, data, and third-party headers in <code>SOURCE_ASSETS.json</code>.</p>
 <p>Flat Swift builds must add <code>-ISources/FotufilmHalide/include</code> to import the C bridge declarations. The supplied Mac and plugin scripts already do this; Swift Package Manager discovers the module automatically.</p>
+<p>Swift Package Manager includes the Metal shader sources and their shared includes in the <code>FotufilmMetal</code> resource bundle. Keep SwiftPM’s resource bundles with the executable when deploying a command-line consumer; shader loading does not require the checkout or a working-directory setting. Run <code>tools/check-metal-package.sh</code> on a Mac with Metal to verify a relocated package consumer. The supplied release-app build continues to load its bundled <code>HandwrittenFotufilm.metallib</code>.</p>
 <p><a href="documentation.html">User guide</a> · <a href="../LICENSING.md">Licences</a></p>
 <h2>Pack versions</h2>
 <p>Pack releases can include <code>version</code> and <code>minimumMacAppVersion</code>, using one to three numbers separated by dots. Packs without these fields still work.</p>

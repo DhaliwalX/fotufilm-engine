@@ -28,7 +28,7 @@ public final class HandwrittenMetalFilmRenderer {
     public static let shared = HandwrittenMetalFilmRenderer()
 
     private static let printCubeEdge = 65
-    private static let curveSamples = 2_048
+    static let curveSamples = 2_048
     static let transferSamples = 1_024
     static let decodeSamples = 256
 
@@ -94,6 +94,7 @@ public final class HandwrittenMetalFilmRenderer {
             let library = try HandwrittenMetalShaderLibrary.makeLibrary(
                 device: device, shader: .pointwise, options: compileOptions,
                 preprocessorMacros: [
+                    "FOTUFILM_POINTWISE_CURVE_SAMPLES": NSNumber(value: Self.curveSamples),
                     "FOTUFILM_POINTWISE_TRANSFER_SAMPLES": NSNumber(
                         value: Self.transferSamples),
                     "FOTUFILM_POINTWISE_DECODE_SAMPLES": NSNumber(
