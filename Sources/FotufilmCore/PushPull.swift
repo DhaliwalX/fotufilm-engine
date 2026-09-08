@@ -83,10 +83,12 @@ public struct FilmDevelopmentProfile: Sendable {
     }
 }
 
-public enum FilmDevelopmentError: Error, Equatable, CustomStringConvertible {
+public enum FilmDevelopmentError: Error, Equatable, CustomStringConvertible, LocalizedError {
     case unavailable(stock: String, requestedStops: Float)
     case unmeasuredCondition(stock: String, requestedStops: Float, availableStops: [Float])
     case invalidProfile(stock: String, condition: String, reason: String)
+
+    public var errorDescription: String? { "invalid development request: \(description)" }
 
     public var description: String {
         switch self {

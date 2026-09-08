@@ -641,6 +641,53 @@ final class HandwrittenMetalFullFrameRendererTests: XCTestCase {
         XCTAssertTrue(readRGBA16(output).map(Float.init).allSatisfy(\.isFinite))
     }
 
+    func testRemoveAllRebuildsFullCapacityWhileOldFramesAreQueued() throws {
+        let harness = try Harness(maximumInFlightFrames: 2)
+        let width = 16, height = 12
+        let input = try representativeX420(device: harness.device, width: width, height: height)
+        var options = spatialOptions(grain: false)
+        try autoreleasepool {
+            var commands: [MTLCommandBuffer] = []
+            var outputs: [MTLTexture] = []
+            for generation in 0..<2 {
+                if generation == 1 {
+                    harness.renderer.removeAll()
+                    options.exposureEV = 1
+                }
+                try harness.renderer.prepareChecked(
+                    key: #function, stock: TestStocks.negative, options: options,
+                    frameWidth: width, frameHeight: height)
+                for _ in 0..<2 {
+                    let output = try rgba16Texture(device: harness.device, width: width, height: height)
+                    let command = try XCTUnwrap(harness.queue.makeCommandBuffer())
+                    XCTAssertTrue(harness.renderer.encodeCapturedHDR(
+                        luma: input.luma, chroma: input.chroma, output: output,
+                        width: width, height: height, key: #function,
+                        transfer: .hlg, sceneScale: HLGSceneTransfer.headroom,
+                        commandBuffer: command), "generation \(generation) needs a full ring")
+                    commands.append(command)
+                    outputs.append(output)
+                }
+            }
+            let excess = try XCTUnwrap(harness.queue.makeCommandBuffer())
+            XCTAssertFalse(harness.renderer.encodeCapturedHDR(
+                luma: input.luma, chroma: input.chroma, output: outputs[3],
+                width: width, height: height, key: #function,
+                transfer: .hlg, sceneScale: HLGSceneTransfer.headroom,
+                commandBuffer: excess))
+            for command in commands { command.commit() }
+            for command in commands {
+                command.waitUntilCompleted()
+                XCTAssertEqual(command.status, .completed, "\(String(describing: command.error))")
+            }
+            XCTAssertEqual(readRGBA16(outputs[0]), readRGBA16(outputs[1]))
+            XCTAssertEqual(readRGBA16(outputs[2]), readRGBA16(outputs[3]))
+            XCTAssertNotEqual(readRGBA16(outputs[0]), readRGBA16(outputs[2]))
+        }
+        harness.renderer.removeAll()
+        XCTAssertEqual(harness.renderer.retainedComponentEntryCount, 0)
+    }
+
     private struct Harness {
         let device: MTLDevice
         let queue: MTLCommandQueue

@@ -48,6 +48,63 @@ final class FilmEnginePreparationTests: XCTestCase {
             }
     }
 
+    func testCheckedSpansReturnDevelopmentErrors() {
+        let stock = TestStocks.negative
+        var options = FotufilmEngine.Options()
+        options.developmentEV = 1
+        let engine = FotufilmEngine(stock: stock, options: options)
+        let input = ImageBuffer(width: 4, height: 4, fill: 0.18)
+        for render in [engine.developNegativeChecked(linearRGB:),
+                       engine.printPositiveChecked(negativeDensity:)] {
+            XCTAssertThrowsError(try render(input)) { error in
+                XCTAssertEqual(error as? FilmDevelopmentError,
+                               .unavailable(stock: stock.name, requestedStops: 1))
+                XCTAssertTrue(error.localizedDescription.contains("invalid development request:"))
+                XCTAssertFalse(error.localizedDescription.contains("Install Halide"))
+            }
+        }
+    }
+
+    #if os(macOS)
+    func testUncheckedEntryPointsReportDevelopmentFailures() throws {
+        let probeKey = "FOTUFILM_DEVELOPMENT_FAILURE_PROBE"
+        if let entryPoint = ProcessInfo.processInfo.environment[probeKey] {
+            var options = FotufilmEngine.Options()
+            options.developmentEV = 1
+            let engine = FotufilmEngine(stock: TestStocks.negative, options: options)
+            let image = ImageBuffer(width: 4, height: 4, fill: 0.18)
+            switch entryPoint {
+            case "process": _ = engine.process(linearRGB: image)
+            case "develop": _ = engine.developNegative(linearRGB: image)
+            case "print": _ = engine.printPositive(negativeDensity: image)
+            default: XCTFail("unknown failure probe")
+            }
+            return XCTFail("unchecked entry point unexpectedly returned")
+        }
+        for entryPoint in ["process", "develop", "print"] {
+            let child = Process()
+            child.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
+            child.arguments = ["-XCTest",
+                "FotufilmCoreTests.FilmEnginePreparationTests/testUncheckedEntryPointsReportDevelopmentFailures",
+                Bundle(for: Self.self).bundlePath]
+            var environment = ProcessInfo.processInfo.environment
+            environment[probeKey] = entryPoint
+            environment["SWIFT_BACKTRACE"] = "enable=no"
+            child.environment = environment
+            let pipe = Pipe()
+            child.standardOutput = pipe
+            child.standardError = pipe
+            try child.run()
+            let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            child.waitUntilExit()
+            XCTAssertNotEqual(child.terminationStatus, 0, entryPoint)
+            XCTAssertTrue(output.contains("invalid development request:"), output)
+            XCTAssertTrue(output.contains("no measured push/pull response"), output)
+            XCTAssertFalse(output.contains("Install Halide"), output)
+        }
+    }
+    #endif
+
     func testInvalidDevelopmentErrorsCanDescribeNonFiniteAndLargeValues() {
         for stops: Float in [.infinity, -.infinity, .nan, .greatestFiniteMagnitude] {
             var options = FotufilmEngine.Options()

@@ -1414,14 +1414,14 @@ public final class HalideMetalFilmRenderer {
     }
 
     /// Smallest peak an end-to-end export of this frame can be made to run in.
-    /// Returns `Int.max` when the requested development condition is unsupported.
+    /// Returns `nil` when the requested development condition is unsupported.
     public static func minimumPeakBytes(width: Int, height: Int,
                                         stock: FilmStock,
                                         options: FotufilmEngine.Options,
-                                        exactMath: Bool = false) -> Int {
+                                        exactMath: Bool = false) -> Int? {
         guard let invocation = try? FilmEngineInvocation(
             validating: stock, options: options, width: width, height: height)
-        else { return Int.max }
+        else { return nil }
         let apron = invocation.spatialSupport
         let pixels = width * height
         let frames = MappedBuffer.residentBytes(pixels * 16)
@@ -1450,9 +1450,10 @@ public final class HalideMetalFilmRenderer {
                                  exactMath: Bool = false) -> Bool {
         let ceiling = budget ?? min(availableBytes() * 3 / 5,
                                     defaultMemoryBudget())
-        let minimum = minimumPeakBytes(width: width, height: height, stock: stock,
-                                       options: options, exactMath: exactMath)
-        return minimum != Int.max && minimum <= ceiling
+        guard let minimum = minimumPeakBytes(width: width, height: height, stock: stock,
+                                            options: options, exactMath: exactMath)
+        else { return false }
+        return minimum <= ceiling
     }
 
     /// What the schedule's own intermediates may use.

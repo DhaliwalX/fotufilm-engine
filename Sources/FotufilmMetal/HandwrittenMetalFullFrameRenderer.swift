@@ -570,12 +570,13 @@ public final class HandwrittenMetalFullFrameRenderer {
         return true
     }
 
-    /// Drops prepared edits and idle pooled resources. Already-encoded command buffers retain all
-    /// resources they use and complete safely after this call.
+    /// Drops prepared edits and starts a fresh frame pool. Already-encoded command buffers retain
+    /// their resources without occupying the next edit's ring slots.
     public func removeAll() {
         lock.lock()
         prepared.removeAll(keepingCapacity: false)
-        intermediates.removeAll { !$0.leased }
+        intermediates.removeAll(keepingCapacity: false)
+        spatial.resetScratchPool()
         lock.unlock()
     }
 

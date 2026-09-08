@@ -1224,6 +1224,14 @@ public final class HandwrittenMetalSpatialExecutor {
         lock.unlock()
     }
 
+    /// Encoded command buffers retain leased scratch until completion; a new edit can allocate
+    /// its own full set of slots without waiting for the discarded pool.
+    func resetScratchPool() {
+        lock.lock()
+        scratch.removeAll(keepingCapacity: false)
+        lock.unlock()
+    }
+
     public func removeAll() {
         lock.lock()
         prepared.removeAll(keepingCapacity: false)
