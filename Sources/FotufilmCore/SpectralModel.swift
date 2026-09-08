@@ -589,20 +589,11 @@ public enum SpectralRuntime {
         } else if !stock.isMonochrome {
             let receiver = printReceiver(stock: stock, paper: paper,
                                          viewingLight: viewingLight)
-            let partitioned = buildLUT { activation in
-                transmissionRGB(
-                    density: [activation.x * paperRanges[0],
-                              activation.y * paperRanges[1],
-                              activation.z * paperRanges[2]],
-                    dyes: paper.dyes, flare: paper.viewingFlare,
-                    illuminant: viewingLight)
-            }
-            let unmixed = buildLUT { activation in
+            paperOutput = buildLUT { activation in
                 receiver.rgb(density: SIMD3(activation.x * paperRanges[0],
                                             activation.y * paperRanges[1],
                                             activation.z * paperRanges[2]))
             }
-            paperOutput = smoothCorrection(unmixed, against: partitioned)
         } else {
             paperOutput = buildLUT { activation in
                 let density = [activation.x * paperRanges[0],
