@@ -587,8 +587,8 @@ public enum SpectralRuntime {
             }
             paperOutput = smoothCorrection(calibrated, against: baseline)
         } else if !stock.isMonochrome {
-            let unmix = PrintDyeUnmix(dyes: paper.analyticalDyes)
-            let anchor = paper.anchorDensity(stock.paperMidDensity)
+            let receiver = printReceiver(stock: stock, paper: paper,
+                                         viewingLight: viewingLight)
             let partitioned = buildLUT { activation in
                 transmissionRGB(
                     density: [activation.x * paperRanges[0],
@@ -597,23 +597,10 @@ public enum SpectralRuntime {
                     dyes: paper.dyes, flare: paper.viewingFlare,
                     illuminant: viewingLight)
             }
-            let trim = printNeutralTrim(
-                unmix: unmix, anchor: anchor,
-                target: transmissionRGB(
-                    density: [anchor, anchor, anchor], dyes: paper.dyes,
-                    flare: paper.viewingFlare, illuminant: viewingLight),
-                flare: paper.viewingFlare, illuminant: viewingLight)
             let unmixed = buildLUT { activation in
-                let density = SIMD3(activation.x * paperRanges[0],
-                                    activation.y * paperRanges[1],
-                                    activation.z * paperRanges[2])
-                let level = (density.x + density.y + density.z) / 3
-                let applied = trim * min(max(level / max(anchor, 1e-6), 0), 1)
-                let amounts = unmix.amounts(forStatusA: density + applied)
-                return transmissionRGB(
-                    density: [amounts.x, amounts.y, amounts.z],
-                    dyes: paper.analyticalDyes,
-                    flare: paper.viewingFlare, illuminant: viewingLight)
+                receiver.rgb(density: SIMD3(activation.x * paperRanges[0],
+                                            activation.y * paperRanges[1],
+                                            activation.z * paperRanges[2]))
             }
             paperOutput = smoothCorrection(unmixed, against: partitioned)
         } else {
@@ -1910,6 +1897,55 @@ public enum SpectralRuntime {
         return SIMD3(red, 0, blue)
     }
 
+    /// The density-to-display step a finished positive is read through, so the render and the
+    /// analytic mirror cannot state different prints.
+    struct PrintReceiver: Sendable {
+        let dyes: [[Float]]
+        let flare: Float
+        let viewingLight: [Float]?
+        let unmix: PrintDyeUnmix?
+        let trim: SIMD3<Float>
+        let anchor: Float
+
+        func rgb(density: SIMD3<Float>) -> SIMD3<Float> {
+            guard let unmix else {
+                return SpectralRuntime.transmissionRGB(
+                    density: [density.x, density.y, density.z], dyes: dyes,
+                    flare: flare, illuminant: viewingLight)
+            }
+            let level = (density.x + density.y + density.z) / 3
+            let applied = trim * min(max(level / max(anchor, 1e-6), 0), 1)
+            let amounts = unmix.amounts(forStatusA: density + applied)
+            return SpectralRuntime.transmissionRGB(
+                density: [amounts.x, amounts.y, amounts.z], dyes: dyes,
+                flare: flare, illuminant: viewingLight)
+        }
+    }
+
+    static func printReceiver(stock: FilmStock, paper: PrintPaper,
+                              viewingLight: [Float]?) -> PrintReceiver {
+        // A scan has no viewing dyes, the digital reference is not a sheet, and a monochrome
+        // print is forced neutral, so none of them unmix.
+        let unmixes = !stock.isMonochrome && !paper.isScan
+            && paper != .screen && !paper.isNegative
+        guard unmixes else {
+            return PrintReceiver(dyes: paper.dyes, flare: paper.viewingFlare,
+                                 viewingLight: viewingLight, unmix: nil,
+                                 trim: .zero, anchor: 1)
+        }
+        let unmix = PrintDyeUnmix(dyes: paper.analyticalDyes)
+        let anchor = paper.anchorDensity(stock.paperMidDensity)
+        let trim = printNeutralTrim(
+            unmix: unmix, anchor: anchor,
+            target: transmissionRGB(density: [anchor, anchor, anchor],
+                                    dyes: paper.dyes, flare: paper.viewingFlare,
+                                    illuminant: viewingLight),
+            flare: paper.viewingFlare, illuminant: viewingLight)
+        return PrintReceiver(dyes: paper.analyticalDyes, flare: paper.viewingFlare,
+                             viewingLight: viewingLight, unmix: unmix,
+                             trim: trim, anchor: anchor)
+    }
+
     /// The three printer lights that put the timed anchor back where the partitioned basis had
     /// it: same level, same neutral. Hunt 14.16 — equal integral densities are "nearly grey" but
     /// not grey — so timing follows the print, not the densitometer.
@@ -2153,6 +2189,8 @@ extension SpectralRuntime {
         let masking = stock.printingContrastScale(correction: printCorrection,
                                                   paper: paper)
         let viewingLight = referenceViewingLight(for: paper)
+        let receiver = printReceiver(stock: stock, paper: paper,
+                                     viewingLight: viewingLight)
         return stops.map { s in
             let density = (0..<3).map {
                 stock.developedDensity(layer: $0, logExposure: s * perStop)
@@ -2190,9 +2228,8 @@ extension SpectralRuntime {
                 rgb = SIMD3(pow(10, -printed[0]), pow(10, -printed[1]),
                             pow(10, -printed[2]))
             } else {
-                rgb = transmissionRGB(density: printed, dyes: paper.dyes,
-                                      flare: paper.viewingFlare,
-                                      illuminant: viewingLight)
+                rgb = receiver.rgb(
+                    density: SIMD3(printed[0], printed[1], printed[2]))
             }
             return luminance(SIMD3(max(rgb.x, 0), max(rgb.y, 0), max(rgb.z, 0)))
         }
