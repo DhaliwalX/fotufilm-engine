@@ -168,9 +168,10 @@ public final class HalideMetalFilmRenderer {
         let byteCount = width * height * 4
         precondition(width > 0 && height > 0)
         precondition(input.length >= byteCount)
-        var invocation = FilmEngineInvocation(
-            stock: stock, options: options, width: width,
+        guard var invocation = try? FilmEngineInvocation(
+            validating: stock, options: options, width: width,
             height: height, frameIndex: frameIndex)
+        else { return nil }
         if invocation.localToneActive
             || invocation.featureMask & FilmEngineFeature.flare != 0 {
             guard input.storageMode == .shared else { return nil }
@@ -213,9 +214,10 @@ public final class HalideMetalFilmRenderer {
         let byteCount = width * height * 16
         precondition(width > 0 && height > 0)
         precondition(input.length >= byteCount)
-        var invocation = FilmEngineInvocation(
-            stock: stock, options: options, width: width,
+        guard var invocation = try? FilmEngineInvocation(
+            validating: stock, options: options, width: width,
             height: height, frameIndex: frameIndex)
+        else { return nil }
         if realtime { invocation.featureMask |= FilmEngineFeature.realtime }
         if invocation.localToneActive
             || invocation.featureMask & FilmEngineFeature.flare != 0 {
@@ -296,10 +298,11 @@ public final class HalideMetalFilmRenderer {
         precondition(densityWidth > 0 && densityHeight > 0)
         precondition(frameWidth >= densityWidth && frameHeight >= densityHeight)
         guard measured.encoding == .linearRec2020 else { return nil }
-        var invocation = FilmEngineInvocation(
-            stock: stock, options: options,
+        guard var invocation = try? FilmEngineInvocation(
+            validating: stock, options: options,
             width: densityWidth, height: densityHeight,
             frameIndex: frameIndex)
+        else { return nil }
         if realtime { invocation.featureMask |= FilmEngineFeature.realtime }
 
         if invocation.localToneActive {
@@ -351,8 +354,9 @@ public final class HalideMetalFilmRenderer {
     public func prepare(stock: FilmStock, options: FotufilmEngine.Options,
                         frameWidth: Int, frameHeight: Int) -> Bool {
         guard frameWidth > 0, frameHeight > 0 else { return false }
-        let invocation = FilmEngineInvocation(
-            stock: stock, options: options, width: frameWidth, height: frameHeight)
+        guard let invocation = try? FilmEngineInvocation(
+            validating: stock, options: options, width: frameWidth, height: frameHeight)
+        else { return false }
         return invocation.withSpectralPointers { exposure, film, paper in
             fotufilm_halide_metal_prepare(
                 invocation.featureMask, exposure, film, paper,
@@ -400,9 +404,10 @@ public final class HalideMetalFilmRenderer {
             output = result
             return true
         }
-        var invocation = FilmEngineInvocation(
-            stock: stock, options: options, width: width,
+        guard var invocation = try? FilmEngineInvocation(
+            validating: stock, options: options, width: width,
             height: height, frameIndex: frameIndex)
+        else { return false }
         pixels.withUnsafeBufferPointer { input in
             if invocation.localToneActive {
                 invocation.measureToneBase(srgbRGBA: input.baseAddress!,
@@ -563,9 +568,10 @@ public final class HalideMetalFilmRenderer {
         // when cancelled.
         let cancelled = { shouldContinue.map { !$0() } ?? false }
         let invocationStart = Date()
-        var invocation = FilmEngineInvocation(
-            stock: stock, options: options, width: width,
+        guard var invocation = try? FilmEngineInvocation(
+            validating: stock, options: options, width: width,
             height: height, frameIndex: frameIndex, noFilm: noFilm)
+        else { return false }
         if getenv("FOTUFILM_STILL_TIMINGS") != nil {
             print(String(format: "  %-10@ %8.1f ms", "invoke" as NSString,
                          Date().timeIntervalSince(invocationStart) * 1000))
@@ -985,9 +991,10 @@ public final class HalideMetalFilmRenderer {
             } catch { print(error.localizedDescription); return false }
         }
         let cancelled = { shouldContinue.map { !$0() } ?? false }
-        var invocation = FilmEngineInvocation(
-            stock: stock, options: options, width: width,
+        guard var invocation = try? FilmEngineInvocation(
+            validating: stock, options: options, width: width,
             height: height, frameIndex: frameIndex, noFilm: noFilm)
+        else { return false }
         invocation.featureMask |= FilmEngineFeature.floatIO
         if realtime { invocation.featureMask |= FilmEngineFeature.realtime }
         if exactMath { invocation.featureMask |= FilmEngineFeature.exactMath }
@@ -1148,9 +1155,11 @@ public final class HalideMetalFilmRenderer {
         measuresGlareOnDevice: Bool = false, noFilm: Bool = false
     ) -> Bool {
         if !noFilm && options.transportConstruction(for: stock) != nil { return false }
-        var mask = FilmEngineInvocation(
-            stock: stock, options: options, width: width, height: height,
-            frameIndex: frameIndex, noFilm: noFilm).featureMask
+        guard let invocation = try? FilmEngineInvocation(
+            validating: stock, options: options, width: width, height: height,
+            frameIndex: frameIndex, noFilm: noFilm)
+        else { return false }
+        var mask = invocation.featureMask
         mask |= FilmEngineFeature.floatIO
         if realtime { mask |= FilmEngineFeature.realtime }
         if exactMath { mask |= FilmEngineFeature.exactMath }
@@ -1405,12 +1414,14 @@ public final class HalideMetalFilmRenderer {
     }
 
     /// Smallest peak an end-to-end export of this frame can be made to run in.
+    /// Returns `Int.max` when the requested development condition is unsupported.
     public static func minimumPeakBytes(width: Int, height: Int,
                                         stock: FilmStock,
                                         options: FotufilmEngine.Options,
                                         exactMath: Bool = false) -> Int {
-        let invocation = FilmEngineInvocation(
-            stock: stock, options: options, width: width, height: height)
+        guard let invocation = try? FilmEngineInvocation(
+            validating: stock, options: options, width: width, height: height)
+        else { return Int.max }
         let apron = invocation.spatialSupport
         let pixels = width * height
         let frames = MappedBuffer.residentBytes(pixels * 16)
@@ -1439,9 +1450,9 @@ public final class HalideMetalFilmRenderer {
                                  exactMath: Bool = false) -> Bool {
         let ceiling = budget ?? min(availableBytes() * 3 / 5,
                                     defaultMemoryBudget())
-        return minimumPeakBytes(width: width, height: height, stock: stock,
-                                options: options,
-                                exactMath: exactMath) <= ceiling
+        let minimum = minimumPeakBytes(width: width, height: height, stock: stock,
+                                       options: options, exactMath: exactMath)
+        return minimum != Int.max && minimum <= ceiling
     }
 
     /// What the schedule's own intermediates may use.
@@ -1573,9 +1584,10 @@ public final class HalideMetalFilmRenderer {
         precondition(originX + regionWidth <= frameWidth)
         precondition(originY + regionHeight <= frameHeight)
         precondition(input.length >= byteCount && output.length >= byteCount)
-        let invocation = FilmEngineInvocation(
-            stock: stock, options: options, width: frameWidth,
+        guard let invocation = try? FilmEngineInvocation(
+            validating: stock, options: options, width: frameWidth,
             height: frameHeight, frameIndex: frameIndex)
+        else { return false }
         guard !invocation.localToneActive,
               invocation.featureMask & FilmEngineFeature.flare == 0 else { return false }
         let inputHandle = UInt64(UInt(bitPattern:
@@ -1679,9 +1691,10 @@ public final class HalideMetalFilmRenderer {
         precondition(width > 0 && height > 0)
         precondition(density.length >= inWidth * inHeight * 8)
         precondition(output.length >= width * height * 4)
-        let invocation = FilmEngineInvocation(
-            stock: stock, options: options, width: width,
+        guard let invocation = try? FilmEngineInvocation(
+            validating: stock, options: options, width: width,
             height: height, frameIndex: frameIndex)
+        else { return false }
         let densityHandle = UInt64(UInt(bitPattern:
             Unmanaged.passUnretained(density as AnyObject).toOpaque()))
         let outputHandle = UInt64(UInt(bitPattern:
@@ -1758,9 +1771,10 @@ public final class HalideMetalFilmRenderer {
         let byteCount = regionWidth * regionHeight * 16
         precondition(regionWidth > 0 && regionHeight > 0)
         precondition(input.length >= byteCount && output.length >= byteCount)
-        var invocation = FilmEngineInvocation(
-            stock: stock, options: options, width: frameWidth,
+        guard var invocation = try? FilmEngineInvocation(
+            validating: stock, options: options, width: frameWidth,
             height: frameHeight, frameIndex: frameIndex)
+        else { return false }
         if realtime { invocation.featureMask |= FilmEngineFeature.realtime }
         guard !invocation.localToneActive,
               invocation.featureMask & FilmEngineFeature.flare == 0 else { return false }

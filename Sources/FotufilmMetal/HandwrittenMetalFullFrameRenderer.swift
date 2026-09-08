@@ -197,8 +197,8 @@ public final class HandwrittenMetalFullFrameRenderer {
 
         var hdrOptions = options
         hdrOptions.paper = .screen
-        let invocation = FilmEngineInvocation(
-            stock: stock, options: hdrOptions,
+        let invocation = try FilmEngineInvocation(
+            validating: stock, options: hdrOptions,
             width: frameWidth, height: frameHeight)
         let layered = try options.transportConstruction(for: stock).map { _ in
             try LayeredTextureTransport(device: device, stock: stock, options: hdrOptions,
@@ -237,7 +237,8 @@ public final class HandwrittenMetalFullFrameRenderer {
         do {
             try spatial.prepareChecked(
                 key: components.internalKey, stock: stock, options: hdrOptions.withoutLayeredTransport,
-                frameWidth: frameWidth, frameHeight: frameHeight, invocation: layered?.tail)
+                frameWidth: frameWidth, frameHeight: frameHeight,
+                invocation: layered?.tail ?? invocation)
         } catch {
             throw PreparationError.spatialPreparation(String(describing: error))
         }

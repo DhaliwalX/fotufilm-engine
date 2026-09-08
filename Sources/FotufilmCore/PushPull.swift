@@ -101,8 +101,7 @@ public enum FilmDevelopmentError: Error, Equatable, CustomStringConvertible {
     }
 
     private static func stops(_ value: Float) -> String {
-        let number = value == value.rounded()
-            ? String(Int(value)) : String(format: "%.2f", value)
+        let number = String(format: value == value.rounded() ? "%.0f" : "%.2f", value)
         return "\(value > 0 ? "+" : "")\(number) stop\(abs(value) == 1 ? "" : "s")"
     }
 }

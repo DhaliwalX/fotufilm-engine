@@ -304,15 +304,22 @@ public struct FotufilmEngine {
         return positive
     }
 
-    /// Recoverable preparation/backend errors for layered constructions; legacy behavior is
-    /// preserved when no construction is selected.
+    /// Recoverable development, preparation, and backend errors for either rendering model.
     public func processChecked(linearRGB image: ImageBuffer) throws -> ImageBuffer {
         if let model = options.transportConstruction(for: stock) {
             return try LayeredTransportRenderer.process(image: image, stock: stock,
                                                          options: options, model: model)
         }
         var plain = stock; plain.layeredTransport = nil
-        guard let output = HalideBackend.process(image: image, stock: plain, options: options) else {
+        let invocation: FilmEngineInvocation?
+        if image.width > 0, image.height > 0 {
+            invocation = try FilmEngineInvocation(
+                validating: plain, options: options, width: image.width, height: image.height)
+        } else {
+            invocation = nil
+        }
+        guard let output = HalideBackend.process(image: image, stock: plain, options: options,
+                                                invocation: invocation) else {
             throw TransportError.backend(Self.missingEngineMessage)
         }
         return output

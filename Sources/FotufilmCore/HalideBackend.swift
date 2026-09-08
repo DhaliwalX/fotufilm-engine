@@ -53,13 +53,14 @@ enum HalideBackend {
                         options: FotufilmEngine.Options,
                         memoryBudget: Int = defaultMemoryBudget,
                         noFilm: Bool = false,
-                        outputTransform: FilmOutputTransform? = nil) -> ImageBuffer? {
+                        outputTransform: FilmOutputTransform? = nil,
+                        invocation supplied: FilmEngineInvocation? = nil) -> ImageBuffer? {
         guard isAvailable else { return nil }
         let width = image.width, height = image.height
         guard width > 0, height > 0 else { return ImageBuffer(width: width, height: height) }
-        var invocation = FilmEngineInvocation(
-            stock: stock, options: options, width: width, height: height,
-            noFilm: noFilm)
+        guard var invocation = try? (supplied ?? FilmEngineInvocation(
+            validating: stock, options: options, width: width, height: height,
+            noFilm: noFilm)) else { return nil }
         if let outputTransform {
             invocation.featureMask |= FilmEngineFeature.encodeOut
             switch outputTransform.transfer {
@@ -191,8 +192,9 @@ enum HalideBackend {
         guard isAvailable else { return nil }
         let width = image.width, height = image.height
         guard width > 0, height > 0 else { return ImageBuffer(width: width, height: height) }
-        var invocation = FilmEngineInvocation(
-            stock: stock, options: options, width: width, height: height)
+        guard var invocation = try? FilmEngineInvocation(
+            validating: stock, options: options, width: width, height: height)
+        else { return nil }
         if let outputTransform {
             // This road JITs and caches its pipelines, so naming the shape costs a cache slot
             // rather than a shipped variant: it is always worth compiling the one transcendental

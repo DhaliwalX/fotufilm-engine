@@ -8,6 +8,51 @@ final class HandwrittenMetalFullFrameRendererTests: XCTestCase {
     private static let testFormat = FilmFormat(
         name: "Handwritten HDR full-frame test", frameHeightMM: 0.8)
 
+    func testCheckedRenderersReturnDevelopmentErrorsAndConveniencesReturnFalse() throws {
+        let harness = try Harness(maximumInFlightFrames: 1)
+        let spatial = try XCTUnwrap(HandwrittenMetalSpatialExecutor(device: harness.device))
+        let stock = TestStocks.negative
+        var options = spatialOptions(grain: false)
+        options.developmentEV = 1
+        let expected = FilmDevelopmentError.unavailable(stock: stock.name, requestedStops: 1)
+        XCTAssertThrowsError(try harness.renderer.prepareChecked(
+            key: #function, stock: stock, options: options,
+            frameWidth: 16, frameHeight: 12)) { error in
+                XCTAssertEqual(error as? FilmDevelopmentError, expected)
+            }
+        XCTAssertThrowsError(try spatial.prepareChecked(
+            key: #function, stock: stock, options: options,
+            frameWidth: 16, frameHeight: 12)) { error in
+                XCTAssertEqual(error as? FilmDevelopmentError, expected)
+            }
+        XCTAssertFalse(harness.renderer.prepare(
+            key: #function, stock: stock, options: options,
+            frameWidth: 16, frameHeight: 12))
+        XCTAssertFalse(spatial.prepare(
+            key: #function, stock: stock, options: options,
+            frameWidth: 16, frameHeight: 12))
+        XCTAssertEqual(harness.renderer.retainedComponentEntryCount, 0)
+    }
+
+    func testHalideMetalReturnsFailureForUnsupportedDevelopment() throws {
+        guard let renderer = HalideMetalFilmRenderer.shared else {
+            throw XCTSkip("Halide Metal unavailable")
+        }
+        let stock = TestStocks.negative
+        var options = spatialOptions(grain: false)
+        options.developmentEV = 1
+        XCTAssertFalse(renderer.prepare(stock: stock, options: options,
+                                        frameWidth: 16, frameHeight: 12))
+        var output: [UInt8] = []
+        XCTAssertFalse(renderer.processSRGB8(
+            [UInt8](repeating: 128, count: 16 * 12 * 4), into: &output,
+            width: 16, height: 12, stock: stock, options: options))
+        XCTAssertFalse(HalideMetalFilmRenderer.canRender(
+            width: 16, height: 12, stock: stock, options: options))
+        XCTAssertFalse(HalideMetalFilmRenderer.canRender(
+            width: 16, height: 12, stock: stock, options: options, budget: Int.max))
+    }
+
     func testFailedRepreparationPreservesThePreviousEdit() throws {
         let harness = try Harness(maximumInFlightFrames: 1)
         let width = 16, height = 12
