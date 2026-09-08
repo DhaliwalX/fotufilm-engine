@@ -64,7 +64,9 @@ final class SceneIlluminantTests: XCTestCase {
             for: TestStocks.negative, illuminant: options.resolvedSceneSpectrum).values)
     }
 
-    func testUnknownSourceRemainsD65WhenStockBalanceChanges() {
+    /// A source with no as-shot record is already white balanced, so it is lit at the stock's
+    /// own balance and a neutral renders neutral. A stated D65 still lights it at D65.
+    func testUnknownSourceIsLitAtTheStockBalance() {
         let options = FotufilmEngine.Options()
         var tungsten = TestStocks.negative
         tungsten.referenceIlluminantKelvin = 3200
@@ -72,9 +74,25 @@ final class SceneIlluminantTests: XCTestCase {
         for channel in 0..<3 { XCTAssertEqual(reference[channel], 0.18, accuracy: 1e-4) }
         let invocation = FilmEngineInvocation(stock: tungsten, options: options, width: 8, height: 8)
         XCTAssertEqual(invocation.spectral.exposure.values, SpectralRuntime.sceneExposure(
-            for: tungsten, cct: 6504).values)
-        let gray = SpectralRuntime.spectralExposure(SIMD3(repeating: 0.18), stock: tungsten,
-                                                   illuminant: options.resolvedSceneSpectrum)
+            for: tungsten, cct: 3200).values)
+        let gray = SpectralRuntime.spectralExposure(
+            SIMD3(repeating: 0.18), stock: tungsten,
+            illuminant: options.resolvedSceneSpectrum(
+                referenceKelvin: tungsten.referenceIlluminantKelvin))
+        XCTAssertEqual(gray.x, gray.y, accuracy: 2e-3)
+        XCTAssertEqual(gray.z, gray.y, accuracy: 2e-3)
+    }
+
+    /// Stating the scene light keeps the physics: tungsten film under a stated D65 reads cool.
+    func testStatedD65OnATungstenStockStillReadsCool() {
+        var options = FotufilmEngine.Options()
+        options.sceneIlluminantKelvin = 6504
+        var tungsten = TestStocks.negative
+        tungsten.referenceIlluminantKelvin = 3200
+        let gray = SpectralRuntime.spectralExposure(
+            SIMD3(repeating: 0.18), stock: tungsten,
+            illuminant: options.resolvedSceneSpectrum(
+                referenceKelvin: tungsten.referenceIlluminantKelvin))
         XCTAssertGreaterThan(gray.z, gray.x)
     }
 

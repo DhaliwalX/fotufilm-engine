@@ -1455,7 +1455,8 @@ public struct FilmEngineInvocation {
         // One resolved spectrum controls both integration and upload identity. Source pixels
         // have already been neutralized at capture; applying RGB WB here would count light twice.
         if !noFilm {
-            let illuminant = options.resolvedSceneSpectrum
+            let illuminant = options.resolvedSceneSpectrum(
+                referenceKelvin: stock.referenceIlluminantKelvin)
             let exposure = options.lensFilters.isEmpty
                 ? SpectralRuntime.sceneExposure(for: stock, illuminant: illuminant)
                 : SpectralRuntime.filteredExposure(for: stock, illuminant: illuminant,
