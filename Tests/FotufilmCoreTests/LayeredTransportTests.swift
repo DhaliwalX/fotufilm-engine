@@ -161,17 +161,17 @@ final class LayeredTransportTests: XCTestCase {
 
     func testSchemaVersionIsExplicitAndRoundTrips() throws {
         let legacy = FilmStockDefinition(id: "test", stock: TestStocks.negative)
-        XCTAssertEqual(legacy.schemaVersion, 1)
+        XCTAssertEqual(legacy.schemaVersion, 2)
         var stock = TestStocks.negative; stock.layeredTransport = TransportFixtures.stack
         let definition = FilmStockDefinition(id: "test", stock: stock)
-        XCTAssertEqual(definition.schemaVersion, 2)
+        XCTAssertEqual(definition.schemaVersion, 3)
         try definition.validate()
         let decoded = try JSONDecoder().decode(FilmStockDefinition.self, from: JSONEncoder().encode(definition))
         try decoded.validate()
         XCTAssertEqual(decoded.stock.layeredTransport, stock.layeredTransport)
         var bad = definition; bad.schemaVersion = 1
         XCTAssertThrowsError(try bad.validate())
-        bad = legacy; bad.schemaVersion = 2
+        bad = legacy; bad.schemaVersion = 3
         XCTAssertThrowsError(try bad.validate())
     }
 

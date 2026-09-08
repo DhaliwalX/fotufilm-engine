@@ -471,6 +471,15 @@ final class HandwrittenMetalFullFrameOfflineParityTests: XCTestCase {
         let allMask = mtfMask | halationMask | interimageMask
             | FilmEngineFeature.flare | FilmEngineFeature.grain
             | FilmEngineFeature.grainMottle
+        var screenedOptions = options(couplers: true)
+        screenedOptions.adjacencyModel = .screenedDiffusion
+        var screenedReversal = TestStocks.reversal
+        screenedReversal.adjacencyModel = .screenedDiffusion
+        var fringeOptions = options(couplers: true)
+        fringeOptions.chromaticFringeAmount = 0.25
+        fringeOptions.chromaticFringeRadiusMM = 0.1
+        var fringeScreenedOptions = fringeOptions
+        fringeScreenedOptions.adjacencyModel = .screenedDiffusion
         return [
             ParityCase(
                 name: "spectral-tail", stock: stock(), options: options(),
@@ -490,6 +499,22 @@ final class HandwrittenMetalFullFrameOfflineParityTests: XCTestCase {
                 name: "couplers-adjacency", stock: stock(interimage: true),
                 options: options(couplers: true),
                 requiredMask: interimageMask, expectsLocalTone: false),
+            ParityCase(
+                name: "screened-adjacency", stock: stock(interimage: true),
+                options: screenedOptions,
+                requiredMask: interimageMask, expectsLocalTone: false),
+            ParityCase(
+                name: "chromatic-fringe", stock: stock(interimage: true),
+                options: fringeOptions,
+                requiredMask: interimageMask, expectsLocalTone: false),
+            ParityCase(
+                name: "chromatic-fringe-screened", stock: stock(interimage: true),
+                options: fringeScreenedOptions,
+                requiredMask: interimageMask, expectsLocalTone: false),
+            ParityCase(
+                name: "screened-reversal", stock: screenedReversal,
+                options: options(couplers: true),
+                requiredMask: FilmEngineFeature.adjacency, expectsLocalTone: false),
             ParityCase(
                 name: "grain", stock: stock(grain: true),
                 options: options(grain: true),

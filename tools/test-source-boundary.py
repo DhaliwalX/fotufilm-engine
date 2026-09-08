@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Exercise the source boundary against accidental files and production key material."""
 from pathlib import Path
+import hashlib
+import json
 import shutil
 import subprocess
 import tempfile
@@ -14,6 +16,8 @@ with tempfile.TemporaryDirectory() as temporary:
         path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(root / name, path)
     (fixture / 'SOURCE_ASSETS.json').write_text('{}')
+    (fixture / 'licenses').mkdir()
+    (fixture / 'licenses/FILM-PROFILES.json').write_text('{}')
     def run(expected):
         result = subprocess.run(['python3', str(fixture / 'tools/check-source-boundary.py')],
                                 capture_output=True, text=True)
@@ -36,5 +40,20 @@ with tempfile.TemporaryDirectory() as temporary:
     link.symlink_to(root / 'Sources/FotufilmCore/FilmStock.swift')
     run(1)
     link.unlink()
+    run(0)
+    name = 'Sources/FotufilmCore/Stocks/portra400.json'
+    profile = fixture / name
+    profile.parent.mkdir(parents=True, exist_ok=True)
+    released = (root / name).read_bytes()
+    profile.write_bytes(released)
+    digest = hashlib.sha256(released).hexdigest()
+    (fixture / 'SOURCE_ASSETS.json').write_text(json.dumps({name: {'sha256': digest}}))
+    (fixture / 'licenses/FILM-PROFILES.json').write_text(json.dumps({'portra400': digest}))
+    run(0)
+    profile.write_bytes(released + b' ')
+    run(1)
+    profile.unlink()
+    run(1)
+    profile.write_bytes(released)
     run(0)
 print('Source-boundary regression checks passed.')

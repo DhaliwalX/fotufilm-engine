@@ -127,7 +127,7 @@ kernel void fotufilm_spatial_develop_linear_hdr(
 
     float3 density;
     for (uint channel = 0u; channel < 3u; ++channel) {
-        float formed = sample_curve(curves, effective[channel], channel);
+        float formed = sample_film_curve(configuration, curves, effective[channel], channel);
         float dMin = configuration[kCurves + channel * 6u];
         float range = film_curve_range(configuration, channel);
         density[channel] = DEVELOP_COMPLEMENT

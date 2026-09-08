@@ -412,7 +412,6 @@ enum CaptureDump {
                 "height": scene.height,
                 "contentHeadroom": scene.contentHeadroom,
             ]
-            if let baked = scene.bakedMired { about["bakedMired"] = baked }
             manifest["scene"] = about
         }
         guard let json = try? JSONSerialization.data(

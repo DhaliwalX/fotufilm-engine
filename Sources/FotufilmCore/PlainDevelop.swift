@@ -30,7 +30,7 @@ public struct PlainDevelop {
 
     public init(options: FotufilmEngine.Options) {
         exposureGain = exp2(options.exposureEV)
-        let gains = options.whiteBalance.gains
+        let gains = options.sceneLightGains
         balance = SIMD3(gains.r, gains.g, gains.b)
         // A source that declares recorded light above diffuse white gets the same highlight
         // shaping the film path stacks in (`FilmEngine`'s configuration) — here fitted to the

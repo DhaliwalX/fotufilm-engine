@@ -1,4 +1,5 @@
 enum FilmStockDefaults {
-    // Illustrative density response, not a fit to a manufacturer's measurements.
-    static let grainDensityProfile: [Float] = [4, 0.1, 0.5]
+    // Fitted against the Vision3 family's published granularity-against-density curves.
+    // A stock that states its own `grainDensityProfile` overrides this.
+    static let grainDensityProfile: [Float] = [5.1682, 0.117436, 0.421188]
 }

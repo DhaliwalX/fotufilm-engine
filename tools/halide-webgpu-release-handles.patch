@@ -1,0 +1,65 @@
+Release every command buffer and pass encoder, and destroy device buffers when they are freed.
+
+halide_webgpu_run finishes a command encoder into a command buffer, submits it and releases
+only the encoder; the command buffer and the compute pass encoder are never released. The
+staging copy in do_copy_to_host releases neither its encoder nor its command buffer, and the
+device-to-device copy keeps its command buffer. A submitted command buffer that is never
+released keeps every buffer it referenced alive, and under Emscripten each leaked handle is
+also an entry in the JS-side object table. Measured in Chrome on an Apple GPU, a frame of 64
+dispatches slowed from ~80 ms to ~450 ms over forty frames in one page as the leaked
+intermediates accumulated; with the releases in place the frame time holds.
+
+halide_webgpu_device_free also destroys the buffer before releasing it. Destruction is
+deferred past any work already submitted against the buffer, so it is safe, and it gives the
+memory back now rather than whenever the last reference elsewhere lets go.
+
+Sent nowhere yet; it belongs upstream on Halide PR #8955, which this tree is a checkout of,
+and applies on top of halide-webgpu-pipeline-cache.patch.
+diff --git a/src/runtime/webgpu.cpp b/src/runtime/webgpu.cpp
+index c408fae25d..61ed67819f 100644
+--- a/src/runtime/webgpu.cpp
++++ b/src/runtime/webgpu.cpp
+@@ -627,6 +627,10 @@ WEAK int halide_webgpu_device_free(void *user_context, halide_buffer_t *buf) {
+         return context.error_code;
+     }
+ 
++    // Destroy before releasing: destruction is deferred past any work already
++    // submitted against the buffer, and does not wait for a reference held
++    // elsewhere to go away.
++    wgpuBufferDestroy(handle->buffer);
+     wgpuBufferRelease(handle->buffer);
+     free(handle);
+     buf->device = 0;
+@@ -769,6 +773,8 @@ int do_copy_to_host(void *user_context, WgpuContext *context, uint8_t *dst,
+         WGPUCommandBuffer command_buffer =
+             wgpuCommandEncoderFinish(encoder, nullptr);
+         wgpuQueueSubmit(context->queue, 1, &command_buffer);
++        wgpuCommandBufferRelease(command_buffer);
++        wgpuCommandEncoderRelease(encoder);
+ 
+         struct BufferMapResult {
+             volatile WGPUMapAsyncStatus map_status;
+@@ -855,6 +861,7 @@ int do_multidimensional_copy(void *user_context, WgpuContext *context,
+             // Submit the copy command.
+             WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(encoder, nullptr);
+             wgpuQueueSubmit(context->queue, 1, &cmd);
++            wgpuCommandBufferRelease(cmd);
+             wgpuCommandEncoderRelease(encoder);
+         } else if ((c.dst + dst_idx) != (c.src + src_idx)) {
+             // Could reach here if a user called directly into the
+@@ -1357,11 +1364,15 @@ WEAK int halide_webgpu_run(void *user_context,
+ 
+     wgpuComputePassEncoderDispatchWorkgroups(pass, groupsX, groupsY, groupsZ);
+     wgpuComputePassEncoderEnd(pass);
++    wgpuComputePassEncoderRelease(pass);
+ 
+     // Submit the compute command.
+     WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, nullptr);
+     wgpuQueueSubmit(context.queue, 1, &commands);
+ 
++    // Release the command buffer as well as the encoder: a submitted command
++    // buffer that is never released keeps every buffer it referenced alive.
++    wgpuCommandBufferRelease(commands);
+     wgpuCommandEncoderRelease(encoder);
+     if (!pipeline_is_cached) {
+         wgpuComputePipelineRelease(pipeline);

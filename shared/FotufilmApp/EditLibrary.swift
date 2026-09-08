@@ -443,6 +443,7 @@ extension EditState: Codable {
              grain, grainMottleShare, discGrain,
              halation, halationColour, halationSpectrum,
              couplers, couplerGapReach, couplerSelf,
+             chromaticFringeAmount, chromaticFringeRadius,
              printCorrection, paper, paperFollowsStock, seed,
              push, bleach, expiredYears, shutterSeconds, printLightKelvin,
              rotation, flipH, straighten, perspectiveV, perspectiveH,
@@ -487,6 +488,10 @@ extension EditState: Codable {
             halationSpectrum = drawn
         }
         couplers = try c.decodeIfPresent(Double.self, forKey: .couplers) ?? couplers
+        chromaticFringeAmount = try c.decodeIfPresent(
+            Double.self, forKey: .chromaticFringeAmount) ?? chromaticFringeAmount
+        chromaticFringeRadius = try c.decodeIfPresent(
+            Double.self, forKey: .chromaticFringeRadius) ?? chromaticFringeRadius
         couplerGapReach = try c.decodeIfPresent(
             [Double].self, forKey: .couplerGapReach) ?? couplerGapReach
         couplerSelf = try c.decodeIfPresent(
@@ -568,6 +573,8 @@ extension EditState: Codable {
         try c.encode(halationColour, forKey: .halationColour)
         try c.encode(halationSpectrum, forKey: .halationSpectrum)
         try c.encode(couplers, forKey: .couplers)
+        try c.encode(chromaticFringeAmount, forKey: .chromaticFringeAmount)
+        try c.encode(chromaticFringeRadius, forKey: .chromaticFringeRadius)
         try c.encode(couplerGapReach, forKey: .couplerGapReach)
         try c.encode(couplerSelf, forKey: .couplerSelf)
         try c.encode(printCorrection, forKey: .printCorrection)

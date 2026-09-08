@@ -1,6 +1,8 @@
 @testable import FotufilmCore
 
 enum TestStocks {
+    // Synthetic neutral-invariant fixtures share the default source white; real stocks keep
+    // their independently specified daylight/tungsten calibration.
     static let negative = FilmStock(
         name: "Test Negative 400",
         sensitivity: [
@@ -8,6 +10,7 @@ enum TestStocks {
             [0.20, 0.73, 0.07],
             [0.00, 0.02, 0.98],
         ],
+        referenceIlluminantKelvin: 6504,
         spectralProfile: .color(peaksNM: [650, 550, 450], dyeFamily: .kodakNegative),
         curves: [
             CharacteristicCurve(dMin: 0.20, gamma: 0.60, toe: -1.20, toeWidth: 0.24, shoulder: 4.20, shoulderWidth: 1.20),
@@ -37,6 +40,7 @@ enum TestStocks {
             [0.16, 0.76, 0.08],
             [0.00, 0.05, 0.95],
         ],
+        referenceIlluminantKelvin: 6504,
         spectralProfile: .color(peaksNM: [640, 545, 445], dyeFamily: .kodachrome),
         curves: [
             CharacteristicCurve(dMin: 0.10, gamma: 3.00, toe: -1.00, toeWidth: 0.21, shoulder: 0.22, shoulderWidth: 0.40),
@@ -62,6 +66,7 @@ enum TestStocks {
             [0.30, 0.33, 0.37],
             [0.30, 0.33, 0.37],
         ],
+        referenceIlluminantKelvin: 6504,
         spectralProfile: .monochrome(rgbWeights: [0.30, 0.33, 0.37]),
         curves: [
             CharacteristicCurve(dMin: 0.10, gamma: 0.62, toe: -1.00, toeWidth: 0.30, shoulder: 2.20, shoulderWidth: 0.30),

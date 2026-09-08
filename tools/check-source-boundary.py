@@ -12,11 +12,14 @@ ASSETS = json.loads((ROOT / 'SOURCE_ASSETS.json').read_text())
 PUBLIC_KEY = ROOT / 'shared/FotufilmApp/FilmPackKeyMaterial.swift'
 DENIED = ('stocks-private/', 'research/', 'ios/', 'ios-uikit/', 'android/',
           'license-server/', 'tools/calibration/', 'docs/calibration/', 'docs/accuracy/')
-STARTER_STOCKS = {'gold200', 'trix400', 'provia100f'}
+RELEASED_STOCKS = json.loads((ROOT / 'licenses/FILM-PROFILES.json').read_text())
+# The print receivers and the projection illuminant are published here deliberately. The
+# receivers are this project's own digitisations of the manufacturers' public datasheets; the
+# xenon projector spectrum is third-party and is attributed in THIRD_PARTY_NOTICES.md. What
+# stays out is the calibration harness, its recorded baseline, and the sheet-reading tables it
+# consumes, which describe unpublished measurement runs.
 DENIED_NAMES = {'MeasuredSpectra.swift', 'CalibrationTests.swift',
-                'EnduraPremierPaperSpectra.swift', 'CrystalArchivePaperSpectra.swift',
-                'Vision2383PrintSpectra.swift', 'Vision2393PrintSpectra.swift',
-                'EternaCPPrintSpectra.swift', 'accuracy-baseline.json'}
+                'accuracy-baseline.json'}
 BINARY_SUFFIXES = {'.png', '.jpg', '.jpeg', '.heic', '.tif', '.tiff', '.exr', '.mp4',
                    '.mov', '.pdf', '.ps', '.zip', '.dmg', '.pkg', '.coeff', '.svg', '.moef',
                    '.webp', '.gif', '.avif', '.bmp', '.dng', '.cr2', '.nef', '.arw', '.raf'}
@@ -31,6 +34,10 @@ def candidates():
 
 def check():
     errors = []
+    for stock, digest in RELEASED_STOCKS.items():
+        path = ROOT / 'Sources/FotufilmCore/Stocks' / f'{stock}.json'
+        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+            errors.append(f'missing or changed released profile: {stock}')
     for name in candidates():
         if not name:
             continue
@@ -63,10 +70,10 @@ def check():
         if name.startswith('Sources/FotufilmCore/Stocks/') and path.suffix == '.json':
             pack = json.loads(raw)
             is_example = pack.get('isExample') and pack.get('id', '').startswith('example-')
-            is_starter = (path.stem in STARTER_STOCKS and pack.get('id') == path.stem
+            is_released = (path.stem in RELEASED_STOCKS and pack.get('id') == path.stem
                           and not pack.get('isExample'))
-            if not (is_example or is_starter):
-                errors.append(f'stock outside Starter/examples: {name}')
+            if not (is_example or is_released):
+                errors.append(f'stock outside released catalogue/examples: {name}')
         if b'\0' not in raw:
             text = raw.decode('utf-8', errors='replace')
             if SECRET.search(text):

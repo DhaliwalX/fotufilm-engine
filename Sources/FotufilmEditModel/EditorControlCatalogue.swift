@@ -100,6 +100,19 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(0...3, neutral: 1,
                                              unit: .multiplier)),
             availability: .couplerGeometry),
+        EditorControl(
+            .chromaticFringeAmount, title: "Fringe Amount",
+            detail: "Spread some inter-layer inhibition farther around color boundaries",
+            section: .filmEmulsion,
+            kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
+            availability: .interlayerInhibition),
+        EditorControl(
+            .chromaticFringeRadius, title: "Fringe Radius",
+            detail: "Broad spread on the film; active when Fringe Amount is above zero",
+            section: .filmEmulsion,
+            kind: .slider(EditorControlScale(20...300, neutral: 100, unit: .micrometers)),
+            availability: .interlayerInhibition,
+            foldsUnder: .chromaticFringeAmount),
 
         EditorControl(
             .push, title: "Push",
@@ -373,6 +386,8 @@ public extension EngineOptionCoverage {
             + "delivery ratio (`FotufilmEngine.Options.completeDeliveryMottle`) that lands in "
             + "the band a video frame and its encoder can hold"),
         "grainModel": .control([.grainModel]),
+        "adjacencyModel": .unexposed(
+            "Experimental transport selection is available through the library, CLI, and stock pack."),
         "halationScale": .control([.halation]),
         "halationSourceColour": .control([.halationColour]),
         "halationReturnGain": .control([.halationSpectrum]),
@@ -393,6 +408,8 @@ public extension EngineOptionCoverage {
             + "here would veil the shadows a second time. The CLI and the Resolve plugin "
             + "expose it, because those can be handed a render that has met no glass"),
         "couplerScale": .control([.couplers]),
+        "chromaticFringeAmount": .control([.chromaticFringeAmount]),
+        "chromaticFringeRadiusMM": .control([.chromaticFringeRadius]),
         "couplerRangeScale": .unexposed(
             "the app sets the per-gap reaches instead, so the engine never reads this one"),
         "couplerGapReachScales": .control([.couplerReach]),
@@ -416,6 +433,7 @@ public extension EngineOptionCoverage {
         "negativeViewing": .globalSetting(
             "Settings chooses the lightbox or scanner reading used by negative output and preview"),
         "sceneIlluminantKelvin": .derived("capture metadata"),
+        "sceneIlluminantChromaticity": .derived("capture chromaticity"),
         "sceneIlluminantSpectrum": .derived(
             "capture metadata when a source supplies a measured illuminant spectrum; its CCT "
             + "is the fallback when only a correlated temperature is available"),

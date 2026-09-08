@@ -21,7 +21,7 @@ done < <(find "$BUNDLE" \( \
 
 while IFS= read -r directory; do
   if [[ "${FOTUFILM_SOURCE_BUILD:-0}" == 1 ]]; then
-    python3 "$(dirname "$0")/verify-starter-pack.py" "$directory" || report "invalid Starter pack: $directory"
+    python3 "$(dirname "$0")/verify-film-profiles.py" "$directory" || report "invalid film profiles: $directory"
   else
     report "plaintext stock directory reached the bundle: $directory"
   fi
@@ -29,7 +29,7 @@ done < <(find "$BUNDLE" -type d -name Stocks -print)
 
 if [[ "${FOTUFILM_SOURCE_BUILD:-0}" == 1 ]]; then
   while IFS= read -r pack; do
-    report "sealed pack reached a Starter-only bundle: $pack"
+    report "sealed pack reached a source bundle: $pack"
   done < <(find "$BUNDLE" -type f -name '*.fotufilmpack' -print)
 fi
 
@@ -39,7 +39,7 @@ while IFS= read -r coefficient; do
   pack_names=(fotufilm bundled)
   if [[ "${FOTUFILM_SOURCE_BUILD:-0}" == 1 ]]; then
     pack_names=()
-    [[ -d "$resources/Stocks" ]] || report "$resources is missing the Starter pack"
+    [[ -d "$resources/Stocks" ]] || report "$resources is missing the film profiles"
   fi
   for name in ${pack_names[@]+"${pack_names[@]}"}; do
     if [[ ! -f "$resources/$name.fotufilmpack" ]]; then

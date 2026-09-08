@@ -888,8 +888,7 @@ final class DesktopEditorModel {
         let wantsSelectionSource = isSelectiveMode
         let cachedSelectionSource = selectionSource?.key == renderKey
             ? selectionSource?.image : nil
-        let staleBalance = !draft && scene?.balanceIsStale(for: state) == true
-        let cachedFull = (scene?.key == fullKey && !staleBalance) ? scene : nil
+        let cachedFull = (scene?.key == fullKey) ? scene : nil
         let cachedDraft = draftScene?.key == draftKey ? draftScene : nil
 
         Task { [weak self] in

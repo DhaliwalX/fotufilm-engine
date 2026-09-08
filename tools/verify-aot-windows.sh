@@ -14,6 +14,8 @@ xcrun clang++ -std=c++17 -O2 -DFOTUFILM_HALIDE_IOS_AOT=1 -DFOTUFILM_AOT_WINDOWED
   tools/aot-window-tests.cpp Sources/FotufilmHalide/FotufilmHalideIOS.cpp \
   "$KERNELS"/*.a -framework Metal -framework Foundation -o "$OUT/runner"
 for mode in 0 1; do
+  mkdir -p "$OUT/$mode"
+  rm -f "$OUT/$mode/"*.f32
   FOTUFILM_AOT_WINDOWED="$mode" FOTUFILM_TRACE_VARIANT=1 \
     "$OUT/runner" "$1" "$OUT/$mode" 2> "$OUT/$mode.trace"
   cat "$OUT/$mode.trace"
@@ -27,9 +29,9 @@ assert "Fotufilm AOT:" not in (root / "0.trace").read_text(), "general path used
 assert "Fotufilm AOT:" in (root / "1.trace").read_text(), "windowed path was not exercised"
 general = sorted((root / "0").glob("*.f32"))
 windowed = sorted((root / "1").glob("*.f32"))
-assert len(general) == len(windowed) == 22, "missing comparison frames"
+assert len(general) == len(windowed) == 28, "missing comparison frames"
 for left, right in zip(general, windowed):
     assert left.name == right.name
     assert left.read_bytes() == right.read_bytes(), f"output differs: {left.name}"
-print("PASS: all 22 general/windowed AOT frames match byte for byte")
+print("PASS: all 28 general/windowed AOT frames match byte for byte")
 PY

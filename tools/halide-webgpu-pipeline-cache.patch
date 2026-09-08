@@ -1,0 +1,307 @@
+Keep each compute pipeline for the next dispatch instead of compiling it again.
+
+halide_webgpu_run creates a compute pipeline for every dispatch and releases it as soon as
+the dispatch is encoded. wgpuDeviceCreateComputePipelineAsync is where an entry point is
+compiled down to the adapter's own shader language, and measured in Chrome on an Apple GPU
+against this project's colour kernel — one module, 64 entry points per frame — that cost
+about 160 ms per dispatch, or eight to ten seconds a frame, all of it compiling pipelines the
+previous frame had already compiled. The monochrome module happened to be served from a
+browser-side cache and ran in tens of milliseconds; the colour module never was.
+
+The pipelines are now kept in a list keyed by device, shader module, entry point and the four
+override constants (workgroup size and workgroup memory), looked up before creating, released
+with the device and at process teardown. The first frame still compiles every kernel it uses;
+every later frame is a lookup. Sent nowhere yet; it belongs upstream on Halide PR #8955, which
+this tree is a checkout of, and applies on top of halide-webgpu-storage-limit.patch.
+diff --git a/src/runtime/webgpu.cpp b/src/runtime/webgpu.cpp
+index 9c8bf5f15f..c408fae25d 100644
+--- a/src/runtime/webgpu.cpp
++++ b/src/runtime/webgpu.cpp
+@@ -269,6 +269,102 @@ struct WgpuBufferHandle {
+ WEAK Halide::Internal::GPUCompilationCache<WGPUDevice, WGPUShaderModule>
+     shader_cache;
+ 
++// A cache of compute pipelines: one per shader module, entry point and set of
++// override constants.
++//
++// wgpuDeviceCreateComputePipelineAsync compiles the entry point down to the
++// adapter's own shader language, and that is where the time goes. Measured in
++// Chrome on an Apple GPU, a frame of 64 dispatches spent about 160 ms per
++// dispatch creating a pipeline it had created for the previous frame and
++// released as soon as the dispatch was encoded. Holding the pipeline makes
++// every dispatch after the first a lookup.
++//
++// The workgroup size and workgroup memory size are pipeline-overridable
++// constants, so they are part of the key. The list is only touched while the
++// context lock is held, which every caller already does.
++struct WgpuCachedPipeline {
++    WGPUDevice device;
++    WGPUShaderModule module;
++    char *entry_name;
++    int threads[3];
++    int workgroup_mem_bytes;
++    WGPUComputePipeline pipeline;
++    WgpuCachedPipeline *next;
++};
++WEAK WgpuCachedPipeline *pipeline_cache = nullptr;
++
++namespace {
++
++WGPUComputePipeline lookup_cached_pipeline(WGPUDevice device,
++                                           WGPUShaderModule module,
++                                           const char *entry_name,
++                                           int threadsX, int threadsY, int threadsZ,
++                                           int workgroup_mem_bytes) {
++    for (WgpuCachedPipeline *entry = pipeline_cache; entry != nullptr; entry = entry->next) {
++        if (entry->device == device && entry->module == module &&
++            entry->threads[0] == threadsX && entry->threads[1] == threadsY &&
++            entry->threads[2] == threadsZ &&
++            entry->workgroup_mem_bytes == workgroup_mem_bytes &&
++            strcmp(entry->entry_name, entry_name) == 0) {
++            return entry->pipeline;
++        }
++    }
++    return nullptr;
++}
++
++// Takes ownership of the pipeline when it returns true. When it cannot
++// allocate the entry, the pipeline is not cached and the caller releases it
++// after the dispatch as before.
++bool cache_pipeline(WGPUDevice device, WGPUShaderModule module,
++                    const char *entry_name,
++                    int threadsX, int threadsY, int threadsZ,
++                    int workgroup_mem_bytes,
++                    WGPUComputePipeline pipeline) {
++    WgpuCachedPipeline *entry = (WgpuCachedPipeline *)malloc(sizeof(WgpuCachedPipeline));
++    if (entry == nullptr) {
++        return false;
++    }
++    size_t name_size = strlen(entry_name) + 1;
++    entry->entry_name = (char *)malloc(name_size);
++    if (entry->entry_name == nullptr) {
++        free(entry);
++        return false;
++    }
++    memcpy(entry->entry_name, entry_name, name_size);
++    entry->device = device;
++    entry->module = module;
++    entry->threads[0] = threadsX;
++    entry->threads[1] = threadsY;
++    entry->threads[2] = threadsZ;
++    entry->workgroup_mem_bytes = workgroup_mem_bytes;
++    entry->pipeline = pipeline;
++    entry->next = pipeline_cache;
++    pipeline_cache = entry;
++    return true;
++}
++
++// Releases the pipelines cached for one device, or for every device when
++// device is nullptr. Must run before the shader modules they were built from
++// are released.
++void release_cached_pipelines(void *user_context, WGPUDevice device) {
++    WgpuCachedPipeline **link = &pipeline_cache;
++    while (*link != nullptr) {
++        WgpuCachedPipeline *entry = *link;
++        if (device == nullptr || entry->device == device) {
++            debug(user_context) << "WGPU: releasing cached pipeline "
++                                << entry->entry_name << "\n";
++            wgpuComputePipelineRelease(entry->pipeline);
++            *link = entry->next;
++            free(entry->entry_name);
++            free(entry);
++        } else {
++            link = &entry->next;
++        }
++    }
++}
++
++}  // namespace
++
+ namespace {
+ 
+ halide_error_code_t init_error_code = halide_error_code_success;
+@@ -603,6 +699,7 @@ WEAK int halide_webgpu_device_release(void *user_context) {
+     }
+ 
+     if (device) {
++        release_cached_pipelines(user_context, device);
+         shader_cache.delete_context(user_context, device,
+                                     wgpuShaderModuleRelease);
+ 
+@@ -1008,77 +1105,90 @@ WEAK int halide_webgpu_run(void *user_context,
+     bool found = shader_cache.lookup(context.device, state_ptr, shader_module);
+     halide_abort_if_false(user_context, found && shader_module != nullptr);
+ 
+-    // Create the compute pipeline.
+-    WGPUConstantEntry overrides[4];
+-    overrides[0] = WGPU_CONSTANT_ENTRY_INIT;
+-    overrides[0].key.data = "wgsize_x";
+-    overrides[0].key.length = WGPU_STRLEN;
+-    overrides[0].value = (double)threadsX;
+-    overrides[1] = WGPU_CONSTANT_ENTRY_INIT;
+-    overrides[1].key.data = "wgsize_y";
+-    overrides[1].key.length = WGPU_STRLEN;
+-    overrides[1].value = (double)threadsY;
+-    overrides[2] = WGPU_CONSTANT_ENTRY_INIT;
+-    overrides[2].key.data = "wgsize_z";
+-    overrides[2].key.length = WGPU_STRLEN;
+-    overrides[2].value = (double)threadsZ;
+-    overrides[3] = WGPU_CONSTANT_ENTRY_INIT;
+-    overrides[3].key.data = "workgroup_mem_bytes";
+-    overrides[3].key.length = WGPU_STRLEN;
+-    overrides[3].value = (double)workgroup_mem_bytes;
+-    WGPUComputeState compute_state = WGPU_COMPUTE_STATE_INIT;
+-    compute_state.module = shader_module;
+-    compute_state.entryPoint.data = entry_name;
+-    compute_state.entryPoint.length = WGPU_STRLEN;
+-    compute_state.constantCount = 4;
+-    compute_state.constants = overrides;
+-
+-    WGPUComputePipelineDescriptor pipeline_desc = WGPU_COMPUTE_PIPELINE_DESCRIPTOR_INIT;
+-    pipeline_desc.compute = compute_state;
+-
+-    // Create the compute pipeline asynchronously.
+-    struct PipelineResult {
+-        volatile WGPUCreatePipelineAsyncStatus status;
+-        WGPUComputePipeline pipeline;
+-        char message[512];
+-    };
+-    PipelineResult pipeline_result;
+-    // Initialize status to a non-success sentinel so that if the callback
+-    // never fires, we take the error path instead of reading uninitialized
+-    // memory. See wgpuInstanceWaitAny below.
+-    pipeline_result.status = WGPUCreatePipelineAsyncStatus_CallbackCancelled;
+-    pipeline_result.pipeline = nullptr;
+-    pipeline_result.message[0] = '\0';
+-
+-    WGPUCreateComputePipelineAsyncCallbackInfo pipeline_callback_info =
+-        WGPU_CREATE_COMPUTE_PIPELINE_ASYNC_CALLBACK_INFO_INIT;
+-    pipeline_callback_info.mode = WGPUCallbackMode_WaitAnyOnly;
+-    pipeline_callback_info.callback = [](WGPUCreatePipelineAsyncStatus status,
+-                                         WGPUComputePipeline pipeline,
+-                                         WGPUStringView message,
+-                                         void *userdata1, void *userdata2) {
+-        PipelineResult *result = (PipelineResult *)userdata1;
+-        result->status = status;
+-        result->pipeline = pipeline;
+-        wgpu_sv_to_cstr(message, result->message, sizeof(result->message));
+-    };
+-    pipeline_callback_info.userdata1 = &pipeline_result;
++    // Reuse the pipeline compiled for this entry point and workgroup shape, or
++    // compile it now and keep it for the next dispatch.
++    WGPUComputePipeline pipeline = lookup_cached_pipeline(
++        context.device, shader_module, entry_name,
++        threadsX, threadsY, threadsZ, workgroup_mem_bytes);
++    bool pipeline_is_cached = pipeline != nullptr;
++    if (pipeline == nullptr) {
++        // Create the compute pipeline.
++        WGPUConstantEntry overrides[4];
++        overrides[0] = WGPU_CONSTANT_ENTRY_INIT;
++        overrides[0].key.data = "wgsize_x";
++        overrides[0].key.length = WGPU_STRLEN;
++        overrides[0].value = (double)threadsX;
++        overrides[1] = WGPU_CONSTANT_ENTRY_INIT;
++        overrides[1].key.data = "wgsize_y";
++        overrides[1].key.length = WGPU_STRLEN;
++        overrides[1].value = (double)threadsY;
++        overrides[2] = WGPU_CONSTANT_ENTRY_INIT;
++        overrides[2].key.data = "wgsize_z";
++        overrides[2].key.length = WGPU_STRLEN;
++        overrides[2].value = (double)threadsZ;
++        overrides[3] = WGPU_CONSTANT_ENTRY_INIT;
++        overrides[3].key.data = "workgroup_mem_bytes";
++        overrides[3].key.length = WGPU_STRLEN;
++        overrides[3].value = (double)workgroup_mem_bytes;
++        WGPUComputeState compute_state = WGPU_COMPUTE_STATE_INIT;
++        compute_state.module = shader_module;
++        compute_state.entryPoint.data = entry_name;
++        compute_state.entryPoint.length = WGPU_STRLEN;
++        compute_state.constantCount = 4;
++        compute_state.constants = overrides;
++
++        WGPUComputePipelineDescriptor pipeline_desc = WGPU_COMPUTE_PIPELINE_DESCRIPTOR_INIT;
++        pipeline_desc.compute = compute_state;
++
++        // Create the compute pipeline asynchronously.
++        struct PipelineResult {
++            volatile WGPUCreatePipelineAsyncStatus status;
++            WGPUComputePipeline pipeline;
++            char message[512];
++        };
++        PipelineResult pipeline_result;
++        // Initialize status to a non-success sentinel so that if the callback
++        // never fires, we take the error path instead of reading uninitialized
++        // memory. See wgpuInstanceWaitAny below.
++        pipeline_result.status = WGPUCreatePipelineAsyncStatus_CallbackCancelled;
++        pipeline_result.pipeline = nullptr;
++        pipeline_result.message[0] = '\0';
++
++        WGPUCreateComputePipelineAsyncCallbackInfo pipeline_callback_info =
++            WGPU_CREATE_COMPUTE_PIPELINE_ASYNC_CALLBACK_INFO_INIT;
++        pipeline_callback_info.mode = WGPUCallbackMode_WaitAnyOnly;
++        pipeline_callback_info.callback = [](WGPUCreatePipelineAsyncStatus status,
++                                             WGPUComputePipeline pipeline,
++                                             WGPUStringView message,
++                                             void *userdata1, void *userdata2) {
++            PipelineResult *result = (PipelineResult *)userdata1;
++            result->status = status;
++            result->pipeline = pipeline;
++            wgpu_sv_to_cstr(message, result->message, sizeof(result->message));
++        };
++        pipeline_callback_info.userdata1 = &pipeline_result;
+ 
+-    WGPUFuture pipeline_future = wgpuDeviceCreateComputePipelineAsync(
+-        context.device, &pipeline_desc, pipeline_callback_info);
++        WGPUFuture pipeline_future = wgpuDeviceCreateComputePipelineAsync(
++            context.device, &pipeline_desc, pipeline_callback_info);
+ 
+-    // Wait for the pipeline to be created.
+-    WGPUFutureWaitInfo wait_info = WGPU_FUTURE_WAIT_INFO_INIT;
+-    wait_info.future = pipeline_future;
+-    wgpuInstanceWaitAny(context.instance, 1, &wait_info, UINT64_MAX);
++        // Wait for the pipeline to be created.
++        WGPUFutureWaitInfo wait_info = WGPU_FUTURE_WAIT_INFO_INIT;
++        wait_info.future = pipeline_future;
++        wgpuInstanceWaitAny(context.instance, 1, &wait_info, UINT64_MAX);
+ 
+-    if (pipeline_result.status != WGPUCreatePipelineAsyncStatus_Success) {
+-        error(user_context) << "WGPU: wgpuDeviceCreateComputePipelineAsync failed ("
+-                            << pipeline_result.status << "): " << pipeline_result.message << "\n";
+-        return halide_error_code_generic_error;
+-    }
++        if (pipeline_result.status != WGPUCreatePipelineAsyncStatus_Success) {
++            error(user_context) << "WGPU: wgpuDeviceCreateComputePipelineAsync failed ("
++                                << pipeline_result.status << "): " << pipeline_result.message << "\n";
++            return halide_error_code_generic_error;
++        }
+ 
+-    WGPUComputePipeline pipeline = pipeline_result.pipeline;
++        pipeline = pipeline_result.pipeline;
++        pipeline_is_cached = cache_pipeline(
++            context.device, shader_module, entry_name,
++            threadsX, threadsY, threadsZ, workgroup_mem_bytes, pipeline);
++        debug(user_context) << "WGPU: compiled pipeline for " << entry_name
++                            << (pipeline_is_cached ? " (cached)" : " (not cached)") << "\n";
++    }
+ 
+     // Set up a compute shader dispatch command.
+     WGPUCommandEncoder encoder =
+@@ -1253,7 +1363,9 @@ WEAK int halide_webgpu_run(void *user_context,
+     wgpuQueueSubmit(context.queue, 1, &commands);
+ 
+     wgpuCommandEncoderRelease(encoder);
+-    wgpuComputePipelineRelease(pipeline);
++    if (!pipeline_is_cached) {
++        wgpuComputePipelineRelease(pipeline);
++    }
+ 
+     return error_scope.wait();
+ }
+@@ -1264,6 +1376,7 @@ WEAK const struct halide_device_interface_t *halide_webgpu_device_interface() {
+ 
+ namespace {
+ WEAK __attribute__((destructor)) void halide_webgpu_cleanup() {
++    release_cached_pipelines(nullptr, nullptr);
+     shader_cache.release_all(nullptr, wgpuShaderModuleRelease);
+     halide_webgpu_device_release(nullptr);
+ }

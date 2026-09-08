@@ -33,6 +33,7 @@ enum GranularityMeter {
                        exposure: Float = 0.18) -> [Float] {
         let size = Int(measuredFrameMM * pxPerMM)
         var options = FotufilmEngine.Options()
+        options.sceneIlluminantKelvin = stock.referenceIlluminantKelvin
         options.format = FilmFormat(name: "microdensitometer",
                                     frameHeightMM: measuredFrameMM)
         options.halationScale = 0
@@ -148,6 +149,7 @@ enum GranularityMeter {
     static func latticeReadBias(_ stock: FilmStock, pxPerMM: Float) -> Float {
         let size = Int(measuredFrameMM * pxPerMM)
         var options = FotufilmEngine.Options()
+        options.sceneIlluminantKelvin = stock.referenceIlluminantKelvin
         options.format = FilmFormat(name: "microdensitometer",
                                     frameHeightMM: measuredFrameMM)
         options.halationScale = 0

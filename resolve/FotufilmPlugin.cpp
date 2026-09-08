@@ -907,8 +907,8 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
     defineDouble(set, "exposure", "Exposure", "Camera exposure, in stops.",
                  "exposureGroup", -5, 5, 0);
     defineDouble(set, "temperature", "Temperature (K)",
-                 "White balance before the film responds, in kelvin. Separate from Scene "
-                 "Illuminant, which sets the spectral light integrated against the emulsion.",
+                 "Spectral scene temperature. Lower Kelvin adds warm light. Relative in mired "
+                 "to Scene Illuminant when a base lamp is selected; 6504 leaves that lamp unchanged.",
                  "exposureGroup", 2000, 12000, 6504);
     defineDouble(set, "tint", "Tint", "Green/magenta balance of the illuminant.",
                  "exposureGroup", -100, 100, 0);
@@ -938,13 +938,13 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
 
     defineGroup(set, "sceneLightGroup", "Spectral Scene Light", "exposureGroup");
     defineChoice(set, "sceneLight", "Scene Illuminant",
-                 "Spectral lighting presented to the film, separate from white balance. "
-                 "Stock Reference preserves existing renders. Custom sources use a daylight or "
+                 "Capture light presented to the film; Temperature and Tint adjust this spectrum. "
+                 "Unspecified light assumes D65. Custom sources use a daylight or "
                  "Planckian spectrum, not a measured LED spectrum.", "sceneLightGroup",
-                 {"Stock Reference", "Daylight · D65", "Daylight · 5500 K",
+                 {"Unspecified · D65", "Daylight · D65", "Daylight · 5500 K",
                   "Tungsten · 3200 K", "Incandescent · 2856 K", "Custom"}, 0);
     defineDouble(set, "sceneLightKelvin", "Scene Illuminant (K)",
-                 "Custom spectral scene light; does not replace Temperature or Tint.",
+                 "Custom capture light before the Temperature and Tint edits.",
                  "sceneLightGroup", 2000, 12000, 6504);
 
     defineGroup(set, "lensGroup", "Lens & Filters");

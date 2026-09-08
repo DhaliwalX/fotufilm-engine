@@ -51,18 +51,48 @@ npm ci
 npm run build
 ```
 
-The output is in `web/dist`. The demo uses the CPU when a WebGPU-compatible
-Halide toolchain is not available.
+The output is in `web/dist`. The demo develops an image at its own size, up
+to about 120 megapixels, cutting it into tiles the kernel runs one at a time;
+the pack carries its spatial parameters for a ladder of frame sizes so grain
+and halation stay the size the emulsion makes them. The demo uses the CPU when
+a WebGPU-compatible Halide toolchain is not available. To build one, install Homebrew's `llvm` and
+`lld` and run `tools/build-halide.sh --webgpu` first; it fetches the Halide
+pull request the browser runtime needs and applies the patches in `tools/`.
 
 ## Included films
 
-Default source builds run without activation and bundle the free Starter pack: Gold 200,
-Tri-X 400, and Provia 100F. These calibrated profiles use
-[CC BY-ND 4.0](licenses/STARTER-PACK.txt); the engine code has separate terms.
+Default source builds include all 40 film profiles, free to use without activation.
+The runtime JSON profiles are available in `Sources/FotufilmCore/Stocks/` under
+[CC BY-SA 4.0](licenses/FILM-PROFILES.txt). You may modify and redistribute them
+with attribution and ShareAlike terms. This licence does not apply to rendered
+photos or videos. The engine code uses Apache-2.0.
 
-The CLI and tests also include synthetic films. Print models use calculated
-example curves, not measured paper profiles. The demo uses a generated colour chart.
+Thirty-three profiles carry sampled characteristic curves with smooth interpolation
+through every validated digitized point. Source tracing variations are retained;
+response outside each published range is extrapolated. These schema version 2
+profiles require a build with sampled-curve support. Schema version 1 remains supported.
+
+The CLI and tests also include synthetic films. The demo uses a generated colour chart.
 See [Build support](docs/support.html) for stock-pack setup.
+
+## Print media
+
+The output media are digitised from the manufacturers' own published datasheets, on the
+same 380-780 nm grid at 5 nm the film model uses. Each carries the sheet's dye spectra,
+layer sensitivities and characteristic curves.
+
+| Medium | Source |
+| --- | --- |
+| Kodak Ektacolor Edge | Kodak E-7020 (April 2019) |
+| Kodak Professional Endura Premier | Kodak E-4070 (March 2013) |
+| Fujicolor Crystal Archive Type CA | Fujifilm AF3-0250U2 (November 2018) |
+| Kodak Vision 2383 | Kodak H-1-2383 (March 2022) |
+| Kodak Vision Premier 2393 | Kodak 2393 curve sheets |
+| Fujifilm ETERNA-CP 3513DI | Fujifilm ETERNA-CP 3513DI brochure |
+
+A sheet that publishes one characteristic curve develops all three records along it;
+E-7020, E-4070 and 2393 publish three and are carried per record. The lab scan and
+telecine are inversions rather than sheets, and are described in `PrintPaperTables.swift`.
 
 `SOURCE_ASSETS.json` records where assets came from and their file hashes. Before
 adding data or images, run `python3 tools/check-source-boundary.py`.

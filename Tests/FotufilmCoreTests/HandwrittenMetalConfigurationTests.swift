@@ -9,6 +9,9 @@ final class HandwrittenMetalConfigurationTests: XCTestCase {
     func testReleaseMetallibConfigurationMatchesSwiftAuthorities() throws {
         let definitions = try releaseDefinitions()
         let offsets: [String: Int] = [
+            "FOTUFILM_CFG_SAMPLED_CURVES": FilmEngineInvocation.sampledCurvesOffset,
+            "FOTUFILM_SAMPLED_CURVE_STRIDE": FilmEngineInvocation.sampledCurveStride,
+            "FOTUFILM_CFG_DEVELOP_COMPLEMENT": FilmEngineInvocation.developComplementOffset,
             "FOTUFILM_CFG_CURVE_SECONDARY": FilmEngineInvocation.curveSecondaryOffset,
             "FOTUFILM_CFG_COUPLER_RELEASE_GAMMA":
                 FilmEngineInvocation.couplerReleaseGammaOffset,

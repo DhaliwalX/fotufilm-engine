@@ -416,6 +416,11 @@ public enum SpectralRuntime {
         for curve in stock.curves {
             add(curve.dMin); add(curve.gamma); add(curve.toe); add(curve.toeWidth)
             add(curve.shoulder); add(curve.shoulderWidth)
+            if let sampled = curve.sampled {
+                add(Float(sampled.logExposure.count))
+                for value in sampled.logExposure { add(value) }
+                for value in sampled.density { add(value) }
+            }
             if let secondary = curve.secondary {
                 add(1)
                 add(secondary.gamma); add(secondary.toe); add(secondary.toeWidth)
@@ -455,8 +460,9 @@ public enum SpectralRuntime {
                                     paper: PrintPaper,
                                     bleachBypass: Float = 0,
                                     printViewingKelvin: Float? = nil) -> SpectralPipelineTables {
-        let referenceIlluminant = filmReferenceIlluminant(for: stock)
-        let exposure = exposureTable(for: stock, illuminant: referenceIlluminant)
+        // Output characterization is fixed at the stock's reference light. The invocation
+        // replaces this exposure table with the scene spectrum after calibration is built.
+        let exposure = exposureTable(for: stock, illuminant: filmReferenceIlluminant(for: stock))
         if stock.isReversal {
             let basis = neutralDensityBasis(for: stock)
             func aligned(_ density: [Float]) -> [Float] { basis(density) }
@@ -1270,8 +1276,8 @@ public enum SpectralRuntime {
     /// Exposure is calibrated against the stock's native reference illuminant. The numerator uses
     /// the scene's
     /// actual SPD, so a spectrally flat subject changes the relative record exposures under a
-    /// different illuminant just as a daylight-balanced film does. Both SPDs are normalized at
-    /// 560 nm so their arbitrary tabular scale is not mistaken for a change in scene intensity.
+    /// different illuminant just as a daylight-balanced film does. Both SPDs are normalized to
+    /// equal photometric Y so their tabular scale is not mistaken for scene intensity.
     /// A lens filter in the form this integration wants it: the stack's transmittance on the
     /// grid, the exposure scale the shoot's metering applied, and the per-layer ratio the
     /// compact fallback needs when there is no reconstruction model to filter band by band.
@@ -1303,13 +1309,13 @@ public enum SpectralRuntime {
             let s = stock.sensitivity
             let p3 = ColorScience.linearRec2020ToDisplayP3(rgb)
             let plain = SIMD3(dot(s[0], p3), dot(s[1], p3), dot(s[2], p3))
-            let anchor = max(illuminant[Illuminant.anchorIndex], 1e-12)
-            let referenceAnchor = max(referenceIlluminant[Illuminant.anchorIndex], 1e-12)
+            let sceneY = Illuminant.luminance(illuminant)
+            let referenceY = Illuminant.luminance(referenceIlluminant)
             var sceneIntegral = SIMD3<Float>(repeating: 0)
             var referenceIntegral = SIMD3<Float>(repeating: 0)
             for i in 0..<SpectralGrid.count {
-                let light = illuminant[i] / anchor
-                let reference = referenceIlluminant[i] / referenceAnchor
+                let light = illuminant[i] / sceneY
+                let reference = referenceIlluminant[i] / referenceY
                 for layer in 0..<3 {
                     sceneIntegral[layer] += light * stock.spectralProfile.layerSensitivity[layer][i]
                     referenceIntegral[layer] += reference
@@ -1326,11 +1332,11 @@ public enum SpectralRuntime {
         let reflectance = model.reflectance(rgb)
         var exposure = SIMD3<Float>(repeating: 0)
         var referenceExposure = SIMD3<Float>(repeating: 0)
-        let anchor = max(illuminant[Illuminant.anchorIndex], 1e-12)
-        let referenceAnchor = max(referenceIlluminant[Illuminant.anchorIndex], 1e-12)
+        let sceneY = Illuminant.luminance(illuminant)
+        let referenceY = Illuminant.luminance(referenceIlluminant)
         for i in 0..<SpectralGrid.count {
-            let light = illuminant[i] / anchor
-            let referenceLight = referenceIlluminant[i] / referenceAnchor
+            let light = illuminant[i] / sceneY
+            let referenceLight = referenceIlluminant[i] / referenceY
             let through = filter.map { reflectance[i] * $0.transmittance[i] } ?? reflectance[i]
             exposure.x += through * light * stock.spectralProfile.layerSensitivity[0][i]
             exposure.y += through * light * stock.spectralProfile.layerSensitivity[1][i]
@@ -1547,11 +1553,11 @@ public enum SpectralRuntime {
     static func monochromaticExposure(_ light: LocusLight, sensitivities: [[Float]],
                                       illuminant: [Float], referenceIlluminant: [Float],
                                       filter: SpectralFilter?) -> [Float] {
-        let anchor = max(illuminant[Illuminant.anchorIndex], 1e-12)
-        let referenceAnchor = max(referenceIlluminant[Illuminant.anchorIndex], 1e-12)
+        let sceneY = Illuminant.luminance(illuminant)
+        let referenceY = Illuminant.luminance(referenceIlluminant)
         var white: Float = 0
         for i in 0..<SpectralGrid.count {
-            white += illuminant[i] / anchor * SpectralGrid.yBar[i]
+            white += illuminant[i] / sceneY * SpectralGrid.yBar[i]
         }
         let target = light.luminance * white
         let lower = light.lowerBand
@@ -1566,7 +1572,7 @@ public enum SpectralRuntime {
             let exposure = lowerThrough * sensitivity[lower] + upperThrough * sensitivity[upper]
             var reference: Float = 0
             for i in 0..<SpectralGrid.count {
-                reference += referenceIlluminant[i] / referenceAnchor * sensitivity[i]
+                reference += referenceIlluminant[i] / referenceY * sensitivity[i]
             }
             return gain * exposure / max(reference, 1e-12)
         }
@@ -1740,13 +1746,13 @@ public enum SpectralRuntime {
         let reflectance = model.reflectance(rgb / radiance)
         var exposure: Float = 0
         var referenceExposure: Float = 0
-        let anchor = max(illuminant[Illuminant.anchorIndex], 1e-12)
-        let referenceAnchor = max(suppliedReference[Illuminant.anchorIndex], 1e-12)
+        let sceneY = Illuminant.luminance(illuminant)
+        let referenceY = Illuminant.luminance(suppliedReference)
         for i in 0..<SpectralGrid.count {
-            let light = illuminant[i] / anchor
+            let light = illuminant[i] / sceneY
             let through = filter.map { reflectance[i] * $0.transmittance[i] } ?? reflectance[i]
             exposure += through * light * donor.sensitivity[i]
-            referenceExposure += suppliedReference[i] / referenceAnchor * donor.sensitivity[i]
+            referenceExposure += suppliedReference[i] / referenceY * donor.sensitivity[i]
         }
         return (filter?.gain ?? 1) * exposure / max(referenceExposure, 1e-12) * radiance
     }
@@ -2152,7 +2158,7 @@ extension SpectralRuntime {
     nonisolated(unsafe) private static var sceneBlendCache =
         BoundedCache<UInt64, SpectralLUT>(limit: 32)
 
-    private static func illuminantSignature(_ illuminant: [Float]) -> UInt64 {
+    static func illuminantSignature(_ illuminant: [Float]) -> UInt64 {
         precondition(illuminant.count == SpectralGrid.count)
         var h: UInt64 = 0xcbf29ce484222325
         for value in illuminant {
@@ -2280,13 +2286,13 @@ extension SpectralRuntime {
         return built
     }
 
-    /// The exposure-domain table behind this stack. nil uses the stock's native reference. Direct
+    /// The exposure-domain table behind this stack. nil assumes D65. Direct
     /// sampling requires coordinates returned by `ColorScience.linearRec2020ToExposureDomain`.
     public static func filteredExposure(for stock: FilmStock,
                                         illuminant supplied: [Float]?,
                                         stack: LensFilterStack) -> SpectralLUT {
         precondition(!stack.isEmpty, "an empty stack has no table of its own to build")
-        let illuminant = supplied ?? filmReferenceIlluminant(for: stock)
+        let illuminant = supplied ?? Illuminant.atLocus(kelvin: 6504)
         let gain = stack.exposureGain(stock: stock, illuminant: illuminant)
         let illuminantID = illuminantSignature(illuminant)
 
@@ -2496,7 +2502,8 @@ public enum SpectralGrid {
         return result
     }
 
-    /// The receiver supplied by PrintPaperSpectra (analytic examples in this repository).
+    /// The receiver supplied by PrintPaperSpectra, digitised from KODAK EKTACOLOR EDGE
+    /// publication E-7020.
     static let paperDyes: [[Float]] = partition(
         zip(PrintPaperSpectra.dyeDensity, PrintPaperSpectra.neutralAmounts)
             .map { record, amount in record.map { $0 * amount } })

@@ -22,14 +22,21 @@ constant int FIELD_COUPLER_RADIUS [[function_constant(17)]];
 constant int FIELD_ADJACENCY_RADIUS [[function_constant(18)]];
 constant bool DEVELOP_MULTIRES [[function_constant(19)]];
 
+// Optional specialization: analytic, complete cubic cache, or general sampled lookup.
+constant uint FILM_CURVE_MODE [[function_constant(20)]];
+
 constant uint kFeatureCouplers = 1u << 3;
 constant uint kFeatureDonor = 1u << 27;
 
 constant uint kCurves = 0u;
+constant uint kSampledCurves = FOTUFILM_CFG_SAMPLED_CURVES;
+constant uint kSampledCurveStride = FOTUFILM_SAMPLED_CURVE_STRIDE;
 constant uint kCoupler = 21u;
 constant uint kGrain = 30u;
 constant uint kCouplerScale = 58u;
 constant uint kAdjacencyStrength = 59u;
+constant uint kAdjacencyModel = kSampledCurves + 3u * kSampledCurveStride;
+constant uint kChromaticFringeAmount = kAdjacencyModel + 3u;
 constant uint kCouplerWarp = 66u;
 constant uint kHalationKernel = 457u;
 constant uint kMottle = 8684u;
@@ -45,7 +52,7 @@ constant uint kDonorReleaseGamma = 8795u;
 constant uint kDiffusionDirect = 8734u;
 constant uint kDiffusionKernel = 8735u;
 constant uint kDonorDiffusionKernel = 8796u;
-constant uint kDevelopComplement = 8799u;
+constant uint kDevelopComplement = FOTUFILM_CFG_DEVELOP_COMPLEMENT;
 constant uint kGrainDensityProfile = 8800u;
 
 constant float kInverseLn10 = 1.0f / 2.3025851f;
@@ -82,6 +89,8 @@ struct DevelopParameters {
     uint4 adjacency;
     uint4 phases;
     float4 grain;
+    uint4 adjacencySecondary;
+    uint4 chromaticFringe;
 };
 struct PrintParameters { uint4 extent; float4 values; };
 
@@ -111,6 +120,46 @@ static inline float inhibitor_release(float activation, float gamma) {
     return released / max(released + retained, 1.0e-8f);
 }
 
+static inline float sample_film_curve(
+    const device float *configuration, texture2d<float, access::read> curves,
+    float exposure, uint channel) {
+    if (is_function_constant_defined(FILM_CURVE_MODE)) {
+        if (FILM_CURVE_MODE == 0u) return sample_curve(curves, exposure, channel);
+    } else if (curves.get_height() == 4u) return sample_curve(curves, exposure, channel);
+    float x = clamp(exposure, -8.0f, 8.0f);
+    uint width = curves.get_width();
+    uint bin = min(uint((x + 8.0f) * (float(width) / 16.0f)), width - 1u);
+    float4 anchor = curves.read(uint2(bin, 4u + 2u * channel));
+    if ((is_function_constant_defined(FILM_CURVE_MODE) && FILM_CURVE_MODE == 1u)
+        || (exposure >= -8.0f && exposure <= 8.0f
+            && as_type<uint>(anchor.x) != 0x7fc00000u)) {
+        float4 pair = curves.read(uint2(bin, 5u + 2u * channel));
+        float dx = x - anchor.x;
+        float2 cubic = dx < 0.0f ? pair.xy : pair.zw;
+        return anchor.y + dx * (anchor.z + dx * (cubic.x + dx * cubic.y));
+    }
+    uint base = kSampledCurves + channel * kSampledCurveStride;
+    uint count = uint(configuration[base]);
+    if (count < 2u) return sample_curve(curves, exposure, channel);
+    if (exposure <= configuration[base + 1u]) return configuration[base + 2u];
+    uint end = base + 1u + (count - 1u) * 3u;
+    if (exposure >= configuration[end]) return configuration[end + 1u];
+    uint low = 0u, high = count - 1u;
+    while (high - low > 1u) {
+        uint mid = (low + high) / 2u;
+        if (configuration[base + 1u + mid * 3u] <= exposure) low = mid;
+        else high = mid;
+    }
+    uint i = base + 1u + low * 3u;
+    float h = configuration[i + 3u] - configuration[i];
+    float t = clamp((exposure - configuration[i]) / h, 0.0f, 1.0f);
+    float delta = configuration[i + 4u] - configuration[i + 1u];
+    float a = h * configuration[i + 2u], b = h * configuration[i + 5u];
+    return configuration[i + 1u] + t * (a + t * (3.0f * delta - 2.0f * a - b
+        + t * (-2.0f * delta + a + b)));
+
+}
+
 static inline float4 stored_log_exposure(float4 light) {
     // The AOT schedule deliberately materializes log exposure in f16. Development,
     // activation, adjacency, and inhibitor release must all observe this same seam.
@@ -122,7 +171,7 @@ static inline float4 activation_from_log(
     texture2d<float, access::read> curves) {
     float4 activation;
     for (uint channel = 0; channel < 3u; ++channel) {
-        float formed = sample_curve(curves, logarithmic[channel], channel);
+        float formed = sample_film_curve(configuration, curves, logarithmic[channel], channel);
         activation[channel] = (formed - configuration[kCurves + channel * 6u])
             / max(film_curve_range(configuration, channel), 1.0e-6f);
     }
@@ -152,7 +201,7 @@ kernel void fotufilm_spatial_bake_half_response(
     if (isfinite(logarithmic)) {
         if (position.z < 3u) {
             uint base = kCurves + position.z * 6u;
-            float formed = sample_curve(curves, logarithmic, position.z);
+            float formed = sample_film_curve(configuration, curves, logarithmic, position.z);
             activation = (formed - configuration[base])
                 / max(film_curve_range(configuration, position.z), 1.0e-6f);
             release = inhibitor_release(
@@ -1447,6 +1496,8 @@ kernel void fotufilm_spatial_develop(
     texture2d<half, access::write> printOutput [[texture(4)]],
     texture2d_array<float, access::read> halfResponse [[texture(5)]],
     texture2d<half, access::read> multiresCorrection [[texture(6)]],
+    texture2d<half, access::read> adjacencySecondary [[texture(7)]],
+    texture2d<half, access::read> chromaticFringe [[texture(8)]],
     const device float *configuration [[buffer(0)]],
     const device float *finePoisson [[buffer(1)]],
     const device float *fineNormal [[buffer(2)]],
@@ -1630,6 +1681,7 @@ kernel void fotufilm_spatial_develop(
         ? DEVELOP_DONOR : (p.state.y & kFeatureDonor) != 0u;
     bool diffused = DEVELOP_CACHE_FIELDS || p.state.z != 0u;
     float4 released;
+    float3 adjacencyResidual = 0.0f;
     if (DEVELOP_CACHE_FIELDS) {
         float2 coordinate = (float2(position)
                 + float2(p.coupler.w, p.phases.x) + 0.5f)
@@ -1647,6 +1699,13 @@ kernel void fotufilm_spatial_develop(
             inhibitor_release(activation.z, configuration[kCouplerReleaseGamma + 2u]),
             inhibitor_release(activation.w, configuration[kDonorReleaseGamma])));
     }
+    float3 fringeResidual = 0.0f;
+    if (couplers && p.chromaticFringe.z != 0u) {
+        float3 broad = sample_develop_grid(chromaticFringe, position, p.chromaticFringe,
+            p.extent.w % max(p.chromaticFringe.z, 1u)).rgb;
+        fringeResidual = (broad - released.rgb)
+            * configuration[kChromaticFringeAmount] * configuration[kCouplerScale];
+    }
     float3 effective = logarithmic;
     if (couplers || donor) {
         for (uint channel = 0u; channel < 3u; ++channel) {
@@ -1656,6 +1715,12 @@ kernel void fotufilm_spatial_develop(
                 inhibition += dot(float3(configuration[row], configuration[row + 1u],
                                           configuration[row + 2u]), released.rgb)
                     * configuration[kCouplerScale];
+                if (p.chromaticFringe.z != 0u) {
+                    for (uint donorChannel = 0u; donorChannel < 3u; ++donorChannel) {
+                        if (donorChannel != channel)
+                            inhibition += configuration[row + donorChannel] * fringeResidual[donorChannel];
+                    }
+                }
             }
             if (donor) {
                 inhibition += configuration[kDonorRelease + channel] * released.w
@@ -1676,7 +1741,14 @@ kernel void fotufilm_spatial_develop(
     } else if (p.state.w != 0u) {
         float3 adjacent = sample_develop_grid(
             adjacencyGrid, position, p.adjacency, p.phases.y).rgb;
-        effective -= configuration[kAdjacencyStrength] * (adjacent - activation.rgb);
+        if (configuration[kAdjacencyModel] > 0.5f) {
+            float3 secondary = sample_develop_grid(
+                adjacencySecondary, position, p.adjacencySecondary, p.phases.w).rgb;
+            constexpr float share = 0.2753401713f;
+            adjacencyResidual = activation.rgb - (share * adjacent + (1.0f - share) * secondary);
+        } else {
+            effective -= configuration[kAdjacencyStrength] * (adjacent - activation.rgb);
+        }
     }
 
     float3 density;
@@ -1685,9 +1757,15 @@ kernel void fotufilm_spatial_develop(
     bool complement = DEVELOP_CACHE_FIELDS
         ? DEVELOP_COMPLEMENT : configuration[kDevelopComplement] > 0.5f;
     for (uint channel = 0u; channel < 3u; ++channel) {
-        float formed = sample_curve(curves, effective[channel], channel);
+        float formed = sample_film_curve(configuration, curves, effective[channel], channel);
         float dMin = configuration[kCurves + channel * 6u];
         float range = film_curve_range(configuration, channel);
+        // Mirrors adjacency_density in FotufilmHalideShared.h, before complement and grain.
+        if (configuration[kAdjacencyModel] > 0.5f && p.state.w != 0u) {
+            float net = max(formed - dMin, 0.0f);
+            formed = dMin + clamp(net + configuration[kAdjacencyStrength]
+                * net * adjacencyResidual[channel], 0.0f, range);
+        }
         density[channel] = complement ? dMin + range - (formed - dMin) : formed;
         if (DEVELOP_GRAIN) {
             float amount = clamp((density[channel] - dMin) / max(range, 1.0e-6f),
@@ -1743,7 +1821,7 @@ static inline float3 developed_density_from_log(
     float3 density;
     bool complement = configuration[kDevelopComplement] > 0.5f;
     for (uint channel = 0u; channel < 3u; ++channel) {
-        float formed = sample_curve(curves, effective[channel], channel);
+        float formed = sample_film_curve(configuration, curves, effective[channel], channel);
         float dMin = configuration[kCurves + channel * 6u];
         float range = film_curve_range(configuration, channel);
         density[channel] = complement ? dMin + range - (formed - dMin) : formed;

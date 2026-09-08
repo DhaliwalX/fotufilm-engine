@@ -21,7 +21,6 @@ web/public/test/
 web/public/scene.png
 web/public/fallback/
 
-# Local stock packs. The bundled example pack lives in
-# Sources/FotufilmCore/Stocks/ and is committed; a calibrated pack belongs
-# outside the repository, pointed at by FOTUFILM_STOCKS.
+# Local stock packs. The released profiles and synthetic examples live in
+# Sources/FotufilmCore/Stocks/. Point FOTUFILM_STOCKS at other local packs.
 /Stocks/

@@ -5,6 +5,9 @@ constant uint kCurveSamples = 2048u;
 constant uint kTransferSamples = FOTUFILM_POINTWISE_TRANSFER_SAMPLES;
 constant uint kDecodeSamples = FOTUFILM_POINTWISE_DECODE_SAMPLES;
 constant uint kCurves = 0u;
+constant uint kSampledCurves = FOTUFILM_CFG_SAMPLED_CURVES;
+constant uint kSampledCurveStride = FOTUFILM_SAMPLED_CURVE_STRIDE;
+constant uint kDevelopComplement = FOTUFILM_CFG_DEVELOP_COMPLEMENT;
 constant uint kCoupler = 21u;
 constant uint kCouplerScale = 58u;
 constant uint kCouplerWarp = 66u;
@@ -366,6 +369,29 @@ static inline float transfer(
         linear_table, (q + 0.5f) / float(kTransferSamples)).r);
 }
 
+static inline float sampled_density(
+    const device float *configuration,
+    float exposure, uint channel) {
+    uint base = kSampledCurves + channel * kSampledCurveStride;
+    uint count = uint(configuration[base]);
+    if (exposure <= configuration[base + 1u]) return configuration[base + 2u];
+    uint end = base + 1u + (count - 1u) * 3u;
+    if (exposure >= configuration[end]) return configuration[end + 1u];
+    uint low = 0u, high = count - 1u;
+    while (high - low > 1u) {
+        uint mid = (low + high) / 2u;
+        if (configuration[base + 1u + mid * 3u] <= exposure) low = mid;
+        else high = mid;
+    }
+    uint i = base + 1u + low * 3u, j = base + 1u + high * 3u;
+    float h = configuration[j] - configuration[i];
+    float t = clamp((exposure - configuration[i]) / h, 0.0f, 1.0f);
+    float y0 = configuration[i + 1u], delta = configuration[j + 1u] - y0;
+    float a = h * configuration[i + 2u], b = h * configuration[j + 2u];
+    return y0 + t * (a + t * (3.0f * delta - 2.0f * a - b
+                              + t * (-2.0f * delta + a + b)));
+}
+
 static inline float3 pointwise_develop(
     texture2d_array<half, access::read> exposure_faces,
     texture3d<half, access::sample> print_cube,
@@ -378,6 +404,15 @@ static inline float3 pointwise_develop(
     float3 layer_exposure = max(records.rgb, 1.0e-6f);
     float3 log_exposure = log10(layer_exposure);
     float3 released = sample_curve(curves, log_exposure, 0u);
+    float3 minima = curve_minimum(configuration);
+    float3 ranges = max(curve_range(configuration), 1.0e-6f);
+    for (uint channel = 0u; channel < 3u; ++channel) {
+        if (configuration[kSampledCurves + channel * kSampledCurveStride] >= 2.0f) {
+            float formed = sampled_density(configuration, log_exposure[channel], channel);
+            released[channel] = release((formed - minima[channel]) / ranges[channel],
+                configuration[kCouplerReleaseGamma + channel]);
+        }
+    }
     float donor_released = 0.0f;
     if (params.donor != 0u) {
         float donor_log = log10(max(records.w, 1.0e-6f));
@@ -396,6 +431,16 @@ static inline float3 pointwise_develop(
         inhibited_log[channel] = log_exposure[channel] - inhibition;
     }
     float3 density_coordinate = sample_curve(curves, inhibited_log, 1u);
+    for (uint channel = 0u; channel < 3u; ++channel) {
+        if (configuration[kSampledCurves + channel * kSampledCurveStride] >= 2.0f) {
+            float x = inhibited_log[channel];
+            float effective = x + warp(configuration, channel, x, params.nonlinear_warp != 0u);
+            float formed = sampled_density(configuration, effective, channel);
+            float coordinate = (formed - minima[channel]) / ranges[channel];
+            density_coordinate[channel] = configuration[kDevelopComplement] != 0.0f
+                ? 1.0f - coordinate : coordinate;
+        }
+    }
     return (kTemporalPrint
         ? temporal_tetrahedral(print_cube, density_coordinate, random)
         : tetrahedral(print_cube, density_coordinate)).rgb;

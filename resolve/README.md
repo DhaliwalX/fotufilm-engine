@@ -1,7 +1,7 @@
 # Fotufilm for DaVinci Resolve
 
-Default builds include Gold 200, Tri-X 400, and Provia 100F from the free
-[Starter pack](../licenses/STARTER-PACK.txt).
+Default builds include all 40 free
+[film profiles](../licenses/FILM-PROFILES.txt), licensed under CC BY-SA 4.0.
 
 This plugin adds Fotufilm to a Resolve node. It uses the same engine and stock
 files as the Mac app and command-line tool.
@@ -40,7 +40,7 @@ updated together; packs that need a newer version are skipped.
 4. Leave **Stage** (under **Pipeline**) on **Full** to render the complete film and print process.
 5. Adjust light and colour, lens filters, development, grain, halation, and output medium.
 
-The plugin includes the three Starter films and example print models. No activation
+The plugin includes all 40 film profiles and example print models. No activation
 is needed. If a control is unavailable for your film, the status line explains why.
 
 The inspector groups controls in the order the light passes through them: Input, Film,

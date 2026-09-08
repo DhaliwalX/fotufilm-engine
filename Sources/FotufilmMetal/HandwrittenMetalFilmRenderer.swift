@@ -623,6 +623,10 @@ public final class HandwrittenMetalFilmRenderer {
     private static func filmDensity(
         configuration: [Float], channel: Int, logExposure: Float
     ) -> Float {
+        if let sampled = FilmEngineInvocation.sampledFilmDensity(
+            configuration: configuration, channel: channel, logExposure: logExposure) {
+            return sampled
+        }
         let primary = curveDensity(
             configuration: configuration, base: channel * 6,
             logExposure: logExposure)

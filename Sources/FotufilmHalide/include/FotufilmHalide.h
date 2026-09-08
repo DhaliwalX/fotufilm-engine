@@ -32,8 +32,10 @@ enum {
 /// Number of floats in the packed configuration. Offsets are defined by the enum below; append new
 /// fields without renumbering existing entries.
 enum {
-    FOTUFILM_FRAME_CONFIGURATION_COUNT = 233 + 3 * FOTUFILM_COUPLER_WARP_SAMPLES
-        + 2 * FOTUFILM_TONE_GRID_CELLS,
+    FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES = 1024,
+    FOTUFILM_SAMPLED_CURVE_STRIDE = 1 + 3 * FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES,
+    FOTUFILM_FRAME_CONFIGURATION_COUNT = 239 + 3 * FOTUFILM_COUPLER_WARP_SAMPLES
+        + 2 * FOTUFILM_TONE_GRID_CELLS + 3 * FOTUFILM_SAMPLED_CURVE_STRIDE,
 };
 
 /// Offsets into the packed configuration.
@@ -224,8 +226,18 @@ enum {
     /// Enabled flag followed by three host-primary luminance weights. Fits chroma after the
     /// output matrix while preserving luminance and above-white highlights; zero disables it.
     FOTUFILM_CONFIG_OUTPUT_GAMUT = FOTUFILM_CONFIG_OUTPUT_SHOULDER + 1,
+    /// Three records: sample count, then (log exposure, density, tangent) triples.
+    FOTUFILM_CONFIG_SAMPLED_CURVES = FOTUFILM_CONFIG_OUTPUT_GAMUT + 4,
+    /// 0: Gaussian/log-exposure adjacency; 1: screened diffusion/Nelson density response.
+    FOTUFILM_CONFIG_ADJACENCY_MODEL = FOTUFILM_CONFIG_SAMPLED_CURVES + 3 * FOTUFILM_SAMPLED_CURVE_STRIDE,
+    FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA,
+    FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS,
+    /// Broad transport changes off-diagonal inhibition only; zero amount preserves legacy output.
+    FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT,
+    FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA,
+    FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS,
     /// Typed record-exposure input seam. Zero is ordinary scene input.
-    FOTUFILM_CONFIG_RECORD_INPUT = FOTUFILM_CONFIG_OUTPUT_GAMUT + 4,
+    FOTUFILM_CONFIG_RECORD_INPUT,
 };
 
 /// Decode-kernel parameters: row-major scene-space matrix, transfer, and premultiplication flag.

@@ -377,14 +377,51 @@ inline Halide::Expr curve_component_density(Halide::ImageParam &configuration,
         Halide::max(toe_term - shoulder_term, 0.0f), shoulder - toe);
 }
 
+inline Halide::Expr sampled_film_density(Halide::ImageParam &configuration,
+                                        Halide::Expr channel, Halide::Expr x) {
+    using namespace Halide;
+    Expr base = FOTUFILM_CONFIG_SAMPLED_CURVES + channel * FOTUFILM_SAMPLED_CURVE_STRIDE;
+    Expr count = clamp(cast<int32_t>(configuration(base)), 2, FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES);
+    Expr low = 0;
+    // Binary lifting tracks only the lower knot. Carrying both bounds through ten
+    // nested selects makes Halide's let substitution expand an exponential DAG
+    // in several AOT schedules. Constant strides keep the same exact interval
+    // search while greatly reducing the expression passed to the compiler.
+    for (int stride = FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES / 2; stride > 0; stride /= 2) {
+        Expr candidate = min(low + stride, count - 1);
+        low = unsafe_promise_clamped(
+            select(configuration(base + 1 + candidate * 3) <= x, candidate, low),
+            0, FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES - 1);
+    }
+    Expr high = min(low + 1, count - 1);
+    Expr i = base + 1 + low * 3, j = base + 1 + high * 3;
+    Expr h = max(configuration(j) - configuration(i), 1.0e-12f);
+    Expr t = clamp((x - configuration(i)) / h, 0.0f, 1.0f);
+    Expr y0 = configuration(i + 1), y1 = configuration(j + 1);
+    Expr a = h * configuration(i + 2), b = h * configuration(j + 2);
+    Expr delta = y1 - y0;
+    Expr y = y0 + t * (a + t * (3 * delta - 2 * a - b + t * (-2 * delta + a + b)));
+    return select(x <= configuration(base + 1), configuration(base + 2),
+                  x >= configuration(base + 1 + (count - 1) * 3),
+                  configuration(base + 2 + (count - 1) * 3), y);
+}
+
+inline Halide::Expr has_sampled_film_curve(Halide::ImageParam &configuration,
+                                          Halide::Expr channel) {
+    return configuration(FOTUFILM_CONFIG_SAMPLED_CURVES
+        + channel * FOTUFILM_SAMPLED_CURVE_STRIDE) >= 2.0f;
+}
+
 inline Halide::Expr film_density(Halide::ImageParam &configuration,
                                  Halide::Expr channel, Halide::Expr log_exposure,
                                  bool approximate = false) {
-    return curve_density(configuration, FOTUFILM_CONFIG_CURVES + channel * 6,
+    Halide::Expr analytic = curve_density(configuration, FOTUFILM_CONFIG_CURVES + channel * 6,
                          log_exposure, approximate)
         + curve_component_density(
             configuration, FOTUFILM_CONFIG_CURVE_SECONDARY + channel * 5,
             log_exposure, approximate);
+    return Halide::select(has_sampled_film_curve(configuration, channel),
+                           sampled_film_density(configuration, channel, log_exposure), analytic);
 }
 
 /// Sampling grid for the tabulated H&D curves below.
@@ -502,6 +539,13 @@ inline Halide::Expr sample_curve(Halide::Func table, Halide::Expr log_exposure,
 }
 
 /// dMax - dMin for the curve at `base`: gamma * (shoulder - toe).
+inline Halide::Expr sample_film_curve(Halide::ImageParam &configuration,
+                                     Halide::Func table, Halide::Expr x,
+                                     Halide::Expr channel) {
+    return Halide::select(has_sampled_film_curve(configuration, channel),
+        sampled_film_density(configuration, channel, x), sample_curve(table, x, channel));
+}
+
 inline Halide::Expr curve_range(Halide::ImageParam &configuration, Halide::Expr base) {
     return configuration(base + 1) * (configuration(base + 4) - configuration(base + 2));
 }
@@ -527,6 +571,29 @@ inline Halide::Expr inhibitor_release(Halide::Expr activation, Halide::Expr gamm
     return Halide::select(gamma == 1.0f, a, nonlinear);
 }
 
+/// Positive Gaussian mixture for the isotropic screened-diffusion transport kernel.
+inline Halide::Expr adjacency_transport(Halide::ImageParam &configuration,
+                                        Halide::Expr primary, Halide::Expr secondary) {
+    constexpr float share = 0.2753401713f;
+    return Halide::select(configuration(FOTUFILM_CONFIG_ADJACENCY_MODEL) > 0.5f,
+                          share * primary + (1.0f - share) * secondary, primary);
+}
+
+/// Nelson's density-weighted response, with a normalized source activation and the stock's
+/// finite development capacity. Applied before reversal complementation and grain. Local DIR
+/// inhibition is already in `formed`; only its spatial adjacency residual enters here.
+inline Halide::Expr adjacency_density(Halide::ImageParam &configuration,
+                                      Halide::Expr channel, Halide::Expr formed,
+                                      Halide::Expr residual) {
+    Halide::Expr base = configuration(FOTUFILM_CONFIG_CURVES + channel * 6);
+    Halide::Expr net = Halide::max(formed - base, 0.0f);
+    Halide::Expr corrected = base + Halide::clamp(
+        net + configuration(FOTUFILM_CONFIG_ADJACENCY_STRENGTH) * net * residual,
+        0.0f, film_curve_range(configuration, channel));
+    return Halide::select(configuration(FOTUFILM_CONFIG_ADJACENCY_MODEL) > 0.5f,
+                          corrected, formed);
+}
+
 inline Halide::Expr coupler_release(Halide::ImageParam &configuration,
                                     Halide::Expr donor, Halide::Expr activation) {
     return inhibitor_release(
@@ -549,6 +616,20 @@ inline Halide::Expr coupler_inhibition(Halide::ImageParam &configuration,
                           + configuration(base + 1) * donor1
                           + configuration(base + 2) * donor2;
     return released * configuration(FOTUFILM_CONFIG_COUPLER_SCALE);
+}
+
+/// Redistribute only inter-layer inhibitor transport. Normalized core and broad fields agree
+/// on constants, so the DC matrix and neutral anchor remain unchanged.
+inline Halide::Expr chromatic_fringe_inhibition(Halide::ImageParam &configuration,
+                                                Halide::Expr channel,
+                                                Halide::Expr delta0, Halide::Expr delta1,
+                                                Halide::Expr delta2) {
+    Halide::Expr base = FOTUFILM_CONFIG_COUPLER + channel * 3;
+    Halide::Expr residual = Halide::select(channel != 0, configuration(base) * delta0, 0.0f)
+                         + Halide::select(channel != 1, configuration(base + 1) * delta1, 0.0f)
+                         + Halide::select(channel != 2, configuration(base + 2) * delta2, 0.0f);
+    return residual * configuration(FOTUFILM_CONFIG_COUPLER_SCALE)
+                    * configuration(FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT);
 }
 
 /// Neutral anchor for the coupler stage: the log-exposure offset that undoes the inhibition a

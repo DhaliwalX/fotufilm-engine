@@ -44,7 +44,7 @@ Options:
   --autoexpose       Anchor the log-average scene luminance on mid-gray
   --wb <kelvin>      Scene illuminant, 2000-12000 K (default: 6504, D65).
                      On camera raw this is relative to the file's as-shot
-                     balance, so 6504 is "as the camera saw it"
+                     light; 6504 preserves the capture illuminant
   --tint <n>         Green/magenta off the locus, -100...100 (default: 0)
   --background <c>  Scene-linear Rec.2020 background for associated-alpha input:
                      black, white, or R,G,B (default: black). The source is
@@ -78,6 +78,10 @@ Options:
   --flare <scale>    Taking-lens veiling glare, 1 enables (default: 0 — a
                      photographed source already carries its own lens's glare)
   --couplers <scale> DIR + adjacency strength; 1 calibrated, overdrive compressed (default: 1)
+  --adjacency-model <m> gaussian or screened-diffusion (default: stock's model)
+  --fringe-amount <f> Broad inter-layer transport fraction, 0-1 (default: stock, normally 0)
+  --fringe-radius <um> Broad transport Gaussian sigma on the film, 0-2000 micrometers
+                     (default: stock, normally 100; must exceed the stock's core radius)
   --bleach-bypass <f> Fraction of the developed silver the bleach leaves in the
                      negative, 0-1 (default: 0). The print re-times on the
                      denser mid-grey, so what changes is contrast and chroma.
@@ -111,7 +115,8 @@ Options:
   --paper <name>     Output medium: ektacolor-edge (default), endura-premier,
                      crystal-archive, vision-2383, vision-2393,
                      eterna-cp, lab-scan, telecine, screen or negative.
-                     Photo and projection variants use analytic example curves.
+                     Photo and projection variants are digitised from the
+                     manufacturers' published datasheets.
                      Reversal stocks use screen regardless of the requested medium.
   --negative <how>   Show the developed negative instead of the print it would
                      make: 'lightbox' keeps the base its own orange, 'scanner'
@@ -436,16 +441,15 @@ func associatedOpenEXRColor(url: URL) -> CIImage? {
 
 /// Loads any supported image as associated scene-referred linear Rec.2020 RGBA, preserving values
 /// above 1 for HDR/raw sources. Association is retained until the caller composites the scene.
-func loadLinear(path: String, balance: WhiteBalance)
-    -> (rgba: [Float], width: Int, height: Int, remaining: WhiteBalance,
-        sceneKelvin: Float?, contentHeadroom: Float) {
+func loadLinear(path: String)
+    -> (rgba: [Float], width: Int, height: Int, sceneKelvin: Float?, sceneChromaticity: SIMD2<Float>?, contentHeadroom: Float) {
     let url = URL(fileURLWithPath: path)
     let isRaw = RawDecode.isRaw(url: url)
     let declaredHeadroom = isRaw ? nil : GainMapHeadroom.declared(url: url)
     let context = CIContext(options: [.useSoftwareRenderer: true, .cacheIntermediates: false])
     var image: CIImage?
-    var remaining = balance
     var sceneKelvin: Float?
+    var sceneChromaticity: SIMD2<Float>?
     var contentHeadroom: Float = 1
     var profileCorrection: CameraProfileCorrection.Resolved?
     var associatedEXRColor: CIImage?
@@ -453,24 +457,14 @@ func loadLinear(path: String, balance: WhiteBalance)
         guard let raw = CIRAWFilter(imageURL: url) else {
             fail("Could not read raw file: \(path)")
         }
-        let displacement = balance.mired
-            - WhiteBalance.kelvinToMired(WhiteBalance.neutralKelvin)
-        let asShot = raw.neutralTemperature > 0
-            ? WhiteBalance.kelvinToMired(raw.neutralTemperature) : nil
-        let placement = asShot.map {
-            RawDecode.placement(displacementMired: displacement, asShotMired: $0)
+        // Decode at the file's complete as-shot white once. Edits change the spectral lamp.
+        let white = raw.neutralChromaticity
+        let xy = SIMD2<Float>(Float(white.x), Float(white.y))
+        if xy.x > 0 && xy.y > 0 && xy.x + xy.y < 1 {
+            sceneChromaticity = xy
         }
-        RawDecode.configure(
-            raw,
-            recipe: RawDecode.Recipe(neutralKelvin: placement?.neutralKelvin ?? nil))
-        remaining = RawDecode.remainingBalance(displacementMired: displacement,
-                                               tint: balance.tint,
-                                               bakedMired: placement?.bakedMired)
-        // The illuminant-aware profile delta — the same wiring as the app's still path: the
-        // demosaic is already colorimetric under the as-shot balance, so only the delta of
-        // the profile's matrix against its daylight anchor may be applied, and only when the
-        // camera resolves and the scene was warm enough for it to differ from identity.
-        sceneKelvin = asShot.map(WhiteBalance.miredToKelvin)
+        sceneKelvin = raw.neutralTemperature > 0 ? raw.neutralTemperature : nil
+        RawDecode.configure(raw, recipe: RawDecode.Recipe())
         profileCorrection = CameraProfileCorrection.resolve(
             camera: RawDecode.cameraIdentity(url: url),
             sceneKelvin: sceneKelvin)
@@ -536,7 +530,7 @@ func loadLinear(path: String, balance: WhiteBalance)
         print(String(format: "Camera profile: %@ at %.0f K, max deviation %.4f",
                      corrected.profileID, corrected.cct, corrected.maxDeviation))
     }
-    return (rgba, width, height, remaining, sceneKelvin, contentHeadroom)
+    return (rgba, width, height, sceneKelvin, sceneChromaticity, contentHeadroom)
 }
 
 func parseLinearBackground(_ value: String?) -> SIMD3<Float> {
@@ -772,8 +766,8 @@ if let diffPath = flags["--diff"] {
     guard positional.count == 2 else {
         fail("--diff <out> takes two rendered images: fotufilm <a> <b> --diff <out>")
     }
-    let a = loadLinear(path: positional[0], balance: .neutral)
-    let b = loadLinear(path: positional[1], balance: .neutral)
+    let a = loadLinear(path: positional[0])
+    let b = loadLinear(path: positional[1])
     guard a.width == b.width, a.height == b.height else {
         fail("Images differ in size: \(a.width)x\(a.height) vs \(b.width)x\(b.height)")
     }
@@ -1127,6 +1121,25 @@ if options.transportConstruction(for: stock) != nil {
 // Capture veiling glare, off unless asked for: see Options.flareScale.
 if let f = flags["--flare"] { options.flareScale = Float(f) ?? 1 }
 if let c = flags["--couplers"] { options.couplerScale = Float(c) ?? 1 }
+if let value = flags["--fringe-amount"] {
+    guard let amount = Float(value), amount.isFinite, (0...1).contains(amount) else {
+        fail("Invalid --fringe-amount '\(value)'; expected a finite fraction from 0 to 1.")
+    }
+    options.chromaticFringeAmount = amount
+}
+if let value = flags["--fringe-radius"] {
+    guard let radius = Float(value), radius.isFinite, (0...2000).contains(radius) else {
+        fail("Invalid --fringe-radius '\(value)'; expected 0 to 2000 micrometers.")
+    }
+    options.chromaticFringeRadiusMM = radius / 1000
+}
+if let model = flags["--adjacency-model"] {
+    guard let adjacency = AdjacencyModel(rawValue: model) else {
+        FileHandle.standardError.write(Data("unknown adjacency model '\(model)'; expected gaussian or screened-diffusion\n".utf8))
+        exit(1)
+    }
+    options.adjacencyModel = adjacency
+}
 if let b = flags["--bleach-bypass"] { options.bleachBypass = Float(b) ?? 0 }
 if let m = flags["--mottle"] { options.grainMottleShare = Float(m) }
 if let s = flags["--shutter"] { options.shutterSeconds = Float(s) }
@@ -1265,7 +1278,7 @@ if let packPath = flags["--dump-wasm-pack"] {
 
     var pack = Data()
     pack.append(contentsOf: Array("FSWP".utf8))
-    pack.appendUInt32(options.transportConstruction(for: stock) == nil ? 1 : 2)
+    pack.appendUInt32(options.transportConstruction(for: stock) == nil ? 2 : 3)
     pack.appendInt32(Int32(packWidth))
     pack.appendInt32(Int32(packHeight))
     pack.appendInt32(invocation.featureMask)
@@ -1281,6 +1294,53 @@ if let packPath = flags["--dump-wasm-pack"] {
     // bound, so it goes across as zeros rather than as a missing buffer.
     pack.appendFloats(tables.paperOutput?.values ?? [Float](repeating: 0, count: lutCount))
 
+    // The size ladder, new in version 2. Every spatial slot above is millimetres of emulsion
+    // times this frame's pixels per millimetre, so a pack sealed for 1600x900 would develop a
+    // 100-megapixel frame with grain and halation seven times too coarse. Rather than teach the
+    // browser the physics, the pack carries the slots that move — some 35 of the 8808 — for a
+    // ladder of short edges 3% apart, each sealed by the same code that sealed the base, along
+    // with the feature mask and the apron a tile needs at that size. The browser takes the
+    // nearest rung, which puts every spatial parameter within 1.5% of where a native render
+    // would put it. The short edge sets pixels per millimetre; the long edge follows the pack's
+    // own aspect so the rung at the pack's size is the pack.
+    let baseShortEdge = min(packWidth, packHeight)
+    let baseLongEdge = max(packWidth, packHeight)
+    var shortEdges: Set<Int> = [baseShortEdge]
+    var edge = 240.0
+    while edge <= 12288 {
+        shortEdges.insert(Int(edge.rounded()))
+        edge *= 1.03
+    }
+    let ladder = shortEdges.sorted()
+    pack.appendInt32(Int32(ladder.count))
+    var masks: Set<Int32> = [invocation.featureMask]
+    for shortEdge in ladder {
+        let longEdge = shortEdge == baseShortEdge
+            ? baseLongEdge : Int((Double(shortEdge) * Double(baseLongEdge) / Double(baseShortEdge)).rounded())
+        let rung = FilmEngineInvocation(stock: stock, options: options,
+                                        width: max(longEdge, shortEdge), height: shortEdge)
+        // Compared by bit pattern, as the stage sidecar does, so a signed zero or a NaN the
+        // engine writes the same way at every size stays unchanged.
+        var changed: [(Int32, Float)] = []
+        for (index, value) in rung.configuration.enumerated()
+        where value.bitPattern != invocation.configuration[index].bitPattern {
+            changed.append((Int32(index), value))
+        }
+        if shortEdge == baseShortEdge && !changed.isEmpty {
+            fail("The pack's own size moved \(changed.count) slots on the ladder.")
+        }
+        masks.insert(rung.featureMask)
+        pack.appendInt32(Int32(shortEdge))
+        pack.appendInt32(rung.featureMask)
+        pack.appendUInt32(rung.seed)
+        pack.appendInt32(Int32(rung.spatialSupport))
+        pack.appendInt32(Int32(changed.count))
+        for (index, value) in changed {
+            pack.appendInt32(index)
+            pack.appendFloats([value])
+        }
+    }
+
     do {
         if options.transportConstruction(for: stock) != nil {
             let plan = try LayeredTransportRenderer.renderPlan(stock: stock, options: options,
@@ -1288,12 +1348,7 @@ if let packPath = flags["--dump-wasm-pack"] {
             guard plan.head.featureMask == FilmEngineFeature.lightOut else {
                 fail("Browser transport packs currently require lens flare and diffusion off")
             }
-            pack.appendInt32(plan.head.featureMask)
-            pack.appendFloats(plan.head.configuration)
-            pack.appendFloats(plan.tail.configuration)
-            pack.appendInt32(Int32(plan.components.count))
-            for component in plan.components {
-                pack.appendFloats(component.exposure)
+            func appendBands(_ component: TransportRenderPlan.Component) {
                 pack.appendInt32(Int32(component.bands.count))
                 for band in component.bands {
                     pack.appendFloats([band.weight])
@@ -1302,6 +1357,32 @@ if let packPath = flags["--dump-wasm-pack"] {
                     pack.appendFloats(band.stencil.weights)
                 }
             }
+            func appendDelta(_ values: [Float], base: [Float]) {
+                let changed = values.indices.filter { values[$0].bitPattern != base[$0].bitPattern }
+                pack.appendInt32(Int32(changed.count))
+                for index in changed { pack.appendInt32(Int32(index)); pack.appendFloats([values[index]]) }
+            }
+            pack.appendInt32(plan.head.featureMask)
+            pack.appendFloats(plan.head.configuration)
+            pack.appendFloats(plan.tail.configuration)
+            pack.appendInt32(Int32(plan.components.count))
+            for component in plan.components {
+                pack.appendFloats(component.exposure)
+                appendBands(component)
+            }
+            // Spectral tables do not depend on image size. Each size stores only its changed
+            // spatial configuration and pixel stencils, reusing the component LUTs above.
+            pack.appendInt32(Int32(ladder.count))
+            for shortEdge in ladder {
+                let longEdge = max(shortEdge, Int((Double(shortEdge) * Double(baseLongEdge) / Double(baseShortEdge)).rounded()))
+                let rung = try LayeredTransportRenderer.renderPlan(stock: stock, options: options,
+                                                                   width: longEdge, height: shortEdge)
+                precondition(rung.components.count == plan.components.count)
+                pack.appendInt32(Int32(shortEdge))
+                appendDelta(rung.head.configuration, base: plan.head.configuration)
+                appendDelta(rung.tail.configuration, base: plan.tail.configuration)
+                for component in rung.components { appendBands(component) }
+            }
         }
         try pack.write(to: URL(fileURLWithPath: packPath))
     } catch {
@@ -1309,8 +1390,9 @@ if let packPath = flags["--dump-wasm-pack"] {
     }
     print("""
     \(stockID) on \(options.paper(for: stock).id) at \(packWidth)x\(packHeight): \
-    \(pack.count / 1024) KiB, features 0x\(String(invocation.featureMask, radix: 16)) \
-    -> \(packPath)
+    \(pack.count / 1024) KiB, features 0x\(String(invocation.featureMask, radix: 16)), \
+    \(ladder.count) sizes from \(ladder.first ?? 0) to \(ladder.last ?? 0) px across \
+    \(masks.count) feature masks -> \(packPath)
     """)
     exit(0)
 }
@@ -1428,13 +1510,14 @@ let balance = WhiteBalance(
     tint: flags["--tint"].flatMap { Float($0) } ?? 0)
 let background = parseLinearBackground(flags["--background"])
 
-var (rgba, width, height, remaining, sceneKelvin, contentHeadroom) =
-    loadLinear(path: positional[0], balance: balance)
+var (rgba, width, height, sceneKelvin, sceneChromaticity, contentHeadroom) =
+    loadLinear(path: positional[0])
 PremultipliedAlpha.flatten(&rgba, over: background)
-options.whiteBalance = remaining
+options.whiteBalance = balance
 // The film-side scene light, from the raw file's as-shot record — the same wiring as the
 // app's still path. The gate inside the engine decides whether it does anything.
 options.sceneIlluminantKelvin = sceneKelvin
+options.sceneIlluminantChromaticity = sceneChromaticity
 // And the declared range, the other clip-side fact the app attaches: recorded light above
 // diffuse white is metered into the film's latitude instead of flattening to paper white.
 options.sceneHeadroom = contentHeadroom

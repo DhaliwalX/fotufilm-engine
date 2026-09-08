@@ -17,12 +17,22 @@ for (const { id } of stocks) {
   const bytes = await readFile(new URL(`packs/${id}.pack`, assets));
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   assert.equal(bytes.toString('ascii', 0, 4), 'FSWP');
-  assert.equal(view.getUint32(4, true), 1);
+  assert.equal(view.getUint32(4, true), 2);
   const configCount = view.getInt32(24, true);
   const lutCount = view.getInt32(32, true);
   assert.equal(configCount, engine._fotufilm_wasm_configuration_count());
   assert.equal(lutCount, engine._fotufilm_wasm_lut_count());
-  assert.equal(bytes.length, 40 + 4 * (configCount + 3 * lutCount));
+  // The size ladder follows the cubes: a count, then per rung five ints and the changed slots.
+  let end = 40 + 4 * (configCount + 3 * lutCount);
+  const rungs = view.getInt32(end, true);
+  end += 4;
+  assert.ok(rungs > 0, `${id}: no size ladder`);
+  for (let r = 0; r < rungs; ++r) {
+    assert.ok(view.getInt32(end, true) > 0, `${id}: rung ${r} has no short edge`);
+    assert.ok(view.getInt32(end + 12, true) >= 0, `${id}: rung ${r} has a negative apron`);
+    end += 20 + 8 * view.getInt32(end + 16, true);
+  }
+  assert.equal(bytes.length, end, `${id}: pack length does not match its ladder`);
 
   const pointers = [];
   const allocate = (values) => {
@@ -50,7 +60,7 @@ for (const { id } of stocks) {
     const exposure = take(lutCount), film = take(lutCount), paper = take(lutCount);
     const render = () => {
       const status = engine._fotufilm_wasm_cpu_render(
-        inputPtr, outputPtr, width, height, configuration, exposure, film, paper,
+        inputPtr, outputPtr, width, height, 0, 0, configuration, exposure, film, paper,
         densityPtr, view.getInt32(16, true), view.getUint32(20, true));
       assert.equal(status, 0, `${id}: render failed`);
       return engine.HEAPF32.slice(outputPtr / 4, outputPtr / 4 + count);

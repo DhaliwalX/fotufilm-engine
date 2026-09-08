@@ -236,6 +236,7 @@ final class AccuracyBaselineTests: XCTestCase {
             image.planes[2][i] = patch.z
         }
         var options = FotufilmEngine.Options()
+        options.sceneIlluminantKelvin = stock.referenceIlluminantKelvin
         options.grainScale = 0
         let out = FotufilmEngine(stock: stock, options: options).process(linearRGB: image)
         let centre = (size / 2) * size + size / 2

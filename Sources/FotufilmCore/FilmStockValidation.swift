@@ -37,14 +37,13 @@ public extension FilmStockDefinition {
             for row in rows { try check(field, row, count: shape.1, range) }
         }
 
-        guard schemaVersion == FilmStockDefinition.currentSchemaVersion
-                || schemaVersion == FilmStockDefinition.layeredTransportSchemaVersion else {
+        guard (1...FilmStockDefinition.layeredTransportSchemaVersion).contains(schemaVersion) else {
             throw fail("schemaVersion",
                        "is \(schemaVersion); this build requires "
-                           + "1 or 2")
+                           + "1, 2 or 3")
         }
-        guard (schemaVersion == 2) == (layeredTransport != nil) else {
-            throw fail("layeredTransport", "layered transport requires schema 2 and schema 2 requires a transport definition")
+        guard (schemaVersion == 3) == (layeredTransport != nil) else {
+            throw fail("layeredTransport", "layered transport requires schema 3 and schema 3 requires a transport definition")
         }
         if let layeredTransport {
             do { try layeredTransport.validate() }
@@ -93,6 +92,9 @@ public extension FilmStockDefinition {
                        + "carries N planes; see FilmStock.supportedCaptureLayerCounts")
         }
         for (index, curve) in curves.enumerated() {
+            if curve.sampled != nil && schemaVersion < 2 {
+                throw fail("schemaVersion", "sampled characteristic curves require schema version 2")
+            }
             try curve.validate(field: "curves[\(index)]", fail: fail)
         }
 
@@ -123,6 +125,9 @@ public extension FilmStockDefinition {
                 throw fail("\(field).sensitivity", "is zero at every wavelength")
             }
             try donor.curve.validate(field: "\(field).curve", fail: fail)
+            guard donor.curve.sampled == nil else {
+                throw fail("\(field).curve.sampled", "sampled records are supported only for dye-forming film curves")
+            }
             // The same bound as `couplerInhibition`: a release row is the same physical
             // quantity, stated for a donor record instead of a dye-forming one.
             try check("\(field).inhibition", donor.inhibition, count: layers, 0...4)
@@ -132,6 +137,9 @@ public extension FilmStockDefinition {
             }
         }
         try paperCurve.validate(field: "paperCurve", fail: fail)
+        guard paperCurve.sampled == nil else {
+            throw fail("paperCurve.sampled", "sampled records are supported only for dye-forming film curves")
+        }
         // A gamma inside its own bound still describes a print nothing can
         // make — 20 over the default gap is 18 D — so bound the density scale
         // too. 3.0 clears the measured sheet's 2.10 and every carried value.
@@ -186,6 +194,8 @@ public extension FilmStockDefinition {
             try check("couplerGeometry.selfRetention", couplerGeometry.selfRetention, 0...1)
         }
         try check("couplerDiffusionMM", couplerDiffusionMM, 0...2)
+        try check("chromaticFringeAmount", chromaticFringeAmount ?? 0, 0...1)
+        try check("chromaticFringeRadiusMM", chromaticFringeRadiusMM ?? 0.1, 0...2)
         try check("adjacencyStrength", adjacencyStrength ?? 0, 0...4)
         try check("adjacencyRadiusMM", adjacencyRadiusMM ?? 0, 0...2)
 
@@ -297,6 +307,9 @@ public extension FilmStockDefinition {
                                "has \(condition.curves.count) entries; expected \(layers)")
                 }
                 for (curveIndex, curve) in condition.curves.enumerated() {
+                    if curve.sampled != nil && schemaVersion < 2 {
+                        throw fail("schemaVersion", "sampled characteristic curves require schema version 2")
+                    }
                     try curve.validate(field: "\(field).curves[\(curveIndex)]", fail: fail)
                 }
                 let donorCurves = condition.donorCurves ?? []
@@ -305,6 +318,9 @@ public extension FilmStockDefinition {
                                "has \(donorCurves.count) entries; expected \(donors.count)")
                 }
                 for (curveIndex, curve) in donorCurves.enumerated() {
+                    guard curve.sampled == nil else {
+                        throw fail("\(field).donorCurves[\(curveIndex)].sampled", "sampled records are supported only for dye-forming film curves")
+                    }
                     try curve.validate(field: "\(field).donorCurves[\(curveIndex)]", fail: fail)
                 }
                 if let value = condition.grainStrength {
@@ -388,6 +404,14 @@ extension FilmStockDefinition.CurveSpec {
         }
         if let secondary {
             try secondary.validate(field: "\(field).secondary", fail: fail)
+        }
+        if let sampled {
+            guard sampled.logExposure.allSatisfy({ (-12...12).contains($0) }),
+                  sampled.density.allSatisfy({ $0 >= dMin && $0 <= 20 }),
+                  sampled.density.first == dMin,
+                  sampled.density.last == sampled.density.max() else {
+                throw fail("\(field).sampled", "requires bounded densities, a dMin first endpoint, and a maximum-density last endpoint")
+            }
         }
     }
 }

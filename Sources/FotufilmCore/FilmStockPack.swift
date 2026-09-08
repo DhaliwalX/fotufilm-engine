@@ -43,7 +43,10 @@ public struct FilmStockDefinition: Codable, Sendable {
     /// renders.
     public var couplerGeometry: CouplerGeometry?
     public var couplerDiffusionMM: Float
+    public var chromaticFringeAmount: Float? = nil
+    public var chromaticFringeRadiusMM: Float? = nil
     public var adjacencyStrength: Float?
+    public var adjacencyModel: AdjacencyModel? = nil
     public var adjacencyRadiusMM: Float?
 
     public var grainStrength: Float
@@ -77,7 +80,7 @@ public struct FilmStockDefinition: Codable, Sendable {
     public var halationHazeMM: Float? = nil
     /// Optional independently calibrated halo shape. Its absence is the exact legacy model.
     public var halationProfile: HalationProfile? = nil
-    /// Requires pack schema 2; older engines must reject rather than ignore this operator.
+    /// Requires pack schema 3; older engines must reject rather than ignore this operator.
     public var layeredTransport: LayeredTransport? = nil
     /// Optional provisional halo shape, ignored unless explicitly enabled by the renderer.
     public var estimatedHalationProfile: HalationProfile? = nil
@@ -119,6 +122,7 @@ public struct FilmStockDefinition: Codable, Sendable {
         public var shoulderWidth: Float
         /// A second coated speed group. Absent preserves the original six-parameter curve.
         public var secondary: ComponentSpec?
+        public var sampled: SampledCharacteristicCurve?
 
         public struct ComponentSpec: Codable, Sendable {
             public var gamma: Float
@@ -150,13 +154,14 @@ public struct FilmStockDefinition: Codable, Sendable {
             shoulder = curve.shoulder
             shoulderWidth = curve.shoulderWidth
             secondary = curve.secondary.map(ComponentSpec.init)
+            sampled = curve.sampled
         }
 
         public var curve: CharacteristicCurve {
             CharacteristicCurve(dMin: dMin, gamma: gamma, toe: toe,
                                 toeWidth: toeWidth, shoulder: shoulder,
                                 shoulderWidth: shoulderWidth,
-                                secondary: secondary?.component)
+                                secondary: secondary?.component, sampled: sampled)
         }
     }
 
@@ -350,8 +355,8 @@ public struct FilmStockDefinition: Codable, Sendable {
 }
 
 public extension FilmStockDefinition {
-    static let currentSchemaVersion = 1
-    static let layeredTransportSchemaVersion = 2
+    static let currentSchemaVersion = 2
+    static let layeredTransportSchemaVersion = 3
 
     /// Materialise the definition into a renderable stock. `FilmStock.init` re-normalises the RGB
     /// matrix and validates layer counts, so a malformed pack fails here rather than part-way
@@ -374,7 +379,10 @@ public extension FilmStockDefinition {
             couplerReleaseGamma: couplerReleaseGamma ?? [1, 1, 1],
             couplerGeometry: couplerGeometry,
             couplerDiffusionMM: couplerDiffusionMM,
+            chromaticFringeAmount: chromaticFringeAmount ?? 0,
+            chromaticFringeRadiusMM: chromaticFringeRadiusMM ?? 0.1,
             adjacencyStrength: adjacencyStrength ?? 0,
+            adjacencyModel: adjacencyModel ?? .gaussian,
             adjacencyRadiusMM: adjacencyRadiusMM ?? 0,
             grainStrength: grainStrength,
             grainSizeMM: grainSizeMM,
@@ -430,7 +438,10 @@ public extension FilmStockDefinition {
         self.couplerReleaseGamma = stock.couplerReleaseGamma
         self.couplerGeometry = stock.couplerGeometry
         self.couplerDiffusionMM = stock.couplerDiffusionMM
+        self.chromaticFringeAmount = stock.chromaticFringeAmount == 0 ? nil : stock.chromaticFringeAmount
+        self.chromaticFringeRadiusMM = stock.chromaticFringeRadiusMM == 0.1 ? nil : stock.chromaticFringeRadiusMM
         self.adjacencyStrength = stock.adjacencyStrength
+        self.adjacencyModel = stock.adjacencyModel == .gaussian ? nil : stock.adjacencyModel
         self.adjacencyRadiusMM = stock.adjacencyRadiusMM
         self.grainStrength = stock.grainStrength
         self.grainSizeMM = stock.grainSizeMM

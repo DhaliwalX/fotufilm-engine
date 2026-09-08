@@ -1098,6 +1098,10 @@ public:
           coupler_radius_("frame_coupler_radius" + suffix),
           adjacency_sigma_("frame_adjacency_sigma" + suffix),
           adjacency_radius_("frame_adjacency_radius" + suffix),
+          adjacency_secondary_sigma_("frame_adjacency_secondary_sigma" + suffix),
+          adjacency_secondary_radius_("frame_adjacency_secondary_radius" + suffix),
+          fringe_sigma_("frame_fringe_sigma" + suffix),
+          fringe_radius_("frame_fringe_radius" + suffix),
           grain_sigma_("frame_grain_sigma" + suffix),
           grain_radius_("frame_grain_radius" + suffix),
           grain_lambda_("frame_grain_lambda" + suffix),
@@ -1189,7 +1193,7 @@ public:
         }
         auto film_curve = [&](Expr channel_index, Expr log_exposure) {
             return tabulated_curves
-                ? sample_curve(film_curves, log_exposure, channel_index)
+                ? sample_film_curve(configuration_, film_curves, log_exposure, channel_index)
                 : film_density(configuration_, channel_index, log_exposure,
                                approximate_);
         };
@@ -1708,6 +1712,7 @@ public:
             * (1.0f / 2.3025851f);
         Func effective_log = log_exposure;
         Func donor_activation("frame_donor_activation" + suffix);
+        Expr adjacency_residual = 0.0f;
         Func donor_released("frame_donor_released" + suffix);
         Func donor_pointwise = donor_released;
         Func donor_diffused = donor_pointwise;
@@ -1727,6 +1732,7 @@ public:
                 configuration_, channel, activation_view(x, y, channel));
             Func released_view = store_frame(released, half_store);
             Func coupler_diffused = released_view;
+            Func fringe_diffused = released_view;
             Func adjacency_diffused = activation_view;
             // Release is nonlinear and happens before inhibitor diffusion. Adjacency still acts on
             // developed activation, so the two spatial stages deliberately no longer share a grid.
@@ -1735,12 +1741,30 @@ public:
                     released_view, coupler_sigma_, coupler_radius_,
                     origin_x_, origin_y_, width_, height_, half_store,
                     "frame_coupler_diffused" + suffix);
+                // Conditional auxiliary fields do not satisfy the folded-window schedule's
+                // monotone-access contract. The host routes those models to the general graph.
+                if (!windowed) {
+                    fringe_diffused = gpu_gaussian_decimated(
+                        released_view, fringe_sigma_, fringe_radius_,
+                        origin_x_, origin_y_, width_, height_, half_store,
+                        "frame_fringe_diffused" + suffix);
+                }
             }
             if (use_adjacency) {
                 adjacency_diffused = gpu_gaussian_decimated(
                     activation_view, adjacency_sigma_, adjacency_radius_,
                     origin_x_, origin_y_, width_, height_, half_store,
                     "frame_adjacency_diffused" + suffix);
+                Func secondary = adjacency_diffused;
+                if (!windowed) {
+                    secondary = gpu_gaussian_decimated(
+                        activation_view,
+                        adjacency_secondary_sigma_, adjacency_secondary_radius_,
+                        origin_x_, origin_y_, width_, height_, half_store,
+                        "frame_adjacency_secondary" + suffix);
+                }
+                adjacency_residual = activation_view(x, y, channel) - adjacency_transport(
+                    configuration_, adjacency_diffused(x, y, channel), secondary(x, y, channel));
             }
             // The donor's development: its own curve on its own exposure, diffused with the
             // other inhibitors — the released species travels the same gelatin.
@@ -1792,6 +1816,15 @@ public:
                     inhibition = coupler_inhibition(
                         configuration_, channel, coupler_diffused(x, y, 0),
                         coupler_diffused(x, y, 1), coupler_diffused(x, y, 2));
+                    if (use_coupler_diffusion && !windowed) {
+                        Expr fringe = chromatic_fringe_inhibition(
+                            configuration_, channel,
+                            fringe_diffused(x, y, 0) - coupler_diffused(x, y, 0),
+                            fringe_diffused(x, y, 1) - coupler_diffused(x, y, 1),
+                            fringe_diffused(x, y, 2) - coupler_diffused(x, y, 2));
+                        inhibition = Halide::select(fringe_radius_ > 0,
+                            inhibition + fringe, inhibition);
+                    }
                 }
                 if (use_donor) {
                     inhibition = inhibition
@@ -1804,9 +1837,9 @@ public:
             }
             Expr shift = 0.0f;
             if (use_adjacency) {
-                shift += configuration_(kAdjacencyStrengthOffset)
-                    * (adjacency_diffused(x, y, channel)
-                       - activation_view(x, y, channel));
+                shift = Halide::select(
+                    configuration_(FOTUFILM_CONFIG_ADJACENCY_MODEL) > 0.5f, 0.0f,
+                    -configuration_(kAdjacencyStrengthOffset) * adjacency_residual);
             }
             shifted(x, y, channel) = inhibited - shift;
             effective_log = shifted;
@@ -1844,6 +1877,9 @@ public:
             Expr complement =
                 configuration_(FOTUFILM_CONFIG_DEVELOP_COMPLEMENT) > 0.5f;
             Expr formed = film_curve(channel, effective_log(x, y, channel));
+            if (use_adjacency) {
+                formed = adjacency_density(configuration_, channel, formed, adjacency_residual);
+            }
             density(x, y, channel) = Halide::select(
                 complement, d_min + range - (formed - d_min), formed);
         }
@@ -1899,6 +1935,10 @@ public:
                 d_min + range - (flat_formed - d_min), flat_formed);
         }
 
+        // Resolved discs reuse density throughout the unrolled coverage calculation.
+        // Materialize it once per pixel to keep sampled-curve searches out of that large
+        // expression. Float32 storage preserves the previously inline density precision.
+        if (use_discs) density = store_frame(density, false);
         Func developed = density;
         if (use_grain) {
             Func noise("frame_poisson_noise" + suffix);
@@ -2406,6 +2446,8 @@ public:
             mtf_radius_0_, mtf_radius_1_, mtf_radius_2_, mtf_luma_radius_,
             halation_radius_0_, halation_radius_1_, halation_radius_2_,
             coupler_sigma_, coupler_radius_, adjacency_sigma_, adjacency_radius_,
+            adjacency_secondary_sigma_, adjacency_secondary_radius_,
+            fringe_sigma_, fringe_radius_,
             // The mottle pair is read by the `_mottle` twins alone; everywhere else they are
             // the same harmless unused parameters the diffusion strides already are, kept in
             // every signature so the shim's single FrameFunction shape holds.
@@ -2627,6 +2669,10 @@ private:
         coupler_radius_.set(std::max(0, int(configuration[kCouplerRadiusOffset])));
         adjacency_sigma_.set(std::max(configuration[kAdjacencySigmaOffset], 0.151f));
         adjacency_radius_.set(std::max(0, int(configuration[kAdjacencyRadiusOffset])));
+        adjacency_secondary_sigma_.set(std::max(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA], 0.151f));
+        adjacency_secondary_radius_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS])));
+        fringe_sigma_.set(std::max(configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA], 0.151f));
+        fringe_radius_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS])));
         grain_sigma_.set(std::max(configuration[kGrainSigmaOffset], 0.151f));
         grain_radius_.set(std::max(0, int(configuration[kGrainRadiusOffset])));
         grain_lambda_.set(configuration[kGrainLambdaOffset]);
@@ -2695,6 +2741,10 @@ private:
                    diffusion_strided_radius_2_;
     Param<int32_t> halation_strided_radius_0_, halation_strided_radius_1_,
                    halation_strided_radius_2_;
+    Param<float> fringe_sigma_;
+    Param<int32_t> fringe_radius_;
+    Param<float> adjacency_secondary_sigma_;
+    Param<int32_t> adjacency_secondary_radius_;
     Param<float> coupler_sigma_, adjacency_sigma_, grain_sigma_, grain_lambda_,
                  mottle_lambda_;
     Param<int32_t> mottle_radius_;

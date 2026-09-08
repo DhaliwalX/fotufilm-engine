@@ -38,6 +38,8 @@ extension FilmStock {
             aged.curves[layer].toe += lostStops * perStop
             aged.curves[layer].shoulder += lostStops * perStop
             aged.curves[layer].dMin += fog
+            aged.curves[layer].sampled = curves[layer].sampled?.shifted(
+                logExposure: lostStops * perStop, density: fog)
         }
         aged.grainStrength *= 1 + FilmStock.expiredGrainPerFog * (fogTotal / 3)
         // The fog the emulsion gained is developed density, so the density law reads granularity

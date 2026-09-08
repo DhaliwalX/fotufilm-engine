@@ -338,8 +338,9 @@ public struct FilmEngineInvocation {
     public static let toneGridCells =
         ToneBaseMeasurement.gridEdge * ToneBaseMeasurement.gridEdge
 
-    public static let configurationCount = 233 + 3 * couplerWarpSamples
-        + 2 * toneGridCells
+    public static let sampledCurveStride = 1 + 3 * SampledCharacteristicCurve.maximumSamples
+    public static let sampledCurvesOffset = 232 + 3 * couplerWarpSamples + 2 * toneGridCells
+    public static let configurationCount = sampledCurvesOffset + 3 * sampledCurveStride + 7
     /// Index of the grading-space switch; mirrors FOTUFILM_CONFIG_GRADE_SPACE.
     /// After it, appended in order so that adding each renumbered nothing:
     /// the six grain-mottle entries, the paper's red and blue records and
@@ -416,6 +417,12 @@ public struct FilmEngineInvocation {
     /// renumbering earlier fields.
     public static let outputShoulderOffset = grainDensityProfileOffset + 3
     public static let outputGamutOffset = outputShoulderOffset + 1
+    public static let adjacencyModelOffset = sampledCurvesOffset + 3 * sampledCurveStride
+    public static let adjacencySecondarySigmaOffset = adjacencyModelOffset + 1
+    public static let adjacencySecondaryRadiusOffset = adjacencyModelOffset + 2
+    public static let chromaticFringeAmountOffset = adjacencyModelOffset + 3
+    public static let chromaticFringeSigmaOffset = adjacencyModelOffset + 4
+    public static let chromaticFringeRadiusOffset = adjacencyModelOffset + 5
     /// Index of the three aperture-calibrated grain strengths; mirrors FOTUFILM_CONFIG_GRAIN.
     public static let grainOffset = 30
 
@@ -945,8 +952,14 @@ public struct FilmEngineInvocation {
         let couplerSigma = selected(.adjacency)
             ? stock.couplerDiffusionMM * pxPerMM : Self.noSpatialReachPixels
         let couplerRadius = Self.gaussianRadius(couplerSigma)
-        let adjacencySigma = selected(.adjacency)
+        let adjacencyReferenceSigma = selected(.adjacency)
             ? stock.adjacencyRadiusMM * pxPerMM : Self.noSpatialReachPixels
+        let screenedAdjacency = (options.adjacencyModel ?? stock.adjacencyModel) == .screenedDiffusion
+        let adjacencySigma = adjacencyReferenceSigma * (screenedAdjacency
+            ? AdjacencyModel.screenedPrimarySigma : 1)
+        let adjacencySecondarySigma = screenedAdjacency
+            ? adjacencyReferenceSigma * AdjacencyModel.screenedSecondarySigma : 0
+        let adjacencySecondaryRadius = Self.gaussianRadius(adjacencySecondarySigma)
         let adjacencyRadius = Self.gaussianRadius(adjacencySigma)
         let adjacencyStrength = selected(.adjacency) ? stock.adjacencyStrength : 0
         let grainScale = selected(.grain) ? options.grainScale : 0
@@ -1135,6 +1148,19 @@ public struct FilmEngineInvocation {
         let couplerScale = Self.effectiveCouplerScale(options.couplerScale)
         let couplersActive = couplerScale > 0
             && inhibition.contains { $0.contains { $0 != 0 } }
+        let requestedFringeAmount = options.chromaticFringeAmount ?? stock.chromaticFringeAmount
+        let requestedFringeMM = options.chromaticFringeRadiusMM ?? stock.chromaticFringeRadiusMM
+        let fringeAmount = requestedFringeAmount.isFinite ? min(max(requestedFringeAmount, 0), 1) : 0
+        let fringeMM = requestedFringeMM.isFinite ? min(max(requestedFringeMM, 0), 2) : 0
+        let hasCrossLayerInhibition = inhibition.enumerated().contains { receiver, row in
+            row.enumerated().contains { donor, value in receiver != donor && value != 0 }
+        }
+        let fringeActive = selected(.adjacency) && couplersActive && !stock.isMonochrome
+            && hasCrossLayerInhibition && fringeAmount > 0
+            && fringeMM > stock.couplerDiffusionMM
+            && Self.gaussianRadius(fringeMM * pxPerMM) > 0
+        let fringeSigma = fringeActive ? fringeMM * pxPerMM : Self.noSpatialReachPixels
+        let fringeRadius = fringeActive ? Self.gaussianRadius(fringeSigma) : 0
         if couplersActive { featureMask |= FilmEngineFeature.couplers }
         // The donor capture layer rides the coupler stage: its release row joins the
         // inhibition sum, its activation joins the diffusion blur, and `couplerScale` scales
@@ -1154,11 +1180,11 @@ public struct FilmEngineInvocation {
             // no disc donor twin to serve a mask no real material forms.
             && !stock.isMonochrome && stock.grainDensityLaw != .silver
         if donorActive { featureMask |= FilmEngineFeature.donorLayer }
-        if (couplersActive || donorActive) && couplerRadius > 0 {
+        if (couplersActive || donorActive) && max(couplerRadius, fringeRadius) > 0 {
             featureMask |= FilmEngineFeature.couplerDiffusion
         }
         if couplerScale > 0 && adjacencyStrength > 0
-            && adjacencyRadius > 0 {
+            && max(adjacencyRadius, adjacencySecondaryRadius) > 0 {
             featureMask |= FilmEngineFeature.adjacency
         }
         if grainScale > 0 && stock.grainStrength > 0 {
@@ -1208,7 +1234,7 @@ public struct FilmEngineInvocation {
             scale: (couplersActive || donorActive) ? couplerScale : 0,
             releaseGamma: stock.couplerReleaseGamma,
             donor: donorActive ? donor : nil)
-        let balance = options.whiteBalance.gains
+        let balance = noFilm ? options.sceneLightGains : (r: Float(1), g: Float(1), b: Float(1))
         configuration += [balance.r, balance.g, balance.b]
         // A source that declares recorded light above diffuse white has that range metered
         // into the film's window with the highlight shaping the one-tap solve drives — the
@@ -1329,7 +1355,22 @@ public struct FilmEngineInvocation {
         // output transform is initialized to.
         configuration += [-1]
         configuration += [0, 0, 0, 0] // optional output gamut fit
-        configuration += [0] // ordinary scene input; transport continuation sets record input
+        for curve in stock.curves {
+            var record = [Float](repeating: 0, count: Self.sampledCurveStride)
+            if let sampled = curve.sampled {
+                record[0] = Float(sampled.logExposure.count)
+                for i in sampled.logExposure.indices {
+                    record[1 + i * 3] = sampled.logExposure[i]
+                    record[2 + i * 3] = sampled.density[i]
+                    record[3 + i * 3] = sampled.slopes[i]
+                }
+            }
+            configuration += record
+        }
+        configuration += [screenedAdjacency ? 1 : 0,
+                          adjacencySecondarySigma, Float(adjacencySecondaryRadius)]
+        configuration += [fringeActive ? fringeAmount : 0, fringeSigma, Float(fringeRadius)]
+        configuration += [0] // typed record-exposure seam
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0
@@ -1358,10 +1399,10 @@ public struct FilmEngineInvocation {
         }
         var diffusion = 0
         if featureMask & FilmEngineFeature.couplers != 0 {
-            diffusion = max(diffusion, couplerRadius)
+            diffusion = max(diffusion, couplerRadius, fringeRadius)
         }
         if featureMask & FilmEngineFeature.adjacency != 0 {
-            diffusion = max(diffusion, adjacencyRadius)
+            diffusion = max(diffusion, adjacencyRadius, adjacencySecondaryRadius)
         }
         optical += diffusion
         let grainSupport = featureMask & FilmEngineFeature.grain != 0 ? grainRadius : 0
@@ -1411,47 +1452,22 @@ public struct FilmEngineInvocation {
                 bleachBypass: options.bleachBypass,
                 printViewingKelvin: options.printViewingKelvin)
         }
-        // The scene's own light, when the source stated one and the gate passed: only the
-        // exposure table changes — development and printing happen in the dark — and the
-        // cache identity moves with it so the GPU re-uploads rather than serves the D65-scene table.
-        let sceneKelvin = SpectralRuntime.sceneLightKelvin(options.sceneIlluminantKelvin)
-        let sceneIlluminant: [Float]? = options.sceneIlluminantSpectrum.isEmpty
-            ? sceneKelvin.map(Illuminant.atLocus(kelvin:))
-            : options.sceneIlluminantSpectrum
-        if !options.sceneIlluminantSpectrum.isEmpty {
-            precondition(options.sceneIlluminantSpectrum.count == SpectralGrid.count,
-                         "scene illuminant SPD must have \(SpectralGrid.count) samples")
-        }
-        if !options.lensFilters.isEmpty {
-            // A filter is upstream of the emulsion and downstream of nothing, so it lands in
-            // the same table the scene's light does — and it has to be built *with* that light
-            // rather than after it, because the filter and the sensitivities are integrated
-            // against each other band by band. One table carries both.
+        // One resolved spectrum controls both integration and upload identity. Source pixels
+        // have already been neutralized at capture; applying RGB WB here would count light twice.
+        if !noFilm {
+            let illuminant = options.resolvedSceneSpectrum
+            let exposure = options.lensFilters.isEmpty
+                ? SpectralRuntime.sceneExposure(for: stock, illuminant: illuminant)
+                : SpectralRuntime.filteredExposure(for: stock, illuminant: illuminant,
+                                                   stack: options.lensFilters)
             self.spectral = SpectralPipelineTables(
-                exposure: SpectralRuntime.filteredExposure(
-                    for: stock, illuminant: sceneIlluminant,
-                    stack: options.lensFilters),
-                filmOutput: self.spectral.filmOutput,
+                exposure: exposure, filmOutput: self.spectral.filmOutput,
                 paperOutput: self.spectral.paperOutput)
             self.spectralCacheID = (self.spectralCacheID
-                ^ options.lensFilters.signature) &* 0x100000001b3
-            if let sceneKelvin {
+                ^ SpectralRuntime.illuminantSignature(illuminant)) &* 0x100000001b3
+            if !options.lensFilters.isEmpty {
                 self.spectralCacheID = (self.spectralCacheID
-                    ^ UInt64(sceneKelvin.bitPattern)) &* 0x100000001b3
-                SpectralRuntime.traceSceneLight(stock: stock, cct: sceneKelvin)
-            }
-        } else if let sceneIlluminant {
-            self.spectral = SpectralPipelineTables(
-                exposure: SpectralRuntime.sceneExposure(
-                    for: stock, illuminant: sceneIlluminant),
-                filmOutput: self.spectral.filmOutput,
-                paperOutput: self.spectral.paperOutput)
-            self.spectralCacheID = (self.spectralCacheID
-                ^ sceneIlluminant.reduce(UInt64(0xcbf29ce484222325)) {
-                    ($0 ^ UInt64($1.bitPattern)) &* 0x100000001b3
-                }) &* 0x100000001b3
-            if let sceneKelvin {
-                SpectralRuntime.traceSceneLight(stock: stock, cct: sceneKelvin)
+                    ^ options.lensFilters.signature) &* 0x100000001b3
             }
         }
         self.featureMask = featureMask
@@ -1704,7 +1720,10 @@ public struct FilmEngineInvocation {
     public static let exposureGainOffset = 61
 
     private static func parameters(_ curve: CharacteristicCurve) -> [Float] {
-        [curve.dMin, curve.gamma, curve.toe, curve.toeWidth,
+        // Legacy range consumers still read gamma * (shoulder - toe).
+        let gamma = curve.sampled == nil ? curve.gamma
+            : (curve.dMax - curve.dMin) / (curve.shoulder - curve.toe)
+        return [curve.dMin, gamma, curve.toe, curve.toeWidth,
          curve.shoulder, curve.shoulderWidth]
     }
 
@@ -1721,9 +1740,35 @@ public struct FilmEngineInvocation {
     }
 
     private static func secondaryParameters(_ curve: CharacteristicCurve) -> [Float] {
+        if curve.sampled != nil { return [0, 0, 1, 0, 1] }
         guard let secondary = curve.secondary else { return [0, 0, 1, 0, 1] }
         return [secondary.gamma, secondary.toe, secondary.toeWidth,
                 secondary.shoulder, secondary.shoulderWidth]
+    }
+
+    /// Shared host evaluator for packed sampled film records used by Metal table builders.
+    public static func sampledFilmDensity(configuration: [Float], channel: Int,
+                                          logExposure x: Float) -> Float? {
+        guard (0..<3).contains(channel), configuration.count == configurationCount else { return nil }
+        let base = sampledCurvesOffset + channel * sampledCurveStride
+        guard configuration[base].isFinite,
+              configuration[base] >= 2,
+              configuration[base] <= Float(SampledCharacteristicCurve.maximumSamples) else { return nil }
+        let count = Int(configuration[base])
+        func value(_ index: Int, _ field: Int) -> Float {
+            configuration[base + 1 + index * 3 + field]
+        }
+        if x <= value(0, 0) { return value(0, 1) }
+        if x >= value(count - 1, 0) { return value(count - 1, 1) }
+        var low = 0, high = count - 1
+        while high - low > 1 {
+            let mid = (low + high) / 2
+            if value(mid, 0) <= x { low = mid } else { high = mid }
+        }
+        return SampledCharacteristicCurve.hermite(
+            x: x, x0: value(low, 0), x1: value(high, 0),
+            y0: value(low, 1), y1: value(high, 1),
+            m0: value(low, 2), m1: value(high, 2))
     }
 
     /// Solves the neutral anchor for the DIR coupler stage. `donor` joins the release sum the
