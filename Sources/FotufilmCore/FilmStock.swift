@@ -231,6 +231,8 @@ public struct FilmStock: Sendable {
     /// Independently calibrated spatial shape of the returned light. `nil` preserves the legacy
     /// model that infers shape from `halationStrength`.
     public var halationProfile: HalationProfile?
+    /// Versioned layered transport. Nil keeps every legacy spatial stage unchanged.
+    public var layeredTransport: LayeredTransport?
     /// A provisional spatial shape for use when no independently calibrated profile exists.
     /// Rendering ignores it unless the caller explicitly enables estimated profiles.
     public var estimatedHalationProfile: HalationProfile?
@@ -307,6 +309,7 @@ public struct FilmStock: Sendable {
         halationLookScale: Float = 1,
         halationHazeMM: Float = 0,
         halationProfile: HalationProfile? = nil,
+        layeredTransport: LayeredTransport? = nil,
         estimatedHalationProfile: HalationProfile? = nil,
         halationReturnMatrix: [[Float]]? = nil,
         paperCurve: CharacteristicCurve,
@@ -368,6 +371,7 @@ public struct FilmStock: Sendable {
         self.halationLookScale = max(halationLookScale, 0)
         self.halationHazeMM = max(halationHazeMM, 0)
         self.halationProfile = halationProfile
+        self.layeredTransport = layeredTransport
         self.estimatedHalationProfile = estimatedHalationProfile
         self.halationReturnMatrix = halationReturnMatrix
         self.paperCurve = paperCurve

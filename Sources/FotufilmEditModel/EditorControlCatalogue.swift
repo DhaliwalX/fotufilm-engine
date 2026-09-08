@@ -376,6 +376,10 @@ public extension EngineOptionCoverage {
         "halationScale": .control([.halation]),
         "halationSourceColour": .control([.halationColour]),
         "halationReturnGain": .control([.halationSpectrum]),
+        "layeredTransport": .unexposed(
+            "Experimental optical construction for the checked planar API and CLI; packed app renderers do not support it."),
+        "transportBackend": .unexposed(
+            "Selects CPU or Metal JIT transport convolution in the checked planar API."),
         "halationHazeMM": .unexposed(
             "the support's impurity scatter is the stock's own figure, stated per sheet; "
             + "the CLI exposes an override for calibration experiments, and a slider here "

@@ -834,6 +834,9 @@ public struct FilmEngineInvocation {
     public init(stock: FilmStock, options: FotufilmEngine.Options,
                 width: Int, height: Int, frameIndex: UInt64 = 0,
                 noFilm: Bool = false) {
+        precondition(noFilm || options.stage == .print
+            || (stock.layeredTransport == nil && options.layeredTransport == nil),
+            "Layered transport requires FotufilmEngine.processChecked; packed frame renderers do not support it")
         // A measured development condition supplies the fresh roll's complete curves. Age and
         // reciprocity then act on those curves; applying the condition last would overwrite both
         // earlier transforms with its fresh, short-exposure measurement.

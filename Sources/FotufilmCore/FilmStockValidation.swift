@@ -37,10 +37,21 @@ public extension FilmStockDefinition {
             for row in rows { try check(field, row, count: shape.1, range) }
         }
 
-        guard schemaVersion == FilmStockDefinition.currentSchemaVersion else {
+        guard schemaVersion == FilmStockDefinition.currentSchemaVersion
+                || schemaVersion == FilmStockDefinition.layeredTransportSchemaVersion else {
             throw fail("schemaVersion",
                        "is \(schemaVersion); this build requires "
-                           + "\(FilmStockDefinition.currentSchemaVersion)")
+                           + "1 or 2")
+        }
+        guard (schemaVersion == 2) == (layeredTransport != nil) else {
+            throw fail("layeredTransport", "layered transport requires schema 2 and schema 2 requires a transport definition")
+        }
+        if let layeredTransport {
+            do { try layeredTransport.validate() }
+            catch { throw fail("layeredTransport", error.localizedDescription) }
+            guard halationProfile == nil && estimatedHalationProfile == nil && halationReturnMatrix == nil else {
+                throw fail("layeredTransport", "remove conflicting legacy profile and return-matrix fields")
+            }
         }
         try Self.checkIdentifier(id, field: "id", limit: 64, fail: fail)
         try Self.checkText(name, field: "name", limit: 64, required: true, fail: fail)

@@ -329,6 +329,9 @@ enum {
     FOTUFILM_FRAME_DONOR_LAYER = 1 << 27,
     /// Legacy annular-basis variant. Current physical profiles use centered continuous fields.
     FOTUFILM_FRAME_HALATION_ANNULAR = 1 << 28,
+    /// JIT-only continuation from nonnegative photographic record exposure. Never RGB or density.
+    /// AOT callers must not mask this bit and then run an RGB-input variant.
+    FOTUFILM_FRAME_RECORD_EXPOSURE_IN = 1 << 30,
     /// Develops with no film in the gate: the creative controls — white balance, the
     /// exposure-keyed tone masks, saturation and vibrance — then straight into the print's
     /// delivery basis and the grade. No spectral recovery, no characteristic curve, no couplers,

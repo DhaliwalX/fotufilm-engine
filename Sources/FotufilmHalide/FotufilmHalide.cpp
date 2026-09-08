@@ -399,6 +399,7 @@ public:
         // absent rather than skipped. `texture` keeps the scene side but returns the source
         // multiplied by the transmittance the spatial stages moved the density through.
         const bool density_in = features & FOTUFILM_FRAME_DENSITY_IN;
+        const bool record_in = features & FOTUFILM_FRAME_RECORD_EXPOSURE_IN;
         const bool texture = features & FOTUFILM_FRAME_TEXTURE;
         const bool use_flare = !density_in && (features & FOTUFILM_FRAME_FLARE);
         const bool use_mtf = !density_in && (features & FOTUFILM_FRAME_MTF);
@@ -426,9 +427,10 @@ public:
         Func curves = film_curve_table(configuration_, "develop_curve_table" + suffix);
 
         Func exposure("develop_exposure" + suffix);
-        exposure(x, y, c) = scene_exposure(
-            configuration_, exposure_lut_, input_r_(x, y), input_g_(x, y),
-            input_b_(x, y), c, x + origin_x_, y + origin_y_);
+        exposure(x, y, c) = record_in
+            ? Halide::mux(c, {input_r_(x, y), input_g_(x, y), input_b_(x, y)})
+            : scene_exposure(configuration_, exposure_lut_, input_r_(x, y), input_g_(x, y),
+                             input_b_(x, y), c, x + origin_x_, y + origin_y_);
 
         // Lens scattering is linear in spectral radiance, so integration through each record's
         // sensitivity commutes with the spatial convolution. Applying the record-specific kernels
@@ -554,6 +556,12 @@ public:
                 light = separated;
                 light_stored = false;
             }
+        }
+
+        if (features & FOTUFILM_FRAME_LIGHT_OUT) {
+            if (!light_stored) { cpu_pointwise(light, x, y, c); }
+            pipeline_ = Pipeline(light);
+            return;
         }
 
         if (use_halation) {
@@ -1338,7 +1346,8 @@ DevelopPipeline *develop_pipeline_for(int32_t feature_mask) {
         | FOTUFILM_FRAME_DISC_GRAIN | FOTUFILM_FRAME_GRAIN_MOTTLE
         | FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_DENSITY_IN
         | FOTUFILM_FRAME_TEXTURE | FOTUFILM_FRAME_DIFFUSION
-        | FOTUFILM_FRAME_DONOR_LAYER | FOTUFILM_FRAME_HALATION_ANNULAR;
+        | FOTUFILM_FRAME_DONOR_LAYER | FOTUFILM_FRAME_HALATION_ANNULAR
+        | FOTUFILM_FRAME_RECORD_EXPOSURE_IN | FOTUFILM_FRAME_LIGHT_OUT;
     const int32_t features = feature_mask & spatial_bits;
     constexpr int32_t stage_bits = FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF
         | FOTUFILM_FRAME_HALATION | FOTUFILM_FRAME_COUPLERS
@@ -1353,8 +1362,10 @@ DevelopPipeline *develop_pipeline_for(int32_t feature_mask) {
         | ((features & FOTUFILM_FRAME_TEXTURE) ? 4096 : 0)
         | ((features & FOTUFILM_FRAME_DIFFUSION) ? 8192 : 0)
         | ((features & FOTUFILM_FRAME_DONOR_LAYER) ? 16384 : 0)
-        | ((features & FOTUFILM_FRAME_HALATION_ANNULAR) ? 32768 : 0);
-    static std::unique_ptr<DevelopPipeline> pipelines[65536];
+        | ((features & FOTUFILM_FRAME_HALATION_ANNULAR) ? 32768 : 0)
+        | ((features & FOTUFILM_FRAME_RECORD_EXPOSURE_IN) ? 65536 : 0)
+        | ((features & FOTUFILM_FRAME_LIGHT_OUT) ? 131072 : 0);
+    static std::unique_ptr<DevelopPipeline> pipelines[262144];
     static std::mutex pipelines_mutex;
     std::lock_guard<std::mutex> lock(pipelines_mutex);
     if (!pipelines[variant]) {

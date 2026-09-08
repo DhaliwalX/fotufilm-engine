@@ -62,6 +62,8 @@ Options:
                      Costs about 5x the pixels and a one-off minute of
                      pipeline build
   --halation <scale> Halation multiplier, 0 disables (default: 1)
+  --transport <json> Opt in to a layered transport construction (experimental)
+  --transport-backend <cpu|metal> Transport convolution backend (default: cpu)
   --halation-colour <f>  How much the halo keeps the source's own colour
                      instead of the stock's layered red, 0-1 (default: 0).
                      The dimmer records are raised to the strongest record's
@@ -1097,6 +1099,26 @@ if let c = flags["--halation-colour"] {
 }
 if let z = flags["--halation-haze"] { options.halationHazeMM = Float(z) }
 options.useEstimatedHalationProfile = flags["--estimated-halation"] != nil
+if let path = flags["--transport"] {
+    do {
+        let model = try JSONDecoder().decode(LayeredTransport.self,
+            from: Data(contentsOf: URL(fileURLWithPath: path)))
+        try model.validate()
+        options.layeredTransport = model
+    } catch { fail("Invalid transport construction: \(error.localizedDescription)") }
+}
+if let backend = flags["--transport-backend"] {
+    switch backend {
+    case "cpu": options.transportBackend = .cpu
+    case "metal": options.transportBackend = .metal
+    default: fail("--transport-backend requires cpu or metal")
+    }
+}
+if options.layeredTransport != nil || stock.layeredTransport != nil {
+    if ["--stages", "--dump-wasm-pack", "--dump-wasm-stages"].contains(where: { flags[$0] != nil }) {
+        fail("Layered transport currently supports direct image rendering; stage sequences and browser packs are not supported.")
+    }
+}
 // Capture veiling glare, off unless asked for: see Options.flareScale.
 if let f = flags["--flare"] { options.flareScale = Float(f) ?? 1 }
 if let c = flags["--couplers"] { options.couplerScale = Float(c) ?? 1 }
@@ -1425,7 +1447,9 @@ if flags["--stages"] != nil {
                        directory: positional[1], depth: depth)
     exit(0)
 }
-let out = FotufilmEngine(stock: stock, options: options).process(linearRGB: linear)
+let out: ImageBuffer
+do { out = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: linear) }
+catch { fail("Render failed: \(error.localizedDescription)") }
 var reflectance = [Float](repeating: 1, count: width * height * 4)
 for i in 0..<(width * height) {
     reflectance[i * 4] = out.planes[0][i]

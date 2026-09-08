@@ -1,4 +1,5 @@
 module FotufilmHalide {
     header "FotufilmHalide.h"
+    header "FotufilmTransport.h"
     export *
 }

@@ -74,6 +74,10 @@ public struct FotufilmEngine {
         public var halationHazeMM: Float? = nil
         /// Uses a provisional spatial profile when no independently calibrated profile exists.
         public var useEstimatedHalationProfile: Bool = false
+        /// Explicit research construction override. The stock's schema-2 construction is used
+        /// otherwise. Supported by the checked planar renderer, not legacy realtime/AOT APIs.
+        public var layeredTransport: LayeredTransport? = nil
+        public var transportBackend: TransportBackend = .cpu
         /// Multiplier on taking-lens veiling glare. The default is 0 because photographic inputs
         /// already include lens glare. Enable it for synthetic light or to model additional glare
         /// relative to the capture lens.
@@ -236,11 +240,29 @@ public struct FotufilmEngine {
     /// `PipelineStage` says it does: `.negative` returns the developed negative's densities,
     /// `.print` is handed them, and `.texture` returns the frame it was given.
     public func process(linearRGB image: ImageBuffer) -> ImageBuffer {
+        if options.layeredTransport != nil || stock.layeredTransport != nil {
+            do { return try processChecked(linearRGB: image) }
+            catch { fatalError(error.localizedDescription) }
+        }
         guard let positive = HalideBackend.process(image: image, stock: stock,
                                                    options: options) else {
             fatalError(Self.missingEngineMessage)
         }
         return positive
+    }
+
+    /// Recoverable preparation/backend errors for layered constructions; legacy behavior is
+    /// preserved when no construction is selected.
+    public func processChecked(linearRGB image: ImageBuffer) throws -> ImageBuffer {
+        if options.stage != .print, let model = options.layeredTransport ?? stock.layeredTransport {
+            return try LayeredTransportRenderer.process(image: image, stock: stock,
+                                                         options: options, model: model)
+        }
+        var plain = stock; plain.layeredTransport = nil
+        guard let output = HalideBackend.process(image: image, stock: plain, options: options) else {
+            throw TransportError.backend(Self.missingEngineMessage)
+        }
+        return output
     }
 
     /// Convenience: 8-bit sRGB interleaved RGB(A) in, same format out.
@@ -381,6 +403,10 @@ public struct FotufilmEngine {
     /// same quantity `process` produces at `PipelineStage.negative`. This is the CPU seam the
     /// spans were named after; it ignores `options.stage` and always develops the negative.
     public func developNegative(linearRGB image: ImageBuffer) -> ImageBuffer {
+        if options.layeredTransport != nil || stock.layeredTransport != nil {
+            var negative = options; negative.stage = .negative
+            return FotufilmEngine(stock: stock, options: negative).process(linearRGB: image)
+        }
         guard let developed = HalideBackend.develop(image: image, stock: stock,
                                                     options: options) else {
             fatalError(Self.missingEngineMessage)
@@ -390,8 +416,10 @@ public struct FotufilmEngine {
 
     /// Converts developed densities to display-linear RGB.
     public func printPositive(negativeDensity density: ImageBuffer) -> ImageBuffer {
-        guard let positive = HalideBackend.print(density: density, stock: stock,
-                                                 options: options) else {
+        var plain = stock; plain.layeredTransport = nil
+        var settings = options; settings.layeredTransport = nil
+        guard let positive = HalideBackend.print(density: density, stock: plain,
+                                                 options: settings) else {
             fatalError(Self.missingEngineMessage)
         }
         return positive
