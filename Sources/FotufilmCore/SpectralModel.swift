@@ -2043,9 +2043,9 @@ extension SpectralRuntime {
                     log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12)))
             }
 
-        let paperDyes = paper.dyes
-        let flare = paper.viewingFlare
         let viewingLight = referenceViewingLight(for: paper)
+        let receiver = printReceiver(stock: stock, paper: paper,
+                                     viewingLight: viewingLight)
 
         /// One wedge point as the viewer has it: three printed densities,
         /// each developed along its own record, then read through the paper's
@@ -2057,8 +2057,8 @@ extension SpectralRuntime {
                         + scale[channel] * relative[channel])
                     - curves[channel].dMin
             }
-            return transmissionRGB(density: printed, dyes: paperDyes, flare: flare,
-                                   illuminant: viewingLight)
+            return receiver.rgb(
+                density: SIMD3(printed[0], printed[1], printed[2]))
         }
 
         /// How far the printed wedge departs from grey, in the log domain the
