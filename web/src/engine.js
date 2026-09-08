@@ -45,7 +45,7 @@ export async function loadPack(url) {
   const magic = String.fromCharCode(...new Uint8Array(bytes, 0, 4))
   if (magic !== PACK_MAGIC) throw new Error(`not a film pack: ${magic}`)
   const version = view.getUint32(4, true)
-  if (version !== 1) throw new Error(`unsupported pack version ${version}`)
+  if (version !== 1 && version !== 2) throw new Error(`unsupported pack version ${version}`)
 
   const width = view.getInt32(8, true)
   const height = view.getInt32(12, true)
@@ -65,7 +65,7 @@ export async function loadPack(url) {
     return values
   }
 
-  return {
+  const pack = {
     width,
     height,
     featureMask,
@@ -77,6 +77,31 @@ export async function loadPack(url) {
     film: take(lutCount),
     paper: take(lutCount),
   }
+  if (version === 2) {
+    const integer = () => { const n = view.getInt32(offset, true); offset += 4; return n }
+    const headMask = integer()
+    const headConfiguration = take(configCount)
+    const tailConfiguration = take(configCount)
+    const count = integer()
+    if (count < 1 || count > 11) throw new Error('invalid transport component count')
+    const components = []
+    for (let k = 0; k < count; ++k) {
+      const exposure = take(lutCount)
+      const bands = []
+      const bandCount = integer()
+      if (bandCount < 1 || bandCount > 64) throw new Error('invalid transport band count')
+      for (let b = 0; b < bandCount; ++b) {
+        const weight = take(1)[0], radius = integer(), stride = integer()
+        if (!Number.isFinite(weight) || weight < 0 || radius < 1 || radius > 128 ||
+            stride < 1 || stride > 4096 || (stride & (stride - 1))) throw new Error('invalid transport stencil')
+        bands.push({ weight, radius, stride, weights: take((radius * 2 + 1) ** 2) })
+      }
+      components.push({ exposure, bands })
+    }
+    pack.transport = { headMask, headConfiguration, tailConfiguration, components }
+  }
+  if (offset !== bytes.byteLength) throw new Error('film pack length mismatch')
+  return pack
 }
 
 /// Parses the stage sidecar written by `--dump-wasm-stages`, and returns one pack per pipeline
@@ -417,7 +442,7 @@ class WebgpuDeveloper {
 
 /// Develops on the CPU, through the same physics compiled to SIMD WebAssembly. This is what a
 /// browser without a WebGPU adapter gets, and what the GPU path falls back to.
-class SimdDeveloper {
+export class SimdDeveloper {
   constructor(module, pack) {
     this.backend = 'simd'
     this.module = module
@@ -441,6 +466,9 @@ class SimdDeveloper {
     this.uploaded = {}
     this.usePack(pack)
 
+    this.transportPtrs = pack.transport ? [module._malloc(plane * 3 * 4),
+      module._malloc(plane * 3 * 4), module._malloc(257 * 257 * 4)] : []
+
     this.renderCall = module.cwrap('fotufilm_wasm_cpu_render', 'number', [
       'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number',
       'number', 'number', 'number',
@@ -461,9 +489,40 @@ class SimdDeveloper {
 
   dispose() {
     for (const ptr of [this.inputPtr, this.outputPtr, this.densityPtr, this.configPtr,
-                       this.exposurePtr, this.filmPtr, this.paperPtr, this.grainPtr]) {
+                       this.exposurePtr, this.filmPtr, this.paperPtr, this.grainPtr, ...this.transportPtrs]) {
       this.module._free(ptr)
     }
+  }
+
+  developTransport(controls) {
+    const { module, pack, plane } = this
+    const plan = pack.transport
+    const [sumPtr, filteredPtr, kernelPtr] = this.transportPtrs
+    module.HEAPF32.fill(0, sumPtr / 4, sumPtr / 4 + plane * 3)
+    const render = (input, mask) => this.renderCall(input, this.outputPtr, this.width,
+      this.height, this.configPtr, this.exposurePtr, this.filmPtr, this.paperPtr,
+      this.densityPtr, mask, pack.seed)
+    for (const component of plan.components) {
+      applyControlsTo(module, { ...pack, configuration: plan.headConfiguration },
+        this.configPtr, this.grainPtr, controls)
+      module.HEAPF32.set(component.exposure, this.exposurePtr / 4)
+      const status = render(this.inputPtr, plan.headMask)
+      if (status !== 0) return status
+      for (const band of component.bands) {
+        module.HEAPF32.set(band.weights, kernelPtr / 4)
+        const status = module.ccall('fotufilm_wasm_transport', 'number',
+          Array(7).fill('number'), [this.outputPtr, filteredPtr, this.width, this.height,
+            kernelPtr, band.radius, band.stride])
+        if (status !== 0) return status
+        // Read fresh views: the convolution may grow the WebAssembly heap.
+        const heap = module.HEAPF32
+        for (let i = 0; i < plane * 3; ++i) heap[sumPtr / 4 + i] += band.weight * heap[filteredPtr / 4 + i]
+      }
+    }
+    applyControlsTo(module, { ...pack, configuration: plan.tailConfiguration },
+      this.configPtr, this.grainPtr, controls)
+    module.HEAPF32.set(pack.exposure, this.exposurePtr / 4)
+    return render(sumPtr, pack.featureMask)
   }
 
   /// Develops one frame. Asynchronous only to match the GPU path — the kernel itself runs on
@@ -475,7 +534,7 @@ class SimdDeveloper {
     applyControlsTo(module, this.pack, this.configPtr, this.grainPtr, controls)
 
     const started = performance.now()
-    const status = this.renderCall(
+    const status = this.pack.transport ? this.developTransport(controls) : this.renderCall(
       this.inputPtr, this.outputPtr, this.width, this.height, this.configPtr,
       this.exposurePtr, this.filmPtr, this.paperPtr, this.densityPtr,
       this.pack.featureMask, this.pack.seed,
@@ -495,7 +554,7 @@ class SimdDeveloper {
 /// Builds the fastest developer this browser will actually run: WebGPU when the adapter can
 /// create the kernel's pipelines, and the SIMD path otherwise.
 export async function createDeveloper(pack) {
-  if (navigator.gpu) {
+  if (navigator.gpu && !pack.transport) {
     try {
       const developer = new WebgpuDeveloper(await loadModule('webgpu'), pack)
       await developer.probe()

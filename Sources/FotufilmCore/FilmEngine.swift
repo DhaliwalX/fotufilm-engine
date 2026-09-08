@@ -338,7 +338,7 @@ public struct FilmEngineInvocation {
     public static let toneGridCells =
         ToneBaseMeasurement.gridEdge * ToneBaseMeasurement.gridEdge
 
-    public static let configurationCount = 232 + 3 * couplerWarpSamples
+    public static let configurationCount = 233 + 3 * couplerWarpSamples
         + 2 * toneGridCells
     /// Index of the grading-space switch; mirrors FOTUFILM_CONFIG_GRADE_SPACE.
     /// After it, appended in order so that adding each renumbered nothing:
@@ -834,9 +834,6 @@ public struct FilmEngineInvocation {
     public init(stock: FilmStock, options: FotufilmEngine.Options,
                 width: Int, height: Int, frameIndex: UInt64 = 0,
                 noFilm: Bool = false) {
-        precondition(noFilm || options.stage == .print
-            || (stock.layeredTransport == nil && options.layeredTransport == nil),
-            "Layered transport requires FotufilmEngine.processChecked; packed frame renderers do not support it")
         // A measured development condition supplies the fresh roll's complete curves. Age and
         // reciprocity then act on those curves; applying the condition last would overwrite both
         // earlier transforms with its fresh, short-exposure measurement.
@@ -1332,6 +1329,7 @@ public struct FilmEngineInvocation {
         // output transform is initialized to.
         configuration += [-1]
         configuration += [0, 0, 0, 0] // optional output gamut fit
+        configuration += [0] // ordinary scene input; transport continuation sets record input
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0

@@ -97,6 +97,7 @@
       <target object="9001001" channel="./35/24" name="Film Age (years)"/>
       <target object="9001001" channel="./34/14" name="Grain"/>
       <target object="9001001" channel="./34/21" name="Grain Seed"/>
+      <target object="9001001" channel="./86/88" name="Halation Model"/>
       <target object="9001001" channel="./86/15" name="Halation"/>
       <target object="9001001" channel="./86/16" name="Estimated Halation Shape"/>
       <target object="9001001" channel="./86/17" name="Halo Colour"/>
@@ -269,6 +270,7 @@
           <parameter name="Halation" id="86" flags="8594198560">
             <foldFlags>4</foldFlags>
             <parameter name="Halation" id="15" flags="12901679120" default="1" value="1"/>
+            <parameter name="Halation Model" id="88" flags="12901744656" default="0" value="0"/>
             <parameter name="Estimated Halation Shape" id="16" flags="12901679104"
                        default="0" value="0"/>
             <parameter name="Halo Colour" id="17" flags="12901679120" default="0" value="0"/>

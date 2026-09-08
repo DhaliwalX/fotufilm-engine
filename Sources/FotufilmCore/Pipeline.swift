@@ -74,6 +74,7 @@ public struct FotufilmEngine {
         public var halationHazeMM: Float? = nil
         /// Uses a provisional spatial profile when no independently calibrated profile exists.
         public var useEstimatedHalationProfile: Bool = false
+        public var halationModel: HalationModel = .legacy
         /// Explicit research construction override. The stock's schema-2 construction is used
         /// otherwise. Supported by the checked planar renderer, not legacy realtime/AOT APIs.
         public var layeredTransport: LayeredTransport? = nil
@@ -240,7 +241,7 @@ public struct FotufilmEngine {
     /// `PipelineStage` says it does: `.negative` returns the developed negative's densities,
     /// `.print` is handed them, and `.texture` returns the frame it was given.
     public func process(linearRGB image: ImageBuffer) -> ImageBuffer {
-        if options.layeredTransport != nil || stock.layeredTransport != nil {
+        if options.transportConstruction(for: stock) != nil {
             do { return try processChecked(linearRGB: image) }
             catch { fatalError(error.localizedDescription) }
         }
@@ -254,7 +255,7 @@ public struct FotufilmEngine {
     /// Recoverable preparation/backend errors for layered constructions; legacy behavior is
     /// preserved when no construction is selected.
     public func processChecked(linearRGB image: ImageBuffer) throws -> ImageBuffer {
-        if options.stage != .print, let model = options.layeredTransport ?? stock.layeredTransport {
+        if let model = options.transportConstruction(for: stock) {
             return try LayeredTransportRenderer.process(image: image, stock: stock,
                                                          options: options, model: model)
         }
@@ -403,7 +404,7 @@ public struct FotufilmEngine {
     /// same quantity `process` produces at `PipelineStage.negative`. This is the CPU seam the
     /// spans were named after; it ignores `options.stage` and always develops the negative.
     public func developNegative(linearRGB image: ImageBuffer) -> ImageBuffer {
-        if options.layeredTransport != nil || stock.layeredTransport != nil {
+        if options.layeredTransport != nil || options.halationModel == .layered {
             var negative = options; negative.stage = .negative
             return FotufilmEngine(stock: stock, options: negative).process(linearRGB: image)
         }

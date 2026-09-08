@@ -94,14 +94,13 @@ or commercial-film calibration from stock names. The no-return core and return
 ratios are supplied independently; captured conditional power is not an absolute
 scene-photon absorption measurement.
 
-The current execution path uses whole-frame intermediates with streamed
-components. It does not implement a fixed working-memory budget, strip rendering,
-ROI rendering, or a compiled transport-pack interchange. Donor capture layers,
-additional Gaussian support haze, stage-sequence exports, and browser packs are
-rejected. Packed frame renderers for the Mac app, mobile apps, and plugins do not
-support construction profiles; direct `FilmEngineInvocation` use enforces this
-precondition instead of silently rendering legacy halation. Use the planar API
-or CLI for this experimental path.
+The current execution paths use whole-frame intermediates with streamed components.
+A fixed working-memory budget and transport strip scheduling are not implemented.
+Donor capture layers, additional Gaussian support haze and stage-sequence exports
+are rejected. Apple camera capture encodes transport in the same command buffer as
+its existing HDR frame graph; the editor and plugin hosts use the AOT transport path.
+Browser transport packs use SIMD WebAssembly. Model selection and export details
+are described below.
 
 ## Reproduce the A/B
 
@@ -116,3 +115,28 @@ and negative stock are synthetic. The test uses the same scene, return strengths
 gauge, development, and print on both sides; grain, adjacency, and local tone are
 disabled to make optical differences legible. The comparison is a diagnostic of
 the models, not evidence that the construction matches a specific film stock.
+
+## Model selection across hosts
+
+`Options.halationModel` selects `legacy` (default) or `layered`. An explicit
+`Options.layeredTransport` construction overrides that selector. With `layered`, the
+stock's construction is used when present; otherwise the engine creates an explicitly
+illustrative stack from the selected format and the stock's return strength and core
+spread. This fallback is not a measured stock calibration.
+
+Mac and iOS persist the selector in Film Model settings. Resolve appends bridge slot
+49, and Final Cut appends parameter 88; zero retains Legacy for existing projects.
+Apple hosts use AOT scene/development passes and native Metal transport convolution.
+The reference API retains CPU and Metal JIT convolution for validation. Native zoomed
+previews currently develop the complete virtual frame before cropping to preserve
+transport tails and reduction-grid alignment. This increases memory use at high zoom.
+
+`--halation-model legacy|layered` selects the CLI model. Browser pack version 2 adds
+head/tail configurations, component exposure LUTs and positive weighted stencils to
+the version 1 base layout. `tools/build-wasm.sh` exports both `.pack` and
+`.layered.pack`. Layered packs use the SIMD backend, including when WebGPU is available;
+Legacy keeps its existing WebGPU/SIMD selection. Runtime exposure, colour and grain
+controls work with either model. Layered stage-sequence exports and browser lens
+flare/diffusion pack overrides are rejected explicitly. Rebuild every AOT kernel and
+browser pack after the appended record-exposure configuration slot; old pack/config
+length mismatches are rejected by the runtime.

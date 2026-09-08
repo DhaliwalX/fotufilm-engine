@@ -8,6 +8,17 @@ public enum TransportBackend: Int32, Sendable, Codable {
     public var isAvailable: Bool { fotufilm_transport_available(rawValue) == 1 }
 }
 
+/// Backend injection keeps optical preparation portable while Apple hosts use their AOT
+/// scene/development kernels and Metal convolution. The reference API uses the CPU implementation.
+public struct TransportExecution {
+    public let render: (ImageBuffer, FilmEngineInvocation, Bool) throws -> ImageBuffer
+    public let convolve: (ImageBuffer, TransportStencil) throws -> ImageBuffer
+    public init(render: @escaping (ImageBuffer, FilmEngineInvocation, Bool) throws -> ImageBuffer,
+                convolve: @escaping (ImageBuffer, TransportStencil) throws -> ImageBuffer) {
+        self.render = render; self.convolve = convolve
+    }
+}
+
 /// Planar reference integration. Optical components are streamed, never all materialized as images.
 public enum LayeredTransportRenderer {
     private struct Prepared: Sendable {
@@ -40,9 +51,38 @@ public enum LayeredTransportRenderer {
         return result
     }
 
+    /// Solved inputs for portable AOT hosts. The browser stores these alongside its base pack.
+    public static func renderPlan(stock: FilmStock, options: FotufilmEngine.Options,
+                                  width: Int, height: Int) throws -> TransportRenderPlan {
+        guard let model = options.transportConstruction(for: stock), stock.donorLayers.isEmpty,
+              options.stage == .full, !options.localTone else {
+            throw TransportError.unsupported("transport pack requires full stage without image-dependent local tone")
+        }
+        let settings = options.withoutLayeredTransport
+        let prepared = try prepare(model: model, stock: stock, options: settings)
+        let t = prepared.compilation.interpolation(amount: Double(options.halationScale * stock.halationLookScale))
+        var head = FilmEngineInvocation(stock: stock, options: settings, width: width, height: height)
+        var tail = head
+        head.clearTransportOptics(keepLens: true)
+        head.featureMask &= FilmEngineFeature.flare | FilmEngineFeature.diffusion
+        head.featureMask |= FilmEngineFeature.lightOut
+        tail.clearTransportOptics(keepLens: false)
+        tail.configuration[Int(FOTUFILM_CONFIG_RECORD_INPUT)] = 1
+        let pitch = Double(options.format.frameHeightMM * min(max(options.frameCoverage, 0.05), 1)) / Double(min(width, height))
+        return TransportRenderPlan(head: head, tail: tail, components: try prepared.compilation.kernels.indices.compactMap { k in
+            let table = prepared.exposure.table(component: k, interpolation: t)
+            guard table.values.contains(where: { $0 > 0 }) else { return nil }
+            let bands = try prepared.compilation.kernels[k].stencils(pixelPitchMM: pitch)
+            return .init(exposure: table.values, bands: bands.map { .init(weight: $0.weight, stencil: $0.stencil) })
+        })
+    }
+
     public static func process(image: ImageBuffer, stock: FilmStock, options: FotufilmEngine.Options,
-                               model supplied: LayeredTransport) throws -> ImageBuffer {
-        guard HalideBackend.isAvailable, options.transportBackend.isAvailable else {
+                               model supplied: LayeredTransport, frameIndex: UInt64 = 0,
+                               execution: TransportExecution? = nil,
+                               invocation suppliedInvocation: FilmEngineInvocation? = nil,
+                               pixelPitchMM: Double? = nil) throws -> ImageBuffer {
+        guard execution != nil || (HalideBackend.isAvailable && options.transportBackend.isAvailable) else {
             throw TransportError.backend("requested transport backend is unavailable")
         }
         guard stock.donorLayers.isEmpty else { throw TransportError.unsupported("donor capture layers") }
@@ -55,7 +95,13 @@ public enum LayeredTransportRenderer {
             throw TransportError.invalid("invalid image or amount")
         }
         var plain = stock; plain.layeredTransport = nil
-        var settings = options; settings.layeredTransport = nil
+        let settings = options.withoutLayeredTransport
+        let render = execution?.render ?? { image, invocation, developOnly in
+            try run(image: image, invocation: invocation, developOnly: developOnly)
+        }
+        let filter = execution?.convolve ?? { image, stencil in
+            try convolve(image, stencil: stencil, backend: options.transportBackend)
+        }
         var model = supplied
         let texture = options.stage == .texture
         if texture && !options.textureStages.contains(.emulsionMTF) { model.coreSigmaMM = [0, 0, 0] }
@@ -63,15 +109,15 @@ public enum LayeredTransportRenderer {
         let amount = texture && !options.textureStages.contains(.halation) ? 0
             : Double(options.halationScale) * Double(stock.halationLookScale)
         let t = prepared.compilation.interpolation(amount: amount)
-        var invocation = FilmEngineInvocation(stock: plain, options: settings,
-                                             width: image.width, height: image.height)
-        if invocation.localToneActive {
+        var invocation = suppliedInvocation ?? FilmEngineInvocation(stock: plain, options: settings,
+                                             width: image.width, height: image.height, frameIndex: frameIndex)
+        if invocation.localToneActive && suppliedInvocation == nil {
             withPlanes(image.planes) { r, g, b in
                 invocation.measureToneBase(planarR: r, g: g, b: b, width: image.width, height: image.height)
             }
         }
-        let pitch = Double(options.format.frameHeightMM * min(max(options.frameCoverage, 0.05), 1))
-            / Double(min(image.width, image.height))
+        let pitch = pixelPitchMM ?? (Double(options.format.frameHeightMM * min(max(options.frameCoverage, 0.05), 1))
+            / Double(min(image.width, image.height)))
         var exposure = ImageBuffer(width: image.width, height: image.height)
         for k in prepared.compilation.kernels.indices {
             let table = prepared.exposure.table(component: k, interpolation: t)
@@ -79,11 +125,11 @@ public enum LayeredTransportRenderer {
             var head = invocation
             head.featureMask &= FilmEngineFeature.flare | FilmEngineFeature.diffusion
             head.featureMask |= FilmEngineFeature.lightOut
-            head.spectral = SpectralPipelineTables(exposure: table, filmOutput: invocation.spectral.filmOutput,
-                                                   paperOutput: invocation.spectral.paperOutput)
-            let component = try run(image: image, invocation: head, developOnly: true)
+            head.clearTransportOptics(keepLens: true)
+            head.setTransportExposure(table)
+            let component = try render(image, head, true)
             for band in try prepared.compilation.kernels[k].stencils(pixelPitchMM: pitch) {
-                let filtered = try convolve(component, stencil: band.stencil, backend: options.transportBackend)
+                let filtered = try filter(component, band.stencil)
                 for c in 0..<3 { for i in 0..<image.pixelCount {
                     exposure.planes[c][i] += band.weight * filtered.planes[c][i]
                 } }
@@ -96,18 +142,25 @@ public enum LayeredTransportRenderer {
         continuation.featureMask &= ~(FilmEngineFeature.flare | FilmEngineFeature.diffusion
             | FilmEngineFeature.mtf | FilmEngineFeature.mtfLuma | FilmEngineFeature.halation
             | FilmEngineFeature.annularHalation | FilmEngineFeature.texture)
-        continuation.featureMask |= Int32(FOTUFILM_FRAME_RECORD_EXPOSURE_IN)
+        continuation.clearTransportOptics(keepLens: false)
+        continuation.configuration[Int(FOTUFILM_CONFIG_RECORD_INPUT)] = 1
         if texture {
             continuation.featureMask |= FilmEngineFeature.densityOut
-            let transported = try run(image: exposure, invocation: continuation)
+            let transported = try render(exposure, continuation, false)
             var referenceHead = invocation
             referenceHead.featureMask &= FilmEngineFeature.flare | FilmEngineFeature.diffusion
             referenceHead.featureMask |= FilmEngineFeature.lightOut
-            let referenceExposure = try run(image: image, invocation: referenceHead, developOnly: true)
+            referenceHead.clearTransportOptics(keepLens: true)
+            let referenceExposure = try render(image, referenceHead, true)
             var reference = continuation
             reference.featureMask &= ~(FilmEngineFeature.grain | FilmEngineFeature.adjacency
                 | FilmEngineFeature.couplerDiffusion | FilmEngineFeature.printMTF)
-            let baseline = try run(image: referenceExposure, invocation: reference)
+            reference.configuration[Int(FOTUFILM_CONFIG_PRINT_MTF_RADIUS)] = 0
+            reference.configuration[Int(FOTUFILM_CONFIG_GRAIN_RADIUS)] = 0
+            reference.configuration[Int(FOTUFILM_CONFIG_ADJACENCY_STRENGTH)] = 0
+            reference.configuration[Int(FOTUFILM_CONFIG_COUPLER_RADIUS)] = 0
+            for c in 0..<3 { reference.configuration[FilmEngineInvocation.grainOffset+c] = 0 }
+            let baseline = try render(referenceExposure, reference, false)
             var output = image
             let sign: Float = stock.isReversal ? -1 : 1
             for c in 0..<3 { for i in 0..<image.pixelCount {
@@ -115,7 +168,7 @@ public enum LayeredTransportRenderer {
             } }
             return output
         }
-        return try run(image: exposure, invocation: continuation)
+        return try render(exposure, continuation, false)
     }
 
     public static func convolve(_ image: ImageBuffer, stencil: TransportStencil,
@@ -176,4 +229,39 @@ public enum LayeredTransportRenderer {
         planes = [r, g, b]
         return result
     }
+}
+
+public extension FilmEngineInvocation {
+    mutating func setTransportExposure(_ table: SpectralLUT) {
+        spectral = SpectralPipelineTables(exposure: table, filmOutput: spectral.filmOutput,
+                                         paperOutput: spectral.paperOutput)
+        // Apple AOT uploads are keyed by this ID. Each component and amount must upload its
+        // own table even though development and print tables are shared.
+        for value in table.values { spectralCacheID = (spectralCacheID ^ UInt64(value.bitPattern)) &* 0x100000001b3 }
+    }
+
+    mutating func clearTransportOptics(keepLens: Bool) {
+        for c in 0..<3 {
+            configuration[Int(FOTUFILM_CONFIG_MTF_RADIUS)+c] = 0
+            configuration[Int(FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS)+c] = 0
+            configuration[Int(FOTUFILM_CONFIG_HALATION_RADIUS)+c] = 0
+        }
+        configuration[Int(FOTUFILM_CONFIG_MTF_LUMA_RADIUS)] = 0
+        configuration[Int(FOTUFILM_CONFIG_MTF_LUMA_SHARE)] = 0
+        for c in 0..<9 { configuration[Int(FOTUFILM_CONFIG_HALATION_MATRIX)+c] = 0 }
+        if !keepLens {
+            configuration[Int(FOTUFILM_CONFIG_FLARE)] = 0
+            configuration[Int(FOTUFILM_CONFIG_DIFFUSION_DIRECT)] = 1
+            for c in 0..<9 { configuration[Int(FOTUFILM_CONFIG_DIFFUSION_KERNEL)+c] = 0 }
+            for c in 0..<3 { configuration[Int(FOTUFILM_CONFIG_DIFFUSION_RADIUS)+c] = 0 }
+        }
+    }
+}
+
+public struct TransportRenderPlan {
+    public struct Band { public let weight: Float; public let stencil: TransportStencil }
+    public struct Component { public let exposure: [Float]; public let bands: [Band] }
+    public let head: FilmEngineInvocation
+    public let tail: FilmEngineInvocation
+    public let components: [Component]
 }

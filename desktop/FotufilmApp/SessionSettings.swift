@@ -247,6 +247,12 @@ final class SettingsSheetController: SessionViewController {
             "Disc Grain",
             get: { AppSettings.shared.discGrainEnabled },
             set: { AppSettings.shared.discGrainEnabled = $0 }))
+        section.add(PopUpRow<HalationModel>(
+            "Halation Model",
+            options: HalationModel.allCases.map { (title: $0.name, value: $0) },
+            get: { AppSettings.shared.halationModel },
+            set: { AppSettings.shared.halationModel = $0 }))
+        section.add(NoteRow("Layered Transport traces light through the film stack. Films without a measured construction use an illustrative model. Estimated Halation Shape applies to Legacy."))
         section.add(ToggleRow(
             "Estimated Halation Shape",
             get: { AppSettings.shared.estimatedHalationEnabled },
@@ -273,6 +279,7 @@ final class SettingsSheetController: SessionViewController {
                 let settings = AppSettings.shared
                 settings.resetCouplerGeometry()
                 settings.discGrainEnabled = false
+                settings.halationModel = .legacy
                 settings.estimatedHalationEnabled =
                     AppSettings.defaultEstimatedHalationEnabled
             })

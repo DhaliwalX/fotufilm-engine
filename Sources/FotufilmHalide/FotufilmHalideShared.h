@@ -930,8 +930,10 @@ inline Halide::Expr scene_exposure(Halide::ImageParam &configuration,
                                    bool half_lut_math = false) {
     CreativeScene scene = creative_exposure(configuration, red, green, blue,
                                             frame_x, frame_y, approximate);
-    return recover_exposure(configuration, exposure_lut, scene.r, scene.g,
-                            scene.b, channel, half_lut_math);
+    return Halide::select(configuration(FOTUFILM_CONFIG_RECORD_INPUT) != 0.0f,
+        Halide::mux(Halide::min(channel, 2), {red, green, blue}),
+        recover_exposure(configuration, exposure_lut, scene.r, scene.g,
+                         scene.b, channel, half_lut_math));
 }
 
 /// Luminance of a three-plane Func at one pixel, in the renderer's working primaries.

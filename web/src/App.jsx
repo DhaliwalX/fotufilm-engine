@@ -423,6 +423,8 @@ function AppHeader({ backend, developing = false, onUpload }) {
 export default function App() {
   const [stocks, setStocks] = useState([])
   const [stock, setStock] = useState(null)
+  const [halationModel, setHalationModel] = useState(
+    () => localStorage.getItem("halationModel") === "layered" ? "layered" : "legacy")
   const [params, setParams] = useState(Object.fromEntries(SLIDERS.map((s) => [s.key, s.def])))
   const [source, setSource] = useState(null)
   const [originalUrl, setOriginalUrl] = useState(null)
@@ -493,11 +495,11 @@ export default function App() {
     if (!stock || !HAS_WASM) return
     let cancelled = false
     setStatus(`loading ${stock}…`)
-    loadPack(assetUrl(`packs/${stock}.pack`))
+    loadPack(assetUrl(`packs/${stock}${halationModel === "layered" ? ".layered" : ""}.pack`))
       .then(async (pack) => {
         // The sidecar is the optional half: without it the demo is still a darkroom, just one
         // that cannot be taken apart. A stock exported before it existed should not fail to load.
-        const sequence = await loadStages(assetUrl(`packs/${stock}.stages`), pack)
+        const sequence = pack.transport ? [] : await loadStages(assetUrl(`packs/${stock}.stages`), pack)
           .catch((e) => {
             console.warn(`no pipeline stages for ${stock}:`, e.message)
             return []
@@ -527,13 +529,13 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [stock])
+  }, [stock, halationModel])
 
   // Everything a developed frame depends on. When it changes the cache is stale by definition,
   // and the walk starts again from whatever is developed next.
   const frameKey = useMemo(
-    () => `${stock}|${originalUrl}|${SLIDERS.map((s) => params[s.key]).join(',')}`,
-    [stock, originalUrl, params])
+    () => `${stock}|${halationModel}|${originalUrl}|${SLIDERS.map((s) => params[s.key]).join(',')}`,
+    [stock, halationModel, originalUrl, params])
 
   const acceptFile = useCallback((file) => {
     if (!file || !file.type.startsWith('image/')) return
@@ -669,7 +671,7 @@ export default function App() {
 
       <main className="workspace">
         <aside className="control-panel panel">
-          <PanelTitle eyebrow="Film setup" title="Build the look" detail="7 controls" />
+          <PanelTitle eyebrow="Film setup" title="Build the look" detail="8 controls" />
 
           <label className="stock-field">
             <span>Film stock</span>
@@ -679,6 +681,18 @@ export default function App() {
               ))}
             </select>
             <small>{STOCK_NOTES[stock] || selectedStock?.name || 'Loading stock library'}</small>
+          </label>
+
+          <label className="stock-field">
+            <span>Halation Model</span>
+            <select value={halationModel} disabled={developing} onChange={(event) => {
+              setHalationModel(event.target.value)
+              localStorage.setItem('halationModel', event.target.value)
+            }}>
+              <option value="legacy">Legacy</option>
+              <option value="layered">Layered Transport</option>
+            </select>
+            <small>{halationModel === 'layered' ? 'Illustrative film stack · SIMD transport' : 'Original film halation'}</small>
           </label>
 
           <div className="adjustment-grid">

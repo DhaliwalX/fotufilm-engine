@@ -62,6 +62,7 @@ public final class HandwrittenMetalFullFrameRenderer {
         let invocation: FilmEngineInvocation
         let toneActive: Bool
         let flareActive: Bool
+        let layered: LayeredTextureTransport?
 
         var intermediateKey: IntermediateKey {
             IntermediateKey(revision: revision, width: width, height: height)
@@ -169,6 +170,10 @@ public final class HandwrittenMetalFullFrameRenderer {
         let invocation = FilmEngineInvocation(
             stock: stock, options: hdrOptions,
             width: frameWidth, height: frameHeight)
+        let layered = try options.transportConstruction(for: stock).map { _ in
+            try LayeredTextureTransport(device: device, stock: stock, options: hdrOptions,
+                invocation: invocation, width: frameWidth, height: frameHeight)
+        }
         let toneActive = invocation.localToneActive
         let flareActive = invocation.featureMask & FilmEngineFeature.flare != 0
 
@@ -205,8 +210,8 @@ public final class HandwrittenMetalFullFrameRenderer {
         }
         do {
             try spatial.prepareChecked(
-                key: internalKey, stock: stock, options: hdrOptions,
-                frameWidth: frameWidth, frameHeight: frameHeight)
+                key: internalKey, stock: stock, options: hdrOptions.withoutLayeredTransport,
+                frameWidth: frameWidth, frameHeight: frameHeight, invocation: layered?.tail)
         } catch {
             throw PreparationError.spatialPreparation(String(describing: error))
         }
@@ -227,7 +232,7 @@ public final class HandwrittenMetalFullFrameRenderer {
             width: frameWidth, height: frameHeight,
             floatInputByteCount: floatInputByteCount,
             invocation: invocation, toneActive: toneActive,
-            flareActive: flareActive)
+            flareActive: flareActive, layered: layered)
         do {
             try primeIntermediateRing(for: value)
         } catch let error as PreparationError {
@@ -314,13 +319,12 @@ public final class HandwrittenMetalFullFrameRenderer {
             gpuToneGrid = nil
         }
 
-        guard spectralHead.encodeCapturedSDR(
-            luma: luma, chroma: chroma,
-            recordExposure: frame.recordExposure, key: state.sdrHeadKey,
-            range: range, gamut: gamut, chromaOffset: chromaOffset,
-            inputGain: inputGain, gpuToneGrid: gpuToneGrid,
-            commandBuffer: commandBuffer)
-        else { return fail() }
+        guard encodeExposure(state: state, frame: frame, suffix: "sdr", key: state.sdrHeadKey,
+            commandBuffer: commandBuffer, expose: { head, key, exposure in
+                head.encodeCapturedSDR(luma: luma, chroma: chroma, recordExposure: exposure,
+                    key: key, range: range, gamut: gamut, chromaOffset: chromaOffset,
+                    inputGain: inputGain, gpuToneGrid: gpuToneGrid, commandBuffer: commandBuffer)
+            }) else { return fail() }
 
         return finishEncoding(
             frame: frame, state: state, output: output,
@@ -389,13 +393,12 @@ public final class HandwrittenMetalFullFrameRenderer {
             gpuToneGrid = nil
         }
 
-        guard spectralHead.encodeCapturedHDR(
-            luma: luma, chroma: chroma,
-            recordExposure: frame.recordExposure, key: state.x420HeadKey,
-            transfer: transfer, sceneScale: sceneScale,
-            chromaOffset: chromaOffset, inputGain: inputGain,
-            gpuToneGrid: gpuToneGrid, commandBuffer: commandBuffer)
-        else { return fail() }
+        guard encodeExposure(state: state, frame: frame, suffix: "hdr", key: state.x420HeadKey,
+            commandBuffer: commandBuffer, expose: { head, key, exposure in
+                head.encodeCapturedHDR(luma: luma, chroma: chroma, recordExposure: exposure,
+                    key: key, transfer: transfer, sceneScale: sceneScale, chromaOffset: chromaOffset,
+                    inputGain: inputGain, gpuToneGrid: gpuToneGrid, commandBuffer: commandBuffer)
+            }) else { return fail() }
 
         return finishEncoding(
             frame: frame, state: state, output: output,
@@ -448,15 +451,26 @@ public final class HandwrittenMetalFullFrameRenderer {
         } else {
             gpuToneGrid = nil
         }
-        guard spectralHead.encode(
-            input: input, recordExposure: frame.recordExposure,
-            key: state.floatHeadKey, inputGain: inputGain,
-            gpuToneGrid: gpuToneGrid, commandBuffer: commandBuffer)
-        else { return fail() }
+        guard encodeExposure(state: state, frame: frame, suffix: "float", key: state.floatHeadKey,
+            commandBuffer: commandBuffer, expose: { head, key, exposure in
+                head.encode(input: input, recordExposure: exposure, key: key, inputGain: inputGain,
+                    gpuToneGrid: gpuToneGrid, commandBuffer: commandBuffer)
+            }) else { return fail() }
 
         return finishEncoding(
             frame: frame, state: state, output: output,
             frameIndex: frameIndex, commandBuffer: commandBuffer)
+    }
+
+    private func encodeExposure(state: Prepared, frame: IntermediateFrame, suffix: String, key: String,
+                                commandBuffer: MTLCommandBuffer,
+                                expose: (HandwrittenMetalSpectralHead, String, MTLTexture) -> Bool) -> Bool {
+        if let layered = state.layered {
+            return layered.encode(output: frame.recordExposure, suffix: suffix,
+                measurements: measurements, flareResources: frame.flareResources,
+                commandBuffer: commandBuffer, expose: expose)
+        }
+        return expose(spectralHead, key, frame.recordExposure)
     }
 
     private func finishEncoding(
@@ -467,7 +481,7 @@ public final class HandwrittenMetalFullFrameRenderer {
         let fusedTail = compositeTail.linearHDRBinding(forKey: state.internalKey)
         var encodedFusedTail = false
         let spatialEncoded: Bool
-        if state.flareActive {
+        if state.flareActive && state.layered == nil {
             guard let resources = frame.flareResources,
                   let flareMean = resources.flareMean,
                   measurements.encodeFlareMean(

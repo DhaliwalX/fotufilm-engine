@@ -105,6 +105,7 @@ enum {
     kFotufilmParam_InputGroup = 85,
     kFotufilmParam_HalationGroup = 86,
     kFotufilmParam_CouplerGroup = 87,
+    kFotufilmParam_HalationModel = 88,
 };
 
 /// The id the plugin writes for the "None" entry the filter and diffusion menus open with. The

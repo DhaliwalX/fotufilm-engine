@@ -19,6 +19,7 @@ final class AppSettings: ObservableObject {
         static let couplerRange = "fotufilm.coupler-range"
         static let couplerSelf = "fotufilm.coupler-self"
         static let discGrain = "fotufilm.disc-grain"
+        static let halationModel = "fotufilm.halation-model"
         static let estimatedHalation = "fotufilm.estimated-halation"
         static let couplerBarrierRedGreen = "fotufilm.coupler-barrier-red-green"
         static let couplerBarrierGreenBlue = "fotufilm.coupler-barrier-green-blue"
@@ -559,6 +560,18 @@ final class AppSettings: ObservableObject {
         return defaultEstimatedHalationEnabled
     }
 
+    nonisolated static var storedHalationModel: HalationModel {
+        UserDefaults.standard.string(forKey: Key.halationModel)
+            .flatMap(HalationModel.init(rawValue:)) ?? .legacy
+    }
+
+    @Published var halationModel: HalationModel {
+        didSet {
+            UserDefaults.standard.set(halationModel.rawValue, forKey: Key.halationModel)
+            NotificationCenter.default.post(name: Self.filmModelChanged, object: nil)
+        }
+    }
+
     @Published var estimatedHalationEnabled: Bool {
         didSet {
             if !adoptingEstimatedHalationDefault {
@@ -637,7 +650,7 @@ final class AppSettings: ObservableObject {
     }
 
     nonisolated static var isFilmModelAdjusted: Bool {
-        isCouplerGeometryAdjusted || storedDiscGrainEnabled
+        isCouplerGeometryAdjusted || storedDiscGrainEnabled || storedHalationModel != .legacy
             || storedEstimatedHalationEnabled != defaultEstimatedHalationEnabled
     }
 
@@ -692,6 +705,7 @@ final class AppSettings: ObservableObject {
         couplerRange = Self.storedCouplerRange
         couplerSelf = Self.storedCouplerSelf
         discGrainEnabled = Self.storedDiscGrainEnabled
+        halationModel = Self.storedHalationModel
         estimatedHalationEnabled = Self.storedEstimatedHalationEnabled
         couplerBarrierRedGreen = Self.storedCouplerBarrierRedGreen
         couplerBarrierGreenBlue = Self.storedCouplerBarrierGreenBlue
@@ -714,6 +728,7 @@ final class AppSettings: ObservableObject {
         negativeViewing = .lightBox
         resetCouplerGeometry()
         discGrainEnabled = false
+        halationModel = .legacy
         estimatedHalationEnabled = Self.defaultEstimatedHalationEnabled
         shareCrashReports = false
         debugInspector = false

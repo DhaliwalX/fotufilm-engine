@@ -32,7 +32,7 @@ enum {
 /// Number of floats in the packed configuration. Offsets are defined by the enum below; append new
 /// fields without renumbering existing entries.
 enum {
-    FOTUFILM_FRAME_CONFIGURATION_COUNT = 232 + 3 * FOTUFILM_COUPLER_WARP_SAMPLES
+    FOTUFILM_FRAME_CONFIGURATION_COUNT = 233 + 3 * FOTUFILM_COUPLER_WARP_SAMPLES
         + 2 * FOTUFILM_TONE_GRID_CELLS,
 };
 
@@ -224,6 +224,8 @@ enum {
     /// Enabled flag followed by three host-primary luminance weights. Fits chroma after the
     /// output matrix while preserving luminance and above-white highlights; zero disables it.
     FOTUFILM_CONFIG_OUTPUT_GAMUT = FOTUFILM_CONFIG_OUTPUT_SHOULDER + 1,
+    /// Typed record-exposure input seam. Zero is ordinary scene input.
+    FOTUFILM_CONFIG_RECORD_INPUT = FOTUFILM_CONFIG_OUTPUT_GAMUT + 4,
 };
 
 /// Decode-kernel parameters: row-major scene-space matrix, transfer, and premultiplication flag.
@@ -809,11 +811,11 @@ enum {
                        FOTUFILM_FRAME_ENCODE_OUT))                           \
     X(color_float_light,                                                    \
       FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF | FOTUFILM_FRAME_MTF_LUMA |    \
-      FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT)                     \
+      FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT | FOTUFILM_FRAME_DIFFUSION)                     \
     X(monochrome_float_light,                                               \
       FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF | FOTUFILM_FRAME_MTF_LUMA |    \
       FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT |                    \
-      FOTUFILM_FRAME_MONOCHROME)                                             \
+      FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_DIFFUSION)                                             \
     X(color_float_fields,                                                   \
       FOTUFILM_AOT_ALL_STAGES | FOTUFILM_FRAME_FLOAT_IO |                     \
       FOTUFILM_FRAME_FIELDS_IN)                                              \

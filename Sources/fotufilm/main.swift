@@ -62,6 +62,7 @@ Options:
                      Costs about 5x the pixels and a one-off minute of
                      pipeline build
   --halation <scale> Halation multiplier, 0 disables (default: 1)
+  --halation-model <legacy|layered> Halation model (default: legacy)
   --transport <json> Opt in to a layered transport construction (experimental)
   --transport-backend <cpu|metal> Transport convolution backend (default: cpu)
   --halation-colour <f>  How much the halo keeps the source's own colour
@@ -1099,6 +1100,10 @@ if let c = flags["--halation-colour"] {
 }
 if let z = flags["--halation-haze"] { options.halationHazeMM = Float(z) }
 options.useEstimatedHalationProfile = flags["--estimated-halation"] != nil
+if let name = flags["--halation-model"] {
+    guard let model = HalationModel(rawValue: name) else { fail("--halation-model requires legacy or layered") }
+    options.halationModel = model
+}
 if let path = flags["--transport"] {
     do {
         let model = try JSONDecoder().decode(LayeredTransport.self,
@@ -1114,9 +1119,9 @@ if let backend = flags["--transport-backend"] {
     default: fail("--transport-backend requires cpu or metal")
     }
 }
-if options.layeredTransport != nil || stock.layeredTransport != nil {
-    if ["--stages", "--dump-wasm-pack", "--dump-wasm-stages"].contains(where: { flags[$0] != nil }) {
-        fail("Layered transport currently supports direct image rendering; stage sequences and browser packs are not supported.")
+if options.transportConstruction(for: stock) != nil {
+    if ["--stages", "--dump-wasm-stages"].contains(where: { flags[$0] != nil }) {
+        fail("Layered transport stage-sequence exports are not supported.")
     }
 }
 // Capture veiling glare, off unless asked for: see Options.flareScale.
@@ -1260,7 +1265,7 @@ if let packPath = flags["--dump-wasm-pack"] {
 
     var pack = Data()
     pack.append(contentsOf: Array("FSWP".utf8))
-    pack.appendUInt32(1)
+    pack.appendUInt32(options.transportConstruction(for: stock) == nil ? 1 : 2)
     pack.appendInt32(Int32(packWidth))
     pack.appendInt32(Int32(packHeight))
     pack.appendInt32(invocation.featureMask)
@@ -1277,6 +1282,27 @@ if let packPath = flags["--dump-wasm-pack"] {
     pack.appendFloats(tables.paperOutput?.values ?? [Float](repeating: 0, count: lutCount))
 
     do {
+        if options.transportConstruction(for: stock) != nil {
+            let plan = try LayeredTransportRenderer.renderPlan(stock: stock, options: options,
+                                                              width: packWidth, height: packHeight)
+            guard plan.head.featureMask == FilmEngineFeature.lightOut else {
+                fail("Browser transport packs currently require lens flare and diffusion off")
+            }
+            pack.appendInt32(plan.head.featureMask)
+            pack.appendFloats(plan.head.configuration)
+            pack.appendFloats(plan.tail.configuration)
+            pack.appendInt32(Int32(plan.components.count))
+            for component in plan.components {
+                pack.appendFloats(component.exposure)
+                pack.appendInt32(Int32(component.bands.count))
+                for band in component.bands {
+                    pack.appendFloats([band.weight])
+                    pack.appendInt32(Int32(band.stencil.radius))
+                    pack.appendInt32(Int32(band.stencil.stride))
+                    pack.appendFloats(band.stencil.weights)
+                }
+            }
+        }
         try pack.write(to: URL(fileURLWithPath: packPath))
     } catch {
         fail("Could not write \(packPath): \(error.localizedDescription)")

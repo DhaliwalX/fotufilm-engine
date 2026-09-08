@@ -75,11 +75,13 @@ rm -f web/public/packs/*.pack web/public/packs/*.stages
 INDEX="web/public/packs/index.json"
 printf '[' > "$INDEX"
 FIRST=1
-MASKS=()
+MASKS=(1048576)
 while IFS=$'\t' read -r id name _; do
   [[ -n "$id" ]] || continue
   ./.build/release/fotufilm --dump-wasm-pack "web/public/packs/$id.pack" \
     --stock "$id" --pack-size "$PACK_SIZE" >/dev/null
+  ./.build/release/fotufilm --dump-wasm-pack "web/public/packs/$id.layered.pack" \
+    --halation-model layered --stock "$id" --pack-size "$PACK_SIZE" >/dev/null
   # The sidecar the pipeline walk reads: the same export once per stage, stored as what each
   # stage does not share with the finished film. It is fetched only when someone takes the
   # pipeline apart, so it rides alongside the pack rather than inside it.
@@ -163,13 +165,13 @@ echo "Linking the WebAssembly module…"
 # shellcheck disable=SC1091
 source "$EMSDK/emsdk_env.sh" >/dev/null 2>&1
 mkdir -p web/public
-em++ -O3 web/engine/fotufilm_wasm_cpu.cpp \
+em++ -std=c++17 -O3 web/engine/fotufilm_wasm_cpu.cpp \
   "$OUTPUT"/cpu/develop_*.a "$OUTPUT"/cpu/print_*.a \
   -I Sources/FotufilmHalide/include -I "$OUTPUT/cpu" \
   -msimd128 -sALLOW_MEMORY_GROWTH=1 \
   -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,worker \
   -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,HEAPF32 \
-  -sEXPORTED_FUNCTIONS=_fotufilm_wasm_cpu_render,_fotufilm_wasm_set_exposure,_fotufilm_wasm_set_scene,_fotufilm_wasm_set_white_balance,_fotufilm_wasm_set_grain,_fotufilm_wasm_configuration_count,_fotufilm_wasm_lut_count,_malloc,_free \
+  -sEXPORTED_FUNCTIONS=_fotufilm_wasm_transport,_fotufilm_wasm_cpu_render,_fotufilm_wasm_set_exposure,_fotufilm_wasm_set_scene,_fotufilm_wasm_set_white_balance,_fotufilm_wasm_set_grain,_fotufilm_wasm_configuration_count,_fotufilm_wasm_lut_count,_malloc,_free \
   -o web/public/fotufilm.mjs
 
 # The WebGPU road. One generator for every stock rather than one per mask: the fused kernel takes

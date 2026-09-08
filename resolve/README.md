@@ -127,3 +127,7 @@ Set `FOTUFILM_STOCKS` to a folder of stock JSON files to load custom films. If a
 custom film and a bundled pack use the same ID, the bundled pack takes precedence.
 See [Build support](../docs/support.html) for custom pack builds and
 [Licensing](../LICENSING.md) for applicable terms.
+
+The **Halation Model** menu selects **Legacy** (the default for older projects) or
+**Layered Transport**. Layered Transport uses an illustrative construction when the
+stock has no measured stack. **Estimated Halation Shape** affects Legacy only.

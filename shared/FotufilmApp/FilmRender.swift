@@ -402,8 +402,12 @@ enum FilmRender {
                     stock: stock, options: options,
                     width: max(1, Int(density.width)),
                     height: max(1, Int(density.height)))
-                prepared = requestedViewport.addingSpatialSupport(
-                    invocation.spatialSupport)
+                // Layered transport currently solves the complete virtual frame so tails and
+                // reduction-grid phases remain identical while panning and zooming.
+                let support = options.transportConstruction(for: stock) == nil
+                    ? invocation.spatialSupport
+                    : Int(max(requestedViewport.virtualFrameSize.width, requestedViewport.virtualFrameSize.height))
+                prepared = requestedViewport.addingSpatialSupport(support)
             }
             viewport = prepared
             frameCoverage = coverage
