@@ -96,7 +96,7 @@ if (( TEST )); then
   tools/generate-halide-aot.sh "$KERNEL_PLATFORM" "$KERNELS"
 
   xcrun clang++ -std=c++17 -O2 -c -isysroot "$SDK" -target "$TARGET" \
-    -DFOTUFILM_HALIDE_IOS_AOT=1 -I"$KERNELS" -ISources/FotufilmHalide/include \
+    -DFOTUFILM_HALIDE_IOS_AOT=1 -DFOTUFILM_TRANSPORT_REFERENCE_STUBS=1 -I"$KERNELS" -ISources/FotufilmHalide/include \
     Sources/FotufilmHalide/FotufilmHalideIOS.cpp -o "$OBJ/FotufilmHalideIOS.o"
   xcrun clang++ -std=c++17 -O2 -c -isysroot "$SDK" -target "$TARGET" \
     -Iresolve resolve/WorkingSpace.cpp -o "$OBJ/WorkingSpace.o"
@@ -166,7 +166,7 @@ for ARCH in "${ARCHS[@]}"; do
     -fmacro-prefix-map="$PWD"=Fotufilm \
     -ffunction-sections -fdata-sections -c \
     -isysroot "$SDK" -target "$TARGET" \
-    -DFOTUFILM_HALIDE_IOS_AOT=1 \
+    -DFOTUFILM_HALIDE_IOS_AOT=1 -DFOTUFILM_TRANSPORT_REFERENCE_STUBS=1 \
     -I"$KERNELS" -ISources/FotufilmHalide/include \
     Sources/FotufilmHalide/FotufilmHalideIOS.cpp \
     -o "$OBJ/FotufilmHalideIOS.o"

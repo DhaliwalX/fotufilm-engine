@@ -34,6 +34,7 @@ enum CouplerDemoPreview {
         var stockID: String
         var gapReach: [Double]
         var selfScale: Double
+        var halationModel: HalationModel = .legacy
         var estimatedHalation: Bool
 
         /// The film as its maker calibrated it: every control back at 1, and the halation shape
@@ -45,6 +46,7 @@ enum CouplerDemoPreview {
 
         var isCalibrated: Bool {
             gapReach.allSatisfy { $0 == 1 } && selfScale == 1
+                && halationModel == .legacy
                 && estimatedHalation == AppSettings.defaultEstimatedHalationEnabled
         }
 
@@ -56,6 +58,7 @@ enum CouplerDemoPreview {
                      gapReach: [AppSettings.storedCouplerBarrierRedGreen,
                                 AppSettings.storedCouplerBarrierGreenBlue],
                      selfScale: AppSettings.storedCouplerSelf,
+                     halationModel: AppSettings.storedHalationModel,
                      estimatedHalation: AppSettings.storedEstimatedHalationEnabled)
         }
     }
@@ -94,6 +97,7 @@ enum CouplerDemoPreview {
 
         var options = FotufilmEngine.Options()
         options.grainScale = 0
+        options.halationModel = settings.halationModel
         options.useEstimatedHalationProfile = settings.estimatedHalation
         options.couplerGapReachScales = settings.gapReach.map(Float.init)
         options.couplerSelfScale = Float(settings.selfScale)

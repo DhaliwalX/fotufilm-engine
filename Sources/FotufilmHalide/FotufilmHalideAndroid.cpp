@@ -53,6 +53,14 @@ int run_develop(const float *input_r, const float *input_g, const float *input_b
         std::max(configuration[FOTUFILM_CONFIG_ADJACENCY_SIGMA], 0.151f);
     const int32_t adjacency_radius =
         std::max(0, int32_t(configuration[FOTUFILM_CONFIG_ADJACENCY_RADIUS]));
+    const float adjacency_secondary_sigma =
+        std::max(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA], 0.151f);
+    const int32_t adjacency_secondary_radius =
+        std::max(0, int32_t(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS]));
+    const float fringe_sigma =
+        std::max(configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA], 0.151f);
+    const int32_t fringe_radius =
+        std::max(0, int32_t(configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS]));
     const float grain_sigma = std::max(configuration[FOTUFILM_CONFIG_GRAIN_SIGMA], 0.151f);
     const int32_t grain_radius =
         std::max(0, int32_t(configuration[FOTUFILM_CONFIG_GRAIN_RADIUS]));
@@ -79,6 +87,8 @@ int run_develop(const float *input_r, const float *input_g, const float *input_b
         stride[0], stride[1], stride[2],
         strided_radius[0], strided_radius[1], strided_radius[2],
         coupler_sigma, coupler_radius, adjacency_sigma, adjacency_radius,
+        adjacency_secondary_sigma, adjacency_secondary_radius,
+        fringe_sigma, fringe_radius,
         grain_sigma, grain_radius, grain_lambda, print_mtf_radius,
         seed, reversal, monochrome, origin_x, origin_y, density);
 }

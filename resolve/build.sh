@@ -100,7 +100,7 @@ for ARCH in "${ARCHS[@]}"; do
     -fmacro-prefix-map="$PWD"=Fotufilm \
     -ffunction-sections -fdata-sections -c \
     -isysroot "$SDK" -target "$TARGET" \
-    -DFOTUFILM_HALIDE_IOS_AOT=1 -DFOTUFILM_AOT_WINDOWED_HOST="$WINDOWED_HOST" \
+    -DFOTUFILM_HALIDE_IOS_AOT=1 -DFOTUFILM_TRANSPORT_REFERENCE_STUBS=1 -DFOTUFILM_AOT_WINDOWED_HOST="$WINDOWED_HOST" \
     -I"$KERNELS" -ISources/FotufilmHalide/include \
     Sources/FotufilmHalide/FotufilmHalideIOS.cpp \
     -o "$OBJ/FotufilmHalideIOS.o"

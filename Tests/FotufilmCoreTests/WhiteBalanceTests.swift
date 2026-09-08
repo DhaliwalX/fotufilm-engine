@@ -144,16 +144,16 @@ final class WhiteBalanceEngineTests: XCTestCase {
         ).configuration[FilmEngineInvocation.whiteBalanceOffset], 1)
     }
 
-    func testTungstenBalanceCoolsThePrint() throws {
+    func testTungstenLightWarmsThePrint() throws {
         try requireEngine()
         let grey = SIMD3<Float>(0.18, 0.18, 0.18)
         let plain = render(grey, balance: .neutral)
         let tungsten = render(grey, balance: WhiteBalance(kelvin: 3200))
-        XCTAssertLessThan(tungsten.x / tungsten.z, plain.x / plain.z * 0.9,
-                          "3200 K should print cooler than neutral")
+        XCTAssertGreaterThan(tungsten.x / tungsten.z, plain.x / plain.z * 1.1,
+                             "3200 K light should print warmer than D65")
         let shade = render(grey, balance: WhiteBalance(kelvin: 9500))
-        XCTAssertGreaterThan(shade.x / shade.z, plain.x / plain.z * 1.1,
-                             "9500 K should print warmer than neutral")
+        XCTAssertLessThan(shade.x / shade.z, plain.x / plain.z * 0.9,
+                          "9500 K light should print cooler than D65")
     }
 
     func testBalanceActsThroughTheEmulsionNotOnThePrint() throws {
@@ -201,19 +201,18 @@ extension WhiteBalanceEngineTests {
         return SIMD3(out.planes[0][centre], out.planes[1][centre], out.planes[2][centre])
     }
 
-    func testDesaturatingABalancedGreyCardPrintsTheSameGrey() throws {
+    func testChromaControlsLeaveNeutralReflectanceUnderTheSceneLight() throws {
         try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable,
                           "the Halide engine is the only processing backend")
         let balance = WhiteBalance(kelvin: 3200)
-        let g = balance.gains
-        // The card as the sensor saw it under tungsten, which the declared balance neutralises.
-        let card = SIMD3<Float>(0.18 / g.r, 0.18 / g.g, 0.18 / g.b)
+        // Ingest neutralizes capture light before the film applies its spectrum once.
+        let card = SIMD3<Float>(repeating: 0.18)
         var options = FotufilmEngine.Options()
         options.whiteBalance = balance
         let balanced = print(card, options: options)
         let plainGrey = print(SIMD3(repeating: 0.18), options: FotufilmEngine.Options())
-        XCTAssertEqual(balanced.x / balanced.z, plainGrey.x / plainGrey.z, accuracy: 0.01,
-                       "a balanced card should print as the grey card does")
+        XCTAssertGreaterThan(balanced.x / balanced.z, plainGrey.x / plainGrey.z * 1.1,
+                             "tungsten must remain visible on a daylight film")
 
         for (saturation, vibrance) in [(Float(0), Float(0)), (1, 1), (2, 0)] {
             options.saturation = saturation

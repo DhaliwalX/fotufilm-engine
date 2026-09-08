@@ -179,7 +179,15 @@ final class HandwrittenMetalSpatialExecutorTests: XCTestCase {
             device: device, lookupLayout: .baseline3D))
         let width = 160, height = 96
         var stock = try fastPathFixtureStock()
-        stock.curves = try XCTUnwrap(FilmStock.named("gold200")).curves
+        // This checks the sampled continuation seam independently of the installed catalogue,
+        // which an embedding may override with analytic stock curves.
+        let knots: [Float] = [-4, -2.4, -1, -0.2, 0.6, 1.1, 3.5]
+        stock.curves = try stock.curves.map { original in
+            var curve = original
+            curve.sampled = try SampledCharacteristicCurve(logExposure: knots,
+                density: knots.map { original.density(logExposure: $0) })
+            return curve
+        }
         XCTAssertTrue(stock.curves.allSatisfy { $0.sampled != nil })
         let options = multiresOptions(height: height)
         let key = #function

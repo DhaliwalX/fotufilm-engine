@@ -430,8 +430,8 @@ final class EditorControlCatalogueTests: XCTestCase {
             .keys.sorted()
 
         XCTAssertEqual(unexposedOrGlobal,
-                       ["couplerRangeScale", "flareScale", "halationHazeMM",
-                        "negativeViewing", "stage", "textureStages",
+                       ["adjacencyModel", "couplerRangeScale", "flareScale", "halationHazeMM", "halationModel", "layeredTransport",
+                        "negativeViewing", "stage", "textureStages", "transportBackend",
                         "useEstimatedHalationProfile"])
     }
 

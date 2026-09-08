@@ -161,9 +161,11 @@ public final class HandwrittenMetalFilmRenderer {
         frameWidth: Int, frameHeight: Int, hdrInput: Bool
     ) -> Bool {
         guard frameWidth > 0, frameHeight > 0,
-              options.stage == .full else { return false }
-        let invocation = FilmEngineInvocation(
-            stock: stock, options: options, width: frameWidth, height: frameHeight)
+              options.stage == .full,
+              options.transportConstruction(for: stock) == nil else { return false }
+        guard let invocation = try? FilmEngineInvocation(
+            validating: stock, options: options, width: frameWidth, height: frameHeight)
+        else { return false }
         let originalMask = invocation.featureMask
         guard !invocation.localToneActive,
               originalMask & FilmEngineFeature.flare == 0 else { return false }

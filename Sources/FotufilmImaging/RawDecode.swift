@@ -14,9 +14,6 @@ import FotufilmCore
 /// How a camera raw file is turned into the scene the emulsion is exposed to.
 public enum RawDecode {
 
-    /// The range Core Image documents for `neutralTemperature`.
-    public static let neutralTemperatureRange: ClosedRange<Float> = 2000...50000
-
     /// A complete, reproducible RAW development request. Call sites choose a recipe instead of
     /// relying on mutable `CIRAWFilter` defaults that may vary between platforms.
     public struct Recipe: Equatable, Sendable {
@@ -47,59 +44,24 @@ public enum RawDecode {
         }
     }
 
-    /// Where the temperature control's displacement ended up: what the
-    /// decoder was asked for, and how far the illuminant actually moved.
-    public struct Placement: Equatable, Sendable {
-        /// The illuminant to demosaic for, or nil to leave the decoder's own
-        /// as-shot balance untouched.
-        public var neutralKelvin: Float?
-        /// How far the demosaic moved the illuminant from as-shot, in mired.
-        public var bakedMired: Float
-
-        public init(neutralKelvin: Float?, bakedMired: Float) {
-            self.neutralKelvin = neutralKelvin
-            self.bakedMired = bakedMired
-        }
-    }
-
-    /// Places a temperature displacement for a file whose as-shot illuminant is `asShotMired`.
-    public static func placement(displacementMired: Float,
-                                 asShotMired: Float) -> Placement {
-        guard displacementMired != 0 else {
-            return Placement(neutralKelvin: nil, bakedMired: 0)
-        }
-        let requested = WhiteBalance.miredToKelvin(asShotMired + displacementMired)
-        let kelvin = min(max(requested, neutralTemperatureRange.lowerBound),
-                         neutralTemperatureRange.upperBound)
-        return Placement(neutralKelvin: kelvin,
-                         bakedMired: WhiteBalance.kelvinToMired(kelvin) - asShotMired)
-    }
-
-    /// What the film model must still adapt for once `bakedMired` has gone into the demosaic.
-    public static func remainingBalance(displacementMired: Float,
-                                        tint: Float,
-                                        bakedMired: Float?) -> WhiteBalance {
-        let neutral = WhiteBalance.kelvinToMired(WhiteBalance.neutralKelvin)
-        let remaining = neutral + displacementMired - (bakedMired ?? 0)
-        return WhiteBalance(kelvin: WhiteBalance.miredToKelvin(remaining), tint: tint)
-    }
-
 #if canImport(CoreImage)
 
     /// What a raw file says about itself, read once.
     public struct Metadata: Sendable {
         /// Native pixel dimensions as the image will be delivered, before any geometry of ours.
         public var pixelSize: CGSize
-        /// The as-shot illuminant in mired, when the decoder reports one.
-        public var asShotMired: Float?
+        /// Decoder-reported capture light, carried without converting to UI coordinates.
+        public var asShotKelvin: Float?
+        public var asShotChromaticity: SIMD2<Float>?
         /// The body that took the picture, as far as the TIFF record names it — what the
         /// spectral profile store resolves against.
         public var camera: CameraIdentity?
 
-        public init(pixelSize: CGSize, asShotMired: Float?,
-                    camera: CameraIdentity? = nil) {
+        public init(pixelSize: CGSize, asShotKelvin: Float?,
+                    camera: CameraIdentity? = nil, asShotChromaticity: SIMD2<Float>? = nil) {
+            self.asShotChromaticity = asShotChromaticity
             self.pixelSize = pixelSize
-            self.asShotMired = asShotMired
+            self.asShotKelvin = asShotKelvin
             self.camera = camera
         }
     }
@@ -212,9 +174,11 @@ public enum RawDecode {
         default:
             size = native
         }
+        let white = filter.neutralChromaticity
+        let xy = SIMD2<Float>(Float(white.x), Float(white.y))
         let kelvin = filter.neutralTemperature
-        return Metadata(pixelSize: size,
-                        asShotMired: kelvin > 0 ? WhiteBalance.kelvinToMired(kelvin) : nil)
+        return Metadata(pixelSize: size, asShotKelvin: kelvin > 0 ? kelvin : nil,
+                        asShotChromaticity: xy.x > 0 && xy.y > 0 && xy.x + xy.y < 1 ? xy : nil)
     }
 
     /// Decodes `data` scene-referred using an explicit development recipe.
@@ -250,9 +214,10 @@ public enum RawDecode {
         }
 
         if let neutralKelvin = recipe.neutralKelvin {
-            filter.neutralTemperature = min(
-                max(neutralKelvin, neutralTemperatureRange.lowerBound),
-                neutralTemperatureRange.upperBound)
+            // The live camera uses this same chromaticity, avoiding incompatible platform
+            // temperature/tint conventions and retaining exactly one capture neutralization.
+            let xy = WhiteBalance.chromaticity(kelvin: neutralKelvin, tint: 0)
+            filter.neutralChromaticity = CGPoint(x: CGFloat(xy.x), y: CGFloat(xy.y))
         }
 
         if let targetLongEdge = recipe.targetLongEdge {

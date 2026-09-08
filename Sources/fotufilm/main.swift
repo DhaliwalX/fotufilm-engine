@@ -42,9 +42,11 @@ Options:
                      its camera exposed. See --list-formats
   --ev <stops>       Exposure compensation in stops (default: 0)
   --autoexpose       Anchor the log-average scene luminance on mid-gray
-  --wb <kelvin>      Scene illuminant, 2000-12000 K (default: 6504, D65).
-                     On camera raw this is relative to the file's as-shot
-                     balance, so 6504 is "as the camera saw it"
+  --wb <kelvin>      Scene illuminant, 2000-12000 K. Unset, an already
+                     white-balanced file is lit at the stock's own balance,
+                     so a neutral renders neutral. On camera raw this is
+                     relative to the file's as-shot light; 6504 preserves
+                     the capture illuminant
   --tint <n>         Green/magenta off the locus, -100...100 (default: 0)
   --background <c>  Scene-linear Rec.2020 background for associated-alpha input:
                      black, white, or R,G,B (default: black). The source is
@@ -62,6 +64,9 @@ Options:
                      Costs about 5x the pixels and a one-off minute of
                      pipeline build
   --halation <scale> Halation multiplier, 0 disables (default: 1)
+  --halation-model <legacy|layered> Halation model (default: legacy)
+  --transport <json> Opt in to a layered transport construction (experimental)
+  --transport-backend <cpu|metal> Transport convolution backend (default: cpu)
   --halation-colour <f>  How much the halo keeps the source's own colour
                      instead of the stock's layered red, 0-1 (default: 0).
                      The dimmer records are raised to the strongest record's
@@ -75,6 +80,10 @@ Options:
   --flare <scale>    Taking-lens veiling glare, 1 enables (default: 0 — a
                      photographed source already carries its own lens's glare)
   --couplers <scale> DIR + adjacency strength; 1 calibrated, overdrive compressed (default: 1)
+  --adjacency-model <m> gaussian or screened-diffusion (default: stock's model)
+  --fringe-amount <f> Broad inter-layer transport fraction, 0-1 (default: stock, normally 0)
+  --fringe-radius <um> Broad transport Gaussian sigma on the film, 0-2000 micrometers
+                     (default: stock, normally 100; must exceed the stock's core radius)
   --bleach-bypass <f> Fraction of the developed silver the bleach leaves in the
                      negative, 0-1 (default: 0). The print re-times on the
                      denser mid-grey, so what changes is contrast and chroma.
@@ -108,7 +117,8 @@ Options:
   --paper <name>     Output medium: ektacolor-edge (default), endura-premier,
                      crystal-archive, vision-2383, vision-2393,
                      eterna-cp, lab-scan, telecine, screen or negative.
-                     Photo and projection variants use analytic example curves.
+                     Photo and projection variants are digitised from the
+                     manufacturers' published datasheets.
                      Reversal stocks use screen regardless of the requested medium.
   --enlarger <head>  Lamp house over the negative: diffuser (default, the
                      diffuse density the sheets are measured in) or condenser
@@ -185,7 +195,7 @@ var flags: [String: String] = [:]
 var args = Array(CommandLine.arguments.dropFirst())
 while !args.isEmpty {
     let a = args.removeFirst()
-    if a == "--list-stocks" || a == "--list-formats" || a == "--dump-curves"
+    if a == "--list-stocks" || a == "--list-stock-capabilities" || a == "--list-formats" || a == "--dump-curves"
         || a == "--dump-spectra" || a == "--help" || a == "-h"
         || a == "--autoexpose" || a == "--check-stocks" || a == "--make-pack-key"
         || a == "--stages" || a == "--estimated-halation" || a == "--hlg" {
@@ -203,9 +213,11 @@ if flags["--help"] != nil || flags["-h"] != nil {
     exit(0)
 }
 
-if flags["--list-stocks"] != nil {
+if flags["--list-stocks"] != nil || flags["--list-stock-capabilities"] != nil {
     for (key, stock) in FilmStock.presets.sorted(by: { $0.key < $1.key }) {
-        print("\(key)\t\(stock.name)\t\(FilmFormat.nativeID(forStockID: key))")
+        let capability = flags["--list-stock-capabilities"] != nil
+            ? "\t\(stock.donorLayers.isEmpty ? "true" : "false")" : ""
+        print("\(key)\t\(stock.name)\t\(FilmFormat.nativeID(forStockID: key))\(capability)")
     }
     exit(0)
 }
@@ -441,16 +453,15 @@ func associatedOpenEXRColor(url: URL) -> CIImage? {
 
 /// Loads any supported image as associated scene-referred linear Rec.2020 RGBA, preserving values
 /// above 1 for HDR/raw sources. Association is retained until the caller composites the scene.
-func loadLinear(path: String, balance: WhiteBalance)
-    -> (rgba: [Float], width: Int, height: Int, remaining: WhiteBalance,
-        sceneKelvin: Float?, contentHeadroom: Float) {
+func loadLinear(path: String)
+    -> (rgba: [Float], width: Int, height: Int, sceneKelvin: Float?, sceneChromaticity: SIMD2<Float>?, contentHeadroom: Float) {
     let url = URL(fileURLWithPath: path)
     let isRaw = RawDecode.isRaw(url: url)
     let declaredHeadroom = isRaw ? nil : GainMapHeadroom.declared(url: url)
     let context = CIContext(options: [.useSoftwareRenderer: true, .cacheIntermediates: false])
     var image: CIImage?
-    var remaining = balance
     var sceneKelvin: Float?
+    var sceneChromaticity: SIMD2<Float>?
     var contentHeadroom: Float = 1
     var profileCorrection: CameraProfileCorrection.Resolved?
     var associatedEXRColor: CIImage?
@@ -458,24 +469,14 @@ func loadLinear(path: String, balance: WhiteBalance)
         guard let raw = CIRAWFilter(imageURL: url) else {
             fail("Could not read raw file: \(path)")
         }
-        let displacement = balance.mired
-            - WhiteBalance.kelvinToMired(WhiteBalance.neutralKelvin)
-        let asShot = raw.neutralTemperature > 0
-            ? WhiteBalance.kelvinToMired(raw.neutralTemperature) : nil
-        let placement = asShot.map {
-            RawDecode.placement(displacementMired: displacement, asShotMired: $0)
+        // Decode at the file's complete as-shot white once. Edits change the spectral lamp.
+        let white = raw.neutralChromaticity
+        let xy = SIMD2<Float>(Float(white.x), Float(white.y))
+        if xy.x > 0 && xy.y > 0 && xy.x + xy.y < 1 {
+            sceneChromaticity = xy
         }
-        RawDecode.configure(
-            raw,
-            recipe: RawDecode.Recipe(neutralKelvin: placement?.neutralKelvin ?? nil))
-        remaining = RawDecode.remainingBalance(displacementMired: displacement,
-                                               tint: balance.tint,
-                                               bakedMired: placement?.bakedMired)
-        // The illuminant-aware profile delta — the same wiring as the app's still path: the
-        // demosaic is already colorimetric under the as-shot balance, so only the delta of
-        // the profile's matrix against its daylight anchor may be applied, and only when the
-        // camera resolves and the scene was warm enough for it to differ from identity.
-        sceneKelvin = asShot.map(WhiteBalance.miredToKelvin)
+        sceneKelvin = raw.neutralTemperature > 0 ? raw.neutralTemperature : nil
+        RawDecode.configure(raw, recipe: RawDecode.Recipe())
         profileCorrection = CameraProfileCorrection.resolve(
             camera: RawDecode.cameraIdentity(url: url),
             sceneKelvin: sceneKelvin)
@@ -541,7 +542,7 @@ func loadLinear(path: String, balance: WhiteBalance)
         print(String(format: "Camera profile: %@ at %.0f K, max deviation %.4f",
                      corrected.profileID, corrected.cct, corrected.maxDeviation))
     }
-    return (rgba, width, height, remaining, sceneKelvin, contentHeadroom)
+    return (rgba, width, height, sceneKelvin, sceneChromaticity, contentHeadroom)
 }
 
 func parseLinearBackground(_ value: String?) -> SIMD3<Float> {
@@ -777,8 +778,8 @@ if let diffPath = flags["--diff"] {
     guard positional.count == 2 else {
         fail("--diff <out> takes two rendered images: fotufilm <a> <b> --diff <out>")
     }
-    let a = loadLinear(path: positional[0], balance: .neutral)
-    let b = loadLinear(path: positional[1], balance: .neutral)
+    let a = loadLinear(path: positional[0])
+    let b = loadLinear(path: positional[1])
     guard a.width == b.width, a.height == b.height else {
         fail("Images differ in size: \(a.width)x\(a.height) vs \(b.width)x\(b.height)")
     }
@@ -1105,9 +1106,52 @@ if let c = flags["--halation-colour"] {
 }
 if let z = flags["--halation-haze"] { options.halationHazeMM = Float(z) }
 options.useEstimatedHalationProfile = flags["--estimated-halation"] != nil
+if let name = flags["--halation-model"] {
+    guard let model = HalationModel(rawValue: name) else { fail("--halation-model requires legacy or layered") }
+    options.halationModel = model
+}
+if let path = flags["--transport"] {
+    do {
+        let model = try JSONDecoder().decode(LayeredTransport.self,
+            from: Data(contentsOf: URL(fileURLWithPath: path)))
+        try model.validate()
+        options.layeredTransport = model
+    } catch { fail("Invalid transport construction: \(error.localizedDescription)") }
+}
+if let backend = flags["--transport-backend"] {
+    switch backend {
+    case "cpu": options.transportBackend = .cpu
+    case "metal": options.transportBackend = .metal
+    default: fail("--transport-backend requires cpu or metal")
+    }
+}
+if options.transportConstruction(for: stock) != nil {
+    if ["--stages", "--dump-wasm-stages"].contains(where: { flags[$0] != nil }) {
+        fail("Layered transport stage-sequence exports are not supported.")
+    }
+}
 // Capture veiling glare, off unless asked for: see Options.flareScale.
 if let f = flags["--flare"] { options.flareScale = Float(f) ?? 1 }
 if let c = flags["--couplers"] { options.couplerScale = Float(c) ?? 1 }
+if let value = flags["--fringe-amount"] {
+    guard let amount = Float(value), amount.isFinite, (0...1).contains(amount) else {
+        fail("Invalid --fringe-amount '\(value)'; expected a finite fraction from 0 to 1.")
+    }
+    options.chromaticFringeAmount = amount
+}
+if let value = flags["--fringe-radius"] {
+    guard let radius = Float(value), radius.isFinite, (0...2000).contains(radius) else {
+        fail("Invalid --fringe-radius '\(value)'; expected 0 to 2000 micrometers.")
+    }
+    options.chromaticFringeRadiusMM = radius / 1000
+}
+if let model = flags["--adjacency-model"] {
+    guard let adjacency = AdjacencyModel(rawValue: model) else {
+        FileHandle.standardError.write(Data("unknown adjacency model '\(model)'; expected gaussian or screened-diffusion\n".utf8))
+        exit(1)
+    }
+    options.adjacencyModel = adjacency
+}
 if let b = flags["--bleach-bypass"] { options.bleachBypass = Float(b) ?? 0 }
 if let m = flags["--mottle"] { options.grainMottleShare = Float(m) }
 if let s = flags["--shutter"] { options.shutterSeconds = Float(s) }
@@ -1253,7 +1297,7 @@ if let packPath = flags["--dump-wasm-pack"] {
 
     var pack = Data()
     pack.append(contentsOf: Array("FSWP".utf8))
-    pack.appendUInt32(2)
+    pack.appendUInt32(options.transportConstruction(for: stock) == nil ? 2 : 3)
     pack.appendInt32(Int32(packWidth))
     pack.appendInt32(Int32(packHeight))
     pack.appendInt32(invocation.featureMask)
@@ -1317,6 +1361,48 @@ if let packPath = flags["--dump-wasm-pack"] {
     }
 
     do {
+        if options.transportConstruction(for: stock) != nil {
+            let plan = try LayeredTransportRenderer.renderPlan(stock: stock, options: options,
+                                                              width: packWidth, height: packHeight)
+            guard plan.head.featureMask == FilmEngineFeature.lightOut else {
+                fail("Browser transport packs currently require lens flare and diffusion off")
+            }
+            func appendBands(_ component: TransportRenderPlan.Component) {
+                pack.appendInt32(Int32(component.bands.count))
+                for band in component.bands {
+                    pack.appendFloats([band.weight])
+                    pack.appendInt32(Int32(band.stencil.radius))
+                    pack.appendInt32(Int32(band.stencil.stride))
+                    pack.appendFloats(band.stencil.weights)
+                }
+            }
+            func appendDelta(_ values: [Float], base: [Float]) {
+                let changed = values.indices.filter { values[$0].bitPattern != base[$0].bitPattern }
+                pack.appendInt32(Int32(changed.count))
+                for index in changed { pack.appendInt32(Int32(index)); pack.appendFloats([values[index]]) }
+            }
+            pack.appendInt32(plan.head.featureMask)
+            pack.appendFloats(plan.head.configuration)
+            pack.appendFloats(plan.tail.configuration)
+            pack.appendInt32(Int32(plan.components.count))
+            for component in plan.components {
+                pack.appendFloats(component.exposure)
+                appendBands(component)
+            }
+            // Spectral tables do not depend on image size. Each size stores only its changed
+            // spatial configuration and pixel stencils, reusing the component LUTs above.
+            pack.appendInt32(Int32(ladder.count))
+            for shortEdge in ladder {
+                let longEdge = max(shortEdge, Int((Double(shortEdge) * Double(baseLongEdge) / Double(baseShortEdge)).rounded()))
+                let rung = try LayeredTransportRenderer.renderPlan(stock: stock, options: options,
+                                                                   width: longEdge, height: shortEdge)
+                precondition(rung.components.count == plan.components.count)
+                pack.appendInt32(Int32(shortEdge))
+                appendDelta(rung.head.configuration, base: plan.head.configuration)
+                appendDelta(rung.tail.configuration, base: plan.tail.configuration)
+                for component in rung.components { appendBands(component) }
+            }
+        }
         try pack.write(to: URL(fileURLWithPath: packPath))
     } catch {
         fail("Could not write \(packPath): \(error.localizedDescription)")
@@ -1443,13 +1529,21 @@ let balance = WhiteBalance(
     tint: flags["--tint"].flatMap { Float($0) } ?? 0)
 let background = parseLinearBackground(flags["--background"])
 
-var (rgba, width, height, remaining, sceneKelvin, contentHeadroom) =
-    loadLinear(path: positional[0], balance: balance)
+var (rgba, width, height, sceneKelvin, sceneChromaticity, contentHeadroom) =
+    loadLinear(path: positional[0])
 PremultipliedAlpha.flatten(&rgba, over: background)
-options.whiteBalance = remaining
-// The film-side scene light, from the raw file's as-shot record — the same wiring as the
-// app's still path. The gate inside the engine decides whether it does anything.
-options.sceneIlluminantKelvin = sceneKelvin
+// A file with an as-shot record takes `--wb` as an edit against that light. A file without
+// one is already white balanced, so a stated `--wb` *is* the scene light and an unstated one
+// leaves the engine on the stock's own balance, where a neutral renders neutral.
+if sceneKelvin == nil, let stated = flags["--wb"].flatMap({ Float($0) }) {
+    options.sceneIlluminantKelvin = stated
+    options.whiteBalance = WhiteBalance(kelvin: WhiteBalance.neutralKelvin,
+                                        tint: balance.tint)
+} else {
+    options.whiteBalance = balance
+    options.sceneIlluminantKelvin = sceneKelvin
+}
+options.sceneIlluminantChromaticity = sceneChromaticity
 // And the declared range, the other clip-side fact the app attaches: recorded light above
 // diffuse white is metered into the film's latitude instead of flattening to paper white.
 options.sceneHeadroom = contentHeadroom
@@ -1488,7 +1582,9 @@ if flags["--stages"] != nil {
                        directory: positional[1], depth: depth)
     exit(0)
 }
-let out = FotufilmEngine(stock: stock, options: options).process(linearRGB: linear)
+let out: ImageBuffer
+do { out = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: linear) }
+catch { fail("Render failed: \(error.localizedDescription)") }
 var reflectance = [Float](repeating: 1, count: width * height * 4)
 for i in 0..<(width * height) {
     reflectance[i * 4] = out.planes[0][i]

@@ -15,6 +15,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case grain, grainMottle, grainModel, halation, halationColour
     case halationSpectrum
     case couplers, couplerReach, couplerSelf
+    case chromaticFringeAmount, chromaticFringeRadius
     case push, bleach, expired, shutter
 
     // The print, and the grade laid over it.
@@ -98,6 +99,7 @@ public enum EditorControlUnit: String, Sendable, Equatable {
     case seconds
     case degrees
     case kelvin
+    case micrometers
     /// A choice, a switch, or a surface of its own: nothing to format.
     case none
 
@@ -123,6 +125,7 @@ public enum EditorControlUnit: String, Sendable, Equatable {
             return String(format: "%.2f s", shown(value, places: 2))
         case .degrees: return String(format: "%+.1f°", shown(value, places: 1))
         case .kelvin: return String(format: "%.0f K", shown(value, places: 0))
+        case .micrometers: return String(format: "%.0f µm", shown(value, places: 0))
         case .none: return ""
         }
     }
@@ -287,6 +290,8 @@ public enum EditorControlAvailability: String, Sendable, Equatable {
     /// that ships a fixed inhibition matrix instead has no geometry to scale, and the engine reads
     /// neither scale there — which is the same fact `CouplerDemoPanel` already says in words.
     case couplerGeometry
+    /// A color stock with inhibition between distinct dye-forming records.
+    case interlayerInhibition
     /// The stock pack carries complete measured curves for at least one non-reference development
     /// condition. A reference curve alone cannot define push or pull.
     case measuredDevelopment
@@ -310,6 +315,11 @@ public enum EditorControlAvailability: String, Sendable, Equatable {
             return stated.lostStopsPerDecade > 0
         case .couplerGeometry:
             return stock?.couplerGeometry != nil
+        case .interlayerInhibition:
+            guard let stock, !stock.isMonochrome else { return false }
+            return stock.couplerInhibition.enumerated().contains { receiver, row in
+                row.enumerated().contains { donor, value in receiver != donor && value != 0 }
+            }
         case .measuredDevelopment:
             return stock?.hasMeasuredDevelopmentResponse == true
         }

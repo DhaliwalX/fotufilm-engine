@@ -346,7 +346,7 @@ using FrameFunction = int (*)(
     halide_buffer_t *, halide_buffer_t *, halide_buffer_t *, halide_buffer_t *,
     halide_buffer_t *, int32_t, int32_t, float, float, float, float, int32_t,
     int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, float, int32_t,
-    float, int32_t, float, int32_t, float, float, int32_t, int32_t, uint32_t,
+    float, int32_t, float, int32_t, float, int32_t, float, int32_t, float, float, int32_t, int32_t, uint32_t,
     int32_t, int32_t,
     int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
     int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
@@ -487,8 +487,7 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     }
     const size_t configuration_bytes =
         FOTUFILM_FRAME_CONFIGURATION_COUNT * sizeof(float);
-    if (!wants_extended &&
-        std::memcmp(state.configuration.data(), configuration, configuration_bytes) != 0) {
+    if (!wants_extended) {
         std::memcpy(state.configuration.data(), configuration, configuration_bytes);
         state.configuration.set_host_dirty();
     }
@@ -513,6 +512,14 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     const int32_t coupler_radius = std::max(0, int32_t(configuration[kCouplerRadiusOffset]));
     const float adjacency_sigma = std::max(configuration[kAdjacencySigmaOffset], 0.151f);
     const int32_t adjacency_radius = std::max(0, int32_t(configuration[kAdjacencyRadiusOffset]));
+    const float adjacency_secondary_sigma =
+        std::max(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA], 0.151f);
+    const int32_t adjacency_secondary_radius =
+        std::max(0, int32_t(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS]));
+    const float fringe_sigma =
+        std::max(configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA], 0.151f);
+    const int32_t fringe_radius =
+        std::max(0, int32_t(configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS]));
     const float grain_sigma = std::max(configuration[kGrainSigmaOffset], 0.151f);
     const int32_t grain_radius = std::max(0, int32_t(configuration[kGrainRadiusOffset]));
     const float grain_lambda = configuration[kGrainLambdaOffset];
@@ -571,6 +578,8 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     radius0, radius1, radius2, luma_radius,                                 \
     halation0, halation1, halation2,                                        \
     coupler_sigma, coupler_radius, adjacency_sigma, adjacency_radius,       \
+    adjacency_secondary_sigma, adjacency_secondary_radius,                 \
+    fringe_sigma, fringe_radius,                                          \
     grain_sigma, grain_radius, grain_lambda,                                \
     mottle_lambda, mottle_radius, print_mtf_radius,                         \
     seed, reversal,                                                         \
@@ -595,15 +604,24 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     }
     const int64_t image_reach = std::max({radius0, radius1, radius2})
         + halo_reach
-        + std::max(fotufilm::gaussian_grid_reach(coupler_sigma, coupler_radius),
-                   fotufilm::gaussian_grid_reach(adjacency_sigma, adjacency_radius))
+        + std::max({fotufilm::gaussian_grid_reach(coupler_sigma, coupler_radius),
+                    fotufilm::gaussian_grid_reach(adjacency_sigma, adjacency_radius),
+                    fotufilm::gaussian_grid_reach(
+                        std::max(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA], 0.151f),
+                        std::max(0, int32_t(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS]))),
+                    fotufilm::gaussian_grid_reach(fringe_sigma, fringe_radius)})
         + int64_t(print_mtf_radius);
     const int64_t grain_reach = int64_t(grain_radius) + print_mtf_radius;
     static const bool windowed_enabled = [] {
         const char *setting = std::getenv("FOTUFILM_AOT_WINDOWED");
         return !setting || std::strcmp(setting, "0") != 0;
     }();
-    if (windowed_enabled && width >= 32 && height >= fotufilm::kWindowStorageRows
+    // The optimized folded schedule carries the original single-field adjacency only.
+    // Screened adjacency and broad inter-layer transport use the general spatial graph.
+    const bool supports_windowed_transport = configuration[FOTUFILM_CONFIG_ADJACENCY_MODEL] < 0.5f
+        && configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT] == 0;
+    if (windowed_enabled && supports_windowed_transport
+        && width >= 32 && height >= fotufilm::kWindowStorageRows
         && origin_x == 0 && origin_y == 0 && !wants_extended
         && in->dim[0].min == 0 && in->dim[1].min == 0
         && out->dim[0].min == 0 && out->dim[1].min == 0
@@ -1041,12 +1059,9 @@ int32_t run_measure(
     const float *configuration) {
     const size_t configuration_bytes =
         FOTUFILM_FRAME_CONFIGURATION_COUNT * sizeof(float);
-    if (std::memcmp(state.measure_configuration.data(), configuration,
-                    configuration_bytes) != 0) {
-        std::memcpy(state.measure_configuration.data(), configuration,
-                    configuration_bytes);
-        state.measure_configuration.set_host_dirty();
-    }
+    std::memcpy(state.measure_configuration.data(), configuration,
+                configuration_bytes);
+    state.measure_configuration.set_host_dirty();
     Buffer<float> input_buffer = Buffer<float>::make_interleaved(
         wrap ? static_cast<float *>(nullptr) : const_cast<float *>(rows_in),
         width, rows, 4);
@@ -1326,4 +1341,10 @@ extern "C" int32_t fotufilm_halide_gaussian(
 extern "C" int32_t fotufilm_halide_approximate_gaussian(
     const float *, float *, int32_t, int32_t, int32_t) { return -1; }
 
+#endif
+
+// The layered Apple path injects AOT rendering and native Metal convolution.
+// Keep the reference ABI linked for the shared portable Swift implementation.
+#if defined(FOTUFILM_TRANSPORT_REFERENCE_STUBS)
+#include "FotufilmTransport.cpp"
 #endif

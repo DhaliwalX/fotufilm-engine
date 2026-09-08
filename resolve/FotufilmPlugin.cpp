@@ -237,6 +237,7 @@ const char *const kParameterNames[FOTUFILM_BRIDGE_PARAMETER_COUNT] = {
     nullptr, "halation400", "halation450", "halation500", "halation550", "halation600",
     "halation650", "halation700", "filterCoating", "frameCoverage", "grainModel",
     "shutterSeconds", "renderMode", "grainAnimation", "couplerRedGreen", "couplerGreenBlue",
+    "halationModel",
 };
 
 /// The Lens group's slots that a choice parameter fills, and how the menu's index becomes the
@@ -252,7 +253,7 @@ const char *const kParameterNames[FOTUFILM_BRIDGE_PARAMETER_COUNT] = {
 bool isDirectChoice(int slot) {
     return slot == FOTUFILM_BRIDGE_MOTTLE_OVERRIDE || slot == FOTUFILM_BRIDGE_FILTER_COATING ||
            slot == FOTUFILM_BRIDGE_GRAIN_MODEL || slot == FOTUFILM_BRIDGE_RENDER_MODE ||
-           slot == FOTUFILM_BRIDGE_GRAIN_FROZEN;
+           slot == FOTUFILM_BRIDGE_GRAIN_FROZEN || slot == FOTUFILM_BRIDGE_HALATION_MODEL;
 }
 
 bool isOffsetChoice(int slot) {
@@ -906,8 +907,8 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
     defineDouble(set, "exposure", "Exposure", "Camera exposure, in stops.",
                  "exposureGroup", -5, 5, 0);
     defineDouble(set, "temperature", "Temperature (K)",
-                 "White balance before the film responds, in kelvin. Separate from Scene "
-                 "Illuminant, which sets the spectral light integrated against the emulsion.",
+                 "Spectral scene temperature. Lower Kelvin adds warm light. Relative in mired "
+                 "to Scene Illuminant when a base lamp is selected; 6504 leaves that lamp unchanged.",
                  "exposureGroup", 2000, 12000, 6504);
     defineDouble(set, "tint", "Tint", "Green/magenta balance of the illuminant.",
                  "exposureGroup", -100, 100, 0);
@@ -937,13 +938,13 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
 
     defineGroup(set, "sceneLightGroup", "Spectral Scene Light", "exposureGroup");
     defineChoice(set, "sceneLight", "Scene Illuminant",
-                 "Spectral lighting presented to the film, separate from white balance. "
-                 "Stock Reference preserves existing renders. Custom sources use a daylight or "
+                 "Capture light presented to the film; Temperature and Tint adjust this spectrum. "
+                 "Unspecified light assumes D65. Custom sources use a daylight or "
                  "Planckian spectrum, not a measured LED spectrum.", "sceneLightGroup",
-                 {"Stock Reference", "Daylight · D65", "Daylight · 5500 K",
+                 {"Unspecified · D65", "Daylight · D65", "Daylight · 5500 K",
                   "Tungsten · 3200 K", "Incandescent · 2856 K", "Custom"}, 0);
     defineDouble(set, "sceneLightKelvin", "Scene Illuminant (K)",
-                 "Custom spectral scene light; does not replace Temperature or Tint.",
+                 "Custom capture light before the Temperature and Tint edits.",
                  "sceneLightGroup", 2000, 12000, 6504);
 
     defineGroup(set, "lensGroup", "Lens & Filters");
@@ -1102,6 +1103,9 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
     defineLabel(set, "grainStatus", "Grain Status", "grainAdvancedGroup", "Not yet examined");
 
     defineGroup(set, "halationGroup", "Halation");
+    defineChoice(set, "halationModel", "Halation Model",
+                 "Legacy or layered optical transport. Unmeasured stacks use an illustrative construction.",
+                 "halationGroup", {"Legacy", "Layered Transport"}, 0);
     OfxPropertySetHandle halation = defineDouble(
                  set, "halation", "Halation",
                  "Multiplier on the fraction of light the base returns. On the "

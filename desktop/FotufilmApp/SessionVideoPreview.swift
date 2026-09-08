@@ -454,6 +454,7 @@ final class VideoPreviewViewController: SessionViewController {
         let exposure, kelvin, tint, highlights, shadows: Float
         let saturation, vibrance, grain, halation, couplers, print: Float
         let discGrain: Bool
+        let halationModel: HalationModel
         let estimatedHalation: Bool
         let localTone: Bool
         let seed: UInt64
@@ -472,6 +473,7 @@ final class VideoPreviewViewController: SessionViewController {
             case .discs: discGrain = true
             }
             halation = options.halationScale
+            halationModel = options.halationModel
             estimatedHalation = options.useEstimatedHalationProfile
             couplers = options.couplerScale
             print = options.printCorrection

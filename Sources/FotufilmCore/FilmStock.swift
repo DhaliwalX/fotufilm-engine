@@ -157,12 +157,18 @@ public struct FilmStock: Sendable {
     }
     /// Diffusion distance of the inhibitors in millimeters on the film.
     public var couplerDiffusionMM: Float
+    /// Broad fraction of off-diagonal DIR transport. Zero is the original single Gaussian.
+    public var chromaticFringeAmount: Float
+    /// Broad Gaussian sigma on the film, in millimeters; only radii above couplerDiffusionMM act.
+    public var chromaticFringeRadiusMM: Float
 
-    /// Strength of the intra-layer adjacency effect: each layer's development is shifted by
-    /// `-adjacencyStrength * (blur(a) - a)` in log exposure, where `a` is the layer's development
-    /// activation.
+    /// Strength of intra-layer adjacency. Gaussian mode shifts log exposure by
+    /// `strength * (a - blur(a))`. Screened diffusion adds
+    /// `strength * netDensity * (a - transport(a))` to formed density, bounded by capacity.
+    /// The two responses require separate stock calibration; their gains are not equivalent.
     public var adjacencyStrength: Float
-    /// Diffusion distance of the adjacency mechanism in millimeters.
+    public var adjacencyModel: AdjacencyModel
+    /// Reference Gaussian sigma in millimeters. Screened diffusion uses ell = sigma / sqrt(2).
     public var adjacencyRadiusMM: Float
 
     /// RMS granularity: the standard deviation of density measured through the standard
@@ -231,6 +237,8 @@ public struct FilmStock: Sendable {
     /// Independently calibrated spatial shape of the returned light. `nil` preserves the legacy
     /// model that infers shape from `halationStrength`.
     public var halationProfile: HalationProfile?
+    /// Versioned layered transport. Nil keeps every legacy spatial stage unchanged.
+    public var layeredTransport: LayeredTransport?
     /// A provisional spatial shape for use when no independently calibrated profile exists.
     /// Rendering ignores it unless the caller explicitly enables estimated profiles.
     public var estimatedHalationProfile: HalationProfile?
@@ -291,7 +299,10 @@ public struct FilmStock: Sendable {
         couplerReleaseGamma: [Float] = [1, 1, 1],
         couplerGeometry: CouplerGeometry? = nil,
         couplerDiffusionMM: Float,
+        chromaticFringeAmount: Float = 0,
+        chromaticFringeRadiusMM: Float = 0.1,
         adjacencyStrength: Float = 0,
+        adjacencyModel: AdjacencyModel = .gaussian,
         adjacencyRadiusMM: Float = 0,
         grainStrength: Float,
         grainSizeMM: Float,
@@ -307,6 +318,7 @@ public struct FilmStock: Sendable {
         halationLookScale: Float = 1,
         halationHazeMM: Float = 0,
         halationProfile: HalationProfile? = nil,
+        layeredTransport: LayeredTransport? = nil,
         estimatedHalationProfile: HalationProfile? = nil,
         halationReturnMatrix: [[Float]]? = nil,
         paperCurve: CharacteristicCurve,
@@ -348,7 +360,10 @@ public struct FilmStock: Sendable {
         self.couplerInhibition = couplerGeometry?.matrix() ?? couplerInhibition
         self.couplerReleaseGamma = couplerReleaseGamma
         self.couplerDiffusionMM = couplerDiffusionMM
+        self.chromaticFringeAmount = chromaticFringeAmount
+        self.chromaticFringeRadiusMM = chromaticFringeRadiusMM
         self.adjacencyStrength = adjacencyStrength
+        self.adjacencyModel = adjacencyModel
         self.adjacencyRadiusMM = adjacencyRadiusMM
         self.grainStrength = grainStrength
         self.grainSizeMM = grainSizeMM
@@ -368,6 +383,7 @@ public struct FilmStock: Sendable {
         self.halationLookScale = max(halationLookScale, 0)
         self.halationHazeMM = max(halationHazeMM, 0)
         self.halationProfile = halationProfile
+        self.layeredTransport = layeredTransport
         self.estimatedHalationProfile = estimatedHalationProfile
         self.halationReturnMatrix = halationReturnMatrix
         self.paperCurve = paperCurve

@@ -67,7 +67,8 @@ bool read_pack(const char *path, Pack &pack) {
     if (!read || bytes.size() < 40 || std::memcmp(bytes.data(), "FSWP", 4) != 0) return false;
 
     const uint8_t *cursor = bytes.data() + 4;
-    if (read_i32(cursor) != 1) return false;
+    const int32_t version = read_i32(cursor);
+    if (version != 1 && version != 2) return false;
     pack.width = read_i32(cursor);
     pack.height = read_i32(cursor);
     pack.feature_mask = read_i32(cursor);
@@ -77,7 +78,8 @@ bool read_pack(const char *path, Pack &pack) {
     const int32_t lut_count = read_i32(cursor);
     read_i32(cursor);  // Whether the stock prints; the cube is written either way.
     if (configuration_count != FOTUFILM_FRAME_CONFIGURATION_COUNT
-        || lut_dimension != kLutDimension) {
+        || lut_dimension != kLutDimension
+        || lut_count != kLutDimension * kLutDimension * kLutDimension * 4) {
         std::fprintf(stderr,
                      "pack disagrees with this build: %d configuration floats (expected %d), "
                      "LUT dimension %d (expected %d)\n",
@@ -85,6 +87,8 @@ bool read_pack(const char *path, Pack &pack) {
                      lut_dimension, kLutDimension);
         return false;
     }
+    const size_t base_bytes = 40 + (size_t(configuration_count) + 3 * size_t(lut_count)) * sizeof(float);
+    if (bytes.size() < base_bytes) return false;
 
     auto take = [&](std::vector<float> &into, int32_t count) {
         into.resize(size_t(count));
@@ -95,7 +99,8 @@ bool read_pack(const char *path, Pack &pack) {
     take(pack.exposure, lut_count);
     take(pack.film, lut_count);
     take(pack.paper, lut_count);
-    return cursor == bytes.data() + bytes.size();
+    // Version 2 appends a resolution ladder. This fixed-size fixture uses only the base frame.
+    return version == 2 || cursor == bytes.data() + bytes.size();
 }
 
 /// Fills the slots the browser export leaves alone, so that the stages selected by the variants
@@ -103,6 +108,11 @@ bool read_pack(const char *path, Pack &pack) {
 /// identical on both paths, which is all a parity fixture owes.
 void arm_configuration(std::vector<float> &configuration) {
     float *c = configuration.data();
+    // Keep the broad inter-layer transport active in the variants that include diffusion,
+    // so the AOT/JIT comparison exercises the added arguments and field instead of only zero.
+    c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT] = 0.2f;
+    c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA] = 9.0f;
+    c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS] = 27.0f;
 
     // A measured veiling-glare mean, which the non-measuring FLARE variants are promised and
     // refuse to run without (`valid_flare_mean`).

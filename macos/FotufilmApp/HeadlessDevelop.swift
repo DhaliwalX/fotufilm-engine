@@ -276,7 +276,7 @@ enum HeadlessDevelop {
                     exit(1)
                 }
                 let sceneMean = mean(of: scene)
-                let balance = FilmRender.remainingBalance(for: state, scene: scene)
+                let balance = state.whiteBalance
                 guard let developed = FilmRender.develop(
                     scene, state: state, hdr: hdr,
                     dynamicRange: hdr ? .hdr : .sdr, report: timings) else {

@@ -442,6 +442,8 @@ public final class HandwrittenMetalSpatialExecutor {
         let halation: [ScalePlan]
         let coupler: GaussianPlan?
         let adjacency: GaussianPlan?
+        let adjacencySecondary: GaussianPlan?
+        let chromaticFringe: GaussianPlan?
         let printMTF: PrintPlan?
         let mtf: MTFPlan?
         let grain: GrainPlan
@@ -518,6 +520,8 @@ public final class HandwrittenMetalSpatialExecutor {
         var adjacency: SIMD4<UInt32>
         var phases: SIMD4<UInt32>
         var grain: SIMD4<Float>
+        var adjacencySecondary = SIMD4<UInt32>.zero
+        var chromaticFringe = SIMD4<UInt32>.zero
     }
 
     private struct ExactCameraTailParameters {
@@ -649,7 +653,7 @@ public final class HandwrittenMetalSpatialExecutor {
     /// edit/stock change, never for the camera frame loop.
     public func prepareChecked(
         key: String, stock: FilmStock, options: FotufilmEngine.Options,
-        frameWidth: Int, frameHeight: Int
+        frameWidth: Int, frameHeight: Int, invocation supplied: FilmEngineInvocation? = nil
     ) throws {
         guard frameWidth > 0, frameHeight > 0 else {
             throw PreparationError.invalidDimensions
@@ -657,8 +661,8 @@ public final class HandwrittenMetalSpatialExecutor {
         guard options.stage == .full else {
             throw PreparationError.unsupportedPipelineStage
         }
-        let invocation = FilmEngineInvocation(
-            stock: stock, options: options, width: frameWidth, height: frameHeight)
+        let invocation = try supplied ?? FilmEngineInvocation(
+            validating: stock, options: options, width: frameWidth, height: frameHeight)
         let mask = invocation.featureMask
         if mask & FilmEngineFeature.discGrain != 0 {
             // Falling back is preferable to silently exchanging opaque silver discs for dye-cloud
@@ -730,6 +734,18 @@ public final class HandwrittenMetalSpatialExecutor {
         let mtf = mask & FilmEngineFeature.mtf != 0
             ? try makeMTFPlan(configuration: configuration, featureMask: mask) : nil
         let grain = try makeGrainPlan(configuration: configuration, featureMask: mask)
+        let adjacencySecondary = adjacency != nil
+            && configuration[FilmEngineInvocation.adjacencyModelOffset] > 0.5
+            ? try makeGaussianPlan(
+                sigma: max(configuration[FilmEngineInvocation.adjacencySecondarySigmaOffset], 0.151),
+                radius: max(Int(configuration[FilmEngineInvocation.adjacencySecondaryRadiusOffset]), 0))
+            : nil
+        let chromaticFringe = mask & FilmEngineFeature.couplers != 0
+            && configuration[FilmEngineInvocation.chromaticFringeAmountOffset] > 0
+            ? try makeGaussianPlan(
+                sigma: max(configuration[FilmEngineInvocation.chromaticFringeSigmaOffset], 0.151),
+                radius: max(Int(configuration[FilmEngineInvocation.chromaticFringeRadiusOffset]), 0))
+            : nil
         let fastPath = try makeFastPathPlan(
             featureMask: mask, configuration: configuration,
             diffusion: diffusion, halation: halation,
@@ -748,7 +764,9 @@ public final class HandwrittenMetalSpatialExecutor {
             configurationBuffer: configurationBuffer, curves: curves,
             halfResponseLUT: halfResponseLUT,
             diffusion: diffusion, halation: halation, coupler: coupler,
-            adjacency: adjacency, printMTF: printMTF, mtf: mtf, grain: grain,
+            adjacency: adjacency, adjacencySecondary: adjacencySecondary,
+            chromaticFringe: chromaticFringe,
+            printMTF: printMTF, mtf: mtf, grain: grain,
             fastPath: fastPath, multiresPath: multiresPath)
         lock.lock()
         prepared[key] = value
@@ -847,12 +865,22 @@ public final class HandwrittenMetalSpatialExecutor {
             commandBuffer: commandBuffer)
     }
 
+    /// Lens optics before the transport component convolution. No development is applied.
+    func encodeOpticalExposure(recordExposure: MTLTexture, output: MTLTexture, key: String,
+                               flareMean: HandwrittenMetalGlobalMeasurements.FlareMean?,
+                               commandBuffer: MTLCommandBuffer) -> Bool {
+        encodeDevelopedDensityImpl(recordExposure: recordExposure, densityOutput: output,
+            key: key, frameIndex: 0, originX: 0, originY: 0, cpuFlareMean: nil,
+            gpuFlareMean: flareMean, linearHDREndpoint: nil, opticalOnly: true,
+            commandBuffer: commandBuffer)
+    }
+
     private func encodeDevelopedDensityImpl(
         recordExposure: MTLTexture, densityOutput: MTLTexture,
         key: String, frameIndex: UInt64, originX: Int, originY: Int,
         cpuFlareMean suppliedFlareMean: SIMD3<Float>?,
         gpuFlareMean: HandwrittenMetalGlobalMeasurements.FlareMean?,
-        linearHDREndpoint: LinearHDREndpoint?,
+        linearHDREndpoint: LinearHDREndpoint?, opticalOnly: Bool = false,
         commandBuffer: MTLCommandBuffer
     ) -> Bool {
         if let suppliedFlareMean, !Self.validFlareMean(suppliedFlareMean) {
@@ -949,13 +977,15 @@ public final class HandwrittenMetalSpatialExecutor {
         }
         encoder.label = "Fotufilm handwritten spatial develop ["
             + (state.multiresPath?.name ?? state.fastPath?.name ?? "generic") + "]"
+        // The legacy specialized entry point shares the optional secondary-texture argument.
+        encoder.setTexture(frameScratch.gridA, index: 7)
 
         let width = state.width
         let height = state.height
         let animatedSeed = state.baseSeed &+ UInt32(truncatingIfNeeded: frameIndex)
             &* 0x7F4A7C15
 
-        if let multiresPath = state.multiresPath {
+        if let multiresPath = state.multiresPath, !opticalOnly {
             let profiler = frameScratch.counterSampleBuffer.map {
                 DispatchProfiler(
                     sampleBuffer: $0, planName: multiresPath.name,
@@ -980,7 +1010,7 @@ public final class HandwrittenMetalSpatialExecutor {
             return true
         }
 
-        if let fastPath = state.fastPath {
+        if let fastPath = state.fastPath, !opticalOnly {
             let profiler = frameScratch.counterSampleBuffer.map {
                 DispatchProfiler(
                     sampleBuffer: $0, planName: fastPath.name,
@@ -1070,8 +1100,19 @@ public final class HandwrittenMetalSpatialExecutor {
                 flare: 0, mean: .inline(.zero), width: width, height: height)
         }
 
+        if opticalOnly {
+            encoder.endEncoding()
+            commandBuffer.addCompletedHandler { [weak self, frameScratch, state, gpuFlareMean] _ in
+                self?.releaseScratch(frameScratch)
+                withExtendedLifetime((state, gpuFlareMean)) {}
+            }
+            return true
+        }
+
         var couplerGeometry = SIMD4<UInt32>.zero
         var adjacencyGeometry = SIMD4<UInt32>.zero
+        var adjacencySecondaryGeometry = SIMD4<UInt32>.zero
+        var fringeGeometry = SIMD4<UInt32>.zero
         let couplerGrid = frameScratch.work
         let releaseActive = state.featureMask
             & (FilmEngineFeature.couplers | FilmEngineFeature.donorLayer) != 0
@@ -1096,24 +1137,42 @@ public final class HandwrittenMetalSpatialExecutor {
             }
         }
 
-        let adjacencyGrid: MTLTexture
+        if let plan = state.chromaticFringe {
+            fringeGeometry = encodeGaussianField(
+                encoder, source: densityOutput, destination: frameScratch.scales[1],
+                temporaryA: frameScratch.gridA, temporaryB: frameScratch.gridB,
+                plan: plan, transform: 2, width: width, height: height,
+                originX: originX, originY: originY,
+                configuration: state.configurationBuffer, curves: state.curves)
+        }
+
+        let adjacencyGrid = state.adjacencySecondary == nil
+            ? frameScratch.gridA : frameScratch.scales[0]
         if let plan = state.adjacency {
             adjacencyGeometry = encodeGaussianField(
+                encoder, source: densityOutput, destination: adjacencyGrid,
+                temporaryA: frameScratch.gridA, temporaryB: frameScratch.gridB,
+                plan: plan, transform: 1, width: width, height: height,
+                originX: originX, originY: originY,
+                configuration: state.configurationBuffer, curves: state.curves)
+        }
+        if let plan = state.adjacencySecondary {
+            adjacencySecondaryGeometry = encodeGaussianField(
                 encoder, source: densityOutput, destination: frameScratch.gridA,
                 temporaryA: frameScratch.gridA, temporaryB: frameScratch.gridB,
                 plan: plan, transform: 1, width: width, height: height,
                 originX: originX, originY: originY,
                 configuration: state.configurationBuffer, curves: state.curves)
-            adjacencyGrid = frameScratch.gridA
-        } else {
-            adjacencyGrid = frameScratch.gridA
         }
 
         encodeDevelop(
             encoder, io: densityOutput, coupler: couplerGrid,
             adjacency: adjacencyGrid, printOutput: frameScratch.gridB, state: state,
+            adjacencySecondary: frameScratch.gridA,
+            chromaticFringe: frameScratch.scales[1], fringeGeometry: fringeGeometry,
             couplerGeometry: couplerGeometry,
             adjacencyGeometry: adjacencyGeometry,
+            adjacencySecondaryGeometry: adjacencySecondaryGeometry,
             seed: animatedSeed, originX: originX, originY: originY)
 
         if let print = state.printMTF {
@@ -1150,6 +1209,27 @@ public final class HandwrittenMetalSpatialExecutor {
             withExtendedLifetime((state, gpuFlareMean)) {}
         }
         return true
+    }
+
+    var preparedEntryCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return prepared.count
+    }
+
+    func removePrepared(forKey key: String) {
+        lock.lock()
+        prepared.removeValue(forKey: key)
+        dispatchProfiles.removeValue(forKey: key)
+        lock.unlock()
+    }
+
+    /// Encoded command buffers retain leased scratch until completion; a new edit can allocate
+    /// its own full set of slots without waiting for the discarded pool.
+    func resetScratchPool() {
+        lock.lock()
+        scratch.removeAll(keepingCapacity: false)
+        lock.unlock()
     }
 
     public func removeAll() {
@@ -1275,6 +1355,12 @@ public final class HandwrittenMetalSpatialExecutor {
         }
         if let adjacency = state.adjacency {
             dispatches += adjacency.fusedPipeline == nil ? 3 : 2
+        }
+        if let secondary = state.adjacencySecondary {
+            dispatches += secondary.stride == 1 || secondary.fusedPipeline == nil ? 3 : 2
+        }
+        if let fringe = state.chromaticFringe {
+            dispatches += fringe.stride == 1 || fringe.fusedPipeline == nil ? 3 : 2
         }
         dispatches += 1
         if let print = state.printMTF {
@@ -2160,7 +2246,10 @@ public final class HandwrittenMetalSpatialExecutor {
         _ encoder: MTLComputeCommandEncoder, io: MTLTexture,
         coupler: MTLTexture, adjacency: MTLTexture, printOutput: MTLTexture,
         state: Prepared,
+        adjacencySecondary: MTLTexture,
+        chromaticFringe: MTLTexture, fringeGeometry: SIMD4<UInt32>,
         couplerGeometry: SIMD4<UInt32>, adjacencyGeometry: SIMD4<UInt32>,
+        adjacencySecondaryGeometry: SIMD4<UInt32>,
         seed: UInt32, originX: Int, originY: Int
     ) {
         var parameters = DevelopParameters(
@@ -2176,17 +2265,22 @@ public final class HandwrittenMetalSpatialExecutor {
             phases: SIMD4(
                 UInt32(originY % max(state.coupler?.stride ?? 1, 1)),
                 UInt32(originY % max(state.adjacency?.stride ?? 1, 1)),
-                UInt32(state.grain.radius), 0),
+                UInt32(state.grain.radius),
+                UInt32(originY % max(state.adjacencySecondary?.stride ?? 1, 1))),
             grain: SIMD4(
                 state.configuration[Configuration.grainLambda],
                 state.configuration[Configuration.mottleLambda],
-                state.configuration[Configuration.grainCorrelation], 0))
+                state.configuration[Configuration.grainCorrelation], 0),
+            adjacencySecondary: adjacencySecondaryGeometry,
+            chromaticFringe: fringeGeometry)
         encoder.setComputePipelineState(state.grain.pipeline)
         encoder.setTexture(state.curves, index: 0)
         encoder.setTexture(coupler, index: 1)
         encoder.setTexture(adjacency, index: 2)
         encoder.setTexture(io, index: 3)
         encoder.setTexture(printOutput, index: 4)
+        encoder.setTexture(adjacencySecondary, index: 7)
+        encoder.setTexture(chromaticFringe, index: 8)
         encoder.setBuffer(state.configurationBuffer, offset: 0, index: 0)
         encoder.setBuffer(state.grain.finePoisson, offset: 0, index: 1)
         encoder.setBuffer(state.grain.normal, offset: 0, index: 2)
@@ -2496,6 +2590,8 @@ public final class HandwrittenMetalSpatialExecutor {
         mtf: MTFPlan?, grain: GrainPlan
     ) throws -> FastPathPlan? {
         guard Self.enableNineDispatchFastPath else { return nil }
+        guard configuration[FilmEngineInvocation.adjacencyModelOffset] < 0.5 else { return nil }
+        guard configuration[FilmEngineInvocation.chromaticFringeAmountOffset] == 0 else { return nil }
         // `.perceptualMultires` is all-or-nothing. Unsupported topology executes the strict
         // generic graph instead of falling into a differently specialized schedule.
         guard optimizationVariant != .perceptualMultires else { return nil }
@@ -2648,6 +2744,8 @@ public final class HandwrittenMetalSpatialExecutor {
         mtf: MTFPlan?, grain: GrainPlan
     ) throws -> MultiresPathPlan? {
         guard optimizationVariant == .perceptualMultires else { return nil }
+        guard configuration[FilmEngineInvocation.adjacencyModelOffset] < 0.5 else { return nil }
+        guard configuration[FilmEngineInvocation.chromaticFringeAmountOffset] == 0 else { return nil }
 
         // This is a hard topology gate, not feature ablation. If a stock asks for any field that
         // this schedule cannot carry, preparation keeps the strict generic graph instead of
@@ -3271,6 +3369,18 @@ public final class HandwrittenMetalSpatialExecutor {
         }
         if state.featureMask & FilmEngineFeature.halation != 0 {
             include(state.halation)
+        }
+        // The optical pyramid is dead after the light stage. Reuse its first surface to retain
+        // the narrow adjacency field while the wider field uses grid A/B independently.
+        if state.adjacencySecondary != nil {
+            widths[0] = state.width
+            heights[0] = state.height
+        }
+        // The optical fields are dead at development. Retain the broad inhibitor field in
+        // the second pyramid surface while the adjacency fields use the other scratch grids.
+        if let fringe = state.chromaticFringe {
+            widths[1] = max(widths[1], (state.width + 2 * fringe.stride - 2) / fringe.stride)
+            heights[1] = max(heights[1], (state.height + 2 * fringe.stride - 2) / fringe.stride)
         }
         return ScratchKey(
             width: state.width, height: state.height,

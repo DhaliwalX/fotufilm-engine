@@ -571,6 +571,29 @@ inline Halide::Expr inhibitor_release(Halide::Expr activation, Halide::Expr gamm
     return Halide::select(gamma == 1.0f, a, nonlinear);
 }
 
+/// Positive Gaussian mixture for the isotropic screened-diffusion transport kernel.
+inline Halide::Expr adjacency_transport(Halide::ImageParam &configuration,
+                                        Halide::Expr primary, Halide::Expr secondary) {
+    constexpr float share = 0.2753401713f;
+    return Halide::select(configuration(FOTUFILM_CONFIG_ADJACENCY_MODEL) > 0.5f,
+                          share * primary + (1.0f - share) * secondary, primary);
+}
+
+/// Nelson's density-weighted response, with a normalized source activation and the stock's
+/// finite development capacity. Applied before reversal complementation and grain. Local DIR
+/// inhibition is already in `formed`; only its spatial adjacency residual enters here.
+inline Halide::Expr adjacency_density(Halide::ImageParam &configuration,
+                                      Halide::Expr channel, Halide::Expr formed,
+                                      Halide::Expr residual) {
+    Halide::Expr base = configuration(FOTUFILM_CONFIG_CURVES + channel * 6);
+    Halide::Expr net = Halide::max(formed - base, 0.0f);
+    Halide::Expr corrected = base + Halide::clamp(
+        net + configuration(FOTUFILM_CONFIG_ADJACENCY_STRENGTH) * net * residual,
+        0.0f, film_curve_range(configuration, channel));
+    return Halide::select(configuration(FOTUFILM_CONFIG_ADJACENCY_MODEL) > 0.5f,
+                          corrected, formed);
+}
+
 inline Halide::Expr coupler_release(Halide::ImageParam &configuration,
                                     Halide::Expr donor, Halide::Expr activation) {
     return inhibitor_release(
@@ -593,6 +616,20 @@ inline Halide::Expr coupler_inhibition(Halide::ImageParam &configuration,
                           + configuration(base + 1) * donor1
                           + configuration(base + 2) * donor2;
     return released * configuration(FOTUFILM_CONFIG_COUPLER_SCALE);
+}
+
+/// Redistribute only inter-layer inhibitor transport. Normalized core and broad fields agree
+/// on constants, so the DC matrix and neutral anchor remain unchanged.
+inline Halide::Expr chromatic_fringe_inhibition(Halide::ImageParam &configuration,
+                                                Halide::Expr channel,
+                                                Halide::Expr delta0, Halide::Expr delta1,
+                                                Halide::Expr delta2) {
+    Halide::Expr base = FOTUFILM_CONFIG_COUPLER + channel * 3;
+    Halide::Expr residual = Halide::select(channel != 0, configuration(base) * delta0, 0.0f)
+                         + Halide::select(channel != 1, configuration(base + 1) * delta1, 0.0f)
+                         + Halide::select(channel != 2, configuration(base + 2) * delta2, 0.0f);
+    return residual * configuration(FOTUFILM_CONFIG_COUPLER_SCALE)
+                    * configuration(FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT);
 }
 
 /// Neutral anchor for the coupler stage: the log-exposure offset that undoes the inhibition a
@@ -974,8 +1011,10 @@ inline Halide::Expr scene_exposure(Halide::ImageParam &configuration,
                                    bool half_lut_math = false) {
     CreativeScene scene = creative_exposure(configuration, red, green, blue,
                                             frame_x, frame_y, approximate);
-    return recover_exposure(configuration, exposure_lut, scene.r, scene.g,
-                            scene.b, channel, half_lut_math);
+    return Halide::select(configuration(FOTUFILM_CONFIG_RECORD_INPUT) != 0.0f,
+        Halide::mux(Halide::min(channel, 2), {red, green, blue}),
+        recover_exposure(configuration, exposure_lut, scene.r, scene.g,
+                         scene.b, channel, half_lut_math));
 }
 
 /// Luminance of a three-plane Func at one pixel, in the renderer's working primaries.

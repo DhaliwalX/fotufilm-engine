@@ -82,6 +82,10 @@ extension EditorControlField {
                           write: { $0.halationSpectrum = $1 })
         case .couplers:
             return .number(read: { $0.couplers }, write: { $0.couplers = $1 })
+        case .chromaticFringeAmount:
+            return .number(read: { $0.chromaticFringeAmount }, write: { $0.chromaticFringeAmount = $1 })
+        case .chromaticFringeRadius:
+            return .number(read: { $0.chromaticFringeRadius }, write: { $0.chromaticFringeRadius = $1 })
         case .push:
             return .number(read: { $0.push }, write: { $0.push = $1 })
         case .bleach:

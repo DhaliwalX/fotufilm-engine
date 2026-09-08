@@ -165,7 +165,17 @@ final class SceneReferredTests: XCTestCase {
                              "the film did not react from 2× to 4× exposure")
     }
 
-    func testPeakEstimateCoversTheBuffersAnExportReallyHolds() {
+    func testUnsupportedDevelopmentHasNoMemoryEstimate() {
+        var options = FotufilmEngine.Options()
+        options.developmentEV = 1
+        XCTAssertNil(HalideMetalFilmRenderer.minimumPeakBytes(
+            width: 16, height: 12, stock: TestStocks.negative, options: options))
+        XCTAssertFalse(HalideMetalFilmRenderer.canRender(
+            width: 16, height: 12, stock: TestStocks.negative, options: options,
+            budget: Int.max))
+    }
+
+    func testPeakEstimateCoversTheBuffersAnExportReallyHolds() throws {
         let width = 7008, height = 4672
         let stock = TestStocks.negative
         let options = FotufilmEngine.Options()
@@ -180,8 +190,8 @@ final class SceneReferredTests: XCTestCase {
         XCTAssertEqual(frames, 0, "a 33 MP frame buffer belongs on disk")
         let expected = frames
             + strip * width * (16 * 2 + HalideMetalFilmRenderer.developBytesPerPixel)
-        let estimate = HalideMetalFilmRenderer.minimumPeakBytes(
-            width: width, height: height, stock: stock, options: options)
+        let estimate = try XCTUnwrap(HalideMetalFilmRenderer.minimumPeakBytes(
+            width: width, height: height, stock: stock, options: options))
         XCTAssertGreaterThanOrEqual(estimate, expected,
                                     "estimate misses buffers the export holds")
 
@@ -247,7 +257,7 @@ final class SceneReferredTests: XCTestCase {
             "an accurate strip must fit the budget with its full-float apron")
     }
 
-    func testAccurateTwoHundredMegapixelGateUsesExactApron() {
+    func testAccurateTwoHundredMegapixelGateUsesExactApron() throws {
         let width = 16_320, height = 12_240
         XCTAssertEqual(width * height, 199_756_800)
         let stock = TestStocks.negative
@@ -256,11 +266,11 @@ final class SceneReferredTests: XCTestCase {
             stock: stock, options: options, width: width, height: height)
         XCTAssertGreaterThan(invocation.spatialSupport, 0)
 
-        let fast = HalideMetalFilmRenderer.minimumPeakBytes(
-            width: width, height: height, stock: stock, options: options)
-        let accurate = HalideMetalFilmRenderer.minimumPeakBytes(
+        let fast = try XCTUnwrap(HalideMetalFilmRenderer.minimumPeakBytes(
+            width: width, height: height, stock: stock, options: options))
+        let accurate = try XCTUnwrap(HalideMetalFilmRenderer.minimumPeakBytes(
             width: width, height: height, stock: stock, options: options,
-            exactMath: true)
+            exactMath: true))
         XCTAssertGreaterThanOrEqual(accurate, fast)
         XCTAssertTrue(HalideMetalFilmRenderer.canRender(
             width: width, height: height, stock: stock, options: options,

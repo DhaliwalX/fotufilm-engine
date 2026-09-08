@@ -279,14 +279,13 @@ struct EditState: Equatable {
     var exposure = 0.0  // EV
     /// Scene illuminant, in mireds so the slider is perceptually even.
     var temperatureMired = Double(WhiteBalance.kelvinToMired(WhiteBalance.neutralKelvin))
-    /// Fixed acquisition illuminant recorded by the camera path. Nil lets an imported RAW use its
-    /// own as-shot record; camera captures persist the same emulsion-reference lock used by live
-    /// Metal, so the decode reproduces the sensor's neutralization exactly.
+    /// Capture white recorded by the camera. Nil preserves an imported RAW's as-shot white.
+    /// Camera captures use the same scene-white neutralization in live preview and RAW decode.
     var captureIlluminantKelvin: Double? = nil
     /// The light the film integrates against, when the camera named one. Nil falls back to the
     /// acquisition illuminant, which is what every imported source has.
     var filmLightKelvin: Double? = nil
-    /// Green/magenta offset from the locus, in units of 0.0001 Duv.
+    /// Green/magenta offset from the locus, in units of 0.0001 delta-uv.
     var tint = 0.0
     /// Scene-referred tone shaping, -1...1 (0 = untouched).
     var highlights = 0.0
@@ -323,6 +322,9 @@ struct EditState: Equatable {
     /// catalogue's ladder. Flat at 1 is the film's own return trip.
     var halationSpectrum = EditState.restingHalationSpectrum
     var couplers = 1.0
+    var chromaticFringeAmount = 0.0
+    /// Gaussian sigma on the film, displayed and persisted in micrometers.
+    var chromaticFringeRadius = 100.0
     /// How far the released inhibitor crosses each interlayer, as a multiple of the stock's own
     /// geometry: index 0 is the red–green scavenger, index 1 the green–blue yellow filter layer.
     /// Seeded from the app-wide barriers, which is where this lived before it moved onto the edit.
@@ -558,8 +560,11 @@ struct EditState: Equatable {
         // at all, which is the option's own default and the render every earlier build made.
         o.halationReturnGain =
             HalationSpectrum.resampled(halationSpectrum.map(Float.init))
+        o.halationModel = AppSettings.storedHalationModel
         o.useEstimatedHalationProfile = AppSettings.storedEstimatedHalationEnabled
         o.couplerScale = Float(couplers)
+        o.chromaticFringeAmount = Float(chromaticFringeAmount)
+        o.chromaticFringeRadiusMM = Float(chromaticFringeRadius / 1000)
         // Per-gap only: each barrier already stands for itself, so setting `couplerRangeScale` as
         // well would be a value the engine never reads.
         o.couplerGapReachScales = couplerGapReach.map(Float.init)

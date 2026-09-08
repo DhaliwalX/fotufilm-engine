@@ -83,10 +83,12 @@ public struct FilmDevelopmentProfile: Sendable {
     }
 }
 
-public enum FilmDevelopmentError: Error, Equatable, CustomStringConvertible {
+public enum FilmDevelopmentError: Error, Equatable, CustomStringConvertible, LocalizedError {
     case unavailable(stock: String, requestedStops: Float)
     case unmeasuredCondition(stock: String, requestedStops: Float, availableStops: [Float])
     case invalidProfile(stock: String, condition: String, reason: String)
+
+    public var errorDescription: String? { "invalid development request: \(description)" }
 
     public var description: String {
         switch self {
@@ -101,8 +103,7 @@ public enum FilmDevelopmentError: Error, Equatable, CustomStringConvertible {
     }
 
     private static func stops(_ value: Float) -> String {
-        let number = value == value.rounded()
-            ? String(Int(value)) : String(format: "%.2f", value)
+        let number = String(format: value == value.rounded() ? "%.0f" : "%.2f", value)
         return "\(value > 0 ? "+" : "")\(number) stop\(abs(value) == 1 ? "" : "s")"
     }
 }

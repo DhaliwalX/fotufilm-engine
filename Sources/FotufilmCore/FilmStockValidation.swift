@@ -37,10 +37,20 @@ public extension FilmStockDefinition {
             for row in rows { try check(field, row, count: shape.1, range) }
         }
 
-        guard (1...FilmStockDefinition.currentSchemaVersion).contains(schemaVersion) else {
+        guard (1...FilmStockDefinition.layeredTransportSchemaVersion).contains(schemaVersion) else {
             throw fail("schemaVersion",
                        "is \(schemaVersion); this build requires "
-                           + "\(FilmStockDefinition.currentSchemaVersion)")
+                           + "1, 2 or 3")
+        }
+        guard (schemaVersion == 3) == (layeredTransport != nil) else {
+            throw fail("layeredTransport", "layered transport requires schema 3 and schema 3 requires a transport definition")
+        }
+        if let layeredTransport {
+            do { try layeredTransport.validate() }
+            catch { throw fail("layeredTransport", error.localizedDescription) }
+            guard halationProfile == nil && estimatedHalationProfile == nil && halationReturnMatrix == nil else {
+                throw fail("layeredTransport", "remove conflicting legacy profile and return-matrix fields")
+            }
         }
         try Self.checkIdentifier(id, field: "id", limit: 64, fail: fail)
         try Self.checkText(name, field: "name", limit: 64, required: true, fail: fail)
@@ -184,6 +194,8 @@ public extension FilmStockDefinition {
             try check("couplerGeometry.selfRetention", couplerGeometry.selfRetention, 0...1)
         }
         try check("couplerDiffusionMM", couplerDiffusionMM, 0...2)
+        try check("chromaticFringeAmount", chromaticFringeAmount ?? 0, 0...1)
+        try check("chromaticFringeRadiusMM", chromaticFringeRadiusMM ?? 0.1, 0...2)
         try check("adjacencyStrength", adjacencyStrength ?? 0, 0...4)
         try check("adjacencyRadiusMM", adjacencyRadiusMM ?? 0, 0...2)
 

@@ -25,7 +25,7 @@ BASE_PUBLIC_PARAMETER_IDS = {
     # grade, and the focal length its scattering is imaged through — then the negative viewing
     # mode, which lives in Output with the rest of what happens after the film.
     *(str(value) for value in range(73, 81)),
-    "10001",
+    "88", "10001",
 }
 PERSISTED_ONLY_PARAMETER_IDS = {"26", "27", "28", "29", "81", "82", "83", "84"}
 BASE_PARAMETER_PATHS = {
@@ -40,7 +40,7 @@ BASE_PARAMETER_PATHS = {
     "77": "72/77", "78": "72/78", "79": "72/79", "18": "72/18",
     "22": "35/22", "23": "35/23", "24": "35/24",
     "14": "34/14", "21": "34/21",
-    "15": "86/15", "16": "86/16", "17": "86/17",
+    "88": "86/88", "15": "86/15", "16": "86/16", "17": "86/17",
     "19": "87/19",
     "4": "36/4", "25": "36/25", "20": "36/20", "80": "36/80",
     "1": "30/1",

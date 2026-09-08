@@ -5,7 +5,7 @@ import Foundation
 public struct WhiteBalance: Equatable, Codable, Sendable {
     /// Correlated colour temperature of the scene illuminant, in kelvin.
     public var kelvin: Float
-    /// Displacement perpendicular to the locus in CIE 1960 uv, x10000 — so one unit is a Duv of
+    /// Displacement perpendicular to the hybrid locus in CIE 1960 uv, x10000 — one unit is
     /// 0.0001 and the slider's ends are +/-0.01.
     public var tint: Float
 
@@ -74,20 +74,37 @@ public struct WhiteBalance: Equatable, Codable, Sendable {
         tangent /= length
         let normal = SIMD2<Float>(-tangent.y, tangent.x)
         let signed = normal.y >= 0 ? normal : -normal
-        return xyFromUV(uv + signed * (tint / 10000))
+        let displacement = signed * (tint / 10000)
+        return boundedChromaticity(fromUV: uv, displacement: displacement)
     }
 
-    /// The reference locus: a Planckian radiator up to 4000 K, the CIE daylight series from 5000 K,
-    /// crossfaded in uv between.
+    static func boundedChromaticity(fromUV uv: SIMD2<Float>,
+                                    displacement: SIMD2<Float>) -> SIMD2<Float> {
+        // Capture-relative edits can reach very warm light, where a requested tint leaves
+        // the spectral locus. Keep the white inside the spectra the engine can represent.
+        let boundary = (0..<SpectralGrid.count).map { i -> SIMD2<Float> in
+            let xyz = SIMD3(SpectralGrid.xBar[i], SpectralGrid.yBar[i], SpectralGrid.zBar[i])
+            return uvFromXY(SIMD2(xyz.x, xyz.y) / xyz.sum())
+        }
+        func cross(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float { a.x * b.y - a.y * b.x }
+        var fraction: Float = 1
+        for i in boundary.indices {
+            let a = boundary[i] - uv
+            let edge = boundary[(i + 1) % boundary.count] - boundary[i]
+            let denominator = cross(displacement, edge)
+            guard abs(denominator) > 1e-12 else { continue }
+            let distance = cross(a, edge) / denominator
+            let along = cross(a, displacement) / denominator
+            if distance >= 0 && distance < 1 && along >= 0 && along <= 1 {
+                fraction = min(fraction, distance * 0.95)
+            }
+        }
+        return xyFromUV(uv + displacement * fraction)
+    }
+
+    /// The chromaticity of the same spectrum used for film exposure.
     static func locusXY(_ kelvin: Float) -> SIMD2<Float> {
-        let t = clamp(kelvin, 1000, 25000)
-        if t <= 4000 { return planckianXY(t) }
-        if t >= 5000 { return daylightXY(t) }
-        let s = (t - 4000) / 1000
-        let blend = s * s * (3 - 2 * s)
-        let planckian = uvFromXY(planckianXY(t))
-        let daylight = uvFromXY(daylightXY(t))
-        return xyFromUV(planckian + (daylight - planckian) * blend)
+        Illuminant.chromaticity(Illuminant.atLocus(kelvin: kelvin))
     }
 
     /// CIE 15 daylight locus, valid 4000-25000 K.
@@ -104,7 +121,7 @@ public struct WhiteBalance: Equatable, Codable, Sendable {
     }
 
     /// Planckian locus by direct integration of Planck's law against the CIE 1931 observer on the
-    /// renderer's own 10 nm grid — the same tables the film model integrates everything else
+    /// renderer's own 5 nm grid — the same tables the film model integrates everything else
     /// against, so a tungsten balance and a tungsten enlarger agree by construction.
     static func planckianXY(_ kelvin: Float) -> SIMD2<Float> {
         let spectrum = SpectralGrid.blackbody(kelvinK: kelvin)

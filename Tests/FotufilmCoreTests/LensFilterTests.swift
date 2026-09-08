@@ -327,11 +327,12 @@ final class LensFilterTests: XCTestCase {
 
     func testExposureTableCarriesTheFilterAtTheNeutral() {
         let stock = Self.colour
+        let light = SpectralRuntime.filmReferenceIlluminant(for: stock)
         let neutral = SIMD3<Float>(repeating: 0.18)
         func exposure(_ stack: LensFilterStack) -> SIMD3<Float> {
-            SpectralRuntime.filteredExposure(for: stock, cct: nil, stack: stack).sample(neutral)
+            SpectralRuntime.filteredExposure(for: stock, illuminant: light, stack: stack).sample(neutral)
         }
-        let bare = SpectralRuntime.tables(for: stock).exposure.sample(neutral)
+        let bare = SpectralRuntime.sceneExposure(for: stock, illuminant: light).sample(neutral)
         XCTAssertEqual(bare.x, bare.y, accuracy: 1e-3)
         XCTAssertEqual(bare.y, bare.z, accuracy: 1e-3)
 
@@ -377,6 +378,7 @@ final class LensFilterTests: XCTestCase {
         }
         var bare = FotufilmEngine.Options()
         bare.grainScale = 0
+        bare.sceneIlluminantKelvin = Self.colour.referenceIlluminantKelvin
         var warmed = bare
         warmed.lensFilters = LensFilterStack(.wratten85B, compensation: .filmSpeed)
         var cooled = bare
