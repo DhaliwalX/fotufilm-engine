@@ -1,9 +1,74 @@
 # Fotufilm engine
 
-Fotufilm is an open-source film simulation engine built to be as physically
-accurate as possible.
-This repository includes the engine, a command-line tool, a Mac app, plugins for
-DaVinci Resolve and Final Cut Pro, and a browser demo.
+Fotufilm is an open-source film simulation engine for photos and video. It models
+how light exposes photographic film, how the image develops into dye or silver,
+and how that film becomes a print, scan, or viewed transparency. Colour, contrast,
+grain, and halation follow the selected film's properties and the process used
+to render it.
+
+This repository includes the shared engine, a command-line tool, a Mac app,
+plugins for DaVinci Resolve and Final Cut Pro, and a browser demo.
+
+[Download for Mac](https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS.pkg) · [User guide](docs/documentation.html) · [![Download on the App Store](docs/assets/download-on-the-app-store.svg)](https://apps.apple.com/app/id6792911908)
+
+## How the film model works
+
+The model follows the stages between scene light and a finished photograph:
+
+```mermaid
+flowchart LR
+    A[Scene light] --> B[Film exposure]
+    B --> C[Development and grain]
+    C --> D[Print, scan, or direct view]
+    D --> E[Output image]
+```
+
+1. **Prepare the light.** The input is decoded into linear, wide-gamut RGB
+   (Rec.2020), where pixel values represent light. Exposure and colour adjustments
+   act here, before the film responds. Adding one stop of exposure doubles the
+   light sent into the model.
+2. **Expose the film.** The spectral model estimates a spectrum from RGB and
+   evaluates the film's sensitivity at 81 wavelengths, from 380 to 780 nm in
+   5 nm steps. Each layer records light according to its sensitivity. Emulsion
+   diffusion spreads detail, while **halation** models light returning through
+   the film base and exposing nearby areas, producing halos around bright sources.
+3. **Develop the image.** Each layer's characteristic curve maps exposure to
+   optical density: how much light the developed film blocks. The curve shapes
+   shadow response, midtone contrast, and highlights. Where the stock supports
+   them, interactions between developing layers and neighbouring areas also
+   shape colour separation and edge contrast.
+4. **Form the grain.** Grain varies the developed density according to the
+   stock's granularity and density response. Grain size and spatial effects are
+   expressed in physical film dimensions, then scaled to the image using the
+   selected film format and frame coverage.
+5. **View the result.** The output stage models how light passes through the
+   developed film. A print medium adds its own spectral response and development
+   curves; scan modes convert the negative to a positive. Reversal film produces
+   a positive for direct viewing. The result is converted back to display colour.
+
+These stages explain why the controls work together: exposure moves the image
+along the film's response curve, film format changes the scale of its texture,
+and the output medium helps determine the final colour and contrast.
+
+## Profiles and model limits
+
+Film stocks are data-driven profiles describing spectral sensitivity,
+characteristic curves, dyes, grain, and spatial behaviour. The same engine reads
+these properties for colour negative, black-and-white, and reversal films. See
+[Included films](#included-films) and [Print media](#print-media) for the bundled
+data and its sources.
+
+The model combines published measurements with physical and statistical
+approximations. RGB cannot uniquely recover the original scene spectrum, and
+clipped highlights cannot supply missing exposure. Digitised curves are limited
+by their source graphs and extrapolate beyond the published range. Grain models
+describe aggregate texture rather than individual crystals. Results therefore
+depend on the input, profile data, and viewing conditions as well as the model.
+
+For a closer look at the implementation, start with the
+[pipeline and controls](Sources/FotufilmCore/Pipeline.swift),
+[spectral model](Sources/FotufilmCore/SpectralModel.swift), and
+[film profile structure](Sources/FotufilmCore/FilmStock.swift).
 
 ## Build the engine
 
@@ -96,8 +161,6 @@ telecine are inversions rather than sheets, and are described in `PrintPaperTabl
 
 `SOURCE_ASSETS.json` records where assets came from and their file hashes. Before
 adding data or images, run `python3 tools/check-source-boundary.py`.
-
-[Download for Mac](https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS.pkg) · [![Download on the App Store](docs/assets/download-on-the-app-store.svg)](https://apps.apple.com/app/id6792911908)
 
 To convert a scan, choose **File → Import Scanned Negative…**, sample its clear film
 border and preview the positive. Import it to adjust all four crop corners independently.
