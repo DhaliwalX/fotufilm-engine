@@ -447,6 +447,18 @@ public final class HandwrittenMetalCompositeTail {
             printCube: state.printCube)
     }
 
+    var preparedEntryCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return prepared.count
+    }
+
+    func removePrepared(forKey key: String) {
+        lock.lock()
+        prepared.removeValue(forKey: key)
+        lock.unlock()
+    }
+
     public func removeAll() {
         lock.lock()
         prepared.removeAll(keepingCapacity: false)

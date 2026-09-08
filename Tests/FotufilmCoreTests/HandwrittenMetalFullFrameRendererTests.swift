@@ -1,12 +1,109 @@
 #if canImport(Metal)
 import XCTest
 @testable import FotufilmCore
-import FotufilmMetal
+@testable import FotufilmMetal
 import Metal
 
 final class HandwrittenMetalFullFrameRendererTests: XCTestCase {
     private static let testFormat = FilmFormat(
         name: "Handwritten HDR full-frame test", frameHeightMM: 0.8)
+
+    func testFailedRepreparationPreservesThePreviousEdit() throws {
+        let harness = try Harness(maximumInFlightFrames: 1)
+        let width = 16, height = 12
+        var stock = TestStocks.monochrome
+        stock.grainSizeMM = 0.1
+        var options = spatialOptions(grain: false)
+        options.format = FilmFormat(name: "Resolved grain regression", frameHeightMM: 0.5)
+        let input = try representativeX420(
+            device: harness.device, width: width, height: height)
+        let output = try rgba16Texture(
+            device: harness.device, width: width, height: height)
+        try harness.renderer.prepareChecked(
+            key: #function, stock: stock, options: options,
+            frameWidth: width, frameHeight: height)
+        XCTAssertEqual(harness.renderer.retainedComponentEntryCount, 5)
+        try render(renderer: harness.renderer, queue: harness.queue,
+                   input: input, output: output, key: #function,
+                   transfer: .hlg, sceneScale: HLGSceneTransfer.headroom, frameIndex: 0)
+        let before = readRGBA16(output)
+
+        var unsupported = options
+        unsupported.exposureEV = 2
+        unsupported.grainScale = 1
+        unsupported.grainModel = .discs
+        XCTAssertThrowsError(try harness.renderer.prepareChecked(
+            key: #function, stock: stock, options: unsupported,
+            frameWidth: width, frameHeight: height)) { error in
+                guard case HandwrittenMetalFullFrameRenderer.PreparationError
+                    .spatialPreparation = error else {
+                    return XCTFail("unexpected preparation error: \(error)")
+                }
+            }
+        XCTAssertEqual(harness.renderer.retainedComponentEntryCount, 5,
+                       "failed graph entries must be released")
+        try render(renderer: harness.renderer, queue: harness.queue,
+                   input: input, output: output, key: #function,
+                   transfer: .hlg, sceneScale: HLGSceneTransfer.headroom, frameIndex: 0)
+        XCTAssertEqual(readRGBA16(output), before,
+                       "a rejected edit must not replace any component of the previous graph")
+        harness.renderer.removeAll()
+        XCTAssertEqual(harness.renderer.retainedComponentEntryCount, 0)
+    }
+
+    func testRepreparationRetainsInFlightGraphsWithoutAccumulatingOldEdits() throws {
+        let harness = try Harness(maximumInFlightFrames: 2)
+        let width = 16, height = 12
+        let stock = TestStocks.negative
+        var options = spatialOptions(grain: false)
+        let input = try representativeX420(
+            device: harness.device, width: width, height: height)
+        let output = try rgba16Texture(
+            device: harness.device, width: width, height: height)
+        try harness.renderer.prepareChecked(
+            key: #function, stock: stock, options: options,
+            frameWidth: width, frameHeight: height)
+        try autoreleasepool {
+            try render(renderer: harness.renderer, queue: harness.queue,
+                       input: input, output: output, key: #function,
+                       transfer: .hlg, sceneScale: HLGSceneTransfer.headroom, frameIndex: 0)
+        }
+        let before = readRGBA16(output)
+        try autoreleasepool {
+            let pending = try XCTUnwrap(harness.queue.makeCommandBuffer())
+            XCTAssertTrue(harness.renderer.encodeCapturedHDR(
+                luma: input.luma, chroma: input.chroma, output: output,
+                width: width, height: height, key: #function,
+                transfer: .hlg, sceneScale: HLGSceneTransfer.headroom,
+                frameIndex: 0, commandBuffer: pending))
+            options.exposureEV = 1
+            try harness.renderer.prepareChecked(
+                key: #function, stock: stock, options: options,
+                frameWidth: width, frameHeight: height)
+            XCTAssertEqual(harness.renderer.retainedComponentEntryCount, 10)
+            pending.commit()
+            pending.waitUntilCompleted()
+            XCTAssertEqual(pending.status, .completed)
+            XCTAssertEqual(readRGBA16(output), before,
+                           "an in-flight frame must finish with its original graph")
+        }
+        XCTAssertEqual(harness.renderer.retainedComponentEntryCount, 5)
+        try autoreleasepool {
+            try render(renderer: harness.renderer, queue: harness.queue,
+                       input: input, output: output, key: #function,
+                       transfer: .hlg, sceneScale: HLGSceneTransfer.headroom, frameIndex: 0)
+        }
+        XCTAssertNotEqual(readRGBA16(output), before)
+        for exposure: Float in [0.25, 0.5, 0.75] {
+            options.exposureEV = exposure
+            try harness.renderer.prepareChecked(
+                key: #function, stock: stock, options: options,
+                frameWidth: width, frameHeight: height)
+            XCTAssertEqual(harness.renderer.retainedComponentEntryCount, 5)
+        }
+        harness.renderer.removeAll()
+        XCTAssertEqual(harness.renderer.retainedComponentEntryCount, 0)
+    }
 
     func testUniformSpatialHDRMasterStaysUniformAndIsOpaque() throws {
         let harness = try Harness(maximumInFlightFrames: 1)
