@@ -504,6 +504,7 @@ export default function App() {
     basePackRef.current = null
     setStages([])
     setResultUrl(null)
+    setElapsed(null)
     setDelta(null)
     if (halationModel === 'layered' && stocks.find(item => item.id === stock)?.layeredTransport === false) {
       setError('Layered Transport does not yet support donor-layer stocks. Select Legacy for this stock.')
@@ -709,7 +710,7 @@ export default function App() {
               <option value="legacy">Legacy</option>
               <option value="layered">Layered Transport</option>
             </select>
-            <small>{halationModel === 'layered' ? 'Illustrative film stack · SIMD transport' : 'Original film halation'}</small>
+            <small>{halationModel === 'layered' ? 'Illustrative film stack' : 'Original film halation'}</small>
           </label>
 
           <div className="adjustment-grid">
@@ -757,7 +758,7 @@ export default function App() {
                 setStageIndex(null)
                 developView(null)
               }}
-              isDisabled={!source || developing || !!status}
+              isDisabled={!source || !developer || developing || !!status}
             />
             <div className="process-status" role="status">
               {error ? (
@@ -864,7 +865,9 @@ export default function App() {
 
         <aside className="pipeline-panel panel">
           <PanelTitle eyebrow="Pipeline" title="All stages" detail={`${stages.length + 1} views`} />
-          <p className="pipeline-note">Select any point in the physical image-formation chain.</p>
+          <p className="pipeline-note">{halationModel === 'layered'
+            ? 'Stage inspection is available with Legacy.'
+            : 'Select any point in the physical image-formation chain.'}</p>
           <PipelineSteps
             stages={stages}
             stageIndex={stageIndex}
