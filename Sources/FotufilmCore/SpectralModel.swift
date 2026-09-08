@@ -521,14 +521,15 @@ public enum SpectralRuntime {
             // lab times a skip-bleach negative through its own extra density, so what
             // survives onto the paper is the added contrast and the lost chroma, not a
             // uniformly darker frame.
-            // Under a condenser head every density the lens sees is the diffuse figure times
-            // the Callier coefficient — the image dyes' and the retained silver's alike, since
-            // the scatter is the whole image's. The mid-grey scales with the rest, so the
-            // re-timing below holds it and the head shows as contrast, as it does in a darkroom.
+            // Under a condenser head every density is the diffuse figure times the Callier
+            // coefficient of the material holding it: the image's own on the image densities,
+            // silver's on the silver the bleach left behind. The mid-grey scales with the rest,
+            // so the re-timing below holds it and the head shows as contrast.
+            let silverCallier = callier == 1 ? Float(1) : Enlarger.silverCallierCoefficient
             let midEnergy = paperExposure(density: midDensity.map { $0 * callier },
                                           dyes: stock.spectralProfile.imageDyeDensity,
                                           lamp: lamp, paperSensitivity: paperSensitivity,
-                                          neutralDensity: callier * retainedSilverDensity(
+                                          neutralDensity: silverCallier * retainedSilverDensity(
                                               midDensity, dMin: dMin,
                                               fraction: bleachBypass))
             // Dividing each channel by the stock's own mid energy is the
@@ -544,7 +545,7 @@ public enum SpectralRuntime {
                 let energy = paperExposure(density: density.map { $0 * callier },
                                            dyes: stock.spectralProfile.imageDyeDensity,
                                            lamp: lamp, paperSensitivity: paperSensitivity,
-                                           neutralDensity: callier * retainedSilverDensity(
+                                           neutralDensity: silverCallier * retainedSilverDensity(
                                                density, dMin: dMin,
                                                fraction: bleachBypass))
                 return SIMD3<Float>(

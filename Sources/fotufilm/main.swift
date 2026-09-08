@@ -115,6 +115,8 @@ Options:
                      (collimated light: the Callier effect reads a silver
                      negative's densities ~1.4x higher, a dye negative's ~1.05x,
                      re-timed through mid-grey, so the print gains contrast).
+                     --bleach-bypass leaves retained silver, which scatters
+                     like a silver negative and takes the silver figure.
                      Only an enlarged reflection print has one
   --negative <how>   Show the developed negative instead of the print it would
                      make: 'lightbox' keeps the base its own orange, 'scanner'

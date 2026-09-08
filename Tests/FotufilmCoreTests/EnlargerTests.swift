@@ -36,6 +36,28 @@ final class EnlargerTests: XCTestCase {
         XCTAssertGreaterThan(Enlarger.dyeCallierCoefficient, 1)
     }
 
+    func testRetainedSilverScattersLikeSilverNotLikeDye() {
+        let stock = TestStocks.negative
+        func printing(bleach: Float, callier: Float) -> [Float] {
+            SpectralRuntime.tables(for: stock, paper: .default, bleachBypass: bleach,
+                                   callier: callier).filmOutput.values
+        }
+        func spread(_ a: [Float], _ b: [Float]) -> Float {
+            zip(a, b).reduce(Float(0)) { max($0, abs($1.0 - $1.1)) }
+        }
+        let dye = Enlarger.dyeCallierCoefficient
+        func headEffect(bleach: Float) -> Float {
+            spread(printing(bleach: bleach, callier: dye), printing(bleach: bleach, callier: 1))
+        }
+        let plain = headEffect(bleach: 0)
+        let some = headEffect(bleach: 0.3)
+        let most = headEffect(bleach: 0.8)
+        XCTAssertGreaterThan(some, plain,
+                             "retained silver should carry the silver coefficient, not the dye's")
+        XCTAssertGreaterThan(most, some, "more retained silver, more of the head")
+        XCTAssertGreaterThan(most, plain * 2)
+    }
+
     func testOnlyAnEnlargedReflectionPrintHasALampHouse() {
         let condenser = Enlarger.condenser
         // A reversal is its own positive; the paper is irrelevant.
