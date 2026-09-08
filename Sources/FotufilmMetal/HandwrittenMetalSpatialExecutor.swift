@@ -661,8 +661,8 @@ public final class HandwrittenMetalSpatialExecutor {
         guard options.stage == .full else {
             throw PreparationError.unsupportedPipelineStage
         }
-        let invocation = supplied ?? FilmEngineInvocation(
-            stock: stock, options: options, width: frameWidth, height: frameHeight)
+        let invocation = try supplied ?? FilmEngineInvocation(
+            validating: stock, options: options, width: frameWidth, height: frameHeight)
         let mask = invocation.featureMask
         if mask & FilmEngineFeature.discGrain != 0 {
             // Falling back is preferable to silently exchanging opaque silver discs for dye-cloud
@@ -1209,6 +1209,27 @@ public final class HandwrittenMetalSpatialExecutor {
             withExtendedLifetime((state, gpuFlareMean)) {}
         }
         return true
+    }
+
+    var preparedEntryCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return prepared.count
+    }
+
+    func removePrepared(forKey key: String) {
+        lock.lock()
+        prepared.removeValue(forKey: key)
+        dispatchProfiles.removeValue(forKey: key)
+        lock.unlock()
+    }
+
+    /// Encoded command buffers retain leased scratch until completion; a new edit can allocate
+    /// its own full set of slots without waiting for the discarded pool.
+    func resetScratchPool() {
+        lock.lock()
+        scratch.removeAll(keepingCapacity: false)
+        lock.unlock()
     }
 
     public func removeAll() {

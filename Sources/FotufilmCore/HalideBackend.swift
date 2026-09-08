@@ -8,8 +8,8 @@ enum HalideBackend {
 
     /// Stages 1-7: scene-linear RGB in, developed per-layer density out.
     static func develop(image: ImageBuffer, stock: FilmStock,
-                        options: FotufilmEngine.Options) -> ImageBuffer? {
-        run(image, stock: stock, options: options, measuresScene: true) {
+                        options: FotufilmEngine.Options) throws -> ImageBuffer? {
+        try run(image, stock: stock, options: options, measuresScene: true) {
             inputR, inputG, inputB, outputR, outputG, outputB,
             width, height, invocation, configuration in
             invocation.withSpectralPointers { exposure, _, _ in
@@ -28,8 +28,8 @@ enum HalideBackend {
     /// expression, so the two roads cannot deliver different frames.
     static func print(density: ImageBuffer, stock: FilmStock,
                       options: FotufilmEngine.Options,
-                      outputTransform: FilmOutputTransform? = nil) -> ImageBuffer? {
-        run(density, stock: stock, options: options,
+                      outputTransform: FilmOutputTransform? = nil) throws -> ImageBuffer? {
+        try run(density, stock: stock, options: options,
             outputTransform: outputTransform) {
             inputR, inputG, inputB, outputR, outputG, outputB,
             width, height, invocation, configuration in
@@ -53,13 +53,15 @@ enum HalideBackend {
                         options: FotufilmEngine.Options,
                         memoryBudget: Int = defaultMemoryBudget,
                         noFilm: Bool = false,
-                        outputTransform: FilmOutputTransform? = nil) -> ImageBuffer? {
-        guard isAvailable else { return nil }
+                        outputTransform: FilmOutputTransform? = nil) throws -> ImageBuffer? {
         let width = image.width, height = image.height
-        guard width > 0, height > 0 else { return ImageBuffer(width: width, height: height) }
-        var invocation = FilmEngineInvocation(
-            stock: stock, options: options, width: width, height: height,
+        guard width > 0, height > 0 else {
+            return isAvailable ? ImageBuffer(width: width, height: height) : nil
+        }
+        var invocation = try FilmEngineInvocation(
+            validating: stock, options: options, width: width, height: height,
             noFilm: noFilm)
+        guard isAvailable else { return nil }
         if let outputTransform {
             invocation.featureMask |= FilmEngineFeature.encodeOut
             switch outputTransform.transfer {
@@ -187,12 +189,14 @@ enum HalideBackend {
             UnsafeMutablePointer<Float>?, Int32, Int32,
             FilmEngineInvocation, UnsafePointer<Float>?
         ) -> Int32
-    ) -> ImageBuffer? {
-        guard isAvailable else { return nil }
+    ) throws -> ImageBuffer? {
         let width = image.width, height = image.height
-        guard width > 0, height > 0 else { return ImageBuffer(width: width, height: height) }
-        var invocation = FilmEngineInvocation(
-            stock: stock, options: options, width: width, height: height)
+        guard width > 0, height > 0 else {
+            return isAvailable ? ImageBuffer(width: width, height: height) : nil
+        }
+        var invocation = try FilmEngineInvocation(
+            validating: stock, options: options, width: width, height: height)
+        guard isAvailable else { return nil }
         if let outputTransform {
             // This road JITs and caches its pipelines, so naming the shape costs a cache slot
             // rather than a shipped variant: it is always worth compiling the one transcendental

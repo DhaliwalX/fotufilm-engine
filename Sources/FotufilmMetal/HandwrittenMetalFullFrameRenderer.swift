@@ -50,11 +50,41 @@ public final class HandwrittenMetalFullFrameRenderer {
 
     public static let outputPixelFormat: MTLPixelFormat = .rgba16Float
 
-    private struct Prepared {
+    /// Owns one graph's component entries through preparation, encoding, and GPU completion.
+    /// Failed and superseded graphs release their entries without touching another revision.
+    private final class PreparedComponents {
         let internalKey: String
-        let sdrHeadKey: String
-        let x420HeadKey: String
-        let floatHeadKey: String
+        var sdrHeadKey: String { "\(internalKey)#nv12" }
+        var x420HeadKey: String { "\(internalKey)#x420" }
+        var floatHeadKey: String { "\(internalKey)#rgba32-float" }
+        private let spectralHead: HandwrittenMetalSpectralHead
+        private let spatial: HandwrittenMetalSpatialExecutor
+        private let compositeTail: HandwrittenMetalCompositeTail
+
+        init(revision: UInt64, spectralHead: HandwrittenMetalSpectralHead,
+             spatial: HandwrittenMetalSpatialExecutor,
+             compositeTail: HandwrittenMetalCompositeTail) {
+            internalKey = "\(revision)#handwritten-hdr-master"
+            self.spectralHead = spectralHead
+            self.spatial = spatial
+            self.compositeTail = compositeTail
+        }
+
+        deinit {
+            spectralHead.removePrepared(forKey: sdrHeadKey)
+            spectralHead.removePrepared(forKey: x420HeadKey)
+            spectralHead.removePrepared(forKey: floatHeadKey)
+            spatial.removePrepared(forKey: internalKey)
+            compositeTail.removePrepared(forKey: internalKey)
+        }
+    }
+
+    private struct Prepared {
+        let components: PreparedComponents
+        var internalKey: String { components.internalKey }
+        var sdrHeadKey: String { components.sdrHeadKey }
+        var x420HeadKey: String { components.x420HeadKey }
+        var floatHeadKey: String { components.floatHeadKey }
         let revision: UInt64
         let width: Int
         let height: Int
@@ -167,8 +197,8 @@ public final class HandwrittenMetalFullFrameRenderer {
 
         var hdrOptions = options
         hdrOptions.paper = .screen
-        let invocation = FilmEngineInvocation(
-            stock: stock, options: hdrOptions,
+        let invocation = try FilmEngineInvocation(
+            validating: stock, options: hdrOptions,
             width: frameWidth, height: frameHeight)
         let layered = try options.transportConstruction(for: stock).map { _ in
             try LayeredTextureTransport(device: device, stock: stock, options: hdrOptions,
@@ -181,27 +211,23 @@ public final class HandwrittenMetalFullFrameRenderer {
         preparationRevision &+= 1
         let revision = preparationRevision
         lock.unlock()
-        // Component dictionaries overwrite a stable key on re-preparation. The revision belongs
-        // only to writable intermediate leases; putting it in component keys retained every
-        // superseded set of frame-sized immutable state for the renderer's lifetime.
-        let internalKey = "\(key)#handwritten-hdr-master"
-        let sdrHeadKey = "\(internalKey)#nv12"
-        let x420HeadKey = "\(internalKey)#x420"
-        let floatHeadKey = "\(internalKey)#rgba32-float"
+        let components = PreparedComponents(
+            revision: revision, spectralHead: spectralHead,
+            spatial: spatial, compositeTail: compositeTail)
 
         do {
             try spectralHead.prepareChecked(
-                key: sdrHeadKey, invocation: invocation,
+                key: components.sdrHeadKey, invocation: invocation,
                 mode: .encodedDisplayP3RGBA8,
                 frameWidth: frameWidth, frameHeight: frameHeight,
                 toneGrid: toneActive ? .gpu : nil)
             try spectralHead.prepareChecked(
-                key: x420HeadKey, invocation: invocation,
+                key: components.x420HeadKey, invocation: invocation,
                 mode: .linearRec2020RGBA16Float,
                 frameWidth: frameWidth, frameHeight: frameHeight,
                 toneGrid: toneActive ? .gpu : nil)
             try spectralHead.prepareChecked(
-                key: floatHeadKey, invocation: invocation,
+                key: components.floatHeadKey, invocation: invocation,
                 mode: .linearRec2020RGBA32Float,
                 frameWidth: frameWidth, frameHeight: frameHeight,
                 toneGrid: toneActive ? .gpu : nil)
@@ -210,14 +236,15 @@ public final class HandwrittenMetalFullFrameRenderer {
         }
         do {
             try spatial.prepareChecked(
-                key: internalKey, stock: stock, options: hdrOptions.withoutLayeredTransport,
-                frameWidth: frameWidth, frameHeight: frameHeight, invocation: layered?.tail)
+                key: components.internalKey, stock: stock, options: hdrOptions.withoutLayeredTransport,
+                frameWidth: frameWidth, frameHeight: frameHeight,
+                invocation: layered?.tail ?? invocation)
         } catch {
             throw PreparationError.spatialPreparation(String(describing: error))
         }
         do {
             try compositeTail.prepareChecked(
-                key: internalKey, invocation: invocation,
+                key: components.internalKey, invocation: invocation,
                 mode: .linearRec2020RGBA16Float,
                 frameWidth: frameWidth, frameHeight: frameHeight)
         } catch {
@@ -225,14 +252,14 @@ public final class HandwrittenMetalFullFrameRenderer {
         }
 
         let value = Prepared(
-            internalKey: internalKey,
-            sdrHeadKey: sdrHeadKey, x420HeadKey: x420HeadKey,
-            floatHeadKey: floatHeadKey,
+            components: components,
             revision: revision,
             width: frameWidth, height: frameHeight,
             floatInputByteCount: floatInputByteCount,
             invocation: invocation, toneActive: toneActive,
             flareActive: flareActive, layered: layered)
+        lock.lock()
+        defer { lock.unlock() }
         do {
             try primeIntermediateRing(for: value)
         } catch let error as PreparationError {
@@ -241,9 +268,7 @@ public final class HandwrittenMetalFullFrameRenderer {
             throw PreparationError.measurementPreparation(String(describing: error))
         }
 
-        lock.lock()
         prepared[key] = value
-        lock.unlock()
     }
 
     /// Compatibility convenience for callers that select another renderer on preparation error.
@@ -545,34 +570,31 @@ public final class HandwrittenMetalFullFrameRenderer {
         return true
     }
 
-    /// Drops prepared edits and idle pooled resources. Already-encoded command buffers retain all
-    /// resources they use and complete safely after this call.
+    /// Drops prepared edits and starts a fresh frame pool. Already-encoded command buffers retain
+    /// their resources without occupying the next edit's ring slots.
     public func removeAll() {
-        spectralHead.removeAll()
-        spatial.removeAll()
-        compositeTail.removeAll()
         lock.lock()
         prepared.removeAll(keepingCapacity: false)
         intermediates.removeAll(keepingCapacity: false)
+        spatial.resetScratchPool()
         lock.unlock()
+    }
+
+    /// Diagnostic count includes graphs retained by frames still being encoded or executed.
+    var retainedComponentEntryCount: Int {
+        spectralHead.preparedEntryCount + spatial.preparedEntryCount
+            + compositeTail.preparedEntryCount
     }
 
     /// Preallocates every currently available ring slot during edit preparation. If an old edit
     /// still occupies slots, its completion makes those slots replaceable without ever aliasing
-    /// their resources.
+    /// their resources. The caller holds `lock` through graph publication.
     private func primeIntermediateRing(for state: Prepared) throws {
-        lock.lock()
-        defer { lock.unlock() }
-        intermediates.removeAll { !$0.leased }
-        do {
-            while intermediates.count < maximumInFlightFrames {
-                intermediates.append(try makeIntermediate(for: state))
-            }
-        } catch {
-            intermediates.removeAll { $0.key == state.intermediateKey && !$0.leased }
-            if let preparation = error as? PreparationError { throw preparation }
-            throw PreparationError.measurementPreparation(String(describing: error))
+        var next = intermediates.filter(\.leased)
+        while next.count < maximumInFlightFrames {
+            next.append(try makeIntermediate(for: state))
         }
+        intermediates = next
     }
 
     private func acquireIntermediate(for state: Prepared) -> IntermediateFrame? {
@@ -598,6 +620,9 @@ public final class HandwrittenMetalFullFrameRenderer {
     private func releaseIntermediate(_ frame: IntermediateFrame) {
         lock.lock()
         frame.leased = false
+        if !prepared.values.contains(where: { $0.intermediateKey == frame.key }) {
+            intermediates.removeAll { $0 === frame }
+        }
         lock.unlock()
     }
 

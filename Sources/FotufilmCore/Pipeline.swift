@@ -303,26 +303,18 @@ public struct FotufilmEngine {
     /// `PipelineStage` says it does: `.negative` returns the developed negative's densities,
     /// `.print` is handed them, and `.texture` returns the frame it was given.
     public func process(linearRGB image: ImageBuffer) -> ImageBuffer {
-        if options.transportConstruction(for: stock) != nil {
-            do { return try processChecked(linearRGB: image) }
-            catch { fatalError(error.localizedDescription) }
-        }
-        guard let positive = HalideBackend.process(image: image, stock: stock,
-                                                   options: options) else {
-            fatalError(Self.missingEngineMessage)
-        }
-        return positive
+        do { return try processChecked(linearRGB: image) }
+        catch { fatalError(error.localizedDescription) }
     }
 
-    /// Recoverable preparation/backend errors for layered constructions; legacy behavior is
-    /// preserved when no construction is selected.
+    /// Recoverable development, preparation, and backend errors for either rendering model.
     public func processChecked(linearRGB image: ImageBuffer) throws -> ImageBuffer {
         if let model = options.transportConstruction(for: stock) {
             return try LayeredTransportRenderer.process(image: image, stock: stock,
                                                          options: options, model: model)
         }
         var plain = stock; plain.layeredTransport = nil
-        guard let output = HalideBackend.process(image: image, stock: plain, options: options) else {
+        guard let output = try HalideBackend.process(image: image, stock: plain, options: options) else {
             throw TransportError.backend(Self.missingEngineMessage)
         }
         return output
@@ -466,24 +458,36 @@ public struct FotufilmEngine {
     /// same quantity `process` produces at `PipelineStage.negative`. This is the CPU seam the
     /// spans were named after; it ignores `options.stage` and always develops the negative.
     public func developNegative(linearRGB image: ImageBuffer) -> ImageBuffer {
+        do { return try developNegativeChecked(linearRGB: image) }
+        catch { fatalError(error.localizedDescription) }
+    }
+
+    /// Develops density with recoverable development and backend errors.
+    public func developNegativeChecked(linearRGB image: ImageBuffer) throws -> ImageBuffer {
         if options.layeredTransport != nil || options.halationModel == .layered {
             var negative = options; negative.stage = .negative
-            return FotufilmEngine(stock: stock, options: negative).process(linearRGB: image)
+            return try FotufilmEngine(stock: stock, options: negative).processChecked(linearRGB: image)
         }
-        guard let developed = HalideBackend.develop(image: image, stock: stock,
+        guard let developed = try HalideBackend.develop(image: image, stock: stock,
                                                     options: options) else {
-            fatalError(Self.missingEngineMessage)
+            throw TransportError.backend(Self.missingEngineMessage)
         }
         return developed
     }
 
     /// Converts developed densities to display-linear RGB.
     public func printPositive(negativeDensity density: ImageBuffer) -> ImageBuffer {
+        do { return try printPositiveChecked(negativeDensity: density) }
+        catch { fatalError(error.localizedDescription) }
+    }
+
+    /// Prints developed density with recoverable development and backend errors.
+    public func printPositiveChecked(negativeDensity density: ImageBuffer) throws -> ImageBuffer {
         var plain = stock; plain.layeredTransport = nil
         var settings = options; settings.layeredTransport = nil
-        guard let positive = HalideBackend.print(density: density, stock: plain,
+        guard let positive = try HalideBackend.print(density: density, stock: plain,
                                                  options: settings) else {
-            fatalError(Self.missingEngineMessage)
+            throw TransportError.backend(Self.missingEngineMessage)
         }
         return positive
     }

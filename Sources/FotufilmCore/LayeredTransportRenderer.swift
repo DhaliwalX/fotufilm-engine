@@ -64,7 +64,7 @@ public enum LayeredTransportRenderer {
         let settings = options.withoutLayeredTransport
         let prepared = try prepare(model: model, stock: stock, options: settings)
         let t = prepared.compilation.interpolation(amount: Double(options.halationScale * stock.halationLookScale))
-        var head = FilmEngineInvocation(stock: stock, options: settings, width: width, height: height)
+        var head = try FilmEngineInvocation(validating: stock, options: settings, width: width, height: height)
         var tail = head
         head.clearTransportOptics(keepLens: true)
         head.featureMask &= FilmEngineFeature.flare | FilmEngineFeature.diffusion
@@ -114,7 +114,7 @@ public enum LayeredTransportRenderer {
         let amount = texture && !options.textureStages.contains(.halation) ? 0
             : Double(options.halationScale) * Double(stock.halationLookScale)
         let t = prepared.compilation.interpolation(amount: amount)
-        var invocation = suppliedInvocation ?? FilmEngineInvocation(stock: plain, options: settings,
+        var invocation = try suppliedInvocation ?? FilmEngineInvocation(validating: plain, options: settings,
                                              width: image.width, height: image.height, frameIndex: frameIndex)
         if invocation.localToneActive && suppliedInvocation == nil {
             withPlanes(image.planes) { r, g, b in

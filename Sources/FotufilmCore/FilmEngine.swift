@@ -838,18 +838,26 @@ public struct FilmEngineInvocation {
         }
     }
 
+    /// Compatibility initializer for known-valid development settings. Use `init(validating:...)`
+    /// when settings come from an editor or another external caller and errors must be recoverable.
     public init(stock: FilmStock, options: FotufilmEngine.Options,
                 width: Int, height: Int, frameIndex: UInt64 = 0,
                 noFilm: Bool = false) {
-        // A measured development condition supplies the fresh roll's complete curves. Age and
-        // reciprocity then act on those curves; applying the condition last would overwrite both
-        // earlier transforms with its fresh, short-exposure measurement.
-        let developed: FilmStock
         do {
-            developed = try stock.pushed(stops: options.developmentEV)
+            self = try Self(validating: stock, options: options, width: width, height: height,
+                            frameIndex: frameIndex, noFilm: noFilm)
         } catch {
             preconditionFailure("invalid development request: \(error)")
         }
+    }
+
+    /// Prepares the invocation or throws `FilmDevelopmentError` for an unsupported or malformed
+    /// development condition. Valid settings produce the same configuration as `init(stock:...)`.
+    public init(validating stock: FilmStock, options: FotufilmEngine.Options,
+                width: Int, height: Int, frameIndex: UInt64 = 0,
+                noFilm: Bool = false) throws {
+        // A measured condition supplies the fresh roll's curves before age and reciprocity.
+        let developed = try stock.pushed(stops: options.developmentEV)
         // Every table key below sees the final developed roll.
         let stock = developed.expired(years: max(options.expiredYears, 0))
             .reciprocity(shutterSeconds: options.shutterSeconds ?? 0)
