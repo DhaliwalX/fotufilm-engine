@@ -653,7 +653,7 @@ public final class HandwrittenMetalSpatialExecutor {
     /// edit/stock change, never for the camera frame loop.
     public func prepareChecked(
         key: String, stock: FilmStock, options: FotufilmEngine.Options,
-        frameWidth: Int, frameHeight: Int
+        frameWidth: Int, frameHeight: Int, invocation supplied: FilmEngineInvocation? = nil
     ) throws {
         guard frameWidth > 0, frameHeight > 0 else {
             throw PreparationError.invalidDimensions
@@ -661,7 +661,7 @@ public final class HandwrittenMetalSpatialExecutor {
         guard options.stage == .full else {
             throw PreparationError.unsupportedPipelineStage
         }
-        let invocation = FilmEngineInvocation(
+        let invocation = supplied ?? FilmEngineInvocation(
             stock: stock, options: options, width: frameWidth, height: frameHeight)
         let mask = invocation.featureMask
         if mask & FilmEngineFeature.discGrain != 0 {
@@ -865,12 +865,22 @@ public final class HandwrittenMetalSpatialExecutor {
             commandBuffer: commandBuffer)
     }
 
+    /// Lens optics before the transport component convolution. No development is applied.
+    func encodeOpticalExposure(recordExposure: MTLTexture, output: MTLTexture, key: String,
+                               flareMean: HandwrittenMetalGlobalMeasurements.FlareMean?,
+                               commandBuffer: MTLCommandBuffer) -> Bool {
+        encodeDevelopedDensityImpl(recordExposure: recordExposure, densityOutput: output,
+            key: key, frameIndex: 0, originX: 0, originY: 0, cpuFlareMean: nil,
+            gpuFlareMean: flareMean, linearHDREndpoint: nil, opticalOnly: true,
+            commandBuffer: commandBuffer)
+    }
+
     private func encodeDevelopedDensityImpl(
         recordExposure: MTLTexture, densityOutput: MTLTexture,
         key: String, frameIndex: UInt64, originX: Int, originY: Int,
         cpuFlareMean suppliedFlareMean: SIMD3<Float>?,
         gpuFlareMean: HandwrittenMetalGlobalMeasurements.FlareMean?,
-        linearHDREndpoint: LinearHDREndpoint?,
+        linearHDREndpoint: LinearHDREndpoint?, opticalOnly: Bool = false,
         commandBuffer: MTLCommandBuffer
     ) -> Bool {
         if let suppliedFlareMean, !Self.validFlareMean(suppliedFlareMean) {
@@ -975,7 +985,7 @@ public final class HandwrittenMetalSpatialExecutor {
         let animatedSeed = state.baseSeed &+ UInt32(truncatingIfNeeded: frameIndex)
             &* 0x7F4A7C15
 
-        if let multiresPath = state.multiresPath {
+        if let multiresPath = state.multiresPath, !opticalOnly {
             let profiler = frameScratch.counterSampleBuffer.map {
                 DispatchProfiler(
                     sampleBuffer: $0, planName: multiresPath.name,
@@ -1000,7 +1010,7 @@ public final class HandwrittenMetalSpatialExecutor {
             return true
         }
 
-        if let fastPath = state.fastPath {
+        if let fastPath = state.fastPath, !opticalOnly {
             let profiler = frameScratch.counterSampleBuffer.map {
                 DispatchProfiler(
                     sampleBuffer: $0, planName: fastPath.name,
@@ -1088,6 +1098,15 @@ public final class HandwrittenMetalSpatialExecutor {
             encodeCopy(
                 encoder, source: current, destination: densityOutput,
                 flare: 0, mean: .inline(.zero), width: width, height: height)
+        }
+
+        if opticalOnly {
+            encoder.endEncoding()
+            commandBuffer.addCompletedHandler { [weak self, frameScratch, state, gpuFlareMean] _ in
+                self?.releaseScratch(frameScratch)
+                withExtendedLifetime((state, gpuFlareMean)) {}
+            }
+            return true
         }
 
         var couplerGeometry = SIMD4<UInt32>.zero

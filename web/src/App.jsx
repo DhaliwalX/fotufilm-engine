@@ -428,6 +428,8 @@ function AppHeader({ backend, developing = false, onUpload }) {
 export default function App() {
   const [stocks, setStocks] = useState([])
   const [stock, setStock] = useState(null)
+  const [halationModel, setHalationModel] = useState(
+    () => localStorage.getItem("halationModel") === "layered" ? "layered" : "legacy")
   const [params, setParams] = useState(Object.fromEntries(SLIDERS.map((s) => [s.key, s.def])))
   const [source, setSource] = useState(null)
   const [originalUrl, setOriginalUrl] = useState(null)
@@ -497,12 +499,24 @@ export default function App() {
   useEffect(() => {
     if (!stock || !HAS_WASM) return
     let cancelled = false
+    developerRef.current?.dispose()
+    developerRef.current = null
+    basePackRef.current = null
+    setStages([])
+    setResultUrl(null)
+    setElapsed(null)
+    setDelta(null)
+    if (halationModel === 'layered' && stocks.find(item => item.id === stock)?.layeredTransport === false) {
+      setError('Layered Transport does not yet support donor-layer stocks. Select Legacy for this stock.')
+      setStatus(null)
+      return
+    }
     setStatus(`loading ${stock}…`)
-    loadPack(assetUrl(`packs/${stock}.pack`))
+    loadPack(assetUrl(`packs/${stock}${halationModel === "layered" ? ".layered" : ""}.pack`))
       .then(async (pack) => {
         // The sidecar is the optional half: without it the demo is still a darkroom, just one
         // that cannot be taken apart. A stock exported before it existed should not fail to load.
-        const sequence = await loadStages(assetUrl(`packs/${stock}.stages`), pack)
+        const sequence = pack.transport ? [] : await loadStages(assetUrl(`packs/${stock}.stages`), pack)
           .catch((e) => {
             console.warn(`no pipeline stages for ${stock}:`, e.message)
             return []
@@ -532,13 +546,13 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [stock])
+  }, [stock, halationModel, stocks])
 
   // Everything a developed frame depends on. When it changes the cache is stale by definition,
   // and the walk starts again from whatever is developed next.
   const frameKey = useMemo(
-    () => `${stock}|${originalUrl}|${SLIDERS.map((s) => params[s.key]).join(',')}`,
-    [stock, originalUrl, params])
+    () => `${stock}|${halationModel}|${originalUrl}|${SLIDERS.map((s) => params[s.key]).join(',')}`,
+    [stock, halationModel, originalUrl, params])
 
   const acceptFile = useCallback((file) => {
     if (!file || !file.type.startsWith('image/')) return
@@ -656,6 +670,7 @@ export default function App() {
           : `print · ${printedStock}`
 
   const selectedStock = stocks.find((item) => item.id === stock)
+  const developer = developerRef.current
   const backendLabel = backend === 'webgpu'
     ? 'WebGPU'
     : backend === 'simd'
@@ -674,16 +689,28 @@ export default function App() {
 
       <main className="workspace">
         <aside className="control-panel panel">
-          <PanelTitle eyebrow="Film setup" title="Build the look" detail="7 controls" />
+          <PanelTitle eyebrow="Film setup" title="Build the look" detail="8 controls" />
 
           <label className="stock-field">
             <span>Film stock</span>
-            <select value={stock || ''} onChange={(event) => setStock(event.target.value)}>
+            <select value={stock || ''} disabled={developing} onChange={(event) => setStock(event.target.value)}>
               {stocks.map((item) => (
                 <option key={item.id} value={item.id}>{item.name}</option>
               ))}
             </select>
             <small>{STOCK_NOTES[stock] || selectedStock?.name || 'Loading stock library'}</small>
+          </label>
+
+          <label className="stock-field">
+            <span>Halation Model</span>
+            <select value={halationModel} disabled={developing} onChange={(event) => {
+              setHalationModel(event.target.value)
+              localStorage.setItem('halationModel', event.target.value)
+            }}>
+              <option value="legacy">Legacy</option>
+              <option value="layered">Layered Transport</option>
+            </select>
+            <small>{halationModel === 'layered' ? 'Illustrative film stack' : 'Original film halation'}</small>
           </label>
 
           <div className="adjustment-grid">
@@ -731,7 +758,7 @@ export default function App() {
                 setStageIndex(null)
                 developView(null)
               }}
-              isDisabled={!source || developing || !!status}
+              isDisabled={!source || !developer || developing || !!status}
             />
             <div className="process-status" role="status">
               {error ? (
@@ -838,7 +865,9 @@ export default function App() {
 
         <aside className="pipeline-panel panel">
           <PanelTitle eyebrow="Pipeline" title="All stages" detail={`${stages.length + 1} views`} />
-          <p className="pipeline-note">Select any point in the physical image-formation chain.</p>
+          <p className="pipeline-note">{halationModel === 'layered'
+            ? 'Stage inspection is available with Legacy.'
+            : 'Select any point in the physical image-formation chain.'}</p>
           <PipelineSteps
             stages={stages}
             stageIndex={stageIndex}

@@ -1891,6 +1891,9 @@ int testPlugin() {
             bool everyCurveCarried = true, everyCurveAgrees = true;
             double worstEncode = 0;
             const char *worstEncodeWhere = "none";
+            size_t worstEncodeIndex = 0;
+            float worstExpected = 0, worstActual = 0;
+            bool worstFit = false, worstPremultiplied = false;
             for (bool fit : {false, true}) {
             for (bool premultiplied : {false, true}) {
             for (int e = 0; !light.empty() && e < static_cast<int>(fotufilm::Encoding::Count);
@@ -1932,6 +1935,9 @@ int testPlugin() {
                     if (gap > worstEncode) {
                         worstEncode = gap;
                         worstEncodeWhere = fotufilm::encodingLabel(encoding);
+                        worstEncodeIndex = i;
+                        worstExpected = reference[i]; worstActual = developedPixels[i];
+                        worstFit = fit; worstPremultiplied = premultiplied;
                     }
                 }
             }
@@ -1941,6 +1947,10 @@ int testPlugin() {
             check(everyCurveAgrees, "and develops a frame through each");
             std::printf("       kernel vs libm: max |d| %.3e (16-bit LSB %.3e, worst %s)\n",
                         worstEncode, 1.0 / 65535.0, worstEncodeWhere);
+            if (worstEncode >= 0.25 / 65535.0) {
+                std::printf("       component %zu: host %.9g, kernel %.9g, fit %d, premultiplied %d\n",
+                            worstEncodeIndex, worstExpected, worstActual, worstFit, worstPremultiplied);
+            }
             check(!light.empty() && worstEncode < 0.25 / 65535.0,
                   "and lands within a quarter of a 16-bit LSB of the host's own encode");
             fotufilm_bridge_release_staging(bridgeContext);
@@ -2629,6 +2639,7 @@ int testPlugin() {
                 {"vibrance", 1.0, nullptr, 0},
                 {"grain", 0, nullptr, 0},
                 {"halation", 0, nullptr, 0},
+                {"halationModel", 1, nullptr, 0},
                 {"couplers", 0, nullptr, 0},
                 {"flare", 2.0, nullptr, 0},
                 {"estimatedHalation", 1, nullptr, 0},

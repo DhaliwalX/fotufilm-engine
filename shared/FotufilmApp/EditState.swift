@@ -556,6 +556,7 @@ struct EditState: Equatable {
         // at all, which is the option's own default and the render every earlier build made.
         o.halationReturnGain =
             HalationSpectrum.resampled(halationSpectrum.map(Float.init))
+        o.halationModel = AppSettings.storedHalationModel
         o.useEstimatedHalationProfile = AppSettings.storedEstimatedHalationEnabled
         o.couplerScale = Float(couplers)
         o.chromaticFringeAmount = Float(chromaticFringeAmount)

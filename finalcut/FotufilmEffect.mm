@@ -1177,6 +1177,11 @@ struct FotufilmGating {
                       sliderMax:10
                           delta:0.01
                       parameterFlags:kFxParameterFlag_DEFAULT];
+    [api addPopupMenuWithName:@"Halation Model"
+                       parameterID:kFotufilmParam_HalationModel
+                      defaultValue:0
+                       menuEntries:@[@"Legacy", @"Layered Transport"]
+                    parameterFlags:kFxParameterFlag_DEFAULT];
     [api addToggleButtonWithName:@"Estimated Halation Shape"
                           parameterID:kFotufilmParam_EstimatedHalation
                     defaultValue:NO
@@ -1619,6 +1624,8 @@ struct FotufilmGating {
     state.parameters[FOTUFILM_BRIDGE_ESTIMATED_HALATION] = flag ? 1.0f : 0.0f;
 
     int choice = 0;
+    [api getIntValue:&choice fromParameter:kFotufilmParam_HalationModel atTime:renderTime];
+    state.parameters[FOTUFILM_BRIDGE_HALATION_MODEL] = choice;
     [api getIntValue:&choice fromParameter:kFotufilmParam_PrintLight atTime:renderTime];
     const int lamps = (int)(sizeof(kFotufilmPrintLightKelvin) / sizeof(*kFotufilmPrintLightKelvin));
     state.parameters[FOTUFILM_BRIDGE_PRINT_LIGHT] =

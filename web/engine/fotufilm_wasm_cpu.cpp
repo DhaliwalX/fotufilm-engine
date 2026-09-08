@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "FotufilmHalide.h"
+#include "FotufilmTransportPortable.h"
 
 #include "fotufilm_wasm_variants.h"
 #include "print_0.h"
@@ -23,6 +24,12 @@
 #include <emscripten/emscripten.h>
 
 extern "C" {
+
+EMSCRIPTEN_KEEPALIVE
+int fotufilm_wasm_transport(float *input, float *output, int w, int h,
+                            float *kernel, int radius, int stride) {
+    return fotufilm_transport_filter(input, output, w, h, kernel, radius, stride);
+}
 
 static const float kSigmaFloor = 0.151f;
 static const int32_t kLutCount = 33 * 33 * 33 * 4;
@@ -63,6 +70,7 @@ static void init_flat(halide_buffer_t *buffer, halide_dimension_t *dim,
 
 /// Mirrors `develop_pipeline_for`.
 static int develop_variant_for(int32_t feature_mask) {
+    if (feature_mask & FOTUFILM_FRAME_LIGHT_OUT) return 1024;
     const int32_t spatial = feature_mask
         & (FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF | FOTUFILM_FRAME_HALATION
            | FOTUFILM_FRAME_COUPLERS | FOTUFILM_FRAME_ADJACENCY | FOTUFILM_FRAME_GRAIN
@@ -155,6 +163,11 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
     }
 #undef FOTUFILM_DEVELOP_ARGUMENTS
     if (status != 0) return status;
+
+    if (feature_mask & FOTUFILM_FRAME_LIGHT_OUT) {
+        memcpy(output, density, plane * 3 * sizeof(float));
+        return 0;
+    }
 
     switch ((reversal ? 1 : 0) | (monochrome ? 2 : 0)) {
     case 0: return print_0(&density_buf, &config_buf, &film_buf, &paper_buf, &out_buf);

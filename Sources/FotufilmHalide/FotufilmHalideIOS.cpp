@@ -1346,3 +1346,9 @@ extern "C" int32_t fotufilm_halide_approximate_gaussian(
     const float *, float *, int32_t, int32_t, int32_t) { return -1; }
 
 #endif
+
+// The layered Apple path injects AOT rendering and native Metal convolution.
+// Keep the reference ABI linked for the shared portable Swift implementation.
+#if defined(FOTUFILM_TRANSPORT_REFERENCE_STUBS)
+#include "FotufilmTransport.cpp"
+#endif

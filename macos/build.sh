@@ -56,7 +56,7 @@ xcrun clang++ -std=c++17 -O2 -gline-tables-only -flto=thin \
   -fmacro-prefix-map="$PWD"=Fotufilm \
   -ffunction-sections -fdata-sections -c \
   -isysroot "$SDK" -target arm64-apple-macos14.0 \
-  -DFOTUFILM_HALIDE_IOS_AOT=1 \
+  -DFOTUFILM_HALIDE_IOS_AOT=1 -DFOTUFILM_TRANSPORT_REFERENCE_STUBS=1 \
   -I"$KERNELS" -ISources/FotufilmHalide/include \
   Sources/FotufilmHalide/FotufilmHalideIOS.cpp \
   -o "$OBJ/FotufilmHalideIOS.o"

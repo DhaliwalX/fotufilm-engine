@@ -33,6 +33,7 @@ Halide::Target wasm_target() {
 
 /// Mirrors the variant number `develop_pipeline_for` derives from a feature mask.
 int develop_variant(int32_t features) {
+    if (features & FOTUFILM_FRAME_LIGHT_OUT) return 1024;
     constexpr int32_t stage_bits = FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF
         | FOTUFILM_FRAME_HALATION | FOTUFILM_FRAME_COUPLERS
         | FOTUFILM_FRAME_ADJACENCY | FOTUFILM_FRAME_GRAIN;
@@ -45,7 +46,7 @@ int develop_variant(int32_t features) {
 constexpr int32_t kSpatialBits = FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF
     | FOTUFILM_FRAME_HALATION | FOTUFILM_FRAME_COUPLERS | FOTUFILM_FRAME_ADJACENCY
     | FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_COUPLER_DIFFUSION
-    | FOTUFILM_FRAME_DISC_GRAIN;
+    | FOTUFILM_FRAME_DISC_GRAIN | FOTUFILM_FRAME_LIGHT_OUT;
 
 }  // namespace
 

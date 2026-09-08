@@ -1634,6 +1634,84 @@ public enum SpectralRuntime {
         }
     }
 
+    /// Positive component tables preserve the calibrated pointwise response. Gamut continuation
+    /// is performed on wavelengths; a positive per-record vertex gain reconciles that with the
+    /// legacy record-level continuation at the very edge of the domain. It is not a return matrix.
+    static func transportExposureTables(stock: FilmStock, options: FotufilmEngine.Options,
+                                        compilation: TransportCompilation) throws -> TransportExposureTables {
+        guard let model = MeasuredReflectanceTable.shared else {
+            throw TransportError.unsupported("spectral reconstruction data is unavailable")
+        }
+        let reference = filmReferenceIlluminant(for: stock)
+        let light = options.resolvedSceneSpectrum
+        let filter = options.lensFilters.isEmpty ? nil
+            : spectralFilter(for: stock, stack: options.lensFilters, illuminant: light)
+        let sceneY = Illuminant.luminance(light), referenceY = Illuminant.luminance(reference)
+        let sourceLight = light.map { $0 / sceneY }
+        let referenceLight = reference.map { $0 / referenceY }
+        let sensitivity = stock.spectralProfile.layerSensitivity
+        let denominator = (0..<3).map { c in
+            zip(referenceLight, sensitivity[c]).reduce(Float(0)) { $0 + $1.0 * $1.1 }
+        }
+        guard denominator.allSatisfy({ $0 > 0 }) else { throw TransportError.invalid("zero reference response") }
+        let whiteY = zip(sourceLight, SpectralGrid.yBar).reduce(Float(0)) { $0 + $1.0 * $1.1 }
+        func reflected(_ rgb: SIMD3<Float>) -> [Float] {
+            zip(model.reflectance(rgb), sourceLight).map(*)
+        }
+        func continued(_ face: SIMD3<Float>, _ mirror: SIMD3<Float>) -> [Float] {
+            zip(reflected(face), reflected(mirror)).map { max(2 * $0 - $1, 0) }
+        }
+        func spectrum(_ point: SIMD3<Float>) -> [Float] {
+            let rgb = ColorScience.linearExposureDomainToRec2020(point)
+            var values: [Float]
+            switch sceneLight(rgb) {
+            case .none: values = Array(repeating: 0, count: SpectralGrid.count)
+            case .reflectance(let colour): values = reflected(colour)
+            case .extrapolated(let face, let mirror): values = continued(face, mirror)
+            case .locus(let edge):
+                values = continued(edge.face, edge.mirror).map { $0 * (1 - edge.share) }
+                let target = edge.luminance * whiteY * edge.share
+                values[edge.lowerBand] += target * (1 - edge.upperShare) / max(SpectralGrid.yBar[edge.lowerBand], 1e-12)
+                values[edge.upperBand] += target * edge.upperShare / max(SpectralGrid.yBar[edge.upperBand], 1e-12)
+            }
+            if let filter {
+                for band in values.indices { values[band] *= filter.transmittance[band] * filter.gain }
+            }
+            return values
+        }
+        let components = compilation.kernels.count, d = lutDimension
+        let count = d * d * d * 4
+        var core = Array(repeating: Array(repeating: Float(0), count: count), count: components)
+        var saturated = core
+        // Preparation is bounded and cached by the caller. All components share the exact same
+        // recovered spectrum and vertex calibration; amount does not enter this computation.
+        for z in 0..<d { for y in 0..<d { for x in 0..<d {
+            let point = SIMD3(Float(x), Float(y), Float(z)) / Float(d - 1)
+            let photons = spectrum(point)
+            let calibrated = domainExposure(point, stock: stock, illuminant: light, filter: filter)
+            let offset = ((z * d + y) * d + x) * 4
+            for c in 0..<3 {
+                let weighted = photons.indices.map { photons[$0] * sensitivity[c][$0] / denominator[c] }
+                let total = weighted.reduce(0, +)
+                guard total > 0 || calibrated[c] <= 1e-10 else {
+                    throw TransportError.invalid("spectral partition cannot reproduce calibrated exposure")
+                }
+                let gain = total > 0 ? calibrated[c] / total : 0
+                for k in 0..<components {
+                    var a: Float = 0, b: Float = 0
+                    for band in photons.indices {
+                        a += weighted[band] * compilation.core[k][c][band]
+                        b += weighted[band] * compilation.saturated[k][c][band]
+                    }
+                    core[k][offset+c] = max(a * gain, 0)
+                    saturated[k][offset+c] = max(b * gain, 0)
+                }
+            }
+        } } }
+        return TransportExposureTables(core: core.map { SpectralLUT(dimension: d, values: $0) },
+                                       saturated: saturated.map { SpectralLUT(dimension: d, values: $0) })
+    }
+
     /// The exposure table for a stock under a scene light, over the locus-enclosing domain.
     static func exposureTable(for stock: FilmStock, illuminant: [Float],
                               referenceIlluminant: [Float]? = nil,

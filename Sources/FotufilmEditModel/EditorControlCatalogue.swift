@@ -391,6 +391,11 @@ public extension EngineOptionCoverage {
         "halationScale": .control([.halation]),
         "halationSourceColour": .control([.halationColour]),
         "halationReturnGain": .control([.halationSpectrum]),
+        "halationModel": .globalSetting("Film Model settings selects Legacy or Layered Transport"),
+        "layeredTransport": .unexposed(
+            "Explicit optical construction override; apps select the model in Film Model settings."),
+        "transportBackend": .unexposed(
+            "Selects CPU or Metal JIT transport convolution in the checked planar API."),
         "halationHazeMM": .unexposed(
             "the support's impurity scatter is the stock's own figure, stated per sheet; "
             + "the CLI exposes an override for calibration experiments, and a slider here "

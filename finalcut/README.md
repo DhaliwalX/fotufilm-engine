@@ -114,3 +114,7 @@ installed. The template controls which parameters appear in Final Cut's inspecto
 
 See [Build support](../docs/support.html), the [Resolve guide](../resolve/README.md),
 and [Licensing](../LICENSING.md) for more information.
+
+The **Halation Model** menu selects **Legacy** (the default for older projects) or
+**Layered Transport**. Layered Transport uses an illustrative construction when the
+stock has no measured stack. **Estimated Halation Shape** affects Legacy only.

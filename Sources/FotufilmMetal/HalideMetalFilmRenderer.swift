@@ -130,6 +130,23 @@ public struct FilmFrameContext {
     fileprivate let width: Int
     fileprivate let height: Int
     fileprivate let encoding: Encoding
+    fileprivate var layered: (stock: FilmStock, options: FotufilmEngine.Options, frameIndex: UInt64, pitch: Double)? = nil
+    fileprivate var layeredResult: Data? = nil
+
+    fileprivate func copyLayeredRegion(to output: MTLBuffer, width regionWidth: Int,
+                                       height regionHeight: Int, x: Int, y: Int) -> Bool? {
+        guard let result = layeredResult else { return nil }
+        guard output.storageMode == .shared else { return false }
+        let pixelBytes = encoding == .linearRec2020 ? 16 : 4
+        result.withUnsafeBytes { source in
+            for row in 0..<regionHeight {
+                output.contents().advanced(by: row * regionWidth * pixelBytes).copyMemory(
+                    from: source.baseAddress!.advanced(by: ((row + y) * width + x) * pixelBytes),
+                    byteCount: regionWidth * pixelBytes)
+            }
+        }
+        return true
+    }
 }
 
 /// Halide's Metal-targeted implementation of the complete spectral film
@@ -172,8 +189,17 @@ public final class HalideMetalFilmRenderer {
                 }
             }
         }
-        return FilmFrameContext(invocation: invocation, width: width, height: height,
-                                encoding: .encodedDisplayP3)
+        var context = FilmFrameContext(invocation: invocation, width: width, height: height,
+                                       encoding: .encodedDisplayP3)
+        if options.transportConstruction(for: stock) != nil {
+            guard input.storageMode == .shared,
+                  let result = layeredEncoded(Array(UnsafeBufferPointer(
+                    start: input.contents().assumingMemoryBound(to: UInt8.self), count: byteCount)),
+                    width: width, height: height, stock: stock, options: options,
+                    frameIndex: frameIndex, srgb: false) else { return nil }
+            context.layeredResult = Data(result)
+        }
+        return context
     }
 
     /// Measures the global stages for a scene-referred frame already in the working space,
@@ -210,8 +236,17 @@ public final class HalideMetalFilmRenderer {
                 }
             }
         }
-        return FilmFrameContext(invocation: invocation, width: width, height: height,
-                                encoding: .linearRec2020)
+        var context = FilmFrameContext(invocation: invocation, width: width, height: height,
+                                       encoding: .linearRec2020)
+        if options.transportConstruction(for: stock) != nil {
+            guard input.storageMode == .shared,
+                  let result = try? LayeredMetalTransport.process(Array(UnsafeBufferPointer(
+                    start: input.contents().assumingMemoryBound(to: Float.self), count: width * height * 4)),
+                    width: width, height: height, stock: stock, options: options, frameIndex: frameIndex)
+            else { return nil }
+            context.layeredResult = result.withUnsafeBytes { Data($0) }
+        }
+        return context
     }
 
     /// Builds a regional context at `frameWidth` × `frameHeight` while taking tone-base and
@@ -301,9 +336,15 @@ public final class HalideMetalFilmRenderer {
             = Float(frameWidth)
         invocation.configuration[FilmEngineInvocation.frameSizeOffset + 1]
             = Float(frameHeight)
-        return FilmFrameContext(invocation: invocation,
-                                width: frameWidth, height: frameHeight,
-                                encoding: .linearRec2020)
+        var context = FilmFrameContext(invocation: invocation,
+                                       width: frameWidth, height: frameHeight,
+                                       encoding: .linearRec2020)
+        if options.transportConstruction(for: stock) != nil {
+            let pitch = Double(options.format.frameHeightMM * min(max(options.frameCoverage, 0.05), 1))
+                / Double(min(densityWidth, densityHeight))
+            context.layered = (stock, options, frameIndex, pitch)
+        }
+        return context
     }
 
     @discardableResult
@@ -352,6 +393,12 @@ public final class HalideMetalFilmRenderer {
         precondition(pixels.count >= byteCount)
         if output.count != byteCount {
             output = [UInt8](repeating: 0, count: byteCount)
+        }
+        if options.transportConstruction(for: stock) != nil {
+            guard let result = layeredEncoded(pixels, width: width, height: height,
+                stock: stock, options: options, frameIndex: frameIndex, srgb: true) else { return false }
+            output = result
+            return true
         }
         var invocation = FilmEngineInvocation(
             stock: stock, options: options, width: width,
@@ -476,6 +523,19 @@ public final class HalideMetalFilmRenderer {
         readRows: (_ rows: Range<Int>, _ into: UnsafeMutableBufferPointer<Float>) -> Void,
         writeRows: (_ rows: Range<Int>, _ from: UnsafeBufferPointer<Float>) -> Void
     ) -> Bool {
+        if !noFilm, options.transportConstruction(for: stock) != nil {
+            guard shouldContinue?() != false else { return false }
+            var source = [Float](repeating: 0, count: width*height*4)
+            source.withUnsafeMutableBufferPointer { readRows(0..<height, $0) }
+            do {
+                let result = try LayeredMetalTransport.process(source, width: width, height: height,
+                    stock: stock, options: options, frameIndex: frameIndex)
+                guard shouldContinue?() != false else { return false }
+                outputTransform = nil // caller applies its requested delivery to the linear result
+                result.withUnsafeBufferPointer { writeRows(0..<height, $0) }
+                return true
+            } catch { print(error.localizedDescription); return false }
+        }
         precondition(width > 0 && height > 0)
         // Use staged development when both the default and caller-provided budgets permit it.
         // Staging uses the same schedule without repeated aprons or host-device frame copies.
@@ -912,6 +972,18 @@ public final class HalideMetalFilmRenderer {
         precondition(width > 0 && height > 0)
         guard staging.capacityPixels >= width * height,
               Self.developsInOnePass(width: width, height: height) else { return false }
+        if !noFilm, options.transportConstruction(for: stock) != nil {
+            guard shouldContinue?() != false else { return false }
+            let source = Array(UnsafeBufferPointer(start: staging.scenePixels, count: width*height*4))
+            do {
+                let result = try LayeredMetalTransport.process(source, width: width, height: height,
+                    stock: stock, options: options, frameIndex: frameIndex)
+                guard shouldContinue?() != false else { return false }
+                result.withUnsafeBufferPointer { staging.developedPixels.update(from: $0.baseAddress!, count: $0.count) }
+                outputTransform = nil
+                return true
+            } catch { print(error.localizedDescription); return false }
+        }
         let cancelled = { shouldContinue.map { !$0() } ?? false }
         var invocation = FilmEngineInvocation(
             stock: stock, options: options, width: width,
@@ -1075,6 +1147,7 @@ public final class HalideMetalFilmRenderer {
         frameIndex: UInt64 = 0, realtime: Bool = false, exactMath: Bool = false,
         measuresGlareOnDevice: Bool = false, noFilm: Bool = false
     ) -> Bool {
+        if !noFilm && options.transportConstruction(for: stock) != nil { return false }
         var mask = FilmEngineInvocation(
             stock: stock, options: options, width: width, height: height,
             frameIndex: frameIndex, noFilm: noFilm).featureMask
@@ -1442,6 +1515,14 @@ public final class HalideMetalFilmRenderer {
         let byteCount = width * height * 4
         precondition(width > 0 && height > 0)
         precondition(input.length >= byteCount && output.length >= byteCount)
+        if options.transportConstruction(for: stock) != nil {
+            guard input.storageMode == .shared, output.storageMode == .shared else { return false }
+            let source = Array(UnsafeBufferPointer(start: input.contents().assumingMemoryBound(to: UInt8.self), count: byteCount))
+            guard let result = layeredEncoded(source, width: width, height: height,
+                stock: stock, options: options, frameIndex: frameIndex, srgb: false) else { return false }
+            result.withUnsafeBufferPointer { output.contents().copyMemory(from: $0.baseAddress!, byteCount: byteCount) }
+            return true
+        }
         let measureStart = FrameClock.isEnabled ? Date() : Date.distantPast
         guard let context = makeRGBA8FrameContext(
             input: input, width: width, height: height,
@@ -1484,6 +1565,7 @@ public final class HalideMetalFilmRenderer {
         stock: FilmStock, options: FotufilmEngine.Options,
         frameIndex: UInt64 = 0
     ) -> Bool {
+        guard options.transportConstruction(for: stock) == nil else { return false }
         let byteCount = regionWidth * regionHeight * 4
         precondition(regionWidth > 0 && regionHeight > 0)
         precondition(frameWidth >= regionWidth && frameHeight >= regionHeight)
@@ -1530,6 +1612,8 @@ public final class HalideMetalFilmRenderer {
         precondition(originX + regionWidth <= context.width)
         precondition(originY + regionHeight <= context.height)
         precondition(input.length >= byteCount && output.length >= byteCount)
+        if let copied = context.copyLayeredRegion(to: output, width: regionWidth,
+            height: regionHeight, x: originX, y: originY) { return copied }
         let invocation = context.invocation
         let inputHandle = UInt64(UInt(bitPattern:
             Unmanaged.passUnretained(input as AnyObject).toOpaque()))
@@ -1556,6 +1640,7 @@ public final class HalideMetalFilmRenderer {
         stock: FilmStock, options: FotufilmEngine.Options,
         frameIndex: UInt64 = 0
     ) -> Bool {
+        guard options.transportConstruction(for: stock) == nil else { return false }
         precondition(width > 0 && height > 0)
         precondition(input.length >= width * height * 4)
         precondition(density.length >= width * height * 8)
@@ -1626,6 +1711,16 @@ public final class HalideMetalFilmRenderer {
         let byteCount = width * height * 16
         precondition(width > 0 && height > 0)
         precondition(input.length >= byteCount && output.length >= byteCount)
+        if options.transportConstruction(for: stock) != nil {
+            guard input.storageMode == .shared, output.storageMode == .shared else { return false }
+            let source = Array(UnsafeBufferPointer(start: input.contents().assumingMemoryBound(to: Float.self), count: width*height*4))
+            do {
+                let result = try LayeredMetalTransport.process(source, width: width, height: height,
+                    stock: stock, options: options, frameIndex: frameIndex)
+                result.withUnsafeBufferPointer { output.contents().copyMemory(from: $0.baseAddress!, byteCount: byteCount) }
+                return true
+            } catch { print(error.localizedDescription); return false }
+        }
         guard let context = makeLinearFloatFrameContext(
             input: input, width: width, height: height,
             stock: stock, options: options, frameIndex: frameIndex,
@@ -1659,6 +1754,7 @@ public final class HalideMetalFilmRenderer {
         frameIndex: UInt64 = 0,
         realtime: Bool = false
     ) -> Bool {
+        guard options.transportConstruction(for: stock) == nil else { return false }
         let byteCount = regionWidth * regionHeight * 16
         precondition(regionWidth > 0 && regionHeight > 0)
         precondition(input.length >= byteCount && output.length >= byteCount)
@@ -1702,6 +1798,20 @@ public final class HalideMetalFilmRenderer {
         precondition(originX + regionWidth <= context.width)
         precondition(originY + regionHeight <= context.height)
         precondition(input.length >= byteCount && output.length >= byteCount)
+        if let copied = context.copyLayeredRegion(to: output, width: regionWidth,
+            height: regionHeight, x: originX, y: originY) { return copied }
+        if let layered = context.layered {
+            guard originX == 0, originY == 0, regionWidth == context.width,
+                  regionHeight == context.height, input.storageMode == .shared,
+                  output.storageMode == .shared,
+                  let result = try? LayeredMetalTransport.process(Array(UnsafeBufferPointer(
+                    start: input.contents().assumingMemoryBound(to: Float.self), count: regionWidth * regionHeight * 4)),
+                    width: regionWidth, height: regionHeight, stock: layered.stock,
+                    options: layered.options, frameIndex: layered.frameIndex,
+                    invocation: context.invocation, pixelPitchMM: layered.pitch) else { return false }
+            result.withUnsafeBytes { output.contents().copyMemory(from: $0.baseAddress!, byteCount: byteCount) }
+            return true
+        }
         let invocation = context.invocation
         let inputHandle = UInt64(UInt(bitPattern:
             Unmanaged.passUnretained(input as AnyObject).toOpaque()))
@@ -1719,6 +1829,36 @@ public final class HalideMetalFilmRenderer {
                     invocation.seed) == 0
             }
         }
+    }
+
+    private func layeredEncoded(_ pixels: [UInt8], width: Int, height: Int,
+                                stock: FilmStock, options: FotufilmEngine.Options,
+                                frameIndex: UInt64, srgb: Bool) -> [UInt8]? {
+        var linear = [Float](repeating: 1, count: width*height*4)
+        for i in 0..<width*height {
+            let alpha = Float(pixels[i*4+3])/255
+            let divisor: Float = alpha > 0 ? alpha*255 : 255
+            let rgb = SIMD3<Float>((0..<3).map { ColorScience.srgbToLinear(Float(pixels[i*4+$0])/divisor) })
+            let scene = srgb ? ColorScience.linearSRGBToRec2020(rgb) : ColorScience.linearDisplayP3ToRec2020(rgb)
+            for c in 0..<3 { linear[4*i+c] = scene[c] }; linear[4*i+3] = alpha
+        }
+        do {
+            let developed = try LayeredMetalTransport.process(linear, width: width, height: height,
+                stock: stock, options: options, frameIndex: frameIndex)
+            var bytes = pixels
+            for i in 0..<width*height {
+                var rgb = SIMD3(developed[4*i], developed[4*i+1], developed[4*i+2])
+                if options.stage == .texture { rgb = ColorScience.linearRec2020ToDisplayP3(rgb) }
+                if srgb { rgb = ColorScience.linearDisplayP3ToSRGB(rgb) }
+                let alpha = Float(pixels[i*4+3])/255
+                for c in 0..<3 {
+                    let value = ColorScience.linearToSrgb(ColorScience.displayShoulder(
+                        rgb[c], knee: stock.isReversal ? 0.7 : 0.9)) * alpha
+                    bytes[4*i+c] = UInt8(min(max((255*value).rounded(),0),255))
+                }
+            }
+            return bytes
+        } catch { print(error.localizedDescription); return nil }
     }
 
     private static func convertSRGBToEncodedDisplayP3(

@@ -50,7 +50,7 @@ export async function loadPack(url) {
   const magic = String.fromCharCode(...new Uint8Array(bytes, 0, 4))
   if (magic !== PACK_MAGIC) throw new Error(`not a film pack: ${magic}`)
   const version = view.getUint32(4, true)
-  if (version !== 1 && version !== 2) throw new Error(`unsupported pack version ${version}`)
+  if (version !== 1 && version !== 2 && version !== 3) throw new Error(`unsupported pack version ${version}`)
 
   const width = view.getInt32(8, true)
   const height = view.getInt32(12, true)
@@ -96,6 +96,43 @@ export async function loadPack(url) {
       ladder.push({ shortEdge, featureMask: rungMask, seed: rungSeed, spatialSupport, slots, values })
     }
   }
+  let transport
+  if (version === 3) {
+    const integer = () => { const n = view.getInt32(offset, true); offset += 4; return n }
+    const headMask = integer(), headConfiguration = take(configCount), tailConfiguration = take(configCount)
+    const count = integer()
+    if (count < 1 || count > 11) throw new Error('invalid transport component count')
+    const readBands = () => {
+      const bands = [], n = integer()
+      if (n < 1 || n > 64) throw new Error('invalid transport band count')
+      for (let b = 0; b < n; ++b) {
+        const weight = take(1)[0], radius = integer(), stride = integer()
+        if (!Number.isFinite(weight) || weight < 0 || radius < 1 || radius > 128 ||
+            stride < 1 || stride > 4096 || (stride & (stride - 1))) throw new Error('invalid transport stencil')
+        bands.push({ weight, radius, stride, weights: take((radius * 2 + 1) ** 2) })
+      }
+      return bands
+    }
+    const delta = (base) => {
+      const result = base.slice(), count = integer()
+      if (count < 0 || count > configCount) throw new Error('invalid transport configuration')
+      for (let i = 0; i < count; ++i) {
+        const slot = integer()
+        if (slot < 0 || slot >= configCount) throw new Error('invalid transport slot')
+        result[slot] = take(1)[0]
+      }
+      return result
+    }
+    const components = Array.from({ length: count }, () => ({ exposure: take(lutCount), bands: readBands() }))
+    const sizes = [], sizeCount = integer()
+    if (sizeCount !== ladder.length) throw new Error('transport size ladder mismatch')
+    for (let i = 0; i < sizeCount; ++i) {
+      const shortEdge = integer(), headConfigurationAtSize = delta(headConfiguration), tailConfigurationAtSize = delta(tailConfiguration)
+      sizes.push({ shortEdge, headConfiguration: headConfigurationAtSize, tailConfiguration: tailConfigurationAtSize,
+        components: components.map((component) => ({ exposure: component.exposure, bands: readBands() })) })
+    }
+    transport = { headMask, headConfiguration, tailConfiguration, components, sizes }
+  }
   if (offset !== bytes.byteLength) throw new Error(`pack has ${bytes.byteLength - offset} trailing bytes`)
 
   return {
@@ -109,6 +146,7 @@ export async function loadPack(url) {
     // The slots as the CLI sealed them. A stage replaces `configuration` with its own; the ladder
     // lays its size over whichever slots the stage left alone, and this is how it tells.
     baseConfiguration: configuration,
+    transport,
     ladder,
     exposure,
     film,
@@ -514,7 +552,7 @@ class Developer {
       : dispatchMask(rung.featureMask, this.pack.ownFeatureMask)
     this.seed = this.pack.seed >>> 0
     this.apron = rung.spatialSupport ?? 0
-    this.tiles = rung.spatialSupport == null
+    this.tiles = this.pack.transport || rung.spatialSupport == null
       ? planTiles(this.width, this.height, 0, Infinity)
       : planTiles(this.width, this.height, this.apron, this.tileBudget)
     let needed = 0
@@ -551,6 +589,7 @@ class Developer {
     if (source.width !== this.width || source.height !== this.height) {
       this.setFrame(source.width, source.height)
     }
+    this.controls = controls
     this.applyControls(controls)
     const pixels = new Uint8ClampedArray(this.width * this.height * 4)
     let elapsed = 0
@@ -703,15 +742,18 @@ export class SimdDeveloper extends Developer {
   }
 
   allocateFrame(pixels) {
+    this.transportPtrs = this.pack.transport ? [this.module._malloc(pixels * 3 * 4),
+      this.module._malloc(pixels * 3 * 4), this.module._malloc(257 * 257 * 4)] : []
     this.inputPtr = this.module._malloc(pixels * 3 * 4)
     this.outputPtr = this.module._malloc(pixels * 3 * 4)
     this.densityPtr = this.module._malloc(pixels * 3 * 4)
   }
 
   freeFrame() {
-    for (const ptr of [this.inputPtr, this.outputPtr, this.densityPtr]) {
+    for (const ptr of [this.inputPtr, this.outputPtr, this.densityPtr, ...(this.transportPtrs ?? [])]) {
       if (ptr) this.module._free(ptr)
     }
+    this.transportPtrs = []
     this.inputPtr = 0
     this.outputPtr = 0
     this.densityPtr = 0
@@ -731,10 +773,49 @@ export class SimdDeveloper extends Developer {
 
   /// Synchronous: the kernel runs on this thread and holds it for the length of the tile.
   run(region) {
+    if (this.pack.transport) return this.runTransport(region)
     return this.renderCall(
       this.inputPtr, this.outputPtr, region.width, region.height, region.x, region.y,
       this.configPtr, this.exposurePtr, this.filmPtr, this.paperPtr, this.densityPtr,
       this.featureMask, this.seed)
+  }
+
+  runTransport(region) {
+    const { module, pack } = this
+    const root = pack.transport
+    const plan = root.sizes.find((size) => size.shortEdge === this.rung.shortEdge) ?? root
+    const [sumPtr, filteredPtr, kernelPtr] = this.transportPtrs
+    const count = region.width * region.height * 3
+    module.HEAPF32.fill(0, sumPtr / 4, sumPtr / 4 + count)
+    const render = (input, mask) => this.renderCall(input, this.outputPtr, region.width,
+      region.height, 0, 0, this.configPtr, this.exposurePtr, this.filmPtr, this.paperPtr,
+      this.densityPtr, mask, this.seed)
+    const original = this.configuration
+    const configure = (values) => {
+      this.configuration = values.slice()
+      this.configuration[this.frameSizeSlot] = this.width
+      this.configuration[this.frameSizeSlot + 1] = this.height
+      this.applyControls(this.controls)
+    }
+    try {
+      for (const component of plan.components) {
+        configure(plan.headConfiguration)
+        module.HEAPF32.set(component.exposure, this.exposurePtr / 4)
+        const status = render(this.inputPtr, root.headMask)
+        if (status !== 0) return status
+        for (const band of component.bands) {
+          module.HEAPF32.set(band.weights, kernelPtr / 4)
+          const status = module.ccall('fotufilm_wasm_transport', 'number', Array(7).fill('number'),
+            [this.outputPtr, filteredPtr, region.width, region.height, kernelPtr, band.radius, band.stride])
+          if (status !== 0) return status
+          const heap = module.HEAPF32
+          for (let i = 0; i < count; ++i) heap[sumPtr / 4 + i] += band.weight * heap[filteredPtr / 4 + i]
+        }
+      }
+      configure(plan.tailConfiguration)
+      module.HEAPF32.set(pack.exposure, this.exposurePtr / 4)
+      return render(sumPtr, this.featureMask)
+    } finally { this.configuration = original }
   }
 
   regionOutput(region) {
@@ -751,7 +832,7 @@ export class SimdDeveloper extends Developer {
 /// Builds the fastest developer this browser will actually run: WebGPU when the adapter can
 /// create the kernel's pipelines, and the SIMD path otherwise.
 export async function createDeveloper(pack) {
-  if (navigator.gpu) {
+  if (navigator.gpu && !pack.transport) {
     try {
       const developer = new WebgpuDeveloper(await loadModule('webgpu'), pack)
       await developer.probe()

@@ -237,6 +237,7 @@ const char *const kParameterNames[FOTUFILM_BRIDGE_PARAMETER_COUNT] = {
     nullptr, "halation400", "halation450", "halation500", "halation550", "halation600",
     "halation650", "halation700", "filterCoating", "frameCoverage", "grainModel",
     "shutterSeconds", "renderMode", "grainAnimation", "couplerRedGreen", "couplerGreenBlue",
+    "halationModel",
 };
 
 /// The Lens group's slots that a choice parameter fills, and how the menu's index becomes the
@@ -252,7 +253,7 @@ const char *const kParameterNames[FOTUFILM_BRIDGE_PARAMETER_COUNT] = {
 bool isDirectChoice(int slot) {
     return slot == FOTUFILM_BRIDGE_MOTTLE_OVERRIDE || slot == FOTUFILM_BRIDGE_FILTER_COATING ||
            slot == FOTUFILM_BRIDGE_GRAIN_MODEL || slot == FOTUFILM_BRIDGE_RENDER_MODE ||
-           slot == FOTUFILM_BRIDGE_GRAIN_FROZEN;
+           slot == FOTUFILM_BRIDGE_GRAIN_FROZEN || slot == FOTUFILM_BRIDGE_HALATION_MODEL;
 }
 
 bool isOffsetChoice(int slot) {
@@ -1102,6 +1103,9 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
     defineLabel(set, "grainStatus", "Grain Status", "grainAdvancedGroup", "Not yet examined");
 
     defineGroup(set, "halationGroup", "Halation");
+    defineChoice(set, "halationModel", "Halation Model",
+                 "Legacy or layered optical transport. Unmeasured stacks use an illustrative construction.",
+                 "halationGroup", {"Legacy", "Layered Transport"}, 0);
     OfxPropertySetHandle halation = defineDouble(
                  set, "halation", "Halation",
                  "Multiplier on the fraction of light the base returns. On the "

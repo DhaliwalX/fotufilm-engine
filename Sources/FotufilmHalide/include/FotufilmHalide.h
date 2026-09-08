@@ -34,7 +34,7 @@ enum {
 enum {
     FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES = 1024,
     FOTUFILM_SAMPLED_CURVE_STRIDE = 1 + 3 * FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES,
-    FOTUFILM_FRAME_CONFIGURATION_COUNT = 238 + 3 * FOTUFILM_COUPLER_WARP_SAMPLES
+    FOTUFILM_FRAME_CONFIGURATION_COUNT = 239 + 3 * FOTUFILM_COUPLER_WARP_SAMPLES
         + 2 * FOTUFILM_TONE_GRID_CELLS + 3 * FOTUFILM_SAMPLED_CURVE_STRIDE,
 };
 
@@ -236,6 +236,8 @@ enum {
     FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT,
     FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA,
     FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS,
+    /// Typed record-exposure input seam. Zero is ordinary scene input.
+    FOTUFILM_CONFIG_RECORD_INPUT,
 };
 
 /// Decode-kernel parameters: row-major scene-space matrix, transfer, and premultiplication flag.
@@ -341,6 +343,9 @@ enum {
     FOTUFILM_FRAME_DONOR_LAYER = 1 << 27,
     /// Legacy annular-basis variant. Current physical profiles use centered continuous fields.
     FOTUFILM_FRAME_HALATION_ANNULAR = 1 << 28,
+    /// JIT-only continuation from nonnegative photographic record exposure. Never RGB or density.
+    /// AOT callers must not mask this bit and then run an RGB-input variant.
+    FOTUFILM_FRAME_RECORD_EXPOSURE_IN = 1 << 30,
     /// Develops with no film in the gate: the creative controls — white balance, the
     /// exposure-keyed tone masks, saturation and vibrance — then straight into the print's
     /// delivery basis and the grade. No spectral recovery, no characteristic curve, no couplers,
@@ -818,11 +823,11 @@ enum {
                        FOTUFILM_FRAME_ENCODE_OUT))                           \
     X(color_float_light,                                                    \
       FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF | FOTUFILM_FRAME_MTF_LUMA |    \
-      FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT)                     \
+      FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT | FOTUFILM_FRAME_DIFFUSION)                     \
     X(monochrome_float_light,                                               \
       FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF | FOTUFILM_FRAME_MTF_LUMA |    \
       FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT |                    \
-      FOTUFILM_FRAME_MONOCHROME)                                             \
+      FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_DIFFUSION)                                             \
     X(color_float_fields,                                                   \
       FOTUFILM_AOT_ALL_STAGES | FOTUFILM_FRAME_FLOAT_IO |                     \
       FOTUFILM_FRAME_FIELDS_IN)                                              \

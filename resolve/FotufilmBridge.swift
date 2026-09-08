@@ -130,7 +130,8 @@ private enum Parameter {
     static let grainFrozen = 46
     static let couplerRedGreen = 47
     static let couplerGreenBlue = 48
-    static let count = 49
+    static let halationModel = 49
+    static let count = 50
 }
 
 /// The filter drawer, in the order a host's menu indexes it. The catalogue is the engine's, so
@@ -239,6 +240,7 @@ private func options(_ parameters: UnsafePointer<Float>?,
     result.flareScale = max(0, value(Parameter.flareScale))
     // And this one's: 0 is the legacy halation model, so a project saved before the
     // checkbox existed renders the halo it always had.
+    result.halationModel = value(Parameter.halationModel) == 1 ? .layered : .legacy
     result.useEstimatedHalationProfile = value(Parameter.estimatedHalation) != 0
     // And this one's: 0 is the film's layered red ring, so a project saved before the
     // slider existed renders the halo it always had.
@@ -388,6 +390,10 @@ private func stock(at index: Int32) -> FilmStock? {
 
 private func validateDevelopment(_ settings: FotufilmEngine.Options,
                                  stock: FilmStock, context: BridgeContext) -> Bool {
+    if settings.transportConstruction(for: stock) != nil && !stock.donorLayers.isEmpty {
+        context.lastError = "Layered Transport does not yet support donor-layer stocks; select Legacy for this stock"
+        return false
+    }
     do {
         _ = try stock.pushed(stops: settings.developmentEV)
         return true

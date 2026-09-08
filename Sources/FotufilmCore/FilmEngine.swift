@@ -340,7 +340,7 @@ public struct FilmEngineInvocation {
 
     public static let sampledCurveStride = 1 + 3 * SampledCharacteristicCurve.maximumSamples
     public static let sampledCurvesOffset = 232 + 3 * couplerWarpSamples + 2 * toneGridCells
-    public static let configurationCount = sampledCurvesOffset + 3 * sampledCurveStride + 6
+    public static let configurationCount = sampledCurvesOffset + 3 * sampledCurveStride + 7
     /// Index of the grading-space switch; mirrors FOTUFILM_CONFIG_GRADE_SPACE.
     /// After it, appended in order so that adding each renumbered nothing:
     /// the six grain-mottle entries, the paper's red and blue records and
@@ -1370,6 +1370,7 @@ public struct FilmEngineInvocation {
         configuration += [screenedAdjacency ? 1 : 0,
                           adjacencySecondarySigma, Float(adjacencySecondaryRadius)]
         configuration += [fringeActive ? fringeAmount : 0, fringeSigma, Float(fringeRadius)]
+        configuration += [0] // typed record-exposure seam
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0
