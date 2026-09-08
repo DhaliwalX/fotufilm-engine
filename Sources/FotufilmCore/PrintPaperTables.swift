@@ -21,6 +21,21 @@ extension PrintPaper {
         }
     }
 
+    /// The sheet's own dye shapes at its neutral-forming amounts, before `partition` divides
+    /// them by their pointwise sum. What a spectrum is composed from once a Status A reading has
+    /// been unmixed; `dyes` stays the partitioned basis the neutral axis is built on.
+    var analyticalDyes: [[Float]] {
+        switch self {
+        case .ektacolorEdge, .screen, .negative, .labScan, .telecine:
+            return SpectralGrid.paperDyeAmounts
+        case .enduraPremier: return SpectralGrid.enduraPremierDyeAmounts
+        case .crystalArchive: return SpectralGrid.crystalArchiveDyeAmounts
+        case .vision2383: return SpectralGrid.vision2383DyeAmounts
+        case .vision2393: return SpectralGrid.vision2393DyeAmounts
+        case .eternaCP: return SpectralGrid.eternaCPDyeAmounts
+        }
+    }
+
     /// Normalized layer sensitivities with publication tails extended. Screen and negative output
     /// bypass paper exposure; their direct-reading branches never use the RA-4 stand-in.
     var sensitivity: [[Float]] {
@@ -162,26 +177,28 @@ extension PrintPaper {
 
 extension SpectralGrid {
     /// KODAK PROFESSIONAL ENDURA Premier Paper (E-4070), from Kodak publication E-4070.
-    static let enduraPremierDyes: [[Float]] = partition(
+    static let enduraPremierDyeAmounts: [[Float]] =
         zip(EnduraPremierPaperSpectra.dyeDensity,
             EnduraPremierPaperSpectra.neutralAmounts)
-            .map { record, amount in record.map { $0 * amount } })
+            .map { record, amount in record.map { $0 * amount } }
+    static let enduraPremierDyes: [[Float]] = partition(enduraPremierDyeAmounts)
     static let enduraPremierSensitivity: [[Float]] =
         normalizeSensitivities(EnduraPremierPaperSpectra.layerSensitivity
             .map(continuedTails))
 
     /// Fujicolor Crystal Archive Type CA, from AF3-0250U2.
-    static let crystalArchiveDyes: [[Float]] = partition(
+    static let crystalArchiveDyeAmounts: [[Float]] =
         zip(CrystalArchivePaperSpectra.dyeDensity,
             CrystalArchivePaperSpectra.neutralAmounts)
-            .map { record, amount in record.map { $0 * amount } })
+            .map { record, amount in record.map { $0 * amount } }
+    static let crystalArchiveDyes: [[Float]] = partition(crystalArchiveDyeAmounts)
     static let crystalArchiveSensitivity: [[Float]] =
         normalizeSensitivities(CrystalArchivePaperSpectra.layerSensitivity
             .map(continuedTails))
 
     /// KODAK VISION Color Print Film 2383, from H-1-2383.
-    static let vision2383Dyes: [[Float]] =
-        partition(Vision2383PrintSpectra.dyeDensity)
+    static let vision2383DyeAmounts: [[Float]] = Vision2383PrintSpectra.dyeDensity
+    static let vision2383Dyes: [[Float]] = partition(vision2383DyeAmounts)
     static let vision2383Sensitivity: [[Float]] =
         normalizeSensitivities(Vision2383PrintSpectra.layerSensitivity
             .map(continuedTails))
@@ -191,8 +208,8 @@ extension SpectralGrid {
     /// 2383 is: the sheet draws these dyes at the amounts that already make a
     /// neutral, and solving its printed neutral for those amounts returns
     /// 1.00, 1.00 and 1.07 of them.
-    static let vision2393Dyes: [[Float]] =
-        partition(Vision2393PrintSpectra.dyeDensity)
+    static let vision2393DyeAmounts: [[Float]] = Vision2393PrintSpectra.dyeDensity
+    static let vision2393Dyes: [[Float]] = partition(vision2393DyeAmounts)
     static let vision2393Sensitivity: [[Float]] =
         normalizeSensitivities(Vision2393PrintSpectra.layerSensitivity
             .map(continuedTails))
@@ -201,8 +218,8 @@ extension SpectralGrid {
     /// `neutralAmounts` multiply like the two Kodak prints: the sheet draws a
     /// Gray beside the three dyes and solving it for their amounts returns
     /// 1.03, 0.99 and 0.95 of them.
-    static let eternaCPDyes: [[Float]] =
-        partition(EternaCPPrintSpectra.dyeDensity)
+    static let eternaCPDyeAmounts: [[Float]] = EternaCPPrintSpectra.dyeDensity
+    static let eternaCPDyes: [[Float]] = partition(eternaCPDyeAmounts)
     static let eternaCPSensitivity: [[Float]] =
         normalizeSensitivities(EternaCPPrintSpectra.layerSensitivity
             .map(continuedTails))

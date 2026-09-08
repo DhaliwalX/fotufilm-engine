@@ -586,6 +586,36 @@ public enum SpectralRuntime {
                                         activation.z * paperRanges[2]))
             }
             paperOutput = smoothCorrection(calibrated, against: baseline)
+        } else if !stock.isMonochrome {
+            let unmix = PrintDyeUnmix(dyes: paper.analyticalDyes)
+            let anchor = paper.anchorDensity(stock.paperMidDensity)
+            let partitioned = buildLUT { activation in
+                transmissionRGB(
+                    density: [activation.x * paperRanges[0],
+                              activation.y * paperRanges[1],
+                              activation.z * paperRanges[2]],
+                    dyes: paper.dyes, flare: paper.viewingFlare,
+                    illuminant: viewingLight)
+            }
+            let trim = printNeutralTrim(
+                unmix: unmix, anchor: anchor,
+                target: transmissionRGB(
+                    density: [anchor, anchor, anchor], dyes: paper.dyes,
+                    flare: paper.viewingFlare, illuminant: viewingLight),
+                flare: paper.viewingFlare, illuminant: viewingLight)
+            let unmixed = buildLUT { activation in
+                let density = SIMD3(activation.x * paperRanges[0],
+                                    activation.y * paperRanges[1],
+                                    activation.z * paperRanges[2])
+                let level = (density.x + density.y + density.z) / 3
+                let applied = trim * min(max(level / max(anchor, 1e-6), 0), 1)
+                let amounts = unmix.amounts(forStatusA: density + applied)
+                return transmissionRGB(
+                    density: [amounts.x, amounts.y, amounts.z],
+                    dyes: paper.analyticalDyes,
+                    flare: paper.viewingFlare, illuminant: viewingLight)
+            }
+            paperOutput = smoothCorrection(unmixed, against: partitioned)
         } else {
             paperOutput = buildLUT { activation in
                 let density = [activation.x * paperRanges[0],
@@ -1802,6 +1832,50 @@ public enum SpectralRuntime {
         return SIMD3(red, 0, blue)
     }
 
+    /// The three printer lights that put the timed anchor back where the partitioned basis had
+    /// it: same level, same neutral. Hunt 14.16 — equal integral densities are "nearly grey" but
+    /// not grey — so timing follows the print, not the densitometer.
+    static func printNeutralTrim(unmix: PrintDyeUnmix, anchor: Float,
+                                 target: SIMD3<Float>, flare: Float,
+                                 illuminant: [Float]?) -> SIMD3<Float> {
+        func printed(_ offset: SIMD3<Float>) -> SIMD3<Float> {
+            let amounts = unmix.amounts(
+                forStatusA: SIMD3(repeating: anchor) + offset)
+            return transmissionRGB(density: [amounts.x, amounts.y, amounts.z],
+                                   dyes: unmix.dyes, flare: flare,
+                                   illuminant: illuminant)
+        }
+        var offset = SIMD3<Float>(repeating: 0)
+        for _ in 0..<24 {
+            let base = printed(offset)
+            let residual = base - target
+            if max(abs(residual.x), max(abs(residual.y), abs(residual.z))) < 1e-7 {
+                break
+            }
+            let epsilon: Float = 1e-3
+            var columns = [SIMD3<Float>](repeating: .zero, count: 3)
+            for channel in 0..<3 {
+                var stepped = offset
+                stepped[channel] += epsilon
+                columns[channel] = (printed(stepped) - base) / epsilon
+            }
+            func cross(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> SIMD3<Float> {
+                SIMD3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z,
+                      a.x * b.y - a.y * b.x)
+            }
+            func dot(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float {
+                a.x * b.x + a.y * b.y + a.z * b.z
+            }
+            let determinant = dot(columns[0], cross(columns[1], columns[2]))
+            guard abs(determinant) > 1e-12 else { break }
+            offset -= SIMD3(
+                dot(residual, cross(columns[1], columns[2])) / determinant,
+                dot(columns[0], cross(residual, columns[2])) / determinant,
+                dot(columns[0], cross(columns[1], residual)) / determinant)
+        }
+        return offset
+    }
+
     /// The numbers `PrintPaper.labScanReferenceMidRatio` and
     /// `labScanReferenceBalance` are committed from: the given stock's
     /// mid-grey read through the lab scan's bands, and its solved balance on
@@ -2421,9 +2495,10 @@ public enum SpectralGrid {
 
     /// The receiver supplied by PrintPaperSpectra, digitised from KODAK EKTACOLOR EDGE
     /// publication E-7020.
-    static let paperDyes: [[Float]] = partition(
+    static let paperDyeAmounts: [[Float]] =
         zip(PrintPaperSpectra.dyeDensity, PrintPaperSpectra.neutralAmounts)
-            .map { record, amount in record.map { $0 * amount } })
+            .map { record, amount in record.map { $0 * amount } }
+    static let paperDyes: [[Float]] = partition(paperDyeAmounts)
     /// Extend and normalize the configured receiver sensitivity.
     static let paperSensitivity: [[Float]] =
         normalizeSensitivities(PrintPaperSpectra.layerSensitivity.map(continuedTails))
