@@ -1269,8 +1269,16 @@ inline Halide::Expr silver_granularity_variance(Halide::Expr density) {
         10.0f, 0.21004f * density + 0.06114f * density * density);
 }
 
-/// Granularity relative to the stock's reference density, under whichever law the emulsion
-/// obeys. Fog is included at both densities.
+/// Saturating reversal variance, divided by the constant Ds^(2p) that cancels at the anchor.
+inline Halide::Expr reversal_granularity_variance(Halide::Expr density,
+                                                 Halide::Expr exponent,
+                                                 Halide::Expr shoulder) {
+    Halide::Expr power = Halide::pow(density / Halide::max(shoulder, 1.0e-4f),
+                                     2.0f * exponent);
+    return power / (1.0f + power);
+}
+
+/// Granularity relative to the stock's reference density. Fog is included at both densities.
 inline Halide::Expr grain_density_modulation(Halide::ImageParam &configuration,
                                              Halide::Expr layer,
                                              Halide::Expr net_density) {
@@ -1289,11 +1297,14 @@ inline Halide::Expr grain_density_modulation(Halide::ImageParam &configuration,
             1.0e-6f);
     Expr silver = silver_granularity_variance(here)
         / Halide::max(silver_granularity_variance(anchor), 1.0e-6f);
-    // No reversal sheet publishes a granularity-against-density curve, so a dye-cloud reversal
-    // keeps Selwyn's plain law rather than borrowing a negative's measured shape.
+    Expr exponent = configuration(FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE);
+    Expr shoulder = configuration(FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE + 1);
+    Expr reversal = reversal_granularity_variance(here, exponent, shoulder)
+        / Halide::max(reversal_granularity_variance(anchor, exponent, shoulder), 1.0e-20f);
+    // Selwyn remains an explicitly selectable legacy law (2).
     Expr selwyn = here / anchor;
     Expr law = configuration(FOTUFILM_CONFIG_GRAIN_LAW);
-    Expr ratio = Halide::select(law > 1.5f, selwyn,
+    Expr ratio = Halide::select(law > 2.5f, reversal, law > 1.5f, selwyn,
                                 Halide::select(law > 0.5f, silver, dye_cloud));
     return Halide::sqrt(Halide::max(ratio, 0.0f));
 }

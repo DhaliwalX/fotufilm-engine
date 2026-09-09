@@ -3,6 +3,33 @@ import Foundation
 
 enum GranularityMeter {
     static let measuredFrameMM: Float = 1.6
+    static let transmissionWeights: [Float] = [0.3, 0.6, 0.1]
+    static let uniformRelativeTolerance: Float = 0.06
+    static let pictureRelativeTolerance: Float = 0.15
+
+    struct Measurement {
+        /// Density standard deviations through the 48 µm aperture.
+        let sigma: [Float]
+        /// Sigma of the weighted density field, including inter-record covariance.
+        let luminanceSigma: Float
+        let ratios: [Float]
+    }
+
+    static func sigma(_ readings: [Float]) -> Float {
+        let mean = readings.reduce(0, +) / Float(readings.count)
+        return sqrt(readings.reduce(0) { $0 + ($1 - mean) * ($1 - mean) }
+            / Float(readings.count))
+    }
+
+    static func luminanceSigma(_ readings: [[Float]]) -> Float {
+        precondition(readings.count == 3 && !readings[0].isEmpty
+            && readings.allSatisfy { $0.count == readings[0].count })
+        return sigma(readings[0].indices.map { index in
+            (0..<3).reduce(Float(0)) {
+                $0 + transmissionWeights[$1] * readings[$1][index]
+            }
+        })
+    }
 
     static func aperture(radiusPx: Float)
         -> (taps: [(dx: Int, dy: Int, weight: Float)], half: Int, total: Float) {
@@ -31,6 +58,12 @@ enum GranularityMeter {
     static func ratios(_ stock: FilmStock, pxPerMM: Float, seed: UInt64,
                        model: GrainModel = .clumpField,
                        exposure: Float = 0.18) -> [Float] {
+        measure(stock, pxPerMM: pxPerMM, seed: seed, model: model, exposure: exposure).ratios
+    }
+
+    static func measure(_ stock: FilmStock, pxPerMM: Float, seed: UInt64,
+                        model: GrainModel = .clumpField,
+                        exposure: Float = 0.18) -> Measurement {
         let size = Int(measuredFrameMM * pxPerMM)
         var options = FotufilmEngine.Options()
         options.sceneIlluminantKelvin = stock.referenceIlluminantKelvin
@@ -53,7 +86,9 @@ enum GranularityMeter {
         // than adding independent apertures, and the answer is already set by how many of those
         // the measured frame holds.
         let stride = max(half / 2, 1)
-        return (0..<3).map { plane in
+        var apertureReadings: [[Float]] = []
+        var sigmas: [Float] = []
+        let ratios = (0..<3).map { plane in
             let values = negative.planes[plane]
             var readings: [Float] = []
             var cy = half
@@ -69,9 +104,9 @@ enum GranularityMeter {
                 }
                 cy += stride
             }
-            let mean = readings.reduce(0, +) / Float(readings.count)
-            let variance = readings.reduce(0) { $0 + ($1 - mean) * ($1 - mean) }
-                / Float(readings.count)
+            apertureReadings.append(readings)
+            let measured = sigma(readings)
+            sigmas.append(measured)
             let curve = stock.curves[plane]
             // The developed density the modulation runs on: a reversal flips the formed
             // density before the grain stage, exactly as the engine does.
@@ -93,8 +128,8 @@ enum GranularityMeter {
             // The clump field takes the emulsion's own granularity-against-density law. A
             // chromogenic negative's is measured — Kodak plots it for Vision3 250D and 500T —
             // and peaks just above D-min before falling; opaque silver's is the Boolean
-            // aperture variance; a reversal, whose curve nobody publishes, keeps Selwyn's
-            // `sigma ∝ sqrt(D)`. The disc path fluctuates covered *area* instead, and converts
+            // aperture variance; dye reversals use a saturating power law. The explicitly
+            // selected legacy law retains Selwyn. The disc path fluctuates covered *area* and converts
             // with Nutting's derivative, so its shape is the model's own sigma times that gain,
             // both taken at the coverage the density implies.
             let aperture = FilmStock.granularityApertureRadiusMM
@@ -115,6 +150,13 @@ enum GranularityMeter {
                     shape = sqrt(silverVariance(here) / silverVariance(anchorD))
                 case .dyeCloudSelwyn:
                     shape = sqrt(here / anchorD)
+                case .dyeCloudReversal:
+                    let p = stock.grainReversalProfile[0]
+                    let ds = stock.grainReversalProfile[1]
+                    // Written as a sigma ratio rather than calling the production variance.
+                    shape = pow(here / anchorD, p)
+                        * sqrt((1 + pow(anchorD / ds, 2 * p))
+                            / (1 + pow(here / ds, 2 * p)))
                 }
             case .discs:
                 let radius = stock.grainSizeMM * stock.grainLayerSizeRatio[plane]
@@ -131,8 +173,10 @@ enum GranularityMeter {
                                                 apertureRadiusMM: aperture) * gain(a0))
             }
             let stated = stock.grainStrength * stock.grainLayerWeights[plane] * shape
-            return sqrt(variance) / stated
+            return measured / stated
         }
+        return Measurement(sigma: sigmas, luminanceSigma: luminanceSigma(apertureReadings),
+                           ratios: ratios)
     }
 
     static func ratio(_ stock: FilmStock, pxPerMM: Float = 500,

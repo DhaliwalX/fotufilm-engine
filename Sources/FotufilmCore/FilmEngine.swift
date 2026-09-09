@@ -422,6 +422,8 @@ public struct FilmEngineInvocation {
     public static let chromaticFringeAmountOffset = Int(FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT)
     public static let chromaticFringeSigmaOffset = Int(FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA)
     public static let chromaticFringeRadiusOffset = Int(FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS)
+    /// Reversal grain exponent and shoulder density; appended to preserve existing offsets.
+    public static let grainReversalProfileOffset = Int(FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE)
     /// Index of the three aperture-calibrated grain strengths; mirrors FOTUFILM_CONFIG_GRAIN.
     public static let grainOffset = Int(FOTUFILM_CONFIG_GRAIN)
 
@@ -1380,6 +1382,7 @@ public struct FilmEngineInvocation {
                           adjacencySecondarySigma, Float(adjacencySecondaryRadius)]
         configuration += [fringeActive ? fringeAmount : 0, fringeSigma, Float(fringeRadius)]
         configuration += [0] // typed record-exposure seam
+        configuration += stock.grainReversalProfile
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0

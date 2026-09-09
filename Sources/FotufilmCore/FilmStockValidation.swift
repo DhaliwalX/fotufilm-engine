@@ -216,6 +216,10 @@ public extension FilmStockDefinition {
             try check("grainDensityProfile.toeDensity", profile[1], 0.001...1)
             try check("grainDensityProfile.decayDensity", profile[2], 0.01...4)
         }
+        if let profile = grainReversalProfile {
+            try check("grainReversalProfile", profile, count: 2, 0.1...10)
+            try check("grainReversalProfile.exponent", profile[0], 0.1...2)
+        }
         try check("halationStrength", halationStrength, count: layers, 0...1)
         try check("halationLookScale", halationLookScale ?? 1, 0...100)
         try check("halationHazeMM", halationHazeMM ?? 0, 0...0.5)

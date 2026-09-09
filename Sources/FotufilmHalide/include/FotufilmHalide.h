@@ -34,7 +34,7 @@ enum {
 enum {
     FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES = 1024,
     FOTUFILM_SAMPLED_CURVE_STRIDE = 1 + 3 * FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES,
-    FOTUFILM_FRAME_CONFIGURATION_COUNT = 239 + 3 * FOTUFILM_COUPLER_WARP_SAMPLES
+    FOTUFILM_FRAME_CONFIGURATION_COUNT = 241 + 3 * FOTUFILM_COUPLER_WARP_SAMPLES
         + 2 * FOTUFILM_TONE_GRID_CELLS + 3 * FOTUFILM_SAMPLED_CURVE_STRIDE,
 };
 
@@ -118,9 +118,8 @@ enum {
     /// Which granularity-against-density law the emulsion obeys. 0 is a chromogenic negative,
     /// whose measured curve peaks just above D-min and falls (the shape's coefficients are in
     /// FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE); 1 is opaque silver, whose Boolean aperture
-    /// variance goes as `D * 10^(0.21004 D + 0.06114 D^2)`; 2 is a dye-cloud emulsion with no
-    /// published curve — a reversal — which keeps Selwyn's plain `sigma ∝ sqrt(D)`. Mirrors
-    /// `GrainDensityLaw`.
+    /// variance goes as `D * 10^(0.21004 D + 0.06114 D^2)`; 2 explicitly retains Selwyn's
+    /// `sigma ∝ sqrt(D)`; 3 is dye reversal's saturating power law. Mirrors `GrainDensityLaw`.
     FOTUFILM_CONFIG_GRAIN_LAW,
     /// Per-layer net density the stock's published granularity is read at, and the per-layer
     /// developed fog added to both that anchor and the pixel's own density. The fog is what
@@ -238,6 +237,8 @@ enum {
     FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS,
     /// Typed record-exposure input seam. Zero is ordinary scene input.
     FOTUFILM_CONFIG_RECORD_INPUT,
+    /// Dye reversal's [exponent p, shoulder density Ds], read under grain law 3.
+    FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE = FOTUFILM_CONFIG_RECORD_INPUT + 1,
 };
 
 /// Decode-kernel parameters: row-major scene-space matrix, transfer, and premultiplication flag.

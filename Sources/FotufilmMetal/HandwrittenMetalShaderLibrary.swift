@@ -296,6 +296,7 @@ enum HandwrittenMetalShaderLibrary {
         "FOTUFILM_CFG_SAMPLED_CURVES": NSNumber(value: FilmEngineInvocation.sampledCurvesOffset),
         "FOTUFILM_SAMPLED_CURVE_STRIDE": NSNumber(value: FilmEngineInvocation.sampledCurveStride),
         "FOTUFILM_CFG_DEVELOP_COMPLEMENT": NSNumber(value: FilmEngineInvocation.developComplementOffset),
+        "FOTUFILM_CFG_GRAIN_REVERSAL_PROFILE": NSNumber(value: FilmEngineInvocation.grainReversalProfileOffset),
         "FOTUFILM_CFG_CURVE_SECONDARY": NSNumber(
             value: FilmEngineInvocation.curveSecondaryOffset),
         "FOTUFILM_CFG_COUPLER_RELEASE_GAMMA": NSNumber(
