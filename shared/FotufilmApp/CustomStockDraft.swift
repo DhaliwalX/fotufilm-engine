@@ -127,6 +127,8 @@ struct CustomStockDraft: Codable, Equatable {
     /// calibration coefficients, but it must retain them when an installed stock is copied.
     /// `nil` keeps older saved drafts decodable and selects the shared family fit.
     var grainDensityProfile: [Float]? = nil
+    /// Preserve a reversal pack's fitted response when it is opened in the Workshop.
+    var grainReversalProfile: [Float]? = nil
 
     /// Red, and the ratios green and blue follow at. Halation is longer-wavelength light coming
     /// back off the base, so red leads by construction, but by how much is the film's own.
@@ -182,8 +184,8 @@ struct CustomStockDraft: Codable, Equatable {
     /// How grain grows with density.
     enum GrainLaw: String, Codable, CaseIterable, Identifiable {
         /// Silver for black and white, the measured dye-cloud shape for a colour negative, and
-        /// Selwyn's dye-cloud law for a reversal.
-        case followsKind, dyeCloud, dyeCloudSelwyn, silver
+        /// the saturating dye-cloud response for a reversal.
+        case followsKind, dyeCloud, dyeCloudSelwyn, dyeCloudReversal, silver
         var id: String { rawValue }
 
         var title: String {
@@ -191,6 +193,7 @@ struct CustomStockDraft: Codable, Equatable {
             case .followsKind: return "Follows the film"
             case .dyeCloud: return "Dye cloud"
             case .dyeCloudSelwyn: return "Dye cloud (Selwyn)"
+            case .dyeCloudReversal: return "Dye cloud (reversal)"
             case .silver: return "Silver"
             }
         }
@@ -200,6 +203,7 @@ struct CustomStockDraft: Codable, Equatable {
             case .followsKind: return nil
             case .dyeCloud: return .dyeCloud
             case .dyeCloudSelwyn: return .dyeCloudSelwyn
+            case .dyeCloudReversal: return .dyeCloudReversal
             case .silver: return .silver
             }
         }
@@ -209,6 +213,7 @@ struct CustomStockDraft: Codable, Equatable {
             case .none: self = .followsKind
             case .some(.dyeCloud): self = .dyeCloud
             case .some(.dyeCloudSelwyn): self = .dyeCloudSelwyn
+            case .some(.dyeCloudReversal): self = .dyeCloudReversal
             case .some(.silver): self = .silver
             }
         }
@@ -303,6 +308,7 @@ struct CustomStockDraft: Codable, Equatable {
         draft.grainFogDensity = definition.grainFogDensity ?? draft.grainFogDensity
         draft.grainDensityLaw = GrainLaw(definition.grainDensityLaw)
         draft.grainDensityProfile = definition.grainDensityProfile
+        draft.grainReversalProfile = definition.grainReversalProfile
 
         draft.halation = definition.halationStrength.first ?? draft.halation
         if let lead = definition.halationStrength.first, lead > 0 {
@@ -409,6 +415,7 @@ struct CustomStockDraft: Codable, Equatable {
                 grainLayerSizeRatio: padded(grainLayerSizeRatio, 1),
                 grainDensityLaw: grainDensityLaw.law,
                 grainDensityProfile: grainDensityProfile,
+                grainReversalProfile: grainReversalProfile ?? FilmStock.defaultGrainReversalProfile,
                 grainFogDensity: grainFogDensity,
                 halationStrength: glow,
                 paperCurve: paper.curve,
