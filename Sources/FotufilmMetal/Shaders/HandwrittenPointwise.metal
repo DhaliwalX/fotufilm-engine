@@ -1,17 +1,17 @@
 #include <metal_stdlib>
 using namespace metal;
 
-constant uint kCurveSamples = 2048u;
+constant uint kCurveSamples = FOTUFILM_POINTWISE_CURVE_SAMPLES;
 constant uint kTransferSamples = FOTUFILM_POINTWISE_TRANSFER_SAMPLES;
 constant uint kDecodeSamples = FOTUFILM_POINTWISE_DECODE_SAMPLES;
-constant uint kCurves = 0u;
+constant uint kCurves = FOTUFILM_CFG_CURVES;
 constant uint kSampledCurves = FOTUFILM_CFG_SAMPLED_CURVES;
 constant uint kSampledCurveStride = FOTUFILM_SAMPLED_CURVE_STRIDE;
 constant uint kDevelopComplement = FOTUFILM_CFG_DEVELOP_COMPLEMENT;
-constant uint kCoupler = 21u;
-constant uint kCouplerScale = 58u;
-constant uint kCouplerWarp = 66u;
-constant uint kCouplerWarpSamples = 128u;
+constant uint kCoupler = FOTUFILM_CFG_COUPLER;
+constant uint kCouplerScale = FOTUFILM_CFG_COUPLER_SCALE;
+constant uint kCouplerWarp = FOTUFILM_CFG_COUPLER_WARP;
+constant uint kCouplerWarpSamples = FOTUFILM_COUPLER_WARP_SAMPLES;
 // FilmEngineInvocation's append-only configuration ABI. Tests pin these against the Swift
 // declarations so a future layout change cannot silently corrupt the shader.
 constant uint kCurveSecondary = FOTUFILM_CFG_CURVE_SECONDARY;

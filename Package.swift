@@ -78,6 +78,19 @@ let halideGPUCXXSettings: [CXXSetting] = []
 let appleOnlyTests: [String] = []
 #endif
 
+#if os(macOS)
+// Host-side definitions for the offline Metal compiler; no Metal device or Halide is required.
+let metalBuildTargets: [Target] = [
+    .executableTarget(name: "fotufilm-metal-defines", dependencies: ["FotufilmMetal"]),
+]
+let metalBuildProducts: [Product] = [
+    .executable(name: "fotufilm-metal-defines", targets: ["fotufilm-metal-defines"]),
+]
+#else
+let metalBuildTargets: [Target] = []
+let metalBuildProducts: [Product] = []
+#endif
+
 let package = Package(
     name: "Fotufilm",
     platforms: [.macOS(.v13), .iOS(.v17)],
@@ -89,7 +102,7 @@ let package = Package(
         .library(name: "FotufilmStockMatch", targets: ["FotufilmStockMatch"]),
         .library(name: "FotufilmEditModel", targets: ["FotufilmEditModel"]),
         .executable(name: "fotufilm", targets: ["fotufilm"]),
-    ] + benchmarkProducts,
+    ] + benchmarkProducts + metalBuildProducts,
     targets: [
         .target(name: "FotufilmUpdate"),
         .target(
@@ -112,9 +125,9 @@ let package = Package(
         .target(
             name: "FotufilmMetal",
             dependencies: ["FotufilmCore", "FotufilmHalide"],
-            // Release apps carry only HandwrittenFotufilm.metallib. Local source compilation finds
-            // these maintainable files from the working tree without packaging them as resources.
-            exclude: ["Shaders"]
+            // Copy sources and include fragments intact for runtime compilation by package clients.
+            // Flat release-app builds continue to carry their compiled metallib instead.
+            resources: [.copy("Shaders")]
         ),
         // Core Image decoding and resampling shared by both apps and the CLI.
         .target(name: "FotufilmImaging", dependencies: ["FotufilmCore"]),
@@ -140,5 +153,5 @@ let package = Package(
             name: "FotufilmUpdateTests",
             dependencies: ["FotufilmUpdate"]
         ),
-    ] + benchmarkTargets
+    ] + benchmarkTargets + metalBuildTargets
 )

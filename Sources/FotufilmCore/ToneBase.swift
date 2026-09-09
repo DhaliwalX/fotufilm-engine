@@ -1,9 +1,10 @@
 import Foundation
+import FotufilmHalide
 
 /// Whole-frame measurement used by local highlight and shadow masks.
 public struct ToneBaseMeasurement {
     /// Cells along the grid's long edge; mirrors FOTUFILM_TONE_GRID_EDGE.
-    public static let gridEdge = 64
+    public static let gridEdge = Int(FOTUFILM_TONE_GRID_EDGE)
 
     /// Guided-filter window radius in cells, about one fifth of the grid's long edge.
     static let windowRadius = 12

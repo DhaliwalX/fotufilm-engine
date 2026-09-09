@@ -1,31 +1,32 @@
 import Foundation
+import FotufilmHalide
 
 /// Feature bits selecting which physical stages a Halide pipeline variant includes.
 public enum FilmEngineFeature {
-    public static let flare: Int32 = 1 << 0
-    public static let mtf: Int32 = 1 << 1
-    public static let halation: Int32 = 1 << 2
-    public static let couplers: Int32 = 1 << 3
-    public static let adjacency: Int32 = 1 << 4
-    public static let grain: Int32 = 1 << 5
-    public static let reversal: Int32 = 1 << 6
-    public static let monochrome: Int32 = 1 << 7
+    public static let flare: Int32 = Int32(FOTUFILM_FRAME_FLARE)
+    public static let mtf: Int32 = Int32(FOTUFILM_FRAME_MTF)
+    public static let halation: Int32 = Int32(FOTUFILM_FRAME_HALATION)
+    public static let couplers: Int32 = Int32(FOTUFILM_FRAME_COUPLERS)
+    public static let adjacency: Int32 = Int32(FOTUFILM_FRAME_ADJACENCY)
+    public static let grain: Int32 = Int32(FOTUFILM_FRAME_GRAIN)
+    public static let reversal: Int32 = Int32(FOTUFILM_FRAME_REVERSAL)
+    public static let monochrome: Int32 = Int32(FOTUFILM_FRAME_MONOCHROME)
     /// Scene-referred schedule: linear float in and out, highlights above 1.0
     /// preserved rather than clipped to display white.
-    public static let floatIO: Int32 = 1 << 8
+    public static let floatIO: Int32 = Int32(FOTUFILM_FRAME_FLOAT_IO)
     /// Extended emulsion MTF schedule: luminance separation and/or a second positive scale;
     /// mirrors FOTUFILM_FRAME_MTF_LUMA, whose bit is retained for AOT compatibility.
-    public static let mtfLuma: Int32 = 1 << 9
+    public static let mtfLuma: Int32 = Int32(FOTUFILM_FRAME_MTF_LUMA)
     /// Spatial diffusion of the DIR couplers; mirrors FOTUFILM_FRAME_COUPLER_DIFFUSION.
-    public static let couplerDiffusion: Int32 = 1 << 10
+    public static let couplerDiffusion: Int32 = Int32(FOTUFILM_FRAME_COUPLER_DIFFUSION)
     /// The realtime schedule rather than the reference one; mirrors FOTUFILM_FRAME_REALTIME.
-    public static let realtime: Int32 = 1 << 11
+    public static let realtime: Int32 = Int32(FOTUFILM_FRAME_REALTIME)
     /// Exact transcendentals rather than fast_* polynomials; mirrors FOTUFILM_FRAME_EXACT_MATH.
-    public static let exactMath: Int32 = 1 << 12
+    public static let exactMath: Int32 = Int32(FOTUFILM_FRAME_EXACT_MATH)
     /// Compiles the Boolean disc grain; mirrors FOTUFILM_FRAME_DISC_GRAIN. Its own variant rather
     /// than a runtime branch: the disc arm is a large unrolled expression, and leaving it in the
     /// pipeline costs every render its compile time even when nothing selects it.
-    public static let discGrain: Int32 = 1 << 15
+    public static let discGrain: Int32 = Int32(FOTUFILM_FRAME_DISC_GRAIN)
     /// The grain-size mixture's coarse second clump field; mirrors
     /// FOTUFILM_FRAME_GRAIN_MOTTLE. Served ahead-of-time by the `_mottle`
     /// twins in FotufilmHalide.h, on device as well as under the JIT. The host
@@ -33,27 +34,27 @@ public enum FilmEngineFeature {
     /// disc model, and any span but the full one — so a request outside it
     /// renders the single-radius field at full strength rather than a
     /// quieter half of the mixture.
-    public static let grainMottle: Int32 = 1 << 16
+    public static let grainMottle: Int32 = Int32(FOTUFILM_FRAME_GRAIN_MOTTLE)
     /// The enlarger and paper MTF, one blur in transmittance after grain; mirrors
     /// FOTUFILM_FRAME_PRINT_MTF.
-    public static let printMTF: Int32 = 1 << 17
+    public static let printMTF: Int32 = Int32(FOTUFILM_FRAME_PRINT_MTF)
     /// The kernel measures veiling glare from the frame it was handed instead of being told the
     /// mean; mirrors FOTUFILM_FRAME_FLARE_MEASURE. Only a whole-frame render may ask for it, and
     /// the mean it reaches is not the host's to the bit — the GPU sums float32 where the host
     /// sums each row in double. Set it and the host must not also measure.
-    public static let flareMeasure: Int32 = 1 << 18
+    public static let flareMeasure: Int32 = Int32(FOTUFILM_FRAME_FLARE_MEASURE)
     /// The kernel carries the finished frame out of the print's delivery basis and into the
     /// host's own space — matrix, transfer, premultiplication — from the slots at
     /// `outputMatrixOffset`; mirrors FOTUFILM_FRAME_ENCODE_OUT. What comes back is then the
     /// host's own encoding, not display-linear light, and it is not what the host's libm would
     /// have produced to the bit.
-    public static let encodeOut: Int32 = 1 << 19
+    public static let encodeOut: Int32 = Int32(FOTUFILM_FRAME_ENCODE_OUT)
     /// Stops after veiling glare and the emulsion MTF and hands that light back as float — the
     /// first pass of the two-pass striped still path; mirrors FOTUFILM_FRAME_LIGHT_OUT.
-    public static let lightOut: Int32 = 1 << 20
+    public static let lightOut: Int32 = Int32(FOTUFILM_FRAME_LIGHT_OUT)
     /// Develops from provided whole-frame halation grids instead of building the pyramid from
     /// the strip; mirrors FOTUFILM_FRAME_FIELDS_IN.
-    public static let fieldsIn: Int32 = 1 << 21
+    public static let fieldsIn: Int32 = Int32(FOTUFILM_FRAME_FIELDS_IN)
     /// Compile-time output-transfer arms used by realtime AOT kernels. Reference kernels leave
     /// these unset and select from the packed coefficients at runtime.
     /// Develops with no film in the gate: the creative controls, the delivery basis and the
@@ -62,36 +63,36 @@ public enum FilmEngineFeature {
     /// An invocation carrying it still names a stock, because the configuration is built from
     /// one — but no variant that carries this bit reads a single slot the stock filled, which
     /// `testNoFilmIgnoresWhichStockWasNamed` is there to keep true.
-    public static let noFilm: Int32 = 1 << 29
-    public static let outputLinear: Int32 = 1 << 22
-    public static let outputPower: Int32 = 1 << 23
-    public static let outputLog: Int32 = 1 << 24
+    public static let noFilm: Int32 = Int32(FOTUFILM_FRAME_NO_FILM)
+    public static let outputLinear: Int32 = Int32(FOTUFILM_FRAME_OUTPUT_LINEAR)
+    public static let outputPower: Int32 = Int32(FOTUFILM_FRAME_OUTPUT_POWER)
+    public static let outputLog: Int32 = Int32(FOTUFILM_FRAME_OUTPUT_LOG)
     /// The two halves of the density seam; mirror FOTUFILM_FRAME_DENSITY_OUT and
     /// FOTUFILM_FRAME_DENSITY_IN. `densityOut` stops the schedule at the developed negative and
     /// hands its densities back in place of a picture; `densityIn` starts it there, reading
     /// densities where it would have read scene light. The hybrid still renderer has always used
     /// the pair to split one frame across two calls; `PipelineStage` is the same cut made
     /// durable enough to cross a process boundary.
-    public static let densityOut: Int32 = 1 << 13
-    public static let densityIn: Int32 = 1 << 14
+    public static let densityOut: Int32 = Int32(FOTUFILM_FRAME_DENSITY_OUT)
+    public static let densityIn: Int32 = Int32(FOTUFILM_FRAME_DENSITY_IN)
     /// `PipelineStage.texture`: the schedule develops the frame twice, once with the spatial
     /// stages the mask still carries and once with none of them, and returns the source
     /// multiplied by the transmittance the two densities differ by. Mirrors
     /// FOTUFILM_FRAME_TEXTURE.
-    public static let texture: Int32 = 1 << 25
+    public static let texture: Int32 = Int32(FOTUFILM_FRAME_TEXTURE)
     /// The lens diffusion filter — mist, fog, black mist — as a three-scale scattering halo over
     /// the scene light, ahead of the emulsion; mirrors FOTUFILM_FRAME_DIFFUSION. Carried by
     /// FOTUFILM_AOT_ALL_STAGES, so the mobile variants compile the stage in and collapse it to a
     /// copy when no mist is fitted.
-    public static let diffusion: Int32 = 1 << 26
+    public static let diffusion: Int32 = Int32(FOTUFILM_FRAME_DIFFUSION)
     /// The donor capture layer — a fourth coated record that develops and releases inhibitor
     /// but forms no image dye (REALA's 4th Color Layer); mirrors FOTUFILM_FRAME_DONOR_LAYER.
     /// Outside every AOT variant list, like the mottle and the print MTF, so a mobile render
     /// masks it off and carries three records alone until the realtime variants are
     /// regenerated with it.
-    public static let donorLayer: Int32 = 1 << 27
+    public static let donorLayer: Int32 = Int32(FOTUFILM_FRAME_DONOR_LAYER)
     /// Legacy annular halation basis. New physical profiles use continuous centered fields.
-    public static let annularHalation: Int32 = 1 << 28
+    public static let annularHalation: Int32 = Int32(FOTUFILM_FRAME_HALATION_ANNULAR)
 }
 
 /// The step out of the print's delivery basis and into a host's own space, for a caller that
@@ -330,17 +331,16 @@ public struct FilmFlareFrame: Sendable {
 public struct FilmEngineInvocation {
     /// Samples per channel in the coupler neutral-anchor table, and the
     /// log-exposure domain it spans.
-    public static let couplerWarpSamples = 128
-    public static let couplerWarpMin: Float = -4
-    public static let couplerWarpMax: Float = 4
+    public static let couplerWarpSamples = Int(FOTUFILM_COUPLER_WARP_SAMPLES)
+    public static let couplerWarpMin: Float = Float(FOTUFILM_COUPLER_WARP_MIN)
+    public static let couplerWarpMax: Float = Float(FOTUFILM_COUPLER_WARP_MAX)
 
     /// Cells reserved per tone-base coefficient plane; mirrors FOTUFILM_TONE_GRID_CELLS.
-    public static let toneGridCells =
-        ToneBaseMeasurement.gridEdge * ToneBaseMeasurement.gridEdge
+    public static let toneGridCells = Int(FOTUFILM_TONE_GRID_CELLS)
 
-    public static let sampledCurveStride = 1 + 3 * SampledCharacteristicCurve.maximumSamples
-    public static let sampledCurvesOffset = 232 + 3 * couplerWarpSamples + 2 * toneGridCells
-    public static let configurationCount = sampledCurvesOffset + 3 * sampledCurveStride + 9
+    public static let sampledCurveStride = Int(FOTUFILM_SAMPLED_CURVE_STRIDE)
+    public static let sampledCurvesOffset = Int(FOTUFILM_CONFIG_SAMPLED_CURVES)
+    public static let configurationCount = Int(FOTUFILM_FRAME_CONFIGURATION_COUNT)
     /// Index of the grading-space switch; mirrors FOTUFILM_CONFIG_GRADE_SPACE.
     /// After it, appended in order so that adding each renumbered nothing:
     /// the six grain-mottle entries, the paper's red and blue records and
@@ -350,112 +350,111 @@ public struct FilmEngineInvocation {
     ///
     /// Counted forward from the start rather than back from the end, so that
     /// appending to the configuration does not silently move it.
-    public static let gradeSpaceOffset = 104 + 3 * couplerWarpSamples
-        + 2 * toneGridCells
+    public static let gradeSpaceOffset = Int(FOTUFILM_CONFIG_GRADE_SPACE)
     /// Index of the grain mottle's sigma/radius/lambda and its three
     /// amplitudes; mirror FOTUFILM_CONFIG_MOTTLE_SIGMA / FOTUFILM_CONFIG_MOTTLE.
-    public static let mottleSigmaOffset = gradeSpaceOffset + 1
-    public static let mottleOffset = mottleSigmaOffset + 3
+    public static let mottleSigmaOffset = Int(FOTUFILM_CONFIG_MOTTLE_SIGMA)
+    public static let mottleOffset = Int(FOTUFILM_CONFIG_MOTTLE)
     /// Index of the paper's red and blue records (six curve parameters each,
     /// green staying in the legacy slot) and their calibrated midpoints;
     /// mirror FOTUFILM_CONFIG_PAPER_RED / _BLUE / _MIDPOINT_RED / _MIDPOINT_BLUE.
-    public static let paperRedOffset = mottleOffset + 3
-    public static let paperBlueOffset = paperRedOffset + 6
-    public static let paperMidpointRedOffset = paperBlueOffset + 6
-    public static let paperMidpointBlueOffset = paperMidpointRedOffset + 1
+    public static let paperRedOffset = Int(FOTUFILM_CONFIG_PAPER_RED)
+    public static let paperBlueOffset = Int(FOTUFILM_CONFIG_PAPER_BLUE)
+    public static let paperMidpointRedOffset = Int(FOTUFILM_CONFIG_PAPER_MIDPOINT_RED)
+    public static let paperMidpointBlueOffset = Int(FOTUFILM_CONFIG_PAPER_MIDPOINT_BLUE)
     /// Index of the grain density law, the per-layer anchor densities and fog, the per-layer
     /// grain and mottle blur sigmas, and the enlarger/paper MTF's sigma and radius; mirror
     /// FOTUFILM_CONFIG_GRAIN_LAW onward.
-    public static let grainLawOffset = paperMidpointBlueOffset + 1
-    public static let grainAnchorOffset = grainLawOffset + 1
-    public static let grainFogOffset = grainAnchorOffset + 3
-    public static let grainSigmaLayerOffset = grainFogOffset + 3
-    public static let mottleSigmaLayerOffset = grainSigmaLayerOffset + 3
-    public static let printMTFOffset = mottleSigmaLayerOffset + 3
+    public static let grainLawOffset = Int(FOTUFILM_CONFIG_GRAIN_LAW)
+    public static let grainAnchorOffset = Int(FOTUFILM_CONFIG_GRAIN_ANCHOR)
+    public static let grainFogOffset = Int(FOTUFILM_CONFIG_GRAIN_FOG)
+    public static let grainSigmaLayerOffset = Int(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER)
+    public static let mottleSigmaLayerOffset = Int(FOTUFILM_CONFIG_MOTTLE_SIGMA_LAYER)
+    public static let printMTFOffset = Int(FOTUFILM_CONFIG_PRINT_MTF_SIGMA)
     /// Index of the host output transform's row-major matrix[9], transfer
     /// shape, transfer coefficients[6] and premultiplication switch; mirror
     /// FOTUFILM_CONFIG_OUTPUT_MATRIX / _TRANSFER / _COEFFICIENTS /
     /// _PREMULTIPLIED. Read only by the `encodeOut` variants. The print MTF
     /// before it takes two slots, a sigma and a radius.
-    public static let outputMatrixOffset = printMTFOffset + 2
-    public static let outputTransferOffset = outputMatrixOffset + 9
-    public static let outputCoefficientsOffset = outputTransferOffset + 1
-    public static let outputPremultipliedOffset = outputCoefficientsOffset + 6
+    public static let outputMatrixOffset = Int(FOTUFILM_CONFIG_OUTPUT_MATRIX)
+    public static let outputTransferOffset = Int(FOTUFILM_CONFIG_OUTPUT_TRANSFER)
+    public static let outputCoefficientsOffset = Int(FOTUFILM_CONFIG_OUTPUT_COEFFICIENTS)
+    public static let outputPremultipliedOffset = Int(FOTUFILM_CONFIG_OUTPUT_PREMULTIPLIED)
     /// Index of the print MTF's kept-detail share; mirrors FOTUFILM_CONFIG_PRINT_SHARPEN.
     /// Appended after the output transform so that adding it renumbered nothing.
-    public static let printSharpenOffset = outputPremultipliedOffset + 1
+    public static let printSharpenOffset = Int(FOTUFILM_CONFIG_PRINT_SHARPEN)
     /// The lens diffusion filter's slots; mirror FOTUFILM_CONFIG_DIFFUSION_*.
-    public static let diffusionDirectOffset = printSharpenOffset + 1
-    public static let diffusionKernelOffset = diffusionDirectOffset + 1
-    public static let diffusionRadiusOffset = diffusionKernelOffset + 9
+    public static let diffusionDirectOffset = Int(FOTUFILM_CONFIG_DIFFUSION_DIRECT)
+    public static let diffusionKernelOffset = Int(FOTUFILM_CONFIG_DIFFUSION_KERNEL)
+    public static let diffusionRadiusOffset = Int(FOTUFILM_CONFIG_DIFFUSION_RADIUS)
     /// Donor curve/release, followed by three reserved legacy halation-ring radii.
-    public static let donorCurveOffset = diffusionRadiusOffset + 3
-    public static let donorReleaseOffset = donorCurveOffset + 6
-    public static let halationRingRadiusOffset = donorReleaseOffset + 3
-    public static let halationMatrixOffset = halationRingRadiusOffset + 3
-    public static let curveSecondaryOffset = halationMatrixOffset + 9
-    public static let mtfSecondarySigmaOffset = curveSecondaryOffset + 15
-    public static let mtfSecondaryRadiusOffset = mtfSecondarySigmaOffset + 3
-    public static let mtfPrimaryShareOffset = mtfSecondaryRadiusOffset + 3
+    public static let donorCurveOffset = Int(FOTUFILM_CONFIG_DONOR_CURVE)
+    public static let donorReleaseOffset = Int(FOTUFILM_CONFIG_DONOR_RELEASE)
+    public static let halationRingRadiusOffset = Int(FOTUFILM_CONFIG_HALATION_RING_RADIUS)
+    public static let halationMatrixOffset = Int(FOTUFILM_CONFIG_HALATION_MATRIX)
+    public static let curveSecondaryOffset = Int(FOTUFILM_CONFIG_CURVE_SECONDARY)
+    public static let mtfSecondarySigmaOffset = Int(FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA)
+    public static let mtfSecondaryRadiusOffset = Int(FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS)
+    public static let mtfPrimaryShareOffset = Int(FOTUFILM_CONFIG_MTF_PRIMARY_SHARE)
     /// Per-donor Hill exponents for inhibitor release, followed by the optional donor-only
     /// layer's exponent; mirror FOTUFILM_CONFIG_COUPLER_RELEASE_GAMMA and
     /// FOTUFILM_CONFIG_DONOR_RELEASE_GAMMA.
-    public static let couplerReleaseGammaOffset = mtfPrimaryShareOffset + 3
-    public static let donorReleaseGammaOffset = couplerReleaseGammaOffset + 3
+    public static let couplerReleaseGammaOffset = Int(FOTUFILM_CONFIG_COUPLER_RELEASE_GAMMA)
+    public static let donorReleaseGammaOffset = Int(FOTUFILM_CONFIG_DONOR_RELEASE_GAMMA)
     /// Optional donor capture record's lens-diffusion scale weights.
-    public static let donorDiffusionKernelOffset = donorReleaseGammaOffset + 1
+    public static let donorDiffusionKernelOffset = Int(FOTUFILM_CONFIG_DONOR_DIFFUSION_KERNEL)
     /// Whether development complements the formed density to a direct positive; mirrors
     /// FOTUFILM_CONFIG_DEVELOP_COMPLEMENT. Only a genuine reversal stock does. A negative shown
     /// on a light box or scanner also sets `FilmEngineFeature.reversal`, but only to route the
     /// output past the paper: it is developed as the negative it is.
-    public static let developComplementOffset = donorDiffusionKernelOffset + 3
+    public static let developComplementOffset = Int(FOTUFILM_CONFIG_DEVELOP_COMPLEMENT)
     /// The chromogenic negative's granularity-against-density coefficients; mirrors
     /// FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE.
-    public static let grainDensityProfileOffset = developComplementOffset + 1
+    public static let grainDensityProfileOffset = Int(FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE)
     /// Index of the SDR shoulder knee the host output transform carries, a negative value
     /// meaning none; mirrors FOTUFILM_CONFIG_OUTPUT_SHOULDER. Appended without
     /// renumbering earlier fields.
-    public static let outputShoulderOffset = grainDensityProfileOffset + 3
-    public static let outputGamutOffset = outputShoulderOffset + 1
-    public static let adjacencyModelOffset = sampledCurvesOffset + 3 * sampledCurveStride
-    public static let adjacencySecondarySigmaOffset = adjacencyModelOffset + 1
-    public static let adjacencySecondaryRadiusOffset = adjacencyModelOffset + 2
-    public static let chromaticFringeAmountOffset = adjacencyModelOffset + 3
-    public static let chromaticFringeSigmaOffset = adjacencyModelOffset + 4
-    public static let chromaticFringeRadiusOffset = adjacencyModelOffset + 5
+    public static let outputShoulderOffset = Int(FOTUFILM_CONFIG_OUTPUT_SHOULDER)
+    public static let outputGamutOffset = Int(FOTUFILM_CONFIG_OUTPUT_GAMUT)
+    public static let adjacencyModelOffset = Int(FOTUFILM_CONFIG_ADJACENCY_MODEL)
+    public static let adjacencySecondarySigmaOffset = Int(FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA)
+    public static let adjacencySecondaryRadiusOffset = Int(FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS)
+    public static let chromaticFringeAmountOffset = Int(FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT)
+    public static let chromaticFringeSigmaOffset = Int(FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA)
+    public static let chromaticFringeRadiusOffset = Int(FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS)
     /// Reversal grain exponent and shoulder density; appended to preserve existing offsets.
-    public static let grainReversalProfileOffset = adjacencyModelOffset + 7
+    public static let grainReversalProfileOffset = Int(FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE)
     /// Index of the three aperture-calibrated grain strengths; mirrors FOTUFILM_CONFIG_GRAIN.
-    public static let grainOffset = 30
+    public static let grainOffset = Int(FOTUFILM_CONFIG_GRAIN)
 
     /// Index of the shared grain blur sigma and, one above it, the blur's reach; mirrors
     /// FOTUFILM_CONFIG_GRAIN_SIGMA and FOTUFILM_CONFIG_GRAIN_RADIUS.
-    public static let grainSigmaOffset = 55
+    public static let grainSigmaOffset = Int(FOTUFILM_CONFIG_GRAIN_SIGMA)
     /// Index of the veiling-glare fraction — the lens's own, plus whatever the filter stack
     /// adds; mirrors FOTUFILM_CONFIG_FLARE.
-    public static let flareOffset = 57
+    public static let flareOffset = Int(FOTUFILM_CONFIG_FLARE)
     /// Index of the caller-supplied veiling-glare mean; mirrors FOTUFILM_CONFIG_FLARE_MEAN.
-    public static let flareMeanOffset = 63
+    public static let flareMeanOffset = Int(FOTUFILM_CONFIG_FLARE_MEAN)
     /// Index of the coupler neutral-anchor table; mirrors FOTUFILM_CONFIG_COUPLER_WARP.
-    public static let couplerWarpOffset = 66
+    public static let couplerWarpOffset = Int(FOTUFILM_CONFIG_COUPLER_WARP)
     /// Index of the camera white-balance gains; mirrors FOTUFILM_CONFIG_WHITE_BALANCE.
-    public static let whiteBalanceOffset = 66 + 3 * couplerWarpSamples
+    public static let whiteBalanceOffset = Int(FOTUFILM_CONFIG_WHITE_BALANCE)
     /// Index of the scene adjustments (highlights, shadows, saturation,
     /// vibrance); mirrors FOTUFILM_CONFIG_HIGHLIGHTS.
-    public static let sceneAdjustOffset = 69 + 3 * couplerWarpSamples
+    public static let sceneAdjustOffset = Int(FOTUFILM_CONFIG_HIGHLIGHTS)
     /// Index of the three-by-three halation scale weights; mirrors
     /// FOTUFILM_CONFIG_HALATION_KERNEL.
-    public static let halationKernelOffset = sceneAdjustOffset + 4
+    public static let halationKernelOffset = Int(FOTUFILM_CONFIG_HALATION_KERNEL)
     /// Index of the print grade's per-channel lift, gain and inverse gamma;
     /// mirrors FOTUFILM_CONFIG_GRADE_LIFT.
-    public static let gradeOffset = 86 + 3 * couplerWarpSamples
+    public static let gradeOffset = Int(FOTUFILM_CONFIG_GRADE_LIFT)
     /// Index of the frame's pixel dimensions; mirrors FOTUFILM_CONFIG_FRAME_WIDTH.
-    public static let frameSizeOffset = 95 + 3 * couplerWarpSamples
+    public static let frameSizeOffset = Int(FOTUFILM_CONFIG_FRAME_WIDTH)
     /// Index of the tone-base grid dimensions and its two coefficient planes;
     /// mirror FOTUFILM_CONFIG_TONE_GRID_WIDTH / _A / _B.
-    public static let toneGridSizeOffset = 97 + 3 * couplerWarpSamples
-    public static let toneGridAOffset = 99 + 3 * couplerWarpSamples
-    public static let toneGridBOffset = toneGridAOffset + toneGridCells
+    public static let toneGridSizeOffset = Int(FOTUFILM_CONFIG_TONE_GRID_WIDTH)
+    public static let toneGridAOffset = Int(FOTUFILM_CONFIG_TONE_GRID_A)
+    public static let toneGridBOffset = Int(FOTUFILM_CONFIG_TONE_GRID_B)
 
     public var configuration: [Float]
     public var spectral: SpectralPipelineTables
@@ -1260,7 +1259,9 @@ public struct FilmEngineInvocation {
                 ? (shadows: Float(0), highlights: AutoAdjustment.kDiffuseWhiteStops)
                 : AutoAdjustment.latitude(stock: stock,
                                           printCorrection: options.printCorrection,
-                                          paper: printMedium)
+                                          paper: printMedium,
+                                          callier: options.enlarger.callierCoefficient(
+                                              for: stock, paper: printMedium))
             highlights = max(-1, min(1, highlights + AutoAdjustment.headroomHighlights(
                 contentHeadroom: options.sceneHeadroom, window: window)))
         }
@@ -1454,14 +1455,17 @@ public struct FilmEngineInvocation {
                 for: stock, bleachBypass: options.bleachBypass))
                 ^ (0x4E45474154495645 &+ look.ordinal)
         } else {
+            let callier = options.enlarger.callierCoefficient(for: stock, paper: printMedium)
             self.spectral = SpectralRuntime.tables(
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
-                printViewingKelvin: options.printViewingKelvin)
+                printViewingKelvin: options.printViewingKelvin,
+                callier: callier)
             self.spectralCacheID = SpectralRuntime.cacheIdentifier(
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
-                printViewingKelvin: options.printViewingKelvin)
+                printViewingKelvin: options.printViewingKelvin,
+                callier: callier)
         }
         // One resolved spectrum controls both integration and upload identity. Source pixels
         // have already been neutralized at capture; applying RGB WB here would count light twice.
@@ -1729,7 +1733,7 @@ public struct FilmEngineInvocation {
     }
 
     /// Mirrors FOTUFILM_CONFIG_EXPOSURE_GAIN.
-    public static let exposureGainOffset = 61
+    public static let exposureGainOffset = Int(FOTUFILM_CONFIG_EXPOSURE_GAIN)
 
     private static func parameters(_ curve: CharacteristicCurve) -> [Float] {
         // Legacy range consumers still read gamma * (shoulder - toe).

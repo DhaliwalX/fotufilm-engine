@@ -18,10 +18,11 @@ public enum AutoAdjustment {
     /// Scene stops that survive to the print with tonal separation, relative to metered mid-grey.
     public static func latitude(
         stock: FilmStock, printCorrection: Float = 0.05,
-        paper: PrintPaper = .default
+        paper: PrintPaper = .default, callier: Float = 1
     ) -> (shadows: Float, highlights: Float) {
         let key = LatitudeKey(
-            tables: SpectralRuntime.cacheIdentifier(for: stock, paper: paper),
+            tables: SpectralRuntime.cacheIdentifier(for: stock, paper: paper,
+                                                    callier: callier),
             correction: printCorrection)
         latitudeLock.lock()
         if let found = latitudeCache[key] {
@@ -34,7 +35,7 @@ public enum AutoAdjustment {
         let stops = Array(stride(from: -reach, through: reach, by: step))
         let scale = SpectralRuntime.neutralToneScale(
             stops: stops, stock: stock, paper: paper,
-            printCorrection: printCorrection)
+            printCorrection: printCorrection, callier: callier)
         let logScale = scale.map { log2(max($0, 1e-6)) }
         func slope(_ index: Int) -> Float {
             (logScale[index + 1] - logScale[index - 1]) / (2 * step)
