@@ -1,5 +1,6 @@
 #if canImport(Metal)
 import Foundation
+import FotufilmHalide
 import Metal
 
 #if canImport(FotufilmCore)
@@ -10,8 +11,8 @@ import FotufilmCore
 ///
 /// Device/simulator app builds compile the maintainable MSL files into one bundled metallib. Metal
 /// function constants remain runtime-specialized; only source parsing and compilation move out of
-/// the first camera frame. SwiftPM tests and command-line developer builds retain source compilation
-/// as an exact fallback when the platform-specific metallib is not present.
+/// the first camera frame. SwiftPM clients compile the sources in their module resource bundle
+/// when the platform-specific metallib is not present.
 enum HandwrittenMetalShaderLibrary {
     enum Shader: String {
         case pointwise = "HandwrittenPointwise"
@@ -189,11 +190,13 @@ enum HandwrittenMetalShaderLibrary {
             urls.append(root.appendingPathComponent("Shaders", isDirectory: true)
                 .appendingPathComponent("\(name).\(pathExtension)"))
         }
+        #if SWIFT_PACKAGE
+        appendBundleCandidates(Bundle.module)
+        #endif
         appendBundleCandidates(Bundle.main)
 
-        // Do not derive this fallback from #filePath: that bakes the developer's checkout into
-        // shipping binaries. Developer commands run from the repository root, and callers that
-        // use another working directory can provide FOTUFILM_METAL_SHADER_ROOT explicitly.
+        // Flat developer builds may still use the checkout. Package clients use Bundle.module;
+        // do not bake a checkout location into shipping code with #filePath.
         urls.append(URL(fileURLWithPath: FileManager.default.currentDirectoryPath,
                         isDirectory: true)
             .appendingPathComponent("Sources/FotufilmMetal/Shaders", isDirectory: true)
@@ -266,6 +269,30 @@ enum HandwrittenMetalShaderLibrary {
     /// the source files readable and makes a renamed or removed ABI field fail at Swift compile
     /// time instead of silently changing a shader literal.
     static let sharedConfigurationMacros: [String: NSNumber] = [
+        "FOTUFILM_CFG_CURVES": NSNumber(value: Int(FOTUFILM_CONFIG_CURVES)),
+        "FOTUFILM_CFG_COUPLER": NSNumber(value: Int(FOTUFILM_CONFIG_COUPLER)),
+        "FOTUFILM_CFG_GRAIN": NSNumber(value: FilmEngineInvocation.grainOffset),
+        "FOTUFILM_CFG_COUPLER_SCALE": NSNumber(value: Int(FOTUFILM_CONFIG_COUPLER_SCALE)),
+        "FOTUFILM_CFG_ADJACENCY_STRENGTH": NSNumber(value: Int(FOTUFILM_CONFIG_ADJACENCY_STRENGTH)),
+        "FOTUFILM_CFG_ADJACENCY_MODEL": NSNumber(value: FilmEngineInvocation.adjacencyModelOffset),
+        "FOTUFILM_CFG_CHROMATIC_FRINGE_AMOUNT": NSNumber(value: FilmEngineInvocation.chromaticFringeAmountOffset),
+        "FOTUFILM_CFG_COUPLER_WARP": NSNumber(value: FilmEngineInvocation.couplerWarpOffset),
+        "FOTUFILM_CFG_HALATION_KERNEL": NSNumber(value: FilmEngineInvocation.halationKernelOffset),
+        "FOTUFILM_CFG_MOTTLE": NSNumber(value: FilmEngineInvocation.mottleOffset),
+        "FOTUFILM_CFG_GRAIN_LAW": NSNumber(value: FilmEngineInvocation.grainLawOffset),
+        "FOTUFILM_CFG_GRAIN_ANCHOR": NSNumber(value: FilmEngineInvocation.grainAnchorOffset),
+        "FOTUFILM_CFG_GRAIN_FOG": NSNumber(value: FilmEngineInvocation.grainFogOffset),
+        "FOTUFILM_CFG_HALATION_MATRIX": NSNumber(value: FilmEngineInvocation.halationMatrixOffset),
+        "FOTUFILM_CFG_DIFFUSION_DIRECT": NSNumber(value: FilmEngineInvocation.diffusionDirectOffset),
+        "FOTUFILM_CFG_DIFFUSION_KERNEL": NSNumber(value: FilmEngineInvocation.diffusionKernelOffset),
+        "FOTUFILM_CFG_DONOR_DIFFUSION_KERNEL": NSNumber(value: FilmEngineInvocation.donorDiffusionKernelOffset),
+        "FOTUFILM_CFG_GRAIN_DENSITY_PROFILE": NSNumber(value: FilmEngineInvocation.grainDensityProfileOffset),
+        "FOTUFILM_CFG_PAPER": NSNumber(value: Int(FOTUFILM_CONFIG_PAPER)),
+        "FOTUFILM_CFG_MASKING": NSNumber(value: Int(FOTUFILM_CONFIG_MASKING)),
+        "FOTUFILM_CFG_PAPER_MIDPOINT": NSNumber(value: Int(FOTUFILM_CONFIG_PAPER_MIDPOINT)),
+        "FOTUFILM_COUPLER_WARP_SAMPLES": NSNumber(value: FilmEngineInvocation.couplerWarpSamples),
+        "FOTUFILM_FEATURE_COUPLERS": NSNumber(value: FilmEngineFeature.couplers),
+        "FOTUFILM_FEATURE_DONOR": NSNumber(value: FilmEngineFeature.donorLayer),
         "FOTUFILM_CFG_SAMPLED_CURVES": NSNumber(value: FilmEngineInvocation.sampledCurvesOffset),
         "FOTUFILM_SAMPLED_CURVE_STRIDE": NSNumber(value: FilmEngineInvocation.sampledCurveStride),
         "FOTUFILM_CFG_DEVELOP_COMPLEMENT": NSNumber(value: FilmEngineInvocation.developComplementOffset),

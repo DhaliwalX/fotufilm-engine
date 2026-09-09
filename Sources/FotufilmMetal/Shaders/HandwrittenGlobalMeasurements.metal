@@ -3,7 +3,7 @@ using namespace metal;
 
 constant uint kReductionThreads = FOTUFILM_MEASUREMENT_REDUCTION_THREADS;
 constant uint kFlareItems = FOTUFILM_MEASUREMENT_FLARE_ITEMS;
-constant uint kDecodeSamples = 256u;
+constant uint kDecodeSamples = FOTUFILM_MEASUREMENT_DECODE_SAMPLES;
 
 struct ToneParameters {
     uint width;
