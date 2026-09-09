@@ -445,7 +445,7 @@ public enum SpectralRuntime {
         add(stock.paperCurve.dMin); add(stock.paperCurve.gamma)
         add(stock.paperCurve.toe); add(stock.paperCurve.toeWidth)
         add(stock.paperCurve.shoulder); add(stock.paperCurve.shoulderWidth)
-        add(stock.paperMidDensity)
+        add(stock.isReversal ? PrintPaper.screen.midDensity : paper.midDensity)
         h = (h ^ UInt64(stock.isReversal ? 1 : 0)) &* 0x100000001b3
         h = (h ^ UInt64(stock.isMonochrome ? 1 : 0)) &* 0x100000001b3
         h = (h ^ UInt64(stock.isReflectionPrint ? 1 : 0)) &* 0x100000001b3
@@ -512,10 +512,6 @@ public enum SpectralRuntime {
             }
         } else {
             let paperSensitivity = paper.sensitivity
-            // A scan's LED emission is folded into its sensor bands, so its lamp
-            // is flat; a sheet hangs under the enlarger.
-            let lamp = paper.isScan ? SpectralGrid.equalEnergy
-                                    : SpectralGrid.enlarger3200K
             let dMin = stock.curves.map(\.dMin)
             let midDensity = (0..<3).map { stock.curves[$0].density(logExposure: 0) }
             // Retained silver darkens the mid-grey too, and the print re-anchors on it — a
@@ -527,14 +523,20 @@ public enum SpectralRuntime {
             // silver's on the silver the bleach left behind. The mid-grey scales with the rest,
             // so the re-timing below holds it and the head shows as contrast.
             let silverCallier = callier == 1 ? Float(1) : Enlarger.silverCallierCoefficient
+            let lamp = printingLamp(
+                paper: paper, density: midDensity.map { $0 * callier },
+                dyes: stock.spectralProfile.imageDyeDensity,
+                neutralDensity: silverCallier * retainedSilverDensity(
+                    midDensity, dMin: dMin, fraction: bleachBypass))
             let midEnergy = paperExposure(density: midDensity.map { $0 * callier },
                                           dyes: stock.spectralProfile.imageDyeDensity,
                                           lamp: lamp, paperSensitivity: paperSensitivity,
                                           neutralDensity: silverCallier * retainedSilverDensity(
                                               midDensity, dMin: dMin,
                                               fraction: bleachBypass))
-            // Dividing each channel by the stock's own mid energy is the
-            // per-stock filtration an enlarger operator dials in. A
+            // The mid-energy ratio supplies each record's exposure-axis origin after
+            // timing the physical lights. On reflection paper it also approximates
+            // the enlarger's per-stock filtration. A
             // reference-anchored medium is profiled once instead: the frame is
             // still auto-exposed (green stays the stock's own), but red and
             // blue keep the distance this stock's mask and mid-scale colour
@@ -774,7 +776,7 @@ public enum SpectralRuntime {
             deliversRec709 = paper.deliversRec709
             clipInterval = paper == .telecine ? (0.76, 0.84) : (0.78, 0.86)
             let midpoint = curve.logExposure(
-                density: curve.dMin + paper.anchorDensity(stock.paperMidDensity))
+                density: curve.dMin + paper.anchorDensity)
             let masking = stock.printingContrastScale(
                 correction: FotufilmEngine.Options().printCorrection, paper: paper)
             let filmRanges = stock.curves.map { $0.dMax - $0.dMin }
@@ -877,8 +879,7 @@ public enum SpectralRuntime {
         init(stock: FilmStock, exposure: SpectralLUT) {
             screenCurve = stock.paperCurve
             screenMid = screenCurve.logExposure(
-                density: screenCurve.dMin + PrintPaper.screen.anchorDensity(
-                    stock.paperMidDensity))
+                density: screenCurve.dMin + PrintPaper.screen.anchorDensity)
             neutralMid = SpectralRuntime.neutralDensity(stock, 0)
             let low = stock.curves.map { $0.toe - 6 }.min() ?? -8
             let high = stock.curves.map { $0.shoulder + 6 }.max() ?? 8
@@ -1949,7 +1950,7 @@ public enum SpectralRuntime {
                                  trim: .zero, anchor: 1)
         }
         let unmix = PrintDyeUnmix(dyes: paper.analyticalDyes)
-        let anchor = paper.anchorDensity(stock.paperMidDensity)
+        let anchor = paper.anchorDensity
         let trim = printNeutralTrim(
             unmix: unmix, anchor: anchor,
             target: transmissionRGB(density: [anchor, anchor, anchor],
@@ -2042,16 +2043,15 @@ extension SpectralRuntime {
 
         let perStop = Float(log10(2.0))
         let paperSensitivity = paper.sensitivity
-        let lamp = paper.isScan ? SpectralGrid.equalEnergy
-                                : SpectralGrid.enlarger3200K
         let dyes = stock.spectralProfile.imageDyeDensity
         let midDensity = (0..<3).map { stock.curves[$0].density(logExposure: 0) }
+        let lamp = printingLamp(paper: paper, density: midDensity, dyes: dyes)
         let midEnergy = paperExposure(density: midDensity, dyes: dyes,
                                       lamp: lamp, paperSensitivity: paperSensitivity)
         let curves = paper.printCurves(for: stock)
         let xMids = curves.map { record in
             record.logExposure(
-                density: record.dMin + paper.anchorDensity(stock.paperMidDensity))
+                density: record.dMin + paper.anchorDensity)
         }
 
         let relatives: [SIMD3<Float>] = stride(from: Float(-5), through: 5, by: 0.25)
@@ -2191,9 +2191,9 @@ extension SpectralRuntime {
         }
 
         let paperSensitivity = paper.sensitivity
-        let lamp = paper.isScan ? SpectralGrid.equalEnergy
-                                : SpectralGrid.enlarger3200K
         let midDensity = (0..<3).map { stock.curves[$0].density(logExposure: 0) }
+        let lamp = printingLamp(paper: paper, density: midDensity.map { $0 * callier },
+                                dyes: stock.spectralProfile.imageDyeDensity)
         let midEnergy = paperExposure(density: midDensity.map { $0 * callier },
                                       dyes: stock.spectralProfile.imageDyeDensity,
                                       lamp: lamp, paperSensitivity: paperSensitivity)
@@ -2201,7 +2201,7 @@ extension SpectralRuntime {
         let curves = paper.printCurves(for: stock)
         let xMids = curves.map { record in
             record.logExposure(
-                density: record.dMin + paper.anchorDensity(stock.paperMidDensity))
+                density: record.dMin + paper.anchorDensity)
         }
         let masking = stock.printingContrastScale(correction: printCorrection,
                                                   paper: paper)

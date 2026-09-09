@@ -156,8 +156,16 @@ layer sensitivities and characteristic curves.
 | Fujifilm ETERNA-CP 3513DI | Fujifilm ETERNA-CP 3513DI brochure |
 
 A sheet that publishes one characteristic curve develops all three records along it;
-E-7020, E-4070 and 2393 publish three and are carried per record. The lab scan and
+E-7020, E-4070, 2383, 2393 and ETERNA-CP publish three and are carried per record. The lab scan and
 telecine are inversions rather than sheets, and are described in `PrintPaperTables.swift`.
+
+Release prints time mid-grey at approximately 1.0 D above clear film (LAD, 10%
+transmission), independently of the camera stock. Reflection papers retain 0.744 D
+(18%). Release printing uses an approximate UV-blocked tungsten RGB additive head;
+the passbands are not measured printer-filter spectra. ETERNA-CP's published Gray
+and dye sum remain inconsistent with a non-negative additive base, so its neutral
+spectral calibration remains uncertain.
+
 
 `SOURCE_ASSETS.json` records where assets came from and their file hashes. Before
 adding data or images, run `python3 tools/check-source-boundary.py`.

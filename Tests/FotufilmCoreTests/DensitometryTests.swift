@@ -108,7 +108,7 @@ final class DensitometryTests: XCTestCase {
     func testPrintTimingTrimIsUnderAPrinterLight() {
         for paper in Self.physicalPrints {
             let unmix = PrintDyeUnmix(dyes: paper.analyticalDyes)
-            let anchor = paper.anchorDensity(stock.paperMidDensity)
+            let anchor = paper.anchorDensity
             let light = SpectralRuntime.referenceViewingLight(for: paper)
             let target = SpectralRuntime.transmissionRGB(
                 density: [anchor, anchor, anchor], dyes: paper.dyes,

@@ -187,7 +187,7 @@ final class ReciprocityTests: XCTestCase {
             let paperCurve = FotufilmEngine.Options().paper(for: stock).printCurve(for: stock)
             let xMid = paperCurve.logExposure(
                 density: paperCurve.dMin
-                    + FotufilmEngine.Options().paper(for: stock).anchorDensity(stock.paperMidDensity))
+                    + FotufilmEngine.Options().paper(for: stock).anchorDensity)
             let range = paperCurve.dMax - paperCurve.dMin
             let activation = SIMD3<Float>(
                 (paperCurve.density(logExposure: xMid + logE.x) - paperCurve.dMin) / range,
