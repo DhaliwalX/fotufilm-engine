@@ -259,8 +259,11 @@ final class AccuracyBaselineTests: XCTestCase {
             spread = max(spread, channels.max()! - channels.min()!)
         }
         let grey = render(SIMD3(0.18, 0.18, 0.18), stock: stock)
+        let medium = FotufilmEngine.Options().paper(for: stock)
+        // Release-print LAD and reflection-paper gray have different output aims.
+        let greyAim: Float = medium.isProjected ? 0.1 : 0.18
         let midGrey = [grey.x, grey.y, grey.z]
-            .map { Double(abs($0 - 0.18)) }.max()!
+            .map { Double(abs($0 - greyAim)) }.max()!
         return (spread, midGrey)
     }
 
@@ -306,17 +309,12 @@ final class AccuracyBaselineTests: XCTestCase {
         let baseline = Baseline(
             note: """
                 Colour accuracy as measured when this file was last accepted. \
-                Regenerate with FOTUFILM_ACCURACY_BASELINE=update and read the \
+                Regenerate with FOTUFILM_ACCURACY_BASELINE=update and review the \
                 diff: bandFloor rising is better, every other measure falling \
-                is better. See AccuracyBaselineTests. The five motion-picture \
-                negatives develop on VISION 2383 rather than RA-4 paper, \
-                because their packs name it as their native print medium, and \
-                their print-side measures sit higher for it. That is the \
-                medium and not a regression: a release print is far steeper \
-                than a sheet of paper and carries a fifth of its viewing \
-                flare, so a neutral wedge spreads more at both ends. Printing \
-                a still stock on 2383 raises its spread the same way, which is \
-                what says this is the sheet rather than the pairing.
+                is better. Mid-grey error is measured against the selected \
+                medium's aim: 10% for release prints and 18% elsewhere. Print-side \
+                measures depend on the medium's curves, illumination and viewing \
+                flare; review their baselines when those properties change.
                 """,
             stocks: stocks)
         let encoder = JSONEncoder()
