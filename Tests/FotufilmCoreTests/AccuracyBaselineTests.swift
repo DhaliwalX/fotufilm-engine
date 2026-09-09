@@ -259,8 +259,11 @@ final class AccuracyBaselineTests: XCTestCase {
             spread = max(spread, channels.max()! - channels.min()!)
         }
         let grey = render(SIMD3(0.18, 0.18, 0.18), stock: stock)
+        let medium = FotufilmEngine.Options().paper(for: stock)
+        // Release-print LAD and reflection-paper gray have different output aims.
+        let greyAim: Float = medium.isProjected ? 0.1 : 0.18
         let midGrey = [grey.x, grey.y, grey.z]
-            .map { Double(abs($0 - 0.18)) }.max()!
+            .map { Double(abs($0 - greyAim)) }.max()!
         return (spread, midGrey)
     }
 
