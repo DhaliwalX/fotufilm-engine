@@ -28,7 +28,7 @@ final class PrintPaperRecordTests: XCTestCase {
         let midpointSlots = [FilmEngineInvocation.paperMidpointRedOffset, 62,
                              FilmEngineInvocation.paperMidpointBlueOffset]
         let anchor = PrintPaper.ektacolorEdge
-            .anchorDensity(Self.stock.paperMidDensity)
+            .anchorDensity
         for (channel, curve) in expected.enumerated() {
             XCTAssertEqual(slots(configuration, at: offsets[channel]),
                            [curve.dMin, curve.gamma, curve.toe, curve.toeWidth,
@@ -95,7 +95,7 @@ final class PrintPaperRecordTests: XCTestCase {
         let midpointSlots = [FilmEngineInvocation.paperMidpointRedOffset, 62,
                              FilmEngineInvocation.paperMidpointBlueOffset]
         let anchor = PrintPaper.enduraPremier
-            .anchorDensity(Self.stock.paperMidDensity)
+            .anchorDensity
         for (channel, curve) in expected.enumerated() {
             XCTAssertEqual(slots(configuration, at: offsets[channel]),
                            [curve.dMin, curve.gamma, curve.toe, curve.toeWidth,
@@ -130,8 +130,4 @@ final class PrintPaperRecordTests: XCTestCase {
         }
     }
 
-    // The stock-to-paper neutrality cases stay in the consumer repository: they anchor on
-    // `paperMidDensity`, which the example stock here does not state. What is public is the
-    // paper data itself - each record's own curve, its midpoint, and its agreement with the
-    // published sheet.
 }

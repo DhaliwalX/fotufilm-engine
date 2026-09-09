@@ -97,14 +97,9 @@ extension PrintPaper {
         case .screen, .negative:
             return [stock.paperCurve, stock.paperCurve, stock.paperCurve]
         case .vision2383:
-            return [Vision2383PrintSpectra.printCurve,
-                    Vision2383PrintSpectra.printCurve,
-                    Vision2383PrintSpectra.printCurve]
-        // Premier's sheet draws its three records far enough apart to fit
-        // separately, which 2383's does not: red, green and blue come back at
-        // gammas of 6.10, 8.81 and 6.63 with none of them against a bound. So
-        // this medium carries the per-record spread that E-7020 does and 2383
-        // still cannot.
+            return [Vision2383PrintSpectra.redCurve,
+                    Vision2383PrintSpectra.greenCurve,
+                    Vision2383PrintSpectra.blueCurve]
         case .vision2393:
             return [Vision2393PrintSpectra.redCurve,
                     Vision2393PrintSpectra.greenCurve,
@@ -214,10 +209,9 @@ extension SpectralGrid {
         normalizeSensitivities(Vision2393PrintSpectra.layerSensitivity
             .map(continuedTails))
 
-    /// FUJIFILM ETERNA-CP 3513DI, from its brochure. Partitioned without a
-    /// `neutralAmounts` multiply like the two Kodak prints: the sheet draws a
-    /// Gray beside the three dyes and solving it for their amounts returns
-    /// 1.03, 0.99 and 0.95 of them.
+    /// FUJIFILM ETERNA-CP 3513DI, preserving the brochure's published dye traces.
+    /// Its held-out Gray requires a negative residual intercept; this is unresolved
+    /// source inconsistency, not evidence of a physical neutral-forming dye ratio.
     static let eternaCPDyeAmounts: [[Float]] = EternaCPPrintSpectra.dyeDensity
     static let eternaCPDyes: [[Float]] = partition(eternaCPDyeAmounts)
     static let eternaCPSensitivity: [[Float]] =
