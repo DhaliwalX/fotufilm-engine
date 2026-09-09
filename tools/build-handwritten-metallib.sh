@@ -28,9 +28,15 @@ trap 'rm -rf "$WORK"' EXIT
 # Use a separate build directory to work inside SwiftPM-driven builds and tests without a lock
 # cycle. The exporter evaluates constants only: it needs neither Halide nor a Metal device.
 TOOL_BUILD="$ROOT/build/metal-defines"
-FOTUFILM_DISABLE_HALIDE=1 swift build --package-path "$ROOT" --scratch-path "$TOOL_BUILD" \
+# The exporter is a host tool, but this script also runs as an Xcode build phase, and Xcode
+# exports the phase's SDK into the environment. SwiftPM reads SDKROOT, so an iOS archive would
+# compile this package's manifest for arm64-apple-macosx against the iPhoneOS SDK and fail with
+# "unable to load standard library". The phase's platform is never the exporter's, so drop it.
+HOST_BUILD=(env -u SDKROOT -u PLATFORM_NAME -u EFFECTIVE_PLATFORM_NAME -u SUPPORTED_PLATFORMS \
+  -u TOOLCHAINS FOTUFILM_DISABLE_HALIDE=1)
+"${HOST_BUILD[@]}" swift build --package-path "$ROOT" --scratch-path "$TOOL_BUILD" \
   -c release --product fotufilm-metal-defines >&2
-TOOL_BIN="$(FOTUFILM_DISABLE_HALIDE=1 swift build --package-path "$ROOT" \
+TOOL_BIN="$("${HOST_BUILD[@]}" swift build --package-path "$ROOT" \
   --scratch-path "$TOOL_BUILD" -c release --show-bin-path)"
 "$TOOL_BIN/fotufilm-metal-defines" > "$WORK/definitions"
 COMMON_DEFINES=()
