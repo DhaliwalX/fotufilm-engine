@@ -19,10 +19,13 @@ static inline float3 fotufilm_decode_x420_scene_sample(
         y + 1.4746f * v,
         y - 0.164553f * u - 0.571353f * v,
         y + 1.8814f * u);
-    return max(float3(
+    // The curve's toe is cut at zero in the recorded gamut; Apple Log 2 then enters Rec.2020
+    // through its matrix and is cut again, matching the 8-bit road's post-matrix clamp.
+    float3 recorded = max(float3(
         capture_scene_light(signal.x, transfer),
         capture_scene_light(signal.y, transfer),
-        capture_scene_light(signal.z, transfer)), 0.0f) * scene_scale;
+        capture_scene_light(signal.z, transfer)), 0.0f);
+    return max(capture_scene_to_working(recorded, transfer), 0.0f) * scene_scale;
 }
 
 static inline float3 fotufilm_decode_x420_scene(

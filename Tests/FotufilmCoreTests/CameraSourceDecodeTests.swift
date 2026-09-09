@@ -86,6 +86,25 @@ final class CameraSourceDecodeTests: XCTestCase {
                        accuracy: 1e-6)
     }
 
+    /// The anchor table Apple prints in the Apple Log 2 white paper (September 2025), which
+    /// states the curve is the Apple Log transfer function unchanged: float signal and 10-bit
+    /// full-range code for 0%, 18%, 90%, and 1200% scene reflection.
+    func testAppleLogPublishedAnchors() {
+        let anchors: [(float: Float, code: Float, reflectance: Float)] = [
+            (0.150477, 154, 0), (0.488272, 500, 0.18),
+            (0.681686, 697, 0.9), (1.0, 1023, 12),
+        ]
+        for anchor in anchors {
+            XCTAssertEqual(AppleLogCurve.linear(anchor.float), anchor.reflectance,
+                           accuracy: 1e-5 + anchor.reflectance * 1e-5,
+                           "float \(anchor.float)")
+            // The 10-bit column is the float column rounded, so it lands within a code's width.
+            XCTAssertEqual(AppleLogCurve.linear(anchor.code / 1023), anchor.reflectance,
+                           accuracy: 1e-4 + anchor.reflectance * 5e-3,
+                           "code \(anchor.code)")
+        }
+    }
+
     func testFujifilmLogPublishedAnchors() {
         XCTAssertEqual(CameraLogCurve.flogToLinear(95.0 / 1023.0), 0,
                        accuracy: 2e-5)
@@ -121,6 +140,7 @@ final class CameraSourceDecodeTests: XCTestCase {
                        0.9 * HLGSceneTransfer.headroom, accuracy: 1e-4)
         XCTAssertEqual(HLGSceneTransfer.headroom, 3.7745, accuracy: 1e-3)
         XCTAssertNil(CameraLogEncoding.appleLog.declaredHeadroom)
+        XCTAssertNil(CameraLogEncoding.appleLog2.declaredHeadroom)
         XCTAssertNil(CameraLogEncoding.slog3.declaredHeadroom)
         XCTAssertNil(CameraLogEncoding.flog.declaredHeadroom)
         XCTAssertNil(CameraLogEncoding.flog2.declaredHeadroom)
@@ -187,6 +207,11 @@ final class CameraSourceDecodeTests: XCTestCase {
     func testCameraEncodingTable() {
         XCTAssertEqual(CameraLogEncoding.appleLog.curve, .appleLog)
         XCTAssertEqual(CameraLogEncoding.appleLog.gamut, .rec2020)
+        XCTAssertEqual(CameraLogEncoding.appleLog2.curve, .appleLog)
+        XCTAssertEqual(CameraLogEncoding.appleLog2.gamut, .appleWideGamut)
+        XCTAssertEqual(CameraLogEncoding.appleLog2.transferFunction, .appleLog)
+        XCTAssertEqual(CameraLogEncoding.appleLog2.sourceLight.primaries,
+                       CameraGamut.appleWideGamut.primaries)
         XCTAssertEqual(CameraLogEncoding.slog3Cine.curve, .sLog3)
         XCTAssertEqual(CameraLogEncoding.slog3Cine.gamut, .sGamut3Cine)
         XCTAssertEqual(CameraLogEncoding.slog3.curve, .sLog3)
@@ -201,5 +226,33 @@ final class CameraSourceDecodeTests: XCTestCase {
         XCTAssertEqual(CameraLogEncoding.flog2C.gamut, .fGamutC)
         XCTAssertEqual(CameraLogEncoding.hlg.curve, .hlg)
         XCTAssertEqual(CameraLogEncoding.hlg.gamut, .rec2020)
+    }
+
+    /// Apple Wide Gamut as published for Apple Log 2 (and carried into the ACES CSC transforms
+    /// and the OCIO studio config), solved against Rec.2020 with D65 on both sides.
+    func testAppleWideGamutMatchesThePublishedPrimaries() {
+        let primaries = CameraGamut.appleWideGamut.primaries
+        XCTAssertEqual(primaries.rx, 0.725); XCTAssertEqual(primaries.ry, 0.301)
+        XCTAssertEqual(primaries.gx, 0.221); XCTAssertEqual(primaries.gy, 0.814)
+        XCTAssertEqual(primaries.bx, 0.068); XCTAssertEqual(primaries.by, -0.076)
+
+        let expected: [Double] = [
+            1.028100938, 0.098978818, -0.127079756,
+            0.002520342, 1.170849643, -0.173369985,
+            -0.022087573, -0.064050383, 1.086137957,
+        ]
+        let matrix = CameraGamut.appleWideGamut.toRec2020
+        for (index, value) in expected.enumerated() {
+            XCTAssertEqual(matrix[index], value, accuracy: 1e-8, "element \(index)")
+        }
+        // D65 to D65: the recorded white is the working white.
+        for row in 0..<3 {
+            XCTAssertEqual(matrix[row * 3] + matrix[row * 3 + 1] + matrix[row * 3 + 2],
+                           1, accuracy: 1e-12)
+        }
+        // The recorded blue and red lie outside Rec.2020, which is the point of the gamut.
+        XCTAssertLessThan(matrix[2], 0)
+        XCTAssertLessThan(matrix[5], 0)
+        XCTAssertLessThan(matrix[6], 0)
     }
 }

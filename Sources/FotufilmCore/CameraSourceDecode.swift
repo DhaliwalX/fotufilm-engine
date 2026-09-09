@@ -1,7 +1,8 @@
 import Foundation
 
 /// Apple Log constants from the Apple Log Profile white paper. The curve combines a log segment
-/// with a parabolic toe that becomes negative at black.
+/// with a parabolic toe that becomes negative at black. Apple Log 2 (iPhone 17 Pro, iOS 26)
+/// keeps this exact curve and changes only the recorded gamut, so it shares these numbers.
 public enum AppleLogCurve {
     public static let r0: Float = -0.05641088
     public static let c: Float = 47.28711236
@@ -268,6 +269,11 @@ public struct CameraGamut: Equatable, Sendable {
     public static let rec2020 = CameraGamut(primaries: Primaries(
         r: (0.70800, 0.29200), g: (0.17000, 0.79700), b: (0.13100, 0.04600)))
 
+    /// Apple Wide Gamut, the primaries Apple Log 2 records in (Apple Log 2 Profile white paper,
+    /// D65). Wider than BT.2020 on every side: its red and blue sit outside the working cube.
+    public static let appleWideGamut = CameraGamut(primaries: Primaries(
+        r: (0.72500, 0.30100), g: (0.22100, 0.81400), b: (0.06800, -0.07600)))
+
     /// Fujifilm F-Gamut uses the BT.2020 primaries and D65 white exactly.
     public static let fGamut = rec2020
 
@@ -353,6 +359,7 @@ public struct CameraGamut: Equatable, Sendable {
 /// converter's switch.
 public enum CameraLogEncoding: String, CaseIterable, Codable, Sendable, Identifiable {
     case appleLog
+    case appleLog2
     case slog3Cine
     case slog3
     case slog2
@@ -365,7 +372,7 @@ public enum CameraLogEncoding: String, CaseIterable, Codable, Sendable, Identifi
 
     public var curve: CameraLogCurve {
         switch self {
-        case .appleLog: return .appleLog
+        case .appleLog, .appleLog2: return .appleLog
         case .slog3Cine, .slog3: return .sLog3
         case .slog2: return .sLog2
         case .flog: return .fLog
@@ -377,6 +384,7 @@ public enum CameraLogEncoding: String, CaseIterable, Codable, Sendable, Identifi
     public var gamut: CameraGamut {
         switch self {
         case .appleLog, .hlg: return .rec2020
+        case .appleLog2: return .appleWideGamut
         case .slog3Cine: return .sGamut3Cine
         case .slog3, .slog2: return .sGamut
         case .flog, .flog2: return .fGamut
@@ -384,9 +392,11 @@ public enum CameraLogEncoding: String, CaseIterable, Codable, Sendable, Identifi
         }
     }
 
+    /// Apple Log 2 is the Apple Log curve over different primaries, so its transfer is stated
+    /// as `.appleLog`; the gamut is what tells the two apart in a `SourceLight`.
     public var transferFunction: SourceTransferFunction {
         switch self {
-        case .appleLog: return .appleLog
+        case .appleLog, .appleLog2: return .appleLog
         case .slog3Cine, .slog3: return .sLog3
         case .slog2: return .sLog2
         case .flog: return .fLog
@@ -403,7 +413,7 @@ public enum CameraLogEncoding: String, CaseIterable, Codable, Sendable, Identifi
     /// path a raw capture takes, so those encodings declare nothing.
     public var declaredHeadroom: Float? {
         switch self {
-        case .appleLog, .slog3Cine, .slog3, .slog2,
+        case .appleLog, .appleLog2, .slog3Cine, .slog3, .slog2,
              .flog, .flog2, .flog2C: return nil
         case .hlg: return HLGSceneTransfer.headroom
         }

@@ -33,10 +33,12 @@ public final class HandwrittenMetalGlobalMeasurements {
         case sRGB = 1
     }
 
-    /// Transfer carried by a 10-bit bi-planar BT.2020 camera buffer.
+    /// Transfer carried by a 10-bit bi-planar camera buffer. HLG and Apple Log record BT.2020
+    /// primaries; Apple Log 2 records Apple Wide Gamut, which the decode carries to Rec.2020.
     public enum HDRCaptureTransfer: UInt32, Sendable {
         case hlg = 0
         case appleLog = 1
+        case appleLog2 = 2
     }
 
     public enum ResourceError: Swift.Error, CustomStringConvertible {
