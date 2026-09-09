@@ -10,6 +10,10 @@ final class ReversalGrainTests: XCTestCase {
         XCTAssertEqual(TestStocks.reversal.grainDensityLaw, .dyeCloudReversal)
         XCTAssertEqual(TestStocks.negative.grainDensityLaw, .dyeCloud)
         XCTAssertEqual(TestStocks.monochrome.grainDensityLaw, .silver)
+        for id in ["provia100f", "velvia50", "kodachrome64"] {
+            XCTAssertEqual(try XCTUnwrap(FilmStock.named(id)).grainDensityLaw,
+                           .dyeCloudReversal, id)
+        }
         var definition = FilmStockDefinition(id: "legacy", stock: TestStocks.reversal)
         definition.grainDensityLaw = .dyeCloudSelwyn
         definition.grainReversalProfile = nil
