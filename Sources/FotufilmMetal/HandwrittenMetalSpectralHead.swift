@@ -36,10 +36,12 @@ public final class HandwrittenMetalSpectralHead {
         case sRGB = 1
     }
 
-    /// Transfer carried by a 10-bit bi-planar BT.2020 camera buffer.
+    /// Transfer carried by a 10-bit bi-planar camera buffer. HLG and Apple Log record BT.2020
+    /// primaries; Apple Log 2 records Apple Wide Gamut, which the decode carries to Rec.2020.
     public enum HDRCaptureTransfer: UInt32, Sendable {
         case hlg = 0
         case appleLog = 1
+        case appleLog2 = 2
     }
 
     /// A whole-frame local-tone solve held on the CPU at preparation time.
@@ -475,7 +477,8 @@ public final class HandwrittenMetalSpectralHead {
 
     /// Fuses x420 camera decode and spectral recovery. The luma/chroma textures are the
     /// `r16Unorm`/`rg16Unorm` views of a 10-bit video-range CVPixelBuffer. HLG and Apple Log both
-    /// carry BT.2020 primaries, so the curve decode lands directly in the film working space.
+    /// carry BT.2020 primaries, so their curve decode lands directly in the film working space;
+    /// Apple Log 2 adds the Apple Wide Gamut matrix inside the same decode.
     @discardableResult
     public func encodeCapturedHDR(
         luma: MTLTexture, chroma: MTLTexture,

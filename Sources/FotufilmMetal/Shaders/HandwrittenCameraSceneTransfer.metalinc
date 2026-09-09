@@ -20,3 +20,20 @@ static inline float apple_log_to_linear(float code) {
     if (code >= 0.0f) return sqrt(code / c) + r0;
     return r0;
 }
+
+// Capture transfers: 0 = HLG, 1 = Apple Log, 2 = Apple Log 2. The two Apple curves are the same
+// function; Apple Log 2 differs only in recording Apple Wide Gamut, carried to the Rec.2020
+// working space here with the matrix FotufilmCore solves from the published primaries.
+static inline float3 apple_wide_gamut_to_rec2020(float3 rgb) {
+    return float3(
+        dot(float3(FOTUFILM_APPLE_WG_TO_2020_0, FOTUFILM_APPLE_WG_TO_2020_1,
+                   FOTUFILM_APPLE_WG_TO_2020_2), rgb),
+        dot(float3(FOTUFILM_APPLE_WG_TO_2020_3, FOTUFILM_APPLE_WG_TO_2020_4,
+                   FOTUFILM_APPLE_WG_TO_2020_5), rgb),
+        dot(float3(FOTUFILM_APPLE_WG_TO_2020_6, FOTUFILM_APPLE_WG_TO_2020_7,
+                   FOTUFILM_APPLE_WG_TO_2020_8), rgb));
+}
+
+static inline float3 capture_scene_to_working(float3 scene, uint transfer) {
+    return transfer == 2u ? apple_wide_gamut_to_rec2020(scene) : scene;
+}
