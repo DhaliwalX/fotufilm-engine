@@ -328,12 +328,14 @@ public enum SpectralRuntime {
     public static func tables(for stock: FilmStock,
                               paper: PrintPaper = .default,
                               bleachBypass: Float = 0,
-                              printViewingKelvin: Float? = nil) -> SpectralPipelineTables {
+                              printViewingKelvin: Float? = nil,
+                              callier: Float = 1) -> SpectralPipelineTables {
         let bleachBypass = retainedSilverFraction(bleachBypass, stock: stock)
         let printViewingKelvin = (stock.isReversal || !paper.acceptsViewingIlluminant) ? nil
             : printLightKelvin(printViewingKelvin)
+        let callier = callierCoefficient(callier, stock: stock, paper: paper)
         let key = cacheIdentifier(for: stock, paper: paper, bleachBypass: bleachBypass,
-                                  printViewingKelvin: printViewingKelvin)
+                                  printViewingKelvin: printViewingKelvin, callier: callier)
         lock.lock()
         while true {
             if let found = cache.value(for: key) {
@@ -350,7 +352,7 @@ public enum SpectralRuntime {
         lock.unlock()
 
         let built = buildTables(for: stock, paper: paper, bleachBypass: bleachBypass,
-                                printViewingKelvin: printViewingKelvin)
+                                printViewingKelvin: printViewingKelvin, callier: callier)
 
         lock.lock()
         cache.insert(built, for: key)
@@ -403,11 +405,22 @@ public enum SpectralRuntime {
         return fraction * retainedSilverPerDye * silver
     }
 
+    /// The Callier coefficient the printing path actually honours: exactly 1 wherever no
+    /// enlarger lamp house is in the path (`Enlarger.illuminates`), and never below 1 — a
+    /// diffuse read is the floor, not a setting.
+    static func callierCoefficient(_ requested: Float, stock: FilmStock,
+                                   paper: PrintPaper) -> Float {
+        guard requested.isFinite, requested > 1,
+              Enlarger.illuminates(stock: stock, paper: paper) else { return 1 }
+        return requested
+    }
+
     /// Identity of the tables a stock needs.
     public static func cacheIdentifier(for stock: FilmStock,
                                        paper: PrintPaper = .default,
                                        bleachBypass: Float = 0,
-                                       printViewingKelvin: Float? = nil) -> UInt64 {
+                                       printViewingKelvin: Float? = nil,
+                                       callier: Float = 1) -> UInt64 {
         var h = stock.spectralProfile.signature
         func add(_ v: Float) { h = (h ^ UInt64(v.bitPattern)) &* 0x100000001b3 }
         // The exposure LUT is normalized against the illuminant this emulsion was balanced for.
@@ -449,6 +462,11 @@ public enum SpectralRuntime {
            let kelvin = printLightKelvin(printViewingKelvin) {
             h = (h ^ UInt64(kelvin.bitPattern)) &* 0x9E3779B97F4A7C15
         }
+        // A diffuser head is the read the sheets were measured in, so it leaves the identity alone.
+        let callier = callierCoefficient(callier, stock: stock, paper: paper)
+        if callier != 1 {
+            h = (h ^ UInt64(callier.bitPattern)) &* 0xC2B2AE3D27D4EB4F
+        }
         // The donor layer changes the exposure cube's fourth channel; empty adds the zero the
         // fold starts from, so every pre-donor identity is untouched.
         let donor = donorSignature(for: stock)
@@ -459,7 +477,8 @@ public enum SpectralRuntime {
     private static func buildTables(for stock: FilmStock,
                                     paper: PrintPaper,
                                     bleachBypass: Float = 0,
-                                    printViewingKelvin: Float? = nil) -> SpectralPipelineTables {
+                                    printViewingKelvin: Float? = nil,
+                                    callier: Float = 1) -> SpectralPipelineTables {
         // Output characterization is fixed at the stock's reference light. The invocation
         // replaces this exposure table with the scene spectrum after calibration is built.
         let exposure = exposureTable(for: stock, illuminant: filmReferenceIlluminant(for: stock))
@@ -503,10 +522,15 @@ public enum SpectralRuntime {
             // lab times a skip-bleach negative through its own extra density, so what
             // survives onto the paper is the added contrast and the lost chroma, not a
             // uniformly darker frame.
-            let midEnergy = paperExposure(density: midDensity,
+            // Under a condenser head every density is the diffuse figure times the Callier
+            // coefficient of the material holding it: the image's own on the image densities,
+            // silver's on the silver the bleach left behind. The mid-grey scales with the rest,
+            // so the re-timing below holds it and the head shows as contrast.
+            let silverCallier = callier == 1 ? Float(1) : Enlarger.silverCallierCoefficient
+            let midEnergy = paperExposure(density: midDensity.map { $0 * callier },
                                           dyes: stock.spectralProfile.imageDyeDensity,
                                           lamp: lamp, paperSensitivity: paperSensitivity,
-                                          neutralDensity: retainedSilverDensity(
+                                          neutralDensity: silverCallier * retainedSilverDensity(
                                               midDensity, dMin: dMin,
                                               fraction: bleachBypass))
             // Dividing each channel by the stock's own mid energy is the
@@ -519,10 +543,10 @@ public enum SpectralRuntime {
             let castOffset = referenceCastOffset(midEnergy: midEnergy,
                                                  stock: stock, paper: paper)
             printing = buildDensityLUT(stock: stock) { density in
-                let energy = paperExposure(density: density,
+                let energy = paperExposure(density: density.map { $0 * callier },
                                            dyes: stock.spectralProfile.imageDyeDensity,
                                            lamp: lamp, paperSensitivity: paperSensitivity,
-                                           neutralDensity: retainedSilverDensity(
+                                           neutralDensity: silverCallier * retainedSilverDensity(
                                                density, dMin: dMin,
                                                fraction: bleachBypass))
                 return SIMD3<Float>(
@@ -2130,7 +2154,9 @@ extension SpectralRuntime {
     /// mirroring the pipeline's own output model rather than by fitting one.
     static func neutralToneScale(stops: [Float], stock: FilmStock,
                                  paper: PrintPaper = .default,
-                                 printCorrection: Float) -> [Float] {
+                                 printCorrection: Float,
+                                 callier: Float = 1) -> [Float] {
+        let callier = callierCoefficient(callier, stock: stock, paper: paper)
         // Display-linear print RGB is Display P3, so its luminance uses the P3 weights.
         let luma = ColorScience.displayP3LuminanceWeights
         func luminance(_ rgb: SIMD3<Float>) -> Float {
@@ -2168,7 +2194,7 @@ extension SpectralRuntime {
         let lamp = paper.isScan ? SpectralGrid.equalEnergy
                                 : SpectralGrid.enlarger3200K
         let midDensity = (0..<3).map { stock.curves[$0].density(logExposure: 0) }
-        let midEnergy = paperExposure(density: midDensity,
+        let midEnergy = paperExposure(density: midDensity.map { $0 * callier },
                                       dyes: stock.spectralProfile.imageDyeDensity,
                                       lamp: lamp, paperSensitivity: paperSensitivity)
         let neutralMid = neutralDensity(stock, 0)
@@ -2193,7 +2219,7 @@ extension SpectralRuntime {
                     return neutralMid - neutralDensity(stock, exposure)
                 })
             } else {
-                let energy = paperExposure(density: density,
+                let energy = paperExposure(density: density.map { $0 * callier },
                                            dyes: stock.spectralProfile.imageDyeDensity,
                                            lamp: lamp, paperSensitivity: paperSensitivity)
                 // The same reference cast the printing LUT carries — this

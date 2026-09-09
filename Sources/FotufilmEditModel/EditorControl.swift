@@ -19,7 +19,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case push, bleach, expired, shutter
 
     // The print, and the grade laid over it.
-    case paper, printLight, printCorrection, gradeSpace
+    case paper, printLight, enlarger, printCorrection, gradeSpace
     case gradeShadowsWarmth, gradeShadowsTint, gradeShadowsLevel
     case gradeMidtonesWarmth, gradeMidtonesTint, gradeMidtonesLevel
     case gradeHighlightsWarmth, gradeHighlightsTint, gradeHighlightsLevel

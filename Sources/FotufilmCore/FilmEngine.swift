@@ -1257,7 +1257,9 @@ public struct FilmEngineInvocation {
                 ? (shadows: Float(0), highlights: AutoAdjustment.kDiffuseWhiteStops)
                 : AutoAdjustment.latitude(stock: stock,
                                           printCorrection: options.printCorrection,
-                                          paper: printMedium)
+                                          paper: printMedium,
+                                          callier: options.enlarger.callierCoefficient(
+                                              for: stock, paper: printMedium))
             highlights = max(-1, min(1, highlights + AutoAdjustment.headroomHighlights(
                 contentHeadroom: options.sceneHeadroom, window: window)))
         }
@@ -1450,14 +1452,17 @@ public struct FilmEngineInvocation {
                 for: stock, bleachBypass: options.bleachBypass))
                 ^ (0x4E45474154495645 &+ look.ordinal)
         } else {
+            let callier = options.enlarger.callierCoefficient(for: stock, paper: printMedium)
             self.spectral = SpectralRuntime.tables(
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
-                printViewingKelvin: options.printViewingKelvin)
+                printViewingKelvin: options.printViewingKelvin,
+                callier: callier)
             self.spectralCacheID = SpectralRuntime.cacheIdentifier(
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
-                printViewingKelvin: options.printViewingKelvin)
+                printViewingKelvin: options.printViewingKelvin,
+                callier: callier)
         }
         // One resolved spectrum controls both integration and upload identity. Source pixels
         // have already been neutralized at capture; applying RGB WB here would count light twice.
