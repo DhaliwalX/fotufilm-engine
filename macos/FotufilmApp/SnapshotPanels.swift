@@ -28,15 +28,19 @@ enum SnapshotPanels {
                 at: directory, withIntermediateDirectories: true)
             // Let the sample develop, so the panels that read the film — the paper list, the
             // reciprocity row — are the ones a photograph really gets.
-            for _ in 1...40 where editor.model.processed == nil {
+            for _ in 1...240 where editor.model.processed == nil || editor.model.isProcessing {
                 try? await Task.sleep(for: .milliseconds(250))
+            }
+            guard editor.model.processed != nil, !editor.model.isProcessing else {
+                print("snapshot-panels: preview did not finish developing")
+                exit(1)
             }
 
             var written = 0
             for panel in InspectorPanel.allCases {
                 let controller = InspectorViewController(model: editor.model)
                 controller.panel = panel
-                if write(controller, size: CGSize(width: columnWidth,
+                if await write(controller, size: CGSize(width: columnWidth,
                                                   height: columnHeight),
                          to: directory.appendingPathComponent(
                             "panel-\(panel.rawValue).png")) {
@@ -58,7 +62,7 @@ enum SnapshotPanels {
             try? await Task.sleep(for: .milliseconds(400))
             let plain = InspectorViewController(model: editor.model)
             plain.panel = .film
-            if write(plain, size: CGSize(width: columnWidth,
+            if await write(plain, size: CGSize(width: columnWidth,
                                          height: columnHeight),
                      to: directory.appendingPathComponent("panel-film-normal.png")) {
                 written += 1
@@ -120,7 +124,7 @@ enum SnapshotPanels {
     /// dark-mode greys, and without a window they would come out light.
     @MainActor
     private static func write(_ controller: NSViewController, size: CGSize,
-                              to url: URL) -> Bool {
+                              to url: URL) async -> Bool {
         // A panel paints nothing behind its rows: in the app the window's glass and the
         // photograph are back there. Drawn straight to a bitmap it lands on nothing, and
         // "nothing" appears as white — under white text, which is what the session's controls are
@@ -157,6 +161,19 @@ enum SnapshotPanels {
         backdrop.layoutSubtreeIfNeeded()
         backdrop.layoutSubtreeIfNeeded()
 
+        // These isolated controllers have no editor observation loop. Refresh them while
+        // their format previews render, instead of recording empty thumbnail placeholders.
+        for _ in 1...240 {
+            (controller as? InspectorViewController)?.refresh()
+            if !hasPendingPreviews(in: view) { break }
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        guard !hasPendingPreviews(in: view) else {
+            print("snapshot-panels: thumbnails did not finish for \(url.lastPathComponent)")
+            return false
+        }
+        backdrop.layoutSubtreeIfNeeded()
+
         guard let bitmap = backdrop.bitmapImageRepForCachingDisplay(
             in: backdrop.bounds) else {
             print("snapshot-panels: could not make a bitmap for \(url.lastPathComponent)")
@@ -175,5 +192,13 @@ enum SnapshotPanels {
             print("snapshot-panels: \(url.lastPathComponent): \(error)")
             return false
         }
+    }
+
+    @MainActor
+    private static func hasPendingPreviews(in view: NSView) -> Bool {
+        if let tile = view as? PreviewTileButton {
+            return tile.thumbnail.image == nil
+        }
+        return view.subviews.contains { hasPendingPreviews(in: $0) }
     }
 }

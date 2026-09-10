@@ -550,6 +550,9 @@ final class InspectorViewController: SessionViewController {
 
     private func noFilmSection() -> FormSectionView {
         let section = FormSectionView(title: "Normal")
+        section.add(NoteRow(status: true) {
+            "Film simulation is off. Choose a film from the library."
+        })
         section.add(NoteRow("Choose a film from the library on the left to use film format, halation, development, and grain. With Normal selected, use Expose to adjust the source and Print to finish the image."))
         return section
     }
