@@ -109,7 +109,7 @@ for (const { id } of stocks.filter(stock => stock.layeredTransport)) {
     }
     assert.deepEqual((await layered.develop(framedSource, { grain: 0 })).pixels, b.pixels,
       `${id}: layered render was not deterministic`);
-    const exposed = await layered.develop(framedSource, { grain: 0, ev: 1 });
+    const exposed = await layered.develop(framedSource, { grain: 0, exposure: 1 });
     assert.notDeepEqual(exposed.pixels, b.pixels, `${id}: layered exposure control did nothing`);
     console.log(`${id}: Legacy/Layered browser selection, determinism and exposure passed`);
   } finally { legacy.dispose(); layered.dispose(); }

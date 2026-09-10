@@ -68,13 +68,13 @@ for (const { id } of stocks) {
     assert.ok(rung.spatialSupport >= 0, `${id}: rung carries an apron`);
     const source = scene(width, height);
     developer.tileBudget = Infinity;
-    const whole = await developer.develop(source, { ev: 0.3, grain: 1 });
+    const whole = await developer.develop(source, { exposure: 0.3, grain: 1 });
     assert.equal(developer.tiles.length, 1);
     assert.equal(developer.configuration[developer.frameSizeSlot], width);
     assert.equal(developer.configuration[developer.frameSizeSlot + 1], height);
     developer.tileBudget = 1;  // the smallest tiles the planner will cut
     developer.width = 0;       // force a new plan at the same size
-    const tiled = await developer.develop(source, { ev: 0.3, grain: 1 });
+    const tiled = await developer.develop(source, { exposure: 0.3, grain: 1 });
     assert.ok(developer.tiles.length > 1, `${id}: the frame was cut (${developer.tiles.length} tiles)`);
     assert.ok(whole.pixels.some((v, i) => i % 4 !== 3 && v > 8), `${id}: flat output`);
     let differing = 0;
