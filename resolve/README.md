@@ -48,16 +48,64 @@ Light & Colour, Lens & Filters, Development, Grain, Halation, Colour Separation,
 Pipeline. Input, Film, and Output start open; Pipeline holds **Stage** and **Render Mode** and
 starts closed. Start with these settings:
 
-| Setting | What it controls |
-| --- | --- |
-| Film Format / Resolved Format | Film size and the format selected by Match Film. |
-| Film Frame Coverage (%) | How much of the film frame is used by the image. |
-| Push / Pull | Development conditions offered by the selected stock. |
-| Long Exposure (s) | Reciprocity correction, when the stock provides the data. |
-| Grain Animation / Grain Seed | Moving or frozen grain and its repeatable pattern. |
-| Mottle | The amount of coarse clumping in the grain. |
-| Return Spectrum | Halation strength across seven wavelength bands. |
-| Render Mode / Effective Renderer | Realtime or Reference rendering. |
+<table>
+<thead><tr><th>Control</th><th>Group</th><th>What it does</th></tr></thead>
+<tbody data-controls="resolve-controls">
+  <tr><td>Timeline Color Space</td><td>Input</td><td>What this node is being handed — the one control that is not taste.</td></tr>
+  <tr><td>Stock</td><td>Film</td><td>The emulsion.</td></tr>
+  <tr><td>Film Format</td><td>Film</td><td>The gauge the frame is exposed on.</td></tr>
+  <tr><td>Film Frame Coverage (%)</td><td>Film</td><td>Short edge of the film frame retained after cropping.</td></tr>
+  <tr><td>Exposure</td><td>Light &amp; Colour</td><td>Camera exposure, in stops.</td></tr>
+  <tr><td>Temperature (K)</td><td>Light &amp; Colour</td><td>Spectral scene temperature.</td></tr>
+  <tr><td>Tint</td><td>Light &amp; Colour</td><td>Green/magenta balance of the illuminant.</td></tr>
+  <tr><td>Highlights</td><td>Light &amp; Colour</td><td>Scene-referred highlight recovery, applied before the film model.</td></tr>
+  <tr><td>Shadows</td><td>Light &amp; Colour</td><td>The same shift, fading in below mid-grey.</td></tr>
+  <tr><td>Regional Tone Mask</td><td>Light &amp; Colour</td><td>Off, the highlight and shadow shifts key to each pixel's own luminance instead of to the region it sits in.</td></tr>
+  <tr><td>Saturation</td><td>Light &amp; Colour</td><td>Chroma multiplier applied to the scene before the film responds.</td></tr>
+  <tr><td>Vibrance</td><td>Light &amp; Colour</td><td>Chroma boost weighted toward the least colourful pixels; already-vivid colours are left alone.</td></tr>
+  <tr><td>Scene Illuminant</td><td>Light &amp; Colour</td><td>Capture light presented to the film; Temperature and Tint adjust this spectrum.</td></tr>
+  <tr><td>Scene Illuminant (K)</td><td>Light &amp; Colour</td><td>Custom capture light before the Temperature and Tint edits.</td></tr>
+  <tr><td>Filter 1</td><td>Lens &amp; Filters</td><td>An absorbing filter on the front of the lens.</td></tr>
+  <tr><td>Filter 2</td><td>Lens &amp; Filters</td><td>A second filter, behind the first.</td></tr>
+  <tr><td>Filter 3</td><td>Lens &amp; Filters</td><td>A third filter, behind the second.</td></tr>
+  <tr><td>Metering</td><td>Lens &amp; Filters</td><td>How the exposure was set with those filters fitted.</td></tr>
+  <tr><td>Diffusion</td><td>Lens &amp; Filters</td><td>A diffusion filter on the front of the lens.</td></tr>
+  <tr><td>Diffusion Grade</td><td>Lens &amp; Filters</td><td>The particle loading a product line's 1/8, 1/4, 1/2, 1 and 2 name: one formulation more heavily loaded, so the grade moves how much light takes part and never how far it goes.</td></tr>
+  <tr><td>Focal Length</td><td>Lens &amp; Filters</td><td>The taking lens's focal length in millimetres, read only by the diffusion filter: a ray deviated by an angle ahead of the lens lands focal length times that angle off its unscattered position, so the same filter glows bigger on a longer lens, exactly as it does in the world.</td></tr>
+  <tr><td>Veiling Glare</td><td>Lens &amp; Filters</td><td>Veiling glare from the taking lens, as a multiplier on the stock's figure.</td></tr>
+  <tr><td>Filter Coating</td><td>Lens &amp; Filters</td><td>Coating on every fitted absorbing and diffusion filter.</td></tr>
+  <tr><td>Push / Pull</td><td>Development</td><td>Measured push or pull conditions for this film's stated developer, dilution, temperature and agitation.</td></tr>
+  <tr><td>Bleach Bypass</td><td>Development</td><td>How much of the developed silver the bleach leaves in the negative.</td></tr>
+  <tr><td>Film Age (years)</td><td>Development</td><td>Years the roll sat past its process-by date.</td></tr>
+  <tr><td>Long Exposure (s)</td><td>Development</td><td>Exposure duration for the stock's measured reciprocity response.</td></tr>
+  <tr><td>Grain</td><td>Grain</td><td>Multiplier on the stock's measured granularity.</td></tr>
+  <tr><td>Mottle</td><td>Grain</td><td>Use the stock's coarse grain mixture, or set a custom share.</td></tr>
+  <tr><td>Mottle Amount (%)</td><td>Grain</td><td>Share of grain variance carried by coarse clumping.</td></tr>
+  <tr><td>Grain Animation</td><td>Grain</td><td>Timeline changes grain each frame.</td></tr>
+  <tr><td>Grain Model</td><td>Grain</td><td>Disc grain is available on silver-image stocks and requires Reference rendering, selected automatically.</td></tr>
+  <tr><td>Grain Seed</td><td>Grain</td><td>Same seed and same frame give the same grain.</td></tr>
+  <tr><td>Halation Model</td><td>Halation</td><td>Legacy or layered optical transport.</td></tr>
+  <tr><td>Halation</td><td>Halation</td><td>Multiplier on the fraction of light the base returns.</td></tr>
+  <tr><td>Estimated Halation Shape</td><td>Halation</td><td>Renders halation through the stock's provisional annular profile — the reflex ring at the base's critical angle — where no independently calibrated profile exists.</td></tr>
+  <tr><td>Halo Colour</td><td>Halation</td><td>How much the halo keeps the source's own colour instead of the film's layered red.</td></tr>
+  <tr><td>Return Spectrum</td><td>Halation</td><td>Gain over the stock's halation return spectrum.</td></tr>
+  <tr><td>DIR Couplers</td><td>Colour Separation</td><td>Multiplier on inter-image inhibition, the mechanism behind the stock's colour separation and its Mackie lines.</td></tr>
+  <tr><td>Separation</td><td>Colour Separation</td><td>Interlayer inhibitor reach.</td></tr>
+  <tr><td>Edge Contrast</td><td>Colour Separation</td><td>Within-layer inhibition.</td></tr>
+  <tr><td>Fringe Amount</td><td>Colour Separation</td><td>Broad inter-layer transport fraction, 0-1.</td></tr>
+  <tr><td>Fringe Radius (µm)</td><td>Colour Separation</td><td>Broad transport Gaussian sigma on the film, 20-300 micrometers.</td></tr>
+  <tr><td>Red–Green Reach</td><td>Colour Separation</td><td>Additional multiplier on Separation for the red–green interlayer.</td></tr>
+  <tr><td>Green–Blue Reach</td><td>Colour Separation</td><td>Additional multiplier on Separation for the green–blue interlayer.</td></tr>
+  <tr><td>Output Medium</td><td>Output</td><td>Choose where the finished image lives.</td></tr>
+  <tr><td>Viewing Illuminant</td><td>Output</td><td>Choose the light used to judge a physical print.</td></tr>
+  <tr><td>Enlarger</td><td>Output</td><td>The lamp house a reflection print is enlarged under.</td></tr>
+  <tr><td>Channel Contrast Match</td><td>Output</td><td>Balances how the film's colour layers print together.</td></tr>
+  <tr><td>Negative Viewing</td><td>Output</td><td>How the developed negative is read when Output Medium is Negative.</td></tr>
+  <tr><td>Stage</td><td>Pipeline</td><td>Which span of the pipeline this node performs.</td></tr>
+  <tr><td>Texture Stages</td><td>Pipeline</td><td>Whether Texture Only carries this stage.</td></tr>
+  <tr><td>Render Mode</td><td>Pipeline</td><td>Default preserves the launch-time renderer setting.</td></tr>
+</tbody>
+</table>
 
 A smaller film format makes grain and other spatial effects larger in the image.
 **Output Medium** selects how the developed film is viewed or printed. The status

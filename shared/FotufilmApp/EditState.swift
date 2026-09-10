@@ -7,6 +7,9 @@ import FotufilmImaging
 #if canImport(FotufilmCore)
 import FotufilmCore
 #endif
+#if canImport(FotufilmEditModel)
+import FotufilmEditModel
+#endif
 
 extension FilmSourceInterpretation {
     var label: String {
@@ -538,56 +541,29 @@ struct EditState: Equatable {
         return o
     }
 
-    /// The develop for a source that measured nothing — a clip, a scan, the live camera.
     var options: FotufilmEngine.Options {
         var o = FotufilmEngine.Options()
-        o.exposureEV = Float(exposure)
+        for control in EditorControlCatalogue.all {
+            guard case .edit = control.scope, let binding = control.binding,
+                  control.persistence.encoding ?? .same == .same,
+                  let value = controlValue(of: control) else { continue }
+            binding.apply(value, to: &o)
+        }
         o.whiteBalance = whiteBalance
-        o.highlights = Float(highlights)
-        o.shadows = Float(shadows)
-        o.localTone = localTone
-        o.saturation = Float(saturation)
-        o.vibrance = Float(vibrance)
-        o.grade = grade
-        o.gradeSpace = encodedGrade ? .encoded : .linear
-        o.grainScale = Float(grain)
-        o.grainMottleShare = grainMottleShare.map(Float.init)
-        o.grainModel = discGrain ? .discs : .clumpField
         o.halationScale = Float(halation)
-        o.halationSourceColour = Float(halationColour)
-        // Resampled here rather than in the engine: the ladder of handles is the editor's shape,
-        // and what the engine takes is a curve on its own grid. A flat ladder resamples to nothing
-        // at all, which is the option's own default and the render every earlier build made.
-        o.halationReturnGain =
-            HalationSpectrum.resampled(halationSpectrum.map(Float.init))
+        o.grainMottleShare = grainMottleShare.map(Float.init)
         o.halationModel = AppSettings.storedHalationModel
         o.useEstimatedHalationProfile = AppSettings.storedEstimatedHalationEnabled
-        o.couplerScale = Float(couplers)
-        o.chromaticFringeAmount = Float(chromaticFringeAmount)
-        o.chromaticFringeRadiusMM = Float(chromaticFringeRadius / 1000)
-        // Per-gap only: each barrier already stands for itself, so setting `couplerRangeScale` as
-        // well would be a value the engine never reads.
         o.couplerGapReachScales = couplerGapReach.map(Float.init)
-        o.couplerSelfScale = Float(couplerSelf)
-        o.printCorrection = Float(printCorrection)
-        // The filters sit in front of everything the engine does, so they are resolved here with
-        // the rest of the develop: the absorbing ones through the exposure table, the scattering
-        // one as the stage ahead of the emulsion.
         let fitted = FilterChoice.resolve(lensFilterIDs)
         if !fitted.absorbing.isEmpty {
             o.lensFilters = LensFilterStack(fitted.absorbing,
                                             compensation: lensFilterMetering)
         }
         o.diffusionFilter = fitted.diffusion
-        // Old edits can carry the generic push value removed from the engine. A stock-specific
-        // measured condition survives; anything else returns to reference development instead of
-        // reaching the engine as an unmeasured request.
-        let requestedDevelopment = Float(push)
-        if stock?.supportsDevelopment(stops: requestedDevelopment) == true {
-            o.developmentEV = requestedDevelopment
+        if stock?.supportsDevelopment(stops: Float(push)) != true {
+            o.developmentEV = 0
         }
-        o.bleachBypass = Float(bleach)
-        o.expiredYears = Float(expiredYears)
         o.shutterSeconds = shutterSeconds.map(Float.init)
         o.printViewingKelvin = printLightKelvin.map(Float.init)
         o.enlarger = enlarger

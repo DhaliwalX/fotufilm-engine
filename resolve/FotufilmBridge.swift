@@ -79,60 +79,7 @@ private func currentInitializationError() -> String {
 /// encode for comparison without requiring a different plugin build.
 nonisolated(unsafe) private var realtimeRenderingEnabled = true
 
-/// Indices into the flat parameter array the host sends.
-private enum Parameter {
-    static let exposureEV = 0
-    static let temperature = 1
-    static let tint = 2
-    static let highlights = 3
-    static let shadows = 4
-    static let saturation = 5
-    static let vibrance = 6
-    static let grainScale = 7
-    static let halationScale = 8
-    static let couplerScale = 9
-    static let printCorrection = 10
-    static let localTone = 11
-    static let pushPull = 12
-    static let bleachBypass = 13
-    static let expiredYears = 14
-    static let printLight = 15
-    static let stage = 16
-    static let textureStages = 17
-    static let flareScale = 18
-    static let estimatedHalation = 19
-    static let halationColour = 20
-    static let lensFilter1 = 21
-    static let lensFilter2 = 22
-    static let lensFilter3 = 23
-    static let metering = 24
-    static let diffusionFamily = 25
-    static let diffusionGrade = 26
-    static let focalLength = 27
-    static let negativeViewing = 28
-    static let mottleOverride = 29
-    static let mottleShare = 30
-    static let couplerReach = 31
-    static let couplerSelf = 32
-    static let sceneIlluminant = 33
-    static let halation400 = 34
-    static let halation450 = 35
-    static let halation500 = 36
-    static let halation550 = 37
-    static let halation600 = 38
-    static let halation650 = 39
-    static let halation700 = 40
-    static let filterCoating = 41
-    static let frameCoverage = 42
-    static let grainModel = 43
-    static let shutterSeconds = 44
-    static let renderMode = 45
-    static let grainFrozen = 46
-    static let couplerRedGreen = 47
-    static let couplerGreenBlue = 48
-    static let halationModel = 49
-    static let count = 50
-}
+private typealias Parameter = BridgeSlot
 
 /// The filter drawer, in the order a host's menu indexes it. The catalogue is the engine's, so
 /// the host's menu is the engine's list plus a "None" the plugin owns.
@@ -189,71 +136,20 @@ private func stage(of parameters: UnsafePointer<Float>?) -> PipelineStage? {
     return PipelineStage(ordinal: whole(parameters[Parameter.stage]))
 }
 
-/// Reads the flat parameter array back into the options the engine takes.
 private func options(_ parameters: UnsafePointer<Float>?,
                      format: Int32, stockIndex: Int32, paper: Int32,
                      seed: UInt32) -> FotufilmEngine.Options {
     var result = FotufilmEngine.Options()
-
-    // Chosen before the early return, because the paper is not carried in the float array and a
-    // host that sends no parameters still prints on something.
     if papers.indices.contains(Int(paper)) {
         result.paper = papers[Int(paper)]
     }
-    // A medium the stock cannot reach — a reversal stock has only its own direct positive — is
-    // substituted by the engine, which resolves `options.paper` against the stock it is handed.
-
     guard let parameters else { return result }
     func value(_ index: Int) -> Float { parameters[index] }
 
-    result.exposureEV = value(Parameter.exposureEV)
-    let kelvin = clamp(value(Parameter.temperature),
-                       WhiteBalance.kelvinRange.lowerBound,
-                       WhiteBalance.kelvinRange.upperBound)
-    let tint = clamp(value(Parameter.tint),
-                     WhiteBalance.tintRange.lowerBound,
-                     WhiteBalance.tintRange.upperBound)
-    result.whiteBalance = WhiteBalance(kelvin: kelvin, tint: tint)
-    result.highlights = clamp(value(Parameter.highlights), -1, 1)
-    result.shadows = clamp(value(Parameter.shadows), -1, 1)
-    result.localTone = value(Parameter.localTone) != 0
-    result.saturation = max(0, value(Parameter.saturation))
-    result.vibrance = clamp(value(Parameter.vibrance), -1, 1)
-    result.grainScale = max(0, value(Parameter.grainScale))
-    result.halationScale = max(0, value(Parameter.halationScale))
-    result.couplerScale = max(0, value(Parameter.couplerScale))
-    result.printCorrection = max(0, value(Parameter.printCorrection))
-    result.developmentEV = value(Parameter.pushPull)
-    result.bleachBypass = clamp(value(Parameter.bleachBypass), 0, 1)
-    result.expiredYears = max(0, value(Parameter.expiredYears))
-    // Zero is each lever's off position, so a slot the host never filled
-    // renders exactly as before the lever existed.
-    let printLight = value(Parameter.printLight)
-    if printLight > 0 { result.printViewingKelvin = printLight }
-    // Validated by `stage(of:)` before any render, so an index this build does not have has
-    // already been refused by the time this reads it.
+    BridgeOptions.apply(parameters, to: &result)
     if let chosen = stage(of: parameters) { result.stage = chosen }
     result.textureStages = TextureStages(
         rawValue: whole(value(Parameter.textureStages)) & TextureStages.all.rawValue)
-    // Off is this lever's zero too, so a host that never filled the slot renders
-    // exactly what it rendered before the lever existed.
-    result.flareScale = max(0, value(Parameter.flareScale))
-    // And this one's: 0 is the legacy halation model, so a project saved before the
-    // checkbox existed renders the halo it always had.
-    result.halationModel = value(Parameter.halationModel) == 1 ? .layered : .legacy
-    result.useEstimatedHalationProfile = value(Parameter.estimatedHalation) != 0
-    // And this one's: 0 is the film's layered red ring, so a project saved before the
-    // slider existed renders the halo it always had.
-    result.halationSourceColour = clamp(value(Parameter.halationColour), 0, 1)
-
-    // The lens, in the order the light meets it: what is screwed onto the front, how the
-    // exposure was set behind it, and the focal length the scattering is imaged through. The
-    // mapping is the command line's, slot for flag: `--filter`, `--metering`, `--diffusion`,
-    // `--diffusion-grade`, `--focal`.
-    //
-    // Each slot's zero is its off position. Three empty threads, no mist and no stated focal
-    // length are what every render made before these existed, so a host that never filled the
-    // block develops exactly the frame it always did.
     let coating: FilterCoating = value(Parameter.filterCoating) == 1 ? .singleLayer
         : (value(Parameter.filterCoating) == 2 ? .uncoated : .multiCoated)
     var fitted: [LensFilter] = []
@@ -261,22 +157,17 @@ private func options(_ parameters: UnsafePointer<Float>?,
         let choice = Int(whole(value(slot))) - 1
         guard lensFilters.indices.contains(choice) else { continue }
         var filter = lensFilters[choice]
-        // Zero retains the multicoated glass used by every existing project.
         filter.coating = coating
         fitted.append(filter)
     }
     if !fitted.isEmpty {
-        // Zero is the engine's own default rather than the first entry, because an unfilled slot
-        // has to mean "as before" and the compensation the engine defaults to is through-the-lens.
-        let choice = Int(whole(value(Parameter.metering))) - 1
+        let choice = Int(whole(value(Parameter.lensMetering))) - 1
         result.lensFilters = LensFilterStack(
             fitted,
             compensation: meterings.indices.contains(choice) ? meterings[choice] : .throughTheLens)
     }
     let family = Int(whole(value(Parameter.diffusionFamily))) - 1
     if diffusionFamilies.indices.contains(family) {
-        // The grade is a bare index, so it needs the family to gate it; on its own, zero would be
-        // 1/8 rather than off.
         let grade = Int(whole(value(Parameter.diffusionGrade)))
         result.diffusionFilter = DiffusionFilter.preset(
             diffusionFamilies[family],
@@ -287,30 +178,23 @@ private func options(_ parameters: UnsafePointer<Float>?,
     if value(Parameter.mottleOverride) != 0 {
         result.grainMottleShare = clamp(value(Parameter.mottleShare), 0, 0.9)
         result.completeDeliveryMottle()
+    } else {
+        result.grainMottleShare = nil
     }
     result.couplerRangeScale = clamp(1 + value(Parameter.couplerReach), 0, 3)
     if value(Parameter.couplerRedGreen) != 0 || value(Parameter.couplerGreenBlue) != 0 {
         result.couplerGapReachScales = [Parameter.couplerRedGreen, Parameter.couplerGreenBlue]
             .map { clamp(1 + value($0), 0, 3) * result.couplerRangeScale }
+    } else {
+        result.couplerGapReachScales = nil
     }
-    result.couplerSelfScale = clamp(1 + value(Parameter.couplerSelf), 0, 3)
     let sceneLight = value(Parameter.sceneIlluminant)
     if sceneLight > 0 { result.sceneIlluminantKelvin = sceneLight }
-    result.halationReturnGain = HalationSpectrum.resampled(
-        (Parameter.halation400...Parameter.halation700).map { value($0) })
-    result.frameCoverage = clamp(1 + value(Parameter.frameCoverage), 0.05, 1)
-    result.grainModel = value(Parameter.grainModel) == 1 ? .discs : .clumpField
-    let shutter = value(Parameter.shutterSeconds)
-    if shutter > 0 { result.shutterSeconds = shutter }
-    let focal = value(Parameter.focalLength)
-    if focal > 0 { result.focalLengthMM = focal }
-    // Only where the negative medium was named. A stated viewing mode is the engine's instruction
-    // to show the developed negative, whatever medium was asked for, so carrying this slot into a
-    // print render would quietly replace the print with the film. Match Film leaves `paper` nil
-    // and is not the negative being asked for.
     let viewing = Int(whole(value(Parameter.negativeViewing))) - 1
     if result.paper?.isNegative == true, negativeViewings.indices.contains(viewing) {
         result.negativeViewing = negativeViewings[viewing]
+    } else {
+        result.negativeViewing = nil
     }
 
     let formats = FilmFormat.presets
@@ -692,6 +576,8 @@ func fotufilm_bridge_control_capabilities(_ stockIndex: Int32, _ paperIndex: Int
     if stock.reciprocityFailure != nil { flags |= 4 }
     if paper.acceptsViewingIlluminant && !stock.isReversal { flags |= 8 }
     if paper.acceptsPrintCorrection && !stock.isMonochrome && !stock.isReversal { flags |= 16 }
+    if Enlarger.illuminates(stock: stock, paper: paper) { flags |= 128 }
+    if EditorControlAvailability.interlayerInhibition.admits(stock: stock) { flags |= 256 }
     return flags
 }
 

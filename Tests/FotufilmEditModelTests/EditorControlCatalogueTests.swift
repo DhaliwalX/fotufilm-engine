@@ -284,7 +284,7 @@ final class EditorControlCatalogueTests: XCTestCase {
         // added to the enum and forgotten in the catalogue fails here, and so does one whose
         // rows are scattered through the panel instead of run together.
         XCTAssertEqual(seen, EditorControlGroup.allCases)
-        XCTAssertEqual(seen, [.film, .lens, .light, .print, .frame])
+        XCTAssertEqual(seen, [.film, .lens, .light, .print, .frame, .pipeline])
     }
 
     // MARK: - What the film will take
@@ -430,9 +430,8 @@ final class EditorControlCatalogueTests: XCTestCase {
             .keys.sorted()
 
         XCTAssertEqual(unexposedOrGlobal,
-                       ["adjacencyModel", "couplerRangeScale", "flareScale", "halationHazeMM", "halationModel", "layeredTransport",
-                        "negativeViewing", "stage", "textureStages", "transportBackend",
-                        "useEstimatedHalationProfile"])
+                       ["adjacencyModel", "couplerRangeScale", "halationHazeMM",
+                        "layeredTransport", "transportBackend"])
     }
 
     func testTheAuditedGapsAreAllOffered() {

@@ -7,111 +7,7 @@
 extern "C" {
 #endif
 
-/// Indices into the parameter array.
-enum {
-    FOTUFILM_BRIDGE_EXPOSURE_EV = 0,
-    /// The illuminant the scene was lit by, in kelvin.
-    FOTUFILM_BRIDGE_TEMPERATURE,
-    FOTUFILM_BRIDGE_TINT,
-    FOTUFILM_BRIDGE_HIGHLIGHTS,
-    FOTUFILM_BRIDGE_SHADOWS,
-    FOTUFILM_BRIDGE_SATURATION,
-    FOTUFILM_BRIDGE_VIBRANCE,
-    FOTUFILM_BRIDGE_GRAIN_SCALE,
-    FOTUFILM_BRIDGE_HALATION_SCALE,
-    FOTUFILM_BRIDGE_COUPLER_SCALE,
-    FOTUFILM_BRIDGE_PRINT_CORRECTION,
-    /// Non-zero keys the highlight/shadow shifts to an edge-aware regional
-    /// base rather than to each pixel's own luminance.
-    FOTUFILM_BRIDGE_LOCAL_TONE,
-    /// Stops of push (positive) or pull (negative) development.
-    FOTUFILM_BRIDGE_PUSH_PULL,
-    /// How much of the developed silver the bleach leaves in the negative, 0...1.
-    FOTUFILM_BRIDGE_BLEACH_BYPASS,
-    /// Years the roll sat past its process-by date, 0 up.
-    FOTUFILM_BRIDGE_EXPIRED_YEARS,
-    /// The illuminant a physical print is viewed under, in kelvin. Zero uses the medium reference:
-    /// D50 for reflection paper or calibrated 5400 K xenon for projection. Digital media ignore it.
-    FOTUFILM_BRIDGE_PRINT_LIGHT,
-    /// Which span of the pipeline this render performs, as a `fotufilm_bridge_stage_*` index.
-    /// Not a lever: it changes what the frames on both sides of the call mean. See the stage
-    /// contract below.
-    FOTUFILM_BRIDGE_STAGE,
-    /// Which spatial stages the texture span lays over the frame, as an OR of the masks
-    /// `fotufilm_bridge_texture_stage_mask` hands out. Read only by that span.
-    FOTUFILM_BRIDGE_TEXTURE_STAGES,
-    /// Multiplier on the taking lens's veiling glare. 0 — the default — leaves
-    /// the stage out: a photographed clip already carries its own lens's glare.
-    FOTUFILM_BRIDGE_FLARE_SCALE,
-    /// Non-zero renders halation through a stock's provisional annular profile where no
-    /// independently calibrated one exists. 0 — the default, and the slot an older project
-    /// never filled — is the exact legacy model, so existing renders do not move.
-    FOTUFILM_BRIDGE_ESTIMATED_HALATION,
-    /// How much the halo keeps the source's own colour instead of the stock's layered red,
-    /// 0–1. The dimmer records are raised to the strongest record's return, so the ring
-    /// brightens toward the light's colour. 0 — the default, and the slot an older project
-    /// never filled — is the film.
-    FOTUFILM_BRIDGE_HALATION_COLOUR,
-    /// Up to three absorbing filters screwed onto the front of the lens, in the order the light
-    /// meets them, each as a `fotufilm_bridge_lens_filter_*` index plus one. 0 — the default, and
-    /// the slot an older project never filled — is an empty thread. No filter is not a clear
-    /// filter: a clear filter would still cost light and still make a ghost.
-    FOTUFILM_BRIDGE_LENS_FILTER_1,
-    FOTUFILM_BRIDGE_LENS_FILTER_2,
-    FOTUFILM_BRIDGE_LENS_FILTER_3,
-    /// How the exposure was set with those filters fitted, as a `fotufilm_bridge_metering_*` index
-    /// plus one. 0 is the engine's own default, through-the-lens metering, so the slot an older
-    /// project never filled reads as it always did. Ignored when no filter is fitted.
-    FOTUFILM_BRIDGE_LENS_METERING,
-    /// A diffusion filter on the front of the lens, as a `fotufilm_bridge_diffusion_family_*`
-    /// index plus one. 0 — the default, and the slot an older project never filled — is none.
-    FOTUFILM_BRIDGE_DIFFUSION_FAMILY,
-    /// Its grade — what a product line's 1/8, 1/4, 1/2, 1 and 2 name, one formulation at
-    /// increasing particle loadings — as a bare `fotufilm_bridge_diffusion_grade_*` index, not
-    /// offset. Read only when a family is chosen, which is what keeps zero an off position for
-    /// the pair rather than for this slot on its own.
-    FOTUFILM_BRIDGE_DIFFUSION_GRADE,
-    /// The taking lens's focal length in millimetres. Read only by the diffusion filter, which
-    /// needs it because a ray deviated by an angle ahead of the lens lands `focal length × angle`
-    /// off its unscattered position — so the same filter glows bigger on a longer lens, exactly
-    /// as it does in the world. 0 — the default, and the slot an older project never filled — is
-    /// the gauge's own normal lens.
-    FOTUFILM_BRIDGE_FOCAL_LENGTH,
-    /// How a developed negative is read, as a `fotufilm_bridge_negative_viewing_*` index plus one.
-    /// 0 — the default, and the slot an older project never filled — leaves the choice to the
-    /// engine, which reads a negative on a light box.
-    ///
-    /// Applied only where the negative medium was explicitly chosen. A viewing mode is not a
-    /// look: to the engine a stated one *is* the instruction to show the negative, so carrying
-    /// this slot into a print render would replace the print with the film.
-    FOTUFILM_BRIDGE_NEGATIVE_VIEWING,
-    // Appended controls: zero preserves the previous render. Reach/self/gap values and
-    // frame coverage are offsets from 1; spectral handles are stops. Coating is
-    // 0 multicoated, 1 single-coated, 2 uncoated. Render mode is 0 host default,
-    // 1 realtime, 2 reference; disc grain always requires reference rendering.
-    FOTUFILM_BRIDGE_MOTTLE_OVERRIDE,
-    FOTUFILM_BRIDGE_MOTTLE_SHARE,
-    FOTUFILM_BRIDGE_COUPLER_REACH,
-    FOTUFILM_BRIDGE_COUPLER_SELF,
-    FOTUFILM_BRIDGE_SCENE_ILLUMINANT,
-    FOTUFILM_BRIDGE_HALATION_400,
-    FOTUFILM_BRIDGE_HALATION_450,
-    FOTUFILM_BRIDGE_HALATION_500,
-    FOTUFILM_BRIDGE_HALATION_550,
-    FOTUFILM_BRIDGE_HALATION_600,
-    FOTUFILM_BRIDGE_HALATION_650,
-    FOTUFILM_BRIDGE_HALATION_700,
-    FOTUFILM_BRIDGE_FILTER_COATING,
-    FOTUFILM_BRIDGE_FRAME_COVERAGE,
-    FOTUFILM_BRIDGE_GRAIN_MODEL,
-    FOTUFILM_BRIDGE_SHUTTER_SECONDS,
-    FOTUFILM_BRIDGE_RENDER_MODE,
-    FOTUFILM_BRIDGE_GRAIN_FROZEN,
-    FOTUFILM_BRIDGE_COUPLER_RED_GREEN,
-    FOTUFILM_BRIDGE_COUPLER_GREEN_BLUE,
-    FOTUFILM_BRIDGE_HALATION_MODEL,
-    FOTUFILM_BRIDGE_PARAMETER_COUNT,
-};
+#include "Generated/FotufilmBridgeSlots.h"
 
 /// The id a host persists for the "None" entry its filter and diffusion menus open with. The
 /// engine has no name for an empty filter thread, so the name is this contract's, spelled once:
@@ -184,8 +80,78 @@ enum {
     FOTUFILM_CONTROL_PRINT_CORRECTION = 16,
     FOTUFILM_CONTROL_DISC_GRAIN = 32,
     FOTUFILM_CONTROL_COUPLERS = 64,
+    FOTUFILM_CONTROL_ENLARGER = 128,
+    FOTUFILM_CONTROL_INTERLAYER_INHIBITION = 256,
 };
 int32_t fotufilm_bridge_control_capabilities(int32_t stock, int32_t paper);
+
+enum {
+    FOTUFILM_HOST_RESOLVE = 0,
+    FOTUFILM_HOST_FINALCUT = 1,
+};
+
+enum {
+    FOTUFILM_HOST_KIND_DOUBLE = 0,
+    FOTUFILM_HOST_KIND_INTEGER = 1,
+    FOTUFILM_HOST_KIND_BOOLEAN = 2,
+    FOTUFILM_HOST_KIND_CHOICE = 3,
+    FOTUFILM_HOST_KIND_MENU = 4,
+    FOTUFILM_HOST_KIND_LABEL = 5,
+    FOTUFILM_HOST_KIND_HIDDEN_STRING = 6,
+    FOTUFILM_HOST_KIND_PUSH_BUTTON = 7,
+    FOTUFILM_HOST_KIND_GROUP = 8,
+    FOTUFILM_HOST_KIND_TEXTURE_TOGGLES = 9,
+};
+
+enum {
+    FOTUFILM_HOST_MENU_NONE = 0,
+    FOTUFILM_HOST_MENU_STOCKS = 1,
+    FOTUFILM_HOST_MENU_GAUGES = 2,
+    FOTUFILM_HOST_MENU_PAPERS = 3,
+    FOTUFILM_HOST_MENU_STAGES = 4,
+    FOTUFILM_HOST_MENU_LENS_FILTERS = 5,
+    FOTUFILM_HOST_MENU_METERINGS = 6,
+    FOTUFILM_HOST_MENU_DIFFUSION_FAMILIES = 7,
+    FOTUFILM_HOST_MENU_DIFFUSION_GRADES = 8,
+    FOTUFILM_HOST_MENU_NEGATIVE_VIEWINGS = 9,
+    FOTUFILM_HOST_MENU_COLOUR_SPACES = 10,
+    FOTUFILM_HOST_MENU_PUSH_CONDITIONS = 11,
+    FOTUFILM_HOST_MENU_TEXTURE_STAGES = 12,
+};
+
+enum {
+    FOTUFILM_HOST_FLAG_ANIMATES = 1,
+    FOTUFILM_HOST_FLAG_SECRET = 2,
+    FOTUFILM_HOST_FLAG_PERSISTENT = 4,
+    FOTUFILM_HOST_FLAG_OPENS_EXPANDED = 8,
+    FOTUFILM_HOST_FLAG_COMPOSED = 16,
+    FOTUFILM_HOST_FLAG_ZERO_LEAVES_ENGINE_DEFAULT = 32,
+    FOTUFILM_HOST_FLAG_COLLAPSED_IN_FINAL_CUT = 64,
+};
+
+int32_t fotufilm_bridge_host_parameter_count(int32_t host);
+int32_t fotufilm_bridge_host_parameter_kind(int32_t host, int32_t index);
+int32_t fotufilm_bridge_host_parameter_slot(int32_t host, int32_t index);
+int32_t fotufilm_bridge_host_parameter_menu(int32_t host, int32_t index);
+int32_t fotufilm_bridge_host_parameter_flags(int32_t host, int32_t index);
+int32_t fotufilm_bridge_host_parameter_fxplug_id(int32_t host, int32_t index);
+int32_t fotufilm_bridge_host_parameter_fxplug_group(int32_t host, int32_t index);
+double fotufilm_bridge_host_parameter_minimum(int32_t host, int32_t index);
+double fotufilm_bridge_host_parameter_maximum(int32_t host, int32_t index);
+double fotufilm_bridge_host_parameter_hard_maximum(int32_t host, int32_t index);
+double fotufilm_bridge_host_parameter_default(int32_t host, int32_t index);
+double fotufilm_bridge_host_parameter_delta(int32_t host, int32_t index);
+double fotufilm_bridge_host_parameter_scale(int32_t host, int32_t index);
+double fotufilm_bridge_host_parameter_offset(int32_t host, int32_t index);
+int32_t fotufilm_bridge_host_parameter_name(int32_t host, int32_t index, char *out, int32_t capacity);
+int32_t fotufilm_bridge_host_parameter_label(int32_t host, int32_t index, char *out, int32_t capacity);
+int32_t fotufilm_bridge_host_parameter_hint(int32_t host, int32_t index, char *out, int32_t capacity);
+int32_t fotufilm_bridge_host_parameter_parent(int32_t host, int32_t index, char *out, int32_t capacity);
+int32_t fotufilm_bridge_host_parameter_choice_count(int32_t host, int32_t index);
+int32_t fotufilm_bridge_host_parameter_choice(int32_t host, int32_t index, int32_t choice, char *out,
+                                              int32_t capacity);
+double fotufilm_bridge_host_parameter_choice_value(int32_t host, int32_t index, int32_t choice);
+int32_t fotufilm_bridge_control_capabilities_mask_for(int32_t host, int32_t index);
 int32_t fotufilm_bridge_resolved_format(int32_t stock, int32_t format, char *out, int32_t capacity);
 int32_t fotufilm_bridge_resolved_paper(int32_t stock, int32_t paper, char *out, int32_t capacity);
 int32_t fotufilm_bridge_development_count(int32_t stock);

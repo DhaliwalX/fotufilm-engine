@@ -12,16 +12,7 @@ import WarningIcon from 'reicon-react/icons/Warning'
 import { assetUrl, createDeveloper, imageSource, loadPack, loadStages } from './engine.js'
 import appIconUrl from './assets/app-icon.png'
 
-// Include only controls that directly update configuration slots. Halation and coupler range
-// require exporting a new pack because they reshape model data.
-const SLIDERS = [
-  { key: 'ev', label: 'Exposure', unit: 'ev', min: -3, max: 3, step: 0.25, def: 0 },
-  { key: 'grain', label: 'Grain', unit: '×', min: 0, max: 2.5, step: 0.05, def: 1 },
-  { key: 'highlights', label: 'Highlights', unit: '', min: -1, max: 1, step: 0.05, def: 0 },
-  { key: 'shadows', label: 'Shadows', unit: '', min: -1, max: 1, step: 0.05, def: 0 },
-  { key: 'saturation', label: 'Saturation', unit: '×', min: 0, max: 2, step: 0.05, def: 1 },
-  { key: 'vibrance', label: 'Vibrance', unit: '', min: -1, max: 1, step: 0.05, def: 0 },
-]
+import { CONTROLS } from './generated/controls.js'
 
 /// The engine is WebAssembly and nothing else, so a browser without it cannot develop anything.
 /// Rather than offer controls that would do nothing, such a browser is shown the pipeline already
@@ -430,7 +421,7 @@ export default function App() {
   const [stock, setStock] = useState(null)
   const [halationModel, setHalationModel] = useState(
     () => localStorage.getItem("halationModel") === "layered" ? "layered" : "legacy")
-  const [params, setParams] = useState(Object.fromEntries(SLIDERS.map((s) => [s.key, s.def])))
+  const [params, setParams] = useState(Object.fromEntries(CONTROLS.map((s) => [s.key, s.def])))
   const [source, setSource] = useState(null)
   const [originalUrl, setOriginalUrl] = useState(null)
   const [resultUrl, setResultUrl] = useState(null)
@@ -551,7 +542,7 @@ export default function App() {
   // Everything a developed frame depends on. When it changes the cache is stale by definition,
   // and the walk starts again from whatever is developed next.
   const frameKey = useMemo(
-    () => `${stock}|${halationModel}|${originalUrl}|${SLIDERS.map((s) => params[s.key]).join(',')}`,
+    () => `${stock}|${halationModel}|${originalUrl}|${CONTROLS.map((s) => params[s.key]).join(',')}`,
     [stock, halationModel, originalUrl, params])
 
   const acceptFile = useCallback((file) => {
@@ -714,8 +705,8 @@ export default function App() {
           </label>
 
           <div className="adjustment-grid">
-            {SLIDERS.map((slider) => {
-              const signed = ['ev', 'highlights', 'shadows', 'vibrance'].includes(slider.key)
+            {CONTROLS.map((slider) => {
+              const signed = slider.signed
               const value = params[slider.key]
               return (
                 <div className="adjustment" key={slider.key}>

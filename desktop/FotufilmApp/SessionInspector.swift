@@ -169,6 +169,8 @@ final class InspectorViewController: SessionViewController {
     private var structureSignature: String {
         [
             panel.rawValue,
+            model.edit.stockID,
+            model.edit.resolvedPaper.id,
             String(model.hasVideo),
             String(model.hasPhoto),
             String(model.sourceInterpretationAvailable),
@@ -318,54 +320,60 @@ final class InspectorViewController: SessionViewController {
         model.edit.hasFilm ? model.edit.stock : nil
     }
 
-    private func catalogued(_ field: EditorControlField) -> EditorControl? {
-        EditorControlCatalogue.controls(for: activeStock)
-            .first { $0.field == field }
+    private var rowFactory: InspectorRowFactory {
+        InspectorRowFactory(model: model, adjustment: { [unowned self] title, range, display, get, set in
+            self.adjustment(title, range: range, display: display, get: get, set: set)
+        }, bespoke: { [unowned self] control in self.bespokeRows(for: control) })
     }
 
-    private func cataloguedSlider(_ field: EditorControlField) -> SliderRow? {
-        guard let control = catalogued(field),
-              let scale = control.kind.scale else { return nil }
-        return adjustment(
-            control.title, range: scale.range,
-            display: scale.unit.format,
-            get: { [model] in model.edit.value(of: field) ?? scale.neutral },
-            set: { [model] value in
-                var next = model.edit
-                next.setValue(value, of: field)
-                model.edit = next
-            })
+    private func rows(in section: EditorControlSection) -> [FormRowView] {
+        rowFactory.controls(in: section).filter { control in
+            switch control.field {
+            case .enlarger: return showsEnlarger
+            case .printCorrection: return showsPrintCorrection
+            default: return true
+            }
+        }.flatMap(rowFactory.rows(for:))
     }
 
-    private func cataloguedToggle(_ field: EditorControlField) -> ToggleRow? {
-        guard let control = catalogued(field),
-              case .toggle = control.kind else { return nil }
-        return ToggleRow(
-            control.title,
-            get: { [model] in model.edit.flag(of: field) ?? false },
-            set: { [model] value in
-                var next = model.edit
-                next.setFlag(value, of: field)
-                model.edit = next
-            })
-    }
-
-    private func cataloguedCurve(_ field: EditorControlField)
-        -> ControlCurveFormRow? {
-        guard let control = catalogued(field),
-              let curve = control.kind.curve else { return nil }
-        return ControlCurveFormRow(
-            control.title, curve: curve,
-            get: { [model] in
-                model.edit.curve(of: field) ?? curve.restingValues
-            },
-            set: { [model] values in
-                var next = model.edit
-                next.setCurve(values, of: field)
-                model.edit = next
-            },
-            began: { [weak model] in model?.beginContinuousEdit() },
-            ended: { [weak model] in model?.endContinuousEdit() })
+    private func bespokeRows(for control: EditorControl) -> [FormRowView] {
+        switch control.field {
+        case .shutter:
+            let times = EditorControlCatalogue.shutterTimes(for: activeStock)
+            guard !times.isEmpty else { return [] }
+            return [PopUpRow<Double?>(
+                control.title,
+                options: [(title: "Instantaneous", value: Double?.none)]
+                    + times.map { (title: EditorControlCatalogue.shutterName($0), value: Double?($0)) },
+                get: { [model] in model.edit.shutterSeconds },
+                set: { [model] in model.edit.shutterSeconds = $0 }),
+                NoteRow { [model] in
+                    guard model.edit.shutterSeconds != nil else {
+                        return "A long exposure loses speed and gains crossover as the layers fail at different rates. This film's sheet states how much."
+                    }
+                    return "Developed with this film's stated reciprocity correction for an exposure that long."
+                }]
+        case .paper:
+            return paperRows()
+        case .printLight:
+            guard showsViewingLight else { return [] }
+            return [PopUpRow<Double?>(
+                control.title,
+                options: EditorControlCatalogue.viewingLights(for: model.edit.resolvedPaper)
+                    .map { (title: $0.label, value: $0.value) },
+                get: { [model] in model.edit.printLightKelvin },
+                set: { [model] in model.edit.printLightKelvin = $0 })]
+        case .enlarger:
+            guard showsEnlarger else { return [] }
+            return [PopUpRow<Enlarger>(
+                control.title,
+                options: Enlarger.allCases.map { ($0.name, $0) },
+                get: { [model] in model.edit.enlarger },
+                set: { [model] in model.edit.enlarger = $0 }),
+                NoteRow { [model] in model.edit.enlarger.detail }]
+        default:
+            return []
+        }
     }
 
     private func filmSections() -> [FormSectionView] {
@@ -391,27 +399,7 @@ final class InspectorViewController: SessionViewController {
         }
 
         let character = FormSectionView(title: "Character")
-        if let row = cataloguedSlider(.grain) { character.add(row) }
-        // The share of the published granularity's variance carried by the coarse field under the
-        // sharp grain. Named choices rather than a slider, as the phone names them: the numbers
-        // are shares of a variance and mean nothing dragged past.
-        character.add(PopUpRow<Double?>(
-            "Grain Mottle",
-            options: [(title: "Film’s Own", value: Double?.none),
-                      (title: "None", value: Double?(0)),
-                      (title: "Light · 20%", value: Double?(0.2)),
-                      (title: "Moderate · 45%", value: Double?(0.45)),
-                      (title: "Heavy · 70%", value: Double?(0.7)),
-                      (title: "Maximum · 90%", value: Double?(0.9))],
-            get: { [model] in model.edit.grainMottleShare },
-            set: { [model] in model.edit.grainMottleShare = $0 }))
-        if let row = cataloguedToggle(.grainModel) { character.add(row) }
-        if let row = cataloguedSlider(.halation) { character.add(row) }
-        if let row = cataloguedSlider(.halationColour) { character.add(row) }
-        if let row = cataloguedCurve(.halationSpectrum) { character.add(row) }
-        if let row = cataloguedSlider(.couplers) { character.add(row) }
-        if let row = cataloguedSlider(.couplerReach) { character.add(row) }
-        if let row = cataloguedSlider(.couplerSelf) { character.add(row) }
+        for row in rows(in: .filmGrain) + rows(in: .filmEmulsion) { character.add(row) }
         character.add(ButtonRow("New Grain Pattern") { [model] in
             model.edit.rerollGrain()
         })
@@ -419,35 +407,7 @@ final class InspectorViewController: SessionViewController {
 
         if allows(.labControls) {
             let lab = FormSectionView(title: "Lab")
-            lab.add(adjustment("Push / Pull", range: -1...3,
-                               display: { String(format: "%+.1f stops", $0) },
-                               get: { [model] in model.edit.push },
-                               set: { [model] in model.edit.push = $0 }))
-            lab.add(adjustment("Bleach Bypass", range: 0...1, display: percent,
-                               get: { [model] in model.edit.bleach },
-                               set: { [model] in model.edit.bleach = $0 }))
-            lab.add(adjustment("Expired", range: 0...30,
-                               display: { $0 < 0.5 ? "Fresh"
-                                   : String(format: "%.0f yr", $0) },
-                               get: { [model] in model.edit.expiredYears },
-                               set: { [model] in model.edit.expiredYears = $0 }))
-            let times = shutterChoices
-            if !times.isEmpty {
-                lab.add(PopUpRow<Double?>(
-                    "Exposure Time",
-                    options: [(title: "Instantaneous", value: Double?.none)]
-                        + times.map {
-                            (title: Self.shutterName($0), value: Double?($0))
-                        },
-                    get: { [model] in model.edit.shutterSeconds },
-                    set: { [model] in model.edit.shutterSeconds = $0 }))
-                lab.add(NoteRow { [model] in
-                    guard model.edit.shutterSeconds != nil else {
-                        return "A long exposure loses speed and gains crossover as the layers fail at different rates. This film's sheet states how much."
-                    }
-                    return "Developed with this film's stated reciprocity correction for an exposure that long."
-                })
-            }
+            for row in rows(in: .filmLab) { lab.add(row) }
             lab.add(NoteRow("The film can's sticker rather than the darkroom: push develops harder with the crossover and grain that costs, bleach bypass leaves the silver in the negative, and an expired roll loses speed from the blue layer first."))
             sections.append(lab)
         } else {
@@ -465,9 +425,15 @@ final class InspectorViewController: SessionViewController {
         return sections
     }
 
-    /// Where the finished image lives, and—only for physical media—the light it is judged under.
     private func printSections() -> [FormSectionView] {
         let print = FormSectionView(title: "Output")
+        let catalogued = rows(in: .printPaper)
+        for row in catalogued { print.add(row) }
+        if catalogued.isEmpty { for row in paperRows() { print.add(row) } }
+        return [print]
+    }
+
+    private func paperRows() -> [FormRowView] {
         let papers = model.edit.stock.map(PrintPaper.choices(for:))
             ?? PrintPaper.allCases
         let canFollowStock = model.edit.stock?.isReversal != true
@@ -490,8 +456,7 @@ final class InspectorViewController: SessionViewController {
                 }
             })
         paperRow.isRowEnabled = papers.count > 1
-        print.add(paperRow)
-        print.add(NoteRow { [model] in
+        let note = NoteRow { [model] in
             guard let stock = model.edit.stock else {
                 guard model.edit.hasFilm else {
                     return "Choose a film to see the output medium made for it."
@@ -508,49 +473,13 @@ final class InspectorViewController: SessionViewController {
                 return "Black-and-white film stays neutral here; the medium mainly changes contrast and whether the result is physical or digital."
             }
             return model.edit.resolvedPaper.detail
-        })
-        if showsViewingLight {
-            print.add(PopUpRow<Double?>(
-                "Viewing Illuminant",
-                options: Self.viewingLightChoices(for: model.edit.resolvedPaper),
-                get: { [model] in model.edit.printLightKelvin },
-                set: { [model] in model.edit.printLightKelvin = $0 }))
         }
-        if showsEnlarger {
-            print.add(PopUpRow<Enlarger>(
-                "Enlarger",
-                options: Enlarger.allCases.map { ($0.name, $0) },
-                get: { [model] in model.edit.enlarger },
-                set: { [model] in model.edit.enlarger = $0 }))
-            print.add(NoteRow { [model] in model.edit.enlarger.detail })
-        }
-        if showsPrintCorrection {
-            print.add(adjustment("Channel Contrast Match", range: 0...1,
-                                 display: percent,
-                                 get: { [model] in model.edit.printCorrection },
-                                 set: { [model] in
-                                     model.edit.printCorrection = $0
-                                 }))
-        }
-        return [print]
+        return [paperRow, note]
     }
 
     private enum OutputMediumChoice: Equatable {
         case matchFilm
         case medium(PrintPaper)
-    }
-
-    private static func viewingLightChoices(for paper: PrintPaper)
-        -> [(title: String, value: Double?)] {
-        if paper.isProjected {
-            return [("Reference Projector · Xenon 5400 K", nil),
-                    ("Light Table · D65", 6504),
-                    ("Proofing Booth · D50", 5003),
-                    ("Tungsten · 2856 K", 2856)]
-        }
-        return [("Reference Booth · D50", nil),
-                ("Daylight · D65", 6504),
-                ("Tungsten · 2856 K", 2856)]
     }
 
     private func sourceSections() -> [FormSectionView] {
@@ -607,50 +536,11 @@ final class InspectorViewController: SessionViewController {
 
     // MARK: - Adjustments
 
-    /// Light, colour, and the finished grade in one place, matching the phone's deck.
     private func adjustmentSections() -> [FormSectionView] {
         let light = FormSectionView(title: "Light")
-        light.add(adjustment("Exposure", range: -3...3,
-                             display: { String(format: "%+.2f", $0) },
-                             get: { [model] in model.edit.exposure },
-                             set: { [model] in model.edit.exposure = $0 }))
-        light.add(adjustment("Highlights", range: -1...1,
-                             display: { String(format: "%+.0f", $0 * 100) },
-                             get: { [model] in model.edit.highlights },
-                             set: { [model] in model.edit.highlights = $0 }))
-        light.add(adjustment("Shadows", range: -1...1,
-                             display: { String(format: "%+.0f", $0 * 100) },
-                             get: { [model] in model.edit.shadows },
-                             set: { [model] in model.edit.shadows = $0 }))
-        if let row = cataloguedToggle(.localTone) { light.add(row) }
-        let mired = ClosedRange(
-            uncheckedBounds: (Double(WhiteBalance.miredRange.lowerBound),
-                              Double(WhiteBalance.miredRange.upperBound)))
-        let tint = ClosedRange(
-            uncheckedBounds: (Double(WhiteBalance.tintRange.lowerBound),
-                              Double(WhiteBalance.tintRange.upperBound)))
-        light.add(adjustment(
-            "Temperature",
-            range: mired,
-            display: {
-                String(format: "%.0f K", WhiteBalance.miredToKelvin(Float($0)))
-            },
-            get: { [model] in model.edit.temperatureMired },
-            set: { [model] in model.edit.temperatureMired = $0 }))
-        light.add(adjustment(
-            "Tint",
-            range: tint,
-            display: { String(format: "%+.0f", $0) },
-            get: { [model] in model.edit.tint },
-            set: { [model] in model.edit.tint = $0 }))
-        light.add(adjustment("Vibrance", range: -1...1,
-                             display: { String(format: "%+.0f", $0 * 100) },
-                             get: { [model] in model.edit.vibrance },
-                             set: { [model] in model.edit.vibrance = $0 }))
-        light.add(adjustment("Saturation", range: 0...2,
-                             display: { String(format: "%+.0f", ($0 - 1) * 100) },
-                             get: { [model] in model.edit.saturation },
-                             set: { [model] in model.edit.saturation = $0 }))
+        for section in [EditorControlSection.lightExposure, .lightBalance, .lightColor] {
+            for row in rows(in: section) { light.add(row) }
+        }
 
         let reset = FormSectionView(title: nil)
         reset.add(ButtonRow("Reset All Edits", destructive: true,
@@ -667,8 +557,7 @@ final class InspectorViewController: SessionViewController {
         let deck = GradeDeckView(model: model)
         gradeDeck = deck
         deckSection.add(view: deck)
-        if let row = cataloguedToggle(.gradeSpace) { deckSection.add(row) }
-
+        for row in rows(in: .lightGrade) where row.rowTitle == "Encoded Grade" { deckSection.add(row) }
         let note = FormSectionView(title: nil)
         note.add(NoteRow("Lift, gamma and gain over the developed print — the pad tilts the band’s color, and the slider moves its level. The film has already responded to the light, so these controls grade the resulting image."))
 
@@ -713,28 +602,13 @@ final class InspectorViewController: SessionViewController {
             options: AspectOption.allCases.map { ($0.rawValue, $0) },
             get: { [model] in model.cropAspect },
             set: { [model] in model.applyAspect($0) }))
-        crop.add(adjustment("Straighten", range: -15...15,
-                            display: { String(format: "%+.1f°", $0) },
-                            get: { [model] in model.edit.straighten },
-                            set: { [model] in model.edit.straighten = $0 }))
+        let geometry = rows(in: .frameGeometry)
+        if let straighten = geometry.first(where: { $0.rowTitle == "Straighten" }) { crop.add(straighten) }
 
-        // Keystone. The photograph's own plane rather than its frame, which is why it is here and
-        // not under Lens: correcting a lens undoes what the glass did, and this undoes where the
-        // camera was standing. The phone has carried both since the crop takeover was written.
         let perspective = FormSectionView(title: "Perspective")
-        let degrees: (Double) -> String = { String(format: "%+.1f°", $0) }
-        perspective.add(adjustment("Vertical", range: -15...15,
-                                   display: degrees,
-                                   get: { [model] in model.edit.perspectiveV },
-                                   set: { [model] in
-                                       model.edit.perspectiveV = $0
-                                   }))
-        perspective.add(adjustment("Horizontal", range: -15...15,
-                                   display: degrees,
-                                   get: { [model] in model.edit.perspectiveH },
-                                   set: { [model] in
-                                       model.edit.perspectiveH = $0
-                                   }))
+        for row in geometry where row.rowTitle == "Vertical" || row.rowTitle == "Horizontal" {
+            perspective.add(row)
+        }
         perspective.add(NoteRow("Tilts the picture plane, for a building photographed from the pavement or a wall shot from one side. The frame is filled again afterwards, so a strong correction crops."))
 
         let reset = FormSectionView(title: nil)
@@ -789,15 +663,10 @@ final class InspectorViewController: SessionViewController {
 
     private func lensSection() -> FormSectionView {
         let lens = FormSectionView(title: "Lens")
-        let toggle = ToggleRow("Correct Lens",
-                               get: { [model] in
-                                   model.edit.lensCorrectionEnabled
-                               },
-                               set: { [model] in
-                                   model.edit.lensCorrectionEnabled = $0
-                               })
-        toggle.isRowEnabled = model.hasPhoto
-        lens.add(toggle)
+        if let toggle = rows(in: .lensCorrection).first(where: { $0.rowTitle == "Lens Correction" }) {
+            toggle.isRowEnabled = model.hasPhoto
+            lens.add(toggle)
+        }
 
         guard model.edit.lensCorrectionEnabled else { return lens }
 
@@ -808,41 +677,10 @@ final class InspectorViewController: SessionViewController {
             // photographer reaching for the sliders and wondering whether the switch is broken.
             lens.add(NoteRow { [model] in model.lensCorrectionNote })
         }
-        if model.hasLensMeasurement {
-            lens.add(adjustment("Amount", range: 0...1,
-                                display: { "\(Int(($0 * 100).rounded()))%" },
-                                get: { [model] in model.edit.lensProfileAmount },
-                                set: { [model] in
-                                    model.edit.lensProfileAmount = $0
-                                }))
+        for row in rows(in: .lensCorrection) where row.rowTitle != "Lens Correction" {
+            if row.rowTitle == "Amount", !model.hasLensMeasurement { continue }
+            lens.add(row)
         }
-        let signed: (Double) -> String = { String(format: "%+.0f", $0 * 100) }
-        lens.add(adjustment("Distortion", range: -1...1, display: signed,
-                            get: { [model] in
-                                model.edit.lensAdjustment.distortion
-                            },
-                            set: { [model] in
-                                model.edit.lensAdjustment.distortion = $0
-                            }))
-        lens.add(adjustment("Vignetting", range: -1...1, display: signed,
-                            get: { [model] in
-                                model.edit.lensAdjustment.vignetting
-                            },
-                            set: { [model] in
-                                model.edit.lensAdjustment.vignetting = $0
-                            }))
-        lens.add(adjustment("Red / Cyan", range: -1...1, display: signed,
-                            get: { [model] in model.edit.lensAdjustment.redCyan },
-                            set: { [model] in
-                                model.edit.lensAdjustment.redCyan = $0
-                            }))
-        lens.add(adjustment("Blue / Yellow", range: -1...1, display: signed,
-                            get: { [model] in
-                                model.edit.lensAdjustment.blueYellow
-                            },
-                            set: { [model] in
-                                model.edit.lensAdjustment.blueYellow = $0
-                            }))
         lens.add(ButtonRow("Reset Lens",
                            enabled: { [model] in model.hasLensEdits }) { [model] in
             model.resetLensCorrection()

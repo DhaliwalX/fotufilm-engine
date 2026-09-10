@@ -187,6 +187,21 @@ int32_t fotufilm_wasm_frame_size_slot(void) {
     return FOTUFILM_CONFIG_FRAME_WIDTH;
 }
 
+#include "generated/fotufilm_wasm_controls.inc"
+
+EMSCRIPTEN_KEEPALIVE
+int32_t fotufilm_wasm_control_count(void) { return kFotufilmWasmControlCount; }
+
+EMSCRIPTEN_KEEPALIVE
+int32_t fotufilm_wasm_control_slot(int32_t index) {
+    return index >= 0 && index < kFotufilmWasmControlCount ? kFotufilmWasmControlSlots[index] : -1;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void fotufilm_wasm_set_slot(float *configuration, int32_t slot, float value) {
+    if (slot >= 0 && slot < FOTUFILM_FRAME_CONFIGURATION_COUNT) configuration[slot] = value;
+}
+
 EMSCRIPTEN_KEEPALIVE
 void fotufilm_wasm_set_exposure(float *configuration, float gain) {
     configuration[FOTUFILM_CONFIG_EXPOSURE_GAIN] = gain;

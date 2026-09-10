@@ -4,6 +4,9 @@ import CoreGraphics
 #if canImport(FotufilmCore)
 import FotufilmCore
 #endif
+#if canImport(FotufilmEditModel)
+import FotufilmEditModel
+#endif
 
 /// Runs in-app desktop parity checks for rendering, inspector controls, and export options.
 /// Usage: `Fotufilm --demo --verify-parity`. Checks inspect rendered output, not only state changes.
@@ -59,6 +62,85 @@ enum VerifyDesktopParity {
     /// Each of these stands for a hole the desktop session had: something the phone could do and
     /// the Mac could not, or something the Mac offered and then silently refused.
     static let checks: [Check] = [
+        Check(name: "catalogued edits survive saving") { editor in
+            var edit = editor.model.edit
+            for control in EditorControlCatalogue.all {
+                if let scale = control.kind.scale {
+                    edit.setValue(scale.range.upperBound, of: control.field)
+                } else if case .toggle(let resting) = control.kind {
+                    edit.setFlag(!resting, of: control.field)
+                } else if let curve = control.kind.curve {
+                    edit.setCurve(curve.handles.map { _ in 0.5 }, of: control.field)
+                }
+            }
+            edit.grainMottleShare = 0.45
+            edit.couplerGapReach = [0.5, 1.5]
+            edit.printLightKelvin = 2856
+            edit.enlarger = .condenser
+            do {
+                let restored = try JSONDecoder().decode(EditState.self, from: JSONEncoder().encode(edit))
+                guard restored == edit else { return .fail("saving changed an edit's values") }
+                guard restored.options.grade == edit.grade,
+                      restored.options.halationScale == Float(edit.halation),
+                      restored.options.couplerGapReachScales == [0.5, 1.5] else {
+                    return .fail("restored controls changed their engine units")
+                }
+                return .pass("all stored controls and composite values round-trip")
+            } catch {
+                return .fail(String(describing: error))
+            }
+        },
+
+        Check(name: "film controls refresh when the stock changes") { editor in
+            let model = editor.model
+            let panel = InspectorViewController(model: model)
+            _ = panel.view
+            panel.viewDidLoad()
+            for preset in StockPreset.all {
+                model.edit.stockID = preset.id
+                panel.refresh()
+                let found = words(in: panel.view)
+                let offered = titles(in: .filmGrain, for: model)
+                    + titles(in: .filmEmulsion, for: model) + titles(in: .filmLab, for: model)
+                let missing = offered.filter { !shows(found, $0) }
+                guard missing.isEmpty else {
+                    return .fail("\(preset.id): missing \(missing.joined(separator: ", "))")
+                }
+                if !preset.stock.hasMeasuredDevelopmentResponse, shows(found, "Push") {
+                    return .fail("\(preset.id): kept the previous film's Push control")
+                }
+                if !preset.stock.isMonochrome && !preset.stock.isReversal {
+                    guard shows(found, "Half"), shows(found, "Full") else {
+                        return .fail("bleach bypass lost its named choices")
+                    }
+                }
+            }
+            return .pass("each installed film offers its own controls")
+        },
+
+        Check(name: "output controls follow the chosen medium") { editor in
+            let model = editor.model
+            guard let preset = StockPreset.all.first(where: {
+                !$0.stock.isMonochrome && !$0.stock.isReversal
+            }) else { return .fail("no colour negative is installed") }
+            model.edit.stockID = preset.id
+            model.edit.paperFollowsStock = false
+            let panel = InspectorViewController(model: model)
+            _ = panel.view
+            panel.viewDidLoad()
+            for paper in PrintPaper.choices(for: preset.stock) {
+                model.edit.paper = paper
+                panel.refresh()
+                let found = words(in: panel.view)
+                guard shows(found, "Enlarger") == Enlarger.illuminates(stock: preset.stock, paper: paper),
+                      shows(found, "Channel Contrast Match") == paper.acceptsPrintCorrection,
+                      shows(found, "Viewing Illuminant") == paper.acceptsViewingIlluminant else {
+                    return .fail("\(paper.id): offered controls the medium ignores or hid active controls")
+                }
+            }
+            return .pass("print, scan and screen controls match the selected medium")
+        },
+
         Check(name: "no film develops") { editor in
             let model = editor.model
             guard let before = await settle(model) else {
@@ -178,13 +260,13 @@ enum VerifyDesktopParity {
 
         Check(name: "the crop panel offers perspective") { editor in
             rows(of: .crop, model: editor.model,
-                 expecting: ["Vertical", "Horizontal", "Straighten"])
+                 expecting: titles(in: .frameGeometry, for: editor.model))
         },
 
         Check(name: "the film panel offers the lab and the mottle") { editor in
             rows(of: .film, model: editor.model,
-                 expecting: ["Character", "Grain Mottle", "Lab", "Push / Pull",
-                             "Bleach Bypass", "Expired"])
+                 expecting: ["Character", "Lab"] + titles(in: .filmGrain, for: editor.model)
+                     + titles(in: .filmLab, for: editor.model))
         },
 
         Check(name: "the desktop offers the mobile emulsion controls") { editor in
@@ -197,12 +279,11 @@ enum VerifyDesktopParity {
             }
             model.edit.stockID = preset.id
             let film = rows(of: .film, model: model,
-                            expecting: ["Disc Grain", "Halo Colour",
-                                        "Return Spectrum", "Separation",
-                                        "Edge Contrast"])
+                            expecting: titles(in: .filmEmulsion, for: model))
             if case .fail = film { return film }
             return rows(of: .adjustments, model: model,
-                        expecting: ["Regional", "Encoded Grade"])
+                        expecting: titles(in: .lightExposure, for: model)
+                            + titles(in: .lightGrade, for: model).filter { $0 == "Encoded Grade" })
         },
 
         Check(name: "disc grain is an edit, not only a setting") { editor in
@@ -244,7 +325,7 @@ enum VerifyDesktopParity {
 
         Check(name: "the lens panel offers filters") { editor in
             rows(of: .lens, model: editor.model,
-                 expecting: ["Filters", "Add Filter", "Correct Lens"])
+                 expecting: ["Filters", "Add Filter", "Lens Correction"])
         },
 
         Check(name: "the film panel drops the emulsion on Normal") { editor in
@@ -429,6 +510,15 @@ enum VerifyDesktopParity {
     ]
 
     /// Builds one inspector tab on its own and reads the names off its rows.
+    @MainActor
+    private static func titles(in section: EditorControlSection,
+                               for model: DesktopEditorModel) -> [String] {
+        let stock = model.edit.hasFilm ? model.edit.stock : nil
+        return EditorControlCatalogue.controls(in: section, for: stock, on: .desktop)
+            .filter { $0.foldsUnder == nil && $0.kind.curve == nil && $0.kind != .takeover }
+            .map(\.title)
+    }
+
     @MainActor
     private static func rows(of panel: InspectorPanel,
                              model: DesktopEditorModel,
