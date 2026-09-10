@@ -11,7 +11,8 @@ final class BrowserColorControlTests: XCTestCase {
     }
 
     func testBrowserWhiteBalanceAndGradeMatchNative() throws {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        // Consumer packages can expose the engine's Tests directory through a symlink.
+        let root = URL(fileURLWithPath: #filePath).resolvingSymlinksInPath().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         let fixture = try JSONDecoder().decode(Fixture.self, from: Data(contentsOf:
             root.appendingPathComponent("web/test/editor/color-fixtures.json")))
