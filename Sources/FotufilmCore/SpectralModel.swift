@@ -2758,7 +2758,7 @@ public enum SpectralGrid {
 /// stores the three peak-channel faces of that anchored cube, each as a 33 x 33 grid of complete
 /// full-grid spectra. Face interpolation is stock-independent; each stock subsequently integrates
 /// the same recovered spectrum against its own layers.
-private final class MeasuredReflectanceTable: @unchecked Sendable {
+final class MeasuredReflectanceTable: @unchecked Sendable {
     static let shared: MeasuredReflectanceTable? = loadBundled()
 
     let dimension: Int

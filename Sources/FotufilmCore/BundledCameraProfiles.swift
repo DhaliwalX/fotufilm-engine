@@ -14,7 +14,7 @@ extension CameraSpectralProfileStore {
     /// The profiles parsed out of the bundled dataset, loaded once, in filename order.
     /// Registration into the store happens separately (`loadBundledProfiles()`) so tests can
     /// inspect the parsed set without depending on registration order.
-    static var bundledProfiles: [CameraSpectralProfile] { parsedBundledProfiles }
+    public static var bundledProfiles: [CameraSpectralProfile] { parsedBundledProfiles }
 
     /// Parses and registers the bundled profiles exactly once; thread-safe by the runtime's
     /// atomic static-let initialization. `profile(id:)`/`resolve` call this before answering so
