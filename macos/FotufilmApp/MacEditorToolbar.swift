@@ -77,7 +77,7 @@ extension DesktopEditorViewController: NSToolbarDelegate {
                           title: "Export", action: #selector(exportDocument(_:)))
         case ToolbarID.inspector:
             return button(identifier, symbol: "sidebar.trailing",
-                          title: "Adjustments",
+                          title: "Darkroom",
                           action: #selector(toggleInspectorPanel(_:)))
         case ToolbarID.readout:
             return readoutItem(identifier)

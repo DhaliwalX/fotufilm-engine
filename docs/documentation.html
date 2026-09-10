@@ -7,6 +7,15 @@
 <h2>Build and open the app</h2>
 <p>Install Xcode 26 or newer and Halide. Run <code>swift build</code> to build the engine and <code>swift test -c release --parallel</code> to test it. Run <code>macos/build.sh --test</code> to build the Mac app.</p>
 <p>Open <code>build/macos/Fotufilm.app</code>. Choose <strong>File → Open…</strong>, select a photo or video, and choose a film.</p>
+<h2>The Mac darkroom</h2>
+<p>The film library sits to the left of the photograph. The <strong>Darkroom</strong> panel on the right follows four stages. You can move between them at any time; each adjustment updates the preview.</p>
+<ol>
+<li><strong>Film</strong>: choose a stock in the library, then set its film format, age, and halation.</li>
+<li><strong>Expose</strong>: adjust exposure, highlights, shadows, and colour balance, then use <strong>Grade</strong> directly below to refine shadows, midtones, and highlights. The light controls act before the film responds; Grade’s lift, gamma, and gain act on the developed image. Lens filters, source interpretation, video encoding, lens correction, and supported long-exposure settings also live here.</li>
+<li><strong>Develop</strong>: set push/pull and bleach bypass, then tune grain, mottle, and the stock’s colour-separation controls.</li>
+<li><strong>Print</strong>: choose the output medium, enlarger, and viewing light where supported. Video cadence is also here. Save with the panel’s Export button, <strong>File → Export…</strong>, or the toolbar’s Export button.</li>
+</ol>
+<p><strong>Selective</strong> and <strong>Crop</strong> sit beneath the stage buttons for still photos. Use <strong>⌘1–⌘4</strong> for the four stages, <strong>⌘5</strong> for Selective, and <strong>⌘6</strong> for Crop, or choose them from the View menu. Click and hold the photograph to compare with the original. With <strong>Normal</strong> selected, Expose and Print remain available; choose a film to enable emulsion and development controls.</p>
 <h2>Film packs</h2>
 <p>The Mac film sidebar offers <strong>Film Workshop…</strong> and <strong>Load custom pack…</strong>. The pack purchase button is hidden.</p>
 <p>Packs loaded in the Mac app are also available in the Fotufilm plugins on the same Mac and user account. Restart Resolve or Final Cut Pro after loading or updating a pack. Install matching app and plugin versions; older plugins skip packs that require a newer release.</p>

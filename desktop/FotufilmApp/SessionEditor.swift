@@ -162,6 +162,7 @@ final class DesktopEditorViewController: SessionViewController {
         inspector.onPanelChanged = { [weak self] panel in
             self?.inspectorPanelChanged(panel)
         }
+        inspector.onExport = { [weak self] in self?.exportDocument(nil) }
         workspace.addSubview(inspectorPanel)
 
         buildRail()
