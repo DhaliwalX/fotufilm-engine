@@ -5,17 +5,17 @@
   "couplerInhibition": [
     [
       0,
-      0,
+      0.265351,
       0
     ],
     [
+      0.20333,
       0,
-      0,
-      0
+      0.115341
     ],
     [
-      0,
-      0,
+      0.067297,
+      0.118275,
       0
     ]
   ],
@@ -833,6 +833,7 @@
   ],
   "grainSizeMM": 0.004,
   "grainStrength": 0.007,
+  "granularityReadDensity": "gross",
   "halationLookScale": 1,
   "halationStrength": [
     0.008,
@@ -898,6 +899,11 @@
   },
   "paperMidDensity": 0.744,
   "reciprocityFailure": {
+    "layerWeights": [
+      0.91,
+      0.91,
+      1.18
+    ],
     "lostStopsPerDecade": 1,
     "statedThroughSeconds": 480,
     "thresholdSeconds": 120

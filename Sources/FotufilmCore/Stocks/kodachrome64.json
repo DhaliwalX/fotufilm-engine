@@ -5,17 +5,17 @@
   "couplerInhibition": [
     [
       0,
-      0,
+      0.284005,
       0
     ],
     [
+      0.083985,
       0,
-      0,
-      0
+      0.140037
     ],
     [
-      0,
-      0,
+      0.140568,
+      0.563341,
       0
     ]
   ],
@@ -1969,6 +1969,7 @@
   ],
   "grainSizeMM": 0.004,
   "grainStrength": 0.01,
+  "granularityReadDensity": "gross",
   "halationLookScale": 1,
   "halationStrength": [
     0.008,
@@ -2040,8 +2041,8 @@
       0.833
     ],
     "lostStopsPerDecade": 0.333,
-    "statedThroughSeconds": 1,
-    "thresholdSeconds": 0.1
+    "statedThroughSeconds": 0.1,
+    "thresholdSeconds": 0.01
   },
   "schemaVersion": 2,
   "sensitivity": [
