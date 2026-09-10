@@ -26,8 +26,8 @@ final class MacDarkroomNavigation: SessionView {
         super.init(frame: frame)
         translatesAutoresizingMaskIntoConstraints = false
         let title = makeStack(.horizontal, spacing: 8, alignment: .firstBaseline)
-        title.addArrangedSubview(help)
         title.addArrangedSubview(heading)
+        title.addArrangedSubview(help)
         title.addArrangedSubview(step)
         let stack = makeStack(.vertical, spacing: 10)
         [title, stages].forEach { stack.addArrangedSubview($0) }

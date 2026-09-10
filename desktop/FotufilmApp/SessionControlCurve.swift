@@ -65,8 +65,8 @@ final class ControlCurveFormRow: FormRowView {
             reading.trailingAnchor.constraint(equalTo: trailingAnchor),
             reading.firstBaselineAnchor.constraint(
                 equalTo: name.firstBaselineAnchor),
-            reading.leadingAnchor.constraint(
-                greaterThanOrEqualTo: name.trailingAnchor, constant: 8),
+            spacingAfterLabel(reading.leadingAnchor.constraint(
+                greaterThanOrEqualTo: name.trailingAnchor, constant: 8)),
             plot.leadingAnchor.constraint(equalTo: leadingAnchor),
             plot.trailingAnchor.constraint(equalTo: trailingAnchor),
             plot.topAnchor.constraint(equalTo: name.bottomAnchor, constant: 7),

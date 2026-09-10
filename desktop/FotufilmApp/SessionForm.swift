@@ -17,16 +17,23 @@ class FormRowView: SessionView {
     var rowTitle = ""
     #if !canImport(UIKit)
     private weak var helpLabel: PlatformView?
-    private var labelLeading: NSLayoutConstraint?
+    private var labelSpacing: [NSLayoutConstraint] = []
     private var helpButton: MacHelpButton?
     #endif
 
-    /// Keeps the label's leading edge available for contextual help without moving its control.
+    /// Registers the label so contextual help can follow it.
     func leadingConstraint(for label: PlatformView) -> NSLayoutConstraint {
         let constraint = label.leadingAnchor.constraint(equalTo: leadingAnchor)
         #if !canImport(UIKit)
         helpLabel = label
-        labelLeading = constraint
+        #endif
+        return constraint
+    }
+
+    /// Reserves room between the label and its value or control when help is added.
+    func spacingAfterLabel(_ constraint: NSLayoutConstraint) -> NSLayoutConstraint {
+        #if !canImport(UIKit)
+        labelSpacing.append(constraint)
         #endif
         return constraint
     }
@@ -39,10 +46,11 @@ class FormRowView: SessionView {
             let button = MacHelpButton(label: rowTitle)
             addSubview(button)
             NSLayoutConstraint.activate([
-                button.leadingAnchor.constraint(equalTo: leadingAnchor),
+                button.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 6),
                 button.centerYAnchor.constraint(equalTo: label.centerYAnchor),
+                button.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
             ])
-            labelLeading?.constant = 20
+            for constraint in labelSpacing { constraint.constant += 20 }
             helpButton = button
         }
         helpButton?.addDescription(read)
@@ -106,8 +114,8 @@ final class FormSectionView: SessionView {
             button.isHidden = true
             headingHelp = button
             let titleRow = makeStack(.horizontal, spacing: 6, alignment: .center)
-            titleRow.addArrangedSubview(button)
             titleRow.addArrangedSubview(heading)
+            titleRow.addArrangedSubview(button)
             outer.addArrangedSubview(titleRow)
             outer.setCustomSpacing(7, after: titleRow)
             #endif
@@ -248,8 +256,8 @@ final class SliderRow: FormRowView {
             readout.trailingAnchor.constraint(equalTo: trailingAnchor),
             readout.firstBaselineAnchor.constraint(
                 equalTo: name.firstBaselineAnchor),
-            readout.leadingAnchor.constraint(
-                greaterThanOrEqualTo: name.trailingAnchor, constant: 8),
+            spacingAfterLabel(readout.leadingAnchor.constraint(
+                greaterThanOrEqualTo: name.trailingAnchor, constant: 8)),
             slider.leadingAnchor.constraint(equalTo: leadingAnchor),
             slider.trailingAnchor.constraint(equalTo: trailingAnchor),
             slider.topAnchor.constraint(equalTo: name.bottomAnchor, constant: 3),
@@ -288,8 +296,8 @@ final class ToggleRow: FormRowView {
             name.centerYAnchor.constraint(equalTo: centerYAnchor),
             toggle.trailingAnchor.constraint(equalTo: trailingAnchor),
             toggle.centerYAnchor.constraint(equalTo: centerYAnchor),
-            toggle.leadingAnchor.constraint(
-                greaterThanOrEqualTo: name.trailingAnchor, constant: 8),
+            spacingAfterLabel(toggle.leadingAnchor.constraint(
+                greaterThanOrEqualTo: name.trailingAnchor, constant: 8)),
             heightAnchor.constraint(greaterThanOrEqualTo: toggle.heightAnchor),
             heightAnchor.constraint(greaterThanOrEqualTo: name.heightAnchor),
         ])
@@ -326,8 +334,8 @@ final class PopUpRow<Value: Equatable>: FormRowView {
             NSLayoutConstraint.activate([
                 leadingConstraint(for: name),
                 name.centerYAnchor.constraint(equalTo: centerYAnchor),
-                popUp.leadingAnchor.constraint(
-                    greaterThanOrEqualTo: name.trailingAnchor, constant: 8),
+                spacingAfterLabel(popUp.leadingAnchor.constraint(
+                    greaterThanOrEqualTo: name.trailingAnchor, constant: 8)),
                 heightAnchor.constraint(greaterThanOrEqualTo: name.heightAnchor),
             ])
         } else {
@@ -483,8 +491,8 @@ final class ValueRow: FormRowView {
             name.centerYAnchor.constraint(equalTo: centerYAnchor),
             name.topAnchor.constraint(equalTo: topAnchor),
             name.bottomAnchor.constraint(equalTo: bottomAnchor),
-            value.leadingAnchor.constraint(equalTo: name.trailingAnchor,
-                                           constant: 8),
+            spacingAfterLabel(value.leadingAnchor.constraint(equalTo: name.trailingAnchor,
+                                           constant: 8)),
             value.trailingAnchor.constraint(equalTo: trailingAnchor),
             value.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
@@ -519,8 +527,8 @@ final class TextFieldRow: FormRowView {
         NSLayoutConstraint.activate([
             leadingConstraint(for: name),
             name.centerYAnchor.constraint(equalTo: centerYAnchor),
-            field.leadingAnchor.constraint(equalTo: name.trailingAnchor,
-                                           constant: 10),
+            spacingAfterLabel(field.leadingAnchor.constraint(equalTo: name.trailingAnchor,
+                                           constant: 10)),
             field.trailingAnchor.constraint(equalTo: trailingAnchor),
             field.topAnchor.constraint(equalTo: topAnchor),
             field.bottomAnchor.constraint(equalTo: bottomAnchor),
