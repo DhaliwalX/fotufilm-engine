@@ -15,6 +15,48 @@ import AppKit
 /// A row that can be asked to catch up with the model without being rebuilt.
 class FormRowView: SessionView {
     var rowTitle = ""
+    #if !canImport(UIKit)
+    private weak var helpLabel: PlatformView?
+    private var labelLeading: NSLayoutConstraint?
+    private var helpButton: MacHelpButton?
+    #endif
+
+    /// Keeps the label's leading edge available for contextual help without moving its control.
+    func leadingConstraint(for label: PlatformView) -> NSLayoutConstraint {
+        let constraint = label.leadingAnchor.constraint(equalTo: leadingAnchor)
+        #if !canImport(UIKit)
+        helpLabel = label
+        labelLeading = constraint
+        #endif
+        return constraint
+    }
+
+    @discardableResult
+    func addHelp(_ read: @escaping () -> String) -> Bool {
+        #if !canImport(UIKit)
+        guard let label = helpLabel else { return false }
+        if helpButton == nil {
+            let button = MacHelpButton(label: rowTitle)
+            addSubview(button)
+            NSLayoutConstraint.activate([
+                button.leadingAnchor.constraint(equalTo: leadingAnchor),
+                button.centerYAnchor.constraint(equalTo: label.centerYAnchor),
+            ])
+            labelLeading?.constant = 20
+            helpButton = button
+        }
+        helpButton?.addDescription(read)
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    func refreshHelp() {
+        #if !canImport(UIKit)
+        helpButton?.refresh()
+        #endif
+    }
 
     /// Pulls the current value out of the model and shows it. Called on every observation tick, so
     /// it must be cheap and must not write anything back.
@@ -27,6 +69,9 @@ class FormRowView: SessionView {
 
     func applyEnabled(_ enabled: Bool) {
         for view in descendants {
+            #if !canImport(UIKit)
+            if view is MacHelpButton { continue }
+            #endif
             (view as? PlatformControl)?.isEnabled = enabled
         }
         Motion.run(Motion.quick) { [self] in
@@ -40,6 +85,9 @@ final class FormSectionView: SessionView {
     private let stack = makeStack(.vertical, spacing: 10)
     private let box = SessionView()
     private(set) var rows: [FormRowView] = []
+    #if !canImport(UIKit)
+    private var headingHelp: MacHelpButton?
+    #endif
 
     init(title: String?) {
         super.init(frame: .zero)
@@ -50,8 +98,19 @@ final class FormSectionView: SessionView {
 
         if let title {
             let heading = CapsLabel(title)
+            #if canImport(UIKit)
             outer.addArrangedSubview(heading)
             outer.setCustomSpacing(7, after: heading)
+            #else
+            let button = MacHelpButton(label: title)
+            button.isHidden = true
+            headingHelp = button
+            let titleRow = makeStack(.horizontal, spacing: 6, alignment: .center)
+            titleRow.addArrangedSubview(button)
+            titleRow.addArrangedSubview(heading)
+            outer.addArrangedSubview(titleRow)
+            outer.setCustomSpacing(7, after: titleRow)
+            #endif
         }
 
         box.backingLayer.backgroundColor = PlatformColor.primaryText
@@ -59,6 +118,9 @@ final class FormSectionView: SessionView {
         box.backingLayer.cornerRadius = 10
         box.backingLayer.cornerCurve = .continuous
         box.translatesAutoresizingMaskIntoConstraints = false
+        #if !canImport(UIKit)
+        box.isHidden = true
+        #endif
         outer.addArrangedSubview(box)
         box.addSubview(stack)
 
@@ -80,6 +142,23 @@ final class FormSectionView: SessionView {
 
     @discardableResult
     func add(_ row: FormRowView) -> FormSectionView {
+        #if !canImport(UIKit)
+        if let note = row as? NoteRow, !note.isStatus {
+            if let headingHelp {
+                headingHelp.isHidden = false
+                headingHelp.addDescription(note.readText)
+                note.onRefresh = { [weak headingHelp] in headingHelp?.refresh() }
+                rows.append(row)
+                return self
+            }
+            if let previous = rows.last, previous.addHelp(note.readText) {
+                note.onRefresh = { [weak previous] in previous?.refreshHelp() }
+                rows.append(row)
+                return self
+            }
+        }
+        box.isHidden = false
+        #endif
         row.translatesAutoresizingMaskIntoConstraints = false
         stack.addArrangedSubview(row)
         row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -90,18 +169,33 @@ final class FormSectionView: SessionView {
     /// Throws the section's rows away and puts a new set in their place, for the one case where the
     /// rows are not known until something has been read off disk.
     func replaceRows(_ replacements: [FormRowView]) {
+        #if !canImport(UIKit)
+        headingHelp?.clearDescriptions()
+        headingHelp?.isHidden = true
+        box.isHidden = true
+        #endif
         for row in rows {
-            stack.removeArrangedSubview(row)
-            row.removeFromSuperview()
+            if row.superview === stack {
+                stack.removeArrangedSubview(row)
+                row.removeFromSuperview()
+            }
         }
         rows.removeAll()
         for row in replacements { add(row) }
+    }
+
+    /// Moves an explanatory footer to this section's help button on the Mac.
+    func addNotes(from section: FormSectionView) {
+        for row in section.rows where row is NoteRow { add(row) }
     }
 
     /// A plain view — a picker grid, a grade deck — dropped into the section as though it were a
     /// row, because to the reader it is one.
     @discardableResult
     func add(view: PlatformView) -> FormSectionView {
+        #if !canImport(UIKit)
+        box.isHidden = false
+        #endif
         view.translatesAutoresizingMaskIntoConstraints = false
         stack.addArrangedSubview(view)
         view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
@@ -149,7 +243,7 @@ final class SliderRow: FormRowView {
         addSubview(readout)
         addSubview(slider)
         NSLayoutConstraint.activate([
-            name.leadingAnchor.constraint(equalTo: leadingAnchor),
+            leadingConstraint(for: name),
             name.topAnchor.constraint(equalTo: topAnchor),
             readout.trailingAnchor.constraint(equalTo: trailingAnchor),
             readout.firstBaselineAnchor.constraint(
@@ -190,7 +284,7 @@ final class ToggleRow: FormRowView {
         addSubview(name)
         addSubview(toggle)
         NSLayoutConstraint.activate([
-            name.leadingAnchor.constraint(equalTo: leadingAnchor),
+            leadingConstraint(for: name),
             name.centerYAnchor.constraint(equalTo: centerYAnchor),
             toggle.trailingAnchor.constraint(equalTo: trailingAnchor),
             toggle.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -230,7 +324,7 @@ final class PopUpRow<Value: Equatable>: FormRowView {
             let name = makeLabel(title, size: 12)
             addSubview(name)
             NSLayoutConstraint.activate([
-                name.leadingAnchor.constraint(equalTo: leadingAnchor),
+                leadingConstraint(for: name),
                 name.centerYAnchor.constraint(equalTo: centerYAnchor),
                 popUp.leadingAnchor.constraint(
                     greaterThanOrEqualTo: name.trailingAnchor, constant: 8),
@@ -270,9 +364,10 @@ final class ButtonRow: FormRowView {
                                destructive: destructive,
                                borderless: !bordered, action: action)
         super.init(frame: .zero)
+        rowTitle = title
         addSubview(button)
         NSLayoutConstraint.activate([
-            button.leadingAnchor.constraint(equalTo: leadingAnchor),
+            leadingConstraint(for: button),
             button.topAnchor.constraint(equalTo: topAnchor),
             button.bottomAnchor.constraint(equalTo: bottomAnchor),
             button.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
@@ -334,9 +429,13 @@ final class ButtonBarRow: FormRowView {
 final class NoteRow: FormRowView {
     private let label: PlatformLabel
     private let text: () -> String
+    let isStatus: Bool
+    var onRefresh: (() -> Void)?
+    var readText: () -> String { text }
 
-    init(_ text: @escaping () -> String) {
+    init(status: Bool = false, _ text: @escaping () -> String) {
         self.text = text
+        isStatus = status
         label = makeFootnote(text())
         super.init(frame: .zero)
         addSubview(label)
@@ -355,6 +454,7 @@ final class NoteRow: FormRowView {
     override func refresh() {
         let next = text()
         if label.textValue != next { label.textValue = next }
+        onRefresh?()
     }
 
     override func applyEnabled(_ enabled: Bool) {}
@@ -370,6 +470,7 @@ final class ValueRow: FormRowView {
         value = makeLabel(read(), size: 12, color: .secondaryText)
         super.init(frame: .zero)
 
+        rowTitle = title
         let name = makeLabel(title, size: 12)
         value.alignment = .right
         value.lineBreakMode = .byTruncatingMiddle
@@ -378,7 +479,7 @@ final class ValueRow: FormRowView {
         addSubview(name)
         addSubview(value)
         NSLayoutConstraint.activate([
-            name.leadingAnchor.constraint(equalTo: leadingAnchor),
+            leadingConstraint(for: name),
             name.centerYAnchor.constraint(equalTo: centerYAnchor),
             name.topAnchor.constraint(equalTo: topAnchor),
             name.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -410,12 +511,13 @@ final class TextFieldRow: FormRowView {
         field.text = get()
         field.onChange = set
 
+        rowTitle = title
         let name = makeLabel(title, size: 12)
         name.setContentHuggingPriority(.defaultHigh, for: .horizontal)
         addSubview(name)
         addSubview(field)
         NSLayoutConstraint.activate([
-            name.leadingAnchor.constraint(equalTo: leadingAnchor),
+            leadingConstraint(for: name),
             name.centerYAnchor.constraint(equalTo: centerYAnchor),
             field.leadingAnchor.constraint(equalTo: name.trailingAnchor,
                                            constant: 10),
@@ -450,6 +552,7 @@ final class NumberFieldRow: FormRowView {
             SessionTextField(numeric: true, alignment: .right)
         }
         super.init(frame: .zero)
+        rowTitle = title
 
         let name = makeLabel(title, size: 12)
         name.setContentCompressionResistancePriority(.defaultLow,
@@ -472,7 +575,7 @@ final class NumberFieldRow: FormRowView {
         }
 
         NSLayoutConstraint.activate([
-            name.leadingAnchor.constraint(equalTo: leadingAnchor),
+            leadingConstraint(for: name),
             name.topAnchor.constraint(equalTo: topAnchor),
             columns.leadingAnchor.constraint(equalTo: leadingAnchor),
             columns.trailingAnchor.constraint(equalTo: trailingAnchor),

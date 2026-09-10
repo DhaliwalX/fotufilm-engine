@@ -423,6 +423,12 @@ final class InspectorViewController: SessionViewController {
         let picker = GaugePickerView(model: model)
         gaugePicker = picker
         format.add(view: picker)
+        #if !canImport(UIKit)
+        format.add(NoteRow { [model] in
+            "Smaller film formats are enlarged more, so the same film shows coarser grain and softer highlights. "
+                + model.edit.gaugeFollowingNote(sensor: model.sensorFrame)
+        })
+        #endif
         return format
     }
 
@@ -479,7 +485,11 @@ final class InspectorViewController: SessionViewController {
     }
 
     private func filmSections() -> [FormSectionView] {
-        guard model.edit.hasFilm else { return [noFilmSection(), hintSection()] }
+        guard model.edit.hasFilm else {
+            let plain = noFilmSection()
+            plain.addNotes(from: hintSection())
+            return [plain]
+        }
         let stock = FormSectionView(title: "Loaded Film")
         stock.add(ValueRow("Stock", value: { [model] in
             StockPreset.preset(id: model.edit.stockID)?.name ?? StockPreset.noFilmName
@@ -489,7 +499,8 @@ final class InspectorViewController: SessionViewController {
         for row in rows(in: .filmLab, matching: { $0.field == .expired }) { condition.add(row) }
         let halation = FormSectionView(title: "Halation")
         for row in rows(in: .filmEmulsion, matching: isHalation) { halation.add(row) }
-        return [stock, formatSection(), condition, halation, hintSection()]
+        stock.addNotes(from: hintSection())
+        return [stock, formatSection(), condition, halation]
     }
 
     private func exposureSections() -> [FormSectionView] {
@@ -707,7 +718,12 @@ final class InspectorViewController: SessionViewController {
             model.endContinuousEdit()
             self?.gradeDeck?.refresh()
         })
+        #if canImport(UIKit)
         return [deckSection, note, reset]
+        #else
+        deckSection.addNotes(from: note)
+        return [deckSection, reset]
+        #endif
     }
 
     // MARK: - Crop
@@ -756,13 +772,24 @@ final class InspectorViewController: SessionViewController {
         let hint = FormSectionView(title: nil)
         hint.add(NoteRow("Drag the frame to crop. Four-Corner Crop lets you move each corner independently and straightens the selection when you leave Crop. Choose an aspect ratio to return to a rectangular crop."))
 
+        #if canImport(UIKit)
         return [orientation, crop, perspective, reset, hint]
+        #else
+        crop.addNotes(from: hint)
+        return [orientation, crop, perspective, reset]
+        #endif
     }
 
     private func lensSections() -> [FormSectionView] {
         let hint = FormSectionView(title: nil)
         hint.add(NoteRow("Lens correction undoes what the taking lens did to the frame — its distortion, its darkened corners, the colour fringing at the edges. It is read from the photograph's own metadata when a matching profile is known."))
+        #if canImport(UIKit)
         return [filterSection(), lensSection(), hint]
+        #else
+        let lens = lensSection()
+        lens.addNotes(from: hint)
+        return [filterSection(), lens]
+        #endif
     }
 
     private func filterSection() -> FormSectionView {
@@ -811,7 +838,7 @@ final class InspectorViewController: SessionViewController {
         } else {
             // Saying what is correcting the picture, or why nothing is, is the difference between a
             // photographer reaching for the sliders and wondering whether the switch is broken.
-            lens.add(NoteRow { [model] in model.lensCorrectionNote })
+            lens.add(NoteRow(status: true) { [model] in model.lensCorrectionNote })
         }
         for row in rows(in: .lensCorrection) where row.rowTitle != "Lens Correction" {
             if row.rowTitle == "Amount", !model.hasLensMeasurement { continue }

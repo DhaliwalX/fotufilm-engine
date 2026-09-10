@@ -60,7 +60,7 @@ final class ControlCurveFormRow: FormRowView {
         }
 
         NSLayoutConstraint.activate([
-            name.leadingAnchor.constraint(equalTo: leadingAnchor),
+            leadingConstraint(for: name),
             name.topAnchor.constraint(equalTo: topAnchor),
             reading.trailingAnchor.constraint(equalTo: trailingAnchor),
             reading.firstBaselineAnchor.constraint(

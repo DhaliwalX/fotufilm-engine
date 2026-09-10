@@ -47,7 +47,7 @@ enum SelectiveSection {
             set: { [model] in model.selective.kind = $0 }))
 
         if model.selective.kind == .subject {
-            selection.add(NoteRow { [model] in
+            selection.add(NoteRow(status: true) { [model] in
                 guard model.subjectsSettled else {
                     return "Looking for a subject in the photograph…"
                 }
@@ -149,7 +149,11 @@ enum SelectiveSection {
             }
             return "The selection is a way of looking at the photograph rather than part of the edit: it is not saved with the document, and an export develops the photograph without it."
         })
+        #if canImport(UIKit)
         sections.append(note)
+        #else
+        selection.addNotes(from: note)
+        #endif
         return sections
     }
 }

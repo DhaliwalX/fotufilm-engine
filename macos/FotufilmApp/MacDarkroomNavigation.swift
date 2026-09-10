@@ -9,7 +9,7 @@ final class MacDarkroomNavigation: SessionView {
     private let heading = makeLabel("Darkroom", size: 16, weight: .semibold)
     private let step = makeLabel("", size: 11, color: .secondaryText,
                                  monospacedDigits: true)
-    private let detail = makeFootnote("")
+    private let help = MacHelpButton(label: "Darkroom")
     private var panels: [InspectorPanel] = []
 
     var count: Int { panels.count }
@@ -26,10 +26,11 @@ final class MacDarkroomNavigation: SessionView {
         super.init(frame: frame)
         translatesAutoresizingMaskIntoConstraints = false
         let title = makeStack(.horizontal, spacing: 8, alignment: .firstBaseline)
+        title.addArrangedSubview(help)
         title.addArrangedSubview(heading)
         title.addArrangedSubview(step)
         let stack = makeStack(.vertical, spacing: 10)
-        [title, stages, detail].forEach { stack.addArrangedSubview($0) }
+        [title, stages].forEach { stack.addArrangedSubview($0) }
         addSubview(stack)
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -37,11 +38,12 @@ final class MacDarkroomNavigation: SessionView {
             stack.topAnchor.constraint(equalTo: topAnchor),
             stack.bottomAnchor.constraint(equalTo: bottomAnchor),
             stages.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            detail.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            // Keep the header steady when switching between one- and two-line descriptions.
-            detail.heightAnchor.constraint(equalToConstant: 32),
         ])
         stages.onSelect = { [weak self] in self?.onSelect?($0) }
+        help.addDescription { [weak self] in
+            guard let self, panels.indices.contains(selectedIndex) else { return "" }
+            return panels[selectedIndex].workflowDetail
+        }
     }
 
     func setPanels(_ panels: [InspectorPanel]) {
@@ -56,7 +58,8 @@ final class MacDarkroomNavigation: SessionView {
         stages.selectedIndex = selectedIndex < 4 ? selectedIndex : -1
         heading.textValue = selectedIndex < 4 ? "Darkroom" : panels[selectedIndex].title
         step.textValue = selectedIndex < 4 ? "\(selectedIndex + 1) of 4" : "Canvas tool"
-        detail.textValue = panels[selectedIndex].workflowDetail
+        help.setAccessibilityLabel("Help for \(panels[selectedIndex].title)")
+        help.refresh()
     }
 }
 

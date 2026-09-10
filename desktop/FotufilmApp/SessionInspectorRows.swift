@@ -27,6 +27,16 @@ struct InspectorRowFactory {
     }
 
     func rows(for control: EditorControl) -> [FormRowView] {
+        let made = makeRows(for: control)
+        #if !canImport(UIKit)
+        if let row = made.first(where: { !($0 is NoteRow) }) {
+            row.addHelp { control.detail }
+        }
+        #endif
+        return made
+    }
+
+    private func makeRows(for control: EditorControl) -> [FormRowView] {
         switch control.kind {
         case .slider(let scale):
             return [slider(control, scale: scale)]
