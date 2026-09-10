@@ -1,5 +1,8 @@
 import CoreGraphics
 import Foundation
+#if canImport(FotufilmImaging)
+import FotufilmImaging
+#endif
 #if canImport(FotufilmCore)
 import FotufilmCore
 #endif
