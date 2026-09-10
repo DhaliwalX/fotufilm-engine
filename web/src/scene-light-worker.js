@@ -7,7 +7,7 @@ async function loadAssets(base) {
   const catalog = await response.json()
   const row = (v) => Array.isArray(v) && v.length === 81 && v.every(Number.isFinite)
   if (
-    catalog.version !== 1 ||
+    catalog.version !== 2 ||
     catalog.bands !== 81 ||
     catalog.dimension !== 33 ||
     catalog.stride !== 85 ||

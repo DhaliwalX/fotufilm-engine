@@ -39,9 +39,12 @@ export function integrateSceneLight(catalog, geometry, stockID, kelvin) {
   const stock = catalog.stocks.find((s) => s.id === stockID)
   if (!stock)
     throw new Error('Scene-light data is unavailable for this film. Rebuild browser packs.')
-  const light = sceneSpectrum(kelvin, catalog),
-    bands = catalog.bands
-  const white = light.reduce((sum, v, i) => sum + v * catalog.yBar[i], 0)
+  const spectrum = sceneSpectrum(kelvin, catalog), bands = catalog.bands
+  // Native spectralExposure normalizes both scene and film-reference SPDs to
+  // equal photometric Y. The catalog denominators use that same normalization.
+  const sceneY = Math.fround(spectrum.reduce((sum, v, i) => sum + v * catalog.yBar[i], 0))
+  const light = spectrum.map((v) => Math.fround(v / sceneY))
+  const white = light.reduce((sum, v, i) => Math.fround(sum + Math.fround(v * catalog.yBar[i])), 0)
   const layers = stock.sensitivity.length,
     count = catalog.dimension ** 3
   const weighted = stock.sensitivity.map((row) => row.map((v, i) => v * light[i]))

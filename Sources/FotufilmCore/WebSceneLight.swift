@@ -49,14 +49,15 @@ public enum WebSceneLight {
             let rows = Array(stock.spectralProfile.layerSensitivity.prefix(3))
                 + (stock.donorLayers.first.map { [$0.sensitivity] } ?? [])
             let reference = SpectralRuntime.filmReferenceIlluminant(for: stock)
+            let referenceY = Illuminant.luminance(reference)
             let denominators = rows.map { row in
                 (0..<SpectralGrid.count).reduce(Float(0)) {
-                    $0 + reference[$1] / reference[Illuminant.anchorIndex] * row[$1]
+                    $0 + reference[$1] / referenceY * row[$1]
                 }
             }
             return ["id": id, "sensitivity": rows, "denominators": denominators]
         }
-        return ["version": 1, "dimension": SpectralRuntime.lutDimension,
+        return ["version": 2, "dimension": SpectralRuntime.lutDimension,
                 "bands": SpectralGrid.count, "stride": stride,
                 "wavelengths": SpectralGrid.wavelengths, "yBar": SpectralGrid.yBar,
                 "daylight": [Illuminant.s0, Illuminant.s1, Illuminant.s2], "stocks": stocks]
