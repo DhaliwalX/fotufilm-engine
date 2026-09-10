@@ -3,7 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
-EMSDK="${EMSDK_ROOT:-$ROOT/build/emsdk}"
+# emsdk_env.sh exports EMSDK and clears EMSDK_ROOT when the parent build sources it.
+EMSDK="${EMSDK_ROOT:-${EMSDK:-$ROOT/build/emsdk}}"
 [[ -f "$EMSDK/emsdk_env.sh" ]] || { echo 'Set EMSDK_ROOT to an Emscripten SDK.' >&2; exit 1; }
 set +u
 source "$EMSDK/emsdk_env.sh" >/dev/null 2>&1
