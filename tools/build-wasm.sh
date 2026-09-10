@@ -248,5 +248,6 @@ tools/build-raw-wasm.sh
 bash tools/build-web-scene.sh
 
 node tools/test-web-scene.mjs
+node tools/test-wasm-transport-colour.mjs
 node tools/test-wasm.mjs
 node tools/test-wasm-tiles.mjs

@@ -88,11 +88,18 @@ svg {
 }
 .toolbar-leading {
   min-width: 224px;
+  flex-shrink: 0;
 }
 .app-name {
   font-weight: 600;
   font-size: 13px;
-  margin: 0 auto 0 7px;
+  margin: 0 3px 0 7px;
+}
+.experimental-label {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
 }
 .tool-button {
   width: 32px;
@@ -1035,4 +1042,29 @@ dialog .adjustment {
 }
 .inspector-tabs button {
   height: 48px;
+}
+
+@media (max-width: 360px) {
+  .editor,
+  .film-collapsed,
+  .inspector-collapsed,
+  .film-collapsed.inspector-collapsed {
+    grid-template-rows: 64px minmax(180px, 1fr) minmax(190px, 40%);
+  }
+  .inspector-collapsed,
+  .film-collapsed.inspector-collapsed {
+    grid-template-rows: 64px minmax(0, 1fr) 0;
+  }
+  .toolbar {
+    position: relative;
+    padding-top: 16px;
+  }
+  .experimental-label {
+    position: absolute;
+    top: 4px;
+    left: 10px;
+  }
+  .film-sidebar {
+    top: 64px;
+  }
 }

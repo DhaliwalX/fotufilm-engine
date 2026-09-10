@@ -126,7 +126,7 @@ test('capture-light worker shares its cached table across media and agrees with 
 test('missing scene assets report an error instead of using the wrong capture light', async ({
   page,
 }) => {
-  await page.route('**/packs/scene/index.json', (route) => route.fulfill({ status: 404, body: '' }))
+  await page.route('**/packs/scene/index.json*', (route) => route.fulfill({ status: 404, body: '' }))
   await page.goto('/')
   const message = await page.evaluate(async () => {
     const { loadSceneExposure } = await import('/src/scene-light.js')

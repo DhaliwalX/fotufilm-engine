@@ -1676,7 +1676,9 @@ public enum SpectralRuntime {
             throw TransportError.unsupported("spectral reconstruction data is unavailable")
         }
         let reference = filmReferenceIlluminant(for: stock)
-        let light = options.resolvedSceneSpectrum
+        // Match FilmEngineInvocation: an image without capture-light metadata is
+        // already balanced, so its reference is the selected film's calibration.
+        let light = options.resolvedSceneSpectrum(referenceKelvin: stock.referenceIlluminantKelvin)
         let filter = options.lensFilters.isEmpty ? nil
             : spectralFilter(for: stock, stack: options.lensFilters, illuminant: light)
         let sceneY = Illuminant.luminance(light), referenceY = Illuminant.luminance(reference)

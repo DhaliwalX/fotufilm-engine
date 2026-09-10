@@ -30,6 +30,30 @@ enum TransportFixtures {
 }
 
 final class LayeredTransportTests: XCTestCase {
+    func testTransportComponentsUseTheSameCaptureLightAsLegacyForEveryFilmReference() throws {
+        for reference: Float in [3200, 5500, 6504] {
+            var stock = TestStocks.negative
+            stock.referenceIlluminantKelvin = reference
+            for capture: Float? in [nil, 4300] {
+                var options = TransportFixtures.quiet
+                options.localTone = false
+                options.sceneIlluminantKelvin = capture
+                options.layeredTransport = TransportFixtures.stack
+                let plan = try LayeredTransportRenderer.renderPlan(
+                    stock: stock, options: options, width: 9, height: 7)
+                let legacy = FilmEngineInvocation(stock: stock, options: options.withoutLayeredTransport,
+                                                  width: 9, height: 7).spectral.exposure.values
+                var maximumError: Float = 0
+                for i in legacy.indices where i % 4 != 3 {
+                    let sum = plan.components.reduce(Float(0)) { $0 + $1.exposure[i] }
+                    maximumError = max(maximumError, abs(sum - legacy[i]))
+                }
+                XCTAssertLessThan(maximumError, 2e-5,
+                                  "reference \(reference), capture \(String(describing: capture))")
+            }
+        }
+    }
+
     func testMirrorMatchesAnalyticMoffatAndConservesPower() throws {
         let result = try LayeredTransportSolver.solve(TransportFixtures.mirror, receiver: 0, band: 20,
                                                      angularSamples: 4096)

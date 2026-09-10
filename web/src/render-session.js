@@ -118,6 +118,8 @@ export class RenderSession {
   }
   async renderer(pack, background = false, onProgress = () => {}) {
     const name = background ? 'thumbnailReady' : pack?.transport ? 'transportReady' : pack ? 'filmReady' : 'normalReady'
+    const cached = background ? this.thumbnail : pack?.transport ? this.transport : pack ? this.developer : this.normal
+    if (cached?.isAborted) this[name] = null
     // A thumbnail must not hold foreground work behind GPU shader compilation.
     this[name] ??= (
       background ? createCpuDeveloper(pack) : pack ? createDeveloper(pack, onProgress) : createNormalDeveloper()
