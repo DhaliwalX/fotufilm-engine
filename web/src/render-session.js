@@ -188,6 +188,8 @@ export class RenderSession {
     onProgress = () => {},
   }) {
     if (this.closed || stale()) return null
+    if (edit.halationModel === 'layered' && image.raw?.sceneKelvin)
+      throw new Error('Layered Transport is unavailable for RAW photos with a detected capture light. Choose Legacy.')
     const work = { label: background ? 'film thumbnail' : purpose }
     const report = (text) => {
       if (this.activeWork === work) {

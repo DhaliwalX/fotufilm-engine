@@ -156,3 +156,14 @@ test('foreground renders run before pending thumbnails, without overlapping heap
   await session.dispose()
   assert.equal(await session.render({}), null)
 })
+
+test('RAW capture light cannot silently use transport components for a different illuminant', async () => {
+  const { RenderSession } = await import('../../src/render-session.js')
+  const session = new RenderSession()
+  await assert.rejects(session.render({
+    image: { raw: { sceneKelvin: 2856 } },
+    edit: { ...defaultEdit('gold200'), halationModel: 'layered' },
+    stock: 'gold200',
+  }), /Choose Legacy/)
+  await session.dispose()
+})
