@@ -1390,7 +1390,7 @@ public enum EditorControlCatalogue {
             .selective, title: "Selective",
             detail: "The same light and colour controls, over part of the frame",
             section: .frameLocal, kind: .takeover,
-            persistence: .none,
+            persistence: EditorControlPersistence.none,
             surfaces: [.app, .desktop],
             omitted: hostsOwnIt.merging([.android: "no selective edits on Android yet"]) { $1 },
             documentation: "Develops a colour, a light or a subject differently from the rest of the frame."),
