@@ -5,7 +5,8 @@ import FotufilmCore
 #endif
 
 /// Renders session panels to PNG with `cacheDisplay(in:to:)`, including on locked or headless
-/// systems. Usage: `Fotufilm --demo --snapshot-panels=/tmp/shots`.
+/// systems. Use `--panel=adjustments` to show Expose in the full-window capture.
+/// Usage: `Fotufilm --demo --panel=adjustments --snapshot-panels=/tmp/shots`.
 enum SnapshotPanels {
     private static let columnWidth: CGFloat = 330
     private static let columnHeight: CGFloat = 1000
@@ -42,6 +43,16 @@ enum SnapshotPanels {
                     written += 1
                 }
             }
+            // Capture the editor before the Normal variant changes the selected film. Use a
+            // consistent size so the inspector stays readable in the full-window image.
+            if let window = editor.view.window {
+                window.setFrameAutosaveName("")
+                window.setContentSize(NSSize(width: 1200, height: 900))
+                try? await Task.sleep(for: .milliseconds(400))
+                if write(window, to: directory.appendingPathComponent("window.png")) {
+                    written += 1
+                }
+            }
             // And the film panel again with no film, which is a different column.
             editor.model.edit.stockID = StockPreset.noFilmID
             try? await Task.sleep(for: .milliseconds(400))
@@ -61,25 +72,6 @@ enum SnapshotPanels {
                    write(window, to: directory.appendingPathComponent(
                     "settings-\(pane.snapshotName).png")) {
                     written += 1
-                }
-            }
-
-            // And the editor window whole, title bar with it: the toolbar is built by hand and the
-            // panels' snapshots never show it, so a change to the bar would otherwise go unseen.
-            if let window = NSApp.windows.first(where: {
-                    $0.contentViewController is DesktopEditorViewController }),
-               let frameView = window.contentView?.superview,
-               let bitmap = frameView.bitmapImageRepForCachingDisplay(
-                    in: frameView.bounds) {
-                frameView.cacheDisplay(in: frameView.bounds, to: bitmap)
-                if let data = bitmap.representation(using: .png, properties: [:]) {
-                    do {
-                        try data.write(to: directory.appendingPathComponent(
-                            "window.png"), options: .atomic)
-                        written += 1
-                    } catch {
-                        print("snapshot-panels: window.png: \(error)")
-                    }
                 }
             }
 
