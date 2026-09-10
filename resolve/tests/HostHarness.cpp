@@ -2088,6 +2088,8 @@ int testPlugin() {
         check(instance.params.params.count("texture_grain") == 1 &&
                   instance.params.params.count("texture_halation") == 1,
               "defines the texture span's stage selection");
+        check(instance.params.params.count("textureSelection") == 0,
+              "does not expose a second, unused texture-mask menu");
 
         // Moving the menu writes the identity, which is what a reopened project resolves against.
         setChoice(plugin, instanceHandle, instance.params, "stage", 1);

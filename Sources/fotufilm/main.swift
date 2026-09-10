@@ -52,11 +52,19 @@ decoded scene-referred, so highlights above diffuse white reach the film
 shoulder and drive halation the way they do on real film.
 
 Options:
-  --stock <name>     Film stock (default: first installed). See --list-stocks
-  --format <name>    Film gauge (default: the gauge the stock is known on).
-                     "sensor" cuts the film to the frame the input file says
-                     its camera exposed. See --list-formats
 @CONTROL_FLAGS@
+  --autoexpose       Anchor the log-average scene luminance on mid-gray
+  --background <c>  Scene-linear Rec.2020 background for associated-alpha input:
+                     black, white, or R,G,B (default: black). The source is
+                     composited before film processing and the output is opaque
+  --depth <8|16>     Output bit depth (default: 8, dithered; 16 for PNG/TIFF)
+  --hlg              Write the print as 16-bit Rec.2020 HLG instead of sRGB.
+                     Implies --depth 16.
+  --transport <json> Opt in to a layered transport construction (experimental)
+  --transport-backend <cpu|metal> Transport convolution backend (default: cpu)
+  --halation-haze <mm> Support impurity scatter as a Gaussian sigma in
+                     millimeters (default: the stock's own figure)
+  --adjacency-model <m> gaussian or screened-diffusion (default: stock's model)
   --stages           Instead of one render, write the frame the film would make
                      with only the physics enabled up to each stage, into the
                      directory named as the output. It starts from every stage
@@ -966,31 +974,13 @@ if let requested = flags["--stock"] {
 var options = FotufilmEngine.Options()
 options.format = FilmFormat.native(forStockID: stockID)
 for control in EditorControlCatalogue.all {
-    guard control.offered(on: .cli), let flag = control.commandLine, flag.generic,
-          let binding = control.host?.binding ?? control.binding else { continue }
+    guard let flag = control.commandLine else { continue }
     guard let text = flags[flag.flag] else { continue }
-    let value: EditorControlValue
-    switch control.host?.kind {
-    case .boolean?:
-        value = .flag(flag.placeholder.isEmpty ? true : text != "0")
-    case .choice(let menu, _)?:
-        guard let choices = menu.fixedChoices,
-              let index = choices.firstIndex(where: { $0.id == text || $0.label == text }) else {
-            fail("Unknown \(flag.flag) value '\(text)'. Choices: "
-                 + (menu.fixedChoices ?? []).map(\.id).joined(separator: ", "))
-        }
-        value = .choice(index)
-    default:
-        guard let number = Double(text), number.isFinite else {
-            fail("Invalid \(flag.flag) value '\(text)'; expected a number.")
-        }
-        if let clamp = control.host?.clamp, !clamp.contains(number) {
-            fail("Invalid \(flag.flag) value '\(text)'; expected \(clamp.lowerBound) to \(clamp.upperBound).")
-        }
-        let canonical = control.host.map { $0.binding == nil ? $0.bridge.canonical(fromBridge: number * $0.paramScale + $0.paramOffset) : number } ?? number
-        value = .number(canonical)
+    do {
+        try control.applyCommandLineValue(text, to: &options)
+    } catch {
+        fail(String(describing: error))
     }
-    binding.apply(value, to: &options)
 }
 if let formatID = flags["--format"] {
     // `sensor` is the frame the input file says it was exposed on, cut from the film the stock

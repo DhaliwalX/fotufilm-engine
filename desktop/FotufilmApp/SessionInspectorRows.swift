@@ -28,13 +28,24 @@ struct InspectorRowFactory {
 
     func rows(for control: EditorControl) -> [FormRowView] {
         switch control.kind {
-        case .slider(let scale), .chips(let scale, _):
+        case .slider(let scale):
             return [slider(control, scale: scale)]
+        case .chips(let scale, let choices):
+            return [PopUpRow<Double>(
+                control.title,
+                options: choices.map { (title: $0.label, value: $0.value) },
+                get: { [model] in model.edit.value(of: control.field) ?? scale.neutral },
+                set: { [model] value in
+                    var next = model.edit
+                    next.setValue(value, of: control.field)
+                    model.edit = next
+                })]
         case .toggle:
             return [toggle(control)]
         case .curve(let curve):
             return [self.curve(control, curve: curve)]
         case .menu(.fixed(let choices)):
+            if control.field == .enlarger { return bespoke(control) }
             return [menu(control, choices: choices)]
         case .menu(.dynamic), .takeover:
             return bespoke(control)
@@ -91,12 +102,6 @@ struct InspectorRowFactory {
                 options: choices.map { (title: $0.label, value: $0.value) },
                 get: { [model] in model.edit.grainMottleShare },
                 set: { [model] in model.edit.grainMottleShare = $0 })
-        case .enlarger:
-            return PopUpRow<Enlarger>(
-                control.title,
-                options: Enlarger.allCases.map { ($0.name, $0) },
-                get: { [model] in model.edit.enlarger },
-                set: { [model] in model.edit.enlarger = $0 })
         case .rotation:
             return PopUpRow<Int>(
                 control.title,

@@ -169,6 +169,8 @@ final class InspectorViewController: SessionViewController {
     private var structureSignature: String {
         [
             panel.rawValue,
+            model.edit.stockID,
+            model.edit.resolvedPaper.id,
             String(model.hasVideo),
             String(model.hasPhoto),
             String(model.sourceInterpretationAvailable),
@@ -325,7 +327,13 @@ final class InspectorViewController: SessionViewController {
     }
 
     private func rows(in section: EditorControlSection) -> [FormRowView] {
-        rowFactory.rows(in: section)
+        rowFactory.controls(in: section).filter { control in
+            switch control.field {
+            case .enlarger: return showsEnlarger
+            case .printCorrection: return showsPrintCorrection
+            default: return true
+            }
+        }.flatMap(rowFactory.rows(for:))
     }
 
     private func bespokeRows(for control: EditorControl) -> [FormRowView] {

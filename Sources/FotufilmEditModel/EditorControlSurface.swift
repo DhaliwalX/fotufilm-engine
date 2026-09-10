@@ -653,11 +653,14 @@ public struct CommandLineFlag: Equatable, Sendable {
     public let placeholder: String
     public let help: String
     public let generic: Bool
+    public let range: ClosedRange<Double>?
 
-    public init(_ flag: String, placeholder: String, help: String, generic: Bool = true) {
+    public init(_ flag: String, placeholder: String, help: String, generic: Bool = true,
+                range: ClosedRange<Double>? = nil) {
         self.flag = flag
         self.placeholder = placeholder
         self.help = help
         self.generic = generic
+        self.range = range
     }
 }

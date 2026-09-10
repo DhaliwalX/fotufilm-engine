@@ -92,6 +92,8 @@ public struct ControlsManifest: Codable, Equatable {
         public let commandLinePlaceholder: String?
         public let commandLineHelp: String?
         public let commandLineGeneric: Bool?
+        public let commandLineMin: Double?
+        public let commandLineMax: Double?
     }
 
     public struct Auxiliary: Codable, Equatable {
@@ -257,7 +259,9 @@ extension ControlsManifest.Control {
                   host: control.host.map(ControlsManifest.Host.init), webConfigSlot: webSlot,
                   webTransform: webTransform, commandLineFlag: control.commandLine?.flag,
                   commandLinePlaceholder: control.commandLine?.placeholder,
-                  commandLineHelp: control.commandLine?.help, commandLineGeneric: control.commandLine?.generic)
+                  commandLineHelp: control.commandLine?.help, commandLineGeneric: control.commandLine?.generic,
+                  commandLineMin: control.commandLine?.range?.lowerBound,
+                  commandLineMax: control.commandLine?.range?.upperBound)
     }
 }
 

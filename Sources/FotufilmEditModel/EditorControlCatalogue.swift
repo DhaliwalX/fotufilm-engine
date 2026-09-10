@@ -583,7 +583,8 @@ public enum EditorControlCatalogue {
                 hint: "Broad inter-layer transport fraction, 0-1. 0 keeps the stock's own transport.",
                 kind: .double(min: 0, max: 1, value: 0), zeroLeavesEngineDefault: true, order: 40),
             commandLine: CommandLineFlag("--fringe-amount", placeholder: "<f>",
-                                         help: "Broad inter-layer transport fraction, 0-1 (default: stock, normally 0)"),
+                                         help: "Broad inter-layer transport fraction, 0-1 (default: stock, normally 0)",
+                                         range: 0...1),
             documentation: "Spreads a share of inter-layer inhibition farther around colour boundaries."),
         EditorControl(
             .chromaticFringeRadius, title: "Fringe Radius",
@@ -604,7 +605,8 @@ public enum EditorControlCatalogue {
                 order: 50),
             commandLine: CommandLineFlag("--fringe-radius", placeholder: "<um>",
                                          help: "Broad transport Gaussian sigma on the film, 0-2000 micrometers "
-                                             + "(default: stock, normally 100; must exceed the stock's core radius)"),
+                                             + "(default: stock, normally 100; must exceed the stock's core radius)",
+                                         range: 0...2000),
             documentation: "Sets the broad spread on the film in micrometres."),
 
         EditorControl(

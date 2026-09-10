@@ -159,6 +159,9 @@ enum HostLayout {
 
     static func controlEntries(_ control: EditorControl, host: HostParameter,
                                surface: EditorSurface) -> [HostEntry] {
+        // The mask has a bridge slot, but its UI is the auxiliary's per-stage toggles.
+        // Defining a second menu would expose an unused choice beside those toggles.
+        if control.field == .textureStages { return [] }
         var flags: Int32 = HostFlags.persistent
         if host.animates { flags |= HostFlags.animates }
         if host.secret { flags |= HostFlags.secret }
