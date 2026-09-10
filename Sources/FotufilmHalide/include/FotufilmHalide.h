@@ -729,6 +729,18 @@ enum {
     X(slide_interimage, FOTUFILM_AOT_SLIDE_INTERIMAGE)                       \
     X(slide_interimage_grainless,                                           \
       FOTUFILM_AOT_SLIDE_INTERIMAGE & ~FOTUFILM_FRAME_GRAIN)                  \
+    X(slide_interimage_extended_mtf,                                        \
+      FOTUFILM_AOT_EXTENDED_MTF(FOTUFILM_AOT_SLIDE_INTERIMAGE))               \
+    X(slide_interimage_no_adjacency_extended_mtf,                            \
+      FOTUFILM_AOT_EXTENDED_MTF(FOTUFILM_AOT_SLIDE_INTERIMAGE                 \
+                               & ~FOTUFILM_FRAME_ADJACENCY))                \
+    X(slide_interimage_grainless_extended_mtf,                              \
+      FOTUFILM_AOT_EXTENDED_MTF(FOTUFILM_AOT_SLIDE_INTERIMAGE                 \
+                               & ~FOTUFILM_FRAME_GRAIN))                    \
+    X(slide_interimage_no_adjacency_grainless_extended_mtf,                 \
+      FOTUFILM_AOT_EXTENDED_MTF(FOTUFILM_AOT_SLIDE_INTERIMAGE                 \
+                               & ~FOTUFILM_FRAME_ADJACENCY                  \
+                               & ~FOTUFILM_FRAME_GRAIN))                    \
     X(slide_extended_mtf, FOTUFILM_AOT_EXTENDED_MTF(FOTUFILM_AOT_SLIDE))      \
     X(slide_no_adjacency_extended_mtf,                                      \
       FOTUFILM_AOT_EXTENDED_MTF(FOTUFILM_AOT_SLIDE                           \

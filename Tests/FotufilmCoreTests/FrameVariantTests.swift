@@ -133,6 +133,11 @@ final class FrameVariantTests: XCTestCase {
         slide & ~FilmEngineFeature.grain,
         slideInterimage,
         slideInterimage & ~FilmEngineFeature.grain,
+        slideInterimage | FilmEngineFeature.mtfLuma,
+        (slideInterimage & ~FilmEngineFeature.adjacency) | FilmEngineFeature.mtfLuma,
+        (slideInterimage & ~FilmEngineFeature.grain) | FilmEngineFeature.mtfLuma,
+        (slideInterimage & ~(FilmEngineFeature.adjacency | FilmEngineFeature.grain))
+            | FilmEngineFeature.mtfLuma,
         slide | FilmEngineFeature.mtfLuma,
         (slide & ~FilmEngineFeature.adjacency) | FilmEngineFeature.mtfLuma,
         (slide & ~FilmEngineFeature.grain) | FilmEngineFeature.mtfLuma,
