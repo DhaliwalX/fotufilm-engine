@@ -3,7 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Fotufilm guide</title></head>
 <body>
 <h1>Fotufilm guide</h1>
-<p>Try the <a href="https://fotufilm.com/demo/">browser demo</a> to develop a photo locally in your browser, select a film and inspect the pipeline stages.</p>
+<p>Try the <a href="https://fotufilm.com/demo/">browser demo</a> to develop a photo locally in your browser, select a film and inspect the pipeline stages. Large photos use overlapping tiles that include the print blur to keep tile boundaries seamless.</p>
 <p>Fotufilm adds a film look to photos and videos. This repository includes the engine, command-line tool, Mac app, Resolve and Final Cut plugins, and browser demo.</p>
 <h2>Build and open the app</h2>
 <p>Install Xcode 26 or newer and Halide. Run <code>swift build</code> to build the engine and <code>swift test -c release --parallel</code> to test it. Run <code>macos/build.sh --test</code> to build the Mac app.</p>

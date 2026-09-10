@@ -28,6 +28,36 @@ final class PipelineStageTests: XCTestCase {
         return options
     }
 
+    func testTileSupportIncludesThePrintAfterTheNegative() throws {
+        for stock in [TestStocks.negative, TestStocks.monochrome] {
+            for (width, height) in [(176, 128), (1600, 900), (4096, 2160)] {
+                let full = try FilmEngineInvocation(validating: stock,
+                    options: options(stage: .full), width: width, height: height)
+                let negative = try FilmEngineInvocation(validating: stock,
+                    options: options(stage: .negative), width: width, height: height)
+                let print = try FilmEngineInvocation(validating: stock,
+                    options: options(stage: .print), width: width, height: height)
+                XCTAssertGreaterThan(print.spatialSupport, 0)
+                XCTAssertEqual(full.spatialSupport,
+                    negative.spatialSupport + print.spatialSupport,
+                    "The print reads neighbouring developed densities, including their optical support")
+                XCTAssertEqual(full.spatialSupportSansHalation,
+                    negative.spatialSupportSansHalation + print.spatialSupport)
+            }
+        }
+    }
+
+    func testBoxPyramidSupportCoversAllThreePassesAndResampling() {
+        XCTAssertEqual(FilmEngineInvocation.boxPyramidSupport(radius: 1, stride: 1), 4)
+        XCTAssertEqual(FilmEngineInvocation.boxPyramidSupport(radius: 2, stride: 1), 7)
+        XCTAssertEqual(FilmEngineInvocation.boxPyramidSupport(radius: 5, stride: 2), 16)
+        XCTAssertEqual(FilmEngineInvocation.boxPyramidSupport(radius: 10, stride: 4), 32)
+        XCTAssertEqual(FilmEngineInvocation.boxPyramidSupport(
+            radius: 1, stride: 1, ringRadius: 1.5), 6)
+        XCTAssertEqual(FilmEngineInvocation.boxPyramidSupport(
+            radius: 5, stride: 2, ringRadius: 2.1), 20)
+    }
+
     func testNegativeThenPrintReproducesFull() throws {
         guard HalideBackend.isAvailable else { throw XCTSkip("Halide not linked") }
         let image = scene()
