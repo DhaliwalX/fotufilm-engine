@@ -122,6 +122,9 @@ public:
         ensure_buffers(w, h);
 
         if (is_metal) {
+            // The previous call may have finished in buffer 1 after an odd band count.
+            // Buffer 0 is wholly overwritten here; discard its old device contents.
+            cached_accum[0].set_device_dirty(false);
             cached_accum[0].fill(0.0f);
             cached_accum[0].set_host_dirty();
             int cur = 0;

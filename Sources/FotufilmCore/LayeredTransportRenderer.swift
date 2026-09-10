@@ -5,7 +5,7 @@ public enum TransportBackend: Int32, Sendable, Codable {
     case cpu = 0
     /// Halide Metal JIT convolution; scene preparation and development retain the CPU reference.
     case metal = 1
-    /// Accelerate 2D FFT continuous halation transport.
+    /// Accelerate 2D FFT convolution of the reference pixel-integrated transport bands.
     case fft = 2
     public var isAvailable: Bool {
         #if canImport(Accelerate)
@@ -216,7 +216,9 @@ public enum LayeredTransportRenderer {
         guard component.width > 0 && component.height > 0, component.planes.count == 3,
               component.planes.allSatisfy({ $0.count == component.pixelCount && $0.allSatisfy(\.isFinite) }),
               exposure.width == component.width && exposure.height == component.height,
-              exposure.planes.count == 3 else {
+              exposure.planes.count == 3,
+              exposure.planes.allSatisfy({ $0.count == component.pixelCount && $0.allSatisfy(\.isFinite) }),
+              bands.allSatisfy({ $0.weight.isFinite && $0.weight >= 0 }) else {
             throw TransportError.invalid("invalid image dimensions or planes")
         }
         let activeBands = bands.filter { $0.weight > 0 }
@@ -224,6 +226,11 @@ public enum LayeredTransportRenderer {
 
         var totalWeights = 0
         for band in activeBands {
+            guard (1...128).contains(band.stencil.radius),
+                  (1...4096).contains(band.stencil.stride),
+                  band.stencil.stride.nonzeroBitCount == 1 else {
+                throw TransportError.invalid("invalid stencil radius or stride")
+            }
             let dim: Int = 2 * band.stencil.radius + 1
             let expected: Int = dim * dim
             guard band.stencil.weights.count == expected else {

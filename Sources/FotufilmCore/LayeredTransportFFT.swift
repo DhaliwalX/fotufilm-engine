@@ -71,246 +71,315 @@ public struct ContinuousBesselOTF: Sendable {
 }
 
 #if canImport(Accelerate)
-final class FFTWorkspace: @unchecked Sendable {
-    var real: [Float]
-    var imag: [Float]
-    init(count: Int) {
-        self.real = [Float](repeating: 0, count: count)
-        self.imag = [Float](repeating: 0, count: count)
-    }
-}
+/// Owns the vDSP allocation for as long as any convolution still references it.
+final class FFTPlan: @unchecked Sendable {
+    let log2N: vDSP_Length
+    private let handle: FFTSetupD
 
-final class FFTWorkspacePool: @unchecked Sendable {
-    static let shared = FFTWorkspacePool()
-    private let lock = NSLock()
-    private var pool: [FFTWorkspace] = []
-
-    func acquire(count: Int) -> FFTWorkspace {
-        lock.lock()
-        defer { lock.unlock() }
-        if let idx = pool.firstIndex(where: { $0.real.count >= count }) {
-            return pool.remove(at: idx)
+    init(log2N: vDSP_Length) throws {
+        guard let handle = vDSP_create_fftsetupD(log2N, FFTRadix(FFT_RADIX2)) else {
+            throw TransportError.backend("failed to create Accelerate FFT setup")
         }
-        return FFTWorkspace(count: count)
+        self.log2N = log2N
+        self.handle = handle
     }
 
-    func release(_ ws: FFTWorkspace) {
-        lock.lock()
-        defer { lock.unlock() }
-        if pool.count < 6 {
-            pool.append(ws)
+    func transform(_ split: inout DSPDoubleSplitComplex, width: vDSP_Length,
+                   height: vDSP_Length, direction: FFTDirection) {
+        withExtendedLifetime(self) {
+            vDSP_fft2d_zipD(handle, &split, 1, 0, width, height, direction)
         }
     }
+
+    deinit { vDSP_destroy_fftsetupD(handle) }
 }
 
 final class FFTSetupCache: @unchecked Sendable {
     static let shared = FFTSetupCache()
     private let lock = NSLock()
-    private var maxLog2: vDSP_Length = 0
-    private var cachedSetup: FFTSetup?
+    private var cached: FFTPlan?
 
-    func setup(forLog2N log2N: vDSP_Length) -> FFTSetup? {
+    func setup(forLog2N log2N: vDSP_Length) throws -> FFTPlan {
+        lock.lock(); defer { lock.unlock() }
+        if let cached, cached.log2N >= log2N { return cached }
+        let plan = try FFTPlan(log2N: max(log2N, 8))
+        cached = plan
+        return plan
+    }
+}
+
+private final class FFTWorkspace: @unchecked Sendable {
+    var real: [Double]
+    var imag: [Double]
+    var byteCount: Int { real.count * 2 * MemoryLayout<Double>.size }
+    init(count: Int) {
+        real = [Double](repeating: 0, count: count)
+        imag = real
+    }
+}
+
+private final class FFTWorkspacePool: @unchecked Sendable {
+    static let shared = FFTWorkspacePool()
+    private let lock = NSLock()
+    private var pool: [FFTWorkspace] = []
+    private var bytes = 0
+
+    func acquire(count: Int) -> FFTWorkspace {
         lock.lock()
-        defer { lock.unlock() }
-        if let setup = cachedSetup, maxLog2 >= log2N {
-            return setup
+        if let index = pool.indices.filter({ pool[$0].real.count >= count })
+            .min(by: { pool[$0].real.count < pool[$1].real.count }) {
+            let result = pool.remove(at: index)
+            bytes -= result.byteCount
+            lock.unlock()
+            return result
         }
-        if let old = cachedSetup {
-            vDSP_destroy_fftsetup(old)
-            cachedSetup = nil
-        }
-        let allocLog = max(log2N, 13)
-        if let newSetup = vDSP_create_fftsetup(allocLog, FFTRadix(FFT_RADIX2)) {
-            cachedSetup = newSetup
-            maxLog2 = allocLog
-            return newSetup
-        }
-        return nil
+        lock.unlock()
+        return FFTWorkspace(count: count)
     }
 
-    deinit {
-        if let s = cachedSetup {
-            vDSP_destroy_fftsetup(s)
+    func release(_ workspace: FFTWorkspace) {
+        lock.lock(); defer { lock.unlock() }
+        if pool.count < 6 && bytes + workspace.byteCount <= 512 * 1024 * 1024 {
+            pool.append(workspace)
+            bytes += workspace.byteCount
         }
     }
 }
 
-@inline(__always)
-private func nextPowerOfTwo(_ value: Int) -> Int {
-    guard value > 1 else { return 1 }
-    var p = 1
-    while p < value {
-        p &<<= 1
+private struct FFTStencilKey: Hashable {
+    let width: Int
+    let height: Int
+    let weights: [Float]
+}
+
+private struct FFTStencilSpectrum {
+    let real: [Double]
+    let imag: [Double]
+    var byteCount: Int { real.count * 2 * MemoryLayout<Double>.size }
+}
+
+private final class FFTStencilCache: @unchecked Sendable {
+    static let shared = FFTStencilCache()
+    private let lock = NSLock()
+    private var entries: [(FFTStencilKey, FFTStencilSpectrum)] = []
+    private var bytes = 0
+
+    func spectrum(stencil: TransportStencil, width: Int, height: Int, plan: FFTPlan) -> FFTStencilSpectrum {
+        let key = FFTStencilKey(width: width, height: height, weights: stencil.weights)
+        lock.lock()
+        if let index = entries.firstIndex(where: { $0.0 == key }) {
+            let entry = entries.remove(at: index)
+            entries.append(entry)
+            lock.unlock()
+            return entry.1
+        }
+        lock.unlock()
+        var real = [Double](repeating: 0, count: width * height)
+        var imag = real
+        let radius = stencil.radius, side = radius * 2 + 1
+        // Keep the full complex spectrum: finite angular quadrature can leave small
+        // asymmetries. Reverse offsets because the spatial reference evaluates correlation.
+        for y in -radius...radius { for x in -radius...radius {
+            real[((height - y) % height) * width + (width - x) % width] =
+                Double(stencil.weights[(y + radius) * side + x + radius])
+        } }
+        real.withUnsafeMutableBufferPointer { r in
+            imag.withUnsafeMutableBufferPointer { i in
+                var split = DSPDoubleSplitComplex(realp: r.baseAddress!, imagp: i.baseAddress!)
+                plan.transform(&split, width: vDSP_Length(width.trailingZeroBitCount),
+                    height: vDSP_Length(height.trailingZeroBitCount), direction: FFTDirection(FFT_FORWARD))
+            }
+        }
+        lock.lock(); defer { lock.unlock() }
+        // Another caller may have prepared the same spectrum while this one transformed it.
+        if let existing = entries.first(where: { $0.0 == key }) { return existing.1 }
+        let spectrum = FFTStencilSpectrum(real: real, imag: imag)
+        let cost = spectrum.byteCount
+        let limit = 512 * 1024 * 1024
+        if cost <= limit {
+            while bytes + cost > limit || entries.count >= 32 {
+                bytes -= entries.removeFirst().1.byteCount
+            }
+            entries.append((key, spectrum)); bytes += cost
+        }
+        return spectrum
     }
-    return p
+}
+
+private func nextPowerOfTwo(_ value: Int) throws -> Int {
+    guard value > 0 && value <= (1 << 29) else {
+        throw TransportError.unsupported("FFT transport dimensions exceed capacity")
+    }
+    var result = 1
+    while result < value { result <<= 1 }
+    return max(64, result)
+}
+
+private struct CubicTap {
+    let indices: SIMD4<Int32>
+    let weights: SIMD4<Float>
+    init(pixel: Int, stride: Int, extent: Int) {
+        let position = (Float(pixel) + 0.5) / Float(stride) - 0.5
+        let base = Int(floor(position)), f = position - floor(position)
+        let g = 1 - f, f2 = f * f, f3 = f2 * f
+        indices = SIMD4(((-1)...2).map { Int32(min(max(base + $0, 0), extent - 1)) })
+        weights = SIMD4(g*g*g, 3*f3-6*f2+4, -3*f3+3*f2+3*f+1, f3) / 6
+    }
 }
 #endif
 
+/// FFT convolution of the same positive pixel-integrated bands as CPU and Metal.
+/// The continuous Bessel OTF is useful for analysis, but sampling it at the FFT
+/// frequencies is not a positive discrete convolution of pixel-cell exposures.
 public enum LayeredTransportFFT {
-    public static func convolve(image: ImageBuffer, kernel: TransportRadialKernel, pixelPitchMM: Double) throws -> ImageBuffer {
+    public static func convolve(image: ImageBuffer, kernel: TransportRadialKernel,
+                                pixelPitchMM: Double) throws -> ImageBuffer {
         guard image.width > 0 && image.height > 0, image.planes.count == 3,
               image.planes.allSatisfy({ $0.count == image.pixelCount && $0.allSatisfy(\.isFinite) }) else {
             throw TransportError.invalid("invalid image or planes")
         }
-        guard pixelPitchMM.isFinite && pixelPitchMM > 0 else {
-            throw TransportError.invalid("invalid pixel pitch")
-        }
-        #if canImport(Accelerate)
         var output = ImageBuffer(width: image.width, height: image.height)
         try convolve(component: image, kernel: kernel, pixelPitchMM: pixelPitchMM, into: &output)
         return output
-        #else
-        throw TransportError.unsupported("FFT transport backend requires Apple Accelerate framework")
-        #endif
     }
 
-    public static func convolve(component: ImageBuffer, kernel: TransportRadialKernel, pixelPitchMM: Double, into exposure: inout ImageBuffer) throws {
+    public static func convolve(component: ImageBuffer, kernel: TransportRadialKernel,
+                                pixelPitchMM: Double, into exposure: inout ImageBuffer) throws {
         guard component.width > 0 && component.height > 0, component.planes.count == 3,
               component.planes.allSatisfy({ $0.count == component.pixelCount && $0.allSatisfy(\.isFinite) }),
               exposure.width == component.width && exposure.height == component.height,
               exposure.planes.count == 3,
-              exposure.planes.allSatisfy({ $0.count == exposure.pixelCount }) else {
+              exposure.planes.allSatisfy({ $0.count == component.pixelCount && $0.allSatisfy(\.isFinite) }) else {
             throw TransportError.invalid("invalid component or exposure dimensions")
         }
         guard pixelPitchMM.isFinite && pixelPitchMM > 0 else {
             throw TransportError.invalid("invalid pixel pitch")
         }
-
         #if canImport(Accelerate)
-        let W = component.width
-        let H = component.height
-
-        let rMax = kernel.radiusMM.last ?? 0.0
-        let rPad = max(16, Int(ceil(rMax / pixelPitchMM)) + 16)
-
-        let minPadW = W + 2 * rPad
-        let minPadH = H + 2 * rPad
-
-        let W_pad = max(64, nextPowerOfTwo(minPadW))
-        let H_pad = max(64, nextPowerOfTwo(minPadH))
-        let paddedCount = W_pad * H_pad
-
-        let log2W = vDSP_Length(W_pad.trailingZeroBitCount)
-        let log2H = vDSP_Length(H_pad.trailingZeroBitCount)
-
-        guard let setup = FFTSetupCache.shared.setup(forLog2N: max(log2W, log2H)) else {
-            throw TransportError.backend("failed to create Accelerate FFT setup")
+        for band in try kernel.stencils(pixelPitchMM: pixelPitchMM) where band.weight > 0 {
+            try accumulate(component, band: band, into: &exposure)
         }
+        #else
+        throw TransportError.unsupported("FFT transport backend requires Apple Accelerate framework")
+        #endif
+    }
 
-        let besselOTF = ContinuousBesselOTF(kernel: kernel, pixelPitchMM: pixelPitchMM)
-
-        // Precompute 2D OTF grid
-        let halfW = W_pad / 2
-        let halfH = H_pad / 2
-        let invW = 1.0 / Float(W_pad)
-        let invH = 1.0 / Float(H_pad)
-        var otf = [Float](repeating: 0, count: paddedCount)
-
-        for y in 0..<H_pad {
-            let ky = Float(y <= halfH ? y : y - H_pad)
-            let nuy = ky * invH
-            let nuy2 = nuy * nuy
-            let rowOffset = y * W_pad
-            for x in 0..<W_pad {
-                let kx = Float(x <= halfW ? x : x - W_pad)
-                let nux = kx * invW
-                let nu = sqrt(nux * nux + nuy2)
-                otf[rowOffset + x] = besselOTF.sample(nu: nu)
-            }
+    #if canImport(Accelerate)
+    private static func accumulate(_ component: ImageBuffer, band: TransportWeightedStencil,
+                                   into exposure: inout ImageBuffer) throws {
+        let w = component.width, h = component.height
+        let stencil = band.stencil, stride = stencil.stride, pad = stencil.radius
+        let gw = (w + stride - 1) / stride, gh = (h + stride - 1) / stride
+        let fw = try nextPowerOfTwo(gw + 2 * pad), fh = try nextPowerOfTwo(gh + 2 * pad)
+        guard fw <= Int.max / fh, fw * fh <= (1 << 28) else {
+            throw TransportError.unsupported("FFT transport workspace exceeds capacity")
         }
-        otf[0] = 1.0 // Strictly conserve energy at DC
-
-        let workspaces = (0..<3).map { _ in FFTWorkspacePool.shared.acquire(count: paddedCount) }
-        defer {
-            for ws in workspaces {
-                FFTWorkspacePool.shared.release(ws)
-            }
-        }
-
-        let inputPlanes = component.planes
-        let expPlanes = exposure.planes
-
-        var plane0 = expPlanes[0]
-        var plane1 = expPlanes[1]
-        var plane2 = expPlanes[2]
-
-        plane0.withUnsafeMutableBufferPointer { p0 in
-            plane1.withUnsafeMutableBufferPointer { p1 in
-                plane2.withUnsafeMutableBufferPointer { p2 in
-                    let exposurePointers = [p0.baseAddress!, p1.baseAddress!, p2.baseAddress!]
-
-                    DispatchQueue.concurrentPerform(iterations: 3) { c in
-                        let ws = workspaces[c]
-                        let src = inputPlanes[c]
-                        let expPtr = exposurePointers[c]
-
-                        ws.real.withUnsafeMutableBufferPointer { rBuf in
-                            ws.imag.withUnsafeMutableBufferPointer { iBuf in
-                                let rPtr = rBuf.baseAddress!
-                                let iPtr = iBuf.baseAddress!
-
-                                // Zero out imaginary plane
-                                vDSP_vclr(iPtr, 1, vDSP_Length(paddedCount))
-
-                                // Edge-replicated padding into rPtr
-                                src.withUnsafeBufferPointer { sBuf in
-                                    let sPtr = sBuf.baseAddress!
-
-                                    // Interior rows y in 0..<H
-                                    for y in 0..<H {
-                                        let sRow = y * W
-                                        let dRow = (y + rPad) * W_pad
-                                        let firstVal = sPtr[sRow]
-                                        let lastVal = sPtr[sRow + W - 1]
-
-                                        // Left clamp
-                                        for x in 0..<rPad {
-                                            rPtr[dRow + x] = firstVal
+        let count = fw * fh
+        let logW = vDSP_Length(fw.trailingZeroBitCount), logH = vDSP_Length(fh.trailingZeroBitCount)
+        let plan = try FFTSetupCache.shared.setup(forLog2N: max(logW, logH))
+        let spectrum = FFTStencilCache.shared.spectrum(stencil: stencil, width: fw, height: fh, plan: plan)
+        let xtaps = stride == 1 ? [] : (0..<w).map { CubicTap(pixel: $0, stride: stride, extent: gw) }
+        let ytaps = stride == 1 ? [] : (0..<h).map { CubicTap(pixel: $0, stride: stride, extent: gh) }
+        var r = exposure.planes[0], g = exposure.planes[1], b = exposure.planes[2]
+        r.withUnsafeMutableBufferPointer { rp in
+            g.withUnsafeMutableBufferPointer { gp in
+                b.withUnsafeMutableBufferPointer { bp in
+                    let destinations = [rp.baseAddress!, gp.baseAddress!, bp.baseAddress!]
+                    DispatchQueue.concurrentPerform(iterations: 3) { channel in
+                        let source = component.planes[channel], destination = destinations[channel]
+                        source.withUnsafeBufferPointer { src in
+                            let input = src.baseAddress!
+                            var minimum: Float = 0, maximum: Float = 0
+                            vDSP_minv(input, 1, &minimum, vDSP_Length(source.count))
+                            vDSP_maxv(input, 1, &maximum, vDSP_Length(source.count))
+                            if minimum == maximum {
+                                var contribution = minimum * band.weight
+                                vDSP_vsadd(destination, 1, &contribution, destination, 1, vDSP_Length(source.count))
+                                return
+                            }
+                            let workspace = FFTWorkspacePool.shared.acquire(count: count)
+                            defer { FFTWorkspacePool.shared.release(workspace) }
+                            workspace.real.withUnsafeMutableBufferPointer { real in
+                                workspace.imag.withUnsafeMutableBufferPointer { imag in
+                                    let data = real.baseAddress!, imaginary = imag.baseAddress!
+                                    vDSP_vclrD(imaginary, 1, vDSP_Length(count))
+                                    // Area reduction matches the reference, including partial edge cells.
+                                    for y in 0..<gh {
+                                        let row = (y + pad) * fw + pad
+                                        if stride == 1 {
+                                            vDSP_vspdp(input + y*w, 1, data + row, 1, vDSP_Length(w))
+                                        } else {
+                                            for x in 0..<gw {
+                                                var sum: Float = 0
+                                                for dy in 0..<stride { for dx in 0..<stride {
+                                                    sum += input[min(y*stride+dy,h-1)*w+min(x*stride+dx,w-1)]
+                                                } }
+                                                data[row+x] = Double(sum / Float(stride*stride))
+                                            }
                                         }
-                                        // Center copy
-                                        memcpy(rPtr + dRow + rPad, sPtr + sRow, W * MemoryLayout<Float>.size)
-                                        // Right clamp
-                                        for x in (rPad + W)..<W_pad {
-                                            rPtr[dRow + x] = lastVal
+                                        var left = data[row], right = data[row+gw-1]
+                                        vDSP_vfillD(&left, data + row - pad, 1, vDSP_Length(pad))
+                                        vDSP_vfillD(&right, data + row + gw, 1, vDSP_Length(fw-pad-gw))
+                                    }
+                                    for y in 0..<pad {
+                                        memcpy(data+y*fw, data+pad*fw, fw*MemoryLayout<Double>.size)
+                                    }
+                                    for y in (pad+gh)..<fh {
+                                        memcpy(data+y*fw, data+(pad+gh-1)*fw, fw*MemoryLayout<Double>.size)
+                                    }
+                                    var split = DSPDoubleSplitComplex(realp: data, imagp: imaginary)
+                                    plan.transform(&split, width: logW, height: logH, direction: FFTDirection(FFT_FORWARD))
+                                    spectrum.real.withUnsafeBufferPointer { kr in
+                                        spectrum.imag.withUnsafeBufferPointer { ki in
+                                            var transfer = DSPDoubleSplitComplex(realp: UnsafeMutablePointer(mutating: kr.baseAddress!),
+                                                imagp: UnsafeMutablePointer(mutating: ki.baseAddress!))
+                                            vDSP_zvmulD(&split, 1, &transfer, 1, &split, 1, vDSP_Length(count), 1)
                                         }
                                     }
-
-                                    // Top replicated rows
-                                    let firstPaddedRow = rPtr + rPad * W_pad
-                                    for y in 0..<rPad {
-                                        memcpy(rPtr + y * W_pad, firstPaddedRow, W_pad * MemoryLayout<Float>.size)
+                                    plan.transform(&split, width: logW, height: logH, direction: FFTDirection(FFT_INVERSE))
+                                    var scale = 1 / Double(count)
+                                    // Double precision keeps bright HDR highlights from introducing
+                                    // global roundoff noise into near-black exposure. Convert only
+                                    // the cropped result back to the reference's float representation.
+                                    var coarse = [Float](repeating: 0, count: gw*gh)
+                                    coarse.withUnsafeMutableBufferPointer { grid in
+                                        for y in 0..<gh {
+                                            let row = data + (y+pad)*fw + pad
+                                            vDSP_vsmulD(row, 1, &scale, row, 1, vDSP_Length(gw))
+                                            vDSP_vdpsp(row, 1, grid.baseAddress!+y*gw, 1, vDSP_Length(gw))
+                                        }
+                                        // Positive normalized convolution stays within the source range.
+                                        vDSP_vclip(grid.baseAddress!, 1, &minimum, &maximum,
+                                            grid.baseAddress!, 1, vDSP_Length(gw*gh))
                                     }
-
-                                    // Bottom replicated rows
-                                    let lastPaddedRow = rPtr + (rPad + H - 1) * W_pad
-                                    for y in (rPad + H)..<H_pad {
-                                        memcpy(rPtr + y * W_pad, lastPaddedRow, W_pad * MemoryLayout<Float>.size)
+                                    var weight = band.weight
+                                    if stride == 1 {
+                                        coarse.withUnsafeBufferPointer { grid in
+                                            for y in 0..<h {
+                                                vDSP_vsma(grid.baseAddress!+y*gw, 1, &weight,
+                                                    destination+y*w, 1, destination+y*w, 1, vDSP_Length(w))
+                                            }
+                                        }
+                                    } else {
+                                        // Separable B-spline reconstruction avoids repeating 16 taps per pixel.
+                                        var horizontal = [Float](repeating: 0, count: w*gh)
+                                        for y in 0..<gh { for x in 0..<w {
+                                            let tap = xtaps[x], row = y*gw
+                                            var value: Float = 0
+                                            for k in 0..<4 { value += tap.weights[k]*coarse[row+Int(tap.indices[k])] }
+                                            horizontal[y*w+x] = value
+                                        } }
+                                        horizontal.withUnsafeBufferPointer { rows in
+                                            for y in 0..<h {
+                                                let tap = ytaps[y]
+                                                for k in 0..<4 {
+                                                    var coefficient = weight*tap.weights[k]
+                                                    vDSP_vsma(rows.baseAddress!+Int(tap.indices[k])*w, 1, &coefficient,
+                                                        destination+y*w, 1, destination+y*w, 1, vDSP_Length(w))
+                                                }
+                                            }
+                                        }
                                     }
-                                }
-
-                                // Forward 2D FFT
-                                var split = DSPSplitComplex(realp: rPtr, imagp: iPtr)
-                                vDSP_fft2d_zip(setup, &split, 1, 0, log2W, log2H, FFTDirection(FFT_FORWARD))
-
-                                // Pointwise spectral multiplication with purely real isotropic OTF
-                                otf.withUnsafeBufferPointer { otfBuf in
-                                    let otfPtr = otfBuf.baseAddress!
-                                    vDSP_vmul(rPtr, 1, otfPtr, 1, rPtr, 1, vDSP_Length(paddedCount))
-                                    vDSP_vmul(iPtr, 1, otfPtr, 1, iPtr, 1, vDSP_Length(paddedCount))
-                                }
-
-                                // Inverse 2D FFT
-                                vDSP_fft2d_zip(setup, &split, 1, 0, log2W, log2H, FFTDirection(FFT_INVERSE))
-
-                                // Scale factor: 1.0 / Float(W_pad * H_pad)
-                                var scale = 1.0 / Float(paddedCount)
-                                vDSP_vsmul(rPtr, 1, &scale, rPtr, 1, vDSP_Length(paddedCount))
-
-                                // Crop and accumulate into exposure
-                                for y in 0..<H {
-                                    let srcRow = (y + rPad) * W_pad + rPad
-                                    let dstRow = y * W
-                                    vDSP_vadd(expPtr + dstRow, 1, rPtr + srcRow, 1, expPtr + dstRow, 1, vDSP_Length(W))
                                 }
                             }
                         }
@@ -318,10 +387,7 @@ public enum LayeredTransportFFT {
                 }
             }
         }
-
-        exposure.planes = [plane0, plane1, plane2]
-        #else
-        throw TransportError.unsupported("FFT transport backend requires Apple Accelerate framework")
-        #endif
+        exposure.planes = [r, g, b]
     }
+    #endif
 }
