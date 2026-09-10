@@ -262,6 +262,7 @@ struct FilmMediumChoice: Identifiable, Hashable, StripChoice {
 
 /// The complete, value-typed description of an edit.
 struct EditState: Equatable {
+    var selective: SelectiveState?
     /// Returns an openable copy, substituting the default stock when current purchase access does
     /// not allow the stored stock. The persisted record remains unchanged.
     func openableByPurchase() -> EditState {

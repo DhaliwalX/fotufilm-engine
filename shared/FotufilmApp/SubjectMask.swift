@@ -1,5 +1,6 @@
 import CoreImage
 import CoreVideo
+import ImageIO
 import Vision
 #if canImport(UIKit)
 import UIKit
@@ -9,6 +10,23 @@ import UIKit
 /// found by Vision's foreground-instance model — the same lift the Photos app makes when a long
 /// press pulls a subject out of its background.
 enum SubjectMask {
+    private static let storageContext = CIContext(options: [.workingColorSpace: NSNull()])
+
+    static func encoded(_ mask: CIImage) -> Data? {
+        guard let image = storageContext.createCGImage(
+            mask, from: mask.extent, format: .L8,
+            colorSpace: CGColorSpaceCreateDeviceGray()) else { return nil }
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data, "public.png" as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return data as Data
+    }
+
+    static func decoded(_ data: Data) -> CIImage? {
+        CIImage(data: data, options: [.colorSpace: NSNull()])
+    }
 
     /// A finished detection, held so that touches can be answered from it
     /// without going back to the model.
@@ -28,6 +46,11 @@ enum SubjectMask {
         /// Everything it found, which is what a selection means before a
         /// finger has named anything in particular.
         var allInstances: IndexSet { observation.allInstances }
+
+        func encodedMask(instance: Int?) -> Data? {
+            mask(of: instance.map { IndexSet(integer: $0) } ?? allInstances)
+                .flatMap(SubjectMask.encoded)
+        }
 
         /// The instance under `unit` — a place in the picture, origin top left, the same
         /// coordinates the sample point is kept in — or nil where the touch landed on the

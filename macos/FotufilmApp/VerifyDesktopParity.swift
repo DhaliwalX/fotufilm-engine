@@ -1,5 +1,7 @@
 import AppKit
 import CoreGraphics
+import CoreImage
+import ImageIO
 
 #if canImport(FotufilmCore)
 import FotufilmCore
@@ -9,11 +11,13 @@ import FotufilmEditModel
 #endif
 
 /// Runs in-app desktop parity checks for rendering, inspector controls, and export options.
-/// Usage: `Fotufilm --demo --verify-parity`. Checks inspect rendered output, not only state changes.
+/// Usage: `Fotufilm --demo --verify-parity`, or `--verify-selective` for the selection regressions.
+/// Checks inspect rendered output, not only state changes.
 enum VerifyDesktopParity {
     @discardableResult
     @MainActor static func runIfRequested() -> Bool {
-        guard ProcessInfo.processInfo.arguments.contains("--verify-parity")
+        let selectiveOnly = ProcessInfo.processInfo.arguments.contains("--verify-selective")
+        guard selectiveOnly || ProcessInfo.processInfo.arguments.contains("--verify-parity")
         else { return false }
         Task { @MainActor in
             guard let editor = await editor() else {
@@ -26,7 +30,8 @@ enum VerifyDesktopParity {
                 exit(1)
             }
             var failures = 0
-            for check in checks {
+            let requested = selectiveOnly ? checks.filter { $0.name.contains("select") || $0.name.contains("mask") } : checks
+            for check in requested {
                 model.reset()
                 model.setShowsNegative(false)
                 _ = await settle(model)
@@ -41,7 +46,7 @@ enum VerifyDesktopParity {
             }
             print(failures == 0
                 ? "verify-parity PASS"
-                : "verify-parity FAIL: \(failures) of \(checks.count)")
+                : "verify-parity FAIL: \(failures) of \(requested.count)")
             exit(failures == 0 ? 0 : 1)
         }
         return true
@@ -395,6 +400,7 @@ enum VerifyDesktopParity {
             // And it must be a *selection*, not the whole frame: a mask that selected everything
             // would be indistinguishable from moving the photograph's own exposure.
             var whole = model.edit
+            whole.selective = nil
             whole.exposure = 2
             model.isSelectiveMode = false
             model.edit = whole
@@ -436,7 +442,7 @@ enum VerifyDesktopParity {
         Check(name: "the mask lands where the click did") { editor in
             let model = editor.model
             // With the frame cropped, a mask read off the decoded *file* and stretched to the
-            // print no longer lines up with it — the phone's takeover has that bug. Reading it
+            // print no longer lines up with it. Reading it
             // off the scene's own plain develop is what makes this check pass.
             // Crop coordinates start at the bottom. Keep both probes in the coloured
             // upper half of the demo chart; its lower gray ramp has identical chroma.
@@ -467,6 +473,220 @@ enum VerifyDesktopParity {
             }
             return .pass("\(reading(near)) under the click, "
                 + "\(reading(far)) opposite it")
+        },
+
+        Check(name: "selective edits survive leaving, history and reopening") { editor in
+            let model = editor.model
+            model.isSelectiveMode = true
+            _ = await settle(model)
+            model.sampleSelection(atUnit: CGPoint(x: 0.2, y: 0.2))
+            model.beginContinuousEdit()
+            model.selective.range = 0.3
+            model.selective.edit.exposure = 2
+            model.endContinuousEdit()
+            guard let visible = await settle(model), let saved = model.edit.selective else {
+                return .fail("the selection never entered saved edit state")
+            }
+            model.isSelectiveMode = false
+            guard let closed = await settle(model), distance(visible, closed) < 0.0001 else {
+                return .fail("leaving Selective changed the print")
+            }
+            model.undo()
+            guard model.edit.selective != saved, let undone = await settle(model),
+                  distance(visible, undone) > 0.002 else {
+                return .fail("undo did not restore the previous selective print")
+            }
+            model.redo()
+            guard model.edit.selective == saved, model.selective == saved,
+                  let redone = await settle(model), distance(visible, redone) < 0.0001 else {
+                return .fail("redo did not restore selection controls and pixels")
+            }
+            do {
+                let restored = try JSONDecoder().decode(EditState.self,
+                    from: JSONEncoder().encode(model.edit))
+                guard restored == model.edit, let data = model.photoSource?.data else {
+                    return .fail("saved selection did not round-trip")
+                }
+                guard await model.editSession.persistBeforeClose() else {
+                    return .fail("closing could not save the selective edit")
+                }
+                let reopened = DesktopEditorModel()
+                reopened.openPhoto(data: data, name: "Selective regression", rawHint: nil)
+                guard let print = await settle(reopened), distance(visible, print) < 0.0001,
+                      reopened.edit == restored, reopened.selective == saved else {
+                    return .fail("reopened state matches: \(reopened.edit == restored); "
+                        + "selection matches: \(reopened.selective == saved); "
+                        + "pixel difference: \(reopened.processed.flatMap(cgImage).map { reading(distance(visible, $0)) } ?? "no print")")
+                }
+                model.isSelectiveMode = true
+                model.clearSelection()
+                model.isSelectiveMode = false
+                guard model.edit.selective == nil else { return .fail("Clear kept a saved selection") }
+                return .pass("closing, undo, redo, JSON, reopening and Clear preserve the expected state")
+            } catch { return .fail(String(describing: error)) }
+        },
+
+        Check(name: "selective photo exports retain masks and 16-bit HDR") { editor in
+            guard let source = editor.model.photoSource else { return .fail("missing source") }
+            return await Task.detached {
+                var base = EditState()
+                base.stockID = StockPreset.noFilmID
+                base.crop = CGRect(x: 0.08, y: 0.1, width: 0.8, height: 0.8)
+                base.rotation = 1
+                let maskExtent = CGRect(x: 0, y: 0, width: 64, height: 64)
+                let black = CIImage(color: .black).cropped(to: maskExtent)
+                let white = CIImage(color: .white).cropped(to: CGRect(x: 0, y: 0, width: 32, height: 64))
+                guard let maskData = SubjectMask.encoded(white.composited(over: black)),
+                      let scene = FilmRender.scene(source: source, state: base, longEdge: 384),
+                      let ground = FilmRender.develop(scene, state: base, hdr: true, dynamicRange: .hdr),
+                      let oldJSON = try? JSONDecoder().decode(EditState.self, from: Data("{}".utf8)),
+                      oldJSON.selective == nil else { return .fail("could not prepare export fixture") }
+                for kind in [SelectiveState.MaskKind.color, .light, .subject] {
+                    var selection = SelectiveState(base: base)
+                    selection.kind = kind
+                    selection.samplePoint = CGPoint(x: 0.2, y: 0.2)
+                    selection.sampleRed = 0.5
+                    selection.sampleGreen = 0.25
+                    selection.sampleBlue = 0.2
+                    selection.range = 0.6
+                    selection.edit.exposure = 2
+                    selection.subjectMask = kind == .subject ? maskData : nil
+                    var state = base
+                    state.selective = selection
+                    guard let data = try? JSONEncoder().encode(state),
+                          let saved = try? JSONDecoder().decode(EditState.self, from: data), saved == state,
+                          let preview = FilmRender.develop(scene, state: saved, collectHistogram: true,
+                              hdr: true, dynamicRange: .hdr),
+                          let exported = FilmRender.render(source: source, state: saved, longEdge: 384,
+                              hdr: true, dynamicRange: .hdr),
+                          exported.image.bitsPerComponent == 16,
+                          exported.hdrImage?.bitsPerComponent == 16,
+                          distance(preview.image.image, exported.image) < 0.0001,
+                          distance(ground.image.image, exported.image) > 0.002,
+                          preview.histogram?.count == 3, preview.hdrHistogram?.count == 3 else {
+                        return .fail("\(kind.rawValue) lost its mask, precision, histogram or preview/export agreement")
+                    }
+                    let url = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("fotufilm-selective-\(UUID().uuidString).tiff")
+                    defer { try? FileManager.default.removeItem(at: url) }
+                    guard exported.write(to: url, format: .tiff, quality: 1, metadata: .strip),
+                          let file = CGImageSourceCreateWithURL(url as CFURL, nil),
+                          let image = CGImageSourceCreateImageAtIndex(file, 0, nil),
+                          image.bitsPerComponent == 16, distance(image, exported.image) < 0.0001 else {
+                        return .fail("\(kind.rawValue) TIFF did not preserve the selective pixels")
+                    }
+                    if let directory = ProcessInfo.processInfo.environment["FOTUFILM_VERIFY_OUTPUT"] {
+                        let folder = URL(fileURLWithPath: directory, isDirectory: true)
+                        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                        guard ground.image.write(to: folder.appendingPathComponent("selective-ground.png"),
+                                  format: .png, quality: 1, metadata: .strip),
+                              exported.write(to: folder.appendingPathComponent("selective-\(kind.rawValue).png"),
+                                  format: .png, quality: 1, metadata: .strip) else {
+                            return .fail("could not write selective render evidence")
+                        }
+                    }
+                    var changed = saved
+                    changed.rotation = 2
+                    changed.exposure = -1
+                    let local = selection.edit.applying(to: changed)
+                    guard local.rotation == 2, local.crop == changed.crop,
+                          local.exposure == 2, local.selective == nil else {
+                        return .fail("local adjustments replaced current frame settings")
+                    }
+                }
+                return .pass("Color, Light and Subject round-trip, match preview/export, and retain 16-bit SDR/HDR")
+            }.value
+        },
+
+        Check(name: "selective light, color and grade controls reach rendered pixels") { editor in
+            guard let source = editor.model.photoSource else { return .fail("missing source") }
+            return await Task.detached {
+                var base = EditState()
+                base.stockID = StockPreset.noFilmID
+                guard let scene = FilmRender.scene(source: source, state: base, longEdge: 192),
+                      let ground = FilmRender.develop(scene, state: base, dynamicRange: .sdr)?.image.image,
+                      let mask = SubjectMask.encoded(CIImage(color: .white)
+                          .cropped(to: CGRect(x: 0, y: 0, width: 32, height: 32))) else {
+                    return .fail("could not prepare local control fixture")
+                }
+                let controls: [(String, (inout SelectiveDevelop) -> Void)] = [
+                    ("Exposure", { $0.exposure = 1 }),
+                    ("Highlights", { $0.highlights = -1 }),
+                    ("Shadows", { $0.shadows = 1 }),
+                    ("Temperature", { $0.temperatureMired += 70 }),
+                    ("Tint", { $0.tint = 40 }),
+                    ("Saturation", { $0.saturation = 0.2 }),
+                    ("Vibrance", { $0.vibrance = 1 }),
+                    ("Shadows warmth", { $0.grade.shadows.balanceX = 0.6 }),
+                    ("Shadows tint", { $0.grade.shadows.balanceY = 0.6 }),
+                    ("Shadows level", { $0.grade.shadows.level = 0.5 }),
+                    ("Midtones warmth", { $0.grade.midtones.balanceX = 0.6 }),
+                    ("Midtones tint", { $0.grade.midtones.balanceY = 0.6 }),
+                    ("Midtones level", { $0.grade.midtones.level = 0.5 }),
+                    ("Highlights warmth", { $0.grade.highlights.balanceX = 0.6 }),
+                    ("Highlights tint", { $0.grade.highlights.balanceY = 0.6 }),
+                    ("Highlights level", { $0.grade.highlights.level = 0.5 }),
+                ]
+                for (name, change) in controls {
+                    var selection = SelectiveState(base: base)
+                    selection.kind = .subject
+                    selection.subjectMask = mask
+                    selection.subjectFeather = 0
+                    change(&selection.edit)
+                    var state = base
+                    state.selective = selection
+                    guard let data = try? JSONEncoder().encode(state),
+                          let saved = try? JSONDecoder().decode(EditState.self, from: data),
+                          let local = FilmRender.develop(scene, state: saved, dynamicRange: .sdr)?.image.image,
+                          let whole = FilmRender.develop(scene, state: selection.edit.applying(to: base),
+                              dynamicRange: .sdr)?.image.image else {
+                        return .fail("\(name) could not be restored or rendered")
+                    }
+                    let agreement = distance(local, whole), change = distance(local, ground)
+                    guard agreement < 0.001, change > 0.0005 else {
+                        return .fail("\(name): difference from whole-frame edit \(reading(agreement)); "
+                            + "change from neutral \(reading(change))")
+                    }
+                }
+                return .pass("all 16 light, color and three-band grade values survive saving and affect the print")
+            }.value
+        },
+
+        Check(name: "saved subject masks follow frame geometry") { editor in
+            guard let source = editor.model.photoSource else { return .fail("missing source") }
+            return await Task.detached {
+                let black = CIImage(color: .black).cropped(to: CGRect(x: 0, y: 0, width: 64, height: 64))
+                let white = CIImage(color: .white).cropped(to: CGRect(x: 0, y: 0, width: 32, height: 64))
+                guard let data = SubjectMask.encoded(white.composited(over: black)),
+                      let mask = SubjectMask.decoded(data) else { return .fail("mask did not round-trip") }
+                var base = EditState()
+                base.stockID = StockPreset.noFilmID
+                let context = CIContext(options: [.workingColorSpace: NSNull()])
+                for (crop, expected) in [
+                    (CGRect(x: 0, y: 0, width: 0.4, height: 1), 1.0),
+                    (CGRect(x: 0.6, y: 0, width: 0.4, height: 1), 0.0)
+                ] {
+                    base.crop = crop
+                    guard let scene = FilmRender.scene(source: source, state: base, longEdge: 128),
+                          let placed = scene.placeSelectionMask?(mask),
+                          let image = context.createCGImage(placed, from: placed.extent,
+                              format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!),
+                          abs(luma(image) - expected) < 0.02 else {
+                        return .fail("saved subject mask stretched across a crop")
+                    }
+                }
+                base.crop = nil
+                base.rotation = 1
+                guard let scene = FilmRender.scene(source: source, state: base, longEdge: 128),
+                      let placed = scene.placeSelectionMask?(mask),
+                      let image = context.createCGImage(placed, from: placed.extent,
+                          format: .RGBA8, colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!),
+                      abs(window(image, at: CGPoint(x: 0.5, y: 0.2))
+                        - window(image, at: CGPoint(x: 0.5, y: 0.8))) > 0.9 else {
+                    return .fail("rotation did not turn the subject mask with the photo")
+                }
+                return .pass("saved subject coverage follows left/right crops and quarter-turn rotation")
+            }.value
         },
 
         Check(name: "the selective panel offers a selection") { editor in

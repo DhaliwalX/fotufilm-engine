@@ -27,7 +27,7 @@ extension EditState: Codable {
         "stockID", "chosenFormatID", "sourceInterpretation", "captureIlluminantKelvin",
         "filmLightKelvin", "grainMottleShare", "couplerGapReach", "paper", "paperFollowsStock",
         "seed", "shutterSeconds", "printLightKelvin", "enlarger", "rotation", "crop", "cornerCrop",
-        "grade", "lensProfileID", "lensAdjustment", "lensFilterIDs", "lensFilterMetering",
+        "grade", "lensProfileID", "lensAdjustment", "lensFilterIDs", "lensFilterMetering", "selective",
     ]
 
     init(from decoder: Decoder) throws {
@@ -78,6 +78,7 @@ extension EditState: Codable {
         cornerCrop = try c.decodeIfPresent(QuadrilateralCrop.self, forKey: EditKey("cornerCrop"))
         if cornerCrop?.isValid == false { cornerCrop = nil }
         grade = try c.decodeIfPresent(ColorGrade.self, forKey: EditKey("grade")) ?? grade
+        selective = try c.decodeIfPresent(SelectiveState.self, forKey: EditKey("selective"))?.saved
         lensProfileID = try c.decodeIfPresent(String.self, forKey: EditKey("lensProfileID"))
         lensAdjustment = try c.decodeIfPresent(LensAdjustment.self, forKey: EditKey("lensAdjustment"))
             ?? lensAdjustment
@@ -88,6 +89,7 @@ extension EditState: Codable {
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: EditKey.self)
+        try c.encodeIfPresent(selective?.saved, forKey: EditKey("selective"))
         for (control, key) in Self.cataloguedKeys {
             let coding = EditKey(key)
             switch control.field.access {

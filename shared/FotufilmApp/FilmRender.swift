@@ -147,6 +147,8 @@ enum FilmRender {
         /// Set only while the rasterise is still running behind this scene; nil once the pixels
         /// are all there, which is every scene the editor holds between renders.
         var ready: RowWatermark?
+        /// Places an upright original-coordinate subject mask on this scene's pixel lattice.
+        var placeSelectionMask: ((CIImage) -> CIImage)? = nil
 
         /// Blocks until `rows` have been laid down. Free — not even a lock — on a settled scene.
         func waitForRows(through row: Int) {
@@ -475,6 +477,10 @@ enum FilmRender {
                     })
             }
         }
+        let sourceExtent = decoded.extent
+        let maskViewport = viewport
+        var maskGeometry = state
+        maskGeometry.selective = nil
         return Scene(pixels: pixels, width: width, height: height,
                      key: SceneKey(state: state, longEdge: longEdge,
                                    viewport: viewport),
@@ -485,7 +491,28 @@ enum FilmRender {
                      frameCoverage: frameCoverage,
                      viewport: viewport,
                      sensorFrame: usesSourceFrame ? source.sensorFrame : nil,
-                     ready: watermark)
+                     ready: watermark,
+                     placeSelectionMask: { mask in
+                         let original = atOrigin(mask).transformed(by: CGAffineTransform(
+                             scaleX: sourceExtent.width / mask.extent.width,
+                             y: sourceExtent.height / mask.extent.height))
+                             .transformed(by: CGAffineTransform(
+                                 translationX: sourceExtent.minX, y: sourceExtent.minY))
+                         let corrected = LensCorrectionFilter.apply(
+                             original, stack: lens.stack, geometryOnly: true)
+                         var framed = geometry(corrected, state: maskGeometry)
+                         if let viewport = maskViewport {
+                             let unit = UnitCropCoordinates.verticallyFlipped(viewport.renderUnitRect)
+                             let extent = framed.extent
+                             let region = CGRect(
+                                 x: extent.minX + unit.minX * extent.width,
+                                 y: extent.minY + unit.minY * extent.height,
+                                 width: unit.width * extent.width,
+                                 height: unit.height * extent.height).intersection(extent)
+                             framed = atOrigin(framed.cropped(to: region))
+                         }
+                         return resample(framed, pixelSize: CGSize(width: width, height: height))
+                     })
     }
 
     /// Measure the original renditions so preview size and crop cannot change exposure placement.
@@ -608,6 +635,12 @@ enum FilmRender {
         shouldContinue: (() -> Bool)? = nil
     ) -> (image: Rendered, histogram: [[Float]]?,
           hdrHistogram: [[Float]]?)? {
+        if let selection = state.selective, selection.hasSelection {
+            return developSelection(scene, state: state, selection: selection,
+                detailMeasurements: detailMeasurements, collectHistogram: collectHistogram,
+                hdr: hdr, dynamicRange: dynamicRange, exact: exact, stock: stockOverride,
+                negative: negative, report: report, shouldContinue: shouldContinue)
+        }
         func time<T>(_ stage: Stage, _ detail: String = "", _ body: () -> T) -> T {
             report?(.began(stage, detail: detail))
             let start = Date()
@@ -954,6 +987,103 @@ enum FilmRender {
         }
         return (rendered, normalized(bins),
                 hdrImage == nil ? nil : normalized(hdrBins))
+    }
+
+    /// Stable, geometry-correct source shared by the Mac sampler, iOS sampler and saved masks.
+    static func selectionSource(_ scene: Scene) -> CGImage? {
+        var plain = EditState()
+        plain.stockID = StockPreset.noFilmID
+        return develop(scene, state: plain, dynamicRange: .sdr)?.image.image
+    }
+
+    static func selectionMask(_ scene: Scene, state: SelectiveState,
+                              source: CGImage) -> CIImage? {
+        let guide = CIImage(cgImage: source)
+        let subject = state.subjectMask.flatMap(SubjectMask.decoded).map {
+            scene.placeSelectionMask?($0) ?? $0
+        }
+        return SelectiveMask.image(over: guide, extent: guide.extent, state: state,
+            subjects: nil, colorSpace: selectionColorSpace, placedSubject: subject)
+    }
+
+    /// Hit testing uses the same placement as the rendered subject mask, including crop and lens.
+    static func selectedSubject(at point: CGPoint, in scene: Scene,
+                                subjects: SubjectMask.Reading) -> Int? {
+        var best: (instance: Int?, weight: Float) = (nil, 0.5)
+        for instance in subjects.allInstances {
+            guard let raw = subjects.mask(of: IndexSet(integer: instance)) else { continue }
+            let mask = scene.placeSelectionMask?(raw) ?? raw
+            let extent = mask.extent
+            let x = floor(extent.minX + min(max(point.x, 0), 0.999999) * extent.width)
+            let y = floor(extent.minY + min(max(1 - point.y, 0), 0.999999) * extent.height)
+            var pixel = [Float](repeating: 0, count: 4)
+            context.render(mask, toBitmap: &pixel, rowBytes: 16,
+                bounds: CGRect(x: x, y: y, width: 1, height: 1), format: .RGBAf, colorSpace: nil)
+            if pixel[0] > best.weight { best = (instance, pixel[0]) }
+        }
+        return best.instance
+    }
+
+    static let selectionColorSpace = CGColorSpace(name: CGColorSpace.displayP3)!
+
+    static func compositeSelection(ground: CGImage, over: CGImage?,
+                                   mask: CIImage, state: SelectiveState,
+                                   showMask: Bool = false) -> CGImage? {
+        SelectiveMask.composite(ground: ground, selection: over, scene: nil,
+            state: state, subjects: nil, showMask: showMask, context: context,
+            colorSpace: selectionColorSpace, preparedMask: mask)
+    }
+
+    private static func developSelection(
+        _ scene: Scene, state: EditState, selection: SelectiveState,
+        detailMeasurements: DetailMeasurements?, collectHistogram: Bool,
+        hdr: Bool, dynamicRange: AppSettings.DynamicRange, exact: Bool,
+        stock: FilmStock?, negative: NegativeViewing?, report: Reporter?,
+        shouldContinue: (() -> Bool)?
+    ) -> (image: Rendered, histogram: [[Float]]?, hdrHistogram: [[Float]]?)? {
+        var base = state
+        base.selective = nil
+        guard shouldContinue?() != false,
+              let plain = selectionSource(scene),
+              let mask = selectionMask(scene, state: selection, source: plain),
+              let ground = develop(scene, state: base, detailMeasurements: detailMeasurements,
+                  hdr: hdr, dynamicRange: dynamicRange, exact: exact, stock: stock,
+                  negative: negative, report: report, shouldContinue: shouldContinue)?.image,
+              let over = develop(scene, state: selection.edit.applying(to: base),
+                  hdr: hdr, dynamicRange: dynamicRange, exact: exact, stock: stock,
+                  negative: negative, report: report, shouldContinue: shouldContinue)?.image,
+              shouldContinue?() != false else { return nil }
+        func blend(_ ground: CGImage, _ over: CGImage) -> CGImage? {
+            compositeSelection(ground: ground, over: over, mask: mask, state: selection)
+        }
+        guard let image = blend(ground.image, over.image) else { return nil }
+        var hdrImage: CGImage?
+        if let groundHDR = ground.hdrImage, let overHDR = over.hdrImage {
+            guard let blended = blend(groundHDR, overHDR) else { return nil }
+            hdrImage = blended
+        }
+        return (Rendered(image: image, hdrImage: hdrImage),
+                collectHistogram ? selectionHistogram(image) : nil,
+                collectHistogram ? hdrImage.map(selectionHistogram) : nil)
+    }
+
+    /// Count delivered channel values, just as the ordinary develop does, in bounded row storage.
+    private static func selectionHistogram(_ image: CGImage) -> [[Float]] {
+        var bins = [[Float]](repeating: [Float](repeating: 0, count: 64), count: 3)
+        let source = CIImage(cgImage: image, options: [.colorSpace: NSNull()])
+        let rows = min(64, image.height)
+        var pixels = [UInt16](repeating: 0, count: image.width * rows * 4)
+        for y in stride(from: 0, to: image.height, by: rows) {
+            let count = min(rows, image.height - y)
+            context.render(source, toBitmap: &pixels, rowBytes: image.width * 8,
+                bounds: CGRect(x: 0, y: y, width: image.width, height: count),
+                format: .RGBA16, colorSpace: nil)
+            for pixel in 0..<(image.width * count) {
+                for channel in 0..<3 { bins[channel][Int(pixels[pixel * 4 + channel]) >> 10] += 1 }
+            }
+        }
+        let peak = max(1, bins.flatMap { $0 }.max() ?? 1)
+        return bins.map { $0.map { $0 / peak } }
     }
 
     private static func developPlain(
