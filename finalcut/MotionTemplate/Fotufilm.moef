@@ -67,17 +67,14 @@
       <Object3DEnvironments>100</Object3DEnvironments>
       <DRTSupport>1</DRTSupport>
     </sceneSettings>
-
-    <!-- Final Cut only shows controls explicitly published by the Motion template. The FxPlug
-         parameter ids are the persisted ABI declared in FotufilmEffect.h. -->
     <publishSettings>
       <version>2</version>
       <target object="9001001" channel="./37" name="Status"/>
       <target object="9001001" channel="./85/5" name="Timeline Color Space"/>
       <target object="9001001" channel="./31/2" name="Stock"/>
-      <target object="9001001" channel="./31/3" name="Format"/>
+      <target object="9001001" channel="./31/3" name="Film Format"/>
       <target object="9001001" channel="./32/6" name="Exposure"/>
-      <target object="9001001" channel="./32/7" name="Temperature"/>
+      <target object="9001001" channel="./32/7" name="Temperature (K)"/>
       <target object="9001001" channel="./32/8" name="Tint"/>
       <target object="9001001" channel="./32/9" name="Highlights"/>
       <target object="9001001" channel="./32/10" name="Shadows"/>
@@ -102,8 +99,11 @@
       <target object="9001001" channel="./86/16" name="Estimated Halation Shape"/>
       <target object="9001001" channel="./86/17" name="Halo Colour"/>
       <target object="9001001" channel="./87/19" name="DIR Couplers"/>
+      <target object="9001001" channel="./87/89" name="Fringe Amount"/>
+      <target object="9001001" channel="./87/90" name="Fringe Radius (µm)"/>
       <target object="9001001" channel="./36/4" name="Output Medium"/>
       <target object="9001001" channel="./36/25" name="Viewing Illuminant"/>
+      <target object="9001001" channel="./36/91" name="Enlarger"/>
       <target object="9001001" channel="./36/20" name="Channel Contrast Match"/>
       <target object="9001001" channel="./36/80" name="Negative Viewing"/>
       <target object="9001001" channel="./30/1" name="Stage"/>
@@ -111,7 +111,7 @@
       <target object="9001001" channel="./30/41" name="Halation Stage"/>
       <target object="9001001" channel="./30/42" name="Adjacency"/>
       <target object="9001001" channel="./30/43" name="Grain Stage"/>
-      <target object="9001001" channel="./30/44" name="Enlarger"/>
+      <target object="9001001" channel="./30/44" name="Enlarger Stage"/>
       <target object="9001001" channel="./10001" name="Mix"/>
     </publishSettings>
 
@@ -172,64 +172,32 @@
           <parameter name="Width" id="313" flags="8589934610" default="1" value="1920"/>
           <parameter name="Height" id="314" flags="8589934610" default="1" value="1080"/>
         </parameter>
-
-        <!-- Dynamic parameters must stay disabled here. With a static Motion channel tree, setting
-             this to 1 makes Final Cut's Ozone serializer dereference a missing folder. -->
         <filter name="Fotufilm" id="9001001" factoryID="6"
                 pluginUUID="C4D9D06C-A2A7-48B4-830B-9AE81B970140"
                 pluginVersion="1" pluginName="FotufilmEffect" pluginDynamicParams="0">
           <timing in="0 1 1 0" out="1197196 120000 1 0" offset="0 1 1 0"/>
           <baseFlags>8589934608</baseFlags>
-
-          <!-- The read-only status line, outside every group because it is created before the
-               first startParameterSubGroup and belongs at the top of the inspector. It is a
-               string channel like the hidden identities, but unlike them it is published: it is
-               the one place the plugin can say why something it was asked for is not happening. -->
           <parameter name="Status" id="37" flags="12901679104" default="" value=""/>
-
-          <!-- Parameter subgroups are channel folders in Motion's serializer. Their ids and
-               nesting must match startParameterSubGroup calls in the FxPlug, in the same order:
-               the panel reads top to bottom as the light does, and the Resolve plug-in reads the
-               same way. foldFlags 4 is a group that opens, 15 one that starts closed. -->
           <parameter name="Input" id="85" flags="8594198560">
             <foldFlags>4</foldFlags>
-            <parameter name="Timeline Color Space" id="5" flags="12901744656"
-                       default="7" value="7"/>
+            <parameter name="Timeline Color Space" id="5" flags="12901744656" default="7" value="7"/>
           </parameter>
-
           <parameter name="Film" id="31" flags="8594198560">
             <foldFlags>4</foldFlags>
             <parameter name="Stock" id="2" flags="12901744656" default="0" value="0"/>
-            <parameter name="Format" id="3" flags="12901744656" default="9" value="9"/>
+            <parameter name="Film Format" id="3" flags="12901744656" default="9" value="9"/>
           </parameter>
-
-          <!-- Hidden string channels persist durable menu identities. They are intentionally not
-               published, but must exist in the static channel tree for saved projects. -->
-          <parameter name="id" id="26" flags="12901679104" default="" value=""/>
-          <parameter name="id" id="27" flags="12901679104" default="" value=""/>
-          <parameter name="id" id="28" flags="12901679104" default="" value=""/>
-          <parameter name="id" id="29" flags="12901679104" default="" value=""/>
-
-          <!-- Group 32 kept its id when it took the Tone controls in; group 33 (Tone) is retired
-               and must not come back under another name. -->
           <parameter name="Light &amp; Colour" id="32" flags="8594198560">
             <foldFlags>4</foldFlags>
             <parameter name="Exposure" id="6" flags="12901679120" default="0" value="0"/>
-            <parameter name="Temperature" id="7" flags="12901679120"
-                       default="6504" value="6504"/>
+            <parameter name="Temperature (K)" id="7" flags="12901679120" default="6504" value="6504"/>
             <parameter name="Tint" id="8" flags="12901679120" default="0" value="0"/>
             <parameter name="Highlights" id="9" flags="12901679120" default="0" value="0"/>
             <parameter name="Shadows" id="10" flags="12901679120" default="0" value="0"/>
-            <parameter name="Regional Tone Mask" id="11" flags="12901679104"
-                       default="1" value="1"/>
+            <parameter name="Regional Tone Mask" id="11" flags="12901679104" default="1" value="1"/>
             <parameter name="Saturation" id="12" flags="12901679120" default="1" value="1"/>
             <parameter name="Vibrance" id="13" flags="12901679120" default="0" value="0"/>
           </parameter>
-
-          <!-- The lens, in the order the light meets it. The grade menu opens on 1/4, which is
-               index 1 of DiffusionFilter.Grade, and the metering menu on entry 1, which is
-               through-the-lens: both are the engine's own defaults rather than the first entry
-               of a list. Veiling Glare is the lens's own flare and lives with the lens. -->
           <parameter name="Lens &amp; Filters" id="72" flags="8594198560">
             <foldFlags>15</foldFlags>
             <parameter name="Filter 1" id="73" flags="12901744656" default="0" value="0"/>
@@ -237,78 +205,62 @@
             <parameter name="Filter 3" id="75" flags="12901744656" default="0" value="0"/>
             <parameter name="Metering" id="76" flags="12901744656" default="1" value="1"/>
             <parameter name="Diffusion" id="77" flags="12901744656" default="0" value="0"/>
-            <parameter name="Diffusion Grade" id="78" flags="12901744656"
-                       default="1" value="1"/>
+            <parameter name="Diffusion Grade" id="78" flags="12901744656" default="1" value="1"/>
             <parameter name="Focal Length" id="79" flags="12901679120" default="0" value="0"/>
             <parameter name="Veiling Glare" id="18" flags="12901679120" default="0" value="0"/>
           </parameter>
-
-          <!-- The durable identity of the four catalogue menus above, as 26...29 are for the
-               menus at the top of the panel. Not published; serialized so a saved project keeps
-               the filter it was graded through when the drawer is renumbered under it. -->
+          <parameter name="Development" id="35" flags="8594198560">
+            <foldFlags>15</foldFlags>
+            <parameter name="Push / Pull" id="22" flags="12901679120" default="0" value="0"/>
+            <parameter name="Bleach Bypass" id="23" flags="12901679120" default="0" value="0"/>
+            <parameter name="Film Age (years)" id="24" flags="12901679120" default="0" value="0"/>
+          </parameter>
+          <parameter name="Grain" id="34" flags="8594198560">
+            <foldFlags>4</foldFlags>
+            <parameter name="Grain" id="14" flags="12901679120" default="1" value="1"/>
+            <parameter name="Grain Seed" id="21" flags="12901679121" default="1179208781" value="1179208781"/>
+          </parameter>
+          <parameter name="Halation" id="86" flags="8594198560">
+            <foldFlags>4</foldFlags>
+            <parameter name="Halation Model" id="88" flags="12901744656" default="0" value="0"/>
+            <parameter name="Halation" id="15" flags="12901679120" default="1" value="1"/>
+            <parameter name="Estimated Halation Shape" id="16" flags="12901679104" default="0" value="0"/>
+            <parameter name="Halo Colour" id="17" flags="12901679120" default="0" value="0"/>
+          </parameter>
+          <parameter name="Colour Separation" id="87" flags="8594198560">
+            <foldFlags>4</foldFlags>
+            <parameter name="DIR Couplers" id="19" flags="12901679120" default="1" value="1"/>
+            <parameter name="Fringe Amount" id="89" flags="12901679120" default="0" value="0"/>
+            <parameter name="Fringe Radius (µm)" id="90" flags="12901679120" default="0" value="0"/>
+          </parameter>
+          <parameter name="Output" id="36" flags="8594198560">
+            <foldFlags>4</foldFlags>
+            <parameter name="Output Medium" id="4" flags="12901744656" default="10" value="10"/>
+            <parameter name="Viewing Illuminant" id="25" flags="12901744656" default="0" value="0"/>
+            <parameter name="Enlarger" id="91" flags="12901744656" default="0" value="0"/>
+            <parameter name="Channel Contrast Match" id="20" flags="12901679120" default="0.05" value="0.05"/>
+            <parameter name="Negative Viewing" id="80" flags="12901744656" default="0" value="0"/>
+          </parameter>
+          <parameter name="Pipeline" id="30" flags="8594198560">
+            <foldFlags>15</foldFlags>
+            <parameter name="Stage" id="1" flags="12901744656" default="0" value="0"/>
+            <parameter name="Emulsion Diffusion" id="40" flags="12901679104" default="1" value="1"/>
+            <parameter name="Halation Stage" id="41" flags="12901679104" default="1" value="1"/>
+            <parameter name="Adjacency" id="42" flags="12901679104" default="1" value="1"/>
+            <parameter name="Grain Stage" id="43" flags="12901679104" default="1" value="1"/>
+            <parameter name="Enlarger Stage" id="44" flags="12901679104" default="1" value="1"/>
+          </parameter>
+          <parameter name="id" id="26" flags="12901679104" default="" value=""/>
+          <parameter name="id" id="27" flags="12901679104" default="" value=""/>
+          <parameter name="id" id="28" flags="12901679104" default="" value=""/>
+          <parameter name="id" id="29" flags="12901679104" default="" value=""/>
           <parameter name="id" id="81" flags="12901679104" default="" value=""/>
           <parameter name="id" id="82" flags="12901679104" default="" value=""/>
           <parameter name="id" id="83" flags="12901679104" default="" value=""/>
           <parameter name="id" id="84" flags="12901679104" default="" value=""/>
-
-          <parameter name="Development" id="35" flags="8594198560">
-            <foldFlags>15</foldFlags>
-            <parameter name="Push / Pull" id="22" flags="12901679120" default="0" value="0"/>
-            <parameter name="Bleach Bypass" id="23" flags="12901679120"
-                       default="0" value="0"/>
-            <parameter name="Film Age (years)" id="24" flags="12901679120"
-                       default="0" value="0"/>
-          </parameter>
-
-          <parameter name="Grain" id="34" flags="8594198560">
-            <foldFlags>4</foldFlags>
-            <parameter name="Grain" id="14" flags="12901679120" default="1" value="1"/>
-            <parameter name="Grain Seed" id="21" flags="12901679121"
-                       default="1179208781" value="1179208781"/>
-          </parameter>
-
-          <parameter name="Halation" id="86" flags="8594198560">
-            <foldFlags>4</foldFlags>
-            <parameter name="Halation" id="15" flags="12901679120" default="1" value="1"/>
-            <parameter name="Halation Model" id="88" flags="12901744656" default="0" value="0"/>
-            <parameter name="Estimated Halation Shape" id="16" flags="12901679104"
-                       default="0" value="0"/>
-            <parameter name="Halo Colour" id="17" flags="12901679120" default="0" value="0"/>
-          </parameter>
-
-          <parameter name="Colour Separation" id="87" flags="8594198560">
-            <foldFlags>4</foldFlags>
-            <parameter name="DIR Couplers" id="19" flags="12901679120" default="1" value="1"/>
-          </parameter>
-
-          <parameter name="Output" id="36" flags="8594198560">
-            <foldFlags>4</foldFlags>
-            <parameter name="Output Medium" id="4" flags="12901744656"
-                       default="9" value="9"/>
-            <parameter name="Viewing Illuminant" id="25" flags="12901744656"
-                       default="0" value="0"/>
-            <parameter name="Channel Contrast Match" id="20" flags="12901679120"
-                       default="0.05" value="0.05"/>
-            <parameter name="Negative Viewing" id="80" flags="12901744656"
-                       default="0" value="0"/>
-          </parameter>
-
-          <parameter name="Pipeline" id="30" flags="8594198560">
-            <foldFlags>15</foldFlags>
-            <parameter name="Stage" id="1" flags="12901744656" default="0" value="0"/>
-            <parameter name="Emulsion Diffusion" id="40" flags="12901679104"
-                       default="1" value="1"/>
-            <parameter name="Halation Stage" id="41" flags="12901679104"
-                       default="1" value="1"/>
-            <parameter name="Adjacency" id="42" flags="12901679104" default="1" value="1"/>
-            <parameter name="Grain Stage" id="43" flags="12901679104" default="1" value="1"/>
-            <parameter name="Enlarger" id="44" flags="12901679104" default="1" value="1"/>
-          </parameter>
-
           <parameter name="Mix" id="10001" flags="12901679104" default="1" value="1"/>
           <parameter name="Flip" id="10002" flags="12905938976" default="0" value="0"/>
-          <parameter name="Input Points" id="10003" flags="12905938976"
-                     default="1" value="1"/>
+          <parameter name="Input Points" id="10003" flags="12905938976" default="1" value="1"/>
         </filter>
       </scenenode>
 

@@ -114,7 +114,7 @@ if (( TEST )); then
     -ISources/FotufilmHalide/include \
     -sdk "$SDK" -target "$TARGET" -swift-version 5 -O -parse-as-library \
     "$FOTUFILM_CORE_SOURCE_DIR"/*.swift Sources/FotufilmMetal/*.swift \
-    "$FOTUFILM_PACK_KEY_SOURCE" resolve/FotufilmBridge.swift \
+    "$FOTUFILM_PACK_KEY_SOURCE" Sources/FotufilmEditModel/*.swift resolve/FotufilmBridge.swift resolve/FotufilmBridgeControls.swift resolve/Generated/FotufilmBridgeSlots.swift \
     "$OBJ/FotufilmHalideIOS.o" "$OBJ/WorkingSpace.o" \
     "$OBJ/FotufilmEffect.o" "$OBJ/HostHarness.o" "$OBJ/ParityFrame.o" \
     "$KERNELS"/*.a \
@@ -216,7 +216,7 @@ for ARCH in "${ARCHS[@]}"; do
     "$FOTUFILM_CORE_SOURCE_DIR"/*.swift \
     Sources/FotufilmMetal/*.swift \
     "$FOTUFILM_PACK_KEY_SOURCE" \
-    resolve/FotufilmBridge.swift \
+    Sources/FotufilmEditModel/*.swift resolve/FotufilmBridge.swift resolve/FotufilmBridgeControls.swift resolve/Generated/FotufilmBridgeSlots.swift \
     -o "$OBJ/FotufilmSwift.o"
 
   # The extension. Halide's runtime is linked private for the same reason the OFX bundle does it:

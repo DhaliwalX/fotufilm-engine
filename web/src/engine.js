@@ -1,3 +1,4 @@
+import { CONTROLS } from './generated/controls.js'
 // The browser half of the film engine.
 //
 // The WebAssembly module holds the same Halide kernels the phones run, but none of the physics
@@ -565,21 +566,21 @@ class Developer {
     writeBaseGrain(this.module, this.configuration, this.grainPtr)
   }
 
-  /// Rewrites the configuration slots that are a pure function of a control. Anything that
-  /// re-enters the film model — halation, coupler range — is not adjustable here and needs a
-  /// pack exported at that setting.
   applyControls(controls) {
     const { module } = this
-    const { ev = 0, grain = 1, highlights = 0, shadows = 0,
-            saturation = 1, vibrance = 0 } = controls
     module.HEAPF32.set(this.configuration, this.configPtr / 4)
-    module.ccall('fotufilm_wasm_set_exposure', null, ['number', 'number'],
-                 [this.configPtr, Math.pow(2, ev)])
-    module.ccall('fotufilm_wasm_set_scene', null,
-                 ['number', 'number', 'number', 'number', 'number'],
-                 [this.configPtr, highlights, shadows, saturation, vibrance])
-    module.ccall('fotufilm_wasm_set_grain', null, ['number', 'number', 'number'],
-                 [this.configPtr, this.grainPtr, grain])
+    for (const control of CONTROLS) {
+      const value = controls[control.key] ?? control.def
+      if (control.kind === 'grain') {
+        module.ccall('fotufilm_wasm_set_grain', null, ['number', 'number', 'number'],
+                     [this.configPtr, this.grainPtr, value])
+        continue
+      }
+      const slot = module.ccall('fotufilm_wasm_control_slot', 'number', ['number'], [control.index])
+      const stored = control.kind === 'exp2' ? Math.pow(2, value) : value
+      module.ccall('fotufilm_wasm_set_slot', null, ['number', 'number', 'number'],
+                   [this.configPtr, slot, stored])
+    }
   }
 
   /// Develops one frame. `source` is a `pixelSource` or `imageSource` at the frame's size; the

@@ -1,0 +1,4745 @@
+{
+  "auxiliaries" : [
+    {
+      "fxplugID" : 37,
+      "kind" : "label",
+      "label" : "Status",
+      "ofxName" : "status",
+      "order" : 0,
+      "surfaces" : [
+        "finalcut"
+      ],
+      "text" : ""
+    },
+    {
+      "group" : "input",
+      "hint" : "The input encoding Fotufilm will decode. Host means Resolve supplied an exact OFX colour-space tag. Assumed means Resolve supplied Raw or no tag; select Timeline Color Space explicitly if that assumption does not match the image arriving at this node.",
+      "kind" : "label",
+      "label" : "Decoded Input",
+      "ofxName" : "colorSpaceStatus",
+      "order" : 20,
+      "surfaces" : [
+        "resolve"
+      ],
+      "text" : "Not yet examined"
+    },
+    {
+      "group" : "film",
+      "kind" : "label",
+      "label" : "Resolved Format",
+      "ofxName" : "resolvedFormat",
+      "order" : 25,
+      "surfaces" : [
+        "resolve"
+      ],
+      "text" : "Not yet examined"
+    },
+    {
+      "fxplugID" : 27,
+      "kind" : "hiddenString",
+      "label" : "id",
+      "ofxName" : "stockID",
+      "order" : 910,
+      "surfaces" : [
+        "resolve",
+        "finalcut"
+      ]
+    },
+    {
+      "fxplugID" : 28,
+      "kind" : "hiddenString",
+      "label" : "id",
+      "ofxName" : "formatID",
+      "order" : 920,
+      "surfaces" : [
+        "resolve",
+        "finalcut"
+      ]
+    },
+    {
+      "fxplugID" : 29,
+      "kind" : "hiddenString",
+      "label" : "id",
+      "ofxName" : "paperID",
+      "order" : 930,
+      "surfaces" : [
+        "resolve",
+        "finalcut"
+      ]
+    },
+    {
+      "fxplugID" : 26,
+      "kind" : "hiddenString",
+      "label" : "id",
+      "ofxName" : "stageID",
+      "order" : 900,
+      "surfaces" : [
+        "resolve",
+        "finalcut"
+      ]
+    },
+    {
+      "fxplugID" : 81,
+      "kind" : "hiddenString",
+      "label" : "id",
+      "ofxName" : "lensFilter1ID",
+      "order" : 940,
+      "surfaces" : [
+        "resolve",
+        "finalcut"
+      ]
+    },
+    {
+      "fxplugID" : 82,
+      "kind" : "hiddenString",
+      "label" : "id",
+      "ofxName" : "lensFilter2ID",
+      "order" : 950,
+      "surfaces" : [
+        "resolve",
+        "finalcut"
+      ]
+    },
+    {
+      "fxplugID" : 83,
+      "kind" : "hiddenString",
+      "label" : "id",
+      "ofxName" : "lensFilter3ID",
+      "order" : 960,
+      "surfaces" : [
+        "resolve",
+        "finalcut"
+      ]
+    },
+    {
+      "fxplugID" : 84,
+      "kind" : "hiddenString",
+      "label" : "id",
+      "ofxName" : "diffusionID",
+      "order" : 970,
+      "surfaces" : [
+        "resolve",
+        "finalcut"
+      ]
+    },
+    {
+      "choices" : [
+        "Reference · 0 stops"
+      ],
+      "group" : "lab",
+      "hint" : "Measured development conditions for this stock. The saved stop value is preserved when the menu is rebuilt. Pair a push with the intended camera exposure.",
+      "kind" : "choice",
+      "label" : "Push / Pull",
+      "ofxName" : "pushCondition",
+      "order" : 15,
+      "persistent" : false,
+      "surfaces" : [
+        "resolve"
+      ],
+      "value" : 0
+    },
+    {
+      "group" : "lab",
+      "kind" : "label",
+      "label" : "Measured Conditions",
+      "ofxName" : "developmentStatus",
+      "order" : 16,
+      "surfaces" : [
+        "resolve"
+      ],
+      "text" : "Not yet examined"
+    },
+    {
+      "group" : "grainAdvanced",
+      "hint" : "Choose a different deterministic grain field. Included in Undo with Grain Seed.",
+      "kind" : "pushButton",
+      "label" : "New Seed",
+      "ofxName" : "newSeed",
+      "order" : 30,
+      "surfaces" : [
+        "resolve"
+      ]
+    },
+    {
+      "group" : "grainAdvanced",
+      "kind" : "label",
+      "label" : "Grain Status",
+      "ofxName" : "grainStatus",
+      "order" : 40,
+      "surfaces" : [
+        "resolve"
+      ],
+      "text" : "Not yet examined"
+    },
+    {
+      "group" : "output",
+      "kind" : "label",
+      "label" : "Resolved Medium",
+      "ofxName" : "resolvedPaper",
+      "order" : 15,
+      "surfaces" : [
+        "resolve"
+      ],
+      "text" : "Not yet examined"
+    },
+    {
+      "group" : "stage",
+      "kind" : "label",
+      "label" : " ",
+      "ofxName" : "stageStatus",
+      "order" : 20,
+      "surfaces" : [
+        "resolve"
+      ],
+      "text" : "Stage: Full — scene in, finished output out"
+    },
+    {
+      "fxplugID" : 40,
+      "group" : "stage",
+      "hint" : "Whether Texture Only carries this stage. Ignored by every other stage, where the strength controls below select what runs.",
+      "kind" : "textureToggles",
+      "label" : "Texture Stages",
+      "ofxName" : "textureStages",
+      "order" : 30,
+      "surfaces" : [
+        "resolve",
+        "finalcut"
+      ]
+    },
+    {
+      "group" : "render",
+      "kind" : "label",
+      "label" : "Effective Renderer",
+      "ofxName" : "renderStatus",
+      "order" : 20,
+      "surfaces" : [
+        "resolve"
+      ],
+      "text" : "Not yet examined"
+    }
+  ],
+  "bridgeSlotCount" : 53,
+  "bridgeSlots" : [
+    "EXPOSURE_EV",
+    "TEMPERATURE",
+    "TINT",
+    "HIGHLIGHTS",
+    "SHADOWS",
+    "SATURATION",
+    "VIBRANCE",
+    "GRAIN_SCALE",
+    "HALATION_SCALE",
+    "COUPLER_SCALE",
+    "PRINT_CORRECTION",
+    "LOCAL_TONE",
+    "PUSH_PULL",
+    "BLEACH_BYPASS",
+    "EXPIRED_YEARS",
+    "PRINT_LIGHT",
+    "STAGE",
+    "TEXTURE_STAGES",
+    "FLARE_SCALE",
+    "ESTIMATED_HALATION",
+    "HALATION_COLOUR",
+    "LENS_FILTER_1",
+    "LENS_FILTER_2",
+    "LENS_FILTER_3",
+    "LENS_METERING",
+    "DIFFUSION_FAMILY",
+    "DIFFUSION_GRADE",
+    "FOCAL_LENGTH",
+    "NEGATIVE_VIEWING",
+    "MOTTLE_OVERRIDE",
+    "MOTTLE_SHARE",
+    "COUPLER_REACH",
+    "COUPLER_SELF",
+    "SCENE_ILLUMINANT",
+    "HALATION_400",
+    "HALATION_450",
+    "HALATION_500",
+    "HALATION_550",
+    "HALATION_600",
+    "HALATION_650",
+    "HALATION_700",
+    "FILTER_COATING",
+    "FRAME_COVERAGE",
+    "GRAIN_MODEL",
+    "SHUTTER_SECONDS",
+    "RENDER_MODE",
+    "GRAIN_FROZEN",
+    "COUPLER_RED_GREEN",
+    "COUPLER_GREEN_BLUE",
+    "HALATION_MODEL",
+    "FRINGE_AMOUNT",
+    "FRINGE_RADIUS",
+    "ENLARGER"
+  ],
+  "controls" : [
+    {
+      "availability" : "always",
+      "commandLineFlag" : "--stock",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Film stock (default: first installed). See --list-stocks",
+      "commandLinePlaceholder" : "<name>",
+      "detail" : "The emulsion the photograph is exposed on",
+      "documentation" : "Selects the emulsion. Normal preserves the source frame without film transformation.",
+      "drives" : [
+
+      ],
+      "dynamicMenu" : "stocks",
+      "field" : "stock",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : false,
+        "dynamicMenu" : "stocks",
+        "fxplugID" : 2,
+        "group" : "film",
+        "hint" : "The emulsion. Each is a measured stock: its own spectral sensitivity, characteristic curves, couplers, halation and granularity.",
+        "kind" : "menu",
+        "label" : "Stock",
+        "ofxName" : "stock",
+        "order" : 10,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+
+      },
+      "scope" : "edit",
+      "section" : "filmStock",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Film"
+    },
+    {
+      "availability" : "always",
+      "commandLineFlag" : "--format",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Film gauge (default: the gauge the stock is known on). \"sensor\" cuts the film to the frame the input file says its camera exposed. See --list-formats",
+      "commandLinePlaceholder" : "<name>",
+      "detail" : "The gauge the frame is exposed on, or the film's own",
+      "documentation" : "Sets physical negative dimensions. Smaller formats increase grain enlargement and spatial halation reach.",
+      "drives" : [
+        "format"
+      ],
+      "dynamicMenu" : "gauges",
+      "field" : "gauge",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : false,
+        "dynamicMenu" : "gauges",
+        "fxplugID" : 3,
+        "group" : "film",
+        "hint" : "The gauge the frame is exposed on. The image height maps onto the gauge's frame height, so a smaller format is enlarged more and shows coarser grain, wider halation and stronger adjacency — the same emulsion at a different magnification. Match Film takes the gauge the chosen stock is known on.",
+        "kind" : "menu",
+        "label" : "Film Format",
+        "ofxName" : "format",
+        "order" : 20,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "value" : -1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "web" : "a pack is sealed for one gauge"
+      },
+      "scope" : "edit",
+      "section" : "filmStock",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Format"
+    },
+    {
+      "availability" : "always",
+      "binding" : "frameCoverage",
+      "detail" : "Short edge of the film frame retained after the host's crop",
+      "drives" : [
+
+      ],
+      "field" : "frameCoverage",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "minusOne",
+        "clampMax" : 1,
+        "clampMin" : 0.05,
+        "composed" : false,
+        "delta" : 0.01,
+        "group" : "film",
+        "hint" : "Short edge of the film frame retained after cropping. 100 uses the full frame; 50 enlarges half the frame. Changes grain, halation and other spatial scales, without cropping pixels. Account for any upstream resize yourself.",
+        "kind" : "double",
+        "label" : "Film Frame Coverage (%)",
+        "max" : 100,
+        "min" : 5,
+        "ofxName" : "frameCoverage",
+        "order" : 30,
+        "paramOffset" : -1,
+        "paramScale" : 0.01,
+        "secret" : false,
+        "slot" : 42,
+        "slotSymbol" : "FRAME_COVERAGE",
+        "value" : 100,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "the crop tool removes pixels; coverage stands in for a crop the host owns",
+        "app" : "the crop tool removes pixels; coverage stands in for a crop the host owns",
+        "cli" : "the command line renders the whole frame as given",
+        "desktop" : "the crop tool removes pixels; coverage stands in for a crop the host owns",
+        "finalcut" : "Final Cut crops before the effect runs; not yet offered there",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : 0.05,
+        "max" : 1,
+        "min" : 0.05,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "hostOnly",
+      "section" : "filmStock",
+      "surfaces" : [
+        "resolve"
+      ],
+      "title" : "Frame Coverage"
+    },
+    {
+      "availability" : "film",
+      "binding" : "grainScale",
+      "commandLineFlag" : "--grain",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Grain multiplier, 0 disables (default: 1)",
+      "commandLinePlaceholder" : "<scale>",
+      "detail" : "How much of the stock's published granularity develops",
+      "documentation" : "Scales calibrated silver or dye-cloud grain variance. Black-and-white films use continuous silver texture so individual samples do not appear as dots.",
+      "drives" : [
+
+      ],
+      "field" : "grain",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1.7976931348623157e+308,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 14,
+        "group" : "grain",
+        "hint" : "Multiplier on the stock's measured granularity. 0 disables it.",
+        "kind" : "double",
+        "label" : "Grain",
+        "max" : 2,
+        "min" : 0,
+        "ofxName" : "grain",
+        "order" : 10,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 7,
+        "slotSymbol" : "GRAIN_SCALE",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+
+      },
+      "persistedKey" : "grain",
+      "scale" : {
+        "admittedMax" : 2,
+        "admittedMin" : 0,
+        "max" : 2,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "multiplier"
+      },
+      "scope" : "edit",
+      "section" : "filmGrain",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Grain",
+      "webConfigSlot" : "FOTUFILM_CONFIG_GRAIN",
+      "webTransform" : "grain"
+    },
+    {
+      "availability" : "film",
+      "binding" : "grainMottleShare",
+      "choices" : [
+        {
+          "detail" : "Whatever this stock’s sheet states",
+          "id" : "film",
+          "label" : "Film’s Own"
+        },
+        {
+          "detail" : "One clump radius, the single-population field",
+          "id" : "none",
+          "label" : "None",
+          "value" : 0
+        },
+        {
+          "detail" : "A trace of coarse structure under the grain",
+          "id" : "light",
+          "label" : "Light · 20%",
+          "value" : 0.2
+        },
+        {
+          "detail" : "The two populations about even",
+          "id" : "moderate",
+          "label" : "Moderate · 45%",
+          "value" : 0.45
+        },
+        {
+          "detail" : "The coarse field carries most of the variance",
+          "id" : "heavy",
+          "label" : "Heavy · 70%",
+          "value" : 0.7
+        },
+        {
+          "detail" : "The engine’s ceiling",
+          "id" : "maximum",
+          "label" : "Maximum · 90%",
+          "value" : 0.9
+        }
+      ],
+      "commandLineFlag" : "--mottle",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Grain-size mixture override, 0-0.9 (default: the stock's own, usually 0): the variance share of the published granularity carried by a coarse second clump field — the soft mottle under the sharp grain. The RMS anchor holds whatever the split",
+      "commandLinePlaceholder" : "<share>",
+      "detail" : "The soft coarse clumping under the sharp grain",
+      "documentation" : "Modulates low-frequency grain clump covariance.",
+      "drives" : [
+
+      ],
+      "field" : "grainMottle",
+      "group" : "film",
+      "kind" : "menu",
+      "omitted" : {
+        "finalcut" : "not yet offered; the share is a Full-stage control",
+        "resolve" : "offered as Mottle and Mottle Amount",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scope" : "edit",
+      "section" : "filmGrain",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "cli"
+      ],
+      "title" : "Mottle"
+    },
+    {
+      "availability" : "always",
+      "choices" : [
+        {
+          "detail" : "",
+          "id" : "stock",
+          "label" : "Stock Default",
+          "value" : 0
+        },
+        {
+          "detail" : "",
+          "id" : "custom",
+          "label" : "Custom",
+          "value" : 1
+        }
+      ],
+      "detail" : "Use the stock's coarse grain mixture, or set a custom share",
+      "drives" : [
+
+      ],
+      "field" : "mottleOverride",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "choices" : [
+          {
+            "detail" : "",
+            "id" : "stock",
+            "label" : "Stock Default",
+            "value" : 0
+          },
+          {
+            "detail" : "",
+            "id" : "custom",
+            "label" : "Custom",
+            "value" : 1
+          }
+        ],
+        "composed" : false,
+        "group" : "grain",
+        "hint" : "Use the stock's coarse grain mixture, or set a custom share. Full mode only.",
+        "kind" : "choice",
+        "label" : "Mottle",
+        "ofxName" : "mottleOverride",
+        "order" : 20,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 29,
+        "slotSymbol" : "MOTTLE_OVERRIDE",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "a plugin host's own setting, with no meaning on a photograph",
+        "app" : "a plugin host's own setting, with no meaning on a photograph",
+        "cli" : "the command line renders the full pipeline end to end",
+        "desktop" : "a plugin host's own setting, with no meaning on a photograph",
+        "finalcut" : "not yet offered; the share is a Full-stage control",
+        "web" : "the demo renders one still through a sealed pack"
+      },
+      "scope" : "hostOnly",
+      "section" : "filmGrain",
+      "surfaces" : [
+        "resolve"
+      ],
+      "title" : "Mottle"
+    },
+    {
+      "availability" : "always",
+      "detail" : "Share of grain variance carried by coarse clumping",
+      "drives" : [
+        "grainMottleShare"
+      ],
+      "field" : "mottleShare",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 0.9,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "group" : "grain",
+        "hint" : "Share of grain variance carried by coarse clumping. Total calibrated granularity is preserved. Custom mottle uses the engine's video delivery size.",
+        "kind" : "double",
+        "label" : "Mottle Amount (%)",
+        "max" : 90,
+        "min" : 0,
+        "ofxName" : "mottleShare",
+        "order" : 30,
+        "paramOffset" : 0,
+        "paramScale" : 0.01,
+        "secret" : false,
+        "slot" : 30,
+        "slotSymbol" : "MOTTLE_SHARE",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "a plugin host's own setting, with no meaning on a photograph",
+        "app" : "a plugin host's own setting, with no meaning on a photograph",
+        "cli" : "the command line renders the full pipeline end to end",
+        "desktop" : "a plugin host's own setting, with no meaning on a photograph",
+        "finalcut" : "not yet offered; the share is a Full-stage control",
+        "web" : "the demo renders one still through a sealed pack"
+      },
+      "scale" : {
+        "admittedMax" : 0.9,
+        "admittedMin" : 0,
+        "max" : 0.9,
+        "min" : 0,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "hostOnly",
+      "section" : "filmGrain",
+      "surfaces" : [
+        "resolve"
+      ],
+      "title" : "Mottle Amount"
+    },
+    {
+      "availability" : "always",
+      "choices" : [
+        {
+          "detail" : "",
+          "id" : "timeline",
+          "label" : "Timeline",
+          "value" : 0
+        },
+        {
+          "detail" : "",
+          "id" : "frozen",
+          "label" : "Frozen",
+          "value" : 1
+        }
+      ],
+      "detail" : "Whether the grain field advances with the timeline",
+      "drives" : [
+
+      ],
+      "field" : "grainAnimation",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "choices" : [
+          {
+            "detail" : "",
+            "id" : "timeline",
+            "label" : "Timeline",
+            "value" : 0
+          },
+          {
+            "detail" : "",
+            "id" : "frozen",
+            "label" : "Frozen",
+            "value" : 1
+          }
+        ],
+        "composed" : false,
+        "group" : "grain",
+        "hint" : "Timeline changes grain each frame. Frozen uses the same field at every time; the texture still responds to changes in the image.",
+        "kind" : "choice",
+        "label" : "Grain Animation",
+        "ofxName" : "grainAnimation",
+        "order" : 40,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 46,
+        "slotSymbol" : "GRAIN_FROZEN",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "a plugin host's own setting, with no meaning on a photograph",
+        "app" : "a plugin host's own setting, with no meaning on a photograph",
+        "cli" : "the command line renders the full pipeline end to end",
+        "desktop" : "a plugin host's own setting, with no meaning on a photograph",
+        "finalcut" : "not yet offered; the grain follows the timeline",
+        "web" : "the demo renders one still through a sealed pack"
+      },
+      "scope" : "hostOnly",
+      "section" : "filmGrain",
+      "surfaces" : [
+        "resolve"
+      ],
+      "title" : "Grain Animation"
+    },
+    {
+      "availability" : "film",
+      "binding" : "discGrain",
+      "commandLineFlag" : "--grain-model",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "clump (default) or discs. `discs` lays Boolean discs at the film's clump radius, scaled onto its published granularity, instead of a blurred clump field: the texture survives enlargement, saturates where discs overlap, and only differs once a disc covers a pixel. Costs about 5x the pixels and a one-off minute of pipeline build",
+      "commandLinePlaceholder" : "<m>",
+      "detail" : "Resolve single grains where one covers an output pixel",
+      "documentation" : "Enables discrete tabular grain disc rendering where emulsion grain clumps resolve at output pixels.",
+      "drives" : [
+
+      ],
+      "field" : "grainModel",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "choices" : [
+          {
+            "detail" : "",
+            "id" : "clump",
+            "label" : "Clump Field",
+            "value" : 0
+          },
+          {
+            "detail" : "",
+            "id" : "discs",
+            "label" : "Discs",
+            "value" : 1
+          }
+        ],
+        "composed" : false,
+        "group" : "grainAdvanced",
+        "hint" : "Disc grain is available on silver-image stocks and requires Reference rendering, selected automatically. Subpixel grain uses the clump field; coarse mottle is suppressed where discs render.",
+        "kind" : "choice",
+        "label" : "Grain Model",
+        "ofxName" : "grainModel",
+        "order" : 10,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 43,
+        "slotSymbol" : "GRAIN_MODEL",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "toggle",
+      "omitted" : {
+        "finalcut" : "not yet offered; discs need Reference rendering",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "persistedKey" : "discGrain",
+      "restingOn" : false,
+      "scope" : "edit",
+      "section" : "filmGrain",
+      "storedEncoding" : "same",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "cli"
+      ],
+      "title" : "Disc Grain"
+    },
+    {
+      "availability" : "film",
+      "binding" : "seed",
+      "commandLineFlag" : "--seed",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Grain random seed (default: fixed)",
+      "commandLinePlaceholder" : "<n>",
+      "detail" : "Same seed and same frame give the same grain",
+      "drives" : [
+
+      ],
+      "field" : "seed",
+      "group" : "film",
+      "host" : {
+        "animates" : false,
+        "bridge" : "identity",
+        "composed" : false,
+        "fxplugID" : 21,
+        "group" : "grainAdvanced",
+        "hint" : "Same seed and same frame give the same grain. Grain also advances with the timeline, so a still frame is still, and a moving one is not.",
+        "kind" : "integer",
+        "label" : "Grain Seed",
+        "max" : 2147483647,
+        "min" : 0,
+        "ofxName" : "seed",
+        "order" : 20,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "value" : 1179208781,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "takeover",
+      "omitted" : {
+        "android" : "rerolled with New Grain Pattern",
+        "app" : "rerolled with New Grain Pattern",
+        "desktop" : "rerolled with New Grain Pattern",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scope" : "edit",
+      "section" : "filmGrain",
+      "surfaces" : [
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Grain Seed"
+    },
+    {
+      "availability" : "always",
+      "binding" : "halationModelIndex",
+      "choices" : [
+        {
+          "detail" : "Original film halation",
+          "id" : "legacy",
+          "label" : "Legacy",
+          "value" : 0
+        },
+        {
+          "detail" : "Illustrative film stack",
+          "id" : "layered",
+          "label" : "Layered Transport",
+          "value" : 1
+        }
+      ],
+      "commandLineFlag" : "--halation-model",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Halation model (default: legacy)",
+      "commandLinePlaceholder" : "<legacy|layered>",
+      "detail" : "Legacy or layered optical transport",
+      "drives" : [
+
+      ],
+      "field" : "halationModel",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "choices" : [
+          {
+            "detail" : "",
+            "id" : "legacy",
+            "label" : "Legacy",
+            "value" : 0
+          },
+          {
+            "detail" : "",
+            "id" : "layered",
+            "label" : "Layered Transport",
+            "value" : 1
+          }
+        ],
+        "composed" : false,
+        "fxplugID" : 88,
+        "group" : "halation",
+        "hint" : "Legacy or layered optical transport. Unmeasured stacks use an illustrative construction.",
+        "kind" : "choice",
+        "label" : "Halation Model",
+        "ofxName" : "halationModel",
+        "order" : 10,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 49,
+        "slotSymbol" : "HALATION_MODEL",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "Film Model settings choose it for every photograph",
+        "app" : "Film Model settings choose it for every photograph",
+        "desktop" : "Film Model settings choose it for every photograph"
+      },
+      "scope" : "global",
+      "section" : "filmEmulsion",
+      "settingKey" : "fotufilm.halation-model",
+      "surfaces" : [
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Halation Model"
+    },
+    {
+      "availability" : "film",
+      "binding" : "halationStops",
+      "commandLineFlag" : "--halation",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Halation multiplier, 0 disables (default: 1)",
+      "commandLinePlaceholder" : "<scale>",
+      "detail" : "Light returned by the base, back through the emulsion",
+      "documentation" : "Controls back-surface reflection and scatter around high-contrast exposure boundaries.",
+      "drives" : [
+
+      ],
+      "field" : "halation",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "multipleFromStops",
+        "clampMax" : 1.7976931348623157e+308,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 15,
+        "group" : "halation",
+        "hardMax" : 100,
+        "hint" : "Multiplier on the fraction of light the base returns. On the legacy model it scales the light going down rather than the finished halo, so raising it widens the halo as well as brightening it — the way a thinner antihalation layer would. With Estimated Halation Shape on, the film's geometry is pinned and this scales the amount alone. 1 is the stock's authored look — the sheet's look scale times the measured film, whose calibrated returns sit at the patent-floor absorber densities and are all but invisible on their own. The measured film survives at 1 over the look scale (0.025 on a rem-jet stock). Typing past the slider reaches 100.",
+        "kind" : "double",
+        "label" : "Halation",
+        "max" : 10,
+        "min" : 0,
+        "ofxName" : "halation",
+        "order" : 20,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 8,
+        "slotSymbol" : "HALATION_SCALE",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "persistedKey" : "halation",
+      "scale" : {
+        "admittedMax" : 6.643856189774724,
+        "admittedMin" : -6,
+        "max" : 6,
+        "min" : -6,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "stopsFromOff"
+      },
+      "scope" : "edit",
+      "section" : "filmEmulsion",
+      "storedEncoding" : "scaleFromStops",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Halation"
+    },
+    {
+      "availability" : "always",
+      "binding" : "estimatedHalationProfile",
+      "commandLineFlag" : "--estimated-halation",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Use provisional spatial profiles where a stock has no independently calibrated profile (default: off)",
+      "commandLinePlaceholder" : "",
+      "detail" : "Provisional annular profiles where no calibrated profile exists",
+      "drives" : [
+
+      ],
+      "field" : "estimatedHalation",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : false,
+        "fxplugID" : 16,
+        "group" : "halation",
+        "hint" : "Renders halation through the stock's provisional annular profile — the reflex ring at the base's critical angle — where no independently calibrated profile exists. Off is the legacy Gaussian model and the render every existing project made; the annular road costs roughly half again as much frame time.",
+        "kind" : "boolean",
+        "label" : "Estimated Halation Shape",
+        "ofxName" : "estimatedHalation",
+        "order" : 30,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 19,
+        "slotSymbol" : "ESTIMATED_HALATION",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "toggle",
+      "omitted" : {
+        "android" : "Film Model settings choose it for every photograph",
+        "app" : "Film Model settings choose it for every photograph",
+        "desktop" : "Film Model settings choose it for every photograph",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "restingOn" : false,
+      "scope" : "global",
+      "section" : "filmEmulsion",
+      "settingKey" : "fotufilm.estimated-halation",
+      "surfaces" : [
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Estimated Halation Shape"
+    },
+    {
+      "availability" : "colourNegative",
+      "binding" : "halationSourceColour",
+      "commandLineFlag" : "--halation-colour",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "How much the halo keeps the source's own colour instead of the stock's layered red, 0-1 (default: 0). The dimmer records are raised to the strongest record's return, so the ring brightens toward the light's colour",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "How much the ring keeps the light's own colour",
+      "documentation" : "Shifts negative halation toward source light spectrum.",
+      "drives" : [
+
+      ],
+      "field" : "halationColour",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 17,
+        "group" : "halation",
+        "hint" : "How much the halo keeps the source's own colour instead of the film's layered red. The returning light re-enters the emulsion from below, so a colour film's ring is red whatever the light was; raising this lifts the dimmer records to the strongest record's return, and the ring brightens toward the light's colour. 0 is the film.",
+        "kind" : "double",
+        "label" : "Halo Colour",
+        "max" : 1,
+        "min" : 0,
+        "ofxName" : "halationColour",
+        "order" : 40,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 20,
+        "slotSymbol" : "HALATION_COLOUR",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "persistedKey" : "halationColour",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : 0,
+        "max" : 1,
+        "min" : 0,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "filmEmulsion",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Halo Colour"
+    },
+    {
+      "availability" : "film",
+      "binding" : "halationReturnGain",
+      "curve" : {
+        "domainMax" : 780,
+        "domainMin" : 380,
+        "handles" : [
+          400,
+          450,
+          500,
+          550,
+          600,
+          650,
+          700
+        ],
+        "max" : 6,
+        "min" : -6,
+        "neutral" : 0,
+        "unit" : "stops"
+      },
+      "detail" : "How much of each wavelength the base hands back",
+      "documentation" : "Selects base reflectance spectral weighting.",
+      "drives" : [
+
+      ],
+      "field" : "halationSpectrum",
+      "foldsUnder" : "halation",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : false,
+        "delta" : 0.01,
+        "group" : "halationSpectrum",
+        "hint" : "Gain over the stock's halation return spectrum. 0 preserves the stock; positive values strengthen this band. Does not create return in an absent band.",
+        "kind" : "double",
+        "label" : "nm (stops)",
+        "max" : 6,
+        "min" : -6,
+        "ofxName" : "halation",
+        "order" : 10,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 34,
+        "slotSymbol" : "HALATION_400",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "curve",
+      "omitted" : {
+        "android" : "the Android panel draws no curve rows yet",
+        "cli" : "no flag carries a curve",
+        "finalcut" : "not yet offered; seven sliders would need seven ids",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "persistedKey" : "halationSpectrum",
+      "scope" : "edit",
+      "section" : "filmEmulsion",
+      "storedEncoding" : "same",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "resolve"
+      ],
+      "title" : "Return Spectrum"
+    },
+    {
+      "availability" : "film",
+      "binding" : "couplerScale",
+      "commandLineFlag" : "--couplers",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "DIR + adjacency strength; 1 calibrated, overdrive compressed (default: 1)",
+      "commandLinePlaceholder" : "<scale>",
+      "detail" : "DIR inhibition: colour separation and edge contrast",
+      "documentation" : "Controls development inhibitor release chemistry for interlayer color separation and edge contrast.",
+      "drives" : [
+
+      ],
+      "field" : "couplers",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1.7976931348623157e+308,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 19,
+        "group" : "coupler",
+        "hint" : "Multiplier on inter-image inhibition, the mechanism behind the stock's colour separation and its Mackie lines. 0 disables it.",
+        "kind" : "double",
+        "label" : "DIR Couplers",
+        "max" : 2,
+        "min" : 0,
+        "ofxName" : "couplers",
+        "order" : 10,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 9,
+        "slotSymbol" : "COUPLER_SCALE",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "persistedKey" : "couplers",
+      "scale" : {
+        "admittedMax" : 2,
+        "admittedMin" : 0,
+        "max" : 2,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "multiplier"
+      },
+      "scope" : "edit",
+      "section" : "filmEmulsion",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Couplers"
+    },
+    {
+      "availability" : "couplerGeometry",
+      "binding" : "couplerGapReach",
+      "commandLineFlag" : "--coupler-reach",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Interlayer inhibitor reach as a multiple of the stock's own geometry, 0-3 (default: 1)",
+      "commandLinePlaceholder" : "<scale>",
+      "detail" : "How far the released inhibitor crosses each interlayer",
+      "documentation" : "Scales how far the released inhibitor crosses each interlayer.",
+      "drives" : [
+
+      ],
+      "field" : "couplerReach",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "minusOne",
+        "clampMax" : 3,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "group" : "coupler",
+        "hint" : "Interlayer inhibitor reach. 1 preserves the stock; 0 seals the layers off.",
+        "kind" : "double",
+        "label" : "Separation",
+        "max" : 3,
+        "min" : 0,
+        "ofxName" : "couplerReach",
+        "order" : 20,
+        "paramOffset" : -1,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 31,
+        "slotSymbol" : "COUPLER_REACH",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "finalcut" : "not yet offered; needs the coupler-geometry gate",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scale" : {
+        "admittedMax" : 3,
+        "admittedMin" : 0,
+        "max" : 3,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "multiplier"
+      },
+      "scope" : "edit",
+      "section" : "filmEmulsion",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "cli"
+      ],
+      "title" : "Separation"
+    },
+    {
+      "availability" : "couplerGeometry",
+      "binding" : "couplerSelf",
+      "commandLineFlag" : "--coupler-self",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Within-layer inhibition as a multiple of the stock's own, 0-3 (default: 1)",
+      "commandLinePlaceholder" : "<scale>",
+      "detail" : "The same inhibition acting within a layer, not across two",
+      "documentation" : "Scales inhibition acting within a layer rather than across two.",
+      "drives" : [
+
+      ],
+      "field" : "couplerSelf",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "minusOne",
+        "clampMax" : 3,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "group" : "coupler",
+        "hint" : "Within-layer inhibition. 1 preserves the stock's retained self-inhibition.",
+        "kind" : "double",
+        "label" : "Edge Contrast",
+        "max" : 3,
+        "min" : 0,
+        "ofxName" : "couplerSelf",
+        "order" : 30,
+        "paramOffset" : -1,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 32,
+        "slotSymbol" : "COUPLER_SELF",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "finalcut" : "not yet offered; needs the coupler-geometry gate",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "persistedKey" : "couplerSelf",
+      "scale" : {
+        "admittedMax" : 3,
+        "admittedMin" : 0,
+        "max" : 3,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "multiplier"
+      },
+      "scope" : "edit",
+      "section" : "filmEmulsion",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "cli"
+      ],
+      "title" : "Edge Contrast"
+    },
+    {
+      "availability" : "couplerGeometry",
+      "detail" : "Additional multiplier on Separation for the red–green interlayer",
+      "drives" : [
+
+      ],
+      "field" : "couplerRedGreen",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "minusOne",
+        "clampMax" : 3,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "group" : "couplerAdvanced",
+        "hint" : "Additional multiplier on Separation for the red–green interlayer.",
+        "kind" : "double",
+        "label" : "Red–Green Reach",
+        "max" : 3,
+        "min" : 0,
+        "ofxName" : "couplerRedGreen",
+        "order" : 10,
+        "paramOffset" : -1,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 47,
+        "slotSymbol" : "COUPLER_RED_GREEN",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "a plugin host's own setting, with no meaning on a photograph",
+        "app" : "a plugin host's own setting, with no meaning on a photograph",
+        "cli" : "the command line renders the full pipeline end to end",
+        "desktop" : "a plugin host's own setting, with no meaning on a photograph",
+        "finalcut" : "not yet offered; needs the coupler-geometry gate",
+        "web" : "the demo renders one still through a sealed pack"
+      },
+      "scale" : {
+        "admittedMax" : 3,
+        "admittedMin" : 0,
+        "max" : 3,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "multiplier"
+      },
+      "scope" : "hostOnly",
+      "section" : "filmEmulsion",
+      "surfaces" : [
+        "resolve"
+      ],
+      "title" : "Red–Green Reach"
+    },
+    {
+      "availability" : "couplerGeometry",
+      "detail" : "Additional multiplier on Separation for the green–blue interlayer",
+      "drives" : [
+
+      ],
+      "field" : "couplerGreenBlue",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "minusOne",
+        "clampMax" : 3,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "group" : "couplerAdvanced",
+        "hint" : "Additional multiplier on Separation for the green–blue interlayer.",
+        "kind" : "double",
+        "label" : "Green–Blue Reach",
+        "max" : 3,
+        "min" : 0,
+        "ofxName" : "couplerGreenBlue",
+        "order" : 20,
+        "paramOffset" : -1,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 48,
+        "slotSymbol" : "COUPLER_GREEN_BLUE",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "a plugin host's own setting, with no meaning on a photograph",
+        "app" : "a plugin host's own setting, with no meaning on a photograph",
+        "cli" : "the command line renders the full pipeline end to end",
+        "desktop" : "a plugin host's own setting, with no meaning on a photograph",
+        "finalcut" : "not yet offered; needs the coupler-geometry gate",
+        "web" : "the demo renders one still through a sealed pack"
+      },
+      "scale" : {
+        "admittedMax" : 3,
+        "admittedMin" : 0,
+        "max" : 3,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "multiplier"
+      },
+      "scope" : "hostOnly",
+      "section" : "filmEmulsion",
+      "surfaces" : [
+        "resolve"
+      ],
+      "title" : "Green–Blue Reach"
+    },
+    {
+      "availability" : "interlayerInhibition",
+      "binding" : "chromaticFringeAmount",
+      "commandLineFlag" : "--fringe-amount",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Broad inter-layer transport fraction, 0-1 (default: stock, normally 0)",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Spread some inter-layer inhibition farther around color boundaries",
+      "documentation" : "Spreads a share of inter-layer inhibition farther around colour boundaries.",
+      "drives" : [
+
+      ],
+      "field" : "chromaticFringeAmount",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 89,
+        "group" : "coupler",
+        "hint" : "Broad inter-layer transport fraction, 0-1. 0 keeps the stock's own transport.",
+        "kind" : "double",
+        "label" : "Fringe Amount",
+        "max" : 1,
+        "min" : 0,
+        "ofxName" : "fringeAmount",
+        "order" : 40,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 50,
+        "slotSymbol" : "FRINGE_AMOUNT",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : true
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "persistedKey" : "chromaticFringeAmount",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : 0,
+        "max" : 1,
+        "min" : 0,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "filmEmulsion",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Fringe Amount"
+    },
+    {
+      "availability" : "interlayerInhibition",
+      "binding" : "chromaticFringeRadiusMicrometers",
+      "commandLineFlag" : "--fringe-radius",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Broad transport Gaussian sigma on the film, 0-2000 micrometers (default: stock, normally 100; must exceed the stock's core radius)",
+      "commandLinePlaceholder" : "<um>",
+      "detail" : "Broad spread on the film; active when Fringe Amount is above zero",
+      "documentation" : "Sets the broad spread on the film in micrometres.",
+      "drives" : [
+
+      ],
+      "field" : "chromaticFringeRadius",
+      "foldsUnder" : "chromaticFringeAmount",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : false,
+        "delta" : 1,
+        "fxplugID" : 90,
+        "group" : "coupler",
+        "hint" : "Broad transport Gaussian sigma on the film, 20-300 micrometers. Read only while Fringe Amount is above zero; 0 keeps the stock's own radius.",
+        "kind" : "double",
+        "label" : "Fringe Radius (µm)",
+        "max" : 300,
+        "min" : 0,
+        "ofxName" : "fringeRadius",
+        "order" : 50,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 51,
+        "slotSymbol" : "FRINGE_RADIUS",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : true
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "persistedKey" : "chromaticFringeRadius",
+      "scale" : {
+        "admittedMax" : 300,
+        "admittedMin" : 20,
+        "max" : 300,
+        "min" : 20,
+        "neutral" : 100,
+        "stops" : [
+
+        ],
+        "unit" : "micrometers"
+      },
+      "scope" : "edit",
+      "section" : "filmEmulsion",
+      "storedEncoding" : "same",
+      "storedNeutral" : 100,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Fringe Radius"
+    },
+    {
+      "availability" : "measuredDevelopment",
+      "binding" : "developmentEV",
+      "commandLineFlag" : "--push",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Push (positive) or pull (negative) development, in stops (default: 0). Must name an exact condition measured for this stock's stated developer, dilution, temperature and agitation; stocks or stop values without measurements are rejected. Pair a push with its exposure change via --ev",
+      "commandLinePlaceholder" : "<stops>",
+      "detail" : "Measured push or pull conditions for this film and process",
+      "documentation" : "Adjusts chemical development timing using measured push/pull sensitometry curves.",
+      "drives" : [
+
+      ],
+      "field" : "push",
+      "group" : "film",
+      "host" : {
+        "animates" : false,
+        "bridge" : "identity",
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 22,
+        "group" : "lab",
+        "hint" : "Measured push or pull conditions for this film's stated developer, dilution, temperature and agitation. The control is disabled when the stock pack has no measured response.",
+        "kind" : "double",
+        "label" : "Push / Pull",
+        "max" : 2,
+        "min" : -2,
+        "ofxName" : "push",
+        "order" : 10,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : true,
+        "slot" : 12,
+        "slotSymbol" : "PUSH_PULL",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "persistedKey" : "push",
+      "scale" : {
+        "admittedMax" : 2,
+        "admittedMin" : -2,
+        "max" : 2,
+        "min" : -2,
+        "neutral" : 0,
+        "stops" : [
+          -2,
+          0,
+          1,
+          2
+        ],
+        "unit" : "stops"
+      },
+      "scope" : "edit",
+      "section" : "filmLab",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Push"
+    },
+    {
+      "availability" : "colourNegative",
+      "binding" : "bleachBypass",
+      "chips" : [
+        {
+          "detail" : "",
+          "id" : "off",
+          "label" : "Off",
+          "value" : 0
+        },
+        {
+          "detail" : "",
+          "id" : "half",
+          "label" : "Half",
+          "value" : 0.5
+        },
+        {
+          "detail" : "",
+          "id" : "full",
+          "label" : "Full",
+          "value" : 1
+        }
+      ],
+      "commandLineFlag" : "--bleach-bypass",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Fraction of the developed silver the bleach leaves in the negative, 0-1 (default: 0). The print re-times on the denser mid-grey, so what changes is contrast and chroma. Colour negative only",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Silver the bleach leaves in the negative",
+      "documentation" : "Retains metallic silver in color negative processing, increasing contrast and lowering dye saturation.",
+      "drives" : [
+
+      ],
+      "field" : "bleach",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 23,
+        "group" : "lab",
+        "hint" : "How much of the developed silver the bleach leaves in the negative. The retained silver is a black-and-white image over the colour one: contrast up, chroma down, together.",
+        "kind" : "double",
+        "label" : "Bleach Bypass",
+        "max" : 1,
+        "min" : 0,
+        "ofxName" : "bleachBypass",
+        "order" : 20,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 13,
+        "slotSymbol" : "BLEACH_BYPASS",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "chips",
+      "omitted" : {
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "persistedKey" : "bleach",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : 0,
+        "max" : 1,
+        "min" : 0,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "filmLab",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Bleach Bypass"
+    },
+    {
+      "availability" : "film",
+      "binding" : "expiredYears",
+      "commandLineFlag" : "--expired",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Years past the process-by date at room temperature (default: 0). One stop per decade slower, blue layer first; base fog and grain rise with it. Add the stop the lab rule asks for with --ev to keep the mids",
+      "commandLinePlaceholder" : "<years>",
+      "detail" : "Years past the process-by date at room temperature",
+      "documentation" : "Simulates room-temperature aging: speed loss, baseline fog density, increased grain, and layer sensitivity drift.",
+      "drives" : [
+
+      ],
+      "field" : "expired",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1.7976931348623157e+308,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.1,
+        "fxplugID" : 24,
+        "group" : "lab",
+        "hint" : "Years the roll sat past its process-by date. Speed falls a stop a decade with the blue-sensitive layer going first, base fog rises, and grain rises with the fog — the muddy, crossed toe of an old roll.",
+        "kind" : "double",
+        "label" : "Film Age (years)",
+        "max" : 30,
+        "min" : 0,
+        "ofxName" : "expired",
+        "order" : 30,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 14,
+        "slotSymbol" : "EXPIRED_YEARS",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "persistedKey" : "expiredYears",
+      "scale" : {
+        "admittedMax" : 30,
+        "admittedMin" : 0,
+        "max" : 20,
+        "min" : 0,
+        "neutral" : 0,
+        "stops" : [
+          0,
+          5,
+          10,
+          20
+        ],
+        "unit" : "years"
+      },
+      "scope" : "edit",
+      "section" : "filmLab",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Expired"
+    },
+    {
+      "availability" : "statedReciprocity",
+      "binding" : "shutterSeconds",
+      "commandLineFlag" : "--shutter",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Exposure time in seconds (default: instantaneous). When the stock's datasheet publishes a long-exposure table the emulsion leaves the reciprocity law as that table states, frozen past the table's last row; a sheet that states no table holds the law. The print re-times the mid; shadows slide into the toe and any unequal failure casts the ends",
+      "commandLinePlaceholder" : "<secs>",
+      "detail" : "How long the shutter was open, for the sheet's reciprocity row",
+      "documentation" : "Evaluates the emulsion's measured reciprocity failure characteristics under low-intensity long exposures.",
+      "drives" : [
+
+      ],
+      "dynamicMenu" : "shutterTimes",
+      "field" : "shutter",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : false,
+        "delta" : 1,
+        "group" : "lab",
+        "hint" : "Exposure duration for the stock's measured reciprocity response. 0 disables the override. Corrections stop at the last measured duration; no motion blur is added. Use the same value in paired Negative Only and Print Only nodes.",
+        "kind" : "double",
+        "label" : "Long Exposure (s)",
+        "max" : 3600,
+        "min" : 0,
+        "ofxName" : "shutterSeconds",
+        "order" : 40,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 44,
+        "slotSymbol" : "SHUTTER_SECONDS",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "finalcut" : "not yet offered; needs the reciprocity gate",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scope" : "edit",
+      "section" : "filmLab",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "cli"
+      ],
+      "title" : "Long Exposure"
+    },
+    {
+      "availability" : "always",
+      "commandLineFlag" : "--filter",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Absorbing filters on the front of the lens, comma separated and applied in order: w85b, w80a, w25, nd09, cc20m and the rest of the Wratten catalogue. Integrated spectrally against the stock's own layer sensitivities, so the same filter is a different filter on a different film",
+      "commandLinePlaceholder" : "<ids>",
+      "detail" : "An absorbing filter on the front of the lens",
+      "drives" : [
+        "lensFilters"
+      ],
+      "dynamicMenu" : "lensFilters",
+      "field" : "lensFilter1",
+      "group" : "lens",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : true,
+        "dynamicMenu" : "lensFilters",
+        "fxplugID" : 73,
+        "group" : "lens",
+        "hint" : "An absorbing filter on the front of the lens. It is integrated spectrally against the chosen film's own three layer sensitivities, which is why the same filter is a different filter on a different stock — an 85B is a correction on tungsten film and a heavy warm cast on daylight film. It also adds the veiling glare of two more air-glass faces, whatever the Veiling Glare slider says — and that added glare is why this control is live only on the Full stage: no kernel this build carries can measure it in a span that ends at the developed negative.",
+        "kind" : "menu",
+        "label" : "Filter 1",
+        "ofxName" : "lensFilter1",
+        "order" : 10,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 21,
+        "slotSymbol" : "LENS_FILTER_1",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "no lens filters on Android yet",
+        "app" : "the Lens deck's filter page holds an ordered stack",
+        "desktop" : "the Lens panel's filter list holds an ordered stack",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scope" : "edit",
+      "section" : "lensGlass",
+      "surfaces" : [
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Filter 1"
+    },
+    {
+      "availability" : "always",
+      "detail" : "A second filter, behind the first",
+      "drives" : [
+        "lensFilters"
+      ],
+      "dynamicMenu" : "lensFilters",
+      "field" : "lensFilter2",
+      "group" : "lens",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : true,
+        "dynamicMenu" : "lensFilters",
+        "fxplugID" : 74,
+        "group" : "lens",
+        "hint" : "A second filter, behind the first. They stack in the order given: their transmittances multiply, and the gap between them makes a ghost of its own.",
+        "kind" : "menu",
+        "label" : "Filter 2",
+        "ofxName" : "lensFilter2",
+        "order" : 20,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 22,
+        "slotSymbol" : "LENS_FILTER_2",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "no lens filters on Android yet",
+        "app" : "the Lens deck's filter page holds an ordered stack",
+        "cli" : "--filter takes the whole stack",
+        "desktop" : "the Lens panel's filter list holds an ordered stack",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scope" : "edit",
+      "section" : "lensGlass",
+      "surfaces" : [
+        "resolve",
+        "finalcut"
+      ],
+      "title" : "Filter 2"
+    },
+    {
+      "availability" : "always",
+      "detail" : "A third filter, behind the second",
+      "drives" : [
+        "lensFilters"
+      ],
+      "dynamicMenu" : "lensFilters",
+      "field" : "lensFilter3",
+      "group" : "lens",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : true,
+        "dynamicMenu" : "lensFilters",
+        "fxplugID" : 75,
+        "group" : "lens",
+        "hint" : "A third filter, behind the second.",
+        "kind" : "menu",
+        "label" : "Filter 3",
+        "ofxName" : "lensFilter3",
+        "order" : 30,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 23,
+        "slotSymbol" : "LENS_FILTER_3",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "no lens filters on Android yet",
+        "app" : "the Lens deck's filter page holds an ordered stack",
+        "cli" : "--filter takes the whole stack",
+        "desktop" : "the Lens panel's filter list holds an ordered stack",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scope" : "edit",
+      "section" : "lensGlass",
+      "surfaces" : [
+        "resolve",
+        "finalcut"
+      ],
+      "title" : "Filter 3"
+    },
+    {
+      "availability" : "always",
+      "commandLineFlag" : "--metering",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "How the exposure was set behind the filter: ttl (default, the camera's own photopic cell), factor (the published filter factor, worked out against the emulsion) or none (a fixed manual exposure, so the light loss lands on the film)",
+      "commandLinePlaceholder" : "<m>",
+      "detail" : "How the exposure was set with those filters fitted",
+      "drives" : [
+        "lensFilters"
+      ],
+      "dynamicMenu" : "meterings",
+      "field" : "metering",
+      "group" : "lens",
+      "host" : {
+        "animates" : true,
+        "bridge" : "indexPlusOne",
+        "composed" : false,
+        "dynamicMenu" : "meterings",
+        "fxplugID" : 76,
+        "group" : "lens",
+        "hint" : "How the exposure was set with those filters fitted. Metered through is the camera's own photopic cell reading the light that got past the glass, and is the default; it can underexpose behind a narrow filter, because the meter does not use the film's sensitivity. Filter factor is the published compensation, worked out against the emulsion, which restores the luminance record without cancelling the colour change. None is a fixed manual exposure, so the light the filter took lands on the film as underexposure. Ignored with no filter fitted, and live only on the Full stage, which is the only span a filter is live in.",
+        "kind" : "menu",
+        "label" : "Metering",
+        "ofxName" : "metering",
+        "order" : 40,
+        "paramOffset" : 1,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 24,
+        "slotSymbol" : "LENS_METERING",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "no lens filters on Android yet",
+        "app" : "chosen on the Lens deck's filter page",
+        "desktop" : "chosen on the Lens panel's filter list",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scope" : "edit",
+      "section" : "lensGlass",
+      "surfaces" : [
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Metering"
+    },
+    {
+      "availability" : "always",
+      "commandLineFlag" : "--diffusion",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "A diffusion filter: promist, blackpromist, glimmerglass, blackglimmerglass, fog, blackfog. A share of the light meets a particle and is scattered or absorbed; the share that missed every particle stays sharp",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "A diffusion filter on the front of the lens",
+      "drives" : [
+        "diffusionFilter"
+      ],
+      "dynamicMenu" : "diffusionFamilies",
+      "field" : "diffusion",
+      "group" : "lens",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : true,
+        "dynamicMenu" : "diffusionFamilies",
+        "fxplugID" : 77,
+        "group" : "lens",
+        "hint" : "A diffusion filter on the front of the lens. A share of the light meets a particle and leaves in a new direction, and the lens images it somewhere else on the frame; the share that missed every particle is untouched, which is why a diffused picture keeps its edges instead of going soft. The black families carry absorbing particles: the blacks still lift and the highlights bloom much less.",
+        "kind" : "menu",
+        "label" : "Diffusion",
+        "ofxName" : "diffusion",
+        "order" : 50,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 25,
+        "slotSymbol" : "DIFFUSION_FAMILY",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "no lens filters on Android yet",
+        "app" : "fitted on the Lens deck's filter page",
+        "desktop" : "fitted on the Lens panel's filter list",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scope" : "edit",
+      "section" : "lensGlass",
+      "surfaces" : [
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Diffusion"
+    },
+    {
+      "availability" : "always",
+      "commandLineFlag" : "--diffusion-grade",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "1/8, 1/4, 1/2, 1 or 2 (default: 1/4)",
+      "commandLinePlaceholder" : "<g>",
+      "detail" : "The particle loading a product line's 1/8, 1/4, 1/2, 1 and 2 name",
+      "drives" : [
+        "diffusionFilter"
+      ],
+      "dynamicMenu" : "diffusionGrades",
+      "field" : "diffusionGrade",
+      "group" : "lens",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : false,
+        "dynamicMenu" : "diffusionGrades",
+        "fxplugID" : 78,
+        "group" : "lens",
+        "hint" : "The particle loading a product line's 1/8, 1/4, 1/2, 1 and 2 name: one formulation more heavily loaded, so the grade moves how much light takes part and never how far it goes. Ignored with no diffusion filter fitted.",
+        "kind" : "menu",
+        "label" : "Diffusion Grade",
+        "ofxName" : "diffusionGrade",
+        "order" : 60,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 26,
+        "slotSymbol" : "DIFFUSION_GRADE",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "no lens filters on Android yet",
+        "app" : "fitted on the Lens deck's filter page",
+        "desktop" : "fitted on the Lens panel's filter list",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scope" : "edit",
+      "section" : "lensGlass",
+      "surfaces" : [
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Diffusion Grade"
+    },
+    {
+      "availability" : "always",
+      "binding" : "focalLengthMM",
+      "commandLineFlag" : "--focal",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Lens focal length. Read by the diffusion filter, whose halo is focal length times scattering angle — the reason the same filter glows bigger on a longer lens. Default: the gauge's own normal lens",
+      "commandLinePlaceholder" : "<mm>",
+      "detail" : "The taking lens's focal length, read by the diffusion filter",
+      "drives" : [
+
+      ],
+      "field" : "focalLength",
+      "group" : "lens",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : false,
+        "delta" : 1,
+        "fxplugID" : 79,
+        "group" : "lens",
+        "hint" : "The taking lens's focal length in millimetres, read only by the diffusion filter: a ray deviated by an angle ahead of the lens lands focal length times that angle off its unscattered position, so the same filter glows bigger on a longer lens, exactly as it does in the world. 0 — the default — is the gauge's own normal lens, which is what the grade numbering on a filter's ring is calibrated around.",
+        "kind" : "double",
+        "label" : "Focal Length",
+        "max" : 300,
+        "min" : 0,
+        "ofxName" : "focalLength",
+        "order" : 70,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 27,
+        "slotSymbol" : "FOCAL_LENGTH",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "read from the capture metadata",
+        "app" : "read from the capture metadata",
+        "desktop" : "read from the capture metadata",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scale" : {
+        "admittedMax" : 300,
+        "admittedMin" : 0,
+        "max" : 300,
+        "min" : 0,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "millimetres"
+      },
+      "scope" : "hostOnly",
+      "section" : "lensGlass",
+      "surfaces" : [
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Focal Length"
+    },
+    {
+      "availability" : "always",
+      "binding" : "flareScale",
+      "commandLineFlag" : "--flare",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Taking-lens veiling glare, 1 enables (default: 0 — a photographed source already carries its own lens's glare)",
+      "commandLinePlaceholder" : "<scale>",
+      "detail" : "Veiling glare from the taking lens, as a multiplier on the stock's figure",
+      "drives" : [
+
+      ],
+      "field" : "flare",
+      "group" : "lens",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1.7976931348623157e+308,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 18,
+        "group" : "lens",
+        "hint" : "Veiling glare from the taking lens, as a multiplier on the stock's figure. It defaults to 0 because a photographed clip already carries the glare of the lens that shot it, and this stage would veil the shadows a second time. Raise it for light that has met no glass — a render or a synthetic chart — or to stand in for glass worse than the camera's.",
+        "kind" : "double",
+        "label" : "Veiling Glare",
+        "max" : 2,
+        "min" : 0,
+        "ofxName" : "flare",
+        "order" : 80,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 18,
+        "slotSymbol" : "FLARE_SCALE",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "every photograph the app develops already carries its own lens's glare",
+        "app" : "every photograph the app develops already carries its own lens's glare",
+        "desktop" : "every photograph the app develops already carries its own lens's glare",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scale" : {
+        "admittedMax" : 2,
+        "admittedMin" : 0,
+        "max" : 2,
+        "min" : 0,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "multiplier"
+      },
+      "scope" : "hostOnly",
+      "section" : "lensGlass",
+      "surfaces" : [
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Veiling Glare"
+    },
+    {
+      "availability" : "always",
+      "choices" : [
+        {
+          "detail" : "",
+          "id" : "multiCoated",
+          "label" : "Multi-coated",
+          "value" : 0
+        },
+        {
+          "detail" : "",
+          "id" : "singleLayer",
+          "label" : "Single-coated",
+          "value" : 1
+        },
+        {
+          "detail" : "",
+          "id" : "uncoated",
+          "label" : "Uncoated",
+          "value" : 2
+        }
+      ],
+      "commandLineFlag" : "--filter-coating",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "uncoated, singleLayer or multiCoated (default). Sets what each face reflects, and so what the filter costs in light and adds in veiling glare",
+      "commandLinePlaceholder" : "<c>",
+      "detail" : "Coating on every fitted absorbing and diffusion filter",
+      "drives" : [
+
+      ],
+      "field" : "filterCoating",
+      "group" : "lens",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "choices" : [
+          {
+            "detail" : "",
+            "id" : "multiCoated",
+            "label" : "Multi-coated",
+            "value" : 0
+          },
+          {
+            "detail" : "",
+            "id" : "singleLayer",
+            "label" : "Single-coated",
+            "value" : 1
+          },
+          {
+            "detail" : "",
+            "id" : "uncoated",
+            "label" : "Uncoated",
+            "value" : 2
+          }
+        ],
+        "composed" : false,
+        "group" : "lensAdvanced",
+        "hint" : "Coating on every fitted absorbing and diffusion filter. Changes transmission and added glare. Multicoated preserves the existing filter look.",
+        "kind" : "choice",
+        "label" : "Filter Coating",
+        "ofxName" : "filterCoating",
+        "order" : 10,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 41,
+        "slotSymbol" : "FILTER_COATING",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "no lens filters on Android yet",
+        "app" : "the Lens deck's filters are multi-coated",
+        "desktop" : "the Lens panel's filters are multi-coated",
+        "finalcut" : "not yet offered; the filters are multi-coated",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scope" : "hostOnly",
+      "section" : "lensGlass",
+      "surfaces" : [
+        "resolve",
+        "cli"
+      ],
+      "title" : "Filter Coating"
+    },
+    {
+      "availability" : "always",
+      "detail" : "Correct the lens the photograph was taken with",
+      "documentation" : "Enables the matched lens profile or the calibrated camera profile.",
+      "drives" : [
+
+      ],
+      "field" : "lensCorrection",
+      "group" : "lens",
+      "kind" : "toggle",
+      "omitted" : {
+        "android" : "no lens correction on Android yet",
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "persistedKey" : "lensCorrectionEnabled",
+      "restingOn" : false,
+      "scope" : "edit",
+      "section" : "lensCorrection",
+      "storedEncoding" : "same",
+      "surfaces" : [
+        "app",
+        "desktop"
+      ],
+      "title" : "Lens Correction"
+    },
+    {
+      "availability" : "always",
+      "detail" : "The profile to correct against, or the matched one",
+      "documentation" : "Identifies the matched lens model.",
+      "drives" : [
+
+      ],
+      "dynamicMenu" : "lensProfiles",
+      "field" : "lensProfile",
+      "group" : "lens",
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "no lens correction on Android yet",
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scope" : "edit",
+      "section" : "lensCorrection",
+      "surfaces" : [
+        "app",
+        "desktop"
+      ],
+      "title" : "Lens"
+    },
+    {
+      "availability" : "always",
+      "detail" : "How much of the matched profile to apply",
+      "documentation" : "Sets overall correction intensity.",
+      "drives" : [
+
+      ],
+      "field" : "lensAmount",
+      "group" : "lens",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "no lens correction on Android yet",
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "persistedKey" : "lensProfileAmount",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : 0,
+        "max" : 1,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "lensCorrection",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop"
+      ],
+      "title" : "Amount"
+    },
+    {
+      "availability" : "always",
+      "detail" : "Barrel at −1, pincushion at +1",
+      "documentation" : "Corrects or introduces radial barrel and pincushion distortion.",
+      "drives" : [
+
+      ],
+      "field" : "lensDistortion",
+      "group" : "lens",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "no lens correction on Android yet",
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lensCorrection",
+      "surfaces" : [
+        "app",
+        "desktop"
+      ],
+      "title" : "Distortion"
+    },
+    {
+      "availability" : "always",
+      "detail" : "Corners darker at −1, lifted at +1",
+      "documentation" : "Compensates for peripheral illumination falloff.",
+      "drives" : [
+
+      ],
+      "field" : "lensVignetting",
+      "group" : "lens",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "no lens correction on Android yet",
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lensCorrection",
+      "surfaces" : [
+        "app",
+        "desktop"
+      ],
+      "title" : "Vignetting"
+    },
+    {
+      "availability" : "always",
+      "detail" : "Lateral chromatic aberration, red against cyan",
+      "documentation" : "Corrects lateral chromatic aberration by scaling the red channel radially.",
+      "drives" : [
+
+      ],
+      "field" : "lensRedCyan",
+      "group" : "lens",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "no lens correction on Android yet",
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lensCorrection",
+      "surfaces" : [
+        "app",
+        "desktop"
+      ],
+      "title" : "Red / Cyan"
+    },
+    {
+      "availability" : "always",
+      "detail" : "Lateral chromatic aberration, blue against yellow",
+      "documentation" : "Corrects lateral chromatic aberration by scaling the blue channel radially.",
+      "drives" : [
+
+      ],
+      "field" : "lensBlueYellow",
+      "group" : "lens",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "no lens correction on Android yet",
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lensCorrection",
+      "surfaces" : [
+        "app",
+        "desktop"
+      ],
+      "title" : "Blue / Yellow"
+    },
+    {
+      "availability" : "always",
+      "binding" : "exposureEV",
+      "commandLineFlag" : "--ev",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Exposure compensation in stops (default: 0)",
+      "commandLinePlaceholder" : "<stops>",
+      "detail" : "Exposure compensation, in stops",
+      "documentation" : "Adjusts exposure in stops (EV) before film simulation.",
+      "drives" : [
+
+      ],
+      "field" : "exposure",
+      "group" : "light",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 6,
+        "group" : "exposure",
+        "hint" : "Camera exposure, in stops.",
+        "kind" : "double",
+        "label" : "Exposure",
+        "max" : 5,
+        "min" : -5,
+        "ofxName" : "exposure",
+        "order" : 10,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 0,
+        "slotSymbol" : "EXPOSURE_EV",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+
+      },
+      "persistedKey" : "exposure",
+      "scale" : {
+        "admittedMax" : 5,
+        "admittedMin" : -5,
+        "max" : 2,
+        "min" : -2,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "stops"
+      },
+      "scope" : "edit",
+      "section" : "lightExposure",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Exposure",
+      "webConfigSlot" : "FOTUFILM_CONFIG_EXPOSURE_GAIN",
+      "webTransform" : "exp2"
+    },
+    {
+      "availability" : "always",
+      "binding" : "highlights",
+      "commandLineFlag" : "--highlights",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Scene-referred shaping above mid-grey, -1...1 (default: 0)",
+      "commandLinePlaceholder" : "<n>",
+      "detail" : "Scene-referred shaping above mid-grey, before the film",
+      "documentation" : "Scales scene radiance above 18% neutral gray.",
+      "drives" : [
+
+      ],
+      "field" : "highlights",
+      "group" : "light",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1,
+        "clampMin" : -1,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 9,
+        "group" : "exposure",
+        "hint" : "Scene-referred highlight recovery, applied before the film model. Keyed to each pixel's regional brightness, so pulling a sky down moves the sky as one piece.",
+        "kind" : "double",
+        "label" : "Highlights",
+        "max" : 1,
+        "min" : -1,
+        "ofxName" : "highlights",
+        "order" : 40,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 3,
+        "slotSymbol" : "HIGHLIGHTS",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+
+      },
+      "persistedKey" : "highlights",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lightExposure",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Highlights",
+      "webConfigSlot" : "FOTUFILM_CONFIG_HIGHLIGHTS",
+      "webTransform" : "identity"
+    },
+    {
+      "availability" : "always",
+      "binding" : "shadows",
+      "commandLineFlag" : "--shadows",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "The same shaping below mid-grey, -1...1 (default: 0)",
+      "commandLinePlaceholder" : "<n>",
+      "detail" : "The same shaping below mid-grey",
+      "documentation" : "Scales scene radiance below 18% neutral gray.",
+      "drives" : [
+
+      ],
+      "field" : "shadows",
+      "group" : "light",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1,
+        "clampMin" : -1,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 10,
+        "group" : "exposure",
+        "hint" : "The same shift, fading in below mid-grey.",
+        "kind" : "double",
+        "label" : "Shadows",
+        "max" : 1,
+        "min" : -1,
+        "ofxName" : "shadows",
+        "order" : 50,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 4,
+        "slotSymbol" : "SHADOWS",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+
+      },
+      "persistedKey" : "shadows",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lightExposure",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Shadows",
+      "webConfigSlot" : "FOTUFILM_CONFIG_SHADOWS",
+      "webTransform" : "identity"
+    },
+    {
+      "availability" : "always",
+      "binding" : "localTone",
+      "commandLineFlag" : "--local-tone",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Regional highlight/shadow keying (default: 1)",
+      "commandLinePlaceholder" : "<0|1>",
+      "detail" : "Key the two shapings above to each pixel's surroundings",
+      "documentation" : "Applies spatially aware contrast compression across adjacent luminance zones.",
+      "drives" : [
+
+      ],
+      "field" : "localTone",
+      "group" : "light",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : false,
+        "fxplugID" : 11,
+        "group" : "exposure",
+        "hint" : "Off, the highlight and shadow shifts key to each pixel's own luminance instead of to the region it sits in. Identical output when both rest at zero.",
+        "kind" : "boolean",
+        "label" : "Regional Tone Mask",
+        "ofxName" : "localTone",
+        "order" : 60,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 11,
+        "slotSymbol" : "LOCAL_TONE",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "toggle",
+      "omitted" : {
+        "web" : "the regional base is measured from the image, which the pack cannot carry"
+      },
+      "persistedKey" : "localTone",
+      "restingOn" : true,
+      "scope" : "edit",
+      "section" : "lightExposure",
+      "storedEncoding" : "same",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Regional"
+    },
+    {
+      "availability" : "always",
+      "binding" : "warmth",
+      "commandLineFlag" : "--wb",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Scene illuminant, 2000-12000 K. Unset, an already white-balanced file is lit at the stock's own balance, so a neutral renders neutral. On camera raw this is relative to the file's as-shot light; 6504 preserves the capture illuminant",
+      "commandLinePlaceholder" : "<kelvin>",
+      "detail" : "The illuminant the scene is declared to have been lit by",
+      "documentation" : "Changes scene-light temperature; RAW edits are relative to the capture illuminant.",
+      "drives" : [
+
+      ],
+      "field" : "warmth",
+      "group" : "light",
+      "host" : {
+        "animates" : true,
+        "bridge" : "kelvinFromWarmth",
+        "clampMax" : 12000,
+        "clampMin" : 2000,
+        "composed" : false,
+        "delta" : 10,
+        "fxplugID" : 7,
+        "group" : "exposure",
+        "hint" : "Spectral scene temperature. Lower Kelvin adds warm light. Relative in mired to Scene Illuminant when a base lamp is selected; 6504 leaves that lamp unchanged.",
+        "kind" : "double",
+        "label" : "Temperature (K)",
+        "max" : 12000,
+        "min" : 2000,
+        "ofxName" : "temperature",
+        "order" : 20,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 1,
+        "slotSymbol" : "TEMPERATURE",
+        "value" : 6504,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "web" : "the demo bakes the scene light into the pack"
+      },
+      "persistedKey" : "temperatureMired",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lightBalance",
+      "storedEncoding" : "miredFromWarmth",
+      "storedNeutral" : 153.7515411376953,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Warmth"
+    },
+    {
+      "availability" : "always",
+      "binding" : "tint",
+      "commandLineFlag" : "--tint",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Green/magenta off the locus, -100...100 (default: 0)",
+      "commandLinePlaceholder" : "<n>",
+      "detail" : "Green and magenta off the daylight locus",
+      "documentation" : "Changes the scene spectrum toward green or magenta, perpendicular to the blended blackbody/daylight locus.",
+      "drives" : [
+
+      ],
+      "field" : "tint",
+      "group" : "light",
+      "host" : {
+        "animates" : true,
+        "bridge" : "duvFromPadTint",
+        "clampMax" : 100,
+        "clampMin" : -100,
+        "composed" : false,
+        "delta" : 0.5,
+        "fxplugID" : 8,
+        "group" : "exposure",
+        "hint" : "Green/magenta balance of the illuminant.",
+        "kind" : "double",
+        "label" : "Tint",
+        "max" : 100,
+        "min" : -100,
+        "ofxName" : "tint",
+        "order" : 30,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 2,
+        "slotSymbol" : "TINT",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "web" : "the demo bakes the scene light into the pack"
+      },
+      "persistedKey" : "tint",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lightBalance",
+      "storedEncoding" : "duvFromPadTint",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Tint"
+    },
+    {
+      "availability" : "always",
+      "choices" : [
+        {
+          "detail" : "",
+          "id" : "unspecified",
+          "label" : "Unspecified · D65",
+          "value" : 0
+        },
+        {
+          "detail" : "",
+          "id" : "d65",
+          "label" : "Daylight · D65",
+          "value" : 6504
+        },
+        {
+          "detail" : "",
+          "id" : "daylight5500",
+          "label" : "Daylight · 5500 K",
+          "value" : 5500
+        },
+        {
+          "detail" : "",
+          "id" : "tungsten3200",
+          "label" : "Tungsten · 3200 K",
+          "value" : 3200
+        },
+        {
+          "detail" : "",
+          "id" : "incandescent",
+          "label" : "Incandescent · 2856 K",
+          "value" : 2856
+        },
+        {
+          "detail" : "",
+          "id" : "custom",
+          "label" : "Custom"
+        }
+      ],
+      "detail" : "Capture light presented to the film; Temperature and Tint adjust this spectrum",
+      "drives" : [
+        "sceneIlluminantKelvin"
+      ],
+      "field" : "sceneLight",
+      "group" : "light",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "choices" : [
+          {
+            "detail" : "",
+            "id" : "unspecified",
+            "label" : "Unspecified · D65",
+            "value" : 0
+          },
+          {
+            "detail" : "",
+            "id" : "d65",
+            "label" : "Daylight · D65",
+            "value" : 6504
+          },
+          {
+            "detail" : "",
+            "id" : "daylight5500",
+            "label" : "Daylight · 5500 K",
+            "value" : 5500
+          },
+          {
+            "detail" : "",
+            "id" : "tungsten3200",
+            "label" : "Tungsten · 3200 K",
+            "value" : 3200
+          },
+          {
+            "detail" : "",
+            "id" : "incandescent",
+            "label" : "Incandescent · 2856 K",
+            "value" : 2856
+          },
+          {
+            "detail" : "",
+            "id" : "custom",
+            "label" : "Custom"
+          }
+        ],
+        "composed" : true,
+        "group" : "sceneLight",
+        "hint" : "Capture light presented to the film; Temperature and Tint adjust this spectrum. Unspecified light assumes D65. Custom sources use a daylight or Planckian spectrum, not a measured LED spectrum.",
+        "kind" : "choice",
+        "label" : "Scene Illuminant",
+        "ofxName" : "sceneLight",
+        "order" : 10,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 33,
+        "slotSymbol" : "SCENE_ILLUMINANT",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "read from the capture metadata",
+        "app" : "read from the capture metadata",
+        "cli" : "--wb states the scene light directly",
+        "desktop" : "read from the capture metadata",
+        "finalcut" : "not yet offered; the clip's light is taken as D65",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scope" : "hostOnly",
+      "section" : "lightBalance",
+      "surfaces" : [
+        "resolve"
+      ],
+      "title" : "Scene Illuminant"
+    },
+    {
+      "availability" : "always",
+      "detail" : "Custom capture light before the Temperature and Tint edits",
+      "drives" : [
+        "sceneIlluminantKelvin"
+      ],
+      "field" : "sceneLightKelvin",
+      "group" : "light",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : true,
+        "delta" : 10,
+        "group" : "sceneLight",
+        "hint" : "Custom capture light before the Temperature and Tint edits.",
+        "kind" : "double",
+        "label" : "Scene Illuminant (K)",
+        "max" : 12000,
+        "min" : 2000,
+        "ofxName" : "sceneLightKelvin",
+        "order" : 20,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "value" : 6504,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "read from the capture metadata",
+        "app" : "read from the capture metadata",
+        "cli" : "--wb states the scene light directly",
+        "desktop" : "read from the capture metadata",
+        "finalcut" : "not yet offered; the clip's light is taken as D65",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scale" : {
+        "admittedMax" : 12000,
+        "admittedMin" : 2000,
+        "max" : 12000,
+        "min" : 2000,
+        "neutral" : 6504,
+        "stops" : [
+
+        ],
+        "unit" : "kelvin"
+      },
+      "scope" : "hostOnly",
+      "section" : "lightBalance",
+      "surfaces" : [
+        "resolve"
+      ],
+      "title" : "Scene Illuminant (K)"
+    },
+    {
+      "availability" : "always",
+      "binding" : "saturation",
+      "commandLineFlag" : "--saturation",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Chroma multiplier before the film responds (default: 1)",
+      "commandLinePlaceholder" : "<scale>",
+      "detail" : "Chroma about each pixel's own luminance",
+      "documentation" : "Scales radial chroma across all hues uniformly.",
+      "drives" : [
+
+      ],
+      "field" : "saturation",
+      "group" : "light",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1.7976931348623157e+308,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 12,
+        "group" : "exposure",
+        "hint" : "Chroma multiplier applied to the scene before the film responds. 1 leaves it untouched.",
+        "kind" : "double",
+        "label" : "Saturation",
+        "max" : 2,
+        "min" : 0,
+        "ofxName" : "saturation",
+        "order" : 70,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 5,
+        "slotSymbol" : "SATURATION",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+
+      },
+      "persistedKey" : "saturation",
+      "scale" : {
+        "admittedMax" : 2,
+        "admittedMin" : 0,
+        "max" : 2,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "multiplier"
+      },
+      "scope" : "edit",
+      "section" : "lightColor",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Saturation",
+      "webConfigSlot" : "FOTUFILM_CONFIG_SATURATION",
+      "webTransform" : "identity"
+    },
+    {
+      "availability" : "always",
+      "binding" : "vibrance",
+      "commandLineFlag" : "--vibrance",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Chroma boost weighted toward the least colourful pixels, -1...1 (default: 0)",
+      "commandLinePlaceholder" : "<n>",
+      "detail" : "Chroma weighted toward the least colourful pixels",
+      "documentation" : "Scales chroma non-linearly, prioritizing muted tones.",
+      "drives" : [
+
+      ],
+      "field" : "vibrance",
+      "group" : "light",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1,
+        "clampMin" : -1,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 13,
+        "group" : "exposure",
+        "hint" : "Chroma boost weighted toward the least colourful pixels; already-vivid colours are left alone.",
+        "kind" : "double",
+        "label" : "Vibrance",
+        "max" : 1,
+        "min" : -1,
+        "ofxName" : "vibrance",
+        "order" : 80,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 6,
+        "slotSymbol" : "VIBRANCE",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+
+      },
+      "persistedKey" : "vibrance",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lightColor",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Vibrance",
+      "webConfigSlot" : "FOTUFILM_CONFIG_VIBRANCE",
+      "webTransform" : "identity"
+    },
+    {
+      "availability" : "always",
+      "binding" : "gradeSpaceEncoded",
+      "detail" : "Correct the encoded signal rather than the light itself",
+      "documentation" : "Grades the sRGB-encoded signal, where a grading suite's corrector works, instead of display-linear light.",
+      "drives" : [
+
+      ],
+      "field" : "gradeSpace",
+      "group" : "light",
+      "kind" : "toggle",
+      "omitted" : {
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "persistedKey" : "encodedGrade",
+      "restingOn" : false,
+      "scope" : "edit",
+      "section" : "lightGrade",
+      "storedEncoding" : "same",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android"
+      ],
+      "title" : "Encoded Grade"
+    },
+    {
+      "availability" : "always",
+      "binding" : "grade(FotufilmEditModel.GradeBand.shadows, FotufilmEditModel.GradeAxis.warmth)",
+      "detail" : "Cool to warm, in the shadows",
+      "drives" : [
+
+      ],
+      "field" : "gradeShadowsWarmth",
+      "group" : "light",
+      "kind" : "slider",
+      "omitted" : {
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lightGrade",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android"
+      ],
+      "title" : "Shadows Warmth"
+    },
+    {
+      "availability" : "always",
+      "binding" : "grade(FotufilmEditModel.GradeBand.shadows, FotufilmEditModel.GradeAxis.tint)",
+      "detail" : "Magenta to green, in the shadows",
+      "drives" : [
+
+      ],
+      "field" : "gradeShadowsTint",
+      "group" : "light",
+      "kind" : "slider",
+      "omitted" : {
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lightGrade",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android"
+      ],
+      "title" : "Shadows Tint"
+    },
+    {
+      "availability" : "always",
+      "binding" : "grade(FotufilmEditModel.GradeBand.shadows, FotufilmEditModel.GradeAxis.level)",
+      "detail" : "How far the shadows are carried",
+      "drives" : [
+
+      ],
+      "field" : "gradeShadowsLevel",
+      "group" : "light",
+      "kind" : "slider",
+      "omitted" : {
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lightGrade",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android"
+      ],
+      "title" : "Shadows Level"
+    },
+    {
+      "availability" : "always",
+      "binding" : "grade(FotufilmEditModel.GradeBand.midtones, FotufilmEditModel.GradeAxis.warmth)",
+      "detail" : "Cool to warm, in the midtones",
+      "drives" : [
+
+      ],
+      "field" : "gradeMidtonesWarmth",
+      "group" : "light",
+      "kind" : "slider",
+      "omitted" : {
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lightGrade",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android"
+      ],
+      "title" : "Midtones Warmth"
+    },
+    {
+      "availability" : "always",
+      "binding" : "grade(FotufilmEditModel.GradeBand.midtones, FotufilmEditModel.GradeAxis.tint)",
+      "detail" : "Magenta to green, in the midtones",
+      "drives" : [
+
+      ],
+      "field" : "gradeMidtonesTint",
+      "group" : "light",
+      "kind" : "slider",
+      "omitted" : {
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lightGrade",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android"
+      ],
+      "title" : "Midtones Tint"
+    },
+    {
+      "availability" : "always",
+      "binding" : "grade(FotufilmEditModel.GradeBand.midtones, FotufilmEditModel.GradeAxis.level)",
+      "detail" : "How far the midtones are carried",
+      "drives" : [
+
+      ],
+      "field" : "gradeMidtonesLevel",
+      "group" : "light",
+      "kind" : "slider",
+      "omitted" : {
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lightGrade",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android"
+      ],
+      "title" : "Midtones Level"
+    },
+    {
+      "availability" : "always",
+      "binding" : "grade(FotufilmEditModel.GradeBand.highlights, FotufilmEditModel.GradeAxis.warmth)",
+      "detail" : "Cool to warm, in the highlights",
+      "drives" : [
+
+      ],
+      "field" : "gradeHighlightsWarmth",
+      "group" : "light",
+      "kind" : "slider",
+      "omitted" : {
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lightGrade",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android"
+      ],
+      "title" : "Highlights Warmth"
+    },
+    {
+      "availability" : "always",
+      "binding" : "grade(FotufilmEditModel.GradeBand.highlights, FotufilmEditModel.GradeAxis.tint)",
+      "detail" : "Magenta to green, in the highlights",
+      "drives" : [
+
+      ],
+      "field" : "gradeHighlightsTint",
+      "group" : "light",
+      "kind" : "slider",
+      "omitted" : {
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lightGrade",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android"
+      ],
+      "title" : "Highlights Tint"
+    },
+    {
+      "availability" : "always",
+      "binding" : "grade(FotufilmEditModel.GradeBand.highlights, FotufilmEditModel.GradeAxis.level)",
+      "detail" : "How far the highlights are carried",
+      "drives" : [
+
+      ],
+      "field" : "gradeHighlightsLevel",
+      "group" : "light",
+      "kind" : "slider",
+      "omitted" : {
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "lightGrade",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android"
+      ],
+      "title" : "Highlights Level"
+    },
+    {
+      "availability" : "printStage",
+      "commandLineFlag" : "--paper",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Output medium: ektacolor-edge (default), endura-premier, crystal-archive, vision-2383, vision-2393, eterna-cp, lab-scan, telecine, screen or negative. Photo and projection variants are digitised from the manufacturers' published datasheets. Reversal stocks use screen regardless of the requested medium.",
+      "commandLinePlaceholder" : "<name>",
+      "detail" : "Choose where the finished image will live",
+      "documentation" : "Selects the print paper, projection print, scan, display reference or the negative itself.",
+      "drives" : [
+        "paper"
+      ],
+      "dynamicMenu" : "papers",
+      "field" : "paper",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : false,
+        "dynamicMenu" : "papers",
+        "fxplugID" : 4,
+        "group" : "output",
+        "hint" : "Choose where the finished image lives. Match Film uses RA-4 paper for a still negative, the stock's native release print for a motion negative, and the direct positive for reversal film. Digital Reference is the HDR path; paper, projection, Lab Scan, Telecine and Negative are SDR. Negative is available only for negative film.",
+        "kind" : "menu",
+        "label" : "Output Medium",
+        "ofxName" : "paper",
+        "order" : 10,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "value" : -1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Output Medium"
+    },
+    {
+      "availability" : "printStage",
+      "binding" : "printViewingKelvin",
+      "commandLineFlag" : "--print-light",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Colour temperature the finished print is viewed under, in kelvin: daylight series from 4000 K up (5003 = D50 proof light), Planckian below (2856 = tungsten). Greys hold — the read adapts to the light — and the paper dyes' metamerism moves. Default: D50 for paper, calibrated 5400 K xenon for cinema print, fixed D65 for screen",
+      "commandLinePlaceholder" : "<k>",
+      "detail" : "Choose the light used to judge a physical print",
+      "documentation" : "Sets the lamp a physical print is judged under; digital media ignore it.",
+      "drives" : [
+
+      ],
+      "dynamicMenu" : "viewingLights",
+      "field" : "printLight",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "choices" : [
+          {
+            "detail" : "D50 for photo paper, calibrated 5400 K xenon for a release print",
+            "id" : "reference",
+            "label" : "Medium Reference · Auto"
+          },
+          {
+            "detail" : "Standard neutral light for judging prints",
+            "id" : "d50",
+            "label" : "Proofing Booth · D50",
+            "value" : 5003
+          },
+          {
+            "detail" : "A warm indoor lamp",
+            "id" : "tungsten",
+            "label" : "Tungsten · 2856 K",
+            "value" : 2856
+          },
+          {
+            "detail" : "Cooler daylight",
+            "id" : "d65",
+            "label" : "Daylight · D65",
+            "value" : 6504
+          }
+        ],
+        "composed" : false,
+        "fxplugID" : 25,
+        "group" : "output",
+        "hint" : "Choose the light used to judge a physical print. Medium Reference means D50 for photo paper or calibrated 5400 K xenon for a projected release print. Digital Reference, Lab Scan, Telecine and Negative ignore this control.",
+        "kind" : "choice",
+        "label" : "Viewing Illuminant",
+        "ofxName" : "printLight",
+        "order" : 20,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 15,
+        "slotSymbol" : "PRINT_LIGHT",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Viewing Illuminant"
+    },
+    {
+      "availability" : "printStage",
+      "binding" : "enlargerIndex",
+      "choices" : [
+        {
+          "detail" : "Soft, even light through a mixing box: the negative prints at its measured density, as in a colour head or a minilab",
+          "id" : "diffuser",
+          "label" : "Diffuser",
+          "value" : 0
+        },
+        {
+          "detail" : "Collimated light: silver grain scatters some of it out of the beam, so a black-and-white negative prints harder and its grain and dust sharper",
+          "id" : "condenser",
+          "label" : "Condenser",
+          "value" : 1
+        }
+      ],
+      "commandLineFlag" : "--enlarger",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Lamp house over the negative: diffuser (default, the diffuse density the sheets are measured in) or condenser (collimated light: the Callier effect reads a silver negative's densities ~1.4x higher, a dye negative's ~1.05x, re-timed through mid-grey, so the print gains contrast). --bleach-bypass leaves retained silver, which scatters like a silver negative and takes the silver figure. Only an enlarged reflection print has one",
+      "commandLinePlaceholder" : "<head>",
+      "detail" : "Choose the lamp house the negative is printed under",
+      "documentation" : "Chooses a diffuser or condenser head for an enlarged reflection print.",
+      "drives" : [
+
+      ],
+      "field" : "enlarger",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "choices" : [
+          {
+            "detail" : "",
+            "id" : "diffuser",
+            "label" : "Diffuser",
+            "value" : 0
+          },
+          {
+            "detail" : "",
+            "id" : "condenser",
+            "label" : "Condenser",
+            "value" : 1
+          }
+        ],
+        "composed" : false,
+        "fxplugID" : 91,
+        "group" : "output",
+        "hint" : "The lamp house a reflection print is enlarged under. Diffuser is the sheets' own diffuse read and changes nothing; Condenser prints a silver negative harder through the Callier effect. Read only where the medium is an enlarged reflection print.",
+        "kind" : "choice",
+        "label" : "Enlarger",
+        "ofxName" : "enlarger",
+        "order" : 25,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 52,
+        "slotSymbol" : "ENLARGER",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Enlarger"
+    },
+    {
+      "availability" : "printStage",
+      "binding" : "printCorrection",
+      "commandLineFlag" : "--print-correction",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "How far the film's colour layers are balanced to print together, 0-1 (default: 0.05)",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Balance how the film's colour layers print together",
+      "documentation" : "Balances how the film's colour layers print together on the chosen medium.",
+      "drives" : [
+
+      ],
+      "field" : "printCorrection",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1.7976931348623157e+308,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 20,
+        "group" : "output",
+        "hint" : "Balances how the film's colour layers print together. The medium's own calibration is already applied; raise this only for a more neutral crossover.",
+        "kind" : "double",
+        "label" : "Channel Contrast Match",
+        "max" : 1,
+        "min" : 0,
+        "ofxName" : "printCorrection",
+        "order" : 30,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 10,
+        "slotSymbol" : "PRINT_CORRECTION",
+        "value" : 0.05,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "persistedKey" : "printCorrection",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : 0,
+        "max" : 1,
+        "min" : 0,
+        "neutral" : 0.05,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0.05,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Channel Contrast Match"
+    },
+    {
+      "availability" : "always",
+      "binding" : "negativeViewingIndex",
+      "commandLineFlag" : "--negative",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Show the developed negative instead of the print it would make: 'lightbox' keeps the base its own orange, 'scanner' divides the base out. Ignored by a reversal stock, which has no negative",
+      "commandLinePlaceholder" : "<how>",
+      "detail" : "How the developed negative is read when the output is the negative",
+      "drives" : [
+
+      ],
+      "dynamicMenu" : "negativeViewings",
+      "field" : "negativeViewing",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "indexPlusOne",
+        "composed" : false,
+        "dynamicMenu" : "negativeViewings",
+        "fxplugID" : 80,
+        "group" : "output",
+        "hint" : "How the developed negative is read when Output Medium is Negative. Light Box sets the lamp so the clear film base sits just under white and keeps its orange. Scanner divides by the film base, so the base reads white. Other output media ignore this control.",
+        "kind" : "menu",
+        "label" : "Negative Viewing",
+        "ofxName" : "negativeViewing",
+        "order" : 40,
+        "paramOffset" : 1,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 28,
+        "slotSymbol" : "NEGATIVE_VIEWING",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "Settings chooses the lightbox or scanner reading",
+        "app" : "Settings chooses the lightbox or scanner reading",
+        "desktop" : "Settings chooses the lightbox or scanner reading",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scope" : "global",
+      "section" : "printPaper",
+      "settingKey" : "fotufilm.negative-viewing",
+      "surfaces" : [
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Negative Viewing"
+    },
+    {
+      "availability" : "always",
+      "detail" : "The part of the frame the print is made from",
+      "documentation" : "Chooses the part of the frame the print is made from.",
+      "drives" : [
+
+      ],
+      "field" : "crop",
+      "group" : "frame",
+      "kind" : "takeover",
+      "omitted" : {
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scope" : "edit",
+      "section" : "frameGeometry",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android"
+      ],
+      "title" : "Crop"
+    },
+    {
+      "availability" : "always",
+      "detail" : "Rotation off level, in degrees",
+      "documentation" : "Rotates the frame off level by up to fifteen degrees.",
+      "drives" : [
+
+      ],
+      "field" : "straighten",
+      "group" : "frame",
+      "kind" : "slider",
+      "omitted" : {
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "persistedKey" : "straighten",
+      "scale" : {
+        "admittedMax" : 15,
+        "admittedMin" : -15,
+        "max" : 15,
+        "min" : -15,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "degrees"
+      },
+      "scope" : "edit",
+      "section" : "frameGeometry",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android"
+      ],
+      "title" : "Straighten"
+    },
+    {
+      "availability" : "always",
+      "detail" : "Keystone about the horizontal axis",
+      "documentation" : "Tilts the picture plane about the horizontal axis.",
+      "drives" : [
+
+      ],
+      "field" : "perspectiveVertical",
+      "group" : "frame",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "the Android crop has no keystone yet",
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "persistedKey" : "perspectiveV",
+      "scale" : {
+        "admittedMax" : 15,
+        "admittedMin" : -15,
+        "max" : 15,
+        "min" : -15,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "degrees"
+      },
+      "scope" : "edit",
+      "section" : "frameGeometry",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop"
+      ],
+      "title" : "Vertical"
+    },
+    {
+      "availability" : "always",
+      "detail" : "Keystone about the vertical axis",
+      "documentation" : "Tilts the picture plane about the vertical axis.",
+      "drives" : [
+
+      ],
+      "field" : "perspectiveHorizontal",
+      "group" : "frame",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "the Android crop has no keystone yet",
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "persistedKey" : "perspectiveH",
+      "scale" : {
+        "admittedMax" : 15,
+        "admittedMin" : -15,
+        "max" : 15,
+        "min" : -15,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "degrees"
+      },
+      "scope" : "edit",
+      "section" : "frameGeometry",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop"
+      ],
+      "title" : "Horizontal"
+    },
+    {
+      "availability" : "always",
+      "choices" : [
+        {
+          "detail" : "",
+          "id" : "0",
+          "label" : "Upright",
+          "value" : 0
+        },
+        {
+          "detail" : "",
+          "id" : "90",
+          "label" : "90°",
+          "value" : 1
+        },
+        {
+          "detail" : "",
+          "id" : "180",
+          "label" : "180°",
+          "value" : 2
+        },
+        {
+          "detail" : "",
+          "id" : "270",
+          "label" : "270°",
+          "value" : 3
+        }
+      ],
+      "detail" : "Quarter turns clockwise",
+      "documentation" : "Turns the frame in quarter turns.",
+      "drives" : [
+
+      ],
+      "field" : "rotation",
+      "group" : "frame",
+      "kind" : "menu",
+      "omitted" : {
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scope" : "edit",
+      "section" : "frameGeometry",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android"
+      ],
+      "title" : "Rotate"
+    },
+    {
+      "availability" : "always",
+      "detail" : "Mirror the frame left to right",
+      "documentation" : "Mirrors the frame left to right.",
+      "drives" : [
+
+      ],
+      "field" : "flip",
+      "group" : "frame",
+      "kind" : "toggle",
+      "omitted" : {
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "persistedKey" : "flipH",
+      "restingOn" : false,
+      "scope" : "edit",
+      "section" : "frameGeometry",
+      "storedEncoding" : "same",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android"
+      ],
+      "title" : "Flip"
+    },
+    {
+      "availability" : "always",
+      "detail" : "The same light and colour controls, over part of the frame",
+      "documentation" : "Develops a colour, a light or a subject differently from the rest of the frame.",
+      "drives" : [
+
+      ],
+      "field" : "selective",
+      "group" : "frame",
+      "kind" : "takeover",
+      "omitted" : {
+        "android" : "no selective edits on Android yet",
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "scope" : "edit",
+      "section" : "frameLocal",
+      "surfaces" : [
+        "app",
+        "desktop"
+      ],
+      "title" : "Selective"
+    },
+    {
+      "availability" : "always",
+      "detail" : "What this node is being handed",
+      "drives" : [
+
+      ],
+      "dynamicMenu" : "colourSpaces",
+      "field" : "colorSpace",
+      "group" : "pipeline",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : false,
+        "dynamicMenu" : "colourSpaces",
+        "fxplugID" : 5,
+        "group" : "input",
+        "hint" : "What this node is being handed — the one control that is not taste. The film model is scene-referred in linear Rec.2020: mid-grey at 0.18, specular highlights above 1.0. The input is decoded to that and the result encoded back, so a wrong setting shows the emulsion the wrong light and lands the characteristic curves whole stops off. Auto reads the space the host tags the clip with, where the host says. A display-referred space (Rec.709, sRGB) clips at diffuse white, leaving halation nothing bright to scatter; a wide-gamut log or linear timeline keeps the highlights the model was built for.",
+        "kind" : "menu",
+        "label" : "Timeline Color Space",
+        "ofxName" : "colorSpace",
+        "order" : 10,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "value" : 7,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "a plugin host's own setting, with no meaning on a photograph",
+        "app" : "a plugin host's own setting, with no meaning on a photograph",
+        "cli" : "the command line renders the full pipeline end to end",
+        "desktop" : "a plugin host's own setting, with no meaning on a photograph",
+        "web" : "the demo renders one still through a sealed pack"
+      },
+      "scope" : "hostOnly",
+      "section" : "pipeline",
+      "surfaces" : [
+        "resolve",
+        "finalcut"
+      ],
+      "title" : "Timeline Color Space"
+    },
+    {
+      "availability" : "always",
+      "binding" : "stageIndex",
+      "detail" : "Which span of the pipeline this node performs",
+      "drives" : [
+
+      ],
+      "dynamicMenu" : "stages",
+      "field" : "stage",
+      "group" : "pipeline",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : true,
+        "dynamicMenu" : "stages",
+        "fxplugID" : 1,
+        "group" : "stage",
+        "hint" : "Which span of the pipeline this node performs. Full is the whole thing and is what every other setting here describes. Negative Only stops at the developed negative and writes its per-layer densities — data, not a picture — and Print Only takes exactly that back and finishes it on the selected medium, so the two in series reproduce Full. Texture Only lays the film's spatial character over the frame it is handed and leaves its colour alone.\n\nA Negative Only node must feed a Print Only node directly, with the same stock and lab settings and nothing in between: the densities are not colour and anything that grades, resamples or transforms them is not editing a picture.",
+        "kind" : "menu",
+        "label" : "Stage",
+        "ofxName" : "stage",
+        "order" : 10,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 16,
+        "slotSymbol" : "STAGE",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "a plugin host's own setting, with no meaning on a photograph",
+        "app" : "a plugin host's own setting, with no meaning on a photograph",
+        "cli" : "the command line renders the full pipeline end to end",
+        "desktop" : "a plugin host's own setting, with no meaning on a photograph",
+        "web" : "the demo renders one still through a sealed pack"
+      },
+      "scope" : "hostOnly",
+      "section" : "pipeline",
+      "surfaces" : [
+        "resolve",
+        "finalcut"
+      ],
+      "title" : "Stage"
+    },
+    {
+      "availability" : "always",
+      "binding" : "textureStagesMask",
+      "detail" : "Which spatial stages the texture span lays over the frame",
+      "drives" : [
+
+      ],
+      "dynamicMenu" : "textureStages",
+      "field" : "textureStages",
+      "group" : "pipeline",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "composed" : true,
+        "dynamicMenu" : "textureStages",
+        "group" : "stage",
+        "hint" : "Whether Texture Only carries this stage. Ignored by every other stage, where the strength controls below select what runs.",
+        "kind" : "menu",
+        "label" : "Texture Stages",
+        "ofxName" : "textureSelection",
+        "order" : 30,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 17,
+        "slotSymbol" : "TEXTURE_STAGES",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "a plugin host's own setting, with no meaning on a photograph",
+        "app" : "a plugin host's own setting, with no meaning on a photograph",
+        "cli" : "the command line renders the full pipeline end to end",
+        "desktop" : "a plugin host's own setting, with no meaning on a photograph",
+        "web" : "the demo renders one still through a sealed pack"
+      },
+      "scope" : "hostOnly",
+      "section" : "pipeline",
+      "surfaces" : [
+        "resolve",
+        "finalcut"
+      ],
+      "title" : "Texture Stages"
+    },
+    {
+      "availability" : "always",
+      "choices" : [
+        {
+          "detail" : "",
+          "id" : "default",
+          "label" : "Default",
+          "value" : 0
+        },
+        {
+          "detail" : "",
+          "id" : "realtime",
+          "label" : "Realtime",
+          "value" : 1
+        },
+        {
+          "detail" : "",
+          "id" : "reference",
+          "label" : "Reference",
+          "value" : 2
+        }
+      ],
+      "detail" : "Default preserves the launch-time renderer setting",
+      "drives" : [
+
+      ],
+      "field" : "renderMode",
+      "group" : "pipeline",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "choices" : [
+          {
+            "detail" : "",
+            "id" : "default",
+            "label" : "Default",
+            "value" : 0
+          },
+          {
+            "detail" : "",
+            "id" : "realtime",
+            "label" : "Realtime",
+            "value" : 1
+          },
+          {
+            "detail" : "",
+            "id" : "reference",
+            "label" : "Reference",
+            "value" : 2
+          }
+        ],
+        "composed" : false,
+        "group" : "render",
+        "hint" : "Default preserves the launch-time renderer setting. Realtime and Reference override it for this node, for both preview and delivery. Disc grain uses Reference.",
+        "kind" : "choice",
+        "label" : "Render Mode",
+        "ofxName" : "renderMode",
+        "order" : 10,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 45,
+        "slotSymbol" : "RENDER_MODE",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "a plugin host's own setting, with no meaning on a photograph",
+        "app" : "a plugin host's own setting, with no meaning on a photograph",
+        "cli" : "the command line renders the full pipeline end to end",
+        "desktop" : "a plugin host's own setting, with no meaning on a photograph",
+        "finalcut" : "Final Cut decides the renderer from its own quality hint",
+        "web" : "the demo renders one still through a sealed pack"
+      },
+      "scope" : "hostOnly",
+      "section" : "pipeline",
+      "surfaces" : [
+        "resolve"
+      ],
+      "title" : "Render Mode"
+    }
+  ],
+  "hostGroups" : [
+    {
+      "fxplugCollapsed" : false,
+      "fxplugID" : 85,
+      "id" : "input",
+      "label" : "Input",
+      "ofxName" : "inputGroup",
+      "opensExpanded" : true
+    },
+    {
+      "fxplugCollapsed" : false,
+      "fxplugID" : 31,
+      "id" : "film",
+      "label" : "Film",
+      "ofxName" : "filmGroup",
+      "opensExpanded" : true
+    },
+    {
+      "fxplugCollapsed" : false,
+      "fxplugID" : 32,
+      "id" : "exposure",
+      "label" : "Light & Colour",
+      "ofxName" : "exposureGroup",
+      "opensExpanded" : false
+    },
+    {
+      "fxplugCollapsed" : false,
+      "id" : "sceneLight",
+      "label" : "Spectral Scene Light",
+      "ofxName" : "sceneLightGroup",
+      "opensExpanded" : false,
+      "parent" : "exposure"
+    },
+    {
+      "fxplugCollapsed" : true,
+      "fxplugID" : 72,
+      "id" : "lens",
+      "label" : "Lens & Filters",
+      "ofxName" : "lensGroup",
+      "opensExpanded" : false
+    },
+    {
+      "fxplugCollapsed" : false,
+      "id" : "lensAdvanced",
+      "label" : "Advanced",
+      "ofxName" : "lensAdvancedGroup",
+      "opensExpanded" : false,
+      "parent" : "lens"
+    },
+    {
+      "fxplugCollapsed" : true,
+      "fxplugID" : 35,
+      "id" : "lab",
+      "label" : "Development",
+      "ofxName" : "labGroup",
+      "opensExpanded" : false
+    },
+    {
+      "fxplugCollapsed" : false,
+      "fxplugID" : 34,
+      "id" : "grain",
+      "label" : "Grain",
+      "ofxName" : "filmResponseGroup",
+      "opensExpanded" : false
+    },
+    {
+      "fxplugCollapsed" : false,
+      "id" : "grainAdvanced",
+      "label" : "Advanced",
+      "ofxName" : "grainAdvancedGroup",
+      "opensExpanded" : false,
+      "parent" : "grain"
+    },
+    {
+      "fxplugCollapsed" : false,
+      "fxplugID" : 86,
+      "id" : "halation",
+      "label" : "Halation",
+      "ofxName" : "halationGroup",
+      "opensExpanded" : false
+    },
+    {
+      "fxplugCollapsed" : false,
+      "id" : "halationSpectrum",
+      "label" : "Return Spectrum",
+      "ofxName" : "halationSpectrumGroup",
+      "opensExpanded" : false,
+      "parent" : "halation"
+    },
+    {
+      "fxplugCollapsed" : false,
+      "fxplugID" : 87,
+      "id" : "coupler",
+      "label" : "Colour Separation",
+      "ofxName" : "couplerGroup",
+      "opensExpanded" : false
+    },
+    {
+      "fxplugCollapsed" : false,
+      "id" : "couplerAdvanced",
+      "label" : "Interlayer Reach",
+      "ofxName" : "couplerAdvancedGroup",
+      "opensExpanded" : false,
+      "parent" : "coupler"
+    },
+    {
+      "fxplugCollapsed" : false,
+      "fxplugID" : 36,
+      "id" : "output",
+      "label" : "Output",
+      "ofxName" : "outputGroup",
+      "opensExpanded" : true
+    },
+    {
+      "fxplugCollapsed" : true,
+      "fxplugID" : 30,
+      "id" : "stage",
+      "label" : "Pipeline",
+      "ofxName" : "stageGroup",
+      "opensExpanded" : false
+    },
+    {
+      "fxplugCollapsed" : false,
+      "id" : "render",
+      "label" : "Rendering",
+      "ofxName" : "renderGroup",
+      "opensExpanded" : false,
+      "parent" : "stage"
+    }
+  ],
+  "retiredFxplugIDs" : [
+    33
+  ],
+  "sections" : [
+    {
+      "group" : "film",
+      "groupTitle" : "Film",
+      "id" : "filmStock",
+      "title" : "Stock"
+    },
+    {
+      "group" : "film",
+      "groupTitle" : "Film",
+      "id" : "filmGrain",
+      "title" : "Grain"
+    },
+    {
+      "group" : "film",
+      "groupTitle" : "Film",
+      "id" : "filmEmulsion",
+      "title" : "Emulsion"
+    },
+    {
+      "group" : "film",
+      "groupTitle" : "Film",
+      "id" : "filmLab",
+      "title" : "Lab"
+    },
+    {
+      "group" : "lens",
+      "groupTitle" : "Lens",
+      "id" : "lensGlass",
+      "title" : "Filters"
+    },
+    {
+      "group" : "lens",
+      "groupTitle" : "Lens",
+      "id" : "lensCorrection",
+      "title" : "Correction"
+    },
+    {
+      "group" : "light",
+      "groupTitle" : "Light & Color",
+      "id" : "lightExposure",
+      "title" : "Exposure"
+    },
+    {
+      "group" : "light",
+      "groupTitle" : "Light & Color",
+      "id" : "lightBalance",
+      "title" : "Balance"
+    },
+    {
+      "group" : "light",
+      "groupTitle" : "Light & Color",
+      "id" : "lightColor",
+      "title" : "Color"
+    },
+    {
+      "group" : "light",
+      "groupTitle" : "Light & Color",
+      "id" : "lightGrade",
+      "title" : "Grade"
+    },
+    {
+      "group" : "print",
+      "groupTitle" : "Print",
+      "id" : "printPaper",
+      "title" : "Output"
+    },
+    {
+      "group" : "frame",
+      "groupTitle" : "Frame",
+      "id" : "frameGeometry",
+      "title" : "Geometry"
+    },
+    {
+      "group" : "frame",
+      "groupTitle" : "Frame",
+      "id" : "frameLocal",
+      "title" : "Local"
+    },
+    {
+      "group" : "pipeline",
+      "groupTitle" : "Pipeline",
+      "id" : "pipeline",
+      "title" : "Pipeline"
+    }
+  ],
+  "textureStageFirstFxplugID" : 40,
+  "textureStageLimitFxplugID" : 72,
+  "version" : 1
+}

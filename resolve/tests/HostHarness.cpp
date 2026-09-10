@@ -10,6 +10,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -2681,6 +2682,10 @@ int testPlugin() {
                 {"filterCoating", 2, "lensFilter1", static_cast<double>(deepRed)},
                 {"frameCoverage", 25, nullptr, 0},
                 {"shutterSeconds", 3600, nullptr, 0},
+                {"fringeAmount", 0.5, nullptr, 0},
+                {"fringeRadius", 300, "fringeAmount", 0.5},
+                {"enlarger", 1, nullptr, 0},
+                {"diffusionGrade", 4, "diffusion", 1},
             };
             bool everyControlRead = true;
             const size_t sizeCount = sizeof(sizes) / sizeof(*sizes);
@@ -2739,6 +2744,27 @@ int testPlugin() {
                 }
             }
             check(everyControlRead, "every control reaches the engine");
+            {
+                std::set<std::string> levered = {"grainAnimation", "grainModel", "negativeViewing",
+                                                 "renderMode"};
+                for (const Lever &lever : levers) levered.insert(lever.name);
+                bool everySlotLevered = true;
+                const int32_t described = fotufilm_bridge_host_parameter_count(FOTUFILM_HOST_RESOLVE);
+                for (int32_t i = 0; i < described; ++i) {
+                    if (fotufilm_bridge_host_parameter_slot(FOTUFILM_HOST_RESOLVE, i) < 0) continue;
+                    const int32_t flags = fotufilm_bridge_host_parameter_flags(FOTUFILM_HOST_RESOLVE, i);
+                    if (flags & FOTUFILM_HOST_FLAG_COMPOSED) continue;
+                    char name[128] = "";
+                    fotufilm_bridge_host_parameter_name(FOTUFILM_HOST_RESOLVE, i, name, sizeof(name));
+                    const std::string spelled = name;
+                    if (spelled.rfind("halation", 0) == 0 && spelled.size() == 11) continue;
+                    if (levered.count(spelled) == 0) {
+                        std::printf("       %s: no lever exercises it\n", name);
+                        everySlotLevered = false;
+                    }
+                }
+                check(everySlotLevered, "every catalogued control has a lever");
+            }
 
             // The gauge: two named gauges differ from each other, and Match Film is one film's
             // own gauge, so at least one of the two differs from it. Back on the small frame,

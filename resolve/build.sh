@@ -128,7 +128,7 @@ for ARCH in "${ARCHS[@]}"; do
     "$FOTUFILM_CORE_SOURCE_DIR"/*.swift \
     Sources/FotufilmMetal/*.swift \
     "$FOTUFILM_PACK_KEY_SOURCE" \
-    resolve/FotufilmBridge.swift \
+    Sources/FotufilmEditModel/*.swift resolve/FotufilmBridge.swift resolve/FotufilmBridgeControls.swift resolve/Generated/FotufilmBridgeSlots.swift \
     -o "$OBJ/FotufilmSwift.o"
 
   xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
@@ -229,7 +229,7 @@ if [[ " $* " == *" --test "* ]]; then
     "$FOTUFILM_CORE_SOURCE_DIR"/*.swift \
     Sources/FotufilmMetal/*.swift \
     "$FOTUFILM_PACK_KEY_SOURCE" \
-    resolve/FotufilmBridge.swift \
+    Sources/FotufilmEditModel/*.swift resolve/FotufilmBridge.swift resolve/FotufilmBridgeControls.swift resolve/Generated/FotufilmBridgeSlots.swift \
     "$OBJ/FotufilmHalideIOS.o" "$OBJ/FotufilmPlugin.o" "$OBJ/WorkingSpace.o" \
     "$OBJ/HostHarness.o" "$OBJ/ParityFrame.o" "$OBJ/TranscodeParity.o" \
     "$KERNELS"/*.a \

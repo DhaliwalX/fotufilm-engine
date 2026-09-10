@@ -1,5 +1,6 @@
 import Foundation
 import FotufilmCore
+import FotufilmEditModel
 import FotufilmImaging
 #if canImport(ImageIO)
 import ImageIO
@@ -7,6 +8,21 @@ import CoreGraphics
 import CoreImage
 import UniformTypeIdentifiers
 #endif
+
+let controlUsage = EditorControlCatalogue.all.compactMap { control -> String? in
+    guard control.offered(on: .cli), let flag = control.commandLine else { return nil }
+    let lead = "  " + flag.flag + (flag.placeholder.isEmpty ? "" : " " + flag.placeholder)
+    let padded = lead.count < 21 ? lead.padding(toLength: 21, withPad: " ", startingAt: 0) : lead + "\n" + String(repeating: " ", count: 21)
+    var words = flag.help.split(separator: " ").map(String.init)
+    var lines: [String] = []
+    var line = ""
+    while !words.isEmpty {
+        let word = words.removeFirst()
+        if line.isEmpty { line = word } else if line.count + 1 + word.count > 58 { lines.append(line); line = word } else { line += " " + word }
+    }
+    lines.append(line)
+    return padded + lines.joined(separator: "\n" + String(repeating: " ", count: 21))
+}.joined(separator: "\n")
 
 let usage = """
 fotufilm — physically based film simulation
@@ -40,122 +56,7 @@ Options:
   --format <name>    Film gauge (default: the gauge the stock is known on).
                      "sensor" cuts the film to the frame the input file says
                      its camera exposed. See --list-formats
-  --ev <stops>       Exposure compensation in stops (default: 0)
-  --autoexpose       Anchor the log-average scene luminance on mid-gray
-  --wb <kelvin>      Scene illuminant, 2000-12000 K. Unset, an already
-                     white-balanced file is lit at the stock's own balance,
-                     so a neutral renders neutral. On camera raw this is
-                     relative to the file's as-shot light; 6504 preserves
-                     the capture illuminant
-  --tint <n>         Green/magenta off the locus, -100...100 (default: 0)
-  --background <c>  Scene-linear Rec.2020 background for associated-alpha input:
-                     black, white, or R,G,B (default: black). The source is
-                     composited before film processing and the output is opaque
-  --depth <8|16>     Output bit depth (default: 8, dithered; 16 for PNG/TIFF)
-  --hlg              Write the print as 16-bit Rec.2020 HLG instead of sRGB,
-                     which is where a gain-map or HLG source's recovered
-                     highlights have somewhere to land. Implies --depth 16.
-  --grain <scale>    Grain multiplier, 0 disables (default: 1)
-  --grain-model <m>  clump (default) or discs. `discs` lays Boolean discs at
-                     the film's clump radius, scaled onto its published
-                     granularity, instead of a blurred clump field: the texture
-                     survives enlargement, saturates where discs overlap, and
-                     only differs once a disc covers a pixel.
-                     Costs about 5x the pixels and a one-off minute of
-                     pipeline build
-  --halation <scale> Halation multiplier, 0 disables (default: 1)
-  --halation-model <legacy|layered> Halation model (default: legacy)
-  --transport <json> Opt in to a layered transport construction (experimental)
-  --transport-backend <cpu|metal> Transport convolution backend (default: cpu)
-  --halation-colour <f>  How much the halo keeps the source's own colour
-                     instead of the stock's layered red, 0-1 (default: 0).
-                     The dimmer records are raised to the strongest record's
-                     return, so the ring brightens toward the light's colour
-  --halation-haze <mm>  The support's impurity scatter, as a Gaussian sigma
-                     in millimeters softening the halo's edges (default: the
-                     stock's own figure; sheets without one state 0, the
-                     clean support)
-  --estimated-halation  Use provisional spatial profiles where a stock has no
-                     independently calibrated profile (default: off)
-  --flare <scale>    Taking-lens veiling glare, 1 enables (default: 0 — a
-                     photographed source already carries its own lens's glare)
-  --couplers <scale> DIR + adjacency strength; 1 calibrated, overdrive compressed (default: 1)
-  --adjacency-model <m> gaussian or screened-diffusion (default: stock's model)
-  --fringe-amount <f> Broad inter-layer transport fraction, 0-1 (default: stock, normally 0)
-  --fringe-radius <um> Broad transport Gaussian sigma on the film, 0-2000 micrometers
-                     (default: stock, normally 100; must exceed the stock's core radius)
-  --bleach-bypass <f> Fraction of the developed silver the bleach leaves in the
-                     negative, 0-1 (default: 0). The print re-times on the
-                     denser mid-grey, so what changes is contrast and chroma.
-                     Colour negative only
-  --mottle <share>   Grain-size mixture override, 0-0.9 (default: the stock's
-                     own, usually 0): the variance share of the published
-                     granularity carried by a coarse second clump field — the
-                     soft mottle under the sharp grain. The RMS anchor holds
-                     whatever the split
-  --shutter <secs>   Exposure time in seconds (default: instantaneous). When
-                     the stock's datasheet publishes a long-exposure table the
-                     emulsion leaves the reciprocity law as that table states,
-                     frozen past the table's last row; a sheet that states no
-                     table holds the law. The print re-times the mid; shadows
-                     slide into the toe and any unequal failure casts the ends
-  --push <stops>     Push (positive) or pull (negative) development, in stops
-                     (default: 0). Must name an exact condition measured for
-                     this stock's stated developer, dilution, temperature and
-                     agitation; stocks or stop values without measurements are
-                     rejected. Pair a push with its exposure change via --ev
-  --expired <years>  Years past the process-by date at room temperature
-                     (default: 0). One stop per decade slower, blue layer
-                     first; base fog and grain rise with it. Add the stop the
-                     lab rule asks for with --ev to keep the mids
-  --print-light <k>  Colour temperature the finished print is viewed under, in
-                     kelvin: daylight series from 4000 K up (5003 = D50 proof
-                     light), Planckian below (2856 = tungsten). Greys hold —
-                     the read adapts to the light — and the paper dyes'
-                     metamerism moves. Default: D50 for paper, calibrated
-                     5400 K xenon for cinema print, fixed D65 for screen
-  --paper <name>     Output medium: ektacolor-edge (default), endura-premier,
-                     crystal-archive, vision-2383, vision-2393,
-                     eterna-cp, lab-scan, telecine, screen or negative.
-                     Photo and projection variants are digitised from the
-                     manufacturers' published datasheets.
-                     Reversal stocks use screen regardless of the requested medium.
-  --enlarger <head>  Lamp house over the negative: diffuser (default, the
-                     diffuse density the sheets are measured in) or condenser
-                     (collimated light: the Callier effect reads a silver
-                     negative's densities ~1.4x higher, a dye negative's ~1.05x,
-                     re-timed through mid-grey, so the print gains contrast).
-                     --bleach-bypass leaves retained silver, which scatters
-                     like a silver negative and takes the silver figure.
-                     Only an enlarged reflection print has one
-  --negative <how>   Show the developed negative instead of the print it would
-                     make: 'lightbox' keeps the base its own orange, 'scanner'
-                     divides the base out. Ignored by a reversal stock, which
-                     has no negative
-  --filter <ids>     Absorbing filters on the front of the lens, comma separated
-                     and applied in order: w85b, w80a, w25, nd09, cc20m and the
-                     rest of the Wratten catalogue. Integrated spectrally
-                     against the stock's own layer sensitivities, so the same
-                     filter is a different filter on a different film
-  --filter-coating <c>  uncoated, singleLayer or multiCoated (default). Sets
-                     what each face reflects, and so what the filter costs in
-                     light and adds in veiling glare
-  --metering <m>     How the exposure was set behind the filter: ttl (default,
-                     the camera's own photopic cell), factor (the published
-                     filter factor, worked out against the emulsion) or none
-                     (a fixed manual exposure, so the light loss lands on the
-                     film)
-  --diffusion <f>    A diffusion filter: promist, blackpromist, glimmerglass,
-                     blackglimmerglass, fog, blackfog. A share of the light
-                     meets a particle and is scattered or absorbed; the share
-                     that missed every particle stays sharp
-  --diffusion-grade <g>  1/8, 1/4, 1/2, 1 or 2 (default: 1/4)
-  --focal <mm>       Lens focal length. Read by the diffusion filter, whose
-                     halo is focal length times scattering angle — the reason
-                     the same filter glows bigger on a longer lens. Default:
-                     the gauge's own normal lens
-  --seed <n>         Grain random seed (default: fixed)
-  --local-tone <0|1> Regional highlight/shadow keying (default: 1)
+@CONTROL_FLAGS@
   --stages           Instead of one render, write the frame the film would make
                      with only the physics enabled up to each stage, into the
                      directory named as the output. It starts from every stage
@@ -183,13 +84,17 @@ Pack options (--seal-pack / --open-pack):
 
 The key comes from FOTUFILM_PACK_KEY (64 hex characters) and its id from
 FOTUFILM_PACK_KEY_ID, so neither reaches a shell history or a process listing.
-"""
+""".replacingOccurrences(of: "@CONTROL_FLAGS@", with: controlUsage)
 
 func fail(_ message: String) -> Never {
     FileHandle.standardError.write((message + "\n").data(using: .utf8)!)
     exit(1)
 }
 
+let valuelessControlFlags = Set(EditorControlCatalogue.all.compactMap { control -> String? in
+    guard control.offered(on: .cli), let flag = control.commandLine, flag.placeholder.isEmpty else { return nil }
+    return flag.flag
+})
 var positional: [String] = []
 var flags: [String: String] = [:]
 var args = Array(CommandLine.arguments.dropFirst())
@@ -198,7 +103,7 @@ while !args.isEmpty {
     if a == "--list-stocks" || a == "--list-stock-capabilities" || a == "--list-formats" || a == "--dump-curves"
         || a == "--dump-spectra" || a == "--help" || a == "-h"
         || a == "--autoexpose" || a == "--check-stocks" || a == "--make-pack-key"
-        || a == "--stages" || a == "--estimated-halation" || a == "--hlg" {
+        || a == "--stages" || a == "--hlg" || valuelessControlFlags.contains(a) {
         flags[a] = ""
     } else if a.hasPrefix("--") {
         guard !args.isEmpty else { fail("Missing value for \(a)\n\n\(usage)") }
@@ -1060,6 +965,33 @@ if let requested = flags["--stock"] {
 
 var options = FotufilmEngine.Options()
 options.format = FilmFormat.native(forStockID: stockID)
+for control in EditorControlCatalogue.all {
+    guard control.offered(on: .cli), let flag = control.commandLine, flag.generic,
+          let binding = control.host?.binding ?? control.binding else { continue }
+    guard let text = flags[flag.flag] else { continue }
+    let value: EditorControlValue
+    switch control.host?.kind {
+    case .boolean?:
+        value = .flag(flag.placeholder.isEmpty ? true : text != "0")
+    case .choice(let menu, _)?:
+        guard let choices = menu.fixedChoices,
+              let index = choices.firstIndex(where: { $0.id == text || $0.label == text }) else {
+            fail("Unknown \(flag.flag) value '\(text)'. Choices: "
+                 + (menu.fixedChoices ?? []).map(\.id).joined(separator: ", "))
+        }
+        value = .choice(index)
+    default:
+        guard let number = Double(text), number.isFinite else {
+            fail("Invalid \(flag.flag) value '\(text)'; expected a number.")
+        }
+        if let clamp = control.host?.clamp, !clamp.contains(number) {
+            fail("Invalid \(flag.flag) value '\(text)'; expected \(clamp.lowerBound) to \(clamp.upperBound).")
+        }
+        let canonical = control.host.map { $0.binding == nil ? $0.bridge.canonical(fromBridge: number * $0.paramScale + $0.paramOffset) : number } ?? number
+        value = .number(canonical)
+    }
+    binding.apply(value, to: &options)
+}
 if let formatID = flags["--format"] {
     // `sensor` is the frame the input file says it was exposed on, cut from the film the stock
     // names — the app's own automatic gauge, asked for by hand here because the CLI is a
@@ -1088,8 +1020,6 @@ if let formatID = flags["--format"] {
         options.format = format
     }
 }
-if let ev = flags["--ev"] { options.exposureEV = Float(ev) ?? 0 }
-if let g = flags["--grain"] { options.grainScale = Float(g) ?? 1 }
 if let model = flags["--grain-model"] {
     switch model {
     case "clump": options.grainModel = .clumpField
@@ -1100,16 +1030,7 @@ if let model = flags["--grain-model"] {
         exit(2)
     }
 }
-if let h = flags["--halation"] { options.halationScale = Float(h) ?? 1 }
-if let c = flags["--halation-colour"] {
-    options.halationSourceColour = Float(c) ?? 0
-}
 if let z = flags["--halation-haze"] { options.halationHazeMM = Float(z) }
-options.useEstimatedHalationProfile = flags["--estimated-halation"] != nil
-if let name = flags["--halation-model"] {
-    guard let model = HalationModel(rawValue: name) else { fail("--halation-model requires legacy or layered") }
-    options.halationModel = model
-}
 if let path = flags["--transport"] {
     do {
         let model = try JSONDecoder().decode(LayeredTransport.self,
@@ -1130,21 +1051,6 @@ if options.transportConstruction(for: stock) != nil {
         fail("Layered transport stage-sequence exports are not supported.")
     }
 }
-// Capture veiling glare, off unless asked for: see Options.flareScale.
-if let f = flags["--flare"] { options.flareScale = Float(f) ?? 1 }
-if let c = flags["--couplers"] { options.couplerScale = Float(c) ?? 1 }
-if let value = flags["--fringe-amount"] {
-    guard let amount = Float(value), amount.isFinite, (0...1).contains(amount) else {
-        fail("Invalid --fringe-amount '\(value)'; expected a finite fraction from 0 to 1.")
-    }
-    options.chromaticFringeAmount = amount
-}
-if let value = flags["--fringe-radius"] {
-    guard let radius = Float(value), radius.isFinite, (0...2000).contains(radius) else {
-        fail("Invalid --fringe-radius '\(value)'; expected 0 to 2000 micrometers.")
-    }
-    options.chromaticFringeRadiusMM = radius / 1000
-}
 if let model = flags["--adjacency-model"] {
     guard let adjacency = AdjacencyModel(rawValue: model) else {
         FileHandle.standardError.write(Data("unknown adjacency model '\(model)'; expected gaussian or screened-diffusion\n".utf8))
@@ -1152,9 +1058,7 @@ if let model = flags["--adjacency-model"] {
     }
     options.adjacencyModel = adjacency
 }
-if let b = flags["--bleach-bypass"] { options.bleachBypass = Float(b) ?? 0 }
 if let m = flags["--mottle"] { options.grainMottleShare = Float(m) }
-if let s = flags["--shutter"] { options.shutterSeconds = Float(s) }
 if let p = flags["--push"] {
     guard let stops = Float(p), stops.isFinite else {
         fail("Invalid --push value '\(p)'; expected a measured stop value for this stock.")
@@ -1166,10 +1070,8 @@ if let p = flags["--push"] {
     }
     options.developmentEV = stops
 }
-if let y = flags["--expired"] { options.expiredYears = Float(y) ?? 0 }
 if let k = flags["--print-light"] { options.printViewingKelvin = Float(k) }
 if let s = flags["--seed"] { options.seed = UInt64(s) ?? options.seed }
-if let f = flags["--focal"] { options.focalLengthMM = Float(f) }
 if let coating = flags["--filter-coating"], FilterCoating(rawValue: coating) == nil {
     fail("Unknown coating '\(coating)'. Choices: "
          + FilterCoating.allCases.map(\.rawValue).joined(separator: ", "))
@@ -1215,17 +1117,6 @@ if let p = flags["--paper"] {
              + PrintPaper.allCases.map(\.id).joined(separator: ", "))
     }
     options.paper = choice
-}
-// The regional tone base is measured from the image being developed, so it is the one control the
-// exported pack cannot carry. Turning it off here is what makes a native render comparable to the
-// browser's.
-if let t = flags["--local-tone"] { options.localTone = t != "0" }
-if let head = flags["--enlarger"] {
-    guard let choice = Enlarger.preset(id: head) else {
-        fail("Unknown enlarger '\(head)'. Choices: "
-             + Enlarger.allCases.map(\.id).joined(separator: ", "))
-    }
-    options.enlarger = choice
 }
 if let n = flags["--negative"] {
     switch n {

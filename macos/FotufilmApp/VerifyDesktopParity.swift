@@ -4,6 +4,9 @@ import CoreGraphics
 #if canImport(FotufilmCore)
 import FotufilmCore
 #endif
+#if canImport(FotufilmEditModel)
+import FotufilmEditModel
+#endif
 
 /// Runs in-app desktop parity checks for rendering, inspector controls, and export options.
 /// Usage: `Fotufilm --demo --verify-parity`. Checks inspect rendered output, not only state changes.
@@ -178,13 +181,13 @@ enum VerifyDesktopParity {
 
         Check(name: "the crop panel offers perspective") { editor in
             rows(of: .crop, model: editor.model,
-                 expecting: ["Vertical", "Horizontal", "Straighten"])
+                 expecting: titles(in: .frameGeometry, for: editor.model))
         },
 
         Check(name: "the film panel offers the lab and the mottle") { editor in
             rows(of: .film, model: editor.model,
-                 expecting: ["Character", "Grain Mottle", "Lab", "Push / Pull",
-                             "Bleach Bypass", "Expired"])
+                 expecting: ["Character", "Lab"] + titles(in: .filmGrain, for: editor.model)
+                     + titles(in: .filmLab, for: editor.model))
         },
 
         Check(name: "the desktop offers the mobile emulsion controls") { editor in
@@ -197,12 +200,11 @@ enum VerifyDesktopParity {
             }
             model.edit.stockID = preset.id
             let film = rows(of: .film, model: model,
-                            expecting: ["Disc Grain", "Halo Colour",
-                                        "Return Spectrum", "Separation",
-                                        "Edge Contrast"])
+                            expecting: titles(in: .filmEmulsion, for: model))
             if case .fail = film { return film }
             return rows(of: .adjustments, model: model,
-                        expecting: ["Regional", "Encoded Grade"])
+                        expecting: titles(in: .lightExposure, for: model)
+                            + titles(in: .lightGrade, for: model).filter { $0 == "Encoded Grade" })
         },
 
         Check(name: "disc grain is an edit, not only a setting") { editor in
@@ -429,6 +431,15 @@ enum VerifyDesktopParity {
     ]
 
     /// Builds one inspector tab on its own and reads the names off its rows.
+    @MainActor
+    private static func titles(in section: EditorControlSection,
+                               for model: DesktopEditorModel) -> [String] {
+        let stock = model.edit.hasFilm ? model.edit.stock : nil
+        return EditorControlCatalogue.controls(in: section, for: stock, on: .desktop)
+            .filter { $0.foldsUnder == nil && $0.kind.curve == nil && $0.kind != .takeover }
+            .map(\.title)
+    }
+
     @MainActor
     private static func rows(of panel: InspectorPanel,
                              model: DesktopEditorModel,

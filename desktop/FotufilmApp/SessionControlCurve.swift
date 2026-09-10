@@ -43,6 +43,7 @@ final class ControlCurveFormRow: FormRowView {
         plot = ControlCurvePlotView(curve: curve)
         axis = ControlCurveAxisView(curve: curve)
         super.init(frame: .zero)
+        rowTitle = title
 
         let name = makeLabel(title, size: 12)
         reading.alignment = .right

@@ -102,6 +102,7 @@ let package = Package(
         .library(name: "FotufilmStockMatch", targets: ["FotufilmStockMatch"]),
         .library(name: "FotufilmEditModel", targets: ["FotufilmEditModel"]),
         .executable(name: "fotufilm", targets: ["fotufilm"]),
+        .executable(name: "fotufilm-controls", targets: ["fotufilm-controls"]),
     ] + benchmarkProducts + metalBuildProducts,
     targets: [
         .target(name: "FotufilmUpdate"),
@@ -135,7 +136,9 @@ let package = Package(
         .target(name: "FotufilmStockMatch", dependencies: ["FotufilmCore"]),
         // Shared editor controls and their engine options.
         .target(name: "FotufilmEditModel", dependencies: ["FotufilmCore"]),
-        .executableTarget(name: "fotufilm", dependencies: ["FotufilmCore", "FotufilmImaging"]),
+        .executableTarget(name: "fotufilm",
+                          dependencies: ["FotufilmCore", "FotufilmImaging", "FotufilmEditModel"]),
+        .executableTarget(name: "fotufilm-controls", dependencies: ["FotufilmEditModel"]),
         .testTarget(
             name: "FotufilmCoreTests",
             dependencies: ["FotufilmCore", "FotufilmMetal", "FotufilmImaging",
