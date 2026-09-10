@@ -120,6 +120,10 @@ PY
   echo "  $id  masks $masks"
 done < <(./.build/release/fotufilm --list-stock-capabilities)
 printf ']' >> "$INDEX"
+python3 tools/export-web-media.py --pack-size "$PACK_SIZE"
+for mask in $(python3 -c 'import json; print(*json.load(open("web/public/packs/media/masks.json")))'); do
+  MASKS+=("$mask")
+done
 # One kernel per distinct mask, however many stocks and sizes ask for it.
 MASKS=($(printf '%s\n' "${MASKS[@]}" | sort -un))
 
@@ -130,7 +134,8 @@ MASKS=($(printf '%s\n' "${MASKS[@]}" | sort -un))
 # to do — on a reversal stock the slide is its own output medium and the last two frames match.
 FALLBACK_STOCK="${FOTUFILM_FALLBACK_STOCK:-gold200}"
 echo "Rendering the static fallback through ${FALLBACK_STOCK}…"
-SCENE_SOURCE="web/public/fotufilm_tagline.png"
+SCENE_SOURCE="web/public/demo-scene.exr"
+python3 tools/generate-demo-exr.py "$SCENE_SOURCE" --size "$PACK_SIZE"
 SCENE_WIDTH="${PACK_SIZE%x*}"
 SCENE_HEIGHT="${PACK_SIZE#*x}"
 [[ -f "$SCENE_SOURCE" ]] || {
@@ -141,7 +146,7 @@ sips -s format png -Z "$SCENE_WIDTH" "$SCENE_SOURCE" --out web/public/scene.png 
 sips --padToHeightWidth "$SCENE_HEIGHT" "$SCENE_WIDTH" --padColor 000000 \
   web/public/scene.png --out web/public/scene.png >/dev/null
 rm -rf web/public/fallback
-./.build/release/fotufilm web/public/scene.png web/public/fallback --stages \
+./.build/release/fotufilm "$SCENE_SOURCE" web/public/fallback --stages \
   --stock "$FALLBACK_STOCK" >/dev/null
 # JPEG for the web. The CLI writes lossless PNG because it writes what the film made, and 6.6 MB
 # of that is not what a browser which cannot run the engine should have to download to see it.
@@ -192,7 +197,7 @@ echo "Linking the WebAssembly module…"
 source "$EMSDK/emsdk_env.sh" >/dev/null 2>&1
 mkdir -p web/public
 em++ -std=c++17 -O3 web/engine/fotufilm_wasm_cpu.cpp \
-  "$OUTPUT"/cpu/develop_*.a "$OUTPUT"/cpu/print_*.a \
+  "$OUTPUT"/cpu/develop_*.a "$OUTPUT"/cpu/print_*.a "$OUTPUT"/cpu/plain_float.a \
   -I Sources/FotufilmHalide/include -I "$OUTPUT/cpu" \
   -msimd128 -sALLOW_MEMORY_GROWTH=1 \
   -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,worker \
@@ -239,5 +244,9 @@ fi
 echo
 echo "Wrote web/public/fotufilm.{mjs,wasm}$([[ -f web/public/fotufilm-webgpu.mjs ]] && echo ', fotufilm-webgpu.{mjs,wasm}') and $(ls web/public/packs/*.pack | wc -l | tr -d ' ') packs."
 
+tools/build-raw-wasm.sh
+bash tools/build-web-scene.sh
+
+node tools/test-web-scene.mjs
 node tools/test-wasm.mjs
 node tools/test-wasm-tiles.mjs

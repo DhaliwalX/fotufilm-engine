@@ -5,17 +5,17 @@
   "couplerInhibition": [
     [
       0,
-      0,
+      0.489373,
       0
     ],
     [
+      0.332604,
       0,
-      0,
-      0
+      0.226475
     ],
     [
-      0,
-      0,
+      0.114028,
+      0.424252,
       0
     ]
   ],
@@ -1705,6 +1705,7 @@
   ],
   "grainSizeMM": 0.004,
   "grainStrength": 0.008,
+  "granularityReadDensity": "gross",
   "halationLookScale": 1,
   "halationStrength": [
     0.008,

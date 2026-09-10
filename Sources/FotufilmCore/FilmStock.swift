@@ -26,6 +26,19 @@ public enum GrainDensityLaw: Int32, Sendable, Codable {
     case dyeCloudReversal = 3
 }
 
+/// The density a sheet's RMS granularity figure was read at. Every maker reads through the
+/// same 48 µm aperture at a diffuse density of 1.0, but not the same 1.0: Fujifilm's reversal
+/// sheets state "1.0 above minimum density", as every negative sheet does, where Kodak's
+/// reversal sheets state a "gross diffuse visual density of 1.0". The two differ by the base's
+/// own D-min, so a pack states which its figure was read at rather than the engine guessing it
+/// from the material.
+public enum GranularityReadDensity: String, Sendable, Codable {
+    /// Diffuse density 1.0 above minimum density: Fujifilm, and every negative material.
+    case net
+    /// Gross diffuse density 1.0, D-min included: Kodak's reversal sheets.
+    case gross
+}
+
 /// A capture layer that develops and inhibits, but forms no image dye of its own.
 ///
 /// Fujifilm's 4th Color Layer is the shipped example: REALA 500D coats a cyan-sensitive CL
@@ -223,6 +236,10 @@ public struct FilmStock: Sendable {
     /// emulsion is not perfectly clean at D-min and an aged one is visibly less so. This is the
     /// *developed* part of D-min only — the base's own dye is a filter, not grain.
     public var grainFogDensity: Float
+    /// Which density 1.0 the published granularity was read at; see `GranularityReadDensity`.
+    /// Defaults to the maker convention the material implies — gross for a reversal, net
+    /// otherwise — which is what every pack rendered before the field existed.
+    public var granularityReadDensity: GranularityReadDensity
 
     /// Fraction of each layer's exposure that reaches the back of the film base, reflects, and
     /// returns to expose the layer a second time.
@@ -319,6 +336,7 @@ public struct FilmStock: Sendable {
         grainDensityProfile: [Float]? = nil,
         grainReversalProfile: [Float] = FilmStock.defaultGrainReversalProfile,
         grainFogDensity: Float = FilmStock.defaultGrainFogDensity,
+        granularityReadDensity: GranularityReadDensity? = nil,
         halationStrength: [Float],
         halationLookScale: Float = 1,
         halationHazeMM: Float = 0,
@@ -389,6 +407,7 @@ public struct FilmStock: Sendable {
             "grainReversalProfile requires an exponent in 0.1...2 and shoulder in 0.1...10")
         self.grainReversalProfile = grainReversalProfile
         self.grainFogDensity = max(grainFogDensity, 0)
+        self.granularityReadDensity = granularityReadDensity ?? (isReversal ? .gross : .net)
         self.halationStrength = halationStrength
         self.halationLookScale = max(halationLookScale, 0)
         self.halationHazeMM = max(halationHazeMM, 0)
@@ -473,13 +492,13 @@ public struct FilmStock: Sendable {
         return max(1 - lost, 1e-4).squareRoot()
     }
 
-    /// The density above base the published granularity is read at, per record: net diffuse
-    /// density 1.0 for a negative material, gross diffuse density 1.0 for a reversal — the two
-    /// conditions the sheets actually state. The clamp keeps a curve too short to reach the read
-    /// density from anchoring outside its own scale.
+    /// The density above base the published granularity is read at, per record: diffuse
+    /// density 1.0 either above minimum density or gross, whichever the sheet states through
+    /// `granularityReadDensity`. The clamp keeps a curve too short to reach the read density
+    /// from anchoring outside its own scale.
     public func granularityAnchorDensity(layer: Int) -> Float {
         let curve = curves[layer]
-        let net: Float = isReversal ? 1 - curve.dMin : 1
+        let net: Float = granularityReadDensity == .gross ? 1 - curve.dMin : 1
         let range = curve.dMax - curve.dMin
         guard range > 0 else { return 0.5 }
         return min(max(net, 0.05 * range), 0.9 * range)

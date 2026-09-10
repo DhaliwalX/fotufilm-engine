@@ -25,7 +25,8 @@ if [[ "${1:-}" == "--webgpu" ]]; then
   BUILD=build/halide-pr-build
   PREFIX=build/halide-pr-install
   if [[ ! -d "$SOURCE/.git" ]]; then
-    echo "Fetching Halide PR #$WEBGPU_PR…"
+    mkdir -p build
+    echo "Fetching Halide PR #${WEBGPU_PR}…"
     git clone --filter=blob:none https://github.com/halide/Halide.git "$SOURCE"
   fi
   git -C "$SOURCE" fetch --quiet origin "refs/pull/$WEBGPU_PR/head"

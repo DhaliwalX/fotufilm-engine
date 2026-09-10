@@ -46,6 +46,46 @@ final class ReversalGrainTests: XCTestCase {
         }
     }
 
+    /// Fujifilm reads its reversal granularity at 1.0 above minimum density where Kodak reads
+    /// gross 1.0, and the pack says which; a pack that says nothing keeps the maker convention
+    /// the material implied before the field existed.
+    func testReadDensityFollowsTheSheetNotTheMaterial() throws {
+        let reversal = TestStocks.reversal
+        XCTAssertEqual(reversal.granularityReadDensity, .gross)
+        XCTAssertEqual(TestStocks.negative.granularityReadDensity, .net)
+        XCTAssertEqual(TestStocks.monochrome.granularityReadDensity, .net)
+        for layer in 0..<3 {
+            XCTAssertEqual(reversal.granularityAnchorDensity(layer: layer),
+                           1 - reversal.curves[layer].dMin, accuracy: 1e-6)
+        }
+
+        var definition = FilmStockDefinition(id: "fuji-read", stock: reversal)
+        definition.granularityReadDensity = .net
+        let encoded = try JSONEncoder().encode(definition)
+        XCTAssertTrue(String(decoding: encoded, as: UTF8.self)
+                          .contains("\"granularityReadDensity\":\"net\""))
+        let decoded = try JSONDecoder().decode(FilmStockDefinition.self, from: encoded).stock
+        XCTAssertEqual(decoded.granularityReadDensity, .net)
+        for layer in 0..<3 {
+            XCTAssertEqual(decoded.granularityAnchorDensity(layer: layer), 1, accuracy: 1e-6)
+            XCTAssertEqual(decoded.grainDensityModulation(layer: layer, netDensity: 1),
+                           1, accuracy: 1e-6)
+            XCTAssertGreaterThan(reversal.grainDensityModulation(layer: layer, netDensity: 1), 1,
+                                 "gross 1.0 anchors below net 1.0 by the base's own D-min")
+        }
+
+        var absent = try JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        absent.removeValue(forKey: "granularityReadDensity")
+        let legacy = try JSONDecoder().decode(
+            FilmStockDefinition.self,
+            from: JSONSerialization.data(withJSONObject: absent)).stock
+        XCTAssertEqual(legacy.granularityReadDensity, .gross)
+
+        absent["granularityReadDensity"] = "visual"
+        XCTAssertThrowsError(try JSONDecoder().decode(
+            FilmStockDefinition.self, from: JSONSerialization.data(withJSONObject: absent)))
+    }
+
     func testAnchorFogAndSaturatingShape() {
         var stock = TestStocks.reversal
         for profile: [Float] in [[1.1, 3], [1.35, 4.5], [2, 10]] {

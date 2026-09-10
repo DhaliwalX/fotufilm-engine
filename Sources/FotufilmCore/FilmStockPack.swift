@@ -74,6 +74,10 @@ public struct FilmStockDefinition: Codable, Sendable {
     public var grainReversalProfile: [Float]? = nil
     /// Developed fog, in density above the base's own dye. Absent is the shared default.
     public var grainFogDensity: Float?
+    /// Which diffuse density 1.0 the sheet read its granularity at, `net` (1.0 above minimum
+    /// density) or `gross`. Absent is the maker convention the material implies — gross for a
+    /// reversal, net otherwise — which every earlier pack rendered.
+    public var granularityReadDensity: GranularityReadDensity? = nil
     public var halationStrength: [Float]
     /// Authored presentation default: the multiple of `halationStrength` a scale of 1 renders.
     /// Absent is 1 — the measured film, bit-identically, which every earlier pack rendered.
@@ -398,6 +402,7 @@ public extension FilmStockDefinition {
             grainDensityProfile: grainDensityProfile,
             grainReversalProfile: grainReversalProfile ?? FilmStock.defaultGrainReversalProfile,
             grainFogDensity: grainFogDensity ?? FilmStock.defaultGrainFogDensity,
+            granularityReadDensity: granularityReadDensity,
             halationStrength: halationStrength,
             halationLookScale: halationLookScale ?? 1,
             halationHazeMM: halationHazeMM ?? 0,
@@ -458,6 +463,7 @@ public extension FilmStockDefinition {
         self.grainDensityProfile = stock.grainDensityProfile
         self.grainReversalProfile = stock.grainReversalProfile
         self.grainFogDensity = stock.grainFogDensity
+        self.granularityReadDensity = stock.granularityReadDensity
         self.halationStrength = stock.halationStrength
         self.halationLookScale = stock.halationLookScale
         self.halationHazeMM = stock.halationHazeMM

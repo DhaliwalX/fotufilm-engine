@@ -114,10 +114,10 @@ enum GranularityMeter {
             let developed = stock.isReversal
                 ? curve.dMin + curve.dMax - formed : formed
             // The sheet's read point, written out independently of the engine's helper:
-            // net diffuse density 1.0 above base for a negative material, gross 1.0 for
-            // a reversal, clamped the way a too-short curve must be.
+            // diffuse density 1.0 above base, or gross 1.0 where the pack says its sheet
+            // read it so, clamped the way a too-short curve must be.
             let range = curve.dMax - curve.dMin
-            let net: Float = stock.isReversal ? 1 - curve.dMin : 1
+            let net: Float = stock.granularityReadDensity == .gross ? 1 - curve.dMin : 1
             let anchorD = min(max(net, 0.05 * range), 0.9 * range)
                 + stock.grainFogDensity
             let here = max(developed - curve.dMin, 0) + stock.grainFogDensity

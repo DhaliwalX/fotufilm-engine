@@ -7,7 +7,7 @@ grain, and halation follow the selected film's properties and the process used
 to render it.
 
 This repository includes the shared engine, a command-line tool, a Mac app,
-plugins for DaVinci Resolve and Final Cut Pro, and a browser demo.
+plugins for DaVinci Resolve and Final Cut Pro, and a browser photo editor.
 
 [Download for Mac](https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS.pkg) · [User guide](docs/documentation.html) · [![Download on the App Store](docs/assets/download-on-the-app-store.svg)](https://apps.apple.com/app/id6792911908)
 
@@ -104,7 +104,7 @@ To include the Final Cut plugin, install Apple's FxPlug SDK first. See the
 [Resolve guide](resolve/README.md) and [Final Cut guide](finalcut/README.md)
 for separate builds and installation steps.
 
-## Build the browser demo
+## Build the browser editor
 
 Install Emscripten and Python 3.10 or newer. Set `EMSDK_ROOT` to your Emscripten
 SDK folder, or install it at `build/emsdk`. Then run:
@@ -118,14 +118,16 @@ npm run build
 
 The output is in `web/dist`. Set `FOTUFILM_BASE=/demo/` when running `npm run build`
 to host the demo at [fotufilm.com/demo](https://fotufilm.com/demo/).
-The demo develops an image at its own size, up
-to about 120 megapixels, cutting it into tiles with overlap for both film development
-and print blur that the kernel runs one at a time;
-the pack carries its spatial parameters for a ladder of frame sizes so grain
-and halation stay the size the emulsion makes them. The demo uses the CPU when
+The editor previews adjustments automatically and
+exports from the original image, up to 120 megapixels. Large images render in
+tiles; the pack carries spatial parameters for a ladder of frame sizes so grain
+and halation follow the emulsion's scale. The editor uses the CPU when
 a WebGPU-compatible Halide toolchain is not available. To build one, install Homebrew's `llvm` and
 `lld` and run `tools/build-halide.sh --webgpu` first; it fetches the Halide
 pull request the browser runtime needs and applies the patches in `tools/`.
+
+The [browser editor guide](docs/documentation.html) covers controls, shortcuts,
+export, and the features that still require the Mac app.
 
 ## Included films
 
@@ -140,7 +142,7 @@ through every validated digitized point. Source tracing variations are retained;
 response outside each published range is extrapolated. These schema version 2
 profiles require a build with sampled-curve support. Schema version 1 remains supported.
 
-The CLI and tests also include synthetic films. The demo uses a generated colour chart.
+The CLI and tests also include synthetic films. The browser opens a generated scene-linear float32 EXR chart.
 See [Build support](docs/support.html) for stock-pack setup.
 
 ## Print media

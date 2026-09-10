@@ -34,6 +34,10 @@ Usage:
   fotufilm <a> <b> --diff <output>         Write A | B | amplified difference
   fotufilm --make-chart <f> --scene spectrum  Write the demo's spectrum scene
   fotufilm --list-stocks                   List stocks and the gauge each is known on
+  fotufilm --list-web-media                Export browser output-medium choices as JSON
+  fotufilm --dump-web-camera-profiles <f>  Export native camera correction anchors (or - for stdout)
+  fotufilm --dump-web-scene <directory>    Export scene-light spectral reconstruction for the browser
+  fotufilm --dump-scene-exposure <f>        Export the native exposure table (requires --scene-kelvin)
   fotufilm --dump-labscan-reference <stock>
                                            Print the lab-scan reference profile a calibrated
                                            build commits for this stock
@@ -54,6 +58,7 @@ shoulder and drive halation the way they do on real film.
 Options:
 @CONTROL_FLAGS@
   --autoexpose       Anchor the log-average scene luminance on mid-gray
+  --scene-kelvin <K> Film capture light, 1000-25000 K; defaults to RAW metadata.
   --background <c>  Scene-linear Rec.2020 background for associated-alpha input:
                      black, white, or R,G,B (default: black). The source is
                      composited before film processing and the output is opaque
@@ -110,7 +115,7 @@ var flags: [String: String] = [:]
 var args = Array(CommandLine.arguments.dropFirst())
 while !args.isEmpty {
     let a = args.removeFirst()
-    if a == "--list-stocks" || a == "--list-stock-capabilities" || a == "--list-formats" || a == "--dump-curves"
+    if a == "--list-web-media" || a == "--list-stocks" || a == "--list-stock-capabilities" || a == "--list-formats" || a == "--dump-curves"
         || a == "--dump-spectra" || a == "--help" || a == "-h"
         || a == "--autoexpose" || a == "--check-stocks" || a == "--make-pack-key"
         || a == "--stages" || a == "--hlg" || valuelessControlFlags.contains(a) {
@@ -142,6 +147,76 @@ if flags["--list-stocks"] != nil || flags["--list-stock-capabilities"] != nil {
             ? "\t\(stock.donorLayers.isEmpty ? "true" : "false")" : ""
         print("\(key)\t\(stock.name)\t\(FilmFormat.nativeID(forStockID: key))\(capability)")
     }
+    exit(0)
+}
+
+if flags["--list-web-media"] != nil {
+    let records: [[String: Any]] = FilmStock.presets.sorted(by: { $0.key < $1.key }).map { id, stock in
+        ["id": id, "default": PrintPaper.default(for: stock).id,
+         "choices": PrintPaper.choices(for: stock).map {
+             ["id": $0.id, "name": $0.name, "detail": $0.detail]
+         }]
+    }
+    do {
+        let data = try JSONSerialization.data(withJSONObject: records, options: [.sortedKeys])
+        print(String(decoding: data, as: UTF8.self))
+    } catch { fail("Could not encode output media: \(error.localizedDescription)") }
+    exit(0)
+}
+
+if let destination = flags["--dump-web-scene"] {
+    guard let values = WebSceneLight.geometry() else { fail("Spectral reconstruction is unavailable") }
+    do {
+        let folder = URL(fileURLWithPath: destination, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var bytes = Data()
+        bytes.appendFloats(values)
+        try bytes.write(to: folder.appendingPathComponent("geometry.f32"), options: .atomic)
+        let records: [(String, FilmStock)] = FilmStock.presetIDs.flatMap { id -> [(String, FilmStock)] in
+            guard let stock = FilmStock.named(id) else { return [] }
+            var bare = stock
+            bare.spectralProfile = idealizedCapture(stock.spectralProfile)
+            return [(id, stock), (id + "@bypassed", bare)]
+        }
+        let catalog = try JSONSerialization.data(withJSONObject: WebSceneLight.catalog(stocks: records),
+                                                 options: [.sortedKeys])
+        try catalog.write(to: folder.appendingPathComponent("index.json"), options: .atomic)
+    } catch { fail("Could not export scene-light assets: \(error.localizedDescription)") }
+    exit(0)
+}
+
+if let destination = flags["--dump-web-camera-profiles"] {
+    func flatten(_ rows: [SIMD3<Float>]) -> [Float] {
+        rows.flatMap { [$0.x, $0.y, $0.z] }
+    }
+    let referenceKelvin = flags["--camera-kelvin"].flatMap(Float.init)
+    let records: [[String: Any]] = CameraSpectralProfileStore.bundledProfiles.map { profile in
+        let anchors = profile.dualIlluminantMatrices()
+        var record: [String: Any] = [
+            "id": profile.id, "make": profile.make ?? "", "model": profile.model ?? "",
+            "tungsten": flatten(anchors.tungsten), "daylight": flatten(anchors.daylight)
+        ]
+        // Optional native reference for browser parity checks; production assets omit it.
+        if let kelvin = referenceKelvin, kelvin.isFinite, kelvin > 0 {
+            record["reference"] = flatten(anchors.correction(cct: kelvin))
+        }
+        return record
+    }
+    let locus: [[Float]] = (40...1000).map { mired in
+        let kelvin = 1e6 / Float(mired)
+        let xy = WhiteBalance.chromaticity(kelvin: kelvin, tint: 0)
+        let denominator = -2 * xy.x + 12 * xy.y + 3
+        return [kelvin, 4 * xy.x / denominator, 6 * xy.y / denominator]
+    }
+    do {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "version": 1, "tungstenKelvin": DualIlluminantMatrices.tungstenKelvin,
+            "daylightKelvin": DualIlluminantMatrices.daylightKelvin,
+            "profiles": records, "whiteLocus": locus
+        ], options: [.sortedKeys])
+        if destination == "-" { print(String(decoding: data, as: UTF8.self)) }
+        else { try data.write(to: URL(fileURLWithPath: destination), options: .atomic) }
+    } catch { fail("Could not export camera profiles: \(error.localizedDescription)") }
     exit(0)
 }
 
@@ -955,7 +1030,8 @@ func writeStageSequence(linear: ImageBuffer, alpha: [Float], stock: FilmStock,
 }
 
 guard positional.count == 2 || flags["--dump-wasm-pack"] != nil
-    || flags["--dump-wasm-stages"] != nil else { fail(usage) }
+    || flags["--dump-wasm-stages"] != nil
+    || flags["--dump-scene-exposure"] != nil else { fail(usage) }
 
 if FilmStock.allPresetIDs.isEmpty {
     if let error = FilmStockPack.loadError {
@@ -982,6 +1058,12 @@ if let requested = flags["--stock"] {
 }
 
 var options = FotufilmEngine.Options()
+if let stated = flags["--scene-kelvin"] {
+    guard let kelvin = Float(stated), kelvin.isFinite, (1000...25000).contains(kelvin) else {
+        fail("--scene-kelvin takes a temperature from 1000 to 25000 K")
+    }
+    options.sceneIlluminantKelvin = kelvin
+}
 options.format = FilmFormat.native(forStockID: stockID)
 for control in EditorControlCatalogue.all {
     guard let flag = control.commandLine else { continue }
@@ -1172,6 +1254,15 @@ extension Data {
         append(contentsOf: bytes)
         append(contentsOf: [UInt8](repeating: 0, count: (4 - bytes.count % 4) % 4))
     }
+}
+
+if let path = flags["--dump-scene-exposure"] {
+    guard let kelvin = options.sceneIlluminantKelvin else { fail("--scene-kelvin is required") }
+    var bytes = Data()
+    bytes.appendFloats(SpectralRuntime.sceneExposure(for: stock, cct: kelvin).values)
+    do { try bytes.write(to: URL(fileURLWithPath: path), options: .atomic) }
+    catch { fail("Could not write scene exposure table") }
+    exit(0)
 }
 
 if let packPath = flags["--dump-wasm-pack"] {
@@ -1427,14 +1518,14 @@ PremultipliedAlpha.flatten(&rgba, over: background)
 // one is already white balanced, so a stated `--wb` *is* the scene light and an unstated one
 // leaves the engine on the stock's own balance, where a neutral renders neutral.
 if sceneKelvin == nil, let stated = flags["--wb"].flatMap({ Float($0) }) {
-    options.sceneIlluminantKelvin = stated
+    options.sceneIlluminantKelvin = options.sceneIlluminantKelvin ?? stated
     options.whiteBalance = WhiteBalance(kelvin: WhiteBalance.neutralKelvin,
                                         tint: balance.tint)
 } else {
     options.whiteBalance = balance
-    options.sceneIlluminantKelvin = sceneKelvin
+    options.sceneIlluminantKelvin = options.sceneIlluminantKelvin ?? sceneKelvin
 }
-options.sceneIlluminantChromaticity = sceneChromaticity
+options.sceneIlluminantChromaticity = flags["--scene-kelvin"] == nil ? sceneChromaticity : nil
 // And the declared range, the other clip-side fact the app attaches: recorded light above
 // diffuse white is metered into the film's latitude instead of flattening to paper white.
 options.sceneHeadroom = contentHeadroom
