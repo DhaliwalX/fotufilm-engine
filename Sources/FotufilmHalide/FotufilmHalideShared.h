@@ -62,7 +62,6 @@ inline Halide::Expr bicubic_sample(Sample sample, Halide::Expr px, Halide::Expr 
     return wy0 * row0 + wy1 * row1 + wy2 * row2 + wy3 * row3;
 }
 
-
 /// A positive normalized annulus. Sixteen directions keep the critical-angle ring round at the
 /// smallest radius where it is visible; the Gaussian field underneath supplies its measured
 /// thickness. Radius zero selects the center sample exactly for AOT variants serving legacy packs.

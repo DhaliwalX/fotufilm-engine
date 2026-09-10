@@ -42,6 +42,19 @@ class TransportConvolution {
     bool is_metal;
     AccumulatePipeline accum_pipe;
     std::mutex mutex;
+    Buffer<float> cached_accum[2];
+    Buffer<float> cached_band_result;
+    int cached_w = 0, cached_h = 0;
+
+    void ensure_buffers(int w, int h) {
+        if (w == cached_w && h == cached_h) return;
+        cached_w = w; cached_h = h;
+        cached_band_result = Buffer<float>(w, h, 3);
+        if (is_metal) {
+            cached_accum[0] = Buffer<float>(w, h, 3);
+            cached_accum[1] = Buffer<float>(w, h, 3);
+        }
+    }
 public:
     explicit TransportConvolution(bool metal)
         : target(get_jit_target_from_environment()), is_metal(metal), accum_pipe(metal) {
@@ -84,13 +97,13 @@ public:
         rb.set_host_dirty(); gb.set_host_dirty(); bb.set_host_dirty(); kb.set_host_dirty();
         red.set(rb); green.set(gb); blue.set(bb); kernel.set(kb);
         width.set(w); height.set(h); radius.set(rad); stride.set(scale);
-        Buffer<float> result(w, h, 3);
-        pipeline.realize(result, target);
-        result.copy_to_host();
+        ensure_buffers(w, h);
+        pipeline.realize(cached_band_result, target);
+        cached_band_result.copy_to_host();
         const int64_t n = int64_t(w) * h;
-        std::copy_n(result.data(), n, out_r);
-        std::copy_n(result.data() + n, n, out_g);
-        std::copy_n(result.data() + 2 * n, n, out_b);
+        std::copy_n(cached_band_result.data(), n, out_r);
+        std::copy_n(cached_band_result.data() + n, n, out_g);
+        std::copy_n(cached_band_result.data() + 2 * n, n, out_b);
     }
     void accumulate_bands(const float *r, const float *g, const float *b,
                           float *accum_r, float *accum_g, float *accum_b,
@@ -106,13 +119,11 @@ public:
         red.set(rb); green.set(gb); blue.set(bb);
         width.set(w); height.set(h);
 
-        Buffer<float> band_result(w, h, 3);
+        ensure_buffers(w, h);
 
         if (is_metal) {
-            // Allocate two GPU accumulation buffers for ping-pong accumulation on device
-            Buffer<float> accum_buf[2] = {Buffer<float>(w, h, 3), Buffer<float>(w, h, 3)};
-            accum_buf[0].fill(0.0f);
-            accum_buf[0].set_host_dirty();
+            cached_accum[0].fill(0.0f);
+            cached_accum[0].set_host_dirty();
             int cur = 0;
 
             for (int i = 0; i < band_count; ++i) {
@@ -125,16 +136,16 @@ public:
                 stride.set(bands[i].stride);
 
                 // Run convolution on GPU
-                pipeline.realize(band_result, target);
+                pipeline.realize(cached_band_result, target);
 
                 // Run GPU accumulation without downloading to host
-                accum_pipe.run(accum_buf[cur], band_result, bands[i].weight, target, accum_buf[1 - cur]);
+                accum_pipe.run(cached_accum[cur], cached_band_result, bands[i].weight, target, cached_accum[1 - cur]);
                 cur = 1 - cur;
             }
 
             // Download accumulated result to host EXACTLY ONCE at the end
-            accum_buf[cur].copy_to_host();
-            const float *res = accum_buf[cur].data();
+            cached_accum[cur].copy_to_host();
+            const float *res = cached_accum[cur].data();
 
             #if defined(__APPLE__)
             vDSP_vadd(res, 1, accum_r, 1, accum_r, 1, n);
@@ -148,7 +159,7 @@ public:
             }
             #endif
         } else {
-            // CPU backend: reuse band_result and accumulate directly into accum_r, accum_g, accum_b
+            // CPU backend: reuse cached_band_result and accumulate directly into accum_r, accum_g, accum_b
             for (int i = 0; i < band_count; ++i) {
                 if (bands[i].weight <= 0.0f) continue;
                 Buffer<float> kb(const_cast<float *>(bands[i].kernel),
@@ -158,8 +169,8 @@ public:
                 radius.set(bands[i].radius);
                 stride.set(bands[i].stride);
 
-                pipeline.realize(band_result, target);
-                const float *res = band_result.data();
+                pipeline.realize(cached_band_result, target);
+                const float *res = cached_band_result.data();
                 const float weight = bands[i].weight;
 
                 #if defined(__APPLE__)

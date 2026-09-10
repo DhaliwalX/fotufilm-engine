@@ -128,12 +128,39 @@ public enum LayeredMetalTransport {
         kernel void transport_up(device const float* a [[buffer(0)]], device float* b [[buffer(1)]],
             device const float* k [[buffer(2)]], constant D& d [[buffer(3)]], uint i [[thread_position_in_grid]]) {
             if(i>=d.w*d.h*3)return; uint c=i/(d.w*d.h), x=i%d.w, y=(i/d.w)%d.h;
+            uint o=c*d.gw*d.gh;
+            if(d.s == 1) {
+                b[i] = a[o + clamp(y, 0u, d.gh - 1) * d.gw + clamp(x, 0u, d.gw - 1)];
+                return;
+            }
             float px=(float(x)+.5f)/float(d.s)-.5f, py=(float(y)+.5f)/float(d.s)-.5f;
-            int ix=int(floor(px)), iy=int(floor(py)); float fx=px-floor(px), fy=py-floor(py);
-            uint x0=clamp(ix,0,int(d.gw)-1), x1=clamp(ix+1,0,int(d.gw)-1);
-            uint y0=clamp(iy,0,int(d.gh)-1), y1=clamp(iy+1,0,int(d.gh)-1), o=c*d.gw*d.gh;
-            b[i]=(1-fx)*((1-fy)*a[o+y0*d.gw+x0]+fy*a[o+y1*d.gw+x0])
-                +fx*((1-fy)*a[o+y0*d.gw+x1]+fy*a[o+y1*d.gw+x1]);
+            int x0=int(floor(px)), y0=int(floor(py));
+            float fx=px-floor(px), fy=py-floor(py);
+            float omfx=1.f-fx, fx2=fx*fx, fx3=fx2*fx;
+            float4 wx = float4(
+                (1.f/6.f)*(omfx*omfx*omfx),
+                (1.f/6.f)*(3.f*fx3 - 6.f*fx2 + 4.f),
+                (1.f/6.f)*(-3.f*fx3 + 3.f*fx2 + 3.f*fx + 1.f),
+                (1.f/6.f)*fx3
+            );
+            float omfy=1.f-fy, fy2=fy*fy, fy3=fy2*fy;
+            float4 wy = float4(
+                (1.f/6.f)*(omfy*omfy*omfy),
+                (1.f/6.f)*(3.f*fy3 - 6.f*fy2 + 4.f),
+                (1.f/6.f)*(-3.f*fy3 + 3.f*fy2 + 3.f*fy + 1.f),
+                (1.f/6.f)*fy3
+            );
+            float val = 0.f;
+            for(int dy=-1; dy<=2; ++dy) {
+                uint yy = clamp(y0 + dy, 0, int(d.gh) - 1);
+                float row = 0.f;
+                for(int dx=-1; dx<=2; ++dx) {
+                    uint xx = clamp(x0 + dx, 0, int(d.gw) - 1);
+                    row += wx[dx + 1] * a[o + yy * d.gw + xx];
+                }
+                val += wy[dy + 1] * row;
+            }
+            b[i] = val;
         }
         """
     }
