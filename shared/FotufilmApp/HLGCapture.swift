@@ -16,16 +16,44 @@ import FotufilmMetal
 /// Shared x420/HLG/Apple Log capture metadata helpers. Camera pixels are decoded by the
 /// handwritten full-frame graph; the buffer converters below exist only for developer benchmarks.
 final class HLGConverter {
-    /// Which curve the capture is carrying.
+    /// Which curve and gamut the capture is carrying.
     enum Transfer {
         case hlg
         case appleLog
+        /// Apple Log's curve over Apple Wide Gamut (iPhone 17 Pro, iOS 26).
+        case appleLog2
 
         /// What the decode multiplies by to land diffuse white on 1.0.
         var sceneScale: Float {
             switch self {
             case .hlg: return PrintEncoding.hdrHeadroom
-            case .appleLog: return AppleLog.sceneScale
+            case .appleLog, .appleLog2: return AppleLog.sceneScale
+            }
+        }
+
+        /// The index the benchmark kernel and the engine's capture kernels switch on.
+        var curveIndex: UInt32 {
+            switch self {
+            case .hlg: return 0
+            case .appleLog: return 1
+            case .appleLog2: return 2
+            }
+        }
+
+        /// The frame attachments this transfer must find.
+        var reading: CapturedFrameColour.Reading {
+            switch self {
+            case .hlg: return .hlg
+            case .appleLog: return .appleLog
+            case .appleLog2: return .appleLog2
+            }
+        }
+
+        var displayName: String {
+            switch self {
+            case .hlg: return "HLG/BT.2020"
+            case .appleLog: return "Apple Log"
+            case .appleLog2: return "Apple Log 2"
             }
         }
     }
@@ -106,7 +134,7 @@ final class HLGConverter {
             if !reportedIncompatibleFrame {
                 reportedIncompatibleFrame = true
                 print("Fotufilm: discarded an HDR frame that was not x420 "
-                      + (transfer == .appleLog ? "Apple Log" : "HLG/BT.2020"))
+                      + transfer.displayName)
             }
             return false
         }
@@ -146,7 +174,7 @@ final class HLGConverter {
             for: pixelBuffer, width: sourceWidth, height: sourceHeight)
         encoder.setBytes(&chromaOffset,
                          length: MemoryLayout<SIMD2<Float>>.size, index: 3)
-        var curve = UInt32(transfer == .appleLog ? 1 : 0)
+        var curve = transfer.curveIndex
         encoder.setBytes(&curve, length: MemoryLayout<UInt32>.size, index: 4)
         encoder.dispatchThreads(
             MTLSize(width: width, height: height, depth: 1),
@@ -164,10 +192,8 @@ final class HLGConverter {
                 == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange,
               CVPixelBufferGetPlaneCount(pixelBuffer) == 2
         else { return false }
-        let reading: CapturedFrameColour.Reading =
-            transfer == .hlg ? .hlg : .appleLog
         return CapturedFrameColour.isCompatible(attachments(of: pixelBuffer),
-                                                with: reading)
+                                                with: transfer.reading)
     }
 
     private static func attachments(
@@ -175,6 +201,7 @@ final class HLGConverter {
     ) -> CapturedFrameColour.Attachments {
         var log: String?
         if #available(iOS 17.2, macOS 14.2, *) {
+            // One key names both Apple Log and Apple Log 2; the reading decides which passes.
             log = string(pixelBuffer, kCVImageBufferLogTransferFunctionKey)
         }
         return CapturedFrameColour.Attachments(
@@ -385,6 +412,15 @@ final class HLGConverter {
     }
     """ }
 
+    /// Apple Wide Gamut to Rec.2020, each row as a Metal `dot` over `recorded`, from the same
+    /// matrix the engine's file path uses.
+    private static var appleWideGamutRows: [String] {
+        let m = CameraGamut.appleWideGamut.toRec2020.map { Float($0) }
+        return (0..<3).map { row in
+            "dot(float3(\(m[row * 3])f, \(m[row * 3 + 1])f, \(m[row * 3 + 2])f), recorded)"
+        }
+    }
+
     private static var metalSource: String { """
     #include <metal_stdlib>
     using namespace metal;
@@ -401,10 +437,27 @@ final class HLGConverter {
 
     \(AppleLog.metalFunction)
 
+    // 0 = HLG, 1 = Apple Log, 2 = Apple Log 2 (the same curve over Apple Wide Gamut).
     static float scene_light(float signal, uint curve)
     {
         return curve == 0 ? hlg_scene_light(signal)
                           : apple_log_to_linear(clamp(signal, 0.0f, 1.0f));
+    }
+
+    static float3 recorded_to_working(float3 recorded, uint curve)
+    {
+        if (curve != 2) { return recorded; }
+        return float3(\(appleWideGamutRows[0]),
+                      \(appleWideGamutRows[1]),
+                      \(appleWideGamutRows[2]));
+    }
+
+    static float3 capture_to_working(float3 signal, uint curve, float scale)
+    {
+        float3 recorded = max(float3(scene_light(signal.x, curve),
+                                     scene_light(signal.y, curve),
+                                     scene_light(signal.z, curve)), 0.0f);
+        return max(recorded_to_working(recorded, curve), 0.0f) * scale;
     }
 
     kernel void fotufilm_capture_to_linear(
@@ -435,10 +488,9 @@ final class HLGConverter {
                                y + 1.8814f * u);
 
         // HLG and Apple Log both carry BT.2020 primaries — the engine's own working
-        // space — so decoding the curve is the whole conversion; no gamut matrix.
-        float3 open = max(float3(scene_light(signal.x, curve),
-                                 scene_light(signal.y, curve),
-                                 scene_light(signal.z, curve)), 0.0f) * scale;
+        // space — so decoding the curve is the whole conversion; Apple Log 2 adds its
+        // Apple Wide Gamut matrix on the way in.
+        float3 open = capture_to_working(signal, curve, scale);
         destination[gid.y * size.x + gid.x] = float4(open, 1.0f);
     }
 
@@ -465,9 +517,7 @@ final class HLGConverter {
         float3 signal = float3(y + 1.4746f * v,
                                y - 0.164553f * u - 0.571353f * v,
                                y + 1.8814f * u);
-        float3 open = max(float3(scene_light(signal.x, curve),
-                                 scene_light(signal.y, curve),
-                                 scene_light(signal.z, curve)), 0.0f) * scale;
+        float3 open = capture_to_working(signal, curve, scale);
         destination[gid.y * size.x + gid.x] = half4(float4(open, 1.0f));
     }
     """ }

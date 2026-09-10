@@ -328,6 +328,16 @@ enum HandwrittenMetalShaderLibrary {
         "FOTUFILM_APPLE_LOG_GAMMA": NSNumber(value: AppleLogCurve.gamma),
         "FOTUFILM_APPLE_LOG_DELTA": NSNumber(value: AppleLogCurve.delta),
         "FOTUFILM_APPLE_LOG_TOE_SIGNAL": NSNumber(value: AppleLogCurve.toeSignal),
-    ]
+    ].merging(appleWideGamutMacros) { current, _ in current }
+
+    /// Apple Log 2's recorded gamut carried to the Rec.2020 working space, row-major, so the x420
+    /// decode uses the same matrix `CameraLogEncoding.appleLog2` hands the file path.
+    private static var appleWideGamutMacros: [String: NSNumber] {
+        var macros: [String: NSNumber] = [:]
+        for (index, value) in CameraGamut.appleWideGamut.toRec2020.enumerated() {
+            macros["FOTUFILM_APPLE_WG_TO_2020_\(index)"] = NSNumber(value: Float(value))
+        }
+        return macros
+    }
 }
 #endif

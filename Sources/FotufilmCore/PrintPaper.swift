@@ -248,13 +248,23 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// has no print exposure to correct, and the digital reference already reads records directly.
     public var acceptsPrintCorrection: Bool { !readsLayersDirectly && !isNegative }
 
-    /// The density above base to anchor mid-grey on, so that the print still
-    /// *reads* at `midDensity` once glare is added. Anchoring on the density
-    /// itself would put mid-grey light by the whole of the flare — 0.002 on
-    /// the papers, which the accuracy ratchet sees.
-    public func anchorDensity(_ midDensity: Float) -> Float {
+    /// Mid-grey relative to the medium's clear white, after viewing flare. Release prints
+    /// use approximately 1.0 D above base (LAD); reflection papers and digital outputs
+    /// retain the 0.744 D / 18% convention. This belongs to the output, regardless of
+    /// whether the negative in the printer was made for stills or motion pictures.
+    /// Kodak H-1-2393t gives 1.00 equivalent neutral density and gross Status A
+    /// 1.09/1.06/1.03; Fuji 3513DI gives gross Status A 1.10/1.05/1.05. We model
+    /// density relative to clear film, not those three gross instrument readings.
+    public var midDensity: Float { isProjected ? 1.0 : 0.744 }
+
+    /// Density above base needed to read at `midDensity` after viewing flare.
+    public var anchorDensity: Float {
         guard viewingFlare > 0 else { return midDensity }
         let read = pow(10, -midDensity)
         return -log10(max(read * (1 + viewingFlare) - viewingFlare, 1e-6))
     }
+
+    /// Compatibility entry point for callers that still pass a stock's legacy grey.
+    @available(*, deprecated, message: "Use anchorDensity; the output medium sets mid-grey.")
+    public func anchorDensity(_ legacyMidDensity: Float) -> Float { anchorDensity }
 }

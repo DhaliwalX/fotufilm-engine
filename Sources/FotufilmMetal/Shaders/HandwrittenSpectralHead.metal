@@ -35,6 +35,7 @@ static inline float decode_transfer(
 #include "HandwrittenCameraSceneTransfer.metalinc"
 
 static inline float capture_scene_light(float signal, uint transfer) {
+    // 1 and 2 (Apple Log, Apple Log 2) share one curve; only the gamut step differs.
     return transfer == 0u ? hlg_scene_light(signal)
         : apple_log_to_linear(clamp(signal, 0.0f, 1.0f));
 }
