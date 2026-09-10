@@ -283,4 +283,87 @@ final class LayeredTransportTests: XCTestCase {
         var donor = TestStocks.negative; donor.donorLayers = [TestStocks.donor]
         XCTAssertThrowsError(try FotufilmEngine(stock: donor, options: options).processChecked(linearRGB: image))
     }
+
+    func testContinuousBesselOTFConservesDCAndInterpolates() throws {
+        let kernel = try TransportRadialKernel(radiusMM: [0.01, 0.02, 0.05], mass: [0.5, 0.3, 0.2])
+        let pitch = 0.005
+        let otf = ContinuousBesselOTF(kernel: kernel, pixelPitchMM: pitch)
+        XCTAssertEqual(otf.sample(nu: 0), 1.0, accuracy: 1e-7)
+        XCTAssertEqual(otf.sample(nu: -0.5), 1.0, accuracy: 1e-7)
+        XCTAssertEqual(otf.table[0], 1.0)
+
+        // Check sampling vs direct Bessel formula
+        let testNu: Float = 0.1
+        let twoPiOverPitch = 2.0 * Double.pi / pitch
+        var directVal = 0.0
+        for i in 0..<kernel.radiusMM.count {
+            #if canImport(Darwin)
+            directVal += kernel.mass[i] * Darwin.j0(twoPiOverPitch * Double(testNu) * kernel.radiusMM[i])
+            #elseif canImport(Glibc)
+            directVal += kernel.mass[i] * Glibc.j0(twoPiOverPitch * Double(testNu) * kernel.radiusMM[i])
+            #else
+            directVal += kernel.mass[i] * j0(twoPiOverPitch * Double(testNu) * kernel.radiusMM[i])
+            #endif
+        }
+        XCTAssertEqual(otf.sample(nu: testNu), Float(directVal), accuracy: 1e-4)
+    }
+
+    func testFFTTransportPreservesUniformFieldsAndConservesEnergy() throws {
+        #if canImport(Accelerate)
+        XCTAssertTrue(TransportBackend.fft.isAvailable)
+        let kernel = try TransportRadialKernel(radiusMM: [0.005, 0.015, 0.035], mass: [0.4, 0.35, 0.25])
+        let pitch = 0.004
+        let w = 27, h = 23
+        let uniformVal: Float = 0.65
+        let image = ImageBuffer(width: w, height: h, fill: uniformVal)
+        let convolved = try LayeredTransportFFT.convolve(image: image, kernel: kernel, pixelPitchMM: pitch)
+
+        for c in 0..<3 {
+            for i in 0..<image.pixelCount {
+                XCTAssertEqual(convolved.planes[c][i], uniformVal, accuracy: 1e-5)
+            }
+        }
+
+        // Test convolveFFT helper on LayeredTransportRenderer
+        let helperResult = try LayeredTransportRenderer.convolveFFT(image: image, kernel: kernel, pixelPitchMM: pitch)
+        for c in 0..<3 {
+            for i in 0..<image.pixelCount {
+                XCTAssertEqual(helperResult.planes[c][i], uniformVal, accuracy: 1e-5)
+            }
+        }
+        #else
+        XCTAssertFalse(TransportBackend.fft.isAvailable)
+        #endif
+    }
+
+    func testFFTTransportPipelineAgreesWithCalibratedExposure() throws {
+        #if canImport(Accelerate)
+        guard TransportBackend.cpu.isAvailable else { throw XCTSkip("Halide unavailable") }
+        var stock = TestStocks.negative; stock.adjacencyStrength = 0
+        var options = TransportFixtures.quiet
+        options.layeredTransport = TransportFixtures.stack
+        options.transportBackend = .fft
+
+        var image = ImageBuffer(width: 25, height: 19, fill: 0.05)
+        image.planes[0][120] = 50.0 // Highlight impulse
+        image.planes[1][120] = 2.0
+        image.planes[2][120] = 1.0
+
+        let engine = FotufilmEngine(stock: stock, options: options)
+        let renderedFFT = try engine.processChecked(linearRGB: image)
+
+        // Compare against CPU backend
+        var cpuOptions = options
+        cpuOptions.transportBackend = .cpu
+        let renderedCPU = try FotufilmEngine(stock: stock, options: cpuOptions).processChecked(linearRGB: image)
+
+        // The halation profile should have high correlation and identical visual character
+        for c in 0..<3 {
+            let sumFFT = renderedFFT.planes[c].reduce(0, +)
+            let sumCPU = renderedCPU.planes[c].reduce(0, +)
+            // Energy conservation agreement between continuous FFT and stencil discretization
+            XCTAssertEqual(sumFFT, sumCPU, accuracy: sumCPU * 0.10)
+        }
+        #endif
+    }
 }

@@ -66,7 +66,7 @@ Options:
   --halation <scale> Halation multiplier, 0 disables (default: 1)
   --halation-model <legacy|layered> Halation model (default: legacy)
   --transport <json> Opt in to a layered transport construction (experimental)
-  --transport-backend <cpu|metal> Transport convolution backend (default: cpu)
+  --transport-backend <cpu|metal|fft> Transport convolution backend (default: cpu)
   --halation-colour <f>  How much the halo keeps the source's own colour
                      instead of the stock's layered red, 0-1 (default: 0).
                      The dimmer records are raised to the strongest record's
@@ -1122,7 +1122,8 @@ if let backend = flags["--transport-backend"] {
     switch backend {
     case "cpu": options.transportBackend = .cpu
     case "metal": options.transportBackend = .metal
-    default: fail("--transport-backend requires cpu or metal")
+    case "fft": options.transportBackend = .fft
+    default: fail("--transport-backend requires cpu, metal, or fft")
     }
 }
 if options.transportConstruction(for: stock) != nil {
