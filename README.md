@@ -116,7 +116,9 @@ npm ci
 npm run build
 ```
 
-The output is in `web/dist`. The demo develops an image at its own size, up
+The output is in `web/dist`. Set `FOTUFILM_BASE=/demo/` when running `npm run build`
+to host the demo at [fotufilm.com/demo](https://fotufilm.com/demo/).
+The demo develops an image at its own size, up
 to about 120 megapixels, cutting it into tiles the kernel runs one at a time;
 the pack carries its spatial parameters for a ladder of frame sizes so grain
 and halation stay the size the emulsion makes them. The demo uses the CPU when

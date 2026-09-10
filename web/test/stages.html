@@ -95,7 +95,7 @@ try {
   const developer = await createDeveloper(base)
   say(`engine: ${developer.backend}`)
   const source = pixelSource({ data: scene(base.width, base.height), width: base.width, height: base.height })
-  const controls = { ev: 0, grain: 1, highlights: 0, shadows: 0, saturation: 1, vibrance: 0 }
+  const controls = { exposure: 0, grain: 1, highlights: 0, shadows: 0, saturation: 1, vibrance: 0 }
 
   developer.usePack(base)
   const print = (await developer.develop(source, controls)).pixels
