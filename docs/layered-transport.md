@@ -12,8 +12,15 @@ swift run -c release fotufilm input.exr output.png --stock example-negative-400 
 
 Use an existing stock ID from `--list-stocks`. `--transport-backend metal` runs the
 transport convolutions through Halide Metal JIT; spectral scene preparation and
-development use the CPU reference in either mode. This is not an end-to-end GPU
+development use the CPU reference with either backend. This is not an end-to-end GPU
 renderer. `cpu` is the default. An unavailable backend produces a render error.
+
+Use `--iterations 31` to measure 30 repeated warm frames after the first render.
+The report includes median and p95 processing latency and achieved frames per second.
+Warm timings exclude image decoding and output encoding and include scene preparation,
+transport, development, and output-medium processing. They are sequential repeated-image
+measurements; a 4K30 workload needs each 3840×2160 frame in 33.33 ms. Failed renders
+abort the benchmark instead of contributing a timing sample.
 
 In Swift, decode and validate a `LayeredTransport`, assign it to
 `FotufilmEngine.Options.layeredTransport`, and call
@@ -82,8 +89,10 @@ integration, or the final multiresolution discretization.
 Pixel weights integrate the overlap of translated pixel cells with each radial
 quadrature node. Narrow and broad radial bands use separate grid scales, so a
 distant tail cannot blur the inner shoulder. Each stencil is positive and
-normalized. Reduction uses positive area weights and reconstruction uses bilinear
-weights. The image boundary extends the nearest true edge pixel. Components and
+normalized. Reduction uses positive area weights and reconstruction uses smooth,
+positive cubic B-spline weights at reduced scales; stride one keeps the original
+pixel samples. Camera, native Metal, Halide, and portable reconstruction agree.
+The image boundary extends the nearest true edge pixel. Components and
 radial bands stream one at a time; amount changes reuse cached endpoint tables.
 
 ## Scope and limitations

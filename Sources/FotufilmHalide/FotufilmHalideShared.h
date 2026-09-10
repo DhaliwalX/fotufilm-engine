@@ -26,6 +26,42 @@ inline Halide::Expr bilinear_sample(Sample sample, Halide::Expr px, Halide::Expr
                 + fy * sample(x0 + 1, y0 + 1));
 }
 
+/// Smooth bicubic sampling using C2-continuous cubic B-spline weights.
+/// Evaluates a separable 4x4 grid of samples around (floor(px), floor(py)).
+/// Guarantees strictly non-negative weights (no ringing or negative exposure overshoot),
+/// partition of unity (sum = 1), and C2 continuity.
+template<typename Sample>
+inline Halide::Expr bicubic_sample(Sample sample, Halide::Expr px, Halide::Expr py) {
+    using Halide::Expr;
+    Expr x0 = Halide::cast<int32_t>(Halide::floor(px));
+    Expr y0 = Halide::cast<int32_t>(Halide::floor(py));
+    Expr fx = px - Halide::floor(px);
+    Expr fy = py - Halide::floor(py);
+
+    Expr one_minus_fx = 1.0f - fx;
+    Expr fx2 = fx * fx;
+    Expr fx3 = fx2 * fx;
+    Expr wx0 = (1.0f / 6.0f) * (one_minus_fx * one_minus_fx * one_minus_fx);
+    Expr wx1 = (1.0f / 6.0f) * (3.0f * fx3 - 6.0f * fx2 + 4.0f);
+    Expr wx2 = (1.0f / 6.0f) * (-3.0f * fx3 + 3.0f * fx2 + 3.0f * fx + 1.0f);
+    Expr wx3 = (1.0f / 6.0f) * fx3;
+
+    Expr one_minus_fy = 1.0f - fy;
+    Expr fy2 = fy * fy;
+    Expr fy3 = fy2 * fy;
+    Expr wy0 = (1.0f / 6.0f) * (one_minus_fy * one_minus_fy * one_minus_fy);
+    Expr wy1 = (1.0f / 6.0f) * (3.0f * fy3 - 6.0f * fy2 + 4.0f);
+    Expr wy2 = (1.0f / 6.0f) * (-3.0f * fy3 + 3.0f * fy2 + 3.0f * fy + 1.0f);
+    Expr wy3 = (1.0f / 6.0f) * fy3;
+
+    Expr row0 = wx0 * sample(x0 - 1, y0 - 1) + wx1 * sample(x0, y0 - 1) + wx2 * sample(x0 + 1, y0 - 1) + wx3 * sample(x0 + 2, y0 - 1);
+    Expr row1 = wx0 * sample(x0 - 1, y0)     + wx1 * sample(x0, y0)     + wx2 * sample(x0 + 1, y0)     + wx3 * sample(x0 + 2, y0);
+    Expr row2 = wx0 * sample(x0 - 1, y0 + 1) + wx1 * sample(x0, y0 + 1) + wx2 * sample(x0 + 1, y0 + 1) + wx3 * sample(x0 + 2, y0 + 1);
+    Expr row3 = wx0 * sample(x0 - 1, y0 + 2) + wx1 * sample(x0, y0 + 2) + wx2 * sample(x0 + 1, y0 + 2) + wx3 * sample(x0 + 2, y0 + 2);
+
+    return wy0 * row0 + wy1 * row1 + wy2 * row2 + wy3 * row3;
+}
+
 /// A positive normalized annulus. Sixteen directions keep the critical-angle ring round at the
 /// smallest radius where it is visible; the Gaussian field underneath supplies its measured
 /// thickness. Radius zero selects the center sample exactly for AOT variants serving legacy packs.

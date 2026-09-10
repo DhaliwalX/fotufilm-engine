@@ -150,13 +150,30 @@ final class LayeredTextureTransport {
       for(int y=-r;y<=r;y++) for(int x=-r;x<=r;x++) sum+=weights[(y+r)*(2*r+1)+x+r]*src.read(uint2(clamp(int2(p)+int2(x,y),int2(0),edge)));
       dst.write(sum,p);
     }
+    inline float4 bspline(float f) {
+      float g=1.f-f, f2=f*f, f3=f2*f;
+      return float4(g*g*g, 3.f*f3-6.f*f2+4.f,
+        -3.f*f3+3.f*f2+3.f*f+1.f, f3)*(1.f/6.f);
+    }
     kernel void accumulate(texture2d<float,access::read> src [[texture(0)]], texture2d<float,access::read_write> dst [[texture(1)]],
       constant uint4 &d [[buffer(1)]], constant float &weight [[buffer(2)]], uint2 p [[thread_position_in_grid]]) {
       if(p.x>=dst.get_width()||p.y>=dst.get_height()) return;
-      float2 q=(float2(p)+0.5f)/float(d.x)-0.5f; int2 a=int2(floor(q)); float2 f=q-floor(q);
       int2 edge=int2(d.zw)-1;
-      float4 v=mix(mix(src.read(uint2(clamp(a,int2(0),edge))),src.read(uint2(clamp(a+int2(1,0),int2(0),edge))),f.x),
-        mix(src.read(uint2(clamp(a+int2(0,1),int2(0),edge))),src.read(uint2(clamp(a+1,int2(0),edge))),f.x),f.y);
+      float4 v;
+      if (d.x == 1) {
+        v=src.read(uint2(min(int2(p),edge)));
+      } else {
+        float2 q=(float2(p)+0.5f)/float(d.x)-0.5f;
+        int2 a=int2(floor(q)); float2 f=q-floor(q);
+        float4 wx=bspline(f.x), wy=bspline(f.y);
+        v=float4(0);
+        for(int y=-1;y<=2;y++) {
+          float4 row=0;
+          for(int x=-1;x<=2;x++)
+            row+=wx[x+1]*src.read(uint2(clamp(a+int2(x,y),int2(0),edge)));
+          v+=wy[y+1]*row;
+        }
+      }
       dst.write(dst.read(p)+weight*v,p);
     }
     kernel void finish(texture2d<float,access::read> src [[texture(0)]], texture2d<float,access::write> dst [[texture(1)]], uint2 p [[thread_position_in_grid]]) {

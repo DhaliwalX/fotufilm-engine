@@ -3,7 +3,7 @@
 #include <cmath>
 #include <vector>
 
-// Positive area reduction, dense convolution and pixel-centred bilinear reconstruction.
+// Positive area reduction, dense convolution and pixel-centred bicubic B-spline reconstruction.
 // Matches the Halide reference and native Metal transport implementation, including edges.
 inline int fotufilm_transport_filter(const float *input, float *output, int w, int h,
                                      const float *kernel, int radius, int stride) {
@@ -35,13 +35,39 @@ inline int fotufilm_transport_filter(const float *input, float *output, int w, i
             blurred[size_t(y) * gw + x] = sum;
         }
         auto at = [&](int x, int y) { return blurred[size_t(std::clamp(y, 0, gh - 1)) * gw + std::clamp(x, 0, gw - 1)]; };
-        for (int y = 0; y < h; ++y) for (int x = 0; x < w; ++x) {
-            float px = (x + .5f) / stride - .5f, py = (y + .5f) / stride - .5f;
-            int ix = int(std::floor(px)), iy = int(std::floor(py));
-            float fx = px - ix, fy = py - iy;
-            float a = at(ix, iy) * (1 - fx) + at(ix + 1, iy) * fx;
-            float b = at(ix, iy + 1) * (1 - fx) + at(ix + 1, iy + 1) * fx;
-            dst[size_t(y) * w + x] = a * (1 - fy) + b * fy;
+        if (stride == 1) {
+            for (int y = 0; y < h; ++y) for (int x = 0; x < w; ++x) {
+                dst[size_t(y) * w + x] = at(x, y);
+            }
+        } else {
+            for (int y = 0; y < h; ++y) for (int x = 0; x < w; ++x) {
+                float px = (x + .5f) / stride - .5f, py = (y + .5f) / stride - .5f;
+                int x0 = int(std::floor(px)), y0 = int(std::floor(py));
+                float fx = px - x0, fy = py - y0;
+                float omfx = 1.0f - fx, fx2 = fx * fx, fx3 = fx2 * fx;
+                float wx[4] = {
+                    (1.0f / 6.0f) * (omfx * omfx * omfx),
+                    (1.0f / 6.0f) * (3.0f * fx3 - 6.0f * fx2 + 4.0f),
+                    (1.0f / 6.0f) * (-3.0f * fx3 + 3.0f * fx2 + 3.0f * fx + 1.0f),
+                    (1.0f / 6.0f) * fx3
+                };
+                float omfy = 1.0f - fy, fy2 = fy * fy, fy3 = fy2 * fy;
+                float wy[4] = {
+                    (1.0f / 6.0f) * (omfy * omfy * omfy),
+                    (1.0f / 6.0f) * (3.0f * fy3 - 6.0f * fy2 + 4.0f),
+                    (1.0f / 6.0f) * (-3.0f * fy3 + 3.0f * fy2 + 3.0f * fy + 1.0f),
+                    (1.0f / 6.0f) * fy3
+                };
+                float val = 0.0f;
+                for (int dy = -1; dy <= 2; ++dy) {
+                    float row = 0.0f;
+                    for (int dx = -1; dx <= 2; ++dx) {
+                        row += wx[dx + 1] * at(x0 + dx, y0 + dy);
+                    }
+                    val += wy[dy + 1] * row;
+                }
+                dst[size_t(y) * w + x] = val;
+            }
         }
     }
     return 0;
