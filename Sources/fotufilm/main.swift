@@ -67,6 +67,8 @@ Options:
   --halation-model <legacy|layered> Halation model (default: legacy)
   --transport <json> Opt in to a layered transport construction (experimental)
   --transport-backend <cpu|metal> Transport convolution backend (default: cpu)
+  --iterations <n>  Render n times; the first warms caches, remaining runs report
+                     processing time and throughput (31 measures 30 warm frames)
   --halation-colour <f>  How much the halo keeps the source's own colour
                      instead of the stock's layered red, 0-1 (default: 0).
                      The dimmer records are raised to the strongest record's
@@ -211,6 +213,14 @@ while !args.isEmpty {
 if flags["--help"] != nil || flags["-h"] != nil {
     print(usage)
     exit(0)
+}
+
+let benchmarkIterations: Int
+if let value = flags["--iterations"] {
+    guard let count = Int(value), count > 0 else { fail("--iterations requires a positive integer") }
+    benchmarkIterations = count
+} else {
+    benchmarkIterations = 1
 }
 
 if flags["--list-stocks"] != nil || flags["--list-stock-capabilities"] != nil {
@@ -1600,6 +1610,28 @@ if hlgOutput {
                     depth: depth, seed: options.seed)
 }
 print("Processed \(width)x\(height) with \(stock.name) (halide) in \(String(format: "%.2f", elapsed))s -> \(positional[1])")
+if benchmarkIterations > 1 {
+    let count = benchmarkIterations
+    print("Benchmarking steady-state across \(count) iterations (warmup: \(String(format: "%.3f", elapsed))s)...")
+    var times = [Double]()
+    for iter in 2...count {
+        let t0 = DispatchTime.now().uptimeNanoseconds
+        do { _ = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: linear) }
+        catch { fail("Benchmark run \(iter) failed: \(error.localizedDescription)") }
+        let dt = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1_000_000_000
+        times.append(dt)
+        print(String(format: "  Run %d: %.3fs (%.1f ms)", iter, dt, dt * 1000))
+    }
+    let avg = times.reduce(0, +) / Double(times.count)
+    let minT = times.min() ?? 0
+    print(String(format: "Steady-state (runs 2..%d): avg %.3fs (%.1f ms), min %.3fs (%.1f ms)", count, avg, avg * 1000, minT, minT * 1000))
+    let sorted = times.sorted()
+    let median = sorted.count % 2 == 0
+        ? (sorted[sorted.count/2-1] + sorted[sorted.count/2]) / 2 : sorted[sorted.count/2]
+    let p95 = sorted[max(0, Int(ceil(Double(sorted.count)*0.95))-1)]
+    print(String(format: "Median %.1f ms, p95 %.1f ms, throughput %.2f fps; 30 fps budget 33.33 ms/frame",
+                 median*1000, p95*1000, 1/avg))
+}
 #else
 fail("Image I/O requires macOS (ImageIO). The FotufilmCore library itself is portable.")
 #endif

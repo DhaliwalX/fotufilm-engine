@@ -104,9 +104,6 @@ public enum LayeredTransportRenderer {
         let render = execution?.render ?? { image, invocation, developOnly in
             try run(image: image, invocation: invocation, developOnly: developOnly)
         }
-        let filter = execution?.convolve ?? { image, stencil in
-            try convolve(image, stencil: stencil, backend: options.transportBackend)
-        }
         var model = supplied
         let texture = options.stage == .texture
         if texture && !options.textureStages.contains(.emulsionMTF) { model.coreSigmaMM = [0, 0, 0] }
@@ -133,11 +130,17 @@ public enum LayeredTransportRenderer {
             head.clearTransportOptics(keepLens: true)
             head.setTransportExposure(table)
             let component = try render(image, head, true)
-            for band in try prepared.compilation.kernels[k].stencils(pixelPitchMM: pitch) {
-                let filtered = try filter(component, band.stencil)
-                for c in 0..<3 { for i in 0..<image.pixelCount {
-                    exposure.planes[c][i] += band.weight * filtered.planes[c][i]
-                } }
+            if let customConvolve = execution?.convolve {
+                let bands = try prepared.compilation.kernels[k].stencils(pixelPitchMM: pitch)
+                for band in bands {
+                    let filtered = try customConvolve(component, band.stencil)
+                    for c in 0..<3 { for i in 0..<image.pixelCount {
+                        exposure.planes[c][i] += band.weight * filtered.planes[c][i]
+                    } }
+                }
+            } else {
+                let bands = try prepared.compilation.kernels[k].stencils(pixelPitchMM: pitch)
+                try accumulate(component: component, bands: bands, into: &exposure, backend: options.transportBackend)
             }
         }
         guard exposure.planes.allSatisfy({ $0.allSatisfy { $0.isFinite && $0 >= 0 } }) else {
@@ -196,6 +199,67 @@ public enum LayeredTransportRenderer {
         }
         guard status == 0 else { throw TransportError.backend("convolution failed (\(status))") }
         return output
+    }
+
+    public static func accumulate(component: ImageBuffer, bands: [TransportWeightedStencil],
+                                  into exposure: inout ImageBuffer,
+                                  backend: TransportBackend = .cpu) throws {
+        guard component.width > 0 && component.height > 0, component.planes.count == 3,
+              component.planes.allSatisfy({ $0.count == component.pixelCount && $0.allSatisfy(\.isFinite) }),
+              exposure.width == component.width && exposure.height == component.height,
+              exposure.planes.count == 3,
+              exposure.planes.allSatisfy({ $0.count == component.pixelCount && $0.allSatisfy(\.isFinite) }),
+              bands.allSatisfy({ $0.weight.isFinite && $0.weight >= 0 }) else {
+            throw TransportError.invalid("invalid image dimensions or planes")
+        }
+        let activeBands = bands.filter { $0.weight > 0 }
+        if activeBands.isEmpty { return }
+
+        var totalWeights = 0
+        for band in activeBands {
+            guard (1...128).contains(band.stencil.radius),
+                  (1...4096).contains(band.stencil.stride),
+                  band.stencil.stride.nonzeroBitCount == 1 else {
+                throw TransportError.invalid("invalid stencil radius or stride")
+            }
+            let dim: Int = 2 * band.stencil.radius + 1
+            let expected: Int = dim * dim
+            guard band.stencil.weights.count == expected else {
+                throw TransportError.invalid("invalid stencil weights size")
+            }
+            totalWeights += band.stencil.weights.count
+        }
+
+        var flattenedWeights = [Float]()
+        flattenedWeights.reserveCapacity(totalWeights)
+        var cBands = [FotufilmTransportBand]()
+        cBands.reserveCapacity(activeBands.count)
+
+        for band in activeBands {
+            flattenedWeights.append(contentsOf: band.stencil.weights)
+            cBands.append(FotufilmTransportBand(kernel: nil,
+                                                radius: Int32(band.stencil.radius),
+                                                stride: Int32(band.stencil.stride),
+                                                weight: band.weight))
+        }
+
+        let status = withPlanes(component.planes) { r, g, b in
+            withMutablePlanes(&exposure.planes) { er, eg, eb in
+                flattenedWeights.withUnsafeBufferPointer { weightsBuf in
+                    var offset = 0
+                    for i in cBands.indices {
+                        cBands[i].kernel = weightsBuf.baseAddress! + offset
+                        offset += Int((2 * cBands[i].radius + 1) * (2 * cBands[i].radius + 1))
+                    }
+                    return cBands.withUnsafeBufferPointer { bandsBuf in
+                        fotufilm_transport_accumulate(r, g, b, er, eg, eb,
+                            Int32(component.width), Int32(component.height),
+                            bandsBuf.baseAddress, Int32(activeBands.count), backend.rawValue)
+                    }
+                }
+            }
+        }
+        guard status == 0 else { throw TransportError.backend("transport accumulate failed (\(status))") }
     }
 
     private static func run(image: ImageBuffer, invocation: FilmEngineInvocation,
