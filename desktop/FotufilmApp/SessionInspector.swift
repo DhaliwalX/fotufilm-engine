@@ -91,6 +91,9 @@ final class InspectorViewController: SessionViewController {
     private var rows: [FormRowView] = []
     private var gaugePicker: GaugePickerView?
     private var gradeDeck: GradeDeckView?
+    #if !canImport(UIKit)
+    private var selectedGradeBand: GradeBandStyle = .shadows
+    #endif
     private var structure = ""
 
     /// Held by the window rather than here: when the panel is minimized to a rail, the rail's
@@ -684,6 +687,10 @@ final class InspectorViewController: SessionViewController {
     private func gradeSections() -> [FormSectionView] {
         let deckSection = FormSectionView(title: "Grade")
         let deck = GradeDeckView(model: model)
+        #if !canImport(UIKit)
+        deck.selectedBand = selectedGradeBand
+        deck.onSelectBand = { [weak self] in self?.selectedGradeBand = $0 }
+        #endif
         gradeDeck = deck
         deckSection.add(view: deck)
         for row in rows(in: .lightGrade) where row.rowTitle == "Encoded Grade" { deckSection.add(row) }

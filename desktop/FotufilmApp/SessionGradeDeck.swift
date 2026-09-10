@@ -13,7 +13,7 @@ import FotufilmCore
 #endif
 
 /// Which band a pad belongs to, and so what its two axes and its wash mean.
-enum GradeBandStyle {
+enum GradeBandStyle: Int {
     case shadows, midtones, highlights
 
     /// The name of the colour a balance is tilted toward, for the readout and for anyone listening
@@ -68,6 +68,13 @@ enum GradeBandStyle {
 final class GradeDeckView: SessionView {
     private let model: DesktopEditorModel
     private var bands: [BandView] = []
+    #if !canImport(UIKit)
+    private let bandTabs = SessionTabStrip()
+    var onSelectBand: ((GradeBandStyle) -> Void)?
+    var selectedBand: GradeBandStyle = .shadows {
+        didSet { updateVisibleBand() }
+    }
+    #endif
 
     init(model: DesktopEditorModel) {
         self.model = model
@@ -83,6 +90,18 @@ final class GradeDeckView: SessionView {
             ("Midtones", \.midtones, .midtones),
             ("Highlights", \.highlights, .highlights),
         ]
+        #if !canImport(UIKit)
+        stack.spacing = 12
+        bandTabs.setTitles(entries.map { $0.0 })
+        bandTabs.setAXLabel("Grade band")
+        bandTabs.onSelect = { [weak self] index in
+            guard let self, let band = GradeBandStyle(rawValue: index) else { return }
+            selectedBand = band
+            onSelectBand?(band)
+        }
+        stack.addArrangedSubview(bandTabs)
+        bandTabs.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        #endif
         for (title, path, style) in entries {
             let band = BandView(title: title, style: style, model: model,
                                 path: path)
@@ -90,6 +109,9 @@ final class GradeDeckView: SessionView {
             band.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
             bands.append(band)
         }
+        #if !canImport(UIKit)
+        updateVisibleBand()
+        #endif
 
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -100,6 +122,15 @@ final class GradeDeckView: SessionView {
     }
 
     func refresh() { bands.forEach { $0.refresh() } }
+
+    #if !canImport(UIKit)
+    private func updateVisibleBand() {
+        bandTabs.selectedIndex = selectedBand.rawValue
+        for (index, band) in bands.enumerated() {
+            band.isHidden = index != selectedBand.rawValue
+        }
+    }
+    #endif
 
     /// One band: a caption with its reading, the pad, and the level under it.
     private final class BandView: SessionView {
