@@ -7,8 +7,7 @@ final class MacDarkroomNavigation: SessionView {
 
     private let stages = SessionTabStrip()
     private let heading = makeLabel("Darkroom", size: 16, weight: .semibold)
-    private let step = makeLabel("", size: 11, color: .secondaryText,
-                                 monospacedDigits: true)
+    private let toolLabel = makeLabel("Canvas tool", size: 11, color: .secondaryText)
     private let help = MacHelpButton(label: "Darkroom")
     private var panels: [InspectorPanel] = []
 
@@ -25,10 +24,11 @@ final class MacDarkroomNavigation: SessionView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         translatesAutoresizingMaskIntoConstraints = false
+        toolLabel.isHidden = true
         let title = makeStack(.horizontal, spacing: 8, alignment: .firstBaseline)
         title.addArrangedSubview(heading)
         title.addArrangedSubview(help)
-        title.addArrangedSubview(step)
+        title.addArrangedSubview(toolLabel)
         let stack = makeStack(.vertical, spacing: 10)
         [title, stages].forEach { stack.addArrangedSubview($0) }
         addSubview(stack)
@@ -57,7 +57,7 @@ final class MacDarkroomNavigation: SessionView {
         guard panels.indices.contains(selectedIndex) else { return }
         stages.selectedIndex = selectedIndex < 4 ? selectedIndex : -1
         heading.textValue = selectedIndex < 4 ? "Darkroom" : panels[selectedIndex].title
-        step.textValue = selectedIndex < 4 ? "\(selectedIndex + 1) of 4" : "Canvas tool"
+        toolLabel.isHidden = selectedIndex < 4
         help.setAccessibilityLabel("Help for \(panels[selectedIndex].title)")
         help.refresh()
     }
