@@ -2,13 +2,13 @@
   "name": "fotufilm — Physical Film Development",
   "short_name": "fotufilm",
   "description": "Physically modelled film simulation engine and interactive darkroom.",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#fdfbe4",
   "theme_color": "#fdfbe4",
   "icons": [
     {
-      "src": "/app-icon.png",
+      "src": "app-icon.png",
       "sizes": "192x192 512x512",
       "type": "image/png",
       "purpose": "any maskable"
