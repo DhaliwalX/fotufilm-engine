@@ -174,3 +174,10 @@ based in part on the work of the Independent JPEG Group. The build copies
 the ports' licence notices into the same deployment directory. LibRaw,
 libjpeg and zlib sources and build outputs are downloaded into ignored build
 and toolchain caches; they are not vendored into the engine repository.
+
+## Browser OpenEXR decoder
+
+The browser uses the Three.js 0.186.0 EXRLoader and its bundled fflate implementation,
+licensed under MIT. Three.js is Copyright © 2010–2026 Three.js authors; fflate is
+Copyright © 2020 Arjun Barrett. See [the MIT notice](licenses/BROWSER-EXR-MIT.txt).
+The decoder is installed from npm; its generated browser bundle stays in deployment assets.

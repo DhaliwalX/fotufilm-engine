@@ -150,10 +150,11 @@ export class RenderSession {
     ])
     const cached = this.sources.find((item) => item.image === image && item.key === key)
     if (cached) return cached
-    const oriented = image.raw ? null : orientImage(image, edit, maxEdge)
-    const canvas = image.raw ? null : cropMode ? oriented : await cropImage(oriented, edit)
+    const floating = image.raw || image.linear
+    const oriented = floating ? null : orientImage(image, edit, maxEdge)
+    const canvas = floating ? null : cropMode ? oriented : await cropImage(oriented, edit)
     const source = linearSource(
-      image.raw ? rawSource(image, edit, maxEdge, cropMode) : imageSource(canvas),
+      floating ? rawSource(image, edit, maxEdge, cropMode) : imageSource(canvas),
     )
     const entry = { image, key, canvas, source, original: null }
     if (maxEdge <= 2400) {

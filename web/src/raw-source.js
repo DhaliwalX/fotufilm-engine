@@ -1,7 +1,8 @@
 import { fullCrop } from './editor-state.js'
 import { homography, mapPoint, outputSize } from './geometry.js'
 
-// RAW storage remains RGB16 with an exposure scale. Geometry restores scene-linear
+// RAW storage remains RGB16 with an exposure scale; EXR storage remains float32.
+// Geometry returns scene-linear
 // Rec.2020 float tiles, including values above display white;
 // a canvas is used only for display, never as an intermediate for film or export.
 export function rawSource(image, edit, maxEdge = Infinity, cropMode = false) {
@@ -23,8 +24,11 @@ export function rawSource(image, edit, maxEdge = Infinity, cropMode = false) {
     (width * cos + height * Math.abs(sin)) / width,
     (height * cos + width * Math.abs(sin)) / height,
   )
-  const { data, colors, sceneScale = 1, profile } = image.raw
-  const sampleScale = sceneScale / 65535
+  const { data, colors, sceneScale = 1, profile } = image.linear || image.raw
+  const sampleScale = image.linear ? 1 : sceneScale / 65535
+  const exactCopy = image.linear && !edit.rotation && !edit.flip && !angle
+    && width === originalWidth && height === originalHeight
+    && crop.every((point, i) => point.every((v, c) => v === fullCrop()[i][c]))
   function point(u, v) {
     const px = ((u - 0.5) * width) / cover,
       py = ((v - 0.5) * height) / cover
@@ -50,6 +54,13 @@ export function rawSource(image, edit, maxEdge = Infinity, cropMode = false) {
     height,
     read(left, top, w, h) {
       const output = new Float32Array(w * h * 4)
+      if (exactCopy) {
+        for (let y = 0; y < h; y++) {
+          const from = ((top + y) * width + left) * 4
+          output.set(data.subarray(from, from + w * 4), y * w * 4)
+        }
+        return output
+      }
       for (let y = 0; y < h; y++)
         for (let x = 0; x < w; x++) {
           const [u, v] = point((left + x + 0.5) / width, (top + y + 0.5) / height)

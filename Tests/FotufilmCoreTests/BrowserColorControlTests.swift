@@ -15,8 +15,8 @@ final class BrowserColorControlTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
         let fixture = try JSONDecoder().decode(Fixture.self, from: Data(contentsOf:
             root.appendingPathComponent("web/test/editor/color-fixtures.json")))
-        // Swift uses Float; the browser uses Double. Extreme tint can produce
-        // large gains, so allow two parts per million there.
+        // The browser rounds spectral and white-balance operations to Float.
+        // Allow small platform math differences, including two ppm for large gains.
         for balance in fixture.balances {
             let native = WhiteBalance(kelvin: balance.temperature, tint: balance.tint).gains
             for (actual, expected) in zip([native.r, native.g, native.b], balance.gains) {

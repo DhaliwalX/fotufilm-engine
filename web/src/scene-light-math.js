@@ -23,13 +23,14 @@ export function sceneSpectrum(kelvin, catalog) {
     const m1 = f((-1.3515 - 1.7703 * xf + 5.9114 * y) / m)
     const m2 = f((0.03 - 31.4424 * xf + 30.0717 * y) / m)
     const [s0, s1, s2] = catalog.daylight
-    return s0.map((v, i) => f(f(f(v + f(m1 * s1[i])) + f(m2 * s2[i])) / 100))
+    return s0.map((v, i) => f(f(f(f(v) + f(m1 * f(s1[i]))) + f(m2 * f(s2[i]))) / 100))
   }
   if (t <= 4000) return planck()
   if (t >= 5000) return daylight()
   const a = planck(),
     b = daylight(),
-    weight = f((t - 4000) / 1000)
+    s = f((t - 4000) / 1000),
+    weight = f(f(s * s) * f(3 - f(2 * s)))
   return a.map((v, i) => f(f(f(1 - weight) * v) + f(weight * b[i])))
 }
 
