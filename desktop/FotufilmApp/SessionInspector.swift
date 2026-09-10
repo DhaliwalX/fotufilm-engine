@@ -391,9 +391,9 @@ final class InspectorViewController: SessionViewController {
                 set: { [model] in model.edit.shutterSeconds = $0 }),
                 NoteRow { [model] in
                     guard model.edit.shutterSeconds != nil else {
-                        return "A long exposure loses speed and gains crossover as the layers fail at different rates. This film's sheet states how much."
+                        return "Apply the film’s measured correction for sensitivity and color changes during long exposures."
                     }
-                    return "Developed with this film's stated reciprocity correction for an exposure that long."
+                    return "Uses the film’s measured long-exposure correction for this shutter time."
                 }]
         case .paper:
             return paperRows()
@@ -462,7 +462,7 @@ final class InspectorViewController: SessionViewController {
         if allows(.labControls) {
             let lab = FormSectionView(title: "Lab")
             for row in rows(in: .filmLab) { lab.add(row) }
-            lab.add(NoteRow("The film can's sticker rather than the darkroom: push develops harder with the crossover and grain that costs, bleach bypass leaves the silver in the negative, and an expired roll loses speed from the blue layer first."))
+            lab.add(NoteRow("Push changes contrast, color, and grain. Bleach bypass retains silver in the negative. Expired film simulates changes from age."))
             sections.append(lab)
         } else {
             sections.append(proSection(
@@ -523,7 +523,7 @@ final class InspectorViewController: SessionViewController {
             chemistry.add(row)
         }
         chemistry.add(NoteRow(chemistry.rows.isEmpty
-            ? "This stock uses its reference development. Push and pull are offered when the film provides measured development conditions."
+            ? "This film uses standard development. Push and pull are available only when the film has measured settings."
             : "Push and pull, where supported, change development. Exposure changes the light reaching the film. Bleach bypass retains silver in the negative."))
         let grain = FormSectionView(title: "Grain")
         for row in rows(in: .filmGrain) { grain.add(row) }
@@ -635,7 +635,7 @@ final class InspectorViewController: SessionViewController {
             options: VideoSourceEncoding.allCases.map { ($0.title, $0) },
             get: { [model] in model.sourceEncoding },
             set: { [model] in model.sourceEncoding = $0 }))
-        source.add(NoteRow("Standard converts tagged SDR, HLG, and PQ to scene-linear Rec.2020. Choose an explicit camera encoding when the file does not identify its curve and gamut reliably."))
+        source.add(NoteRow("Standard reads the file’s color tags automatically. Choose a camera encoding if the file’s tags are missing or incorrect."))
 
         return source
     }
@@ -648,7 +648,7 @@ final class InspectorViewController: SessionViewController {
                       ("18 fps · Super 8", 18), ("24 fps · cine", 24)],
             get: { [model] in model.videoFrameRate },
             set: { [model] in model.videoFrameRate = $0 }))
-        cadence.add(NoteRow("Retimes the export to a film cadence by developing fewer, longer-lived frames."))
+        cadence.add(NoteRow("Choose the export frame rate. Lower rates hold each frame longer."))
         return cadence
     }
 
@@ -667,7 +667,7 @@ final class InspectorViewController: SessionViewController {
             let compare = "Click and hold the photo to compare with the original."
             #endif
             return model.hasVideo
-                ? "Press space to play or pause. Scrubbing develops each frame live; when the playhead settles, that frame develops again at full resolution."
+                ? "Press Space to play or pause. Scrubbing shows a preview; stopping displays the frame at full resolution."
                 : compare
         })
         return hint
@@ -706,7 +706,7 @@ final class InspectorViewController: SessionViewController {
         deckSection.add(view: deck)
         for row in rows(in: .lightGrade) where row.rowTitle == "Encoded Grade" { deckSection.add(row) }
         let note = FormSectionView(title: nil)
-        note.add(NoteRow("Lift, gamma and gain over the developed print — the pad tilts the band’s color, and the slider moves its level. The film has already responded to the light, so these controls grade the resulting image."))
+        note.add(NoteRow("Choose Shadows, Midtones, or Highlights. Use the pad to adjust color and the slider to adjust brightness. Grade is applied after the film response."))
 
         let reset = FormSectionView(title: nil)
         reset.add(ButtonRow("Reset Grade", destructive: true,
@@ -761,7 +761,7 @@ final class InspectorViewController: SessionViewController {
         for row in geometry where row.rowTitle == "Vertical" || row.rowTitle == "Horizontal" {
             perspective.add(row)
         }
-        perspective.add(NoteRow("Tilts the picture plane, for a building photographed from the pavement or a wall shot from one side. The frame is filled again afterwards, so a strong correction crops."))
+        perspective.add(NoteRow("Straighten converging lines caused by camera angle. Strong corrections crop more of the image."))
 
         let reset = FormSectionView(title: nil)
         reset.add(ButtonRow("Reset Crop", destructive: true,
@@ -782,7 +782,7 @@ final class InspectorViewController: SessionViewController {
 
     private func lensSections() -> [FormSectionView] {
         let hint = FormSectionView(title: nil)
-        hint.add(NoteRow("Lens correction undoes what the taking lens did to the frame — its distortion, its darkened corners, the colour fringing at the edges. It is read from the photograph's own metadata when a matching profile is known."))
+        hint.add(NoteRow("Correct lens distortion, dark corners, and color fringing. A matching profile is selected from the photo’s metadata when available."))
         #if canImport(UIKit)
         return [filterSection(), lensSection(), hint]
         #else

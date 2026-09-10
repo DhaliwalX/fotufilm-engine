@@ -53,10 +53,15 @@ enum SnapshotPanels {
                 written += 1
             }
 
-            if write(SettingsSheetController(),
-                     size: CGSize(width: 520, height: 900),
-                     to: directory.appendingPathComponent("settings.png")) {
-                written += 1
+            let settings = MacSettingsWindowController()
+            settings.window?.appearance = NSAppearance(named: .darkAqua)
+            for (index, pane) in MacSettingsPane.allCases.enumerated() {
+                settings.tabs.selectedTabViewItemIndex = index
+                if let window = settings.window,
+                   write(window, to: directory.appendingPathComponent(
+                    "settings-\(pane.snapshotName).png")) {
+                    written += 1
+                }
             }
 
             // And the editor window whole, title bar with it: the toolbar is built by hand and the
@@ -95,6 +100,24 @@ enum SnapshotPanels {
             try? await Task.sleep(for: .milliseconds(250))
         }
         return nil
+    }
+
+    @MainActor
+    private static func write(_ window: NSWindow, to url: URL) -> Bool {
+        guard let frameView = window.contentView?.superview else { return false }
+        frameView.layoutSubtreeIfNeeded()
+        frameView.layoutSubtreeIfNeeded()
+        guard let bitmap = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds)
+        else { return false }
+        frameView.cacheDisplay(in: frameView.bounds, to: bitmap)
+        guard let data = bitmap.representation(using: .png, properties: [:]) else { return false }
+        do {
+            try data.write(to: url, options: .atomic)
+            return true
+        } catch {
+            print("snapshot-panels: \(url.lastPathComponent): \(error)")
+            return false
+        }
     }
 
     /// Puts a controller's view in an off-screen window at the given size, lets AppKit lay it out,

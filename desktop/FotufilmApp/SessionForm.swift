@@ -97,7 +97,7 @@ final class FormSectionView: SessionView {
     private var headingHelp: MacHelpButton?
     #endif
 
-    init(title: String?) {
+    init(title: String?, standardHeading: Bool = false) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
@@ -105,7 +105,8 @@ final class FormSectionView: SessionView {
         addSubview(outer)
 
         if let title {
-            let heading = CapsLabel(title)
+            let heading: PlatformLabel = standardHeading
+                ? makeLabel(title, size: 13, weight: .semibold) : CapsLabel(title)
             #if canImport(UIKit)
             outer.addArrangedSubview(heading)
             outer.setCustomSpacing(7, after: heading)

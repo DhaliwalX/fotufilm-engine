@@ -476,19 +476,33 @@ enum VerifyDesktopParity {
                              "Selection Light"])
         },
 
-        Check(name: "settings reach the film model") { editor in
-            let sheet = SettingsSheetController()
-            _ = sheet.view
-            sheet.viewDidLoad()
-            let showing = words(in: sheet.view)
-            let wanted = ["New Photos", "Starting Film", "Output",
-                          "Negative", "Film Model", "Disc Grain",
-                          "Red–Green", "Edge Contrast"]
-            let missing = wanted.filter { !shows(showing, $0) }
-            guard missing.isEmpty else {
-                return .fail("missing \(missing.joined(separator: ", "))")
+        Check(name: "settings group the controls in native tabs") { _ in
+            let settings = MacSettingsWindowController()
+            guard settings.tabs.tabStyle == .toolbar,
+                  settings.window?.sheetParent == nil,
+                  settings.tabs.tabViewItems.map(\.label) == ["General", "Output", "Film Model"] else {
+                return .fail("settings did not create an independent window with three toolbar tabs")
             }
-            return .pass("\(wanted.count) rows found")
+            let expected = [
+                ["New Photos", "Starting Film", "Reset All Settings"],
+                ["Photos", "Video", "Photo Quality", "Video Quality", "Negative"],
+                ["Grain", "Halation", "Color Separation", "Disc Grain", "Red–Green", "Edge Contrast"],
+            ]
+            for (index, labels) in expected.enumerated() {
+                settings.tabs.selectedTabViewItemIndex = index
+                guard let controller = settings.tabs.tabViewItems[index].viewController else {
+                    return .fail("settings tab \(index) has no controls")
+                }
+                let showing = words(in: controller.view)
+                let missing = labels.filter { !shows(showing, $0) }
+                guard missing.isEmpty else {
+                    return .fail("missing \(missing.joined(separator: ", "))")
+                }
+                guard !showing.contains("Done") else {
+                    return .fail("settings still use a modal Done button")
+                }
+            }
+            return .pass("General, Output, and Film Model expose all settings without a modal sheet")
         },
 
         Check(name: "the RGB histogram reads the print") { editor in

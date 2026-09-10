@@ -271,7 +271,7 @@ enum LensFilterSection {
     static func note(for model: DesktopEditorModel) -> String {
         let fitted = model.edit.lensFilterIDs
         guard !fitted.isEmpty else {
-            return "Filters go on in front of everything the film does — a conversion filter to change the light, a neutral density to open the lens, a mist to bloom the highlights."
+            return "Filters change the light before it reaches the film. Color filters change its color, neutral density filters reduce it, and diffusion filters soften highlights."
         }
         let resolved = FilterChoice.resolve(fitted)
         var lines: [String] = []
@@ -290,11 +290,11 @@ extension LensFilterCompensation {
     var detail: String {
         switch self {
         case .none:
-            return "The exposure was not changed, so the filter's light loss lands on the film as underexposure — a strobe metered before the filter went on, or any fixed manual exposure."
+            return "Exposure stays fixed, so the filters make the image darker."
         case .throughTheLens:
-            return "The camera metered through the filter, which is what a meter behind the lens does: a neutral density becomes exactly invisible, and a deep red still underexposes."
+            return "Compensates for light lost through the filters as a camera meter would. Neutral density is fully compensated; strong color filters can still underexpose."
         case .filmSpeed:
-            return "The published filter factor was applied, worked out against the emulsion's own sensitivities. It restores the green-sensitive record and only that one, which is what a filter factor is for."
+            return "Compensates using the filter factor for this film. This restores exposure in the green-sensitive layer."
         }
     }
 }

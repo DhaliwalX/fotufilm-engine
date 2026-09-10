@@ -281,7 +281,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "Film stock (default: first installed). See --list-stocks",
       "commandLinePlaceholder" : "<name>",
-      "detail" : "The emulsion the photograph is exposed on",
+      "detail" : "Choose the film used to render the photo.",
       "documentation" : "Selects the emulsion. Normal preserves the source frame without film transformation.",
       "drives" : [
 
@@ -330,7 +330,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "Film gauge (default: the gauge the stock is known on). \"sensor\" cuts the film to the frame the input file says its camera exposed. See --list-formats",
       "commandLinePlaceholder" : "<name>",
-      "detail" : "The gauge the frame is exposed on, or the film's own",
+      "detail" : "Set the film frame size, which affects visible grain and halation.",
       "documentation" : "Sets physical negative dimensions. Smaller formats increase grain enlargement and spatial halation reach.",
       "drives" : [
         "format"
@@ -438,7 +438,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Grain multiplier, 0 disables (default: 1)",
       "commandLinePlaceholder" : "<scale>",
-      "detail" : "How much of the stock's published granularity develops",
+      "detail" : "Adjust grain strength relative to the selected film.",
       "documentation" : "Scales calibrated silver or dye-cloud grain variance. Black-and-white films use continuous silver texture so individual samples do not appear as dots.",
       "drives" : [
 
@@ -507,36 +507,36 @@
       "binding" : "grainMottleShare",
       "choices" : [
         {
-          "detail" : "Whatever this stock’s sheet states",
+          "detail" : "Use the film’s default amount",
           "id" : "film",
           "label" : "Film’s Own"
         },
         {
-          "detail" : "One clump radius, the single-population field",
+          "detail" : "No added coarse clusters",
           "id" : "none",
           "label" : "None",
           "value" : 0
         },
         {
-          "detail" : "A trace of coarse structure under the grain",
+          "detail" : "A small amount of coarse grain",
           "id" : "light",
           "label" : "Light · 20%",
           "value" : 0.2
         },
         {
-          "detail" : "The two populations about even",
+          "detail" : "Similar amounts of fine and coarse grain",
           "id" : "moderate",
           "label" : "Moderate · 45%",
           "value" : 0.45
         },
         {
-          "detail" : "The coarse field carries most of the variance",
+          "detail" : "Mostly coarse grain",
           "id" : "heavy",
           "label" : "Heavy · 70%",
           "value" : 0.7
         },
         {
-          "detail" : "The engine’s ceiling",
+          "detail" : "Maximum coarse grain",
           "id" : "maximum",
           "label" : "Maximum · 90%",
           "value" : 0.9
@@ -546,7 +546,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "Grain-size mixture override, 0-0.9 (default: the stock's own, usually 0): the variance share of the published granularity carried by a coarse second clump field — the soft mottle under the sharp grain. The RMS anchor holds whatever the split",
       "commandLinePlaceholder" : "<share>",
-      "detail" : "The soft coarse clumping under the sharp grain",
+      "detail" : "Add larger, softer clusters to the grain pattern.",
       "documentation" : "Modulates low-frequency grain clump covariance.",
       "drives" : [
 
@@ -585,7 +585,7 @@
           "value" : 1
         }
       ],
-      "detail" : "Use the stock's coarse grain mixture, or set a custom share",
+      "detail" : "Use the film’s default grain clumping or choose an amount.",
       "drives" : [
 
       ],
@@ -641,7 +641,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "Share of grain variance carried by coarse clumping",
+      "detail" : "Set how much of the grain pattern comes from larger clusters.",
       "drives" : [
         "grainMottleShare"
       ],
@@ -713,7 +713,7 @@
           "value" : 1
         }
       ],
-      "detail" : "Whether the grain field advances with the timeline",
+      "detail" : "Choose whether the grain pattern changes between video frames.",
       "drives" : [
 
       ],
@@ -774,7 +774,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "clump (default) or discs. `discs` lays Boolean discs at the film's clump radius, scaled onto its published granularity, instead of a blurred clump field: the texture survives enlargement, saturates where discs overlap, and only differs once a disc covers a pixel. Costs about 5x the pixels and a one-off minute of pipeline build",
       "commandLinePlaceholder" : "<m>",
-      "detail" : "Resolve single grains where one covers an output pixel",
+      "detail" : "Draw individual grains when they are large enough to be visible.",
       "documentation" : "Enables discrete tabular grain disc rendering where emulsion grain clumps resolve at output pixels.",
       "drives" : [
 
@@ -839,7 +839,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "Grain random seed (default: fixed)",
       "commandLinePlaceholder" : "<n>",
-      "detail" : "Same seed and same frame give the same grain",
+      "detail" : "Choose a grain pattern. The same seed and frame produce the same pattern.",
       "drives" : [
 
       ],
@@ -901,7 +901,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Halation model (default: legacy)",
       "commandLinePlaceholder" : "<legacy|layered>",
-      "detail" : "Legacy or layered optical transport",
+      "detail" : "Choose how light is scattered and reflected within the film.",
       "drives" : [
 
       ],
@@ -964,7 +964,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Halation multiplier, 0 disables (default: 1)",
       "commandLinePlaceholder" : "<scale>",
-      "detail" : "Light returned by the base, back through the emulsion",
+      "detail" : "Adjust the glow around bright areas caused by light reflecting inside the film.",
       "documentation" : "Controls back-surface reflection and scatter around high-contrast exposure boundaries.",
       "drives" : [
 
@@ -1033,7 +1033,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Use provisional spatial profiles where a stock has no independently calibrated profile (default: off)",
       "commandLinePlaceholder" : "",
-      "detail" : "Provisional annular profiles where no calibrated profile exists",
+      "detail" : "Use an estimated halo shape when the film has no measured shape.",
       "drives" : [
 
       ],
@@ -1083,7 +1083,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "How much the halo keeps the source's own colour instead of the stock's layered red, 0-1 (default: 0). The dimmer records are raised to the strongest record's return, so the ring brightens toward the light's colour",
       "commandLinePlaceholder" : "<f>",
-      "detail" : "How much the ring keeps the light's own colour",
+      "detail" : "Control how much the halo keeps the color of the light source.",
       "documentation" : "Shifts negative halation toward source light spectrum.",
       "drives" : [
 
@@ -1164,7 +1164,7 @@
         "neutral" : 0,
         "unit" : "stops"
       },
-      "detail" : "How much of each wavelength the base hands back",
+      "detail" : "Adjust which colors the film base reflects back into the image.",
       "documentation" : "Selects base reflectance spectral weighting.",
       "drives" : [
 
@@ -1218,7 +1218,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "DIR + adjacency strength; 1 calibrated, overdrive compressed (default: 1)",
       "commandLinePlaceholder" : "<scale>",
-      "detail" : "DIR inhibition: colour separation and edge contrast",
+      "detail" : "Adjust how development affects color separation and edge contrast.",
       "documentation" : "Controls development inhibitor release chemistry for interlayer color separation and edge contrast.",
       "drives" : [
 
@@ -1286,7 +1286,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Interlayer inhibitor reach as a multiple of the stock's own geometry, 0-3 (default: 1)",
       "commandLinePlaceholder" : "<scale>",
-      "detail" : "How far the released inhibitor crosses each interlayer",
+      "detail" : "Adjust how strongly neighboring film layers affect each other during development.",
       "documentation" : "Scales how far the released inhibitor crosses each interlayer.",
       "drives" : [
 
@@ -1350,7 +1350,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Within-layer inhibition as a multiple of the stock's own, 0-3 (default: 1)",
       "commandLinePlaceholder" : "<scale>",
-      "detail" : "The same inhibition acting within a layer, not across two",
+      "detail" : "Adjust the local contrast around edges created during development.",
       "documentation" : "Scales inhibition acting within a layer rather than across two.",
       "drives" : [
 
@@ -1412,7 +1412,7 @@
     },
     {
       "availability" : "couplerGeometry",
-      "detail" : "Additional multiplier on Separation for the red–green interlayer",
+      "detail" : "Adjust the separation between the red and green layers.",
       "drives" : [
 
       ],
@@ -1470,7 +1470,7 @@
     },
     {
       "availability" : "couplerGeometry",
-      "detail" : "Additional multiplier on Separation for the green–blue interlayer",
+      "detail" : "Adjust the separation between the green and blue layers.",
       "drives" : [
 
       ],
@@ -1535,7 +1535,7 @@
       "commandLineMax" : 1,
       "commandLineMin" : 0,
       "commandLinePlaceholder" : "<f>",
-      "detail" : "Spread some inter-layer inhibition farther around color boundaries",
+      "detail" : "Add a broader color effect around edges.",
       "documentation" : "Spreads a share of inter-layer inhibition farther around colour boundaries.",
       "drives" : [
 
@@ -1603,7 +1603,7 @@
       "commandLineMax" : 2000,
       "commandLineMin" : 0,
       "commandLinePlaceholder" : "<um>",
-      "detail" : "Broad spread on the film; active when Fringe Amount is above zero",
+      "detail" : "Set the width of the color fringe. Requires Fringe Amount above zero.",
       "documentation" : "Sets the broad spread on the film in micrometres.",
       "drives" : [
 
@@ -1670,7 +1670,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "Push (positive) or pull (negative) development, in stops (default: 0). Must name an exact condition measured for this stock's stated developer, dilution, temperature and agitation; stocks or stop values without measurements are rejected. Pair a push with its exposure change via --ev",
       "commandLinePlaceholder" : "<stops>",
-      "detail" : "Measured push or pull conditions for this film and process",
+      "detail" : "Choose a measured push or pull development setting for this film.",
       "documentation" : "Adjusts chemical development timing using measured push/pull sensitometry curves.",
       "drives" : [
 
@@ -1759,7 +1759,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Fraction of the developed silver the bleach leaves in the negative, 0-1 (default: 0). The print re-times on the denser mid-grey, so what changes is contrast and chroma. Colour negative only",
       "commandLinePlaceholder" : "<f>",
-      "detail" : "Silver the bleach leaves in the negative",
+      "detail" : "Leave silver in the negative to increase contrast and reduce color saturation.",
       "documentation" : "Retains metallic silver in color negative processing, increasing contrast and lowering dye saturation.",
       "drives" : [
 
@@ -1827,7 +1827,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Years past the process-by date at room temperature (default: 0). One stop per decade slower, blue layer first; base fog and grain rise with it. Add the stop the lab rule asks for with --ev to keep the mids",
       "commandLinePlaceholder" : "<years>",
-      "detail" : "Years past the process-by date at room temperature",
+      "detail" : "Simulate film stored at room temperature past its expiry date, in years.",
       "documentation" : "Simulates room-temperature aging: speed loss, baseline fog density, increased grain, and layer sensitivity drift.",
       "drives" : [
 
@@ -1898,7 +1898,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Exposure time in seconds (default: instantaneous). When the stock's datasheet publishes a long-exposure table the emulsion leaves the reciprocity law as that table states, frozen past the table's last row; a sheet that states no table holds the law. The print re-times the mid; shadows slide into the toe and any unequal failure casts the ends",
       "commandLinePlaceholder" : "<secs>",
-      "detail" : "How long the shutter was open, for the sheet's reciprocity row",
+      "detail" : "Set exposure time to apply the film’s measured long-exposure correction.",
       "documentation" : "Evaluates the emulsion's measured reciprocity failure characteristics under low-intensity long exposures.",
       "drives" : [
 
@@ -1949,7 +1949,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "Absorbing filters on the front of the lens, comma separated and applied in order: w85b, w80a, w25, nd09, cc20m and the rest of the Wratten catalogue. Integrated spectrally against the stock's own layer sensitivities, so the same filter is a different filter on a different film",
       "commandLinePlaceholder" : "<ids>",
-      "detail" : "An absorbing filter on the front of the lens",
+      "detail" : "Add a lens filter that changes the amount or color of incoming light.",
       "drives" : [
         "lensFilters"
       ],
@@ -1994,7 +1994,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "A second filter, behind the first",
+      "detail" : "Add a second lens filter.",
       "drives" : [
         "lensFilters"
       ],
@@ -2039,7 +2039,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "A third filter, behind the second",
+      "detail" : "Add a third lens filter.",
       "drives" : [
         "lensFilters"
       ],
@@ -2088,7 +2088,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "How the exposure was set behind the filter: ttl (default, the camera's own photopic cell), factor (the published filter factor, worked out against the emulsion) or none (a fixed manual exposure, so the light loss lands on the film)",
       "commandLinePlaceholder" : "<m>",
-      "detail" : "How the exposure was set with those filters fitted",
+      "detail" : "Choose how exposure compensates for light lost through the filters.",
       "drives" : [
         "lensFilters"
       ],
@@ -2137,7 +2137,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "A diffusion filter: promist, blackpromist, glimmerglass, blackglimmerglass, fog, blackfog. A share of the light meets a particle and is scattered or absorbed; the share that missed every particle stays sharp",
       "commandLinePlaceholder" : "<f>",
-      "detail" : "A diffusion filter on the front of the lens",
+      "detail" : "Add a filter that softens detail and spreads bright highlights.",
       "drives" : [
         "diffusionFilter"
       ],
@@ -2186,7 +2186,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "1/8, 1/4, 1/2, 1 or 2 (default: 1/4)",
       "commandLinePlaceholder" : "<g>",
-      "detail" : "The particle loading a product line's 1/8, 1/4, 1/2, 1 and 2 name",
+      "detail" : "Set the diffusion filter strength using its marked grade.",
       "drives" : [
         "diffusionFilter"
       ],
@@ -2236,7 +2236,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Lens focal length. Read by the diffusion filter, whose halo is focal length times scattering angle — the reason the same filter glows bigger on a longer lens. Default: the gauge's own normal lens",
       "commandLinePlaceholder" : "<mm>",
-      "detail" : "The taking lens's focal length, read by the diffusion filter",
+      "detail" : "Set the lens focal length used to calculate the diffusion effect.",
       "drives" : [
 
       ],
@@ -2298,7 +2298,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Taking-lens veiling glare, 1 enables (default: 0 — a photographed source already carries its own lens's glare)",
       "commandLinePlaceholder" : "<scale>",
-      "detail" : "Veiling glare from the taking lens, as a multiplier on the stock's figure",
+      "detail" : "Adjust scattered lens light that lifts dark areas and reduces contrast.",
       "drives" : [
 
       ],
@@ -2381,7 +2381,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "uncoated, singleLayer or multiCoated (default). Sets what each face reflects, and so what the filter costs in light and adds in veiling glare",
       "commandLinePlaceholder" : "<c>",
-      "detail" : "Coating on every fitted absorbing and diffusion filter",
+      "detail" : "Choose the coating used on the fitted lens filters.",
       "drives" : [
 
       ],
@@ -2443,7 +2443,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "Correct the lens the photograph was taken with",
+      "detail" : "Correct lens distortion, dark corners, and color fringing.",
       "documentation" : "Enables the matched lens profile or the calibrated camera profile.",
       "drives" : [
 
@@ -2471,7 +2471,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "The profile to correct against, or the matched one",
+      "detail" : "Choose a lens profile or use the match from the photo’s metadata.",
       "documentation" : "Identifies the matched lens model.",
       "drives" : [
 
@@ -2497,7 +2497,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "How much of the matched profile to apply",
+      "detail" : "Adjust the strength of the lens correction.",
       "documentation" : "Sets overall correction intensity.",
       "drives" : [
 
@@ -2536,7 +2536,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "Barrel at −1, pincushion at +1",
+      "detail" : "Adjust curved edges: negative values add barrel distortion; positive values add pincushion distortion.",
       "documentation" : "Corrects or introduces radial barrel and pincushion distortion.",
       "drives" : [
 
@@ -2572,7 +2572,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "Corners darker at −1, lifted at +1",
+      "detail" : "Darken the corners with negative values or brighten them with positive values.",
       "documentation" : "Compensates for peripheral illumination falloff.",
       "drives" : [
 
@@ -2608,7 +2608,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "Lateral chromatic aberration, red against cyan",
+      "detail" : "Correct red and cyan fringes around edges.",
       "documentation" : "Corrects lateral chromatic aberration by scaling the red channel radially.",
       "drives" : [
 
@@ -2644,7 +2644,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "Lateral chromatic aberration, blue against yellow",
+      "detail" : "Correct blue and yellow fringes around edges.",
       "documentation" : "Corrects lateral chromatic aberration by scaling the blue channel radially.",
       "drives" : [
 
@@ -2685,7 +2685,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Exposure compensation in stops (default: 0)",
       "commandLinePlaceholder" : "<stops>",
-      "detail" : "Exposure compensation, in stops",
+      "detail" : "Brighten or darken the light reaching the film, measured in stops.",
       "documentation" : "Adjusts exposure in stops (EV) before film simulation.",
       "drives" : [
 
@@ -2754,7 +2754,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Scene-referred shaping above mid-grey, -1...1 (default: 0)",
       "commandLinePlaceholder" : "<n>",
-      "detail" : "Scene-referred shaping above mid-grey, before the film",
+      "detail" : "Adjust bright areas before the film response is applied.",
       "documentation" : "Scales scene radiance above 18% neutral gray.",
       "drives" : [
 
@@ -2825,7 +2825,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "The same shaping below mid-grey, -1...1 (default: 0)",
       "commandLinePlaceholder" : "<n>",
-      "detail" : "The same shaping below mid-grey",
+      "detail" : "Adjust dark areas before the film response is applied.",
       "documentation" : "Scales scene radiance below 18% neutral gray.",
       "drives" : [
 
@@ -2896,7 +2896,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Regional highlight/shadow keying (default: 1)",
       "commandLinePlaceholder" : "<0|1>",
-      "detail" : "Key the two shapings above to each pixel's surroundings",
+      "detail" : "Make highlight and shadow adjustments respond to nearby brightness.",
       "documentation" : "Applies spatially aware contrast compression across adjacent luminance zones.",
       "drives" : [
 
@@ -2948,7 +2948,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "Scene illuminant, 2000-12000 K. Unset, an already white-balanced file is lit at the stock's own balance, so a neutral renders neutral. On camera raw this is relative to the file's as-shot light; 6504 preserves the capture illuminant",
       "commandLinePlaceholder" : "<kelvin>",
-      "detail" : "The illuminant the scene is declared to have been lit by",
+      "detail" : "Set the color temperature of the scene lighting.",
       "documentation" : "Changes scene-light temperature; RAW edits are relative to the capture illuminant.",
       "drives" : [
 
@@ -3016,7 +3016,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "Green/magenta off the locus, -100...100 (default: 0)",
       "commandLinePlaceholder" : "<n>",
-      "detail" : "Green and magenta off the daylight locus",
+      "detail" : "Shift the color balance between green and magenta.",
       "documentation" : "Changes the scene spectrum toward green or magenta, perpendicular to the blended blackbody/daylight locus.",
       "drives" : [
 
@@ -3116,7 +3116,7 @@
           "label" : "Custom"
         }
       ],
-      "detail" : "Capture light presented to the film; Temperature and Tint adjust this spectrum",
+      "detail" : "Choose the scene light source. Temperature and Tint refine its color.",
       "drives" : [
         "sceneIlluminantKelvin"
       ],
@@ -3195,7 +3195,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "Custom capture light before the Temperature and Tint edits",
+      "detail" : "Define a custom scene light source before Temperature and Tint adjustments.",
       "drives" : [
         "sceneIlluminantKelvin"
       ],
@@ -3254,7 +3254,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Chroma multiplier before the film responds (default: 1)",
       "commandLinePlaceholder" : "<scale>",
-      "detail" : "Chroma about each pixel's own luminance",
+      "detail" : "Adjust color intensity while preserving brightness.",
       "documentation" : "Scales radial chroma across all hues uniformly.",
       "drives" : [
 
@@ -3325,7 +3325,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Chroma boost weighted toward the least colourful pixels, -1...1 (default: 0)",
       "commandLinePlaceholder" : "<n>",
-      "detail" : "Chroma weighted toward the least colourful pixels",
+      "detail" : "Adjust color intensity, with more effect on muted colors.",
       "documentation" : "Scales chroma non-linearly, prioritizing muted tones.",
       "drives" : [
 
@@ -3392,7 +3392,7 @@
     {
       "availability" : "always",
       "binding" : "gradeSpaceEncoded",
-      "detail" : "Correct the encoded signal rather than the light itself",
+      "detail" : "Apply the grade to encoded color values instead of linear light. This changes how the grade responds.",
       "documentation" : "Grades the sRGB-encoded signal, where a grading suite's corrector works, instead of display-linear light.",
       "drives" : [
 
@@ -3493,7 +3493,7 @@
     {
       "availability" : "always",
       "binding" : "grade(FotufilmEditModel.GradeBand.shadows, FotufilmEditModel.GradeAxis.level)",
-      "detail" : "How far the shadows are carried",
+      "detail" : "Adjust the brightness of the shadows.",
       "drives" : [
 
       ],
@@ -3601,7 +3601,7 @@
     {
       "availability" : "always",
       "binding" : "grade(FotufilmEditModel.GradeBand.midtones, FotufilmEditModel.GradeAxis.level)",
-      "detail" : "How far the midtones are carried",
+      "detail" : "Adjust the brightness of the midtones.",
       "drives" : [
 
       ],
@@ -3709,7 +3709,7 @@
     {
       "availability" : "always",
       "binding" : "grade(FotufilmEditModel.GradeBand.highlights, FotufilmEditModel.GradeAxis.level)",
-      "detail" : "How far the highlights are carried",
+      "detail" : "Adjust the brightness of the highlights.",
       "drives" : [
 
       ],
@@ -3748,7 +3748,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "Output medium: ektacolor-edge (default), endura-premier, crystal-archive, vision-2383, vision-2393, eterna-cp, lab-scan, telecine, screen or negative. Photo and projection variants are digitised from the manufacturers' published datasheets. Reversal stocks use screen regardless of the requested medium.",
       "commandLinePlaceholder" : "<name>",
-      "detail" : "Choose where the finished image will live",
+      "detail" : "Choose how the film is printed, scanned, or viewed.",
       "documentation" : "Selects the print paper, projection print, scan, display reference or the negative itself.",
       "drives" : [
         "paper"
@@ -3797,7 +3797,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "Colour temperature the finished print is viewed under, in kelvin: daylight series from 4000 K up (5003 = D50 proof light), Planckian below (2856 = tungsten). Greys hold — the read adapts to the light — and the paper dyes' metamerism moves. Default: D50 for paper, calibrated 5400 K xenon for cinema print, fixed D65 for screen",
       "commandLinePlaceholder" : "<k>",
-      "detail" : "Choose the light used to judge a physical print",
+      "detail" : "Choose the light used to view the print.",
       "documentation" : "Sets the lamp a physical print is judged under; digital media ignore it.",
       "drives" : [
 
@@ -3870,13 +3870,13 @@
       "binding" : "enlargerIndex",
       "choices" : [
         {
-          "detail" : "Soft, even light through a mixing box: the negative prints at its measured density, as in a colour head or a minilab",
+          "detail" : "Soft, even light, as in a color enlarger or minilab.",
           "id" : "diffuser",
           "label" : "Diffuser",
           "value" : 0
         },
         {
-          "detail" : "Collimated light: silver grain scatters some of it out of the beam, so a black-and-white negative prints harder and its grain and dust sharper",
+          "detail" : "Focused light for stronger contrast and more visible grain and dust in black-and-white prints.",
           "id" : "condenser",
           "label" : "Condenser",
           "value" : 1
@@ -3886,7 +3886,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Lamp house over the negative: diffuser (default, the diffuse density the sheets are measured in) or condenser (collimated light: the Callier effect reads a silver negative's densities ~1.4x higher, a dye negative's ~1.05x, re-timed through mid-grey, so the print gains contrast). --bleach-bypass leaves retained silver, which scatters like a silver negative and takes the silver figure. Only an enlarged reflection print has one",
       "commandLinePlaceholder" : "<head>",
-      "detail" : "Choose the lamp house the negative is printed under",
+      "detail" : "Choose the enlarger lighting used to make the print.",
       "documentation" : "Chooses a diffuser or condenser head for an enlarged reflection print.",
       "drives" : [
 
@@ -3949,7 +3949,7 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "How far the film's colour layers are balanced to print together, 0-1 (default: 0.05)",
       "commandLinePlaceholder" : "<f>",
-      "detail" : "Balance how the film's colour layers print together",
+      "detail" : "Adjust the color balance of the print.",
       "documentation" : "Balances how the film's colour layers print together on the chosen medium.",
       "drives" : [
 
@@ -4017,7 +4017,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "Show the developed negative instead of the print it would make: 'lightbox' keeps the base its own orange, 'scanner' divides the base out. Ignored by a reversal stock, which has no negative",
       "commandLinePlaceholder" : "<how>",
-      "detail" : "How the developed negative is read when the output is the negative",
+      "detail" : "Choose how negative output is displayed.",
       "drives" : [
 
       ],
@@ -4063,7 +4063,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "The part of the frame the print is made from",
+      "detail" : "Choose the area of the photo to keep.",
       "documentation" : "Chooses the part of the frame the print is made from.",
       "drives" : [
 
@@ -4088,7 +4088,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "Rotation off level, in degrees",
+      "detail" : "Rotate the photo to level the horizon, in degrees.",
       "documentation" : "Rotates the frame off level by up to fifteen degrees.",
       "drives" : [
 
@@ -4127,7 +4127,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "Keystone about the horizontal axis",
+      "detail" : "Correct perspective when the camera was tilted up or down.",
       "documentation" : "Tilts the picture plane about the horizontal axis.",
       "drives" : [
 
@@ -4166,7 +4166,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "Keystone about the vertical axis",
+      "detail" : "Correct perspective when the camera faced the subject at an angle.",
       "documentation" : "Tilts the picture plane about the vertical axis.",
       "drives" : [
 
@@ -4231,7 +4231,7 @@
           "value" : 3
         }
       ],
-      "detail" : "Quarter turns clockwise",
+      "detail" : "Rotate the photo 90 degrees clockwise.",
       "documentation" : "Turns the frame in quarter turns.",
       "drives" : [
 
@@ -4256,7 +4256,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "Mirror the frame left to right",
+      "detail" : "Flip the photo horizontally.",
       "documentation" : "Mirrors the frame left to right.",
       "drives" : [
 
@@ -4284,7 +4284,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "The same light and colour controls, over part of the frame",
+      "detail" : "Adjust light and color in a selected part of the photo.",
       "documentation" : "Develops a colour, a light or a subject differently from the rest of the frame.",
       "drives" : [
 

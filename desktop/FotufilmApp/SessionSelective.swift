@@ -145,9 +145,9 @@ enum SelectiveSection {
         note.add(NoteRow { [model] in
             if model.selective.kind != .subject,
                model.selective.samplePoint == nil {
-                return "Sample a point to say what the selection is made of — a colour to pick every pixel like it, or a light to pick everything as bright as it. The selection's own develop is laid over the photograph wherever the two match."
+                return "Sample a point to select areas with a similar color or brightness, then adjust the selection."
             }
-            return "The selection is a way of looking at the photograph rather than part of the edit: it is not saved with the document, and an export develops the photograph without it."
+            return "Selective adjustments appear in the preview only. They are not saved with the document or included in exports."
         })
         #if canImport(UIKit)
         sections.append(note)
