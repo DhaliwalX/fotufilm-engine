@@ -255,7 +255,8 @@ public struct FilmStock: Sendable {
     /// Characteristic curve of the print paper (identical shape per channel;
     /// per-channel neutrality comes from printer-light calibration).
     public var paperCurve: CharacteristicCurve
-    /// Paper density that a correctly exposed mid-gray should land on.
+    /// Legacy pack field retained for decoding and round trips. Rendering uses
+    /// `PrintPaper.midDensity`; a camera stock does not set the output medium's grey.
     public var paperMidDensity: Float
 
     /// Where this emulsion leaves the reciprocity law, when its datasheet states a

@@ -722,6 +722,7 @@ public final class HandwrittenMetalFullFrameRenderer {
         switch transfer {
         case .hlg: return .hlg
         case .appleLog: return .appleLog
+        case .appleLog2: return .appleLog2
         }
     }
 

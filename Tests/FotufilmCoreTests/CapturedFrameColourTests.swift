@@ -75,6 +75,36 @@ final class CapturedFrameColourTests: XCTestCase {
             "an HLG frame passed as Apple Log")
     }
 
+    func testAppleLog2NeedsItsOwnKeyStated() throws {
+        guard #available(iOS 26.0, macOS 26.0, *) else {
+            throw XCTSkip("the Apple Log 2 key needs iOS 26 / macOS 26")
+        }
+        // Core Video's stated shape for an Apple Log 2 frame: the log key, the BT.2020 matrix,
+        // and nothing else.
+        let stated = Attachments(
+            yCbCrMatrix: CapturedFrameColour.rec2020Matrix,
+            logTransferFunction: CapturedFrameColour.appleLog2TransferFunction)
+        XCTAssertTrue(CapturedFrameColour.isCompatible(stated, with: .appleLog2))
+        XCTAssertFalse(
+            CapturedFrameColour.isCompatible(stated, with: .appleLog),
+            "an Apple Log 2 frame passed as Apple Log, which would skip its gamut")
+        XCTAssertFalse(CapturedFrameColour.isCompatible(stated, with: .hlg))
+
+        let appleLog = Attachments(
+            yCbCrMatrix: CapturedFrameColour.rec2020Matrix,
+            logTransferFunction: CapturedFrameColour.appleLogTransferFunction)
+        XCTAssertFalse(
+            CapturedFrameColour.isCompatible(appleLog, with: .appleLog2),
+            "an Apple Log frame passed as Apple Log 2, which would apply a gamut it lacks")
+        XCTAssertFalse(
+            CapturedFrameColour.isCompatible(Attachments(), with: .appleLog2),
+            "a frame that never said it was Apple Log 2 passed as Apple Log 2")
+
+        var wrongMatrix = stated
+        wrongMatrix.yCbCrMatrix = kCVImageBufferYCbCrMatrix_ITU_R_709_2 as String
+        XCTAssertFalse(CapturedFrameColour.isCompatible(wrongMatrix, with: .appleLog2))
+    }
+
     func testNoFrameIsBothReadings() throws {
         guard #available(iOS 17.2, macOS 14.2, *) else {
             throw XCTSkip("the log transfer key needs iOS 17.2 / macOS 14.2")
@@ -86,10 +116,20 @@ final class CapturedFrameColourTests: XCTestCase {
                             CapturedFrameColour.appleLogTransferFunction),
             Attachments(),
         ]
-        for attachments in candidates {
-            let hlg = CapturedFrameColour.isCompatible(attachments, with: .hlg)
-            let log = CapturedFrameColour.isCompatible(attachments, with: .appleLog)
-            XCTAssertFalse(hlg && log, "\(attachments) passed as both readings")
+        var readings: [CapturedFrameColour.Reading] = [.hlg, .appleLog]
+        var all = candidates
+        if #available(iOS 26.0, macOS 26.0, *) {
+            readings.append(.appleLog2)
+            all.append(Attachments(
+                yCbCrMatrix: CapturedFrameColour.rec2020Matrix,
+                logTransferFunction: CapturedFrameColour.appleLog2TransferFunction))
+        }
+        for attachments in all {
+            let passing = readings.filter {
+                CapturedFrameColour.isCompatible(attachments, with: $0)
+            }
+            XCTAssertLessThanOrEqual(
+                passing.count, 1, "\(attachments) passed as \(passing)")
         }
     }
 }

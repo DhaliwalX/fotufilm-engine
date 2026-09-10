@@ -191,7 +191,7 @@ final class HandwrittenMetalGlobalMeasurementsTests: XCTestCase {
 
         for transfer in [
             HandwrittenMetalGlobalMeasurements.HDRCaptureTransfer.hlg,
-            .appleLog,
+            .appleLog, .appleLog2,
         ] {
             let sceneScale: Float = transfer == .hlg
                 ? HLGSceneTransfer.headroom : AppleLogCurve.sceneScale
@@ -205,15 +205,17 @@ final class HandwrittenMetalGlobalMeasurementsTests: XCTestCase {
                     y + 1.4746 * v,
                     y - 0.164553 * u - 0.571353 * v,
                     y + 1.8814 * u)
-                let scene = SIMD3<Float>(
+                let recorded = pointwiseMax(SIMD3<Float>(
                     captureSceneLight(signal.x, transfer: transfer),
                     captureSceneLight(signal.y, transfer: transfer),
-                    captureSceneLight(signal.z, transfer: transfer))
-                let working = scene * (sceneScale * inputGain)
+                    captureSceneLight(signal.z, transfer: transfer)), .zero)
+                let working = pointwiseMax(
+                    capturedToWorking(recorded, transfer: transfer), .zero)
+                    * (sceneScale * inputGain)
                 let base = index * 4
-                decoded[base] = Float16(max(working.x, 0))
-                decoded[base + 1] = Float16(max(working.y, 0))
-                decoded[base + 2] = Float16(max(working.z, 0))
+                decoded[base] = Float16(working.x)
+                decoded[base + 1] = Float16(working.y)
+                decoded[base + 2] = Float16(working.z)
             }
             let decodedBuffer = try buffer(device: device, values: decoded)
             let textureResources = try measurements.makeResources(
@@ -438,8 +440,22 @@ final class HandwrittenMetalGlobalMeasurementsTests: XCTestCase {
         let clamped = min(max(signal, 0), 1)
         switch transfer {
         case .hlg: return HLGSceneTransfer.sceneLight(clamped)
-        case .appleLog: return AppleLogCurve.linear(clamped)
+        case .appleLog, .appleLog2: return AppleLogCurve.linear(clamped)
         }
+    }
+
+    /// The recorded gamut to Rec.2020: identity for the BT.2020 captures, the published Apple
+    /// Wide Gamut matrix for Apple Log 2 — the step that separates the two Apple readings.
+    private func capturedToWorking(
+        _ recorded: SIMD3<Float>,
+        transfer: HandwrittenMetalGlobalMeasurements.HDRCaptureTransfer
+    ) -> SIMD3<Float> {
+        guard transfer == .appleLog2 else { return recorded }
+        let m = CameraGamut.appleWideGamut.toRec2020.map { Float($0) }
+        return SIMD3(
+            m[0] * recorded.x + m[1] * recorded.y + m[2] * recorded.z,
+            m[3] * recorded.x + m[4] * recorded.y + m[5] * recorded.z,
+            m[6] * recorded.x + m[7] * recorded.y + m[8] * recorded.z)
     }
 
     private func buffer<T>(device: MTLDevice, values: [T]) throws -> MTLBuffer {

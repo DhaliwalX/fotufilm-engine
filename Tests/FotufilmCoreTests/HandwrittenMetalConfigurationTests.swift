@@ -110,9 +110,19 @@ final class HandwrittenMetalConfigurationTests: XCTestCase {
                            accuracy: 2e-6, name)
         }
 
+        let appleWideGamut = CameraGamut.appleWideGamut.toRec2020.map { Float($0) }
         let transforms: [(String, (SIMD3<Float>) -> SIMD3<Float>)] = [
             ("FOTUFILM_DELIVERY_P3_TO_2020_", ColorScience.linearDisplayP3ToRec2020),
             ("FOTUFILM_DELIVERY_P3_TO_709_", ColorScience.linearDisplayP3ToSRGB),
+            ("FOTUFILM_APPLE_WG_TO_2020_", { rgb in
+                SIMD3(
+                    appleWideGamut[0] * rgb.x + appleWideGamut[1] * rgb.y
+                        + appleWideGamut[2] * rgb.z,
+                    appleWideGamut[3] * rgb.x + appleWideGamut[4] * rgb.y
+                        + appleWideGamut[5] * rgb.z,
+                    appleWideGamut[6] * rgb.x + appleWideGamut[7] * rgb.y
+                        + appleWideGamut[8] * rgb.z)
+            }),
         ]
         for (prefix, transform) in transforms {
             let red = transform(SIMD3(1, 0, 0))

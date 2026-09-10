@@ -448,9 +448,11 @@ final class HandwrittenMetalSpectralHeadTests: XCTestCase {
             key: "fast-head-x420", invocation: invocation,
             mode: .linearRec2020RGBA16Float,
             frameWidth: width, frameHeight: height)
+        // Neutral chroma keeps every reading on the grey axis, which Apple Log 2's gamut matrix
+        // must leave in place: its rows sum to one.
         for transfer in [
             HandwrittenMetalSpectralHead.HDRCaptureTransfer.hlg,
-            .appleLog,
+            .appleLog, .appleLog2,
         ] {
             let sceneScale: Float = transfer == .hlg
                 ? HLGSceneTransfer.headroom : 1 / AppleLogCurve.diffuseWhite

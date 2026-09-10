@@ -1112,7 +1112,7 @@ public struct FilmEngineInvocation {
         let xMids = paperCurves.map { record in
             record.logExposure(
                 density: record.dMin
-                    + printMedium.anchorDensity(stock.paperMidDensity))
+                    + printMedium.anchorDensity)
         }
         let xMid = xMids[1]
 
