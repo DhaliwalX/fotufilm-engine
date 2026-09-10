@@ -47,6 +47,17 @@ final class PipelineStageTests: XCTestCase {
         }
     }
 
+    func testBoxPyramidSupportCoversAllThreePassesAndResampling() {
+        XCTAssertEqual(FilmEngineInvocation.boxPyramidSupport(radius: 1, stride: 1), 4)
+        XCTAssertEqual(FilmEngineInvocation.boxPyramidSupport(radius: 2, stride: 1), 7)
+        XCTAssertEqual(FilmEngineInvocation.boxPyramidSupport(radius: 5, stride: 2), 16)
+        XCTAssertEqual(FilmEngineInvocation.boxPyramidSupport(radius: 10, stride: 4), 32)
+        XCTAssertEqual(FilmEngineInvocation.boxPyramidSupport(
+            radius: 1, stride: 1, ringRadius: 1.5), 6)
+        XCTAssertEqual(FilmEngineInvocation.boxPyramidSupport(
+            radius: 5, stride: 2, ringRadius: 2.1), 20)
+    }
+
     func testNegativeThenPrintReproducesFull() throws {
         guard HalideBackend.isAvailable else { throw XCTSkip("Halide not linked") }
         let image = scene()
