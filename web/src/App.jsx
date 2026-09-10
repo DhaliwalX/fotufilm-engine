@@ -647,15 +647,18 @@ export default function App() {
   if (!HAS_WASM) return <StaticPipeline />
 
   const stage = stageIndex == null ? null : stages[stageIndex]
+  // A selection changes before the cached view finishes updating. A print has no stage
+  // difference, even while the previous stage's delta is still in state.
+  const shownDelta = stage && showDelta && stageIndex > 0 ? delta : null
   const shownUrl = showOriginal
     ? originalUrl
-    : (delta ? delta.url : resultUrl) || originalUrl
+    : (shownDelta ? shownDelta.url : resultUrl) || originalUrl
   const shownLabel = !originalUrl
     ? null
     : showOriginal || !resultUrl
       ? 'source · digital'
-      : delta
-        ? `what ${stage.label} added · ×${delta.gain.toFixed(1)}`
+      : shownDelta
+        ? `what ${stage.label} added · ×${shownDelta.gain.toFixed(1)}`
         : stage
           ? `${stage.label} · ${printedStock}`
           : `print · ${printedStock}`
@@ -877,9 +880,9 @@ export default function App() {
               isDisabled={!resultUrl || developing || stageIndex == null || stageIndex === 0}
               width="100%"
             />
-            {delta && (
+            {shownDelta && (
               <span className="delta-readout">
-                ×{delta.gain.toFixed(1)} gain · {delta.peak.toFixed(0)}/255 peak
+                ×{shownDelta.gain.toFixed(1)} gain · {shownDelta.peak.toFixed(0)}/255 peak
               </span>
             )}
           </div>
