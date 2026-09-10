@@ -5,6 +5,8 @@ import { TabList, Tab } from '@astryxdesign/core/TabList'
 import { Selector } from '@astryxdesign/core/Selector'
 import { PreviewQueue, previewLabel } from './preview-queue.js'
 import { IMAGE_ACCEPT, isRawFile, importRaw } from './raw-import.js'
+import { isEXRFile, importEXR } from './exr-import.js'
+import { assetUrl } from './engine.js'
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { RenderSession, loadStockIndex } from './render-session.js'
 import {
@@ -356,9 +358,9 @@ export default function App() {
       errors = []
     for (const file of Array.from(incoming || [])) {
       if (controller.signal.aborted) break
-      if (isRawFile(file)) {
+      if (isEXRFile(file) || isRawFile(file)) {
         try {
-          const decoded = await importRaw(file, {
+          const decoded = await (isEXRFile(file) ? importEXR : importRaw)(file, {
             signal: controller.signal,
             onProgress: (text) => {
               if (!controller.signal.aborted) setImportStatus(`${text}: ${file.name}`)
@@ -406,32 +408,20 @@ export default function App() {
     setError(errors.length ? errors.join(' ') : null)
   }
   async function openSample() {
+    const generation = ++loadGeneration.current
     try {
-      const canvas = document.createElement('canvas')
-      canvas.width = 1600
-      canvas.height = 1000
-      const ctx = canvas.getContext('2d')
-      ctx.fillStyle = '#202124'
-      ctx.fillRect(0, 0, 1600, 1000)
-      for (let row = 0; row < 4; row++)
-        for (let column = 0; column < 8; column++) {
-          ctx.fillStyle = `hsl(${column * 45} ${85 - row * 20}% ${65 - row * 12}%)`
-          ctx.fillRect(70 + column * 185, 70 + row * 160, 165, 140)
-        }
-      const gradient = ctx.createLinearGradient(70, 0, 1530, 0)
-      gradient.addColorStop(0, '#000')
-      gradient.addColorStop(1, '#fff')
-      ctx.fillStyle = gradient
-      ctx.fillRect(70, 750, 1460, 180)
-      await acceptFiles([
-        new File([await canvasBlob(canvas)], 'Color chart.png', {
-          type: 'image/png',
-        }),
-      ])
+      const response = await fetch(assetUrl('demo-scene.exr'))
+      if (!response.ok) throw new Error('The linear EXR sample could not be loaded.')
+      const bytes = await response.arrayBuffer()
+      if (generation !== loadGeneration.current) return
+      await acceptFiles([new File([bytes], 'Scene response.exr', {
+        type: 'image/x-exr',
+      })])
     } catch (e) {
-      setError(e.message)
+      if (generation === loadGeneration.current) setError(e.message)
     }
   }
+  useEffect(() => { openSample() }, [])
   function selectFile(file) {
     if (file.id === activeId || exporting) return
     histories.current.set(activeId, history)
@@ -651,7 +641,7 @@ export default function App() {
               ? `Camera spectral profile: ${active.image.raw.profile.name} · estimated ${Math.round(active.image.raw.profile.kelvin)} K`
               : 'RAW decoder color · no matching camera spectral correction'
             : undefined}>
-            {active?.image.raw ? 'RAW · ' : ''}
+            {active?.image.linear ? 'EXR · linear · ' : active?.image.raw ? 'RAW · ' : ''}
             {active ? `${((rawWidth * rawHeight) / 1000000).toFixed(1)} MP` : ''}
           </span>
         </div>
@@ -795,13 +785,13 @@ export default function App() {
               onClick={() => input.current?.click()}
             />
             <Button
-              label="Open sample chart"
+              label="Open linear EXR sample"
               variant="ghost"
               size="sm"
               className="text-button"
               onClick={openSample}
             />
-            <small>RAW, JPEG, PNG, WebP, AVIF · processed on this device</small>
+            <small>EXR, RAW, JPEG, PNG, WebP, AVIF · processed on this device</small>
           </div>
         )}
         {importStatus && (

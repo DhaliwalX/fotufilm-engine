@@ -335,7 +335,7 @@ for (let i = 0; i < 256; ++i) srgbToLinearTable[i] = srgbToLinear(i / 255)
 function decodeInto(destination, source, plane, stride, offsets) {
   const [o0, o1, o2] = offsets
   if (source instanceof Float32Array) {
-    // RAW geometry already supplies scene-linear Rec.2020; do not decode gamma twice.
+    // RAW and EXR geometry already supply scene-linear Rec.2020; preserve that light directly.
     for (let p = 0; p < plane; p++) {
       destination[p * stride + o0] = source[p * 4]
       destination[p * stride + o1] = source[p * 4 + 1]

@@ -142,7 +142,7 @@ through every validated digitized point. Source tracing variations are retained;
 response outside each published range is extrapolated. These schema version 2
 profiles require a build with sampled-curve support. Schema version 1 remains supported.
 
-The CLI and tests also include synthetic films. The demo uses a generated colour chart.
+The CLI and tests also include synthetic films. The browser opens a generated scene-linear float32 EXR chart.
 See [Build support](docs/support.html) for stock-pack setup.
 
 ## Print media

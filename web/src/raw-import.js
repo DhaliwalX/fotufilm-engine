@@ -34,7 +34,7 @@ export const RAW_EXTENSIONS = [
   'mdc',
   'x3f',
 ]
-export const IMAGE_ACCEPT = ['image/*', ...RAW_EXTENSIONS.map((ext) => `.${ext}`)].join(',')
+export const IMAGE_ACCEPT = ['image/*', '.exr', ...RAW_EXTENSIONS.map((ext) => `.${ext}`)].join(',')
 export const isRawFile = (file) =>
   RAW_EXTENSIONS.includes(file.name.split('.').at(-1).toLowerCase()) ||
   /(?:raw|dng|cr2|cr3|nef|arw|raf)/i.test(file.type)

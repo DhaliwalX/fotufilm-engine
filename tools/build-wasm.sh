@@ -134,7 +134,8 @@ MASKS=($(printf '%s\n' "${MASKS[@]}" | sort -un))
 # to do — on a reversal stock the slide is its own output medium and the last two frames match.
 FALLBACK_STOCK="${FOTUFILM_FALLBACK_STOCK:-gold200}"
 echo "Rendering the static fallback through ${FALLBACK_STOCK}…"
-SCENE_SOURCE="web/public/fotufilm_tagline.png"
+SCENE_SOURCE="web/public/demo-scene.exr"
+python3 tools/generate-demo-exr.py "$SCENE_SOURCE" --size "$PACK_SIZE"
 SCENE_WIDTH="${PACK_SIZE%x*}"
 SCENE_HEIGHT="${PACK_SIZE#*x}"
 [[ -f "$SCENE_SOURCE" ]] || {
@@ -145,7 +146,7 @@ sips -s format png -Z "$SCENE_WIDTH" "$SCENE_SOURCE" --out web/public/scene.png 
 sips --padToHeightWidth "$SCENE_HEIGHT" "$SCENE_WIDTH" --padColor 000000 \
   web/public/scene.png --out web/public/scene.png >/dev/null
 rm -rf web/public/fallback
-./.build/release/fotufilm web/public/scene.png web/public/fallback --stages \
+./.build/release/fotufilm "$SCENE_SOURCE" web/public/fallback --stages \
   --stock "$FALLBACK_STOCK" >/dev/null
 # JPEG for the web. The CLI writes lossless PNG because it writes what the film made, and 6.6 MB
 # of that is not what a browser which cannot run the engine should have to download to see it.

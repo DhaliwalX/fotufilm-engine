@@ -19,6 +19,7 @@ web/public/fotufilm-webgpu.wasm
 web/public/packs/
 web/public/test/
 web/public/scene.png
+web/public/demo-scene.exr
 web/public/fallback/
 
 # Local stock packs. The released profiles and synthetic examples live in
