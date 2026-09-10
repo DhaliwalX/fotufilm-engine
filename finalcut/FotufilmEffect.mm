@@ -952,6 +952,169 @@ struct FotufilmGating {
     return [lines componentsJoinedByString:@" "];
 }
 
+static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, int32_t), int32_t index) {
+    char buffer[4096];
+    const int32_t length = read(FOTUFILM_HOST_FINALCUT, index, buffer, (int32_t)sizeof(buffer));
+    return length < 0 ? @"" : [[NSString alloc] initWithBytes:buffer length:(NSUInteger)length
+                                                     encoding:NSUTF8StringEncoding] ?: @"";
+}
+
+- (void)addHostParameter:(int32_t)index
+                     api:(id<FxParameterCreationAPI_v5>)api
+                  engine:(FotufilmEngine *)engine
+                  gating:(const FotufilmGating &)gating
+              whenPushes:(FxParameterFlags)whenPushes
+              whenPrints:(FxParameterFlags)whenPrints
+                  status:(NSString *)status {
+    const int32_t kind = fotufilm_bridge_host_parameter_kind(FOTUFILM_HOST_FINALCUT, index);
+    const int32_t identifier = fotufilm_bridge_host_parameter_fxplug_id(FOTUFILM_HOST_FINALCUT, index);
+    if (identifier < 0) return;
+    const int32_t flags = fotufilm_bridge_host_parameter_flags(FOTUFILM_HOST_FINALCUT, index);
+    NSString *label = FotufilmHostString(fotufilm_bridge_host_parameter_label, index);
+    const double minimum = fotufilm_bridge_host_parameter_minimum(FOTUFILM_HOST_FINALCUT, index);
+    const double maximum = fotufilm_bridge_host_parameter_maximum(FOTUFILM_HOST_FINALCUT, index);
+    const double hardMaximum = fotufilm_bridge_host_parameter_hard_maximum(FOTUFILM_HOST_FINALCUT, index);
+    const double value = fotufilm_bridge_host_parameter_default(FOTUFILM_HOST_FINALCUT, index);
+    const double delta = fotufilm_bridge_host_parameter_delta(FOTUFILM_HOST_FINALCUT, index);
+    FxParameterFlags parameterFlags = kFxParameterFlag_DEFAULT;
+    if (!(flags & FOTUFILM_HOST_FLAG_ANIMATES)) parameterFlags |= kFxParameterFlag_NOT_ANIMATABLE;
+    switch (identifier) {
+        case kFotufilmParam_Push: parameterFlags |= whenPushes; break;
+        case kFotufilmParam_Paper:
+        case kFotufilmParam_PrintLight:
+        case kFotufilmParam_PrintCorrection:
+        case kFotufilmParam_Enlarger: parameterFlags |= whenPrints; break;
+        case kFotufilmParam_NegativeViewing: parameterFlags |= kFxParameterFlag_DISABLED; break;
+        default: break;
+    }
+    switch (kind) {
+        case FOTUFILM_HOST_KIND_DOUBLE:
+            [api addFloatSliderWithName:label
+                            parameterID:(UInt32)identifier
+                           defaultValue:value
+                           parameterMin:minimum
+                           parameterMax:MAX(hardMaximum, maximum)
+                              sliderMin:minimum
+                              sliderMax:maximum
+                                  delta:delta
+                         parameterFlags:parameterFlags];
+            break;
+        case FOTUFILM_HOST_KIND_INTEGER:
+            [api addIntSliderWithName:label
+                          parameterID:(UInt32)identifier
+                         defaultValue:(int)value
+                         parameterMin:(int)minimum
+                         parameterMax:(int)maximum
+                            sliderMin:(int)minimum
+                            sliderMax:(int)maximum
+                                delta:1
+                       parameterFlags:parameterFlags];
+            break;
+        case FOTUFILM_HOST_KIND_BOOLEAN:
+            [api addToggleButtonWithName:label
+                             parameterID:(UInt32)identifier
+                            defaultValue:value != 0
+                          parameterFlags:parameterFlags];
+            break;
+        case FOTUFILM_HOST_KIND_CHOICE: {
+            NSMutableArray<NSString *> *entries = [NSMutableArray array];
+            const int32_t choices = fotufilm_bridge_host_parameter_choice_count(FOTUFILM_HOST_FINALCUT, index);
+            for (int32_t c = 0; c < choices; ++c) {
+                char buffer[256];
+                const int32_t length = fotufilm_bridge_host_parameter_choice(
+                    FOTUFILM_HOST_FINALCUT, index, c, buffer, (int32_t)sizeof(buffer));
+                [entries addObject:length < 0 ? @"" : [[NSString alloc] initWithBytes:buffer
+                                                                                length:(NSUInteger)length
+                                                                              encoding:NSUTF8StringEncoding]];
+            }
+            [api addPopupMenuWithName:label
+                          parameterID:(UInt32)identifier
+                         defaultValue:(UInt32)MAX(value, 0)
+                          menuEntries:entries
+                       parameterFlags:parameterFlags];
+            break;
+        }
+        case FOTUFILM_HOST_KIND_MENU: {
+            NSArray<NSString *> *entries = nil;
+            NSInteger selected = (NSInteger)value;
+            switch (fotufilm_bridge_host_parameter_menu(FOTUFILM_HOST_FINALCUT, index)) {
+                case FOTUFILM_HOST_MENU_STOCKS:
+                    entries = engine.stockLabels.count ? engine.stockLabels : @[ @"No stocks installed" ];
+                    break;
+                case FOTUFILM_HOST_MENU_GAUGES:
+                    entries = engine.formatLabels.count ? engine.formatLabels : @[ @"Match Film" ];
+                    selected = engine.matchFilmFormat;
+                    break;
+                case FOTUFILM_HOST_MENU_PAPERS:
+                    entries = engine.paperLabels.count ? engine.paperLabels : @[ @"Ektacolor Edge" ];
+                    selected = engine.matchFilmOutput;
+                    break;
+                case FOTUFILM_HOST_MENU_STAGES:
+                    entries = engine.stageLabels.count ? engine.stageLabels : @[ @"Full" ];
+                    break;
+                case FOTUFILM_HOST_MENU_LENS_FILTERS:
+                    entries = engine.lensFilterLabels.count ? engine.lensFilterLabels : @[ @"None" ];
+                    break;
+                case FOTUFILM_HOST_MENU_METERINGS:
+                    entries = engine.meteringLabels.count ? engine.meteringLabels : @[ @"Metered through" ];
+                    break;
+                case FOTUFILM_HOST_MENU_DIFFUSION_FAMILIES:
+                    entries = engine.diffusionLabels.count ? engine.diffusionLabels : @[ @"None" ];
+                    break;
+                case FOTUFILM_HOST_MENU_DIFFUSION_GRADES:
+                    entries = engine.diffusionGradeLabels.count ? engine.diffusionGradeLabels : @[ @"1/4" ];
+                    selected = engine.defaultDiffusionGrade;
+                    break;
+                case FOTUFILM_HOST_MENU_NEGATIVE_VIEWINGS:
+                    entries = engine.negativeViewingLabels.count ? engine.negativeViewingLabels : @[ @"Light Box" ];
+                    break;
+                case FOTUFILM_HOST_MENU_COLOUR_SPACES:
+                    entries = [self colorSpaceMenu];
+                    break;
+                default:
+                    entries = @[ @"None" ];
+                    break;
+            }
+            if (selected < 0 || selected >= (NSInteger)entries.count) selected = MAX((NSInteger)entries.count - 1, 0);
+            if (identifier == kFotufilmParam_Stage) _describedStages = entries.count;
+            if (identifier == kFotufilmParam_Format) _describedFormats = entries.count;
+            if (identifier == kFotufilmParam_Paper) _describedPapers = entries.count;
+            if (identifier == kFotufilmParam_LensFilter1) _describedLensFilters = entries.count;
+            if (identifier == kFotufilmParam_Diffusion) _describedDiffusions = entries.count;
+            [api addPopupMenuWithName:label
+                          parameterID:(UInt32)identifier
+                         defaultValue:(UInt32)selected
+                          menuEntries:entries
+                       parameterFlags:parameterFlags];
+            break;
+        }
+        case FOTUFILM_HOST_KIND_LABEL:
+            [api addStringParameterWithName:label
+                                parameterID:(UInt32)identifier
+                               defaultValue:status
+                             parameterFlags:kFxParameterFlag_DISABLED | kFxParameterFlag_NOT_ANIMATABLE];
+            break;
+        case FOTUFILM_HOST_KIND_HIDDEN_STRING:
+            [api addStringParameterWithName:@"id"
+                                parameterID:(UInt32)identifier
+                               defaultValue:@""
+                             parameterFlags:kFxParameterFlag_HIDDEN];
+            break;
+        case FOTUFILM_HOST_KIND_TEXTURE_TOGGLES:
+            _describedTextureStages = engine.textureLabels.count;
+            for (NSUInteger t = 0; t < engine.textureLabels.count; ++t) {
+                const bool offered = t < gating.offered.size() ? gating.offered[t] : true;
+                [api addToggleButtonWithName:engine.textureLabels[t]
+                                 parameterID:(UInt32)(identifier + t)
+                                defaultValue:YES
+                              parameterFlags:offered ? kFxParameterFlag_DEFAULT : kFxParameterFlag_DISABLED];
+            }
+            break;
+        default:
+            break;
+    }
+}
+
 - (BOOL)addParametersWithError:(NSError **)error {
     id<FxParameterCreationAPI_v5> api = [self creationAPI];
     if (!api) {
@@ -960,315 +1123,64 @@ struct FotufilmGating {
         return NO;
     }
     FotufilmEngine *engine = FotufilmEngine.shared;
-
-    // A menu with nothing in it cannot be added, and an engine that failed to load has nothing to
-    // put in one. The stand-ins keep the inspector coherent; the status line says why.
-    NSArray<NSString *> *stages =
-        engine.stageLabels.count ? engine.stageLabels : @[ @"Full" ];
-    NSArray<NSString *> *stocks =
-        engine.stockLabels.count ? engine.stockLabels : @[ @"No stocks installed" ];
-    NSArray<NSString *> *formats =
-        engine.formatLabels.count ? engine.formatLabels : @[ @"Match Film" ];
-    NSArray<NSString *> *papers =
-        engine.paperLabels.count ? engine.paperLabels : @[ @"Ektacolor Edge" ];
-    NSArray<NSString *> *viewings =
-        engine.negativeViewingLabels.count ? engine.negativeViewingLabels : @[ @"Light Box" ];
-    NSArray<NSString *> *filters =
-        engine.lensFilterLabels.count ? engine.lensFilterLabels : @[ @"None" ];
-    NSArray<NSString *> *meterings =
-        engine.meteringLabels.count ? engine.meteringLabels : @[ @"Metered through" ];
-    NSArray<NSString *> *diffusions =
-        engine.diffusionLabels.count ? engine.diffusionLabels : @[ @"None" ];
-    NSArray<NSString *> *grades =
-        engine.diffusionGradeLabels.count ? engine.diffusionGradeLabels : @[ @"1/4" ];
-
-    // What this panel is about to be given, recorded before the first control is created —
-    // the status line is one of them, and it reports on exactly this. Every count below is the
-    // length of the list the menu is built from, and the texture count is how many toggles the
-    // loop further down will make. An engine that starts later cannot change any of them: Final
-    // Cut builds an inspector once.
-    _describedStages = stages.count;
-    _describedFormats = formats.count;
-    _describedPapers = papers.count;
-    _describedLensFilters = filters.count;
-    _describedDiffusions = diffusions.count;
-    _describedTextureStages = engine.textureLabels.count;
-
-    // The controls are created against the defaults — stock 0, the Full span, Auto — because
-    // nothing else can be read here. A restored project is re-gated when it joins its document.
     const FotufilmGating gating = [self gatingForStock:0];
     const FxParameterFlags whenPushes = gating.pushes ? kFxParameterFlag_DEFAULT
                                                       : kFxParameterFlag_DISABLED;
     const FxParameterFlags whenPrints = gating.prints ? kFxParameterFlag_DEFAULT
                                                       : kFxParameterFlag_DISABLED;
+    NSString *status = [self statusForStock:0
+                                      stage:FOTUFILM_BRIDGE_STAGE_FULL
+                                 colorSpace:kFotufilmColorSpaceAuto
+                                     gating:gating
+                              pushRequested:0
+                               pushMeasured:0];
 
-    // Read-only, so DISABLED: the host draws it dimmed, which is what a line the user cannot type
-    // into should look like. Its value is derived and refreshed, never read back.
-    [api addStringParameterWithName:@"Status"
-                             parameterID:kFotufilmParam_Status
-                       defaultValue:[self statusForStock:0
-                                                  stage:FOTUFILM_BRIDGE_STAGE_FULL
-                                             colorSpace:kFotufilmColorSpaceAuto
-                                                 gating:gating
-                                          pushRequested:0
-                                           pushMeasured:0]
-                          parameterFlags:kFxParameterFlag_DISABLED | kFxParameterFlag_NOT_ANIMATABLE];
-
-    // The panel reads top to bottom as the light does, in the same order as the Resolve
-    // plug-in: what arrives, the film it meets, how it is exposed, the glass in front of it,
-    // how it is developed, the emulsion's own character, and where the result is viewed. The
-    // pipeline controls come last, shut: they choose which part of that story this effect
-    // performs, and a first-time user should meet Timeline Color Space before Stage.
-    [api startParameterSubGroup:@"Input"
-                         parameterID:kFotufilmParam_InputGroup
-                      parameterFlags:kFxParameterFlag_DEFAULT];
-    [api addPopupMenuWithName:@"Timeline Color Space"
-                       parameterID:kFotufilmParam_ColorSpace
-                 defaultValue:kFotufilmColorSpaceAuto
-                  menuEntries:[self colorSpaceMenu]
-                    parameterFlags:kFxParameterFlag_DEFAULT];
-    [api endParameterSubGroup];
-
-    [api startParameterSubGroup:@"Film"
-                         parameterID:kFotufilmParam_FilmGroup
-                      parameterFlags:kFxParameterFlag_DEFAULT];
-    [api addPopupMenuWithName:@"Stock"
-                       parameterID:kFotufilmParam_Stock
-                 defaultValue:0
-                  menuEntries:stocks
-                    parameterFlags:kFxParameterFlag_DEFAULT];
-    // Match Film is the default gauge: the format a stock is actually known on, rather than a
-    // number the user has to look up. Naming a gauge pins it.
-    [api addPopupMenuWithName:@"Format"
-                       parameterID:kFotufilmParam_Format
-                 defaultValue:(int)engine.matchFilmFormat
-                  menuEntries:formats
-                    parameterFlags:kFxParameterFlag_DEFAULT];
-    [api endParameterSubGroup];
-
-    // The durable identity of each menu choice, hidden. See kFotufilmParam_StageID.
-    for (UInt32 identity : {(UInt32)kFotufilmParam_StageID, (UInt32)kFotufilmParam_StockID,
-                            (UInt32)kFotufilmParam_FormatID, (UInt32)kFotufilmParam_PaperID}) {
-        [api addStringParameterWithName:@"id"
-                                 parameterID:identity
-                           defaultValue:@""
-                              parameterFlags:kFxParameterFlag_HIDDEN];
+    const int32_t count = fotufilm_bridge_host_parameter_count(FOTUFILM_HOST_FINALCUT);
+    for (int32_t i = 0; i < count; ++i) {
+        const int32_t kind = fotufilm_bridge_host_parameter_kind(FOTUFILM_HOST_FINALCUT, i);
+        const int32_t identifier = fotufilm_bridge_host_parameter_fxplug_id(FOTUFILM_HOST_FINALCUT, i);
+        const int32_t flags = fotufilm_bridge_host_parameter_flags(FOTUFILM_HOST_FINALCUT, i);
+        NSString *label = FotufilmHostString(fotufilm_bridge_host_parameter_label, i);
+        const double minimum = fotufilm_bridge_host_parameter_minimum(FOTUFILM_HOST_FINALCUT, i);
+        const double maximum = fotufilm_bridge_host_parameter_maximum(FOTUFILM_HOST_FINALCUT, i);
+        const double hardMaximum = fotufilm_bridge_host_parameter_hard_maximum(FOTUFILM_HOST_FINALCUT, i);
+        const double value = fotufilm_bridge_host_parameter_default(FOTUFILM_HOST_FINALCUT, i);
+        const double delta = fotufilm_bridge_host_parameter_delta(FOTUFILM_HOST_FINALCUT, i);
+        FxParameterFlags parameterFlags = kFxParameterFlag_DEFAULT;
+        if (!(flags & FOTUFILM_HOST_FLAG_ANIMATES)) parameterFlags |= kFxParameterFlag_NOT_ANIMATABLE;
+        switch (identifier) {
+            case kFotufilmParam_Push: parameterFlags |= whenPushes; break;
+            case kFotufilmParam_Paper:
+            case kFotufilmParam_PrintLight:
+            case kFotufilmParam_PrintCorrection:
+            case kFotufilmParam_Enlarger: parameterFlags |= whenPrints; break;
+            case kFotufilmParam_NegativeViewing: parameterFlags |= kFxParameterFlag_DISABLED; break;
+            default: break;
+        }
+        switch (kind) {
+            case FOTUFILM_HOST_KIND_GROUP:
+                if (identifier < 0) break;
+                [api startParameterSubGroup:label
+                                 parameterID:(UInt32)identifier
+                              parameterFlags:(flags & FOTUFILM_HOST_FLAG_COLLAPSED_IN_FINAL_CUT)
+                                                 ? kFxParameterFlag_COLLAPSED : kFxParameterFlag_DEFAULT];
+                for (int32_t j = i + 1; j < count; ++j) {
+                    const int32_t memberKind = fotufilm_bridge_host_parameter_kind(FOTUFILM_HOST_FINALCUT, j);
+                    if (memberKind == FOTUFILM_HOST_KIND_GROUP) break;
+                    if (fotufilm_bridge_host_parameter_fxplug_group(FOTUFILM_HOST_FINALCUT, j) != identifier) break;
+                    i = j;
+                    [self addHostParameter:j api:api engine:engine gating:gating
+                                whenPushes:whenPushes whenPrints:whenPrints status:status];
+                }
+                [api endParameterSubGroup];
+                break;
+            default:
+                [self addHostParameter:i api:api engine:engine gating:gating
+                            whenPushes:whenPushes whenPrints:whenPrints status:status];
+                break;
+        }
     }
-
-    [api startParameterSubGroup:@"Light & Colour"
-                         parameterID:kFotufilmParam_ExposureGroup
-                      parameterFlags:kFxParameterFlag_DEFAULT];
-    [self addSlider:api name:@"Exposure" parameterID:kFotufilmParam_Exposure
-            value:0 min:-5 max:5 delta:0.01];
-    [self addSlider:api name:@"Temperature" parameterID:kFotufilmParam_Temperature
-            value:6504 min:2000 max:12000 delta:10];
-    [self addSlider:api name:@"Tint" parameterID:kFotufilmParam_Tint
-            value:0 min:-100 max:100 delta:0.5];
-    [self addSlider:api name:@"Highlights" parameterID:kFotufilmParam_Highlights
-            value:0 min:-1 max:1 delta:0.01];
-    [self addSlider:api name:@"Shadows" parameterID:kFotufilmParam_Shadows
-            value:0 min:-1 max:1 delta:0.01];
-    [api addToggleButtonWithName:@"Regional Tone Mask"
-                          parameterID:kFotufilmParam_LocalTone
-                    defaultValue:YES
-                       parameterFlags:kFxParameterFlag_DEFAULT];
-    [self addSlider:api name:@"Saturation" parameterID:kFotufilmParam_Saturation
-            value:1 min:0 max:2 delta:0.01];
-    [self addSlider:api name:@"Vibrance" parameterID:kFotufilmParam_Vibrance
-            value:0 min:-1 max:1 delta:0.01];
-    [api endParameterSubGroup];
-
-    // The lens, in the order the light meets it: the absorbing glass, how the exposure was set
-    // behind it, then the diffusion filter and the focal length its scattering is imaged through.
-    [api startParameterSubGroup:@"Lens & Filters"
-                         parameterID:kFotufilmParam_LensGroup
-                      parameterFlags:kFxParameterFlag_COLLAPSED];
-    NSString *const filterNames[3] = { @"Filter 1", @"Filter 2", @"Filter 3" };
-    const UInt32 filterIDs[3] = { kFotufilmParam_LensFilter1, kFotufilmParam_LensFilter2,
-                                  kFotufilmParam_LensFilter3 };
-    for (int i = 0; i < 3; ++i) {
-        [api addPopupMenuWithName:filterNames[i]
-                           parameterID:filterIDs[i]
-                     defaultValue:0
-                      menuEntries:filters
-                        parameterFlags:kFxParameterFlag_DEFAULT];
-    }
-    // The default is the engine's own, through-the-lens metering, which is entry 1 of its list.
-    [api addPopupMenuWithName:@"Metering"
-                       parameterID:kFotufilmParam_Metering
-                 defaultValue:(UInt32)(meterings.count > 1 ? 1 : 0)
-                  menuEntries:meterings
-                    parameterFlags:kFxParameterFlag_DEFAULT];
-    [api addPopupMenuWithName:@"Diffusion"
-                       parameterID:kFotufilmParam_Diffusion
-                 defaultValue:0
-                  menuEntries:diffusions
-                    parameterFlags:kFxParameterFlag_DEFAULT];
-    const NSInteger defaultGrade =
-        engine.defaultDiffusionGrade >= 0 && engine.defaultDiffusionGrade < (NSInteger)grades.count
-            ? engine.defaultDiffusionGrade : 0;
-    [api addPopupMenuWithName:@"Diffusion Grade"
-                       parameterID:kFotufilmParam_DiffusionGrade
-                 defaultValue:(UInt32)defaultGrade
-                  menuEntries:grades
-                    parameterFlags:kFxParameterFlag_DEFAULT];
-    // Zero is the gauge's own normal lens, which is what the grade numbering on a filter's ring
-    // is calibrated around.
-    [self addSlider:api name:@"Focal Length" parameterID:kFotufilmParam_FocalLength
-            value:0 min:0 max:300 delta:1];
-    // Zero leaves the stage out: a photographed clip already carries its own lens's glare.
-    [self addSlider:api name:@"Veiling Glare" parameterID:kFotufilmParam_Flare
-            value:0 min:0 max:2 delta:0.01];
-    [api endParameterSubGroup];
-
-    // The durable identity of the four catalogue menus above, hidden, as 26...29 are.
-    for (UInt32 identity : {(UInt32)kFotufilmParam_LensFilter1ID,
-                            (UInt32)kFotufilmParam_LensFilter2ID,
-                            (UInt32)kFotufilmParam_LensFilter3ID,
-                            (UInt32)kFotufilmParam_DiffusionID}) {
-        [api addStringParameterWithName:@"id"
-                                 parameterID:identity
-                           defaultValue:@""
-                              parameterFlags:kFxParameterFlag_HIDDEN];
-    }
-
-    [api startParameterSubGroup:@"Development"
-                         parameterID:kFotufilmParam_LabGroup
-                      parameterFlags:kFxParameterFlag_COLLAPSED];
-    // A continuous slider over a set of measured conditions: the engine carries a film's response
-    // only at the developments it was measured at, and refuses anything between. The value is
-    // snapped to the nearest one on the way to the engine — not in the control, which animates —
-    // and the slider is disabled on a film that has none.
-    [self addSlider:api name:@"Push / Pull" parameterID:kFotufilmParam_Push
-            value:0 min:-1 max:3 delta:0.01 flags:whenPushes];
-    [self addSlider:api name:@"Bleach Bypass" parameterID:kFotufilmParam_BleachBypass
-            value:0 min:0 max:1 delta:0.01];
-    [self addSlider:api name:@"Film Age (years)" parameterID:kFotufilmParam_Expired
-            value:0 min:0 max:30 delta:0.1];
-    [api endParameterSubGroup];
-
-    [api startParameterSubGroup:@"Grain"
-                         parameterID:kFotufilmParam_ResponseGroup
-                      parameterFlags:kFxParameterFlag_DEFAULT];
-    [self addSlider:api name:@"Grain" parameterID:kFotufilmParam_Grain
-            value:1 min:0 max:2 delta:0.01];
-    [api addIntSliderWithName:@"Grain Seed"
-                       parameterID:kFotufilmParam_Seed
-                 defaultValue:0x46494C4D
-                 parameterMin:0
-                 parameterMax:INT32_MAX
-                    sliderMin:0
-                    sliderMax:INT32_MAX
-                        delta:1
-                    parameterFlags:kFxParameterFlag_NOT_ANIMATABLE];
-    [api endParameterSubGroup];
-
-    [api startParameterSubGroup:@"Halation"
-                         parameterID:kFotufilmParam_HalationGroup
-                      parameterFlags:kFxParameterFlag_DEFAULT];
-    // The slider stays 0-10; the hard range admits typed values to 100, so a pack's authored look
-    // can be pushed well past itself without touching the calibrated sheets.
-    [api addFloatSliderWithName:@"Halation"
-                         parameterID:kFotufilmParam_Halation
-                   defaultValue:1
-                   parameterMin:0
-                   parameterMax:100
-                      sliderMin:0
-                      sliderMax:10
-                          delta:0.01
-                      parameterFlags:kFxParameterFlag_DEFAULT];
-    [api addToggleButtonWithName:@"Estimated Halation Shape"
-                          parameterID:kFotufilmParam_EstimatedHalation
-                    defaultValue:NO
-                       parameterFlags:kFxParameterFlag_DEFAULT];
-    [self addSlider:api name:@"Halo Colour" parameterID:kFotufilmParam_HalationColour
-            value:0 min:0 max:1 delta:0.01];
-    [api endParameterSubGroup];
-
-    [api startParameterSubGroup:@"Colour Separation"
-                         parameterID:kFotufilmParam_CouplerGroup
-                      parameterFlags:kFxParameterFlag_DEFAULT];
-    [self addSlider:api name:@"DIR Couplers" parameterID:kFotufilmParam_Couplers
-            value:1 min:0 max:2 delta:0.01];
-    [api endParameterSubGroup];
-
-    [api startParameterSubGroup:@"Output"
-                         parameterID:kFotufilmParam_OutputGroup
-                      parameterFlags:kFxParameterFlag_DEFAULT];
-    [api addPopupMenuWithName:@"Output Medium"
-                       parameterID:kFotufilmParam_Paper
-                 defaultValue:(int)engine.matchFilmOutput
-                  menuEntries:papers
-                    parameterFlags:whenPrints];
-    [api addPopupMenuWithName:@"Viewing Illuminant"
-                       parameterID:kFotufilmParam_PrintLight
-                 defaultValue:0
-                  menuEntries:@[ @"Medium Reference · Auto", @"Proofing Booth · D50",
-                                 @"Tungsten · 2856 K", @"Daylight · D65" ]
-                    parameterFlags:whenPrints];
-    [self addSlider:api name:@"Channel Contrast Match"
-            parameterID:kFotufilmParam_PrintCorrection
-            value:0.05 min:0 max:1 delta:0.01 flags:whenPrints];
-    // How a developed negative is read, and it is read only where the negative *is* the output.
-    // The controls are created against the default medium, Match Film, which is not the negative,
-    // so it starts dimmed; `refreshControlsAtTime` follows the menu from there.
-    [api addPopupMenuWithName:@"Negative Viewing"
-                       parameterID:kFotufilmParam_NegativeViewing
-                 defaultValue:0
-                  menuEntries:viewings
-                    parameterFlags:kFxParameterFlag_DISABLED];
-    [api endParameterSubGroup];
-
-    // Last, and shut: a clip is Full unless someone has read what the other spans are for.
-    [api startParameterSubGroup:@"Pipeline"
-                         parameterID:kFotufilmParam_PipelineGroup
-                      parameterFlags:kFxParameterFlag_COLLAPSED];
-    [api addPopupMenuWithName:@"Stage"
-                       parameterID:kFotufilmParam_Stage
-                 defaultValue:0
-                  menuEntries:stages
-                    parameterFlags:kFxParameterFlag_DEFAULT];
-    for (NSUInteger i = 0; i < engine.textureLabels.count; ++i) {
-        const bool offered = i < gating.offered.size() ? gating.offered[i] : true;
-        [api addToggleButtonWithName:engine.textureLabels[i]
-                              parameterID:(UInt32)(kFotufilmParam_TextureStageFirst + i)
-                        defaultValue:YES
-                           parameterFlags:offered ? kFxParameterFlag_DEFAULT
-                                                  : kFxParameterFlag_DISABLED];
-    }
-    [api endParameterSubGroup];
-
     return YES;
-}
-
-- (void)addSlider:(id<FxParameterCreationAPI_v5>)api
-             name:(NSString *)name
-           parameterID:(UInt32)parameterID
-            value:(double)value
-              min:(double)minimum
-              max:(double)maximum
-            delta:(double)delta {
-    [self addSlider:api name:name parameterID:parameterID value:value min:minimum max:maximum
-              delta:delta flags:kFxParameterFlag_DEFAULT];
-}
-
-- (void)addSlider:(id<FxParameterCreationAPI_v5>)api
-             name:(NSString *)name
-           parameterID:(UInt32)parameterID
-            value:(double)value
-              min:(double)minimum
-              max:(double)maximum
-            delta:(double)delta
-            flags:(FxParameterFlags)flags {
-    [api addFloatSliderWithName:name
-                         parameterID:parameterID
-                   defaultValue:value
-                   parameterMin:minimum
-                   parameterMax:maximum
-                      sliderMin:minimum
-                      sliderMax:maximum
-                          delta:delta
-                      parameterFlags:flags];
 }
 
 - (NSArray<NSString *> *)colorSpaceMenu {
@@ -1324,6 +1236,7 @@ struct FotufilmGating {
         case kFotufilmParam_Stock:
         case kFotufilmParam_Paper:
         case kFotufilmParam_ColorSpace:
+        case kFotufilmParam_FringeAmount:
         case kFotufilmParam_Push: gatesSomething = YES; break;
         default: break;
     }
@@ -1471,6 +1384,25 @@ struct FotufilmGating {
                                                  : kFxParameterFlag_DISABLED
                        toParameter:printOnly];
     }
+    const NSInteger gatedPaper = [self choiceFor:kFotufilmParam_Paper
+                                      identityID:kFotufilmParam_PaperID
+                                             ids:engine.paperIDs
+                                       described:_describedPapers
+                                       defaultID:@kFotufilmMatchFilmPaperID
+                                             api:retrieval
+                                          atTime:time];
+    const int32_t capabilities = engine.ready
+        ? fotufilm_bridge_control_capabilities((int32_t)stock, (int32_t)gatedPaper) : 0;
+    [setting setParameterFlags:(gating.prints && (capabilities & FOTUFILM_CONTROL_ENLARGER))
+                                   ? kFxParameterFlag_DEFAULT : kFxParameterFlag_DISABLED
+                   toParameter:kFotufilmParam_Enlarger];
+    const BOOL interlayer = (capabilities & FOTUFILM_CONTROL_INTERLAYER_INHIBITION) != 0;
+    double fringe = 0;
+    [retrieval getFloatValue:&fringe fromParameter:kFotufilmParam_FringeAmount atTime:time];
+    [setting setParameterFlags:interlayer ? kFxParameterFlag_DEFAULT : kFxParameterFlag_DISABLED
+                   toParameter:kFotufilmParam_FringeAmount];
+    [setting setParameterFlags:(interlayer && fringe > 0) ? kFxParameterFlag_DEFAULT : kFxParameterFlag_DISABLED
+                   toParameter:kFotufilmParam_FringeRadius];
     // The lens is camera-side: nothing screwed onto the front of it exists in a span that starts
     // at the developed negative, so Print Only dims the whole group as it dims the exposure.
     //
@@ -1574,55 +1506,52 @@ struct FotufilmGating {
     state.version = kFotufilmStateVersion;
     state.quality = (uint32_t)qualityLevel;
 
-    // The float block, slot by slot. Only the viewing lamp is converted — a popup reads as an
-    // index and the bridge wants kelvin. Nothing is clamped: a typed value past a slider's end is
-    // the user asking for it, and the engine is the one that decides what it means. The one
-    // exception is the push, below, which the engine would refuse rather than interpret.
-    double value = 0;
-    [api getFloatValue:&value fromParameter:kFotufilmParam_Exposure atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_EXPOSURE_EV] = (float)value;
-    [api getFloatValue:&value fromParameter:kFotufilmParam_Temperature atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_TEMPERATURE] = (float)value;
-    [api getFloatValue:&value fromParameter:kFotufilmParam_Tint atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_TINT] = (float)value;
-    [api getFloatValue:&value fromParameter:kFotufilmParam_Highlights atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_HIGHLIGHTS] = (float)value;
-    [api getFloatValue:&value fromParameter:kFotufilmParam_Shadows atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_SHADOWS] = (float)value;
-    [api getFloatValue:&value fromParameter:kFotufilmParam_Saturation atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_SATURATION] = (float)value;
-    [api getFloatValue:&value fromParameter:kFotufilmParam_Vibrance atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_VIBRANCE] = (float)value;
-    [api getFloatValue:&value fromParameter:kFotufilmParam_Grain atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_GRAIN_SCALE] = (float)value;
-    [api getFloatValue:&value fromParameter:kFotufilmParam_Halation atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_HALATION_SCALE] = (float)value;
-    [api getFloatValue:&value fromParameter:kFotufilmParam_HalationColour atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_HALATION_COLOUR] = (float)value;
-    [api getFloatValue:&value fromParameter:kFotufilmParam_Flare atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_FLARE_SCALE] = (float)value;
-    [api getFloatValue:&value fromParameter:kFotufilmParam_Couplers atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_COUPLER_SCALE] = (float)value;
-    [api getFloatValue:&value fromParameter:kFotufilmParam_PrintCorrection atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_PRINT_CORRECTION] = (float)value;
-    [api getFloatValue:&value fromParameter:kFotufilmParam_Push atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_PUSH_PULL] = (float)value;
-    [api getFloatValue:&value fromParameter:kFotufilmParam_BleachBypass atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_BLEACH_BYPASS] = (float)value;
-    [api getFloatValue:&value fromParameter:kFotufilmParam_Expired atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_EXPIRED_YEARS] = (float)value;
-
-    BOOL flag = NO;
-    [api getBoolValue:&flag fromParameter:kFotufilmParam_LocalTone atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_LOCAL_TONE] = flag ? 1.0f : 0.0f;
-    [api getBoolValue:&flag fromParameter:kFotufilmParam_EstimatedHalation atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_ESTIMATED_HALATION] = flag ? 1.0f : 0.0f;
-
-    int choice = 0;
-    [api getIntValue:&choice fromParameter:kFotufilmParam_PrintLight atTime:renderTime];
-    const int lamps = (int)(sizeof(kFotufilmPrintLightKelvin) / sizeof(*kFotufilmPrintLightKelvin));
-    state.parameters[FOTUFILM_BRIDGE_PRINT_LIGHT] =
-        kFotufilmPrintLightKelvin[choice >= 0 && choice < lamps ? choice : 0];
+    const int32_t count = fotufilm_bridge_host_parameter_count(FOTUFILM_HOST_FINALCUT);
+    for (int32_t i = 0; i < count; ++i) {
+        const int32_t slot = fotufilm_bridge_host_parameter_slot(FOTUFILM_HOST_FINALCUT, i);
+        if (slot < 0 || slot >= FOTUFILM_BRIDGE_PARAMETER_COUNT) continue;
+        const int32_t identifier = fotufilm_bridge_host_parameter_fxplug_id(FOTUFILM_HOST_FINALCUT, i);
+        if (identifier < 0) continue;
+        if (fotufilm_bridge_host_parameter_flags(FOTUFILM_HOST_FINALCUT, i) & FOTUFILM_HOST_FLAG_COMPOSED) continue;
+        const double scale = fotufilm_bridge_host_parameter_scale(FOTUFILM_HOST_FINALCUT, i);
+        const double offset = fotufilm_bridge_host_parameter_offset(FOTUFILM_HOST_FINALCUT, i);
+        double raw = 0;
+        switch (fotufilm_bridge_host_parameter_kind(FOTUFILM_HOST_FINALCUT, i)) {
+            case FOTUFILM_HOST_KIND_BOOLEAN: {
+                BOOL on = NO;
+                [api getBoolValue:&on fromParameter:(UInt32)identifier atTime:renderTime];
+                raw = on ? 1 : 0;
+                break;
+            }
+            case FOTUFILM_HOST_KIND_CHOICE: {
+                int chosen = 0;
+                [api getIntValue:&chosen fromParameter:(UInt32)identifier atTime:renderTime];
+                const double mapped = fotufilm_bridge_host_parameter_choice_value(FOTUFILM_HOST_FINALCUT, i,
+                                                                                  MAX(chosen, 0));
+                raw = mapped < 0 ? 0 : mapped;
+                break;
+            }
+            case FOTUFILM_HOST_KIND_MENU: {
+                int chosen = 0;
+                [api getIntValue:&chosen fromParameter:(UInt32)identifier atTime:renderTime];
+                raw = MAX(chosen, 0);
+                break;
+            }
+            case FOTUFILM_HOST_KIND_INTEGER: {
+                int whole = 0;
+                [api getIntValue:&whole fromParameter:(UInt32)identifier atTime:renderTime];
+                raw = whole;
+                break;
+            }
+            default: {
+                double number = 0;
+                [api getFloatValue:&number fromParameter:(UInt32)identifier atTime:renderTime];
+                raw = number;
+                break;
+            }
+        }
+        state.parameters[slot] = (float)(raw * scale + offset);
+    }
 
     // The lens. Each of these slots is "engine index plus one, zero meaning off", so that a
     // project saved before the group existed — whose blob stops at the halo colour and whose
@@ -1657,15 +1586,7 @@ struct FotufilmGating {
                      defaultID:@kFotufilmNoFilterID
                            api:api
                         atTime:renderTime];
-    [api getIntValue:&choice fromParameter:kFotufilmParam_Metering atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_LENS_METERING] = (float)(MAX(choice, 0) + 1);
-    [api getIntValue:&choice fromParameter:kFotufilmParam_DiffusionGrade atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_DIFFUSION_GRADE] = (float)MAX(choice, 0);
-    [api getIntValue:&choice fromParameter:kFotufilmParam_NegativeViewing atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_NEGATIVE_VIEWING] = (float)(MAX(choice, 0) + 1);
-    [api getFloatValue:&value fromParameter:kFotufilmParam_FocalLength atTime:renderTime];
-    state.parameters[FOTUFILM_BRIDGE_FOCAL_LENGTH] = (float)value;
-
+    int choice = 0;
     [api getIntValue:&choice fromParameter:kFotufilmParam_Seed atTime:renderTime];
     state.seed = (uint32_t)choice;
 
@@ -1766,6 +1687,7 @@ struct FotufilmGating {
     // loop stops at the toggles this panel actually has rather than asking the host about
     // parameter ids it was never given.
     int32_t mask = 0;
+    BOOL flag = NO;
     for (NSUInteger i = 0; i < engine.textureMasks.count && i < _describedTextureStages; ++i) {
         flag = NO;
         [api getBoolValue:&flag

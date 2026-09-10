@@ -6,7 +6,8 @@ import FotufilmCore
 import AVFoundation
 #endif
 
-/// Forwards the engine's Apple Log curve and provides the AVFoundation capability probe.
+/// Forwards the engine's Apple Log curve and provides the AVFoundation capability probes. Apple
+/// Log 2 shares the curve and every constant here; only its recorded gamut differs.
 enum AppleLog {
     static func linear(_ code: Float) -> Float { AppleLogCurve.linear(code) }
 
@@ -25,6 +26,17 @@ enum AppleLog {
         else { return false }
         return device.formats.contains {
             $0.supportedColorSpaces.contains(.appleLog)
+        }
+    }()
+
+    /// Whether the rear camera offers Apple Log 2 on any format — iPhone 17 Pro on iOS 26.
+    static let isLog2SupportedByCamera: Bool = {
+        guard #available(iOS 26.0, *),
+              let device = AVCaptureDevice.default(
+                .builtInWideAngleCamera, for: .video, position: .back)
+        else { return false }
+        return device.formats.contains {
+            $0.supportedColorSpaces.contains(.appleLog2)
         }
     }()
 #endif

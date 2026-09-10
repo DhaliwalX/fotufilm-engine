@@ -3,7 +3,7 @@ using namespace metal;
 
 constant uint kReductionThreads = FOTUFILM_MEASUREMENT_REDUCTION_THREADS;
 constant uint kFlareItems = FOTUFILM_MEASUREMENT_FLARE_ITEMS;
-constant uint kDecodeSamples = 256u;
+constant uint kDecodeSamples = FOTUFILM_MEASUREMENT_DECODE_SAMPLES;
 
 struct ToneParameters {
     uint width;
@@ -79,6 +79,7 @@ static inline float3 encoded_to_working(
 #include "HandwrittenCameraSceneTransfer.metalinc"
 
 static inline float capture_scene_light(float signal, uint transfer) {
+    // 1 and 2 (Apple Log, Apple Log 2) share one curve; only the gamut step differs.
     return transfer == 0u ? hlg_scene_light(signal)
         : apple_log_to_linear(clamp(signal, 0.0f, 1.0f));
 }

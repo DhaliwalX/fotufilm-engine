@@ -26,6 +26,42 @@ inline Halide::Expr bilinear_sample(Sample sample, Halide::Expr px, Halide::Expr
                 + fy * sample(x0 + 1, y0 + 1));
 }
 
+/// Smooth bicubic sampling using C2-continuous cubic B-spline weights.
+/// Evaluates a separable 4x4 grid of samples around (floor(px), floor(py)).
+/// Guarantees strictly non-negative weights (no ringing or negative exposure overshoot),
+/// partition of unity (sum = 1), and C2 continuity.
+template<typename Sample>
+inline Halide::Expr bicubic_sample(Sample sample, Halide::Expr px, Halide::Expr py) {
+    using Halide::Expr;
+    Expr x0 = Halide::cast<int32_t>(Halide::floor(px));
+    Expr y0 = Halide::cast<int32_t>(Halide::floor(py));
+    Expr fx = px - Halide::floor(px);
+    Expr fy = py - Halide::floor(py);
+
+    Expr one_minus_fx = 1.0f - fx;
+    Expr fx2 = fx * fx;
+    Expr fx3 = fx2 * fx;
+    Expr wx0 = (1.0f / 6.0f) * (one_minus_fx * one_minus_fx * one_minus_fx);
+    Expr wx1 = (1.0f / 6.0f) * (3.0f * fx3 - 6.0f * fx2 + 4.0f);
+    Expr wx2 = (1.0f / 6.0f) * (-3.0f * fx3 + 3.0f * fx2 + 3.0f * fx + 1.0f);
+    Expr wx3 = (1.0f / 6.0f) * fx3;
+
+    Expr one_minus_fy = 1.0f - fy;
+    Expr fy2 = fy * fy;
+    Expr fy3 = fy2 * fy;
+    Expr wy0 = (1.0f / 6.0f) * (one_minus_fy * one_minus_fy * one_minus_fy);
+    Expr wy1 = (1.0f / 6.0f) * (3.0f * fy3 - 6.0f * fy2 + 4.0f);
+    Expr wy2 = (1.0f / 6.0f) * (-3.0f * fy3 + 3.0f * fy2 + 3.0f * fy + 1.0f);
+    Expr wy3 = (1.0f / 6.0f) * fy3;
+
+    Expr row0 = wx0 * sample(x0 - 1, y0 - 1) + wx1 * sample(x0, y0 - 1) + wx2 * sample(x0 + 1, y0 - 1) + wx3 * sample(x0 + 2, y0 - 1);
+    Expr row1 = wx0 * sample(x0 - 1, y0)     + wx1 * sample(x0, y0)     + wx2 * sample(x0 + 1, y0)     + wx3 * sample(x0 + 2, y0);
+    Expr row2 = wx0 * sample(x0 - 1, y0 + 1) + wx1 * sample(x0, y0 + 1) + wx2 * sample(x0 + 1, y0 + 1) + wx3 * sample(x0 + 2, y0 + 1);
+    Expr row3 = wx0 * sample(x0 - 1, y0 + 2) + wx1 * sample(x0, y0 + 2) + wx2 * sample(x0 + 1, y0 + 2) + wx3 * sample(x0 + 2, y0 + 2);
+
+    return wy0 * row0 + wy1 * row1 + wy2 * row2 + wy3 * row3;
+}
+
 /// A positive normalized annulus. Sixteen directions keep the critical-angle ring round at the
 /// smallest radius where it is visible; the Gaussian field underneath supplies its measured
 /// thickness. Radius zero selects the center sample exactly for AOT variants serving legacy packs.
@@ -571,6 +607,29 @@ inline Halide::Expr inhibitor_release(Halide::Expr activation, Halide::Expr gamm
     return Halide::select(gamma == 1.0f, a, nonlinear);
 }
 
+/// Positive Gaussian mixture for the isotropic screened-diffusion transport kernel.
+inline Halide::Expr adjacency_transport(Halide::ImageParam &configuration,
+                                        Halide::Expr primary, Halide::Expr secondary) {
+    constexpr float share = 0.2753401713f;
+    return Halide::select(configuration(FOTUFILM_CONFIG_ADJACENCY_MODEL) > 0.5f,
+                          share * primary + (1.0f - share) * secondary, primary);
+}
+
+/// Nelson's density-weighted response, with a normalized source activation and the stock's
+/// finite development capacity. Applied before reversal complementation and grain. Local DIR
+/// inhibition is already in `formed`; only its spatial adjacency residual enters here.
+inline Halide::Expr adjacency_density(Halide::ImageParam &configuration,
+                                      Halide::Expr channel, Halide::Expr formed,
+                                      Halide::Expr residual) {
+    Halide::Expr base = configuration(FOTUFILM_CONFIG_CURVES + channel * 6);
+    Halide::Expr net = Halide::max(formed - base, 0.0f);
+    Halide::Expr corrected = base + Halide::clamp(
+        net + configuration(FOTUFILM_CONFIG_ADJACENCY_STRENGTH) * net * residual,
+        0.0f, film_curve_range(configuration, channel));
+    return Halide::select(configuration(FOTUFILM_CONFIG_ADJACENCY_MODEL) > 0.5f,
+                          corrected, formed);
+}
+
 inline Halide::Expr coupler_release(Halide::ImageParam &configuration,
                                     Halide::Expr donor, Halide::Expr activation) {
     return inhibitor_release(
@@ -593,6 +652,20 @@ inline Halide::Expr coupler_inhibition(Halide::ImageParam &configuration,
                           + configuration(base + 1) * donor1
                           + configuration(base + 2) * donor2;
     return released * configuration(FOTUFILM_CONFIG_COUPLER_SCALE);
+}
+
+/// Redistribute only inter-layer inhibitor transport. Normalized core and broad fields agree
+/// on constants, so the DC matrix and neutral anchor remain unchanged.
+inline Halide::Expr chromatic_fringe_inhibition(Halide::ImageParam &configuration,
+                                                Halide::Expr channel,
+                                                Halide::Expr delta0, Halide::Expr delta1,
+                                                Halide::Expr delta2) {
+    Halide::Expr base = FOTUFILM_CONFIG_COUPLER + channel * 3;
+    Halide::Expr residual = Halide::select(channel != 0, configuration(base) * delta0, 0.0f)
+                         + Halide::select(channel != 1, configuration(base + 1) * delta1, 0.0f)
+                         + Halide::select(channel != 2, configuration(base + 2) * delta2, 0.0f);
+    return residual * configuration(FOTUFILM_CONFIG_COUPLER_SCALE)
+                    * configuration(FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT);
 }
 
 /// Neutral anchor for the coupler stage: the log-exposure offset that undoes the inhibition a
@@ -974,8 +1047,10 @@ inline Halide::Expr scene_exposure(Halide::ImageParam &configuration,
                                    bool half_lut_math = false) {
     CreativeScene scene = creative_exposure(configuration, red, green, blue,
                                             frame_x, frame_y, approximate);
-    return recover_exposure(configuration, exposure_lut, scene.r, scene.g,
-                            scene.b, channel, half_lut_math);
+    return Halide::select(configuration(FOTUFILM_CONFIG_RECORD_INPUT) != 0.0f,
+        Halide::mux(Halide::min(channel, 2), {red, green, blue}),
+        recover_exposure(configuration, exposure_lut, scene.r, scene.g,
+                         scene.b, channel, half_lut_math));
 }
 
 /// Luminance of a three-plane Func at one pixel, in the renderer's working primaries.
@@ -1230,8 +1305,16 @@ inline Halide::Expr silver_granularity_variance(Halide::Expr density) {
         10.0f, 0.21004f * density + 0.06114f * density * density);
 }
 
-/// Granularity relative to the stock's reference density, under whichever law the emulsion
-/// obeys. Fog is included at both densities.
+/// Saturating reversal variance, divided by the constant Ds^(2p) that cancels at the anchor.
+inline Halide::Expr reversal_granularity_variance(Halide::Expr density,
+                                                 Halide::Expr exponent,
+                                                 Halide::Expr shoulder) {
+    Halide::Expr power = Halide::pow(density / Halide::max(shoulder, 1.0e-4f),
+                                     2.0f * exponent);
+    return power / (1.0f + power);
+}
+
+/// Granularity relative to the stock's reference density. Fog is included at both densities.
 inline Halide::Expr grain_density_modulation(Halide::ImageParam &configuration,
                                              Halide::Expr layer,
                                              Halide::Expr net_density) {
@@ -1250,11 +1333,14 @@ inline Halide::Expr grain_density_modulation(Halide::ImageParam &configuration,
             1.0e-6f);
     Expr silver = silver_granularity_variance(here)
         / Halide::max(silver_granularity_variance(anchor), 1.0e-6f);
-    // No reversal sheet publishes a granularity-against-density curve, so a dye-cloud reversal
-    // keeps Selwyn's plain law rather than borrowing a negative's measured shape.
+    Expr exponent = configuration(FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE);
+    Expr shoulder = configuration(FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE + 1);
+    Expr reversal = reversal_granularity_variance(here, exponent, shoulder)
+        / Halide::max(reversal_granularity_variance(anchor, exponent, shoulder), 1.0e-20f);
+    // Selwyn remains an explicitly selectable legacy law (2).
     Expr selwyn = here / anchor;
     Expr law = configuration(FOTUFILM_CONFIG_GRAIN_LAW);
-    Expr ratio = Halide::select(law > 1.5f, selwyn,
+    Expr ratio = Halide::select(law > 2.5f, reversal, law > 1.5f, selwyn,
                                 Halide::select(law > 0.5f, silver, dye_cloud));
     return Halide::sqrt(Halide::max(ratio, 0.0f));
 }

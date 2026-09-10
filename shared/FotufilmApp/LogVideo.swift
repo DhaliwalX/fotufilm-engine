@@ -13,6 +13,7 @@ enum VideoSourceEncoding: String, CaseIterable, Identifiable {
     /// Trust the container's tags and convert SDR, HLG, or PQ to scene-linear Rec.2020.
     case standard
     case appleLog
+    case appleLog2
     case slog3Cine
     case slog3
     case slog2
@@ -27,6 +28,7 @@ enum VideoSourceEncoding: String, CaseIterable, Identifiable {
         switch self {
         case .standard: return "Standard"
         case .appleLog: return "Apple Log · Rec.2020"
+        case .appleLog2: return "Apple Log 2 · Apple Wide Gamut"
         case .slog3Cine: return "S-Log3 · S-Gamut3.Cine"
         case .slog3: return "S-Log3 · S-Gamut3"
         case .slog2: return "S-Log2 · S-Gamut"
@@ -47,6 +49,7 @@ enum VideoSourceEncoding: String, CaseIterable, Identifiable {
         switch self {
         case .standard: return nil
         case .appleLog: return .appleLog
+        case .appleLog2: return .appleLog2
         case .slog3Cine: return .slog3Cine
         case .slog3: return .slog3
         case .slog2: return .slog2

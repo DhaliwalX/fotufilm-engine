@@ -5,6 +5,53 @@ import XCTest
 import Metal
 
 final class HandwrittenMetalSpatialExecutorTests: XCTestCase {
+    func testReversalGrainProfileReachesHandwrittenDevelopment() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let queue = try XCTUnwrap(device.makeCommandQueue())
+        let executor = try XCTUnwrap(HandwrittenMetalSpatialExecutor(device: device))
+        let width = 96, height = 64
+        var stock = TestStocks.reversal
+        stock.emulsionDiffusionMM = [0, 0, 0]
+        stock.adjacencyStrength = 0
+        stock.flare = 0
+        var options = FotufilmEngine.Options()
+        options.flareScale = 0
+        options.halationScale = 0
+        options.couplerScale = 0
+        options.format = FilmFormat(name: "resolved grain", frameHeightMM: 0.25)
+        let inputs = [Float16](repeating: 0.18, count: width * height * 4)
+        let source = try texture(device: device, width: width, height: height,
+                                 usage: [.shaderRead], values: inputs)
+        let destination = try texture(device: device, width: width, height: height,
+                                      usage: [.shaderRead, .shaderWrite])
+        var measurements: [Float] = []
+        let profiles: [[Float]] = [[0.8, 2], [1.35, 4.5]]
+        for (index, profile) in profiles.enumerated() {
+            stock.grainReversalProfile = profile
+            let key = #function + "-\(index)"
+            try executor.prepareChecked(key: key, stock: stock, options: options,
+                                        frameWidth: width, frameHeight: height)
+            try encode(executor: executor, queue: queue, source: source,
+                       destination: destination, key: key, frameIndex: 0x5EED)
+            let rendered = values(destination)
+            let green = (0..<(width * height)).map { Float(rendered[$0 * 4 + 1]) }
+            measurements.append(GranularityMeter.sigma(green))
+            try encode(executor: executor, queue: queue, source: source,
+                       destination: destination, key: key, frameIndex: 0x5EED)
+            XCTAssertEqual(rendered, values(destination))
+        }
+        let net = stock.developedDensity(layer: 1, logExposure: log10(Float(inputs[0])))
+            - stock.curves[1].dMin
+        let scales = profiles.map { profile -> Float in
+            stock.grainReversalProfile = profile
+            return stock.grainDensityModulation(layer: 1, netDensity: net)
+        }
+        XCTAssertGreaterThan(abs(scales[1] / scales[0] - 1), 0.15,
+                             "the profiles must produce distinguishable noise")
+        XCTAssertEqual(measurements[1] / measurements[0], scales[1] / scales[0],
+                       accuracy: 0.015, "allow half-density quantization")
+    }
+
     func testGPUFlareMeanChainsIntoSpatialGraphWithoutReadback() throws {
         let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
         let queue = try XCTUnwrap(device.makeCommandQueue())
@@ -179,7 +226,15 @@ final class HandwrittenMetalSpatialExecutorTests: XCTestCase {
             device: device, lookupLayout: .baseline3D))
         let width = 160, height = 96
         var stock = try fastPathFixtureStock()
-        stock.curves = try XCTUnwrap(FilmStock.named("gold200")).curves
+        // This checks the sampled continuation seam independently of the installed catalogue,
+        // which an embedding may override with analytic stock curves.
+        let knots: [Float] = [-4, -2.4, -1, -0.2, 0.6, 1.1, 3.5]
+        stock.curves = try stock.curves.map { original in
+            var curve = original
+            curve.sampled = try SampledCharacteristicCurve(logExposure: knots,
+                density: knots.map { original.density(logExposure: $0) })
+            return curve
+        }
         XCTAssertTrue(stock.curves.allSatisfy { $0.sampled != nil })
         let options = multiresOptions(height: height)
         let key = #function

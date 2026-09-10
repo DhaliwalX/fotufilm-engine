@@ -34,7 +34,7 @@ enum {
 enum {
     FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES = 1024,
     FOTUFILM_SAMPLED_CURVE_STRIDE = 1 + 3 * FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES,
-    FOTUFILM_FRAME_CONFIGURATION_COUNT = 232 + 3 * FOTUFILM_COUPLER_WARP_SAMPLES
+    FOTUFILM_FRAME_CONFIGURATION_COUNT = 241 + 3 * FOTUFILM_COUPLER_WARP_SAMPLES
         + 2 * FOTUFILM_TONE_GRID_CELLS + 3 * FOTUFILM_SAMPLED_CURVE_STRIDE,
 };
 
@@ -118,9 +118,8 @@ enum {
     /// Which granularity-against-density law the emulsion obeys. 0 is a chromogenic negative,
     /// whose measured curve peaks just above D-min and falls (the shape's coefficients are in
     /// FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE); 1 is opaque silver, whose Boolean aperture
-    /// variance goes as `D * 10^(0.21004 D + 0.06114 D^2)`; 2 is a dye-cloud emulsion with no
-    /// published curve — a reversal — which keeps Selwyn's plain `sigma ∝ sqrt(D)`. Mirrors
-    /// `GrainDensityLaw`.
+    /// variance goes as `D * 10^(0.21004 D + 0.06114 D^2)`; 2 explicitly retains Selwyn's
+    /// `sigma ∝ sqrt(D)`; 3 is dye reversal's saturating power law. Mirrors `GrainDensityLaw`.
     FOTUFILM_CONFIG_GRAIN_LAW,
     /// Per-layer net density the stock's published granularity is read at, and the per-layer
     /// developed fog added to both that anchor and the pixel's own density. The fog is what
@@ -228,6 +227,18 @@ enum {
     FOTUFILM_CONFIG_OUTPUT_GAMUT = FOTUFILM_CONFIG_OUTPUT_SHOULDER + 1,
     /// Three records: sample count, then (log exposure, density, tangent) triples.
     FOTUFILM_CONFIG_SAMPLED_CURVES = FOTUFILM_CONFIG_OUTPUT_GAMUT + 4,
+    /// 0: Gaussian/log-exposure adjacency; 1: screened diffusion/Nelson density response.
+    FOTUFILM_CONFIG_ADJACENCY_MODEL = FOTUFILM_CONFIG_SAMPLED_CURVES + 3 * FOTUFILM_SAMPLED_CURVE_STRIDE,
+    FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA,
+    FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS,
+    /// Broad transport changes off-diagonal inhibition only; zero amount preserves legacy output.
+    FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT,
+    FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA,
+    FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS,
+    /// Typed record-exposure input seam. Zero is ordinary scene input.
+    FOTUFILM_CONFIG_RECORD_INPUT,
+    /// Dye reversal's [exponent p, shoulder density Ds], read under grain law 3.
+    FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE = FOTUFILM_CONFIG_RECORD_INPUT + 1,
 };
 
 /// Decode-kernel parameters: row-major scene-space matrix, transfer, and premultiplication flag.
@@ -333,6 +344,9 @@ enum {
     FOTUFILM_FRAME_DONOR_LAYER = 1 << 27,
     /// Legacy annular-basis variant. Current physical profiles use centered continuous fields.
     FOTUFILM_FRAME_HALATION_ANNULAR = 1 << 28,
+    /// JIT-only continuation from nonnegative photographic record exposure. Never RGB or density.
+    /// AOT callers must not mask this bit and then run an RGB-input variant.
+    FOTUFILM_FRAME_RECORD_EXPOSURE_IN = 1 << 30,
     /// Develops with no film in the gate: the creative controls — white balance, the
     /// exposure-keyed tone masks, saturation and vibrance — then straight into the print's
     /// delivery basis and the grade. No spectral recovery, no characteristic curve, no couplers,
@@ -810,11 +824,11 @@ enum {
                        FOTUFILM_FRAME_ENCODE_OUT))                           \
     X(color_float_light,                                                    \
       FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF | FOTUFILM_FRAME_MTF_LUMA |    \
-      FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT)                     \
+      FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT | FOTUFILM_FRAME_DIFFUSION)                     \
     X(monochrome_float_light,                                               \
       FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF | FOTUFILM_FRAME_MTF_LUMA |    \
       FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT |                    \
-      FOTUFILM_FRAME_MONOCHROME)                                             \
+      FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_DIFFUSION)                                             \
     X(color_float_fields,                                                   \
       FOTUFILM_AOT_ALL_STAGES | FOTUFILM_FRAME_FLOAT_IO |                     \
       FOTUFILM_FRAME_FIELDS_IN)                                              \

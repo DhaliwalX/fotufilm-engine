@@ -131,6 +131,10 @@ int fotufilm_wasm_render(float *input, float *output, int32_t width, int32_t hei
     const int32_t coupler_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_COUPLER_RADIUS]);
     const float adjacency_sigma = max_f(c[FOTUFILM_CONFIG_ADJACENCY_SIGMA], kSigmaFloor);
     const int32_t adjacency_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_ADJACENCY_RADIUS]);
+    const float adjacency_secondary_sigma = max_f(c[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA], kSigmaFloor);
+    const int32_t adjacency_secondary_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS]);
+    const float fringe_sigma = max_f(c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA], kSigmaFloor);
+    const int32_t fringe_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS]);
     const float grain_sigma = max_f(c[FOTUFILM_CONFIG_GRAIN_SIGMA], kSigmaFloor);
     const int32_t grain_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_GRAIN_RADIUS]);
     const float grain_lambda = c[FOTUFILM_CONFIG_GRAIN_LAMBDA];
@@ -159,7 +163,7 @@ int fotufilm_wasm_render(float *input, float *output, int32_t width, int32_t hei
         mtf_sigma_0, mtf_sigma_1, mtf_sigma_2, mtf_luma_sigma, mtf_radius_0,         \
         mtf_radius_1, mtf_radius_2, mtf_luma_radius, halation_radius[0],             \
         halation_radius[1], halation_radius[2], coupler_sigma, coupler_radius,       \
-        adjacency_sigma, adjacency_radius, grain_sigma, grain_radius, grain_lambda,  \
+        adjacency_sigma, adjacency_radius, adjacency_secondary_sigma, adjacency_secondary_radius, fringe_sigma, fringe_radius, grain_sigma, grain_radius, grain_lambda,  \
         mottle_lambda, mottle_radius, print_mtf_radius, seed, reversal,              \
         origin_x, origin_y, halation_stride[0], halation_stride[1],                  \
         halation_stride[2], halation_strided_radius[0], halation_strided_radius[1],  \
@@ -200,6 +204,21 @@ int fotufilm_wasm_render(float *input, float *output, int32_t width, int32_t hei
 EMSCRIPTEN_KEEPALIVE
 int32_t fotufilm_wasm_frame_size_slot(void) {
     return FOTUFILM_CONFIG_FRAME_WIDTH;
+}
+
+#include "generated/fotufilm_wasm_controls.inc"
+
+EMSCRIPTEN_KEEPALIVE
+int32_t fotufilm_wasm_control_count(void) { return kFotufilmWasmControlCount; }
+
+EMSCRIPTEN_KEEPALIVE
+int32_t fotufilm_wasm_control_slot(int32_t index) {
+    return index >= 0 && index < kFotufilmWasmControlCount ? kFotufilmWasmControlSlots[index] : -1;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void fotufilm_wasm_set_slot(float *configuration, int32_t slot, float value) {
+    if (slot >= 0 && slot < FOTUFILM_FRAME_CONFIGURATION_COUNT) configuration[slot] = value;
 }
 
 EMSCRIPTEN_KEEPALIVE

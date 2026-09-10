@@ -3,11 +3,9 @@ import Foundation
 /// How granularity varies with density — which is a property of the emulsion, not of the
 /// grain model that renders it.
 ///
-/// Selwyn's `sigma_D ∝ sqrt(D)` is what a single population of developed centres gives, and it
-/// is the law this engine used for every material. It is wrong for both of the two it can be
-/// checked against: a real colour negative is a mixture of sub-layers whose measured curve
-/// peaks just above D-min and falls, and a real silver emulsion's grains hide one another, so
-/// what fluctuates is covered area read through a finite aperture.
+/// Colour negatives peak above D-min and fall; dye reversals rise toward a shoulder.
+/// The silver disc model describes an idealized grain population, not a measured law for
+/// every silver emulsion/developer pair.
 public enum GrainDensityLaw: Int32, Sendable, Codable {
     /// Chromogenic negative: the silver is bleached away and the image is a dye cloud per
     /// developed centre, but the coating is several sub-layers of different speed and crystal
@@ -20,11 +18,12 @@ public enum GrainDensityLaw: Int32, Sendable, Codable {
     /// steepens as the grains begin to hide one another — but far less steeply than the
     /// `sqrt(10^D - 1)` this engine used, which assumed a fixed correlation area.
     case silver = 1
-    /// A dye-cloud emulsion whose granularity-against-density curve nobody publishes: every
-    /// reversal stock in the pack. No sheet in `research/spectral/specs` plots one, and a
-    /// negative's measured shape is not transferable to a material that develops backwards, so
-    /// these keep Selwyn's plain `sigma_D ∝ sqrt(D)` until a curve is measured.
+    /// Explicit legacy single-population law, `sigma_D ∝ sqrt(D)`. Retained for packs that
+    /// request it; colour reversals default to `dyeCloudReversal`.
     case dyeCloudSelwyn = 2
+    /// Dye reversal: `sigma_D² ∝ D^(2p) / (1 + (D / Ds)^(2p))`. The exponent and shoulder
+    /// density are supplied by `grainReversalProfile`, normalized at the stock's read density.
+    case dyeCloudReversal = 3
 }
 
 /// A capture layer that develops and inhibits, but forms no image dye of its own.
@@ -157,12 +156,18 @@ public struct FilmStock: Sendable {
     }
     /// Diffusion distance of the inhibitors in millimeters on the film.
     public var couplerDiffusionMM: Float
+    /// Broad fraction of off-diagonal DIR transport. Zero is the original single Gaussian.
+    public var chromaticFringeAmount: Float
+    /// Broad Gaussian sigma on the film, in millimeters; only radii above couplerDiffusionMM act.
+    public var chromaticFringeRadiusMM: Float
 
-    /// Strength of the intra-layer adjacency effect: each layer's development is shifted by
-    /// `-adjacencyStrength * (blur(a) - a)` in log exposure, where `a` is the layer's development
-    /// activation.
+    /// Strength of intra-layer adjacency. Gaussian mode shifts log exposure by
+    /// `strength * (a - blur(a))`. Screened diffusion adds
+    /// `strength * netDensity * (a - transport(a))` to formed density, bounded by capacity.
+    /// The two responses require separate stock calibration; their gains are not equivalent.
     public var adjacencyStrength: Float
-    /// Diffusion distance of the adjacency mechanism in millimeters.
+    public var adjacencyModel: AdjacencyModel
+    /// Reference Gaussian sigma in millimeters. Screened diffusion uses ell = sigma / sqrt(2).
     public var adjacencyRadiusMM: Float
 
     /// RMS granularity: the standard deviation of density measured through the standard
@@ -196,8 +201,8 @@ public struct FilmStock: Sendable {
     public var grainLayerSizeRatio: [Float]
     /// Which granularity-against-density law the emulsion obeys; see `GrainDensityLaw`.
     /// Defaults to the material: silver for a monochrome stock, the measured chromogenic
-    /// negative shape for a colour negative, and Selwyn for a reversal, whose curve is
-    /// unpublished. Stated explicitly because the material and the law cross — a chromogenic
+    /// negative shape for a colour negative, and a saturating power law for a dye reversal.
+    /// Stated explicitly because the material and the law cross — a chromogenic
     /// black-and-white stock is a dye cloud.
     public var grainDensityLaw: GrainDensityLaw
     /// The chromogenic negative's granularity-against-density shape, read only under
@@ -209,6 +214,10 @@ public struct FilmStock: Sendable {
     /// is read at. The default is an illustrative analytic shape; measured packs
     /// provide their own coefficients.
     public var grainDensityProfile: [Float]
+    /// `[exponent p, shoulder density Ds]` for `dyeCloudReversal`, in developed density
+    /// above base plus fog, like the other grain laws. The generic profile is a provisional
+    /// family shape; packs can supply their own measured coefficients.
+    public var grainReversalProfile: [Float]
     /// Density of the developed fog: unexposed crystals that cross threshold anyway. These are
     /// development centres like any other, so they carry granularity, which is why a fresh
     /// emulsion is not perfectly clean at D-min and an aged one is visibly less so. This is the
@@ -231,6 +240,8 @@ public struct FilmStock: Sendable {
     /// Independently calibrated spatial shape of the returned light. `nil` preserves the legacy
     /// model that infers shape from `halationStrength`.
     public var halationProfile: HalationProfile?
+    /// Versioned layered transport. Nil keeps every legacy spatial stage unchanged.
+    public var layeredTransport: LayeredTransport?
     /// A provisional spatial shape for use when no independently calibrated profile exists.
     /// Rendering ignores it unless the caller explicitly enables estimated profiles.
     public var estimatedHalationProfile: HalationProfile?
@@ -244,7 +255,8 @@ public struct FilmStock: Sendable {
     /// Characteristic curve of the print paper (identical shape per channel;
     /// per-channel neutrality comes from printer-light calibration).
     public var paperCurve: CharacteristicCurve
-    /// Paper density that a correctly exposed mid-gray should land on.
+    /// Legacy pack field retained for decoding and round trips. Rendering uses
+    /// `PrintPaper.midDensity`; a camera stock does not set the output medium's grey.
     public var paperMidDensity: Float
 
     /// Where this emulsion leaves the reciprocity law, when its datasheet states a
@@ -291,7 +303,10 @@ public struct FilmStock: Sendable {
         couplerReleaseGamma: [Float] = [1, 1, 1],
         couplerGeometry: CouplerGeometry? = nil,
         couplerDiffusionMM: Float,
+        chromaticFringeAmount: Float = 0,
+        chromaticFringeRadiusMM: Float = 0.1,
         adjacencyStrength: Float = 0,
+        adjacencyModel: AdjacencyModel = .gaussian,
         adjacencyRadiusMM: Float = 0,
         grainStrength: Float,
         grainSizeMM: Float,
@@ -302,11 +317,13 @@ public struct FilmStock: Sendable {
         grainLayerSizeRatio: [Float] = [1, 1, 1],
         grainDensityLaw: GrainDensityLaw? = nil,
         grainDensityProfile: [Float]? = nil,
+        grainReversalProfile: [Float] = FilmStock.defaultGrainReversalProfile,
         grainFogDensity: Float = FilmStock.defaultGrainFogDensity,
         halationStrength: [Float],
         halationLookScale: Float = 1,
         halationHazeMM: Float = 0,
         halationProfile: HalationProfile? = nil,
+        layeredTransport: LayeredTransport? = nil,
         estimatedHalationProfile: HalationProfile? = nil,
         halationReturnMatrix: [[Float]]? = nil,
         paperCurve: CharacteristicCurve,
@@ -348,7 +365,10 @@ public struct FilmStock: Sendable {
         self.couplerInhibition = couplerGeometry?.matrix() ?? couplerInhibition
         self.couplerReleaseGamma = couplerReleaseGamma
         self.couplerDiffusionMM = couplerDiffusionMM
+        self.chromaticFringeAmount = chromaticFringeAmount
+        self.chromaticFringeRadiusMM = chromaticFringeRadiusMM
         self.adjacencyStrength = adjacencyStrength
+        self.adjacencyModel = adjacencyModel
         self.adjacencyRadiusMM = adjacencyRadiusMM
         self.grainStrength = grainStrength
         self.grainSizeMM = grainSizeMM
@@ -360,14 +380,20 @@ public struct FilmStock: Sendable {
         self.grainLayerSizeRatio = grainLayerSizeRatio.count == 3
             ? grainLayerSizeRatio.map { max($0, 0.05) } : [1, 1, 1]
         self.grainDensityLaw = grainDensityLaw
-            ?? (isMonochrome ? .silver : (isReversal ? .dyeCloudSelwyn : .dyeCloud))
+            ?? (isMonochrome ? .silver : (isReversal ? .dyeCloudReversal : .dyeCloud))
         self.grainDensityProfile = grainDensityProfile?.count == 3
             ? grainDensityProfile! : FilmStock.defaultGrainDensityProfile
+        precondition(grainReversalProfile.count == 2
+            && grainReversalProfile[0].isFinite && (0.1...2).contains(grainReversalProfile[0])
+            && grainReversalProfile[1].isFinite && (0.1...10).contains(grainReversalProfile[1]),
+            "grainReversalProfile requires an exponent in 0.1...2 and shoulder in 0.1...10")
+        self.grainReversalProfile = grainReversalProfile
         self.grainFogDensity = max(grainFogDensity, 0)
         self.halationStrength = halationStrength
         self.halationLookScale = max(halationLookScale, 0)
         self.halationHazeMM = max(halationHazeMM, 0)
         self.halationProfile = halationProfile
+        self.layeredTransport = layeredTransport
         self.estimatedHalationProfile = estimatedHalationProfile
         self.halationReturnMatrix = halationReturnMatrix
         self.paperCurve = paperCurve
@@ -403,6 +429,7 @@ public struct FilmStock: Sendable {
 
     /// Illustrative density response for synthetic examples. Measured packs supply their own.
     public static let defaultGrainDensityProfile: [Float] = FilmStockDefaults.grainDensityProfile
+    public static let defaultGrainReversalProfile: [Float] = [1.1, 3]
 
     /// Expected dye-cloud clumps per square millimetre. The Poisson field derives intensity as
     /// `-ln(1 - a) / (πr²)` from coverage `a` and `grainSizeMM`. A silver clump is a measured
@@ -481,6 +508,13 @@ public struct FilmStock: Sendable {
         density * pow(10, 0.21004 * density + 0.06114 * density * density)
     }
 
+    /// Dimensionless equivalent of the saturating power variance. The omitted Ds^(2p)
+    /// cancels in the anchor ratio. Mirrors the CPU/Metal implementation.
+    func reversalGranularityVariance(_ density: Float) -> Float {
+        let power = pow(density / grainReversalProfile[1], 2 * grainReversalProfile[0])
+        return power / (1 + power)
+    }
+
     /// Granularity at `netDensity`, relative to the datasheet read density, under whichever law
     /// the emulsion obeys. Fog density is included at both the anchor and requested density.
     public func grainDensityModulation(layer: Int, netDensity: Float) -> Float {
@@ -497,6 +531,9 @@ public struct FilmStock: Sendable {
                 / max(silverGranularityVariance(anchor), 1e-6)
         case .dyeCloudSelwyn:
             ratio = here / anchor
+        case .dyeCloudReversal:
+            ratio = reversalGranularityVariance(here)
+                / max(reversalGranularityVariance(anchor), 1e-20)
         }
         return max(ratio, 0).squareRoot()
     }

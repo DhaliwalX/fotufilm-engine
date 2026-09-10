@@ -223,47 +223,25 @@ const char *compactEncodingLabel(fotufilm::Encoding encoding) {
         : fotufilm::encodingLabel(encoding);
 }
 
-/// The OFX parameter behind each slot of the bridge's block, or null where the slot is composed
-/// rather than read from one parameter: the span is resolved through its persisted id, and the
-/// texture selection is an OR of several booleans.
-const char *const kParameterNames[FOTUFILM_BRIDGE_PARAMETER_COUNT] = {
-    "exposure", "temperature", "tint", "highlights", "shadows",
-    "saturation", "vibrance", "grain", "halation", "couplers",
-    "printCorrection", "localTone", "push", "bleachBypass", "expired",
-    "printLight", nullptr, nullptr, "flare", "estimatedHalation",
-    "halationColour", "lensFilter1", "lensFilter2", "lensFilter3",
-    "metering", "diffusion", "diffusionGrade", "focalLength",
-    "negativeViewing", "mottleOverride", "mottleShare", "couplerReach", "couplerSelf",
-    nullptr, "halation400", "halation450", "halation500", "halation550", "halation600",
-    "halation650", "halation700", "filterCoating", "frameCoverage", "grainModel",
-    "shutterSeconds", "renderMode", "grainAnimation", "couplerRedGreen", "couplerGreenBlue",
+std::string hostString(int32_t (*read)(int32_t, int32_t, char *, int32_t), int32_t index) {
+    char buffer[4096];
+    const int32_t length = read(FOTUFILM_HOST_RESOLVE, index, buffer, static_cast<int32_t>(sizeof(buffer)));
+    return length < 0 ? std::string() : std::string(buffer, static_cast<size_t>(length));
+}
+
+int32_t hostFlags(int32_t index) {
+    return fotufilm_bridge_host_parameter_flags(FOTUFILM_HOST_RESOLVE, index);
+}
+
+/// Where a menu's entries come from at describe time, and which described-count records how many
+/// the host was given. A menu whose engine list is empty is described with one placeholder entry.
+struct MenuSource {
+    std::vector<std::string> options;
+    int defaultIndex;
+    int *described;
 };
 
-/// The Lens group's slots that a choice parameter fills, and how the menu's index becomes the
-/// number the bridge wants.
-///
-/// The bridge asks for "engine index plus one, zero meaning off" from the filter, diffusion,
-/// metering and negative-viewing slots, so that a slot an older project never filled is that
-/// lever's off position. Two of those menus already carry the offset in their entries: the filter
-/// and diffusion menus open with a "None" this side owns, so their menu index *is* the offset
-/// number, and only the two whose entries come straight out of an engine enum need the one added.
-/// The grade is the one bare index here, gated by its family being chosen rather than by a zero
-/// of its own, so it is read as it stands.
-bool isDirectChoice(int slot) {
-    return slot == FOTUFILM_BRIDGE_MOTTLE_OVERRIDE || slot == FOTUFILM_BRIDGE_FILTER_COATING ||
-           slot == FOTUFILM_BRIDGE_GRAIN_MODEL || slot == FOTUFILM_BRIDGE_RENDER_MODE ||
-           slot == FOTUFILM_BRIDGE_GRAIN_FROZEN;
-}
-
-bool isOffsetChoice(int slot) {
-    return slot == FOTUFILM_BRIDGE_LENS_METERING ||
-           slot == FOTUFILM_BRIDGE_NEGATIVE_VIEWING;
-}
-
-/// What each viewing-illuminant choice hands the bridge, in menu order. Zero means the selected
-/// medium's own reference: D50 for reflection paper and calibrated 5400 K xenon for projection.
-/// D65 is appended so the three indices shipped by older versions are not renumbered.
-const float kPrintLightKelvin[] = {0.0f, 5003.0f, 2856.0f, 6504.0f};
+MenuSource menuSource(int32_t menu, double requested);
 
 constexpr const char *kStageParam = "stage";
 constexpr const char *kStockParam = "stock";
@@ -830,429 +808,159 @@ OfxStatus describeInContext(OfxImageEffectHandle effect) {
     OfxParamSetHandle set = nullptr;
     if (gEffect->getParamSet(effect, &set) != kOfxStatOK) return kOfxStatErrBadHandle;
 
-    // The frozen menu layout `menuEncoding` decodes: original spaces, Auto at its shipped
-    // index, spaces added since appended after it.
-    std::vector<std::string> spaces;
-    for (int i = 0; i < kColorSpaceAuto; ++i) {
-        spaces.push_back(fotufilm::encodingLabel(static_cast<fotufilm::Encoding>(i)));
+    const int32_t count = fotufilm_bridge_host_parameter_count(FOTUFILM_HOST_RESOLVE);
+    for (int32_t i = 0; i < count; ++i) {
+        const int32_t kind = fotufilm_bridge_host_parameter_kind(FOTUFILM_HOST_RESOLVE, i);
+        const std::string name = hostString(fotufilm_bridge_host_parameter_name, i);
+        const std::string label = hostString(fotufilm_bridge_host_parameter_label, i);
+        const std::string hint = hostString(fotufilm_bridge_host_parameter_hint, i);
+        const std::string parent = hostString(fotufilm_bridge_host_parameter_parent, i);
+        const char *parentName = parent.empty() ? nullptr : parent.c_str();
+        const char *hintText = hint.empty() ? nullptr : hint.c_str();
+        const int32_t flags = hostFlags(i);
+        const double minimum = fotufilm_bridge_host_parameter_minimum(FOTUFILM_HOST_RESOLVE, i);
+        const double maximum = fotufilm_bridge_host_parameter_maximum(FOTUFILM_HOST_RESOLVE, i);
+        const double hardMaximum = fotufilm_bridge_host_parameter_hard_maximum(FOTUFILM_HOST_RESOLVE, i);
+        const double value = fotufilm_bridge_host_parameter_default(FOTUFILM_HOST_RESOLVE, i);
+        switch (kind) {
+        case FOTUFILM_HOST_KIND_GROUP:
+            defineGroup(set, name.c_str(), label.c_str(), parentName,
+                        (flags & FOTUFILM_HOST_FLAG_OPENS_EXPANDED) != 0);
+            break;
+        case FOTUFILM_HOST_KIND_DOUBLE: {
+            OfxPropertySetHandle properties = defineDouble(set, name.c_str(), label.c_str(), hintText,
+                                                           parentName, minimum, maximum, value);
+            if (!properties) break;
+            if (hardMaximum > maximum) gProperty->propSetDouble(properties, kOfxParamPropMax, 0, hardMaximum);
+            if (!(flags & FOTUFILM_HOST_FLAG_ANIMATES)) gProperty->propSetInt(properties, kOfxParamPropAnimates, 0, 0);
+            if (flags & FOTUFILM_HOST_FLAG_SECRET) gProperty->propSetInt(properties, kOfxParamPropSecret, 0, 1);
+            break;
+        }
+        case FOTUFILM_HOST_KIND_INTEGER: {
+            OfxPropertySetHandle properties = define(set, kOfxParamTypeInteger, name.c_str(), label.c_str(),
+                                                     hintText, parentName);
+            if (!properties) break;
+            gProperty->propSetInt(properties, kOfxParamPropDefault, 0, static_cast<int>(value));
+            if (!(flags & FOTUFILM_HOST_FLAG_ANIMATES)) gProperty->propSetInt(properties, kOfxParamPropAnimates, 0, 0);
+            break;
+        }
+        case FOTUFILM_HOST_KIND_BOOLEAN: {
+            OfxPropertySetHandle properties = define(set, kOfxParamTypeBoolean, name.c_str(), label.c_str(),
+                                                     hintText, parentName);
+            if (properties) gProperty->propSetInt(properties, kOfxParamPropDefault, 0, value != 0 ? 1 : 0);
+            break;
+        }
+        case FOTUFILM_HOST_KIND_CHOICE: {
+            std::vector<std::string> options;
+            const int32_t choices = fotufilm_bridge_host_parameter_choice_count(FOTUFILM_HOST_RESOLVE, i);
+            for (int32_t c = 0; c < choices; ++c) {
+                char buffer[256];
+                const int32_t length = fotufilm_bridge_host_parameter_choice(
+                    FOTUFILM_HOST_RESOLVE, i, c, buffer, static_cast<int32_t>(sizeof(buffer)));
+                options.push_back(length < 0 ? std::string() : std::string(buffer, static_cast<size_t>(length)));
+            }
+            OfxPropertySetHandle properties = defineChoice(set, name.c_str(), label.c_str(), hintText,
+                                                           parentName, options, static_cast<int>(value));
+            if (properties && !(flags & FOTUFILM_HOST_FLAG_PERSISTENT)) {
+                gProperty->propSetInt(properties, kOfxParamPropPersistant, 0, 0);
+            }
+            break;
+        }
+        case FOTUFILM_HOST_KIND_MENU: {
+            MenuSource source = menuSource(fotufilm_bridge_host_parameter_menu(FOTUFILM_HOST_RESOLVE, i), value);
+            if (source.described) *source.described = static_cast<int>(source.options.size());
+            defineChoice(set, name.c_str(), label.c_str(), hintText, parentName, source.options,
+                         source.defaultIndex);
+            break;
+        }
+        case FOTUFILM_HOST_KIND_LABEL: {
+            char text[256] = "";
+            fotufilm_bridge_host_parameter_choice(FOTUFILM_HOST_RESOLVE, i, 0, text, static_cast<int32_t>(sizeof(text)));
+            defineLabel(set, name.c_str(), label.c_str(), parentName, text, hintText);
+            break;
+        }
+        case FOTUFILM_HOST_KIND_HIDDEN_STRING:
+            defineHiddenString(set, name.c_str());
+            break;
+        case FOTUFILM_HOST_KIND_PUSH_BUTTON:
+            define(set, kOfxParamTypePushButton, name.c_str(), label.c_str(), hintText, parentName);
+            break;
+        case FOTUFILM_HOST_KIND_TEXTURE_TOGGLES:
+            for (size_t t = 0; t < gTextureParams.size(); ++t) {
+                OfxPropertySetHandle selected = define(set, kOfxParamTypeBoolean, gTextureParams[t].c_str(),
+                                                       gTextureLabels[t].c_str(), hintText, parentName);
+                if (selected) gProperty->propSetInt(selected, kOfxParamPropDefault, 0, 1);
+            }
+            break;
+        default:
+            break;
+        }
     }
-    spaces.push_back("Auto (from host)");
-    for (int i = kColorSpaceAuto; i < static_cast<int>(fotufilm::Encoding::Count); ++i) {
-        spaces.push_back(fotufilm::encodingLabel(static_cast<fotufilm::Encoding>(i)));
-    }
-    std::vector<std::string> stocks = gStockLabels;
-    // The placeholder is the reason, not a guess at it: an inactive licence reads as "not
-    // activated", a broken pack as the pack's own error, and only a genuinely empty pack as
-    // "no stocks installed". The menu is fixed once described, so it heals on restart; the
-    // status line and the first render carry the same text until then.
-    if (stocks.empty()) {
-        stocks.push_back(gInitializationError.empty() ? "No stocks installed"
-                                                      : gInitializationError);
-    }
-
-    // The panel reads top to bottom as the light does: what arrives, the film it meets, how it
-    // is exposed, the glass in front of it, how it is developed, the emulsion's own character,
-    // and where the result is viewed. The pipeline controls come last: they are about which
-    // part of that story a node performs, not about the picture, and a first-time user should
-    // meet Timeline Color Space before Stage.
-    defineGroup(set, "inputGroup", "Input", nullptr, true);
-    defineChoice(set, kColorSpaceParam, "Timeline Color Space",
-                 "What this node is being handed — the one control that is not "
-                 "taste. The film model is scene-referred in linear Rec.2020: "
-                 "mid-grey at 0.18, specular highlights above 1.0. The input is "
-                 "decoded to that and the result encoded back, so a wrong "
-                 "setting shows the emulsion the wrong light and lands the "
-                 "characteristic curves whole stops off. Auto reads the space "
-                 "the host tags the clip with, where the host says. A "
-                 "display-referred space (Rec.709, sRGB) clips at diffuse "
-                 "white, leaving halation nothing bright to scatter; a "
-                 "wide-gamut log or linear timeline keeps the highlights the "
-                 "model was built for.",
-                 "inputGroup", spaces, kColorSpaceAuto);
-    defineLabel(set, kColorSpaceStatusParam, "Decoded Input", "inputGroup",
-                "Not yet examined",
-                "The input encoding Fotufilm will decode. Host means Resolve supplied an "
-                "exact OFX colour-space tag. Assumed means Resolve supplied Raw or no tag; "
-                "select Timeline Color Space explicitly if that assumption does not match "
-                "the image arriving at this node.");
-
-    defineGroup(set, "filmGroup", "Film", nullptr, true);
-    gDescribedStocks = static_cast<int>(stocks.size());
-    defineChoice(set, kStockParam, "Stock",
-                 "The emulsion. Each is a measured stock: its own spectral "
-                 "sensitivity, characteristic curves, couplers, halation and "
-                 "granularity.",
-                 "filmGroup", stocks, 0);
-    std::vector<std::string> formats = gFormatLabels.empty()
-        ? std::vector<std::string>{"35mm still"} : gFormatLabels;
-    const int matchFilm = static_cast<int>(formats.size());
-    formats.push_back("Match Film");
-    gDescribedFormats = static_cast<int>(formats.size());
-    defineChoice(set, kFormatParam, "Film Format",
-                 "The gauge the frame is exposed on. The image height maps onto "
-                 "the gauge's frame height, so a smaller format is enlarged more "
-                 "and shows coarser grain, wider halation and stronger adjacency "
-                 "— the same emulsion at a different magnification. Match Film "
-                 "takes the gauge the chosen stock is known on.",
-                 "filmGroup", formats, matchFilm);
-    defineLabel(set, "resolvedFormat", "Resolved Format", "filmGroup", "Not yet examined");
-    defineDouble(set, "frameCoverage", "Film Frame Coverage (%)",
-                 "Short edge of the film frame retained after cropping. 100 uses the full frame; "
-                 "50 enlarges half the frame. Changes grain, halation and other spatial scales, "
-                 "without cropping pixels. Account for any upstream resize yourself.",
-                 "filmGroup", 5, 100, 100);
-
-    defineGroup(set, "exposureGroup", "Light & Colour");
-    defineDouble(set, "exposure", "Exposure", "Camera exposure, in stops.",
-                 "exposureGroup", -5, 5, 0);
-    defineDouble(set, "temperature", "Temperature (K)",
-                 "White balance before the film responds, in kelvin. Separate from Scene "
-                 "Illuminant, which sets the spectral light integrated against the emulsion.",
-                 "exposureGroup", 2000, 12000, 6504);
-    defineDouble(set, "tint", "Tint", "Green/magenta balance of the illuminant.",
-                 "exposureGroup", -100, 100, 0);
-
-    defineDouble(set, "highlights", "Highlights",
-                 "Scene-referred highlight recovery, applied before the film "
-                 "model. Keyed to each pixel's regional brightness, so pulling a "
-                 "sky down moves the sky as one piece.",
-                 "exposureGroup", -1, 1, 0);
-    defineDouble(set, "shadows", "Shadows",
-                 "The same shift, fading in below mid-grey.", "exposureGroup", -1, 1, 0);
-    OfxPropertySetHandle localTone =
-        define(set, kOfxParamTypeBoolean, "localTone", "Regional Tone Mask",
-               "Off, the highlight and shadow shifts key to each pixel's own "
-               "luminance instead of to the region it sits in. Identical output "
-               "when both rest at zero.",
-               "exposureGroup");
-    if (localTone) gProperty->propSetInt(localTone, kOfxParamPropDefault, 0, 1);
-    defineDouble(set, "saturation", "Saturation",
-                 "Chroma multiplier applied to the scene before the film "
-                 "responds. 1 leaves it untouched.",
-                 "exposureGroup", 0, 2, 1);
-    defineDouble(set, "vibrance", "Vibrance",
-                 "Chroma boost weighted toward the least colourful pixels; "
-                 "already-vivid colours are left alone.",
-                 "exposureGroup", -1, 1, 0);
-
-    defineGroup(set, "sceneLightGroup", "Spectral Scene Light", "exposureGroup");
-    defineChoice(set, "sceneLight", "Scene Illuminant",
-                 "Spectral lighting presented to the film, separate from white balance. "
-                 "Stock Reference preserves existing renders. Custom sources use a daylight or "
-                 "Planckian spectrum, not a measured LED spectrum.", "sceneLightGroup",
-                 {"Stock Reference", "Daylight · D65", "Daylight · 5500 K",
-                  "Tungsten · 3200 K", "Incandescent · 2856 K", "Custom"}, 0);
-    defineDouble(set, "sceneLightKelvin", "Scene Illuminant (K)",
-                 "Custom spectral scene light; does not replace Temperature or Tint.",
-                 "sceneLightGroup", 2000, 12000, 6504);
-
-    defineGroup(set, "lensGroup", "Lens & Filters");
-    std::vector<std::string> filters = gLensFilterLabels.empty()
-        ? std::vector<std::string>{"None"} : gLensFilterLabels;
-    gDescribedLensFilters = static_cast<int>(filters.size());
-    const char *const kFilterLabels[3] = {"Filter 1", "Filter 2", "Filter 3"};
-    const char *const kFilterHints[3] = {
-        "An absorbing filter on the front of the lens. It is integrated spectrally against the "
-        "chosen film's own three layer sensitivities, which is why the same filter is a "
-        "different filter on a different stock — an 85B is a correction on tungsten film and a "
-        "heavy warm cast on daylight film. It also adds the veiling glare of two more air-glass "
-        "faces, whatever the Veiling Glare slider says — and that added glare is why this control "
-        "is live only on the Full stage: no kernel this build carries can measure it in a span "
-        "that ends at the developed negative.",
-        "A second filter, behind the first. They stack in the order given: their transmittances "
-        "multiply, and the gap between them makes a ghost of its own.",
-        "A third filter, behind the second.",
-    };
-    for (int i = 0; i < 3; ++i) {
-        defineChoice(set, kLensFilterParams[i], kFilterLabels[i], kFilterHints[i],
-                     "lensGroup", filters, 0);
-    }
-    std::vector<std::string> meterings = gMeteringLabels.empty()
-        ? std::vector<std::string>{"Metered through"} : gMeteringLabels;
-    // The default is the engine's: through-the-lens metering, which is entry 1 of its own list.
-    const int meteredThrough = gMeteringLabels.size() > 1 ? 1 : 0;
-    defineChoice(set, "metering", "Metering",
-                 "How the exposure was set with those filters fitted. Metered through is the "
-                 "camera's own photopic cell reading the light that got past the glass, and is "
-                 "the default; it can underexpose behind a narrow filter, because the meter does "
-                 "not use the film's sensitivity. Filter factor is the published compensation, "
-                 "worked out against the emulsion, which restores the luminance record without "
-                 "cancelling the colour change. None is a fixed manual exposure, so the light "
-                 "the filter took lands on the film as underexposure. Ignored with no filter "
-                 "fitted, and live only on the Full stage, which is the only span a filter is "
-                 "live in.",
-                 "lensGroup", meterings, meteredThrough);
-    std::vector<std::string> diffusions = gDiffusionLabels.empty()
-        ? std::vector<std::string>{"None"} : gDiffusionLabels;
-    gDescribedDiffusions = static_cast<int>(diffusions.size());
-    defineChoice(set, kDiffusionParam, "Diffusion",
-                 "A diffusion filter on the front of the lens. A share of the light meets a "
-                 "particle and leaves in a new direction, and the lens images it somewhere else "
-                 "on the frame; the share that missed every particle is untouched, which is why "
-                 "a diffused picture keeps its edges instead of going soft. The black families "
-                 "carry absorbing particles: the blacks still lift and the highlights bloom much "
-                 "less.",
-                 "lensGroup", diffusions, 0);
-    std::vector<std::string> grades = gDiffusionGradeLabels.empty()
-        ? std::vector<std::string>{"1/4"} : gDiffusionGradeLabels;
-    const int32_t defaultGrade = fotufilm_bridge_diffusion_default_grade();
-    defineChoice(set, "diffusionGrade", "Diffusion Grade",
-                 "The particle loading a product line's 1/8, 1/4, 1/2, 1 and 2 name: one "
-                 "formulation more heavily loaded, so the grade moves how much light takes part "
-                 "and never how far it goes. Ignored with no diffusion filter fitted.",
-                 "lensGroup", grades,
-                 defaultGrade >= 0 && defaultGrade < static_cast<int32_t>(grades.size())
-                     ? defaultGrade : 0);
-    defineDouble(set, "focalLength", "Focal Length",
-                 "The taking lens's focal length in millimetres, read only by the diffusion "
-                 "filter: a ray deviated by an angle ahead of the lens lands focal length times "
-                 "that angle off its unscattered position, so the same filter glows bigger on a "
-                 "longer lens, exactly as it does in the world. 0 — the default — is the gauge's "
-                 "own normal lens, which is what the grade numbering on a filter's ring is "
-                 "calibrated around.",
-                 "lensGroup", 0, 300, 0);
-    for (int i = 0; i < 3; ++i) defineHiddenString(set, kLensFilterIDParams[i]);
-    defineHiddenString(set, kDiffusionIDParam);
-
-    defineDouble(set, "flare", "Veiling Glare",
-                 "Veiling glare from the taking lens, as a multiplier on the "
-                 "stock's figure. It defaults to 0 because a photographed clip "
-                 "already carries the glare of the lens that shot it, and this "
-                 "stage would veil the shadows a second time. Raise it for light "
-                 "that has met no glass — a render or a synthetic chart — or to "
-                 "stand in for glass worse than the camera's.",
-                 "lensGroup", 0, 2, 0);
-    defineGroup(set, "lensAdvancedGroup", "Advanced", "lensGroup");
-    defineChoice(set, "filterCoating", "Filter Coating",
-                 "Coating on every fitted absorbing and diffusion filter. Changes transmission "
-                 "and added glare. Multicoated preserves the existing filter look.",
-                 "lensAdvancedGroup", {"Multi-coated", "Single-coated", "Uncoated"}, 0);
-
-    defineGroup(set, "labGroup", "Development");
-    OfxPropertySetHandle push = defineDouble(
-        set, "push", "Push / Pull",
-        "Measured push or pull conditions for this film's stated developer, "
-        "dilution, temperature and agitation. The control is disabled when "
-        "the stock pack has no measured response.",
-        "labGroup", -2, 2, 0);
-    // Interpolation between keyframes would be an unmeasured development condition. The instance
-    // change handler also snaps typed and dragged values to the selected stock's measurements.
-    if (push) {
-        gProperty->propSetInt(push, kOfxParamPropAnimates, 0, 0);
-        gProperty->propSetInt(push, kOfxParamPropSecret, 0, 1);
-    }
-    auto conditionMenu = defineChoice(set, "pushCondition", "Push / Pull",
-                 "Measured development conditions for this stock. The saved stop value is "
-                 "preserved when the menu is rebuilt. Pair a push with the intended camera exposure.",
-                 "labGroup", {"Reference · 0 stops"}, 0);
-    if (conditionMenu) gProperty->propSetInt(conditionMenu, kOfxParamPropPersistant, 0, 0);
-    defineLabel(set, "developmentStatus", "Measured Conditions", "labGroup", "Not yet examined");
-    defineDouble(set, "bleachBypass", "Bleach Bypass",
-                 "How much of the developed silver the bleach leaves in the "
-                 "negative. The retained silver is a black-and-white image "
-                 "over the colour one: contrast up, chroma down, together.",
-                 "labGroup", 0, 1, 0);
-    defineDouble(set, "expired", "Film Age (years)",
-                 "Years the roll sat past its process-by date. Speed falls a "
-                 "stop a decade with the blue-sensitive layer going first, "
-                 "base fog rises, and grain rises with the fog — the muddy, "
-                 "crossed toe of an old roll.",
-                 "labGroup", 0, 30, 0);
-    defineDouble(set, "shutterSeconds", "Long Exposure (s)",
-                 "Exposure duration for the stock's measured reciprocity response. 0 disables "
-                 "the override. Corrections stop at the last measured duration; no motion blur "
-                 "is added. Use the same value in paired Negative Only and Print Only nodes.",
-                 "labGroup", 0, 3600, 0);
-
-    defineGroup(set, "filmResponseGroup", "Grain");
-    defineDouble(set, "grain", "Grain",
-                 "Multiplier on the stock's measured granularity. 0 disables it.",
-                 "filmResponseGroup", 0, 2, 1);
-    defineChoice(set, "mottleOverride", "Mottle",
-                 "Use the stock's coarse grain mixture, or set a custom share. Full mode only.",
-                 "filmResponseGroup", {"Stock Default", "Custom"}, 0);
-    defineDouble(set, "mottleShare", "Mottle Amount (%)",
-                 "Share of grain variance carried by coarse clumping. Total calibrated "
-                 "granularity is preserved. Custom mottle uses the engine's video delivery size.",
-                 "filmResponseGroup", 0, 90, 0);
-    defineChoice(set, "grainAnimation", "Grain Animation",
-                 "Timeline changes grain each frame. Frozen uses the same field at every time; "
-                 "the texture still responds to changes in the image.",
-                 "filmResponseGroup", {"Timeline", "Frozen"}, 0);
-    defineGroup(set, "grainAdvancedGroup", "Advanced", "filmResponseGroup");
-    defineChoice(set, "grainModel", "Grain Model",
-                 "Disc grain is available on silver-image stocks and requires Reference rendering, "
-                 "selected automatically. Subpixel "
-                 "grain uses the clump field; coarse mottle is suppressed where discs render.",
-                 "grainAdvancedGroup", {"Clump Field", "Discs"}, 0);
-    OfxPropertySetHandle seed =
-        define(set, kOfxParamTypeInteger, kSeedParam, "Grain Seed",
-               "Same seed and same frame give the same grain. Grain also "
-               "advances with the timeline, so a still frame is still, and a "
-               "moving one is not.",
-               "grainAdvancedGroup");
-    if (seed) {
-        gProperty->propSetInt(seed, kOfxParamPropDefault, 0, 0x46494C4D);
-        gProperty->propSetInt(seed, kOfxParamPropAnimates, 0, 0);
-    }
-
-    define(set, kOfxParamTypePushButton, "newSeed", "New Seed",
-           "Choose a different deterministic grain field. Included in Undo with Grain Seed.",
-           "grainAdvancedGroup");
-    defineLabel(set, "grainStatus", "Grain Status", "grainAdvancedGroup", "Not yet examined");
-
-    defineGroup(set, "halationGroup", "Halation");
-    OfxPropertySetHandle halation = defineDouble(
-                 set, "halation", "Halation",
-                 "Multiplier on the fraction of light the base returns. On the "
-                 "legacy model it scales the light going down rather than the "
-                 "finished halo, so raising it widens the halo as well as "
-                 "brightening it — the way a thinner antihalation layer would. "
-                 "With Estimated Halation Shape on, the film's geometry is "
-                 "pinned and this scales the amount alone. 1 is the stock's "
-                 "authored look — the sheet's look scale times the measured "
-                 "film, whose calibrated returns sit at the patent-floor "
-                 "absorber densities and are all but invisible on their own. "
-                 "The measured film survives at 1 over the look scale (0.025 "
-                 "on a rem-jet stock). Typing past the slider reaches 100.",
-                 "halationGroup", 0, 10, 1);
-    // The slider stays 0–10; the hard range admits typed values to 100 so a
-    // pack's authored look can still be pushed well past itself without
-    // touching the calibrated sheets.
-    if (halation) gProperty->propSetDouble(halation, kOfxParamPropMax, 0, 100);
-    OfxPropertySetHandle estimatedHalation =
-        define(set, kOfxParamTypeBoolean, "estimatedHalation",
-               "Estimated Halation Shape",
-               "Renders halation through the stock's provisional annular "
-               "profile — the reflex ring at the base's critical angle — where "
-               "no independently calibrated profile exists. Off is the legacy "
-               "Gaussian model and the render every existing project made; the "
-               "annular road costs roughly half again as much frame time.",
-               "halationGroup");
-    if (estimatedHalation) {
-        gProperty->propSetInt(estimatedHalation, kOfxParamPropDefault, 0, 0);
-    }
-    defineDouble(set, "halationColour", "Halo Colour",
-                 "How much the halo keeps the source's own colour instead of "
-                 "the film's layered red. The returning light re-enters the "
-                 "emulsion from below, so a colour film's ring is red whatever "
-                 "the light was; raising this lifts the dimmer records to the "
-                 "strongest record's return, and the ring brightens toward the "
-                 "light's colour. 0 is the film.",
-                 "halationGroup", 0, 1, 0);
-    defineGroup(set, "halationSpectrumGroup", "Return Spectrum", "halationGroup");
-    const char *spectralNames[] = {"halation400", "halation450", "halation500", "halation550",
-                                   "halation600", "halation650", "halation700"};
-    const char *spectralLabels[] = {"400 nm (stops)", "450 nm (stops)", "500 nm (stops)",
-                                    "550 nm (stops)", "600 nm (stops)", "650 nm (stops)",
-                                    "700 nm (stops)"};
-    for (int i = 0; i < 7; ++i) {
-        defineDouble(set, spectralNames[i], spectralLabels[i],
-                     "Gain over the stock's halation return spectrum. 0 preserves the stock; "
-                     "positive values strengthen this band. Does not create return in an absent band.",
-                     "halationSpectrumGroup", -6, 6, 0);
-    }
-
-    defineGroup(set, "couplerGroup", "Colour Separation");
-    defineDouble(set, "couplers", "DIR Couplers",
-                 "Multiplier on inter-image inhibition, the mechanism behind the "
-                 "stock's colour separation and its Mackie lines. 0 disables it.",
-                 "couplerGroup", 0, 2, 1);
-    defineDouble(set, "couplerReach", "Separation",
-                 "Interlayer inhibitor reach. 1 preserves the stock; 0 seals the layers off.",
-                 "couplerGroup", 0, 3, 1);
-    defineDouble(set, "couplerSelf", "Edge Contrast",
-                 "Within-layer inhibition. 1 preserves the stock's retained self-inhibition.",
-                 "couplerGroup", 0, 3, 1);
-    defineGroup(set, "couplerAdvancedGroup", "Interlayer Reach", "couplerGroup");
-    defineDouble(set, "couplerRedGreen", "Red–Green Reach",
-                 "Additional multiplier on Separation for the red–green interlayer.",
-                 "couplerAdvancedGroup", 0, 3, 1);
-    defineDouble(set, "couplerGreenBlue", "Green–Blue Reach",
-                 "Additional multiplier on Separation for the green–blue interlayer.",
-                 "couplerAdvancedGroup", 0, 3, 1);
-
-    defineGroup(set, "outputGroup", "Output", nullptr, true);
-    std::vector<std::string> papers = gPaperLabels.empty()
-        ? std::vector<std::string>{"Match Film"} : gPaperLabels;
-    const int matchPaper = static_cast<int>(papers.size()) - 1;
-    gDescribedPapers = static_cast<int>(papers.size());
-    defineChoice(set, kPaperParam, "Output Medium",
-                 "Choose where the finished image lives. Match Film uses RA-4 paper for a still "
-                 "negative, the stock's native release print for a motion negative, and the "
-                 "direct positive for reversal film. Digital Reference is the HDR path; paper, "
-                 "projection, Lab Scan, Telecine and Negative are SDR. Negative is available "
-                 "only for negative film.",
-                 "outputGroup", papers, matchPaper);
-    defineLabel(set, "resolvedPaper", "Resolved Medium", "outputGroup", "Not yet examined");
-    defineChoice(set, "printLight", "Viewing Illuminant",
-                 "Choose the light used to judge a physical print. Medium Reference means D50 "
-                 "for photo paper or calibrated 5400 K xenon for a projected release print. "
-                 "Digital Reference, Lab Scan, Telecine and Negative ignore this control.",
-                 "outputGroup",
-                 {"Medium Reference · Auto", "Proofing Booth · D50",
-                  "Tungsten · 2856 K", "Daylight · D65"}, 0);
-    defineDouble(set, "printCorrection", "Channel Contrast Match",
-                 "Balances how the film's colour layers print together. The medium's own "
-                 "calibration is already applied; raise this only for a more neutral crossover.",
-                 "outputGroup", 0, 1, 0.05);
-    std::vector<std::string> viewings = gNegativeViewingLabels.empty()
-        ? std::vector<std::string>{"Light Box"} : gNegativeViewingLabels;
-    defineChoice(set, kNegativeViewingParam, "Negative Viewing",
-                 "How the developed negative is read when Output Medium is Negative. "
-                 "Light Box sets the lamp so the clear film base sits just under white and "
-                 "keeps its orange. Scanner divides by the film base, so the base reads "
-                 "white. Other output media ignore this control.",
-                 "outputGroup", viewings, 0);
-
-    // Last, and shut: a node is Full unless someone has read what the other spans are for.
-    defineGroup(set, "stageGroup", "Pipeline");
-    std::vector<std::string> spans = gStageLabels;
-    if (spans.empty()) spans.push_back("Full");
-    gDescribedStages = static_cast<int>(spans.size());
-    defineChoice(set, kStageParam, "Stage",
-                 "Which span of the pipeline this node performs. Full is the whole "
-                 "thing and is what every other setting here describes. Negative Only "
-                 "stops at the developed negative and writes its per-layer densities "
-                 "— data, not a picture — and Print Only takes exactly that back and "
-                 "finishes it on the selected medium, so the two in series reproduce "
-                 "Full. Texture Only lays "
-                 "the film's spatial character over the frame it is handed and leaves "
-                 "its colour alone.\n\n"
-                 "A Negative Only node must feed a Print Only node directly, with the "
-                 "same stock and lab settings and nothing in between: the densities "
-                 "are not colour and anything that grades, resamples or transforms "
-                 "them is not editing a picture.",
-                 "stageGroup", spans, 0);
-    defineLabel(set, kStageStatusParam, " ", "stageGroup",
-                "Stage: Full — scene in, finished output out");
-    defineHiddenString(set, kStageIDParam);
-    // Nothing here when the engine has not come up: the bridge hands out the spatial stages, and
-    // a toggle cannot be invented for one whose bit is unknown. `createInstance` records that the
-    // panel has none, because a texture selection that cannot be read is not a selection of none.
-    for (size_t i = 0; i < gTextureParams.size(); ++i) {
-        OfxPropertySetHandle selected = define(
-            set, kOfxParamTypeBoolean, gTextureParams[i].c_str(),
-            gTextureLabels[i].c_str(),
-            "Whether Texture Only carries this stage. Ignored by every other stage, "
-            "where the strength controls below select what runs.",
-            "stageGroup");
-        if (selected) gProperty->propSetInt(selected, kOfxParamPropDefault, 0, 1);
-    }
-
-    defineGroup(set, "renderGroup", "Rendering", "stageGroup");
-    defineChoice(set, "renderMode", "Render Mode",
-                 "Default preserves the launch-time renderer setting. Realtime and Reference "
-                 "override it for this node, for both preview and delivery. Disc grain uses Reference.",
-                 "renderGroup", {"Default", "Realtime", "Reference"}, 0);
-    defineLabel(set, "renderStatus", "Effective Renderer", "renderGroup", "Not yet examined");
-
-    // The identity behind each menu above; see the comment on kStockIDParam.
-    defineHiddenString(set, kStockIDParam);
-    defineHiddenString(set, kFormatIDParam);
-    defineHiddenString(set, kPaperIDParam);
-
     return kOfxStatOK;
+}
+
+MenuSource menuSource(int32_t menu, double requested) {
+    MenuSource source{{}, 0, nullptr};
+    switch (menu) {
+    case FOTUFILM_HOST_MENU_STOCKS:
+        source.options = gStockLabels;
+        if (source.options.empty()) {
+            source.options.push_back(gInitializationError.empty() ? "No stocks installed"
+                                                                  : gInitializationError);
+        }
+        source.described = &gDescribedStocks;
+        break;
+    case FOTUFILM_HOST_MENU_GAUGES:
+        source.options = gFormatLabels.empty() ? std::vector<std::string>{"35mm still"} : gFormatLabels;
+        source.options.push_back("Match Film");
+        source.described = &gDescribedFormats;
+        break;
+    case FOTUFILM_HOST_MENU_PAPERS:
+        source.options = gPaperLabels.empty() ? std::vector<std::string>{"Match Film"} : gPaperLabels;
+        source.described = &gDescribedPapers;
+        break;
+    case FOTUFILM_HOST_MENU_STAGES:
+        source.options = gStageLabels.empty() ? std::vector<std::string>{"Full"} : gStageLabels;
+        source.described = &gDescribedStages;
+        break;
+    case FOTUFILM_HOST_MENU_LENS_FILTERS:
+        source.options = gLensFilterLabels.empty() ? std::vector<std::string>{"None"} : gLensFilterLabels;
+        source.described = &gDescribedLensFilters;
+        break;
+    case FOTUFILM_HOST_MENU_METERINGS:
+        source.options = gMeteringLabels.empty() ? std::vector<std::string>{"Metered through"} : gMeteringLabels;
+        break;
+    case FOTUFILM_HOST_MENU_DIFFUSION_FAMILIES:
+        source.options = gDiffusionLabels.empty() ? std::vector<std::string>{"None"} : gDiffusionLabels;
+        source.described = &gDescribedDiffusions;
+        break;
+    case FOTUFILM_HOST_MENU_DIFFUSION_GRADES:
+        source.options = gDiffusionGradeLabels.empty() ? std::vector<std::string>{"1/4"} : gDiffusionGradeLabels;
+        requested = fotufilm_bridge_diffusion_default_grade();
+        break;
+    case FOTUFILM_HOST_MENU_NEGATIVE_VIEWINGS:
+        source.options = gNegativeViewingLabels.empty() ? std::vector<std::string>{"Light Box"}
+                                                        : gNegativeViewingLabels;
+        break;
+    case FOTUFILM_HOST_MENU_COLOUR_SPACES:
+        for (int i = 0; i < kColorSpaceAuto; ++i) {
+            source.options.push_back(fotufilm::encodingLabel(static_cast<fotufilm::Encoding>(i)));
+        }
+        source.options.push_back("Auto (from host)");
+        for (int i = kColorSpaceAuto; i < static_cast<int>(fotufilm::Encoding::Count); ++i) {
+            source.options.push_back(fotufilm::encodingLabel(static_cast<fotufilm::Encoding>(i)));
+        }
+        break;
+    default:
+        source.options.push_back("None");
+        break;
+    }
+    const int last = static_cast<int>(source.options.size()) - 1;
+    int index = requested < 0 ? last : static_cast<int>(requested);
+    if (index > last) index = last;
+    if (index < 0) index = 0;
+    source.defaultIndex = index;
+    return source;
 }
 
 /// One menu with a persisted identity. `described` is how many entries the host was actually
@@ -1423,6 +1131,11 @@ void updateContextControls(Instance *instance, OfxTime time) {
     for (int slot : {FOTUFILM_BRIDGE_COUPLER_REACH, FOTUFILM_BRIDGE_COUPLER_SELF,
                      FOTUFILM_BRIDGE_COUPLER_RED_GREEN, FOTUFILM_BRIDGE_COUPLER_GREEN_BLUE}) enable(slot, geometry);
     enable(FOTUFILM_BRIDGE_BLEACH_BYPASS, colourNegative);
+    const bool interlayer = scene && (capabilities & FOTUFILM_CONTROL_INTERLAYER_INHIBITION) != 0;
+    enable(FOTUFILM_BRIDGE_FRINGE_AMOUNT, interlayer);
+    enable(FOTUFILM_BRIDGE_FRINGE_RADIUS, interlayer &&
+           controlValue(instance, FOTUFILM_BRIDGE_FRINGE_AMOUNT, time) > 0);
+    enable(FOTUFILM_BRIDGE_ENLARGER, print && (capabilities & FOTUFILM_CONTROL_ENLARGER) != 0);
     enable(FOTUFILM_BRIDGE_SHUTTER_SECONDS, (capabilities & FOTUFILM_CONTROL_RECIPROCITY) != 0);
     enable(FOTUFILM_BRIDGE_PRINT_LIGHT, print && (capabilities & FOTUFILM_CONTROL_VIEWING_LIGHT) != 0);
     enable(FOTUFILM_BRIDGE_PRINT_CORRECTION, print && (capabilities & FOTUFILM_CONTROL_PRINT_CORRECTION) != 0);
@@ -1919,10 +1632,14 @@ OfxStatus createInstance(OfxImageEffectHandle effect) {
         {"newSeed", &instance->newSeed},
     };
     for (const auto &entry : extraHandles) gParameter->paramGetHandle(set, entry.first, entry.second, nullptr);
-    for (int i = 0; i < FOTUFILM_BRIDGE_PARAMETER_COUNT; ++i) {
-        if (!kParameterNames[i]) continue;
-        gParameter->paramGetHandle(set, kParameterNames[i],
-                                   &instance->parameters[i], nullptr);
+    const int32_t hostCount = fotufilm_bridge_host_parameter_count(FOTUFILM_HOST_RESOLVE);
+    for (int32_t i = 0; i < hostCount; ++i) {
+        const int32_t slot = fotufilm_bridge_host_parameter_slot(FOTUFILM_HOST_RESOLVE, i);
+        if (slot < 0 || slot >= FOTUFILM_BRIDGE_PARAMETER_COUNT) continue;
+        const int32_t kind = fotufilm_bridge_host_parameter_kind(FOTUFILM_HOST_RESOLVE, i);
+        if (kind == FOTUFILM_HOST_KIND_GROUP || kind == FOTUFILM_HOST_KIND_TEXTURE_TOGGLES) continue;
+        const std::string name = hostString(fotufilm_bridge_host_parameter_name, i);
+        gParameter->paramGetHandle(set, name.c_str(), &instance->parameters[slot], nullptr);
     }
     gParameter->paramGetHandle(set, kStageParam, &instance->stage, nullptr);
     gParameter->paramGetHandle(set, kStageIDParam, &instance->stageID, nullptr);
@@ -2222,52 +1939,53 @@ void forRows(int begin, int end, void (*work)(int begin, int end, void *context)
 /// Reads the float parameter block the bridge takes, as of `time`.
 void readParameters(Instance *instance, OfxTime time,
                     float parameters[FOTUFILM_BRIDGE_PARAMETER_COUNT]) {
-    for (int i = 0; i < FOTUFILM_BRIDGE_PARAMETER_COUNT; ++i) {
-        parameters[i] = 0;
-        if (!instance->parameters[i]) continue;
-        // The Lens group's four catalogue menus are resolved out of the ids the project
-        // persisted, after this loop. Reading the menu index here as well would only be reading
-        // the number that id exists to outvote, so they are left at zero until then.
-        if (i == FOTUFILM_BRIDGE_LENS_FILTER_1 || i == FOTUFILM_BRIDGE_LENS_FILTER_2 ||
-            i == FOTUFILM_BRIDGE_LENS_FILTER_3 || i == FOTUFILM_BRIDGE_DIFFUSION_FAMILY) {
-            continue;
-        }
-        if (i == FOTUFILM_BRIDGE_LOCAL_TONE || i == FOTUFILM_BRIDGE_ESTIMATED_HALATION) {
-            int value = i == FOTUFILM_BRIDGE_LOCAL_TONE ? 1 : 0;
-            gParameter->paramGetValueAtTime(instance->parameters[i], time, &value);
-            parameters[i] = static_cast<float>(value);
-        } else if (isOffsetChoice(i) || isDirectChoice(i) || i == FOTUFILM_BRIDGE_DIFFUSION_GRADE) {
-            // A choice param appears as an int, and the bridge wants a position in the engine's
-            // own list: the menu's own for the grade, and one less than the menu's for the menus
-            // that open with a None or a default this side owns. The offset is added back on the
-            // way out, which is what makes a slot an older project never filled read as off.
+    for (int i = 0; i < FOTUFILM_BRIDGE_PARAMETER_COUNT; ++i) parameters[i] = 0;
+    const int32_t hostCount = fotufilm_bridge_host_parameter_count(FOTUFILM_HOST_RESOLVE);
+    for (int32_t i = 0; i < hostCount; ++i) {
+        const int32_t slot = fotufilm_bridge_host_parameter_slot(FOTUFILM_HOST_RESOLVE, i);
+        if (slot < 0 || slot >= FOTUFILM_BRIDGE_PARAMETER_COUNT) continue;
+        if (hostFlags(i) & FOTUFILM_HOST_FLAG_COMPOSED) continue;
+        OfxParamHandle handle = instance->parameters[slot];
+        if (!handle) continue;
+        const double scale = fotufilm_bridge_host_parameter_scale(FOTUFILM_HOST_RESOLVE, i);
+        const double offset = fotufilm_bridge_host_parameter_offset(FOTUFILM_HOST_RESOLVE, i);
+        double raw = 0;
+        switch (fotufilm_bridge_host_parameter_kind(FOTUFILM_HOST_RESOLVE, i)) {
+        case FOTUFILM_HOST_KIND_BOOLEAN: {
             int value = 0;
-            gParameter->paramGetValueAtTime(instance->parameters[i], time, &value);
+            gParameter->paramGetValueAtTime(handle, time, &value);
+            raw = value != 0 ? 1 : 0;
+            break;
+        }
+        case FOTUFILM_HOST_KIND_CHOICE: {
+            int value = 0;
+            gParameter->paramGetValueAtTime(handle, time, &value);
             if (value < 0) value = 0;
-            parameters[i] = static_cast<float>(value) + (isOffsetChoice(i) ? 1.0f : 0.0f);
-        } else if (i == FOTUFILM_BRIDGE_PRINT_LIGHT) {
-            // A choice param appears as an int, and the bridge wants kelvin.
-            int value = 0;
-            gParameter->paramGetValueAtTime(instance->parameters[i], time, &value);
-            const int count =
-                static_cast<int>(sizeof(kPrintLightKelvin) / sizeof(*kPrintLightKelvin));
-            parameters[i] = kPrintLightKelvin[value >= 0 && value < count ? value : 0];
-        } else {
-            double value = 0;
-            gParameter->paramGetValueAtTime(instance->parameters[i], time, &value);
-            parameters[i] = static_cast<float>(value);
+            const double mapped = fotufilm_bridge_host_parameter_choice_value(FOTUFILM_HOST_RESOLVE, i, value);
+            raw = mapped < 0 ? 0 : mapped;
+            break;
         }
+        case FOTUFILM_HOST_KIND_MENU: {
+            int value = 0;
+            gParameter->paramGetValueAtTime(handle, time, &value);
+            raw = value < 0 ? 0 : value;
+            break;
+        }
+        case FOTUFILM_HOST_KIND_INTEGER: {
+            int value = 0;
+            gParameter->paramGetValueAtTime(handle, time, &value);
+            raw = value;
+            break;
+        }
+        default: {
+            double value = 0;
+            gParameter->paramGetValueAtTime(handle, time, &value);
+            raw = value;
+            break;
+        }
+        }
+        parameters[slot] = static_cast<float>(raw * scale + offset);
     }
-    // New multiplicative controls encode offsets so a zero-filled legacy block remains neutral.
-    for (int slot : {FOTUFILM_BRIDGE_COUPLER_REACH, FOTUFILM_BRIDGE_COUPLER_SELF,
-                     FOTUFILM_BRIDGE_COUPLER_RED_GREEN, FOTUFILM_BRIDGE_COUPLER_GREEN_BLUE}) {
-        if (instance->parameters[slot]) parameters[slot] -= 1;
-    }
-    if (instance->parameters[FOTUFILM_BRIDGE_FRAME_COVERAGE]) {
-        parameters[FOTUFILM_BRIDGE_FRAME_COVERAGE] =
-            parameters[FOTUFILM_BRIDGE_FRAME_COVERAGE] / 100 - 1;
-    }
-    parameters[FOTUFILM_BRIDGE_MOTTLE_SHARE] /= 100;
     int light = 0;
     if (instance->sceneLight) gParameter->paramGetValueAtTime(instance->sceneLight, time, &light);
     const float sceneLights[] = {0, 6504, 5500, 3200, 2856};

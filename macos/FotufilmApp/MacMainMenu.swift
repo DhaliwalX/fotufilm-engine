@@ -358,6 +358,9 @@ private final class EditHistoryMenuDelegate: NSObject, NSMenuDelegate {
         if new.printLightKelvin != old.printLightKelvin {
             return "Viewing Illuminant"
         }
+        if new.enlarger != old.enlarger {
+            return "Enlarger"
+        }
         if new.printCorrection != old.printCorrection {
             return "Channel Contrast Match"
         }

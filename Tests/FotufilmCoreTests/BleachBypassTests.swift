@@ -24,7 +24,7 @@ final class BleachBypassTests: XCTestCase {
         let paperCurve = FotufilmEngine.Options().paper(for: stock).printCurve(for: stock)
         let xMid = paperCurve.logExposure(
             density: paperCurve.dMin
-                + FotufilmEngine.Options().paper(for: stock).anchorDensity(stock.paperMidDensity))
+                + FotufilmEngine.Options().paper(for: stock).anchorDensity)
         let range = paperCurve.dMax - paperCurve.dMin
         let activation = SIMD3<Float>(
             (paperCurve.density(logExposure: xMid + relativeLogE.x) - paperCurve.dMin) / range,
@@ -115,7 +115,7 @@ final class BleachBypassTests: XCTestCase {
             let activation = SIMD3<Float>((0..<3).map { channel in
                 let curve = paperCurves[channel]
                 let xMid = curve.logExposure(
-                    density: curve.dMin + paper.anchorDensity(stock.paperMidDensity))
+                    density: curve.dMin + paper.anchorDensity)
                 return (curve.density(logExposure: xMid + logE[channel])
                         - curve.dMin) / (curve.dMax - curve.dMin)
             })

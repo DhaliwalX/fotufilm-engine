@@ -4,6 +4,7 @@ import { measureTone, toneKey } from './tone-base.js'
 import { CONFIG } from './engine-constants.js'
 import { packedGrade, whiteBalanceGains, applyColorControls } from './color-controls.js'
 
+import { CONTROLS } from './generated/controls.js'
 // The browser half of the film engine.
 //
 // The WebAssembly module holds the same Halide kernels the phones run, but none of the physics
@@ -69,7 +70,7 @@ export function parsePack(bytes) {
   const magic = String.fromCharCode(...new Uint8Array(bytes, 0, 4))
   if (magic !== PACK_MAGIC) throw new Error(`not a film pack: ${magic}`)
   const version = view.getUint32(4, true)
-  if (version !== 1 && version !== 2) throw new Error(`unsupported pack version ${version}`)
+  if (version !== 1 && version !== 2 && version !== 3) throw new Error(`unsupported pack version ${version}`)
 
   const width = view.getInt32(8, true)
   const height = view.getInt32(12, true)
@@ -115,6 +116,43 @@ export function parsePack(bytes) {
       ladder.push({ shortEdge, featureMask: rungMask, seed: rungSeed, spatialSupport, slots, values })
     }
   }
+  let transport
+  if (version === 3) {
+    const integer = () => { const n = view.getInt32(offset, true); offset += 4; return n }
+    const headMask = integer(), headConfiguration = take(configCount), tailConfiguration = take(configCount)
+    const count = integer()
+    if (count < 1 || count > 11) throw new Error('invalid transport component count')
+    const readBands = () => {
+      const bands = [], n = integer()
+      if (n < 1 || n > 64) throw new Error('invalid transport band count')
+      for (let b = 0; b < n; ++b) {
+        const weight = take(1)[0], radius = integer(), stride = integer()
+        if (!Number.isFinite(weight) || weight < 0 || radius < 1 || radius > 128 ||
+            stride < 1 || stride > 4096 || (stride & (stride - 1))) throw new Error('invalid transport stencil')
+        bands.push({ weight, radius, stride, weights: take((radius * 2 + 1) ** 2) })
+      }
+      return bands
+    }
+    const delta = (base) => {
+      const result = base.slice(), count = integer()
+      if (count < 0 || count > configCount) throw new Error('invalid transport configuration')
+      for (let i = 0; i < count; ++i) {
+        const slot = integer()
+        if (slot < 0 || slot >= configCount) throw new Error('invalid transport slot')
+        result[slot] = take(1)[0]
+      }
+      return result
+    }
+    const components = Array.from({ length: count }, () => ({ exposure: take(lutCount), bands: readBands() }))
+    const sizes = [], sizeCount = integer()
+    if (sizeCount !== ladder.length) throw new Error('transport size ladder mismatch')
+    for (let i = 0; i < sizeCount; ++i) {
+      const shortEdge = integer(), headConfigurationAtSize = delta(headConfiguration), tailConfigurationAtSize = delta(tailConfiguration)
+      sizes.push({ shortEdge, headConfiguration: headConfigurationAtSize, tailConfiguration: tailConfigurationAtSize,
+        components: components.map((component) => ({ exposure: component.exposure, bands: readBands() })) })
+    }
+    transport = { headMask, headConfiguration, tailConfiguration, components, sizes }
+  }
   if (offset !== bytes.byteLength) throw new Error(`pack has ${bytes.byteLength - offset} trailing bytes`)
 
   return {
@@ -129,6 +167,7 @@ export function parsePack(bytes) {
     // The slots as the CLI sealed them. A stage replaces `configuration` with its own; the ladder
     // lays its size over whichever slots the stage left alone, and this is how it tells.
     baseConfiguration: configuration,
+    transport,
     ladder,
     exposure,
     film,
@@ -546,7 +585,7 @@ class Developer {
       : dispatchMask(rung.featureMask, this.pack.ownFeatureMask)
     this.seed = this.pack.seed >>> 0
     this.apron = rung.spatialSupport ?? 0
-    this.tiles = rung.spatialSupport == null
+    this.tiles = this.pack.transport || rung.spatialSupport == null
       ? planTiles(this.width, this.height, 0, Infinity)
       : planTiles(this.width, this.height, this.apron, this.tileBudget)
     let needed = 0
@@ -559,27 +598,29 @@ class Developer {
     writeBaseGrain(this.module, this.configuration, this.grainPtr)
   }
 
-  /// Rewrites the configuration slots that are a pure function of a control. Anything that
-  /// re-enters the film model — halation, coupler range — is not adjustable here and needs a
-  /// pack exported at that setting.
   applyControls(controls) {
     const { module } = this
-    const { ev = 0, grain = 1, highlights = 0, shadows = 0,
-            saturation = 1, vibrance = 0 } = controls
+    // The editor stores exposure as `ev`; the shared control catalogue calls it `exposure`.
+    const values = { ...controls, exposure: controls.ev ?? controls.exposure }
     module.HEAPF32.set(this.configuration, this.configPtr / 4)
-    module.ccall('fotufilm_wasm_set_exposure', null, ['number', 'number'],
-                 [this.configPtr, Math.pow(2, ev)])
-    module.ccall('fotufilm_wasm_set_scene', null,
-                 ['number', 'number', 'number', 'number', 'number'],
-                 [this.configPtr, highlights, shadows, saturation, vibrance])
-    module.ccall('fotufilm_wasm_set_grain', null, ['number', 'number', 'number'],
-                 [this.configPtr, this.grainPtr, grain])
+    for (const control of CONTROLS) {
+      const value = values[control.key] ?? control.def
+      if (control.kind === 'grain') {
+        module.ccall('fotufilm_wasm_set_grain', null, ['number', 'number', 'number'],
+                     [this.configPtr, this.grainPtr, value])
+        continue
+      }
+      const slot = module.ccall('fotufilm_wasm_control_slot', 'number', ['number'], [control.index])
+      const stored = control.kind === 'exp2' ? Math.pow(2, value) : value
+      module.ccall('fotufilm_wasm_set_slot', null, ['number', 'number', 'number'],
+                   [this.configPtr, slot, stored])
+    }
     const configuration = module.HEAPF32.subarray(this.configPtr / 4,
       this.configPtr / 4 + this.configuration.length)
     applyColorControls(configuration, controls)
     // Keep coarse and resolved grain at the same strength as the clump field.
     for (const offset of [CONFIG.MOTTLE, CONFIG.GRAIN_DISC]) {
-      for (let c = 0; c < 3; c++) configuration[offset + c] *= grain
+      for (let c = 0; c < 3; c++) configuration[offset + c] *= controls.grain ?? 1
     }
     this.seed = ((controls.seed ?? 0) + this.pack.seed) >>> 0
   }
@@ -591,6 +632,7 @@ class Developer {
     if (source.width !== this.width || source.height !== this.height) {
       this.setFrame(source.width, source.height)
     }
+    this.controls = controls
     this.applyControls(controls)
     if (controls.localTone && (controls.highlights || controls.shadows)) {
       onProgress('Measuring local highlights and shadows')
@@ -756,15 +798,18 @@ export class SimdDeveloper extends Developer {
   }
 
   allocateFrame(pixels) {
+    this.transportPtrs = this.pack.transport ? [this.module._malloc(pixels * 3 * 4),
+      this.module._malloc(pixels * 3 * 4), this.module._malloc(257 * 257 * 4)] : []
     this.inputPtr = this.module._malloc(pixels * 3 * 4)
     this.outputPtr = this.module._malloc(pixels * 3 * 4)
     this.densityPtr = this.module._malloc(pixels * 3 * 4)
   }
 
   freeFrame() {
-    for (const ptr of [this.inputPtr, this.outputPtr, this.densityPtr]) {
+    for (const ptr of [this.inputPtr, this.outputPtr, this.densityPtr, ...(this.transportPtrs ?? [])]) {
       if (ptr) this.module._free(ptr)
     }
+    this.transportPtrs = []
     this.inputPtr = 0
     this.outputPtr = 0
     this.densityPtr = 0
@@ -784,10 +829,49 @@ export class SimdDeveloper extends Developer {
 
   /// Synchronous: the kernel runs on this thread and holds it for the length of the tile.
   run(region) {
+    if (this.pack.transport) return this.runTransport(region)
     return this.renderCall(
       this.inputPtr, this.outputPtr, region.width, region.height, region.x, region.y,
       this.configPtr, this.exposurePtr, this.filmPtr, this.paperPtr, this.densityPtr,
       this.featureMask, this.seed)
+  }
+
+  runTransport(region) {
+    const { module, pack } = this
+    const root = pack.transport
+    const plan = root.sizes.find((size) => size.shortEdge === this.rung.shortEdge) ?? root
+    const [sumPtr, filteredPtr, kernelPtr] = this.transportPtrs
+    const count = region.width * region.height * 3
+    module.HEAPF32.fill(0, sumPtr / 4, sumPtr / 4 + count)
+    const render = (input, mask) => this.renderCall(input, this.outputPtr, region.width,
+      region.height, 0, 0, this.configPtr, this.exposurePtr, this.filmPtr, this.paperPtr,
+      this.densityPtr, mask, this.seed)
+    const original = this.configuration
+    const configure = (values) => {
+      this.configuration = values.slice()
+      this.configuration[this.frameSizeSlot] = this.width
+      this.configuration[this.frameSizeSlot + 1] = this.height
+      this.applyControls(this.controls)
+    }
+    try {
+      for (const component of plan.components) {
+        configure(plan.headConfiguration)
+        module.HEAPF32.set(component.exposure, this.exposurePtr / 4)
+        const status = render(this.inputPtr, root.headMask)
+        if (status !== 0) return status
+        for (const band of component.bands) {
+          module.HEAPF32.set(band.weights, kernelPtr / 4)
+          const status = module.ccall('fotufilm_wasm_transport', 'number', Array(7).fill('number'),
+            [this.outputPtr, filteredPtr, region.width, region.height, kernelPtr, band.radius, band.stride])
+          if (status !== 0) return status
+          const heap = module.HEAPF32
+          for (let i = 0; i < count; ++i) heap[sumPtr / 4 + i] += band.weight * heap[filteredPtr / 4 + i]
+        }
+      }
+      configure(plan.tailConfiguration)
+      module.HEAPF32.set(pack.exposure, this.exposurePtr / 4)
+      return render(sumPtr, this.featureMask)
+    } finally { this.configuration = original }
   }
 
   regionOutput(region) {
@@ -805,7 +889,7 @@ export class SimdDeveloper extends Developer {
 /// create the kernel's pipelines, and the SIMD path otherwise.
 export async function createDeveloper(pack, onProgress = () => {}) {
   if (typeof WebAssembly !== 'object') throw new Error('This browser cannot process film profiles. Use a browser with WebAssembly support.')
-  if (navigator.gpu) {
+  if (navigator.gpu && !pack.transport) {
     let developer
     try {
       onProgress('Loading WebGPU engine')

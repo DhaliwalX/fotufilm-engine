@@ -123,13 +123,10 @@ enum FilmRender {
         var width: Int
         var height: Int
         var key: SceneKey
-        /// How far the demosaic already moved the illuminant, in mired from
-        /// the file's as-shot value.
-        var bakedMired: Float?
-        /// The light the film integrates against, in kelvin, when there is one to state — raw
-        /// only: the camera's own named light, or failing that the file's as-shot record. Carried
-        /// on the scene because the develop runs later, from here.
+        /// Capture light, preserved independently of edits. A camera capture names it for RAW
+        /// and processed files; imported RAW carries the decoder's original Kelvin and xy.
         var sceneKelvin: Float?
+        var sceneChromaticity: SIMD2<Float>? = nil
         /// The light the decode recovered above display white, as a multiple of it: above 1 exactly
         /// when a gain map was expanded (`.expandToHDR`), 1 for every SDR source — and for raw,
         /// whose above-white radiance has always been the negative's own path and is not rolled.
@@ -154,13 +151,6 @@ enum FilmRender {
         /// Blocks until `rows` have been laid down. Free — not even a lock — on a settled scene.
         func waitForRows(through row: Int) {
             ready?.wait(through: row)
-        }
-
-        /// True when the temperature has moved away from what this scene was demosaiced for, so a
-        /// render that wants to be right has to decode again rather than reuse it.
-        func balanceIsStale(for state: EditState) -> Bool {
-            guard let bakedMired else { return false }
-            return bakedMired != FilmRender.balanceMired(state)
         }
 
         /// The scene as full-precision samples, whole: a scene still being
@@ -219,20 +209,6 @@ enum FilmRender {
         }
     }
 
-    /// The temperature control's displacement from neutral, in mired.
-    static func balanceMired(_ state: EditState) -> Float {
-        Float(state.temperatureMired)
-            - WhiteBalance.kelvinToMired(WhiteBalance.neutralKelvin)
-    }
-
-    /// What is left for the film model to adapt once `scene` has been
-    /// demosaiced for part of the correction.
-    static func remainingBalance(for state: EditState, scene: Scene) -> WhiteBalance {
-        RawDecode.remainingBalance(displacementMired: balanceMired(state),
-                                   tint: Float(state.tint),
-                                   bakedMired: scene.bakedMired)
-    }
-
     static func detailMeasurements(
         of scene: Scene, state: EditState,
         negative: NegativeViewing? = nil
@@ -241,9 +217,9 @@ enum FilmRender {
               let engine = HalideMetalFilmRenderer.shared,
               let device = MTLCreateSystemDefaultDevice() else { return nil }
         var options = state.options(sensor: scene.sensorFrame)
-        options.whiteBalance = remainingBalance(for: state, scene: scene)
         options.frameCoverage = scene.frameCoverage
         options.sceneIlluminantKelvin = scene.sceneKelvin
+        options.sceneIlluminantChromaticity = scene.sceneChromaticity
         options.sceneHeadroom = scene.inputConversion == .preserveHDR
             ? scene.contentHeadroom : 1
         options.paper = state.resolvedPaper
@@ -301,21 +277,9 @@ enum FilmRender {
         let decodeLongEdge = state.crop == nil && state.cornerCrop == nil && requestedViewport == nil
             ? longEdge : nil
         let fixedCaptureIlluminant = source.isRaw
-            ? state.captureIlluminantKelvin.map(Float.init) : nil
-        let placement: RawDecode.Placement?
-        if let fixedCaptureIlluminant {
-            // Camera video is normalized by this same device lock. Ask CIRAWFilter for that
-            // neutralization explicitly and leave no digital RGB remainder for the film head.
-            placement = RawDecode.Placement(
-                neutralKelvin: fixedCaptureIlluminant, bakedMired: 0)
-        } else {
-            placement = source.asShotMired.map {
-                RawDecode.placement(
-                    displacementMired: balanceMired(state), asShotMired: $0)
-            }
-        }
-        let bakedMired = placement?.bakedMired
-        let neutralKelvin = placement?.neutralKelvin ?? nil
+            ? (state.filmLightKelvin ?? state.captureIlluminantKelvin).map(Float.init) : nil
+        // Preserve as-shot neutralization for imports. A camera capture reproduces its declared
+        // scene-white lock. Temperature and tint edits belong solely to spectral exposure.
 
         // Settled before the decode rather than after it, because whether this app has a measurement
         // of the lens decides whether the decoder should apply its own.
@@ -330,7 +294,7 @@ enum FilmRender {
         case .preserveHDR, .engineLinearToneMap: decodeMode = .expandedHDR
         }
         guard var decoded = time(.decode, source.detail, {
-            source.decoded(longEdge: decodeLongEdge, neutralKelvin: neutralKelvin,
+            source.decoded(longEdge: decodeLongEdge, neutralKelvin: fixedCaptureIlluminant,
                            upright: upright,
                            decodeMode: decodeMode,
                            correctingLens: lens.supersedesDecoder ? false : nil)
@@ -402,8 +366,12 @@ enum FilmRender {
                     stock: stock, options: options,
                     width: max(1, Int(density.width)),
                     height: max(1, Int(density.height)))
-                prepared = requestedViewport.addingSpatialSupport(
-                    invocation.spatialSupport)
+                // Layered transport currently solves the complete virtual frame so tails and
+                // reduction-grid phases remain identical while panning and zooming.
+                let support = options.transportConstruction(for: stock) == nil
+                    ? invocation.spatialSupport
+                    : Int(max(requestedViewport.virtualFrameSize.width, requestedViewport.virtualFrameSize.height))
+                prepared = requestedViewport.addingSpatialSupport(support)
             }
             viewport = prepared
             frameCoverage = coverage
@@ -431,7 +399,7 @@ enum FilmRender {
         // band with the rasterise rather than as a second walk over the finished frame.
         let decodeKelvin = source.isRaw
             ? fixedCaptureIlluminant
-                ?? source.asShotMired.map(WhiteBalance.miredToKelvin)
+                ?? source.descriptor.asShotKelvin
             : nil
         // The profile delta belongs to the decode: it interpolates the camera's own matrices at
         // the light the file was neutralized against. The film's light is a separate statement,
@@ -510,8 +478,8 @@ enum FilmRender {
         return Scene(pixels: pixels, width: width, height: height,
                      key: SceneKey(state: state, longEdge: longEdge,
                                    viewport: viewport),
-                     bakedMired: bakedMired,
                      sceneKelvin: sceneKelvin,
+                     sceneChromaticity: fixedCaptureIlluminant == nil ? source.descriptor.asShotChromaticity : nil,
                      contentHeadroom: contentHeadroom,
                      inputConversion: inputConversion,
                      frameCoverage: frameCoverage,
@@ -585,8 +553,8 @@ enum FilmRender {
         key.longEdge = max(width, height)
         pixels.flush(byteOffset: 0, byteCount: rowBytes * height)
         return Scene(pixels: pixels, width: width, height: height, key: key,
-                     bakedMired: scene.bakedMired,
                      sceneKelvin: scene.sceneKelvin,
+                     sceneChromaticity: scene.sceneChromaticity,
                      contentHeadroom: scene.contentHeadroom,
                      inputConversion: scene.inputConversion,
                      frameCoverage: scene.frameCoverage,
@@ -689,14 +657,13 @@ enum FilmRender {
         let stock = film?.stock
         // Resolve automatic gauge from the scene's captured sensor frame.
         var options = state.options(sensor: scene.sensorFrame)
-        options.whiteBalance = remainingBalance(for: state, scene: scene)
         // The film the geometry kept, measured when the scene was placed: a cropped
         // picture is an enlargement, and the engine scales grain and the other
         // millimetre-sized structures to match.
         options.frameCoverage = scene.frameCoverage
-        // The film-side scene light, from the same as-shot record the profile delta used at
-        // rasterize time. The gate inside the engine decides whether it does anything.
+        // Pass capture light unchanged; the engine resolves temperature/tint edits spectrally.
         options.sceneIlluminantKelvin = scene.sceneKelvin
+        options.sceneIlluminantChromaticity = scene.sceneChromaticity
         // The recorded range above diffuse white, so an HDR source's highlights are metered
         // into the film's latitude instead of printing to paper white. Only when the decode
         // kept that light: a tone-mapped scene still carries the metadata fact in
@@ -1330,7 +1297,8 @@ struct PhotoSource: @unchecked Sendable {
         let originalName: String?
         let pixelSize: CGSize
         let orientation: CGImagePropertyOrientation
-        let asShotMired: Float?
+        let asShotKelvin: Float?
+        var asShotChromaticity: SIMD2<Float>? = nil
         let camera: CameraIdentity?
         let captureMetadata: [String: Any]?
         let lensShot: LensShot?
@@ -1363,7 +1331,6 @@ struct PhotoSource: @unchecked Sendable {
         return data
     }
     var isRaw: Bool { descriptor.kind == .raw }
-    var asShotMired: Float? { descriptor.asShotMired }
     var camera: CameraIdentity? { descriptor.camera }
     var orientation: CGImagePropertyOrientation { descriptor.orientation }
     var pixelSize: CGSize { descriptor.pixelSize }
@@ -1390,7 +1357,8 @@ struct PhotoSource: @unchecked Sendable {
             descriptor: Descriptor(
                 kind: .raw, contentType: contentType, originalName: name,
                 pixelSize: raw.pixelSize, orientation: .up,
-                asShotMired: raw.asShotMired, camera: raw.camera,
+                asShotKelvin: raw.asShotKelvin, asShotChromaticity: raw.asShotChromaticity,
+                camera: raw.camera,
                 captureMetadata: capture, lensShot: lensShot(from: capture),
                 sensorFrame: SensorFrame.read(data: data), declaredHeadroom: nil,
                 sourceColorProfile: properties?[kCGImagePropertyProfileName as String]
@@ -1419,7 +1387,7 @@ struct PhotoSource: @unchecked Sendable {
                 kind: .raster,
                 contentType: resolvedContentType(data: data, hint: nil),
                 originalName: name, pixelSize: pixelSize,
-                orientation: orientation, asShotMired: nil, camera: nil,
+                orientation: orientation, asShotKelvin: nil, camera: nil,
                 captureMetadata: capture, lensShot: lensShot(from: capture),
                 sensorFrame: SensorFrame.read(data: data),
                 declaredHeadroom: GainMapHeadroom.declared(data: data),
@@ -1434,7 +1402,7 @@ struct PhotoSource: @unchecked Sendable {
             descriptor: Descriptor(
                 kind: .bitmap, contentType: nil, originalName: nil,
                 pixelSize: CGSize(width: image.width, height: image.height),
-                orientation: .up, asShotMired: nil, camera: nil,
+                orientation: .up, asShotKelvin: nil, camera: nil,
                 captureMetadata: nil, lensShot: nil, sensorFrame: nil,
                 declaredHeadroom: nil,
                 sourceColorProfile: image.colorSpace?.name.map { $0 as String }),

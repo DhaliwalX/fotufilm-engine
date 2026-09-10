@@ -14,6 +14,8 @@ import AppKit
 
 /// A row that can be asked to catch up with the model without being rebuilt.
 class FormRowView: SessionView {
+    var rowTitle = ""
+
     /// Pulls the current value out of the model and shows it. Called on every observation tick, so
     /// it must be cheap and must not write anything back.
     func refresh() {}
@@ -134,6 +136,7 @@ final class SliderRow: FormRowView {
         readout.alignment = .right
         readout.setContentHuggingPriority(.defaultHigh, for: .horizontal)
 
+        rowTitle = title
         slider.began = began
         slider.ended = ended
         slider.onChange = { [weak self] value in
@@ -180,6 +183,7 @@ final class ToggleRow: FormRowView {
         self.read = get
         toggle = SessionToggle(description: title)
         super.init(frame: .zero)
+        rowTitle = title
         toggle.onChange = set
 
         let name = makeLabel(title, size: 12)
@@ -214,6 +218,7 @@ final class PopUpRow<Value: Equatable>: FormRowView {
         read = get
         popUp = SessionPopUp(description: title ?? "")
         super.init(frame: .zero)
+        rowTitle = title ?? ""
         popUp.setOptions(options.map(\.title))
         popUp.onPick = { [values] index in
             guard values.indices.contains(index) else { return }

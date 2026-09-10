@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import argparse
-import re
+import json
 import struct
 import sys
 from pathlib import Path
@@ -12,59 +12,11 @@ from xml.etree import ElementTree
 
 
 PLUGIN_UUID = "C4D9D06C-A2A7-48B4-830B-9AE81B970140"
-TEXTURE_STAGE_SOURCE = (
-    Path(__file__).resolve().parents[1] / "Sources/FotufilmCore/PipelineStage.swift"
-)
-BASE_PUBLIC_PARAMETER_IDS = {
-    *(str(value) for value in range(1, 26)),
-    # The read-only status line. It is derived state rather than a control, but it is published
-    # for the same reason every other control is: an unpublished channel is one Final Cut's
-    # inspector does not draw, and a status line nobody can read is not a status line.
-    "37",
-    # The Lens group: three filter threads, the metering behind them, the diffusion filter, its
-    # grade, and the focal length its scattering is imaged through — then the negative viewing
-    # mode, which lives in Output with the rest of what happens after the film.
-    *(str(value) for value in range(73, 81)),
-    "10001",
-}
-PERSISTED_ONLY_PARAMETER_IDS = {"26", "27", "28", "29", "81", "82", "83", "84"}
-BASE_PARAMETER_PATHS = {
-    # Group ids are the FxPlug's startParameterSubGroup ids: 85 Input, 31 Film, 32 Light & Colour
-    # (which absorbed the retired Tone group, 33), 72 Lens & Filters, 35 Development, 34 Grain,
-    # 86 Halation, 87 Colour Separation, 36 Output, 30 Pipeline.
-    "5": "85/5",
-    "2": "31/2", "3": "31/3",
-    "6": "32/6", "7": "32/7", "8": "32/8", "9": "32/9",
-    "10": "32/10", "11": "32/11", "12": "32/12", "13": "32/13",
-    "73": "72/73", "74": "72/74", "75": "72/75", "76": "72/76",
-    "77": "72/77", "78": "72/78", "79": "72/79", "18": "72/18",
-    "22": "35/22", "23": "35/23", "24": "35/24",
-    "14": "34/14", "21": "34/21",
-    "15": "86/15", "16": "86/16", "17": "86/17",
-    "19": "87/19",
-    "4": "36/4", "25": "36/25", "20": "36/20", "80": "36/80",
-    "1": "30/1",
-    # The status line sits outside every group, because it is created before the first
-    # startParameterSubGroup call: its channel path is the filter's own.
-    "37": "37",
-    "10001": "10001",
-}
+GENERATED = Path(__file__).resolve().parents[1] / "finalcut/Generated/fxplug-parameters.json"
 
 
-def texture_stage_count(path: Path) -> int:
-    text = path.read_text(encoding="utf-8")
-    ordered = re.search(
-        r"public static let ordered:.*?=\s*\[(.*?)\n\s*\]", text, re.DOTALL
-    )
-    if ordered is None:
-        raise ValueError("TextureStages.ordered was not found")
-    entries = re.findall(
-        r'\(\s*"[^"]+"\s*,\s*"[^"]+"\s*,\s*\.[A-Za-z][A-Za-z0-9]*\s*\)',
-        ordered.group(1),
-    )
-    if not entries:
-        raise ValueError("TextureStages.ordered contains no stages")
-    return len(entries)
+def generated_parameters(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def png_size(path: Path) -> tuple[int, int] | None:
@@ -77,7 +29,7 @@ def png_size(path: Path) -> tuple[int, int] | None:
     return struct.unpack(">II", data[16:24])
 
 
-def validate(path: Path, require_previews: bool, texture_stages_source: Path) -> list[str]:
+def validate(path: Path, require_previews: bool, generated_source: Path) -> list[str]:
     failures: list[str] = []
     try:
         root = ElementTree.parse(path).getroot()
@@ -85,19 +37,18 @@ def validate(path: Path, require_previews: bool, texture_stages_source: Path) ->
         return [f"cannot parse {path}: {error}"]
 
     try:
-        stage_count = texture_stage_count(texture_stages_source)
+        generated = generated_parameters(generated_source)
     except (OSError, UnicodeError, ValueError) as error:
-        return [f"cannot determine the engine texture stages from {texture_stages_source}: {error}"]
-    if stage_count > 32:
-        return ["TextureStages.ordered exceeds the reserved FxPlug parameter block 40...71"]
-    texture_parameter_ids = {
-        str(value) for value in range(40, 40 + stage_count)
-    }
-    public_parameter_ids = BASE_PUBLIC_PARAMETER_IDS | texture_parameter_ids
-    serialized_parameter_ids = public_parameter_ids | PERSISTED_ONLY_PARAMETER_IDS
-    parameter_paths = BASE_PARAMETER_PATHS | {
-        parameter_id: f"30/{parameter_id}" for parameter_id in texture_parameter_ids
-    }
+        return [f"cannot read the generated parameter table {generated_source}: {error}"]
+    stage_count = int(generated["textureStageCount"])
+    first = int(generated["textureStageFirst"])
+    limit = int(generated["textureStageLimit"])
+    if first + stage_count > limit:
+        return ["the texture stages exceed the reserved FxPlug parameter block"]
+    texture_parameter_ids = {str(value) for value in range(first, first + stage_count)}
+    public_parameter_ids = {str(value) for value in generated["public"]}
+    serialized_parameter_ids = public_parameter_ids | {str(value) for value in generated["persistedOnly"]}
+    parameter_paths = dict(generated["paths"])
 
     filters = [node for node in root.findall(".//filter")
                if node.get("pluginUUID") == PLUGIN_UUID]
@@ -121,7 +72,7 @@ def validate(path: Path, require_previews: bool, texture_stages_source: Path) ->
         failures.append(f"missing serialized parameters: {', '.join(missing_parameters)}")
     serialized_texture_ids = {
         value for value in parameter_id_set
-        if value.isdigit() and 40 <= int(value) < 72
+        if value.isdigit() and first <= int(value) < limit
     }
     extra_texture_ids = sorted(serialized_texture_ids - texture_parameter_ids, key=int)
     if extra_texture_ids:
@@ -141,7 +92,7 @@ def validate(path: Path, require_previews: bool, texture_stages_source: Path) ->
     missing_targets = sorted(public_parameter_ids - published, key=int)
     if missing_targets:
         failures.append(f"unpublished parameters: {', '.join(missing_targets)}")
-    published_persisted = sorted(PERSISTED_ONLY_PARAMETER_IDS & published, key=int)
+    published_persisted = sorted({str(value) for value in generated["persistedOnly"]} & published, key=int)
     if published_persisted:
         failures.append(
             "hidden identity parameters must not be published: "
@@ -175,11 +126,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("template", type=Path)
     parser.add_argument("--require-previews", action="store_true")
-    parser.add_argument("--texture-stages-source", type=Path, default=TEXTURE_STAGE_SOURCE)
+    parser.add_argument("--generated", type=Path, default=GENERATED)
     arguments = parser.parse_args()
-    failures = validate(
-        arguments.template, arguments.require_previews, arguments.texture_stages_source
-    )
+    failures = validate(arguments.template, arguments.require_previews, arguments.generated)
     if failures:
         for failure in failures:
             print(f"error: {failure}", file=sys.stderr)

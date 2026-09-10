@@ -8,104 +8,7 @@
 #include "FotufilmBridge.h"
 #include "WorkingSpace.h"
 
-/// The parameter ids Final Cut persists. They are an ABI in exactly the sense the OFX plugin's
-/// parameter *names* are: a project file keeps the id, so a value moved to a different id is a
-/// value the next open reads off the wrong control. Ids are never reused and never renumbered;
-/// a retired one stays retired. FxPlug reserves ids outside 1...9998, so the block below stays
-/// well inside that.
-enum {
-    kFotufilmParam_Stage = 1,
-    kFotufilmParam_Stock = 2,
-    kFotufilmParam_Format = 3,
-    kFotufilmParam_Paper = 4,
-    kFotufilmParam_ColorSpace = 5,
-
-    kFotufilmParam_Exposure = 6,
-    kFotufilmParam_Temperature = 7,
-    kFotufilmParam_Tint = 8,
-
-    kFotufilmParam_Highlights = 9,
-    kFotufilmParam_Shadows = 10,
-    kFotufilmParam_LocalTone = 11,
-    kFotufilmParam_Saturation = 12,
-    kFotufilmParam_Vibrance = 13,
-
-    kFotufilmParam_Grain = 14,
-    kFotufilmParam_Halation = 15,
-    kFotufilmParam_EstimatedHalation = 16,
-    kFotufilmParam_HalationColour = 17,
-    kFotufilmParam_Flare = 18,
-    kFotufilmParam_Couplers = 19,
-    kFotufilmParam_PrintCorrection = 20,
-    kFotufilmParam_Seed = 21,
-
-    kFotufilmParam_Push = 22,
-    kFotufilmParam_BleachBypass = 23,
-    kFotufilmParam_Expired = 24,
-    kFotufilmParam_PrintLight = 25,
-
-    /// Stable menu-choice IDs. Persisted indices may change when packs are updated, so rendering
-    /// resolves the ID first and reconciles the menu index.
-    kFotufilmParam_StageID = 26,
-    kFotufilmParam_StockID = 27,
-    kFotufilmParam_FormatID = 28,
-    kFotufilmParam_PaperID = 29,
-
-    /// Group headers.
-    kFotufilmParam_PipelineGroup = 30,
-    kFotufilmParam_FilmGroup = 31,
-    kFotufilmParam_ExposureGroup = 32,
-    /// Retired: the Tone controls now sit in the Exposure group, which the inspector titles
-    /// Light & Colour. The number is kept out of circulation, as every parameter id is.
-    kFotufilmParam_ToneGroup_Retired = 33,
-    kFotufilmParam_ResponseGroup = 34,
-    kFotufilmParam_LabGroup = 35,
-    kFotufilmParam_OutputGroup = 36,
-
-    /// The read-only status line: what the plugin is doing with what it has been given, and why
-    /// something it was asked for is not happening. Derived state, refreshed whenever a control
-    /// moves and when an instance joins a document; it is published so the inspector shows it.
-    kFotufilmParam_Status = 37,
-
-    /// One toggle per spatial stage the texture span can lay over the frame, in the order
-    /// `fotufilm_bridge_texture_stage_*` hands them out. The block is sized generously so that a
-    /// stage added to the engine lands on a fresh id rather than shifting the ones after it.
-    kFotufilmParam_TextureStageFirst = 40,
-    kFotufilmParam_TextureStageLimit = 72,
-
-    /// The lens: what is screwed onto the front of it, and how the exposure was set behind that.
-    /// The block starts where the reserved texture block ends, so nothing here can collide with a
-    /// spatial stage the engine grows into.
-    kFotufilmParam_LensGroup = 72,
-    kFotufilmParam_LensFilter1 = 73,
-    kFotufilmParam_LensFilter2 = 74,
-    kFotufilmParam_LensFilter3 = 75,
-    kFotufilmParam_Metering = 76,
-    kFotufilmParam_Diffusion = 77,
-    kFotufilmParam_DiffusionGrade = 78,
-    kFotufilmParam_FocalLength = 79,
-
-    /// How a developed negative is read. It lives in the Output group with the rest of what
-    /// happens after the film, not in the Lens group.
-    kFotufilmParam_NegativeViewing = 80,
-
-    /// Stable menu-choice IDs for the four catalogue menus in the Lens group, following the
-    /// 26...29 pattern above: hidden, never published, and the thing a project actually keeps.
-    /// The filter drawer is the one menu here that will certainly grow, and a drawer that gains a
-    /// filter renumbers every entry after it.
-    kFotufilmParam_LensFilter1ID = 81,
-    kFotufilmParam_LensFilter2ID = 82,
-    kFotufilmParam_LensFilter3ID = 83,
-    kFotufilmParam_DiffusionID = 84,
-
-    /// Group headers added when the inspector was laid out to match the Resolve plug-in:
-    /// Input at the top, and Halation and Colour Separation split out of what was one
-    /// Film Response group. Groups hold no value, so only the order they are declared in
-    /// matters to a project.
-    kFotufilmParam_InputGroup = 85,
-    kFotufilmParam_HalationGroup = 86,
-    kFotufilmParam_CouplerGroup = 87,
-};
+#include "Generated/FotufilmParameterIDs.h"
 
 /// The id the plugin writes for the "None" entry the filter and diffusion menus open with. The
 /// engine has no name for an empty filter thread, so this one belongs to the bridge contract,
@@ -129,7 +32,6 @@ enum { kFotufilmColorSpaceAuto = 7 };
 /// The viewing-illuminant menu in its persisted order. Zero means the medium reference: D50 for
 /// reflection paper or calibrated 5400 K xenon for projection. D65 is appended so existing menu
 /// indices are not renumbered.
-static const float kFotufilmPrintLightKelvin[] = {0.0f, 5003.0f, 2856.0f, 6504.0f};
 
 /// The identity a saved project holds for the gauge that follows the stock. It is the plugin's
 /// own, not the bridge's: "match film" is expressed to the engine by passing a format index at
@@ -174,7 +76,7 @@ typedef struct {
 /// Bumped to 2 when the Lens group's eight slots were appended to the parameter block. The blob
 /// is memcpy'd, so a state written by the previous build is a different length as well as a
 /// different shape.
-enum { kFotufilmStateVersion = 2 };
+enum { kFotufilmStateVersion = 3 };
 
 /// The `quality` value at which a frame is being kept rather than shown and discarded.
 ///

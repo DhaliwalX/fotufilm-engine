@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "FotufilmHalide.h"
+#include "FotufilmTransportPortable.h"
 
 #include "fotufilm_wasm_variants.h"
 #include "print_0.h"
@@ -26,6 +27,11 @@
 extern "C" {
 
 EMSCRIPTEN_KEEPALIVE int fotufilm_wasm_plain_supported() { return 1; }
+EMSCRIPTEN_KEEPALIVE
+int fotufilm_wasm_transport(float *input, float *output, int w, int h,
+                            float *kernel, int radius, int stride) {
+    return fotufilm_transport_filter(input, output, w, h, kernel, radius, stride);
+}
 
 static const float kSigmaFloor = 0.151f;
 static const int32_t kLutCount = 33 * 33 * 33 * 4;
@@ -66,6 +72,7 @@ static void init_flat(halide_buffer_t *buffer, halide_dimension_t *dim,
 
 /// Mirrors `develop_pipeline_for`.
 static int develop_variant_for(int32_t feature_mask) {
+    if (feature_mask & FOTUFILM_FRAME_LIGHT_OUT) return 1024;
     const int32_t spatial = feature_mask
         & (FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF | FOTUFILM_FRAME_HALATION
            | FOTUFILM_FRAME_COUPLERS | FOTUFILM_FRAME_ADJACENCY | FOTUFILM_FRAME_GRAIN
@@ -134,6 +141,10 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
     const int32_t coupler_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_COUPLER_RADIUS]);
     const float adjacency_sigma = max_f(c[FOTUFILM_CONFIG_ADJACENCY_SIGMA], kSigmaFloor);
     const int32_t adjacency_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_ADJACENCY_RADIUS]);
+    const float adjacency_secondary_sigma = max_f(c[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA], kSigmaFloor);
+    const int32_t adjacency_secondary_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS]);
+    const float fringe_sigma = max_f(c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA], kSigmaFloor);
+    const int32_t fringe_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS]);
     const float grain_sigma = max_f(c[FOTUFILM_CONFIG_GRAIN_SIGMA], kSigmaFloor);
     const int32_t grain_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_GRAIN_RADIUS]);
     const float grain_lambda = c[FOTUFILM_CONFIG_GRAIN_LAMBDA];
@@ -146,7 +157,7 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
         mtf_sigma_1, mtf_sigma_2, mtf_luma_sigma, mtf_radius_0, mtf_radius_1,         \
         mtf_radius_2, mtf_luma_radius, stride[0], stride[1], stride[2],               \
         strided_radius[0], strided_radius[1], strided_radius[2], coupler_sigma,       \
-        coupler_radius, adjacency_sigma, adjacency_radius, grain_sigma, grain_radius, \
+        coupler_radius, adjacency_sigma, adjacency_radius, adjacency_secondary_sigma, adjacency_secondary_radius, fringe_sigma, fringe_radius, grain_sigma, grain_radius, \
         grain_lambda, print_mtf_radius, seed, reversal, monochrome, origin_x, origin_y,  \
         &density_buf
 
@@ -157,6 +168,11 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
     }
 #undef FOTUFILM_DEVELOP_ARGUMENTS
     if (status != 0) return status;
+
+    if (feature_mask & FOTUFILM_FRAME_LIGHT_OUT) {
+        memcpy(output, density, plane * 3 * sizeof(float));
+        return 0;
+    }
 
     switch ((reversal ? 1 : 0) | (monochrome ? 2 : 0)) {
     case 0: return print_0(&density_buf, &config_buf, &film_buf, &paper_buf, &out_buf);
@@ -174,6 +190,21 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
 EMSCRIPTEN_KEEPALIVE
 int32_t fotufilm_wasm_frame_size_slot(void) {
     return FOTUFILM_CONFIG_FRAME_WIDTH;
+}
+
+#include "generated/fotufilm_wasm_controls.inc"
+
+EMSCRIPTEN_KEEPALIVE
+int32_t fotufilm_wasm_control_count(void) { return kFotufilmWasmControlCount; }
+
+EMSCRIPTEN_KEEPALIVE
+int32_t fotufilm_wasm_control_slot(int32_t index) {
+    return index >= 0 && index < kFotufilmWasmControlCount ? kFotufilmWasmControlSlots[index] : -1;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void fotufilm_wasm_set_slot(float *configuration, int32_t slot, float value) {
+    if (slot >= 0 && slot < FOTUFILM_FRAME_CONFIGURATION_COUNT) configuration[slot] = value;
 }
 
 EMSCRIPTEN_KEEPALIVE

@@ -7,6 +7,9 @@ import FotufilmImaging
 #if canImport(FotufilmCore)
 import FotufilmCore
 #endif
+#if canImport(FotufilmEditModel)
+import FotufilmEditModel
+#endif
 
 extension FilmSourceInterpretation {
     var label: String {
@@ -279,14 +282,13 @@ struct EditState: Equatable {
     var exposure = 0.0  // EV
     /// Scene illuminant, in mireds so the slider is perceptually even.
     var temperatureMired = Double(WhiteBalance.kelvinToMired(WhiteBalance.neutralKelvin))
-    /// Fixed acquisition illuminant recorded by the camera path. Nil lets an imported RAW use its
-    /// own as-shot record; camera captures persist the same emulsion-reference lock used by live
-    /// Metal, so the decode reproduces the sensor's neutralization exactly.
+    /// Capture white recorded by the camera. Nil preserves an imported RAW's as-shot white.
+    /// Camera captures use the same scene-white neutralization in live preview and RAW decode.
     var captureIlluminantKelvin: Double? = nil
     /// The light the film integrates against, when the camera named one. Nil falls back to the
     /// acquisition illuminant, which is what every imported source has.
     var filmLightKelvin: Double? = nil
-    /// Green/magenta offset from the locus, in units of 0.0001 Duv.
+    /// Green/magenta offset from the locus, in units of 0.0001 delta-uv.
     var tint = 0.0
     /// Scene-referred tone shaping, -1...1 (0 = untouched).
     var highlights = 0.0
@@ -323,6 +325,9 @@ struct EditState: Equatable {
     /// catalogue's ladder. Flat at 1 is the film's own return trip.
     var halationSpectrum = EditState.restingHalationSpectrum
     var couplers = 1.0
+    var chromaticFringeAmount = 0.0
+    /// Gaussian sigma on the film, displayed and persisted in micrometers.
+    var chromaticFringeRadius = 100.0
     /// How far the released inhibitor crosses each interlayer, as a multiple of the stock's own
     /// geometry: index 0 is the red–green scavenger, index 1 the green–blue yellow filter layer.
     /// Seeded from the app-wide barriers, which is where this lived before it moved onto the edit.
@@ -366,6 +371,10 @@ struct EditState: Equatable {
     /// to RA-4 paper, motion negative to its native release print, and reversal to its direct
     /// positive. New edits instead use the HDR-capable digital reference selected above.
     var paperFollowsStock = false
+    /// The lamp house a reflection print is enlarged under. `.diffuser` is the sheets' own
+    /// diffuse read and changes nothing; `.condenser` prints a silver negative harder through
+    /// the Callier effect. Read only where `Enlarger.illuminates` the medium.
+    var enlarger = Enlarger.default
 
     var rotation = 0  // clockwise quarter turns, 0...3
     var flipH = false
@@ -532,55 +541,32 @@ struct EditState: Equatable {
         return o
     }
 
-    /// The develop for a source that measured nothing — a clip, a scan, the live camera.
     var options: FotufilmEngine.Options {
         var o = FotufilmEngine.Options()
-        o.exposureEV = Float(exposure)
+        for control in EditorControlCatalogue.all {
+            guard case .edit = control.scope, let binding = control.binding,
+                  control.persistence.encoding ?? .same == .same,
+                  let value = controlValue(of: control) else { continue }
+            binding.apply(value, to: &o)
+        }
         o.whiteBalance = whiteBalance
-        o.highlights = Float(highlights)
-        o.shadows = Float(shadows)
-        o.localTone = localTone
-        o.saturation = Float(saturation)
-        o.vibrance = Float(vibrance)
-        o.grade = grade
-        o.gradeSpace = encodedGrade ? .encoded : .linear
-        o.grainScale = Float(grain)
-        o.grainMottleShare = grainMottleShare.map(Float.init)
-        o.grainModel = discGrain ? .discs : .clumpField
         o.halationScale = Float(halation)
-        o.halationSourceColour = Float(halationColour)
-        // Resampled here rather than in the engine: the ladder of handles is the editor's shape,
-        // and what the engine takes is a curve on its own grid. A flat ladder resamples to nothing
-        // at all, which is the option's own default and the render every earlier build made.
-        o.halationReturnGain =
-            HalationSpectrum.resampled(halationSpectrum.map(Float.init))
+        o.grainMottleShare = grainMottleShare.map(Float.init)
+        o.halationModel = AppSettings.storedHalationModel
         o.useEstimatedHalationProfile = AppSettings.storedEstimatedHalationEnabled
-        o.couplerScale = Float(couplers)
-        // Per-gap only: each barrier already stands for itself, so setting `couplerRangeScale` as
-        // well would be a value the engine never reads.
         o.couplerGapReachScales = couplerGapReach.map(Float.init)
-        o.couplerSelfScale = Float(couplerSelf)
-        o.printCorrection = Float(printCorrection)
-        // The filters sit in front of everything the engine does, so they are resolved here with
-        // the rest of the develop: the absorbing ones through the exposure table, the scattering
-        // one as the stage ahead of the emulsion.
         let fitted = FilterChoice.resolve(lensFilterIDs)
         if !fitted.absorbing.isEmpty {
             o.lensFilters = LensFilterStack(fitted.absorbing,
                                             compensation: lensFilterMetering)
         }
         o.diffusionFilter = fitted.diffusion
-        // Old edits can carry the generic push value removed from the engine. A stock-specific
-        // measured condition survives; anything else returns to reference development instead of
-        // reaching the engine as an unmeasured request.
-        let requestedDevelopment = Float(push)
-        if stock?.supportsDevelopment(stops: requestedDevelopment) == true {
-            o.developmentEV = requestedDevelopment
+        if stock?.supportsDevelopment(stops: Float(push)) != true {
+            o.developmentEV = 0
         }
-        o.bleachBypass = Float(bleach)
-        o.expiredYears = Float(expiredYears)
         o.shutterSeconds = shutterSeconds.map(Float.init)
         o.printViewingKelvin = printLightKelvin.map(Float.init)
+        o.enlarger = enlarger
         let outputMedium = resolvedPaper
         o.paper = outputMedium
         if outputMedium.isNegative {

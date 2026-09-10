@@ -11,7 +11,9 @@ public struct FotufilmEngine {
         /// Source range above diffuse white as a linear multiple. One is SDR identity. HDR values
         /// drive `AutoAdjustment.headroomHighlights` to fit declared range into measured latitude.
         public var sceneHeadroom: Float = 1
-        /// The illuminant the scene was lit by.
+        /// Spectral scene-light edit: Kelvin is a mired displacement from D65 when capture
+        /// light is supplied; tint adds locus-relative delta-uv units. Input RGB must already
+        /// be neutralized for its capture light. These controls never apply RGB correction.
         public var whiteBalance: WhiteBalance = .neutral
         /// Scene-referred highlight shaping, -1...1: an exposure shift of up to 3 EV that fades in
         /// over the six stops above mid-grey, applied before the film model so the emulsion sees
@@ -74,6 +76,11 @@ public struct FotufilmEngine {
         public var halationHazeMM: Float? = nil
         /// Uses a provisional spatial profile when no independently calibrated profile exists.
         public var useEstimatedHalationProfile: Bool = false
+        public var halationModel: HalationModel = .legacy
+        /// Explicit research construction override. The stock's schema-2 construction is used
+        /// otherwise. Supported by the checked planar renderer, not legacy realtime/AOT APIs.
+        public var layeredTransport: LayeredTransport? = nil
+        public var transportBackend: TransportBackend = .cpu
         /// Multiplier on taking-lens veiling glare. The default is 0 because photographic inputs
         /// already include lens glare. Enable it for synthetic light or to model additional glare
         /// relative to the capture lens.
@@ -82,6 +89,14 @@ public struct FotufilmEngine {
         /// stock). Creative overdrive above 1 is compressed so the 2 endpoint applies 1.5 physical
         /// doses rather than letting spatial inhibition grow without bound.
         public var couplerScale: Float = 1
+        /// Optional adjacency-model override, leaving the stock's authored model as the default.
+        public var adjacencyModel: AdjacencyModel? = nil
+        /// Fraction of inter-layer inhibition carried by the broad spatial component, 0...1.
+        /// Nil uses the stock; zero preserves its original transport. Uniform colors are unchanged.
+        public var chromaticFringeAmount: Float? = nil
+        /// Broad transport sigma in millimeters on the film. Nil uses the stock (normally 0.1 mm).
+        /// A radius at or below the stock's core transport radius adds no fringe.
+        public var chromaticFringeRadiusMM: Float? = nil
         /// Multiplier on how far the released inhibitor reaches through the layer stack, applied to
         /// every interlayer alike (`CouplerGeometry.interlayerTransmission`). 0 seals the layers off
         /// from each other; above 1 crosses more.
@@ -126,6 +141,13 @@ public struct FotufilmEngine {
         public var bleachBypass: Float = 0
         /// Optional *additional* correction of film channel-contrast mismatch.
         public var printCorrection: Float = 0.05
+        /// The lamp house the negative is enlarged under. `.diffuser` — the default, and the
+        /// diffuse densitometry every stock sheet is read in — changes nothing. `.condenser`
+        /// applies the Callier effect: the negative's densities read at their specular values,
+        /// so a silver negative prints harder (`Enlarger.silverCallierCoefficient`) and a dye
+        /// negative only slightly so, with the print re-timed through the scaled mid-grey. Read
+        /// only where a reflection sheet is optically enlarged; see `Enlarger.illuminates`.
+        public var enlarger: Enlarger = .diffuser
         /// Where the developed image is finished. `nil` — the default — takes the medium the
         /// loaded stock was designed for, so a motion-picture camera negative reaches its release
         /// print stock and a still negative reaches the measured sheet, without the caller naming
@@ -174,18 +196,70 @@ public struct FotufilmEngine {
         /// Which spatial stages `stage == .texture` lays over the frame. Ignored by every other
         /// stage, where the selection is the ordinary strength levers.
         public var textureStages: TextureStages = .all
-        /// The scene's correlated colour temperature in kelvin, when the source states one —
-        /// the film-side half of the physical-light system. A warm temperature swaps the
-        /// spectral exposure table for one integrated against the exact CIE-locus SPD
-        /// (`SpectralRuntime.sceneExposure`), retaining both film colour balance and metamerism.
-        /// nil — the default for a source without capture metadata — uses the loaded stock's fixed
-        /// `referenceIlluminantKelvin` as both the assumed scene light and exposure reference.
-        /// An explicit scene light changes only the numerator; film balance remains fixed stock data.
+        /// Capture illuminant, from a decoder that records one. Nil means the source carries no
+        /// as-shot light — an already white-balanced file — and the scene light falls back to the
+        /// stock's own `referenceIlluminantKelvin`, so a neutral in renders neutral out.
+        /// `whiteBalance` edits this light; the stock reference remains fixed calibration data.
         public var sceneIlluminantKelvin: Float? = nil
-        /// An explicit spectral power distribution on `SpectralGrid` (380...780 nm, 10 nm steps).
-        /// This takes precedence over CCT and allows fluorescent, LED, and measured sources whose
-        /// spectra cannot be recovered from chromaticity. Empty uses `sceneIlluminantKelvin`.
+        /// Exact capture white, when a decoder reports xy. Avoids converting vendor tint units.
+        public var sceneIlluminantChromaticity: SIMD2<Float>? = nil
+        /// Measured scene SPD on 380...780 nm in 5 nm steps (81 samples). Overrides both
+        /// capture chromaticity and temperature/tint edits. Arbitrary scale; equal-Y normalization.
         public var sceneIlluminantSpectrum: [Float] = []
+
+        public var resolvedSceneIlluminant: WhiteBalance {
+            resolvedSceneIlluminant(referenceKelvin: WhiteBalance.neutralKelvin)
+        }
+
+        public func resolvedSceneIlluminant(referenceKelvin: Float) -> WhiteBalance {
+            let base = sceneIlluminantKelvin ?? referenceKelvin
+            precondition(base.isFinite && base > 0 && whiteBalance.kelvin.isFinite
+                         && whiteBalance.kelvin > 0 && whiteBalance.tint.isFinite, "invalid scene illuminant")
+            let displacement = whiteBalance.mired - WhiteBalance.neutral.mired
+            return WhiteBalance(
+                kelvin: WhiteBalance.miredToKelvin(WhiteBalance.kelvinToMired(base) + displacement),
+                tint: whiteBalance.tint)
+        }
+
+        public var resolvedSceneSpectrum: [Float] {
+            resolvedSceneSpectrum(referenceKelvin: WhiteBalance.neutralKelvin)
+        }
+
+        public func resolvedSceneSpectrum(referenceKelvin: Float) -> [Float] {
+            if !sceneIlluminantSpectrum.isEmpty {
+                precondition(sceneIlluminantSpectrum.count == SpectralGrid.count
+                             && sceneIlluminantSpectrum.allSatisfy { $0.isFinite && $0 >= 0 },
+                             "scene SPD must have 81 finite nonnegative samples")
+                _ = Illuminant.luminance(sceneIlluminantSpectrum)
+                return sceneIlluminantSpectrum
+            }
+            let edited = resolvedSceneIlluminant(referenceKelvin: referenceKelvin)
+            guard let white = sceneIlluminantChromaticity else {
+                return Illuminant.spectrum(edited)
+            }
+            // Carry the measured off-locus chromaticity directly; only UI temperature movement
+            // uses mired. The original decoder white is never rounded through a tint coordinate.
+            let original = WhiteBalance.chromaticity(
+                kelvin: sceneIlluminantKelvin ?? referenceKelvin, tint: 0)
+            let offset = WhiteBalance.uvFromXY(white) - WhiteBalance.uvFromXY(original)
+            let target = WhiteBalance.uvFromXY(WhiteBalance.chromaticity(
+                kelvin: edited.kelvin, tint: edited.tint)) + offset
+            return Illuminant.matching(WhiteBalance.xyFromUV(target),
+                                       base: Illuminant.atLocus(kelvin: edited.kelvin))
+        }
+
+        /// Colorimetric approximation when no film is loaded; the film path integrates the
+        /// complete spectrum against its own sensitivities instead of multiplying RGB.
+        public var sceneLightGains: (r: Float, g: Float, b: Float) {
+            if sceneIlluminantSpectrum.isEmpty && sceneIlluminantChromaticity == nil
+                && resolvedSceneIlluminant.isNeutral {
+                return (1, 1, 1)
+            }
+            let source = WhiteBalance.workingRGB(fromXY: Illuminant.chromaticity(resolvedSceneSpectrum))
+            let reference = WhiteBalance.workingRGB(fromXY: WhiteBalance.chromaticity(kelvin: 6504, tint: 0))
+            let gain = source / reference
+            return (gain.x, gain.y, gain.z)
+        }
         /// What is screwed onto the front of the lens, and how the exposure was set with it
         /// there. A filter is the one accessory that sits ahead of the whole engine, so it
         /// reaches only two things: the light the emulsion integrates — spectrally, against the
@@ -236,11 +310,21 @@ public struct FotufilmEngine {
     /// `PipelineStage` says it does: `.negative` returns the developed negative's densities,
     /// `.print` is handed them, and `.texture` returns the frame it was given.
     public func process(linearRGB image: ImageBuffer) -> ImageBuffer {
-        guard let positive = HalideBackend.process(image: image, stock: stock,
-                                                   options: options) else {
-            fatalError(Self.missingEngineMessage)
+        do { return try processChecked(linearRGB: image) }
+        catch { fatalError(error.localizedDescription) }
+    }
+
+    /// Recoverable development, preparation, and backend errors for either rendering model.
+    public func processChecked(linearRGB image: ImageBuffer) throws -> ImageBuffer {
+        if let model = options.transportConstruction(for: stock) {
+            return try LayeredTransportRenderer.process(image: image, stock: stock,
+                                                         options: options, model: model)
         }
-        return positive
+        var plain = stock; plain.layeredTransport = nil
+        guard let output = try HalideBackend.process(image: image, stock: plain, options: options) else {
+            throw TransportError.backend(Self.missingEngineMessage)
+        }
+        return output
     }
 
     /// Convenience: 8-bit sRGB interleaved RGB(A) in, same format out.
@@ -381,18 +465,36 @@ public struct FotufilmEngine {
     /// same quantity `process` produces at `PipelineStage.negative`. This is the CPU seam the
     /// spans were named after; it ignores `options.stage` and always develops the negative.
     public func developNegative(linearRGB image: ImageBuffer) -> ImageBuffer {
-        guard let developed = HalideBackend.develop(image: image, stock: stock,
+        do { return try developNegativeChecked(linearRGB: image) }
+        catch { fatalError(error.localizedDescription) }
+    }
+
+    /// Develops density with recoverable development and backend errors.
+    public func developNegativeChecked(linearRGB image: ImageBuffer) throws -> ImageBuffer {
+        if options.layeredTransport != nil || options.halationModel == .layered {
+            var negative = options; negative.stage = .negative
+            return try FotufilmEngine(stock: stock, options: negative).processChecked(linearRGB: image)
+        }
+        guard let developed = try HalideBackend.develop(image: image, stock: stock,
                                                     options: options) else {
-            fatalError(Self.missingEngineMessage)
+            throw TransportError.backend(Self.missingEngineMessage)
         }
         return developed
     }
 
     /// Converts developed densities to display-linear RGB.
     public func printPositive(negativeDensity density: ImageBuffer) -> ImageBuffer {
-        guard let positive = HalideBackend.print(density: density, stock: stock,
-                                                 options: options) else {
-            fatalError(Self.missingEngineMessage)
+        do { return try printPositiveChecked(negativeDensity: density) }
+        catch { fatalError(error.localizedDescription) }
+    }
+
+    /// Prints developed density with recoverable development and backend errors.
+    public func printPositiveChecked(negativeDensity density: ImageBuffer) throws -> ImageBuffer {
+        var plain = stock; plain.layeredTransport = nil
+        var settings = options; settings.layeredTransport = nil
+        guard let positive = try HalideBackend.print(density: density, stock: plain,
+                                                 options: settings) else {
+            throw TransportError.backend(Self.missingEngineMessage)
         }
         return positive
     }

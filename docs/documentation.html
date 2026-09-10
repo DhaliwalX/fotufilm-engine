@@ -3,6 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Fotufilm guide</title></head>
 <body>
 <h1>Fotufilm guide</h1>
+<p>Try the <a href="https://fotufilm.com/demo/">browser editor</a> to develop photos locally in your browser, select films and output media, adjust exposure and inspect the pipeline. Large photos use overlapping tiles that include the print blur to keep tile boundaries seamless.</p>
 <p>Fotufilm adds a film look to photos and videos. This repository includes the engine, command-line tool, Mac app, Resolve and Final Cut plugins, and browser demo.</p>
 <h2>Build and open the app</h2>
 <p>Install Xcode 26 or newer and Halide. Run <code>swift build</code> to build the engine and <code>swift test -c release --parallel</code> to test it. Run <code>macos/build.sh --test</code> to build the Mac app.</p>
@@ -16,9 +17,113 @@
 <p>These sampled profiles use stock schema version 2 and require an engine, app or plugin built with sampled-curve support. Older builds reject them. Existing schema version 1 profiles remain supported.</p>
 <p><a href="https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS.pkg">Download for Mac</a> · <a href="https://apps.apple.com/app/id6792911908" aria-label="Download Fotufilm on the App Store"><img src="assets/download-on-the-app-store.svg" alt="Download on the App Store" width="120" height="40" style="vertical-align: middle"></a></p>
 <p>The film profiles use <a href="../licenses/FILM-PROFILES.txt">CC BY-SA 4.0</a>. You may modify and redistribute profiles with attribution and ShareAlike terms; rendered photos and videos are not covered by the profile licence. The code uses <a href="../LICENSE">Apache-2.0</a>.</p>
+<h2>Controls</h2>
+<p>Every control the apps offer, in the order the panels list them. Controls that do not apply to the chosen film or medium are hidden.</p>
+<p>On Mac and iPad, the inspector updates when you change film or output medium. Push snaps to the selected film's measured development conditions, and Bleach Bypass offers Off, Half and Full. Enlarger appears only for an enlarged reflection print; digital output media hide the printing controls they do not use.</p>
+<h3>Film</h3>
+<table>
+<thead><tr><th>Control</th><th>Description</th><th>Default</th></tr></thead>
+<tbody data-controls="film">
+  <tr><td>Film</td><td>Selects the emulsion. Normal preserves the source frame without film transformation.</td><td>Starting stock</td></tr>
+  <tr><td>Format</td><td>Sets physical negative dimensions. Smaller formats increase grain enlargement and spatial halation reach.</td><td>Match the Film</td></tr>
+  <tr><td>Grain</td><td>Scales calibrated silver or dye-cloud grain variance. Black-and-white films use continuous silver texture so individual samples do not appear as dots.</td><td>1.00×</td></tr>
+  <tr><td>Mottle</td><td>Modulates low-frequency grain clump covariance.</td><td>Film’s Own</td></tr>
+  <tr><td>Disc Grain</td><td>Enables discrete tabular grain disc rendering where emulsion grain clumps resolve at output pixels.</td><td>Off</td></tr>
+  <tr><td>Halation</td><td>Controls back-surface reflection and scatter around high-contrast exposure boundaries.</td><td>+0.0 EV</td></tr>
+  <tr><td>Halo Colour</td><td>Shifts negative halation toward source light spectrum.</td><td>0%</td></tr>
+  <tr><td>Return Spectrum</td><td>Selects base reflectance spectral weighting.</td><td>Flat</td></tr>
+  <tr><td>Couplers</td><td>Controls development inhibitor release chemistry for interlayer color separation and edge contrast.</td><td>1.00×</td></tr>
+  <tr><td>Separation</td><td>Scales how far the released inhibitor crosses each interlayer.</td><td>1.00×</td></tr>
+  <tr><td>Edge Contrast</td><td>Scales inhibition acting within a layer rather than across two.</td><td>1.00×</td></tr>
+  <tr><td>Fringe Amount</td><td>Spreads a share of inter-layer inhibition farther around colour boundaries.</td><td>0%</td></tr>
+  <tr><td>Fringe Radius</td><td>Sets the broad spread on the film in micrometres.</td><td>100 µm</td></tr>
+  <tr><td>Push</td><td>Adjusts chemical development timing using measured push/pull sensitometry curves.</td><td>+0.0 EV</td></tr>
+  <tr><td>Bleach Bypass</td><td>Retains metallic silver in color negative processing, increasing contrast and lowering dye saturation.</td><td>0%</td></tr>
+  <tr><td>Expired</td><td>Simulates room-temperature aging: speed loss, baseline fog density, increased grain, and layer sensitivity drift.</td><td>Fresh</td></tr>
+  <tr><td>Long Exposure</td><td>Evaluates the emulsion's measured reciprocity failure characteristics under low-intensity long exposures.</td><td>Off</td></tr>
+</tbody>
+</table>
+<h3>Lens</h3>
+<table>
+<thead><tr><th>Control</th><th>Description</th><th>Default</th></tr></thead>
+<tbody data-controls="lens">
+  <tr><td>Lens Correction</td><td>Enables the matched lens profile or the calibrated camera profile.</td><td>Off</td></tr>
+  <tr><td>Lens</td><td>Identifies the matched lens model.</td><td>Matched</td></tr>
+  <tr><td>Amount</td><td>Sets overall correction intensity.</td><td>100%</td></tr>
+  <tr><td>Distortion</td><td>Corrects or introduces radial barrel and pincushion distortion.</td><td>+0.00</td></tr>
+  <tr><td>Vignetting</td><td>Compensates for peripheral illumination falloff.</td><td>+0.00</td></tr>
+  <tr><td>Red / Cyan</td><td>Corrects lateral chromatic aberration by scaling the red channel radially.</td><td>+0.00</td></tr>
+  <tr><td>Blue / Yellow</td><td>Corrects lateral chromatic aberration by scaling the blue channel radially.</td><td>+0.00</td></tr>
+</tbody>
+</table>
+<h3>Light &amp; Color</h3>
+<table>
+<thead><tr><th>Control</th><th>Description</th><th>Default</th></tr></thead>
+<tbody data-controls="light">
+  <tr><td>Exposure</td><td>Adjusts exposure in stops (EV) before film simulation.</td><td>+0.0 EV</td></tr>
+  <tr><td>Highlights</td><td>Scales scene radiance above 18% neutral gray.</td><td>+0.00</td></tr>
+  <tr><td>Shadows</td><td>Scales scene radiance below 18% neutral gray.</td><td>+0.00</td></tr>
+  <tr><td>Regional</td><td>Applies spatially aware contrast compression across adjacent luminance zones.</td><td>On</td></tr>
+  <tr><td>Warmth</td><td>Changes scene-light temperature; RAW edits are relative to the capture illuminant.</td><td>+0.00</td></tr>
+  <tr><td>Tint</td><td>Changes the scene spectrum toward green or magenta, perpendicular to the blended blackbody/daylight locus.</td><td>+0.00</td></tr>
+  <tr><td>Saturation</td><td>Scales radial chroma across all hues uniformly.</td><td>1.00×</td></tr>
+  <tr><td>Vibrance</td><td>Scales chroma non-linearly, prioritizing muted tones.</td><td>+0.00</td></tr>
+  <tr><td>Encoded Grade</td><td>Grades the sRGB-encoded signal, where a grading suite's corrector works, instead of display-linear light.</td><td>Off</td></tr>
+  <tr><td>Shadows Warmth</td><td>Cool to warm, in the shadows</td><td>+0.00</td></tr>
+  <tr><td>Shadows Tint</td><td>Magenta to green, in the shadows</td><td>+0.00</td></tr>
+  <tr><td>Shadows Level</td><td>How far the shadows are carried</td><td>+0.00</td></tr>
+  <tr><td>Midtones Warmth</td><td>Cool to warm, in the midtones</td><td>+0.00</td></tr>
+  <tr><td>Midtones Tint</td><td>Magenta to green, in the midtones</td><td>+0.00</td></tr>
+  <tr><td>Midtones Level</td><td>How far the midtones are carried</td><td>+0.00</td></tr>
+  <tr><td>Highlights Warmth</td><td>Cool to warm, in the highlights</td><td>+0.00</td></tr>
+  <tr><td>Highlights Tint</td><td>Magenta to green, in the highlights</td><td>+0.00</td></tr>
+  <tr><td>Highlights Level</td><td>How far the highlights are carried</td><td>+0.00</td></tr>
+</tbody>
+</table>
+<h3>Print</h3>
+<table>
+<thead><tr><th>Control</th><th>Description</th><th>Default</th></tr></thead>
+<tbody data-controls="print">
+  <tr><td>Output Medium</td><td>Selects the print paper, projection print, scan, display reference or the negative itself.</td><td>Digital Reference</td></tr>
+  <tr><td>Viewing Illuminant</td><td>Sets the lamp a physical print is judged under; digital media ignore it.</td><td>Medium reference</td></tr>
+  <tr><td>Enlarger</td><td>Chooses a diffuser or condenser head for an enlarged reflection print.</td><td>Diffuser</td></tr>
+  <tr><td>Channel Contrast Match</td><td>Balances how the film's colour layers print together on the chosen medium.</td><td>5%</td></tr>
+</tbody>
+</table>
+<h3>Frame</h3>
+<table>
+<thead><tr><th>Control</th><th>Description</th><th>Default</th></tr></thead>
+<tbody data-controls="frame">
+  <tr><td>Crop</td><td>Chooses the part of the frame the print is made from.</td><td></td></tr>
+  <tr><td>Straighten</td><td>Rotates the frame off level by up to fifteen degrees.</td><td>+0.0°</td></tr>
+  <tr><td>Vertical</td><td>Tilts the picture plane about the horizontal axis.</td><td>+0.0°</td></tr>
+  <tr><td>Horizontal</td><td>Tilts the picture plane about the vertical axis.</td><td>+0.0°</td></tr>
+  <tr><td>Rotate</td><td>Turns the frame in quarter turns.</td><td>Upright</td></tr>
+  <tr><td>Flip</td><td>Mirrors the frame left to right.</td><td>Off</td></tr>
+  <tr><td>Selective</td><td>Develops a colour, a light or a subject differently from the rest of the frame.</td><td></td></tr>
+</tbody>
+</table>
+<h2>Scene light</h2>
+<p><strong>Warmth</strong> and <strong>Tint</strong> change the light exposing the film. Warmer light means lower Kelvin; positive tint adds green light. Each stock retains its own fixed daylight or tungsten balance. Sources without capture-light metadata assume D65, so changing film does not change the assumed lamp.</p>
+<p>Output calibration stays at the stock's reference light. Extreme tint shifts are limited to physically representable light.</p>
+<p>RAW imports retain their complete as-shot white chromaticity. Temperature and tint edits happen after decoding and do not demosaic the file again. The camera normalizes acquisition at its declared scene white, then the engine applies that light once through the film's spectral sensitivities. A Kelvin value assumes a smooth Planckian/daylight spectrum; it does not identify an LED or fluorescent lamp.</p>
+<p>The CLI <code>--wb</code> and <code>--tint</code> controls now change spectral scene light rather than digitally correcting RGB. For RAW, temperature is a relative mired adjustment to the capture light, with 6504 preserving it. In plugins, supply an image already balanced for its capture light; <strong>Scene Illuminant</strong> sets the base lamp and Temperature/Tint adjust it. Existing edits with non-neutral balance can render differently.</p>
+<p>Developers can supply an exact capture xy white or an 81-sample spectrum covering 380–780 nm at 5 nm. A supplied spectrum takes precedence over the temperature/tint controls. Relative spectra are normalized to equal luminance, including lamps with no energy at 560 nm.</p>
 <h2>Print models</h2>
-<p>The output menu names each paper or print film: Kodak Ektacolor Edge, Kodak Professional Endura Premier, Fujicolor Crystal Archive Type CA, Kodak Vision 2383, Kodak Vision Premier 2393, and Fujifilm ETERNA-CP 3513DI. The source distribution supplies analytic example receivers under these material names. Their descriptions identify this limitation; the names alone do not establish measured calibration. The film strip offers photo prints for still gauges and projection prints plus Telecine for motion-picture gauges; the film name does not change the choices. The CLI and tests also include synthetic films and a generated colour chart.</p>
+<p>The output menu names each paper or print film: Kodak Ektacolor Edge, Kodak Professional Endura Premier, Fujicolor Crystal Archive Type CA, Kodak Vision 2383, Kodak Vision Premier 2393, and Fujifilm ETERNA-CP 3513DI. Each is digitised from the manufacturer's own published datasheet: Kodak E-7020, E-4070 and H-1-2383, Fujifilm AF3-0250U2, and the 2393 and ETERNA-CP 3513DI sheets. Dye spectra, layer sensitivities and characteristic curves are read from those publications rather than modelled. The film strip offers photo prints for still gauges and projection prints plus Telecine for motion-picture gauges; the film name does not change the choices. The CLI and tests also include synthetic films and a generated colour chart.</p>
+<p>Release prints time a correctly exposed grey card to approximately 1.0 density above clear film (10% transmission), regardless of the camera stock. Photo paper retains its 18% grey target. This makes release-print midtones darker and gives highlights more room than the previous paper-grey timing. Kodak 2383 now develops red, green and blue along separate curves from its datasheet. Existing stock-pack <code>paperMidDensity</code> values still load, but the selected output medium sets the grey target.</p>
+<p>Release printing uses an approximate UV-blocked tungsten RGB additive printer, separate from the xenon light used to view the print. Complete measured printer-filter spectra are unavailable in the source sheets, so the passbands are approximate. Fujifilm ETERNA-CP's published Gray curve does not agree with its dye sum under a non-negative additive-base model; the published dyes are retained, and their neutral spectral calibration remains uncertain.</p>
 <p>The CLI IDs are <code>ektacolor-edge</code>, <code>endura-premier</code>, <code>crystal-archive</code>, <code>vision-2383</code>, <code>vision-2393</code>, and <code>eterna-cp</code>. These identifiers are preserved, so saved print selections continue to resolve. Existing complete colour grades still load; incomplete grades are rejected.</p>
+<p>The <strong>Enlarger</strong> menu, offered where a negative is optically enlarged onto a reflection paper, chooses the lamp house. <strong>Diffuser</strong> is the default and reads the negative at the diffuse density the film sheets are measured in, so it changes nothing. <strong>Condenser</strong> applies the Callier effect: collimated light loses what the image scatters, so densities read at their specular values, about 1.4 times diffuse for a silver black-and-white negative and about 1.05 times for a dye negative. Each material carries its own figure, so <strong>Bleach Bypass</strong> matters here: the silver the bleach leaves behind scatters like a black-and-white negative and reads at the silver figure, and the more of it a colour negative retains, the more the condenser moves it. The print is re-timed through the scaled mid-grey, so the head shows as harder contrast rather than a darker print, and a normally processed colour negative barely moves. Scans, the negative view, Digital Reference, cinema release prints and reversal film have no enlarger in their path and ignore the menu. The CLI flag is <code>--enlarger diffuser|condenser</code>.</p>
+<h2>Halation models</h2>
+<p><strong>Halation Model</strong> offers <strong>Legacy</strong> and <strong>Layered Transport</strong>. Find it under Film Model in Mac and iOS settings, in the Halation group in Resolve and Final Cut, and under Film → Character in the browser. Legacy is the default for existing settings and projects. Layered Transport traces wavelength-dependent light through the film stack and uses an illustrative construction when a stock has no measured stack. <strong>Estimated Halation Shape</strong> applies only to Legacy.</p>
+<p>Layered Transport is experimental, uses more memory and may render more slowly. Donor-layer stocks currently require Legacy. Browser transport uses SIMD WebAssembly and develops the whole frame; the browser uses the film’s default output medium, and stage inspection remains available with Legacy. See the <a href="layered-transport.md">model guide</a> for the illustrative A/B, construction fields, and backend limits.</p>
+<p>The CLI supports <code>--transport-backend cpu|metal</code>. Reduced bands use smooth cubic B-spline reconstruction across camera and editor paths. Use <code>--iterations 31</code> to measure 30 warm renders, including median and p95 frame times and achieved throughput; image decoding and output encoding are excluded from warm timings.</p>
+<h2>Library rendering</h2>
+<p>The Swift package includes the shader resources needed by <code>FotufilmMetal</code>. Package consumers can initialize renderers outside the source checkout without setting a shader search path.</p>
+<p>When reusing an edit key, <code>HandwrittenMetalFullFrameRenderer.prepareChecked</code> keeps the previous edit usable if preparation fails. Frames already queued continue with the settings they were encoded with. Calling <code>removeAll()</code> gives the next edit a fresh frame pool, so queued frames from the previous edit do not occupy its preview slots.</p>
+<p>Use <code>FilmEngineInvocation(validating:options:width:height:)</code> or the engine’s <code>processChecked</code>, <code>developNegativeChecked</code> and <code>printPositiveChecked</code> methods to handle unsupported push/pull settings as <code>FilmDevelopmentError</code>. Checked Metal preparation propagates the same error; Boolean preparation methods return false. The original nonthrowing entry points require known-valid settings and report the development error if that requirement is violated.</p>
+<p><code>HalideMetalFilmRenderer.minimumPeakBytes</code> returns an optional estimate. Unwrap it before calculating a memory budget; <code>nil</code> means the requested development condition cannot be prepared. <code>canRender</code> returns false in that case.</p>
 <h2>Scanned negatives</h2>
 <p>Choose <strong>File → Import Scanned Negative…</strong> and open a RAW or unconverted image with its clear film border visible. Drag over an unexposed border patch, choose the closest film, and use <strong>Preview Positive</strong>. <strong>Import Positive</strong> opens the result with Normal selected and the Crop tool ready.</p>
 <p>Drag the four crop corners independently, then leave Crop or press Return to straighten the selected area. Corner edits support undo, saved edits and full-resolution export. Rotation and flipping keep the four-corner selection attached to the image. Drags use a cached display preview; film thumbnails refresh after leaving Crop. Choose an aspect ratio for a rectangular crop, or Reset Crop to start again.</p>
@@ -46,14 +151,75 @@
 <p>Run <code>resolve/build.sh --test</code> or <code>finalcut/build.sh --test</code> to test a plugin. Building the installable Final Cut plugin also requires Apple's FxPlug SDK. See the <a href="../resolve/README.md">Resolve guide</a> and <a href="../finalcut/README.md">Final Cut guide</a>.</p>
 <h2>Resolve controls</h2>
 <p>The inspector groups controls under Input, Film, Light &amp; Colour, Lens &amp; Filters, Development, Grain, Halation, Colour Separation, Output, and Pipeline, in the order the light passes through them. Input, Film, and Output start open. The Final Cut Pro plugin uses the same groups. <strong>Resolved Format</strong>, <strong>Resolved Medium</strong>, and <strong>Effective Renderer</strong> show the settings in use.</p>
-<ul>
-<li><strong>Film Frame Coverage (%)</strong> sets how much of the film frame you use.</li>
-<li><strong>Grain Animation</strong> follows the timeline or freezes the grain. <strong>Grain Seed</strong> lets you repeat a pattern.</li>
-<li><strong>Mottle</strong> changes coarse grain clumping. <strong>Return Spectrum</strong> adjusts halation across seven wavelength bands.</li>
-<li><strong>Render Mode</strong> selects Realtime or Reference. Disc grain needs a silver-image film and Reference mode.</li>
-</ul>
+<table>
+<thead><tr><th>Control</th><th>Behavior</th></tr></thead>
+<tbody data-controls="resolve">
+  <tr><td>Timeline Color Space</td><td>What this node is being handed — the one control that is not taste. The film model is scene-referred in linear Rec.2020: mid-grey at 0.18, specular highlights above 1.0. The input is decoded to that and the result encoded back, so a wrong setting shows the emulsion the wrong light and lands the characteristic curves whole stops off. Auto reads the space the host tags the clip with, where the host says. A display-referred space (Rec.709, sRGB) clips at diffuse white, leaving halation nothing bright to scatter; a wide-gamut log or linear timeline keeps the highlights the model was built for.</td></tr>
+  <tr><td>Stock</td><td>The emulsion. Each is a measured stock: its own spectral sensitivity, characteristic curves, couplers, halation and granularity.</td></tr>
+  <tr><td>Film Format</td><td>The gauge the frame is exposed on. The image height maps onto the gauge's frame height, so a smaller format is enlarged more and shows coarser grain, wider halation and stronger adjacency — the same emulsion at a different magnification. Match Film takes the gauge the chosen stock is known on.</td></tr>
+  <tr><td>Film Frame Coverage (%)</td><td>Short edge of the film frame retained after cropping. 100 uses the full frame; 50 enlarges half the frame. Changes grain, halation and other spatial scales, without cropping pixels. Account for any upstream resize yourself.</td></tr>
+  <tr><td>Exposure</td><td>Camera exposure, in stops.</td></tr>
+  <tr><td>Temperature (K)</td><td>Spectral scene temperature. Lower Kelvin adds warm light. Relative in mired to Scene Illuminant when a base lamp is selected; 6504 leaves that lamp unchanged.</td></tr>
+  <tr><td>Tint</td><td>Green/magenta balance of the illuminant.</td></tr>
+  <tr><td>Highlights</td><td>Scene-referred highlight recovery, applied before the film model. Keyed to each pixel's regional brightness, so pulling a sky down moves the sky as one piece.</td></tr>
+  <tr><td>Shadows</td><td>The same shift, fading in below mid-grey.</td></tr>
+  <tr><td>Regional Tone Mask</td><td>Off, the highlight and shadow shifts key to each pixel's own luminance instead of to the region it sits in. Identical output when both rest at zero.</td></tr>
+  <tr><td>Saturation</td><td>Chroma multiplier applied to the scene before the film responds. 1 leaves it untouched.</td></tr>
+  <tr><td>Vibrance</td><td>Chroma boost weighted toward the least colourful pixels; already-vivid colours are left alone.</td></tr>
+  <tr><td>Scene Illuminant</td><td>Capture light presented to the film; Temperature and Tint adjust this spectrum. Unspecified light assumes D65. Custom sources use a daylight or Planckian spectrum, not a measured LED spectrum.</td></tr>
+  <tr><td>Scene Illuminant (K)</td><td>Custom capture light before the Temperature and Tint edits.</td></tr>
+  <tr><td>Filter 1</td><td>An absorbing filter on the front of the lens. It is integrated spectrally against the chosen film's own three layer sensitivities, which is why the same filter is a different filter on a different stock — an 85B is a correction on tungsten film and a heavy warm cast on daylight film. It also adds the veiling glare of two more air-glass faces, whatever the Veiling Glare slider says — and that added glare is why this control is live only on the Full stage: no kernel this build carries can measure it in a span that ends at the developed negative.</td></tr>
+  <tr><td>Filter 2</td><td>A second filter, behind the first. They stack in the order given: their transmittances multiply, and the gap between them makes a ghost of its own.</td></tr>
+  <tr><td>Filter 3</td><td>A third filter, behind the second.</td></tr>
+  <tr><td>Metering</td><td>How the exposure was set with those filters fitted. Metered through is the camera's own photopic cell reading the light that got past the glass, and is the default; it can underexpose behind a narrow filter, because the meter does not use the film's sensitivity. Filter factor is the published compensation, worked out against the emulsion, which restores the luminance record without cancelling the colour change. None is a fixed manual exposure, so the light the filter took lands on the film as underexposure. Ignored with no filter fitted, and live only on the Full stage, which is the only span a filter is live in.</td></tr>
+  <tr><td>Diffusion</td><td>A diffusion filter on the front of the lens. A share of the light meets a particle and leaves in a new direction, and the lens images it somewhere else on the frame; the share that missed every particle is untouched, which is why a diffused picture keeps its edges instead of going soft. The black families carry absorbing particles: the blacks still lift and the highlights bloom much less.</td></tr>
+  <tr><td>Diffusion Grade</td><td>The particle loading a product line's 1/8, 1/4, 1/2, 1 and 2 name: one formulation more heavily loaded, so the grade moves how much light takes part and never how far it goes. Ignored with no diffusion filter fitted.</td></tr>
+  <tr><td>Focal Length</td><td>The taking lens's focal length in millimetres, read only by the diffusion filter: a ray deviated by an angle ahead of the lens lands focal length times that angle off its unscattered position, so the same filter glows bigger on a longer lens, exactly as it does in the world. 0 — the default — is the gauge's own normal lens, which is what the grade numbering on a filter's ring is calibrated around.</td></tr>
+  <tr><td>Veiling Glare</td><td>Veiling glare from the taking lens, as a multiplier on the stock's figure. It defaults to 0 because a photographed clip already carries the glare of the lens that shot it, and this stage would veil the shadows a second time. Raise it for light that has met no glass — a render or a synthetic chart — or to stand in for glass worse than the camera's.</td></tr>
+  <tr><td>Filter Coating</td><td>Coating on every fitted absorbing and diffusion filter. Changes transmission and added glare. Multicoated preserves the existing filter look.</td></tr>
+  <tr><td>Push / Pull</td><td>Measured push or pull conditions for this film's stated developer, dilution, temperature and agitation. The control is disabled when the stock pack has no measured response.</td></tr>
+  <tr><td>Bleach Bypass</td><td>How much of the developed silver the bleach leaves in the negative. The retained silver is a black-and-white image over the colour one: contrast up, chroma down, together.</td></tr>
+  <tr><td>Film Age (years)</td><td>Years the roll sat past its process-by date. Speed falls a stop a decade with the blue-sensitive layer going first, base fog rises, and grain rises with the fog — the muddy, crossed toe of an old roll.</td></tr>
+  <tr><td>Long Exposure (s)</td><td>Exposure duration for the stock's measured reciprocity response. 0 disables the override. Corrections stop at the last measured duration; no motion blur is added. Use the same value in paired Negative Only and Print Only nodes.</td></tr>
+  <tr><td>Grain</td><td>Multiplier on the stock's measured granularity. 0 disables it.</td></tr>
+  <tr><td>Mottle</td><td>Use the stock's coarse grain mixture, or set a custom share. Full mode only.</td></tr>
+  <tr><td>Mottle Amount (%)</td><td>Share of grain variance carried by coarse clumping. Total calibrated granularity is preserved. Custom mottle uses the engine's video delivery size.</td></tr>
+  <tr><td>Grain Animation</td><td>Timeline changes grain each frame. Frozen uses the same field at every time; the texture still responds to changes in the image.</td></tr>
+  <tr><td>Grain Model</td><td>Disc grain is available on silver-image stocks and requires Reference rendering, selected automatically. Subpixel grain uses the clump field; coarse mottle is suppressed where discs render.</td></tr>
+  <tr><td>Grain Seed</td><td>Same seed and same frame give the same grain. Grain also advances with the timeline, so a still frame is still, and a moving one is not.</td></tr>
+  <tr><td>Halation Model</td><td>Legacy or layered optical transport. Unmeasured stacks use an illustrative construction.</td></tr>
+  <tr><td>Halation</td><td>Multiplier on the fraction of light the base returns. On the legacy model it scales the light going down rather than the finished halo, so raising it widens the halo as well as brightening it — the way a thinner antihalation layer would. With Estimated Halation Shape on, the film's geometry is pinned and this scales the amount alone. 1 is the stock's authored look — the sheet's look scale times the measured film, whose calibrated returns sit at the patent-floor absorber densities and are all but invisible on their own. The measured film survives at 1 over the look scale (0.025 on a rem-jet stock). Typing past the slider reaches 100.</td></tr>
+  <tr><td>Estimated Halation Shape</td><td>Renders halation through the stock's provisional annular profile — the reflex ring at the base's critical angle — where no independently calibrated profile exists. Off is the legacy Gaussian model and the render every existing project made; the annular road costs roughly half again as much frame time.</td></tr>
+  <tr><td>Halo Colour</td><td>How much the halo keeps the source's own colour instead of the film's layered red. The returning light re-enters the emulsion from below, so a colour film's ring is red whatever the light was; raising this lifts the dimmer records to the strongest record's return, and the ring brightens toward the light's colour. 0 is the film.</td></tr>
+  <tr><td>Return Spectrum</td><td>Gain over the stock's halation return spectrum. 0 preserves the stock; positive values strengthen this band. Does not create return in an absent band.</td></tr>
+  <tr><td>DIR Couplers</td><td>Multiplier on inter-image inhibition, the mechanism behind the stock's colour separation and its Mackie lines. 0 disables it.</td></tr>
+  <tr><td>Separation</td><td>Interlayer inhibitor reach. 1 preserves the stock; 0 seals the layers off.</td></tr>
+  <tr><td>Edge Contrast</td><td>Within-layer inhibition. 1 preserves the stock's retained self-inhibition.</td></tr>
+  <tr><td>Fringe Amount</td><td>Broad inter-layer transport fraction, 0-1. 0 keeps the stock's own transport.</td></tr>
+  <tr><td>Fringe Radius (µm)</td><td>Broad transport Gaussian sigma on the film, 20-300 micrometers. Read only while Fringe Amount is above zero; 0 keeps the stock's own radius.</td></tr>
+  <tr><td>Red–Green Reach</td><td>Additional multiplier on Separation for the red–green interlayer.</td></tr>
+  <tr><td>Green–Blue Reach</td><td>Additional multiplier on Separation for the green–blue interlayer.</td></tr>
+  <tr><td>Output Medium</td><td>Choose where the finished image lives. Match Film uses RA-4 paper for a still negative, the stock's native release print for a motion negative, and the direct positive for reversal film. Digital Reference is the HDR path; paper, projection, Lab Scan, Telecine and Negative are SDR. Negative is available only for negative film.</td></tr>
+  <tr><td>Viewing Illuminant</td><td>Choose the light used to judge a physical print. Medium Reference means D50 for photo paper or calibrated 5400 K xenon for a projected release print. Digital Reference, Lab Scan, Telecine and Negative ignore this control.</td></tr>
+  <tr><td>Enlarger</td><td>The lamp house a reflection print is enlarged under. Diffuser is the sheets' own diffuse read and changes nothing; Condenser prints a silver negative harder through the Callier effect. Read only where the medium is an enlarged reflection print.</td></tr>
+  <tr><td>Channel Contrast Match</td><td>Balances how the film's colour layers print together. The medium's own calibration is already applied; raise this only for a more neutral crossover.</td></tr>
+  <tr><td>Negative Viewing</td><td>How the developed negative is read when Output Medium is Negative. Light Box sets the lamp so the clear film base sits just under white and keeps its orange. Scanner divides by the film base, so the base reads white. Other output media ignore this control.</td></tr>
+  <tr><td>Stage</td><td>Which span of the pipeline this node performs. Full is the whole thing and is what every other setting here describes. Negative Only stops at the developed negative and writes its per-layer densities — data, not a picture — and Print Only takes exactly that back and finishes it on the selected medium, so the two in series reproduce Full. Texture Only lays the film's spatial character over the frame it is handed and leaves its colour alone. A Negative Only node must feed a Print Only node directly, with the same stock and lab settings and nothing in between: the densities are not colour and anything that grades, resamples or transforms them is not editing a picture.</td></tr>
+  <tr><td>Texture Stages</td><td>Whether Texture Only carries this stage. Ignored by every other stage, where the strength controls below select what runs.</td></tr>
+  <tr><td>Render Mode</td><td>Default preserves the launch-time renderer setting. Realtime and Reference override it for this node, for both preview and delivery. Disc grain uses Reference.</td></tr>
+</tbody>
+</table>
+<p>Reversal films use a density-dependent grain curve with cleaner highlights and stronger grain in deep shadows, leveling off near maximum density. Grain strength stays anchored at the film's reference density. Custom packs can set the curve's exponent and shoulder with <code>grainReversalProfile</code>; packs explicitly selecting the legacy Selwyn law retain that behavior. The Workshop offers “Dye cloud (reversal)” and preserves custom reversal coefficients when copying or saving a film.</p>
 <p>Some controls depend on the film or stage you choose. For separate Negative Only and Print Only nodes, match their development settings, including <strong>Long Exposure (s)</strong>.</p>
 <p>Resolve and Final Cut fit finished prints to the timeline's colour gamut. Colours already inside it stay unchanged. This adjustment does not apply to density data or Texture Only output.</p>
+<h2>Film border and fringe effects</h2>
+<p>Adjacency changes development close to an image edge: the denser side gains a narrow border and the less-developed side loses density in a fringe. The command-line tool offers <code>--adjacency-model screened-diffusion</code>, an experimental density-dependent response with a two-Gaussian approximation to lateral diffusion with removal. It runs on the CPU and Metal renderers. Choose <code>--adjacency-model gaussian</code> for the original response; existing packs keep that default.</p>
+<p>For an A/B, render the same source twice with the two model names and identical settings. Use <code>--grain 0 --halation 0</code> to isolate the small edge changes. <code>--couplers 0</code> disables adjacency together with inter-layer inhibition. The new model reuses the stock's radius and strength as starting values; it does not establish a new measured calibration for that stock. It models development edges, not optical halation or light leaks at the frame border.</p>
+<p>Library clients can set <code>FotufilmEngine.Options.adjacencyModel = .screenedDiffusion</code>. A pack can author <code>"adjacencyModel": "screened-diffusion"</code>. <code>adjacencyRadiusMM</code> retains its reference Gaussian-sigma units, with diffusion length equal to that value divided by √2. The new response acts on net formed density before reversal complementation and grain, and is bounded by the stock's development capacity.</p>
+<h3>Chromatic fringes</h3>
+<p><strong>Fringe Amount</strong> in <strong>Film → Emulsion</strong>, beside <strong>Edge Contrast</strong>, spreads a fraction of inter-layer inhibition over a broader neighborhood. Its range is 0–100%; 0% preserves the original transport. Expand the arrow beside <strong>Fringe Amount</strong> to reveal <strong>Fringe Radius</strong>, which sets that broad Gaussian sigma in micrometers on the film, from 20–300 µm in the editor, with a starting radius of 100 µm. The radius must exceed the film's narrow inhibitor radius to act. Start with 5–20% and 50–150 µm; these are creative exploration settings, not a measured calibration for a film stock.</p>
+<p>The fringe color follows the film's layer coupling and development curves. Uniform color patches stay unchanged apart from numerical rounding; neutral edges can acquire a tint. The existing <strong>Separation</strong> control also changes color throughout the image, while <strong>Edge Contrast</strong> changes inhibition within a layer. Monochrome films and films without inter-layer inhibition do not offer chromatic fringes. The effect does not model lens chromatic aberration or halation.</p>
+<p>From the command line, use <code>--fringe-amount 0.1 --fringe-radius 100</code>; the radius is in micrometers. Use identical settings and <code>--fringe-amount 0</code> for the baseline. Library clients can set <code>FotufilmEngine.Options.chromaticFringeAmount</code> and <code>chromaticFringeRadiusMM</code> (millimeters, so 100 µm is 0.1 mm). Nil uses the stock's values. Stock packs can author the same field names; absent fields mean amount 0 and radius 0.1 mm. The SDK accepts radius 0–2 mm and amount 0–1. Disabling couplers or the adjacency texture stage also disables the fringe. Existing packs and saved edits remain off by default.</p>
 <h2>Colour grading with the plugins</h2>
 <p>The engine decodes the image reaching the node into linear Rec.2020 light with mid-grey at 0.18, exposes the film with that light, develops it through characteristic curves, DIR couplers, halation and grain, and prints or scans the negative onto the selected <strong>Output Medium</strong>. The output is display-referred, with black and white set by the paper or scan, and is encoded back into the space that arrived at the node. Negative films deliver standard dynamic range; only reversal film on <strong>Digital Reference</strong> keeps light above display white. In a Rec.709 timeline the print is fitted into the Rec.709 gamut without changing luminance.</p>
 <p>Log or linear wide-gamut timelines (DaVinci Wide Gamut / Intermediate, ACEScct, ACEScg or linear) are preferred over Rec.709 or sRGB, which clip at diffuse white and give halation no light above white. The <strong>Light &amp; Colour</strong> controls (Exposure in stops, white balance, highlights, shadows, saturation, vibrance) act on the scene before the emulsion responds; a stop of Exposure moves the picture along the film's curve as in camera. Grading after the node regrades a finished print. Turn off host display transforms applied after the node, such as Resolve output tone mapping or an ACES output transform, or convert the print yourself to keep the paper's curve.</p>

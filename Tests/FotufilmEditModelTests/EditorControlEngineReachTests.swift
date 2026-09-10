@@ -3,6 +3,24 @@ import FotufilmCore
 @testable import FotufilmEditModel
 
 final class EditorControlEngineReachTests: XCTestCase {
+    func testChromaticFringeControlsReachTransportWithoutChangingNeutralAnchor() throws {
+        try assertReachesTheEngine(.chromaticFringeAmount) { $0.chromaticFringeAmount = 0.2 }
+        var enabled = FotufilmEngine.Options()
+        enabled.chromaticFringeAmount = 0.2
+        try assertReachesTheEngine(.chromaticFringeRadius, from: enabled) {
+            $0.chromaticFringeRadiusMM = 0.2
+        }
+        let amount = try XCTUnwrap(EditorControlCatalogue.control(.chromaticFringeAmount))
+        let radius = try XCTUnwrap(EditorControlCatalogue.control(.chromaticFringeRadius))
+        XCTAssertEqual(amount.kind.scale?.neutral, 0)
+        XCTAssertEqual(amount.kind.scale?.unit.format(0.15), "15%")
+        XCTAssertEqual(radius.kind.scale?.neutral, 100)
+        XCTAssertEqual(radius.kind.scale?.unit.format(100), "100 µm")
+        XCTAssertFalse(amount.availability.admits(stock: nil))
+        XCTAssertFalse(amount.availability.admits(stock: FilmStock.noFilm))
+        let monochrome = FilmStock.presets.values.first { $0.isMonochrome }
+        XCTAssertFalse(radius.availability.admits(stock: monochrome))
+    }
 
     private func stock() throws -> FilmStock {
         try XCTUnwrap(FilmStock.presets["example-negative-400"],

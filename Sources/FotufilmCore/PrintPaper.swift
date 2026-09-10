@@ -2,11 +2,17 @@ import Foundation
 
 /// The medium that turns developed film into a finished image, including the film itself.
 public enum PrintPaper: String, CaseIterable, Sendable {
+    /// KODAK EKTACOLOR EDGE Paper (E-7020), measured.
     case ektacolorEdge = "ektacolor-edge"
+    /// KODAK PROFESSIONAL ENDURA Premier Paper (E-4070), measured.
     case enduraPremier = "endura-premier"
+    /// Fujicolor Crystal Archive Type CA (AF3-0250U2), measured.
     case crystalArchive = "crystal-archive"
+    /// KODAK VISION Color Print Film 2383 (H-1-2383), measured.
     case vision2383 = "vision-2383"
+    /// KODAK VISION Premier Color Print Film 2393, measured.
     case vision2393 = "vision-2393"
+    /// FUJIFILM ETERNA-CP Color Positive Film 3513DI, measured.
     case eternaCP = "eterna-cp"
     /// The minilab scanner's finished positive: a trichromatic LED read of the
     /// negative inverted in software, the way most real colour negative is
@@ -19,6 +25,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// An idealized direct digital reference, with no scanner or physical print stage.
     case screen
     /// The developed negative itself, viewed by transmission rather than printed or inverted.
+    /// Kept last because `allCases` order is a persisted host ABI.
     case negative
 
     /// Default for engine and headless callers.
@@ -47,9 +54,24 @@ public enum PrintPaper: String, CaseIterable, Sendable {
 
     public var detail: String {
         switch self {
-        case .ektacolorEdge, .enduraPremier, .crystalArchive,
-             .vision2383, .vision2393, .eternaCP:
-            return "An analytic example receiver, not a calibration of a commercial print material."
+        case .ektacolorEdge:
+            return "A classic Kodak RA-4 photo print, with the paper's real colour mixing "
+                + "and a familiar, slightly warm feel."
+        case .enduraPremier:
+            return "A professional Kodak RA-4 photo print with rich saturated colour, "
+                + "deep blacks, and clean highlights."
+        case .crystalArchive:
+            return "A Fujifilm RA-4 photo print with clean greens and a slightly cooler feel "
+                + "than Ektacolor Edge."
+        case .vision2383:
+            return "The standard Kodak cinema print: deeper and punchier than photo paper, "
+                + "and the natural partner for Vision3 negatives."
+        case .vision2393:
+            return "Kodak's bolder cinema print, with richer colour and deeper blacks than "
+                + "Vision 2383, but less shadow detail."
+        case .eternaCP:
+            return "Fujifilm's cinema print for Eterna and Reala negatives, with a cooler, "
+                + "gentler look than Kodak release prints."
         case .labScan:
             return "A clean digital scan of the negative, with the full black point and punchy "
                 + "contrast a minilab gives a file."
@@ -84,18 +106,25 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         stock.isReversal ? [.screen] : allCases
     }
 
-    /// Reversal film is viewed directly; negative film uses the requested medium.
+    /// The medium a stock actually reaches when the edit asks for this one: the request where it
+    /// is available, the only entry where it is not.
     public func resolved(for stock: FilmStock) -> PrintPaper {
-        stock.isReversal ? .screen : self
+        let available = Self.choices(for: stock)
+        return available.contains(self) ? self : available[0]
     }
 
-    /// Use the stock's stated medium, or the standard example photo print.
+    /// What this stock prints on when the caller expresses no preference: the medium the emulsion
+    /// was designed for where it names one, and the measured sheet where it does not.
+    ///
+    /// A motion-picture camera negative is timed onto a release print stock, and its mask density
+    /// and contrast assume that partner; developing one onto RA-4 paper is a choice a caller can
+    /// still make, but it is not what silence should mean.
     public static func `default`(for stock: FilmStock) -> PrintPaper {
         (stock.nativePrintMedium ?? .default).resolved(for: stock)
     }
 
     /// Preview media for the selected gauge, with an explicitly named native medium first.
-    /// Reversal film is viewed directly. Negative film offers the three analytic photo or
+    /// Reversal film is viewed directly. Negative film offers the three photo or
     /// projection variants; motion-picture gauges also offer Telecine.
     public static func stripChoices(for stock: FilmStock,
                                     gauge: FilmFormat) -> [PrintPaper] {
@@ -111,7 +140,11 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         return media + [.screen]
     }
 
-    /// Illustrative viewing glare as a fraction of the medium's reference white.
+    /// Veiling glare between the print and the eye, as a fraction of the
+    /// medium's own reference white. The papers are measured at 0/45, which
+    /// excludes the first-surface reflection a viewer gets back, so 1/400
+    /// carries their 2.10 D to the 1.98 D a glossy print reads in a booth. A
+    /// projection port is a darker surround than a room.
     public var viewingFlare: Float {
         switch self {
         case .vision2383, .vision2393, .eternaCP: return 1.0 / 2000.0
@@ -120,7 +153,12 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         }
     }
 
-    /// Projection uses the example xenon illuminant; photo prints use D50.
+    /// Whether this finished positive is projected rather than held: a transparency on a screen
+    /// in a dark room, not a sheet under a room's light.
+    ///
+    /// It decides the reference lamp the print is read by. A paper hangs under whatever light the
+    /// viewer has and defaults to a D50 judging booth; a release print defaults to calibrated
+    /// 5400 K xenon screen light, which is the illuminant its published dye amounts target.
     public var isProjected: Bool {
         self == .vision2383 || self == .vision2393 || self == .eternaCP
     }
@@ -144,18 +182,19 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         }
     }
 
-    /// Whether this output path's colour is profiled once, on a reference negative, rather than
-    /// re-timed for the stock in the carrier.
+    /// Whether this output path's colour is profiled once, on a reference negative,
+    /// rather than re-timed for the stock in the carrier.
     ///
-    /// An enlarger operator dials filtration for the negative in front of them, so every physical
-    /// paper solves its own neutral per stock. A minilab's inversion is a fixed profile: the
-    /// machine auto-exposes each frame but does not re-solve its colour for the emulsion, so each
-    /// stock keeps the cast its mask and mid-scale colour put between it and the reference. The
-    /// profile is `labScanReferenceMidRatio`, `labScanReferenceBalance` and `labScanCastCeiling`.
-    /// This repository carries a neutral reference and a zero ceiling, which leaves the lab scan
-    /// timing every stock neutral; a calibrated build supplies its own numbers. The telecine
-    /// keeps per-stock timing: its chain is timed per programme by a colourist, not left to a
-    /// profile.
+    /// An enlarger operator dials filtration for the negative in front of them,
+    /// so every physical paper solves its own neutral per stock. A minilab's
+    /// inversion is a fixed profile: the machine auto-exposes each frame but
+    /// does not re-solve its colour for the emulsion, which is why Gold scans
+    /// warm and Portra scans neutral from the same lab — a same-lab corpus
+    /// measures +0.019 median Oklab b between those two, where a per-stock
+    /// solve renders them 0.002 apart. The profile is anchored on Portra 400
+    /// (`labScanReferenceMidRatio`), the stock that corpus puts closest to
+    /// neutral. The telecine keeps its own convention: its chain is timed
+    /// per programme by a colourist, not left to a profile.
     public var isReferenceAnchored: Bool { self == .labScan }
 
     /// Whether the scan's three channels leave the machine as a Rec.709 video signal rather than
@@ -165,21 +204,35 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// could not encode. Lab Scan writes a file and is limited only by its own bands.
     public var deliversRec709: Bool { self == .telecine }
 
-    /// Illustrative output-stage blur, expressed as Gaussian sigma in millimetres on film.
+    /// Combined lens, focus, receiver, and scattering blur as Gaussian sigma in millimetres on film.
+    /// The lab-scan value is 7 µm versus a documented 5.3–6.6 µm sample pitch. Screen output has
+    /// no physical imaging stage and uses zero.
     public var enlargerBlurMM: Float {
         switch self {
         case .ektacolorEdge, .enduraPremier, .crystalArchive: return 0.004
         case .vision2383, .vision2393, .eternaCP: return 0.003
         case .labScan: return 0.007
+        // The Spirit's documented geometry: a 1920-photosite detail array
+        // across the full Super 35 camera aperture it projects — 24.92 mm —
+        // is a 0.013 mm sample pitch on the film, and a Gaussian of half that
+        // pitch carries the pixel footprint with the imaging lens on top.
         case .telecine: return 0.0065
         case .screen, .negative: return 0
         }
     }
 
-    /// Fraction of pre-blur detail restored by the scan model.
+    /// Fraction of pre-blur detail restored by the output medium, from 0 to 1. Optical papers use
+    /// 0. The lab-scan value of 0.65 matches measured grain amplitude and correlation after scanner
+    /// aperture blur and unsharp masking.
     public var scanSharpening: Float {
         switch self {
         case .labScan: return 0.65
+        // A video chain runs aperture correction — the operator-adjustable
+        // detail peaking every telecine documented, applied film-relative
+        // before sizing — and no machine publishes a strength for it, so the
+        // figure is a stance: harder than the minilab's unsharp mask, because
+        // the electronically crisped grain is part of what a transfer looks
+        // like, and short of undoing the aperture entirely.
         case .telecine: return 0.8
         case .ektacolorEdge, .enduraPremier, .crystalArchive, .vision2383, .vision2393, .eternaCP,
              .screen, .negative:
@@ -195,13 +248,23 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// has no print exposure to correct, and the digital reference already reads records directly.
     public var acceptsPrintCorrection: Bool { !readsLayersDirectly && !isNegative }
 
-    /// The density above base to anchor mid-grey on, so that the print still
-    /// *reads* at `midDensity` once glare is added. Anchoring on the density
-    /// itself would put mid-grey light by the whole of the flare — 0.002 on
-    /// the papers, which the accuracy ratchet sees.
-    public func anchorDensity(_ midDensity: Float) -> Float {
+    /// Mid-grey relative to the medium's clear white, after viewing flare. Release prints
+    /// use approximately 1.0 D above base (LAD); reflection papers and digital outputs
+    /// retain the 0.744 D / 18% convention. This belongs to the output, regardless of
+    /// whether the negative in the printer was made for stills or motion pictures.
+    /// Kodak H-1-2393t gives 1.00 equivalent neutral density and gross Status A
+    /// 1.09/1.06/1.03; Fuji 3513DI gives gross Status A 1.10/1.05/1.05. We model
+    /// density relative to clear film, not those three gross instrument readings.
+    public var midDensity: Float { isProjected ? 1.0 : 0.744 }
+
+    /// Density above base needed to read at `midDensity` after viewing flare.
+    public var anchorDensity: Float {
         guard viewingFlare > 0 else { return midDensity }
         let read = pow(10, -midDensity)
         return -log10(max(read * (1 + viewingFlare) - viewingFlare, 1e-6))
     }
+
+    /// Compatibility entry point for callers that still pass a stock's legacy grey.
+    @available(*, deprecated, message: "Use anchorDensity; the output medium sets mid-grey.")
+    public func anchorDensity(_ legacyMidDensity: Float) -> Float { anchorDensity }
 }

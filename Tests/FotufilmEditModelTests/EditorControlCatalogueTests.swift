@@ -284,7 +284,7 @@ final class EditorControlCatalogueTests: XCTestCase {
         // added to the enum and forgotten in the catalogue fails here, and so does one whose
         // rows are scattered through the panel instead of run together.
         XCTAssertEqual(seen, EditorControlGroup.allCases)
-        XCTAssertEqual(seen, [.film, .lens, .light, .print, .frame])
+        XCTAssertEqual(seen, [.film, .lens, .light, .print, .frame, .pipeline])
     }
 
     // MARK: - What the film will take
@@ -315,7 +315,7 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertEqual(
             EditorControlCatalogue.controls(in: .printPaper, for: negative)
                 .map(\.field),
-            [.paper, .printLight, .printCorrection])
+            [.paper, .printLight, .enlarger, .printCorrection])
     }
 
     /// The grade is available in Light & Color for every develop, film or not, so it survives a
@@ -430,9 +430,8 @@ final class EditorControlCatalogueTests: XCTestCase {
             .keys.sorted()
 
         XCTAssertEqual(unexposedOrGlobal,
-                       ["couplerRangeScale", "flareScale", "halationHazeMM",
-                        "negativeViewing", "stage", "textureStages",
-                        "useEstimatedHalationProfile"])
+                       ["adjacencyModel", "couplerRangeScale", "halationHazeMM",
+                        "layeredTransport", "transportBackend"])
     }
 
     func testTheAuditedGapsAreAllOffered() {

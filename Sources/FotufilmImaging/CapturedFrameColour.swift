@@ -10,6 +10,10 @@ public enum CapturedFrameColour {
     public enum Reading: Equatable, Sendable {
         case hlg
         case appleLog
+        /// The same curve as `appleLog` over Apple Wide Gamut primaries. Core Video says such a
+        /// frame states only its log key and the BT.2020 Y′CbCr matrix, leaving the primaries
+        /// and transfer attachments undefined or absent.
+        case appleLog2
     }
 
     /// The attachments a frame carries, as strings, so the rule can be stated and tested without
@@ -44,6 +48,10 @@ public enum CapturedFrameColour {
     public static var appleLogTransferFunction: String {
         kCVImageBufferLogTransferFunction_AppleLog as String
     }
+    @available(iOS 26.0, macOS 26.0, *)
+    public static var appleLog2TransferFunction: String {
+        kCVImageBufferLogTransferFunction_AppleLog2 as String
+    }
 
     public static func isCompatible(_ attachments: Attachments,
                                     with reading: Reading) -> Bool {
@@ -58,6 +66,9 @@ public enum CapturedFrameColour {
         case .appleLog:
             guard #available(iOS 17.2, macOS 14.2, *) else { return false }
             return states(attachments.logTransferFunction, appleLogTransferFunction)
+        case .appleLog2:
+            guard #available(iOS 26.0, macOS 26.0, *) else { return false }
+            return states(attachments.logTransferFunction, appleLog2TransferFunction)
         }
     }
 

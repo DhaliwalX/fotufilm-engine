@@ -43,7 +43,10 @@ public struct FilmStockDefinition: Codable, Sendable {
     /// renders.
     public var couplerGeometry: CouplerGeometry?
     public var couplerDiffusionMM: Float
+    public var chromaticFringeAmount: Float? = nil
+    public var chromaticFringeRadiusMM: Float? = nil
     public var adjacencyStrength: Float?
+    public var adjacencyModel: AdjacencyModel? = nil
     public var adjacencyRadiusMM: Float?
 
     public var grainStrength: Float
@@ -59,13 +62,16 @@ public struct FilmStockDefinition: Codable, Sendable {
     public var grainLayerSizeRatio: [Float]?
     /// Which granularity-against-density law the emulsion obeys. Absent reads it off the
     /// material: silver for a monochrome stock, the measured chromogenic negative shape for a
-    /// colour negative, Selwyn for a reversal. Stated only where the material and the law
+    /// colour negative, saturating power law for a dye reversal. Stated where the material and the law
     /// cross, as they do for a chromogenic black-and-white stock.
     public var grainDensityLaw: GrainDensityLaw?
     /// `[amplitude, toeDensity, decayDensity]` of the chromogenic negative's
     /// granularity-against-density shape. Absent uses the embedding's shared default;
     /// this source repository supplies an illustrative analytic profile.
     public var grainDensityProfile: [Float]?
+    /// `[exponent p, shoulder density Ds]` of the dye reversal's saturating power law.
+    /// Absent uses the provisional family profile [1.1, 3].
+    public var grainReversalProfile: [Float]? = nil
     /// Developed fog, in density above the base's own dye. Absent is the shared default.
     public var grainFogDensity: Float?
     public var halationStrength: [Float]
@@ -77,6 +83,8 @@ public struct FilmStockDefinition: Codable, Sendable {
     public var halationHazeMM: Float? = nil
     /// Optional independently calibrated halo shape. Its absence is the exact legacy model.
     public var halationProfile: HalationProfile? = nil
+    /// Requires pack schema 3; older engines must reject rather than ignore this operator.
+    public var layeredTransport: LayeredTransport? = nil
     /// Optional provisional halo shape, ignored unless explicitly enabled by the renderer.
     public var estimatedHalationProfile: HalationProfile? = nil
     /// Optional spectral return matrix (receiver rows by source columns) from the stock's
@@ -351,6 +359,7 @@ public struct FilmStockDefinition: Codable, Sendable {
 
 public extension FilmStockDefinition {
     static let currentSchemaVersion = 2
+    static let layeredTransportSchemaVersion = 3
 
     /// Materialise the definition into a renderable stock. `FilmStock.init` re-normalises the RGB
     /// matrix and validates layer counts, so a malformed pack fails here rather than part-way
@@ -373,7 +382,10 @@ public extension FilmStockDefinition {
             couplerReleaseGamma: couplerReleaseGamma ?? [1, 1, 1],
             couplerGeometry: couplerGeometry,
             couplerDiffusionMM: couplerDiffusionMM,
+            chromaticFringeAmount: chromaticFringeAmount ?? 0,
+            chromaticFringeRadiusMM: chromaticFringeRadiusMM ?? 0.1,
             adjacencyStrength: adjacencyStrength ?? 0,
+            adjacencyModel: adjacencyModel ?? .gaussian,
             adjacencyRadiusMM: adjacencyRadiusMM ?? 0,
             grainStrength: grainStrength,
             grainSizeMM: grainSizeMM,
@@ -384,11 +396,13 @@ public extension FilmStockDefinition {
             grainLayerSizeRatio: grainLayerSizeRatio ?? [1, 1, 1],
             grainDensityLaw: grainDensityLaw,
             grainDensityProfile: grainDensityProfile,
+            grainReversalProfile: grainReversalProfile ?? FilmStock.defaultGrainReversalProfile,
             grainFogDensity: grainFogDensity ?? FilmStock.defaultGrainFogDensity,
             halationStrength: halationStrength,
             halationLookScale: halationLookScale ?? 1,
             halationHazeMM: halationHazeMM ?? 0,
             halationProfile: halationProfile,
+            layeredTransport: layeredTransport,
             estimatedHalationProfile: estimatedHalationProfile,
             halationReturnMatrix: halationReturnMatrix,
             paperCurve: paperCurve.curve,
@@ -404,7 +418,8 @@ public extension FilmStockDefinition {
     /// Capture a stock in its exact rendered form.
     init(id: String, stock: FilmStock, subtitle: String? = nil,
          nativeFormatID: String? = nil) {
-        self.schemaVersion = FilmStockDefinition.currentSchemaVersion
+        self.schemaVersion = stock.layeredTransport == nil
+            ? FilmStockDefinition.currentSchemaVersion : FilmStockDefinition.layeredTransportSchemaVersion
         self.id = id
         self.name = stock.name
         self.subtitle = subtitle
@@ -427,7 +442,10 @@ public extension FilmStockDefinition {
         self.couplerReleaseGamma = stock.couplerReleaseGamma
         self.couplerGeometry = stock.couplerGeometry
         self.couplerDiffusionMM = stock.couplerDiffusionMM
+        self.chromaticFringeAmount = stock.chromaticFringeAmount == 0 ? nil : stock.chromaticFringeAmount
+        self.chromaticFringeRadiusMM = stock.chromaticFringeRadiusMM == 0.1 ? nil : stock.chromaticFringeRadiusMM
         self.adjacencyStrength = stock.adjacencyStrength
+        self.adjacencyModel = stock.adjacencyModel == .gaussian ? nil : stock.adjacencyModel
         self.adjacencyRadiusMM = stock.adjacencyRadiusMM
         self.grainStrength = stock.grainStrength
         self.grainSizeMM = stock.grainSizeMM
@@ -438,11 +456,13 @@ public extension FilmStockDefinition {
         self.grainLayerSizeRatio = stock.grainLayerSizeRatio
         self.grainDensityLaw = stock.grainDensityLaw
         self.grainDensityProfile = stock.grainDensityProfile
+        self.grainReversalProfile = stock.grainReversalProfile
         self.grainFogDensity = stock.grainFogDensity
         self.halationStrength = stock.halationStrength
         self.halationLookScale = stock.halationLookScale
         self.halationHazeMM = stock.halationHazeMM
         self.halationProfile = stock.halationProfile
+        self.layeredTransport = stock.layeredTransport
         self.estimatedHalationProfile = stock.estimatedHalationProfile
         self.halationReturnMatrix = stock.halationReturnMatrix
         self.paperCurve = CurveSpec(stock.paperCurve)

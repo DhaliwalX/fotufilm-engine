@@ -84,8 +84,8 @@ export class RenderSession {
     this.activeWork = null
     this.running = false
   }
-  async pack(id, medium = null) {
-    const key = `${id}:${medium || 'default'}`
+  async pack(id, medium = null, halationModel = 'legacy') {
+    const key = `${id}:${medium || 'default'}:${halationModel}`
     if (this.packs.has(key)) {
       const value = this.packs.get(key)
       this.packs.delete(key)
@@ -94,7 +94,10 @@ export class RenderSession {
     }
     let pack,
       stagesUrl = null
-    if (medium) {
+    if (halationModel === 'layered') {
+      if (medium) throw new Error('Layered Transport uses the film’s default output medium.')
+      pack = await loadPack(assetUrl(`packs/${id}.layered.pack`))
+    } else if (medium) {
       this.catalog ??= loadStockIndex().catch((error) => {
         this.catalog = null
         throw error
@@ -114,7 +117,7 @@ export class RenderSession {
     return entry
   }
   async renderer(pack, background = false, onProgress = () => {}) {
-    const name = background ? 'thumbnailReady' : pack ? 'filmReady' : 'normalReady'
+    const name = background ? 'thumbnailReady' : pack?.transport ? 'transportReady' : pack ? 'filmReady' : 'normalReady'
     // A thumbnail must not hold foreground work behind GPU shader compilation.
     this[name] ??= (
       background ? createCpuDeveloper(pack) : pack ? createDeveloper(pack, onProgress) : createNormalDeveloper()
@@ -125,6 +128,7 @@ export class RenderSession {
           return null
         }
         if (background) this.thumbnail = developer
+        else if (pack?.transport) this.transport = developer
         else if (pack) this.developer = developer
         else this.normal = developer
         return developer
@@ -191,9 +195,9 @@ export class RenderSession {
       }
       if (!this.closed && !stale()) onProgress(text)
     }
-    if (edit.stock !== null && !this.packs.has(`${stock}:${edit.medium || 'default'}`))
+    if (edit.stock !== null && !this.packs.has(`${stock}:${edit.medium || 'default'}:${edit.halationModel || 'legacy'}`))
       report(edit.medium ? 'Loading film and output-medium profile' : 'Loading film profile')
-    const entry = edit.stock === null ? null : await this.pack(stock, edit.medium)
+    const entry = edit.stock === null ? null : await this.pack(stock, edit.medium, edit.halationModel)
     if (this.closed || stale()) return null
     if (!entry && !this.normalReady) report('Loading light and color engine')
     const developer = await this.renderer(entry?.pack, background && !!entry, report)
@@ -201,6 +205,7 @@ export class RenderSession {
     return this.enqueue(async () => {
       if (this.closed || stale()) return null
       const started = performance.now()
+      if (entry?.pack.transport && stage !== null) throw new Error('Pipeline inspection is available with Legacy.')
       if (entry && stage !== null) {
         report('Loading pipeline inspection stages')
         entry.stages ??= await loadStages(
@@ -276,7 +281,8 @@ export class RenderSession {
       }
     }, background, work)
   }
-  stages(stock, medium = null) {
+  stages(stock, medium = null, halationModel = 'legacy') {
+    if (halationModel === 'layered') return Promise.resolve([])
     return this.enqueue(async () => {
       const entry = await this.pack(stock, medium)
       entry.stages ??= await loadStages(
@@ -291,12 +297,14 @@ export class RenderSession {
     this.closed = true
     return this.enqueue(() => {
       this.developer?.dispose()
+      this.transport?.dispose()
       this.normal?.dispose()
       this.thumbnail?.dispose()
       this.sources = []
       this.normal = null
       this.thumbnail = null
       this.developer = null
+      this.transport = null
       this.packs.clear()
     })
   }

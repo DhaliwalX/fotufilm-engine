@@ -54,10 +54,10 @@ try {
     const width = 640, height = 400
     const source = synthetic(width, height)
     developer.tileBudget = Infinity
-    const whole = await developer.develop(source, { ev: 0.2 })
+    const whole = await developer.develop(source, { exposure: 0.2 })
     developer.tileBudget = 200 * 200
     developer.width = 0
-    const tiled = await developer.develop(source, { ev: 0.2 })
+    const tiled = await developer.develop(source, { exposure: 0.2 })
     let differing = 0
     for (let i = 0; i < whole.pixels.length; ++i) if (whole.pixels[i] !== tiled.pixels[i]) differing++
     say(`${differing === 0 ? '  ok  ' : ' FAIL '} ${developer.tiles.length} tiles match the whole frame `
@@ -73,7 +73,7 @@ try {
     developer.tileBudget = developer.backend === 'webgpu' ? 6_000_000 : 2_000_000
     developer.width = 0
     const started = performance.now()
-    const { pixels, elapsed } = await developer.develop(synthetic(width, height), { ev: 0.2, grain: 1 })
+    const { pixels, elapsed } = await developer.develop(synthetic(width, height), { exposure: 0.2, grain: 1 })
     const total = performance.now() - started
     // Developed, not flat: the print spans a real range of tones across the frame.
     let low = 255, high = 0

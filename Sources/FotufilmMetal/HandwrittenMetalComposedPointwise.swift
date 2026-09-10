@@ -120,8 +120,8 @@ public final class HandwrittenMetalComposedPointwise {
               frameWidth <= Int(UInt32.max), frameHeight <= Int(UInt32.max),
               sceneCeiling.isFinite, sceneCeiling > 0
         else { throw PreparationError.invalidDimensions }
-        let invocation = FilmEngineInvocation(
-            stock: stock, options: options,
+        let invocation = try FilmEngineInvocation(
+            validating: stock, options: options,
             width: frameWidth, height: frameHeight)
         let adjust = FilmEngineInvocation.sceneAdjustOffset
         let balance = FilmEngineInvocation.whiteBalanceOffset

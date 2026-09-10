@@ -334,7 +334,7 @@ export default function App() {
     let cancelled = false
     setStages([])
     session
-      .stages(stockId, edit.medium)
+      .stages(stockId, edit.medium, edit.halationModel)
       .then((next) => {
         if (!cancelled) setStages(next)
       })
@@ -344,7 +344,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [panel, session, stockId, edit.medium])
+  }, [panel, session, stockId, edit.medium, edit.halationModel])
 
   async function acceptFiles(incoming) {
     if (exporting) return
@@ -472,7 +472,9 @@ export default function App() {
     const medium = stocks.find((s) => s.id === id)?.media.some((m) => m.id === edit.medium)
       ? edit.medium
       : null
-    patch({ stock: id, medium })
+    const halationModel = stocks.find((s) => s.id === id)?.layeredTransport === false
+      ? 'legacy' : edit.halationModel || 'legacy'
+    patch({ stock: id, medium: halationModel === 'layered' ? null : medium, halationModel })
     setStage(null)
     setDifference(false)
   }
@@ -947,6 +949,23 @@ export default function App() {
                 </div>
                 {edit.stock && (
                   <Section title="Character">
+                    <Selector
+                      label="Halation Model"
+                      size="sm"
+                      width="100%"
+                      value={edit.halationModel || 'legacy'}
+                      options={[
+                        { value: 'legacy', label: 'Legacy' },
+                        ...(selectedStock?.layeredTransport === false ? [] : [{ value: 'layered', label: 'Layered Transport' }]),
+                      ]}
+                      onChange={(halationModel) => {
+                        endEdit()
+                        patch({ halationModel, medium: null })
+                        setStage(null)
+                        setDifference(false)
+                      }}
+                    />
+                    {edit.halationModel === 'layered' && <p className="medium-detail">Uses the film’s default output medium. Pipeline inspection is available with Legacy.</p>}
                     {adjustments('Character')}
                     <Button
                       label="New Grain Pattern"
@@ -966,7 +985,7 @@ export default function App() {
                     label="Output medium"
                     size="sm"
                     width="100%"
-                    isDisabled={exporting || !active || !edit.stock}
+                    isDisabled={exporting || !active || !edit.stock || edit.halationModel === 'layered'}
                     value={edit.medium || selectedStock?.defaultMedium || 'screen'}
                     options={(
                       selectedStock?.media || [{ id: 'screen', name: 'Digital Reference' }]

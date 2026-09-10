@@ -33,10 +33,12 @@ public final class HandwrittenMetalGlobalMeasurements {
         case sRGB = 1
     }
 
-    /// Transfer carried by a 10-bit bi-planar BT.2020 camera buffer.
+    /// Transfer carried by a 10-bit bi-planar camera buffer. HLG and Apple Log record BT.2020
+    /// primaries; Apple Log 2 records Apple Wide Gamut, which the decode carries to Rec.2020.
     public enum HDRCaptureTransfer: UInt32, Sendable {
         case hlg = 0
         case appleLog = 1
+        case appleLog2 = 2
     }
 
     public enum ResourceError: Swift.Error, CustomStringConvertible {
@@ -160,6 +162,7 @@ public final class HandwrittenMetalGlobalMeasurements {
         }
     }
 
+    static let decodeSamples = Int(UInt8.max) + 1
     static let reductionThreads = 256
     static let flareItemsPerThread = 8
 
@@ -217,6 +220,7 @@ public final class HandwrittenMetalGlobalMeasurements {
             let library = try HandwrittenMetalShaderLibrary.makeLibrary(
                 device: device, shader: .globalMeasurements, options: options,
                 preprocessorMacros: [
+                    "FOTUFILM_MEASUREMENT_DECODE_SAMPLES": NSNumber(value: Self.decodeSamples),
                     "FOTUFILM_MEASUREMENT_REDUCTION_THREADS": NSNumber(
                         value: Self.reductionThreads),
                     "FOTUFILM_MEASUREMENT_FLARE_ITEMS": NSNumber(
@@ -601,9 +605,9 @@ public final class HandwrittenMetalGlobalMeasurements {
     }
 
     private static func makeDecodeTexture(device: MTLDevice) -> MTLTexture? {
-        var values = [Float16](repeating: 0, count: 256)
+        var values = [Float16](repeating: 0, count: Self.decodeSamples)
         for index in values.indices {
-            let value = ColorScience.srgbToLinear(Float(index) / 255)
+            let value = ColorScience.srgbToLinear(Float(index) / Float(Self.decodeSamples - 1))
             let half = Float16(value)
             guard value.isFinite, half.isFinite else { return nil }
             values[index] = half

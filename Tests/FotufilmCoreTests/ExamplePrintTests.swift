@@ -43,7 +43,7 @@ final class ExamplePrintTests: XCTestCase {
         }
     }
 
-    func testAnalyticReceiverIsFiniteAndNeutral() {
+    func testReceiverIsFiniteAndNeutral() {
         for index in 0..<SpectralGrid.count {
             let sum = SpectralGrid.paperDyes.reduce(Float.zero) { $0 + $1[index] }
             XCTAssertEqual(sum, 1, accuracy: 1e-6)
@@ -56,16 +56,37 @@ final class ExamplePrintTests: XCTestCase {
         XCTAssertEqual(Illuminant.xenonProjection[Illuminant.anchorIndex], 1, accuracy: 1e-6)
     }
 
-    func testExampleCurvesAreMonotonicAndInvertible() {
+    /// A measured print receiver is not a gentle analytic ramp: RA-4 paper runs at gamma 5.9 and
+    /// a release print steeper still, so each record reaches D-max inside a few tenths of a decade
+    /// and is flat on either side of it. The invariants that survive that, and that the print stage
+    /// actually relies on, are these — finite and never falling anywhere, strictly rising and
+    /// invertible across the record's own active span.
+    func testPrintCurvesAreNonDecreasingAndInvertibleAcrossTheirActiveSpan() {
         for paper in PrintPaper.allCases {
-            for curve in paper.printCurves(for: TestStocks.negative) {
+            for (record, curve) in paper.printCurves(for: TestStocks.negative).enumerated() {
+                let label = "\(paper.rawValue) record \(record)"
                 var previous: Float = -.infinity
-                for exposure in stride(from: Float(-1), through: 1, by: 0.1) {
+                for exposure in stride(from: Float(-4), through: 4, by: 0.05) {
                     let density = curve.density(logExposure: exposure)
-                    XCTAssertTrue(density.isFinite)
-                    XCTAssertGreaterThan(density, previous)
-                    XCTAssertEqual(curve.logExposure(density: density), exposure, accuracy: 0.001)
+                    XCTAssertTrue(density.isFinite, label)
+                    // The plateau above D-max is a clamp, so it carries float jitter of a few
+                    // parts in ten million. That is six orders below a visible density step.
+                    XCTAssertGreaterThanOrEqual(density, previous - 1e-5, label)
                     previous = density
+                }
+
+                // Strictly inside the toe and shoulder the curve is the printing stage's working
+                // range, and it has to be one-to-one there for the timing solve to invert it.
+                let span = curve.shoulder - curve.toe
+                XCTAssertGreaterThan(span, 0, label)
+                var last: Float = -.infinity
+                for step in 1...9 {
+                    let exposure = curve.toe + span * Float(step) / 10
+                    let density = curve.density(logExposure: exposure)
+                    XCTAssertGreaterThan(density, last, label)
+                    XCTAssertEqual(curve.logExposure(density: density), exposure,
+                                   accuracy: 0.001, label)
+                    last = density
                 }
             }
         }

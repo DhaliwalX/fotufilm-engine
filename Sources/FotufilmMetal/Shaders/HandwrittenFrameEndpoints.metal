@@ -10,10 +10,10 @@ constant bool kHeadChroma [[function_constant(5)]];
 
 constant uint kCurveSamples = FOTUFILM_ENDPOINT_CURVE_SAMPLES;
 constant uint kTransferSamples = FOTUFILM_ENDPOINT_TRANSFER_SAMPLES;
-constant uint kCurves = 0u;
-constant uint kPaper = 33u;
-constant uint kMasking = 39u;
-constant uint kPaperMidpoint = 62u;
+constant uint kCurves = FOTUFILM_CFG_CURVES;
+constant uint kPaper = FOTUFILM_CFG_PAPER;
+constant uint kMasking = FOTUFILM_CFG_MASKING;
+constant uint kPaperMidpoint = FOTUFILM_CFG_PAPER_MIDPOINT;
 constant uint kExposureGain = FOTUFILM_CFG_EXPOSURE_GAIN;
 constant uint kWhiteBalance = FOTUFILM_CFG_WHITE_BALANCE;
 constant uint kSceneAdjust = FOTUFILM_CFG_SCENE_ADJUST;

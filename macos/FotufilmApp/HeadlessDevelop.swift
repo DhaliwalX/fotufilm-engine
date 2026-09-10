@@ -94,6 +94,7 @@ enum HeadlessDevelop {
             .flatMap { name in
                 switch name {
                 case "apple-log": return .appleLog
+                case "apple-log-2": return .appleLog2
                 case "slog3-cine": return .slog3Cine
                 case "slog3": return .slog3
                 case "slog2": return .slog2
@@ -276,7 +277,7 @@ enum HeadlessDevelop {
                     exit(1)
                 }
                 let sceneMean = mean(of: scene)
-                let balance = FilmRender.remainingBalance(for: state, scene: scene)
+                let balance = state.whiteBalance
                 guard let developed = FilmRender.develop(
                     scene, state: state, hdr: hdr,
                     dynamicRange: hdr ? .hdr : .sdr, report: timings) else {
@@ -573,7 +574,7 @@ enum HeadlessDevelop {
         else { return false }
         var pass = true
         let encodings: [VideoSourceEncoding] =
-            [.appleLog, .slog3Cine, .slog3, .slog2,
+            [.appleLog, .appleLog2, .slog3Cine, .slog3, .slog2,
              .flog, .flog2, .flog2C, .hlg]
         for encoding in encodings {
             guard let line = verifyLogConversion(encoding) else {
@@ -609,6 +610,7 @@ enum HeadlessDevelop {
             .flatMap { name in
                 switch name {
                 case "apple-log": return .appleLog
+                case "apple-log-2": return .appleLog2
                 case "slog3-cine": return .slog3Cine
                 case "slog3": return .slog3
                 case "slog2": return .slog2

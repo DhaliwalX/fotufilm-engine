@@ -10,6 +10,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -1891,6 +1892,9 @@ int testPlugin() {
             bool everyCurveCarried = true, everyCurveAgrees = true;
             double worstEncode = 0;
             const char *worstEncodeWhere = "none";
+            size_t worstEncodeIndex = 0;
+            float worstExpected = 0, worstActual = 0;
+            bool worstFit = false, worstPremultiplied = false;
             for (bool fit : {false, true}) {
             for (bool premultiplied : {false, true}) {
             for (int e = 0; !light.empty() && e < static_cast<int>(fotufilm::Encoding::Count);
@@ -1932,6 +1936,9 @@ int testPlugin() {
                     if (gap > worstEncode) {
                         worstEncode = gap;
                         worstEncodeWhere = fotufilm::encodingLabel(encoding);
+                        worstEncodeIndex = i;
+                        worstExpected = reference[i]; worstActual = developedPixels[i];
+                        worstFit = fit; worstPremultiplied = premultiplied;
                     }
                 }
             }
@@ -1941,6 +1948,10 @@ int testPlugin() {
             check(everyCurveAgrees, "and develops a frame through each");
             std::printf("       kernel vs libm: max |d| %.3e (16-bit LSB %.3e, worst %s)\n",
                         worstEncode, 1.0 / 65535.0, worstEncodeWhere);
+            if (worstEncode >= 0.25 / 65535.0) {
+                std::printf("       component %zu: host %.9g, kernel %.9g, fit %d, premultiplied %d\n",
+                            worstEncodeIndex, worstExpected, worstActual, worstFit, worstPremultiplied);
+            }
             check(!light.empty() && worstEncode < 0.25 / 65535.0,
                   "and lands within a quarter of a 16-bit LSB of the host's own encode");
             fotufilm_bridge_release_staging(bridgeContext);
@@ -2077,6 +2088,8 @@ int testPlugin() {
         check(instance.params.params.count("texture_grain") == 1 &&
                   instance.params.params.count("texture_halation") == 1,
               "defines the texture span's stage selection");
+        check(instance.params.params.count("textureSelection") == 0,
+              "does not expose a second, unused texture-mask menu");
 
         // Moving the menu writes the identity, which is what a reopened project resolves against.
         setChoice(plugin, instanceHandle, instance.params, "stage", 1);
@@ -2629,6 +2642,7 @@ int testPlugin() {
                 {"vibrance", 1.0, nullptr, 0},
                 {"grain", 0, nullptr, 0},
                 {"halation", 0, nullptr, 0},
+                {"halationModel", 1, nullptr, 0},
                 {"couplers", 0, nullptr, 0},
                 {"flare", 2.0, nullptr, 0},
                 {"estimatedHalation", 1, nullptr, 0},
@@ -2670,6 +2684,10 @@ int testPlugin() {
                 {"filterCoating", 2, "lensFilter1", static_cast<double>(deepRed)},
                 {"frameCoverage", 25, nullptr, 0},
                 {"shutterSeconds", 3600, nullptr, 0},
+                {"fringeAmount", 0.5, nullptr, 0},
+                {"fringeRadius", 300, "fringeAmount", 0.5},
+                {"enlarger", 1, nullptr, 0},
+                {"diffusionGrade", 4, "diffusion", 1},
             };
             bool everyControlRead = true;
             const size_t sizeCount = sizeof(sizes) / sizeof(*sizes);
@@ -2728,6 +2746,27 @@ int testPlugin() {
                 }
             }
             check(everyControlRead, "every control reaches the engine");
+            {
+                std::set<std::string> levered = {"grainAnimation", "grainModel", "negativeViewing",
+                                                 "renderMode"};
+                for (const Lever &lever : levers) levered.insert(lever.name);
+                bool everySlotLevered = true;
+                const int32_t described = fotufilm_bridge_host_parameter_count(FOTUFILM_HOST_RESOLVE);
+                for (int32_t i = 0; i < described; ++i) {
+                    if (fotufilm_bridge_host_parameter_slot(FOTUFILM_HOST_RESOLVE, i) < 0) continue;
+                    const int32_t flags = fotufilm_bridge_host_parameter_flags(FOTUFILM_HOST_RESOLVE, i);
+                    if (flags & FOTUFILM_HOST_FLAG_COMPOSED) continue;
+                    char name[128] = "";
+                    fotufilm_bridge_host_parameter_name(FOTUFILM_HOST_RESOLVE, i, name, sizeof(name));
+                    const std::string spelled = name;
+                    if (spelled.rfind("halation", 0) == 0 && spelled.size() == 11) continue;
+                    if (levered.count(spelled) == 0) {
+                        std::printf("       %s: no lever exercises it\n", name);
+                        everySlotLevered = false;
+                    }
+                }
+                check(everySlotLevered, "every catalogued control has a lever");
+            }
 
             // The gauge: two named gauges differ from each other, and Match Film is one film's
             // own gauge, so at least one of the two differs from it. Back on the small frame,

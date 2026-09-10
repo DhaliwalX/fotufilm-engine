@@ -19,6 +19,7 @@ final class AppSettings: ObservableObject {
         static let couplerRange = "fotufilm.coupler-range"
         static let couplerSelf = "fotufilm.coupler-self"
         static let discGrain = "fotufilm.disc-grain"
+        static let halationModel = "fotufilm.halation-model"
         static let estimatedHalation = "fotufilm.estimated-halation"
         static let couplerBarrierRedGreen = "fotufilm.coupler-barrier-red-green"
         static let couplerBarrierGreenBlue = "fotufilm.coupler-barrier-green-blue"
@@ -168,8 +169,7 @@ final class AppSettings: ObservableObject {
         UserDefaults.standard.set(enabled, forKey: Key.cameraGrain)
     }
 
-    /// The camera never runs automatic white balance. It assumes the illuminant the loaded
-    /// emulsion was designed for, or the light the photographer names.
+    /// The camera uses the declared scene light, with a stock-independent D65 default.
     enum CameraFilmBalance: String, CaseIterable, Identifiable, Sendable {
         case film, household, tungsten, mixed, daylight, overcast
 
@@ -177,7 +177,7 @@ final class AppSettings: ObservableObject {
 
         var label: String {
             switch self {
-            case .film: return "DEFAULT"
+            case .film: return "D65"
             case .household: return "2856K"
             case .tungsten: return "3200K"
             case .mixed: return "4300K"
@@ -197,13 +197,10 @@ final class AppSettings: ObservableObject {
             }
         }
 
-        func kelvin(filmReference: Float?) -> Float {
-            fixedKelvin ?? filmReference ?? 5500
-        }
+        var kelvin: Float { fixedKelvin ?? WhiteBalance.neutralKelvin }
     }
 
-    /// Follow Film is the physical default: expose a daylight stock under 5500 K and a tungsten
-    /// stock under 3200 K until the photographer explicitly names the other lighting condition.
+    /// The persisted default case retains its identifier while assuming D65 for every stock.
     nonisolated static var storedCameraFilmBalance: CameraFilmBalance {
         UserDefaults.standard.string(forKey: Key.cameraFilmBalance)
             .flatMap(CameraFilmBalance.init(rawValue:)) ?? .film
@@ -559,6 +556,18 @@ final class AppSettings: ObservableObject {
         return defaultEstimatedHalationEnabled
     }
 
+    nonisolated static var storedHalationModel: HalationModel {
+        UserDefaults.standard.string(forKey: Key.halationModel)
+            .flatMap(HalationModel.init(rawValue:)) ?? .legacy
+    }
+
+    @Published var halationModel: HalationModel {
+        didSet {
+            UserDefaults.standard.set(halationModel.rawValue, forKey: Key.halationModel)
+            NotificationCenter.default.post(name: Self.filmModelChanged, object: nil)
+        }
+    }
+
     @Published var estimatedHalationEnabled: Bool {
         didSet {
             if !adoptingEstimatedHalationDefault {
@@ -637,7 +646,7 @@ final class AppSettings: ObservableObject {
     }
 
     nonisolated static var isFilmModelAdjusted: Bool {
-        isCouplerGeometryAdjusted || storedDiscGrainEnabled
+        isCouplerGeometryAdjusted || storedDiscGrainEnabled || storedHalationModel != .legacy
             || storedEstimatedHalationEnabled != defaultEstimatedHalationEnabled
     }
 
@@ -692,6 +701,7 @@ final class AppSettings: ObservableObject {
         couplerRange = Self.storedCouplerRange
         couplerSelf = Self.storedCouplerSelf
         discGrainEnabled = Self.storedDiscGrainEnabled
+        halationModel = Self.storedHalationModel
         estimatedHalationEnabled = Self.storedEstimatedHalationEnabled
         couplerBarrierRedGreen = Self.storedCouplerBarrierRedGreen
         couplerBarrierGreenBlue = Self.storedCouplerBarrierGreenBlue
@@ -714,6 +724,7 @@ final class AppSettings: ObservableObject {
         negativeViewing = .lightBox
         resetCouplerGeometry()
         discGrainEnabled = false
+        halationModel = .legacy
         estimatedHalationEnabled = Self.defaultEstimatedHalationEnabled
         shareCrashReports = false
         debugInspector = false

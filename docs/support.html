@@ -24,13 +24,14 @@
 <p>Custom stock definitions require schema version 1. Sampled spectral rows must contain 81 values from 380 to 780 nm at 5 nm spacing. Coupler geometry must state its two <code>interlayerTransmission</code> values. Older 41-sample rows and range-only coupler definitions are no longer converted during import; export them again in the current format.</p>
 <h2>Disabled Resolve controls</h2>
 <p>Check <strong>Stage</strong>, <strong>Resolved Format</strong>, <strong>Resolved Medium</strong>, and <strong>Effective Renderer</strong>. Custom Mottle needs Full and clump-field grain. Discs needs a silver-image film and Reference mode.</p>
-<p>The app and both plugins use the same paper and print-film names in <strong>Output Medium</strong>. In the source distribution, the model descriptions identify the analytic example receivers.</p>
+<p>The app and both plugins use the same paper and print-film names in <strong>Output Medium</strong>. Each receiver is digitised from the manufacturer's own published datasheet, and the model descriptions name the publication.</p>
 <p>Negative Only produces density data. To view a negative image, choose Full and set Output Medium to Negative.</p>
 <h2>Custom builds</h2>
 <p>For a custom pack build, set both <code>FOTUFILM_PACK_KEY_SOURCE</code> and <code>FOTUFILM_SEALED_PACKS</code> to absolute paths outside this checkout. Both are required. Keep secret pack keys out of version control.</p>
 <p>To add supplied packs while retaining the source app’s bundle identifier, keychain service, and imported-pack library, set <code>FOTUFILM_USE_SOURCE_IDENTITY=1</code>. This changes identity selection only; the configured sealed packs still determine the bundled catalogue.</p>
 <p>Run <code>python3 tools/check-source-boundary.py</code> before adding files. Record the source and hash of new images, data, and third-party headers in <code>SOURCE_ASSETS.json</code>.</p>
 <p>Flat Swift builds must add <code>-ISources/FotufilmHalide/include</code> to import the C bridge declarations. The supplied Mac and plugin scripts already do this; Swift Package Manager discovers the module automatically.</p>
+<p>Swift Package Manager includes the Metal shader sources and their shared includes in the <code>FotufilmMetal</code> resource bundle. Keep SwiftPM’s resource bundles with the executable when deploying a command-line consumer; shader loading does not require the checkout or a working-directory setting. Run <code>tools/check-metal-package.sh</code> on a Mac with Metal to verify a relocated package consumer. The supplied release-app build continues to load its bundled <code>HandwrittenFotufilm.metallib</code>.</p>
 <p><a href="documentation.html">User guide</a> · <a href="../LICENSING.md">Licences</a></p>
 <h2>Pack versions</h2>
 <p>Pack releases can include <code>version</code> and <code>minimumMacAppVersion</code>, using one to three numbers separated by dots. Packs without these fields still work.</p>

@@ -13,10 +13,13 @@ PUBLIC_KEY = ROOT / 'shared/FotufilmApp/FilmPackKeyMaterial.swift'
 DENIED = ('stocks-private/', 'research/', 'ios/', 'ios-uikit/', 'android/',
           'license-server/', 'tools/calibration/', 'docs/calibration/', 'docs/accuracy/')
 RELEASED_STOCKS = json.loads((ROOT / 'licenses/FILM-PROFILES.json').read_text())
+# The print receivers and the projection illuminant are published here deliberately. The
+# receivers are this project's own digitisations of the manufacturers' public datasheets; the
+# xenon projector spectrum is third-party and is attributed in THIRD_PARTY_NOTICES.md. What
+# stays out is the calibration harness, its recorded baseline, and the sheet-reading tables it
+# consumes, which describe unpublished measurement runs.
 DENIED_NAMES = {'MeasuredSpectra.swift', 'CalibrationTests.swift',
-                'EnduraPremierPaperSpectra.swift', 'CrystalArchivePaperSpectra.swift',
-                'Vision2383PrintSpectra.swift', 'Vision2393PrintSpectra.swift',
-                'EternaCPPrintSpectra.swift', 'accuracy-baseline.json'}
+                'accuracy-baseline.json'}
 BINARY_SUFFIXES = {'.png', '.jpg', '.jpeg', '.heic', '.tif', '.tiff', '.exr', '.mp4',
                    '.mov', '.pdf', '.ps', '.zip', '.dmg', '.pkg', '.coeff', '.svg', '.moef',
                    '.webp', '.gif', '.avif', '.bmp', '.dng', '.cr2', '.nef', '.arw', '.raf'}

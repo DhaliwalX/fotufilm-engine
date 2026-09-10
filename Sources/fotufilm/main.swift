@@ -1,5 +1,6 @@
 import Foundation
 import FotufilmCore
+import FotufilmEditModel
 import FotufilmImaging
 #if canImport(ImageIO)
 import ImageIO
@@ -7,6 +8,21 @@ import CoreGraphics
 import CoreImage
 import UniformTypeIdentifiers
 #endif
+
+let controlUsage = EditorControlCatalogue.all.compactMap { control -> String? in
+    guard control.offered(on: .cli), let flag = control.commandLine else { return nil }
+    let lead = "  " + flag.flag + (flag.placeholder.isEmpty ? "" : " " + flag.placeholder)
+    let padded = lead.count < 21 ? lead.padding(toLength: 21, withPad: " ", startingAt: 0) : lead + "\n" + String(repeating: " ", count: 21)
+    var words = flag.help.split(separator: " ").map(String.init)
+    var lines: [String] = []
+    var line = ""
+    while !words.isEmpty {
+        let word = words.removeFirst()
+        if line.isEmpty { line = word } else if line.count + 1 + word.count > 58 { lines.append(line); line = word } else { line += " " + word }
+    }
+    lines.append(line)
+    return padded + lines.joined(separator: "\n" + String(repeating: " ", count: 21))
+}.joined(separator: "\n")
 
 let usage = """
 fotufilm — physically based film simulation
@@ -40,109 +56,22 @@ decoded scene-referred, so highlights above diffuse white reach the film
 shoulder and drive halation the way they do on real film.
 
 Options:
-  --stock <name>     Film stock (default: first installed). See --list-stocks
-  --format <name>    Film gauge (default: the gauge the stock is known on).
-                     "sensor" cuts the film to the frame the input file says
-                     its camera exposed. See --list-formats
-  --ev <stops>       Exposure compensation in stops (default: 0)
+@CONTROL_FLAGS@
   --autoexpose       Anchor the log-average scene luminance on mid-gray
-  --wb <kelvin>      Scene illuminant, 2000-12000 K (default: 6504, D65).
-                     On camera raw this is relative to the file's as-shot
-                     balance, so 6504 is "as the camera saw it"
   --scene-kelvin <K> Film capture light, 1000-25000 K; defaults to RAW metadata.
-  --tint <n>         Green/magenta off the locus, -100...100 (default: 0)
   --background <c>  Scene-linear Rec.2020 background for associated-alpha input:
                      black, white, or R,G,B (default: black). The source is
                      composited before film processing and the output is opaque
   --depth <8|16>     Output bit depth (default: 8, dithered; 16 for PNG/TIFF)
-  --hlg              Write the print as 16-bit Rec.2020 HLG instead of sRGB,
-                     which is where a gain-map or HLG source's recovered
-                     highlights have somewhere to land. Implies --depth 16.
-  --grain <scale>    Grain multiplier, 0 disables (default: 1)
-  --grain-model <m>  clump (default) or discs. `discs` lays Boolean discs at
-                     the film's clump radius, scaled onto its published
-                     granularity, instead of a blurred clump field: the texture
-                     survives enlargement, saturates where discs overlap, and
-                     only differs once a disc covers a pixel.
-                     Costs about 5x the pixels and a one-off minute of
-                     pipeline build
-  --halation <scale> Halation multiplier, 0 disables (default: 1)
-  --halation-colour <f>  How much the halo keeps the source's own colour
-                     instead of the stock's layered red, 0-1 (default: 0).
-                     The dimmer records are raised to the strongest record's
-                     return, so the ring brightens toward the light's colour
-  --halation-haze <mm>  The support's impurity scatter, as a Gaussian sigma
-                     in millimeters softening the halo's edges (default: the
-                     stock's own figure; sheets without one state 0, the
-                     clean support)
-  --estimated-halation  Use provisional spatial profiles where a stock has no
-                     independently calibrated profile (default: off)
-  --flare <scale>    Taking-lens veiling glare, 1 enables (default: 0 — a
-                     photographed source already carries its own lens's glare)
-  --couplers <scale> DIR + adjacency strength; 1 calibrated, overdrive compressed (default: 1)
-  --bleach-bypass <f> Fraction of the developed silver the bleach leaves in the
-                     negative, 0-1 (default: 0). The print re-times on the
-                     denser mid-grey, so what changes is contrast and chroma.
-                     Colour negative only
-  --mottle <share>   Grain-size mixture override, 0-0.9 (default: the stock's
-                     own, usually 0): the variance share of the published
-                     granularity carried by a coarse second clump field — the
-                     soft mottle under the sharp grain. The RMS anchor holds
-                     whatever the split
-  --shutter <secs>   Exposure time in seconds (default: instantaneous). When
-                     the stock's datasheet publishes a long-exposure table the
-                     emulsion leaves the reciprocity law as that table states,
-                     frozen past the table's last row; a sheet that states no
-                     table holds the law. The print re-times the mid; shadows
-                     slide into the toe and any unequal failure casts the ends
-  --push <stops>     Push (positive) or pull (negative) development, in stops
-                     (default: 0). Must name an exact condition measured for
-                     this stock's stated developer, dilution, temperature and
-                     agitation; stocks or stop values without measurements are
-                     rejected. Pair a push with its exposure change via --ev
-  --expired <years>  Years past the process-by date at room temperature
-                     (default: 0). One stop per decade slower, blue layer
-                     first; base fog and grain rise with it. Add the stop the
-                     lab rule asks for with --ev to keep the mids
-  --print-light <k>  Colour temperature the finished print is viewed under, in
-                     kelvin: daylight series from 4000 K up (5003 = D50 proof
-                     light), Planckian below (2856 = tungsten). Greys hold —
-                     the read adapts to the light — and the paper dyes'
-                     metamerism moves. Default: D50 for paper, calibrated
-                     5400 K xenon for cinema print, fixed D65 for screen
-  --paper <name>     Output medium: ektacolor-edge (default), endura-premier,
-                     crystal-archive, vision-2383, vision-2393,
-                     eterna-cp, lab-scan, telecine, screen or negative.
-                     Photo and projection variants use analytic example curves.
-                     Reversal stocks use screen regardless of the requested medium.
-  --negative <how>   Show the developed negative instead of the print it would
-                     make: 'lightbox' keeps the base its own orange, 'scanner'
-                     divides the base out. Ignored by a reversal stock, which
-                     has no negative
-  --filter <ids>     Absorbing filters on the front of the lens, comma separated
-                     and applied in order: w85b, w80a, w25, nd09, cc20m and the
-                     rest of the Wratten catalogue. Integrated spectrally
-                     against the stock's own layer sensitivities, so the same
-                     filter is a different filter on a different film
-  --filter-coating <c>  uncoated, singleLayer or multiCoated (default). Sets
-                     what each face reflects, and so what the filter costs in
-                     light and adds in veiling glare
-  --metering <m>     How the exposure was set behind the filter: ttl (default,
-                     the camera's own photopic cell), factor (the published
-                     filter factor, worked out against the emulsion) or none
-                     (a fixed manual exposure, so the light loss lands on the
-                     film)
-  --diffusion <f>    A diffusion filter: promist, blackpromist, glimmerglass,
-                     blackglimmerglass, fog, blackfog. A share of the light
-                     meets a particle and is scattered or absorbed; the share
-                     that missed every particle stays sharp
-  --diffusion-grade <g>  1/8, 1/4, 1/2, 1 or 2 (default: 1/4)
-  --focal <mm>       Lens focal length. Read by the diffusion filter, whose
-                     halo is focal length times scattering angle — the reason
-                     the same filter glows bigger on a longer lens. Default:
-                     the gauge's own normal lens
-  --seed <n>         Grain random seed (default: fixed)
-  --local-tone <0|1> Regional highlight/shadow keying (default: 1)
+  --hlg              Write the print as 16-bit Rec.2020 HLG instead of sRGB.
+                     Implies --depth 16.
+  --transport <json> Opt in to a layered transport construction (experimental)
+  --transport-backend <cpu|metal> Transport convolution backend (default: cpu)
+  --iterations <n>  Render n times; the first warms caches, remaining runs report
+                     processing time and throughput (31 measures 30 warm frames)
+  --halation-haze <mm> Support impurity scatter as a Gaussian sigma in
+                     millimeters (default: the stock's own figure)
+  --adjacency-model <m> gaussian or screened-diffusion (default: stock's model)
   --stages           Instead of one render, write the frame the film would make
                      with only the physics enabled up to each stage, into the
                      directory named as the output. It starts from every stage
@@ -170,22 +99,26 @@ Pack options (--seal-pack / --open-pack):
 
 The key comes from FOTUFILM_PACK_KEY (64 hex characters) and its id from
 FOTUFILM_PACK_KEY_ID, so neither reaches a shell history or a process listing.
-"""
+""".replacingOccurrences(of: "@CONTROL_FLAGS@", with: controlUsage)
 
 func fail(_ message: String) -> Never {
     FileHandle.standardError.write((message + "\n").data(using: .utf8)!)
     exit(1)
 }
 
+let valuelessControlFlags = Set(EditorControlCatalogue.all.compactMap { control -> String? in
+    guard control.offered(on: .cli), let flag = control.commandLine, flag.placeholder.isEmpty else { return nil }
+    return flag.flag
+})
 var positional: [String] = []
 var flags: [String: String] = [:]
 var args = Array(CommandLine.arguments.dropFirst())
 while !args.isEmpty {
     let a = args.removeFirst()
-    if a == "--list-web-media" || a == "--list-stocks" || a == "--list-formats" || a == "--dump-curves"
+    if a == "--list-web-media" || a == "--list-stocks" || a == "--list-stock-capabilities" || a == "--list-formats" || a == "--dump-curves"
         || a == "--dump-spectra" || a == "--help" || a == "-h"
         || a == "--autoexpose" || a == "--check-stocks" || a == "--make-pack-key"
-        || a == "--stages" || a == "--estimated-halation" || a == "--hlg" {
+        || a == "--stages" || a == "--hlg" || valuelessControlFlags.contains(a) {
         flags[a] = ""
     } else if a.hasPrefix("--") {
         guard !args.isEmpty else { fail("Missing value for \(a)\n\n\(usage)") }
@@ -200,9 +133,19 @@ if flags["--help"] != nil || flags["-h"] != nil {
     exit(0)
 }
 
-if flags["--list-stocks"] != nil {
+let benchmarkIterations: Int
+if let value = flags["--iterations"] {
+    guard let count = Int(value), count > 0 else { fail("--iterations requires a positive integer") }
+    benchmarkIterations = count
+} else {
+    benchmarkIterations = 1
+}
+
+if flags["--list-stocks"] != nil || flags["--list-stock-capabilities"] != nil {
     for (key, stock) in FilmStock.presets.sorted(by: { $0.key < $1.key }) {
-        print("\(key)\t\(stock.name)\t\(FilmFormat.nativeID(forStockID: key))")
+        let capability = flags["--list-stock-capabilities"] != nil
+            ? "\t\(stock.donorLayers.isEmpty ? "true" : "false")" : ""
+        print("\(key)\t\(stock.name)\t\(FilmFormat.nativeID(forStockID: key))\(capability)")
     }
     exit(0)
 }
@@ -508,16 +451,15 @@ func associatedOpenEXRColor(url: URL) -> CIImage? {
 
 /// Loads any supported image as associated scene-referred linear Rec.2020 RGBA, preserving values
 /// above 1 for HDR/raw sources. Association is retained until the caller composites the scene.
-func loadLinear(path: String, balance: WhiteBalance)
-    -> (rgba: [Float], width: Int, height: Int, remaining: WhiteBalance,
-        sceneKelvin: Float?, contentHeadroom: Float) {
+func loadLinear(path: String)
+    -> (rgba: [Float], width: Int, height: Int, sceneKelvin: Float?, sceneChromaticity: SIMD2<Float>?, contentHeadroom: Float) {
     let url = URL(fileURLWithPath: path)
     let isRaw = RawDecode.isRaw(url: url)
     let declaredHeadroom = isRaw ? nil : GainMapHeadroom.declared(url: url)
     let context = CIContext(options: [.useSoftwareRenderer: true, .cacheIntermediates: false])
     var image: CIImage?
-    var remaining = balance
     var sceneKelvin: Float?
+    var sceneChromaticity: SIMD2<Float>?
     var contentHeadroom: Float = 1
     var profileCorrection: CameraProfileCorrection.Resolved?
     var associatedEXRColor: CIImage?
@@ -525,24 +467,14 @@ func loadLinear(path: String, balance: WhiteBalance)
         guard let raw = CIRAWFilter(imageURL: url) else {
             fail("Could not read raw file: \(path)")
         }
-        let displacement = balance.mired
-            - WhiteBalance.kelvinToMired(WhiteBalance.neutralKelvin)
-        let asShot = raw.neutralTemperature > 0
-            ? WhiteBalance.kelvinToMired(raw.neutralTemperature) : nil
-        let placement = asShot.map {
-            RawDecode.placement(displacementMired: displacement, asShotMired: $0)
+        // Decode at the file's complete as-shot white once. Edits change the spectral lamp.
+        let white = raw.neutralChromaticity
+        let xy = SIMD2<Float>(Float(white.x), Float(white.y))
+        if xy.x > 0 && xy.y > 0 && xy.x + xy.y < 1 {
+            sceneChromaticity = xy
         }
-        RawDecode.configure(
-            raw,
-            recipe: RawDecode.Recipe(neutralKelvin: placement?.neutralKelvin ?? nil))
-        remaining = RawDecode.remainingBalance(displacementMired: displacement,
-                                               tint: balance.tint,
-                                               bakedMired: placement?.bakedMired)
-        // The illuminant-aware profile delta — the same wiring as the app's still path: the
-        // demosaic is already colorimetric under the as-shot balance, so only the delta of
-        // the profile's matrix against its daylight anchor may be applied, and only when the
-        // camera resolves and the scene was warm enough for it to differ from identity.
-        sceneKelvin = asShot.map(WhiteBalance.miredToKelvin)
+        sceneKelvin = raw.neutralTemperature > 0 ? raw.neutralTemperature : nil
+        RawDecode.configure(raw, recipe: RawDecode.Recipe())
         profileCorrection = CameraProfileCorrection.resolve(
             camera: RawDecode.cameraIdentity(url: url),
             sceneKelvin: sceneKelvin)
@@ -608,7 +540,7 @@ func loadLinear(path: String, balance: WhiteBalance)
         print(String(format: "Camera profile: %@ at %.0f K, max deviation %.4f",
                      corrected.profileID, corrected.cct, corrected.maxDeviation))
     }
-    return (rgba, width, height, remaining, sceneKelvin, contentHeadroom)
+    return (rgba, width, height, sceneKelvin, sceneChromaticity, contentHeadroom)
 }
 
 func parseLinearBackground(_ value: String?) -> SIMD3<Float> {
@@ -844,8 +776,8 @@ if let diffPath = flags["--diff"] {
     guard positional.count == 2 else {
         fail("--diff <out> takes two rendered images: fotufilm <a> <b> --diff <out>")
     }
-    let a = loadLinear(path: positional[0], balance: .neutral)
-    let b = loadLinear(path: positional[1], balance: .neutral)
+    let a = loadLinear(path: positional[0])
+    let b = loadLinear(path: positional[1])
     guard a.width == b.width, a.height == b.height else {
         fail("Images differ in size: \(a.width)x\(a.height) vs \(b.width)x\(b.height)")
     }
@@ -1133,6 +1065,15 @@ if let stated = flags["--scene-kelvin"] {
     options.sceneIlluminantKelvin = kelvin
 }
 options.format = FilmFormat.native(forStockID: stockID)
+for control in EditorControlCatalogue.all {
+    guard let flag = control.commandLine else { continue }
+    guard let text = flags[flag.flag] else { continue }
+    do {
+        try control.applyCommandLineValue(text, to: &options)
+    } catch {
+        fail(String(describing: error))
+    }
+}
 if let formatID = flags["--format"] {
     // `sensor` is the frame the input file says it was exposed on, cut from the film the stock
     // names — the app's own automatic gauge, asked for by hand here because the CLI is a
@@ -1161,8 +1102,6 @@ if let formatID = flags["--format"] {
         options.format = format
     }
 }
-if let ev = flags["--ev"] { options.exposureEV = Float(ev) ?? 0 }
-if let g = flags["--grain"] { options.grainScale = Float(g) ?? 1 }
 if let model = flags["--grain-model"] {
     switch model {
     case "clump": options.grainModel = .clumpField
@@ -1173,18 +1112,35 @@ if let model = flags["--grain-model"] {
         exit(2)
     }
 }
-if let h = flags["--halation"] { options.halationScale = Float(h) ?? 1 }
-if let c = flags["--halation-colour"] {
-    options.halationSourceColour = Float(c) ?? 0
-}
 if let z = flags["--halation-haze"] { options.halationHazeMM = Float(z) }
-options.useEstimatedHalationProfile = flags["--estimated-halation"] != nil
-// Capture veiling glare, off unless asked for: see Options.flareScale.
-if let f = flags["--flare"] { options.flareScale = Float(f) ?? 1 }
-if let c = flags["--couplers"] { options.couplerScale = Float(c) ?? 1 }
-if let b = flags["--bleach-bypass"] { options.bleachBypass = Float(b) ?? 0 }
+if let path = flags["--transport"] {
+    do {
+        let model = try JSONDecoder().decode(LayeredTransport.self,
+            from: Data(contentsOf: URL(fileURLWithPath: path)))
+        try model.validate()
+        options.layeredTransport = model
+    } catch { fail("Invalid transport construction: \(error.localizedDescription)") }
+}
+if let backend = flags["--transport-backend"] {
+    switch backend {
+    case "cpu": options.transportBackend = .cpu
+    case "metal": options.transportBackend = .metal
+    default: fail("--transport-backend requires cpu or metal")
+    }
+}
+if options.transportConstruction(for: stock) != nil {
+    if ["--stages", "--dump-wasm-stages"].contains(where: { flags[$0] != nil }) {
+        fail("Layered transport stage-sequence exports are not supported.")
+    }
+}
+if let model = flags["--adjacency-model"] {
+    guard let adjacency = AdjacencyModel(rawValue: model) else {
+        FileHandle.standardError.write(Data("unknown adjacency model '\(model)'; expected gaussian or screened-diffusion\n".utf8))
+        exit(1)
+    }
+    options.adjacencyModel = adjacency
+}
 if let m = flags["--mottle"] { options.grainMottleShare = Float(m) }
-if let s = flags["--shutter"] { options.shutterSeconds = Float(s) }
 if let p = flags["--push"] {
     guard let stops = Float(p), stops.isFinite else {
         fail("Invalid --push value '\(p)'; expected a measured stop value for this stock.")
@@ -1196,10 +1152,8 @@ if let p = flags["--push"] {
     }
     options.developmentEV = stops
 }
-if let y = flags["--expired"] { options.expiredYears = Float(y) ?? 0 }
 if let k = flags["--print-light"] { options.printViewingKelvin = Float(k) }
 if let s = flags["--seed"] { options.seed = UInt64(s) ?? options.seed }
-if let f = flags["--focal"] { options.focalLengthMM = Float(f) }
 if let coating = flags["--filter-coating"], FilterCoating(rawValue: coating) == nil {
     fail("Unknown coating '\(coating)'. Choices: "
          + FilterCoating.allCases.map(\.rawValue).joined(separator: ", "))
@@ -1246,10 +1200,6 @@ if let p = flags["--paper"] {
     }
     options.paper = choice
 }
-// The regional tone base is measured from the image being developed, so it is the one control the
-// exported pack cannot carry. Turning it off here is what makes a native render comparable to the
-// browser's.
-if let t = flags["--local-tone"] { options.localTone = t != "0" }
 if let n = flags["--negative"] {
     switch n {
     case "lightbox": options.negativeViewing = .lightBox
@@ -1329,7 +1279,7 @@ if let packPath = flags["--dump-wasm-pack"] {
 
     var pack = Data()
     pack.append(contentsOf: Array("FSWP".utf8))
-    pack.appendUInt32(2)
+    pack.appendUInt32(options.transportConstruction(for: stock) == nil ? 2 : 3)
     pack.appendInt32(Int32(packWidth))
     pack.appendInt32(Int32(packHeight))
     pack.appendInt32(invocation.featureMask)
@@ -1393,6 +1343,48 @@ if let packPath = flags["--dump-wasm-pack"] {
     }
 
     do {
+        if options.transportConstruction(for: stock) != nil {
+            let plan = try LayeredTransportRenderer.renderPlan(stock: stock, options: options,
+                                                              width: packWidth, height: packHeight)
+            guard plan.head.featureMask == FilmEngineFeature.lightOut else {
+                fail("Browser transport packs currently require lens flare and diffusion off")
+            }
+            func appendBands(_ component: TransportRenderPlan.Component) {
+                pack.appendInt32(Int32(component.bands.count))
+                for band in component.bands {
+                    pack.appendFloats([band.weight])
+                    pack.appendInt32(Int32(band.stencil.radius))
+                    pack.appendInt32(Int32(band.stencil.stride))
+                    pack.appendFloats(band.stencil.weights)
+                }
+            }
+            func appendDelta(_ values: [Float], base: [Float]) {
+                let changed = values.indices.filter { values[$0].bitPattern != base[$0].bitPattern }
+                pack.appendInt32(Int32(changed.count))
+                for index in changed { pack.appendInt32(Int32(index)); pack.appendFloats([values[index]]) }
+            }
+            pack.appendInt32(plan.head.featureMask)
+            pack.appendFloats(plan.head.configuration)
+            pack.appendFloats(plan.tail.configuration)
+            pack.appendInt32(Int32(plan.components.count))
+            for component in plan.components {
+                pack.appendFloats(component.exposure)
+                appendBands(component)
+            }
+            // Spectral tables do not depend on image size. Each size stores only its changed
+            // spatial configuration and pixel stencils, reusing the component LUTs above.
+            pack.appendInt32(Int32(ladder.count))
+            for shortEdge in ladder {
+                let longEdge = max(shortEdge, Int((Double(shortEdge) * Double(baseLongEdge) / Double(baseShortEdge)).rounded()))
+                let rung = try LayeredTransportRenderer.renderPlan(stock: stock, options: options,
+                                                                   width: longEdge, height: shortEdge)
+                precondition(rung.components.count == plan.components.count)
+                pack.appendInt32(Int32(shortEdge))
+                appendDelta(rung.head.configuration, base: plan.head.configuration)
+                appendDelta(rung.tail.configuration, base: plan.tail.configuration)
+                for component in rung.components { appendBands(component) }
+            }
+        }
         try pack.write(to: URL(fileURLWithPath: packPath))
     } catch {
         fail("Could not write \(packPath): \(error.localizedDescription)")
@@ -1519,13 +1511,21 @@ let balance = WhiteBalance(
     tint: flags["--tint"].flatMap { Float($0) } ?? 0)
 let background = parseLinearBackground(flags["--background"])
 
-var (rgba, width, height, remaining, sceneKelvin, contentHeadroom) =
-    loadLinear(path: positional[0], balance: balance)
+var (rgba, width, height, sceneKelvin, sceneChromaticity, contentHeadroom) =
+    loadLinear(path: positional[0])
 PremultipliedAlpha.flatten(&rgba, over: background)
-options.whiteBalance = remaining
-// The film-side scene light, from the raw file's as-shot record — the same wiring as the
-// app's still path. The gate inside the engine decides whether it does anything.
-options.sceneIlluminantKelvin = options.sceneIlluminantKelvin ?? sceneKelvin
+// A file with an as-shot record takes `--wb` as an edit against that light. A file without
+// one is already white balanced, so a stated `--wb` *is* the scene light and an unstated one
+// leaves the engine on the stock's own balance, where a neutral renders neutral.
+if sceneKelvin == nil, let stated = flags["--wb"].flatMap({ Float($0) }) {
+    options.sceneIlluminantKelvin = options.sceneIlluminantKelvin ?? stated
+    options.whiteBalance = WhiteBalance(kelvin: WhiteBalance.neutralKelvin,
+                                        tint: balance.tint)
+} else {
+    options.whiteBalance = balance
+    options.sceneIlluminantKelvin = options.sceneIlluminantKelvin ?? sceneKelvin
+}
+options.sceneIlluminantChromaticity = flags["--scene-kelvin"] == nil ? sceneChromaticity : nil
 // And the declared range, the other clip-side fact the app attaches: recorded light above
 // diffuse white is metered into the film's latitude instead of flattening to paper white.
 options.sceneHeadroom = contentHeadroom
@@ -1564,7 +1564,9 @@ if flags["--stages"] != nil {
                        directory: positional[1], depth: depth)
     exit(0)
 }
-let out = FotufilmEngine(stock: stock, options: options).process(linearRGB: linear)
+let out: ImageBuffer
+do { out = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: linear) }
+catch { fail("Render failed: \(error.localizedDescription)") }
 var reflectance = [Float](repeating: 1, count: width * height * 4)
 for i in 0..<(width * height) {
     reflectance[i * 4] = out.planes[0][i]
@@ -1580,6 +1582,28 @@ if hlgOutput {
                     depth: depth, seed: options.seed)
 }
 print("Processed \(width)x\(height) with \(stock.name) (halide) in \(String(format: "%.2f", elapsed))s -> \(positional[1])")
+if benchmarkIterations > 1 {
+    let count = benchmarkIterations
+    print("Benchmarking steady-state across \(count) iterations (warmup: \(String(format: "%.3f", elapsed))s)...")
+    var times = [Double]()
+    for iter in 2...count {
+        let t0 = DispatchTime.now().uptimeNanoseconds
+        do { _ = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: linear) }
+        catch { fail("Benchmark run \(iter) failed: \(error.localizedDescription)") }
+        let dt = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1_000_000_000
+        times.append(dt)
+        print(String(format: "  Run %d: %.3fs (%.1f ms)", iter, dt, dt * 1000))
+    }
+    let avg = times.reduce(0, +) / Double(times.count)
+    let minT = times.min() ?? 0
+    print(String(format: "Steady-state (runs 2..%d): avg %.3fs (%.1f ms), min %.3fs (%.1f ms)", count, avg, avg * 1000, minT, minT * 1000))
+    let sorted = times.sorted()
+    let median = sorted.count % 2 == 0
+        ? (sorted[sorted.count/2-1] + sorted[sorted.count/2]) / 2 : sorted[sorted.count/2]
+    let p95 = sorted[max(0, Int(ceil(Double(sorted.count)*0.95))-1)]
+    print(String(format: "Median %.1f ms, p95 %.1f ms, throughput %.2f fps; 30 fps budget 33.33 ms/frame",
+                 median*1000, p95*1000, 1/avg))
+}
 #else
 fail("Image I/O requires macOS (ImageIO). The FotufilmCore library itself is portable.")
 #endif
