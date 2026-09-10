@@ -121,6 +121,23 @@ final class LensCorrectionFilterTests: XCTestCase {
         }
     }
 
+    func testSubjectMaskFollowsGeometryWithoutVignettingOrChroma() {
+        let stack = LensCorrectionStack([
+            LensCorrection(distortion: .poly3(k1: -0.08),
+                           vignetting: .radial(k1: -0.4, k2: 0, k3: 0),
+                           lateralChroma: .linear(red: 1.02, blue: 0.98))
+        ])
+        let pixels = render(LensCorrectionFilter.apply(
+            radiusRamp(), stack: stack, geometryOnly: true))
+        for r in probes {
+            let got = pixel(pixels, atRadius: r)
+            let expected = stack.sample(atRadius: r).green
+            XCTAssertEqual(got.red, expected, accuracy: 0.004)
+            XCTAssertEqual(got.green, expected, accuracy: 0.004)
+            XCTAssertEqual(got.blue, expected, accuracy: 0.004)
+        }
+    }
+
     func testAFilesOwnWarpMovesThePixelsItSaysItDoes() {
         var correction = LensCorrection()
         correction.planeWarp = LensCorrection.PlaneWarp(

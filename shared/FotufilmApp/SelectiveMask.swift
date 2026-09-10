@@ -26,12 +26,15 @@ enum SelectiveMask {
     static func image(over source: CIImage, extent: CGRect,
                       state: SelectiveState,
                       subjects: SubjectMask.Reading?,
-                      colorSpace: CGColorSpace) -> CIImage? {
+                      colorSpace: CGColorSpace,
+                      placedSubject: CIImage? = nil) -> CIImage? {
         if state.kind == .subject {
-            guard let subjects else { return nil }
-            let chosen = state.subjectInstance.map { IndexSet(integer: $0) }
-                ?? subjects.allInstances
-            guard let mask = subjects.mask(of: chosen) else { return nil }
+            let detected = subjects.flatMap { reading in
+                reading.mask(of: state.subjectInstance.map { IndexSet(integer: $0) }
+                    ?? reading.allInstances)
+            }
+            guard let mask = placedSubject
+                ?? state.subjectMask.flatMap(SubjectMask.decoded) ?? detected else { return nil }
             return SubjectMask.fitted(mask, to: source,
                                       edge: state.subjectEdge,
                                       feather: state.subjectFeather)
@@ -62,13 +65,14 @@ enum SelectiveMask {
                           scene: CIImage?, state: SelectiveState,
                           subjects: SubjectMask.Reading?,
                           showMask: Bool, context: CIContext,
-                          colorSpace: CGColorSpace) -> CGImage? {
+                          colorSpace: CGColorSpace,
+                          preparedMask: CIImage? = nil) -> CGImage? {
         let base = CIImage(cgImage: ground)
         let extent = base.extent
         // The mask is read off the scene where there is one — the film has not moved those colours
         // yet — and off the print where there is not.
         let source = scene.map { fitted($0, to: extent) } ?? base
-        guard let mask = image(over: source, extent: extent, state: state,
+        guard let mask = preparedMask ?? image(over: source, extent: extent, state: state,
                                subjects: subjects, colorSpace: colorSpace)
         else { return nil }
 
@@ -94,8 +98,8 @@ enum SelectiveMask {
             ])?.outputImage
         }
         guard let output else { return nil }
-        return context.createCGImage(output, from: extent, format: .RGBA8,
-                                     colorSpace: colorSpace)
+        return context.createCGImage(output, from: extent, format: .RGBA16,
+                                     colorSpace: ground.colorSpace ?? colorSpace)
     }
 
     private static func fitted(_ image: CIImage, to extent: CGRect) -> CIImage {

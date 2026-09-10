@@ -62,19 +62,29 @@ public enum LensCorrectionFilter {
 
     /// Applies `stack` to `image`, which must be in linear light — the falloff is a light gain, and
     /// applying it to an encoded signal would lift the corners by the wrong amount.
+    /// Set `geometryOnly` for masks: use green-channel placement without chroma or falloff gain.
     ///
     /// The picture keeps the extent it arrived with. Where the correction reaches past the frame the
     /// edge pixel is held rather than going transparent, so a barrel correction leaves stretched
     /// corners instead of empty wedges; `LensCorrectionStack.sourceReach` tells a caller how far in
     /// to crop if it wants neither.
     public static func apply(_ image: CIImage,
-                             stack: LensCorrectionStack) -> CIImage {
+                             stack: LensCorrectionStack,
+                             geometryOnly: Bool = false) -> CIImage {
         guard !stack.isIdentity, let kernel else { return image }
         let extent = image.extent
         guard extent.width > 1, extent.height > 1, extent.isInfinite == false
         else { return image }
-        guard let curve = curveImage(
-            stack.resamplingTable(entries: tableEntries)) else { return image }
+        var table = stack.resamplingTable(entries: tableEntries)
+        if geometryOnly {
+            // A mask follows the green-channel geometry, without color shifts or light gain.
+            for i in stride(from: 0, to: table.count, by: 4) {
+                table[i] = table[i + 1]
+                table[i + 2] = table[i + 1]
+                table[i + 3] = 1
+            }
+        }
+        guard let curve = curveImage(table) else { return image }
 
         let centre = CIVector(x: extent.midX, y: extent.midY)
         let halfDiagonal = 0.5 * sqrt(extent.width * extent.width

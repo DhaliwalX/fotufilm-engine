@@ -26,7 +26,7 @@ enum SelectiveRender {
 }
 
 /// Builds desktop selective-grade controls using shared `SelectiveState` and `SelectiveMask`.
-/// Selective state is session-only and is not persisted or applied to exports.
+/// Selective edits share the photograph's save, undo and export paths.
 @MainActor
 enum SelectiveSection {
     static func sections(model: DesktopEditorModel,
@@ -48,14 +48,17 @@ enum SelectiveSection {
 
         if model.selective.kind == .subject {
             selection.add(NoteRow(status: true) { [model] in
+                if model.selective.subjectMask != nil, model.subjectReading == nil {
+                    return "Using the saved subject selection."
+                }
                 guard model.subjectsSettled else {
-                    return "Looking for a subject in the photograph…"
+                    return "Finding subjects…"
                 }
                 let count = model.subjectReading?.allInstances.count ?? 0
                 switch count {
-                case 0: return "Nothing in this photograph reads as a subject."
-                case 1: return "One subject lifted from the background."
-                default: return "\(count) subjects lifted from the background."
+                case 0: return "No subjects found."
+                case 1: return "One subject found."
+                default: return "\(count) subjects found."
                 }
             })
             selection.add(adjustment(
@@ -136,8 +139,8 @@ enum SelectiveSection {
             { [model] in model.selective.edit.saturation = $0 }))
         light.add(ButtonRow(
             "Match the Photograph",
-            enabled: { [model] in model.selective.edit != model.edit }) {
-                [model] in model.selective.edit = model.edit
+            enabled: { [model] in model.selective.edit != SelectiveDevelop(model.edit) }) {
+                [model] in model.selective.edit = SelectiveDevelop(model.edit)
             })
         sections.append(light)
 
@@ -147,7 +150,7 @@ enum SelectiveSection {
                model.selective.samplePoint == nil {
                 return "Sample a point to select areas with a similar color or brightness, then adjust the selection."
             }
-            return "Selective adjustments appear in the preview only. They are not saved with the document or included in exports."
+            return "Selective adjustments are saved with the photo and included in photo exports."
         })
         #if canImport(UIKit)
         sections.append(note)

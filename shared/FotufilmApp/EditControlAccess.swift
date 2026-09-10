@@ -126,7 +126,7 @@ extension EditorControlField {
             return .bespoke { $0.rotation != 0 }
         case .flip: return .flag(\.flipH)
         case .selective:
-            return .bespoke { _ in false }
+            return .bespoke { $0.selective != nil }
 
         case .colorSpace, .stage, .textureStages, .renderMode:
             return .unstored("a plugin host's own setting")

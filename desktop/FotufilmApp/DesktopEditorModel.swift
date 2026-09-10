@@ -96,28 +96,40 @@ final class DesktopEditorModel {
 
     // MARK: - The selection
 
-    /// Active local selection and grade. This editor-only state is not persisted in exports.
+    /// The panel's editable selection; completed masks are recorded by the ordinary edit session.
     var selective = SelectiveState() {
         didSet {
-            guard selective != oldValue, isSelectiveMode,
+            guard selective != oldValue,
                   !isResettingSelection else { return }
-            // A selection change re-composites but does not touch the edit, so it does not go
-            // through `editChanged` and has to ask for the render itself.
+            if selective.kind == .subject,
+               oldValue.kind != .subject || selective.subjectInstance != oldValue.subjectInstance {
+                if let mask = subjectReading?.encodedMask(instance: selective.subjectInstance) {
+                    isResettingSelection = true
+                    selective.subjectMask = mask
+                    isResettingSelection = false
+                }
+            }
+            if edit.selective != selective.saved {
+                isPublishingSelection = true
+                edit.selective = selective.saved
+                isPublishingSelection = false
+                return
+            }
             pending = (edit, editSession.isContinuousEditActive)
             isProcessing = true
             drain()
         }
     }
 
-    /// Whether the selective panel is up. The composite costs a second develop of every frame, so
-    /// it is only paid for while the panel that shows it is on screen.
+    /// Panel visibility only controls sampling and the temporary mask overlay.
     var isSelectiveMode = false {
         didSet {
             guard isSelectiveMode != oldValue else { return }
-            if isSelectiveMode, !selective.seeded {
-                // Opens changing nothing: the selection's develop starts as the photograph's.
-                selective.edit = edit
-                selective.seeded = true
+            if isSelectiveMode,
+               !(selective.kind == .subject && !subjectsSettled && selective.seeded) {
+                isResettingSelection = true
+                selective = SelectiveState(base: edit)
+                isResettingSelection = false
             }
             if isSelectiveMode { startSubjectDetection() }
             pending = (edit, false)
@@ -143,15 +155,9 @@ final class DesktopEditorModel {
     var isSamplingSelection = false
 
     private var isResettingSelection = false
+    private var isPublishingSelection = false
 
     private var selectionSource: (key: FilmRender.SceneKey, image: CGImage)?
-
-    /// The develop that produces it: no film, and every control at rest.
-    nonisolated private static let restingDevelop: EditState = {
-        var state = EditState()
-        state.stockID = StockPreset.noFilmID
-        return state
-    }()
 
     /// What the detector found in this photograph, once.
     private(set) var subjectReading: SubjectMask.Reading?
@@ -160,14 +166,12 @@ final class DesktopEditorModel {
 
     /// Whether the selection has anything to select by yet.
     var hasSelection: Bool {
-        selective.kind == .subject
-            ? (subjectReading != nil)
-            : (selective.samplePoint != nil)
+        selective.hasSelection
     }
 
     /// Whether the composite is what the canvas is showing.
     var isCompositing: Bool {
-        isSelectiveMode && (hasSelection || showsSelectionMask)
+        edit.selective != nil || (isSelectiveMode && showsSelectionMask)
     }
 
     /// Reads a colour out of the photograph at a point in unit image coordinates, origin top
@@ -196,9 +200,8 @@ final class DesktopEditorModel {
     /// Back to no selection, with the selection's own develop reseeded from the photograph's.
     func clearSelection() {
         var next = SelectiveState()
-        next.edit = edit
+        next.edit = SelectiveDevelop(edit)
         next.seeded = true
-        next.kind = selective.kind
         selective = next
     }
 
@@ -214,10 +217,10 @@ final class DesktopEditorModel {
             self.subjectReading = reading
             self.subjectsSettled = true
             self.subjectTask = nil
-            if self.isSelectiveMode, self.selective.kind == .subject {
-                self.pending = (self.edit, false)
-                self.isProcessing = true
-                self.drain()
+            if self.selective.kind == .subject {
+                if self.selective.subjectMask == nil {
+                    self.selective.subjectMask = reading?.encodedMask(instance: self.selective.subjectInstance)
+                }
             }
         }
     }
@@ -376,6 +379,11 @@ final class DesktopEditorModel {
     }
 
     private func editChanged(from old: EditState, restoring: Bool) {
+        if !isPublishingSelection, old.selective != edit.selective || restoring {
+            isResettingSelection = true
+            selective = SelectiveState(base: edit)
+            isResettingSelection = false
+        }
         if autoAdjustActive, !isApplyingAuto {
             let autoWindowChanged = old.stockID != edit.stockID
                 || old.printCorrection != edit.printCorrection
@@ -875,11 +883,8 @@ final class DesktopEditorModel {
         let session = renderSession
 
         let negative = negativeViewing
-        // The selection's own develop, and the picture the mask is weighed against. Both nil
-        // unless the selective panel is up, so an ordinary edit pays for exactly one develop.
-        let selection = isCompositing ? selective : nil
-        let subjects = subjectReading
-        let showMask = showsSelectionMask
+        let selection = selective
+        let showMask = isSelectiveMode && showsSelectionMask
         let fullKey = FilmRender.SceneKey(state: state, longEdge: nil)
         let draftKey = FilmRender.SceneKey(state: state, longEdge: draftTarget)
         let renderKey = draft ? draftKey : fullKey
@@ -894,7 +899,7 @@ final class DesktopEditorModel {
         Task { [weak self] in
             let rendered = await Task.detached(priority: .userInitiated) {
                 () -> (full: FilmRender.Scene?, draft: FilmRender.Scene?,
-                       image: CGImage?, selectionSource: CGImage?)? in
+                       image: CGImage?, selectionSource: CGImage?, print: CGImage?)? in
                 let renderScene: FilmRender.Scene
                 if draft {
                     guard let reduced = cachedDraft ?? FilmRender.scene(
@@ -913,31 +918,30 @@ final class DesktopEditorModel {
                 // edit: geometry-exact against the print, and steady while the edit moves.
                 let plain: CGImage? = wantsSelectionSource
                     ? (cachedSelectionSource
-                        ?? FilmRender.develop(renderScene, state: Self.restingDevelop)?
-                            .image.image)
+                        ?? FilmRender.selectionSource(renderScene))
                     : nil
                 let maskSource = plain.map(CIImage.init(cgImage:))
+                var completedPrint: CGImage?
                 func print(_ scene: FilmRender.Scene) -> CGImage? {
                     let ground = FilmRender.develop(scene, state: state,
                                                     negative: negative)?
                         .image.image
-                    guard let ground, let selection else { return ground }
-                    // The second develop is the selection's own edit over the same scene; the two
-                    // are then blended through the mask. Skipped where the mask itself is being
-                    // shown, which needs the ground and the weights and nothing else.
-                    let over = showMask ? nil
-                        : FilmRender.develop(scene, state: selection.edit,
-                                             negative: negative)?.image.image
+                    completedPrint = ground
+                    guard let ground, showMask, let plain,
+                          let mask = FilmRender.selectionMask(scene, state: selection, source: plain)
+                    else { return ground }
                     return SelectiveMask.composite(
-                        ground: ground, selection: over, scene: maskSource,
-                        state: selection, subjects: subjects,
+                        ground: ground, selection: nil, scene: maskSource,
+                        state: selection, subjects: nil,
                         showMask: showMask, context: SelectiveRender.context,
-                        colorSpace: SelectiveRender.space) ?? ground
+                        colorSpace: SelectiveRender.space, preparedMask: mask) ?? ground
                 }
                 if draft {
-                    return (cachedFull, renderScene, print(renderScene), plain)
+                    let image = print(renderScene)
+                    return (cachedFull, renderScene, image, plain, completedPrint)
                 }
-                return (renderScene, cachedDraft, print(renderScene), plain)
+                let image = print(renderScene)
+                return (renderScene, cachedDraft, image, plain, completedPrint)
             }.value
             guard let self else { return }
             if self.renderSession == session, let rendered {
@@ -951,8 +955,9 @@ final class DesktopEditorModel {
                     self.developedLongEdge = max(image.width, image.height)
                     // The shelf's thumbnail is the print, never the negative the canvas may be
                     // showing instead.
-                    if !draft, !strip, negative == nil, selection == nil {
-                        self.lastPrint = image
+                    if !draft, !strip, negative == nil, self.edit == state {
+                        self.lastPrint = rendered.print
+                        if state.selective != nil { self.editSession.schedulePersist() }
                     }
                 }
             }
