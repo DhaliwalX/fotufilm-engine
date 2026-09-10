@@ -16,6 +16,9 @@ import FotufilmCore
 /// are omitted because they do not apply on macOS.
 final class SettingsSheetController: SessionViewController {
     var onClose: (() -> Void)?
+    #if !canImport(UIKit)
+    var pane: MacSettingsPane = .general
+    #endif
 
     private let column = ScrollColumn(inset: 0, pad: 4, bottom: 8)
     private var rows: [FormRowView] = []
@@ -25,7 +28,26 @@ final class SettingsSheetController: SessionViewController {
 
     private var settings: AppSettings { .shared }
 
+    private func makeSection(_ title: String?) -> FormSectionView {
+        #if canImport(UIKit)
+        return FormSectionView(title: title)
+        #else
+        return FormSectionView(title: title, standardHeading: true)
+        #endif
+    }
+
     override func loadView() {
+        #if !canImport(UIKit)
+        let root = SessionView(frame: CGRect(x: 0, y: 0, width: 560, height: 510))
+        root.addSubview(column)
+        NSLayoutConstraint.activate([
+            column.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 24),
+            column.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -24),
+            column.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
+            column.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16),
+        ])
+        view = root
+        #else
         let root = SessionView(frame: CGRect(x: 0, y: 0, width: 520,
                                              height: 640))
 
@@ -64,17 +86,11 @@ final class SettingsSheetController: SessionViewController {
             buttons.bottomAnchor.constraint(
                 equalTo: root.safeAreaLayoutGuide.bottomAnchor, constant: -18),
         ])
-        #if canImport(UIKit)
         // A form sheet uses this when there is room, but may shrink in Split View or Stage Manager.
         // Hard minimums made the same form clip and log broken constraints in those widths.
         preferredContentSize = root.frame.size
-        #else
-        NSLayoutConstraint.activate([
-            root.widthAnchor.constraint(greaterThanOrEqualToConstant: 500),
-            root.heightAnchor.constraint(greaterThanOrEqualToConstant: 520),
-        ])
-        #endif
         view = root
+        #endif
     }
 
     override func viewDidLoad() {
@@ -120,18 +136,26 @@ final class SettingsSheetController: SessionViewController {
     }
 
     private func sections() -> [FormSectionView] {
+        #if !canImport(UIKit)
+        switch pane {
+        case .general: return [newPhotos(), reset()]
+        case .output: return output() + [negativePreview()]
+        case .filmModel: return filmModel()
+        }
+        #else
         var result: [FormSectionView] = []
         #if os(iOS)
         if !ProAccess.purchased { result.append(proPurchase()) }
         #endif
-        result += [newPhotos(), output(), negativePreview(), filmModel()]
+        result += [newPhotos()] + output() + [negativePreview()] + filmModel()
         result.append(reset())
         return result
+        #endif
     }
 
     #if os(iOS)
     private func proPurchase() -> FormSectionView {
-        let section = FormSectionView(title: "Fotufilm Pro")
+        let section = makeSection("Fotufilm Pro")
         section.add(ButtonRow("Unlock Fotufilm Pro…") {
             ProGate.present()
         })
@@ -147,7 +171,7 @@ final class SettingsSheetController: SessionViewController {
     // MARK: - New photos
 
     private func newPhotos() -> FormSectionView {
-        let section = FormSectionView(title: "New Photos")
+        let section = makeSection("New Photos")
 
         // Films this build cannot load are left out rather than shown locked: a starting film is
         // what every new photograph opens on, and one that will not load is a setting that
@@ -173,9 +197,9 @@ final class SettingsSheetController: SessionViewController {
             "Suggest a Film Automatically",
             get: { AppSettings.shared.autoStock },
             set: { AppSettings.shared.autoStock = $0 }))
-        section.add(NoteRow("Chooses a film for each photograph as it opens, learning from the films you keep. Your own choice always wins."))
+        section.add(NoteRow("Suggests a film when you open a photo, based on your previous choices. You can select a different film at any time."))
         section.add(ButtonRow(
-            "Forget What I’ve Taught It", destructive: true,
+            "Reset Film Suggestions", destructive: true,
             enabled: { StockPreferenceStore.shared.hasLearnedAnything }) {
                 StockPreferenceStore.shared.forget()
             })
@@ -184,50 +208,61 @@ final class SettingsSheetController: SessionViewController {
 
     // MARK: - Output
 
-    private func output() -> FormSectionView {
-        let section = FormSectionView(title: "Output")
+    private func output() -> [FormSectionView] {
+        #if canImport(UIKit)
+        let photos = makeSection("Output")
+        let videos = photos
+        #else
+        let photos = makeSection("Photos")
+        let videos = makeSection("Video")
+        #endif
         let ranges = AppSettings.DynamicRange.allCases.map {
             (title: $0 == .hdr ? "HDR" : "Standard", value: $0)
         }
-        section.add(PopUpRow<AppSettings.DynamicRange>(
+        photos.add(PopUpRow<AppSettings.DynamicRange>(
             "Photos", options: ranges,
             get: { AppSettings.shared.stillDynamicRange },
             set: { AppSettings.shared.stillDynamicRange = $0 }))
-        section.add(PopUpRow<AppSettings.DynamicRange>(
+        videos.add(PopUpRow<AppSettings.DynamicRange>(
             "Videos", options: ranges,
             get: { AppSettings.shared.videoDynamicRange },
             set: { AppSettings.shared.videoDynamicRange = $0 }))
-        section.add(NoteRow("Standard works everywhere. HDR keeps the highlights the film developed above paper white, on a screen that can show them."))
+        photos.add(NoteRow("HDR preserves brighter highlights on compatible displays. Choose Standard for wider compatibility."))
 
-        section.add(PopUpRow<AppSettings.RenderingMode>(
+        photos.add(PopUpRow<AppSettings.RenderingMode>(
             "Photo Quality",
             options: AppSettings.RenderingMode.allCases.map {
                 (title: $0.label, value: $0)
             },
             get: { AppSettings.shared.renderingMode },
             set: { AppSettings.shared.renderingMode = $0 }))
-        section.add(PopUpRow<AppSettings.VideoDevelopQuality>(
+        videos.add(PopUpRow<AppSettings.VideoDevelopQuality>(
             "Video Quality",
             options: AppSettings.VideoDevelopQuality.allCases.map {
                 (title: $0.label, value: $0)
             },
             get: { AppSettings.shared.videoDevelopQuality },
             set: { AppSettings.shared.videoDevelopQuality = $0 }))
-        section.add(PopUpRow<AppSettings.VideoExportBitrate>(
+        videos.add(PopUpRow<AppSettings.VideoExportBitrate>(
             "Video File Size",
             options: AppSettings.VideoExportBitrate.allCases.map {
                 (title: $0.label, value: $0)
             },
             get: { AppSettings.shared.videoExportBitrate },
             set: { AppSettings.shared.videoExportBitrate = $0 }))
-        section.add(NoteRow("Accurate evaluates the film’s curves exactly; fast interpolates them. Video quality decides whether a clip develops at its own resolution or at the fast road’s internal 1080p."))
-        return section
+        photos.add(NoteRow("Accurate uses exact film curves. Fast uses an approximation to reduce processing time."))
+        videos.add(NoteRow("Video quality sets the processing resolution. Full uses the source resolution; Fast processes at up to 1080p. HDR preserves brighter highlights on compatible displays."))
+        #if canImport(UIKit)
+        return [photos]
+        #else
+        return [photos, videos]
+        #endif
     }
 
     // MARK: - Negative output and preview
 
     private func negativePreview() -> FormSectionView {
-        let section = FormSectionView(title: "Negative")
+        let section = makeSection("Negative")
         section.add(PopUpRow<NegativeViewing>(
             "Reading",
             options: NegativeViewing.allCases.map {
@@ -235,45 +270,54 @@ final class SettingsSheetController: SessionViewController {
             },
             get: { AppSettings.shared.negativeViewing },
             set: { AppSettings.shared.negativeViewing = $0 }))
-        section.add(NoteRow("Controls negative output and Show Negative in the editor. A light box sets its lamp so the clear film base sits just under white and keeps the orange mask; a scanner divides by the film base, so the orange mask reads white."))
+        section.add(NoteRow("Sets how negatives are displayed and exported. Light Box keeps the film’s orange mask. Scanner removes the mask so the clear film base appears white."))
         return section
     }
 
     // MARK: - Film model
 
-    private func filmModel() -> FormSectionView {
-        let section = FormSectionView(title: "Film Model")
-        section.add(ToggleRow(
+    private func filmModel() -> [FormSectionView] {
+        #if canImport(UIKit)
+        let grain = makeSection("Film Model")
+        let halation = grain
+        let separation = grain
+        #else
+        let grain = makeSection("Grain")
+        let halation = makeSection("Halation")
+        let separation = makeSection("Color Separation")
+        #endif
+        grain.add(ToggleRow(
             "Disc Grain",
             get: { AppSettings.shared.discGrainEnabled },
             set: { AppSettings.shared.discGrainEnabled = $0 }))
-        section.add(PopUpRow<HalationModel>(
+        grain.add(NoteRow("Disc Grain draws individual grains when they are large enough to be visible."))
+        halation.add(PopUpRow<HalationModel>(
             "Halation Model",
             options: HalationModel.allCases.map { (title: $0.name, value: $0) },
             get: { AppSettings.shared.halationModel },
             set: { AppSettings.shared.halationModel = $0 }))
-        section.add(NoteRow("Layered Transport traces light through the film stack. Films without a measured construction use an illustrative model. Donor-layer films require Legacy. Estimated Halation Shape applies to Legacy."))
-        section.add(ToggleRow(
+        halation.add(NoteRow("Layered Transport simulates light moving through the film layers. It uses an approximation when measurements are unavailable. Films with donor layers require Legacy. Estimated Halation Shape only affects Legacy."))
+        halation.add(ToggleRow(
             "Estimated Halation Shape",
             get: { AppSettings.shared.estimatedHalationEnabled },
             set: { AppSettings.shared.estimatedHalationEnabled = $0 }))
 
-        section.add(couplerRow("Color Separation",
+        separation.add(couplerRow("Color Separation",
                                get: { AppSettings.shared.couplerRange },
                                set: { AppSettings.shared.couplerRange = $0 }))
-        section.add(couplerRow(
+        separation.add(couplerRow(
             "Red–Green",
             get: { AppSettings.shared.couplerBarrierRedGreen },
             set: { AppSettings.shared.couplerBarrierRedGreen = $0 }))
-        section.add(couplerRow(
+        separation.add(couplerRow(
             "Green–Blue",
             get: { AppSettings.shared.couplerBarrierGreenBlue },
             set: { AppSettings.shared.couplerBarrierGreenBlue = $0 }))
-        section.add(couplerRow("Edge Contrast",
+        separation.add(couplerRow("Edge Contrast",
                                get: { AppSettings.shared.couplerSelf },
                                set: { AppSettings.shared.couplerSelf = $0 }))
-        section.add(NoteRow("These apply to every film and start every new photograph, which then carries its own. Color separation moves both layer pairs together; set a pair on its own to separate them. Edge contrast is the subtle sharpening development itself creates."))
-        section.add(ButtonRow(
+        separation.add(NoteRow("These defaults apply to all films and new photos. Color Separation adjusts both color pairs together. Red–Green and Green–Blue adjust each pair separately. Edge Contrast controls sharpening caused by development."))
+        separation.add(ButtonRow(
             "Restore Film Model", destructive: true,
             enabled: { AppSettings.isFilmModelAdjusted }) {
                 let settings = AppSettings.shared
@@ -283,7 +327,11 @@ final class SettingsSheetController: SessionViewController {
                 settings.estimatedHalationEnabled =
                     AppSettings.defaultEstimatedHalationEnabled
             })
-        return section
+        #if canImport(UIKit)
+        return [grain]
+        #else
+        return [grain, halation, separation]
+        #endif
     }
 
     private func couplerRow(_ title: String, get: @escaping () -> Double,
@@ -298,7 +346,7 @@ final class SettingsSheetController: SessionViewController {
     // MARK: - Reset
 
     private func reset() -> FormSectionView {
-        let section = FormSectionView(title: nil)
+        let section = makeSection(nil)
         section.add(ButtonRow("Reset All Settings", destructive: true) {
             [weak self] in self?.confirmReset()
         })
@@ -331,21 +379,15 @@ final class SettingsSheetController: SessionViewController {
         #endif
     }
 
-    /// Escape. `NSResponder.cancelOperation` forwards to this selector, which is how the export
-    /// sheets take it too — without it the sheet closes and the editor never hears, and the flag
-    /// that keeps two sheets from standing at once stays raised for the rest of the session.
-    ///
-    /// A form sheet on the iPad is dismissed by dragging it down, which is not a responder
-    /// message at all; `viewDidDisappear` below is what catches that, and it catches Escape as
-    /// well. Both are here because the cost of missing either is the same: a session that will
-    /// never open another sheet.
+    /// Release the iPad sheet state after either Done or a swipe dismissal.
+    /// On the Mac, Escape closes the independent settings window.
     #if canImport(UIKit)
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         finish()
     }
     #else
-    @objc func cancel(_ sender: Any?) { close() }
+    @objc func cancel(_ sender: Any?) { view.window?.performClose(sender) }
 
     override func viewDidDisappear() {
         super.viewDidDisappear()

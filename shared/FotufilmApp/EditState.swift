@@ -480,16 +480,14 @@ struct EditState: Equatable {
             let gauge = FilmFormat.native(forStockID: stockID).name
             // Normal has no emulsion or native gauge, so describe the fallback as enlargement.
             guard hasFilm else {
-                return "With no film loaded there is nothing cut to a gauge, so this only "
-                    + "decides how far the picture is enlarged — \(gauge) until you "
-                    + "choose otherwise."
+                return "No film is selected. The default frame size is \(gauge)."
             }
             let name = StockPreset.preset(id: stockID)?.name ?? "This film"
             return "\(name) uses \(gauge), and changing the film changes the format with it."
         }
         return """
-        This picture was taken on a \(sensor.frameSize) frame, so it is developed on \
-        \(sensor.gauge.format.name) — the nearest gauge film was ever cut to.
+        The camera’s frame size is \(sensor.frameSize). Fotufilm uses the closest film format: \
+        \(sensor.gauge.format.name).
         """
     }
 

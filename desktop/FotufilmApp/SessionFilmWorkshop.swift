@@ -675,8 +675,7 @@ final class FilmWorkshopController: SessionViewController {
             libraryRows.append(row)
         }
         if films.isEmpty {
-            add(NoteRow("Nothing here yet. Everything below makes a film; "
-                        + "Save keeps it."))
+            add(NoteRow("No custom films yet. Edit the settings below, then choose Save."))
         }
 
         add(ButtonBarRow([

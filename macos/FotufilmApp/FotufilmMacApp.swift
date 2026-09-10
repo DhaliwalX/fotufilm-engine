@@ -179,6 +179,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Menu commands
 
+    @MainActor @objc func openSettings(_ sender: Any?) {
+        MacSettingsWindowController.shared.showWindow(sender)
+    }
+
     @MainActor @objc func importScannedNegative(_ sender: Any?) {
         guard negativeImporter == nil, let editorWindow = windowController?.window,
               let model = windowController?.editor.model else { return }
