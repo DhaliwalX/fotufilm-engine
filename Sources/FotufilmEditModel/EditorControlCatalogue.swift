@@ -102,15 +102,15 @@ public enum EditorControlCatalogue {
     ]
 
     public static let mottleShares: [EditorMenuChoice] = [
-        EditorMenuChoice(nil, "Film’s Own", detail: "Whatever this stock’s sheet states", id: "film"),
-        EditorMenuChoice(0, "None", detail: "One clump radius, the single-population field", id: "none"),
-        EditorMenuChoice(0.2, "Light · 20%", detail: "A trace of coarse structure under the grain",
+        EditorMenuChoice(nil, "Film’s Own", detail: "Use the film’s default amount", id: "film"),
+        EditorMenuChoice(0, "None", detail: "No added coarse clusters", id: "none"),
+        EditorMenuChoice(0.2, "Light · 20%", detail: "A small amount of coarse grain",
                          id: "light"),
-        EditorMenuChoice(0.45, "Moderate · 45%", detail: "The two populations about even",
+        EditorMenuChoice(0.45, "Moderate · 45%", detail: "Similar amounts of fine and coarse grain",
                          id: "moderate"),
-        EditorMenuChoice(0.7, "Heavy · 70%", detail: "The coarse field carries most of the variance",
+        EditorMenuChoice(0.7, "Heavy · 70%", detail: "Mostly coarse grain",
                          id: "heavy"),
-        EditorMenuChoice(0.9, "Maximum · 90%", detail: "The engine’s ceiling", id: "maximum"),
+        EditorMenuChoice(0.9, "Maximum · 90%", detail: "Maximum coarse grain", id: "maximum"),
     ]
 
     public static let shutterLadder: [Double] = [1, 2, 4, 8, 15, 30, 60, 120, 240, 480]
@@ -169,7 +169,7 @@ public enum EditorControlCatalogue {
     private static let film: [EditorControl] = [
         EditorControl(
             .stock, title: "Film",
-            detail: "The emulsion the photograph is exposed on",
+            detail: "Choose the film used to render the photo.",
             section: .filmStock, kind: .menu(.dynamic(.stocks)),
             drives: [],
             surfaces: [.app, .desktop, .android, .resolve, .finalcut, .web, .cli],
@@ -184,7 +184,7 @@ public enum EditorControlCatalogue {
             documentation: "Selects the emulsion. Normal preserves the source frame without film transformation."),
         EditorControl(
             .gauge, title: "Format",
-            detail: "The gauge the frame is exposed on, or the film's own",
+            detail: "Set the film frame size, which affects visible grain and halation.",
             section: .filmStock, kind: .menu(.dynamic(.gauges)),
             drives: ["format"],
             surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
@@ -229,7 +229,7 @@ public enum EditorControlCatalogue {
 
         EditorControl(
             .grain, title: "Grain",
-            detail: "How much of the stock's published granularity develops",
+            detail: "Adjust grain strength relative to the selected film.",
             section: .filmGrain,
             kind: .slider(EditorControlScale(0...2, neutral: 1, unit: .multiplier)),
             availability: .film,
@@ -245,7 +245,7 @@ public enum EditorControlCatalogue {
             documentation: "Scales calibrated silver or dye-cloud grain variance. Black-and-white films use continuous silver texture so individual samples do not appear as dots."),
         EditorControl(
             .grainMottle, title: "Mottle",
-            detail: "The soft coarse clumping under the sharp grain",
+            detail: "Add larger, softer clusters to the grain pattern.",
             section: .filmGrain, kind: .menu(.fixed(mottleShares)), availability: .film,
             persistence: .bespoke,
             binding: .grainMottleShare,
@@ -265,7 +265,7 @@ public enum EditorControlCatalogue {
             documentation: "Modulates low-frequency grain clump covariance."),
         EditorControl(
             .mottleOverride, title: "Mottle",
-            detail: "Use the stock's coarse grain mixture, or set a custom share",
+            detail: "Use the film’s default grain clumping or choose an amount.",
             section: .filmGrain,
             kind: .menu(.fixed([EditorMenuChoice(0, "Stock Default", id: "stock"),
                                 EditorMenuChoice(1, "Custom", id: "custom")])),
@@ -281,7 +281,7 @@ public enum EditorControlCatalogue {
                 order: 20)),
         EditorControl(
             .mottleShare, title: "Mottle Amount",
-            detail: "Share of grain variance carried by coarse clumping",
+            detail: "Set how much of the grain pattern comes from larger clusters.",
             section: .filmGrain,
             kind: .slider(EditorControlScale(0...0.9, neutral: 0, unit: .percent)),
             scope: .hostOnly,
@@ -296,7 +296,7 @@ public enum EditorControlCatalogue {
                 kind: .double(min: 0, max: 90, value: 0), paramScale: 0.01, clamp: 0...0.9, order: 30)),
         EditorControl(
             .grainAnimation, title: "Grain Animation",
-            detail: "Whether the grain field advances with the timeline",
+            detail: "Choose whether the grain pattern changes between video frames.",
             section: .filmGrain,
             kind: .menu(.fixed([EditorMenuChoice(0, "Timeline", id: "timeline"),
                                 EditorMenuChoice(1, "Frozen", id: "frozen")])),
@@ -313,7 +313,7 @@ public enum EditorControlCatalogue {
                 order: 40)),
         EditorControl(
             .grainModel, title: "Disc Grain",
-            detail: "Resolve single grains where one covers an output pixel",
+            detail: "Draw individual grains when they are large enough to be visible.",
             section: .filmGrain, kind: .toggle(restingOn: false), availability: .film,
             persistence: .key("discGrain", .same),
             binding: .discGrain,
@@ -340,7 +340,7 @@ public enum EditorControlCatalogue {
             documentation: "Enables discrete tabular grain disc rendering where emulsion grain clumps resolve at output pixels."),
         EditorControl(
             .seed, title: "Grain Seed",
-            detail: "Same seed and same frame give the same grain",
+            detail: "Choose a grain pattern. The same seed and frame produce the same pattern.",
             section: .filmGrain, kind: .takeover, availability: .film,
             persistence: .bespoke,
             binding: .seed,
@@ -362,7 +362,7 @@ public enum EditorControlCatalogue {
 
         EditorControl(
             .halationModel, title: "Halation Model",
-            detail: "Legacy or layered optical transport",
+            detail: "Choose how light is scattered and reflected within the film.",
             section: .filmEmulsion,
             kind: .menu(.fixed([EditorMenuChoice(0, "Legacy", detail: "Original film halation", id: "legacy"),
                                 EditorMenuChoice(1, "Layered Transport", detail: "Illustrative film stack",
@@ -382,7 +382,7 @@ public enum EditorControlCatalogue {
                                          help: "Halation model (default: legacy)")),
         EditorControl(
             .halation, title: "Halation",
-            detail: "Light returned by the base, back through the emulsion",
+            detail: "Adjust the glow around bright areas caused by light reflecting inside the film.",
             section: .filmEmulsion,
             kind: .slider(EditorControlScale(HalationAmount.travel, neutral: 0,
                                              unit: .stopsFromOff,
@@ -410,7 +410,7 @@ public enum EditorControlCatalogue {
             documentation: "Controls back-surface reflection and scatter around high-contrast exposure boundaries."),
         EditorControl(
             .estimatedHalation, title: "Estimated Halation Shape",
-            detail: "Provisional annular profiles where no calibrated profile exists",
+            detail: "Use an estimated halo shape when the film has no measured shape.",
             section: .filmEmulsion, kind: .toggle(restingOn: false),
             scope: .global(settingKey: "fotufilm.estimated-halation"),
             binding: .estimatedHalationProfile,
@@ -430,7 +430,7 @@ public enum EditorControlCatalogue {
                                              + "independently calibrated profile (default: off)")),
         EditorControl(
             .halationColour, title: "Halo Colour",
-            detail: "How much the ring keeps the light's own colour",
+            detail: "Control how much the halo keeps the color of the light source.",
             section: .filmEmulsion,
             kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
             availability: .colourNegative,
@@ -453,7 +453,7 @@ public enum EditorControlCatalogue {
             documentation: "Shifts negative halation toward source light spectrum."),
         EditorControl(
             .halationSpectrum, title: "Return Spectrum",
-            detail: "How much of each wavelength the base hands back",
+            detail: "Adjust which colors the film base reflects back into the image.",
             section: .filmEmulsion,
             kind: .curve(EditorControlCurve(
                 handles: HalationSpectrum.handleNM.map { Double($0) },
@@ -481,7 +481,7 @@ public enum EditorControlCatalogue {
             documentation: "Selects base reflectance spectral weighting."),
         EditorControl(
             .couplers, title: "Couplers",
-            detail: "DIR inhibition: colour separation and edge contrast",
+            detail: "Adjust how development affects color separation and edge contrast.",
             section: .filmEmulsion,
             kind: .slider(EditorControlScale(0...2, neutral: 1, unit: .multiplier)),
             availability: .film,
@@ -499,7 +499,7 @@ public enum EditorControlCatalogue {
             documentation: "Controls development inhibitor release chemistry for interlayer color separation and edge contrast."),
         EditorControl(
             .couplerReach, title: "Separation",
-            detail: "How far the released inhibitor crosses each interlayer",
+            detail: "Adjust how strongly neighboring film layers affect each other during development.",
             section: .filmEmulsion,
             kind: .slider(EditorControlScale(0...3, neutral: 1, unit: .multiplier)),
             availability: .couplerGeometry,
@@ -520,7 +520,7 @@ public enum EditorControlCatalogue {
             documentation: "Scales how far the released inhibitor crosses each interlayer."),
         EditorControl(
             .couplerSelf, title: "Edge Contrast",
-            detail: "The same inhibition acting within a layer, not across two",
+            detail: "Adjust the local contrast around edges created during development.",
             section: .filmEmulsion,
             kind: .slider(EditorControlScale(0...3, neutral: 1, unit: .multiplier)),
             availability: .couplerGeometry,
@@ -540,7 +540,7 @@ public enum EditorControlCatalogue {
             documentation: "Scales inhibition acting within a layer rather than across two."),
         EditorControl(
             .couplerRedGreen, title: "Red–Green Reach",
-            detail: "Additional multiplier on Separation for the red–green interlayer",
+            detail: "Adjust the separation between the red and green layers.",
             section: .filmEmulsion,
             kind: .slider(EditorControlScale(0...3, neutral: 1, unit: .multiplier)),
             availability: .couplerGeometry,
@@ -555,7 +555,7 @@ public enum EditorControlCatalogue {
                 clamp: 0...3, order: 10)),
         EditorControl(
             .couplerGreenBlue, title: "Green–Blue Reach",
-            detail: "Additional multiplier on Separation for the green–blue interlayer",
+            detail: "Adjust the separation between the green and blue layers.",
             section: .filmEmulsion,
             kind: .slider(EditorControlScale(0...3, neutral: 1, unit: .multiplier)),
             availability: .couplerGeometry,
@@ -570,7 +570,7 @@ public enum EditorControlCatalogue {
                 clamp: 0...3, order: 20)),
         EditorControl(
             .chromaticFringeAmount, title: "Fringe Amount",
-            detail: "Spread some inter-layer inhibition farther around color boundaries",
+            detail: "Add a broader color effect around edges.",
             section: .filmEmulsion,
             kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
             availability: .interlayerInhibition,
@@ -588,7 +588,7 @@ public enum EditorControlCatalogue {
             documentation: "Spreads a share of inter-layer inhibition farther around colour boundaries."),
         EditorControl(
             .chromaticFringeRadius, title: "Fringe Radius",
-            detail: "Broad spread on the film; active when Fringe Amount is above zero",
+            detail: "Set the width of the color fringe. Requires Fringe Amount above zero.",
             section: .filmEmulsion,
             kind: .slider(EditorControlScale(20...300, neutral: 100, unit: .micrometers)),
             availability: .interlayerInhibition,
@@ -611,7 +611,7 @@ public enum EditorControlCatalogue {
 
         EditorControl(
             .push, title: "Push",
-            detail: "Measured push or pull conditions for this film and process",
+            detail: "Choose a measured push or pull development setting for this film.",
             section: .filmLab,
             kind: .slider(EditorControlScale(-2...2, neutral: 0, unit: .stops,
                                              stops: [-2, 0, 1, 2])),
@@ -636,7 +636,7 @@ public enum EditorControlCatalogue {
             documentation: "Adjusts chemical development timing using measured push/pull sensitometry curves."),
         EditorControl(
             .bleach, title: "Bleach Bypass",
-            detail: "Silver the bleach leaves in the negative",
+            detail: "Leave silver in the negative to increase contrast and reduce color saturation.",
             section: .filmLab,
             kind: .chips(EditorControlScale(0...1, neutral: 0, unit: .percent),
                          choices: [EditorControlChoice(0, "Off"),
@@ -661,7 +661,7 @@ public enum EditorControlCatalogue {
             documentation: "Retains metallic silver in color negative processing, increasing contrast and lowering dye saturation."),
         EditorControl(
             .expired, title: "Expired",
-            detail: "Years past the process-by date at room temperature",
+            detail: "Simulate film stored at room temperature past its expiry date, in years.",
             section: .filmLab,
             kind: .slider(EditorControlScale(0...20, neutral: 0, unit: .years,
                                              stops: [0, 5, 10, 20], admitted: 0...30)),
@@ -685,7 +685,7 @@ public enum EditorControlCatalogue {
             documentation: "Simulates room-temperature aging: speed loss, baseline fog density, increased grain, and layer sensitivity drift."),
         EditorControl(
             .shutter, title: "Long Exposure",
-            detail: "How long the shutter was open, for the sheet's reciprocity row",
+            detail: "Set exposure time to apply the film’s measured long-exposure correction.",
             section: .filmLab, kind: .menu(.dynamic(.shutterTimes)),
             availability: .statedReciprocity,
             persistence: .bespoke,
@@ -712,7 +712,7 @@ public enum EditorControlCatalogue {
     private static let light: [EditorControl] = [
         EditorControl(
             .lensFilter1, title: "Filter 1",
-            detail: "An absorbing filter on the front of the lens",
+            detail: "Add a lens filter that changes the amount or color of incoming light.",
             section: .lensGlass, kind: .menu(.dynamic(.lensFilters)),
             persistence: .bespoke,
             drives: ["lensFilters"],
@@ -741,7 +741,7 @@ public enum EditorControlCatalogue {
                                          generic: false)),
         EditorControl(
             .lensFilter2, title: "Filter 2",
-            detail: "A second filter, behind the first",
+            detail: "Add a second lens filter.",
             section: .lensGlass, kind: .menu(.dynamic(.lensFilters)),
             persistence: .bespoke,
             drives: ["lensFilters"],
@@ -759,7 +759,7 @@ public enum EditorControlCatalogue {
                 kind: .choice(.dynamic(.lensFilters), value: 0), composed: true, order: 20)),
         EditorControl(
             .lensFilter3, title: "Filter 3",
-            detail: "A third filter, behind the second",
+            detail: "Add a third lens filter.",
             section: .lensGlass, kind: .menu(.dynamic(.lensFilters)),
             persistence: .bespoke,
             drives: ["lensFilters"],
@@ -775,7 +775,7 @@ public enum EditorControlCatalogue {
                 kind: .choice(.dynamic(.lensFilters), value: 0), composed: true, order: 30)),
         EditorControl(
             .metering, title: "Metering",
-            detail: "How the exposure was set with those filters fitted",
+            detail: "Choose how exposure compensates for light lost through the filters.",
             section: .lensGlass, kind: .menu(.dynamic(.meterings)),
             persistence: .bespoke,
             drives: ["lensFilters"],
@@ -805,7 +805,7 @@ public enum EditorControlCatalogue {
                                          generic: false)),
         EditorControl(
             .diffusion, title: "Diffusion",
-            detail: "A diffusion filter on the front of the lens",
+            detail: "Add a filter that softens detail and spreads bright highlights.",
             section: .lensGlass, kind: .menu(.dynamic(.diffusionFamilies)),
             persistence: .bespoke,
             drives: ["diffusionFilter"],
@@ -831,7 +831,7 @@ public enum EditorControlCatalogue {
                                          generic: false)),
         EditorControl(
             .diffusionGrade, title: "Diffusion Grade",
-            detail: "The particle loading a product line's 1/8, 1/4, 1/2, 1 and 2 name",
+            detail: "Set the diffusion filter strength using its marked grade.",
             section: .lensGlass, kind: .menu(.dynamic(.diffusionGrades)),
             persistence: .bespoke,
             drives: ["diffusionFilter"],
@@ -851,7 +851,7 @@ public enum EditorControlCatalogue {
                                          help: "1/8, 1/4, 1/2, 1 or 2 (default: 1/4)", generic: false)),
         EditorControl(
             .focalLength, title: "Focal Length",
-            detail: "The taking lens's focal length, read by the diffusion filter",
+            detail: "Set the lens focal length used to calculate the diffusion effect.",
             section: .lensGlass,
             kind: .slider(EditorControlScale(0...300, neutral: 0, unit: .millimetres)),
             scope: .hostOnly,
@@ -878,7 +878,7 @@ public enum EditorControlCatalogue {
                                              + "the gauge's own normal lens")),
         EditorControl(
             .flare, title: "Veiling Glare",
-            detail: "Veiling glare from the taking lens, as a multiplier on the stock's figure",
+            detail: "Adjust scattered lens light that lifts dark areas and reduces contrast.",
             section: .lensGlass,
             kind: .slider(EditorControlScale(0...2, neutral: 0, unit: .multiplier)),
             scope: .hostOnly,
@@ -902,7 +902,7 @@ public enum EditorControlCatalogue {
                                              + "photographed source already carries its own lens's glare)")),
         EditorControl(
             .filterCoating, title: "Filter Coating",
-            detail: "Coating on every fitted absorbing and diffusion filter",
+            detail: "Choose the coating used on the fitted lens filters.",
             section: .lensGlass,
             kind: .menu(.fixed([EditorMenuChoice(0, "Multi-coated", id: "multiCoated"),
                                 EditorMenuChoice(1, "Single-coated", id: "singleLayer"),
@@ -931,7 +931,7 @@ public enum EditorControlCatalogue {
 
         EditorControl(
             .lensCorrection, title: "Lens Correction",
-            detail: "Correct the lens the photograph was taken with",
+            detail: "Correct lens distortion, dark corners, and color fringing.",
             section: .lensCorrection, kind: .toggle(restingOn: false),
             persistence: .key("lensCorrectionEnabled", .same),
             surfaces: [.app, .desktop],
@@ -939,14 +939,14 @@ public enum EditorControlCatalogue {
             documentation: "Enables the matched lens profile or the calibrated camera profile."),
         EditorControl(
             .lensProfile, title: "Lens",
-            detail: "The profile to correct against, or the matched one",
+            detail: "Choose a lens profile or use the match from the photo’s metadata.",
             section: .lensCorrection, kind: .menu(.dynamic(.lensProfiles)),
             surfaces: [.app, .desktop],
             omitted: hostsOwnIt.merging([.android: "no lens correction on Android yet"]) { $1 },
             documentation: "Identifies the matched lens model."),
         EditorControl(
             .lensAmount, title: "Amount",
-            detail: "How much of the matched profile to apply",
+            detail: "Adjust the strength of the lens correction.",
             section: .lensCorrection,
             kind: .slider(EditorControlScale(0...1, neutral: 1, unit: .percent)),
             persistence: .key("lensProfileAmount", .same),
@@ -955,7 +955,7 @@ public enum EditorControlCatalogue {
             documentation: "Sets overall correction intensity."),
         EditorControl(
             .lensDistortion, title: "Distortion",
-            detail: "Barrel at −1, pincushion at +1",
+            detail: "Adjust curved edges: negative values add barrel distortion; positive values add pincushion distortion.",
             section: .lensCorrection, kind: .slider(signed),
             persistence: .bespoke,
             surfaces: [.app, .desktop],
@@ -963,7 +963,7 @@ public enum EditorControlCatalogue {
             documentation: "Corrects or introduces radial barrel and pincushion distortion."),
         EditorControl(
             .lensVignetting, title: "Vignetting",
-            detail: "Corners darker at −1, lifted at +1",
+            detail: "Darken the corners with negative values or brighten them with positive values.",
             section: .lensCorrection, kind: .slider(signed),
             persistence: .bespoke,
             surfaces: [.app, .desktop],
@@ -971,7 +971,7 @@ public enum EditorControlCatalogue {
             documentation: "Compensates for peripheral illumination falloff."),
         EditorControl(
             .lensRedCyan, title: "Red / Cyan",
-            detail: "Lateral chromatic aberration, red against cyan",
+            detail: "Correct red and cyan fringes around edges.",
             section: .lensCorrection, kind: .slider(signed),
             persistence: .bespoke,
             surfaces: [.app, .desktop],
@@ -979,7 +979,7 @@ public enum EditorControlCatalogue {
             documentation: "Corrects lateral chromatic aberration by scaling the red channel radially."),
         EditorControl(
             .lensBlueYellow, title: "Blue / Yellow",
-            detail: "Lateral chromatic aberration, blue against yellow",
+            detail: "Correct blue and yellow fringes around edges.",
             section: .lensCorrection, kind: .slider(signed),
             persistence: .bespoke,
             surfaces: [.app, .desktop],
@@ -988,7 +988,7 @@ public enum EditorControlCatalogue {
 
         EditorControl(
             .exposure, title: "Exposure",
-            detail: "Exposure compensation, in stops",
+            detail: "Brighten or darken the light reaching the film, measured in stops.",
             section: .lightExposure,
             kind: .slider(EditorControlScale(-2...2, neutral: 0, unit: .stops, admitted: -5...5)),
             binding: .exposureEV,
@@ -1003,7 +1003,7 @@ public enum EditorControlCatalogue {
             documentation: "Adjusts exposure in stops (EV) before film simulation."),
         EditorControl(
             .highlights, title: "Highlights",
-            detail: "Scene-referred shaping above mid-grey, before the film",
+            detail: "Adjust bright areas before the film response is applied.",
             section: .lightExposure, kind: .slider(signed),
             binding: .highlights,
             surfaces: [.app, .desktop, .android, .resolve, .finalcut, .web, .cli],
@@ -1019,7 +1019,7 @@ public enum EditorControlCatalogue {
             documentation: "Scales scene radiance above 18% neutral gray."),
         EditorControl(
             .shadows, title: "Shadows",
-            detail: "The same shaping below mid-grey",
+            detail: "Adjust dark areas before the film response is applied.",
             section: .lightExposure, kind: .slider(signed),
             binding: .shadows,
             surfaces: [.app, .desktop, .android, .resolve, .finalcut, .web, .cli],
@@ -1033,7 +1033,7 @@ public enum EditorControlCatalogue {
             documentation: "Scales scene radiance below 18% neutral gray."),
         EditorControl(
             .localTone, title: "Regional",
-            detail: "Key the two shapings above to each pixel's surroundings",
+            detail: "Make highlight and shadow adjustments respond to nearby brightness.",
             section: .lightExposure, kind: .toggle(restingOn: true),
             binding: .localTone,
             surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
@@ -1050,7 +1050,7 @@ public enum EditorControlCatalogue {
 
         EditorControl(
             .warmth, title: "Warmth",
-            detail: "The illuminant the scene is declared to have been lit by",
+            detail: "Set the color temperature of the scene lighting.",
             section: .lightBalance, kind: .slider(signed),
             persistence: .key("temperatureMired", .miredFromWarmth),
             binding: .warmth,
@@ -1073,7 +1073,7 @@ public enum EditorControlCatalogue {
             documentation: "Changes scene-light temperature; RAW edits are relative to the capture illuminant."),
         EditorControl(
             .tint, title: "Tint",
-            detail: "Green and magenta off the daylight locus",
+            detail: "Shift the color balance between green and magenta.",
             section: .lightBalance, kind: .slider(signed),
             persistence: .key("tint", .duvFromPadTint),
             binding: .tint,
@@ -1090,7 +1090,7 @@ public enum EditorControlCatalogue {
             documentation: "Changes the scene spectrum toward green or magenta, perpendicular to the blended blackbody/daylight locus."),
         EditorControl(
             .sceneLight, title: "Scene Illuminant",
-            detail: "Capture light presented to the film; Temperature and Tint adjust this spectrum",
+            detail: "Choose the scene light source. Temperature and Tint refine its color.",
             section: .lightBalance,
             kind: .menu(.fixed([
                 EditorMenuChoice(0, "Unspecified · D65", id: "unspecified"),
@@ -1123,7 +1123,7 @@ public enum EditorControlCatalogue {
                 ]), value: 0), composed: true, order: 10)),
         EditorControl(
             .sceneLightKelvin, title: "Scene Illuminant (K)",
-            detail: "Custom capture light before the Temperature and Tint edits",
+            detail: "Define a custom scene light source before Temperature and Tint adjustments.",
             section: .lightBalance,
             kind: .slider(EditorControlScale(2000...12000, neutral: 6504, unit: .kelvin)),
             scope: .hostOnly,
@@ -1140,7 +1140,7 @@ public enum EditorControlCatalogue {
 
         EditorControl(
             .saturation, title: "Saturation",
-            detail: "Chroma about each pixel's own luminance",
+            detail: "Adjust color intensity while preserving brightness.",
             section: .lightColor,
             kind: .slider(EditorControlScale(0...2, neutral: 1, unit: .multiplier)),
             binding: .saturation,
@@ -1156,7 +1156,7 @@ public enum EditorControlCatalogue {
             documentation: "Scales radial chroma across all hues uniformly."),
         EditorControl(
             .vibrance, title: "Vibrance",
-            detail: "Chroma weighted toward the least colourful pixels",
+            detail: "Adjust color intensity, with more effect on muted colors.",
             section: .lightColor, kind: .slider(signed),
             binding: .vibrance,
             surfaces: [.app, .desktop, .android, .resolve, .finalcut, .web, .cli],
@@ -1172,7 +1172,7 @@ public enum EditorControlCatalogue {
 
         EditorControl(
             .gradeSpace, title: "Encoded Grade",
-            detail: "Correct the encoded signal rather than the light itself",
+            detail: "Apply the grade to encoded color values instead of linear light. This changes how the grade responds.",
             section: .lightGrade, kind: .toggle(restingOn: false),
             persistence: .key("encodedGrade", .same),
             binding: .gradeSpaceEncoded,
@@ -1184,7 +1184,7 @@ public enum EditorControlCatalogue {
     private static let print: [EditorControl] = [
         EditorControl(
             .paper, title: "Output Medium",
-            detail: "Choose where the finished image will live",
+            detail: "Choose how the film is printed, scanned, or viewed.",
             section: .printPaper, kind: .menu(.dynamic(.papers)), availability: .printStage,
             drives: ["paper"],
             surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
@@ -1208,7 +1208,7 @@ public enum EditorControlCatalogue {
             documentation: "Selects the print paper, projection print, scan, display reference or the negative itself."),
         EditorControl(
             .printLight, title: "Viewing Illuminant",
-            detail: "Choose the light used to judge a physical print",
+            detail: "Choose the light used to view the print.",
             section: .printPaper, kind: .menu(.dynamic(.viewingLights)), availability: .printStage,
             persistence: .bespoke,
             binding: .printViewingKelvin,
@@ -1232,16 +1232,13 @@ public enum EditorControlCatalogue {
             documentation: "Sets the lamp a physical print is judged under; digital media ignore it."),
         EditorControl(
             .enlarger, title: "Enlarger",
-            detail: "Choose the lamp house the negative is printed under",
+            detail: "Choose the enlarger lighting used to make the print.",
             section: .printPaper,
             kind: .menu(.fixed([
                 EditorMenuChoice(0, "Diffuser",
-                                 detail: "Soft, even light through a mixing box: the negative prints at its "
-                                     + "measured density, as in a colour head or a minilab", id: "diffuser"),
+                                 detail: "Soft, even light, as in a color enlarger or minilab.", id: "diffuser"),
                 EditorMenuChoice(1, "Condenser",
-                                 detail: "Collimated light: silver grain scatters some of it out of the beam, "
-                                     + "so a black-and-white negative prints harder and its grain and dust "
-                                     + "sharper", id: "condenser"),
+                                 detail: "Focused light for stronger contrast and more visible grain and dust in black-and-white prints.", id: "condenser"),
             ])),
             availability: .printStage,
             persistence: .bespoke,
@@ -1269,7 +1266,7 @@ public enum EditorControlCatalogue {
             documentation: "Chooses a diffuser or condenser head for an enlarged reflection print."),
         EditorControl(
             .printCorrection, title: "Channel Contrast Match",
-            detail: "Balance how the film's colour layers print together",
+            detail: "Adjust the color balance of the print.",
             section: .printPaper,
             kind: .slider(EditorControlScale(0...1, neutral: 0.05, unit: .percent)),
             availability: .printStage,
@@ -1288,7 +1285,7 @@ public enum EditorControlCatalogue {
             documentation: "Balances how the film's colour layers print together on the chosen medium."),
         EditorControl(
             .negativeViewing, title: "Negative Viewing",
-            detail: "How the developed negative is read when the output is the negative",
+            detail: "Choose how negative output is displayed.",
             section: .printPaper, kind: .menu(.dynamic(.negativeViewings)),
             scope: .global(settingKey: "fotufilm.negative-viewing"),
             binding: .negativeViewingIndex,
@@ -1334,7 +1331,7 @@ public enum EditorControlCatalogue {
                           persistence: .bespoke, binding: .grade(band, .tint),
                           omitted: hostsOwnIt),
             EditorControl(fields.2, title: "\(name) Level",
-                          detail: "How far the \(name.lowercased()) are carried",
+                          detail: "Adjust the brightness of the \(name.lowercased()).",
                           section: .lightGrade, kind: .slider(signed),
                           persistence: .bespoke, binding: .grade(band, .level),
                           omitted: hostsOwnIt),
@@ -1344,20 +1341,20 @@ public enum EditorControlCatalogue {
     private static let frame: [EditorControl] = [
         EditorControl(
             .crop, title: "Crop",
-            detail: "The part of the frame the print is made from",
+            detail: "Choose the area of the photo to keep.",
             section: .frameGeometry, kind: .takeover,
             omitted: hostsOwnIt,
             documentation: "Chooses the part of the frame the print is made from."),
         EditorControl(
             .straighten, title: "Straighten",
-            detail: "Rotation off level, in degrees",
+            detail: "Rotate the photo to level the horizon, in degrees.",
             section: .frameGeometry,
             kind: .slider(EditorControlScale(-15...15, neutral: 0, unit: .degrees)),
             omitted: hostsOwnIt,
             documentation: "Rotates the frame off level by up to fifteen degrees."),
         EditorControl(
             .perspectiveVertical, title: "Vertical",
-            detail: "Keystone about the horizontal axis",
+            detail: "Correct perspective when the camera was tilted up or down.",
             section: .frameGeometry,
             kind: .slider(EditorControlScale(-15...15, neutral: 0, unit: .degrees)),
             persistence: .key("perspectiveV", .same),
@@ -1366,7 +1363,7 @@ public enum EditorControlCatalogue {
             documentation: "Tilts the picture plane about the horizontal axis."),
         EditorControl(
             .perspectiveHorizontal, title: "Horizontal",
-            detail: "Keystone about the vertical axis",
+            detail: "Correct perspective when the camera faced the subject at an angle.",
             section: .frameGeometry,
             kind: .slider(EditorControlScale(-15...15, neutral: 0, unit: .degrees)),
             persistence: .key("perspectiveH", .same),
@@ -1375,20 +1372,20 @@ public enum EditorControlCatalogue {
             documentation: "Tilts the picture plane about the vertical axis."),
         EditorControl(
             .rotation, title: "Rotate",
-            detail: "Quarter turns clockwise",
+            detail: "Rotate the photo 90 degrees clockwise.",
             section: .frameGeometry, kind: .menu(.fixed(rotations)),
             omitted: hostsOwnIt,
             documentation: "Turns the frame in quarter turns."),
         EditorControl(
             .flip, title: "Flip",
-            detail: "Mirror the frame left to right",
+            detail: "Flip the photo horizontally.",
             section: .frameGeometry, kind: .toggle(restingOn: false),
             persistence: .key("flipH", .same),
             omitted: hostsOwnIt,
             documentation: "Mirrors the frame left to right."),
         EditorControl(
             .selective, title: "Selective",
-            detail: "The same light and colour controls, over part of the frame",
+            detail: "Adjust light and color in a selected part of the photo.",
             section: .frameLocal, kind: .takeover,
             persistence: EditorControlPersistence.none,
             surfaces: [.app, .desktop],

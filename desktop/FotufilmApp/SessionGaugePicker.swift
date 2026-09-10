@@ -67,10 +67,13 @@ final class GaugePickerView: SessionView {
         stack.addArrangedSubview(detailRow)
         stack.addArrangedSubview(followButton)
         stack.addArrangedSubview(followNote)
+        #if canImport(UIKit)
         let enlargementNote = makeFootnote(
             "Smaller film formats are enlarged more, so the same film shows "
             + "coarser grain and softer highlights.")
         stack.addArrangedSubview(enlargementNote)
+        enlargementNote.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        #endif
         addSubview(stack)
 
         NSLayoutConstraint.activate([
@@ -83,7 +86,6 @@ final class GaugePickerView: SessionView {
             // Constrain wrapping labels to the stack width so their intrinsic width does not
             // force a single line.
             followNote.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            enlargementNote.widthAnchor.constraint(equalTo: stack.widthAnchor),
             detailLabel.leadingAnchor.constraint(
                 equalTo: detailRow.leadingAnchor),
             detailLabel.centerYAnchor.constraint(
@@ -139,8 +141,11 @@ final class GaugePickerView: SessionView {
         if following {
             let what = model.sensorFrame == nil
                 ? "Following the film" : "Following the camera"
-            followNote.textValue =
-                "\(what). \(model.edit.gaugeFollowingNote(sensor: model.sensorFrame))"
+            #if canImport(UIKit)
+            followNote.textValue = "\(what). \(model.edit.gaugeFollowingNote(sensor: model.sensorFrame))"
+            #else
+            followNote.textValue = what
+            #endif
         } else {
             followButton.title = model.sensorFrame == nil
                 ? "Match the Film" : "Match the Camera"

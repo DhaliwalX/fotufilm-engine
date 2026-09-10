@@ -20,25 +20,42 @@ import FotufilmEditModel
 
 /// Which set of controls the trailing column is showing.
 enum InspectorPanel: String, CaseIterable {
-    case film, lens, adjustments, selective, crop
+    case film
+    #if canImport(UIKit)
+    case lens, adjustments
+    #else
+    case adjustments, development, print
+    #endif
+    case selective, crop
 
     var title: String {
         switch self {
         case .film: return "Film"
+        #if canImport(UIKit)
         case .lens: return "Lens"
         case .adjustments: return "Light & Color"
+        #else
+        case .adjustments: return "Expose"
+        case .development: return "Develop"
+        case .print: return "Print"
+        #endif
         case .selective: return "Selective"
         case .crop: return "Crop"
         }
     }
 
-    /// How every surface names the panel — the tab bar and the rail both draw the glyph, with the
-    /// word held back for tool tips and for anyone listening rather than looking.
+    /// The collapsed rail and iPad tabs use glyphs; the Mac darkroom uses visible stage names.
     var symbol: String {
         switch self {
         case .film: return "film"
+        #if canImport(UIKit)
         case .lens: return "camera.aperture"
         case .adjustments: return "slider.horizontal.3"
+        #else
+        case .adjustments: return "sun.max"
+        case .development: return "flask"
+        case .print: return "photo.on.rectangle"
+        #endif
         case .selective: return "circle.dashed"
         case .crop: return "crop.rotate"
         }
@@ -49,7 +66,11 @@ enum InspectorPanel: String, CaseIterable {
     /// A clip gets neither the crop nor the selection: the crop is dragged on a still canvas, and
     /// the selection would have to be re-sampled every frame to mean anything.
     static func available(video: Bool) -> [InspectorPanel] {
+        #if canImport(UIKit)
         video ? [.film, .lens, .adjustments] : allCases
+        #else
+        video ? [.film, .adjustments, .development, .print] : allCases
+        #endif
     }
 }
 
@@ -60,12 +81,19 @@ enum InspectorPanel: String, CaseIterable {
 /// is in down and put it back up sixty times a second.
 final class InspectorViewController: SessionViewController {
     private let model: DesktopEditorModel
+    #if canImport(UIKit)
     private let tabs = SessionTabStrip()
+    #else
+    private let tabs = MacDarkroomNavigation()
+    #endif
     private let column = ScrollColumn()
 
     private var rows: [FormRowView] = []
     private var gaugePicker: GaugePickerView?
     private var gradeDeck: GradeDeckView?
+    #if !canImport(UIKit)
+    private var selectedGradeBand: GradeBandStyle = .shadows
+    #endif
     private var structure = ""
 
     /// Held by the window rather than here: when the panel is minimized to a rail, the rail's
@@ -77,12 +105,14 @@ final class InspectorViewController: SessionViewController {
             // showing it is up and not a moment longer.
             model.isSelectiveMode = panel == .selective
             if panel != .selective { model.isSamplingSelection = false }
+            rebuildTabs()
             rebuild(direction: order(panel) >= order(oldValue) ? 1 : -1)
             onPanelChanged?(panel)
         }
     }
 
     var onPanelChanged: ((InspectorPanel) -> Void)?
+    var onExport: (() -> Void)?
 
     private var tabsTop: NSLayoutConstraint?
 
@@ -160,7 +190,11 @@ final class InspectorViewController: SessionViewController {
 
     private func rebuildTabs() {
         let available = InspectorPanel.available(video: model.hasVideo)
+        #if canImport(UIKit)
         tabs.setTabs(available.map { (symbol: $0.symbol, title: $0.title) })
+        #else
+        tabs.setPanels(available)
+        #endif
         if let index = available.firstIndex(of: panel) {
             tabs.selectedIndex = index
         }
@@ -269,8 +303,14 @@ final class InspectorViewController: SessionViewController {
         let sections: [FormSectionView]
         switch panel {
         case .film: sections = filmSections()
+        #if canImport(UIKit)
         case .lens: sections = lensSections()
         case .adjustments: sections = adjustmentSections()
+        #else
+        case .adjustments: sections = exposureSections()
+        case .development: sections = developmentSections()
+        case .print: sections = finishingSections()
+        #endif
         case .selective: sections = selectiveSections()
         case .crop: sections = cropSections()
         }
@@ -281,6 +321,7 @@ final class InspectorViewController: SessionViewController {
             rows.append(contentsOf: section.rows)
         }
         rows.forEach { $0.isRowEnabled = !model.isExporting }
+        tabs.isEnabled = !model.isExporting
         column.scrollToTop()
 
         guard direction != 0 else { return }
@@ -326,8 +367,9 @@ final class InspectorViewController: SessionViewController {
         }, bespoke: { [unowned self] control in self.bespokeRows(for: control) })
     }
 
-    private func rows(in section: EditorControlSection) -> [FormRowView] {
-        rowFactory.controls(in: section).filter { control in
+    private func rows(in section: EditorControlSection,
+                      matching predicate: (EditorControl) -> Bool = { _ in true }) -> [FormRowView] {
+        rowFactory.controls(in: section).filter(predicate).filter { control in
             switch control.field {
             case .enlarger: return showsEnlarger
             case .printCorrection: return showsPrintCorrection
@@ -349,9 +391,9 @@ final class InspectorViewController: SessionViewController {
                 set: { [model] in model.edit.shutterSeconds = $0 }),
                 NoteRow { [model] in
                     guard model.edit.shutterSeconds != nil else {
-                        return "A long exposure loses speed and gains crossover as the layers fail at different rates. This film's sheet states how much."
+                        return "Apply the film’s measured correction for sensitivity and color changes during long exposures."
                     }
-                    return "Developed with this film's stated reciprocity correction for an exposure that long."
+                    return "Uses the film’s measured long-exposure correction for this shutter time."
                 }]
         case .paper:
             return paperRows()
@@ -376,13 +418,25 @@ final class InspectorViewController: SessionViewController {
         }
     }
 
-    private func filmSections() -> [FormSectionView] {
-        var sections: [FormSectionView] = []
-
+    private func formatSection() -> FormSectionView {
         let format = FormSectionView(title: "Film Format")
         let picker = GaugePickerView(model: model)
         gaugePicker = picker
         format.add(view: picker)
+        #if !canImport(UIKit)
+        format.add(NoteRow { [model] in
+            "Smaller film formats are enlarged more, so the same film shows coarser grain and softer highlights. "
+                + model.edit.gaugeFollowingNote(sensor: model.sensorFrame)
+        })
+        #endif
+        return format
+    }
+
+    #if canImport(UIKit)
+    private func filmSections() -> [FormSectionView] {
+        var sections: [FormSectionView] = []
+
+        let format = formatSection()
         sections.append(format)
 
         // The film's own controls only exist where there is a film: on Normal the sensor's
@@ -408,7 +462,7 @@ final class InspectorViewController: SessionViewController {
         if allows(.labControls) {
             let lab = FormSectionView(title: "Lab")
             for row in rows(in: .filmLab) { lab.add(row) }
-            lab.add(NoteRow("The film can's sticker rather than the darkroom: push develops harder with the crossover and grain that costs, bleach bypass leaves the silver in the negative, and an expired roll loses speed from the blue layer first."))
+            lab.add(NoteRow("Push changes contrast, color, and grain. Bleach bypass retains silver in the negative. Expired film simulates changes from age."))
             sections.append(lab)
         } else {
             sections.append(proSection(
@@ -424,6 +478,83 @@ final class InspectorViewController: SessionViewController {
         sections.append(hintSection())
         return sections
     }
+
+    #else
+    private func isHalation(_ control: EditorControl) -> Bool {
+        control.host?.group == .halation || control.host?.group == .halationSpectrum
+    }
+
+    private func filmSections() -> [FormSectionView] {
+        guard model.edit.hasFilm else {
+            let plain = noFilmSection()
+            plain.addNotes(from: hintSection())
+            return [plain]
+        }
+        let stock = FormSectionView(title: "Loaded Film")
+        stock.add(ValueRow("Stock", value: { [model] in
+            StockPreset.preset(id: model.edit.stockID)?.name ?? StockPreset.noFilmName
+        }))
+        stock.add(NoteRow("Choose a stock from the film library on the left."))
+        let condition = FormSectionView(title: "Film Condition")
+        for row in rows(in: .filmLab, matching: { $0.field == .expired }) { condition.add(row) }
+        let halation = FormSectionView(title: "Halation")
+        for row in rows(in: .filmEmulsion, matching: isHalation) { halation.add(row) }
+        stock.addNotes(from: hintSection())
+        return [stock, formatSection(), condition, halation]
+    }
+
+    private func exposureSections() -> [FormSectionView] {
+        var sections = [lightSection()] + gradeSections()
+        if model.edit.hasFilm && !shutterChoices.isEmpty {
+            let reciprocity = FormSectionView(title: "Long Exposure")
+            for row in rows(in: .filmLab, matching: { $0.field == .shutter }) { reciprocity.add(row) }
+            sections.append(reciprocity)
+        }
+        sections += lensSections()
+        if model.sourceInterpretationAvailable { sections += sourceSections() }
+        if model.hasVideo { sections.append(videoSourceSection()) }
+        return sections
+    }
+
+    private func developmentSections() -> [FormSectionView] {
+        guard model.edit.hasFilm else { return [noFilmSection()] }
+        let chemistry = FormSectionView(title: "Development")
+        for row in rows(in: .filmLab, matching: { $0.field != .expired && $0.field != .shutter }) {
+            chemistry.add(row)
+        }
+        chemistry.add(NoteRow(chemistry.rows.isEmpty
+            ? "This film uses standard development. Push and pull are available only when the film has measured settings."
+            : "Push and pull, where supported, change development. Exposure changes the light reaching the film. Bleach bypass retains silver in the negative."))
+        let grain = FormSectionView(title: "Grain")
+        for row in rows(in: .filmGrain) { grain.add(row) }
+        grain.add(ButtonRow("New Grain Pattern") { [model] in model.edit.rerollGrain() })
+        let separation = FormSectionView(title: "Colour Separation")
+        for row in rows(in: .filmEmulsion, matching: { !isHalation($0) }) { separation.add(row) }
+        var sections = [chemistry, grain]
+        if !separation.rows.isEmpty { sections.append(separation) }
+        return sections
+    }
+
+    private func finishingSections() -> [FormSectionView] {
+        var sections = printSections()
+        if model.hasVideo { sections.append(cadenceSection()) }
+        let export = FormSectionView(title: "Export")
+        export.add(ButtonRow(model.hasVideo ? "Export Video…" : "Export Photo…",
+                             enabled: { [model] in model.canExport }) { [weak self] in
+            self?.onExport?()
+        })
+        export.add(NoteRow("Choose the file format and size for the finished image."))
+        sections.append(export)
+        return sections
+    }
+
+    private func noFilmSection() -> FormSectionView {
+        let section = FormSectionView(title: "Normal")
+        section.add(NoteRow("Choose a film from the library on the left to use film format, halation, development, and grain. With Normal selected, use Expose to adjust the source and Print to finish the image."))
+        return section
+    }
+
+    #endif
 
     private func printSections() -> [FormSectionView] {
         let print = FormSectionView(title: "Output")
@@ -497,15 +628,19 @@ final class InspectorViewController: SessionViewController {
         return [source]
     }
 
-    private func videoSections() -> [FormSectionView] {
+    private func videoSourceSection() -> FormSectionView {
         let source = FormSectionView(title: "Source")
         source.add(PopUpRow<VideoSourceEncoding>(
             "Encoding",
             options: VideoSourceEncoding.allCases.map { ($0.title, $0) },
             get: { [model] in model.sourceEncoding },
             set: { [model] in model.sourceEncoding = $0 }))
-        source.add(NoteRow("Standard converts tagged SDR, HLG, and PQ to scene-linear Rec.2020. Choose an explicit camera encoding when the file does not identify its curve and gamut reliably."))
+        source.add(NoteRow("Standard reads the file’s color tags automatically. Choose a camera encoding if the file’s tags are missing or incorrect."))
 
+        return source
+    }
+
+    private func cadenceSection() -> FormSectionView {
         let cadence = FormSectionView(title: "Cadence")
         cadence.add(PopUpRow<Int?>(
             "Cadence",
@@ -513,8 +648,12 @@ final class InspectorViewController: SessionViewController {
                       ("18 fps · Super 8", 18), ("24 fps · cine", 24)],
             get: { [model] in model.videoFrameRate },
             set: { [model] in model.videoFrameRate = $0 }))
-        cadence.add(NoteRow("Retimes the export to a film cadence by developing fewer, longer-lived frames."))
-        return [source, cadence]
+        cadence.add(NoteRow("Choose the export frame rate. Lower rates hold each frame longer."))
+        return cadence
+    }
+
+    private func videoSections() -> [FormSectionView] {
+        [videoSourceSection(), cadenceSection()]
     }
 
     private func hintSection() -> FormSectionView {
@@ -528,7 +667,7 @@ final class InspectorViewController: SessionViewController {
             let compare = "Click and hold the photo to compare with the original."
             #endif
             return model.hasVideo
-                ? "Press space to play or pause. Scrubbing develops each frame live; when the playhead settles, that frame develops again at full resolution."
+                ? "Press Space to play or pause. Scrubbing shows a preview; stopping displays the frame at full resolution."
                 : compare
         })
         return hint
@@ -536,18 +675,22 @@ final class InspectorViewController: SessionViewController {
 
     // MARK: - Adjustments
 
-    private func adjustmentSections() -> [FormSectionView] {
+    private func lightSection() -> FormSectionView {
         let light = FormSectionView(title: "Light")
         for section in [EditorControlSection.lightExposure, .lightBalance, .lightColor] {
             for row in rows(in: section) { light.add(row) }
         }
 
+        return light
+    }
+
+    private func adjustmentSections() -> [FormSectionView] {
         let reset = FormSectionView(title: nil)
         reset.add(ButtonRow("Reset All Edits", destructive: true,
                             enabled: { [model] in
                                 model.edit != EditState.defaults
                             }) { [model] in model.reset() })
-        return [light] + gradeSections() + [reset]
+        return [lightSection()] + gradeSections() + [reset]
     }
 
     // MARK: - Grade
@@ -555,11 +698,15 @@ final class InspectorViewController: SessionViewController {
     private func gradeSections() -> [FormSectionView] {
         let deckSection = FormSectionView(title: "Grade")
         let deck = GradeDeckView(model: model)
+        #if !canImport(UIKit)
+        deck.selectedBand = selectedGradeBand
+        deck.onSelectBand = { [weak self] in self?.selectedGradeBand = $0 }
+        #endif
         gradeDeck = deck
         deckSection.add(view: deck)
         for row in rows(in: .lightGrade) where row.rowTitle == "Encoded Grade" { deckSection.add(row) }
         let note = FormSectionView(title: nil)
-        note.add(NoteRow("Lift, gamma and gain over the developed print — the pad tilts the band’s color, and the slider moves its level. The film has already responded to the light, so these controls grade the resulting image."))
+        note.add(NoteRow("Choose Shadows, Midtones, or Highlights. Use the pad to adjust color and the slider to adjust brightness. Grade is applied after the film response."))
 
         let reset = FormSectionView(title: nil)
         reset.add(ButtonRow("Reset Grade", destructive: true,
@@ -571,7 +718,12 @@ final class InspectorViewController: SessionViewController {
             model.endContinuousEdit()
             self?.gradeDeck?.refresh()
         })
+        #if canImport(UIKit)
         return [deckSection, note, reset]
+        #else
+        deckSection.addNotes(from: note)
+        return [deckSection, reset]
+        #endif
     }
 
     // MARK: - Crop
@@ -609,7 +761,7 @@ final class InspectorViewController: SessionViewController {
         for row in geometry where row.rowTitle == "Vertical" || row.rowTitle == "Horizontal" {
             perspective.add(row)
         }
-        perspective.add(NoteRow("Tilts the picture plane, for a building photographed from the pavement or a wall shot from one side. The frame is filled again afterwards, so a strong correction crops."))
+        perspective.add(NoteRow("Straighten converging lines caused by camera angle. Strong corrections crop more of the image."))
 
         let reset = FormSectionView(title: nil)
         reset.add(ButtonRow("Reset Crop", destructive: true,
@@ -620,13 +772,24 @@ final class InspectorViewController: SessionViewController {
         let hint = FormSectionView(title: nil)
         hint.add(NoteRow("Drag the frame to crop. Four-Corner Crop lets you move each corner independently and straightens the selection when you leave Crop. Choose an aspect ratio to return to a rectangular crop."))
 
+        #if canImport(UIKit)
         return [orientation, crop, perspective, reset, hint]
+        #else
+        crop.addNotes(from: hint)
+        return [orientation, crop, perspective, reset]
+        #endif
     }
 
     private func lensSections() -> [FormSectionView] {
         let hint = FormSectionView(title: nil)
-        hint.add(NoteRow("Lens correction undoes what the taking lens did to the frame — its distortion, its darkened corners, the colour fringing at the edges. It is read from the photograph's own metadata when a matching profile is known."))
+        hint.add(NoteRow("Correct lens distortion, dark corners, and color fringing. A matching profile is selected from the photo’s metadata when available."))
+        #if canImport(UIKit)
         return [filterSection(), lensSection(), hint]
+        #else
+        let lens = lensSection()
+        lens.addNotes(from: hint)
+        return [filterSection(), lens]
+        #endif
     }
 
     private func filterSection() -> FormSectionView {
@@ -675,7 +838,7 @@ final class InspectorViewController: SessionViewController {
         } else {
             // Saying what is correcting the picture, or why nothing is, is the difference between a
             // photographer reaching for the sliders and wondering whether the switch is broken.
-            lens.add(NoteRow { [model] in model.lensCorrectionNote })
+            lens.add(NoteRow(status: true) { [model] in model.lensCorrectionNote })
         }
         for row in rows(in: .lensCorrection) where row.rowTitle != "Lens Correction" {
             if row.rowTitle == "Amount", !model.hasLensMeasurement { continue }

@@ -60,13 +60,13 @@ final class ControlCurveFormRow: FormRowView {
         }
 
         NSLayoutConstraint.activate([
-            name.leadingAnchor.constraint(equalTo: leadingAnchor),
+            leadingConstraint(for: name),
             name.topAnchor.constraint(equalTo: topAnchor),
             reading.trailingAnchor.constraint(equalTo: trailingAnchor),
             reading.firstBaselineAnchor.constraint(
                 equalTo: name.firstBaselineAnchor),
-            reading.leadingAnchor.constraint(
-                greaterThanOrEqualTo: name.trailingAnchor, constant: 8),
+            spacingAfterLabel(reading.leadingAnchor.constraint(
+                greaterThanOrEqualTo: name.trailingAnchor, constant: 8)),
             plot.leadingAnchor.constraint(equalTo: leadingAnchor),
             plot.trailingAnchor.constraint(equalTo: trailingAnchor),
             plot.topAnchor.constraint(equalTo: name.bottomAnchor, constant: 7),

@@ -55,35 +55,25 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     public var detail: String {
         switch self {
         case .ektacolorEdge:
-            return "A classic Kodak RA-4 photo print, with the paper's real colour mixing "
-                + "and a familiar, slightly warm feel."
+            return "Kodak photo paper with a slightly warm color balance."
         case .enduraPremier:
-            return "A professional Kodak RA-4 photo print with rich saturated colour, "
-                + "deep blacks, and clean highlights."
+            return "Kodak photo paper with saturated colors and deep blacks."
         case .crystalArchive:
-            return "A Fujifilm RA-4 photo print with clean greens and a slightly cooler feel "
-                + "than Ektacolor Edge."
+            return "Fujifilm photo paper with a cooler color balance than Ektacolor Edge."
         case .vision2383:
-            return "The standard Kodak cinema print: deeper and punchier than photo paper, "
-                + "and the natural partner for Vision3 negatives."
+            return "Kodak cinema print film with stronger contrast than photo paper."
         case .vision2393:
-            return "Kodak's bolder cinema print, with richer colour and deeper blacks than "
-                + "Vision 2383, but less shadow detail."
+            return "Kodak cinema print film with deeper blacks and stronger color than 2383, but less shadow detail."
         case .eternaCP:
-            return "Fujifilm's cinema print for Eterna and Reala negatives, with a cooler, "
-                + "gentler look than Kodak release prints."
+            return "Fujifilm cinema print film with a cooler color balance and softer contrast than Kodak print films."
         case .labScan:
-            return "A clean digital scan of the negative, with the full black point and punchy "
-                + "contrast a minilab gives a file."
+            return "A digital scan with deep blacks and strong contrast."
         case .telecine:
-            return "A classic Rec.709 video transfer, with film black sitting just above video "
-                + "black and a gentler run into the highlights than a lab scan."
+            return "A Rec.709 video transfer with slightly raised blacks and softer highlights than Lab Scan."
         case .screen:
-            return "A clean D65 wide-gamut display rendering with no paper, scanner, or viewing "
-                + "lamp added. HDR delivery is available for reversal film."
+            return "Display the image directly, without paper or scanner effects. Reversal films support HDR output."
         case .negative:
-            return "The developed film itself on a light box, before printing or digital "
-                + "inversion. Colour negatives keep their film base and reversed tones."
+            return "View the developed negative before printing or conversion to a positive."
         }
     }
 

@@ -48,11 +48,9 @@ public enum Enlarger: String, CaseIterable, Sendable, Codable {
     public var detail: String {
         switch self {
         case .diffuser:
-            return "Soft, even light through a mixing box: the negative prints at its measured "
-                + "density, as in a colour head or a minilab"
+            return "Use soft, even light, as in a color enlarger or minilab."
         case .condenser:
-            return "Collimated light: silver grain scatters some of it out of the beam, so a "
-                + "black-and-white negative prints harder and its grain and dust sharper"
+            return "Use focused light for stronger contrast and more visible grain and dust in black-and-white prints."
         }
     }
 

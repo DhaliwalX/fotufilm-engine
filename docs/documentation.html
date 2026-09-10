@@ -8,6 +8,17 @@
 <h2>Build and open the app</h2>
 <p>Install Xcode 26 or newer and Halide. Run <code>swift build</code> to build the engine and <code>swift test -c release --parallel</code> to test it. Run <code>macos/build.sh --test</code> to build the Mac app.</p>
 <p>Open <code>build/macos/Fotufilm.app</code>. Choose <strong>File → Open…</strong>, select a photo or video, and choose a film.</p>
+<h2>The Mac darkroom</h2>
+<p>The film library sits to the left of the photograph. The <strong>Darkroom</strong> panel on the right follows four stages, with the current stage highlighted in the tabs. You can move between them at any time; each adjustment updates the preview.</p>
+<p>Small <strong>?</strong> help buttons appear after control and section labels. Hover to read a tooltip, or click to open the explanation. Descriptions follow the selected film and options. Short status messages remain visible in the panel.</p>
+<p>Choose <strong>Fotufilm → Settings…</strong> (<strong>⌘,</strong>) to open the separate Mac settings window. <strong>General</strong> contains defaults for new photos and film suggestions. <strong>Output</strong> groups photo, video, and negative viewing options. <strong>Film Model</strong> groups grain, halation, and color separation defaults. Changes apply immediately, and the window can stay open while you edit. Use the window’s close button or <strong>⌘W</strong> when finished.</p>
+<ol>
+<li><strong>Film</strong>: choose a stock in the library, then set its film format, age, and halation.</li>
+<li><strong>Expose</strong>: adjust exposure, highlights, shadows, and colour balance, then use <strong>Grade</strong> directly below. Its <strong>Shadows</strong>, <strong>Midtones</strong>, and <strong>Highlights</strong> tabs show one colour pad and level slider at a time, while retaining each band’s adjustments. The light controls act before the film responds; Grade’s lift, gamma, and gain act on the developed image. Lens filters, source interpretation, video encoding, lens correction, and supported long-exposure settings also live here.</li>
+<li><strong>Develop</strong>: set push/pull and bleach bypass, then tune grain, mottle, and the stock’s colour-separation controls.</li>
+<li><strong>Print</strong>: choose the output medium, enlarger, and viewing light where supported. Video cadence is also here. Save with the panel’s Export button, <strong>File → Export…</strong>, or the toolbar’s Export button.</li>
+</ol>
+<p><strong>Selective</strong> and <strong>Crop</strong> are canvas tools in the toolbar above the photograph, beside the zoom controls. They are available for still photos and open their settings in the right-hand panel. Choose a darkroom stage to return to its controls. Use <strong>⌘1–⌘4</strong> for the four stages, <strong>⌘5</strong> for Selective, and <strong>⌘6</strong> for Crop, or choose them from the View menu. Click and hold the photograph to compare with the original. With <strong>Normal</strong> selected, Expose and Print remain available; choose a film to enable emulsion and development controls.</p>
 <h2>Film packs</h2>
 <p>The Mac film sidebar offers <strong>Film Workshop…</strong> and <strong>Load custom pack…</strong>. The pack purchase button is hidden.</p>
 <p>Packs loaded in the Mac app are also available in the Fotufilm plugins on the same Mac and user account. Restart Resolve or Final Cut Pro after loading or updating a pack. Install matching app and plugin versions; older plugins skip packs that require a newer release.</p>
@@ -71,13 +82,13 @@
   <tr><td>Encoded Grade</td><td>Grades the sRGB-encoded signal, where a grading suite's corrector works, instead of display-linear light.</td><td>Off</td></tr>
   <tr><td>Shadows Warmth</td><td>Cool to warm, in the shadows</td><td>+0.00</td></tr>
   <tr><td>Shadows Tint</td><td>Magenta to green, in the shadows</td><td>+0.00</td></tr>
-  <tr><td>Shadows Level</td><td>How far the shadows are carried</td><td>+0.00</td></tr>
+  <tr><td>Shadows Level</td><td>Adjust the brightness of the shadows.</td><td>+0.00</td></tr>
   <tr><td>Midtones Warmth</td><td>Cool to warm, in the midtones</td><td>+0.00</td></tr>
   <tr><td>Midtones Tint</td><td>Magenta to green, in the midtones</td><td>+0.00</td></tr>
-  <tr><td>Midtones Level</td><td>How far the midtones are carried</td><td>+0.00</td></tr>
+  <tr><td>Midtones Level</td><td>Adjust the brightness of the midtones.</td><td>+0.00</td></tr>
   <tr><td>Highlights Warmth</td><td>Cool to warm, in the highlights</td><td>+0.00</td></tr>
   <tr><td>Highlights Tint</td><td>Magenta to green, in the highlights</td><td>+0.00</td></tr>
-  <tr><td>Highlights Level</td><td>How far the highlights are carried</td><td>+0.00</td></tr>
+  <tr><td>Highlights Level</td><td>Adjust the brightness of the highlights.</td><td>+0.00</td></tr>
 </tbody>
 </table>
 <h3>Print</h3>

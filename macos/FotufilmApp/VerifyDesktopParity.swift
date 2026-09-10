@@ -93,13 +93,16 @@ enum VerifyDesktopParity {
 
         Check(name: "film controls refresh when the stock changes") { editor in
             let model = editor.model
-            let panel = InspectorViewController(model: model)
-            _ = panel.view
-            panel.viewDidLoad()
+            let panels: [InspectorViewController] = [InspectorPanel.film, .adjustments, .development].map {
+                let panel = InspectorViewController(model: model)
+                panel.panel = $0
+                _ = panel.view
+                return panel
+            }
             for preset in StockPreset.all {
                 model.edit.stockID = preset.id
-                panel.refresh()
-                let found = words(in: panel.view)
+                panels.forEach { $0.refresh() }
+                let found = Set(panels.flatMap { words(in: $0.view) })
                 let offered = titles(in: .filmGrain, for: model)
                     + titles(in: .filmEmulsion, for: model) + titles(in: .filmLab, for: model)
                 let missing = offered.filter { !shows(found, $0) }
@@ -126,6 +129,7 @@ enum VerifyDesktopParity {
             model.edit.stockID = preset.id
             model.edit.paperFollowsStock = false
             let panel = InspectorViewController(model: model)
+            panel.panel = .print
             _ = panel.view
             panel.viewDidLoad()
             for paper in PrintPaper.choices(for: preset.stock) {
@@ -263,10 +267,10 @@ enum VerifyDesktopParity {
                  expecting: titles(in: .frameGeometry, for: editor.model))
         },
 
-        Check(name: "the film panel offers the lab and the mottle") { editor in
-            rows(of: .film, model: editor.model,
-                 expecting: ["Character", "Lab"] + titles(in: .filmGrain, for: editor.model)
-                     + titles(in: .filmLab, for: editor.model))
+        Check(name: "the development stage offers chemistry and grain") { editor in
+            rows(of: .development, model: editor.model,
+                 expecting: ["Grain", "Development"] + titles(in: .filmGrain, for: editor.model)
+                     + titles(in: .filmLab, for: editor.model).filter { $0 != "Expired" && $0 != "Long Exposure" })
         },
 
         Check(name: "the desktop offers the mobile emulsion controls") { editor in
@@ -279,11 +283,17 @@ enum VerifyDesktopParity {
             }
             model.edit.stockID = preset.id
             let film = rows(of: .film, model: model,
-                            expecting: titles(in: .filmEmulsion, for: model))
+                            expecting: ["Film Format", "Expired", "Halo Colour",
+                                        "Return Spectrum"])
             if case .fail = film { return film }
-            return rows(of: .adjustments, model: model,
-                        expecting: titles(in: .lightExposure, for: model)
-                            + titles(in: .lightGrade, for: model).filter { $0 == "Encoded Grade" })
+            let develop = rows(of: .development, model: model,
+                               expecting: ["Disc Grain", "Separation", "Edge Contrast"])
+            if case .fail = develop { return develop }
+            let expose = rows(of: .adjustments, model: model,
+                              expecting: ["Exposure", "Regional", "Grade", "Encoded Grade"])
+            if case .fail = expose { return expose }
+            return rows(of: .print, model: model,
+                        expecting: ["Output Medium", "Export Photo…"])
         },
 
         Check(name: "disc grain is an edit, not only a setting") { editor in
@@ -323,8 +333,8 @@ enum VerifyDesktopParity {
             return .pass("the photo selected the disc engine variant independently")
         },
 
-        Check(name: "the lens panel offers filters") { editor in
-            rows(of: .lens, model: editor.model,
+        Check(name: "the exposure stage offers lens filters") { editor in
+            rows(of: .adjustments, model: editor.model,
                  expecting: ["Filters", "Add Filter", "Lens Correction"])
         },
 
@@ -336,18 +346,24 @@ enum VerifyDesktopParity {
             _ = panel.view
             panel.viewDidLoad()
             let showing = words(in: panel.view)
-            guard !shows(showing, "Character"), !shows(showing, "Lab") else {
+            guard !shows(showing, "Halation"), !shows(showing, "Expired") else {
                 return .fail("the film's own controls were still offered")
-            }
-            guard shows(showing, "Output") else {
-                return .fail("the output section went with them")
             }
             // And the gauge row must stop naming a film that is not loaded.
             guard !showing.contains(where: { $0.contains("THIS FILM USES") })
             else {
                 return .fail("the gauge note still speaks of a loaded film")
             }
-            return .pass("Character and Lab gone, Output kept, gauge note true")
+            panel.panel = .development
+            let development = words(in: panel.view)
+            guard !shows(development, "Push"), !shows(development, "Mottle") else {
+                return .fail("development controls remained available on Normal")
+            }
+            let expose = rows(of: .adjustments, model: model,
+                              expecting: ["Exposure", "Grade"])
+            if case .fail = expose { return expose }
+            return rows(of: .print, model: model,
+                        expecting: ["Output", "Export Photo…"])
         },
 
         Check(name: "a selection reaches the print") { editor in
@@ -460,19 +476,33 @@ enum VerifyDesktopParity {
                              "Selection Light"])
         },
 
-        Check(name: "settings reach the film model") { editor in
-            let sheet = SettingsSheetController()
-            _ = sheet.view
-            sheet.viewDidLoad()
-            let showing = words(in: sheet.view)
-            let wanted = ["New Photos", "Starting Film", "Output",
-                          "Negative", "Film Model", "Disc Grain",
-                          "Red–Green", "Edge Contrast"]
-            let missing = wanted.filter { !shows(showing, $0) }
-            guard missing.isEmpty else {
-                return .fail("missing \(missing.joined(separator: ", "))")
+        Check(name: "settings group the controls in native tabs") { _ in
+            let settings = MacSettingsWindowController()
+            guard settings.tabs.tabStyle == .toolbar,
+                  settings.window?.sheetParent == nil,
+                  settings.tabs.tabViewItems.map(\.label) == ["General", "Output", "Film Model"] else {
+                return .fail("settings did not create an independent window with three toolbar tabs")
             }
-            return .pass("\(wanted.count) rows found")
+            let expected = [
+                ["New Photos", "Starting Film", "Reset All Settings"],
+                ["Photos", "Video", "Photo Quality", "Video Quality", "Negative"],
+                ["Grain", "Halation", "Color Separation", "Disc Grain", "Red–Green", "Edge Contrast"],
+            ]
+            for (index, labels) in expected.enumerated() {
+                settings.tabs.selectedTabViewItemIndex = index
+                guard let controller = settings.tabs.tabViewItems[index].viewController else {
+                    return .fail("settings tab \(index) has no controls")
+                }
+                let showing = words(in: controller.view)
+                let missing = labels.filter { !shows(showing, $0) }
+                guard missing.isEmpty else {
+                    return .fail("missing \(missing.joined(separator: ", "))")
+                }
+                guard !showing.contains("Done") else {
+                    return .fail("settings still use a modal Done button")
+                }
+            }
+            return .pass("General, Output, and Film Model expose all settings without a modal sheet")
         },
 
         Check(name: "the RGB histogram reads the print") { editor in

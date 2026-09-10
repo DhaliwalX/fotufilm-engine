@@ -550,6 +550,8 @@ final class SessionPopUp: SessionView {
         #else
         button.controlSize = .small
         button.font = PlatformType.system(12)
+        button.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        button.cell?.lineBreakMode = .byTruncatingTail
         button.target = self
         button.action = #selector(chose)
         #endif

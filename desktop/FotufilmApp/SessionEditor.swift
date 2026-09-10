@@ -63,6 +63,7 @@ final class DesktopEditorViewController: SessionViewController {
 
     private var observation: ObservationLoop?
     private var settingsObserver: AnyCancellable?
+    private var renderingSettingsObserver: AnyCancellable?
     private var filmModelObserver: NSObjectProtocol?
     private var packsObserver: NSObjectProtocol?
     private var proAccessObserver: NSObjectProtocol?
@@ -162,6 +163,7 @@ final class DesktopEditorViewController: SessionViewController {
         inspector.onPanelChanged = { [weak self] panel in
             self?.inspectorPanelChanged(panel)
         }
+        inspector.onExport = { [weak self] in self?.exportDocument(nil) }
         workspace.addSubview(inspectorPanel)
 
         buildRail()
@@ -200,7 +202,11 @@ final class DesktopEditorViewController: SessionViewController {
     private var railPanels: [InspectorPanel] = []
 
     private func rebuildRail(stack: PlatformStackView) {
+        #if canImport(UIKit)
         let available = InspectorPanel.available(video: model.hasVideo)
+        #else
+        let available = Array(InspectorPanel.available(video: model.hasVideo).prefix(4))
+        #endif
         guard available != railPanels else { return }
         railPanels = available
         for view in stack.arrangedSubviews {
@@ -240,6 +246,17 @@ final class DesktopEditorViewController: SessionViewController {
         settingsObserver = AppSettings.shared.objectWillChange
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refresh() }
+        #if !canImport(UIKit)
+        // A separate settings window can stay open while editing. Update the preview when
+        // rendering defaults change, after the published values have been stored.
+        let settings = AppSettings.shared
+        renderingSettingsObserver = Publishers.CombineLatest4(
+            settings.$renderingMode, settings.$negativeViewing,
+            settings.$stillDynamicRange, settings.$videoDevelopQuality)
+            .dropFirst()
+            .debounce(for: .milliseconds(100), scheduler: RunLoop.main)
+            .sink { [weak self] _ in self?.model.rerender(debounce: false) }
+        #endif
         filmModelObserver = NotificationCenter.default.addObserver(
             forName: AppSettings.filmModelChanged, object: nil, queue: .main
         ) { [weak self] _ in
@@ -682,6 +699,9 @@ final class DesktopEditorViewController: SessionViewController {
         lastPanel = panel
         syncCropMode()
         cropCanvas.cropChangedExternally()
+        #if !canImport(UIKit)
+        view.window?.toolbar?.validateVisibleItems()
+        #endif
     }
 
     private var lastPanel = InspectorPanel.film
@@ -984,9 +1004,11 @@ final class DesktopEditorViewController: SessionViewController {
 
     // MARK: - Settings
 
-    /// The app's settings, over the session. A form sheet rather than the workshop's full pane:
-    /// it is a set of questions to answer, not a place to work.
+    /// Settings use an independent window on the Mac and a form sheet on iPad.
     @objc func openSettings(_ sender: Any?) {
+        #if !canImport(UIKit)
+        MacSettingsWindowController.shared.showWindow(sender)
+        #else
         guard !sheetUp else { return }
         sheetUp = true
         let settings = SettingsSheetController()
@@ -997,11 +1019,8 @@ final class DesktopEditorViewController: SessionViewController {
             // different develop, so the canvas catches up rather than waiting for the next edit.
             model.rerender(debounce: false)
         }
-        #if canImport(UIKit)
         settings.modalPresentationStyle = .formSheet
         present(settings, animated: true)
-        #else
-        presentAsSheet(settings)
         #endif
     }
 
@@ -1093,6 +1112,11 @@ final class DesktopEditorViewController: SessionViewController {
         guard let panel = panel(from: sender),
               InspectorPanel.available(video: model.hasVideo).contains(panel)
         else { return }
+        #if !canImport(UIKit)
+        if sender is NSToolbarItem {
+            guard model.hasPhoto, !model.hasVideo, !model.isExporting else { return }
+        }
+        #endif
         inspector.panel = panel
         setPanels(animated: true) { wanted in
             wanted.inspector = true
@@ -1105,7 +1129,7 @@ final class DesktopEditorViewController: SessionViewController {
         let tag = (sender as? UIKeyCommand)
             .flatMap { $0.propertyList as? Int }
         #else
-        let tag = (sender as? NSMenuItem)?.tag
+        let tag = (sender as? NSMenuItem)?.tag ?? (sender as? NSToolbarItem)?.tag
         #endif
         guard let tag, InspectorPanel.allCases.indices.contains(tag) else {
             return nil
@@ -1418,7 +1442,7 @@ extension DesktopEditorViewController: NSMenuItemValidation {
             item.state = model.isSamplingSelection ? .on : .off
             return model.hasPhoto && !model.hasVideo && !model.isExporting
         case #selector(openSettings(_:)):
-            return canOpenSheet
+            return true
         default:
             return true
         }

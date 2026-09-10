@@ -55,7 +55,7 @@ enum MainMenu {
             #selector(AppDelegate.toggleAutomaticUpdateChecks(_:)))
         menu.addItem(.separator())
         add(menu, "Settings…",
-            #selector(DesktopEditorViewController.openSettings(_:)), key: ",")
+            #selector(AppDelegate.openSettings(_:)), key: ",")
         menu.addItem(.separator())
 
         let services = NSMenu(title: "Services")

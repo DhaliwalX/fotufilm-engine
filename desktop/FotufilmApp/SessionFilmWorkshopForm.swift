@@ -99,10 +99,7 @@ extension FilmWorkshopController {
             "Shot on", options: formats,
             get: { [weak self] in self?.draft.nativeFormatID },
             set: { [weak self] id in self?.edit { $0.nativeFormatID = id } }))
-        section.add(NoteRow("The format a film is normally shot on. Everything "
-                            + "measured in millimetres below — grain, turbidity, "
-                            + "coupler reach — is enlarged from it, so the same "
-                            + "numbers look coarser on a smaller frame."))
+        section.add(NoteRow("Set the film’s usual frame size. Smaller frames enlarge grain, softness, and edge effects more."))
         return section
     }
 
@@ -131,18 +128,9 @@ extension FilmWorkshopController {
             }))
 
         if draft.spectralModel == .drawn {
-            section.add(NoteRow("The curves above are yours: drag a handle, "
-                                + "press an empty spot to add one, or carry a "
-                                + "handle below the plot to take it out. The "
-                                + "chips pick which curve is in hand. What the "
-                                + "engine renders is the drawn curve resampled "
-                                + "onto its 5 nm grid — exactly what the "
-                                + "graph strokes."))
+            section.add(NoteRow("Drag a point to change the curve, click to add a point, or drag below the graph to remove one. Use the buttons to select a curve. The graph shows the 5 nm samples used for rendering."))
             if let lineage = draft.spectralLineage {
-                section.add(NoteRow("These curves descend from \(lineage)'s "
-                                    + "record. Play freely and save copies; a "
-                                    + "film drawn from a library record does "
-                                    + "not export."))
+                section.add(NoteRow("These curves are based on \(lineage). You can edit them and save copies, but films based on library records cannot be exported."))
             }
         }
 
@@ -151,10 +139,7 @@ extension FilmWorkshopController {
                 section.add(numbers("Panchromatic response", decimals: 2,
                                     get: { $0.monoWeights },
                                     set: { $0.monoWeights = $1 }))
-                section.add(NoteRow("Drag the bands above, or type here. What one "
-                                    + "emulsion makes of the three primaries: a film "
-                                    + "that answers red strongly renders a red "
-                                    + "filter's effect without one."))
+                section.add(NoteRow("Set how strongly black-and-white film responds to red, green, and blue light. Drag the graph or enter values here."))
             }
             return section
         }
@@ -171,10 +156,7 @@ extension FilmWorkshopController {
                                 get: { $0.peaksNM }, set: { $0.peaksNM = $1 }))
             section.add(numbers("Bandwidth", decimals: 0,
                                 get: { $0.widthsNM }, set: { $0.widthsNM = $1 }))
-            section.add(NoteRow("Nanometres, and the same two numbers as the graph "
-                                + "above: drag a crest to move a layer's peak, or "
-                                + "the small ring on its shoulder to open or close "
-                                + "the band it answers over."))
+            section.add(NoteRow("Set each layer’s peak sensitivity and bandwidth in nanometres. Drag the peak or width handle on the graph, or enter values here."))
         }
 
         for layer in 0..<3 {
@@ -191,9 +173,7 @@ extension FilmWorkshopController {
                                     draft.sensitivityMix = mix
                                 }))
         }
-        section.add(NoteRow("Crosstalk. No emulsion answers one primary and "
-                            + "nothing else; the rows are normalised, so what "
-                            + "matters is their proportion."))
+        section.add(NoteRow("Set each layer’s response to red, green, and blue light. Values are normalized, so their proportions determine the result."))
         return section
     }
 
@@ -201,9 +181,7 @@ extension FilmWorkshopController {
 
     private func toneSection() -> FormSectionView {
         let section = FormSectionView(title: "Tone")
-        section.add(NoteRow("Drag the curve above. These are the same six "
-                            + "numbers, for when a value is known rather than "
-                            + "looked for."))
+        section.add(NoteRow("Drag the tone curve or enter its six values here."))
         section.add(slider("Base density", 0...1.6, format: "%.2f",
                            get: { $0.baseDensity },
                            set: { $0.baseDensity = $1 }))
@@ -232,10 +210,7 @@ extension FilmWorkshopController {
             section.add(numbers("Mask density", decimals: 3,
                                 get: { $0.maskOffsets },
                                 set: { $0.maskOffsets = $1 }))
-            section.add(NoteRow("The orange mask, as density added over the red "
-                                + "layer's base. It is a correction printed into "
-                                + "the negative, which is why the negative looks "
-                                + "orange and the print does not."))
+            section.add(NoteRow("Set the orange mask density in the negative. The mask is removed when making a positive print."))
         }
         return section
     }
@@ -270,9 +245,7 @@ extension FilmWorkshopController {
                               set: { [weak self] on in
                                   self?.edit { $0.isReflectionPrint = on }
                               }))
-        section.add(NoteRow("A print on paper reaches the D-max a reflective "
-                            + "surface can and no further. A transparency, lit "
-                            + "from behind, goes darker than any paper."))
+        section.add(NoteRow("Paper has a lower maximum black density than backlit transparency film."))
         return section
     }
 
@@ -292,11 +265,7 @@ extension FilmWorkshopController {
         section.add(slider("Green–blue barrier", 0...1, format: "%.3f",
                            get: { $0.couplerTransmissionGreenBlue },
                            set: { $0.couplerTransmissionGreenBlue = $1 }))
-        section.add(NoteRow("A layer developing hard releases inhibitor that "
-                            + "suppresses its neighbours. The barriers are the "
-                            + "coated interlayers: 1 lets everything through, 0 "
-                            + "seals the layers apart. Watch the hue sweep — the "
-                            + "grey wedge is the control and should stay put."))
+        section.add(NoteRow("Control how development in one layer reduces development in neighboring layers. Barrier values of 1 allow the full interaction; 0 blocks it. Compare the color chart while checking that the gray wedge stays neutral."))
         section.add(slider("Coupler reach", 0...0.4, format: "%.3f", unit: " mm",
                            get: { $0.couplerDiffusionMM },
                            set: { $0.couplerDiffusionMM = $1 }))
@@ -307,10 +276,7 @@ extension FilmWorkshopController {
                            unit: " mm",
                            get: { $0.adjacencyRadiusMM },
                            set: { $0.adjacencyRadiusMM = $1 }))
-        section.add(NoteRow("The border in the middle of the chart is where the "
-                            + "edge effect shows: exhausted developer drifting "
-                            + "across a boundary lightens one side of it and "
-                            + "darkens the other."))
+        section.add(NoteRow("Edge effects increase contrast along boundaries. Use the center edge in the chart to compare the result."))
         return section
     }
 
@@ -326,10 +292,7 @@ extension FilmWorkshopController {
         section.add(slider("Measured on luminance", 0...1, format: "%.2f",
                            get: { $0.mtfLumaShare },
                            set: { $0.mtfLumaShare = $1 }))
-        section.add(NoteRow("Light scatters sideways inside the emulsion before "
-                            + "it is recorded. The blue layer is on top and sees "
-                            + "the sharpest image; the red layer is under "
-                            + "everything. The bar patterns are where this shows."))
+        section.add(NoteRow("Control image softness caused by light scattering inside the film. Use the bar patterns to compare sharpness."))
         return section
     }
 
@@ -346,11 +309,7 @@ extension FilmWorkshopController {
         }
         section.add(slider("Flare", 0...0.05, format: "%.4f",
                            get: { $0.flare }, set: { $0.flare = $1 }))
-        section.add(NoteRow("Halation is light that went through the emulsion, "
-                            + "bounced off the base and came back — red first, "
-                            + "which is why it glows warm. Flare is the light "
-                            + "that never made it to a sharp image at all, and "
-                            + "is the floor under the chart's black surround."))
+        section.add(NoteRow("Halation adds glow around highlights from light reflecting inside the film. Flare lifts dark areas and reduces contrast."))
         return section
     }
 
@@ -394,11 +353,7 @@ extension FilmWorkshopController {
             set: { [weak self] law in
                 self?.edit { $0.grainDensityLaw = law }
             }))
-        section.add(NoteRow("Dye clouds are not opaque, so their densities add. "
-                            + "Silver grains are, so what adds is covered area — "
-                            + "the same noise at low density, steepening as the "
-                            + "grains begin to hide one another. The flat grey "
-                            + "field is where to look."))
+        section.add(NoteRow("Choose how grain changes with film density. Dye grain adds density; silver grain covers more area as grains overlap. Compare the flat gray field."))
         return section
     }
 
@@ -428,15 +383,9 @@ extension FilmWorkshopController {
                                     $0.reciprocityStatedThroughSeconds =
                                         $1.first ?? 0
                                 }))
-            section.add(NoteRow("Seconds. Past the last exposure the sheet states "
-                                + "a correction for, the correction holds at what "
-                                + "it said there — the fit describes a published "
-                                + "row, and the row ends. Zero leaves it open."))
+            section.add(NoteRow("Set the longest measured exposure in seconds. Beyond this time, the correction stays fixed. Use 0 for no upper limit."))
         } else {
-            section.add(NoteRow("A film left open for minutes loses speed, and "
-                                + "the manufacturer's sheet says by how much. Off "
-                                + "unless you have that row: a film with no "
-                                + "measurement should not be given an invented one."))
+            section.add(NoteRow("Simulate sensitivity loss during long exposures. Enable this only when measured correction data is available."))
         }
         return section
     }

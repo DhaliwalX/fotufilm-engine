@@ -13,6 +13,8 @@ extension DesktopEditorViewController: NSToolbarDelegate {
         static let zoomOut = NSToolbarItem.Identifier("zoomOut")
         static let zoomIn = NSToolbarItem.Identifier("zoomIn")
         static let zoomToFit = NSToolbarItem.Identifier("zoomToFit")
+        static let selective = NSToolbarItem.Identifier("selective")
+        static let crop = NSToolbarItem.Identifier("crop")
         static let undo = NSToolbarItem.Identifier("undo")
         static let redo = NSToolbarItem.Identifier("redo")
         static let reset = NSToolbarItem.Identifier("reset")
@@ -37,7 +39,7 @@ extension DesktopEditorViewController: NSToolbarDelegate {
         [ToolbarID.stocks, .sidebarTrackingSeparator, ToolbarID.open,
          .flexibleSpace,
          ToolbarID.zoomOut, ToolbarID.readout, ToolbarID.zoomIn,
-         ToolbarID.zoomToFit, .flexibleSpace,
+         ToolbarID.zoomToFit, ToolbarID.selective, ToolbarID.crop, .flexibleSpace,
          ToolbarID.histogram, ToolbarID.undo, ToolbarID.redo,
          ToolbarID.reset, ToolbarID.export,
          ToolbarID.inspector]
@@ -60,6 +62,10 @@ extension DesktopEditorViewController: NSToolbarDelegate {
                           action: #selector(toggleStockSidebar(_:)))
         case ToolbarID.open:
             return openItem(identifier)
+        case ToolbarID.selective:
+            return canvasToolItem(identifier, panel: .selective)
+        case ToolbarID.crop:
+            return canvasToolItem(identifier, panel: .crop)
         case ToolbarID.undo:
             return button(identifier, symbol: "arrow.uturn.backward",
                           title: "Undo", action: #selector(performUndo(_:)))
@@ -77,7 +83,7 @@ extension DesktopEditorViewController: NSToolbarDelegate {
                           title: "Export", action: #selector(exportDocument(_:)))
         case ToolbarID.inspector:
             return button(identifier, symbol: "sidebar.trailing",
-                          title: "Adjustments",
+                          title: "Darkroom",
                           action: #selector(toggleInspectorPanel(_:)))
         case ToolbarID.readout:
             return readoutItem(identifier)
@@ -106,6 +112,15 @@ extension DesktopEditorViewController: NSToolbarDelegate {
         item.target = self
         item.action = action
         item.isBordered = true
+        return item
+    }
+
+    private func canvasToolItem(_ identifier: NSToolbarItem.Identifier,
+                                panel: InspectorPanel) -> NSToolbarItem {
+        let item = button(identifier, symbol: panel.symbol, title: panel.title,
+                          action: #selector(chooseInspectorPanel(_:)))
+        item.tag = InspectorPanel.allCases.firstIndex(of: panel)!
+        item.visibilityPriority = .high
         return item
     }
 
@@ -152,6 +167,21 @@ extension DesktopEditorViewController: NSToolbarDelegate {
 
     public func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
         switch item.action {
+        case #selector(chooseInspectorPanel(_:)):
+            guard InspectorPanel.allCases.indices.contains(item.tag) else { return false }
+            let panel = InspectorPanel.allCases[item.tag]
+            let selected = inspectorIsUp && currentPanel == panel
+            let symbol = NSImage(systemSymbolName: panel.symbol,
+                                 accessibilityDescription: panel.title)
+            if selected {
+                item.image = symbol?.withSymbolConfiguration(
+                    NSImage.SymbolConfiguration(paletteColors: [PlatformColor.accent]))
+                item.image?.isTemplate = false
+            } else {
+                item.image = symbol
+            }
+            item.toolTip = "\(panel.title)\(selected ? " — Active" : "") (⌘\(item.tag + 1))"
+            return model.hasPhoto && !model.hasVideo && !model.isExporting
         case #selector(toggleHistogram(_:)):
             item.image = NSImage(
                 systemSymbolName: isHistogramShown ? "waveform.circle.fill" : "waveform",
