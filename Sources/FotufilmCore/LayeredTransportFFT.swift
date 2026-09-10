@@ -87,7 +87,27 @@ final class FFTPlan: @unchecked Sendable {
     func transform(_ split: inout DSPDoubleSplitComplex, width: vDSP_Length,
                    height: vDSP_Length, direction: FFTDirection) {
         withExtendedLifetime(self) {
-            vDSP_fft2d_zipD(handle, &split, 1, 0, width, height, direction)
+            // Large strided double-precision column FFTs are very expensive.
+            // Transpose between contiguous row passes, keeping the same 2D DFT.
+            let w = 1 << Int(width), h = 1 << Int(height)
+            let scratch = FFTWorkspacePool.shared.acquire(count: w*h)
+            defer { FFTWorkspacePool.shared.release(scratch) }
+            for y in 0..<h {
+                var row = DSPDoubleSplitComplex(realp: split.realp+y*w, imagp: split.imagp+y*w)
+                vDSP_fft_zipD(handle, &row, 1, width, direction)
+            }
+            scratch.real.withUnsafeMutableBufferPointer { real in
+                scratch.imag.withUnsafeMutableBufferPointer { imag in
+                    vDSP_mtransD(split.realp, 1, real.baseAddress!, 1, vDSP_Length(w), vDSP_Length(h))
+                    vDSP_mtransD(split.imagp, 1, imag.baseAddress!, 1, vDSP_Length(w), vDSP_Length(h))
+                    for x in 0..<w {
+                        var row = DSPDoubleSplitComplex(realp: real.baseAddress!+x*h, imagp: imag.baseAddress!+x*h)
+                        vDSP_fft_zipD(handle, &row, 1, height, direction)
+                    }
+                    vDSP_mtransD(real.baseAddress!, 1, split.realp, 1, vDSP_Length(h), vDSP_Length(w))
+                    vDSP_mtransD(imag.baseAddress!, 1, split.imagp, 1, vDSP_Length(h), vDSP_Length(w))
+                }
+            }
         }
     }
 

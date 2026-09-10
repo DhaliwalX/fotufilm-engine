@@ -151,7 +151,7 @@ final class LayeredTransportRegressionTests: XCTestCase {
         let kernel = try TransportRadialKernel(radiusMM: [0.001, 0.09, 0.22, 0.44], mass: [0.1, 0.2, 0.3, 0.4])
         let bands = try kernel.stencils(pixelPitchMM: 0.004)
         XCTAssertGreaterThan(bands.count, 2)
-        for (w, h) in [(37, 29), (11, 9), (37, 29)] {
+        for (w, h) in [(37, 29), (11, 9), (129, 65), (37, 29)] {
             var image = ImageBuffer(width: w, height: h)
             for c in 0..<3 { for i in 0..<w*h { image.planes[c][i] = Float((i*17+c*23)%101)/100 } }
             image.planes[0][0] = 20; image.planes[1][w*h-1] = 10
