@@ -5,6 +5,28 @@ import Metal
 import FotufilmMetal
 
 final class LayeredPlatformTests: XCTestCase {
+    func testPluginFloatRendererKeepsGreyBalancedAcrossTransportModels() throws {
+        let renderer = try XCTUnwrap(HalideMetalFilmRenderer.shared)
+        let width = 17, height = 13
+        var pixels = [Float](repeating: 0.18, count: width * height * 4)
+        for i in 0..<(width * height) { pixels[4 * i + 3] = 0.7 }
+        for reference: Float in [3200, 5500, 6504] {
+            var stock = TestStocks.negative
+            stock.referenceIlluminantKelvin = reference
+            stock.adjacencyStrength = 0
+            var options = TransportFixtures.quiet
+            options.localTone = false
+            let legacy = try XCTUnwrap(renderer.processLinearFloat(pixels,
+                width: width, height: height, stock: stock, options: options))
+            options.halationModel = .layered
+            let layered = try XCTUnwrap(renderer.processLinearFloat(pixels,
+                width: width, height: height, stock: stock, options: options))
+            let error = zip(legacy, layered).map { abs($0 - $1) }.max() ?? 0
+            XCTAssertLessThan(error, 0.0002, "film reference \(reference)")
+            XCTAssertEqual(layered[3], 0.7)
+        }
+    }
+
     func testEncodedSelectionPreservesAlphaAndDeliveryBasis() throws {
         let renderer = try XCTUnwrap(HalideMetalFilmRenderer.shared)
         let w = 17, h = 13

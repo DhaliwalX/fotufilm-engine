@@ -609,6 +609,7 @@ export default function App() {
             onClick={() => setFilmOpen((v) => !v)}
           />
           <span className="app-name">Fotufilm</span>
+          <span className="experimental-label">Experimental</span>
           <ToolButton
             icon="open"
             label="Open images (⌘O)"

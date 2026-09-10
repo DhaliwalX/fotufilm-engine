@@ -109,7 +109,7 @@ test('corrupt RAW reports an error, and a following valid import still works', a
 
 test('RAW cancellation releases the worker without changing the open photo', async ({ page }) => {
   await page.goto('/')
-  await page.route('**/raw/decoder.mjs', () => {})
+  await page.route('**/raw/decoder.mjs*', () => {})
   await page.locator('input[type=file][multiple]').setInputFiles({
     name: 'slow.dng',
     mimeType: '',

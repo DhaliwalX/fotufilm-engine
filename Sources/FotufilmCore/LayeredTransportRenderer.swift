@@ -35,7 +35,7 @@ public enum LayeredTransportRenderer {
         for byte in try encoder.encode(model) { key = (key ^ UInt64(byte)) &* 0x100000001b3 }
         key ^= SpectralRuntime.cacheIdentifier(for: stock)
         key ^= options.lensFilters.signature
-        for values in [options.resolvedSceneSpectrum, options.halationReturnGain,
+        for values in [options.resolvedSceneSpectrum(referenceKelvin: stock.referenceIlluminantKelvin), options.halationReturnGain,
                        [options.sceneIlluminantKelvin ?? 0, options.halationSourceColour, options.halationHazeMM ?? 0]] {
             key = (key ^ UInt64(values.count)) &* 0x100000001b3
             for value in values { key = (key ^ UInt64(value.bitPattern)) &* 0x100000001b3 }

@@ -18,23 +18,36 @@ try {
     if (request.url().includes('/packs/media/')) mediumRequests.push(request.url())
   })
   await page.goto(base.href)
+  const requested = (requests, name) => requests.find(url => {
+    const actual = new URL(url), expected = new URL(name, base)
+    return actual.origin === expected.origin && actual.pathname === expected.pathname
+  })
   await page.locator('input[type=file][multiple]').setInputFiles({ name: 'linear.DNG',
     mimeType: '', buffer: Buffer.from(makeDNG({ width: 2001, height: 1201, mosaic: false })) })
   await page.waitForFunction(() => /1600 × 960/.test(document.querySelector('.viewer-status > [role=status]')?.textContent), null, { timeout: 30000 })
   assert.match(await page.locator('.pixel-readout').innerText(), /RAW/)
-  assert.ok(decoderRequests.some(url => url === new URL('raw/decoder.mjs', base).href))
-  assert.ok(decoderRequests.some(url => url === new URL('raw/decoder.wasm', base).href))
-  assert.ok(decoderRequests.some(url => url === new URL('raw/camera-profiles.json', base).href))
+  const decoderModule = requested(decoderRequests, 'raw/decoder.mjs')
+  assert.ok(decoderModule)
+  const revision = new URL(decoderModule).searchParams.get('v')
+  assert.ok(revision, 'production runtime must have a content revision')
+  for (const name of ['raw/decoder.wasm', 'raw/camera-profiles.json']) {
+    const url = requested(decoderRequests, name)
+    assert.ok(url, `${name} was requested`)
+    assert.equal(new URL(url).searchParams.get('v'), revision)
+  }
   assert.deepEqual(errors, [])
   await page.getByRole('searchbox').fill('Gold 200')
   await page.getByTitle('Gold 200', { exact: true }).click()
   await page.getByRole('combobox', { name: 'Output medium', exact: true }).click()
   await page.getByRole('option', { name: 'Lab Scan', exact: true }).click()
   await page.waitForFunction(() => /1600 × 960/.test(document.querySelector('.viewer-status > [role=status]')?.textContent), null, { timeout: 60000 })
-  assert.ok(mediumRequests.some(url => url === new URL('packs/media/gold200/lab-scan.pack.delta', base).href))
+  assert.ok(requested(mediumRequests, 'packs/media/gold200/lab-scan.pack.delta'))
   await page.getByRole('button', { name: 'Export (⌘S)', exact: true }).click()
-  assert.ok(sceneRequests.some(url => url === new URL('packs/scene/index.json', base).href))
-  assert.ok(sceneRequests.some(url => url === new URL('packs/scene/geometry.spectra', base).href))
+  for (const name of ['packs/scene/index.json', 'packs/scene/geometry.spectra']) {
+    const url = requested(sceneRequests, name)
+    assert.ok(url, `${name} was requested`)
+    assert.equal(new URL(url).searchParams.get('v'), revision)
+  }
   const downloaded = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Export', exact: true }).click()
   const file = await downloaded

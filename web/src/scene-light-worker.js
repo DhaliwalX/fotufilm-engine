@@ -1,8 +1,9 @@
 import { integrateSceneLight } from './scene-light-math.js'
+import { relatedAssetUrl } from './runtime-assets.js'
 
 let assets
 async function loadAssets(base) {
-  const response = await fetch(new URL('index.json', base))
+  const response = await fetch(relatedAssetUrl('index.json', base))
   if (!response.ok) throw new Error('Scene-light data could not be loaded. Rebuild browser packs.')
   const catalog = await response.json()
   const row = (v) => Array.isArray(v) && v.length === 81 && v.every(Number.isFinite)
@@ -30,7 +31,7 @@ async function loadAssets(base) {
     )
   )
     throw new Error('Invalid scene-light catalog. Rebuild browser packs.')
-  const compressed = await fetch(new URL('geometry.spectra', base))
+  const compressed = await fetch(relatedAssetUrl('geometry.spectra', base))
   if (!compressed.ok) throw new Error('Scene spectra could not be loaded. Rebuild browser packs.')
   const bytes = await new Response(
     compressed.body.pipeThrough(new DecompressionStream('gzip')),

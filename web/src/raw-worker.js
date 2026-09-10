@@ -1,4 +1,5 @@
 import { loadCameraProfiles, resolveCameraProfile, estimateAsShotKelvin } from './camera-profile.js'
+import { relatedAssetUrl } from './runtime-assets.js'
 
 // One worker per import releases the decoder's entire WASM heap on completion.
 self.onmessage = async ({ data: { bytes, decoderURL } }) => {
@@ -19,7 +20,7 @@ self.onmessage = async ({ data: { bytes, decoderURL } }) => {
     }
     self.postMessage({ status: 'Loading RAW decoder' })
     const factory = (await import(/* @vite-ignore */ decoderURL)).default
-    module = await factory()
+    module = await factory({ locateFile: name => relatedAssetUrl(name, decoderURL) })
     if (
       [
         '_raw_scene_scale',
@@ -46,7 +47,7 @@ self.onmessage = async ({ data: { bytes, decoderURL } }) => {
       cameraToXYZ: Array.from({ length: 9 }, (_, i) => module._raw_camera_to_xyz(i)),
     }
     self.postMessage({ status: 'Loading camera spectral profiles' })
-    const catalog = await loadCameraProfiles(new URL('camera-profiles.json', decoderURL))
+    const catalog = await loadCameraProfiles(relatedAssetUrl('camera-profiles.json', decoderURL))
     const profile = resolveCameraProfile(camera, catalog)
     const sceneKelvin = estimateAsShotKelvin(camera, catalog.whiteLocus)
     self.postMessage({

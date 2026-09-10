@@ -2,6 +2,7 @@ import { loadMediumBytes } from './output-media.js'
 import { yieldToBrowser } from './yield.js'
 import { measureTone, toneKey } from './tone-base.js'
 import { CONFIG } from './engine-constants.js'
+import { runtimeAssetUrl, createRuntimeLoader, supportsWebgpuRuntime } from './runtime-assets.js'
 import { packedGrade, whiteBalanceGains, applyColorControls } from './color-controls.js'
 
 import { CONTROLS } from './generated/controls.js'
@@ -27,9 +28,10 @@ const ENGINES = {
 
 /// Where the site is served from — '/' in development, a sub-path on the published demo. Every
 /// runtime fetch is addressed from here, since none of them go through the bundler.
-export const assetUrl = (name) => new URL(import.meta.env.BASE_URL + name, window.location.href).href
+export const assetUrl = name => runtimeAssetUrl(name, import.meta.env.BASE_URL,
+  window.location.href, typeof __FOTUFILM_RUNTIME_REVISION__ === 'string' ? __FOTUFILM_RUNTIME_REVISION__ : '')
 
-const modulePromises = new Map()
+const runtime = createRuntimeLoader(kind => assetUrl(ENGINES[kind]))
 const toneMeasurements = new WeakMap()
 const preparedSources = new WeakSet()
 async function measuredTone(source, controls, balance) {
@@ -42,13 +44,7 @@ async function measuredTone(source, controls, balance) {
 }
 
 function loadModule(kind) {
-  if (!modulePromises.has(kind)) {
-    // The URL is assembled at runtime so the bundler treats it as an opaque fetch rather than a
-    // module to resolve: files in public/ are copied verbatim and are not part of the graph.
-    const url = assetUrl(ENGINES[kind])
-    modulePromises.set(kind, import(/* @vite-ignore */ url).then((m) => m.default()))
-  }
-  return modulePromises.get(kind)
+  return runtime.load(kind)
 }
 
 /// Parses the little-endian pack written by the CLI. The layout is fixed by
@@ -667,7 +663,10 @@ class Developer {
     return { pixels, elapsed }
   }
 
+  get isAborted() { return runtime.wasAborted(this.module) }
+
   dispose() {
+    if (this.isAborted) return
     this.freeFrame()
     this.module._free(this.grainPtr)
     this.disposeTables()
@@ -889,7 +888,7 @@ export class SimdDeveloper extends Developer {
 /// create the kernel's pipelines, and the SIMD path otherwise.
 export async function createDeveloper(pack, onProgress = () => {}) {
   if (typeof WebAssembly !== 'object') throw new Error('This browser cannot process film profiles. Use a browser with WebAssembly support.')
-  if (navigator.gpu && !pack.transport) {
+  if (supportsWebgpuRuntime(navigator.gpu, WebAssembly) && !pack.transport) {
     let developer
     try {
       onProgress('Loading WebGPU engine')
@@ -900,8 +899,8 @@ export async function createDeveloper(pack, onProgress = () => {}) {
     } catch (error) {
       // An aborted Emscripten module cannot be called again, so the promise goes with it and the
       // next pack loads a fresh one.
-      if (developer && !developer.module.ABORT) developer.dispose()
-      modulePromises.delete('webgpu')
+      if (developer && !runtime.wasAborted(developer.module)) developer.dispose()
+      runtime.forget('webgpu')
       console.warn('WebGPU engine unavailable, developing on the CPU instead:', error)
     }
   }
@@ -960,7 +959,14 @@ export async function createCpuDeveloper(pack) {
 }
 
 export async function createNormalDeveloper() {
-  const module = await loadModule('simd')
+  let module
+  try { module = await loadModule('simd') }
+  catch (error) {
+    // Normal has a scene-linear reference implementation and does not need a
+    // working WASM runtime to open an EXR or RAW photo.
+    console.warn('CPU WASM unavailable, using the light and color reference:', error)
+    return null
+  }
   if (!module._fotufilm_wasm_plain_supported) return null
   const configuration = new Float32Array(CONFIG.FOTUFILM_FRAME_CONFIGURATION_COUNT)
   configuration[CONFIG.TONE_GRID_WIDTH] = configuration[CONFIG.TONE_GRID_HEIGHT] = 1
