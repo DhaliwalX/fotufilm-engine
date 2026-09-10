@@ -1418,15 +1418,16 @@ public struct FilmEngineInvocation {
         }
         optical += diffusion
         let grainSupport = featureMask & FilmEngineFeature.grain != 0 ? grainRadius : 0
-        // The print MTF runs after grain, so a tile needs the two stacked to develop its interior
-        // exactly as the whole frame would.
+        // The print MTF reads neighbouring developed densities, so its reach stacks after both
+        // the optical chain and the grain field. Omitting it from the optical reach truncates
+        // the negative near a tile boundary before the print reads those neighbours.
         let printSupport = featureMask & FilmEngineFeature.printMTF != 0 ? printMTFRadius : 0
-        self.spatialSupport = max(optical, grainSupport + printSupport)
+        self.spatialSupport = max(optical, grainSupport) + printSupport
         // The same support with halation's reach taken out — what a strip needs when the
         // halation fields arrive whole-frame — and the two pieces the fields path prices its
         // passes by: the reach of the light chain alone, and halation's own.
         self.spatialSupportSansHalation = max(optical - halationReach,
-                                              grainSupport + printSupport)
+                                              grainSupport) + printSupport
         self.lightSupport = lightReach
         self.halationSupport = halationReach
         self.halationPixelRadii = halationRadii.map(Int32.init)
