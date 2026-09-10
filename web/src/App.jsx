@@ -946,7 +946,7 @@ export default function App() {
                       value={edit.halationModel || 'legacy'}
                       options={[
                         { value: 'legacy', label: 'Legacy' },
-                        ...(selectedStock?.layeredTransport === false ? [] : [{ value: 'layered', label: 'Layered Transport' }]),
+                        ...(selectedStock?.layeredTransport === false || active?.image.raw?.sceneKelvin ? [] : [{ value: 'layered', label: 'Layered Transport' }]),
                       ]}
                       onChange={(halationModel) => {
                         endEdit()
@@ -955,6 +955,7 @@ export default function App() {
                         setDifference(false)
                       }}
                     />
+                    {active?.image.raw?.sceneKelvin && <p className="medium-detail">RAW photos with a detected capture light use Legacy halation.</p>}
                     {edit.halationModel === 'layered' && <p className="medium-detail">Uses the film’s default output medium. Pipeline inspection is available with Legacy.</p>}
                     {adjustments('Character')}
                     <Button
