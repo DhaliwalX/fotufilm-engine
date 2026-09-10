@@ -32,9 +32,15 @@ enum VerifyDesktopParity {
             var failures = 0
             let requested = selectiveOnly ? checks.filter { $0.name.contains("select") || $0.name.contains("mask") } : checks
             for check in requested {
+                print("  RUN   \(check.name)")
+                fflush(stdout)
                 model.reset()
                 model.setShowsNegative(false)
-                _ = await settle(model)
+                guard await settle(model) != nil else {
+                    print("  FAIL  \(check.name) — reset did not finish rendering")
+                    failures += 1
+                    continue
+                }
                 let result = await check.run(editor)
                 switch result {
                 case .pass(let note):
@@ -43,6 +49,7 @@ enum VerifyDesktopParity {
                     print("  FAIL  \(check.name) — \(why)")
                     failures += 1
                 }
+                fflush(stdout)
             }
             print(failures == 0
                 ? "verify-parity PASS"
@@ -804,7 +811,7 @@ enum VerifyDesktopParity {
     /// Waits until rendering is idle with no pending work, then returns the canvas image.
     @MainActor
     private static func settle(_ model: DesktopEditorModel,
-                               timeout: TimeInterval = 30) async -> CGImage? {
+                               timeout: TimeInterval = 120) async -> CGImage? {
         let deadline = Date().addingTimeInterval(timeout)
         // Long enough for the change to have been submitted at all: `isProcessing` is false in the
         // instant between the write and the loop picking it up.
@@ -819,7 +826,9 @@ enum VerifyDesktopParity {
             }
             try? await Task.sleep(for: .milliseconds(100))
         }
-        return model.processed.flatMap(cgImage)
+        print("  TIMEOUT  rendering did not settle within \(Int(timeout)) seconds")
+        fflush(stdout)
+        return nil
     }
 
     private static func cgImage(_ image: NSImage) -> CGImage? {
