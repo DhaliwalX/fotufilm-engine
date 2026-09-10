@@ -1,12 +1,11 @@
 import AppKit
 
 /// Named process stages stay visible while their controls scroll underneath.
-/// Crop and selective editing are tools available alongside the four stages.
+/// Canvas tools are opened from the toolbar and use this column for their settings.
 final class MacDarkroomNavigation: SessionView {
     var onSelect: ((Int) -> Void)?
 
     private let stages = SessionTabStrip()
-    private let tools = SessionTabStrip()
     private let heading = makeLabel("Darkroom", size: 16, weight: .semibold)
     private let step = makeLabel("", size: 11, color: .secondaryText,
                                  monospacedDigits: true)
@@ -20,10 +19,7 @@ final class MacDarkroomNavigation: SessionView {
     }
 
     var isEnabled = true {
-        didSet {
-            stages.isEnabled = isEnabled
-            tools.isEnabled = isEnabled
-        }
+        didSet { stages.isEnabled = isEnabled }
     }
 
     override init(frame: CGRect) {
@@ -33,7 +29,7 @@ final class MacDarkroomNavigation: SessionView {
         title.addArrangedSubview(heading)
         title.addArrangedSubview(step)
         let stack = makeStack(.vertical, spacing: 10)
-        [title, stages, detail, tools].forEach { stack.addArrangedSubview($0) }
+        [title, stages, detail].forEach { stack.addArrangedSubview($0) }
         addSubview(stack)
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -44,26 +40,22 @@ final class MacDarkroomNavigation: SessionView {
             detail.widthAnchor.constraint(equalTo: stack.widthAnchor),
             // Keep the header steady when switching between one- and two-line descriptions.
             detail.heightAnchor.constraint(equalToConstant: 32),
-            tools.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
         stages.onSelect = { [weak self] in self?.onSelect?($0) }
-        tools.onSelect = { [weak self] in self?.onSelect?($0 + 4) }
     }
 
     func setPanels(_ panels: [InspectorPanel]) {
         guard panels != self.panels else { return }
         self.panels = panels
         stages.setTitles(panels.prefix(4).map(\.title))
-        tools.setTitles(panels.dropFirst(4).map(\.title))
-        tools.isHidden = panels.count <= 4
         updateSelection()
     }
 
     private func updateSelection() {
         guard panels.indices.contains(selectedIndex) else { return }
         stages.selectedIndex = selectedIndex < 4 ? selectedIndex : -1
-        tools.selectedIndex = selectedIndex >= 4 ? selectedIndex - 4 : -1
-        step.textValue = selectedIndex < 4 ? "\(selectedIndex + 1) of 4" : "Tools"
+        heading.textValue = selectedIndex < 4 ? "Darkroom" : panels[selectedIndex].title
+        step.textValue = selectedIndex < 4 ? "\(selectedIndex + 1) of 4" : "Canvas tool"
         detail.textValue = panels[selectedIndex].workflowDetail
     }
 }

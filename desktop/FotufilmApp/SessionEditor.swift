@@ -201,7 +201,11 @@ final class DesktopEditorViewController: SessionViewController {
     private var railPanels: [InspectorPanel] = []
 
     private func rebuildRail(stack: PlatformStackView) {
+        #if canImport(UIKit)
         let available = InspectorPanel.available(video: model.hasVideo)
+        #else
+        let available = Array(InspectorPanel.available(video: model.hasVideo).prefix(4))
+        #endif
         guard available != railPanels else { return }
         railPanels = available
         for view in stack.arrangedSubviews {
@@ -683,6 +687,9 @@ final class DesktopEditorViewController: SessionViewController {
         lastPanel = panel
         syncCropMode()
         cropCanvas.cropChangedExternally()
+        #if !canImport(UIKit)
+        view.window?.toolbar?.validateVisibleItems()
+        #endif
     }
 
     private var lastPanel = InspectorPanel.film
@@ -1094,6 +1101,11 @@ final class DesktopEditorViewController: SessionViewController {
         guard let panel = panel(from: sender),
               InspectorPanel.available(video: model.hasVideo).contains(panel)
         else { return }
+        #if !canImport(UIKit)
+        if sender is NSToolbarItem {
+            guard model.hasPhoto, !model.hasVideo, !model.isExporting else { return }
+        }
+        #endif
         inspector.panel = panel
         setPanels(animated: true) { wanted in
             wanted.inspector = true
@@ -1106,7 +1118,7 @@ final class DesktopEditorViewController: SessionViewController {
         let tag = (sender as? UIKeyCommand)
             .flatMap { $0.propertyList as? Int }
         #else
-        let tag = (sender as? NSMenuItem)?.tag
+        let tag = (sender as? NSMenuItem)?.tag ?? (sender as? NSToolbarItem)?.tag
         #endif
         guard let tag, InspectorPanel.allCases.indices.contains(tag) else {
             return nil
