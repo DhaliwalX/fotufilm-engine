@@ -1600,6 +1600,21 @@ if hlgOutput {
                     depth: depth, seed: options.seed)
 }
 print("Processed \(width)x\(height) with \(stock.name) (halide) in \(String(format: "%.2f", elapsed))s -> \(positional[1])")
+if let iterStr = flags["--iterations"], let count = Int(iterStr), count > 1 {
+    print("Benchmarking steady-state across \(count) iterations (warmup: \(String(format: "%.3f", elapsed))s)...")
+    var times = [Double]()
+    for iter in 2...count {
+        let t0 = Date()
+        _ = try? FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: linear)
+        let dt = Date().timeIntervalSince(t0)
+        times.append(dt)
+        print(String(format: "  Run %d: %.3fs (%.1f ms)", iter, dt, dt * 1000))
+    }
+    let avg = times.reduce(0, +) / Double(times.count)
+    let minT = times.min() ?? 0
+    print(String(format: "Steady-state (runs 2..%d): avg %.3fs (%.1f ms), min %.3fs (%.1f ms)", count, avg, avg * 1000, minT, minT * 1000))
+    print(String(format: "Startup / JIT overhead:    %.3fs (%.1f ms)", elapsed - avg, (elapsed - avg) * 1000))
+}
 #else
 fail("Image I/O requires macOS (ImageIO). The FotufilmCore library itself is portable.")
 #endif

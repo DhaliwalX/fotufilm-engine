@@ -159,6 +159,45 @@ final class LayeredTransportTests: XCTestCase {
         XCTAssertLessThan(error, 0.00002)
     }
 
+    func testMultiBandAccumulationMatchesSequentialConvolve() throws {
+        guard TransportBackend.cpu.isAvailable else { throw XCTSkip("Halide unavailable") }
+        let kernel1 = try TransportRadialKernel(radiusMM: [0.01, 0.04], mass: [0.4, 0.6])
+        let stencil1 = try kernel1.stencil(pixelPitchMM: 0.008)
+        let kernel2 = try TransportRadialKernel(radiusMM: [0.08, 0.16], mass: [0.3, 0.7])
+        let stencil2 = try kernel2.stencil(pixelPitchMM: 0.008)
+        let bands = [
+            TransportWeightedStencil(weight: 0.35, stencil: stencil1),
+            TransportWeightedStencil(weight: 0.65, stencil: stencil2)
+        ]
+
+        var impulse = ImageBuffer(width: 37, height: 29)
+        impulse.planes[0][14*37+18] = 10; impulse.planes[1][0] = 3; impulse.planes[2][10] = 5
+
+        // Sequential reference
+        var reference = ImageBuffer(width: 37, height: 29)
+        for band in bands {
+            let filtered = try LayeredTransportRenderer.convolve(impulse, stencil: band.stencil)
+            for c in 0..<3 { for i in 0..<impulse.pixelCount {
+                reference.planes[c][i] += band.weight * filtered.planes[c][i]
+            } }
+        }
+
+        // Batched CPU accumulation
+        var cpuAccum = ImageBuffer(width: 37, height: 29)
+        try LayeredTransportRenderer.accumulate(component: impulse, bands: bands, into: &cpuAccum, backend: .cpu)
+        for c in 0..<3 { for i in 0..<impulse.pixelCount {
+            XCTAssertEqual(cpuAccum.planes[c][i], reference.planes[c][i], accuracy: 0.00005)
+        } }
+
+        // Batched Metal accumulation
+        guard TransportBackend.metal.isAvailable else { throw XCTSkip("Metal unavailable; CPU assertions passed") }
+        var metalAccum = ImageBuffer(width: 37, height: 29)
+        try LayeredTransportRenderer.accumulate(component: impulse, bands: bands, into: &metalAccum, backend: .metal)
+        let maxMetalDiff = zip(reference.planes.flatMap { $0 }, metalAccum.planes.flatMap { $0 })
+            .map { abs($0 - $1) }.max() ?? 0
+        XCTAssertLessThan(maxMetalDiff, 0.0001)
+    }
+
     func testSchemaVersionIsExplicitAndRoundTrips() throws {
         let legacy = FilmStockDefinition(id: "test", stock: TestStocks.negative)
         XCTAssertEqual(legacy.schemaVersion, 2)

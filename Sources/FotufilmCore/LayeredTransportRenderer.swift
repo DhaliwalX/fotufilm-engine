@@ -104,9 +104,6 @@ public enum LayeredTransportRenderer {
         let render = execution?.render ?? { image, invocation, developOnly in
             try run(image: image, invocation: invocation, developOnly: developOnly)
         }
-        let filter = execution?.convolve ?? { image, stencil in
-            try convolve(image, stencil: stencil, backend: options.transportBackend)
-        }
         var model = supplied
         let texture = options.stage == .texture
         if texture && !options.textureStages.contains(.emulsionMTF) { model.coreSigmaMM = [0, 0, 0] }
@@ -124,6 +121,8 @@ public enum LayeredTransportRenderer {
         let pitch = pixelPitchMM ?? (Double(options.format.frameHeightMM * min(max(options.frameCoverage, 0.05), 1))
             / Double(min(image.width, image.height)))
         var exposure = ImageBuffer(width: image.width, height: image.height)
+        let profile = ProcessInfo.processInfo.environment["FOTUFILM_TRANSPORT_PROFILE"] == "1"
+        var tHead = 0.0, tFilter = 0.0, tAccum = 0.0, filterCount = 0
         for k in prepared.compilation.kernels.indices {
             let table = prepared.exposure.table(component: k, interpolation: t)
             if !table.values.contains(where: { $0 > 0 }) { continue }
@@ -132,14 +131,29 @@ public enum LayeredTransportRenderer {
             head.featureMask |= FilmEngineFeature.lightOut
             head.clearTransportOptics(keepLens: true)
             head.setTransportExposure(table)
+            let t0 = CFAbsoluteTimeGetCurrent()
             let component = try render(image, head, true)
-            for band in try prepared.compilation.kernels[k].stencils(pixelPitchMM: pitch) {
-                let filtered = try filter(component, band.stencil)
-                for c in 0..<3 { for i in 0..<image.pixelCount {
-                    exposure.planes[c][i] += band.weight * filtered.planes[c][i]
-                } }
+            tHead += CFAbsoluteTimeGetCurrent() - t0
+            let bands = try prepared.compilation.kernels[k].stencils(pixelPitchMM: pitch)
+            filterCount += bands.count
+            if let customConvolve = execution?.convolve {
+                for band in bands {
+                    let t1 = CFAbsoluteTimeGetCurrent()
+                    let filtered = try customConvolve(component, band.stencil)
+                    tFilter += CFAbsoluteTimeGetCurrent() - t1
+                    let t2 = CFAbsoluteTimeGetCurrent()
+                    for c in 0..<3 { for i in 0..<image.pixelCount {
+                        exposure.planes[c][i] += band.weight * filtered.planes[c][i]
+                    } }
+                    tAccum += CFAbsoluteTimeGetCurrent() - t2
+                }
+            } else {
+                let t1 = CFAbsoluteTimeGetCurrent()
+                try accumulate(component: component, bands: bands, into: &exposure, backend: options.transportBackend)
+                tFilter += CFAbsoluteTimeGetCurrent() - t1
             }
         }
+        let tContStart = CFAbsoluteTimeGetCurrent()
         guard exposure.planes.allSatisfy({ $0.allSatisfy { $0.isFinite && $0 >= 0 } }) else {
             throw TransportError.backend("transport produced invalid record exposure")
         }
@@ -174,7 +188,13 @@ public enum LayeredTransportRenderer {
             } }
             return output
         }
-        return try render(exposure, continuation, false)
+        let result = try render(exposure, continuation, false)
+        if profile {
+            let tCont = CFAbsoluteTimeGetCurrent() - tContStart
+            print(String(format: "[PROFILE] head: %.1fms | filter (%d bands): %.1fms | accum: %.1fms | continuation: %.1fms | total: %.1fms",
+                         tHead * 1000, filterCount, tFilter * 1000, tAccum * 1000, tCont * 1000, (tHead + tFilter + tAccum + tCont) * 1000))
+        }
+        return result
     }
 
     public static func convolve(_ image: ImageBuffer, stencil: TransportStencil,
@@ -196,6 +216,60 @@ public enum LayeredTransportRenderer {
         }
         guard status == 0 else { throw TransportError.backend("convolution failed (\(status))") }
         return output
+    }
+
+    public static func accumulate(component: ImageBuffer, bands: [TransportWeightedStencil],
+                                  into exposure: inout ImageBuffer,
+                                  backend: TransportBackend = .cpu) throws {
+        guard component.width > 0 && component.height > 0, component.planes.count == 3,
+              component.planes.allSatisfy({ $0.count == component.pixelCount && $0.allSatisfy(\.isFinite) }),
+              exposure.width == component.width && exposure.height == component.height,
+              exposure.planes.count == 3 else {
+            throw TransportError.invalid("invalid image dimensions or planes")
+        }
+        let activeBands = bands.filter { $0.weight > 0 }
+        if activeBands.isEmpty { return }
+
+        var totalWeights = 0
+        for band in activeBands {
+            let dim: Int = 2 * band.stencil.radius + 1
+            let expected: Int = dim * dim
+            guard band.stencil.weights.count == expected else {
+                throw TransportError.invalid("invalid stencil weights size")
+            }
+            totalWeights += band.stencil.weights.count
+        }
+
+        var flattenedWeights = [Float]()
+        flattenedWeights.reserveCapacity(totalWeights)
+        var cBands = [FotufilmTransportBand]()
+        cBands.reserveCapacity(activeBands.count)
+
+        for band in activeBands {
+            flattenedWeights.append(contentsOf: band.stencil.weights)
+            cBands.append(FotufilmTransportBand(kernel: nil,
+                                                radius: Int32(band.stencil.radius),
+                                                stride: Int32(band.stencil.stride),
+                                                weight: band.weight))
+        }
+
+        let status = withPlanes(component.planes) { r, g, b in
+            withMutablePlanes(&exposure.planes) { er, eg, eb in
+                flattenedWeights.withUnsafeBufferPointer { weightsBuf in
+                    var offset = 0
+                    for i in cBands.indices {
+                        cBands[i].kernel = weightsBuf.baseAddress! + offset
+                        offset += Int((2 * cBands[i].radius + 1) * (2 * cBands[i].radius + 1))
+                    }
+                    return cBands.withUnsafeBufferPointer { bandsBuf in
+                        fotufilm_transport_accumulate(r, g, b, er, eg, eb,
+                            Int32(component.width), Int32(component.height),
+                            bandsBuf.baseAddress, Int32(activeBands.count), backend.rawValue)
+                    }
+                }
+            }
+        }
+        guard status == 0 else { throw TransportError.backend("transport accumulate failed (\(status))") }
     }
 
     private static func run(image: ImageBuffer, invocation: FilmEngineInvocation,

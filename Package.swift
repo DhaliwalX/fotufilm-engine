@@ -32,6 +32,7 @@ let halideLinkerSettings: [LinkerSetting] = halideRoot.map { root in
             .when(platforms: halidePlatforms)),
         .linkedLibrary("Halide", .when(platforms: halidePlatforms)),
         .linkedFramework("Metal", .when(platforms: [.macOS])),
+        .linkedFramework("Accelerate", .when(platforms: [.macOS])),
         .linkedLibrary("dl", .when(platforms: [.linux])),
         .linkedLibrary("pthread", .when(platforms: [.linux])),
     ]
