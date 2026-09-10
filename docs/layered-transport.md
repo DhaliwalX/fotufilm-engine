@@ -12,14 +12,8 @@ swift run -c release fotufilm input.exr output.png --stock example-negative-400 
 
 Use an existing stock ID from `--list-stocks`. `--transport-backend metal` runs the
 transport convolutions through Halide Metal JIT; spectral scene preparation and
-development use the CPU reference in all three modes. This is not an end-to-end GPU
-renderer. `--transport-backend fft` uses Apple Accelerate for FFT convolution of
-these same positive pixel-integrated radial bands. Double-precision transforms avoid
-HDR highlight roundoff leaking into dark exposure. It uses the same area reduction,
-edge extension, and cubic B-spline reconstruction as CPU and Metal. Sampling the
-continuous ring OTF directly is not used for rendering because its discrete inverse
-can contain negative exposure. `cpu` is the default. An unavailable backend produces
-a render error.
+development use the CPU reference with either backend. This is not an end-to-end GPU
+renderer. `cpu` is the default. An unavailable backend produces a render error.
 
 Use `--iterations 31` to measure 30 repeated warm frames after the first render.
 The report includes median and p95 processing latency and achieved frames per second.
@@ -97,7 +91,7 @@ quadrature node. Narrow and broad radial bands use separate grid scales, so a
 distant tail cannot blur the inner shoulder. Each stencil is positive and
 normalized. Reduction uses positive area weights and reconstruction uses smooth,
 positive cubic B-spline weights at reduced scales; stride one keeps the original
-pixel samples. Camera, native Metal, Halide, portable, and FFT reconstruction agree.
+pixel samples. Camera, native Metal, Halide, and portable reconstruction agree.
 The image boundary extends the nearest true edge pixel. Components and
 radial bands stream one at a time; amount changes reuse cached endpoint tables.
 

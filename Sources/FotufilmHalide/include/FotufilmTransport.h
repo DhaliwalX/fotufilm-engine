@@ -21,10 +21,9 @@ typedef struct {
     float weight;
 } FotufilmTransportBand;
 
-/// Multi-band positive normalized accumulation.
-/// Input (r, g, b) is uploaded to the device ONCE.
-/// All bands are evaluated and accumulated on the device.
-/// Accumulated result is downloaded to host ONCE and accumulated into (accum_r, accum_g, accum_b).
+/// Add weighted, positive normalized convolutions to the existing accumulation planes.
+/// Metal uploads the input planes once, accumulates bands on the device, and downloads
+/// their sum once. CPU evaluates each band and adds it directly to the host planes.
 int32_t fotufilm_transport_accumulate(
     const float *r, const float *g, const float *b,
     float *accum_r, float *accum_g, float *accum_b,

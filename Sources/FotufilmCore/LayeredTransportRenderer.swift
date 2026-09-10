@@ -5,14 +5,7 @@ public enum TransportBackend: Int32, Sendable, Codable {
     case cpu = 0
     /// Halide Metal JIT convolution; scene preparation and development retain the CPU reference.
     case metal = 1
-    /// Accelerate 2D FFT convolution of the reference pixel-integrated transport bands.
-    case fft = 2
-    public var isAvailable: Bool {
-        #if canImport(Accelerate)
-        if self == .fft { return true }
-        #endif
-        return fotufilm_transport_available(rawValue) == 1
-    }
+    public var isAvailable: Bool { fotufilm_transport_available(rawValue) == 1 }
 }
 
 /// Backend injection keeps optical preparation portable while Apple hosts use their AOT
@@ -145,8 +138,6 @@ public enum LayeredTransportRenderer {
                         exposure.planes[c][i] += band.weight * filtered.planes[c][i]
                     } }
                 }
-            } else if options.transportBackend == .fft {
-                try LayeredTransportFFT.convolve(component: component, kernel: prepared.compilation.kernels[k], pixelPitchMM: pitch, into: &exposure)
             } else {
                 let bands = try prepared.compilation.kernels[k].stencils(pixelPitchMM: pitch)
                 try accumulate(component: component, bands: bands, into: &exposure, backend: options.transportBackend)
@@ -307,11 +298,6 @@ public enum LayeredTransportRenderer {
         } }
         planes = [r, g, b]
         return result
-    }
-
-    public static func convolveFFT(image: ImageBuffer, kernel: TransportRadialKernel,
-                                   pixelPitchMM: Double) throws -> ImageBuffer {
-        try LayeredTransportFFT.convolve(image: image, kernel: kernel, pixelPitchMM: pixelPitchMM)
     }
 }
 

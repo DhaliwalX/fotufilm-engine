@@ -2,9 +2,6 @@ import XCTest
 #if canImport(Metal)
 import Metal
 #endif
-#if canImport(Accelerate)
-import Accelerate
-#endif
 @testable import FotufilmCore
 #if canImport(Metal)
 import FotufilmMetal
@@ -48,40 +45,6 @@ final class LayeredTransportRegressionTests: XCTestCase {
 
     #endif
 
-    #if canImport(Accelerate)
-    func testFFTPositiveImpulse() throws {
-        let kernel = try TransportRadialKernel(radiusMM: [0.005, 0.015, 0.035], mass: [0.4, 0.35, 0.25])
-        var image = ImageBuffer(width: 65, height: 65)
-        for c in 0..<3 { image.planes[c][32 * 65 + 32] = 1 }
-        let result = try LayeredTransportFFT.convolve(image: image, kernel: kernel, pixelPitchMM: 0.004)
-        let values = result.planes[0]
-        XCTAssertGreaterThanOrEqual(values.min()!, 0)
-        XCTAssertEqual(values.reduce(0, +), 1, accuracy: 0.00002)
-        if TransportBackend.cpu.isAvailable {
-            let reference = try LayeredTransportRenderer.convolve(image, stencil: kernel.stencil(pixelPitchMM: 0.004))
-            XCTAssertLessThan(zip(values, reference.planes[0]).map { abs($0-$1) }.max()!, 0.000002)
-        }
-    }
-
-    func testFFTBlackHighlightPipeline() throws {
-        guard TransportBackend.cpu.isAvailable else { throw XCTSkip("Halide unavailable") }
-        var stock = TestStocks.negative; stock.adjacencyStrength = 0
-        var options = TransportFixtures.quiet
-        options.layeredTransport = TransportFixtures.stack
-        var image = ImageBuffer(width: 25, height: 19)
-        image.planes[0][120] = 50
-        image.planes[1][120] = 2
-        image.planes[2][120] = 1
-        let cpu = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: image)
-        options.transportBackend = .fft
-        let fft = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: image)
-        for c in 0..<3 {
-            XCTAssertLessThan(zip(cpu.planes[c], fft.planes[c]).map { abs($0-$1) }.max()!, 0.00005)
-        }
-    }
-
-    #endif
-
     func testMetalRepeatedOddBandAccumulation() throws {
         guard TransportBackend.metal.isAvailable else { throw XCTSkip("Metal unavailable") }
         let kernel = try TransportRadialKernel(radiusMM: [0.01], mass: [1])
@@ -112,57 +75,32 @@ final class LayeredTransportRegressionTests: XCTestCase {
         }
     }
 
-    #if canImport(Accelerate)
-    func testFFTHDRHighlightDoesNotLeakIntoDistantShadows() throws {
-        let kernel = try TransportRadialKernel(radiusMM: [0.008], mass: [1])
-        var image = ImageBuffer(width: 129, height: 97, fill: 0.00001)
-        image.planes[0][48*129+64] = 10000
-        let output = try LayeredTransportFFT.convolve(image: image, kernel: kernel, pixelPitchMM: 0.008)
-        var maximumShadowError: Float = 0
-        for y in 0..<97 { for x in 0..<129 where abs(x-64) > 8 || abs(y-48) > 8 {
-            maximumShadowError = max(maximumShadowError, abs(output.planes[0][y*129+x] - 0.00001))
-        } }
-        XCTAssertLessThan(maximumShadowError, 1e-8)
-    }
-
-    func testFFTPlanSurvivesCacheGrowthAndIsReleasedAfterUse() throws {
-        let cache = FFTSetupCache()
-        var small: FFTPlan? = try cache.setup(forLog2N: 6)
-        weak var lifetime = small
-        let larger = try cache.setup(forLog2N: 14)
-        XCTAssertNotNil(lifetime)
-        XCTAssertEqual(larger.log2N, 14)
-        var real = [Double](repeating: 1, count: 64*64)
-        var imag = [Double](repeating: 0, count: 64*64)
-        real.withUnsafeMutableBufferPointer { r in
-            imag.withUnsafeMutableBufferPointer { i in
-                var split = DSPDoubleSplitComplex(realp: r.baseAddress!, imagp: i.baseAddress!)
-                small!.transform(&split, width: 6, height: 6, direction: FFTDirection(FFT_FORWARD))
-            }
-        }
-        XCTAssertEqual(real[0], 4096, accuracy: 0.001)
-        XCTAssertTrue(real.dropFirst().allSatisfy { abs($0) < 0.00001 })
-        small = nil
-        XCTAssertNil(lifetime)
-    }
-
-    func testFFTMultiscaleMatchesSpatialAtEdgesAndAcrossSizes() throws {
+    func testMultiscaleAccumulationMatchesSequentialAcrossSizeChanges() throws {
         guard TransportBackend.cpu.isAvailable else { throw XCTSkip("Halide unavailable") }
         let kernel = try TransportRadialKernel(radiusMM: [0.001, 0.09, 0.22, 0.44], mass: [0.1, 0.2, 0.3, 0.4])
         let bands = try kernel.stencils(pixelPitchMM: 0.004)
         XCTAssertGreaterThan(bands.count, 2)
+        XCTAssertTrue(bands.contains { $0.stencil.stride > 1 })
         for (w, h) in [(37, 29), (11, 9), (129, 65), (37, 29)] {
             var image = ImageBuffer(width: w, height: h)
             for c in 0..<3 { for i in 0..<w*h { image.planes[c][i] = Float((i*17+c*23)%101)/100 } }
             image.planes[0][0] = 20; image.planes[1][w*h-1] = 10
-            var cpu = ImageBuffer(width: w, height: h, fill: 0.125)
-            var fft = cpu
-            try LayeredTransportRenderer.accumulate(component: image, bands: bands, into: &cpu)
-            try LayeredTransportFFT.convolve(component: image, kernel: kernel, pixelPitchMM: 0.004, into: &fft)
-            for c in 0..<3 {
-                XCTAssertLessThan(zip(cpu.planes[c],fft.planes[c]).map { abs($0-$1) }.max()!, 0.00005)
+            var reference = ImageBuffer(width: w, height: h, fill: 0.125)
+            for band in bands {
+                let filtered = try LayeredTransportRenderer.convolve(image, stencil: band.stencil)
+                for c in 0..<3 { for i in 0..<w*h {
+                    reference.planes[c][i] += band.weight * filtered.planes[c][i]
+                } }
+            }
+            for backend in [TransportBackend.cpu, .metal] where backend.isAvailable {
+                var output = ImageBuffer(width: w, height: h, fill: 0.125)
+                try LayeredTransportRenderer.accumulate(component: image, bands: bands, into: &output, backend: backend)
+                for c in 0..<3 {
+                    XCTAssertLessThan(zip(reference.planes[c], output.planes[c]).map { abs($0-$1) }.max()!, 0.00005,
+                                      "\(backend), \(w)x\(h), channel \(c)")
+                }
             }
         }
     }
-    #endif
+
 }

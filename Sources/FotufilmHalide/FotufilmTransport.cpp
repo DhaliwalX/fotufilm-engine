@@ -48,12 +48,16 @@ class TransportConvolution {
 
     void ensure_buffers(int w, int h) {
         if (w == cached_w && h == cached_h) return;
-        cached_w = w; cached_h = h;
-        cached_band_result = Buffer<float>(w, h, 3);
+        Buffer<float> result(w, h, 3);
+        Buffer<float> accum[2];
         if (is_metal) {
-            cached_accum[0] = Buffer<float>(w, h, 3);
-            cached_accum[1] = Buffer<float>(w, h, 3);
+            accum[0] = Buffer<float>(w, h, 3);
+            accum[1] = Buffer<float>(w, h, 3);
         }
+        cached_band_result = std::move(result);
+        cached_accum[0] = std::move(accum[0]);
+        cached_accum[1] = std::move(accum[1]);
+        cached_w = w; cached_h = h;
     }
 public:
     explicit TransportConvolution(bool metal)
@@ -112,7 +116,7 @@ public:
         std::lock_guard<std::mutex> lock(mutex);
         const int64_t n = int64_t(w) * h;
 
-        // 1. Host -> Device upload of input planes: EXACTLY ONCE
+        // Reuse the input bindings across bands; Metal uploads each plane once.
         Buffer<float> rb(const_cast<float *>(r), w, h), gb(const_cast<float *>(g), w, h),
             bb(const_cast<float *>(b), w, h);
         rb.set_host_dirty(); gb.set_host_dirty(); bb.set_host_dirty();
@@ -146,7 +150,7 @@ public:
                 cur = 1 - cur;
             }
 
-            // Download accumulated result to host EXACTLY ONCE at the end
+            // Download the accumulated bands once at the end.
             cached_accum[cur].copy_to_host();
             const float *res = cached_accum[cur].data();
 
