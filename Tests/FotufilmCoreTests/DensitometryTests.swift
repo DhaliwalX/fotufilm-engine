@@ -102,35 +102,29 @@ final class DensitometryTests: XCTestCase {
         XCTAssertEqual(high, 1.15, accuracy: 0.02)
     }
 
-    /// Timing follows the print, not the instrument, and the correction it
-    /// needs is small. Hunt, section 14.16: equal integral densities are
-    /// "generally nearly grey" but not exactly grey.
-    func testPrintTimingTrimIsUnderAPrinterLight() {
-        for paper in Self.physicalPrints {
-            let unmix = PrintDyeUnmix(dyes: paper.analyticalDyes)
-            let anchor = paper.anchorDensity
+    /// Reflection-paper setup is a fixed exposure translation, not a density offset.
+    /// Its density effect must vanish in both the toe and shoulder.
+    func testReflectionSetupActsOnExposureNotDevelopedDensity() {
+        for paper: PrintPaper in [.ektacolorEdge, .enduraPremier, .crystalArchive] {
+            let curves = paper.printCurves(for: stock)
+            let midpoints = paper.printExposureMidpoints(for: stock)
             let light = SpectralRuntime.referenceViewingLight(for: paper)
-            let target = SpectralRuntime.transmissionRGB(
-                density: [anchor, anchor, anchor], dyes: paper.dyes,
-                flare: paper.viewingFlare, illuminant: light)
-            let trim = SpectralRuntime.printNeutralTrim(
-                unmix: unmix, anchor: anchor, target: target,
-                flare: paper.viewingFlare, illuminant: light)
-            let magnitude = max(abs(trim.x), max(abs(trim.y), abs(trim.z)))
-            XCTAssertLessThan(magnitude, 0.075,
-                              "\(paper.rawValue) needs \(magnitude) D of trim, "
-                              + "which is more than three printer lights")
-
-            // And it does what it was solved for: the anchor lands on target.
-            let amounts = unmix.amounts(
-                forStatusA: SIMD3(repeating: anchor) + trim)
-            let rgb = SpectralRuntime.transmissionRGB(
-                density: [amounts.x, amounts.y, amounts.z],
-                dyes: paper.analyticalDyes, flare: paper.viewingFlare,
-                illuminant: light)
-            XCTAssertEqual(rgb.x, target.x, accuracy: 1e-4, paper.rawValue)
-            XCTAssertEqual(rgb.y, target.y, accuracy: 1e-4, paper.rawValue)
-            XCTAssertEqual(rgb.z, target.z, accuracy: 1e-4, paper.rawValue)
+            let receiver = SpectralRuntime.printReceiver(stock: stock, paper: paper, viewingLight: light)
+            let density = SIMD3((0..<3).map {
+                curves[$0].density(logExposure: midpoints[$0]) - curves[$0].dMin
+            })
+            let rgb = receiver.rgb(density: density)
+            for channel in 0..<3 {
+                XCTAssertEqual(rgb[channel], pow(10, -paper.midDensity), accuracy: 1e-4)
+                let curve = curves[channel]
+                let untrimmed = curve.logExposure(density: curve.dMin + paper.anchorDensity)
+                let shift = midpoints[channel] - untrimmed
+                XCTAssertLessThan(abs(shift), 0.05, "log exposure, not density units")
+                for exposure in [curve.toe - 10, curve.shoulder + 10] {
+                    XCTAssertEqual(curve.density(logExposure: exposure + shift),
+                                   curve.density(logExposure: exposure), accuracy: 3e-5)
+                }
+            }
         }
     }
 }

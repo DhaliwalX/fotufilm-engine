@@ -3805,10 +3805,10 @@
       "binding" : "printViewingKelvin",
       "commandLineFlag" : "--print-light",
       "commandLineGeneric" : false,
-      "commandLineHelp" : "Colour temperature the finished print is viewed under, in kelvin: daylight series from 4000 K up (5003 = D50 proof light), Planckian below (2856 = tungsten). Greys hold — the read adapts to the light — and the paper dyes' metamerism moves. Default: D50 for paper, calibrated 5400 K xenon for cinema print, fixed D65 for screen",
+      "commandLineHelp" : "Colour temperature the finished print is viewed under, in kelvin: daylight series from 4000 K up (5003 = D50 proof light), Planckian below (2856 = tungsten). Positive values are bounded to 1000-25000 K, in 100 K buckets. The read adapts to the light without re-timing the print; even neutral dyes can shift. Default: D50 for paper, calibrated 5400 K xenon for cinema print, fixed D65 for screen",
       "commandLinePlaceholder" : "<k>",
       "detail" : "Choose the light used to view the print.",
-      "documentation" : "Sets the lamp a physical print is judged under; digital media ignore it.",
+      "documentation" : "Changes the viewing lamp without re-timing the developed print; digital media ignore it.",
       "drives" : [
 
       ],
@@ -3846,7 +3846,7 @@
         "composed" : false,
         "fxplugID" : 25,
         "group" : "output",
-        "hint" : "Choose the light used to judge a physical print. Medium Reference means D50 for photo paper or calibrated 5400 K xenon for a projected release print. Digital Reference, Lab Scan, Telecine and Negative ignore this control.",
+        "hint" : "Choose the light used to judge a physical print. Medium Reference means D50 for photo paper or calibrated 5400 K xenon for a projected release print. Only the viewing light changes; the developed print is not re-timed. Digital Reference, Lab Scan, Telecine and Negative ignore this control.",
         "kind" : "choice",
         "label" : "Viewing Illuminant",
         "ofxName" : "printLight",
@@ -3957,10 +3957,10 @@
       "binding" : "printCorrection",
       "commandLineFlag" : "--print-correction",
       "commandLineGeneric" : true,
-      "commandLineHelp" : "How far the film's colour layers are balanced to print together, 0-1 (default: 0.05)",
+      "commandLineHelp" : "Optional digital channel-contrast correction, 0-1 (default: 0; not a printer-light control)",
       "commandLinePlaceholder" : "<f>",
-      "detail" : "Adjust the color balance of the print.",
-      "documentation" : "Balances how the film's colour layers print together on the chosen medium.",
+      "detail" : "Optional digital channel-contrast correction; not a printer-light adjustment.",
+      "documentation" : "Optional digital channel-contrast correction. Off by default to preserve measured slopes; this is not a physical printer-light control.",
       "drives" : [
 
       ],
@@ -3975,7 +3975,7 @@
         "delta" : 0.01,
         "fxplugID" : 20,
         "group" : "output",
-        "hint" : "Balances how the film's colour layers print together. The medium's own calibration is already applied; raise this only for a more neutral crossover.",
+        "hint" : "Digital correction of channel-contrast mismatch, not physical printer timing. Off preserves the measured record slopes; raise for a more neutral crossover.",
         "kind" : "double",
         "label" : "Channel Contrast Match",
         "max" : 1,
@@ -3987,7 +3987,7 @@
         "secret" : false,
         "slot" : 10,
         "slotSymbol" : "PRINT_CORRECTION",
-        "value" : 0.05,
+        "value" : 0,
         "zeroLeavesEngineDefault" : false
       },
       "kind" : "slider",
@@ -4000,7 +4000,7 @@
         "admittedMin" : 0,
         "max" : 1,
         "min" : 0,
-        "neutral" : 0.05,
+        "neutral" : 0,
         "stops" : [
 
         ],
@@ -4009,7 +4009,7 @@
       "scope" : "edit",
       "section" : "printPaper",
       "storedEncoding" : "same",
-      "storedNeutral" : 0.05,
+      "storedNeutral" : 0,
       "surfaces" : [
         "app",
         "desktop",

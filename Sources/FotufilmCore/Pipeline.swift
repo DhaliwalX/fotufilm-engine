@@ -139,8 +139,9 @@ public struct FotufilmEngine {
         /// the fully bleached C-41 every existing render is — changes nothing. Monochrome stocks
         /// ignore it (their image *is* the silver), as does a reversal stock's direct positive.
         public var bleachBypass: Float = 0
-        /// Optional *additional* correction of film channel-contrast mismatch.
-        public var printCorrection: Float = 0.05
+        /// Optional digital correction of film channel-contrast mismatch, not a physical
+        /// printer-light adjustment. Off by default so the measured record slopes survive.
+        public var printCorrection: Float = 0
         /// The lamp house the negative is enlarged under. `.diffuser` — the default, and the
         /// diffuse densitometry every stock sheet is read in — changes nothing. `.condenser`
         /// applies the Callier effect: the negative's densities read at their specular values,
@@ -161,7 +162,9 @@ public struct FotufilmEngine {
         /// radiator below it (2856 is CIE A). Bradford adaptation carries the lamp white to the
         /// D65 display while retaining dye metamerism. nil uses the medium's calibrated reference:
         /// D50 for reflection paper and 5400 K filtered xenon for a cinema print. Scans, screen
-        /// output, viewed negatives, and reversal stocks ignore this value.
+        /// output, viewed negatives, and reversal stocks ignore this value. Finite positive
+        /// values are bounded to 1000...25000 K and canonicalized to 100 K buckets; invalid or
+        /// non-positive values use the reference. The developed print is not re-timed.
         public var printViewingKelvin: Float? = nil
         /// The grade laid over the finished image — lift, gamma and gain by band.
         public var grade: ColorGrade = .neutral

@@ -238,7 +238,7 @@
             <parameter name="Output Medium" id="4" flags="12901744656" default="10" value="10"/>
             <parameter name="Viewing Illuminant" id="25" flags="12901744656" default="0" value="0"/>
             <parameter name="Enlarger" id="91" flags="12901744656" default="0" value="0"/>
-            <parameter name="Channel Contrast Match" id="20" flags="12901679120" default="0.05" value="0.05"/>
+            <parameter name="Channel Contrast Match" id="20" flags="12901679120" default="0" value="0"/>
             <parameter name="Negative Viewing" id="80" flags="12901744656" default="0" value="0"/>
           </parameter>
           <parameter name="Pipeline" id="30" flags="8594198560">

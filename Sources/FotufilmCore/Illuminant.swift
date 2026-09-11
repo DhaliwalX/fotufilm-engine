@@ -138,9 +138,9 @@ public enum Illuminant {
     ///
     /// This is the one illuminant here that is *measured* rather than constructed — there is no
     /// CIE series for an arc lamp, and a projected print is not viewed by daylight or by a
-    /// blackbody. It matters because a release print's dyes are published at the amounts that
-    /// form a visual neutral *under this lamp* (see `Vision2383PrintSpectra.dyeDensity`), so
-    /// reading them under anything else is reading them against a white they were not drawn for.
+    /// blackbody. Kodak specifies a xenon-arc viewing illuminant for its dye measurements,
+    /// but does not identify this particular lamp or publish its complete spectrum. This
+    /// measurement supplies a representative projector, not an exact Kodak reference.
     ///
     /// Source: `colour.SDS_LIGHT_SOURCES["Kinoton 75P"]` from the colour-science library,
     /// Copyright 2013 Colour Developers, BSD-3-Clause. Redistributing this table in source form
@@ -190,8 +190,8 @@ public enum Illuminant {
     /// strictly-positive two-term filtration that brings its CIE 1931 white to the model's
     /// 5400 K daylight locus. The filtration preserves the arc's narrow blue structure and
     /// projector IR-cut tail; substituting a daylight or blackbody generator would erase both
-    /// and therefore erase dye metamerism that Kodak's release-print data explicitly normalizes
-    /// for a xenon-arc viewing illuminant.
+    /// and change dye metamerism. This filtered spectrum is a model of a calibrated projector,
+    /// not a measured filter or a reconstruction of Kodak's unpublished reference lamp.
     ///
     /// The correction is `exp(aq + bq²)`, q = (λ − 560 nm) / 100 nm, with `a` and `b`
     /// solved on this 5 nm observer grid for the chromaticity of `daylight(kelvin: 5400)`.

@@ -299,18 +299,29 @@ public enum SpectralRuntime {
     /// illuminant. Named standards retain their specified temperatures; other values are
     /// quantized to `printLightBucketKelvin` so a viewing session shares one table.
     public static func printLightKelvin(_ cct: Float?) -> Float? {
-        guard let cct, cct > 0 else { return nil }
+        guard let cct, cct.isFinite, cct > 0 else { return nil }
+        // Bound the input before quantizing: very low blackbody temperatures underflow,
+        // and rounding a positive temperature to zero aliases the reference-light key.
+        let bounded = clamp(cct, 1000, 25000)
         for standard: Float in [2856, 5003, 6504]
-            where abs(cct - standard) < printLightBucketKelvin / 2 {
+            where abs(bounded - standard) < printLightBucketKelvin / 2 {
             return standard
         }
-        return (cct / printLightBucketKelvin).rounded() * printLightBucketKelvin
+        let bucket = (bounded / printLightBucketKelvin).rounded() * printLightBucketKelvin
+        // Canonicalization must be idempotent: 2920 -> 2900 -> 2856 used to build
+        // one spectrum under another spectrum's cache key. Snap the rounded bucket too.
+        for standard: Float in [2856, 5003, 6504]
+            where abs(bucket - standard) < printLightBucketKelvin / 2 {
+            return standard
+        }
+        return bucket
     }
 
     /// The lamp the finished print hangs under. CIE practice: the daylight series where it
     /// is defined (4000 K and up — D50 proofing light, D65, overcast shade), the Planckian
     /// radiator below (halogen and tungsten room light, CIE A at 2856 K). The seam at
-    /// 4000 K steps between the two families, which is the CIE's own seam, not a new one.
+    /// 4000 K is an explicit source-family switch in this control, not a physical law:
+    /// temperature alone does not identify a lamp's spectrum.
     static func printLightSPD(kelvin: Float) -> [Float] {
         kelvin >= 4000 ? Illuminant.daylight(kelvin: kelvin)
                        : Illuminant.planckian(kelvin: kelvin)
@@ -523,19 +534,16 @@ public enum SpectralRuntime {
             // silver's on the silver the bleach left behind. The mid-grey scales with the rest,
             // so the re-timing below holds it and the head shows as contrast.
             let silverCallier = callier == 1 ? Float(1) : Enlarger.silverCallierCoefficient
-            let lamp = printingLamp(
-                paper: paper, density: midDensity.map { $0 * callier },
+            let illumination = printingIllumination(
+                stock: stock, paper: paper, density: midDensity.map { $0 * callier },
                 dyes: stock.spectralProfile.imageDyeDensity,
                 neutralDensity: silverCallier * retainedSilverDensity(
                     midDensity, dMin: dMin, fraction: bleachBypass))
-            let midEnergy = paperExposure(density: midDensity.map { $0 * callier },
-                                          dyes: stock.spectralProfile.imageDyeDensity,
-                                          lamp: lamp, paperSensitivity: paperSensitivity,
-                                          neutralDensity: silverCallier * retainedSilverDensity(
-                                              midDensity, dMin: dMin,
-                                              fraction: bleachBypass))
-            // The mid-energy ratio supplies each record's exposure-axis origin after
-            // timing the physical lights. On reflection paper it also approximates
+            let lamp = illumination.lamp
+            let midEnergy = illumination.referenceEnergy
+            // Release film removes only the common lamp scale against its setup energy
+            // targets; an unreachable timing residual survives. On reflection paper the
+            // mid-energy ratio also approximates
             // the enlarger's per-stock filtration. A
             // reference-anchored medium is profiled once instead: the frame is
             // still auto-exposed (green stays the stock's own), but red and
@@ -568,7 +576,7 @@ public enum SpectralRuntime {
             .map { $0.dMax - $0.dMin }
         // The lamp the finished positive is read under. A reflection print defaults to the D50
         // judging booth used for critical print evaluation. A projected print defaults to the
-        // calibrated 5400 K xenon screen light its published dye amounts target. Screen output
+        // representative filtered 5400 K xenon screen light. Screen output
         // stays in the renderer's fixed D65 display space, while scans have no viewing lamp.
         //
         // A stated temperature still wins on physical media: asking what a release print looks
@@ -1922,8 +1930,6 @@ public enum SpectralRuntime {
         let flare: Float
         let viewingLight: [Float]?
         let unmix: PrintDyeUnmix?
-        let trim: SIMD3<Float>
-        let anchor: Float
 
         func rgb(density: SIMD3<Float>) -> SIMD3<Float> {
             guard let unmix else {
@@ -1931,9 +1937,7 @@ public enum SpectralRuntime {
                     density: [density.x, density.y, density.z], dyes: dyes,
                     flare: flare, illuminant: viewingLight)
             }
-            let level = (density.x + density.y + density.z) / 3
-            let applied = trim * min(max(level / max(anchor, 1e-6), 0), 1)
-            let amounts = unmix.amounts(forStatusA: density + applied)
+            let amounts = unmix.amounts(forStatusA: density)
             return SpectralRuntime.transmissionRGB(
                 density: [amounts.x, amounts.y, amounts.z], dyes: dyes,
                 flare: flare, illuminant: viewingLight)
@@ -1948,26 +1952,36 @@ public enum SpectralRuntime {
             && paper != .screen && !paper.isNegative
         guard unmixes else {
             return PrintReceiver(dyes: paper.dyes, flare: paper.viewingFlare,
-                                 viewingLight: viewingLight, unmix: nil,
-                                 trim: .zero, anchor: 1)
+                                 viewingLight: viewingLight, unmix: nil)
         }
         let unmix = PrintDyeUnmix(dyes: paper.analyticalDyes)
-        let anchor = paper.anchorDensity
-        let trim = printNeutralTrim(
-            unmix: unmix, anchor: anchor,
-            target: transmissionRGB(density: [anchor, anchor, anchor],
-                                    dyes: paper.dyes, flare: paper.viewingFlare,
-                                    illuminant: viewingLight),
-            flare: paper.viewingFlare, illuminant: viewingLight)
         return PrintReceiver(dyes: paper.analyticalDyes, flare: paper.viewingFlare,
-                             viewingLight: viewingLight, unmix: unmix,
-                             trim: trim, anchor: anchor)
+                             viewingLight: viewingLight, unmix: unmix)
     }
 
-    /// The three printer lights that put the timed anchor back where the partitioned basis had
-    /// it: same level, same neutral. Hunt 14.16 — equal integral densities are "nearly grey" but
-    /// not grey — so timing follows the print, not the densitometer.
-    static func printNeutralTrim(unmix: PrintDyeUnmix, anchor: Float,
+    /// The reflection print's visual setup is solved once, under D50. These density targets
+    /// are inverted through the characteristic curves into exposure offsets; they are never
+    /// added to developed densities. Cine media use their published LAD targets instead.
+    private static let reflectionPrintDensityTrims: [PrintPaper: SIMD3<Float>] = {
+        Dictionary(uniqueKeysWithValues:
+            [PrintPaper.ektacolorEdge, .enduraPremier, .crystalArchive].map { paper in
+                let anchor = paper.anchorDensity
+                let light = referenceViewingLight(for: paper)
+                return (paper, solveReflectionPrintSetup(
+                    unmix: PrintDyeUnmix(dyes: paper.analyticalDyes), anchor: anchor,
+                    target: SIMD3(repeating: pow(10, -paper.midDensity)),
+                    flare: paper.viewingFlare, illuminant: light))
+            })
+    }()
+
+    static func reflectionPrintDensityTrim(for paper: PrintPaper) -> SIMD3<Float> {
+        reflectionPrintDensityTrims[paper] ?? .zero
+    }
+
+    /// Find a visual setup density, not a printer-light magnitude. Exposure placement belongs
+    /// to `printExposureMidpoints`; a real light adjustment translates log exposure and fades
+    /// naturally in both toe and shoulder. Hunt, sections 14.16 and 16.2.
+    private static func solveReflectionPrintSetup(unmix: PrintDyeUnmix, anchor: Float,
                                  target: SIMD3<Float>, flare: Float,
                                  illuminant: [Float]?) -> SIMD3<Float> {
         func printed(_ offset: SIMD3<Float>) -> SIMD3<Float> {
@@ -2047,14 +2061,12 @@ extension SpectralRuntime {
         let paperSensitivity = paper.sensitivity
         let dyes = stock.spectralProfile.imageDyeDensity
         let midDensity = (0..<3).map { stock.curves[$0].density(logExposure: 0) }
-        let lamp = printingLamp(paper: paper, density: midDensity, dyes: dyes)
-        let midEnergy = paperExposure(density: midDensity, dyes: dyes,
-                                      lamp: lamp, paperSensitivity: paperSensitivity)
+        let illumination = printingIllumination(stock: stock, paper: paper,
+                                                density: midDensity, dyes: dyes)
+        let lamp = illumination.lamp
+        let midEnergy = illumination.referenceEnergy
         let curves = paper.printCurves(for: stock)
-        let xMids = curves.map { record in
-            record.logExposure(
-                density: record.dMin + paper.anchorDensity)
-        }
+        let xMids = paper.printExposureMidpoints(for: stock)
 
         let relatives: [SIMD3<Float>] = stride(from: Float(-5), through: 5, by: 0.25)
             .map { stops in
@@ -2194,17 +2206,13 @@ extension SpectralRuntime {
 
         let paperSensitivity = paper.sensitivity
         let midDensity = (0..<3).map { stock.curves[$0].density(logExposure: 0) }
-        let lamp = printingLamp(paper: paper, density: midDensity.map { $0 * callier },
-                                dyes: stock.spectralProfile.imageDyeDensity)
-        let midEnergy = paperExposure(density: midDensity.map { $0 * callier },
-                                      dyes: stock.spectralProfile.imageDyeDensity,
-                                      lamp: lamp, paperSensitivity: paperSensitivity)
+        let illumination = printingIllumination(stock: stock, paper: paper,
+            density: midDensity.map { $0 * callier }, dyes: stock.spectralProfile.imageDyeDensity)
+        let lamp = illumination.lamp
+        let midEnergy = illumination.referenceEnergy
         let neutralMid = neutralDensity(stock, 0)
         let curves = paper.printCurves(for: stock)
-        let xMids = curves.map { record in
-            record.logExposure(
-                density: record.dMin + paper.anchorDensity)
-        }
+        let xMids = paper.printExposureMidpoints(for: stock)
         let masking = stock.printingContrastScale(correction: printCorrection,
                                                   paper: paper)
         let viewingLight = referenceViewingLight(for: paper)

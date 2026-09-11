@@ -336,7 +336,7 @@ struct EditState: Equatable {
                            AppSettings.storedCouplerBarrierGreenBlue]
     /// The inhibition matrix's diagonal — adjacency within one layer rather than across two.
     var couplerSelf = AppSettings.storedCouplerSelf
-    var printCorrection = 0.05
+    var printCorrection = Double(FotufilmEngine.Options().printCorrection)
     var seed: UInt64 = 0x46494C4D
 
     /// Filter IDs ordered from the lens front element outward. Order affects air-gap veiling glare;

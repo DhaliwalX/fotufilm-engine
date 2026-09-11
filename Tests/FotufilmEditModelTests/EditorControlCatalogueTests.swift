@@ -250,10 +250,10 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertFalse(scale.isMoved(1e-9))
         XCTAssertTrue(scale.isMoved(0.01))
 
-        // Print correction rests at 0.05, not at zero: an untouched print is not "0% correction".
-        let correction = EditorControlScale(0...1, neutral: 0.05, unit: .percent)
-        XCTAssertFalse(correction.isMoved(0.05))
-        XCTAssertTrue(correction.isMoved(0))
+        // Channel contrast correction is explicitly digital and defaults off.
+        let correction = EditorControlScale(0...1, neutral: 0, unit: .percent)
+        XCTAssertFalse(correction.isMoved(0))
+        XCTAssertTrue(correction.isMoved(0.05))
     }
 
     // MARK: - The panel's order

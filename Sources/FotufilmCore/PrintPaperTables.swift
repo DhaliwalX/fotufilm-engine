@@ -36,8 +36,10 @@ extension PrintPaper {
         }
     }
 
-    /// Normalized layer sensitivities with publication tails extended. Screen and negative output
-    /// bypass paper exposure; their direct-reading branches never use the RA-4 stand-in.
+    /// Layer sensitivities with publication tails extended. Release prints preserve the
+    /// publication's inter-layer speed scale: it determines the additive printer's beam mix.
+    /// Per-layer normalization is harmless only for paths without a spectral timing solve.
+    /// Screen and negative output bypass paper exposure.
     var sensitivity: [[Float]] {
         switch self {
         case .ektacolorEdge, .screen, .negative: return SpectralGrid.paperSensitivity
@@ -49,6 +51,50 @@ extension PrintPaper {
         case .labScan: return SpectralGrid.labScanSensitivity
         case .telecine: return SpectralGrid.telecineSensitivity
         }
+    }
+
+    /// Gross Status A setup aims, not densities above clear film. Kodak H-1-2383t and
+    /// H-1-2393t, LAD sections; Fujifilm ETERNA-CP 3513DI brochure, "Aim Print Density".
+    /// These instrument readings must not be replaced by three equal density values or
+    /// by an RGB-neutralizing correction after development.
+    var ladStatusA: SIMD3<Float>? {
+        switch self {
+        case .vision2383, .vision2393: return SIMD3(1.09, 1.06, 1.03)
+        case .eternaCP: return SIMD3(1.10, 1.05, 1.05)
+        default: return nil
+        }
+    }
+
+    /// Density at which the published reciprocal-exposure sensitivity was measured.
+    /// Kodak labels D = 1.0; Fuji explicitly states 1.0 above minimum density.
+    func sensitivityReferenceExposures(for stock: FilmStock) -> [Float] {
+        precondition(isProjected)
+        return printCurves(for: stock).map {
+            $0.logExposure(density: self == .eternaCP ? $0.dMin + 1 : 1)
+        }
+    }
+
+    /// Fixed printer exposure-axis origins. Reflection paper is visually balanced under its
+    /// reference lamp; cine film uses the published gross LAD aims. Viewing another lamp
+    /// cannot move these exposures. Monochrome retains the single-record neutral convention.
+    func printExposureMidpoints(for stock: FilmStock) -> [Float] {
+        let curves = printCurves(for: stock)
+        if let aim = ladStatusA, !stock.isMonochrome, !stock.isReversal {
+            return (0..<3).map { curves[$0].logExposure(density: aim[$0]) }
+        }
+        let offset = acceptsViewingIlluminant && !stock.isMonochrome && !stock.isReversal
+            ? SpectralRuntime.reflectionPrintDensityTrim(for: self) : .zero
+        return (0..<3).map {
+            curves[$0].logExposure(density: curves[$0].dMin + anchorDensity + offset[$0])
+        }
+    }
+
+    /// Sensitivity-weighted energy needed at setup, relative to each record's published
+    /// sensitivity reference. Only a common multiplier is arbitrary; record ratios are not.
+    func printingAim(for stock: FilmStock) -> SIMD3<Float> {
+        let midpoints = printExposureMidpoints(for: stock)
+        let reference = sensitivityReferenceExposures(for: stock)
+        return SIMD3((0..<3).map { pow(10, midpoints[$0] - reference[$0]) })
     }
 
     /// The characteristic curve the print's timing is reckoned against: the
@@ -195,8 +241,7 @@ extension SpectralGrid {
     static let vision2383DyeAmounts: [[Float]] = Vision2383PrintSpectra.dyeDensity
     static let vision2383Dyes: [[Float]] = partition(vision2383DyeAmounts)
     static let vision2383Sensitivity: [[Float]] =
-        normalizeSensitivities(Vision2383PrintSpectra.layerSensitivity
-            .map(continuedTails))
+        Vision2383PrintSpectra.layerSensitivity.map(continuedTails)
 
     /// KODAK VISION Premier Color Print Film 2393, from its own curve sheets.
     /// Partitioned without a `neutralAmounts` multiply for the same reason
@@ -206,8 +251,7 @@ extension SpectralGrid {
     static let vision2393DyeAmounts: [[Float]] = Vision2393PrintSpectra.dyeDensity
     static let vision2393Dyes: [[Float]] = partition(vision2393DyeAmounts)
     static let vision2393Sensitivity: [[Float]] =
-        normalizeSensitivities(Vision2393PrintSpectra.layerSensitivity
-            .map(continuedTails))
+        Vision2393PrintSpectra.layerSensitivity.map(continuedTails)
 
     /// FUJIFILM ETERNA-CP 3513DI, preserving the brochure's published dye traces.
     /// Its held-out Gray requires a negative residual intercept; this is unresolved
@@ -215,8 +259,7 @@ extension SpectralGrid {
     static let eternaCPDyeAmounts: [[Float]] = EternaCPPrintSpectra.dyeDensity
     static let eternaCPDyes: [[Float]] = partition(eternaCPDyeAmounts)
     static let eternaCPSensitivity: [[Float]] =
-        normalizeSensitivities(EternaCPPrintSpectra.layerSensitivity
-            .map(continuedTails))
+        EternaCPPrintSpectra.layerSensitivity.map(continuedTails)
 
     /// Minilab scanner sensitivity as LED emission bands at 630, 545, and 465 nm. Red and blue use
     /// community-measured SP3000 lamp values; 545 nm green sits at the top of the 535-545 nm range

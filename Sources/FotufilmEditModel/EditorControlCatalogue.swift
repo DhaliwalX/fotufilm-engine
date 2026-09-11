@@ -1232,17 +1232,19 @@ public enum EditorControlCatalogue {
                 label: "Viewing Illuminant",
                 hint: "Choose the light used to judge a physical print. Medium Reference means D50 "
                     + "for photo paper or calibrated 5400 K xenon for a projected release print. "
+                    + "Only the viewing light changes; the developed print is not re-timed. "
                     + "Digital Reference, Lab Scan, Telecine and Negative ignore this control.",
                 kind: .choice(.fixed(printLights), value: 0), order: 20),
             commandLine: CommandLineFlag("--print-light", placeholder: "<k>",
                                          help: "Colour temperature the finished print is viewed under, in "
                                              + "kelvin: daylight series from 4000 K up (5003 = D50 proof "
-                                             + "light), Planckian below (2856 = tungsten). Greys hold — "
-                                             + "the read adapts to the light — and the paper dyes' "
-                                             + "metamerism moves. Default: D50 for paper, calibrated "
+                                             + "light), Planckian below (2856 = tungsten). Positive "
+                                             + "values are bounded to 1000-25000 K, in 100 K buckets. "
+                                             + "The read adapts to the light without re-timing the print; "
+                                             + "even neutral dyes can shift. Default: D50 for paper, calibrated "
                                              + "5400 K xenon for cinema print, fixed D65 for screen",
                                          generic: false),
-            documentation: "Sets the lamp a physical print is judged under; digital media ignore it."),
+            documentation: "Changes the viewing lamp without re-timing the developed print; digital media ignore it."),
         EditorControl(
             .enlarger, title: "Enlarger",
             detail: "Choose the enlarger lighting used to make the print.",
@@ -1279,9 +1281,9 @@ public enum EditorControlCatalogue {
             documentation: "Chooses a diffuser or condenser head for an enlarged reflection print."),
         EditorControl(
             .printCorrection, title: "Channel Contrast Match",
-            detail: "Adjust the color balance of the print.",
+            detail: "Optional digital channel-contrast correction; not a printer-light adjustment.",
             section: .printPaper,
-            kind: .slider(EditorControlScale(0...1, neutral: 0.05, unit: .percent)),
+            kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
             availability: .printStage,
             binding: .printCorrection,
             surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
@@ -1289,13 +1291,13 @@ public enum EditorControlCatalogue {
             host: HostParameter(
                 slot: 10, slotSymbol: "PRINT_CORRECTION", ofxName: "printCorrection", fxplugID: 20,
                 group: .output, label: "Channel Contrast Match",
-                hint: "Balances how the film's colour layers print together. The medium's own "
-                    + "calibration is already applied; raise this only for a more neutral crossover.",
-                kind: .double(min: 0, max: 1, value: 0.05), clamp: 0...Double.greatestFiniteMagnitude, order: 30),
+                hint: "Digital correction of channel-contrast mismatch, not physical printer timing. "
+                    + "Off preserves the measured record slopes; raise for a more neutral crossover.",
+                kind: .double(min: 0, max: 1, value: 0), clamp: 0...Double.greatestFiniteMagnitude, order: 30),
             commandLine: CommandLineFlag("--print-correction", placeholder: "<f>",
-                                         help: "How far the film's colour layers are balanced to print "
-                                             + "together, 0-1 (default: 0.05)"),
-            documentation: "Balances how the film's colour layers print together on the chosen medium."),
+                                         help: "Optional digital channel-contrast correction, "
+                                             + "0-1 (default: 0; not a printer-light control)"),
+            documentation: "Optional digital channel-contrast correction. Off by default to preserve measured slopes; this is not a physical printer-light control."),
         EditorControl(
             .negativeViewing, title: "Negative Viewing",
             detail: "Choose how negative output is displayed.",

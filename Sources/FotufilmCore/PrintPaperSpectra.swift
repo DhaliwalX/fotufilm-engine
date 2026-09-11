@@ -78,8 +78,9 @@ enum PrintPaperSpectra {
     /// from the sheet's page 4, on the publication's own log scale read back
     /// to linear. Zero outside each record's printed span, which is where
     /// `SpectralGrid.continuedTails` takes over. The absolute levels differ
-    /// by two decades between layers and none of that survives: the print
-    /// stage divides every layer by its own energy at mid-grey.
+    /// by two decades between layers. They cancel in this paper's fixed-lamp
+    /// mid-energy ratio, but must be retained wherever sensitivity drives a
+    /// spectral printer-light solve (as it does for release print film).
     static let layerSensitivity: [[Float]] = [
         [
             0, 0, 0, 0, 0, 0, 0,

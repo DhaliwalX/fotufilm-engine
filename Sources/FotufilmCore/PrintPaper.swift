@@ -148,7 +148,8 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     ///
     /// It decides the reference lamp the print is read by. A paper hangs under whatever light the
     /// viewer has and defaults to a D50 judging booth; a release print defaults to calibrated
-    /// 5400 K xenon screen light, which is the illuminant its published dye amounts target.
+    /// 5400 K filtered-xenon model. This is a representative projector spectrum, not the
+    /// unspecified xenon lamp used for the manufacturer's dye measurements.
     public var isProjected: Bool {
         self == .vision2383 || self == .vision2393 || self == .eternaCP
     }
@@ -238,16 +239,14 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// has no print exposure to correct, and the digital reference already reads records directly.
     public var acceptsPrintCorrection: Bool { !readsLayersDirectly && !isNegative }
 
-    /// Mid-grey relative to the medium's clear white, after viewing flare. Release prints
-    /// use approximately 1.0 D above base (LAD); reflection papers and digital outputs
-    /// retain the 0.744 D / 18% convention. This belongs to the output, regardless of
-    /// whether the negative in the printer was made for stills or motion pictures.
-    /// Kodak H-1-2393t gives 1.00 equivalent neutral density and gross Status A
-    /// 1.09/1.06/1.03; Fuji 3513DI gives gross Status A 1.10/1.05/1.05. We model
-    /// density relative to clear film, not those three gross instrument readings.
+    /// Nominal visual mid-grey, relative to clear white and after viewing flare, used by
+    /// reflection/digital outputs and the single-record monochrome convention. Colour cine
+    /// prints are placed at their published gross Status A LAD aims by `printExposureMidpoints`;
+    /// those aims are not three equal densities above base or a forced 10% RGB value.
     public var midDensity: Float { isProjected ? 1.0 : 0.744 }
 
-    /// Density above base needed to read at `midDensity` after viewing flare.
+    /// Nominal density above base needed to read at `midDensity` after viewing flare.
+    /// Colour print records use `printExposureMidpoints`, including their setup calibration.
     public var anchorDensity: Float {
         guard viewingFlare > 0 else { return midDensity }
         let read = pow(10, -midDensity)
