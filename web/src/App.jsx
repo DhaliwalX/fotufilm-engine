@@ -1,3 +1,11 @@
+import { VIDEO_LABELS } from './generated/controls.js'
+import VideoControls from './VideoControls.jsx'
+import { VIDEO_ACCEPT, isVideoFile, importVideo } from './video-import.js'
+import {
+  createVideoDestination,
+  exportVideo,
+  videoDimensions,
+} from './video-export.js'
 import { Button } from '@astryxdesign/core/Button'
 import { TextInput } from '@astryxdesign/core/TextInput'
 import { Switch } from '@astryxdesign/core/Switch'
@@ -7,7 +15,14 @@ import { PreviewQueue, previewLabel } from './preview-queue.js'
 import { IMAGE_ACCEPT, isRawFile, importRaw } from './raw-import.js'
 import { isEXRFile, importEXR } from './exr-import.js'
 import { assetUrl } from './engine.js'
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react'
 import { RenderSession, loadStockIndex } from './render-session.js'
 import {
   defaultEdit,
@@ -42,7 +57,17 @@ const stageNames = [
   'Negative',
   'Output',
 ]
-const ratios = ['free', 'original', '1:1', '3:2', '2:3', '4:3', '3:4', '16:9', '9:16']
+const ratios = [
+  'free',
+  'original',
+  '1:1',
+  '3:2',
+  '2:3',
+  '4:3',
+  '3:4',
+  '16:9',
+  '9:16',
+]
 const isTyping = (target) =>
   target instanceof HTMLElement &&
   (!!target.closest(
@@ -111,7 +136,9 @@ function StockRow({ stock, active, image, session, onSelect }) {
       onClick={onSelect}
       title={stock.name}
     >
-      <span className="stock-thumb">{url ? <img src={url} alt="" /> : <Icon name="film" />}</span>
+      <span className="stock-thumb">
+        {url ? <img src={url} alt="" /> : <Icon name="film" />}
+      </span>
       <span className="stock-copy">
         <span>{stock.name}</span>
         <small>{stock.kind || 'Film'}</small>
@@ -156,11 +183,20 @@ export default function App() {
     urls = useRef(new Set()),
     loadGeneration = useRef(0),
     importController = useRef(null)
+  const [videoTime, setVideoTime] = useState(0),
+    [videoFormat, setVideoFormat] = useState('mp4'),
+    [videoQuality, setVideoQuality] = useState('high'),
+    [videoDownload, setVideoDownload] = useState(null)
+  const videoExportController = useRef(null),
+    clips = useRef(new Set()),
+    videoDownloadRef = useRef(null)
   const [cropPreview, setCropPreview] = useState(false)
   const cropMode = panel === 'crop' && inspectorOpen && !cropPreview
   const [zoomReadout, setZoomReadout] = useState(100)
   const previewEditJSON = JSON.stringify(
-    cropMode ? { ...edit, crop: fullCrop(), ratio: 'free', straighten: 0 } : edit,
+    cropMode
+      ? { ...edit, crop: fullCrop(), ratio: 'free', straighten: 0 }
+      : edit,
   )
   const [settledEdit, setSettledEdit] = useState(previewEditJSON)
   useEffect(() => {
@@ -170,23 +206,34 @@ export default function App() {
   const interacting = !!history.group || settledEdit !== previewEditJSON
   const [interactiveEdge, setInteractiveEdge] = useState(512)
   const previewEdge = Math.min(
-    Math.max(active?.image.naturalWidth || 1600, active?.image.naturalHeight || 1600),
+    Math.max(
+      active?.image.naturalWidth || 1600,
+      active?.image.naturalHeight || 1600,
+    ),
     cropMode ? 1600 : interacting ? interactiveEdge : Math.round(1600 * zoom),
   )
   const previewKey = JSON.stringify([
     activeId,
+    active?.image.video ? videoTime : null,
     previewEditJSON,
     stage,
     difference,
     cropMode,
     previewEdge,
   ])
-  const previewEdit = useMemo(() => JSON.parse(previewEditJSON), [previewEditJSON])
+  const previewEdit = useMemo(
+    () => JSON.parse(previewEditJSON),
+    [previewEditJSON],
+  )
   const selectedStock = stocks.find((stock) => stock.id === edit.stock)
   const stockId = edit.stock || stocks[0]?.id
-  const patch = useCallback((value, group) => dispatch({ type: 'edit', patch: value, group }), [])
+  const patch = useCallback(
+    (value, group) => dispatch({ type: 'edit', patch: value, group }),
+    [],
+  )
   const endEdit = useCallback(() => dispatch({ type: 'end' }), [])
-  const setParam = (key, value) => patch({ params: { ...edit.params, [key]: value } }, key)
+  const setParam = (key, value) =>
+    patch({ params: { ...edit.params, [key]: value } }, key)
   const setInspector = (value) => {
     endEdit()
     setPanel(value)
@@ -211,6 +258,10 @@ export default function App() {
       alive.current = false
       previewQueue.current.close()
       renderer.dispose()
+      videoExportController.current?.abort()
+      videoDownloadRef.current?.dispose()
+      for (const clip of clips.current) clip.dispose()
+      clips.current.clear()
       importController.current?.abort()
       loadGeneration.current++
       for (const url of urls.current) URL.revokeObjectURL(url)
@@ -254,9 +305,11 @@ export default function App() {
   }, [])
   useEffect(() => {
     if (!active || !stockId || !session || exporting) return
-    const currentFile = () => alive.current && currentPreview.current?.activeId === active.id
+    const currentFile = () =>
+      alive.current && currentPreview.current?.activeId === active.id
     const request = {
       image: active.image,
+      videoTime,
       edit: previewEdit,
       stock: stockId,
       maxEdge: previewEdge,
@@ -268,15 +321,25 @@ export default function App() {
     const frame = requestAnimationFrame(() => {
       const stock = stocks.find((item) => item.id === previewEdit.stock)
       const queued = {
-        fileId: active.id, filename: active.name, edit: previewEdit,
+        fileId: active.id,
+        filename: active.name,
+        edit: previewEdit,
         stockName: stock?.name,
-        mediumName: stock?.media.find((medium) => medium.id === previewEdit.medium)?.name,
-        edge: previewEdge, cropMode, stage, difference,
+        mediumName: stock?.media.find(
+          (medium) => medium.id === previewEdit.medium,
+        )?.name,
+        edge: previewEdge,
+        cropMode,
+        stage,
+        difference,
         stageLabel: stages[stage]?.label,
       }
       const label = previewLabel(queued, lastRenderedPreview.current)
       previewQueue.current
-        .submit((onProgress) => session.render({ ...request, onProgress }), label)
+        .submit(
+          (onProgress) => session.render({ ...request, onProgress }),
+          label,
+        )
         .then((next) => {
           if (
             !next ||
@@ -287,9 +350,13 @@ export default function App() {
             return
           if (interacting) {
             if (next.renderMilliseconds > 65)
-              setInteractiveEdge((edge) => Math.max(256, Math.round(edge * 0.8)))
+              setInteractiveEdge((edge) =>
+                Math.max(256, Math.round(edge * 0.8)),
+              )
             else if (next.renderMilliseconds < 25)
-              setInteractiveEdge((edge) => Math.min(800, Math.round(edge * 1.1)))
+              setInteractiveEdge((edge) =>
+                Math.min(800, Math.round(edge * 1.1)),
+              )
           }
           const url = URL.createObjectURL(next.blob),
             originalUrl = URL.createObjectURL(next.original)
@@ -317,6 +384,7 @@ export default function App() {
     return () => cancelAnimationFrame(frame)
   }, [
     active,
+    videoTime,
     previewEdit,
     previewEdge,
     interacting,
@@ -358,12 +426,19 @@ export default function App() {
       errors = []
     for (const file of Array.from(incoming || [])) {
       if (controller.signal.aborted) break
-      if (isEXRFile(file) || isRawFile(file)) {
+      if (isVideoFile(file) || isEXRFile(file) || isRawFile(file)) {
         try {
-          const decoded = await (isEXRFile(file) ? importEXR : importRaw)(file, {
+          const decoded = await (
+            isVideoFile(file)
+              ? importVideo
+              : isEXRFile(file)
+                ? importEXR
+                : importRaw
+          )(file, {
             signal: controller.signal,
             onProgress: (text) => {
-              if (!controller.signal.aborted) setImportStatus(`${text}: ${file.name}`)
+              if (!controller.signal.aborted)
+                setImportStatus(`${text}: ${file.name}`)
             },
           })
           loaded.push({ id: crypto.randomUUID(), name: file.name, ...decoded })
@@ -372,8 +447,11 @@ export default function App() {
         }
         continue
       }
-      if (!file.type.startsWith('image/') && !/\.(png|jpe?g|webp|avif|gif|bmp)$/i.test(file.name)) {
-        errors.push(`${file.name}: choose an image or camera RAW file.`)
+      if (
+        !file.type.startsWith('image/') &&
+        !/\.(png|jpe?g|webp|avif|gif|bmp)$/i.test(file.name)
+      ) {
+        errors.push(`${file.name}: choose a photo, camera RAW file, or video.`)
         continue
       }
       const url = URL.createObjectURL(file)
@@ -390,16 +468,23 @@ export default function App() {
       }
     }
     if (generation !== loadGeneration.current) {
-      loaded.forEach((file) => URL.revokeObjectURL(file.url))
+      loaded.forEach((file) => {
+        file.image.video?.dispose()
+        URL.revokeObjectURL(file.url)
+      })
       return
     }
     setImportStatus(null)
     importController.current = null
     if (loaded.length) {
-      loaded.forEach((file) => urls.current.add(file.url))
+      loaded.forEach((file) => {
+        urls.current.add(file.url)
+        if (file.image.video) clips.current.add(file.image.video)
+      })
       if (activeId) histories.current.set(activeId, history)
       setFiles((current) => [...current, ...loaded])
       setActiveId(loaded[0].id)
+      setVideoTime(loaded[0].image.video?.start || 0)
       dispatch({ type: 'load', edit: defaultEdit(edit.stock) })
       replaceResult(null)
       setStage(null)
@@ -411,21 +496,27 @@ export default function App() {
     const generation = ++loadGeneration.current
     try {
       const response = await fetch(assetUrl('demo-scene.exr'))
-      if (!response.ok) throw new Error('The linear EXR sample could not be loaded.')
+      if (!response.ok)
+        throw new Error('The linear EXR sample could not be loaded.')
       const bytes = await response.arrayBuffer()
       if (generation !== loadGeneration.current) return
-      await acceptFiles([new File([bytes], 'Scene response.exr', {
-        type: 'image/x-exr',
-      })])
+      await acceptFiles([
+        new File([bytes], 'Scene response.exr', {
+          type: 'image/x-exr',
+        }),
+      ])
     } catch (e) {
       if (generation === loadGeneration.current) setError(e.message)
     }
   }
-  useEffect(() => { openSample() }, [])
+  useEffect(() => {
+    openSample()
+  }, [])
   function selectFile(file) {
     if (file.id === activeId || exporting) return
     histories.current.set(activeId, history)
     setActiveId(file.id)
+    setVideoTime(file.image.video?.start || 0)
     dispatch({
       type: 'restore',
       history: histories.current.get(file.id) || {
@@ -443,6 +534,7 @@ export default function App() {
     if (file.id === activeId) {
       const next = remaining[Math.max(0, files.indexOf(file) - 1)]
       setActiveId(next?.id || null)
+      setVideoTime(next?.image.video?.start || 0)
       dispatch({
         type: 'restore',
         history: histories.current.get(next?.id) || {
@@ -452,6 +544,8 @@ export default function App() {
       })
       replaceResult(null)
     }
+    file.image.video?.dispose()
+    clips.current.delete(file.image.video)
     histories.current.delete(file.id)
     setFiles(remaining)
     URL.revokeObjectURL(file.url)
@@ -459,12 +553,20 @@ export default function App() {
   }
   function selectStock(id) {
     if (exporting) return
-    const medium = stocks.find((s) => s.id === id)?.media.some((m) => m.id === edit.medium)
+    const medium = stocks
+      .find((s) => s.id === id)
+      ?.media.some((m) => m.id === edit.medium)
       ? edit.medium
       : null
-    const halationModel = stocks.find((s) => s.id === id)?.layeredTransport === false
-      ? 'legacy' : edit.halationModel || 'legacy'
-    patch({ stock: id, medium: halationModel === 'layered' ? null : medium, halationModel })
+    const halationModel =
+      stocks.find((s) => s.id === id)?.layeredTransport === false
+        ? 'legacy'
+        : edit.halationModel || 'legacy'
+    patch({
+      stock: id,
+      medium: halationModel === 'layered' ? null : medium,
+      halationModel,
+    })
     setStage(null)
     setDifference(false)
   }
@@ -492,6 +594,56 @@ export default function App() {
       setError(e.message)
     }
   }
+  async function exportClip() {
+    if (!active?.image.video || !session || exporting) return
+    const controller = new AbortController()
+    videoExportController.current = controller
+    setExporting(true)
+    setError(null)
+    setStatus('Choose an export destination')
+    try {
+      const filename = `${cleanName(active.name)}-${edit.stock || 'normal'}.${videoFormat}`
+      const destination = await createVideoDestination(filename)
+      const saved = await exportVideo({
+        image: active.image,
+        edit,
+        stock: stockId,
+        session,
+        destination,
+        format: videoFormat,
+        quality: videoQuality,
+        maxEdge: exportSize === 'full' ? Infinity : Number(exportSize),
+        signal: controller.signal,
+        onProgress: ({ progress, frames, finalizing }) =>
+          setStatus(
+            finalizing
+              ? 'Finalizing video file'
+              : `Exporting video · ${Math.floor(progress * 100)}% · ${frames} frames`,
+          ),
+      })
+      if (!alive.current) {
+        await saved.dispose()
+        return
+      }
+      await videoDownloadRef.current?.dispose()
+      videoDownloadRef.current = saved
+      setVideoDownload(saved)
+      setDialog(null)
+    } catch (error) {
+      if (
+        error.name !== 'AbortError' &&
+        error.name !== 'ConversionCanceledError' &&
+        alive.current
+      )
+        setError(error.message)
+    } finally {
+      videoExportController.current = null
+      if (alive.current) {
+        setExporting(false)
+        setStatus(null)
+      }
+    }
+  }
   async function exportImage() {
     if (!active || !session || !stockId || exporting) return
     setExporting(true)
@@ -512,7 +664,8 @@ export default function App() {
         exportType === 'image/png'
           ? next.blob
           : await canvasBlob(next.canvas, exportType, quality / 100)
-      const extension = exportType === 'image/jpeg' ? 'jpg' : exportType.split('/')[1]
+      const extension =
+        exportType === 'image/jpeg' ? 'jpg' : exportType.split('/')[1]
       download(
         blob,
         `${cleanName(active.name)}-${edit.stock || 'normal'}${edit.medium ? `-${edit.medium}` : ''}.${extension}`,
@@ -548,13 +701,15 @@ export default function App() {
       } else if (event.key === 'Enter' && cropMode) {
         setPanel('film')
         endEdit()
-      } else if (!command && event.key.toLowerCase() === 'h') setHistogram((v) => !v)
+      } else if (!command && event.key.toLowerCase() === 'h')
+        setHistogram((v) => !v)
       else if (!command && event.key.toLowerCase() === 'c') {
         setPanel('crop')
         setCropPreview(false)
         setInspectorOpen(true)
       } else if (event.key === '0') setZoom(1)
-      else if (event.key === '+' || event.key === '=') setZoom((z) => Math.min(8, z + 0.25))
+      else if (event.key === '+' || event.key === '=')
+        setZoom((z) => Math.min(8, z + 0.25))
       else if (event.key === '-') setZoom((z) => Math.max(1, z - 0.25))
       else if (event.key === 'Tab') return
     }
@@ -584,7 +739,9 @@ export default function App() {
     height = edit.rotation % 2 ? rawWidth : rawHeight
   const cropSize = outputSize(edit.crop, width, height)
   const exportScale =
-    exportSize === 'full' ? 1 : Math.min(1, Number(exportSize) / Math.max(width, height))
+    exportSize === 'full'
+      ? 1
+      : Math.min(1, Number(exportSize) / Math.max(width, height))
   const shownResult = result?.fileId === activeId ? result : null
   const adjustments = (group) => (
     <Adjustments
@@ -612,7 +769,7 @@ export default function App() {
           <span className="experimental-label">Experimental</span>
           <ToolButton
             icon="open"
-            label="Open images (⌘O)"
+            label="Open photos or videos (⌘O)"
             onClick={() => input.current?.click()}
             disabled={exporting}
           />
@@ -624,7 +781,9 @@ export default function App() {
             onClick={() => setZoom((z) => Math.max(1, z - 0.25))}
             disabled={!active || zoom === 1 || cropMode}
           />
-          <span className="zoom-readout">{zoom === 1 ? 'Fit' : `${zoomReadout}%`}</span>
+          <span className="zoom-readout">
+            {zoom === 1 ? 'Fit' : `${zoomReadout}%`}
+          </span>
           <ToolButton
             icon="plus"
             label="Zoom in"
@@ -637,13 +796,26 @@ export default function App() {
             onClick={() => setZoom(1)}
             disabled={!active || zoom === 1}
           />
-          <span className="pixel-readout" title={active?.image.raw
-            ? active.image.raw.profile
-              ? `Camera spectral profile: ${active.image.raw.profile.name} · estimated ${Math.round(active.image.raw.profile.kelvin)} K`
-              : 'RAW decoder color · no matching camera spectral correction'
-            : undefined}>
-            {active?.image.linear ? 'EXR · linear · ' : active?.image.raw ? 'RAW · ' : ''}
-            {active ? `${((rawWidth * rawHeight) / 1000000).toFixed(1)} MP` : ''}
+          <span
+            className="pixel-readout"
+            title={
+              active?.image.raw
+                ? active.image.raw.profile
+                  ? `Camera spectral profile: ${active.image.raw.profile.name} · estimated ${Math.round(active.image.raw.profile.kelvin)} K`
+                  : 'RAW decoder color · no matching camera spectral correction'
+                : undefined
+            }
+          >
+            {active?.image.video
+              ? 'Video · '
+              : active?.image.linear
+                ? 'EXR · linear · '
+                : active?.image.raw
+                  ? 'RAW · '
+                  : ''}
+            {active
+              ? `${((rawWidth * rawHeight) / 1000000).toFixed(1)} MP`
+              : ''}
           </span>
         </div>
         <div className="toolbar-trailing">
@@ -683,7 +855,11 @@ export default function App() {
             onClick={() => setDialog('export')}
             disabled={!active || !stocks.length || exporting}
           />
-          <ToolButton icon="more" label="More options" onClick={() => setDialog('more')} />
+          <ToolButton
+            icon="more"
+            label="More options"
+            onClick={() => setDialog('more')}
+          />
           <ToolButton
             icon="inspector"
             label="Toggle adjustments"
@@ -692,7 +868,11 @@ export default function App() {
           />
         </div>
       </header>
-      <aside className="film-sidebar" aria-label="Film library" inert={exporting}>
+      <aside
+        className="film-sidebar"
+        aria-label="Film library"
+        inert={exporting}
+      >
         <div className="sidebar-heading">
           <span>Film</span>
           <small>{stocks.length}</small>
@@ -730,7 +910,7 @@ export default function App() {
               key={stock.id}
               stock={stock}
               active={edit.stock === stock.id}
-              image={active?.image}
+              image={active?.image.video ? null : active?.image}
               session={session}
               onSelect={() => selectStock(stock.id)}
             />
@@ -742,7 +922,7 @@ export default function App() {
       </aside>
       <main
         className={`viewer ${dragOver ? 'drag-over' : ''}`}
-        aria-label="Image editor"
+        aria-label="Photo and video editor"
         onDragOver={(e) => {
           e.preventDefault()
           setDragOver(true)
@@ -757,29 +937,42 @@ export default function App() {
         }}
       >
         {active ? (
-          <ImageCanvas
-            result={shownResult}
-            original={active.image}
-            sourceKey={active.id}
-            zoom={zoom}
-            outputWidth={cropMode ? width : cropSize.width}
-            onZoomReadout={setZoomReadout}
-            setZoom={setZoom}
-            compare={compare}
-            setCompare={setCompare}
-            cropMode={cropMode}
-            crop={edit.crop}
-            onCrop={(crop) => patch({ crop, ratio: 'free' }, 'crop')}
-            onEnd={endEdit}
-            showHistogram={histogram ? () => setHistogram(false) : null}
-          />
+          <>
+            <ImageCanvas
+              result={shownResult}
+              original={active.image}
+              sourceKey={active.id}
+              zoom={zoom}
+              outputWidth={cropMode ? width : cropSize.width}
+              onZoomReadout={setZoomReadout}
+              setZoom={setZoom}
+              compare={compare}
+              setCompare={setCompare}
+              cropMode={cropMode}
+              crop={edit.crop}
+              onCrop={(crop) => patch({ crop, ratio: 'free' }, 'crop')}
+              onEnd={endEdit}
+              showHistogram={histogram ? () => setHistogram(false) : null}
+            />
+            {active.image.video && (
+              <VideoControls
+                key={active.id}
+                clip={active.image.video}
+                time={videoTime}
+                onTime={setVideoTime}
+                settings={edit.video}
+                onChange={(video) => patch({ video })}
+                disabled={exporting || cropMode}
+              />
+            )}
+          </>
         ) : (
           <div className="empty-canvas">
             <Icon name="open" />
-            <h1>Open a photo</h1>
-            <p>Drop images here or choose files.</p>
+            <h1>Open a photo or video</h1>
+            <p>Drop photos or videos here, or choose files.</p>
             <Button
-              label="Open images"
+              label="Open photos or videos"
               variant="primary"
               size="sm"
               className="primary"
@@ -792,7 +985,9 @@ export default function App() {
               className="text-button"
               onClick={openSample}
             />
-            <small>EXR, RAW, JPEG, PNG, WebP, AVIF · processed on this device</small>
+            <small>
+              EXR, RAW, photos, MP4, MOV, WebM · processed on this device
+            </small>
           </div>
         )}
         {importStatus && (
@@ -828,7 +1023,9 @@ export default function App() {
           </div>
         )}
         <div className="viewer-status">
-          <span className="document-name">{active?.name || 'No photo open'}</span>
+          <span className="document-name">
+            {active?.name || 'No photo open'}
+          </span>
           <span role="status">
             {status ||
               (active && shownResult?.key !== previewKey
@@ -867,7 +1064,11 @@ export default function App() {
             />
           )}
           <span className="backend-label">
-            {shownResult?.backend === 'webgpu' ? 'WebGPU' : shownResult ? 'CPU' : ''}
+            {shownResult?.backend === 'webgpu'
+              ? 'WebGPU'
+              : shownResult
+                ? 'CPU'
+                : ''}
           </span>
         </div>
         {files.length > 1 && (
@@ -877,7 +1078,10 @@ export default function App() {
                 className={`filmstrip-item ${file.id === activeId ? 'selected' : ''}`}
                 key={file.id}
               >
-                <button aria-label={`Select ${file.name}`} onClick={() => selectFile(file)}>
+                <button
+                  aria-label={`Select ${file.name}`}
+                  onClick={() => selectFile(file)}
+                >
                   <img src={file.url} alt={file.name} />
                 </button>
                 <button
@@ -947,7 +1151,10 @@ export default function App() {
                       value={edit.halationModel || 'legacy'}
                       options={[
                         { value: 'legacy', label: 'Legacy' },
-                        ...(selectedStock?.layeredTransport === false || active?.image.raw?.sceneKelvin ? [] : [{ value: 'layered', label: 'Layered Transport' }]),
+                        ...(selectedStock?.layeredTransport === false ||
+                        active?.image.raw?.sceneKelvin
+                          ? []
+                          : [{ value: 'layered', label: 'Layered Transport' }]),
                       ]}
                       onChange={(halationModel) => {
                         endEdit()
@@ -956,8 +1163,18 @@ export default function App() {
                         setDifference(false)
                       }}
                     />
-                    {active?.image.raw?.sceneKelvin && <p className="medium-detail">RAW photos with a detected capture light use Legacy halation.</p>}
-                    {edit.halationModel === 'layered' && <p className="medium-detail">Uses the film’s default output medium. Pipeline inspection is available with Legacy.</p>}
+                    {active?.image.raw?.sceneKelvin && (
+                      <p className="medium-detail">
+                        RAW photos with a detected capture light use Legacy
+                        halation.
+                      </p>
+                    )}
+                    {edit.halationModel === 'layered' && (
+                      <p className="medium-detail">
+                        Uses the film’s default output medium. Pipeline
+                        inspection is available with Legacy.
+                      </p>
+                    )}
                     {adjustments('Character')}
                     <Button
                       label="New Grain Pattern"
@@ -977,11 +1194,23 @@ export default function App() {
                     label="Output medium"
                     size="sm"
                     width="100%"
-                    isDisabled={exporting || !active || !edit.stock || edit.halationModel === 'layered'}
-                    value={edit.medium || selectedStock?.defaultMedium || 'screen'}
+                    isDisabled={
+                      exporting ||
+                      !active ||
+                      !edit.stock ||
+                      edit.halationModel === 'layered'
+                    }
+                    value={
+                      edit.medium || selectedStock?.defaultMedium || 'screen'
+                    }
                     options={(
-                      selectedStock?.media || [{ id: 'screen', name: 'Digital Reference' }]
-                    ).map((medium) => ({ value: medium.id, label: medium.name }))}
+                      selectedStock?.media || [
+                        { id: 'screen', name: 'Digital Reference' },
+                      ]
+                    ).map((medium) => ({
+                      value: medium.id,
+                      label: medium.name,
+                    }))}
                     onChange={(medium) => {
                       endEdit()
                       patch({ medium })
@@ -994,7 +1223,9 @@ export default function App() {
                       {(edit.medium || selectedStock.defaultMedium) === 'screen'
                         ? 'Direct display rendering without paper or scanning. Export is 8-bit sRGB.'
                         : selectedStock.media.find(
-                            (m) => m.id === (edit.medium || selectedStock.defaultMedium),
+                            (m) =>
+                              m.id ===
+                              (edit.medium || selectedStock.defaultMedium),
                           )?.detail}
                     </p>
                   )}
@@ -1022,7 +1253,9 @@ export default function App() {
                     size="sm"
                   />
                 </Section>
-                <Section title="White Balance">{adjustments('White Balance')}</Section>
+                <Section title="White Balance">
+                  {adjustments('White Balance')}
+                </Section>
                 <Section title="Color">{adjustments('Color')}</Section>
                 <Section title="Grade">
                   <Switch
@@ -1035,7 +1268,12 @@ export default function App() {
                     size="sm"
                   />
                   {['Shadows', 'Midtones', 'Highlights'].map((band) => (
-                    <div className="grade-band" key={band} role="group" aria-label={band}>
+                    <div
+                      className="grade-band"
+                      key={band}
+                      role="group"
+                      aria-label={band}
+                    >
                       <h3>{band}</h3>
                       {adjustments(band)}
                     </div>
@@ -1079,9 +1317,16 @@ export default function App() {
                     value={edit.ratio}
                     options={ratios.map((ratio) => ({
                       value: ratio,
-                      label: ratio === 'free' ? 'Free' : ratio === 'original' ? 'Original' : ratio,
+                      label:
+                        ratio === 'free'
+                          ? 'Free'
+                          : ratio === 'original'
+                            ? 'Original'
+                            : ratio,
                     }))}
-                    onChange={(ratio) => patch({ ratio, crop: cropForRatio(ratio, width, height) })}
+                    onChange={(ratio) =>
+                      patch({ ratio, crop: cropForRatio(ratio, width, height) })
+                    }
                   />
                   <div className="crop-actions">
                     <Button
@@ -1140,7 +1385,9 @@ export default function App() {
                     variant="secondary"
                     size="sm"
                     className="secondary full-width"
-                    onClick={() => patch({ crop: fullCrop(), ratio: 'free', straighten: 0 })}
+                    onClick={() =>
+                      patch({ crop: fullCrop(), ratio: 'free', straighten: 0 })
+                    }
                   />
                   <Button
                     label="Done"
@@ -1206,7 +1453,7 @@ export default function App() {
       <input
         ref={input}
         type="file"
-        accept={IMAGE_ACCEPT}
+        accept={`${IMAGE_ACCEPT},${VIDEO_ACCEPT}`}
         multiple
         hidden
         onChange={(e) => {
@@ -1226,7 +1473,7 @@ export default function App() {
       />
       {dialog === 'export' && (
         <Modal
-          title="Export image"
+          title={active?.image.video ? VIDEO_LABELS.export : 'Export image'}
           onClose={() => {
             if (!exporting) setDialog(null)
           }}
@@ -1236,12 +1483,25 @@ export default function App() {
               Format
               <select
                 aria-label="Format"
-                value={exportType}
-                onChange={(e) => setExportType(e.target.value)}
+                value={active?.image.video ? videoFormat : exportType}
+                onChange={(e) =>
+                  active?.image.video
+                    ? setVideoFormat(e.target.value)
+                    : setExportType(e.target.value)
+                }
               >
-                <option value="image/png">PNG</option>
-                <option value="image/jpeg">JPEG</option>
-                <option value="image/webp">WebP</option>
+                {active?.image.video ? (
+                  <>
+                    <option value="mp4">{VIDEO_LABELS.mp4}</option>
+                    <option value="webm">{VIDEO_LABELS.webm}</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="image/png">PNG</option>
+                    <option value="image/jpeg">JPEG</option>
+                    <option value="image/webp">WebP</option>
+                  </>
+                )}
               </select>
             </label>
             <label className="select-row">
@@ -1257,7 +1517,7 @@ export default function App() {
                 <option value="1600">1600 px long edge</option>
               </select>
             </label>
-            {exportType !== 'image/png' && (
+            {!active?.image.video && exportType !== 'image/png' && (
               <Adjustment
                 slider={{
                   key: 'quality',
@@ -1273,12 +1533,42 @@ export default function App() {
                 onChange={setQuality}
               />
             )}
+            {active?.image.video && (
+              <label className="select-row">
+                Quality
+                <select
+                  aria-label={VIDEO_LABELS.quality}
+                  value={videoQuality}
+                  onChange={(e) => setVideoQuality(e.target.value)}
+                >
+                  <option value="medium">{VIDEO_LABELS.medium}</option>
+                  <option value="high">{VIDEO_LABELS.high}</option>
+                  <option value="very-high">{VIDEO_LABELS.veryHigh}</option>
+                </select>
+              </label>
+            )}
             <p className="export-detail">
-              {Math.max(1, Math.round(cropSize.width * exportScale))} ×{' '}
-              {Math.max(1, Math.round(cropSize.height * exportScale))} pixels · sRGB · 8-bit
+              {active?.image.video
+                ? videoDimensions(
+                    active.image,
+                    edit,
+                    exportSize === 'full' ? Infinity : Number(exportSize),
+                  ).width
+                : Math.max(1, Math.round(cropSize.width * exportScale))}{' '}
+              ×{' '}
+              {active?.image.video
+                ? videoDimensions(
+                    active.image,
+                    edit,
+                    exportSize === 'full' ? Infinity : Number(exportSize),
+                  ).height
+                : Math.max(1, Math.round(cropSize.height * exportScale))}{' '}
+              pixels · sRGB · 8-bit
             </p>
             <p className="export-detail">
-              Exports the finished image with the current crop and adjustments.
+              {active?.image.video
+                ? 'Exports every frame in the trim range with the current film, crop, and adjustments. Writes directly to disk; no upload. Odd dimensions are padded by one pixel.'
+                : 'Exports the finished image with the current crop and adjustments.'}
             </p>
           </fieldset>
           {exporting && <p role="status">{status || 'Preparing export'}</p>}
@@ -1288,18 +1578,42 @@ export default function App() {
               variant="secondary"
               size="sm"
               className="secondary"
-              onClick={() => setDialog(null)}
-              isDisabled={exporting}
+              onClick={() =>
+                exporting
+                  ? videoExportController.current?.abort()
+                  : setDialog(null)
+              }
+              isDisabled={exporting && !active?.image.video}
             />
             <Button
               label={exporting ? 'Exporting…' : 'Export'}
               variant="primary"
               size="sm"
-              onClick={exportImage}
+              onClick={active?.image.video ? exportClip : exportImage}
               isDisabled={exporting}
             />
           </div>
         </Modal>
+      )}
+      {videoDownload && (
+        <div className="video-download" role="status">
+          {videoDownload.url ? (
+            <a href={videoDownload.url} download={videoDownload.filename}>
+              Download {videoDownload.filename}
+            </a>
+          ) : (
+            <span>Saved {videoDownload.filename}</span>
+          )}
+          <button
+            onClick={async () => {
+              await videoDownload.dispose()
+              videoDownloadRef.current = null
+              setVideoDownload(null)
+            }}
+          >
+            {VIDEO_LABELS.dismiss}
+          </button>
+        </div>
       )}
       {dialog === 'more' && (
         <Modal title="Options" onClose={() => setDialog(null)}>
@@ -1373,22 +1687,24 @@ export default function App() {
         <Modal title="Browser support" onClose={() => setDialog(null)}>
           <div className="support-copy">
             <p>
-              Photos are processed on this device. WebGPU is used when available, with WebAssembly
-              CPU fallback.
+              Photos and videos are processed on this device. WebGPU is used
+              when available, with WebAssembly CPU fallback.
             </p>
             <p>
-              Fit preview uses up to 1600 pixels on the long edge; zooming requests more detail.
-              Export develops the original at the selected size.
+              Fit preview uses up to 1600 pixels on the long edge; zooming
+              requests more detail. Export develops the original at the selected
+              size.
             </p>
             <p>
-              The browser supports film selection, grain, light and color adjustments, three-way
-              grading, crop, rotation and flip. Camera RAW files decode locally with LibRaw, using
-              as-shot white balance and 16-bit linear data. Other images use the browser decoder.
+              The browser supports film selection, grain, light and color
+              adjustments, three-way grading, crop, rotation and flip. Camera
+              RAW files decode locally with LibRaw, using as-shot white balance
+              and 16-bit linear data. Other images use the browser decoder.
             </p>
             <p>
-              Video processing, scanned-negative conversion, spectral film and lens controls,
-              selective adjustments, custom packs, and HDR / 16-bit export are available in the Mac
-              app.
+              Scanned-negative conversion, spectral film and lens controls,
+              selective adjustments, custom packs, and HDR / 16-bit export are
+              available in the Mac app.
             </p>
           </div>
         </Modal>

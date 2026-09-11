@@ -181,3 +181,20 @@ The browser uses the Three.js 0.186.0 EXRLoader and its bundled fflate implement
 licensed under MIT. Three.js is Copyright © 2010–2026 Three.js authors; fflate is
 Copyright © 2020 Arjun Barrett. See [the MIT notice](licenses/BROWSER-EXR-MIT.txt).
 The decoder is installed from npm; its generated browser bundle stays in deployment assets.
+
+## Browser video
+
+The browser video reader, WebCodecs integration, audio conversion and muxers use
+Mediabunny 1.56.1, Copyright © Vanilagy, under the Mozilla Public License 2.0.
+The library is used without modification. Its corresponding source is available
+at <https://github.com/Vanilagy/mediabunny/tree/v1.56.1> and in the
+[mediabunny 1.56.1 npm package](https://www.npmjs.com/package/mediabunny/v/1.56.1).
+See [the MPL-2.0 license](licenses/MEDIABUNNY-MPL-2.0.txt). These terms cover the
+library; they do not cover rendered videos.
+
+The optional software HEVC decoder uses **@hevcjs/core 1.4.5** by Thibaut Lion,
+under the [MIT license](licenses/HEVCJS-MIT.txt). Its unmodified WebAssembly
+decoder and loader are bundled from the pinned npm dependency and run in a
+worker when native decoding cannot expose camera code values. Source:
+https://github.com/lid-labs/hevc.js and https://www.npmjs.com/package/@hevcjs/core/v/1.4.5.
+The license is included in browser builds at `licenses/HEVCJS-MIT.txt`.

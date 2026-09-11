@@ -18,7 +18,10 @@ import { canvasBlob, cropImage, orientImage } from './geometry.js'
 
 export async function loadStockIndex() {
   const response = await fetch(assetUrl('packs/index.json'))
-  if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) {
+  if (
+    !response.ok ||
+    !response.headers.get('content-type')?.includes('application/json')
+  ) {
     throw new Error('The film library could not be loaded.')
   }
   const index = await response.json()
@@ -30,7 +33,9 @@ export async function loadStockIndex() {
     throw new Error('Invalid film library.')
   const mediaResponse = await fetch(assetUrl('packs/media.json'))
   if (!mediaResponse.ok)
-    throw new Error('Output media could not be loaded. Rebuild the browser packs.')
+    throw new Error(
+      'Output media could not be loaded. Rebuild the browser packs.',
+    )
   const media = await mediaResponse.json()
   return index.map((stock) => {
     const entry = media.find((item) => item.id === stock.id)
@@ -95,7 +100,10 @@ export class RenderSession {
     let pack,
       stagesUrl = null
     if (halationModel === 'layered') {
-      if (medium) throw new Error('Layered Transport uses the film’s default output medium.')
+      if (medium)
+        throw new Error(
+          'Layered Transport uses the film’s default output medium.',
+        )
       pack = await loadPack(assetUrl(`packs/${id}.layered.pack`))
     } else if (medium) {
       this.catalog ??= loadStockIndex().catch((error) => {
@@ -104,10 +112,18 @@ export class RenderSession {
       })
       const stock = (await this.catalog).find((item) => item.id === id)
       const choice = stock?.media.find((item) => item.id === medium)
-      if (!choice) throw new Error('This output medium is unavailable for the selected film.')
+      if (!choice)
+        throw new Error(
+          'This output medium is unavailable for the selected film.',
+        )
       const base = await this.pack(id)
       pack = choice.pack
-        ? parsePack(await loadMediumBytes(base.pack.bytes, assetUrl(`packs/${choice.pack}`)))
+        ? parsePack(
+            await loadMediumBytes(
+              base.pack.bytes,
+              assetUrl(`packs/${choice.pack}`),
+            ),
+          )
         : base.pack
       stagesUrl = choice.stages ? assetUrl(`packs/${choice.stages}`) : null
     } else pack = await loadPack(assetUrl(`packs/${id}.pack`))
@@ -117,12 +133,28 @@ export class RenderSession {
     return entry
   }
   async renderer(pack, background = false, onProgress = () => {}) {
-    const name = background ? 'thumbnailReady' : pack?.transport ? 'transportReady' : pack ? 'filmReady' : 'normalReady'
-    const cached = background ? this.thumbnail : pack?.transport ? this.transport : pack ? this.developer : this.normal
+    const name = background
+      ? 'thumbnailReady'
+      : pack?.transport
+        ? 'transportReady'
+        : pack
+          ? 'filmReady'
+          : 'normalReady'
+    const cached = background
+      ? this.thumbnail
+      : pack?.transport
+        ? this.transport
+        : pack
+          ? this.developer
+          : this.normal
     if (cached?.isAborted) this[name] = null
     // A thumbnail must not hold foreground work behind GPU shader compilation.
     this[name] ??= (
-      background ? createCpuDeveloper(pack) : pack ? createDeveloper(pack, onProgress) : createNormalDeveloper()
+      background
+        ? createCpuDeveloper(pack)
+        : pack
+          ? createDeveloper(pack, onProgress)
+          : createNormalDeveloper()
     )
       .then((developer) => {
         if (this.closed) {
@@ -141,7 +173,14 @@ export class RenderSession {
       })
     return this[name]
   }
-  async source(image, edit, maxEdge, cropMode) {
+  async source(image, edit, maxEdge, cropMode, videoTime, cacheSource = true) {
+    if (image.video) {
+      const frame = await image.video.frame(
+        videoTime ?? image.video.start,
+        edit.video.encoding,
+      )
+      return this.source(frame, edit, maxEdge, cropMode, null, false)
+    }
     const key = JSON.stringify([
       maxEdge,
       cropMode,
@@ -150,16 +189,24 @@ export class RenderSession {
       cropMode ? null : edit.crop,
       cropMode ? 0 : edit.straighten,
     ])
-    const cached = this.sources.find((item) => item.image === image && item.key === key)
+    const cached = this.sources.find(
+      (item) => item.image === image && item.key === key,
+    )
     if (cached) return cached
     const floating = image.raw || image.linear
     const oriented = floating ? null : orientImage(image, edit, maxEdge)
-    const canvas = floating ? null : cropMode ? oriented : await cropImage(oriented, edit)
+    const canvas = floating
+      ? null
+      : cropMode
+        ? oriented
+        : await cropImage(oriented, edit)
     const source = linearSource(
-      floating ? rawSource(image, edit, maxEdge, cropMode) : imageSource(canvas),
+      floating
+        ? rawSource(image, edit, maxEdge, cropMode)
+        : imageSource(canvas),
     )
     const entry = { image, key, canvas, source, original: null }
-    if (maxEdge <= 2400) {
+    if (cacheSource && maxEdge <= 2400) {
       this.sources.unshift(entry)
       this.sources.length = Math.min(3, this.sources.length)
     }
@@ -186,12 +233,17 @@ export class RenderSession {
     background = false,
     comparison = !background,
     purpose = 'preview',
+    videoTime = null,
+    encode = true,
+    cacheSource = true,
     stale = () => false,
     onProgress = () => {},
   }) {
     if (this.closed || stale()) return null
     if (edit.halationModel === 'layered' && image.raw?.sceneKelvin)
-      throw new Error('Layered Transport is unavailable for RAW photos with a detected capture light. Choose Legacy.')
+      throw new Error(
+        'Layered Transport is unavailable for RAW photos with a detected capture light. Choose Legacy.',
+      )
     const work = { label: background ? 'film thumbnail' : purpose }
     const report = (text) => {
       if (this.activeWork === work) {
@@ -200,103 +252,168 @@ export class RenderSession {
       }
       if (!this.closed && !stale()) onProgress(text)
     }
-    if (edit.stock !== null && !this.packs.has(`${stock}:${edit.medium || 'default'}:${edit.halationModel || 'legacy'}`))
-      report(edit.medium ? 'Loading film and output-medium profile' : 'Loading film profile')
-    const entry = edit.stock === null ? null : await this.pack(stock, edit.medium, edit.halationModel)
+    if (
+      edit.stock !== null &&
+      !this.packs.has(
+        `${stock}:${edit.medium || 'default'}:${edit.halationModel || 'legacy'}`,
+      )
+    )
+      report(
+        edit.medium
+          ? 'Loading film and output-medium profile'
+          : 'Loading film profile',
+      )
+    const entry =
+      edit.stock === null
+        ? null
+        : await this.pack(stock, edit.medium, edit.halationModel)
     if (this.closed || stale()) return null
     if (!entry && !this.normalReady) report('Loading light and color engine')
-    const developer = await this.renderer(entry?.pack, background && !!entry, report)
+    const developer = await this.renderer(
+      entry?.pack,
+      background && !!entry,
+      report,
+    )
     work.onWait = report
-    return this.enqueue(async () => {
-      if (this.closed || stale()) return null
-      const started = performance.now()
-      if (entry?.pack.transport && stage !== null) throw new Error('Pipeline inspection is available with Legacy.')
-      if (entry && stage !== null) {
-        report('Loading pipeline inspection stages')
+    return this.enqueue(
+      async () => {
+        if (this.closed || stale()) return null
+        const started = performance.now()
+        if (entry?.pack.transport && stage !== null)
+          throw new Error('Pipeline inspection is available with Legacy.')
+        if (entry && stage !== null) {
+          report('Loading pipeline inspection stages')
+          entry.stages ??= await loadStages(
+            assetUrl(`packs/${stock}.stages`),
+            entry.pack,
+            entry.stagesUrl,
+          )
+        }
+        if (stale()) return null
+        report(
+          cropMode
+            ? 'Preparing crop canvas'
+            : 'Preparing crop and image pixels',
+        )
+        const prepared = await this.source(
+          image,
+          edit,
+          maxEdge,
+          cropMode,
+          videoTime,
+          cacheSource,
+        )
+        const { source, canvas: sourceCanvas } = prepared
+        const rendering = (text) =>
+          report(`${text} · ${source.width}×${source.height} ${purpose}`)
+        const controls = {
+          ...edit.params,
+          gradeSpace: edit.gradeSpace,
+          seed: edit.seed,
+          localTone: edit.localTone,
+        }
+        const selected = edit.stock === null ? null : stage
+        const pack = await this.capturePack(
+          entry
+            ? selected === null
+              ? entry.pack
+              : entry.stages[selected]
+            : null,
+          stock,
+          image.raw?.sceneKelvin,
+          report,
+        )
+        if (entry && !pack)
+          throw new Error('This pipeline stage is unavailable.')
+        if (pack) developer.usePack(pack)
+        let { pixels, elapsed } = developer
+          ? await developer.develop(source, controls, rendering)
+          : await developNormal(source, controls, rendering)
+        let delta = null
+        if (difference && selected > 0) {
+          report('Rendering previous stage for comparison')
+          developer.usePack(
+            await this.capturePack(
+              entry.stages[selected - 1],
+              stock,
+              image.raw?.sceneKelvin,
+              report,
+            ),
+          )
+          const before = await developer.develop(source, controls)
+          let peak = 0
+          for (let i = 0; i < pixels.length; i++)
+            if (i % 4 !== 3)
+              peak = Math.max(peak, Math.abs(pixels[i] - before.pixels[i]))
+          const gain = peak < 0.5 ? 1 : Math.min(128, 127 / peak)
+          pixels = pixels.map((v, i) =>
+            i % 4 === 3 ? 255 : 128 + (v - before.pixels[i]) * gain,
+          )
+          delta = { peak, gain }
+        }
+        if (stale()) return null
+        report(`Encoding ${purpose} image`)
+        const canvas = document.createElement('canvas')
+        canvas.width = source.width
+        canvas.height = source.height
+        canvas
+          .getContext('2d')
+          .putImageData(
+            new ImageData(pixels, source.width, source.height),
+            0,
+            0,
+          )
+        const blob = encode ? await canvasBlob(canvas) : null
+        let original = prepared.original
+        if (comparison && !original) report('Preparing original for comparison')
+        if (comparison && !original && sourceCanvas)
+          original = await canvasBlob(sourceCanvas)
+        else if (comparison && !original) {
+          const baseline = await developNormal(source, defaultEdit().params)
+          const comparison = document.createElement('canvas')
+          comparison.width = source.width
+          comparison.height = source.height
+          comparison
+            .getContext('2d')
+            .putImageData(
+              new ImageData(baseline.pixels, source.width, source.height),
+              0,
+              0,
+            )
+          original = await canvasBlob(comparison)
+        }
+        prepared.original = original
+        return {
+          canvas,
+          blob,
+          original,
+          elapsed,
+          renderMilliseconds: performance.now() - started,
+          delta,
+          backend: pack ? developer.backend : 'normal',
+          width: canvas.width,
+          height: canvas.height,
+        }
+      },
+      background,
+      work,
+    )
+  }
+  stages(stock, medium = null, halationModel = 'legacy') {
+    if (halationModel === 'layered') return Promise.resolve([])
+    return this.enqueue(
+      async () => {
+        const entry = await this.pack(stock, medium)
         entry.stages ??= await loadStages(
           assetUrl(`packs/${stock}.stages`),
           entry.pack,
           entry.stagesUrl,
         )
-      }
-      if (stale()) return null
-      report(cropMode ? 'Preparing crop canvas' : 'Preparing crop and image pixels')
-      const prepared = await this.source(image, edit, maxEdge, cropMode)
-      const { source, canvas: sourceCanvas } = prepared
-      const rendering = (text) => report(`${text} · ${source.width}×${source.height} ${purpose}`)
-      const controls = {
-        ...edit.params,
-        gradeSpace: edit.gradeSpace,
-        seed: edit.seed,
-        localTone: edit.localTone,
-      }
-      const selected = edit.stock === null ? null : stage
-      const pack = await this.capturePack(
-        entry ? (selected === null ? entry.pack : entry.stages[selected]) : null,
-        stock, image.raw?.sceneKelvin, report,
-      )
-      if (entry && !pack) throw new Error('This pipeline stage is unavailable.')
-      if (pack) developer.usePack(pack)
-      let { pixels, elapsed } = developer
-        ? await developer.develop(source, controls, rendering)
-        : await developNormal(source, controls, rendering)
-      let delta = null
-      if (difference && selected > 0) {
-        report('Rendering previous stage for comparison')
-        developer.usePack(await this.capturePack(entry.stages[selected - 1], stock, image.raw?.sceneKelvin, report))
-        const before = await developer.develop(source, controls)
-        let peak = 0
-        for (let i = 0; i < pixels.length; i++)
-          if (i % 4 !== 3) peak = Math.max(peak, Math.abs(pixels[i] - before.pixels[i]))
-        const gain = peak < 0.5 ? 1 : Math.min(128, 127 / peak)
-        pixels = pixels.map((v, i) => (i % 4 === 3 ? 255 : 128 + (v - before.pixels[i]) * gain))
-        delta = { peak, gain }
-      }
-      if (stale()) return null
-      report(`Encoding ${purpose} image`)
-      const canvas = document.createElement('canvas')
-      canvas.width = source.width
-      canvas.height = source.height
-      canvas.getContext('2d').putImageData(new ImageData(pixels, source.width, source.height), 0, 0)
-      const blob = await canvasBlob(canvas)
-      let original = prepared.original
-      if (comparison && !original) report('Preparing original for comparison')
-      if (comparison && !original && sourceCanvas) original = await canvasBlob(sourceCanvas)
-      else if (comparison && !original) {
-        const baseline = await developNormal(source, defaultEdit().params)
-        const comparison = document.createElement('canvas')
-        comparison.width = source.width
-        comparison.height = source.height
-        comparison
-          .getContext('2d')
-          .putImageData(new ImageData(baseline.pixels, source.width, source.height), 0, 0)
-        original = await canvasBlob(comparison)
-      }
-      prepared.original = original
-      return {
-        canvas,
-        blob,
-        original,
-        elapsed,
-        renderMilliseconds: performance.now() - started,
-        delta,
-        backend: pack ? developer.backend : 'normal',
-        width: canvas.width,
-        height: canvas.height,
-      }
-    }, background, work)
-  }
-  stages(stock, medium = null, halationModel = 'legacy') {
-    if (halationModel === 'layered') return Promise.resolve([])
-    return this.enqueue(async () => {
-      const entry = await this.pack(stock, medium)
-      entry.stages ??= await loadStages(
-        assetUrl(`packs/${stock}.stages`),
-        entry.pack,
-        entry.stagesUrl,
-      )
-      return entry.stages.map((s) => ({ id: s.id, label: s.label }))
-    }, false, { label: 'pipeline inspection profiles' })
+        return entry.stages.map((s) => ({ id: s.id, label: s.label }))
+      },
+      false,
+      { label: 'pipeline inspection profiles' },
+    )
   }
   dispose() {
     this.closed = true

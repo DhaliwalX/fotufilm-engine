@@ -1,7 +1,33 @@
+import { VIDEO_ENCODINGS } from './video-color.js'
 export const SLIDERS = [
-  { key: 'ev', label: 'Exposure', min: -3, max: 3, step: 0.05, def: 0, unit: 'EV', group: 'Light' },
-  { key: 'highlights', label: 'Highlights', min: -1, max: 1, step: 0.01, def: 0, group: 'Light' },
-  { key: 'shadows', label: 'Shadows', min: -1, max: 1, step: 0.01, def: 0, group: 'Light' },
+  {
+    key: 'ev',
+    label: 'Exposure',
+    min: -3,
+    max: 3,
+    step: 0.05,
+    def: 0,
+    unit: 'EV',
+    group: 'Light',
+  },
+  {
+    key: 'highlights',
+    label: 'Highlights',
+    min: -1,
+    max: 1,
+    step: 0.01,
+    def: 0,
+    group: 'Light',
+  },
+  {
+    key: 'shadows',
+    label: 'Shadows',
+    min: -1,
+    max: 1,
+    step: 0.01,
+    def: 0,
+    group: 'Light',
+  },
   {
     key: 'temperature',
     label: 'Temperature',
@@ -12,7 +38,15 @@ export const SLIDERS = [
     unit: 'K',
     group: 'White Balance',
   },
-  { key: 'tint', label: 'Tint', min: -100, max: 100, step: 1, def: 0, group: 'White Balance' },
+  {
+    key: 'tint',
+    label: 'Tint',
+    min: -100,
+    max: 100,
+    step: 1,
+    def: 0,
+    group: 'White Balance',
+  },
   {
     key: 'saturation',
     label: 'Saturation',
@@ -23,7 +57,15 @@ export const SLIDERS = [
     unit: '×',
     group: 'Color',
   },
-  { key: 'vibrance', label: 'Vibrance', min: -1, max: 1, step: 0.01, def: 0, group: 'Color' },
+  {
+    key: 'vibrance',
+    label: 'Vibrance',
+    min: -1,
+    max: 1,
+    step: 0.01,
+    def: 0,
+    group: 'Color',
+  },
   {
     key: 'grain',
     label: 'Grain',
@@ -55,6 +97,7 @@ export const fullCrop = () => [
 export const defaultEdit = (stock = null) => ({
   stock,
   medium: null,
+  video: { encoding: 'standard', trimStart: 0, trimEnd: null, audio: true },
   halationModel: 'legacy',
   params: Object.fromEntries(SLIDERS.map((s) => [s.key, s.def])),
   gradeSpace: false,
@@ -66,10 +109,16 @@ export const defaultEdit = (stock = null) => ({
   crop: fullCrop(),
   ratio: 'free',
 })
-export const initialHistory = { past: [], present: defaultEdit(), future: [], group: null }
+export const initialHistory = {
+  past: [],
+  present: defaultEdit(),
+  future: [],
+  group: null,
+}
 export function historyReducer(state, action) {
   if (action.type === 'restore') return action.history
-  if (action.type === 'load') return { past: [], present: action.edit, future: [], group: null }
+  if (action.type === 'load')
+    return { past: [], present: action.edit, future: [], group: null }
   if (action.type === 'end') return { ...state, group: null }
   if (action.type === 'undo') {
     if (!state.past.length) return state
@@ -115,7 +164,9 @@ export function validCrop(points) {
     points.every((a, i) => {
       const b = points[(i + 1) % 4],
         c = points[(i + 2) % 4]
-      return (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]) > 0.0001
+      return (
+        (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]) > 0.0001
+      )
     })
   )
 }
@@ -142,7 +193,8 @@ export function cropForRatio(ratio, width, height) {
 }
 export function parseEdit(json, stockIDs) {
   const saved = JSON.parse(json)
-  if (saved.version !== 1 || !saved.edit) throw new Error('Unsupported edit file.')
+  if (saved.version !== 1 || !saved.edit)
+    throw new Error('Unsupported edit file.')
   const edit = saved.edit,
     base = defaultEdit(edit.stock)
   if (edit.stock !== null && !stockIDs.includes(edit.stock))
@@ -157,9 +209,26 @@ export function parseEdit(json, stockIDs) {
     )
   )
     throw new Error('Invalid adjustment values.')
-  if (edit.medium != null && (typeof edit.medium !== 'string' || !/^[a-z0-9-]+$/.test(edit.medium)))
+  if (
+    edit.video != null &&
+    (!VIDEO_ENCODINGS.some((item) => item.id === edit.video.encoding) ||
+      !Number.isFinite(edit.video.trimStart) ||
+      edit.video.trimStart < 0 ||
+      (edit.video.trimEnd !== null &&
+        (!Number.isFinite(edit.video.trimEnd) ||
+          edit.video.trimEnd <= edit.video.trimStart)) ||
+      typeof edit.video.audio !== 'boolean')
+  )
+    throw new Error('Invalid video settings.')
+  if (
+    edit.medium != null &&
+    (typeof edit.medium !== 'string' || !/^[a-z0-9-]+$/.test(edit.medium))
+  )
     throw new Error('Invalid output medium.')
-  if (edit.halationModel != null && !['legacy', 'layered'].includes(edit.halationModel))
+  if (
+    edit.halationModel != null &&
+    !['legacy', 'layered'].includes(edit.halationModel)
+  )
     throw new Error('Invalid halation model.')
   if (
     !validCrop(edit.crop) ||
@@ -172,13 +241,24 @@ export function parseEdit(json, stockIDs) {
     !Number.isInteger(edit.seed) ||
     edit.seed < 0 ||
     edit.seed > 0xffffffff ||
-    !['free', 'original', '1:1', '3:2', '2:3', '4:3', '3:4', '16:9', '9:16'].includes(edit.ratio)
+    ![
+      'free',
+      'original',
+      '1:1',
+      '3:2',
+      '2:3',
+      '4:3',
+      '3:4',
+      '16:9',
+      '9:16',
+    ].includes(edit.ratio)
   )
     throw new Error('Invalid frame settings.')
   return {
     ...base,
     ...Object.fromEntries(Object.keys(base).map((key) => [key, edit[key]])),
     medium: edit.medium ?? null,
+    video: edit.video ?? base.video,
     halationModel: edit.halationModel ?? 'legacy',
     params: Object.fromEntries(SLIDERS.map((s) => [s.key, edit.params[s.key]])),
   }

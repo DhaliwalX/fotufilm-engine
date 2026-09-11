@@ -29,6 +29,12 @@ export default defineConfig({
   }, {
     name: 'browser-third-party-licenses',
     generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'licenses/MEDIABUNNY-MPL-2.0.txt',
+        source: readFileSync(new URL('../licenses/MEDIABUNNY-MPL-2.0.txt', import.meta.url), 'utf8') })
+      this.emitFile({ type: 'asset', fileName: 'licenses/MEDIABUNNY-SOURCE.txt',
+        source: 'Mediabunny 1.56.1 by Vanilagy; MPL-2.0; used without modification.\nCorresponding source: https://www.npmjs.com/package/mediabunny/v/1.56.1\nhttps://github.com/Vanilagy/mediabunny/tree/v1.56.1\n' })
+      this.emitFile({ type: 'asset', fileName: 'licenses/HEVCJS-MIT.txt',
+        source: readFileSync(new URL('../licenses/HEVCJS-MIT.txt', import.meta.url), 'utf8') })
       this.emitFile({ type: 'asset', fileName: 'licenses/BROWSER-EXR-MIT.txt',
         source: readFileSync(new URL('../licenses/BROWSER-EXR-MIT.txt', import.meta.url), 'utf8') })
       this.emitFile({ type: 'asset', fileName: 'licenses/HALIDE-MIT.txt',

@@ -8,6 +8,17 @@ public enum EditorControlCatalogue {
 
     public static let all: [EditorControl] = film + light + print + frame + pipeline
 
+    // Browser media transport and delivery controls do not occupy film-engine
+    // slots. Export their labels with the shared catalogue, separately from
+    // parameters that cross the WASM / plugin bridge.
+    public static let webVideoLabels: [String: String] = [
+        "play": "Play", "pause": "Pause", "position": "Video position",
+        "encoding": "Input color space", "trimStart": "Trim in", "trimEnd": "Trim out",
+        "audio": "Include audio", "export": "Export video", "quality": "Video quality",
+        "medium": "Medium", "high": "High", "veryHigh": "Very high",
+        "mp4": "MP4 · H.264", "webm": "WebM · VP9", "dismiss": "Dismiss",
+    ]
+
     public static let auxiliaries: [HostAuxiliary] = [
         HostAuxiliary(ofxName: "status", fxplugID: 37, group: nil, label: "Status",
                       kind: .label(text: "", hint: nil), surfaces: [.finalcut], order: 0),

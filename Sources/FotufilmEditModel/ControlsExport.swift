@@ -335,7 +335,11 @@ public struct ControlsExport {
                            + "step: \(step), def: \(scale.neutral), signed: \(signed), kind: '\(kind)' },")
             index += 1
         }
+        let labels = EditorControlCatalogue.webVideoLabels.keys.sorted().map { key in
+            "  '\(key)': '\(EditorControlCatalogue.webVideoLabels[key]!)',"
+        }
         return "export const CONTROLS = [\n" + entries.joined(separator: "\n") + "\n]\n"
+            + "export const VIDEO_LABELS = {\n" + labels.joined(separator: "\n") + "\n}\n"
     }
 
     static func wasmControls() -> String {
