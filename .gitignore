@@ -18,6 +18,7 @@ web/public/fotufilm-webgpu.mjs
 web/public/fotufilm-webgpu.wasm
 web/public/packs/
 web/public/test/
+web/public/parity/
 web/public/scene.png
 web/public/demo-scene.exr
 web/public/fallback/

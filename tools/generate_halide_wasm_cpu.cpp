@@ -26,25 +26,9 @@ Halide::Target wasm_target() {
     target.bits = 32;
     target.set_feature(Halide::Target::WasmSimd128);
     target.set_feature(Halide::Target::WasmBulkMemory);
+    target.set_feature(Halide::Target::StrictFloat);
     return target;
 }
-
-/// Mirrors the variant number `develop_pipeline_for` derives from a feature mask.
-int develop_variant(int32_t features) {
-    if (features & FOTUFILM_FRAME_LIGHT_OUT) return 1024;
-    constexpr int32_t stage_bits = FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF
-        | FOTUFILM_FRAME_HALATION | FOTUFILM_FRAME_COUPLERS
-        | FOTUFILM_FRAME_ADJACENCY | FOTUFILM_FRAME_GRAIN;
-    return (features & stage_bits)
-        | ((features & FOTUFILM_FRAME_MTF_LUMA) ? 64 : 0)
-        | ((features & FOTUFILM_FRAME_COUPLER_DIFFUSION) ? 128 : 0)
-        | ((features & FOTUFILM_FRAME_DISC_GRAIN) ? 256 : 0);
-}
-
-constexpr int32_t kSpatialBits = FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF
-    | FOTUFILM_FRAME_HALATION | FOTUFILM_FRAME_COUPLERS | FOTUFILM_FRAME_ADJACENCY
-    | FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_COUPLER_DIFFUSION
-    | FOTUFILM_FRAME_DISC_GRAIN | FOTUFILM_FRAME_LIGHT_OUT;
 
 }  // namespace
 
@@ -60,8 +44,8 @@ int main(int argc, char **argv) {
     std::vector<int> variants;
     const bool plain_only = std::string(argv[2]) == "--plain-only";
     for (int i = 2; !plain_only && i < argc; ++i) {
-        const int32_t features = int32_t(strtol(argv[i], nullptr, 0)) & kSpatialBits;
-        const int variant = develop_variant(features);
+        const int32_t features = fotufilm_develop_features(int32_t(strtol(argv[i], nullptr, 0)));
+        const int variant = fotufilm_develop_variant(features);
         if (std::find(variants.begin(), variants.end(), variant) != variants.end()) continue;
         variants.push_back(variant);
 
@@ -70,7 +54,7 @@ int main(int argc, char **argv) {
         DevelopPipeline pipeline(features, "_variant_" + std::to_string(variant));
         // The first module carries the Halide runtime; the rest link against it.
         pipeline.compile_aot((output / name).string(), name, variants.size() == 1,
-                             wasm_target());
+                             wasm_target(), true);
         std::cout << " ok\n";
     }
 

@@ -420,9 +420,10 @@ Func gpu_gaussian(Func source, Expr sigma0, Expr sigma1, Expr sigma2,
                             / denominator),
                 0.0f),
             name + "_norm_sum");
+        Expr weight = Halide::exp(-Halide::cast<float>(k * k) / denominator);
         kernel(k, channel) = tap(Halide::select(
             Halide::abs(k) <= window,
-            Halide::exp(-Halide::cast<float>(k * k) / denominator) / total,
+            gpu_device_api() == DeviceAPI::WebGPU ? weight : weight / total,
             0.0f));
     } else {
         Expr total = Halide::sum(
@@ -430,8 +431,11 @@ Func gpu_gaussian(Func source, Expr sigma0, Expr sigma1, Expr sigma2,
                                              * normalization_taps.x)
                         / denominator),
             name + "_norm_sum");
-        kernel(k, channel) =
-            tap(Halide::exp(-Halide::cast<float>(k * k) / denominator) / total);
+        Expr weight = Halide::exp(-Halide::cast<float>(k * k) / denominator);
+        // Match the CPU's unnormalized taps on WebGPU. Both directional passes already
+        // divide by the sum of the valid weights; normalizing twice adds rounding.
+        kernel(k, channel) = tap(gpu_device_api() == DeviceAPI::WebGPU
+            ? weight : weight / total);
     }
     gpu_table(kernel, k, channel, channels, name);
 
@@ -480,9 +484,23 @@ Func gpu_triple_box_blur(Func source, Expr radius, Expr width, Expr height,
     RDom fold(-radius, radius * 2 + 1, -radius, radius * 2 + 1, name + "_fold");
     Func kernel(name + "_kernel");
     Expr inner = k - fold.x - fold.y;
-    kernel(k) = tap(Halide::sum(
-        Halide::select(Halide::abs(inner) <= radius, 1.0f, 0.0f),
-        name + "_fold_sum") * box_scale * box_scale * box_scale);
+    if (gpu_device_api() == DeviceAPI::WebGPU) {
+        // Preserve the CPU's rounding at each of the three box convolutions.
+        Func box(name + "_box"), box_twice(name + "_box_twice");
+        box(k) = Halide::select(Halide::abs(k) <= radius, box_scale, 0.0f);
+        RDom fold_once(-radius, radius * 2 + 1, name + "_fold_once");
+        box_twice(k) = Halide::sum(box(k - fold_once.x), name + "_fold_once_sum")
+            * box_scale;
+        RDom fold_again(-radius, radius * 2 + 1, name + "_fold_again");
+        kernel(k) = Halide::sum(box_twice(k - fold_again.x), name + "_fold_again_sum")
+            * box_scale;
+        gpu_table(box, k, name + "_box");
+        gpu_table(box_twice, k, name + "_box_twice");
+    } else {
+        kernel(k) = tap(Halide::sum(
+            Halide::select(Halide::abs(inner) <= radius, 1.0f, 0.0f),
+            name + "_fold_sum") * box_scale * box_scale * box_scale);
+    }
     gpu_table(kernel, k, name + "_kernel");
 
     Func bounded = constant_exterior(
@@ -1111,7 +1129,8 @@ public:
           seed_("frame_seed" + suffix),
           reversal_("frame_reversal" + suffix),
           origin_x_("frame_origin_x" + suffix),
-          origin_y_("frame_origin_y" + suffix) {
+          origin_y_("frame_origin_y" + suffix),
+          runtime_features_("frame_features" + suffix) {
         WindowedFrameSchedule window_schedule(windowed);
         feature_mask &= ~ablated_features();
         const bool use_flare = feature_mask & FOTUFILM_FRAME_FLARE;
@@ -1186,10 +1205,13 @@ public:
         const bool half_store = fast(kStillFastHalfStore);
 
         Func film_curves;
-        const bool tabulated_curves = fast(kStillFastCurves);
+        // The reference CPU samples this same 2048-entry table. Evaluating the
+        // analytic curve per pixel instead changes the model between backends.
+        const bool tabulated_curves = gpu_device_api() == DeviceAPI::WebGPU
+            || fast(kStillFastCurves);
         if (tabulated_curves) {
             film_curves = film_curve_table(
-                configuration_, "frame_film_curves" + suffix, gpu_device_api());
+                configuration_, "frame_film_curves" + suffix, gpu_device_api(), approximate_);
         }
         auto film_curve = [&](Expr channel_index, Expr log_exposure) {
             return tabulated_curves
@@ -1250,12 +1272,16 @@ public:
                                    channel), name + "_down_sum")
                     / Halide::max(cell_count, 1.0f);
                 Func down_view = store_frame(down, half_store, exposure_channels);
-                previous = down_view;
-                previous_stride = stride;
-                previous_phase_x = phase_x;
-                previous_phase_y = phase_y;
-                previous_width = down_width;
-                previous_height = down_height;
+                // The CPU averages each scale directly from the source. Reusing an
+                // averaged grid changes rounding, even when the strides divide exactly.
+                if (gpu_device_api() != DeviceAPI::WebGPU) {
+                    previous = down_view;
+                    previous_stride = stride;
+                    previous_phase_x = phase_x;
+                    previous_phase_y = phase_y;
+                    previous_width = down_width;
+                    previous_height = down_height;
+                }
                 Func blurred = gpu_triple_box_blur(
                     down_view, *diffusion_strided_radii[scale_index],
                     down_width, down_height, half_store, name + "_spread",
@@ -1536,10 +1562,21 @@ public:
                     + (1.0f - primary_share) * secondary(x, y, channel);
                 Func mixed_view = store_frame(mixed, half_store);
                 Func separated("frame_mtf_separated" + suffix);
-                separated(x, y, channel) = mtf_luma_mix(
+                Expr extended = mtf_luma_mix(
                     configuration_, mixed_view(x, y, channel),
                     record_neutral(mixed_view, x, y), per_layer(x, y, 3));
+                separated(x, y, channel) = gpu_device_api() == DeviceAPI::WebGPU
+                    ? Halide::select((runtime_features_ & FOTUFILM_FRAME_MTF_LUMA) != 0,
+                                     extended, per_layer(x, y, channel))
+                    : extended;
                 light = store_frame(separated, half_store);
+            }
+            if (gpu_device_api() == DeviceAPI::WebGPU) {
+                Func selected("frame_selected_mtf" + suffix);
+                selected(x, y, channel) = Halide::select(
+                    (runtime_features_ & FOTUFILM_FRAME_MTF) != 0,
+                    light(x, y, channel), pre_mtf(x, y, channel));
+                light = store_frame(selected, false);
             }
         }
 
@@ -1652,12 +1689,16 @@ public:
                                    channel), name + "_down_sum")
                     / Halide::max(cell_count, 1.0f);
                 Func down_view = store_frame(down, half_store);
-                previous = down_view;
-                previous_stride = stride;
-                previous_phase_x = phase_x;
-                previous_phase_y = phase_y;
-                previous_width = down_width;
-                previous_height = down_height;
+                // The CPU averages each scale directly from the source. Reusing an
+                // averaged grid changes rounding, even when the strides divide exactly.
+                if (gpu_device_api() != DeviceAPI::WebGPU) {
+                    previous = down_view;
+                    previous_stride = stride;
+                    previous_phase_x = phase_x;
+                    previous_phase_y = phase_y;
+                    previous_width = down_width;
+                    previous_height = down_height;
+                }
                 Func blurred = gpu_triple_box_blur(
                     down_view, *strided_radii[scale_index],
                     down_width, down_height, half_store, name + "_spread");
@@ -1679,8 +1720,10 @@ public:
                 auto at = [&](Expr sx, Expr sy) {
                     return bounded_blur(sx, sy, channel);
                 };
-                Expr center = bilinear_sample(at, sample_x, sample_y)
-                    / Halide::max(bilinear_sample(valid_sample, sample_x, sample_y), 1.0e-12f);
+                const bool separate_weights = gpu_device_api() == DeviceAPI::WebGPU;
+                Expr center = bilinear_sample(at, sample_x, sample_y, separate_weights)
+                    / Halide::max(bilinear_sample(valid_sample, sample_x, sample_y,
+                                                  separate_weights), 1.0e-12f);
                 if (use_annular) {
                     Expr ring_radius = configuration_(
                         FOTUFILM_CONFIG_HALATION_RING_RADIUS + scale_index)
@@ -1707,9 +1750,8 @@ public:
         }
 
         Func log_exposure("frame_log_exposure" + suffix);
-        log_exposure(x, y, channel) = fs_log(
-            Halide::max(light(x, y, channel), 1.0e-6f), approximate_)
-            * (1.0f / 2.3025851f);
+        log_exposure(x, y, channel) = fs_log10(
+            Halide::max(light(x, y, channel), 1.0e-6f), approximate_);
         Func effective_log = log_exposure;
         Func donor_activation("frame_donor_activation" + suffix);
         Expr adjacency_residual = 0.0f;
@@ -1773,12 +1815,12 @@ public:
                 if (tabulated_curves) {
                     donor_curves = curve_table(
                         configuration_, FOTUFILM_CONFIG_DONOR_CURVE, 6, 1,
-                        "frame_donor_curve" + suffix, gpu_device_api());
+                        "frame_donor_curve" + suffix, gpu_device_api(), approximate_);
                 }
                 Func donor_log("frame_donor_log" + suffix);
-                donor_log(x, y, channel) = fs_log(
+                donor_log(x, y, channel) = fs_log10(
                     Halide::max(donor_exposure(x, y, channel), 1.0e-6f),
-                    approximate_) * (1.0f / 2.3025851f);
+                    approximate_);
                 Func donor_log_view = store_frame(donor_log, half_store);
                 Expr donor_formed = tabulated_curves
                     ? sample_curve(donor_curves,
@@ -1891,9 +1933,8 @@ public:
         Func flat_density("frame_flat_density" + suffix);
         if (texture_) {
             Func flat_log("frame_flat_log_exposure" + suffix);
-            flat_log(x, y, channel) = fs_log(
-                Halide::max(flat_light(x, y, channel), 1.0e-6f), approximate_)
-                * (1.0f / 2.3025851f);
+            flat_log(x, y, channel) = fs_log10(
+                Halide::max(flat_light(x, y, channel), 1.0e-6f), approximate_);
             Func flat_effective = flat_log;
             if (use_couplers || use_donor) {
                 Func flat_log_view = store_frame(flat_log, half_store);
@@ -1948,7 +1989,10 @@ public:
             // what makes the realtime path fast. It has no second population, so the mixture asks
             // for the Halide-scheduled blur instead: two fields at two correlation lengths, which
             // is slower and is only ever reached when a stock or the user asks for the mottle.
-            const bool table_grain = fast(kStillFastGrainTable);
+            // The reference CPU draws from these inverse-CDF tables. The browser GPU must
+            // use the same seeded samples, rather than a different analytic approximation.
+            const bool table_grain = gpu_device_api() == DeviceAPI::WebGPU
+                || fast(kStillFastGrainTable);
             // Realtime-only for the same radius-cap reason as the extern MTF above; a still that
             // draws from the tables still blurs through the Halide schedule.
             const bool extern_grain = realtime_ && !float_io_ && metal_grain_compute()
@@ -2132,12 +2176,17 @@ public:
         }
 
         if (feature_mask & FOTUFILM_FRAME_PRINT_MTF) {
+            if (gpu_device_api() == DeviceAPI::WebGPU) {
+                // The runtime bypass also reads this field. Store it once so that selecting
+                // the print stage does not pull the entire grain graph into the print pass.
+                developed = store_frame(developed, false, 3);
+            }
             // The enlarger lens and the paper's own scattering, in the transmittance the negative
             // actually passes rather than in its density. Placed after grain and before anything
             // reads the negative, which is where an enlarger sits.
             Func transmittance("frame_print_mtf_transmittance" + suffix);
-            transmittance(x, y, channel) = fs_exp(
-                -developed(x, y, channel) * 2.3025851f, approximate_);
+            transmittance(x, y, channel) = fs_pow10(
+                -developed(x, y, channel), approximate_);
             Func spread = gpu_gaussian(
                 store_frame(transmittance, half_store, 3),
                 configuration_(FOTUFILM_CONFIG_PRINT_MTF_SIGMA),
@@ -2155,9 +2204,14 @@ public:
                     + keep * (transmittance(x, y, channel) - spread(x, y, channel)),
                 spread(x, y, channel));
             Func printed("frame_printed_density" + suffix);
-            printed(x, y, channel) = -fs_log(
-                Halide::max(read, 1.0e-6f), approximate_)
-                * (1.0f / 2.3025851f);
+            Expr printed_density = -fs_log10(
+                Halide::max(read, 1.0e-6f), approximate_);
+            // The browser shares one graph across stocks. A zero-radius filter still makes
+            // a rounded density/transmittance round trip, so honor the actual stage mask.
+            printed(x, y, channel) = gpu_device_api() == DeviceAPI::WebGPU
+                ? Halide::select((runtime_features_ & FOTUFILM_FRAME_PRINT_MTF) != 0,
+                                 printed_density, developed(x, y, channel))
+                : printed_density;
             developed = printed;
             if (texture_) {
                 // The flat development takes the same path through transmittance and back, minus
@@ -2167,15 +2221,18 @@ public:
                 // because the variant that covers this request carries it — the two sides take
                 // the identical pointwise round trip and cancel to the bit.
                 Func flat_transmittance("frame_flat_print_mtf_transmittance" + suffix);
-                flat_transmittance(x, y, channel) = fs_exp(
-                    -flat_density(x, y, channel) * 2.3025851f, approximate_);
+                flat_transmittance(x, y, channel) = fs_pow10(
+                    -flat_density(x, y, channel), approximate_);
                 // Through the same selected store the spatial side's transmittance uses, so a flat
                 // development cannot differ merely because only one side crossed a storage seam.
                 Func flat_stored = store_frame(flat_transmittance, half_store, 3);
                 Func flat_printed("frame_flat_printed_density" + suffix);
-                flat_printed(x, y, channel) = -fs_log(
-                    Halide::max(flat_stored(x, y, channel), 1.0e-6f), approximate_)
-                    * (1.0f / 2.3025851f);
+                Expr flat_printed_density = -fs_log10(
+                    Halide::max(flat_stored(x, y, channel), 1.0e-6f), approximate_);
+                flat_printed(x, y, channel) = gpu_device_api() == DeviceAPI::WebGPU
+                    ? Halide::select((runtime_features_ & FOTUFILM_FRAME_PRINT_MTF) != 0,
+                                     flat_printed_density, flat_density(x, y, channel))
+                    : flat_printed_density;
                 flat_density = flat_printed;
             }
         }
@@ -2203,7 +2260,7 @@ public:
         };
 
         Func paper_curve = paper_curve_table(
-            configuration_, "frame_paper_curve" + suffix, gpu_device_api());
+            configuration_, "frame_paper_curve" + suffix, gpu_device_api(), approximate_);
         auto paper_activation = [&](Expr channel_index) {
             Expr base = paper_curve_base(channel_index);
             Expr exposure = paper_midpoint(configuration_, channel_index)
@@ -2325,9 +2382,10 @@ public:
             output(x, y, channel) = Halide::mux(
                 channel, {encoded(0), encoded(1), encoded(2), alpha});
         } else if (float_io_) {
-            // Floored for the same reason the encoding branch floors, and unfloored for the
-            // texture span for the same reason it does not.
-            Expr delivered = texture_
+            // The browser receives the same unencoded linear float result as PrintPipeline.
+            // Preserve negative working-space components until its display conversion. Native
+            // print delivery keeps its existing floor; texture always preserves scene light.
+            Expr delivered = texture_ || gpu_device_api() == DeviceAPI::WebGPU
                 ? final_linear(x, y, safe_channel)
                 : Halide::max(final_linear(x, y, safe_channel), 0.0f);
             output(x, y, channel) = Halide::select(
@@ -2469,6 +2527,7 @@ public:
         }) {
             arguments.push_back(scalar);
         }
+        if (gpu_device_api() == DeviceAPI::WebGPU) arguments.push_back(runtime_features_);
         pipeline_.compile_to_static_library(prefix, arguments, function_name, target);
     }
 #endif
@@ -2753,6 +2812,7 @@ private:
     Param<uint32_t> seed_;
     Param<int32_t> reversal_;
     Param<int32_t> origin_x_, origin_y_;
+    Param<int32_t> runtime_features_;
     Pipeline pipeline_;
     Buffer<> exposure_buffer_;
     Buffer<float> film_buffer_, paper_buffer_;

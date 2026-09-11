@@ -14,12 +14,20 @@ constexpr int kLutValueCount = kLutDimension * kLutDimension * kLutDimension * 4
 
 /// Bilinear sampling shared by the CPU and GPU halation schedules.
 template<typename Sample>
-inline Halide::Expr bilinear_sample(Sample sample, Halide::Expr px, Halide::Expr py) {
+inline Halide::Expr bilinear_sample(Sample sample, Halide::Expr px, Halide::Expr py,
+                                    bool separate_weights = false) {
     using Halide::Expr;
     Expr x0 = Halide::cast<int32_t>(Halide::floor(px));
     Expr y0 = Halide::cast<int32_t>(Halide::floor(py));
     Expr fx = px - Halide::floor(px);
     Expr fy = py - Halide::floor(py);
+    if (separate_weights) {
+        // The reference CPU's decimated grids round each of the four weighted terms.
+        Expr w00 = (1.0f - fx) * (1.0f - fy), w01 = (1.0f - fx) * fy;
+        Expr w10 = fx * (1.0f - fy), w11 = fx * fy;
+        return w00 * sample(x0, y0) + w01 * sample(x0, y0 + 1)
+            + w10 * sample(x0 + 1, y0) + w11 * sample(x0 + 1, y0 + 1);
+    }
     return (1.0f - fx) * ((1.0f - fy) * sample(x0, y0)
                           + fy * sample(x0, y0 + 1))
         + fx * ((1.0f - fy) * sample(x0 + 1, y0)
@@ -187,6 +195,18 @@ inline Halide::Expr fs_pow(Halide::Expr base, Halide::Expr exponent,
     return approximate
         ? Halide::fast_pow(Halide::max(base, 1.0e-8f), exponent)
         : Halide::pow(base, exponent);
+}
+
+/// Preserve the CPU's division when converting natural log to photographic density.
+/// Multiplying by a rounded reciprocal introduces another float32 rounding difference.
+inline Halide::Expr fs_log10(Halide::Expr value, bool approximate) {
+    return approximate ? fs_log(value, true) * (1.0f / 2.3025851f)
+                       : Halide::log(value) / Halide::log(10.0f);
+}
+
+inline Halide::Expr fs_pow10(Halide::Expr value, bool approximate) {
+    return approximate ? fs_exp(value * 2.3025851f, true)
+                       : Halide::pow(10.0f, value);
 }
 
 inline Halide::Expr fs_cos(Halide::Expr value, bool approximate) {
@@ -470,15 +490,15 @@ constexpr float kCurveMax = 8.0f;
 inline Halide::Func curve_table(Halide::ImageParam &configuration, int offset,
                                 int stride, int channels,
                                 const std::string &name,
-                                Halide::DeviceAPI gpu = Halide::DeviceAPI::None) {
+                                Halide::DeviceAPI gpu = Halide::DeviceAPI::None,
+                                bool approximate = false) {
     Halide::Var i(name + "_i"), c(name + "_c");
     Halide::Func table(name);
     Halide::Expr log_exposure = kCurveMin
         + (kCurveMax - kCurveMin) * (Halide::cast<float>(i)
                                      / float(kCurveSamples - 1));
     table(i, c) = curve_density(configuration, offset + c * stride,
-                                log_exposure,
-                                gpu != Halide::DeviceAPI::None);
+                                log_exposure, approximate);
     table.compute_root().bound(i, 0, kCurveSamples).bound(c, 0, channels);
     if (gpu != Halide::DeviceAPI::None) {
         Halide::Var block_i(name + "_block_i"), thread_i(name + "_thread_i");
@@ -495,14 +515,14 @@ inline Halide::Func curve_table(Halide::ImageParam &configuration, int offset,
 /// The three film curves, indexed (sample, layer).
 inline Halide::Func film_curve_table(Halide::ImageParam &configuration,
                                      const std::string &name,
-                                Halide::DeviceAPI gpu = Halide::DeviceAPI::None) {
+                                Halide::DeviceAPI gpu = Halide::DeviceAPI::None,
+                                bool approximate = false) {
     Halide::Var i(name + "_i"), c(name + "_c");
     Halide::Func table(name);
     Halide::Expr log_exposure = kCurveMin
         + (kCurveMax - kCurveMin) * (Halide::cast<float>(i)
                                      / float(kCurveSamples - 1));
-    table(i, c) = film_density(configuration, c, log_exposure,
-                               gpu != Halide::DeviceAPI::None);
+    table(i, c) = film_density(configuration, c, log_exposure, approximate);
     table.compute_root().bound(i, 0, kCurveSamples).bound(c, 0, 3);
     if (gpu != Halide::DeviceAPI::None) {
         Halide::Var block_i(name + "_block_i"), thread_i(name + "_thread_i");
@@ -539,15 +559,15 @@ inline Halide::Expr paper_midpoint(Halide::ImageParam &configuration,
 /// `paper_curve_base` rather than sharing its offset arithmetic.
 inline Halide::Func paper_curve_table(Halide::ImageParam &configuration,
                                       const std::string &name,
-                                Halide::DeviceAPI gpu = Halide::DeviceAPI::None) {
+                                Halide::DeviceAPI gpu = Halide::DeviceAPI::None,
+                                bool approximate = false) {
     Halide::Var i(name + "_i"), c(name + "_c");
     Halide::Func table(name);
     Halide::Expr log_exposure = kCurveMin
         + (kCurveMax - kCurveMin) * (Halide::cast<float>(i)
                                      / float(kCurveSamples - 1));
     table(i, c) = curve_density(configuration, paper_curve_base(c),
-                                log_exposure,
-                                gpu != Halide::DeviceAPI::None);
+                                log_exposure, approximate);
     table.compute_root().bound(i, 0, kCurveSamples).bound(c, 0, 3);
     if (gpu != Halide::DeviceAPI::None) {
         Halide::Var block_i(name + "_block_i"), thread_i(name + "_thread_i");

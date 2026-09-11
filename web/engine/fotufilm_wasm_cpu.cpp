@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "FotufilmHalide.h"
+#include "FotufilmHalideDevelop.h"
 #include "FotufilmTransportPortable.h"
 
 #include "fotufilm_wasm_variants.h"
@@ -68,23 +69,6 @@ static void init_flat(halide_buffer_t *buffer, halide_dimension_t *dim,
     // ABI halide_type_t and dropped `lanes` from the struct, but both versions take this ctor —
     // 21 defaults the lanes away, 22 never had them.
     buffer->type = halide_type_t(halide_type_float, 32);
-}
-
-/// Mirrors `develop_pipeline_for`.
-static int develop_variant_for(int32_t feature_mask) {
-    if (feature_mask & FOTUFILM_FRAME_LIGHT_OUT) return 1024;
-    const int32_t spatial = feature_mask
-        & (FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF | FOTUFILM_FRAME_HALATION
-           | FOTUFILM_FRAME_COUPLERS | FOTUFILM_FRAME_ADJACENCY | FOTUFILM_FRAME_GRAIN
-           | FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_COUPLER_DIFFUSION
-           | FOTUFILM_FRAME_DISC_GRAIN);
-    const int32_t stages = spatial
-        & (FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF | FOTUFILM_FRAME_HALATION
-           | FOTUFILM_FRAME_COUPLERS | FOTUFILM_FRAME_ADJACENCY | FOTUFILM_FRAME_GRAIN);
-    return stages
-        | ((spatial & FOTUFILM_FRAME_MTF_LUMA) ? 64 : 0)
-        | ((spatial & FOTUFILM_FRAME_COUPLER_DIFFUSION) ? 128 : 0)
-        | ((spatial & FOTUFILM_FRAME_DISC_GRAIN) ? 256 : 0);
 }
 
 /// Develops one frame, or one tile of a larger one. Input and output are planar float RGB —
@@ -148,6 +132,16 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
     const float grain_sigma = max_f(c[FOTUFILM_CONFIG_GRAIN_SIGMA], kSigmaFloor);
     const int32_t grain_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_GRAIN_RADIUS]);
     const float grain_lambda = c[FOTUFILM_CONFIG_GRAIN_LAMBDA];
+    const int32_t grain_mode = (int32_t)c[FOTUFILM_CONFIG_GRAIN_MODE];
+    const float mottle_sigma = max_f(c[FOTUFILM_CONFIG_MOTTLE_SIGMA], kSigmaFloor);
+    const int32_t mottle_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_MOTTLE_RADIUS]);
+    const float mottle_lambda = c[FOTUFILM_CONFIG_MOTTLE_LAMBDA];
+    int32_t diffusion_stride[3], diffusion_strided_radius[3];
+    for (int scale = 0; scale < 3; ++scale) {
+        const int32_t radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_DIFFUSION_RADIUS + scale]);
+        diffusion_stride[scale] = fotufilm_diffusion_stride(radius);
+        diffusion_strided_radius[scale] = fotufilm_halation_strided_radius(radius, diffusion_stride[scale]);
+    }
     const int32_t print_mtf_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_PRINT_MTF_RADIUS]);
     const int32_t reversal = (feature_mask & FOTUFILM_FRAME_REVERSAL) ? 1 : 0;
     const int32_t monochrome = (feature_mask & FOTUFILM_FRAME_MONOCHROME) ? 1 : 0;
@@ -159,10 +153,13 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
         strided_radius[0], strided_radius[1], strided_radius[2], coupler_sigma,       \
         coupler_radius, adjacency_sigma, adjacency_radius, adjacency_secondary_sigma, adjacency_secondary_radius, fringe_sigma, fringe_radius, grain_sigma, grain_radius, \
         grain_lambda, print_mtf_radius, seed, reversal, monochrome, origin_x, origin_y,  \
-        &density_buf
+        grain_mode, mottle_sigma, mottle_radius, mottle_lambda,                     \
+        diffusion_stride[0], diffusion_stride[1], diffusion_stride[2],              \
+        diffusion_strided_radius[0], diffusion_strided_radius[1],                   \
+        diffusion_strided_radius[2], &density_buf
 
     int status;
-    switch (develop_variant_for(feature_mask)) {
+    switch (fotufilm_develop_variant(feature_mask)) {
 #include "fotufilm_wasm_variants.inc"
     default: return -2;
     }

@@ -169,7 +169,7 @@ int fotufilm_wasm_render(float *input, float *output, int32_t width, int32_t hei
         halation_stride[2], halation_strided_radius[0], halation_strided_radius[1],  \
         halation_strided_radius[2], diffusion_stride[0], diffusion_stride[1],        \
         diffusion_stride[2], diffusion_strided_radius[0],                            \
-        diffusion_strided_radius[1], diffusion_strided_radius[2], &out_buf
+        diffusion_strided_radius[1], diffusion_strided_radius[2], feature_mask, &out_buf
 
     int status;
     if (feature_mask & FOTUFILM_FRAME_MONOCHROME) {

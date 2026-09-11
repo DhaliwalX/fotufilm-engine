@@ -34,10 +34,19 @@ if [[ "${1:-}" == "--webgpu" ]]; then
   # --force above puts the checkout back to the PR's own content, so the patches always apply to
   # an unpatched tree however many times this is run. In this order: each patch was written on
   # top of the one before it. Each file explains what it carries and why.
-  for patch in halide-webgpu-storage-limit halide-webgpu-pipeline-cache halide-webgpu-release-handles; do
+  for patch in halide-webgpu-storage-limit halide-webgpu-pipeline-cache halide-webgpu-release-handles halide-webgpu-strict-float; do
     git -C "$SOURCE" apply "$PWD/tools/$patch.patch"
   done
-  echo "Halide PR #$WEBGPU_PR at $(git -C "$SOURCE" rev-parse --short HEAD), plus the three tools/halide-webgpu-*.patch files"
+  python3 - "$SOURCE/src/FotufilmExactWGSL.h" <<'PY'
+from pathlib import Path
+import sys
+shader = Path('tools/webgpu-parity/reference-math.wgsl').read_text()
+license = Path('tools/webgpu-parity/HALIDE-LICENSE.txt').read_text()
+Path(sys.argv[1]).write_text('/*\n' + license + '\n*/\n'
+    + 'static const char *fotufilm_exact_wgsl = R"WGSLSOURCE(\n'
+    + shader + '\n)WGSLSOURCE";\n')
+PY
+  echo "Halide PR #$WEBGPU_PR at $(git -C "$SOURCE" rev-parse --short HEAD), plus tools/halide-webgpu-*.patch"
 fi
 
 [[ -f "$SOURCE/CMakeLists.txt" ]] || {
@@ -83,6 +92,9 @@ grep -q 'found components:.*WebAssembly' "$BUILD/CMakeCache.txt" || {
 
 cmake --build "$BUILD" -j
 cmake --install "$BUILD" --prefix "$PREFIX" >/dev/null
+if [[ "${1:-}" == "--webgpu" ]]; then
+  python3 tools/webgpu-parity/toolchain.py write "$PREFIX"
+fi
 
 echo
 echo "Installed to $PREFIX. tools/build-wasm.sh picks it up from there."

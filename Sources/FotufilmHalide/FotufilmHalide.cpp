@@ -1,5 +1,6 @@
 
 #include "FotufilmHalide.h"
+#include "FotufilmHalideDevelop.h"
 
 #if defined(FOTUFILM_HALIDE_ENABLED)
 
@@ -30,6 +31,10 @@ namespace {
 
 constexpr int kVectorWidth = 8;
 constexpr int kStripHeight = 32;
+
+Halide::Target reference_target() {
+    return Halide::get_jit_target_from_environment().with_feature(Halide::Target::StrictFloat);
+}
 
 Expr typed_zero(const Func &function) {
     return Halide::cast(function.value().type(), 0);
@@ -1013,13 +1018,13 @@ public:
         monochrome_.set((feature_mask & FOTUFILM_FRAME_MONOCHROME) != 0 ? 1 : 0);
         origin_x_.set(origin_x);
         origin_y_.set(origin_y);
-        pipeline_.realize(result);
+        pipeline_.realize(result, reference_target());
     }
 
 #if defined(FOTUFILM_HALIDE_AOT_GENERATOR)
     /// The arguments in the order the generated function takes them.
-    std::vector<Halide::Argument> arguments() {
-        return {
+    std::vector<Halide::Argument> arguments(bool extended = false) {
+        std::vector<Halide::Argument> args = {
             input_r_, input_g_, input_b_, configuration_, exposure_lut_,
             width_, height_,
             mtf_sigma_0_, mtf_sigma_1_, mtf_sigma_2_, mtf_luma_sigma_,
@@ -1033,12 +1038,22 @@ public:
             grain_sigma_, grain_radius_, grain_lambda_, print_mtf_radius_,
             seed_, reversal_, monochrome_, origin_x_, origin_y_,
         };
+        if (extended) {
+            args.insert(args.end(), {
+                grain_mode_, mottle_sigma_, mottle_radius_, mottle_lambda_,
+                diffusion_stride_0_, diffusion_stride_1_, diffusion_stride_2_,
+                diffusion_strided_radius_0_, diffusion_strided_radius_1_,
+                diffusion_strided_radius_2_,
+            });
+        }
+        return args;
     }
 
     void compile_aot(const std::string &prefix, const std::string &function_name,
-                     bool include_runtime, Halide::Target target) {
+                     bool include_runtime, Halide::Target target, bool extended_arguments = false) {
+        target.set_feature(Halide::Target::StrictFloat);
         if (!include_runtime) target.set_feature(Halide::Target::NoRuntime);
-        pipeline_.compile_to_static_library(prefix, arguments(), function_name,
+        pipeline_.compile_to_static_library(prefix, arguments(extended_arguments), function_name,
                                             target);
     }
 #endif
@@ -1178,12 +1193,13 @@ public:
         configuration_.set(config);
         film_lut_.set(film);
         paper_lut_.set(paper);
-        pipeline_.realize(result);
+        pipeline_.realize(result, reference_target());
     }
 
 #if defined(FOTUFILM_HALIDE_AOT_GENERATOR)
     void compile_aot(const std::string &prefix, const std::string &function_name,
                      bool include_runtime, Halide::Target target) {
+        target.set_feature(Halide::Target::StrictFloat);
         if (!include_runtime) target.set_feature(Halide::Target::NoRuntime);
         std::vector<Halide::Argument> arguments = {
             input_, configuration_, film_lut_, paper_lut_};
@@ -1261,12 +1277,13 @@ public:
         configuration_.set(config);
         origin_x_.set(origin_x);
         origin_y_.set(origin_y);
-        pipeline_.realize(result);
+        pipeline_.realize(result, reference_target());
     }
 
 #if defined(FOTUFILM_HALIDE_AOT_GENERATOR)
     void compile_aot(const std::string &prefix, const std::string &function_name,
                      bool include_runtime, Halide::Target target) {
+        target.set_feature(Halide::Target::StrictFloat);
         if (!include_runtime) target.set_feature(Halide::Target::NoRuntime);
         std::vector<Halide::Argument> arguments = {
             input_r_, input_g_, input_b_, configuration_, origin_x_, origin_y_};
@@ -1305,7 +1322,7 @@ public:
         sigma_.set(sigma);
         radius_.set(radius);
         Buffer<float> result(width, height, 3);
-        pipeline_.realize(result);
+        pipeline_.realize(result, reference_target());
         std::copy_n(result.data(), count, output);
     }
 
@@ -1342,7 +1359,7 @@ public:
         height_.set(height);
         radius_.set(radius);
         Buffer<float> result(width, height, 3);
-        pipeline_.realize(result);
+        pipeline_.realize(result, reference_target());
         std::copy_n(result.data(), count, output);
     }
 
@@ -1379,32 +1396,8 @@ extern "C" int32_t fotufilm_halide_available(void) { return 1; }
 namespace {
 
 DevelopPipeline *develop_pipeline_for(int32_t feature_mask) {
-    constexpr int32_t spatial_bits = FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF
-        | FOTUFILM_FRAME_HALATION | FOTUFILM_FRAME_COUPLERS
-        | FOTUFILM_FRAME_ADJACENCY | FOTUFILM_FRAME_GRAIN
-        | FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_COUPLER_DIFFUSION
-        | FOTUFILM_FRAME_DISC_GRAIN | FOTUFILM_FRAME_GRAIN_MOTTLE
-        | FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_DENSITY_IN
-        | FOTUFILM_FRAME_TEXTURE | FOTUFILM_FRAME_DIFFUSION
-        | FOTUFILM_FRAME_DONOR_LAYER | FOTUFILM_FRAME_HALATION_ANNULAR
-        | FOTUFILM_FRAME_RECORD_EXPOSURE_IN | FOTUFILM_FRAME_LIGHT_OUT;
-    const int32_t features = feature_mask & spatial_bits;
-    constexpr int32_t stage_bits = FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF
-        | FOTUFILM_FRAME_HALATION | FOTUFILM_FRAME_COUPLERS
-        | FOTUFILM_FRAME_ADJACENCY | FOTUFILM_FRAME_GRAIN;
-    const int variant = (features & stage_bits)
-        | ((features & FOTUFILM_FRAME_MTF_LUMA) ? 64 : 0)
-        | ((features & FOTUFILM_FRAME_COUPLER_DIFFUSION) ? 128 : 0)
-        | ((features & FOTUFILM_FRAME_DISC_GRAIN) ? 256 : 0)
-        | ((features & FOTUFILM_FRAME_GRAIN_MOTTLE) ? 512 : 0)
-        | ((features & FOTUFILM_FRAME_PRINT_MTF) ? 1024 : 0)
-        | ((features & FOTUFILM_FRAME_DENSITY_IN) ? 2048 : 0)
-        | ((features & FOTUFILM_FRAME_TEXTURE) ? 4096 : 0)
-        | ((features & FOTUFILM_FRAME_DIFFUSION) ? 8192 : 0)
-        | ((features & FOTUFILM_FRAME_DONOR_LAYER) ? 16384 : 0)
-        | ((features & FOTUFILM_FRAME_HALATION_ANNULAR) ? 32768 : 0)
-        | ((features & FOTUFILM_FRAME_RECORD_EXPOSURE_IN) ? 65536 : 0)
-        | ((features & FOTUFILM_FRAME_LIGHT_OUT) ? 131072 : 0);
+    const int32_t features = fotufilm_develop_features(feature_mask);
+    const int variant = fotufilm_develop_variant(features);
     static std::unique_ptr<DevelopPipeline> pipelines[262144];
     static std::mutex pipelines_mutex;
     std::lock_guard<std::mutex> lock(pipelines_mutex);

@@ -1,0 +1,274 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>CPU/WebGPU parity — running</title>
+<!-- Development-only harness. Both kernels receive identical linear RGB float32 values,
+     configuration, tables, seed and dimensions. Compare their float32 output bits before
+     display transforms or quantization. A CPU fallback must never count as WebGPU coverage. -->
+<body
+  style="
+    background: #111;
+    color: #ddd;
+    font:
+      13px/1.6 ui-monospace,
+      monospace;
+    padding: 24px;
+  "
+>
+  <h1>Reference CPU / WebGPU float32 parity</h1>
+  <pre id="out">Loading engines…</pre>
+  <pre id="report"></pre>
+  <details>
+    <summary>Native reference fixture</summary>
+    <pre id="fixture"></pre>
+  </details>
+  <script type="module">
+    import {
+      assetUrl,
+      loadPack,
+      loadStages,
+      SimdDeveloper,
+      WebgpuDeveloper,
+    } from "/src/engine.js";
+    import { relatedAssetUrl } from "/src/runtime-assets.js";
+
+    const out = document.querySelector("#out");
+    const report = document.querySelector("#report");
+    const query = new URLSearchParams(location.search);
+    const width = Number(query.get("width") || 64);
+    const height = Number(query.get("height") || 48);
+    const lines = [];
+    const results = [];
+    const say = (text) => {
+      lines.push(text);
+      out.textContent = lines.join("\n");
+    };
+
+    function scene() {
+      const data = new Float32Array(width * height * 3);
+      for (let y = 0; y < height; ++y)
+        for (let x = 0; x < width; ++x) {
+          const p = (y * width + x) * 3;
+          const spot =
+            Math.abs(x - width * 0.6) < width * 0.1 &&
+            Math.abs(y - height * 0.4) < height * 0.15;
+          const level = x / Math.max(1, width - 1);
+          data[p] = spot ? 4 : 0.002 + level * 1.8;
+          data[p + 1] = spot ? 3 : 0.003 + (y / Math.max(1, height - 1)) * 0.9;
+          data[p + 2] = spot ? 2 : 0.001 + (1 - level) * 0.7;
+        }
+      return data;
+    }
+
+    async function render(developer, pack, source, controls) {
+      developer.tileBudget = Infinity;
+      developer.usePack(pack);
+      developer.setFrame(width, height);
+      developer.applyControls(controls);
+      const n = width * height;
+      const stride = developer.outputStride;
+      const offsets = developer.outputOffsets({ width, height });
+      const heap = developer.module.HEAPF32;
+      const start = developer.inputPtr / 4;
+      for (let p = 0; p < n; ++p) {
+        for (let c = 0; c < 3; ++c)
+          heap[start + p * stride + offsets[c]] = source[p * 3 + c];
+        if (stride === 4) heap[start + p * stride + 3] = 1;
+      }
+      const region = { x: 0, y: 0, width, height };
+      const status = await developer.run(region);
+      if (status !== 0)
+        throw new Error(`${developer.backend} returned ${status}`);
+      const output = developer.regionOutput(region);
+      const rgb = new Float32Array(n * 3);
+      for (let p = 0; p < n; ++p)
+        for (let c = 0; c < 3; ++c) {
+          rgb[p * 3 + c] = output[p * stride + offsets[c]];
+        }
+      return rgb;
+    }
+
+    function compare(cpu, gpu) {
+      const a = new Uint32Array(cpu.buffer);
+      const b = new Uint32Array(gpu.buffer);
+      const ordered = (bits) =>
+        bits & 0x80000000 ? 0xffffffff - bits : bits + 0x80000000;
+      let differing = 0,
+        nonfinite = 0,
+        maxAbsolute = 0,
+        maxULP = 0;
+      let first = null,
+        worstAbsolute = null;
+      const sample = (i) => ({
+        pixel: Math.floor(i / 3),
+        channel: i % 3,
+        cpu: cpu[i],
+        gpu: gpu[i],
+        cpuBits: a[i].toString(16),
+        gpuBits: b[i].toString(16),
+      });
+      for (let i = 0; i < a.length; ++i) {
+        if (!Number.isFinite(cpu[i]) || !Number.isFinite(gpu[i])) nonfinite++;
+        if (a[i] === b[i]) continue;
+        differing++;
+        const absolute = Math.abs(cpu[i] - gpu[i]);
+        if (absolute > maxAbsolute) worstAbsolute = sample(i);
+        maxAbsolute = Math.max(maxAbsolute, absolute);
+        maxULP = Math.max(maxULP, Math.abs(ordered(a[i]) - ordered(b[i])));
+        first ??= sample(i);
+      }
+      return {
+        samples: a.length,
+        differing,
+        nonfinite,
+        maxAbsolute,
+        maxULP,
+        first,
+        worstAbsolute,
+      };
+    }
+
+    function encodeFloats(values) {
+      const bytes = new Uint8Array(
+        values.buffer,
+        values.byteOffset,
+        values.byteLength,
+      );
+      let text = "";
+      for (let i = 0; i < bytes.length; i += 4096)
+        text += String.fromCharCode(...bytes.subarray(i, i + 4096));
+      return btoa(text);
+    }
+
+    try {
+      if (!navigator.gpu)
+        throw new Error("WebGPU is unavailable; comparison cannot run");
+      if (
+        !(
+          Number.isInteger(width) &&
+          Number.isInteger(height) &&
+          width > 0 &&
+          height > 0
+        )
+      ) {
+        throw new Error("Dimensions must be positive integers");
+      }
+      const runtimeURL = (name) => {
+        const url = new URL(assetUrl(name));
+        if (query.has("revision"))
+          url.searchParams.set("v", query.get("revision"));
+        return url.href;
+      };
+      const cpuURL = runtimeURL(
+        query.get("cpu") === "probe"
+          ? "parity/probe-cpu.mjs"
+          : query.get("cpu") === "strict"
+            ? "parity/strict-cpu.mjs"
+            : "fotufilm.mjs",
+      );
+      const gpuURL = runtimeURL(
+        query.get("gpu") === "probe"
+          ? "parity/probe-gpu.mjs"
+          : query.get("gpu") === "strict"
+            ? "parity/strict-gpu.mjs"
+            : "fotufilm-webgpu.mjs",
+      );
+      const { default: createCPU } = await import(/* @vite-ignore */ cpuURL);
+      const { default: createGPU } = await import(/* @vite-ignore */ gpuURL);
+      const cpuModule = await createCPU({
+        locateFile: (name) => relatedAssetUrl(name, cpuURL),
+      });
+      const gpuModule = await createGPU({
+        locateFile: (name) => relatedAssetUrl(name, gpuURL),
+      });
+      const index = await (await fetch("/packs/index.json")).json();
+      const ids =
+        query.get("stocks") === "all"
+          ? index.map((s) => s.id)
+          : (query.get("stocks") || "gold200").split(",");
+      const input = scene();
+      const controls = {
+        ev: Number(query.get("exposure") || 0),
+        grain: Number(query.get("grain") ?? 1),
+        highlights: 0,
+        shadows: 0,
+        saturation: 1,
+        vibrance: 0,
+      };
+      say(
+        `${width}×${height}; linear RGB float32 input and output; identical control values`,
+      );
+      for (const id of ids) {
+        const pack = await loadPack(`/packs/${id}.pack`);
+        const stages =
+          query.get("stages") === "none"
+            ? []
+            : await loadStages(`/packs/${id}.stages`, pack);
+        const cpu = new SimdDeveloper(cpuModule, pack);
+        const gpu = new WebgpuDeveloper(gpuModule, pack);
+        try {
+          for (const stage of [...stages, { ...pack, id: "full" }]) {
+            say(`${id}/${stage.id}: running`);
+            const cpuStart = performance.now();
+            const a = await render(cpu, stage, input, controls);
+            const cpuMilliseconds = performance.now() - cpuStart;
+            const gpuStart = performance.now();
+            const b = await render(gpu, stage, input, controls);
+            const gpuMilliseconds = performance.now() - gpuStart;
+            if (cpu.featureMask !== gpu.featureMask || cpu.seed !== gpu.seed)
+              throw new Error(
+                "CPU and WebGPU selected different frame parameters",
+              );
+            const result = {
+              stock: id,
+              stage: stage.id,
+              featureMask: cpu.featureMask,
+              seed: cpu.seed,
+              cpuMilliseconds,
+              gpuMilliseconds,
+              ...compare(a, b),
+            };
+            if (query.has("fixture") && stage.id === "full") {
+              const configuration = cpu.module.HEAPF32.slice(
+                cpu.configPtr / 4,
+                cpu.configPtr / 4 + cpu.configuration.length,
+              );
+              document.querySelector("#fixture").textContent = JSON.stringify({
+                stock: id,
+                width,
+                height,
+                featureMask: cpu.featureMask,
+                seed: cpu.seed,
+                input: encodeFloats(input),
+                configuration: encodeFloats(configuration),
+                output: encodeFloats(a),
+                cpuURL,
+                gpuURL,
+              });
+            }
+            results.push(result);
+            say(
+              `${result.differing || result.nonfinite ? "FAIL" : "PASS"} ${id}/${stage.id}: ` +
+                `${result.differing}/${result.samples} differ; max abs ${result.maxAbsolute}; max ULP ${result.maxULP}`,
+            );
+            report.textContent = JSON.stringify(
+              { width, height, controls, cpuURL, gpuURL, results },
+              null,
+              2,
+            );
+          }
+        } finally {
+          cpu.dispose();
+          gpu.dispose();
+        }
+      }
+      const failures = results.filter((r) => r.differing || r.nonfinite).length;
+      say(
+        `${failures ? "FAIL" : "PASS"}: ${results.length - failures}/${results.length} comparisons match exactly`,
+      );
+      document.title = `CPU/WebGPU parity — ${failures ? "FAIL" : "PASS"}`;
+    } catch (error) {
+      say(`ERROR: ${error.stack || error}`);
+      document.title = "CPU/WebGPU parity — ERROR";
+    }
+  </script>
+</body>
