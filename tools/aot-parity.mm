@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -433,7 +434,21 @@ struct Difference {
     // artifact — in either unit, which is why compare_mode's message calls it "half scale" for
     // both rather than trying to say two different things.
     size_t categorical = 0;
+    // Adjacent representable half values in the density-buffer output. The offline and driver
+    // compilers can straddle a half rounding boundary even when their float arithmetic agrees.
+    // Count these against the same small rounding budget, without relaxing float-output checks.
+    size_t half_rounding = 0;
 };
+
+bool adjacent_half_values(float a, float b) {
+    if (!std::isfinite(a) || !std::isfinite(b)) return false;
+    const _Float16 left = _Float16(a), right = _Float16(b);
+    if (float(left) != a || float(right) != b) return false;
+    uint16_t left_bits, right_bits;
+    std::memcpy(&left_bits, &left, sizeof(left_bits));
+    std::memcpy(&right_bits, &right, sizeof(right_bits));
+    return std::abs(int(left_bits) - int(right_bits)) == 1;
+}
 
 Difference compare_records(const Record &a, const Record &b) {
     Difference difference;
@@ -441,6 +456,8 @@ Difference compare_records(const Record &a, const Record &b) {
         difference.count_mismatch = 1;
         return difference;
     }
+    const bool half_density = (a.mask & FOTUFILM_FRAME_DENSITY_OUT) != 0
+        && (a.mask & FOTUFILM_FRAME_FLOAT_IO) == 0;
     for (size_t i = 0; i < a.output.size(); ++i) {
         const bool a_nan = std::isnan(a.output[i]), b_nan = std::isnan(b.output[i]);
         if (a_nan || b_nan) {
@@ -448,7 +465,9 @@ Difference compare_records(const Record &a, const Record &b) {
             continue;
         }
         const double delta = std::fabs(double(a.output[i]) - double(b.output[i]));
-        if (delta >= 0.5) {
+        if (half_density && adjacent_half_values(a.output[i], b.output[i])) {
+            ++difference.half_rounding;
+        } else if (!half_density && delta >= 0.5) {
             ++difference.categorical;
         } else if (delta > difference.worst_noncategorical) {
             difference.worst_noncategorical = delta;
@@ -461,6 +480,42 @@ Difference compare_records(const Record &a, const Record &b) {
         }
     }
     return difference;
+}
+
+bool within_error_budget(const Difference &difference, double tolerance, size_t budget) {
+    return difference.count_mismatch == 0 && difference.nan_mismatches == 0
+        && difference.categorical + difference.half_rounding <= budget
+        && difference.worst_noncategorical <= tolerance;
+}
+
+int test_comparison() {
+    int failures = 0;
+    auto check = [&](const char *name, int32_t mask, std::vector<float> left,
+                     std::vector<float> right, size_t budget, bool expected) {
+        Record a{"test", mask, 0, std::move(left)};
+        Record b{"test", mask, 0, std::move(right)};
+        const auto difference = compare_records(a, b);
+        const bool passed = within_error_budget(difference, 1e-4, budget);
+        if (passed != expected) {
+            std::printf("FAIL comparator: %s\n", name);
+            ++failures;
+        }
+    };
+    const int32_t half = FOTUFILM_FRAME_DENSITY_OUT;
+    check("adjacent half", half, {1.5f}, {1.5009765625f}, 1, true);
+    check("negative adjacent half", half, {-1.5f}, {-1.5009765625f}, 1, true);
+    check("zero budget stays strict", half, {1.5f}, {1.5009765625f}, 0, false);
+    check("too many half differences", half, {1.5f, 1.5f},
+          {1.5009765625f, 1.5009765625f}, 1, false);
+    check("two half steps fail", half, {1.5f}, {1.501953125f}, 4, false);
+    check("large half differences fail", half, {1024.0f}, {1026.0f}, 4, false);
+    check("float density stays strict", half | FOTUFILM_FRAME_FLOAT_IO,
+          {1.5f}, {1.5009765625f}, 4, false);
+    check("float output stays strict", FOTUFILM_FRAME_FLOAT_IO,
+          {1.5f}, {1.5009765625f}, 4, false);
+    check("half outputs must be representable", half, {1.5f}, {1.5008f}, 4, false);
+    std::printf("Comparator checks: %d failures\n", failures);
+    return failures == 0 ? 0 : 1;
 }
 
 /// Whether a dump carries no information — every value the same. Two paths agree trivially on a
@@ -536,17 +591,19 @@ int compare_mode(const char *left_dir, const char *right_dir, double tolerance,
         // Two separate questions, because they fail for different reasons. worst_noncategorical
         // against tolerance is "did the two compilers' arithmetic actually disagree" — the thing a
         // real regression trips. difference.categorical against its budget is "how many pixels
-        // landed on the far side of a rounding boundary" — expected in small numbers on an 8-bit
-        // output (measured: at most 2 of 331,776, on 21 of 182 variants) and not a defect on its
-        // own. A variant can fail either bar without failing the other.
-        const bool categorical_over_budget = difference.categorical > categorical_budget;
+        // landed on the far side of a rounding boundary". Half-density outputs use the same
+        // budget, but only for adjacent representable half values: multiple half steps still
+        // face the float tolerance. A variant can fail either bar without failing the other.
+        const bool categorical_over_budget = difference.categorical + difference.half_rounding
+            > categorical_budget;
         const bool noncategorical_over_tolerance = difference.worst_noncategorical > tolerance;
-        if (categorical_over_budget || noncategorical_over_tolerance) {
+        if (!within_error_budget(difference, tolerance, categorical_budget)) {
             std::printf("DIFFER   %-56s max |AOT - JIT| = %.9g at [%zu] "
-                        "AOT %.9g JIT %.9g, %zu of %zu at least half scale apart%s%s\n",
+                        "AOT %.9g JIT %.9g, %zu categorical and %zu adjacent-half "
+                        "differences of %zu%s%s\n",
                         left.name.c_str(), difference.max_absolute, difference.worst_index,
                         double(difference.worst_left), double(difference.worst_right),
-                        difference.categorical, left.output.size(),
+                        difference.categorical, difference.half_rounding, left.output.size(),
                         categorical_over_budget ? " [over categorical budget]" : "",
                         noncategorical_over_tolerance ? " [over tolerance]" : "");
             ++failures;
@@ -555,6 +612,12 @@ int compare_mode(const char *left_dir, const char *right_dir, double tolerance,
             // agreeing ones came to the tolerance rather than how far the failing ones went.
             worst = difference.worst_noncategorical;
             worst_name = kVariants[index].name;
+        }
+        if (difference.half_rounding && within_error_budget(difference, tolerance,
+                                                           categorical_budget)) {
+            std::printf("ROUND    %-56s %zu adjacent-half differences of %zu, max %.9g\n",
+                        left.name.c_str(), difference.half_rounding, left.output.size(),
+                        difference.max_absolute);
         }
     }
     std::printf("\n%d variants, %d failing, %d developing a constant; "
@@ -567,6 +630,7 @@ int compare_mode(const char *left_dir, const char *right_dir, double tolerance,
 void usage() {
     std::fprintf(stderr,
                  "usage: aot-parity --count\n"
+                 "       aot-parity --self-test\n"
                  "       aot-parity --pack=PACK --variant=INDEX --out=FILE\n"
                  "       aot-parity --compare LEFT_DIR RIGHT_DIR [--tolerance=T]\n"
                  "                  [--categorical-budget=N]\n");
@@ -588,6 +652,8 @@ int main(int argc, char **argv) {
         if (argument == "--count") {
             std::printf("%d\n", kVariantCount);
             return 0;
+        } else if (argument == "--self-test") {
+            return test_comparison();
         } else if (argument == "--compare") {
             compare = true;
         } else if (argument.rfind("--pack=", 0) == 0) {

@@ -43,11 +43,12 @@ SIZE="${FOTUFILM_PARITY_SIZE:-384x216}"
 # regression, which this project's own float precision is nowhere near.
 TOLERANCE="${FOTUFILM_PARITY_TOLERANCE:-1e-4}"
 # How many pixels may land on the wrong side of a rounding boundary before it counts as a failure,
-# rather than the boundary case it is. Only 8-bit-output variants hit this at all — a float output
-# either differs by a float-scale amount (bounded by TOLERANCE above) or not — and only ever by
-# exactly one code. Measured worst case across all 182 variants: 2 pixels of 331,776, on 21
-# variants. Double that for margin without opening the door to what an actual regression would
-# look like: a wrong stage produces many wrong pixels, not two.
+# rather than the boundary case it is. This covers 8-bit output codes and adjacent representable
+# half values in the density-buffer output; float32 outputs retain TOLERANCE. Half differences
+# larger than one representable step still face that tolerance. Measured across 201 variants:
+# at most two of 331,776 density values straddle a half boundary, on three head variants. The
+# existing 8-bit budget was also based on at most two differing output codes. Double that for
+# margin while still rejecting broad disagreement or larger density errors.
 CATEGORICAL_BUDGET="${FOTUFILM_PARITY_CATEGORICAL_BUDGET:-4}"
 # The pool width. Matches the kernel generator's default and its reasoning: the performance cores,
 # because each unit is one single-threaded Halide compile. FOTUFILM_PARITY_JOBS overrides it for a
@@ -82,6 +83,8 @@ xcrun clang++ -std=c++17 -O2 -fobjc-arc \
   "$KERNELS"/*.a \
   -framework Metal -framework Foundation \
   -o "$OUT/parity-aot"
+
+"$OUT/parity-aot" --self-test
 
 echo "--- building the JIT harness ---"
 xcrun clang++ -std=c++17 -O2 -fobjc-arc \
