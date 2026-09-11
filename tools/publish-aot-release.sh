@@ -50,10 +50,11 @@ for PLATFORM in "${PLATFORMS[@]}"; do
 
   # A real cross-platform link checks the full current bridge against every generated archive.
   # It does not claim GPU execution on a hosted runner.
-  xcrun --sdk "$SDK" clang++ -std=c++17 -O2 -dynamiclib \
+  xcrun --sdk "$SDK" clang++ -std=c++17 -O2 -dynamiclib -fobjc-arc \
     -isysroot "$(xcrun --sdk "$SDK" --show-sdk-path)" -target "$TARGET" \
     -DFOTUFILM_HALIDE_IOS_AOT=1 -I"$OUTPUT" -ISources/FotufilmHalide/include \
-    Sources/FotufilmHalide/FotufilmHalideIOS.cpp "$OUTPUT"/*.a \
+    Sources/FotufilmHalide/FotufilmHalideIOS.cpp \
+    Sources/FotufilmHalide/FotufilmMetalGrain.mm "$OUTPUT"/*.a \
     -framework Foundation -framework Metal -o "$WORK/aot-link-check.dylib"
   tools/verify-apple-aot.sh "$WORK/aot-link-check.dylib"
   python3 tools/aot-release.py package "$PLATFORM" "$OUTPUT" "$WORK/release"

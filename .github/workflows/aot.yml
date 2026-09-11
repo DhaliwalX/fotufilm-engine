@@ -75,7 +75,7 @@ jobs:
           test "$(xcrun --sdk iphoneos metal --version | head -1 | awk '{print $4}')" = "$(jq -r .metal_version tools/aot-toolchain.json)"
       - name: Cache the pinned Halide build
         id: halide
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: build/halide-install
           key: apple-aot-halide-${{ runner.arch }}-${{ env.HALIDE_REVISION }}-${{ hashFiles('tools/aot-toolchain.json', 'tools/build-halide.sh') }}
@@ -87,6 +87,12 @@ jobs:
              ! jq -e --arg revision "$expected" '.halide_revision == $revision' build/halide-install/fotufilm-toolchain.json > /dev/null; then
             tools/build-halide.sh
           fi
+      - name: Save the completed compiler before kernel generation
+        if: steps.halide.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: build/halide-install
+          key: ${{ steps.halide.outputs.cache-primary-key }}
       - name: Generate, audit and publish missing AOT releases
         env:
           GH_TOKEN: ${{ github.token }}
