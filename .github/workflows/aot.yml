@@ -1,0 +1,93 @@
+name: Apple AOT releases
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Sources/FotufilmHalide/**'
+      - 'third_party/Halide'
+      - 'tools/*aot*'
+      - 'tools/generate_halide_ios.cpp'
+      - 'tools/build-halide.sh'
+      - 'tools/redact-binary-paths.py'
+      - 'LICENSE'
+      - '.github/workflows/aot.yml'
+  pull_request:
+    paths:
+      - 'Sources/FotufilmHalide/**'
+      - 'third_party/Halide'
+      - 'tools/*aot*'
+      - 'tools/generate_halide_ios.cpp'
+      - 'tools/build-halide.sh'
+      - 'tools/redact-binary-paths.py'
+      - 'LICENSE'
+      - '.github/workflows/aot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: apple-aot-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/test-aot-release.py
+      - run: python3 tools/check-source-boundary.py
+      - run: bash -n tools/generate-halide-aot.sh tools/publish-aot-release.sh tools/build-halide.sh
+
+  publish:
+    needs: test
+    if: github.repository == 'DhaliwalX/fotufilm-engine' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    # Standard public-repository runner, not a paid -large / -xlarge runner.
+    runs-on: macos-26
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [device, simulator, macos, macos-intel]
+    permissions:
+      contents: write
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      FOTUFILM_BUILD_JOBS: '2'
+      FOTUFILM_AOT_JOBS: '2'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+      - name: Install the pinned compiler dependencies
+        run: |
+          brew install cmake ninja llvm@22 lld@22
+          echo "LLVM_ROOT=$(brew --prefix llvm@22)" >> "$GITHUB_ENV"
+          echo "LLD_ROOT=$(brew --prefix lld@22)" >> "$GITHUB_ENV"
+          test "$("$(brew --prefix llvm@22)/bin/llvm-config" --version)" = "$(jq -r .llvm tools/aot-toolchain.json)"
+          test "$(xcodebuild -version | tail -1 | awk '{print $3}')" = "$(jq -r .xcode_build tools/aot-toolchain.json)"
+          echo "HALIDE_REVISION=$(git ls-tree HEAD third_party/Halide | awk '{print $3}')" >> "$GITHUB_ENV"
+          if ! xcrun --sdk iphoneos metal --version; then
+            xcodebuild -downloadComponent MetalToolchain
+            xcrun --sdk iphoneos metal --version
+          fi
+          test "$(xcrun --sdk iphoneos metal --version | head -1 | awk '{print $4}')" = "$(jq -r .metal_version tools/aot-toolchain.json)"
+      - name: Cache the pinned Halide build
+        id: halide
+        uses: actions/cache@v4
+        with:
+          path: build/halide-install
+          key: apple-aot-halide-${{ runner.arch }}-${{ env.HALIDE_REVISION }}-${{ hashFiles('tools/aot-toolchain.json', 'tools/build-halide.sh') }}
+      - name: Build Halide from its public source pin
+        # The build helper writes provenance; the publisher rejects an incorrect cache.
+        run: |
+          expected=$(git ls-tree HEAD third_party/Halide | awk '{print $3}')
+          if ! test -f build/halide-install/fotufilm-toolchain.json || \
+             ! jq -e --arg revision "$expected" '.halide_revision == $revision' build/halide-install/fotufilm-toolchain.json > /dev/null; then
+            tools/build-halide.sh
+          fi
+      - name: Generate, audit and publish missing AOT releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tools/publish-aot-release.sh "${{ matrix.platform }}"

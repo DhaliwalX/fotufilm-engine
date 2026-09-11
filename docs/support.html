@@ -5,6 +5,7 @@
 <h1>Build support</h1>
 <h2>Build requirements</h2>
 <p>Install Xcode 26 or newer and select it with <code>xcode-select</code>. Install Halide with Homebrew, or set <code>HALIDE_ROOT</code> to a compatible installation.</p>
+<p>Apple AOT generation first downloads matching, checksum-verified kernels from the public engine releases. Downloads need no GitHub token or installed Halide. Set <code>FOTUFILM_AOT_REQUIRE_PREBUILT=1</code> for a compiler-free AOT step in CI; if the expected release is missing, run the engine’s <strong>Apple AOT releases</strong> workflow on main and wait for it to finish. Local builds can instead generate with <code>HALIDE_ROOT</code>; use <code>FOTUFILM_AOT_NO_FETCH=1</code> to explicitly test the local compiler. See the <a href="../README.md#apple-aot-kernels">AOT build guide</a> for supported targets and publishing.</p>
 <p>The Final Cut plugin also needs Apple's FxPlug SDK. Without it, the Mac build includes only the Resolve plugin. You can still run the Final Cut test harness without the SDK.</p>
 <p>Start CI manually in GitHub Actions. Rendering and plugin tests need a working Metal device.</p>
 <h2>Browser editor setup</h2>

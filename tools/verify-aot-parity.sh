@@ -68,7 +68,8 @@ SDK="$(xcrun --sdk macosx --show-sdk-path)"
 TARGET="arm64-apple-macos14.0"
 mkdir -p "$OUT"
 
-tools/generate-halide-aot.sh macos "$KERNELS"
+# Both sides must use the same compiler; a public release may use a different local toolchain.
+FOTUFILM_AOT_NO_FETCH=1 tools/generate-halide-aot.sh macos "$KERNELS"
 
 echo "--- fixture ---"
 PACK="$OUT/fixture.fswp"

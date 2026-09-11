@@ -86,9 +86,34 @@ swift build
 swift test -c release --parallel
 ```
 
-CI runs only when started manually in GitHub Actions.
+The engine/desktop test workflow runs manually; Apple AOT releases also run automatically
+when their build inputs change on main.
 
 If Halide is installed elsewhere, set `HALIDE_ROOT` to its installation folder.
+
+### Apple AOT kernels
+
+`tools/generate-halide-aot.sh device` (or `simulator`, `macos`, `macos-intel`)
+first fetches matching precompiled kernels from the public engine's GitHub releases.
+Downloads need no token or installed Halide compiler. SHA-256 checksums and a manifest
+verify the source inputs, platform, compiler recipe and every archive/header before use.
+If a release is unavailable, local builds can generate with `HALIDE_ROOT` instead.
+Set `FOTUFILM_AOT_REQUIRE_PREBUILT=1` in CI to require a published set, or
+`FOTUFILM_AOT_NO_FETCH=1` to test local generation. Schedule overrides do not substitute
+default release kernels; select `FOTUFILM_AOT_NO_FETCH=1` when testing another compiler.
+
+The **Apple AOT releases** workflow runs on kernel/build-input changes merged to `main`,
+and supports manual runs. It uses GitHub's standard `macos-26` runner, builds the pinned
+Halide source with LLVM 22.1.8 and Xcode 26.6, and publishes missing content-keyed releases
+for all four targets. Only the publishing job uses GitHub's built-in token; no personal
+access token is required. Archives include licence notices, exclude host tools and local
+paths, and pass a full bridge-link check before publication. These are linkage and
+archive checks, not GPU execution tests. AOT releases never become the app's Latest release.
+The compiler contract is in `tools/aot-toolchain.json`; update it deliberately when
+upgrading the toolchain. For a local publisher, build with `tools/build-halide.sh`, then
+run `tools/publish-aot-release.sh` from a clean, merged engine checkout.
+
+### Command-line use
 
 List the included films or process an image from the command line:
 

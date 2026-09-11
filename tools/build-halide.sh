@@ -76,10 +76,16 @@ fi
 
 echo "Halide $(git -C "$SOURCE" rev-parse --short HEAD) against LLVM $("$LLVM_PREFIX/bin/llvm-config" --version)"
 
+PREFIX_MAP_FLAGS="-ffile-prefix-map=$PWD=/__fotufilm_build_root__ -fdebug-prefix-map=$PWD=/__fotufilm_build_root__ -fmacro-prefix-map=$PWD=/__fotufilm_build_root__"
 cmake -G Ninja -S "$SOURCE" -B "$BUILD" \
   -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_OSX_SYSROOT="$(xcrun --sdk macosx --show-sdk-path)" \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+  -DCMAKE_C_FLAGS="$PREFIX_MAP_FLAGS" \
+  -DCMAKE_CXX_FLAGS="$PREFIX_MAP_FLAGS" \
   -DHalide_LLVM_ROOT="$LLVM_PREFIX" \
   -DLLD_DIR="$LLD_PREFIX/lib/cmake/lld" \
+  -DHalide_WASM_BACKEND=OFF \
   -DWITH_TESTS=OFF -DWITH_TUTORIALS=OFF -DWITH_DOCS=OFF \
   -DWITH_UTILS=OFF -DWITH_PYTHON_BINDINGS=OFF
 
@@ -90,8 +96,18 @@ grep -q 'found components:.*WebAssembly' "$BUILD/CMakeCache.txt" || {
   exit 1
 }
 
-cmake --build "$BUILD" -j
+cmake --build "$BUILD" --parallel "${FOTUFILM_BUILD_JOBS:-$(sysctl -n hw.ncpu)}"
 cmake --install "$BUILD" --prefix "$PREFIX" >/dev/null
+python3 - "$PREFIX" "$SOURCE" "$LLVM_PREFIX" <<'PY'
+import hashlib, json, pathlib, subprocess, sys
+prefix, source, llvm = map(pathlib.Path, sys.argv[1:])
+record = {
+    "halide_revision": subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip(),
+    "llvm": subprocess.check_output([str(llvm / "bin/llvm-config"), "--version"], text=True).strip(),
+    "build_script": hashlib.sha256(pathlib.Path("tools/build-halide.sh").read_bytes()).hexdigest(),
+}
+(prefix / "fotufilm-toolchain.json").write_text(json.dumps(record, indent=2) + "\n")
+PY
 if [[ "${1:-}" == "--webgpu" ]]; then
   python3 tools/webgpu-parity/toolchain.py write "$PREFIX"
 fi
