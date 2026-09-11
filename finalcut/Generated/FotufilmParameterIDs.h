@@ -14,6 +14,8 @@ enum {
     kFotufilmParam_LocalTone = 11,
     kFotufilmParam_Saturation = 12,
     kFotufilmParam_Vibrance = 13,
+    kFotufilmParam_SceneLight = 93,
+    kFotufilmParam_SceneLightKelvin = 94,
     kFotufilmParam_LensFilter1 = 73,
     kFotufilmParam_LensFilter2 = 74,
     kFotufilmParam_LensFilter3 = 75,

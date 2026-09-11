@@ -340,8 +340,8 @@
     "sha256": "a26fc5b38380272c92e9019a2eb8b45542a66814b3e2b203772db8904b9fb99f"
   },
   "finalcut/MotionTemplate/Fotufilm.moef": {
-    "provenance": "Project-authored Motion effect template, regenerated from EditorControlCatalogue with optional digital channel-contrast correction off by default; no photography or manufacturer artwork.",
-    "sha256": "9bd3f4be5f8667a473709f46b66eb91500ac6206c163c29f9566dba70ef86fc0"
+    "provenance": "Project-authored Motion effect template, regenerated from EditorControlCatalogue with stock-native source illumination and explicit source presets/custom temperature; no photography or manufacturer artwork.",
+    "sha256": "6889f9f4343261c70d1517d31e5d2bbff69f1ebfe98aa216e43b93ba2c99a7f6"
   },
   "macos/AppIcon.icon/Assets/Cyan.svg": {
     "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",

@@ -88,8 +88,6 @@ enum FilmRender {
         var sourceInterpretation: FilmSourceInterpretation
         /// Camera RAW is decoded at the same fixed illuminant as its live/video acquisition.
         var captureIlluminantKelvin: Double?
-        /// The scene carries the film's light with it, so a change of it is a different scene.
-        var filmLightKelvin: Double?
         /// Everything about the lens correction that changes the pixels. It belongs in the key
         /// because the correction happens on the way into the scene, so a cached scene made with a
         /// different one is the wrong picture rather than a stale-looking one.
@@ -108,7 +106,6 @@ enum FilmRender {
             self.viewport = viewport
             sourceInterpretation = state.sourceInterpretation
             captureIlluminantKelvin = state.captureIlluminantKelvin
-            filmLightKelvin = state.filmLightKelvin
             lens = state.lensSettings
         }
     }
@@ -220,8 +217,6 @@ enum FilmRender {
               let device = MTLCreateSystemDefaultDevice() else { return nil }
         var options = state.options(sensor: scene.sensorFrame)
         options.frameCoverage = scene.frameCoverage
-        options.sceneIlluminantKelvin = scene.sceneKelvin
-        options.sceneIlluminantChromaticity = scene.sceneChromaticity
         options.sceneHeadroom = scene.inputConversion == .preserveHDR
             ? scene.contentHeadroom : 1
         options.paper = state.resolvedPaper
@@ -279,7 +274,7 @@ enum FilmRender {
         let decodeLongEdge = state.crop == nil && state.cornerCrop == nil && requestedViewport == nil
             ? longEdge : nil
         let fixedCaptureIlluminant = source.isRaw
-            ? (state.filmLightKelvin ?? state.captureIlluminantKelvin).map(Float.init) : nil
+            ? state.captureIlluminantKelvin.map(Float.init) : nil
         // Preserve as-shot neutralization for imports. A camera capture reproduces its declared
         // scene-white lock. Temperature and tint edits belong solely to spectral exposure.
 
@@ -411,10 +406,9 @@ enum FilmRender {
                 camera: source.camera,
                 sceneKelvin: decodeKelvin)
             : nil
-        // A camera capture names its light whether or not it kept the raw: the processed frame
-        // left the ISP under the same acquisition lock the decode reproduces.
-        let sceneKelvin = state.filmLightKelvin.map(Float.init)
-            ?? (source.isRaw ? decodeKelvin : nil)
+        // Capture metadata remains a decode fact. Film exposure uses the edit's independent
+        // Source Illuminant; changing it does not invalidate or re-demosaic these pixels.
+        let sceneKelvin = source.isRaw ? decodeKelvin : nil
         let rowBytes = width * MemoryLayout<Float>.size * 4
         guard let buffer = MappedBuffer(byteCount: rowBytes * height) else {
             return nil
@@ -694,9 +688,8 @@ enum FilmRender {
         // picture is an enlargement, and the engine scales grain and the other
         // millimetre-sized structures to match.
         options.frameCoverage = scene.frameCoverage
-        // Pass capture light unchanged; the engine resolves temperature/tint edits spectrally.
-        options.sceneIlluminantKelvin = scene.sceneKelvin
-        options.sceneIlluminantChromaticity = scene.sceneChromaticity
+        // state.options selects stock-native or explicit source light. Capture white remains
+        // attached to the decoded scene for provenance, not as an implicit rendering override.
         // The recorded range above diffuse white, so an HDR source's highlights are metered
         // into the film's latitude instead of printing to paper white. Only when the decode
         // kept that light: a tone-mapped scene still carries the metadata fact in

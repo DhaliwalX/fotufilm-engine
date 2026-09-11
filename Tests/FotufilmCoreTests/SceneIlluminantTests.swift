@@ -5,6 +5,29 @@ import FotufilmMetal
 #endif
 
 final class SceneIlluminantTests: XCTestCase {
+    func testDefaultTracksEachStockButExplicitSourceDoesNot() {
+        for native: Float in [3200, 5500] {
+            var stock = TestStocks.negative
+            stock.referenceIlluminantKelvin = native
+            var options = FotufilmEngine.Options()
+            options.paper = .vision2383
+            let baseline = FilmEngineInvocation(stock: stock, options: options, width: 8, height: 8)
+            XCTAssertNotNil(baseline.spectral.paperOutput)
+            options.sceneIlluminantKelvin = native
+            let matched = FilmEngineInvocation(stock: stock, options: options, width: 8, height: 8)
+            XCTAssertEqual(baseline.spectral.exposure.values, matched.spectral.exposure.values)
+            XCTAssertEqual(baseline.spectralCacheID, matched.spectralCacheID)
+
+            options.sceneIlluminantKelvin = 5000
+            let changed = FilmEngineInvocation(stock: stock, options: options, width: 8, height: 8)
+            XCTAssertNotEqual(baseline.spectral.exposure.values, changed.spectral.exposure.values)
+            XCTAssertNotEqual(baseline.spectralCacheID, changed.spectralCacheID)
+            XCTAssertEqual(baseline.spectral.filmOutput.values, changed.spectral.filmOutput.values)
+            XCTAssertEqual(baseline.spectral.paperOutput?.values, changed.spectral.paperOutput?.values)
+            XCTAssertEqual(stock.referenceIlluminantKelvin, native)
+        }
+    }
+
     func testSpectrumAndControlWhiteAgreeIncludingTintAndCrossover() {
         for kelvin in stride(from: Float(2000), through: 12000, by: 100) {
             for tint: Float in [-100, 0, 100] {

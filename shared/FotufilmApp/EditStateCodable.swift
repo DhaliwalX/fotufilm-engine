@@ -28,7 +28,7 @@ extension EditState: Codable {
 
     static let bespokeKeys: [String] = [
         "stockID", "chosenFormatID", "sourceInterpretation", "captureIlluminantKelvin",
-        "filmLightKelvin", "grainMottleShare", "couplerGapReach", "paper", "paperFollowsStock",
+        "filmLightKelvin", "sourceLightIndex", "grainMottleShare", "couplerGapReach", "paper", "paperFollowsStock",
         "seed", "shutterSeconds", "printLightKelvin", "enlarger", "rotation", "crop", "cornerCrop",
         "grade", "lensProfileID", "lensAdjustment", "lensFilterIDs", "lensFilterMetering", "selective",
     ]
@@ -65,6 +65,25 @@ extension EditState: Codable {
             ?? sourceInterpretation
         captureIlluminantKelvin = try c.decodeIfPresent(Double.self, forKey: EditKey("captureIlluminantKelvin"))
         filmLightKelvin = try c.decodeIfPresent(Double.self, forKey: EditKey("filmLightKelvin"))
+        if let index = try c.decodeIfPresent(Int.self, forKey: EditKey("sourceLightIndex")) {
+            guard EditorControlCatalogue.sourceLights.indices.contains(index) else {
+                throw DecodingError.dataCorruptedError(forKey: EditKey("sourceLightIndex"),
+                    in: c, debugDescription: "Unknown source illuminant selection")
+            }
+            sourceLightIndex = index
+        } else if let legacy = filmLightKelvin {
+            // Preserve explicitly stored camera light in older edits. New edits always persist
+            // the selection, so acquisition metadata cannot opt them out of Stock Native.
+            sourceLightIndex = EditorControlCatalogue.sourceLights.firstIndex { $0.id == "custom" }!
+            sourceLightKelvin = legacy
+            // That field also took precedence over capture white in the old RAW decoder.
+            // Migrate the existing decode once; future source edits must not change it.
+            captureIlluminantKelvin = legacy
+        }
+        guard sourceLightKelvin.isFinite, (1000...25000).contains(sourceLightKelvin) else {
+            throw DecodingError.dataCorruptedError(forKey: EditKey("sourceLightKelvin"),
+                in: c, debugDescription: "Source illuminant must be between 1000 and 25000 K")
+        }
         grainMottleShare = try c.decodeIfPresent(Double.self, forKey: EditKey("grainMottleShare"))
         couplerGapReach = try c.decodeIfPresent([Double].self, forKey: EditKey("couplerGapReach"))
             ?? couplerGapReach
@@ -113,6 +132,7 @@ extension EditState: Codable {
         try c.encode(sourceInterpretation, forKey: EditKey("sourceInterpretation"))
         try c.encodeIfPresent(captureIlluminantKelvin, forKey: EditKey("captureIlluminantKelvin"))
         try c.encodeIfPresent(filmLightKelvin, forKey: EditKey("filmLightKelvin"))
+        try c.encode(sourceLightIndex, forKey: EditKey("sourceLightIndex"))
         try c.encodeIfPresent(grainMottleShare, forKey: EditKey("grainMottleShare"))
         try c.encode(couplerGapReach, forKey: EditKey("couplerGapReach"))
         try c.encode(paper.id, forKey: EditKey("paper"))

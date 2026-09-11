@@ -5,6 +5,24 @@ import FotufilmCore
 #endif
 
 public enum EditorControlCatalogue {
+    /// Stable menu order shared by editors and plugin hosts. Zero follows the selected stock;
+    /// nil is the custom-temperature entry, not a measured capture spectrum.
+    public static let sourceLights: [EditorMenuChoice] = [
+        EditorMenuChoice(0, "Stock Native", id: "unspecified"),
+        EditorMenuChoice(6504, "Daylight · D65", id: "d65"),
+        EditorMenuChoice(5500, "Daylight · 5500 K", id: "daylight5500"),
+        EditorMenuChoice(3200, "Tungsten · 3200 K", id: "tungsten3200"),
+        EditorMenuChoice(2856, "Incandescent · 2856 K", id: "incandescent"),
+        EditorMenuChoice(nil, "Custom", id: "custom"),
+    ]
+
+    public static func sourceLightKelvin(selection: Int, custom: Double) -> Float? {
+        guard sourceLights.indices.contains(selection) else { return nil }
+        let kelvin = sourceLights[selection].value ?? custom
+        guard kelvin.isFinite, (1000...25000).contains(kelvin) else { return nil }
+        return Float(kelvin)
+    }
+
 
     public static let all: [EditorControl] = film + light + print + frame + pipeline
 
@@ -1063,7 +1081,7 @@ public enum EditorControlCatalogue {
 
         EditorControl(
             .warmth, title: "Warmth",
-            detail: "Set the color temperature of the scene lighting.",
+            detail: "Adjust warmth relative to the selected Source Illuminant.",
             section: .lightBalance, kind: .slider(signed),
             persistence: .key("temperatureMired", .miredFromWarmth),
             binding: .warmth,
@@ -1073,17 +1091,15 @@ public enum EditorControlCatalogue {
                 slot: 1, slotSymbol: "TEMPERATURE", ofxName: "temperature", fxplugID: 7, group: .exposure,
                 label: "Temperature (K)",
                 hint: "Spectral scene temperature. Lower Kelvin adds warm light. Relative in mired "
-                    + "to Scene Illuminant when a base lamp is selected; 6504 leaves that lamp unchanged.",
+                    + "to Source Illuminant; 6504 leaves the selected or stock-native lamp unchanged.",
                 kind: .double(min: 2000, max: 12000, value: 6504, delta: 10), bridge: .kelvinFromWarmth,
                 binding: .whiteBalanceKelvin, clamp: 2000...12000, order: 20),
             commandLine: CommandLineFlag("--wb", placeholder: "<kelvin>",
-                                         help: "Scene illuminant, 2000-12000 K. Unset, an already "
-                                             + "white-balanced file is lit at the stock's own balance, "
-                                             + "so a neutral renders neutral. On camera raw this is "
-                                             + "relative to the file's as-shot light; 6504 preserves "
-                                             + "the capture illuminant",
+                                         help: "Relative scene-light adjustment, 2000-12000 K. "
+                                             + "6504 leaves the stock-native or explicit --scene-kelvin "
+                                             + "light unchanged, for RAW and processed inputs alike",
                                          generic: false),
-            documentation: "Changes scene-light temperature; RAW edits are relative to the capture illuminant."),
+            documentation: "Adjusts scene-light temperature relative to Source Illuminant, without changing RAW decoding."),
         EditorControl(
             .tint, title: "Tint",
             detail: "Shift the color balance between green and magenta.",
@@ -1102,54 +1118,39 @@ public enum EditorControlCatalogue {
                                          generic: false),
             documentation: "Changes the scene spectrum toward green or magenta, perpendicular to the blended blackbody/daylight locus."),
         EditorControl(
-            .sceneLight, title: "Scene Illuminant",
-            detail: "Choose the scene light source. Temperature and Tint refine its color.",
+            .sceneLight, title: "Source Illuminant",
+            detail: "Stock Native uses the selected film's reference light. Choose another source to simulate a lighting mismatch; Warmth and Tint refine it.",
             section: .lightBalance,
-            kind: .menu(.fixed([
-                EditorMenuChoice(0, "Unspecified · D65", id: "unspecified"),
-                EditorMenuChoice(6504, "Daylight · D65", id: "d65"),
-                EditorMenuChoice(5500, "Daylight · 5500 K", id: "daylight5500"),
-                EditorMenuChoice(3200, "Tungsten · 3200 K", id: "tungsten3200"),
-                EditorMenuChoice(2856, "Incandescent · 2856 K", id: "incandescent"),
-                EditorMenuChoice(nil, "Custom", id: "custom"),
-            ])),
-            scope: .hostOnly,
+            kind: .menu(.fixed(sourceLights)),
             drives: ["sceneIlluminantKelvin"],
-            surfaces: [.resolve],
-            omitted: [.app: "read from the capture metadata", .desktop: "read from the capture metadata",
-                      .android: "read from the capture metadata",
-                      .finalcut: "not yet offered; the clip's light is taken as D65",
-                      .web: webBaked, .cli: "--wb states the scene light directly"],
+            surfaces: [.app, .desktop, .resolve, .finalcut],
+            omitted: [.android: "the source spectrum is baked into the stock pack",
+                      .web: webBaked, .cli: "--scene-kelvin selects an explicit source; omission uses Stock Native"],
             host: HostParameter(
-                slot: 33, slotSymbol: "SCENE_ILLUMINANT", ofxName: "sceneLight", group: .sceneLight,
-                label: "Scene Illuminant",
-                hint: "Capture light presented to the film; Temperature and Tint adjust this spectrum. "
-                    + "Unspecified light assumes D65. Custom sources use a daylight or Planckian "
+                slot: 33, slotSymbol: "SCENE_ILLUMINANT", ofxName: "sceneLight", fxplugID: 93, group: .sceneLight,
+                label: "Source Illuminant",
+                hint: "Light presented to the film; Stock Native follows the selected film's reference. "
+                    + "Temperature and Tint adjust this light. Custom sources use a daylight or Planckian "
                     + "spectrum, not a measured LED spectrum.",
-                kind: .choice(.fixed([
-                    EditorMenuChoice(0, "Unspecified · D65", id: "unspecified"),
-                    EditorMenuChoice(6504, "Daylight · D65", id: "d65"),
-                    EditorMenuChoice(5500, "Daylight · 5500 K", id: "daylight5500"),
-                    EditorMenuChoice(3200, "Tungsten · 3200 K", id: "tungsten3200"),
-                    EditorMenuChoice(2856, "Incandescent · 2856 K", id: "incandescent"),
-                    EditorMenuChoice(nil, "Custom", id: "custom"),
-                ]), value: 0), composed: true, order: 10)),
+                kind: .choice(.fixed(sourceLights), value: 0), composed: true, order: 10),
+            documentation: "Defaults to the selected stock's native light, independent of capture metadata. Presets or Custom override only the film-exposure illuminant."),
         EditorControl(
-            .sceneLightKelvin, title: "Scene Illuminant (K)",
-            detail: "Define a custom scene light source before Temperature and Tint adjustments.",
+            .sceneLightKelvin, title: "Source Illuminant (K)",
+            detail: "Custom source temperature before Warmth and Tint. This does not change capture white balance or print viewing light.",
             section: .lightBalance,
-            kind: .slider(EditorControlScale(2000...12000, neutral: 6504, unit: .kelvin)),
-            scope: .hostOnly,
+            kind: .slider(EditorControlScale(1000...25000, neutral: 6504, unit: .kelvin)),
+            persistence: .key("sourceLightKelvin", .same),
             drives: ["sceneIlluminantKelvin"],
-            surfaces: [.resolve],
-            omitted: [.app: "read from the capture metadata", .desktop: "read from the capture metadata",
-                      .android: "read from the capture metadata",
-                      .finalcut: "not yet offered; the clip's light is taken as D65",
-                      .web: webBaked, .cli: "--wb states the scene light directly"],
+            surfaces: [.app, .desktop, .resolve, .finalcut, .cli],
+            omitted: [.android: "the source spectrum is baked into the stock pack", .web: webBaked],
             host: HostParameter(
-                slot: nil, ofxName: "sceneLightKelvin", group: .sceneLight, label: "Scene Illuminant (K)",
-                hint: "Custom capture light before the Temperature and Tint edits.",
-                kind: .double(min: 2000, max: 12000, value: 6504, delta: 10), composed: true, order: 20)),
+                slot: nil, ofxName: "sceneLightKelvin", fxplugID: 94, group: .sceneLight, label: "Source Illuminant (K)",
+                hint: "Custom source light before Temperature and Tint; used only when Source Illuminant is Custom.",
+                kind: .double(min: 1000, max: 25000, value: 6504, delta: 10), composed: true, order: 20),
+            commandLine: CommandLineFlag("--scene-kelvin", placeholder: "<K>",
+                help: "Source illuminant, 1000-25000 K. Default: stock-native light, including RAW inputs",
+                generic: false),
+            documentation: "Sets a custom source temperature from 1000 to 25000 K; active when Source Illuminant is Custom."),
 
         EditorControl(
             .saturation, title: "Saturation",

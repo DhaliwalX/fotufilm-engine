@@ -97,7 +97,7 @@ final class EditorControlSurfaceTests: XCTestCase {
             .focalLength: ("focalLength", 79, 27), .negativeViewing: ("negativeViewing", 80, 28),
             .mottleOverride: ("mottleOverride", nil, 29), .mottleShare: ("mottleShare", nil, 30),
             .couplerReach: ("couplerReach", nil, 31), .couplerSelf: ("couplerSelf", nil, 32),
-            .sceneLight: ("sceneLight", nil, 33), .halationSpectrum: ("halation", nil, 34),
+            .sceneLight: ("sceneLight", 93, 33), .halationSpectrum: ("halation", nil, 34),
             .filterCoating: ("filterCoating", nil, 41), .frameCoverage: ("frameCoverage", nil, 42),
             .grainModel: ("grainModel", nil, 43), .shutter: ("shutterSeconds", nil, 44),
             .renderMode: ("renderMode", nil, 45), .grainAnimation: ("grainAnimation", nil, 46),

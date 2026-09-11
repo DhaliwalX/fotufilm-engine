@@ -199,12 +199,13 @@ public struct FotufilmEngine {
         /// Which spatial stages `stage == .texture` lays over the frame. Ignored by every other
         /// stage, where the selection is the ordinary strength levers.
         public var textureStages: TextureStages = .all
-        /// Capture illuminant, from a decoder that records one. Nil means the source carries no
-        /// as-shot light — an already white-balanced file — and the scene light falls back to the
-        /// stock's own `referenceIlluminantKelvin`, so a neutral in renders neutral out.
-        /// `whiteBalance` edits this light; the stock reference remains fixed calibration data.
+        /// Explicit source illuminant for film exposure. Nil uses the stock's own reference
+        /// light, for RAW and processed inputs alike. Decode and white-balance the input first;
+        /// capture metadata does not select this value automatically. `whiteBalance` edits this
+        /// light while the stock reference remains fixed calibration data.
         public var sceneIlluminantKelvin: Float? = nil
-        /// Exact capture white, when a decoder reports xy. Avoids converting vendor tint units.
+        /// Explicit source xy white. Opt in when simulating a stated capture light; decoder
+        /// metadata alone must not populate this field in the stock-native default mode.
         public var sceneIlluminantChromaticity: SIMD2<Float>? = nil
         /// Measured scene SPD on 380...780 nm in 5 nm steps (81 samples). Overrides both
         /// capture chromaticity and temperature/tint edits. Arbitrary scale; equal-Y normalization.

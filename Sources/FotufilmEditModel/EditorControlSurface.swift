@@ -336,7 +336,13 @@ public enum EngineBinding: Equatable, Sendable {
         case .focalLengthMM:
             options.focalLengthMM = value.number.flatMap { $0 > 0 ? Float($0) : nil }
         case .sceneIlluminantKelvin:
-            options.sceneIlluminantKelvin = value.number.flatMap { $0 > 0 ? Float($0) : nil }
+            options.sceneIlluminantKelvin = value.number.flatMap {
+                $0.isFinite && (1000...25000).contains($0) ? Float($0) : nil
+            }
+            // Selecting a temperature or Stock Native replaces the entire source choice.
+            // A previous capture xy or measured spectrum must not silently override it.
+            options.sceneIlluminantChromaticity = nil
+            options.sceneIlluminantSpectrum = []
         case .stageIndex:
             if let index = value.choice, let stage = PipelineStage(ordinal: Int32(index)) {
                 options.stage = stage

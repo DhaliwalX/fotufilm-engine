@@ -50,6 +50,12 @@ These stages explain why the controls work together: exposure moves the image
 along the film's response curve, film format changes the scale of its texture,
 and the output medium helps determine the final colour and contrast.
 
+**Source Illuminant** defaults to **Stock Native** for RAW, processed images and
+video. RAW white balance still controls decoding; it no longer automatically
+selects the simulated scene light. In the Mac app and plugins, choose a preset or
+**Custom** temperature to simulate another source, independently of print viewing light. In the CLI, use
+`--scene-kelvin 5500` for an explicit source; omission follows the selected stock.
+
 ## Profiles and model limits
 
 Film stocks are data-driven profiles describing spectral sensitivity,
@@ -109,10 +115,12 @@ After building, check camera-log conversion and the full-float video decode path
 ```sh
 build/macos/Fotufilm.app/Contents/MacOS/Fotufilm --verify-log-conversion
 build/macos/Fotufilm.app/Contents/MacOS/Fotufilm --verify-preview-depth
+build/macos/Fotufilm.app/Contents/MacOS/Fotufilm --verify-source-illuminant
 ```
 
 These checks use synthetic ramps to compare CPU and Metal conversion and measure
 the precision retained through decoding, playback, and paused-frame rendering.
+The source-illuminant check also verifies saved selections and RAW decode-cache isolation.
 
 ## Build the browser editor
 

@@ -833,6 +833,8 @@ int main(int argc, const char *argv[]) {
                 // A menu index, and the engine wants the lamp in kelvin. Entry 2 is 2856 K.
                 {kFotufilmParam_PrintLight, FOTUFILM_BRIDGE_PRINT_LIGHT, @2, 2856.0f,
                  "viewing light, in kelvin"},
+                {kFotufilmParam_SceneLight, FOTUFILM_BRIDGE_SCENE_ILLUMINANT, @3, 3200.0f,
+                 "source illuminant, in kelvin"},
                 // The lens. The filter and diffusion menus open with a "None" the plugin owns,
                 // so a menu index already is the engine index plus one the bridge wants; the
                 // metering and negative-viewing menus come straight out of an engine enum and
@@ -866,6 +868,21 @@ int main(int argc, const char *argv[]) {
                            .UTF8String);
                 host.values[@(slot.parameter)] = saved;
             }
+
+            host.values[@(kFotufilmParam_SceneLight)] = @5;
+            host.values[@(kFotufilmParam_SceneLightKelvin)] = @4960.0;
+            NSData *sourceState = nil;
+            [effect pluginState:&sourceState atTime:kCMTimeZero quality:2 error:&error];
+            FotufilmState sourceUnpacked{};
+            [sourceState getBytes:&sourceUnpacked length:sizeof(sourceUnpacked)];
+            expect(sourceUnpacked.parameters[FOTUFILM_BRIDGE_SCENE_ILLUMINANT] == 4960.0f,
+                   "custom source illuminant reaches the engine");
+            host.values[@(kFotufilmParam_SceneLight)] = @0;
+            [effect pluginState:&sourceState atTime:kCMTimeZero quality:2 error:&error];
+            [sourceState getBytes:&sourceUnpacked length:sizeof(sourceUnpacked)];
+            expect(sourceUnpacked.parameters[FOTUFILM_BRIDGE_SCENE_ILLUMINANT] == 0,
+                   "Stock Native clears custom source illuminant");
+            host.values[@(kFotufilmParam_SceneLightKelvin)] = @6504.0;
 
             // The seed is not in the block; it is its own argument, and grain is seeded on it.
             host.values[@(kFotufilmParam_Seed)] = @12345;

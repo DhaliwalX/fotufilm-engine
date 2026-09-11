@@ -106,6 +106,12 @@ struct InspectorRowFactory {
 
     func menu(_ control: EditorControl, choices: [EditorMenuChoice]) -> FormRowView {
         switch control.field {
+        case .sceneLight:
+            return PopUpRow<Int>(
+                control.title,
+                options: choices.enumerated().map { (title: $1.label, value: $0) },
+                get: { [model] in model.edit.sourceLightIndex },
+                set: { [model] in model.edit.sourceLightIndex = $0 })
         case .grainMottle:
             return PopUpRow<Double?>(
                 control.title,
