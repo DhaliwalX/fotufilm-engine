@@ -29,6 +29,9 @@ OUT="build/aot-parity"
 # Overridable so two embeddings can be compared without one overwriting the other: the
 # metallib road and the source road want separate trees and the same JIT side.
 KERNELS="${FOTUFILM_PARITY_KERNELS:-build/halide-macos}"
+# The generator resolves source in the physical engine checkout. A compatibility symlink may
+# run this harness from a consumer, so preserve that caller's output location explicitly.
+[[ "$KERNELS" == /* ]] || KERNELS="$PWD/$KERNELS"
 STOCK="${FOTUFILM_PARITY_STOCK:-example-negative-400}"
 SIZE="${FOTUFILM_PARITY_SIZE:-384x216}"
 # Set from a measured run: see the summary line the comparison prints. The two roads compile the
