@@ -670,6 +670,13 @@ int main(int argc, const char *argv[]) {
                    "and the refusal names the restart that is the only fix");
             expect(saysThat(broken, @"Texture Only cannot be rendered"),
                    "the status line says the same thing before the render is attempted");
+            id<FxTileableEffect> restoredStalled =
+                [[NSClassFromString(@"FotufilmEffect") alloc] initWithAPIManager:broken];
+            [restoredStalled pluginInstanceAddedToDocument];
+            error = nil;
+            expect(!tryDevelop(restoredStalled, width, height, &error)
+                       && saysThat(broken, @"placeholders"),
+                   "restoring a real placeholder inspector preserves its missing-control warning");
             broken.values[@(kFotufilmParam_StageID)] = stageID(FOTUFILM_BRIDGE_STAGE_FULL);
             expect(tryDevelop(stalled, width, height, &error),
                    "and every other span on that panel still develops");
@@ -688,6 +695,42 @@ int main(int argc, const char *argv[]) {
                "the status line exists and is a string");
         expect(dimmed(host, kFotufilmParam_Status),
                "the status line is dimmed: it is read, never typed into");
+        expect(!saysThat(host, @"placeholders") && !saysThat(host, @"toggles are missing"),
+               "a newly populated inspector does not report an engine startup failure");
+
+        printf("restored inspector\n");
+        {
+            FakeHost *saved = [[FakeHost alloc] init];
+            id<FxTileableEffect> original = makeEffect(saved);
+            saved.values[@(kFotufilmParam_Format)] = @0;
+            saved.values[@(kFotufilmParam_FormatID)] = @"";
+            Class effectClass = NSClassFromString(@"FotufilmEffect");
+            // FxPlug loads saved parameters without calling addParametersWithError: again.
+            id<FxTileableEffect> restored = [[effectClass alloc] initWithAPIManager:saved];
+            [restored pluginInstanceAddedToDocument];
+            expect(!saysThat(saved, @"placeholders") && !saysThat(saved, @"toggles are missing"),
+                   "a restored populated inspector retains its menus and texture toggles");
+            NSError *restoreError = nil;
+            NSData *restoredState = nil;
+            FotufilmState unpacked{};
+            expect([restored pluginState:&restoredState atTime:kCMTimeZero quality:2 error:&restoreError],
+                   "a restored effect packs its saved controls");
+            [restoredState getBytes:&unpacked length:sizeof(unpacked)];
+            expect(unpacked.format == 0,
+                   "restoring a saved explicit format does not replace it with Match Film");
+
+            saved.values[@(kFotufilmParam_StageID)] = stageID(FOTUFILM_BRIDGE_STAGE_TEXTURE);
+            for (int i = 0; i < fotufilm_bridge_texture_stage_count(); ++i)
+                saved.values[@(kFotufilmParam_TextureStageFirst + i)] = @NO;
+            [saved.values removeObjectForKey:@(kFotufilmParam_InspectorShape)];
+            id<FxTileableEffect> legacy = [[effectClass alloc] initWithAPIManager:saved];
+            [legacy pluginInstanceAddedToDocument];
+            expect(!saysThat(saved, @"toggles are missing") && !saysThat(saved, @"placeholders"),
+                   "older projects recover the inspector from existing controls, even when all toggles are off");
+            expect(tryDevelop(legacy, width, height, &restoreError),
+                   "an older restored Texture Only effect with all stages off still renders");
+            (void)original;
+        }
         // Match Film is one past the engine's own gauges: passing it as `format` is how the
         // plugin says "the gauge this stock is known on".
         expect([host.values[@(kFotufilmParam_Format)] intValue] >= fotufilm_bridge_format_count(),

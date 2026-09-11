@@ -46,6 +46,8 @@ public enum EditorControlCatalogue {
                       kind: .hiddenString, order: 960),
         HostAuxiliary(ofxName: "diffusionID", fxplugID: 84, group: nil, label: "id",
                       kind: .hiddenString, order: 970),
+        HostAuxiliary(ofxName: "inspectorShape", fxplugID: 92, group: nil, label: "Inspector Shape",
+                      kind: .hiddenString, surfaces: [.finalcut], order: 980),
         HostAuxiliary(ofxName: "pushCondition", group: .lab, label: "Push / Pull",
                       hint: "Measured development conditions for this stock. The saved stop value is "
                           + "preserved when the menu is rebuilt. Pair a push with the intended camera exposure.",

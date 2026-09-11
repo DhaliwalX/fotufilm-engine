@@ -123,6 +123,16 @@
       ]
     },
     {
+      "fxplugID" : 92,
+      "kind" : "hiddenString",
+      "label" : "Inspector Shape",
+      "ofxName" : "inspectorShape",
+      "order" : 980,
+      "surfaces" : [
+        "finalcut"
+      ]
+    },
+    {
       "choices" : [
         "Reference · 0 stops"
       ],

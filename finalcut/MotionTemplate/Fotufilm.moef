@@ -258,6 +258,7 @@
           <parameter name="id" id="82" flags="12901679104" default="" value=""/>
           <parameter name="id" id="83" flags="12901679104" default="" value=""/>
           <parameter name="id" id="84" flags="12901679104" default="" value=""/>
+          <parameter name="Inspector Shape" id="92" flags="12901679104" default="" value=""/>
           <parameter name="Mix" id="10001" flags="12901679104" default="1" value="1"/>
           <parameter name="Flip" id="10002" flags="12905938976" default="0" value="0"/>
           <parameter name="Input Points" id="10003" flags="12905938976" default="1" value="1"/>

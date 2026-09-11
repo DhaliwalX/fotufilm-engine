@@ -48,6 +48,7 @@ enum {
     kFotufilmParam_LensFilter2ID = 82,
     kFotufilmParam_LensFilter3ID = 83,
     kFotufilmParam_DiffusionID = 84,
+    kFotufilmParam_InspectorShape = 92,
     kFotufilmParam_InputGroup = 85,
     kFotufilmParam_FilmGroup = 31,
     kFotufilmParam_ExposureGroup = 32,
