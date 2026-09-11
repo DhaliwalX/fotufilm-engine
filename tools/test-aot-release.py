@@ -133,6 +133,27 @@ class ReleaseTests(unittest.TestCase):
             self.assertNotIn("Authorization", " ".join(arguments))
             self.assertIn("https://github.com/DhaliwalX/fotufilm-engine/releases/download/", arguments[-1])
 
+    def test_parity_harness_keeps_consumer_output_location(self):
+        fixture = self.directory / "consumer"
+        (fixture / "tools").mkdir(parents=True)
+        shutil.copyfile(aot.ROOT / "tools/verify-aot-parity.sh", fixture / "tools/verify-aot-parity.sh")
+        stubs = {
+            "tools/resolve-halide-toolchain.sh": "printf '/compiler\\n'",
+            "tools/generate-halide-aot.sh": 'printf "%s\\n" "$@" "$FOTUFILM_AOT_NO_FETCH"; exit 42',
+            "bin/xcrun": "printf '/sdk\\n'",
+            "bin/sysctl": "printf '1\\n'",
+        }
+        for name, body in stubs.items():
+            path = fixture / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("#!/bin/sh\n" + body + "\n")
+            path.chmod(0o755)
+        result = subprocess.run(["bash", str(fixture / "tools/verify-aot-parity.sh")],
+                                env={"PATH": str(fixture / "bin") + ":" + os.defpath},
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 42, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ["macos", str(fixture / "build/halide-macos"), "1"])
+
     def test_key_uses_public_sources_and_toolchain_not_consumer_or_installed_paths(self):
         fixture = self.directory / "engine"
         for name in self.record["inputs"]:
