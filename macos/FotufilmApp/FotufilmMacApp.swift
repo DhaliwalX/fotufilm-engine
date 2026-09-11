@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 enum FotufilmMac {
     static func main() {
         StockPacks.bootstrap()
+        VerifySourceIlluminant.runIfRequested()
         VerifyPausedLog.runIfRequested()
         HeadlessDevelop.verifyLogConversionIfRequested()
         HeadlessDevelop.verifyLogStillIfRequested()

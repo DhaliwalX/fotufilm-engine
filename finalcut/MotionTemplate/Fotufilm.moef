@@ -81,6 +81,8 @@
       <target object="9001001" channel="./32/11" name="Regional Tone Mask"/>
       <target object="9001001" channel="./32/12" name="Saturation"/>
       <target object="9001001" channel="./32/13" name="Vibrance"/>
+      <target object="9001001" channel="./32/93" name="Source Illuminant"/>
+      <target object="9001001" channel="./32/94" name="Source Illuminant (K)"/>
       <target object="9001001" channel="./72/73" name="Filter 1"/>
       <target object="9001001" channel="./72/74" name="Filter 2"/>
       <target object="9001001" channel="./72/75" name="Filter 3"/>
@@ -197,6 +199,8 @@
             <parameter name="Regional Tone Mask" id="11" flags="12901679104" default="1" value="1"/>
             <parameter name="Saturation" id="12" flags="12901679120" default="1" value="1"/>
             <parameter name="Vibrance" id="13" flags="12901679120" default="0" value="0"/>
+            <parameter name="Source Illuminant" id="93" flags="12901744656" default="0" value="0"/>
+            <parameter name="Source Illuminant (K)" id="94" flags="12901679120" default="6504" value="6504"/>
           </parameter>
           <parameter name="Lens &amp; Filters" id="72" flags="8594198560">
             <foldFlags>15</foldFlags>
@@ -238,7 +242,7 @@
             <parameter name="Output Medium" id="4" flags="12901744656" default="10" value="10"/>
             <parameter name="Viewing Illuminant" id="25" flags="12901744656" default="0" value="0"/>
             <parameter name="Enlarger" id="91" flags="12901744656" default="0" value="0"/>
-            <parameter name="Channel Contrast Match" id="20" flags="12901679120" default="0.05" value="0.05"/>
+            <parameter name="Channel Contrast Match" id="20" flags="12901679120" default="0" value="0"/>
             <parameter name="Negative Viewing" id="80" flags="12901744656" default="0" value="0"/>
           </parameter>
           <parameter name="Pipeline" id="30" flags="8594198560">

@@ -208,6 +208,7 @@ final class InspectorViewController: SessionViewController {
             String(model.hasVideo),
             String(model.hasPhoto),
             String(model.sourceInterpretationAvailable),
+            String(model.edit.sourceLightIndex),
             String(showsViewingLight),
             String(showsPrintCorrection),
             String(model.edit.lensCorrectionEnabled),
@@ -371,6 +372,8 @@ final class InspectorViewController: SessionViewController {
                       matching predicate: (EditorControl) -> Bool = { _ in true }) -> [FormRowView] {
         rowFactory.controls(in: section).filter(predicate).filter { control in
             switch control.field {
+            case .sceneLightKelvin:
+                return EditorControlCatalogue.sourceLights[model.edit.sourceLightIndex].id == "custom"
             case .enlarger: return showsEnlarger
             case .printCorrection: return showsPrintCorrection
             default: return true

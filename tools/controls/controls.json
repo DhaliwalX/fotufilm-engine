@@ -2956,10 +2956,10 @@
       "binding" : "warmth",
       "commandLineFlag" : "--wb",
       "commandLineGeneric" : false,
-      "commandLineHelp" : "Scene illuminant, 2000-12000 K. Unset, an already white-balanced file is lit at the stock's own balance, so a neutral renders neutral. On camera raw this is relative to the file's as-shot light; 6504 preserves the capture illuminant",
+      "commandLineHelp" : "Relative scene-light adjustment, 2000-12000 K. 6504 leaves the stock-native or explicit --scene-kelvin light unchanged, for RAW and processed inputs alike",
       "commandLinePlaceholder" : "<kelvin>",
-      "detail" : "Set the color temperature of the scene lighting.",
-      "documentation" : "Changes scene-light temperature; RAW edits are relative to the capture illuminant.",
+      "detail" : "Adjust warmth relative to the selected Source Illuminant.",
+      "documentation" : "Adjusts scene-light temperature relative to Source Illuminant, without changing RAW decoding.",
       "drives" : [
 
       ],
@@ -2974,7 +2974,7 @@
         "delta" : 10,
         "fxplugID" : 7,
         "group" : "exposure",
-        "hint" : "Spectral scene temperature. Lower Kelvin adds warm light. Relative in mired to Scene Illuminant when a base lamp is selected; 6504 leaves that lamp unchanged.",
+        "hint" : "Spectral scene temperature. Lower Kelvin adds warm light. Relative in mired to Source Illuminant; 6504 leaves the selected or stock-native lamp unchanged.",
         "kind" : "double",
         "label" : "Temperature (K)",
         "max" : 12000,
@@ -3093,7 +3093,7 @@
         {
           "detail" : "",
           "id" : "unspecified",
-          "label" : "Unspecified · D65",
+          "label" : "Stock Native",
           "value" : 0
         },
         {
@@ -3126,7 +3126,8 @@
           "label" : "Custom"
         }
       ],
-      "detail" : "Choose the scene light source. Temperature and Tint refine its color.",
+      "detail" : "Stock Native uses the selected film's reference light. Choose another source to simulate a lighting mismatch; Warmth and Tint refine it.",
+      "documentation" : "Defaults to the selected stock's native light, independent of capture metadata. Presets or Custom override only the film-exposure illuminant.",
       "drives" : [
         "sceneIlluminantKelvin"
       ],
@@ -3139,7 +3140,7 @@
           {
             "detail" : "",
             "id" : "unspecified",
-            "label" : "Unspecified · D65",
+            "label" : "Stock Native",
             "value" : 0
           },
           {
@@ -3173,10 +3174,11 @@
           }
         ],
         "composed" : true,
+        "fxplugID" : 93,
         "group" : "sceneLight",
-        "hint" : "Capture light presented to the film; Temperature and Tint adjust this spectrum. Unspecified light assumes D65. Custom sources use a daylight or Planckian spectrum, not a measured LED spectrum.",
+        "hint" : "Light presented to the film; Stock Native follows the selected film's reference. Temperature and Tint adjust this light. Custom sources use a daylight or Planckian spectrum, not a measured LED spectrum.",
         "kind" : "choice",
-        "label" : "Scene Illuminant",
+        "label" : "Source Illuminant",
         "ofxName" : "sceneLight",
         "order" : 10,
         "paramOffset" : 0,
@@ -3189,23 +3191,28 @@
       },
       "kind" : "menu",
       "omitted" : {
-        "android" : "read from the capture metadata",
-        "app" : "read from the capture metadata",
-        "cli" : "--wb states the scene light directly",
-        "desktop" : "read from the capture metadata",
-        "finalcut" : "not yet offered; the clip's light is taken as D65",
+        "android" : "the source spectrum is baked into the stock pack",
+        "cli" : "--scene-kelvin selects an explicit source; omission uses Stock Native",
         "web" : "reshapes the sealed pack rather than a configuration slot"
       },
-      "scope" : "hostOnly",
+      "scope" : "edit",
       "section" : "lightBalance",
       "surfaces" : [
-        "resolve"
+        "app",
+        "desktop",
+        "resolve",
+        "finalcut"
       ],
-      "title" : "Scene Illuminant"
+      "title" : "Source Illuminant"
     },
     {
       "availability" : "always",
-      "detail" : "Define a custom scene light source before Temperature and Tint adjustments.",
+      "commandLineFlag" : "--scene-kelvin",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Source illuminant, 1000-25000 K. Default: stock-native light, including RAW inputs",
+      "commandLinePlaceholder" : "<K>",
+      "detail" : "Custom source temperature before Warmth and Tint. This does not change capture white balance or print viewing light.",
+      "documentation" : "Sets a custom source temperature from 1000 to 25000 K; active when Source Illuminant is Custom.",
       "drives" : [
         "sceneIlluminantKelvin"
       ],
@@ -3216,12 +3223,13 @@
         "bridge" : "identity",
         "composed" : true,
         "delta" : 10,
+        "fxplugID" : 94,
         "group" : "sceneLight",
-        "hint" : "Custom capture light before the Temperature and Tint edits.",
+        "hint" : "Custom source light before Temperature and Tint; used only when Source Illuminant is Custom.",
         "kind" : "double",
-        "label" : "Scene Illuminant (K)",
-        "max" : 12000,
-        "min" : 2000,
+        "label" : "Source Illuminant (K)",
+        "max" : 25000,
+        "min" : 1000,
         "ofxName" : "sceneLightKelvin",
         "order" : 20,
         "paramOffset" : 0,
@@ -3232,30 +3240,33 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "android" : "read from the capture metadata",
-        "app" : "read from the capture metadata",
-        "cli" : "--wb states the scene light directly",
-        "desktop" : "read from the capture metadata",
-        "finalcut" : "not yet offered; the clip's light is taken as D65",
+        "android" : "the source spectrum is baked into the stock pack",
         "web" : "reshapes the sealed pack rather than a configuration slot"
       },
+      "persistedKey" : "sourceLightKelvin",
       "scale" : {
-        "admittedMax" : 12000,
-        "admittedMin" : 2000,
-        "max" : 12000,
-        "min" : 2000,
+        "admittedMax" : 25000,
+        "admittedMin" : 1000,
+        "max" : 25000,
+        "min" : 1000,
         "neutral" : 6504,
         "stops" : [
 
         ],
         "unit" : "kelvin"
       },
-      "scope" : "hostOnly",
+      "scope" : "edit",
       "section" : "lightBalance",
+      "storedEncoding" : "same",
+      "storedNeutral" : 6504,
       "surfaces" : [
-        "resolve"
+        "app",
+        "desktop",
+        "resolve",
+        "finalcut",
+        "cli"
       ],
-      "title" : "Scene Illuminant (K)"
+      "title" : "Source Illuminant (K)"
     },
     {
       "availability" : "always",
@@ -3805,10 +3816,10 @@
       "binding" : "printViewingKelvin",
       "commandLineFlag" : "--print-light",
       "commandLineGeneric" : false,
-      "commandLineHelp" : "Colour temperature the finished print is viewed under, in kelvin: daylight series from 4000 K up (5003 = D50 proof light), Planckian below (2856 = tungsten). Greys hold — the read adapts to the light — and the paper dyes' metamerism moves. Default: D50 for paper, calibrated 5400 K xenon for cinema print, fixed D65 for screen",
+      "commandLineHelp" : "Colour temperature the finished print is viewed under, in kelvin: daylight series from 4000 K up (5003 = D50 proof light), Planckian below (2856 = tungsten). Positive values are bounded to 1000-25000 K, in 100 K buckets. The read adapts to the light without re-timing the print; even neutral dyes can shift. Default: D50 for paper, calibrated 5400 K xenon for cinema print, fixed D65 for screen",
       "commandLinePlaceholder" : "<k>",
       "detail" : "Choose the light used to view the print.",
-      "documentation" : "Sets the lamp a physical print is judged under; digital media ignore it.",
+      "documentation" : "Changes the viewing lamp without re-timing the developed print; digital media ignore it.",
       "drives" : [
 
       ],
@@ -3846,7 +3857,7 @@
         "composed" : false,
         "fxplugID" : 25,
         "group" : "output",
-        "hint" : "Choose the light used to judge a physical print. Medium Reference means D50 for photo paper or calibrated 5400 K xenon for a projected release print. Digital Reference, Lab Scan, Telecine and Negative ignore this control.",
+        "hint" : "Choose the light used to judge a physical print. Medium Reference means D50 for photo paper or calibrated 5400 K xenon for a projected release print. Only the viewing light changes; the developed print is not re-timed. Digital Reference, Lab Scan, Telecine and Negative ignore this control.",
         "kind" : "choice",
         "label" : "Viewing Illuminant",
         "ofxName" : "printLight",
@@ -3957,10 +3968,10 @@
       "binding" : "printCorrection",
       "commandLineFlag" : "--print-correction",
       "commandLineGeneric" : true,
-      "commandLineHelp" : "How far the film's colour layers are balanced to print together, 0-1 (default: 0.05)",
+      "commandLineHelp" : "Optional digital channel-contrast correction, 0-1 (default: 0; not a printer-light control)",
       "commandLinePlaceholder" : "<f>",
-      "detail" : "Adjust the color balance of the print.",
-      "documentation" : "Balances how the film's colour layers print together on the chosen medium.",
+      "detail" : "Optional digital channel-contrast correction; not a printer-light adjustment.",
+      "documentation" : "Optional digital channel-contrast correction. Off by default to preserve measured slopes; this is not a physical printer-light control.",
       "drives" : [
 
       ],
@@ -3975,7 +3986,7 @@
         "delta" : 0.01,
         "fxplugID" : 20,
         "group" : "output",
-        "hint" : "Balances how the film's colour layers print together. The medium's own calibration is already applied; raise this only for a more neutral crossover.",
+        "hint" : "Digital correction of channel-contrast mismatch, not physical printer timing. Off preserves the measured record slopes; raise for a more neutral crossover.",
         "kind" : "double",
         "label" : "Channel Contrast Match",
         "max" : 1,
@@ -3987,7 +3998,7 @@
         "secret" : false,
         "slot" : 10,
         "slotSymbol" : "PRINT_CORRECTION",
-        "value" : 0.05,
+        "value" : 0,
         "zeroLeavesEngineDefault" : false
       },
       "kind" : "slider",
@@ -4000,7 +4011,7 @@
         "admittedMin" : 0,
         "max" : 1,
         "min" : 0,
-        "neutral" : 0.05,
+        "neutral" : 0,
         "stops" : [
 
         ],
@@ -4009,7 +4020,7 @@
       "scope" : "edit",
       "section" : "printPaper",
       "storedEncoding" : "same",
-      "storedNeutral" : 0.05,
+      "storedNeutral" : 0,
       "surfaces" : [
         "app",
         "desktop",

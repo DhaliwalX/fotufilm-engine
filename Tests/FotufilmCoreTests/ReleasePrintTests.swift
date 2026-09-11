@@ -5,7 +5,7 @@ final class ReleasePrintTests: XCTestCase {
     private let prints: [PrintPaper] = [.vision2383, .vision2393, .eternaCP]
 
     func testMediumOwnsGreyForStillAndMotionPictureNegatives() throws {
-        for id in ["gold200", "vision250d", "eterna500", "trix400"] {
+        for id in ["gold200", "vision250d", "vision500t", "eterna500", "trix400"] {
             var stock = try XCTUnwrap(FilmStock.named(id))
             // Old packs can carry any valid paperMidDensity. It must not retime a medium.
             stock.paperMidDensity = 0.3
@@ -16,17 +16,27 @@ final class ReleasePrintTests: XCTestCase {
                                                        width: 16, height: 16)
                 let midpoints = [FilmEngineInvocation.paperMidpointRedOffset, 62,
                                  FilmEngineInvocation.paperMidpointBlueOffset]
-                for (channel, curve) in paper.printCurves(for: stock).enumerated() {
+                let curves = paper.printCurves(for: stock)
+                let expectedMidpoints = paper.printExposureMidpoints(for: stock)
+                for (channel, curve) in curves.enumerated() {
                     let density = curve.density(
-                        logExposure: invocation.configuration[midpoints[channel]]) - curve.dMin
-                    let viewed = (pow(10, -density) + paper.viewingFlare)
-                        / (1 + paper.viewingFlare)
-                    XCTAssertEqual(viewed, paper.isProjected ? 0.1 : pow(10, -0.744),
-                                   accuracy: 1e-5, "\(id) \(paper) record \(channel)")
+                        logExposure: invocation.configuration[midpoints[channel]])
+                    XCTAssertEqual(invocation.configuration[midpoints[channel]], expectedMidpoints[channel])
+                    if let aim = paper.ladStatusA, !stock.isMonochrome {
+                        XCTAssertEqual(density, aim[channel], accuracy: 1e-5,
+                                       "\(id) \(paper): LAD is gross Status A density")
+                    }
                 }
                 let tone = SpectralRuntime.neutralToneScale(
                     stops: [0], stock: stock, paper: paper, printCorrection: 1)
-                XCTAssertEqual(tone[0], paper.isProjected ? 0.1 : pow(10, -0.744),
+                let receiver = SpectralRuntime.printReceiver(stock: stock, paper: paper,
+                    viewingLight: SpectralRuntime.referenceViewingLight(for: paper))
+                let density = SIMD3((0..<3).map {
+                    curves[$0].density(logExposure: expectedMidpoints[$0]) - curves[$0].dMin
+                })
+                let rgb = receiver.rgb(density: density)
+                let w = ColorScience.displayP3LuminanceWeights
+                XCTAssertEqual(tone[0], rgb.x*w.0 + rgb.y*w.1 + rgb.z*w.2,
                                accuracy: 1e-4, "analytic mirror: \(id) \(paper)")
             }
         }
@@ -61,7 +71,7 @@ final class ReleasePrintTests: XCTestCase {
     func testLADIncreases2383HighlightExposureRange() {
         let curve = Vision2383PrintSpectra.greenCurve
         let old = curve.logExposure(density: curve.dMin + 0.744)
-        let lad = curve.logExposure(density: curve.dMin + PrintPaper.vision2383.anchorDensity)
+        let lad = curve.logExposure(density: 1.06)
         let highlight = curve.logExposure(density: curve.dMin + 0.1)
         let shadow = curve.logExposure(density: curve.dMin + 3)
         // Printer exposure stops. A negative of gamma ~0.6 expands this into about
@@ -71,12 +81,14 @@ final class ReleasePrintTests: XCTestCase {
     }
 
     func testAdditivePrinterBlocksUVAndTimesAllReceivingLayers() throws {
-        for id in ["gold200", "vision250d", "eterna500"] {
+        for id in ["gold200", "vision250d", "vision500t", "eterna500"] {
             let stock = try XCTUnwrap(FilmStock.named(id))
             let density = stock.curves.map { $0.density(logExposure: 0) }
             let dyes = stock.spectralProfile.imageDyeDensity
             for paper in prints {
-                let lamp = SpectralRuntime.printingLamp(paper: paper, density: density, dyes: dyes)
+                let illumination = SpectralRuntime.printingIllumination(stock: stock,
+                    paper: paper, density: density, dyes: dyes)
+                let lamp = illumination.lamp
                 XCTAssertEqual(lamp.count, SpectralGrid.count)
                 XCTAssertTrue(lamp.allSatisfy { $0.isFinite && $0 >= 0 })
                 for (i, wavelength) in SpectralGrid.wavelengths.enumerated()
@@ -86,8 +98,10 @@ final class ReleasePrintTests: XCTestCase {
                 let mid = SpectralRuntime.paperExposure(density: density, dyes: dyes,
                     lamp: lamp, paperSensitivity: paper.sensitivity)
                 XCTAssertGreaterThan(mid.y, 0)
-                XCTAssertEqual(mid.x / mid.y, 1, accuracy: 1e-4, "\(id) \(paper)")
-                XCTAssertEqual(mid.z / mid.y, 1, accuracy: 1e-4, "\(id) \(paper)")
+                for channel in 0..<3 {
+                    XCTAssertEqual(mid[channel] / illumination.referenceEnergy[channel], 1,
+                                   accuracy: 1e-4, "\(id) \(paper)")
+                }
                 // Filtering alters relative colour responses, not just the scalar anchor.
                 let bare = SpectralGrid.enlarger3200K
                 let bareMid = SpectralRuntime.paperExposure(density: density, dyes: dyes,
@@ -104,12 +118,108 @@ final class ReleasePrintTests: XCTestCase {
         }
     }
 
+    func testLADAimsAndSensitivityMeasurementDensities() {
+        let stock = TestStocks.negative
+        XCTAssertEqual(PrintPaper.vision2383.ladStatusA, SIMD3(1.09, 1.06, 1.03))
+        XCTAssertEqual(PrintPaper.vision2393.ladStatusA, SIMD3(1.09, 1.06, 1.03))
+        XCTAssertEqual(PrintPaper.eternaCP.ladStatusA, SIMD3(1.10, 1.05, 1.05))
+        for paper in prints {
+            let curves = paper.printCurves(for: stock)
+            let reference = paper.sensitivityReferenceExposures(for: stock)
+            for channel in 0..<3 {
+                XCTAssertEqual(curves[channel].density(logExposure: reference[channel]),
+                    paper == .eternaCP ? 1 + curves[channel].dMin : 1, accuracy: 1e-5)
+            }
+        }
+        XCTAssertEqual(PrintPaper.vision2383.sensitivity,
+                       Vision2383PrintSpectra.layerSensitivity.map(SpectralGrid.continuedTails))
+        XCTAssertEqual(PrintPaper.vision2393.sensitivity,
+                       Vision2393PrintSpectra.layerSensitivity.map(SpectralGrid.continuedTails))
+        XCTAssertEqual(PrintPaper.eternaCP.sensitivity,
+                       EternaCPPrintSpectra.layerSensitivity.map(SpectralGrid.continuedTails))
+    }
+
+    func testPrinterMixMatchesAnIndependentLinearSolve() throws {
+        let stock = try XCTUnwrap(FilmStock.named("vision250d"))
+        let density = stock.curves.map { $0.density(logExposure: 0) }
+        let dyes = stock.spectralProfile.imageDyeDensity
+        let beams = SpectralGrid.releasePrinterBeams
+        func cross(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> SIMD3<Float> {
+            SIMD3(a.y*b.z-a.z*b.y, a.z*b.x-a.x*b.z, a.x*b.y-a.y*b.x)
+        }
+        func dot(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float { (a*b).sum() }
+        for paper in prints {
+            let columns = beams.map {
+                SpectralRuntime.paperExposure(density: density, dyes: dyes,
+                    lamp: $0, paperSensitivity: paper.sensitivity)
+            }
+            let target = paper.printingAim(for: stock)
+            let determinant = dot(columns[0], cross(columns[1], columns[2]))
+            let weights = SIMD3(dot(target, cross(columns[1], columns[2])),
+                dot(columns[0], cross(target, columns[2])),
+                dot(columns[0], cross(columns[1], target))) / determinant
+            XCTAssertGreaterThan(min(weights.x, min(weights.y, weights.z)), 0)
+            let expected = (0..<SpectralGrid.count).map {
+                beams[0][$0]*weights.x + beams[1][$0]*weights.y + beams[2][$0]*weights.z
+            }
+            let actual = SpectralRuntime.releasePrinterLamp(density: density, dyes: dyes,
+                sensitivity: paper.sensitivity, target: target)
+            let peak = expected.max()!
+            for i in actual.indices { XCTAssertEqual(actual[i]/peak, expected[i]/peak, accuracy: 1e-5) }
+            // Blue-to-magenta leakage is still present, but must not be inflated by
+            // flattening the sheet's layer speeds. This is a model invariant, not a lab fit.
+            let blueFraction = columns[2].y * weights.z / target.y
+            XCTAssertLessThan(blueFraction, 0.03, "\(paper): \(blueFraction)")
+            XCTAssertGreaterThan(blueFraction, 0)
+        }
+    }
+
+    func testUnreachablePrinterAimDoesNotSubtractPhotons() {
+        let paper = PrintPaper.vision2383
+        let density: [Float] = [0, 0, 0]
+        let dyes = TestStocks.negative.spectralProfile.imageDyeDensity
+        let target = SIMD3<Float>(0, 1, 0)
+        let lamp = SpectralRuntime.releasePrinterLamp(density: density, dyes: dyes,
+            sensitivity: paper.sensitivity, target: target)
+        XCTAssertTrue(lamp.allSatisfy { $0.isFinite && $0 >= 0 })
+        let response = SpectralRuntime.paperExposure(density: density, dyes: dyes,
+            lamp: lamp, paperSensitivity: paper.sensitivity)
+        XCTAssertGreaterThan(response.y, 0.9)
+        XCTAssertGreaterThan(response.x + response.z, 0,
+            "overlapping layers cannot expose only green; retain the timing residual")
+    }
+
+    func testSceneBalanceDoesNotSelectADifferentPrinterSource() throws {
+        let stock = try XCTUnwrap(FilmStock.named("vision250d"))
+        var retagged = stock
+        retagged.referenceIlluminantKelvin = 3200
+        let density = stock.curves.map { $0.density(logExposure: 0) }
+        let dyes = stock.spectralProfile.imageDyeDensity
+        for paper in prints {
+            XCTAssertEqual(SpectralRuntime.printingIllumination(stock: stock, paper: paper,
+                density: density, dyes: dyes).lamp,
+                SpectralRuntime.printingIllumination(stock: retagged, paper: paper,
+                density: density, dyes: dyes).lamp)
+            // Retained neutral silver changes the required overall exposure, not beam colour.
+            let plain = SpectralRuntime.printingIllumination(stock: stock, paper: paper,
+                density: density, dyes: dyes)
+            let silver = SpectralRuntime.printingIllumination(stock: stock, paper: paper,
+                density: density, dyes: dyes, neutralDensity: 0.7)
+            for i in plain.lamp.indices { XCTAssertEqual(plain.lamp[i], silver.lamp[i], accuracy: 1e-5) }
+            for c in 0..<3 {
+                XCTAssertEqual(silver.referenceEnergy[c] / plain.referenceEnergy[c],
+                               pow(10, -0.7), accuracy: 1e-5)
+            }
+        }
+        XCTAssertEqual(FotufilmEngine.Options().printCorrection, 0)
+    }
+
     func testReflectiveAndScanLampsRetainTheirExistingSpectra() {
         let stock = TestStocks.negative
         let density = stock.curves.map { $0.density(logExposure: 0) }
         for paper: PrintPaper in [.ektacolorEdge, .enduraPremier, .crystalArchive, .labScan, .telecine] {
-            XCTAssertEqual(SpectralRuntime.printingLamp(
-                paper: paper, density: density, dyes: stock.spectralProfile.imageDyeDensity),
+            XCTAssertEqual(SpectralRuntime.printingIllumination(stock: stock,
+                paper: paper, density: density, dyes: stock.spectralProfile.imageDyeDensity).lamp,
                 paper.isScan ? SpectralGrid.equalEnergy : SpectralGrid.enlarger3200K)
         }
     }
@@ -138,7 +248,7 @@ extension ReleasePrintTests {
         options.halationScale = 0
         options.couplerScale = 0
         options.localTone = false
-        for id in ["gold200", "vision250d"] {
+        for id in ["gold200", "vision250d", "vision500t"] {
             var stock = try XCTUnwrap(FilmStock.named(id))
             stock.flare = 0
             for paper in prints {

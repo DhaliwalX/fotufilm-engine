@@ -1015,14 +1015,11 @@ enum VideoPipeline {
         }
         let converterCamera = captureCamera
         let converterCCT = captureCCT
-        // The film side of the same physical-light system: the develop integrates the stock's
-        // spectral exposure under the clip's stated light. The gate inside the engine mirrors
-        // the converter's — no temperature, daylight, or FOTUFILM_PROFILE_OFF leaves every
-        // table bit-identical.
+        // Capture light belongs to camera-profile decoding. Film exposure keeps the caller's
+        // stock-native or explicit source illuminant, independently of container metadata.
         var options = options
         // An explicit mixture takes the delivery ratio; the film's own field stands.
         options.completeDeliveryMottle()
-        options.sceneIlluminantKelvin = options.sceneIlluminantKelvin ?? captureCCT
         // Range is a source fact, derived from the same transfer that decodes the pixels. Camera
         // log capacity is not declared content headroom; HLG and PQ are bounded transfers.
         options.sceneHeadroom = sourceEncoding.cameraEncoding?.declaredHeadroom

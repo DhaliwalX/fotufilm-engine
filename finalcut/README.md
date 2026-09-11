@@ -74,6 +74,10 @@ errors. The plugin includes all 40 film profiles and needs no activation.
 A saved project retains its menu choices and texture-stage controls when reopened.
 A smaller film gauge makes grain and other spatial effects larger in the image.
 
+**Source Illuminant** defaults to **Stock Native**, following the selected film's
+reference light. Choose a preset or **Custom** and set **Source Illuminant (K)**
+to simulate another source. This is separate from the print's **Viewing Illuminant**.
+
 Final Cut supplies linear-light images. The color-space choices therefore select
 color primaries, without applying a second gamma or log conversion. Auto reads the
 image's color information. An unnamed color space falls back to linear Rec.709,

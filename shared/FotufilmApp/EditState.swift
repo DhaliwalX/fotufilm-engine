@@ -286,9 +286,12 @@ struct EditState: Equatable {
     /// Capture white recorded by the camera. Nil preserves an imported RAW's as-shot white.
     /// Camera captures use the same scene-white neutralization in live preview and RAW decode.
     var captureIlluminantKelvin: Double? = nil
-    /// The light the film integrates against, when the camera named one. Nil falls back to the
-    /// acquisition illuminant, which is what every imported source has.
+    /// Legacy camera-acquisition field. Kept for old documents and camera clients; it no longer
+    /// changes the RAW decode or implicitly selects the film's source illuminant.
     var filmLightKelvin: Double? = nil
+    /// Index into the catalogue's stable source-light menu. Zero follows the selected stock.
+    var sourceLightIndex = 0
+    var sourceLightKelvin = 6504.0
     /// Green/magenta offset from the locus, in units of 0.0001 delta-uv.
     var tint = 0.0
     /// Scene-referred tone shaping, -1...1 (0 = untouched).
@@ -336,7 +339,7 @@ struct EditState: Equatable {
                            AppSettings.storedCouplerBarrierGreenBlue]
     /// The inhibition matrix's diagonal — adjacency within one layer rather than across two.
     var couplerSelf = AppSettings.storedCouplerSelf
-    var printCorrection = 0.05
+    var printCorrection = Double(FotufilmEngine.Options().printCorrection)
     var seed: UInt64 = 0x46494C4D
 
     /// Filter IDs ordered from the lens front element outward. Order affects air-gap veiling glare;
@@ -549,6 +552,8 @@ struct EditState: Equatable {
             binding.apply(value, to: &o)
         }
         o.whiteBalance = whiteBalance
+        o.sceneIlluminantKelvin = EditorControlCatalogue.sourceLightKelvin(
+            selection: sourceLightIndex, custom: sourceLightKelvin)
         o.halationScale = Float(halation)
         o.grainMottleShare = grainMottleShare.map(Float.init)
         o.halationModel = AppSettings.storedHalationModel

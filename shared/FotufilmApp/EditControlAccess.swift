@@ -27,8 +27,8 @@ extension EditorControlField {
         case .localTone: return .flag(\.localTone)
         case .saturation: return .number(\.saturation)
         case .vibrance: return .number(\.vibrance)
-        case .sceneLight, .sceneLightKelvin:
-            return .unstored("the capture metadata names the scene light")
+        case .sceneLight: return .bespoke { $0.sourceLightIndex != 0 }
+        case .sceneLightKelvin: return .number(\.sourceLightKelvin)
 
         case .stock:
             return .bespoke { $0.stockID != EditState.defaults.stockID }

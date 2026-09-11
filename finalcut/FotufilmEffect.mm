@@ -1311,6 +1311,7 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
         case kFotufilmParam_Stock:
         case kFotufilmParam_Paper:
         case kFotufilmParam_ColorSpace:
+        case kFotufilmParam_SceneLight:
         case kFotufilmParam_FringeAmount:
         case kFotufilmParam_Push: gatesSomething = YES; break;
         default: break;
@@ -1502,6 +1503,14 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
     const BOOL cameraSide = stage == FOTUFILM_BRIDGE_STAGE_FULL ||
                             stage == FOTUFILM_BRIDGE_STAGE_NEGATIVE;
     const BOOL texturing = stage == FOTUFILM_BRIDGE_STAGE_TEXTURE;
+    int sourceChoice = 0;
+    [retrieval getIntValue:&sourceChoice fromParameter:kFotufilmParam_SceneLight atTime:time];
+    [setting setParameterFlags:(cameraSide || texturing) ? kFxParameterFlag_DEFAULT
+                                                       : kFxParameterFlag_DISABLED
+                   toParameter:kFotufilmParam_SceneLight];
+    [setting setParameterFlags:((cameraSide || texturing) && sourceChoice == 5)
+                                  ? kFxParameterFlag_DEFAULT : kFxParameterFlag_DISABLED
+                   toParameter:kFotufilmParam_SceneLightKelvin];
     for (UInt32 absorbing : {(UInt32)kFotufilmParam_LensFilter1,
                              (UInt32)kFotufilmParam_LensFilter2,
                              (UInt32)kFotufilmParam_LensFilter3,
@@ -1629,6 +1638,23 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
             }
         }
         state.parameters[slot] = (float)(raw * scale + offset);
+    }
+
+    // Source-light menu and custom temperature compose one physical source override.
+    // Zero keeps the stock-native default; capture metadata never fills this slot.
+    int sourceChoice = 0;
+    [api getIntValue:&sourceChoice fromParameter:kFotufilmParam_SceneLight atTime:renderTime];
+    for (int32_t i = 0; i < count; ++i) {
+        if (fotufilm_bridge_host_parameter_fxplug_id(FOTUFILM_HOST_FINALCUT, i)
+            != kFotufilmParam_SceneLight) continue;
+        double sourceKelvin = fotufilm_bridge_host_parameter_choice_value(
+            FOTUFILM_HOST_FINALCUT, i, MAX(sourceChoice, 0));
+        if (sourceKelvin < 0) {
+            sourceKelvin = 6504;
+            [api getFloatValue:&sourceKelvin fromParameter:kFotufilmParam_SceneLightKelvin atTime:renderTime];
+        }
+        state.parameters[FOTUFILM_BRIDGE_SCENE_ILLUMINANT] = (float)sourceKelvin;
+        break;
     }
 
     // The lens. Each of these slots is "engine index plus one, zero meaning off", so that a

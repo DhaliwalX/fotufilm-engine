@@ -321,6 +321,10 @@ private final class EditHistoryMenuDelegate: NSObject, NSMenuDelegate {
         if new.sourceInterpretation != old.sourceInterpretation {
             return "Source Interpretation"
         }
+        if new.sourceLightIndex != old.sourceLightIndex
+            || new.sourceLightKelvin != old.sourceLightKelvin {
+            return EditorControlCatalogue.control(.sceneLight)!.title
+        }
         if new.exposure != old.exposure || new.highlights != old.highlights
             || new.shadows != old.shadows || new.localTone != old.localTone {
             return "Light"

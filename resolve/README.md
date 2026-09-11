@@ -63,8 +63,8 @@ starts closed. Start with these settings:
   <tr><td>Regional Tone Mask</td><td>Light &amp; Colour</td><td>Off, the highlight and shadow shifts key to each pixel's own luminance instead of to the region it sits in.</td></tr>
   <tr><td>Saturation</td><td>Light &amp; Colour</td><td>Chroma multiplier applied to the scene before the film responds.</td></tr>
   <tr><td>Vibrance</td><td>Light &amp; Colour</td><td>Chroma boost weighted toward the least colourful pixels; already-vivid colours are left alone.</td></tr>
-  <tr><td>Scene Illuminant</td><td>Light &amp; Colour</td><td>Capture light presented to the film; Temperature and Tint adjust this spectrum.</td></tr>
-  <tr><td>Scene Illuminant (K)</td><td>Light &amp; Colour</td><td>Custom capture light before the Temperature and Tint edits.</td></tr>
+  <tr><td>Source Illuminant</td><td>Light &amp; Colour</td><td>Light presented to the film; Stock Native follows the selected film's reference.</td></tr>
+  <tr><td>Source Illuminant (K)</td><td>Light &amp; Colour</td><td>Custom source light before Temperature and Tint; used only when Source Illuminant is Custom.</td></tr>
   <tr><td>Filter 1</td><td>Lens &amp; Filters</td><td>An absorbing filter on the front of the lens.</td></tr>
   <tr><td>Filter 2</td><td>Lens &amp; Filters</td><td>A second filter, behind the first.</td></tr>
   <tr><td>Filter 3</td><td>Lens &amp; Filters</td><td>A third filter, behind the second.</td></tr>
@@ -99,7 +99,7 @@ starts closed. Start with these settings:
   <tr><td>Output Medium</td><td>Output</td><td>Choose where the finished image lives.</td></tr>
   <tr><td>Viewing Illuminant</td><td>Output</td><td>Choose the light used to judge a physical print.</td></tr>
   <tr><td>Enlarger</td><td>Output</td><td>The lamp house a reflection print is enlarged under.</td></tr>
-  <tr><td>Channel Contrast Match</td><td>Output</td><td>Balances how the film's colour layers print together.</td></tr>
+  <tr><td>Channel Contrast Match</td><td>Output</td><td>Digital correction of channel-contrast mismatch, not physical printer timing.</td></tr>
   <tr><td>Negative Viewing</td><td>Output</td><td>How the developed negative is read when Output Medium is Negative.</td></tr>
   <tr><td>Stage</td><td>Pipeline</td><td>Which span of the pipeline this node performs.</td></tr>
   <tr><td>Texture Stages</td><td>Pipeline</td><td>Whether Texture Only carries this stage.</td></tr>

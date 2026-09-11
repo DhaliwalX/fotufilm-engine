@@ -32,7 +32,7 @@ final class PrintViewingLightTests: XCTestCase {
     }
 
     /// A measured neutral is not a flat reflectance, so greys move too — but far less than
-    /// colours. Measured: 5.8% worst on the grey axis against 250% on the primaries.
+    /// colours on this synthetic grid. This is model behavior, not measured print accuracy.
     func testGreysMoveFarLessThanColoursUnderTungsten() {
         let stock = Self.negative
         let d50 = SpectralRuntime.tables(for: stock)
@@ -86,6 +86,75 @@ final class PrintViewingLightTests: XCTestCase {
         XCTAssertEqual(SpectralRuntime.printLightKelvin(5003), 5003)
         XCTAssertEqual(SpectralRuntime.printLightKelvin(6504), 6504)
         XCTAssertEqual(SpectralRuntime.printLightKelvin(5432), 5400)
+    }
+
+    func testTemperatureCanonicalizationIsBoundedAndIdempotent() {
+        for kelvin: Float in [.nan, .infinity, -.infinity, -1, 0] {
+            XCTAssertNil(SpectralRuntime.printLightKelvin(kelvin))
+        }
+        XCTAssertEqual(SpectralRuntime.printLightKelvin(1), 1000)
+        XCTAssertEqual(SpectralRuntime.printLightKelvin(.greatestFiniteMagnitude), 25000)
+        XCTAssertEqual(SpectralRuntime.printLightKelvin(2920), 2856)
+        for kelvin in stride(from: Float(1), through: 26000, by: 1) {
+            let canonical = SpectralRuntime.printLightKelvin(kelvin)
+            XCTAssertEqual(canonical, SpectralRuntime.printLightKelvin(canonical), "\(kelvin)")
+        }
+    }
+
+    func testNearbyTemperaturesDoNotDependOnRequestOrder() {
+        var firstStock = Self.negative
+        firstStock.referenceIlluminantKelvin = 5531
+        var secondStock = firstStock
+        secondStock.referenceIlluminantKelvin = 5532
+        let a = SpectralRuntime.tables(for: firstStock, paper: .vision2383, printViewingKelvin: 2920)
+        let b = SpectralRuntime.tables(for: firstStock, paper: .vision2383, printViewingKelvin: 2856)
+        let c = SpectralRuntime.tables(for: secondStock, paper: .vision2383, printViewingKelvin: 2856)
+        let d = SpectralRuntime.tables(for: secondStock, paper: .vision2383, printViewingKelvin: 2920)
+        XCTAssertEqual(a.paperOutput?.values, b.paperOutput?.values)
+        XCTAssertEqual(c.paperOutput?.values, d.paperOutput?.values)
+        XCTAssertEqual(a.paperOutput?.values, c.paperOutput?.values)
+        for stock in [firstStock, secondStock] {
+            XCTAssertEqual(SpectralRuntime.cacheIdentifier(for: stock, printViewingKelvin: 2920),
+                           SpectralRuntime.cacheIdentifier(for: stock, printViewingKelvin: 2856))
+        }
+    }
+
+    func testExtremeInputCannotPoisonReferenceTables() {
+        var stock = Self.negative
+        stock.referenceIlluminantKelvin = 5533
+        let low = SpectralRuntime.tables(for: stock, paper: .vision2383, printViewingKelvin: 1)
+        let reference = SpectralRuntime.tables(for: stock, paper: .vision2383)
+        let high = SpectralRuntime.tables(for: stock, paper: .vision2383,
+                                          printViewingKelvin: .greatestFiniteMagnitude)
+        for tables in [low, reference, high] {
+            XCTAssertTrue(tables.paperOutput!.values.allSatisfy(\.isFinite))
+        }
+        XCTAssertNotEqual(low.paperOutput?.values, reference.paperOutput?.values)
+        XCTAssertNotEqual(SpectralRuntime.cacheIdentifier(for: stock, printViewingKelvin: 1),
+                          SpectralRuntime.cacheIdentifier(for: stock))
+    }
+
+    func testViewingOnlyChangesLightNotDevelopedDyesOrPrinting() {
+        let stock = Self.negative
+        for paper in PrintPaper.allCases where paper.acceptsViewingIlluminant {
+            let reference = SpectralRuntime.tables(for: stock, paper: paper)
+            let warm = SpectralRuntime.tables(for: stock, paper: paper, printViewingKelvin: 2856)
+            XCTAssertEqual(reference.filmOutput.values, warm.filmOutput.values)
+            for light in [Illuminant.a, Illuminant.d50, Illuminant.d65, Illuminant.xenonProjection] {
+                let receiver = SpectralRuntime.printReceiver(stock: stock, paper: paper, viewingLight: light)
+                for amounts in [SIMD3<Float>(1, 1, 1), SIMD3(0.3, 1.2, 0.5), SIMD3(1.1, 0.4, 0.8)] {
+                    let density = Densitometry.statusADensity(amounts: amounts, dyes: paper.analyticalDyes)
+                    let actual = receiver.rgb(density: density)
+                    let expected = SpectralRuntime.transmissionRGB(
+                        density: [amounts.x, amounts.y, amounts.z], dyes: paper.analyticalDyes,
+                        flare: paper.viewingFlare, illuminant: light)
+                    for channel in 0..<3 {
+                        XCTAssertEqual(actual[channel], expected[channel], accuracy: 2e-5,
+                                       "\(paper): a viewing lamp must not retime dye")
+                    }
+                }
+            }
+        }
     }
 
     func testBradfordAdaptationKeepsAFlatReflectorNeutral() {

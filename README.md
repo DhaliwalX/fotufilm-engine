@@ -50,6 +50,12 @@ These stages explain why the controls work together: exposure moves the image
 along the film's response curve, film format changes the scale of its texture,
 and the output medium helps determine the final colour and contrast.
 
+**Source Illuminant** defaults to **Stock Native** for RAW, processed images and
+video. RAW white balance still controls decoding; it no longer automatically
+selects the simulated scene light. In the Mac app and plugins, choose a preset or
+**Custom** temperature to simulate another source, independently of print viewing light. In the CLI, use
+`--scene-kelvin 5500` for an explicit source; omission follows the selected stock.
+
 ## Profiles and model limits
 
 Film stocks are data-driven profiles describing spectral sensitivity,
@@ -109,10 +115,12 @@ After building, check camera-log conversion and the full-float video decode path
 ```sh
 build/macos/Fotufilm.app/Contents/MacOS/Fotufilm --verify-log-conversion
 build/macos/Fotufilm.app/Contents/MacOS/Fotufilm --verify-preview-depth
+build/macos/Fotufilm.app/Contents/MacOS/Fotufilm --verify-source-illuminant
 ```
 
 These checks use synthetic ramps to compare CPU and Metal conversion and measure
 the precision retained through decoding, playback, and paused-frame rendering.
+The source-illuminant check also verifies saved selections and RAW decode-cache isolation.
 
 ## Build the browser editor
 
@@ -185,10 +193,18 @@ A sheet that publishes one characteristic curve develops all three records along
 E-7020, E-4070, 2383, 2393 and ETERNA-CP publish three and are carried per record. The lab scan and
 telecine are inversions rather than sheets, and are described in `PrintPaperTables.swift`.
 
-Release prints time mid-grey at approximately 1.0 D above clear film (LAD, 10%
-transmission), independently of the camera stock. Reflection papers retain 0.744 D
-(18%). Release printing uses an approximate UV-blocked tungsten RGB additive head;
-the passbands are not measured printer-filter spectra. ETERNA-CP's published Gray
+Colour release prints time the reference negative to the published gross Status A
+LAD aims: 1.09/1.06/1.03 for Kodak 2383 and 2393, and 1.10/1.05/1.05 for ETERNA-CP.
+The solve preserves relative layer speeds and changes exposure through a non-negative,
+UV-blocked tungsten RGB additive head. These aims are not three equal densities
+above clear film. Reflection papers retain a visually balanced 0.744 D (18%) setup
+under D50. Viewing another lamp never changes the developed dyes. Optional digital
+channel-contrast correction is off by default.
+
+The printer passbands and filtered 5400 K xenon reference are explicit approximations,
+not measured printer filters or the manufacturers' original calibration lamps. Output
+is relative to clear medium; no unmeasured print-base spectrum is invented. Reflection
+paper filtration remains an exposure-ratio approximation. ETERNA-CP's published Gray
 and dye sum remain inconsistent with a non-negative additive base, so its neutral
 spectral calibration remains uncertain.
 

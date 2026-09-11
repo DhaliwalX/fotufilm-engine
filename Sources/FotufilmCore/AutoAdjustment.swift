@@ -17,7 +17,7 @@ public enum AutoAdjustment {
 
     /// Scene stops that survive to the print with tonal separation, relative to metered mid-grey.
     public static func latitude(
-        stock: FilmStock, printCorrection: Float = 0.05,
+        stock: FilmStock, printCorrection: Float = 0,
         paper: PrintPaper = .default, callier: Float = 1
     ) -> (shadows: Float, highlights: Float) {
         let key = LatitudeKey(
@@ -105,7 +105,7 @@ public enum AutoAdjustment {
     /// Solves exposure, highlights and shadows for a scene described by its regional log-luminances
     /// (`ToneBaseMeasurement.regionStops`, metered neutrally: balance 1, gain 1).
     public static func solve(
-        regionStops: [Float], stock: FilmStock, printCorrection: Float = 0.05
+        regionStops: [Float], stock: FilmStock, printCorrection: Float = 0
     ) -> Solution {
         guard let scene = SceneStops(regionStops: regionStops) else {
             return .neutral

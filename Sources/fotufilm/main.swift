@@ -58,7 +58,6 @@ shoulder and drive halation the way they do on real film.
 Options:
 @CONTROL_FLAGS@
   --autoexpose       Anchor the log-average scene luminance on mid-gray
-  --scene-kelvin <K> Film capture light, 1000-25000 K; defaults to RAW metadata.
   --background <c>  Scene-linear Rec.2020 background for associated-alpha input:
                      black, white, or R,G,B (default: black). The source is
                      composited before film processing and the output is opaque
@@ -1511,21 +1510,12 @@ let balance = WhiteBalance(
     tint: flags["--tint"].flatMap { Float($0) } ?? 0)
 let background = parseLinearBackground(flags["--background"])
 
-var (rgba, width, height, sceneKelvin, sceneChromaticity, contentHeadroom) =
+var (rgba, width, height, _, _, contentHeadroom) =
     loadLinear(path: positional[0])
 PremultipliedAlpha.flatten(&rgba, over: background)
-// A file with an as-shot record takes `--wb` as an edit against that light. A file without
-// one is already white balanced, so a stated `--wb` *is* the scene light and an unstated one
-// leaves the engine on the stock's own balance, where a neutral renders neutral.
-if sceneKelvin == nil, let stated = flags["--wb"].flatMap({ Float($0) }) {
-    options.sceneIlluminantKelvin = options.sceneIlluminantKelvin ?? stated
-    options.whiteBalance = WhiteBalance(kelvin: WhiteBalance.neutralKelvin,
-                                        tint: balance.tint)
-} else {
-    options.whiteBalance = balance
-    options.sceneIlluminantKelvin = options.sceneIlluminantKelvin ?? sceneKelvin
-}
-options.sceneIlluminantChromaticity = flags["--scene-kelvin"] == nil ? sceneChromaticity : nil
+// RAW decoding keeps its as-shot white. All inputs then use the stock's native light unless
+// --scene-kelvin explicitly names a different source. --wb is the same relative edit on both.
+options.whiteBalance = balance
 // And the declared range, the other clip-side fact the app attaches: recorded light above
 // diffuse white is metered into the film's latitude instead of flattening to paper white.
 options.sceneHeadroom = contentHeadroom

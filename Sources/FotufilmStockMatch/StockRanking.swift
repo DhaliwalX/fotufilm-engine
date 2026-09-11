@@ -166,7 +166,7 @@ public enum StockRanking {
     public static func rank(
         scene: SceneReading,
         films: [Film],
-        printCorrection: Float = 0.05,
+        printCorrection: Float = 0,
         weights: StockWeights = StockPreference.prior,
         isCancelled: () -> Bool = { false },
         develop: Develop

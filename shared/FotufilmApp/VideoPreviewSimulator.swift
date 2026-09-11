@@ -256,9 +256,7 @@ final class VideoPreviewSimulator: NSObject, ObservableObject, @unchecked Sendab
             self.develop.logConverter = nil
             self.develop.hasSourceFrame = false
             self.develop.preparedKeys.removeAll(keepingCapacity: true)
-            // The film-side scene light rides the same capture fact; the engine's gate
-            // decides whether it does anything.
-            self.develop.options.sceneIlluminantKelvin = capture.sceneCCT
+            // Source Illuminant remains the per-edit choice; capture CCT only drives decoding.
             // As does the range the container declares (HLG's bounded ceiling); a camera
             // log declares nothing and rides the negative's own path.
             self.develop.options.sceneHeadroom = plan.sceneHeadroom
@@ -327,9 +325,7 @@ final class VideoPreviewSimulator: NSObject, ObservableObject, @unchecked Sendab
             // The prepare identity is stock|format|size; an options change moves the
             // feature mask inside it, so the next develop must re-prepare.
             self.develop.preparedKeys.removeAll(keepingCapacity: true)
-            // The caller's options are per-edit; the scene light and the declared range are
-            // the clip's own facts, re-attached here so a settings change cannot shed them.
-            self.develop.options.sceneIlluminantKelvin = self.develop.sceneCCT
+            // The declared range is a clip fact; source illuminant remains the per-edit choice.
             self.develop.options.sceneHeadroom = VideoPreviewAttachment
                 .sceneHeadroom(declaredBy: self.develop.sceneHeadroom)
             self.renderCurrentInput()
@@ -362,7 +358,6 @@ final class VideoPreviewSimulator: NSObject, ObservableObject, @unchecked Sendab
             queue.async {
                 // The clip's own facts, exactly as the streaming develop attaches them.
                 var options = options
-                options.sceneIlluminantKelvin = self.develop.sceneCCT
                 options.sceneHeadroom = VideoPreviewAttachment.sceneHeadroom(
                     declaredBy: self.develop.sceneHeadroom)
                 // The same completion the streaming path applied, so the paused
@@ -504,7 +499,6 @@ final class VideoPreviewSimulator: NSObject, ObservableObject, @unchecked Sendab
             queue.async {
                 // The clip's own facts, exactly as the streaming develop attaches them.
                 var options = options
-                options.sceneIlluminantKelvin = self.develop.sceneCCT
                 options.sceneHeadroom = self.develop.sceneHeadroom
                 // The same completion the streaming path applied, so a held deep frame is the
                 // playing one here too.

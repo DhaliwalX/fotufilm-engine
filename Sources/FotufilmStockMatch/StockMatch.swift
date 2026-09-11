@@ -95,7 +95,7 @@ public enum StockMatch {
     /// Scores one film against one scene, without developing anything.
     public static func fit(
         scene: SceneDescription, stock: FilmStock,
-        printCorrection: Float = 0.05
+        printCorrection: Float = 0
     ) -> Fit {
         let raw = analytic(scene: scene, stock: stock,
                            printCorrection: printCorrection)
@@ -112,7 +112,7 @@ public enum StockMatch {
     /// The same reading, unweighted.
     public static func analytic(
         scene: SceneDescription, stock: FilmStock,
-        printCorrection: Float = 0.05
+        printCorrection: Float = 0
     ) -> (features: StockFeatures, isEligible: Bool) {
         var features = StockFeatures()
         features[.grainAmount] = stock.grainStrength / kReferenceGrain

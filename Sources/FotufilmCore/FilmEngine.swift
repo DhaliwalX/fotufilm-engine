@@ -1117,11 +1117,7 @@ public struct FilmEngineInvocation {
         // ride the appended ones.
         let paperCurves = printMedium.printCurves(for: stock)
         let paper = paperCurves[1]
-        let xMids = paperCurves.map { record in
-            record.logExposure(
-                density: record.dMin
-                    + printMedium.anchorDensity)
-        }
+        let xMids = printMedium.printExposureMidpoints(for: stock)
         let xMid = xMids[1]
 
         // Two lenses' worth of veiling glare, and only one of them is optional.

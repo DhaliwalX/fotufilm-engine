@@ -27,16 +27,14 @@ final class PrintPaperRecordTests: XCTestCase {
                        FilmEngineInvocation.paperBlueOffset]
         let midpointSlots = [FilmEngineInvocation.paperMidpointRedOffset, 62,
                              FilmEngineInvocation.paperMidpointBlueOffset]
-        let anchor = PrintPaper.ektacolorEdge
-            .anchorDensity
+        let midpoints = PrintPaper.ektacolorEdge.printExposureMidpoints(for: Self.stock)
         for (channel, curve) in expected.enumerated() {
             XCTAssertEqual(slots(configuration, at: offsets[channel]),
                            [curve.dMin, curve.gamma, curve.toe, curve.toeWidth,
                             curve.shoulder, curve.shoulderWidth],
                            "record \(channel)")
             let midpoint = configuration[midpointSlots[channel]]
-            XCTAssertEqual(curve.density(logExposure: midpoint) - curve.dMin,
-                           anchor, accuracy: 1e-3,
+            XCTAssertEqual(midpoint, midpoints[channel], accuracy: 1e-6,
                            "record \(channel) must anchor its own curve")
         }
         // Three genuinely different records, or the per-channel plumbing is
@@ -57,12 +55,12 @@ final class PrintPaperRecordTests: XCTestCase {
             XCTAssertEqual(slots(
                 configuration, at: FilmEngineInvocation.paperBlueOffset),
                 green, paper.rawValue)
-            XCTAssertEqual(
-                configuration[FilmEngineInvocation.paperMidpointRedOffset],
-                configuration[62], paper.rawValue)
-            XCTAssertEqual(
-                configuration[FilmEngineInvocation.paperMidpointBlueOffset],
-                configuration[62], paper.rawValue)
+            // A shared characteristic curve does not imply shared exposure timing:
+            // the physical paper's dye spectra still need separate setup exposures.
+            let midpoints = paper.printExposureMidpoints(for: Self.stock)
+            XCTAssertEqual(configuration[FilmEngineInvocation.paperMidpointRedOffset], midpoints[0])
+            XCTAssertEqual(configuration[62], midpoints[1])
+            XCTAssertEqual(configuration[FilmEngineInvocation.paperMidpointBlueOffset], midpoints[2])
         }
     }
 
@@ -94,16 +92,14 @@ final class PrintPaperRecordTests: XCTestCase {
                        FilmEngineInvocation.paperBlueOffset]
         let midpointSlots = [FilmEngineInvocation.paperMidpointRedOffset, 62,
                              FilmEngineInvocation.paperMidpointBlueOffset]
-        let anchor = PrintPaper.enduraPremier
-            .anchorDensity
+        let midpoints = PrintPaper.enduraPremier.printExposureMidpoints(for: Self.stock)
         for (channel, curve) in expected.enumerated() {
             XCTAssertEqual(slots(configuration, at: offsets[channel]),
                            [curve.dMin, curve.gamma, curve.toe, curve.toeWidth,
                             curve.shoulder, curve.shoulderWidth],
                            "record \(channel)")
             let midpoint = configuration[midpointSlots[channel]]
-            XCTAssertEqual(curve.density(logExposure: midpoint) - curve.dMin,
-                           anchor, accuracy: 1e-3,
+            XCTAssertEqual(midpoint, midpoints[channel], accuracy: 1e-6,
                            "record \(channel) must anchor its own curve")
         }
         XCTAssertNotEqual(slots(configuration, at: offsets[0]),
