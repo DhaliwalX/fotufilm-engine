@@ -866,24 +866,24 @@ enum HeadlessDevelop {
 
         // How much of the ramp came back apart. A 4:2:2 ProRes carries a neutral ramp entirely in
         // luma, so what survives here is the depth and not the chroma sampling.
-        var levels = Set<UInt16>()
-        if format == kCVPixelFormatType_64RGBAHalf {
+        var levels = Set<UInt32>()
+        if format == kCVPixelFormatType_128RGBAFloat {
             CVPixelBufferLockBaseAddress(pixels, .readOnly)
             if let base = CVPixelBufferGetBaseAddress(pixels) {
-                let row = base.assumingMemoryBound(to: UInt16.self)
+                let row = base.assumingMemoryBound(to: Float.self)
                 for x in 0..<CVPixelBufferGetWidth(pixels) {
-                    levels.insert(row[x * 4 + 1])
+                    levels.insert(row[x * 4 + 1].bitPattern)
                 }
             }
             CVPixelBufferUnlockBaseAddress(pixels, .readOnly)
         }
         let ok = road.deepInput && bits > 8
-            && format == kCVPixelFormatType_64RGBAHalf && levels.count > 256
+            && format == kCVPixelFormatType_128RGBAFloat && levels.count > 256
         return (String(
             format: "verify-preview-depth: probe reads %d-bit, road asks deep "
                 + "%@, decoder delivers %@, %d ramp levels survive %@",
             bits, road.deepInput ? "yes" : "no",
-            format == kCVPixelFormatType_64RGBAHalf ? "half float" : "8-bit",
+            format == kCVPixelFormatType_128RGBAFloat ? "full float" : "8-bit",
             levels.count, ok ? "ok" : "FAILED"), ok)
     }
 
@@ -940,7 +940,7 @@ enum HeadlessDevelop {
         let player = AVPlayer(playerItem: item)
         let output = AVPlayerItemVideoOutput(pixelBufferAttributes: [
             kCVPixelBufferPixelFormatTypeKey as String:
-                kCVPixelFormatType_64RGBAHalf,
+                kCVPixelFormatType_128RGBAFloat,
             kCVPixelBufferWidthKey as String: width,
             kCVPixelBufferHeightKey as String: height,
         ])
@@ -970,20 +970,20 @@ enum HeadlessDevelop {
                     + "the preview would be black", false)
         }
         let format = CVPixelBufferGetPixelFormatType(pixels)
-        let deep = format == kCVPixelFormatType_64RGBAHalf
+        let deep = format == kCVPixelFormatType_128RGBAFloat
         // What the tap actually carries, counted the way the reader's probe counts it: a shallow
-        // delivery padded into half float would come back with a quarter of the ramp.
-        var levels = Set<UInt16>()
+        // delivery padded into full float would come back with a quarter of the ramp.
+        var levels = Set<UInt32>()
         CVPixelBufferLockBaseAddress(pixels, .readOnly)
         if deep, let base = CVPixelBufferGetBaseAddress(pixels) {
-            let row = base.assumingMemoryBound(to: UInt16.self)
+            let row = base.assumingMemoryBound(to: Float.self)
             for x in 0..<CVPixelBufferGetWidth(pixels) {
-                levels.insert(row[x * 4 + 1])
+                levels.insert(row[x * 4 + 1].bitPattern)
             }
         }
         CVPixelBufferUnlockBaseAddress(pixels, .readOnly)
         return (String(format: "delivers %@ with %d ramp levels",
-                       deep ? "half float" : "8-bit", levels.count),
+                       deep ? "full float" : "8-bit", levels.count),
                 deep && levels.count > 256)
     }
 
@@ -1148,7 +1148,8 @@ enum HeadlessDevelop {
         guard let converter = LogConverter(encoding: encoding,
                                            width: width, height: height)
         else { return nil }
-        var halves = [UInt16](repeating: 0, count: width * height * 4)
+        // Match the decoder's RGBA32F contract on both raw-pointer and CVPixelBuffer paths.
+        var codes = [Float](repeating: 0, count: width * height * 4)
         var state: UInt64 = 0x46494C4D
         func random10BitCode() -> Float {
             state ^= state >> 12; state ^= state << 25; state ^= state >> 27
@@ -1161,16 +1162,16 @@ enum HeadlessDevelop {
                     let code = y == 0
                         ? Float(x) / 1023
                         : random10BitCode()
-                    halves[i + channel] = Float16(code).bitPattern
+                    codes[i + channel] = code
                 }
-                halves[i + 3] = Float16(1).bitPattern
+                codes[i + 3] = 1
             }
         }
         var reference = [Float](repeating: 0, count: width * height * 4)
-        let referenceRan = halves.withUnsafeBytes { source in
+        let referenceRan = codes.withUnsafeBytes { source in
             reference.withUnsafeMutableBufferPointer { dest in
                 converter.convertLinearPacked(
-                    source.baseAddress!, rowBytes: width * 8,
+                    source.baseAddress!, rowBytes: width * 16,
                     into: dest.baseAddress!)
             }
         }
@@ -1187,7 +1188,7 @@ enum HeadlessDevelop {
             let working = cameraEncoding.gamut.toRec2020.map { Float($0) }
             for pixel in 0..<(width * height) {
                 let lin = (0..<3).map {
-                    curve.linear(Float(Float16(bitPattern: halves[pixel * 4 + $0])))
+                    curve.linear(codes[pixel * 4 + $0])
                 }
                 for channel in 0..<3 {
                     let expected = (working[channel * 3] * lin[0]
@@ -1202,7 +1203,7 @@ enum HeadlessDevelop {
         var pixelBufferOut: CVPixelBuffer?
         guard CVPixelBufferCreate(
                 kCFAllocatorDefault, width, height,
-                kCVPixelFormatType_64RGBAHalf,
+                kCVPixelFormatType_128RGBAFloat,
                 [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary,
                 &pixelBufferOut) == kCVReturnSuccess,
               let pixelBuffer = pixelBufferOut,
@@ -1213,11 +1214,11 @@ enum HeadlessDevelop {
         CVPixelBufferLockBaseAddress(pixelBuffer, [])
         if let base = CVPixelBufferGetBaseAddress(pixelBuffer) {
             let rowBytes = CVPixelBufferGetBytesPerRow(pixelBuffer)
-            halves.withUnsafeBytes { source in
+            codes.withUnsafeBytes { source in
                 for row in 0..<height {
                     (base + row * rowBytes).copyMemory(
-                        from: source.baseAddress! + row * width * 8,
-                        byteCount: width * 8)
+                        from: source.baseAddress! + row * width * 16,
+                        byteCount: width * 16)
                 }
             }
         }
@@ -1231,10 +1232,10 @@ enum HeadlessDevelop {
         }
 
         var deepReference = [UInt8](repeating: 0, count: width * height * 4)
-        let deepReferenceRan = halves.withUnsafeBytes { source in
+        let deepReferenceRan = codes.withUnsafeBytes { source in
             deepReference.withUnsafeMutableBufferPointer { dest in
                 converter.convertDeepPacked(
-                    source.baseAddress!, rowBytes: width * 8,
+                    source.baseAddress!, rowBytes: width * 16,
                     into: dest.baseAddress!)
             }
         }
@@ -1254,22 +1255,22 @@ enum HeadlessDevelop {
         guard let rampConverter = LogConverter(encoding: encoding,
                                                width: 256, height: 1)
         else { return nil }
-        var rampHalves = [UInt16](repeating: 0, count: 256 * 4)
+        var rampCodes = [Float](repeating: 0, count: 256 * 4)
         var rampBytes = [UInt8](repeating: 0, count: 256 * 4)
         for code in 0..<256 {
             for channel in 0..<3 {
-                rampHalves[code * 4 + channel] = Float16(Float(code) / 255).bitPattern
+                rampCodes[code * 4 + channel] = Float(code) / 255
                 rampBytes[code * 4 + channel] = UInt8(code)
             }
-            rampHalves[code * 4 + 3] = Float16(1).bitPattern
+            rampCodes[code * 4 + 3] = 1
             rampBytes[code * 4 + 3] = 255
         }
         var rampFloat = [Float](repeating: 0, count: 256 * 4)
         var rampTable = [UInt8](repeating: 0, count: 256 * 4)
-        let rampsRan = rampHalves.withUnsafeBytes { source in
+        let rampsRan = rampCodes.withUnsafeBytes { source in
             rampFloat.withUnsafeMutableBufferPointer { dest in
                 rampConverter.convertLinearPacked(
-                    source.baseAddress!, rowBytes: 256 * 8,
+                    source.baseAddress!, rowBytes: 256 * 16,
                     into: dest.baseAddress!)
             }
         } && rampBytes.withUnsafeBytes { source in
@@ -1315,23 +1316,23 @@ enum HeadlessDevelop {
               let tableRamp = LogConverter(encoding: encoding,
                                            width: steps, height: 1)
         else { return nil }
-        var halves = [UInt16](repeating: 0, count: steps * 4)
+        var codes = [Float](repeating: 0, count: steps * 4)
         var bytes = [UInt8](repeating: 0, count: steps * 4)
         for i in 0..<steps {
             let code = Float(i) / Float(steps - 1)
             for channel in 0..<3 {
-                halves[i * 4 + channel] = Float16(code).bitPattern
+                codes[i * 4 + channel] = code
                 bytes[i * 4 + channel] = UInt8((code * 255).rounded())
             }
-            halves[i * 4 + 3] = Float16(1).bitPattern
+            codes[i * 4 + 3] = 1
             bytes[i * 4 + 3] = 255
         }
         var deep = [UInt8](repeating: 0, count: steps * 4)
         var table = [UInt8](repeating: 0, count: steps * 4)
-        let ran = halves.withUnsafeBytes { source in
+        let ran = codes.withUnsafeBytes { source in
             deep.withUnsafeMutableBufferPointer { dest in
                 deepRamp.convertDeepPacked(source.baseAddress!,
-                                           rowBytes: steps * 8,
+                                           rowBytes: steps * 16,
                                            into: dest.baseAddress!)
             }
         } && bytes.withUnsafeBytes { source in

@@ -104,6 +104,16 @@ To include the Final Cut plugin, install Apple's FxPlug SDK first. See the
 [Resolve guide](resolve/README.md) and [Final Cut guide](finalcut/README.md)
 for separate builds and installation steps.
 
+After building, check camera-log conversion and the full-float video decode path:
+
+```sh
+build/macos/Fotufilm.app/Contents/MacOS/Fotufilm --verify-log-conversion
+build/macos/Fotufilm.app/Contents/MacOS/Fotufilm --verify-preview-depth
+```
+
+These checks use synthetic ramps to compare CPU and Metal conversion and measure
+the precision retained through decoding, playback, and paused-frame rendering.
+
 ## Build the browser editor
 
 Install Emscripten and Python 3.10 or newer. Set `EMSDK_ROOT` to your Emscripten
