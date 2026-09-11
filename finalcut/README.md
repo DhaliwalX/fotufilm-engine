@@ -71,6 +71,7 @@ updated together; packs that need a newer version are skipped.
 
 The **Status** line explains input color handling, unavailable controls, and render
 errors. The plugin includes all 40 film profiles and needs no activation.
+A saved project retains its menu choices and texture-stage controls when reopened.
 A smaller film gauge makes grain and other spatial effects larger in the image.
 
 Final Cut supplies linear-light images. The color-space choices therefore select

@@ -727,6 +727,7 @@ struct FotufilmGating {
     NSUInteger _describedPapers;
     NSUInteger _describedLensFilters;
     NSUInteger _describedDiffusions;
+    BOOL _inspectorShapeKnown;
 
     /// The whole-frame hash of the source the cached frame was developed from, and whether there
     /// is one. It is the last term of the tiled path's cache key and the only expensive one, so
@@ -807,6 +808,77 @@ struct FotufilmGating {
 }
 
 // MARK: parameters
+
+/// FxPlug does not call addParametersWithError: when deserializing an effect. Keep the
+/// creation-time counts in a hidden parameter so restored instances read the same menus.
+- (NSString *)inspectorShape {
+    NSArray *counts = @[ @1, @(_describedTextureStages), @(_describedStages),
+                        @(_describedFormats), @(_describedPapers),
+                        @(_describedLensFilters), @(_describedDiffusions) ];
+    NSData *data = [NSJSONSerialization dataWithJSONObject:counts options:0 error:nil];
+    return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+}
+
+- (void)describeCurrentInspector {
+    FotufilmEngine *engine = FotufilmEngine.shared;
+    _describedTextureStages = engine.textureLabels.count;
+    _describedStages = MAX(engine.stageLabels.count, 1);
+    _describedFormats = MAX(engine.formatLabels.count, 1);
+    _describedPapers = MAX(engine.paperLabels.count, 1);
+    _describedLensFilters = MAX(engine.lensFilterLabels.count, 1);
+    _describedDiffusions = MAX(engine.diffusionLabels.count, 1);
+}
+
+- (void)restoreInspectorShape {
+    if (_inspectorShapeKnown) return;
+    id<FxParameterRetrievalAPI_v6> retrieval = [self retrievalAPI];
+    if (!retrieval) return;
+    NSString *saved = nil;
+    if ([retrieval getStringParameterValue:&saved fromParameter:kFotufilmParam_InspectorShape]
+        && saved.length) {
+        id counts = [NSJSONSerialization JSONObjectWithData:[saved dataUsingEncoding:NSUTF8StringEncoding]
+                                                   options:0 error:nil];
+        BOOL valid = [counts isKindOfClass:NSArray.class] && [counts count] == 7;
+        if (valid) {
+            for (id count in counts) {
+                if (![count isKindOfClass:NSNumber.class] || [count doubleValue] < 0
+                    || [count doubleValue] > 9998
+                    || [count doubleValue] != [count unsignedIntegerValue]) {
+                    valid = NO;
+                    break;
+                }
+            }
+        }
+        if (valid && [counts[0] unsignedIntegerValue] == 1) {
+            _describedTextureStages = [counts[1] unsignedIntegerValue];
+            _describedStages = [counts[2] unsignedIntegerValue];
+            _describedFormats = [counts[3] unsignedIntegerValue];
+            _describedPapers = [counts[4] unsignedIntegerValue];
+            _describedLensFilters = [counts[5] unsignedIntegerValue];
+            _describedDiffusions = [counts[6] unsignedIntegerValue];
+            _inspectorShapeKnown = YES;
+            return;
+        }
+    }
+
+    // Older projects and Motion templates have no shape parameter. Their real texture
+    // parameters distinguish a populated inspector from one created while startup failed.
+    // Query existence, not the toggle value: all stages can legitimately be switched off.
+    if (!FotufilmEngine.shared.ready) return;
+    [self describeCurrentInspector];
+    _describedTextureStages = 0;
+    for (UInt32 parameter = kFotufilmParam_TextureStageFirst;
+         parameter < kFotufilmParam_TextureStageLimit; ++parameter) {
+        FxParameterFlags flags = 0;
+        if (![retrieval getParameterFlags:&flags fromParameter:parameter]) break;
+        ++_describedTextureStages;
+    }
+    if (_describedTextureStages == 0) {
+        _describedStages = _describedFormats = _describedPapers = 1;
+        _describedLensFilters = _describedDiffusions = 1;
+    }
+    _inspectorShapeKnown = YES;
+}
 
 - (id<FxParameterCreationAPI_v5>)creationAPI {
     return [_apiManager apiForProtocol:@protocol(FxParameterCreationAPI_v5)];
@@ -1097,7 +1169,8 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
         case FOTUFILM_HOST_KIND_HIDDEN_STRING:
             [api addStringParameterWithName:@"id"
                                 parameterID:(UInt32)identifier
-                               defaultValue:@""
+                               defaultValue:identifier == kFotufilmParam_InspectorShape
+                                                ? [self inspectorShape] : @""
                              parameterFlags:kFxParameterFlag_HIDDEN];
             break;
         case FOTUFILM_HOST_KIND_TEXTURE_TOGGLES:
@@ -1123,6 +1196,8 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
         return NO;
     }
     FotufilmEngine *engine = FotufilmEngine.shared;
+    [self describeCurrentInspector];
+    _inspectorShapeKnown = YES;
     const FotufilmGating gating = [self gatingForStock:0];
     const FxParameterFlags whenPushes = gating.pushes ? kFxParameterFlag_DEFAULT
                                                       : kFxParameterFlag_DISABLED;
@@ -1269,6 +1344,7 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
 /// A restored instance: the menus hold whatever the project saved, which the creation-time
 /// gating against the defaults knows nothing about.
 - (void)pluginInstanceAddedToDocument {
+    [self restoreInspectorShape];
     id<FxCustomParameterActionAPI_v4> action = [self actionAPI];
     // Through `id`: the SDK's action protocol does not adopt NSObject, so `respondsToSelector:`
     // is not one of its methods. It is still the right question — the API may be absent, and a
@@ -1337,6 +1413,7 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
 /// the status line saying all of it — including which measured development an off-grid push will
 /// actually be developed at. Nothing here writes a parameter value; see the note on Push / Pull.
 - (void)refreshControlsAtTime:(CMTime)time {
+    [self restoreInspectorShape];
     id<FxParameterRetrievalAPI_v6> retrieval = [self retrievalAPI];
     id<FxParameterSettingAPI_v5> setting = [self settingAPI];
     if (!retrieval || !setting || _refreshing) return;
@@ -1500,6 +1577,7 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
                                           @"Final Cut did not offer a parameter retrieval API");
         return NO;
     }
+    [self restoreInspectorShape];
     FotufilmEngine *engine = FotufilmEngine.shared;
 
     FotufilmState state{};
