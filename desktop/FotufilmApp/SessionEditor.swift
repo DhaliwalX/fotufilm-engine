@@ -853,7 +853,8 @@ final class DesktopEditorViewController: SessionViewController {
         case #selector(rerollGrain(_:)): return model.isOpen
         case #selector(forgetLearning(_:)):
             return StockPreferenceStore.shared.hasLearnedAnything
-        case #selector(openFilmWorkshop(_:)): return !sheetUp
+        case #selector(openFilmWorkshop(_:)):
+            return FilmWorkshopController.isAvailable && !sheetUp
         case #selector(zoomIn(_:)): return zoomCanvas.canZoomIn
         case #selector(zoomOut(_:)), #selector(zoomToFit(_:)):
             return zoomCanvas.canZoomOut
@@ -983,7 +984,7 @@ final class DesktopEditorViewController: SessionViewController {
     /// columns of its own — rather than as a form sheet, because it is a place to work and not a
     /// question to answer.
     @objc func openFilmWorkshop(_ sender: Any?) {
-        guard !sheetUp else { return }
+        guard FilmWorkshopController.isAvailable, !sheetUp else { return }
         #if canImport(UIKit)
         guard ProGate.allow(.customStocks) else { return }
         #endif
@@ -1295,9 +1296,6 @@ final class DesktopEditorViewController: SessionViewController {
             UIKeyCommand(title: "Show Original",
                          action: #selector(toggleShowOriginal(_:)),
                          input: "\\", modifierFlags: .command),
-            UIKeyCommand(title: "Film Workshop…",
-                         action: #selector(openFilmWorkshop(_:)),
-                         input: "n", modifierFlags: [.command, .shift]),
             UIKeyCommand(title: "Show Negative",
                          action: #selector(toggleShowNegative(_:)),
                          input: "n", modifierFlags: [.command, .alternate]),
@@ -1311,6 +1309,11 @@ final class DesktopEditorViewController: SessionViewController {
                          action: #selector(sampleSelection(_:)),
                          input: "s", modifierFlags: [.command, .shift]),
         ]
+        if FilmWorkshopController.isAvailable {
+            commands.append(UIKeyCommand(
+                title: "Film Workshop…", action: #selector(openFilmWorkshop(_:)),
+                input: "n", modifierFlags: [.command, .shift]))
+        }
         // The tabs, numbered the way they are stacked.
         for (index, panel) in InspectorPanel.allCases.enumerated() {
             commands.append(UIKeyCommand(
@@ -1413,7 +1416,7 @@ extension DesktopEditorViewController: NSMenuItemValidation {
             item.state = id == model.edit.stockID ? .on : .off
             return !model.isExporting
         case #selector(openFilmWorkshop(_:)):
-            return canOpenSheet
+            return FilmWorkshopController.isAvailable && canOpenSheet
         case #selector(zoomIn(_:)):
             return canvasCanZoomIn
         case #selector(zoomOut(_:)):

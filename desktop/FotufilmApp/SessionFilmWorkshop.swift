@@ -17,6 +17,9 @@ import FotufilmCore
 /// controls. Imported definitions retain their source lineage for export-policy checks.
 final class FilmWorkshopController: SessionViewController {
 
+    /// Temporarily hides every Workshop entry point on Mac and iPad.
+    static let isAvailable = false
+
     /// Called when the sheet has gone, and when the library changed under it, so whoever opened the
     /// workshop can put the film list back up to date.
     var onClose: (() -> Void)?
