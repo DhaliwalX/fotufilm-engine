@@ -126,6 +126,12 @@ a WebGPU-compatible Halide toolchain is not available. To build one, install Hom
 `lld` and run `tools/build-halide.sh --webgpu` first; it fetches the Halide
 pull request the browser runtime needs and applies the patches in `tools/`.
 
+The reference CPU and browser WebGPU kernels use strict float32 evaluation.
+Rebuild an older WebGPU toolchain before generating the browser runtime; the build
+checks that its arithmetic patch matches the engine. The
+[parity diagnostics](tools/webgpu-parity/README.md) compare output bits before
+display conversion, including native reference fixtures and per-stage reports.
+
 The [browser editor guide](docs/documentation.html) covers controls, shortcuts,
 export, and the features that still require the Mac app.
 

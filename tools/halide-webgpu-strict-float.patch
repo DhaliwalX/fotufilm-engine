@@ -1,0 +1,113 @@
+# StrictFloat must also constrain device arithmetic. WGSL permits fusion and
+# approximate transcendental operations, so emit explicit binary32 helpers for
+# float32 operations. build-halide.sh supplies FotufilmExactWGSL.h from the
+# shared, tested reference-math.wgsl source and its Halide polynomial license.
+--- a/src/CodeGen_WebGPU_Dev.cpp
++++ b/src/CodeGen_WebGPU_Dev.cpp
+@@ -9,6 +9,7 @@
+ #include "CodeGen_Internal.h"
+ #include "CodeGen_WebGPU_Dev.h"
+ #include "IROperator.h"
++#include "FotufilmExactWGSL.h"
+
+ namespace Halide {
+ namespace Internal {
+@@ -55,7 +56,7 @@
+     class CodeGen_WGSL : public CodeGen_GPU_C {
+     public:
+         CodeGen_WGSL(std::ostream &s, Target t)
+-            : CodeGen_GPU_C(s, t) {
++            : CodeGen_GPU_C(s, t), exact_math(t.has_feature(Target::StrictFloat)) {
+             vector_declaration_style = VectorDeclarationStyle::WGSLSyntax;
+             abs_returns_unsigned_type = false;
+
+@@ -127,6 +128,11 @@
+         void visit(const Select *op) override;
+         void visit(const Store *op) override;
+
++        bool exact_math;
++        void print_exact_call(Type type, const string &name, const vector<Expr> &args);
++        void visit(const Add *op) override;
++        void visit(const Sub *op) override;
++        void visit(const Mul *op) override;
+         string kernel_name;
+         std::unordered_set<string> buffers;
+         std::unordered_set<string> buffers_with_emulated_accesses;
+@@ -136,10 +142,11 @@
+     std::ostringstream src_stream;
+     string cur_kernel_name;
+     CodeGen_WGSL wgsl;
++    bool exact_math;
+ };
+
+ CodeGen_WebGPU_Dev::CodeGen_WebGPU_Dev(const Target &t)
+-    : wgsl(src_stream, t) {
++    : wgsl(src_stream, t), exact_math(t.has_feature(Target::StrictFloat)) {
+ }
+
+ void CodeGen_WebGPU_Dev::add_kernel(Stmt s,
+@@ -180,6 +187,8 @@
+         << "fn is_nan_f32(x : f32) -> bool {return x != x;}\n"
+         << "fn is_inf_f32(x : f32) -> bool {return !is_nan_f32(x) && is_nan_f32(x - x);}\n"
+         << "fn is_finite_f32(x : f32) -> bool {return !is_nan_f32(x) && !is_inf_f32(x);}\n";
++
++    if (exact_math) src_stream << fotufilm_exact_wgsl;
+
+     // Create pipeline-overridable constants for the workgroup size and
+     // workgroup array size.
+@@ -474,7 +483,46 @@
+     print_assignment(type, print_type(type) + "(" + id_value + ")");
+ }
+
++void CodeGen_WebGPU_Dev::CodeGen_WGSL::print_exact_call(Type type, const string &name, const vector<Expr> &args) {
++    vector<string> ids;
++    for (const auto &a : args) ids.push_back(print_expr(a));
++    ostringstream rhs;
++    if (type.lanes() != 1) rhs << print_type(type) << "(";
++    for (int lane = 0; lane < type.lanes(); ++lane) {
++        if (lane) rhs << ", ";
++        rhs << name << "(";
++        for (size_t i = 0; i < args.size(); ++i) {
++            if (i) rhs << ", ";
++            rhs << ids[i];
++            if (args[i].type().lanes() != 1) rhs << "[" << lane << "]";
++        }
++        rhs << ")";
++    }
++    if (type.lanes() != 1) rhs << ")";
++    print_assignment(type, rhs.str());
++}
++void CodeGen_WebGPU_Dev::CodeGen_WGSL::visit(const Add *op) {
++    if (exact_math && op->type.is_float()) { print_exact_call(op->type, "sf_add", {op->a, op->b}); }
++    else CodeGen_GPU_C::visit(op);
++}
++void CodeGen_WebGPU_Dev::CodeGen_WGSL::visit(const Sub *op) {
++    if (exact_math && op->type.is_float()) { print_exact_call(op->type, "sf_sub", {op->a, op->b}); }
++    else CodeGen_GPU_C::visit(op);
++}
++void CodeGen_WebGPU_Dev::CodeGen_WGSL::visit(const Mul *op) {
++    if (exact_math && op->type.is_float()) { print_exact_call(op->type, "sf_mul", {op->a, op->b}); }
++    else CodeGen_GPU_C::visit(op);
++}
+ void CodeGen_WebGPU_Dev::CodeGen_WGSL::visit(const Call *op) {
++    if (exact_math && op->is_extern() && op->type.is_float()) {
++        string name;
++        if (op->name == "exp_f32") name = "sf_exp";
++        if (op->name == "log_f32") name = "sf_log";
++        if (op->name == "pow_f32") name = "sf_pow";
++        if (op->name == "sqrt_f32") name = "sf_sqrt";
++        if (!name.empty()) { print_exact_call(op->type, name, op->args); return; }
++    }
++
+     if (op->is_intrinsic(Call::gpu_thread_barrier)) {
+         internal_assert(op->args.size() == 1)
+             << "gpu_thread_barrier() intrinsic must specify fence type.\n";
+@@ -556,6 +604,8 @@
+ }
+
+ void CodeGen_WebGPU_Dev::CodeGen_WGSL::visit(const Div *op) {
++    if (exact_math && op->type.is_float()) { print_exact_call(op->type, "sf_div", {op->a, op->b}); return; }
++
+     if (auto bits = is_const_power_of_two_integer(op->b)) {
+         // WGSL requires the RHS of a shift to be unsigned.
+         Type uint_type = op->a.type().with_code(halide_type_uint);

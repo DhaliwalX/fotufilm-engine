@@ -44,16 +44,20 @@ echo "Halide: $HALIDE_PREFIX"
 # It has to speak the promise-based webgpu.h that a current Emscripten's emdawnwebgpu port
 # provides — Halide's released runtime still wants the pre-Future header, which pins the link to
 # Emscripten 3.1.x, whose bundled binaryen then rejects the wasm features Halide's own LLVM emits.
-# Halide PR #8955 is what breaks that triangle. It also needs three things the PR does not carry.
+# Halide PR #8955 is what breaks that triangle. It also needs the patches below.
 # The runtime raises five adapter limits and omits maxStorageBuffersPerShaderStage, so the combine
 # kernel's nine storage buffers are refused against a default of eight; it compiles a compute
 # pipeline for every dispatch and throws it away, which on the colour kernel's 64 dispatches came
 # to eight seconds a frame; and it never releases the command buffers it submits, so a page slows
 # down frame by frame. See the tools/halide-webgpu-*.patch files; tools/build-halide.sh --webgpu
-# applies all three.
+# applies these and strict float32 arithmetic for CPU/WebGPU agreement.
 WEBGPU_HALIDE="${FOTUFILM_WEBGPU_HALIDE:-}"
 if [[ -z "$WEBGPU_HALIDE" && -f build/halide-pr-install/include/Halide.h ]]; then
   WEBGPU_HALIDE=build/halide-pr-install
+fi
+
+if [[ -n "$WEBGPU_HALIDE" ]]; then
+  python3 tools/webgpu-parity/toolchain.py verify "$WEBGPU_HALIDE"
 fi
 
 # A current Emscripten, deliberately: Halide's LLVM stamps wasm features into the object that

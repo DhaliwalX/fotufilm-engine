@@ -26,6 +26,7 @@ Halide::Target wasm_target(bool webgpu) {
     target.os = Halide::Target::WebAssemblyRuntime;
     target.arch = Halide::Target::WebAssembly;
     target.bits = 32;
+    target.set_feature(Halide::Target::StrictFloat);
     if (webgpu) {
         target.set_feature(Halide::Target::WebGPU);
         // No WasmMvpOnly here. It used to be needed because Halide's WebGPU runtime wanted the
@@ -83,9 +84,10 @@ int main(int argc, char **argv) {
         // 4th Color Layer, so its kernel stays as it was.
         {"color_float",
          FOTUFILM_AOT_ALL_STAGES | FOTUFILM_FRAME_FLOAT_IO
-             | FOTUFILM_FRAME_DONOR_LAYER, true},
+             | FOTUFILM_FRAME_DONOR_LAYER | FOTUFILM_FRAME_EXACT_MATH, true},
         {"monochrome_float",
-         FOTUFILM_AOT_ALL_STAGES | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO, false},
+         FOTUFILM_AOT_ALL_STAGES | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO
+             | FOTUFILM_FRAME_EXACT_MATH, false},
     };
 
     const Halide::Target target = wasm_target(webgpu);
