@@ -32,12 +32,13 @@
     } from "/src/engine.js";
     import { relatedAssetUrl } from "/src/runtime-assets.js";
     import { loadMediumBytes } from "/src/output-media.js";
+    import { decodeEXR } from "/src/exr-decode.js";
 
     const out = document.querySelector("#out");
     const report = document.querySelector("#report");
     const query = new URLSearchParams(location.search);
-    const width = Number(query.get("width") || 64);
-    const height = Number(query.get("height") || 48);
+    let width = Number(query.get("width") || 64);
+    let height = Number(query.get("height") || 48);
     const lines = [];
     const results = [];
     const say = (text) => {
@@ -45,7 +46,19 @@
       out.textContent = lines.join("\n");
     };
 
-    function scene() {
+    async function scene() {
+      if (query.get("scene") === "exr") {
+        const response = await fetch(assetUrl("demo-scene.exr"));
+        if (!response.ok)
+          throw new Error("The linear EXR sample could not be loaded");
+        const decoded = decodeEXR(await response.arrayBuffer());
+        width = decoded.width;
+        height = decoded.height;
+        return Float32Array.from(
+          { length: width * height * 3 },
+          (_, i) => decoded.pixels[Math.floor(i / 3) * 4 + (i % 3)],
+        );
+      }
       const data = new Float32Array(width * height * 3);
       for (let y = 0; y < height; ++y)
         for (let x = 0; x < width; ++x) {
@@ -190,7 +203,7 @@
         query.get("stocks") === "all"
           ? index.map((s) => s.id)
           : (query.get("stocks") || "gold200").split(",");
-      const input = scene();
+      const input = await scene();
       const controls = {
         ev: Number(query.get("exposure") || 0),
         grain: Number(query.get("grain") ?? 1),
@@ -281,7 +294,15 @@
                   `${result.differing}/${result.samples} differ; max abs ${result.maxAbsolute}; max ULP ${result.maxULP}`,
               );
               report.textContent = JSON.stringify(
-                { width, height, controls, cpuURL, gpuURL, results },
+                {
+                  width,
+                  height,
+                  scene: query.get("scene") || "synthetic",
+                  controls,
+                  cpuURL,
+                  gpuURL,
+                  results,
+                },
                 null,
                 2,
               );

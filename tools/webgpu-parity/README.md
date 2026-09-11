@@ -41,7 +41,8 @@ After building the actual engine and packs with `tools/build-wasm.sh`, open
 scene at every stage, before display transforms. `stocks=all`, `grain=1`,
 `width`, `height`, and `exposure` vary the coverage. `medium=all` compares every
 available output medium for the selected stocks; a medium ID selects just that
-output. A successful operation probe
+output. `scene=exr` uses the bundled scene-linear EXR at its original dimensions
+through the editor's decoder. A successful operation probe
 alone does not establish full-frame parity, native CPU parity, or cross-device
 coverage.
 
