@@ -64,7 +64,8 @@ for PLATFORM in "${PLATFORMS[@]}"; do
   if [[ -z "${RELEASE:-}" ]]; then
     gh release create "$TAG" --repo "$REPOSITORY" --draft --latest=false \
       --target "$(git rev-parse HEAD)" --title "Apple AOT kernels: $PLATFORM (${TAG##*-})" \
-      --notes "Precompiled $PLATFORM kernels from the public engine. The manifest records source, compiler and per-file hashes. Archive checksum, completeness, privacy and AOT-only link checks passed. Downloading requires no token."
+      --notes "$(printf '%s\n\n' "Precompiled $PLATFORM kernels from the public engine. The manifest records source, compiler and per-file hashes. Archive checksum, completeness, privacy and AOT-only link checks passed. Downloading requires no token. Film profiles are not included."
+        cat NOTICE)"
   fi
   gh release upload "$TAG" --repo "$REPOSITORY" --clobber \
     "$WORK/release/kernels.tar.gz" "$WORK/release/kernels.tar.gz.sha256" "$WORK/release/aot-manifest.json"
