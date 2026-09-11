@@ -98,16 +98,15 @@ final class StockSidebarViewController: SessionViewController {
         root.addSubview(search)
         root.addSubview(list)
 
-        // The way into the workshop from the column the films are in. It is here rather than only
-        // in the menu bar because the iPad has no menu bar, and making a film should not be a thing
-        // only the Mac can reach. The iPad's purchase entry point shares the footer, where it stays
-        // reachable without a keyboard.
+        // Sidebar actions stay reachable without a keyboard on iPad.
         #if canImport(UIKit)
         footer.addArrangedSubview(upgrade)
         upgrade.heightAnchor.constraint(equalToConstant: 30).isActive = true
         #endif
-        footer.addArrangedSubview(makeFilm)
-        makeFilm.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        if FilmWorkshopController.isAvailable {
+            footer.addArrangedSubview(makeFilm)
+            makeFilm.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        }
         #if os(macOS)
         footer.addArrangedSubview(loadPack)
         loadPack.heightAnchor.constraint(equalToConstant: 30).isActive = true

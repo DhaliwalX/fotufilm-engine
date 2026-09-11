@@ -153,10 +153,12 @@ enum MainMenu {
             #selector(DesktopEditorViewController.toggleDiscGrain(_:)))
         add(menu, "Estimated Halation Shape (Advanced)",
             #selector(DesktopEditorViewController.toggleEstimatedHalation(_:)))
-        menu.addItem(.separator())
-        add(menu, "Film Workshop…",
-            #selector(DesktopEditorViewController.openFilmWorkshop(_:)),
-            key: "n", modifiers: [.command, .shift])
+        if FilmWorkshopController.isAvailable {
+            menu.addItem(.separator())
+            add(menu, "Film Workshop…",
+                #selector(DesktopEditorViewController.openFilmWorkshop(_:)),
+                key: "n", modifiers: [.command, .shift])
+        }
         menu.addItem(.separator())
         add(menu, "Choose Film Per Photo",
             #selector(DesktopEditorViewController.toggleAutoStock(_:)))
@@ -182,7 +184,6 @@ enum MainMenu {
         add(menu, "Show Original",
             #selector(DesktopEditorViewController.toggleShowOriginal(_:)),
             key: "\\")
-        // ⌥⌘N rather than ⇧⌘N, which the Film Workshop already has.
         add(menu, "Show Negative",
             #selector(DesktopEditorViewController.toggleShowNegative(_:)),
             key: "n", modifiers: [.command, .option])
