@@ -87,6 +87,7 @@ public struct FilmStockDefinition: Codable, Sendable {
     public var halationHazeMM: Float? = nil
     /// Optional independently calibrated halo shape. Its absence is the exact legacy model.
     public var halationProfile: HalationProfile? = nil
+    /// Used when Layered Transport is selected; Legacy retains its own profile and matrix.
     /// Requires pack schema 3; older engines must reject rather than ignore this operator.
     public var layeredTransport: LayeredTransport? = nil
     /// Optional provisional halo shape, ignored unless explicitly enabled by the renderer.

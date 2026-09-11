@@ -387,7 +387,7 @@ public enum EditorControlCatalogue {
             host: HostParameter(
                 slot: 49, slotSymbol: "HALATION_MODEL", ofxName: "halationModel", fxplugID: 88,
                 group: .halation, label: "Halation Model",
-                hint: "Legacy or layered optical transport. Unmeasured stacks use an illustrative construction.",
+                hint: "Legacy or layered optical transport. Layered uses an inferred stock construction where included, otherwise an illustrative stack.",
                 kind: .choice(.fixed([EditorMenuChoice(0, "Legacy", id: "legacy"),
                                       EditorMenuChoice(1, "Layered Transport", id: "layered")]), value: 0),
                 order: 10),

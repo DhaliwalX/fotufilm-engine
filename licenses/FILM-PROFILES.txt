@@ -68,3 +68,9 @@ This license covers the listed profile files. It does not cover engine
 code, synthetic example profiles, software branding, or third-party publications.
 Film and manufacturer names identify simulated film types. They remain their
 owners' trademarks and do not imply endorsement.
+
+The included inferred Layered Transport fields are covered by the same license.
+They are estimates, not measured film constructions. Aerocolor's generic PET
+optical constants use the CC0 RefractiveIndex.INFO Zhang dataset:
+https://refractiveindex.info/?shelf=organic&book=polyethylene_terephthalate&page=Zhang
+See docs/layered-transport.md in the source repository for assumptions and limits.

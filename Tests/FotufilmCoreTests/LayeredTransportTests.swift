@@ -238,6 +238,58 @@ final class LayeredTransportTests: XCTestCase {
         XCTAssertThrowsError(try bad.validate())
     }
 
+    func testStockConstructionPreservesLegacyFieldsAndRendering() throws {
+        var legacy = TestStocks.negative
+        legacy.halationProfile = HalationProfile(
+            roundTripOpticalDepth: [0.8, 1, 1.2], angularExponent: [1, 1, 1],
+            diffuseShare: [0.1, 0.1, 0.1], diffuseSigmaMM: [0.01, 0.01, 0.01],
+            bounceRetention: [0.1, 0.1, 0.1])
+        legacy.estimatedHalationProfile = legacy.halationProfile
+        legacy.halationReturnMatrix = [[0.8, 0.1, 0.1], [0.2, 0.7, 0.1], [0.1, 0.2, 0.7]]
+        var withConstruction = legacy
+        withConstruction.layeredTransport = TransportFixtures.stack
+        let definition = FilmStockDefinition(id: "coexisting-models", stock: withConstruction)
+        try definition.validate()
+        let decoded = try JSONDecoder().decode(FilmStockDefinition.self,
+            from: JSONEncoder().encode(definition))
+        try decoded.validate()
+        XCTAssertEqual(decoded.stock.halationProfile, legacy.halationProfile)
+        XCTAssertEqual(decoded.stock.estimatedHalationProfile, legacy.estimatedHalationProfile)
+        XCTAssertEqual(decoded.stock.halationReturnMatrix, legacy.halationReturnMatrix)
+
+        var options = TransportFixtures.quiet
+        XCTAssertEqual(options.halationModel, .legacy)
+        XCTAssertNil(options.transportConstruction(for: decoded.stock))
+        options.halationModel = .layered
+        XCTAssertEqual(options.transportConstruction(for: decoded.stock), TransportFixtures.stack)
+        options.layeredTransport = TransportFixtures.mirror
+        XCTAssertEqual(options.transportConstruction(for: decoded.stock), TransportFixtures.mirror)
+
+        // Coexistence must not bypass validation of either Legacy profile or its matrix.
+        var bad = decoded; bad.halationProfile?.roundTripOpticalDepth = [-1, 1, 1]
+        XCTAssertThrowsError(try bad.validate())
+        bad = decoded; bad.estimatedHalationProfile?.roundTripOpticalDepth = [-1, 1, 1]
+        XCTAssertThrowsError(try bad.validate())
+        bad = decoded; bad.halationReturnMatrix = [[1]]
+        XCTAssertThrowsError(try bad.validate())
+
+        guard TransportBackend.cpu.isAvailable else { throw XCTSkip("Halide unavailable; schema assertions passed") }
+        var source = ImageBuffer(width: 37, height: 29, fill: 0.008)
+        for y in 10..<19 { for x in 14..<23 {
+            source.planes[0][y * 37 + x] = 16
+            source.planes[1][y * 37 + x] = 4
+            source.planes[2][y * 37 + x] = 1
+        } }
+        options = TransportFixtures.quiet
+        options.localTone = false; options.frameCoverage = 0.05
+        for estimated in [false, true] {
+            options.useEstimatedHalationProfile = estimated
+            let before = try FotufilmEngine(stock: legacy, options: options).processChecked(linearRGB: source)
+            let after = try FotufilmEngine(stock: decoded.stock, options: options).processChecked(linearRGB: source)
+            XCTAssertEqual(after.planes, before.planes)
+        }
+    }
+
     func testSceneSpectrumWithNo560nmEnergyKeepsCalibratedExposure() throws {
         guard TransportBackend.cpu.isAvailable else { throw XCTSkip("Halide unavailable") }
         var options = TransportFixtures.quiet
