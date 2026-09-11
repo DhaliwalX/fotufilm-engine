@@ -48,9 +48,8 @@ public extension FilmStockDefinition {
         if let layeredTransport {
             do { try layeredTransport.validate() }
             catch { throw fail("layeredTransport", error.localizedDescription) }
-            guard halationProfile == nil && estimatedHalationProfile == nil && halationReturnMatrix == nil else {
-                throw fail("layeredTransport", "remove conflicting legacy profile and return-matrix fields")
-            }
+            // Model selection chooses the optical operator. Retain the independently
+            // validated Legacy fields so adding a construction does not change its look.
         }
         try Self.checkIdentifier(id, field: "id", limit: 64, fail: fail)
         try Self.checkText(name, field: "name", limit: 64, required: true, fail: fail)

@@ -5,6 +5,51 @@ explicit optical construction. Existing films keep their existing rendering unle
 a construction is supplied. No included commercial film is relabeled as measured
 layered transport.
 
+## Included inferred constructions
+
+The catalogue includes inferred constructions for 22 films: Acros 100, Aerocolor
+2460, Agfachrome 50/100/200, Astia 100F, CineStill 400D/800T, Delta 3200,
+Double-X 5222, Eterna 500, Eterna Vivid 500, F64D, FP4 Plus 125, HP5 Plus 400,
+Kodachrome 25/64/200, T-Max 100, Tri-X 400, and VISION3 250D/500T. Select
+**Layered Transport** to use them. Legacy remains the default and retains its
+separate halation parameters.
+
+These constructions transfer existing estimated halo shapes into an optical
+stack; they are not measurements or recovered manufacturing recipes. Three
+effective optical depths are fitted at 450, 550 and 650 nm, interpolated in log
+space and held outside that interval. Return strengths are supplied independently.
+Generic coating thicknesses, receiver depths and capture probabilities remain
+assumptions. Two-scale compact responses are reduced to the same second moment;
+Legacy's return colour matrix and extra diffusion are not part of this fit.
+
+Most constructions use an effective undercoat and acetate support. Historical
+cinema and Kodachrome constructions use an assumed rear absorber. VISION3 uses
+an undercoat scenario while retaining its previous strength estimate. CineStill
+uses effective attenuation in the coating without assuming a parent geometry.
+Aerocolor uses an assumed coating/undercoat split and a PET support proxy. Its
+thinner support produces a different shape from the previous acetate estimate;
+the numerical checks pass, but the fit exceeds the 0.02 normalized edge-error
+screen used for the other profiles.
+
+All included constructions pass the renderer's existing eight-component,
+0.005 edge-error limit, nonnegative partition checks, power accounting and
+angular-quadrature checks. Those checks establish numerical behavior, not
+agreement with real film. Candidates exceeding the component limit are not
+included. Instax has no inferred candidate; donor-layer films still require
+Legacy. Other films retain the illustrative fallback described below.
+
+The inferred fields share the film profiles' CC BY-SA 4.0 license. Aerocolor's
+generic PET optical constants use the CC0
+[RefractiveIndex.INFO Zhang dataset](https://refractiveindex.info/?shelf=organic&book=polyethylene_terephthalate&page=Zhang).
+They are a material proxy, not measurements of that film's support. The source's
+400 nm values are held over 380–395 nm. No measured gelatin or emulsion dispersion
+is claimed.
+
+CineStill 400D also uses the catalogue's VISION3 250D image-dye partition as an
+explicit rendering proxy, with updated halation colour ratios and return matrix.
+Its other capture, curve, grain and development parameters are preserved. This
+proxy does not establish that the two films share a manufacturing recipe.
+
 ```sh
 swift run -c release fotufilm input.exr output.png --stock example-negative-400 \
   --transport construction.json --halation 1 --grain 0
@@ -50,9 +95,11 @@ error convention.
 
 Spectral fields accept either one constant or all 81 samples. Three-row fields
 use one spectrum per receiver. A `FilmStockDefinition` carrying a construction
-uses schema 3. Schemas 1 and 2 reject that field; schema 3 requires it and rejects
-conflicting legacy halation profiles and return matrices. Other stock data and
-the developed/printed response remain available.
+uses schema 3. Schemas 1 and 2 reject that field; schema 3 requires it. Legacy
+halation profiles and return matrices may coexist with a construction: model
+selection chooses which operator runs. Adding a construction therefore preserves
+the stock's Legacy rendering. Other stock data and the developed/printed response
+remain available.
 
 ## Optical and numerical model
 
