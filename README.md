@@ -7,7 +7,7 @@ grain, and halation follow the selected film's properties and the process used
 to render it.
 
 This repository includes the shared engine, a command-line tool, a Mac app,
-plugins for DaVinci Resolve and Final Cut Pro, and a browser photo editor.
+plugins for DaVinci Resolve and Final Cut Pro, and a browser photo and video editor.
 
 [Download for Mac](https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS.pkg) · [User guide](docs/documentation.html) · [![Download on the App Store](docs/assets/download-on-the-app-store.svg)](https://apps.apple.com/app/id6792911908)
 
@@ -118,6 +118,11 @@ npm run build
 
 The output is in `web/dist`. Set `FOTUFILM_BASE=/demo/` when running `npm run build`
 to host the demo at [fotufilm.com/demo](https://fotufilm.com/demo/).
+Video supports the Mac app’s camera log inputs, frame previews, trimming, audio,
+and MP4 / H.264 or WebM / VP9 export. It reads files in bounded slices and streams
+exports to disk. HEVC Main / Main10 has a worker-based software decoder when
+native decoding cannot expose its original pixels. Export is 8-bit SDR.
+
 The editor previews adjustments automatically and
 exports from the original image, up to 120 megapixels. Large images render in
 tiles; the pack carries spatial parameters for a ladder of frame sizes so grain

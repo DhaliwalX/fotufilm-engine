@@ -1068,3 +1068,25 @@ dialog .adjustment {
     top: 64px;
   }
 }
+
+.video-controls {
+  flex: 0 0 auto;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border, #444);
+  background: var(--panel, #202020);
+  color: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  z-index: 2;
+}
+.video-timeline, .video-settings { display: flex; align-items: center; gap: 12px; }
+.video-timeline input[type=range] { flex: 1; min-width: 60px; }
+.video-timeline output { font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 11px; }
+.video-settings { flex-wrap: wrap; margin: 8px 0; }
+.video-settings label { display: flex; gap: 6px; align-items: center; font-size: 11px; }
+.video-settings select, .video-settings input[type=number] { color: inherit; background: var(--panel, #202020); border: 1px solid #666; border-radius: 4px; padding: 4px; }
+.video-settings input[type=number] { width: 72px; }
+.video-controls small { font-size: 10px; opacity: .7; }
+.video-controls button, .video-download button { border: 1px solid #666; border-radius: 4px; background: transparent; color: inherit; padding: 4px 10px; cursor: pointer; }
+.video-download { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); padding: 16px; background: #222; color: #fff; border: 1px solid #666; border-radius: 8px; z-index: 100; display: flex; align-items: center; gap: 16px; }
+.video-download a { color: #b9d5ff; }

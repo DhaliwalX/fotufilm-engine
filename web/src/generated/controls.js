@@ -6,3 +6,20 @@ export const CONTROLS = [
   { key: 'saturation', index: 4, label: 'Saturation', unit: '×', min: 0.0, max: 2.0, step: 0.05, def: 1.0, signed: false, kind: 'identity' },
   { key: 'vibrance', index: 5, label: 'Vibrance', unit: '', min: -1.0, max: 1.0, step: 0.05, def: 0.0, signed: true, kind: 'identity' },
 ]
+export const VIDEO_LABELS = {
+  'audio': 'Include audio',
+  'dismiss': 'Dismiss',
+  'encoding': 'Input color space',
+  'export': 'Export video',
+  'high': 'High',
+  'medium': 'Medium',
+  'mp4': 'MP4 · H.264',
+  'pause': 'Pause',
+  'play': 'Play',
+  'position': 'Video position',
+  'quality': 'Video quality',
+  'trimEnd': 'Trim out',
+  'trimStart': 'Trim in',
+  'veryHigh': 'Very high',
+  'webm': 'WebM · VP9',
+}
