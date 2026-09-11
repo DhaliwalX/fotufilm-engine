@@ -1,9 +1,8 @@
 #!/bin/bash
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(python3 -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve().parents[1])' "$0")"
 
 PLATFORM="${1:?usage: $0 <device|simulator|macos|macos-intel> [output-dir]}"
-RELEASE_REPOSITORY="${FOTUFILM_AOT_REPOSITORY:-DhaliwalX/fotufilm-engine}"
 case "$PLATFORM" in
   device)
     OUTPUT="${2:-build/halide-ios-iphoneos}"
@@ -31,36 +30,38 @@ case "$PLATFORM" in
     ;;
 esac
 
+OUTPUT="$(python3 tools/aot-release.py output "$PLATFORM" "$OUTPUT")"
+STAMP="$OUTPUT/.generated-from"
+SCHEDULE_FLAGS="$(python3 tools/aot-release.py flags "$PLATFORM")"
+
+# A public release is keyed solely by engine inputs and the declared compiler recipe, not by a
+# locally installed dylib or a consumer app's source. Fetch before resolving any compiler: Xcode
+# Cloud needs only these archives, headers and their licence notices.
+if [[ -z "${FOTUFILM_AOT_NO_FETCH:-}" && "$SCHEDULE_FLAGS" == '{}' ]]; then
+  if python3 tools/aot-release.py cache "$PLATFORM" "$OUTPUT"; then
+    echo "Verified cached public AOT kernels ($PLATFORM)."
+    exit 0
+  fi
+  if python3 tools/aot-release.py fetch "$PLATFORM" "$OUTPUT"; then
+    exit 0
+  else
+    STATUS=$?
+    # An unavailable release may fall back locally; a checksum or manifest error must not.
+    [[ "$STATUS" == 3 ]] || exit "$STATUS"
+  fi
+fi
+if [[ "${FOTUFILM_AOT_REQUIRE_PREBUILT:-0}" == 1 ]]; then
+  echo "Matching public AOTs are required. Run the Apple AOT releases workflow on engine main" >&2
+  echo "and wait for $(python3 tools/aot-release.py tag "$PLATFORM"). No download token is needed." >&2
+  exit 1
+fi
+
 HALIDE_PREFIX="$(tools/resolve-halide-toolchain.sh)"
-# Getting the wrong toolchain would not announce itself. The Halide prefix is an input to the
-# kernel-inputs hash, so a different one does not fail the build: it silently regenerates all 188
-# archives with a different compiler, and the release the hash names no longer matches.
-#
-# One canonical spelling, because the prefix is part of the fingerprint below: the CI post-clone
-# passes an absolute HALIDE_ROOT while the archive's build phase finds the same toolchain by
-# relative candidate search, and the two spellings were failing each other's stamp — the archive
-# regenerated kernels the fetch had just delivered.
 HALIDE_PREFIX="$(cd "$HALIDE_PREFIX" && pwd -P)"
 echo "Halide: $HALIDE_PREFIX"
-
-SOURCES=(
-  tools/generate_halide_ios.cpp
-  Sources/FotufilmHalide/FotufilmHalideGeometry.h
-  Sources/FotufilmHalide/FotufilmHalideShared.h
-  Sources/FotufilmHalide/FotufilmHalideMetal.cpp
-  Sources/FotufilmHalide/include/FotufilmHalide.h
-)
-STAMP="$OUTPUT/.generated-from"
-FINGERPRINT="$(shasum -a 256 "${SOURCES[@]}" | shasum -a 256 | cut -d' ' -f1)"
-SCHEDULE_FLAGS="${FOTUFILM_F16_BLUR:-} ${FOTUFILM_F16_LUT:-} ${FOTUFILM_F16_TETRA:-}"
-SCHEDULE_FLAGS="$SCHEDULE_FLAGS ${FOTUFILM_SPLIT_DOWN:-} ${FOTUFILM_METAL_GRAIN:-} ${FOTUFILM_ABLATE:-}"
-SCHEDULE_FLAGS="$SCHEDULE_FLAGS ${FOTUFILM_STILL_FAST:-}"
-# A metallib archive and a source-embedded one are different bytes from the same generator, so the
-# precompile switch has to be in the fingerprint too — otherwise re-running with it flipped against
-# the same OUTPUT reads the stamp, sees the generator and schedule unchanged, and serves the wrong
-# kind of archive for the request that just asked for it.
-SCHEDULE_FLAGS="$SCHEDULE_FLAGS ${FOTUFILM_METAL_PRECOMPILE:-} ${FOTUFILM_METAL_MATH_MODE:-}"
-FINGERPRINT="$FINGERPRINT $HALIDE_PREFIX $TARGET $SCHEDULE_FLAGS"
+COMPILER_HASH="$(shasum -a 256 "$HALIDE_PREFIX/include/Halide.h" "$HALIDE_PREFIX/lib/libHalide.dylib" \
+  | shasum -a 256 | cut -d' ' -f1)"
+FINGERPRINT="$(python3 tools/aot-release.py key "$PLATFORM") $COMPILER_HASH $TARGET $SCHEDULE_FLAGS $(xcodebuild -version)"
 
 # Prebuilt Halide runtimes can carry the publisher's __FILE__ path. These replacements preserve
 # byte lengths and archive offsets, so they are safe for generated objects from either the cache or
@@ -82,61 +83,7 @@ if [[ -f "$STAMP" && "$(cat "$STAMP")" == "$FINGERPRINT" ]]; then
   exit 0
 fi
 
-# A kernel release published from a development Mac, keyed by kernel-inputs-hash: the same bytes
-# this script would generate (one process per variant keeps them machine-independent), fetched in
-# seconds instead of minutes. Only attempted when every schedule flag *outside* that hash is at
-# its default — a flagged build must be generated, not fetched — and any failure at all falls
-# through to generating locally, so an offline machine builds exactly as before.
-fetch_kernel_release() {
-  [[ -z "${FOTUFILM_AOT_NO_FETCH:-}" ]] || return 1
-  [[ -z "${FOTUFILM_F16_BLUR:-}${FOTUFILM_F16_LUT:-}${FOTUFILM_F16_TETRA:-}" ]] || return 1
-  [[ -z "${FOTUFILM_SPLIT_DOWN:-}${FOTUFILM_METAL_GRAIN:-}${FOTUFILM_ABLATE:-}" ]] || return 1
-  # Releases published by publish-aot-release.sh contain the default Halide 22 precompiled
-  # metallibs. Explicit compiler-mode overrides generate locally so a release can never silently
-  # substitute archives built under different Metal settings.
-  [[ -z "${FOTUFILM_METAL_PRECOMPILE:-}${FOTUFILM_METAL_MATH_MODE:-}" ]] || return 1
-  local hash tag asset archive
-  hash="$(tools/kernel-inputs-hash.sh "$HALIDE_PREFIX" "$TARGET" 2>/dev/null)" || return 1
-  tag="aot-$PLATFORM-${hash:0:16}"
-  asset="kernels.tar.gz"
-  archive="$OUTPUT-release.tar.gz"
-  rm -f "$archive"
-  if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-    gh release download "$tag" --repo "$RELEASE_REPOSITORY" --pattern "$asset" \
-      --output "$archive" 2>/dev/null || { rm -f "$archive"; return 1; }
-  else
-    local token
-    token="${FOTUFILM_AOT_TOKEN:-${GITHUB_TOKEN:-}}"
-    [[ -n "$token" ]] || return 1
-    local asset_url
-    asset_url="$(curl --fail --silent --show-error --connect-timeout 15 --retry 2 \
-        -H "Authorization: Bearer $token" \
-        "https://api.github.com/repos/$RELEASE_REPOSITORY/releases/tags/$tag" 2>/dev/null \
-      | python3 -c 'import json,sys
-release = json.load(sys.stdin)
-for entry in release.get("assets", []):
-    if entry.get("name") == "'"$asset"'":
-        print(entry["url"]); break' 2>/dev/null)" || return 1
-    [[ -n "$asset_url" ]] || return 1
-    curl --fail --location --silent --show-error --connect-timeout 15 --retry 2 \
-      -H "Authorization: Bearer $token" -H "Accept: application/octet-stream" \
-      "$asset_url" -o "$archive" || { rm -f "$archive"; return 1; }
-  fi
-  rm -rf "$OUTPUT"
-  mkdir -p "$OUTPUT"
-  tar xzf "$archive" -C "$OUTPUT" || { rm -rf "$OUTPUT" "$archive"; return 1; }
-  rm -f "$archive"
-  redact_generated_paths
-  # The stamp is this machine's fingerprint, not the publisher's: the toolchain prefix in it is
-  # a local path, so it can only be written where it will be checked.
-  echo "$FINGERPRINT" > "$STAMP"
-  echo "Fetched $PLATFORM kernels from release $tag."
-}
-
-if fetch_kernel_release; then
-  exit 0
-fi
-
+# OUTPUT is an absolute, validated generated-only directory (never a repository or home).
 rm -rf "$OUTPUT"
 mkdir -p "$OUTPUT"
 

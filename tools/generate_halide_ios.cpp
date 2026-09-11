@@ -80,8 +80,8 @@ int main(int argc, char **argv) {
     // Compiled metallib embedding: the default on Halide 22+, FOTUFILM_METAL_PRECOMPILE=0 opts
     // out for local debugging. It cuts macOS archives from 517 MB to 137 MB and takes the
     // readable Metal source out of the shipped binary, which is otherwise 91% shader text anyone
-    // can run strings over — the whole reason to want it. ci_scripts/fetch-halide-toolchain.sh
-    // and tools/build-halide-toolchain.sh carry a Halide 22 built and pinned for exactly this;
+    // can run strings over. tools/aot-toolchain.json and the Halide source pin define the
+    // compiler used by the public Apple AOT releases workflow;
     // a Halide older than 22 (a local brew install, most likely) falls through the #if below and
     // gets the old source-embedded archives automatically, no flag needed either way.
     //
