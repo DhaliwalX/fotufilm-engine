@@ -110,8 +110,10 @@ access token is required. Archives include licence notices, exclude host tools a
 paths, and pass a full bridge-link check before publication. These are linkage and
 archive checks, not GPU execution tests. AOT releases never become the app's Latest release.
 The compiler contract is in `tools/aot-toolchain.json`; update it deliberately when
-upgrading the toolchain. For a local publisher, build with `tools/build-halide.sh`, then
-run `tools/publish-aot-release.sh` from a clean, merged engine checkout.
+upgrading the toolchain. For a local publisher, install `cmake`, `ninja`, `llvm@22`,
+`lld@22` and `flatbuffers` with Homebrew, set `LLVM_ROOT` and `LLD_ROOT` to those versioned
+formula prefixes, and build with `tools/build-halide.sh`. Then run
+`tools/publish-aot-release.sh` from a clean, merged engine checkout.
 
 ### Command-line use
 

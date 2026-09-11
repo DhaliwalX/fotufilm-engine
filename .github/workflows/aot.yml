@@ -62,7 +62,7 @@ jobs:
           fetch-depth: 0
       - name: Install the pinned compiler dependencies
         run: |
-          brew install cmake ninja llvm@22 lld@22
+          brew install cmake ninja llvm@22 lld@22 flatbuffers
           echo "LLVM_ROOT=$(brew --prefix llvm@22)" >> "$GITHUB_ENV"
           echo "LLD_ROOT=$(brew --prefix lld@22)" >> "$GITHUB_ENV"
           test "$("$(brew --prefix llvm@22)/bin/llvm-config" --version)" = "$(jq -r .llvm tools/aot-toolchain.json)"
