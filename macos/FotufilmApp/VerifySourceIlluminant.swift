@@ -50,12 +50,37 @@ enum VerifySourceIlluminant {
             precondition(resetLegacy.captureIlluminantKelvin == 3200)
             let oldDefault = try decoder.decode(EditState.self, from: Data("{}".utf8))
             precondition(oldDefault.options.sceneIlluminantKelvin == nil)
+            typealias CameraLight = AppSettings.CameraFilmBalance
+            precondition(CameraLight(storedValue: nil) == .stockNative)
+            precondition(CameraLight(storedValue: "invalid") == .stockNative)
+            precondition(CameraLight(storedValue: "film") == .film)
+            for native: Float in [3200, 5500] {
+                var cameraEdit = EditState()
+                CameraLight.stockNative.applyCapture(to: &cameraEdit)
+                let cameraDecodeKey = FilmRender.SceneKey(state: cameraEdit, longEdge: 1024)
+                for light in CameraLight.allCases {
+                    precondition(CameraLight(storedValue: light.rawValue) == light)
+                    // Overwrite stale acquisition metadata, not just an empty default document.
+                    cameraEdit.filmLightKelvin = 4300
+                    light.applyCapture(to: &cameraEdit)
+                    precondition(cameraEdit.captureIlluminantKelvin == 6504)
+                    precondition(cameraEdit.filmLightKelvin == nil)
+                    precondition(cameraEdit.options.sceneIlluminantKelvin == light.fixedKelvin)
+                    precondition(FilmRender.SceneKey(state: cameraEdit, longEdge: 1024) == cameraDecodeKey)
+                    // Source resolution passes through Float mireds; allow its sub-millikelvin round trip.
+                    precondition(abs(cameraEdit.options.resolvedSceneIlluminant(referenceKelvin: native).kelvin
+                                     - light.resolvedKelvin(reference: native)) < 0.001)
+                    let saved = try decoder.decode(EditState.self, from: encoder.encode(cameraEdit))
+                    precondition(saved.captureIlluminantKelvin == 6504)
+                    precondition(saved.options.sceneIlluminantKelvin == light.fixedKelvin)
+                }
+            }
             for invalid in [#"{"sourceLightIndex":99}"#,
                             #"{"sourceLightKelvin":999}"#,
                             #"{"sourceLightKelvin":25001}"#] {
                 precondition((try? decoder.decode(EditState.self, from: Data(invalid.utf8))) == nil)
             }
-            print("source-illuminant: native default, presets, custom, reset, stock switching, persistence, migration and decode-cache isolation passed")
+            print("source-illuminant: native default, presets, custom, reset, stock switching, persistence, migration, camera capture handoff and decode-cache isolation passed")
             exit(0)
         } catch {
             print("source-illuminant: \(error)")

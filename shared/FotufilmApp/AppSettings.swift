@@ -4,6 +4,9 @@ import Foundation
 #if canImport(FotufilmCore)
 import FotufilmCore
 #endif
+#if canImport(FotufilmEditModel)
+import FotufilmEditModel
+#endif
 
 @MainActor
 final class AppSettings: ObservableObject {
@@ -169,14 +172,23 @@ final class AppSettings: ObservableObject {
         UserDefaults.standard.set(enabled, forKey: Key.cameraGrain)
     }
 
-    /// The camera uses the declared scene light, with a stock-independent D65 default.
+    /// Simulated source light, independent of the camera's fixed acquisition white.
     enum CameraFilmBalance: String, CaseIterable, Identifiable, Sendable {
+        case stockNative = "stock-native"
+        // Preserve the saved identifier of the previous explicit D65 choice.
         case film, household, tungsten, mixed, daylight, overcast
+
+        static let captureReferenceKelvin = WhiteBalance.neutralKelvin
+
+        init(storedValue: String?) {
+            self = storedValue.flatMap(Self.init(rawValue:)) ?? .stockNative
+        }
 
         var id: String { rawValue }
 
         var label: String {
             switch self {
+            case .stockNative: return "Stock Native"
             case .film: return "D65"
             case .household: return "2856K"
             case .tungsten: return "3200K"
@@ -188,7 +200,8 @@ final class AppSettings: ObservableObject {
 
         var fixedKelvin: Float? {
             switch self {
-            case .film: return nil
+            case .stockNative: return nil
+            case .film: return Self.captureReferenceKelvin
             case .household: return 2856
             case .tungsten: return 3200
             case .mixed: return 4300
@@ -197,13 +210,27 @@ final class AppSettings: ObservableObject {
             }
         }
 
-        var kelvin: Float { fixedKelvin ?? WhiteBalance.neutralKelvin }
+        func resolvedKelvin(reference: Float) -> Float { fixedKelvin ?? reference }
+
+        /// Keep the viewfinder's source choice in both the saved image and its editable recipe.
+        /// Capture white must not follow this choice: doing both applies opposing colour changes.
+        func applyCapture(to state: inout EditState) {
+            state.captureIlluminantKelvin = Double(Self.captureReferenceKelvin)
+            state.filmLightKelvin = nil
+            state.sourceLightKelvin = Double(fixedKelvin ?? Self.captureReferenceKelvin)
+            if let fixedKelvin {
+                state.sourceLightIndex = EditorControlCatalogue.sourceLights.firstIndex {
+                    $0.value == Double(fixedKelvin)
+                } ?? 5 // The existing Custom choice also covers 4300 K and 6500 K.
+            } else {
+                state.sourceLightIndex = 0
+            }
+        }
     }
 
-    /// The persisted default case retains its identifier while assuming D65 for every stock.
+    /// New sessions follow the stock; previously saved explicit choices keep their temperatures.
     nonisolated static var storedCameraFilmBalance: CameraFilmBalance {
-        UserDefaults.standard.string(forKey: Key.cameraFilmBalance)
-            .flatMap(CameraFilmBalance.init(rawValue:)) ?? .film
+        CameraFilmBalance(storedValue: UserDefaults.standard.string(forKey: Key.cameraFilmBalance))
     }
 
     nonisolated static func rememberCameraFilmBalance(_ balance: CameraFilmBalance) {
