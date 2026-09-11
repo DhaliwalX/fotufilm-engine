@@ -39,7 +39,9 @@ stamp instead of silently using ordinary WGSL arithmetic.
 After building the actual engine and packs with `tools/build-wasm.sh`, open
 `/test/parity.html?revision=build-name&grain=0` to compare a synthetic linear RGB
 scene at every stage, before display transforms. `stocks=all`, `grain=1`,
-`width`, `height`, and `exposure` vary the coverage. A successful operation probe
+`width`, `height`, and `exposure` vary the coverage. `medium=all` compares every
+available output medium for the selected stocks; a medium ID selects just that
+output. A successful operation probe
 alone does not establish full-frame parity, native CPU parity, or cross-device
 coverage.
 

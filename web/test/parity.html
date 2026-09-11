@@ -26,10 +26,12 @@
       assetUrl,
       loadPack,
       loadStages,
+      parsePack,
       SimdDeveloper,
       WebgpuDeveloper,
     } from "/src/engine.js";
     import { relatedAssetUrl } from "/src/runtime-assets.js";
+    import { loadMediumBytes } from "/src/output-media.js";
 
     const out = document.querySelector("#out");
     const report = document.querySelector("#report");
@@ -181,6 +183,9 @@
         locateFile: (name) => relatedAssetUrl(name, gpuURL),
       });
       const index = await (await fetch("/packs/index.json")).json();
+      const media = query.has("medium")
+        ? await (await fetch("/packs/media.json")).json()
+        : [];
       const ids =
         query.get("stocks") === "all"
           ? index.map((s) => s.id)
@@ -198,67 +203,93 @@
         `${width}×${height}; linear RGB float32 input and output; identical control values`,
       );
       for (const id of ids) {
-        const pack = await loadPack(`/packs/${id}.pack`);
-        const stages =
-          query.get("stages") === "none"
-            ? []
-            : await loadStages(`/packs/${id}.stages`, pack);
-        const cpu = new SimdDeveloper(cpuModule, pack);
-        const gpu = new WebgpuDeveloper(gpuModule, pack);
-        try {
-          for (const stage of [...stages, { ...pack, id: "full" }]) {
-            say(`${id}/${stage.id}: running`);
-            const cpuStart = performance.now();
-            const a = await render(cpu, stage, input, controls);
-            const cpuMilliseconds = performance.now() - cpuStart;
-            const gpuStart = performance.now();
-            const b = await render(gpu, stage, input, controls);
-            const gpuMilliseconds = performance.now() - gpuStart;
-            if (cpu.featureMask !== gpu.featureMask || cpu.seed !== gpu.seed)
-              throw new Error(
-                "CPU and WebGPU selected different frame parameters",
-              );
-            const result = {
-              stock: id,
-              stage: stage.id,
-              featureMask: cpu.featureMask,
-              seed: cpu.seed,
-              cpuMilliseconds,
-              gpuMilliseconds,
-              ...compare(a, b),
-            };
-            if (query.has("fixture") && stage.id === "full") {
-              const configuration = cpu.module.HEAPF32.slice(
-                cpu.configPtr / 4,
-                cpu.configPtr / 4 + cpu.configuration.length,
-              );
-              document.querySelector("#fixture").textContent = JSON.stringify({
+        const base = await loadPack(`/packs/${id}.pack`);
+        const catalog = media.find((stock) => stock.id === id);
+        const choices =
+          query.get("medium") === "all"
+            ? catalog?.choices
+            : query.has("medium")
+              ? catalog?.choices.filter(
+                  (choice) => choice.id === query.get("medium"),
+                )
+              : [{ id: "default" }];
+        if (!choices?.length)
+          throw new Error(`No matching output medium for ${id}`);
+        for (const choice of choices) {
+          const pack = choice.pack
+            ? parsePack(
+                await loadMediumBytes(base.bytes, `/packs/${choice.pack}`),
+              )
+            : base;
+          const stages =
+            query.get("stages") === "none"
+              ? []
+              : await loadStages(
+                  `/packs/${id}.stages`,
+                  pack,
+                  choice.stages ? `/packs/${choice.stages}` : null,
+                );
+          const cpu = new SimdDeveloper(cpuModule, pack);
+          const gpu = new WebgpuDeveloper(gpuModule, pack);
+          try {
+            for (const stage of [...stages, { ...pack, id: "full" }]) {
+              say(`${id}/${choice.id}/${stage.id}: running`);
+              const cpuStart = performance.now();
+              const a = await render(cpu, stage, input, controls);
+              const cpuMilliseconds = performance.now() - cpuStart;
+              const gpuStart = performance.now();
+              const b = await render(gpu, stage, input, controls);
+              const gpuMilliseconds = performance.now() - gpuStart;
+              if (cpu.featureMask !== gpu.featureMask || cpu.seed !== gpu.seed)
+                throw new Error(
+                  "CPU and WebGPU selected different frame parameters",
+                );
+              const result = {
                 stock: id,
-                width,
-                height,
+                medium: choice.id,
+                stage: stage.id,
                 featureMask: cpu.featureMask,
                 seed: cpu.seed,
-                input: encodeFloats(input),
-                configuration: encodeFloats(configuration),
-                output: encodeFloats(a),
-                cpuURL,
-                gpuURL,
-              });
+                cpuMilliseconds,
+                gpuMilliseconds,
+                ...compare(a, b),
+              };
+              if (query.has("fixture") && stage.id === "full") {
+                const configuration = cpu.module.HEAPF32.slice(
+                  cpu.configPtr / 4,
+                  cpu.configPtr / 4 + cpu.configuration.length,
+                );
+                document.querySelector("#fixture").textContent = JSON.stringify(
+                  {
+                    stock: id,
+                    medium: choice.id,
+                    width,
+                    height,
+                    featureMask: cpu.featureMask,
+                    seed: cpu.seed,
+                    input: encodeFloats(input),
+                    configuration: encodeFloats(configuration),
+                    output: encodeFloats(a),
+                    cpuURL,
+                    gpuURL,
+                  },
+                );
+              }
+              results.push(result);
+              say(
+                `${result.differing || result.nonfinite ? "FAIL" : "PASS"} ${id}/${choice.id}/${stage.id}: ` +
+                  `${result.differing}/${result.samples} differ; max abs ${result.maxAbsolute}; max ULP ${result.maxULP}`,
+              );
+              report.textContent = JSON.stringify(
+                { width, height, controls, cpuURL, gpuURL, results },
+                null,
+                2,
+              );
             }
-            results.push(result);
-            say(
-              `${result.differing || result.nonfinite ? "FAIL" : "PASS"} ${id}/${stage.id}: ` +
-                `${result.differing}/${result.samples} differ; max abs ${result.maxAbsolute}; max ULP ${result.maxULP}`,
-            );
-            report.textContent = JSON.stringify(
-              { width, height, controls, cpuURL, gpuURL, results },
-              null,
-              2,
-            );
+          } finally {
+            cpu.dispose();
+            gpu.dispose();
           }
-        } finally {
-          cpu.dispose();
-          gpu.dispose();
         }
       }
       const failures = results.filter((r) => r.differing || r.nonfinite).length;
