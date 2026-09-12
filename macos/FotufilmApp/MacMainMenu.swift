@@ -340,6 +340,7 @@ private final class EditHistoryMenuDelegate: NSObject, NSMenuDelegate {
             return "Grain"
         }
         if new.halation != old.halation
+            || new.halationReturnRatio != old.halationReturnRatio
             || new.halationColour != old.halationColour
             || new.halationSpectrum != old.halationSpectrum {
             return "Halation"

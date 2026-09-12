@@ -1087,6 +1087,49 @@
       "title" : "Estimated Halation Shape"
     },
     {
+      "availability" : "film",
+      "binding" : "halationReturnRatio",
+      "commandLineFlag" : "--halation-return",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Red returned/direct exposure percentage, 0-100 (default: film; CineStill 12)",
+      "commandLineMax" : 100,
+      "commandLineMin" : 0,
+      "commandLinePlaceholder" : "<percent>",
+      "detail" : "Red returned/direct exposure percentage; follows the selected film until adjusted.",
+      "documentation" : "Sets the red returned/direct exposure percentage and preserves the film’s return colour balance. CineStill 800T and 400D default to 12%. Use Film Return restores the selected film’s value.",
+      "drives" : [
+
+      ],
+      "field" : "halationReturn",
+      "group" : "film",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "Return overrides are not yet offered in the Android editor",
+        "finalcut" : "Return overrides are not yet offered in plugin hosts",
+        "resolve" : "Return overrides are not yet offered in plugin hosts",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : 0,
+        "max" : 1,
+        "min" : 0,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "filmEmulsion",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "cli"
+      ],
+      "title" : "Halation Return"
+    },
+    {
       "availability" : "colourNegative",
       "binding" : "halationSourceColour",
       "commandLineFlag" : "--halation-colour",

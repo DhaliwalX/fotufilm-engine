@@ -323,6 +323,11 @@ struct EditState: Equatable {
     /// photograph instead of following the device.
     var discGrain = AppSettings.storedDiscGrainEnabled
     var halation = 1.0
+    /// Nil follows the loaded film's returned/direct ratio.
+    var halationReturnRatio: Double? = nil
+    var resolvedHalationReturnRatio: Double {
+        halationReturnRatio ?? Double(stock?.halationStrength.first ?? 0)
+    }
     /// How much the halo keeps the light's own colour instead of the film's layered red, 0…1.
     var halationColour = 0.0
     /// A gain on what the base returns at each wavelength, one value per handle of the
@@ -558,6 +563,11 @@ struct EditState: Equatable {
         o.sceneIlluminantKelvin = EditorControlCatalogue.sourceLightKelvin(
             selection: sourceLightIndex, custom: sourceLightKelvin)
         o.halationScale = Float(halation)
+        if hasFilm, let red = stock?.halationStrength.first, red > 0 {
+            o.halationReturnRatio = halationReturnRatio.map(Float.init)
+        } else {
+            o.halationReturnRatio = nil
+        }
         o.grainMottleShare = grainMottleShare.map(Float.init)
         o.halationModel = AppSettings.storedHalationModel
         o.useEstimatedHalationProfile = AppSettings.storedEstimatedHalationEnabled

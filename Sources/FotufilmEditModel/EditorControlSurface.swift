@@ -180,6 +180,7 @@ public enum EngineBinding: Equatable, Sendable {
     case discGrain
     case halationStops
     case halationSourceColour
+    case halationReturnRatio
     case halationReturnGain
     case couplerScale
     case couplerGapReach
@@ -222,6 +223,7 @@ public enum EngineBinding: Equatable, Sendable {
         case .grainMottleShare: return ["grainMottleShare"]
         case .discGrain: return ["grainModel"]
         case .halationStops: return ["halationScale"]
+        case .halationReturnRatio: return ["halationReturnRatio"]
         case .halationSourceColour: return ["halationSourceColour"]
         case .halationReturnGain: return ["halationReturnGain"]
         case .couplerScale: return ["couplerScale"]
@@ -285,6 +287,8 @@ public enum EngineBinding: Equatable, Sendable {
             if let number = value.number {
                 options.halationScale = Float(HalationAmount.scale(fromStops: number))
             }
+        case .halationReturnRatio:
+            options.halationReturnRatio = value.number.map(Float.init)
         case .halationSourceColour:
             if let number = value.number { options.halationSourceColour = Float(number) }
         case .halationReturnGain:

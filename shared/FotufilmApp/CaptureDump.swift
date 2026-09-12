@@ -396,6 +396,7 @@ enum CaptureDump {
                 "vibrance": state.vibrance,
                 "grain": state.grain,
                 "halation": state.halation,
+                "halationReturnRatio": state.resolvedHalationReturnRatio,
                 "halationColour": state.halationColour,
                 "halationSpectrum": state.halationSpectrum,
                 "couplers": state.couplers,

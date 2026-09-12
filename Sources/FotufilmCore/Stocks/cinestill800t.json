@@ -114,9 +114,9 @@
   "grainLumaCorrelation": 0.6,
   "halationLookScale": 1,
   "halationStrength": [
-    0.03,
-    0.00101248,
-    9.4e-07
+    0.12,
+    0.00404992,
+    3.76e-06
   ],
   "halationReturnMatrix": [
     [
@@ -1012,13 +1012,13 @@
     ],
     "returnedToDirect": [
       [
-        0.03
+        0.12
       ],
       [
-        0.00101248
+        0.00404992
       ],
       [
-        9.4e-07
+        3.76e-06
       ]
     ],
     "revision": 1,
