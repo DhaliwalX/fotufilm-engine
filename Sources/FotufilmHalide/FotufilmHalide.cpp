@@ -5,6 +5,7 @@
 #if defined(FOTUFILM_HALIDE_ENABLED)
 
 #include "FotufilmHalideShared.h"
+#include "FotufilmCompiledCache.h"
 
 #include <algorithm>
 #include <cmath>
@@ -398,6 +399,7 @@ public:
           mottle_sigma_("develop_mottle_sigma" + suffix),
           mottle_radius_("develop_mottle_radius" + suffix),
           mottle_lambda_("develop_mottle_lambda" + suffix),
+          print_mtf_radius_("develop_print_mtf_radius" + suffix),
           seed_("develop_seed" + suffix),
           reversal_("develop_reversal" + suffix),
           monochrome_("develop_monochrome" + suffix),
@@ -936,6 +938,24 @@ public:
             output = textured;
         }
         pipeline_ = Pipeline(output);
+        cached_.prepare(pipeline_, "develop:" + std::to_string(features),
+            {
+            input_r_, input_g_, input_b_, configuration_, exposure_lut_,
+            width_, height_,
+            mtf_sigma_0_, mtf_sigma_1_, mtf_sigma_2_, mtf_luma_sigma_,
+            mtf_radius_0_, mtf_radius_1_, mtf_radius_2_, mtf_luma_radius_,
+            halation_stride_0_, halation_stride_1_, halation_stride_2_,
+            halation_strided_radius_0_, halation_strided_radius_1_,
+            halation_strided_radius_2_,
+            coupler_sigma_, coupler_radius_, adjacency_sigma_, adjacency_radius_,
+            adjacency_secondary_sigma_, adjacency_secondary_radius_,
+            fringe_sigma_, fringe_radius_,
+            grain_sigma_, grain_radius_, grain_lambda_, print_mtf_radius_,
+            seed_, reversal_, monochrome_, origin_x_, origin_y_,
+                grain_mode_, mottle_sigma_, mottle_radius_, mottle_lambda_,
+                diffusion_stride_0_, diffusion_stride_1_, diffusion_stride_2_,
+                diffusion_strided_radius_0_, diffusion_strided_radius_1_,
+                diffusion_strided_radius_2_,}, reference_target());
     }
 
     /// Develops into `result`, which the caller owns.
@@ -1020,7 +1040,8 @@ public:
         monochrome_.set((feature_mask & FOTUFILM_FRAME_MONOCHROME) != 0 ? 1 : 0);
         origin_x_.set(origin_x);
         origin_y_.set(origin_y);
-        pipeline_.realize(result, reference_target());
+        if (cached_) cached_.realize(result);
+        else pipeline_.realize(result, reference_target());
     }
 
 #if defined(FOTUFILM_HALIDE_AOT_GENERATOR)
@@ -1086,6 +1107,7 @@ private:
     /// Where this call's pixels sit in the whole frame.
     Param<int32_t> origin_x_, origin_y_;
     Pipeline pipeline_;
+    compiled_cache::Pipeline cached_;
     std::mutex mutex_;
 };
 
@@ -1178,6 +1200,9 @@ public:
         }
         cpu_pointwise(output, x, y, c);
         pipeline_ = Pipeline(output);
+        cached_.prepare(pipeline_, "print:" + std::to_string(reversal) + ":" + std::to_string(monochrome)
+                + ":" + std::to_string(encode) + ":" + std::to_string(transfer_shape),
+            {input_, configuration_, film_lut_, paper_lut_}, reference_target());
     }
 
     /// Prints `density` — the buffer the develop pass just filled — into
@@ -1194,7 +1219,8 @@ public:
         configuration_.set(config);
         film_lut_.set(film);
         paper_lut_.set(paper);
-        pipeline_.realize(result, reference_target());
+        if (cached_) cached_.realize(result);
+        else pipeline_.realize(result, reference_target());
     }
 
 #if defined(FOTUFILM_HALIDE_AOT_GENERATOR)
@@ -1212,6 +1238,7 @@ public:
 private:
     ImageParam input_, configuration_, film_lut_, paper_lut_;
     Pipeline pipeline_;
+    compiled_cache::Pipeline cached_;
     std::mutex mutex_;
 };
 
@@ -1229,7 +1256,9 @@ public:
         : input_r_(Float(32), 2, "plain_input_r" + suffix),
           input_g_(Float(32), 2, "plain_input_g" + suffix),
           input_b_(Float(32), 2, "plain_input_b" + suffix),
-          configuration_(Float(32), 1, "plain_configuration" + suffix) {
+          configuration_(Float(32), 1, "plain_configuration" + suffix),
+          origin_x_("plain_origin_x" + suffix),
+          origin_y_("plain_origin_y" + suffix) {
         Var x("x"), y("y"), c("c");
         CreativeScene scene = creative_exposure(
             configuration_, input_r_(x, y), input_g_(x, y), input_b_(x, y),
@@ -1261,6 +1290,9 @@ public:
         }
         cpu_pointwise(output, x, y, c);
         pipeline_ = Pipeline(output);
+        cached_.prepare(pipeline_, "plain:" + std::to_string(monochrome) + ":" + std::to_string(encode)
+                + ":" + std::to_string(transfer_shape),
+            {input_r_, input_g_, input_b_, configuration_, origin_x_, origin_y_}, reference_target());
     }
 
     void run(const float *input_r, const float *input_g, const float *input_b,
@@ -1278,7 +1310,8 @@ public:
         configuration_.set(config);
         origin_x_.set(origin_x);
         origin_y_.set(origin_y);
-        pipeline_.realize(result, reference_target());
+        if (cached_) cached_.realize(result);
+        else pipeline_.realize(result, reference_target());
     }
 
 #if defined(FOTUFILM_HALIDE_AOT_GENERATOR)
@@ -1297,6 +1330,7 @@ private:
     ImageParam input_r_, input_g_, input_b_, configuration_;
     Param<int32_t> origin_x_, origin_y_;
     Pipeline pipeline_;
+    compiled_cache::Pipeline cached_;
     std::mutex mutex_;
 };
 
@@ -1309,6 +1343,8 @@ public:
         Func output = gaussian(source, sigma_, sigma_, sigma_, radius_, width_,
                                height_, "gaussian_output");
         pipeline_ = Pipeline(output);
+        cached_.prepare(pipeline_, "gaussian",
+            {input_, width_, height_, sigma_, radius_}, reference_target());
     }
 
     void run(const float *input, float *output, int32_t width, int32_t height,
@@ -1323,7 +1359,8 @@ public:
         sigma_.set(sigma);
         radius_.set(radius);
         Buffer<float> result(width, height, 3);
-        pipeline_.realize(result, reference_target());
+        if (cached_) cached_.realize(result);
+        else pipeline_.realize(result, reference_target());
         std::copy_n(result.data(), count, output);
     }
 
@@ -1334,6 +1371,7 @@ private:
     Param<float> sigma_{"standalone_gaussian_sigma"};
     Param<int32_t> radius_{"standalone_gaussian_radius"};
     Pipeline pipeline_;
+    compiled_cache::Pipeline cached_;
     std::mutex mutex_;
 };
 
@@ -1347,6 +1385,8 @@ public:
         Func box2 = box_blur(box1, radius_, width_, height_, "approximate_box_2");
         Func output = box_blur(box2, radius_, width_, height_, "approximate_box_3");
         pipeline_ = Pipeline(output);
+        cached_.prepare(pipeline_, "approximate-gaussian",
+            {input_, width_, height_, radius_}, reference_target());
     }
 
     void run(const float *input, float *output, int32_t width, int32_t height,
@@ -1360,7 +1400,8 @@ public:
         height_.set(height);
         radius_.set(radius);
         Buffer<float> result(width, height, 3);
-        pipeline_.realize(result, reference_target());
+        if (cached_) cached_.realize(result);
+        else pipeline_.realize(result, reference_target());
         std::copy_n(result.data(), count, output);
     }
 
@@ -1370,6 +1411,7 @@ private:
     Param<int32_t> height_{"standalone_approximate_height"};
     Param<int32_t> radius_{"standalone_approximate_radius"};
     Pipeline pipeline_;
+    compiled_cache::Pipeline cached_;
     std::mutex mutex_;
 };
 

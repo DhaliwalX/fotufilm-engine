@@ -21,6 +21,7 @@ let halidePlatforms: [Platform] = [.macOS, .linux]
 let halideCXXSettings: [CXXSetting] = halideRoot.map { root in
     [
         .define("FOTUFILM_HALIDE_ENABLED", .when(platforms: halidePlatforms)),
+        .define("FOTUFILM_ENABLE_COMPILED_CACHE", .when(platforms: [.macOS])),
         .unsafeFlags(["-I\(root)/include", "-std=c++17"], .when(platforms: halidePlatforms)),
     ]
 } ?? []

@@ -23,13 +23,12 @@ jobs:
       - run: python3 tools/test-aot-release.py
       - run: python3 tools/test-audit-bundle-paths.py
       - run: brew install halide
+      - run: python3 tools/test-compiled-cache.py
+      - run: python3 tools/test-test-engine.py
       - run: bash tools/test-grain-coverage.sh
-      # Compile the largest Metal grain pipeline without other test processes competing
-      # for the hosted runner's GPU resources. It remains part of the required suite.
-      - name: Resolved silver grain on Metal
-        run: swift test -c release --filter testResolvedSilverDiscsMatchCPUAndChangeWithTheSeed
-      - name: Remaining release tests
-        run: swift test -c release --parallel --num-workers 2 --skip testResolvedSilverDiscsMatchCPUAndChangeWithTheSeed
+      # The runner isolates the largest Metal grain test, then audits the complete suite.
+      - name: Complete release tests
+        run: python3 tools/test-engine.py --workers 2
       - run: swift build
       - run: finalcut/build.sh --test
       - run: macos/build.sh --test
