@@ -19,7 +19,11 @@ jobs:
       - run: swift run fotufilm-controls --check
       - run: python3 tools/test-source-boundary.py
       - run: python3 tools/test-film-profiles.py
+      - run: python3 tools/test-compile-if-needed.py
+      - run: python3 tools/test-aot-release.py
+      - run: python3 tools/test-audit-bundle-paths.py
       - run: brew install halide
+      - run: bash tools/test-grain-coverage.sh
       # Compile the largest Metal grain pipeline without other test processes competing
       # for the hosted runner's GPU resources. It remains part of the required suite.
       - name: Resolved silver grain on Metal

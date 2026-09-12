@@ -137,6 +137,12 @@ To include the Final Cut plugin, install Apple's FxPlug SDK first. See the
 [Resolve guide](resolve/README.md) and [Final Cut guide](finalcut/README.md)
 for separate builds and installation steps.
 
+Mac, Resolve, and Final Cut rebuilds reuse compiled objects after checking source
+and header contents, compiler, flags, and SDK dependencies. Linking, bundle assembly,
+signing, audits, and requested tests still run. Set `FOTUFILM_BUILD_CACHE=0` to
+force recompilation, or remove `build/macos/obj`, `build/resolve/obj-*`, and
+`build/finalcut/obj-*`.
+
 After building, check camera-log conversion and the full-float video decode path:
 
 ```sh

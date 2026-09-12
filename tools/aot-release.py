@@ -56,10 +56,40 @@ def flags() -> dict[str, str]:
     return {name: os.environ[name] for name in sorted(set(names)) if os.environ.get(name)}
 
 
+def generator_inputs() -> set[str]:
+    """Follow local includes without requiring an installed compiler or SDK.
+
+    Read every conditional branch so this covers every generated variant/target.
+    External angle includes belong to the declared toolchain. Reject macro or
+    missing quoted includes rather than silently omitting a possible dependency.
+    """
+    pending = [ROOT / "tools/generate_halide_ios.cpp"]
+    paths = set()
+    root = ROOT.resolve()
+    while pending:
+        source = pending.pop().resolve()
+        if not source.is_relative_to(root):
+            raise ValueError("AOT generator inputs must stay inside the engine checkout")
+        name = str(source.relative_to(root))
+        if name in paths:
+            continue
+        paths.add(name)
+        for include in re.findall(r'^\s*#\s*include\s+([^\n]+)', source.read_text(), re.MULTILINE):
+            literal = re.match(r'([<"])([^>"]+)[>"]', include)
+            if not literal:
+                raise ValueError(f"Use a literal include for the AOT fingerprint: {name}")
+            delimiter, header = literal.groups()
+            candidates = (source.parent / header, root / "Sources/FotufilmHalide/include" / header)
+            dependency = next((path for path in candidates if path.is_file()), None)
+            if dependency:
+                pending.append(dependency)
+            elif delimiter == '"':
+                raise ValueError(f"Missing AOT generator include in {name}: {header}")
+    return paths
+
+
 def identity(platform: str) -> dict:
-    paths = set(RECIPE_FILES)
-    paths.update(str(p.relative_to(ROOT)) for p in (ROOT / "Sources/FotufilmHalide").rglob("*")
-                 if p.suffix in {".h", ".cpp", ".mm"} and p.is_file())
+    paths = set(RECIPE_FILES) | generator_inputs()
     inputs = {name: digest((ROOT / name).read_bytes()) for name in sorted(paths)}
     record = {
         "schema": 1, "repository": REPOSITORY, "platform": platform,

@@ -483,10 +483,12 @@ public:
                     x + origin_x_, y + origin_y_);
             }
         }
-        bool light_stored = false;
+        // Diffusion already scheduled and stored this Func. Scheduling it again
+        // splits the remaining x loop again and multiplies the SIMD width.
+        bool light_stored = use_diffusion;
 
         if (use_flare) {
-            cpu_pointwise(light, x, y, c);
+            if (!light_stored) { cpu_pointwise(light, x, y, c); }
             light_stored = true;
             Func row_sum("develop_flare_row_sum" + suffix);
             row_sum(y, c) = Halide::cast<double>(0);

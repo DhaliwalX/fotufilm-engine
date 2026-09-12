@@ -29,6 +29,10 @@ Run commands from the repository root:
 finalcut/build.sh
 ```
 
+Rebuilds reuse objects after checking compiler inputs and output contents. Set
+`FOTUFILM_BUILD_CACHE=0` to force recompilation. Test objects built against the
+substitute SDK remain in a separate directory from the shipped plugin objects.
+
 The result is `build/finalcut/Fotufilm for Final Cut Pro.app`. To install it:
 
 ```sh

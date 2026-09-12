@@ -33,6 +33,25 @@ TEST=0
 INSTALL=0
 [[ " $* " == *" --install "* ]] && INSTALL=1
 
+# Compile the same optimized engine module for the host harness and shipped plugin.
+# TARGET and OBJ select the architecture and the isolated stub/SDK object tree.
+compile_engine_swift() {
+  python3 tools/compile-if-needed.py xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
+    -ISources/FotufilmHalide/include \
+    -sdk "$SDK" \
+    -target "$TARGET" \
+    -swift-version 5 \
+    -O -whole-module-optimization -g -parse-as-library \
+    -file-prefix-map "$PWD=Fotufilm" \
+    -file-prefix-map "$FOTUFILM_CORE_SOURCE_DIR=Fotufilm/Sources/FotufilmCore" \
+    -module-name FotufilmFxPlug -emit-object \
+    "$FOTUFILM_CORE_SOURCE_DIR"/*.swift \
+    Sources/FotufilmMetal/*.swift \
+    "$FOTUFILM_PACK_KEY_SOURCE" \
+    Sources/FotufilmEditModel/*.swift resolve/FotufilmBridge.swift resolve/FotufilmBridgeControls.swift resolve/Generated/FotufilmBridgeSlots.swift \
+    -o "$OBJ/FotufilmSwift.o"
+}
+
 # --- the FxPlug SDK -----------------------------------------------------------------------------
 #
 # FxPlug ships in two pieces, and they are not the same pieces. The sparse SDK under
@@ -89,32 +108,31 @@ if (( TEST )); then
     *) echo "unsupported architecture: $ARCH" >&2; exit 2 ;;
   esac
   KERNELS="build/halide-$KERNEL_PLATFORM"
-  OBJ="build/finalcut/obj-$ARCH"
+  OBJ="build/finalcut/obj-test-$ARCH"
   TARGET="$ARCH-apple-macos$DEPLOYMENT"
   mkdir -p "$OBJ"
 
   tools/generate-halide-aot.sh "$KERNEL_PLATFORM" "$KERNELS"
 
-  xcrun clang++ -std=c++17 -O2 -c -isysroot "$SDK" -target "$TARGET" \
+  python3 tools/compile-if-needed.py xcrun clang++ -std=c++17 -O2 -c -isysroot "$SDK" -target "$TARGET" \
     -DFOTUFILM_HALIDE_IOS_AOT=1 -DFOTUFILM_TRANSPORT_REFERENCE_STUBS=1 -I"$KERNELS" -ISources/FotufilmHalide/include \
     Sources/FotufilmHalide/FotufilmHalideIOS.cpp -o "$OBJ/FotufilmHalideIOS.o"
-  xcrun clang++ -std=c++17 -O2 -c -isysroot "$SDK" -target "$TARGET" \
+  python3 tools/compile-if-needed.py xcrun clang++ -std=c++17 -O2 -c -isysroot "$SDK" -target "$TARGET" \
     -Iresolve resolve/WorkingSpace.cpp -o "$OBJ/WorkingSpace.o"
   for source in FotufilmEffect tests/HostHarness; do
-    xcrun clang++ -std=c++17 -fobjc-arc -O2 -Wno-nullability-completeness -c \
+    python3 tools/compile-if-needed.py xcrun clang++ -std=c++17 -fobjc-arc -O2 -Wno-nullability-completeness -c \
       -isysroot "$SDK" -target "$TARGET" -DFOTUFILM_FXPLUG_STUB=1 \
       -Ifinalcut/tests -Iresolve -Ifinalcut -Iresolve/tests \
       "finalcut/$source.mm" -o "$OBJ/$(basename "$source").o"
   done
   # The parity frame is shared with the OFX harness, so that "the same picture" means the same
   # pixels rather than two descriptions of one.
-  xcrun clang++ -std=c++17 -O2 -c -isysroot "$SDK" -target "$TARGET" \
+  python3 tools/compile-if-needed.py xcrun clang++ -std=c++17 -O2 -c -isysroot "$SDK" -target "$TARGET" \
     -Iresolve/tests resolve/tests/ParityFrame.cpp -o "$OBJ/ParityFrame.o"
+  compile_engine_swift
   xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
-    -ISources/FotufilmHalide/include \
-    -sdk "$SDK" -target "$TARGET" -swift-version 5 -O -parse-as-library \
-    "$FOTUFILM_CORE_SOURCE_DIR"/*.swift Sources/FotufilmMetal/*.swift \
-    "$FOTUFILM_PACK_KEY_SOURCE" Sources/FotufilmEditModel/*.swift resolve/FotufilmBridge.swift resolve/FotufilmBridgeControls.swift resolve/Generated/FotufilmBridgeSlots.swift \
+    -sdk "$SDK" -target "$TARGET" -emit-executable \
+    "$OBJ/FotufilmSwift.o" \
     "$OBJ/FotufilmHalideIOS.o" "$OBJ/WorkingSpace.o" \
     "$OBJ/FotufilmEffect.o" "$OBJ/HostHarness.o" "$OBJ/ParityFrame.o" \
     "$KERNELS"/*.a \
@@ -129,10 +147,7 @@ if (( TEST )); then
     FOTUFILM_STOCKS="$PWD/Sources/FotufilmCore/Stocks" \
     "build/finalcut/host-harness"
 
-  # The harness object files are compiled against the stub and would be the wrong ones to ship.
-  # The per-architecture loop below wipes the directory before it builds, so they cannot survive
-  # into a bundle; this is only what makes that guarantee legible.
-  rm -rf "build/finalcut/obj-$ARCH"
+  # Stub objects stay in obj-test-*; only the real-SDK obj-* tree can enter a bundle.
 
   (( BUILD_SDK )) || exit 0
   echo "--- the harness passed; building against the FxPlug SDK ---"
@@ -157,10 +172,10 @@ for ARCH in "${ARCHS[@]}"; do
   echo "--- $ARCH ---"
   tools/generate-halide-aot.sh "$KERNEL_PLATFORM" "$KERNELS"
 
-  rm -rf "$OBJ"; mkdir -p "$OBJ"
+  mkdir -p "$OBJ"
 
   # The engine's Halide shim, ahead-of-time. Nothing that ships carries a compiler.
-  xcrun clang++ -std=c++17 -O2 -gline-tables-only -flto=thin \
+  python3 tools/compile-if-needed.py xcrun clang++ -std=c++17 -O2 -gline-tables-only -flto=thin \
     -fvisibility=hidden -fvisibility-inlines-hidden \
     -ffile-prefix-map="$PWD"=Fotufilm -fdebug-prefix-map="$PWD"=Fotufilm \
     -fmacro-prefix-map="$PWD"=Fotufilm \
@@ -173,7 +188,7 @@ for ARCH in "${ARCHS[@]}"; do
 
   # The colour-space maths, shared verbatim with the OFX plugin. One definition of what a
   # timeline's encoding is, so the two hosts cannot disagree about it.
-  xcrun clang++ -std=c++17 -O2 -gline-tables-only -flto=thin \
+  python3 tools/compile-if-needed.py xcrun clang++ -std=c++17 -O2 -gline-tables-only -flto=thin \
     -ffile-prefix-map="$PWD"=Fotufilm -fdebug-prefix-map="$PWD"=Fotufilm \
     -fmacro-prefix-map="$PWD"=Fotufilm \
     -ffunction-sections -fdata-sections -c \
@@ -181,7 +196,7 @@ for ARCH in "${ARCHS[@]}"; do
     -Iresolve resolve/WorkingSpace.cpp \
     -o "$OBJ/WorkingSpace.o"
 
-  xcrun clang++ -std=c++17 -fobjc-arc -O2 -gline-tables-only \
+  python3 tools/compile-if-needed.py xcrun clang++ -std=c++17 -fobjc-arc -O2 -gline-tables-only \
     -ffile-prefix-map="$PWD"=Fotufilm -fdebug-prefix-map="$PWD"=Fotufilm \
     -fmacro-prefix-map="$PWD"=Fotufilm \
     -ffunction-sections -fdata-sections -c \
@@ -191,33 +206,20 @@ for ARCH in "${ARCHS[@]}"; do
     finalcut/FotufilmEffect.mm \
     -o "$OBJ/FotufilmEffect.o"
 
-  xcrun clang -fobjc-arc -O2 -c \
+  python3 tools/compile-if-needed.py xcrun clang -fobjc-arc -O2 -c \
     -ffile-prefix-map="$PWD"=Fotufilm -fdebug-prefix-map="$PWD"=Fotufilm \
     -fmacro-prefix-map="$PWD"=Fotufilm \
     -isysroot "$SDK" -target "$TARGET" \
     -F"$FXPLUG_HEADERS" \
     finalcut/PlugInMain.m -o "$OBJ/PlugInMain.o"
 
-  xcrun clang -fobjc-arc -O2 -c \
+  python3 tools/compile-if-needed.py xcrun clang -fobjc-arc -O2 -c \
     -ffile-prefix-map="$PWD"=Fotufilm -fdebug-prefix-map="$PWD"=Fotufilm \
     -fmacro-prefix-map="$PWD"=Fotufilm \
     -isysroot "$SDK" -target "$TARGET" \
     finalcut/WrapperMain.m -o "$OBJ/WrapperMain.o"
 
-  xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
-    -ISources/FotufilmHalide/include \
-    -sdk "$SDK" \
-    -target "$TARGET" \
-    -swift-version 5 \
-    -O -whole-module-optimization -g -parse-as-library \
-    -file-prefix-map "$PWD=Fotufilm" \
-    -file-prefix-map "$FOTUFILM_CORE_SOURCE_DIR=Fotufilm/Sources/FotufilmCore" \
-    -module-name FotufilmFxPlug -emit-object \
-    "$FOTUFILM_CORE_SOURCE_DIR"/*.swift \
-    Sources/FotufilmMetal/*.swift \
-    "$FOTUFILM_PACK_KEY_SOURCE" \
-    Sources/FotufilmEditModel/*.swift resolve/FotufilmBridge.swift resolve/FotufilmBridgeControls.swift resolve/Generated/FotufilmBridgeSlots.swift \
-    -o "$OBJ/FotufilmSwift.o"
+  compile_engine_swift
 
   # The extension. Halide's runtime is linked private for the same reason the OFX bundle does it:
   # a second Halide in the same process binds the wrong runtime and aborts mid-frame. The pro apps

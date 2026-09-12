@@ -168,6 +168,27 @@ class ReleaseTests(unittest.TestCase):
             app.write_text("consumer-only code")
             with patch.dict(os.environ, {"HALIDE_ROOT": "/not-installed"}):
                 self.assertEqual(aot.identity("device")["key"], initial)
+            # CPU-only code and the AOT host shim do not enter the Metal generator.
+            # Editing either must not regenerate hundreds of identical archives.
+            for name in ("FotufilmHalide.cpp", "FotufilmHalideIOS.cpp", "FotufilmMetalGrain.mm"):
+                (fixture / "Sources/FotufilmHalide" / name).write_text("unrelated implementation\n")
+                self.assertEqual(aot.identity("device")["key"], initial)
+            shared = fixture / "Sources/FotufilmHalide/FotufilmHalideShared.h"
+            shared.write_text(shared.read_text() + '\n#include "AdditionalKernel.h"\n')
+            added = shared.with_name("AdditionalKernel.h")
+            with self.assertRaisesRegex(ValueError, "Missing AOT generator include"):
+                aot.identity("device")
+            added.write_text("// new transitive dependency\n")
+            self.assertIn(str(added.relative_to(fixture)), aot.generator_inputs())
+            changed = aot.identity("device")["key"]
+            self.assertNotEqual(changed, initial)
+            added.write_text("// changed transitive dependency\n")
+            self.assertNotEqual(aot.identity("device")["key"], changed)
+            shared.write_text(shared.read_text() + "\n#include DYNAMIC_HEADER\n")
+            with self.assertRaisesRegex(ValueError, "literal include"):
+                aot.identity("device")
+            shared.write_text(shared.read_text().replace("\n#include DYNAMIC_HEADER\n", ""))
+            initial = aot.identity("device")["key"]
             toolchain = fixture / "tools/aot-toolchain.json"
             toolchain.write_text(toolchain.read_text() + "\n")
             self.assertNotEqual(aot.identity("device")["key"], initial)

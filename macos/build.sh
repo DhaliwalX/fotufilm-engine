@@ -27,7 +27,7 @@ DSYM="build/macos/Fotufilm.app.dSYM"
 
 HALIDE_PREFIX="$(tools/resolve-halide-toolchain.sh)"
 
-rm -rf "$APP" "$OBJ" "$DSYM"
+rm -rf "$APP" "$DSYM"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$OBJ"
 
 SDK="$(xcrun --sdk macosx --show-sdk-path)"
@@ -50,7 +50,7 @@ fi
 
 tools/generate-halide-aot.sh macos "$KERNELS"
 
-xcrun clang++ -std=c++17 -O2 -gline-tables-only -flto=thin \
+python3 tools/compile-if-needed.py xcrun clang++ -std=c++17 -O2 -gline-tables-only -flto=thin \
   -fvisibility=hidden -fvisibility-inlines-hidden \
   -ffile-prefix-map="$PWD"=Fotufilm -fdebug-prefix-map="$PWD"=Fotufilm \
   -fmacro-prefix-map="$PWD"=Fotufilm \
@@ -69,7 +69,7 @@ for source in shared/FotufilmApp/*.swift; do
   [[ "$source" == shared/FotufilmApp/FilmPackKeyMaterial.swift ]] || SHARED_SOURCES+=("$source")
 done
 
-xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
+python3 tools/compile-if-needed.py xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
   -ISources/FotufilmHalide/include \
   -sdk "$SDK" \
   -target arm64-apple-macos14.0 \
@@ -173,7 +173,9 @@ if [[ -d macos/AppIcon.icon ]]; then
   fi
 fi
 
-tools/build-handwritten-metallib.sh macosx "$APP/Contents/Resources/HandwrittenFotufilm.metallib"
+# Keep the verified shader cache outside the bundle rebuilt above.
+tools/build-handwritten-metallib.sh macosx "$OBJ/HandwrittenFotufilm.metallib"
+cp "$OBJ/HandwrittenFotufilm.metallib" "$APP/Contents/Resources/HandwrittenFotufilm.metallib"
 tools/audit-apple-bundle.sh "$APP"
 
 # Sign the app, so the Keychain recognises it from one build to the next.

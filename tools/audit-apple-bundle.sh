@@ -69,11 +69,9 @@ while IFS= read -r json; do
     report "unexpected plaintext JSON reached the bundle: $json"
 done < <(find "$BUNDLE" -type f -name '*.json' -print)
 
-while IFS= read -r file; do
-  leaked="$(strings -a "$file" | LC_ALL=C grep -E -m 1 \
-    '/Users/[^/]+/|/home/[^/]+/|/\.claude/worktrees/' || true)"
-  [[ -z "$leaked" ]] || report "local build path in $file: $leaked"
-done < <(find "$BUNDLE" -type f -print)
+if ! python3 "$(dirname "$0")/audit-bundle-paths.py" "$BUNDLE"; then
+  failures=$((failures + 1))
+fi
 
 (( failures == 0 )) || exit 1
 echo "Audited $BUNDLE: no authoring files, unapproved stock resources, or local build paths."

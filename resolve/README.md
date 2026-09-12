@@ -18,6 +18,10 @@ resolve/build.sh --test
 This creates `build/resolve/Fotufilm.ofx.bundle` and runs a small test host that
 renders frames without opening Resolve.
 
+Rebuilds reuse objects whose compiler inputs and contents still match. The host
+harness links the same optimized engine objects as the plugin; every requested
+host test still runs. Set `FOTUFILM_BUILD_CACHE=0` to force recompilation.
+
 To install the plugin:
 
 ```sh

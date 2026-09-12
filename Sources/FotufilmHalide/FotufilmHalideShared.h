@@ -1441,45 +1441,58 @@ inline Halide::Expr boolean_coverage(Halide::Expr x, Halide::Expr y,
     // that grows as the grain goes sub-pixel.
     Expr base_cell_x = cast<int32_t>(Halide::floor(cast<float>(x) / cell));
     Expr base_cell_y = cast<int32_t>(Halide::floor(cast<float>(y) / cell));
-    for (int dy = -1; dy <= 2; ++dy) {
-        for (int dx = -1; dx <= 2; ++dx) {
-            Expr cell_x = base_cell_x + dx;
-            Expr cell_y = base_cell_y + dy;
-            Expr cell_hash = pixel_hash(cell_x, cell_y, seed, layer);
-            // Poisson count for this cell, by comparing one uniform against the running CDF.
-            Expr uniform = cast<float>(cell_hash >> 8) * (1.0f / 16777216.0f);
-            Expr term = Halide::exp(-lambda_cell);
-            Expr cdf = term;
-            Expr count = 0;
-            for (int n = 1; n <= kBooleanGrainsPerCell; ++n) {
-                count += Halide::select(uniform > cdf, 1, 0);
-                term = term * lambda_cell * (1.0f / float(n));
-                cdf = cdf + term;
-            }
-            Expr grain_hash = pcg(cell_hash);
-            for (int g = 0; g < kBooleanGrainsPerCell; ++g) {
-                grain_hash = pcg(grain_hash);
-                Expr gx = cast<float>(grain_hash >> 8) * (1.0f / 16777216.0f);
-                Expr next = pcg(grain_hash);
-                Expr gy = cast<float>(next >> 8) * (1.0f / 16777216.0f);
-                grain_hash = next;
-                Expr present = Expr(g) < count;
-                Expr centre_x = (cast<float>(cell_x) + gx) * cell;
-                Expr centre_y = (cast<float>(cell_y) + gy) * cell;
-                for (int k = 0;
-                     k < kBooleanSamplesPerAxis * kBooleanSamplesPerAxis; ++k) {
-                    Expr ox = sample_x[k] - centre_x;
-                    Expr oy = sample_y[k] - centre_y;
-                    hit[k] = hit[k]
-                        || (present && (ox * ox + oy * oy < radius_px * radius_px));
-                }
-            }
+    // Keep the cell walk in the generated program instead of expanding sixteen copies of
+    // every grain/sample expression in the compiler. The reductions preserve the Boolean
+    // union exactly, including the sample positions, hash streams and coverage.
+    Halide::RDom cells(-1, 4, -1, 4);
+    Expr cell_x = base_cell_x + cells.x;
+    Expr cell_y = base_cell_y + cells.y;
+    Expr cell_hash = pixel_hash(cell_x, cell_y, seed, layer);
+    // Poisson count for this cell, by comparing one uniform against the running CDF.
+    Expr uniform = cast<float>(cell_hash >> 8) * (1.0f / 16777216.0f);
+    Expr term = Halide::exp(-lambda_cell);
+    Expr cdf = term;
+    Expr count = 0;
+    for (int n = 1; n <= kBooleanGrainsPerCell; ++n) {
+        count += Halide::select(uniform > cdf, 1, 0);
+        term = term * lambda_cell * (1.0f / float(n));
+        cdf = cdf + term;
+    }
+    Expr grain_hash = pcg(cell_hash);
+    for (int g = 0; g < kBooleanGrainsPerCell; ++g) {
+        grain_hash = pcg(grain_hash);
+        Expr gx = cast<float>(grain_hash >> 8) * (1.0f / 16777216.0f);
+        Expr next = pcg(grain_hash);
+        Expr gy = cast<float>(next >> 8) * (1.0f / 16777216.0f);
+        grain_hash = next;
+        Expr present = Expr(g) < count;
+        Expr centre_x = (cast<float>(cell_x) + gx) * cell;
+        Expr centre_y = (cast<float>(cell_y) + gy) * cell;
+        for (int k = 0;
+             k < kBooleanSamplesPerAxis * kBooleanSamplesPerAxis; ++k) {
+            Expr ox = sample_x[k] - centre_x;
+            Expr oy = sample_y[k] - centre_y;
+            hit[k] = hit[k]
+                || (present && (ox * ox + oy * oy < radius_px * radius_px));
         }
     }
 
+    // Each of the sixteen cells contributes zero or one for a sample. Five bits per
+    // sample hold the entire count without carries into its neighbour. Two reductions
+    // share each cell's hash and Poisson count across six/three samples respectively.
     Expr total = 0.0f;
-    for (int k = 0; k < kBooleanSamplesPerAxis * kBooleanSamplesPerAxis; ++k) {
-        total += Halide::select(hit[k], 1.0f, 0.0f);
+    constexpr int samples = kBooleanSamplesPerAxis * kBooleanSamplesPerAxis;
+    for (int first = 0; first < samples; first += 6) {
+        Expr packed = cast<uint32_t>(0);
+        const int end = std::min(first + 6, samples);
+        for (int k = first; k < end; ++k) {
+            packed = packed | (cast<uint32_t>(hit[k]) << (5 * (k - first)));
+        }
+        Expr counts = Halide::sum(cells, packed);
+        for (int k = first; k < end; ++k) {
+            Expr count = (counts >> (5 * (k - first))) & 31;
+            total += Halide::select(count != 0, 1.0f, 0.0f);
+        }
     }
     // Centered on the fraction the model actually covers, which is the clamped value rather than
     // the requested one, so the clamp costs variance at the extremes and never a density shift.

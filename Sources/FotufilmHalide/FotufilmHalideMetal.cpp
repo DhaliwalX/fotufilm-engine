@@ -352,6 +352,9 @@ void gpu_pointwise(Func function, Var x, Var y, Var channel, int channels) {
         .gpu_tile(x, y, block_x, block_y, thread_x, thread_y,
                   gpu_tile_x(), gpu_tile_y(),
                   Halide::TailStrategy::GuardWithIf, gpu_device_api());
+    // Keep the boundary guards in the kernel. Splitting this dynamic geometry into
+    // edge/interior loops costs seconds per JIT variant without improving Metal throughput.
+    if (gpu_device_api() == DeviceAPI::Metal) function.never_partition_all();
 }
 
 /// Materializes `values` as one full-frame GPU pass and returns the view its consumers read.
