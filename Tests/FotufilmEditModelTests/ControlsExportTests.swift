@@ -82,6 +82,20 @@ final class ControlsExportTests: XCTestCase {
         XCTAssertTrue(kotlin.contains("val expiredYears: Double = 0.0,"))
     }
 
+    func testEveryExportedKotlinUnitIsDeclaredAndFormatted() {
+        let kotlin = ControlsExport.kotlinControls()
+        let formatting = ControlsExport.kotlinTransforms()
+        let pattern = try! NSRegularExpression(pattern: "ControlUnit\\.([A-Z_]+)")
+        let range = NSRange(kotlin.startIndex..., in: kotlin)
+        let units = Set(pattern.matches(in: kotlin, range: range).map {
+            String(kotlin[Range($0.range(at: 1), in: kotlin)!])
+        })
+        for unit in units {
+            XCTAssertTrue(kotlin.contains("    \(unit),"), "missing enum case for \(unit)")
+            XCTAssertTrue(formatting.contains("ControlUnit.\(unit) ->"), "missing formatter for \(unit)")
+        }
+    }
+
     func testTheDocumentationRegionsCoverEveryAppGroup() {
         let regions = ControlsExport.documentationRegions()
         for group in EditorControlGroup.allCases where group != .pipeline {
