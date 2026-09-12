@@ -3888,83 +3888,6 @@
     },
     {
       "availability" : "printStage",
-      "binding" : "enlargerIndex",
-      "choices" : [
-        {
-          "detail" : "Soft, even light, as in a color enlarger or minilab.",
-          "id" : "diffuser",
-          "label" : "Diffuser",
-          "value" : 0
-        },
-        {
-          "detail" : "Focused light for stronger contrast and more visible grain and dust in black-and-white prints.",
-          "id" : "condenser",
-          "label" : "Condenser",
-          "value" : 1
-        }
-      ],
-      "commandLineFlag" : "--enlarger",
-      "commandLineGeneric" : true,
-      "commandLineHelp" : "Lamp house over the negative: diffuser (default, the diffuse density the sheets are measured in) or condenser (collimated light: the Callier effect reads a silver negative's densities ~1.4x higher, a dye negative's ~1.05x, re-timed through mid-grey, so the print gains contrast). --bleach-bypass leaves retained silver, which scatters like a silver negative and takes the silver figure. Only an enlarged reflection print has one",
-      "commandLinePlaceholder" : "<head>",
-      "detail" : "Choose the enlarger lighting used to make the print.",
-      "documentation" : "Chooses a diffuser or condenser head for an enlarged reflection print.",
-      "drives" : [
-
-      ],
-      "field" : "enlarger",
-      "group" : "print",
-      "host" : {
-        "animates" : true,
-        "bridge" : "identity",
-        "choices" : [
-          {
-            "detail" : "",
-            "id" : "diffuser",
-            "label" : "Diffuser",
-            "value" : 0
-          },
-          {
-            "detail" : "",
-            "id" : "condenser",
-            "label" : "Condenser",
-            "value" : 1
-          }
-        ],
-        "composed" : false,
-        "fxplugID" : 91,
-        "group" : "output",
-        "hint" : "The lamp house a reflection print is enlarged under. Diffuser is the sheets' own diffuse read and changes nothing; Condenser prints a silver negative harder through the Callier effect. Read only where the medium is an enlarged reflection print.",
-        "kind" : "choice",
-        "label" : "Enlarger",
-        "ofxName" : "enlarger",
-        "order" : 25,
-        "paramOffset" : 0,
-        "paramScale" : 1,
-        "secret" : false,
-        "slot" : 52,
-        "slotSymbol" : "ENLARGER",
-        "value" : 0,
-        "zeroLeavesEngineDefault" : false
-      },
-      "kind" : "menu",
-      "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
-      },
-      "scope" : "edit",
-      "section" : "printPaper",
-      "surfaces" : [
-        "app",
-        "desktop",
-        "android",
-        "resolve",
-        "finalcut",
-        "cli"
-      ],
-      "title" : "Enlarger"
-    },
-    {
-      "availability" : "printStage",
       "binding" : "printCorrection",
       "commandLineFlag" : "--print-correction",
       "commandLineGeneric" : true,
@@ -4081,6 +4004,275 @@
         "cli"
       ],
       "title" : "Negative Viewing"
+    },
+    {
+      "availability" : "printStage",
+      "binding" : "enlargerIndex",
+      "choices" : [
+        {
+          "detail" : "Soft, even light, as in a color enlarger or minilab.",
+          "id" : "diffuser",
+          "label" : "Diffuser",
+          "value" : 0
+        },
+        {
+          "detail" : "Focused light for stronger contrast and more visible grain and dust in black-and-white prints.",
+          "id" : "condenser",
+          "label" : "Condenser",
+          "value" : 1
+        }
+      ],
+      "commandLineFlag" : "--enlarger",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Lamp house over the negative: diffuser (default, the diffuse density the sheets are measured in) or condenser (collimated light: the Callier effect reads a silver negative's densities ~1.4x higher, a dye negative's ~1.05x, re-timed through mid-grey, so the print gains contrast). --bleach-bypass leaves retained silver, which scatters like a silver negative and takes the silver figure. Only an enlarged reflection print has one",
+      "commandLinePlaceholder" : "<head>",
+      "detail" : "Choose the enlarger lighting used to make the print.",
+      "documentation" : "Chooses a diffuser or condenser head for an enlarged reflection print.",
+      "drives" : [
+
+      ],
+      "field" : "enlarger",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "choices" : [
+          {
+            "detail" : "",
+            "id" : "diffuser",
+            "label" : "Diffuser",
+            "value" : 0
+          },
+          {
+            "detail" : "",
+            "id" : "condenser",
+            "label" : "Condenser",
+            "value" : 1
+          }
+        ],
+        "composed" : false,
+        "fxplugID" : 91,
+        "group" : "output",
+        "hint" : "The lamp house a reflection print is enlarged under. Diffuser is the sheets' own diffuse read and changes nothing; Condenser prints a silver negative harder through the Callier effect. Read only where the medium is an enlarged reflection print.",
+        "kind" : "choice",
+        "label" : "Enlarger",
+        "ofxName" : "enlarger",
+        "order" : 25,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 52,
+        "slotSymbol" : "ENLARGER",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "scope" : "edit",
+      "section" : "printLamp",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Enlarger"
+    },
+    {
+      "availability" : "printStage",
+      "commandLineFlag" : "--printer",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Opt-in optical printer: simulated-tungsten (synthetic, not measured hardware). Reflection paper only",
+      "commandLinePlaceholder" : "<id>",
+      "detail" : "Print through a tungsten lamp and colour filters",
+      "documentation" : "Enables a synthetic tungsten printer with fixed reference calibration.",
+      "drives" : [
+        "printer"
+      ],
+      "field" : "printerEnabled",
+      "group" : "print",
+      "kind" : "toggle",
+      "omitted" : {
+        "android" : "The simulated printer is currently exposed in the Apple apps and CLI.",
+        "finalcut" : "The plugin bridge does not yet expose simulated printer profiles.",
+        "resolve" : "The plugin bridge does not yet expose simulated printer profiles.",
+        "web" : "The browser does not build a printer lamp's spectral tables."
+      },
+      "persistedKey" : "printerEnabled",
+      "restingOn" : false,
+      "scope" : "edit",
+      "section" : "printLamp",
+      "storedEncoding" : "same",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "cli"
+      ],
+      "title" : "Simulated Printer"
+    },
+    {
+      "availability" : "printStage",
+      "commandLineFlag" : "--printer-lamp",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Printer lamp spectrum, 2800...3600 K (default: 3200); requires --printer simulated-tungsten",
+      "commandLinePlaceholder" : "<k>",
+      "detail" : "Change the spectrum of the enlarger's lamp",
+      "documentation" : "Changes the spectrum illuminating the negative.",
+      "drives" : [
+        "printer"
+      ],
+      "field" : "printerLamp",
+      "group" : "print",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "The simulated printer is currently exposed in the Apple apps and CLI.",
+        "finalcut" : "The plugin bridge does not yet expose simulated printer profiles.",
+        "resolve" : "The plugin bridge does not yet expose simulated printer profiles.",
+        "web" : "The browser does not build a printer lamp's spectral tables."
+      },
+      "scale" : {
+        "admittedMax" : 3600,
+        "admittedMin" : 2800,
+        "max" : 3600,
+        "min" : 2800,
+        "neutral" : 3200,
+        "stops" : [
+
+        ],
+        "unit" : "kelvin"
+      },
+      "scope" : "edit",
+      "section" : "printLamp",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "cli"
+      ],
+      "title" : "Lamp Temperature"
+    },
+    {
+      "availability" : "printStage",
+      "commandLineFlag" : "--printer-ev",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Paper exposure, -6...6 stops (default: 0); +1 doubles light. Requires --printer simulated-tungsten",
+      "commandLinePlaceholder" : "<ev>",
+      "detail" : "More light on the paper makes a darker print",
+      "documentation" : "One stop doubles the light exposing the paper and darkens the positive print.",
+      "drives" : [
+        "printer"
+      ],
+      "field" : "printerExposure",
+      "group" : "print",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "The simulated printer is currently exposed in the Apple apps and CLI.",
+        "finalcut" : "The plugin bridge does not yet expose simulated printer profiles.",
+        "resolve" : "The plugin bridge does not yet expose simulated printer profiles.",
+        "web" : "The browser does not build a printer lamp's spectral tables."
+      },
+      "scale" : {
+        "admittedMax" : 6,
+        "admittedMin" : -6,
+        "max" : 6,
+        "min" : -6,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "stops"
+      },
+      "scope" : "edit",
+      "section" : "printLamp",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "cli"
+      ],
+      "title" : "Paper Exposure"
+    },
+    {
+      "availability" : "printStage",
+      "commandLineFlag" : "--printer-m",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Synthetic magenta filter density, 0...1.2 (default: 0.40); requires --printer simulated-tungsten",
+      "commandLinePlaceholder" : "<d>",
+      "detail" : "Reduce the green light reaching the paper",
+      "documentation" : "Synthetic magenta filtration in optical density, not manufacturer dial units.",
+      "drives" : [
+        "printer"
+      ],
+      "field" : "printerMagenta",
+      "group" : "print",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "The simulated printer is currently exposed in the Apple apps and CLI.",
+        "finalcut" : "The plugin bridge does not yet expose simulated printer profiles.",
+        "resolve" : "The plugin bridge does not yet expose simulated printer profiles.",
+        "web" : "The browser does not build a printer lamp's spectral tables."
+      },
+      "scale" : {
+        "admittedMax" : 1.2,
+        "admittedMin" : 0,
+        "max" : 1.2,
+        "min" : 0,
+        "neutral" : 0.4,
+        "stops" : [
+
+        ],
+        "unit" : "opticalDensity"
+      },
+      "scope" : "edit",
+      "section" : "printLamp",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "cli"
+      ],
+      "title" : "Magenta Filter"
+    },
+    {
+      "availability" : "printStage",
+      "commandLineFlag" : "--printer-y",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Synthetic yellow filter density, 0...1.2 (default: 0.50); requires --printer simulated-tungsten",
+      "commandLinePlaceholder" : "<d>",
+      "detail" : "Reduce the blue light reaching the paper",
+      "documentation" : "Synthetic yellow filtration in optical density, not manufacturer dial units.",
+      "drives" : [
+        "printer"
+      ],
+      "field" : "printerYellow",
+      "group" : "print",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "The simulated printer is currently exposed in the Apple apps and CLI.",
+        "finalcut" : "The plugin bridge does not yet expose simulated printer profiles.",
+        "resolve" : "The plugin bridge does not yet expose simulated printer profiles.",
+        "web" : "The browser does not build a printer lamp's spectral tables."
+      },
+      "scale" : {
+        "admittedMax" : 1.2,
+        "admittedMin" : 0,
+        "max" : 1.2,
+        "min" : 0,
+        "neutral" : 0.5,
+        "stops" : [
+
+        ],
+        "unit" : "opticalDensity"
+      },
+      "scope" : "edit",
+      "section" : "printLamp",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "cli"
+      ],
+      "title" : "Yellow Filter"
     },
     {
       "availability" : "always",
@@ -4744,6 +4936,12 @@
       "groupTitle" : "Print",
       "id" : "printPaper",
       "title" : "Output"
+    },
+    {
+      "group" : "print",
+      "groupTitle" : "Print",
+      "id" : "printLamp",
+      "title" : "Lamp"
     },
     {
       "group" : "frame",

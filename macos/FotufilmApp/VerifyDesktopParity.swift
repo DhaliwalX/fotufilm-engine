@@ -11,26 +11,36 @@ import FotufilmEditModel
 #endif
 
 /// Runs in-app desktop parity checks for rendering, inspector controls, and export options.
-/// Usage: `Fotufilm --demo --verify-parity`, or `--verify-selective` for the selection regressions.
+/// Usage: `Fotufilm --demo --verify-parity`, `--verify-parity=lamp`, or `--verify-selective`.
 /// Checks inspect rendered output, not only state changes.
 enum VerifyDesktopParity {
     @discardableResult
     @MainActor static func runIfRequested() -> Bool {
         let selectiveOnly = ProcessInfo.processInfo.arguments.contains("--verify-selective")
-        guard selectiveOnly || ProcessInfo.processInfo.arguments.contains("--verify-parity")
-        else { return false }
+        let argument = ProcessInfo.processInfo.arguments.first {
+            $0 == "--verify-parity" || $0.hasPrefix("--verify-parity=")
+        }
+        guard selectiveOnly || argument != nil else { return false }
+        let filter = argument?.split(separator: "=", maxSplits: 1).dropFirst().first.map(String.init)
+        let requested = checks.filter { check in
+            let selected = !selectiveOnly || check.name.contains("select") || check.name.contains("mask")
+            return selected && (filter.map { check.name.localizedCaseInsensitiveContains($0) } ?? true)
+        }
+        guard !requested.isEmpty else {
+            print("verify-parity FAIL: no check matches \(filter ?? "")")
+            exit(1)
+        }
         Task { @MainActor in
             guard let editor = await editor() else {
                 print("verify-parity FAIL: no editor window appeared")
                 exit(1)
             }
             let model = editor.model
-            guard await settle(model) != nil else {
+            guard await settle(model, timeout: filter == nil ? 30 : 120) != nil else {
                 print("verify-parity FAIL: the sample never developed")
                 exit(1)
             }
             var failures = 0
-            let requested = selectiveOnly ? checks.filter { $0.name.contains("select") || $0.name.contains("mask") } : checks
             for check in requested {
                 print("  RUN   \(check.name)")
                 fflush(stdout)
@@ -348,6 +358,62 @@ enum VerifyDesktopParity {
         Check(name: "the exposure stage offers lens filters") { editor in
             rows(of: .adjustments, model: editor.model,
                  expecting: ["Filters", "Add Filter", "Lens Correction"])
+        },
+
+        Check(name: "lamp controls persist and expose the paper") { editor in
+            let model = editor.model
+            var state = model.edit
+            state.stockID = "portra400"
+            state.grain = 0
+            state.halation = 0
+            state.couplers = 0
+            state.paper = .ektacolorEdge
+            state.paperFollowsStock = false
+            state.setFlag(true, of: .printerEnabled)
+            for (field, value): (EditorControlField, Double) in [
+                (.printerLamp, 3100), (.printerExposure, 0.25),
+                (.printerMagenta, 0.45), (.printerYellow, 0.55)
+            ] { state.setValue(value, of: field) }
+            let wanted = PrinterProfile(lampKelvin: 3100, exposureEV: 0.25,
+                                        magenta: 0.45, yellow: 0.55)
+            guard state.options(sensor: nil).printer == wanted else {
+                return .fail("a lamp control did not reach the engine")
+            }
+            do {
+                let restored = try JSONDecoder().decode(EditState.self,
+                    from: JSONEncoder().encode(state))
+                let old = try JSONDecoder().decode(EditState.self, from: Data("{}".utf8))
+                guard restored.printerEnabled, restored.printerProfile == wanted,
+                      old.options(sensor: nil).printer == nil else {
+                    return .fail("lamp settings or the legacy default changed on reload")
+                }
+            } catch { return .fail("lamp edit did not round-trip: \(error)") }
+            model.edit = state
+            if case .fail(let why) = rows(of: .print, model: model,
+                expecting: ["Lamp", "Simulated Printer", "Lamp Temperature", "Paper Exposure",
+                            "Magenta Filter", "Yellow Filter"]) {
+                return .fail(why)
+            }
+            guard let before = await settle(model, timeout: 120) else { return .fail("no lamp print") }
+            model.edit.setValue(1.25, of: .printerExposure)
+            guard let after = await settle(model, timeout: 120), luma(before) - luma(after) > 0.02 else {
+                return .fail("more paper exposure did not darken the rendered print")
+            }
+            let held = model.edit.printerProfile
+            model.edit.setFlag(false, of: .printerEnabled)
+            guard model.edit.options(sensor: nil).printer == nil,
+                  model.edit.printerProfile == held else {
+                return .fail("switching off discarded the settings or kept the printer active")
+            }
+            model.edit.paper = .screen
+            let inspector = InspectorViewController(model: model)
+            inspector.panel = .print
+            _ = inspector.view
+            inspector.viewDidLoad()
+            guard !shows(words(in: inspector.view), "Lamp") else {
+                return .fail("the lamp remained on a digital output")
+            }
+            return .pass("lamp rows, saved settings, legacy default, output gating, and exposure response")
         },
 
         Check(name: "the film panel drops the emulsion on Normal") { editor in

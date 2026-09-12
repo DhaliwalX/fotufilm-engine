@@ -48,7 +48,6 @@ constexpr int kCurvesOffset = FOTUFILM_CONFIG_CURVES;
 constexpr int kCouplerOffset = FOTUFILM_CONFIG_COUPLER;
 constexpr int kGrainOffset = FOTUFILM_CONFIG_GRAIN;
 constexpr int kPaperOffset = FOTUFILM_CONFIG_PAPER;
-constexpr int kMaskingOffset = FOTUFILM_CONFIG_MASKING;
 constexpr int kMtfSigmaOffset = FOTUFILM_CONFIG_MTF_SIGMA;
 constexpr int kMtfRadiusOffset = FOTUFILM_CONFIG_MTF_RADIUS;
 constexpr int kMtfLumaSigmaOffset = FOTUFILM_CONFIG_MTF_LUMA_SIGMA;
@@ -2263,9 +2262,8 @@ public:
             configuration_, "frame_paper_curve" + suffix, gpu_device_api(), approximate_);
         auto paper_activation = [&](Expr channel_index) {
             Expr base = paper_curve_base(channel_index);
-            Expr exposure = paper_midpoint(configuration_, channel_index)
-                + configuration_(kMaskingOffset + channel_index)
-                    * relative(channel_index);
+            Expr exposure = paper_exposure(configuration_, channel_index,
+                                           relative(channel_index));
             return (sample_curve(paper_curve, exposure, channel_index)
                     - configuration_(base))
                 / curve_range(configuration_, base);

@@ -340,13 +340,16 @@ public enum SpectralRuntime {
                               paper: PrintPaper = .default,
                               bleachBypass: Float = 0,
                               printViewingKelvin: Float? = nil,
-                              callier: Float = 1) -> SpectralPipelineTables {
+                              callier: Float = 1,
+                              printer: PrinterProfile? = nil) -> SpectralPipelineTables {
+        let printer = PrinterProfile.resolved(printer, stock: stock, paper: paper)
         let bleachBypass = retainedSilverFraction(bleachBypass, stock: stock)
         let printViewingKelvin = (stock.isReversal || !paper.acceptsViewingIlluminant) ? nil
             : printLightKelvin(printViewingKelvin)
         let callier = callierCoefficient(callier, stock: stock, paper: paper)
         let key = cacheIdentifier(for: stock, paper: paper, bleachBypass: bleachBypass,
-                                  printViewingKelvin: printViewingKelvin, callier: callier)
+                                  printViewingKelvin: printViewingKelvin, callier: callier,
+                                  printer: printer)
         lock.lock()
         while true {
             if let found = cache.value(for: key) {
@@ -363,7 +366,8 @@ public enum SpectralRuntime {
         lock.unlock()
 
         let built = buildTables(for: stock, paper: paper, bleachBypass: bleachBypass,
-                                printViewingKelvin: printViewingKelvin, callier: callier)
+                                printViewingKelvin: printViewingKelvin, callier: callier,
+                                printer: printer)
 
         lock.lock()
         cache.insert(built, for: key)
@@ -431,7 +435,8 @@ public enum SpectralRuntime {
                                        paper: PrintPaper = .default,
                                        bleachBypass: Float = 0,
                                        printViewingKelvin: Float? = nil,
-                                       callier: Float = 1) -> UInt64 {
+                                       callier: Float = 1,
+                                       printer: PrinterProfile? = nil) -> UInt64 {
         var h = stock.spectralProfile.signature
         func add(_ v: Float) { h = (h ^ UInt64(v.bitPattern)) &* 0x100000001b3 }
         // The exposure LUT is normalized against the illuminant this emulsion was balanced for.
@@ -482,6 +487,9 @@ public enum SpectralRuntime {
         // fold starts from, so every pre-donor identity is untouched.
         let donor = donorSignature(for: stock)
         if donor != 0 { h = (h ^ donor) &* 0x100000001b3 }
+        if let printer = PrinterProfile.resolved(printer, stock: stock, paper: paper) {
+            h = (h ^ printer.spectralSignature) &* 0x100000001b3
+        }
         return h
     }
 
@@ -489,7 +497,8 @@ public enum SpectralRuntime {
                                     paper: PrintPaper,
                                     bleachBypass: Float = 0,
                                     printViewingKelvin: Float? = nil,
-                                    callier: Float = 1) -> SpectralPipelineTables {
+                                    callier: Float = 1,
+                                    printer: PrinterProfile? = nil) -> SpectralPipelineTables {
         // Output characterization is fixed at the stock's reference light. The invocation
         // replaces this exposure table with the scene spectrum after calibration is built.
         let exposure = exposureTable(for: stock, illuminant: filmReferenceIlluminant(for: stock))
@@ -539,8 +548,16 @@ public enum SpectralRuntime {
                 dyes: stock.spectralProfile.imageDyeDensity,
                 neutralDensity: silverCallier * retainedSilverDensity(
                     midDensity, dMin: dMin, fraction: bleachBypass))
-            let lamp = illumination.lamp
-            let midEnergy = illumination.referenceEnergy
+            let lamp = printer?.filteredSpectrum ?? illumination.lamp
+            // Keep the simulated printer's reference setup fixed when its lamp or filters move.
+            // Other media retain their existing printing illumination and calibration.
+            let midEnergy = printer == nil ? illumination.referenceEnergy : paperExposure(
+                density: midDensity.map { $0 * callier },
+                dyes: stock.spectralProfile.imageDyeDensity,
+                lamp: PrinterProfile.simulatedTungsten.filteredSpectrum,
+                paperSensitivity: paperSensitivity,
+                neutralDensity: silverCallier * retainedSilverDensity(
+                    midDensity, dMin: dMin, fraction: bleachBypass))
             // Release film removes only the common lamp scale against its setup energy
             // targets; an unreachable timing residual survives. On reflection paper the
             // mid-energy ratio also approximates

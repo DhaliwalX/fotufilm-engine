@@ -102,6 +102,19 @@ extension EditorControlField {
             return .bespoke { $0.printLightKelvin != nil }
         case .enlarger:
             return .bespoke { $0.enlarger != .default }
+        case .printerEnabled: return .flag(\.printerEnabled)
+        case .printerLamp:
+            return .derived(read: { Double($0.printerProfile.lampKelvin) },
+                            write: { $0.printerProfile.lampKelvin = Float($1) })
+        case .printerExposure:
+            return .derived(read: { Double($0.printerProfile.exposureEV) },
+                            write: { $0.printerProfile.exposureEV = Float($1) })
+        case .printerMagenta:
+            return .derived(read: { Double($0.printerProfile.magenta) },
+                            write: { $0.printerProfile.magenta = Float($1) })
+        case .printerYellow:
+            return .derived(read: { Double($0.printerProfile.yellow) },
+                            write: { $0.printerProfile.yellow = Float($1) })
         case .printCorrection: return .number(\.printCorrection)
         case .negativeViewing:
             return .unstored("Settings chooses the lightbox or scanner reading")

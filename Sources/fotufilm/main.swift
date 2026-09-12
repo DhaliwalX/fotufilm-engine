@@ -1199,6 +1199,28 @@ if let p = flags["--paper"] {
     }
     options.paper = choice
 }
+let printerFlags = ["--printer-lamp", "--printer-ev", "--printer-m", "--printer-y"]
+if let id = flags["--printer"] {
+    guard id == "simulated-tungsten" else { fail("Unknown printer '\(id)'; expected simulated-tungsten") }
+    guard flags["--negative"] == nil,
+          Enlarger.illuminates(stock: stock, paper: options.paper(for: stock)) else {
+        fail("The simulated printer requires a negative enlarged onto reflection paper")
+    }
+    func printerValue(_ flag: String, default fallback: Float, range: ClosedRange<Float>) -> Float {
+        guard let text = flags[flag] else { return fallback }
+        guard let value = Float(text), value.isFinite, range.contains(value) else {
+            fail("\(flag) requires a finite value in \(range.lowerBound)...\(range.upperBound)")
+        }
+        return value
+    }
+    options.printer = PrinterProfile(
+        lampKelvin: printerValue("--printer-lamp", default: 3200, range: PrinterProfile.lampRange),
+        exposureEV: printerValue("--printer-ev", default: 0, range: PrinterProfile.exposureRange),
+        magenta: printerValue("--printer-m", default: 0.4, range: PrinterProfile.filterRange),
+        yellow: printerValue("--printer-y", default: 0.5, range: PrinterProfile.filterRange))
+} else if printerFlags.contains(where: { flags[$0] != nil }) {
+    fail("Printer controls require --printer simulated-tungsten")
+}
 if let n = flags["--negative"] {
     switch n {
     case "lightbox": options.negativeViewing = .lightBox

@@ -874,6 +874,8 @@ public struct FilmEngineInvocation {
         // picture actually lands on rather than the request, which may name one this stock
         // cannot reach or may name none at all.
         let printMedium = options.paper(for: stock)
+        let printer = !noFilm && options.stage.writesPrint && options.negativeViewing == nil
+            ? PrinterProfile.resolved(options.printer, stock: stock, paper: printMedium) : nil
         // A crop keeps only `frameCoverage` of the frame's short edge, so the same buffer
         // spans fewer millimetres of emulsion and every millimetre-sized structure grows
         // in pixels. The floor keeps a degenerate sliver from asking for unbounded radii.
@@ -1109,15 +1111,22 @@ public struct FilmEngineInvocation {
         let printMTFSigma = max(printMedium.enlargerBlurMM * pxPerMM,
                                 Self.grainSigmaFloorPixels)
         let printMTFRadius = printMTFActive ? Self.gaussianRadius(printMTFSigma) : 0
-        let masking = stock.printingContrastScale(correction: options.printCorrection,
-                                                  paper: printMedium)
+        let masking = printer == nil
+            ? stock.printingContrastScale(correction: options.printCorrection, paper: printMedium)
+            : [Float](repeating: 1, count: 3)
         // The paper's three records, each anchored at its own calibrated
         // midpoint so a neutral mid-grey prints neutral through records that
         // do not share a curve. Green keeps the legacy slots; red and blue
         // ride the appended ones.
         let paperCurves = printMedium.printCurves(for: stock)
         let paper = paperCurves[1]
-        let xMids = printMedium.printExposureMidpoints(for: stock)
+        var xMids = printMedium.printExposureMidpoints(for: stock)
+        // Paper exposure shifts log light after negative transmission, before the paper curves.
+        // Reuse the midpoint slots to preserve the packed ABI and avoid rebuilding spectral LUTs.
+        if let printer, printer.exposureEV != 0 {
+            let shift = printer.exposureEV * log10(Float(2))
+            xMids = xMids.map { $0 + shift }
+        }
         let xMid = xMids[1]
 
         // Two lenses' worth of veiling glare, and only one of them is optional.
@@ -1469,12 +1478,12 @@ public struct FilmEngineInvocation {
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
                 printViewingKelvin: options.printViewingKelvin,
-                callier: callier)
+                callier: callier, printer: printer)
             self.spectralCacheID = SpectralRuntime.cacheIdentifier(
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
                 printViewingKelvin: options.printViewingKelvin,
-                callier: callier)
+                callier: callier, printer: printer)
         }
         // One resolved spectrum controls both integration and upload identity. Source pixels
         // have already been neutralized at capture; applying RGB WB here would count light twice.

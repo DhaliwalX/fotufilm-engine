@@ -451,6 +451,7 @@ final class VideoPreviewViewController: SessionViewController {
     // MARK: - The paused frame
 
     private struct OptionsKey: Hashable {
+        let printer: PrinterProfile?
         let exposure, kelvin, tint, highlights, shadows: Float
         let saturation, vibrance, grain, halation, couplers, print: Float
         let discGrain: Bool
@@ -460,6 +461,7 @@ final class VideoPreviewViewController: SessionViewController {
         let seed: UInt64
 
         init(_ options: FotufilmEngine.Options) {
+            printer = options.printer?.normalized
             exposure = options.exposureEV
             kelvin = options.whiteBalance.kelvin
             tint = options.whiteBalance.tint
