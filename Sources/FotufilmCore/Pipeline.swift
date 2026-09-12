@@ -149,6 +149,9 @@ public struct FotufilmEngine {
         /// negative only slightly so, with the print re-timed through the scaled mid-grey. Read
         /// only where a reflection sheet is optically enlarged; see `Enlarger.illuminates`.
         public var enlarger: Enlarger = .diffuser
+        /// Optional simulated optical printer. Nil preserves the existing printing model.
+        /// Applies only to enlarged reflection prints; exposure is separate from film exposure.
+        public var printer: PrinterProfile? = nil
         /// Where the developed image is finished. `nil` — the default — takes the medium the
         /// loaded stock was designed for, so a motion-picture camera negative reaches its release
         /// print stock and a still negative reaches the measured sheet, without the caller naming

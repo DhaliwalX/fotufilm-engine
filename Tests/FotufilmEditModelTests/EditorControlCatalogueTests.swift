@@ -315,7 +315,11 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertEqual(
             EditorControlCatalogue.controls(in: .printPaper, for: negative)
                 .map(\.field),
-            [.paper, .printLight, .enlarger, .printCorrection])
+                       [.paper, .printLight, .printCorrection])
+        XCTAssertEqual(EditorControlCatalogue.controls(in: .printLamp, for: negative).map(\.field),
+                       [.enlarger, .printerEnabled, .printerLamp, .printerExposure,
+                        .printerMagenta, .printerYellow])
+        XCTAssertTrue(EditorControlCatalogue.controls(in: .printLamp, for: reversal).isEmpty)
     }
 
     /// The grade is available in Light & Color for every develop, film or not, so it survives a

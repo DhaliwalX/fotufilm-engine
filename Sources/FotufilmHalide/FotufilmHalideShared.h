@@ -554,6 +554,15 @@ inline Halide::Expr paper_midpoint(Halide::ImageParam &configuration,
         configuration(FOTUFILM_CONFIG_PAPER_MIDPOINT_BLUE));
 }
 
+/// The spectral LUT has already integrated the filtered printer lamp through the negative.
+/// Midpoint slots include any uniform printer exposure shift; the calibration and film
+/// densities remain fixed. Shared by CPU and GPU, including packed-LUT AOT variants.
+inline Halide::Expr paper_exposure(Halide::ImageParam &configuration,
+                                   Halide::Expr channel, Halide::Expr relative) {
+    return paper_midpoint(configuration, channel)
+        + configuration(FOTUFILM_CONFIG_MASKING + channel) * relative;
+}
+
 /// The paper's three records, indexed (sample, channel). The bases are not
 /// evenly strided, so this lays out `curve_table`'s body over
 /// `paper_curve_base` rather than sharing its offset arithmetic.

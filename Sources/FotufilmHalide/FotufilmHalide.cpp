@@ -1122,14 +1122,13 @@ public:
             Expr relative = lut_sample(
                 film_lut_, activation(x, y, 0), activation(x, y, 1),
                 activation(x, y, 2), c);
-            Expr paper_exposure = paper_midpoint(configuration_, c)
-                + configuration_(FOTUFILM_CONFIG_MASKING + c) * relative;
+            Expr exposure = paper_exposure(configuration_, c, relative);
             Expr paper_base = paper_curve_base(c);
             Expr paper_min = configuration_(paper_base);
             Expr paper_range = curve_range(configuration_, paper_base);
             Func paper_activation("print_paper_activation" + suffix);
             paper_activation(x, y, c) =
-                (sample_curve(paper_curve, paper_exposure, c) - paper_min)
+                (sample_curve(paper_curve, exposure, c) - paper_min)
                 / paper_range;
             cpu_pointwise(paper_activation, x, y, c);
             display(x, y, c) = lut_sample(

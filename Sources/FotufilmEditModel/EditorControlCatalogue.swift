@@ -1247,40 +1247,6 @@ public enum EditorControlCatalogue {
                                          generic: false),
             documentation: "Changes the viewing lamp without re-timing the developed print; digital media ignore it."),
         EditorControl(
-            .enlarger, title: "Enlarger",
-            detail: "Choose the enlarger lighting used to make the print.",
-            section: .printPaper,
-            kind: .menu(.fixed([
-                EditorMenuChoice(0, "Diffuser",
-                                 detail: "Soft, even light, as in a color enlarger or minilab.", id: "diffuser"),
-                EditorMenuChoice(1, "Condenser",
-                                 detail: "Focused light for stronger contrast and more visible grain and dust in black-and-white prints.", id: "condenser"),
-            ])),
-            availability: .printStage,
-            persistence: .bespoke,
-            binding: .enlargerIndex,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
-            host: HostParameter(
-                slot: 52, slotSymbol: "ENLARGER", ofxName: "enlarger", fxplugID: 91, group: .output,
-                label: "Enlarger",
-                hint: "The lamp house a reflection print is enlarged under. Diffuser is the sheets' "
-                    + "own diffuse read and changes nothing; Condenser prints a silver negative harder "
-                    + "through the Callier effect. Read only where the medium is an enlarged reflection print.",
-                kind: .choice(.fixed([EditorMenuChoice(0, "Diffuser", id: "diffuser"),
-                                      EditorMenuChoice(1, "Condenser", id: "condenser")]), value: 0),
-                order: 25),
-            commandLine: CommandLineFlag("--enlarger", placeholder: "<head>",
-                                         help: "Lamp house over the negative: diffuser (default, the "
-                                             + "diffuse density the sheets are measured in) or condenser "
-                                             + "(collimated light: the Callier effect reads a silver "
-                                             + "negative's densities ~1.4x higher, a dye negative's ~1.05x, "
-                                             + "re-timed through mid-grey, so the print gains contrast). "
-                                             + "--bleach-bypass leaves retained silver, which scatters "
-                                             + "like a silver negative and takes the silver figure. "
-                                             + "Only an enlarged reflection print has one"),
-            documentation: "Chooses a diffuser or condenser head for an enlarged reflection print."),
-        EditorControl(
             .printCorrection, title: "Channel Contrast Match",
             detail: "Optional digital channel-contrast correction; not a printer-light adjustment.",
             section: .printPaper,
@@ -1325,6 +1291,100 @@ public enum EditorControlCatalogue {
                                              + "divides the base out. Ignored by a reversal stock, which "
                                              + "has no negative",
                                          generic: false)),
+        EditorControl(
+            .enlarger, title: "Enlarger",
+            detail: "Choose the enlarger lighting used to make the print.",
+            section: .printLamp,
+            kind: .menu(.fixed([
+                EditorMenuChoice(0, "Diffuser",
+                                 detail: "Soft, even light, as in a color enlarger or minilab.", id: "diffuser"),
+                EditorMenuChoice(1, "Condenser",
+                                 detail: "Focused light for stronger contrast and more visible grain and dust in black-and-white prints.", id: "condenser"),
+            ])),
+            availability: .printStage,
+            persistence: .bespoke,
+            binding: .enlargerIndex,
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
+            omitted: [.web: webBaked],
+            host: HostParameter(
+                slot: 52, slotSymbol: "ENLARGER", ofxName: "enlarger", fxplugID: 91, group: .output,
+                label: "Enlarger",
+                hint: "The lamp house a reflection print is enlarged under. Diffuser is the sheets' "
+                    + "own diffuse read and changes nothing; Condenser prints a silver negative harder "
+                    + "through the Callier effect. Read only where the medium is an enlarged reflection print.",
+                kind: .choice(.fixed([EditorMenuChoice(0, "Diffuser", id: "diffuser"),
+                                      EditorMenuChoice(1, "Condenser", id: "condenser")]), value: 0),
+                order: 25),
+            commandLine: CommandLineFlag("--enlarger", placeholder: "<head>",
+                                         help: "Lamp house over the negative: diffuser (default, the "
+                                             + "diffuse density the sheets are measured in) or condenser "
+                                             + "(collimated light: the Callier effect reads a silver "
+                                             + "negative's densities ~1.4x higher, a dye negative's ~1.05x, "
+                                             + "re-timed through mid-grey, so the print gains contrast). "
+                                             + "--bleach-bypass leaves retained silver, which scatters "
+                                             + "like a silver negative and takes the silver figure. "
+                                             + "Only an enlarged reflection print has one"),
+            documentation: "Chooses a diffuser or condenser head for an enlarged reflection print."),
+        EditorControl(
+            .printerEnabled, title: "Simulated Printer",
+            detail: "Print through a tungsten lamp and colour filters",
+            section: .printLamp, kind: .toggle(restingOn: false), availability: .printStage,
+            drives: ["printer"], surfaces: [.app, .desktop, .cli], omitted: printerOmissions,
+            commandLine: CommandLineFlag("--printer", placeholder: "<id>",
+                help: "Opt-in optical printer: simulated-tungsten (synthetic, not measured hardware). Reflection paper only",
+                generic: false),
+            documentation: "Enables a synthetic tungsten printer with fixed reference calibration."),
+        EditorControl(
+            .printerLamp, title: "Lamp Temperature",
+            detail: "Change the spectrum of the enlarger's lamp",
+            section: .printLamp,
+            kind: .slider(EditorControlScale(2800...3600, neutral: 3200, unit: .kelvin)),
+            availability: .printStage, persistence: .bespoke, drives: ["printer"],
+            surfaces: [.app, .desktop, .cli], omitted: printerOmissions,
+            commandLine: CommandLineFlag("--printer-lamp", placeholder: "<k>",
+                help: "Printer lamp spectrum, 2800...3600 K (default: 3200); requires --printer simulated-tungsten",
+                generic: false),
+            documentation: "Changes the spectrum illuminating the negative."),
+        EditorControl(
+            .printerExposure, title: "Paper Exposure",
+            detail: "More light on the paper makes a darker print",
+            section: .printLamp,
+            kind: .slider(EditorControlScale(-6...6, neutral: 0, unit: .stops)),
+            availability: .printStage, persistence: .bespoke, drives: ["printer"],
+            surfaces: [.app, .desktop, .cli], omitted: printerOmissions,
+            commandLine: CommandLineFlag("--printer-ev", placeholder: "<ev>",
+                help: "Paper exposure, -6...6 stops (default: 0); +1 doubles light. Requires --printer simulated-tungsten",
+                generic: false),
+            documentation: "One stop doubles the light exposing the paper and darkens the positive print."),
+        EditorControl(
+            .printerMagenta, title: "Magenta Filter",
+            detail: "Reduce the green light reaching the paper",
+            section: .printLamp,
+            kind: .slider(EditorControlScale(0...1.2, neutral: 0.4, unit: .opticalDensity)),
+            availability: .printStage, persistence: .bespoke, drives: ["printer"],
+            surfaces: [.app, .desktop, .cli], omitted: printerOmissions,
+            commandLine: CommandLineFlag("--printer-m", placeholder: "<d>",
+                help: "Synthetic magenta filter density, 0...1.2 (default: 0.40); requires --printer simulated-tungsten",
+                generic: false),
+            documentation: "Synthetic magenta filtration in optical density, not manufacturer dial units."),
+        EditorControl(
+            .printerYellow, title: "Yellow Filter",
+            detail: "Reduce the blue light reaching the paper",
+            section: .printLamp,
+            kind: .slider(EditorControlScale(0...1.2, neutral: 0.5, unit: .opticalDensity)),
+            availability: .printStage, persistence: .bespoke, drives: ["printer"],
+            surfaces: [.app, .desktop, .cli], omitted: printerOmissions,
+            commandLine: CommandLineFlag("--printer-y", placeholder: "<d>",
+                help: "Synthetic yellow filter density, 0...1.2 (default: 0.50); requires --printer simulated-tungsten",
+                generic: false),
+            documentation: "Synthetic yellow filtration in optical density, not manufacturer dial units."),
+    ]
+
+    private static let printerOmissions: [EditorSurface: String] = [
+        .android: "The simulated printer is currently exposed in the Apple apps and CLI.",
+        .web: "The browser does not build a printer lamp's spectral tables.",
+        .resolve: "The plugin bridge does not yet expose simulated printer profiles.",
+        .finalcut: "The plugin bridge does not yet expose simulated printer profiles.",
     ]
 
     private static let gradeBands: [EditorControl] = GradeBand.allCases.flatMap { band -> [EditorControl] in

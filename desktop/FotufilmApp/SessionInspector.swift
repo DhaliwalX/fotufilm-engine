@@ -89,6 +89,8 @@ final class InspectorViewController: SessionViewController {
     private let column = ScrollColumn()
 
     private var rows: [FormRowView] = []
+    private var printerRows: [FormRowView] = []
+    private var printCorrectionRow: FormRowView?
     private var gaugePicker: GaugePickerView?
     private var gradeDeck: GradeDeckView?
     #if !canImport(UIKit)
@@ -210,6 +212,7 @@ final class InspectorViewController: SessionViewController {
             String(model.sourceInterpretationAvailable),
             String(model.edit.sourceLightIndex),
             String(showsViewingLight),
+            String(showsEnlarger),
             String(showsPrintCorrection),
             String(model.edit.lensCorrectionEnabled),
             String(model.hasLensMeasurement),
@@ -284,16 +287,25 @@ final class InspectorViewController: SessionViewController {
         gaugePicker?.refresh()
         gradeDeck?.refresh()
 
+        refreshEnabledRows()
+    }
+
+    private func refreshEnabledRows() {
         let enabled = !model.isExporting
-        if tabs.isEnabled != enabled {
-            tabs.isEnabled = enabled
-            rows.forEach { $0.isRowEnabled = enabled }
+        if tabs.isEnabled != enabled { tabs.isEnabled = enabled }
+        for row in rows {
+            let allowed = enabled
+                && (!printerRows.contains(where: { $0 === row }) || model.edit.printerEnabled)
+                && (row !== printCorrectionRow || !showsEnlarger || !model.edit.printerEnabled)
+            if row.isRowEnabled != allowed { row.isRowEnabled = allowed }
         }
     }
 
     private func rebuild(direction: CGFloat) {
         structure = structureSignature
         rows.removeAll()
+        printerRows.removeAll()
+        printCorrectionRow = nil
         gaugePicker = nil
         gradeDeck = nil
         for view in column.column.arrangedSubviews {
@@ -321,8 +333,7 @@ final class InspectorViewController: SessionViewController {
                 .isActive = true
             rows.append(contentsOf: section.rows)
         }
-        rows.forEach { $0.isRowEnabled = !model.isExporting }
-        tabs.isEnabled = !model.isExporting
+        refreshEnabledRows()
         column.scrollToTop()
 
         guard direction != 0 else { return }
@@ -378,7 +389,16 @@ final class InspectorViewController: SessionViewController {
             case .printCorrection: return showsPrintCorrection
             default: return true
             }
-        }.flatMap(rowFactory.rows(for:))
+        }.flatMap { control in
+            let made = rowFactory.rows(for: control)
+            switch control.field {
+            case .printCorrection: printCorrectionRow = made.first
+            case .printerLamp, .printerExposure, .printerMagenta, .printerYellow:
+                printerRows.append(contentsOf: made)
+            default: break
+            }
+            return made
+        }
     }
 
     private func bespokeRows(for control: EditorControl) -> [FormRowView] {
@@ -567,7 +587,15 @@ final class InspectorViewController: SessionViewController {
         let catalogued = rows(in: .printPaper)
         for row in catalogued { print.add(row) }
         if catalogued.isEmpty { for row in paperRows() { print.add(row) } }
-        return [print]
+        guard showsEnlarger else { return [print] }
+        let lamp = FormSectionView(title: EditorControlSection.printLamp.title)
+        for row in rows(in: .printLamp) { lamp.add(row) }
+        lamp.add(NoteRow { [model] in
+            model.edit.printerEnabled
+                ? "A simulated tungsten lamp and colour filters expose the paper through the negative. More paper exposure makes a darker print."
+                : "Enable Simulated Printer to adjust lamp temperature, paper exposure and filtration."
+        })
+        return [print, lamp]
     }
 
     private func paperRows() -> [FormRowView] {

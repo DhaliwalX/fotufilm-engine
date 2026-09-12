@@ -22,6 +22,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case lensDistortion, lensVignetting, lensRedCyan, lensBlueYellow
 
     case paper, printLight, enlarger, printCorrection, negativeViewing, gradeSpace
+    case printerEnabled, printerLamp, printerExposure, printerMagenta, printerYellow
     case gradeShadowsWarmth, gradeShadowsTint, gradeShadowsLevel
     case gradeMidtonesWarmth, gradeMidtonesTint, gradeMidtonesLevel
     case gradeHighlightsWarmth, gradeHighlightsTint, gradeHighlightsLevel
@@ -52,7 +53,7 @@ public enum EditorControlSection: String, CaseIterable, Sendable {
     case filmStock, filmGrain, filmEmulsion, filmLab
     case lensGlass, lensCorrection
     case lightExposure, lightBalance, lightColor, lightGrade
-    case printPaper
+    case printPaper, printLamp
     case frameGeometry, frameLocal
     case pipeline
 
@@ -61,7 +62,7 @@ public enum EditorControlSection: String, CaseIterable, Sendable {
         case .filmStock, .filmGrain, .filmEmulsion, .filmLab: return .film
         case .lensGlass, .lensCorrection: return .lens
         case .lightExposure, .lightBalance, .lightColor, .lightGrade: return .light
-        case .printPaper: return .print
+        case .printPaper, .printLamp: return .print
         case .frameGeometry, .frameLocal: return .frame
         case .pipeline: return .pipeline
         }
@@ -80,6 +81,7 @@ public enum EditorControlSection: String, CaseIterable, Sendable {
         case .lightColor: return "Color"
         case .lightGrade: return "Grade"
         case .printPaper: return "Output"
+        case .printLamp: return "Lamp"
         case .frameGeometry: return "Geometry"
         case .frameLocal: return "Local"
         case .pipeline: return "Pipeline"
@@ -97,6 +99,7 @@ public enum EditorControlUnit: String, Sendable, Equatable, Codable {
     case seconds
     case degrees
     case kelvin
+    case opticalDensity
     case micrometers
     case millimetres
     case none
@@ -119,6 +122,7 @@ public enum EditorControlUnit: String, Sendable, Equatable, Codable {
             return String(format: "%.2f s", shown(value, places: 2))
         case .degrees: return String(format: "%+.1f°", shown(value, places: 1))
         case .kelvin: return String(format: "%.0f K", shown(value, places: 0))
+        case .opticalDensity: return String(format: "%.2f OD", shown(value, places: 2))
         case .micrometers: return String(format: "%.0f µm", shown(value, places: 0))
         case .millimetres: return String(format: "%.0f mm", shown(value, places: 0))
         case .none: return ""

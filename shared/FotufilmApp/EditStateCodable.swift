@@ -29,7 +29,7 @@ extension EditState: Codable {
     static let bespokeKeys: [String] = [
         "stockID", "chosenFormatID", "sourceInterpretation", "captureIlluminantKelvin",
         "filmLightKelvin", "sourceLightIndex", "grainMottleShare", "couplerGapReach", "paper", "paperFollowsStock",
-        "seed", "shutterSeconds", "printLightKelvin", "enlarger", "rotation", "crop", "cornerCrop",
+        "seed", "shutterSeconds", "printLightKelvin", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop",
         "grade", "lensProfileID", "lensAdjustment", "lensFilterIDs", "lensFilterMetering", "selective",
     ]
 
@@ -95,6 +95,8 @@ extension EditState: Codable {
         printLightKelvin = try c.decodeIfPresent(Double.self, forKey: EditKey("printLightKelvin"))
         enlarger = try c.decodeIfPresent(String.self, forKey: EditKey("enlarger"))
             .flatMap(Enlarger.preset(id:)) ?? .default
+        printerProfile = try c.decodeIfPresent(PrinterProfile.self, forKey: EditKey("printerProfile"))?
+            .normalized ?? .simulatedTungsten
         rotation = ((try c.decodeIfPresent(Int.self, forKey: EditKey("rotation")) ?? rotation) % 4 + 4) % 4
         crop = try c.decodeIfPresent(CGRect.self, forKey: EditKey("crop"))
         cornerCrop = try c.decodeIfPresent(QuadrilateralCrop.self, forKey: EditKey("cornerCrop"))
@@ -141,6 +143,7 @@ extension EditState: Codable {
         try c.encodeIfPresent(shutterSeconds, forKey: EditKey("shutterSeconds"))
         try c.encodeIfPresent(printLightKelvin, forKey: EditKey("printLightKelvin"))
         try c.encode(enlarger.id, forKey: EditKey("enlarger"))
+        try c.encode(printerProfile.normalized, forKey: EditKey("printerProfile"))
         try c.encode(rotation, forKey: EditKey("rotation"))
         try c.encodeIfPresent(crop, forKey: EditKey("crop"))
         try c.encodeIfPresent(cornerCrop, forKey: EditKey("cornerCrop"))
