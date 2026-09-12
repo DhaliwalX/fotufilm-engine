@@ -226,6 +226,7 @@ public final class HandwrittenMetalSpatialExecutor {
         let scale1Height: Int
         let scale2Width: Int
         let scale2Height: Int
+        let separateDevelopInput: Bool
     }
 
     private final class Scratch {
@@ -235,13 +236,14 @@ public final class HandwrittenMetalSpatialExecutor {
         let scales: [MTLTexture]
         let concurrentCoarse: [MTLTexture]
         let multiresRelease: MTLTexture?
+        let fusedDevelopInput: MTLTexture?
         let counterSampleBuffer: MTLCounterSampleBuffer?
         var leased = false
 
         init(
             work: MTLTexture, gridA: MTLTexture, gridB: MTLTexture,
             scales: [MTLTexture], concurrentCoarse: [MTLTexture],
-            multiresRelease: MTLTexture?,
+            multiresRelease: MTLTexture?, fusedDevelopInput: MTLTexture?,
             counterSampleBuffer: MTLCounterSampleBuffer?
         ) {
             self.work = work
@@ -250,6 +252,7 @@ public final class HandwrittenMetalSpatialExecutor {
             self.scales = scales
             self.concurrentCoarse = concurrentCoarse
             self.multiresRelease = multiresRelease
+            self.fusedDevelopInput = fusedDevelopInput
             self.counterSampleBuffer = counterSampleBuffer
         }
     }
@@ -1610,6 +1613,10 @@ public final class HandwrittenMetalSpatialExecutor {
             preconditionFailure("invalid handwritten spatial fast-path plan")
         }
         let print = state.printMTF
+        // Fused development reads a print apron beyond each output tile. Keep that input
+        // immutable until every threadgroup finishes; a threadgroup barrier cannot protect
+        // neighboring tiles from an in-place store. Split endpoints only read their own pixel.
+        let storedLog = scratch.fusedDevelopInput ?? densityOutput
         let width = state.width
         let height = state.height
         let scale0Width = (width + state.halation[0].stride - 1)
@@ -1635,7 +1642,7 @@ public final class HandwrittenMetalSpatialExecutor {
                 state.configuration[Configuration.mtfPrimaryShare + 2]))
         encoder.setComputePipelineState(mtfDownsample)
         encoder.setTexture(recordExposure, index: 0)
-        encoder.setTexture(densityOutput, index: 1)
+        encoder.setTexture(storedLog, index: 1)
         encoder.setTexture(scratch.scales[0], index: 2)
         encoder.setBuffer(mtf.weights, offset: 0, index: 0)
         encoder.setBytes(&mtfParameters, length: MemoryLayout<MTFParameters>.stride, index: 1)
@@ -1712,7 +1719,7 @@ public final class HandwrittenMetalSpatialExecutor {
                 UInt32(adjacency.stride), 0))
         encoder.setComputePipelineState(
             plan.exactSpecialized ? finishFieldsLUTPipeline : finishFieldsPipeline)
-        encoder.setTexture(densityOutput, index: 0)
+        encoder.setTexture(storedLog, index: 0)
         encoder.setTexture(scratch.gridA, index: 1)
         encoder.setTexture(scale1Blur, index: 2)
         encoder.setTexture(scale2Blur, index: 3)
@@ -1753,8 +1760,8 @@ public final class HandwrittenMetalSpatialExecutor {
             barrierAfter: true)
         profiler?.complete("adjacency-blur", encoder: encoder)
 
-        // 9. The automatic path develops the print halo in one dispatch. The measured split
-        // variant instead stores transmittance here and gives dispatch 10 only the cheap print
+        // 9. The fused endpoint develops the print halo in one dispatch. The split endpoint
+        // stores transmittance here and gives dispatch 10 only the cheap print
         // convolution, avoiding repeated curves, release, and grain work around every tile.
         var develop = DevelopParameters(
             extent: SIMD4(UInt32(width), UInt32(height), 0, 0),
@@ -1783,7 +1790,7 @@ public final class HandwrittenMetalSpatialExecutor {
             encoder.setTexture(state.curves, index: 0)
             encoder.setTexture(scratch.gridA, index: 1)
             encoder.setTexture(scratch.work, index: 2)
-            encoder.setTexture(densityOutput, index: 3)
+            encoder.setTexture(storedLog, index: 3)
             encoder.setTexture(halfResponseLUT, index: 5)
             encoder.setTexture(endpoint.binding.printCube, index: 6)
             encoder.setTexture(endpoint.output, index: 7)
@@ -1807,7 +1814,7 @@ public final class HandwrittenMetalSpatialExecutor {
             encoder.setTexture(state.curves, index: 0)
             encoder.setTexture(scratch.gridA, index: 1)
             encoder.setTexture(scratch.work, index: 2)
-            encoder.setTexture(densityOutput, index: 3)
+            encoder.setTexture(storedLog, index: 3)
             encoder.setTexture(scratch.gridB, index: 4)
             if plan.exactSpecialized {
                 guard let halfResponseLUT = state.halfResponseLUT else {
@@ -1851,7 +1858,8 @@ public final class HandwrittenMetalSpatialExecutor {
         encoder.setTexture(state.curves, index: 0)
         encoder.setTexture(scratch.gridA, index: 1)
         encoder.setTexture(scratch.work, index: 2)
-        encoder.setTexture(densityOutput, index: 3)
+        encoder.setTexture(storedLog, index: 3)
+        encoder.setTexture(densityOutput, index: 4)
         encoder.setBuffer(state.configurationBuffer, offset: 0, index: 0)
         encoder.setBuffer(state.grain.finePoisson, offset: 0, index: 1)
         encoder.setBuffer(state.grain.normal, offset: 0, index: 2)
@@ -3320,6 +3328,14 @@ public final class HandwrittenMetalSpatialExecutor {
         } else {
             multiresRelease = nil
         }
+        let fusedDevelopInput: MTLTexture?
+        if key.separateDevelopInput {
+            fusedDevelopInput = texture(width: key.width, height: key.height)
+            guard fusedDevelopInput != nil else { return nil }
+            fusedDevelopInput?.label = "Fotufilm spatial fused develop input"
+        } else {
+            fusedDevelopInput = nil
+        }
         let counterSampleBuffer: MTLCounterSampleBuffer?
         if let timestampCounterSet {
             let descriptor = MTLCounterSampleBufferDescriptor()
@@ -3335,7 +3351,7 @@ public final class HandwrittenMetalSpatialExecutor {
         let value = Scratch(
             work: work, gridA: gridA, gridB: gridB, scales: scales,
             concurrentCoarse: concurrentCoarse,
-            multiresRelease: multiresRelease,
+            multiresRelease: multiresRelease, fusedDevelopInput: fusedDevelopInput,
             counterSampleBuffer: counterSampleBuffer)
         lock.lock()
         if let available = scratch[key]?.first(where: { !$0.leased }) {
@@ -3386,7 +3402,8 @@ public final class HandwrittenMetalSpatialExecutor {
             width: state.width, height: state.height,
             scale0Width: widths[0], scale0Height: heights[0],
             scale1Width: widths[1], scale1Height: heights[1],
-            scale2Width: widths[2], scale2Height: heights[2])
+            scale2Width: widths[2], scale2Height: heights[2],
+            separateDevelopInput: state.fastPath?.developPrintPipeline != nil)
     }
 
     private func releaseScratch(_ value: Scratch) {
