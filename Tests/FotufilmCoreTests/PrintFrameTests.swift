@@ -134,6 +134,29 @@ final class PrintFrameTests: XCTestCase {
                           try pixels(XCTUnwrap(PrintFrameRenderer.render(image, configuration: hp5))))
     }
 
+    func testFilmBorderColourFollowsTheStocksOwnBaseAndReversalDensity() throws {
+        let portra = configuration(.film, stock: "portra400")
+        let gold = configuration(.film, stock: "gold200")
+        let monochrome = configuration(.film, stock: "hp5plus400")
+        let reversal = configuration(.film, stock: "ektachromee100")
+        XCTAssertNotEqual(portra.baseRGB, gold.baseRGB)
+        XCTAssertNotEqual(portra.baseRGB, monochrome.baseRGB)
+        XCTAssertGreaterThan(portra.baseRGB.x, portra.baseRGB.z)
+        XCTAssertGreaterThan(monochrome.baseRGB.x, reversal.baseRGB.x)
+        XCTAssertLessThan(reversal.baseRGB.x, 0.05)
+        XCTAssertEqual(max(portra.baseRGB.x, portra.baseRGB.y, portra.baseRGB.z),
+                       SpectralRuntime.lightBoxBaseLevel, accuracy: 0.00001)
+        let warm = PrintFrameConfiguration(frame: .film, formatID: "35mm", stockID: "portra400",
+                                           paper: .ektacolorEdge, viewingKelvin: 2856)
+        XCTAssertNotEqual(warm.baseRGB, portra.baseRGB)
+        let scanner = PrintFrameConfiguration(frame: .film, formatID: "35mm", stockID: "portra400",
+                                              paper: .negative, negativeViewing: .scanner)
+        XCTAssertEqual(scanner.baseRGB, SIMD3(repeating: 1))
+        let image = try fixture()
+        XCTAssertNotEqual(try pixels(XCTUnwrap(PrintFrameRenderer.render(image, configuration: portra))),
+                          try pixels(XCTUnwrap(PrintFrameRenderer.render(image, configuration: gold))))
+    }
+
     func testStockNotchMetadataSurvivesCodingAndRejectsInvalidGeometry() throws {
         let definition = try XCTUnwrap(FilmStock.presetDefinitions["hp5plus400"])
         let restored = try JSONDecoder().decode(FilmStockDefinition.self,
