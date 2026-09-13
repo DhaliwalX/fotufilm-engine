@@ -449,13 +449,10 @@ enum {
 /// size again to save a stage on a path almost nothing takes.
 #define FOTUFILM_AOT_FLARE(mask) ((mask) | FOTUFILM_FRAME_FLARE)
 
-/// A stock that goes through an enlarger onto paper. The slide masks are shared: a colour stock
-/// with no couplers at all is a transparency, which is projected rather than printed, but a
-/// monochrome stock with no couplers is usually a negative and is printed like any other. So the
-/// monochrome slide variants carry the enlarger and the colour ones do not — and a monochrome
-/// reversal stock, the one case on the wrong side of that split, falls back to the same variant
-/// with the radius at zero. FrameVariantTests holds the assumption that no colour negative reaches
-/// a plain slide variant.
+/// A stock that goes through an enlarger onto paper. Negatives without interimage correction
+/// share the slide's capture stages, but still need the print MTF. Keep an enlarged colour
+/// family for those negatives as well as the monochrome variants. A reversal can use an
+/// enlarged variant with the print radius at zero when no tighter variant is available.
 #define FOTUFILM_AOT_ENLARGED(mask) ((mask) | FOTUFILM_FRAME_PRINT_MTF)
 
 /// The variants the Mac generates, as (name, mask) pairs.
@@ -723,6 +720,18 @@ enum {
       FOTUFILM_AOT_ENLARGED(FOTUFILM_AOT_EXTENDED_MTF(                        \
           FOTUFILM_AOT_NEGATIVE & ~FOTUFILM_FRAME_ADJACENCY                  \
                                & ~FOTUFILM_FRAME_GRAIN)))                   \
+    X(negative_no_interimage, FOTUFILM_AOT_ENLARGED(FOTUFILM_AOT_SLIDE))     \
+    X(negative_no_interimage_disc,                                         \
+      FOTUFILM_AOT_ENLARGED(FOTUFILM_AOT_DISC(FOTUFILM_AOT_SLIDE)))          \
+    X(negative_no_interimage_grainless,                                    \
+      FOTUFILM_AOT_ENLARGED(FOTUFILM_AOT_SLIDE & ~FOTUFILM_FRAME_GRAIN))     \
+    X(negative_no_interimage_no_mtf,                                       \
+      FOTUFILM_AOT_ENLARGED(FOTUFILM_AOT_SLIDE_NO_MTF))                     \
+    X(negative_no_interimage_no_mtf_disc,                                  \
+      FOTUFILM_AOT_ENLARGED(FOTUFILM_AOT_DISC(FOTUFILM_AOT_SLIDE_NO_MTF)))   \
+    X(negative_no_interimage_no_mtf_grainless,                             \
+      FOTUFILM_AOT_ENLARGED(FOTUFILM_AOT_SLIDE_NO_MTF                       \
+                           & ~FOTUFILM_FRAME_GRAIN))                       \
     X(slide, FOTUFILM_AOT_SLIDE)                                             \
     X(slide_disc, FOTUFILM_AOT_DISC(FOTUFILM_AOT_SLIDE))                     \
     X(slide_grainless, FOTUFILM_AOT_SLIDE & ~FOTUFILM_FRAME_GRAIN)            \

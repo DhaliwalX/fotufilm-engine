@@ -128,6 +128,12 @@ final class FrameVariantTests: XCTestCase {
         enlarged((negative & ~FilmEngineFeature.grain) | FilmEngineFeature.mtfLuma),
         enlarged((negative & ~(FilmEngineFeature.adjacency | FilmEngineFeature.grain))
                  | FilmEngineFeature.mtfLuma),
+        enlarged(slide),
+        enlarged(slide | FilmEngineFeature.discGrain),
+        enlarged(slide & ~FilmEngineFeature.grain),
+        enlarged(slideNoMTF),
+        enlarged(slideNoMTF | FilmEngineFeature.discGrain),
+        enlarged(slideNoMTF & ~FilmEngineFeature.grain),
         slide,
         slide | FilmEngineFeature.discGrain,
         slide & ~FilmEngineFeature.grain,
@@ -287,6 +293,17 @@ final class FrameVariantTests: XCTestCase {
         for mask in Self.basicVariants {
             XCTAssertEqual(selected(for: mask), mask)
             assertVariantIsTight(mask, "basic realtime")
+        }
+    }
+
+    func testColorNegativesWithoutInterimageSelectWithoutUnusedCouplers() {
+        for capture in [Self.slide, Self.slideNoMTF] {
+            for grain in [capture, capture | FilmEngineFeature.discGrain,
+                          capture & ~FilmEngineFeature.grain] {
+                let mask = Self.enlarged(grain)
+                XCTAssertEqual(selected(for: mask), mask)
+                assertVariantIsTight(mask, "colour negative without interimage correction")
+            }
         }
     }
 
