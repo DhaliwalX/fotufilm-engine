@@ -450,6 +450,8 @@ public final class HandwrittenMetalSpatialExecutor {
         let printMTF: PrintPlan?
         let mtf: MTFPlan?
         let grain: GrainPlan
+        var fuseCopyRelease = true
+        var scratchKey: ScratchKey
         var fastPath: FastPathPlan?
         var multiresPath: MultiresPathPlan?
     }
@@ -545,6 +547,7 @@ public final class HandwrittenMetalSpatialExecutor {
     private let library: MTLLibrary
     private let copyPipeline: MTLComputePipelineState
     private let transformPipeline: MTLComputePipelineState
+    private let copyReleasePipeline: MTLComputePipelineState
     private let downsamplePipeline: MTLComputePipelineState
     private let horizontalPipeline: MTLComputePipelineState
     private let verticalPipeline: MTLComputePipelineState
@@ -612,6 +615,7 @@ public final class HandwrittenMetalSpatialExecutor {
             self.library = library
             copyPipeline = try pipeline("fotufilm_spatial_copy")
             transformPipeline = try pipeline("fotufilm_spatial_transform")
+            copyReleasePipeline = try pipeline("fotufilm_spatial_copy_release")
             downsamplePipeline = try pipeline("fotufilm_spatial_downsample")
             horizontalPipeline = try pipeline("fotufilm_spatial_blur_horizontal")
             verticalPipeline = try pipeline("fotufilm_spatial_blur_vertical")
@@ -683,25 +687,15 @@ public final class HandwrittenMetalSpatialExecutor {
         guard let curves = makeCurveTexture(configuration: configuration) else {
             throw PreparationError.allocationFailed("film curve texture")
         }
-        let halfResponseLUT: MTLTexture?
-        if optimizationVariant == .exactSpecialized
-            || optimizationVariant == .perceptualMultires {
-            guard let table = makeHalfResponseLUT(
-                    configuration: configurationBuffer, curves: curves) else {
-                throw PreparationError.allocationFailed("half-response lookup table")
-            }
-            halfResponseLUT = table
-        } else {
-            halfResponseLUT = nil
-        }
-
-        let diffusion = try (0..<3).map { scale -> ScalePlan in
+        let diffusionScaleCount = mask & FilmEngineFeature.diffusion != 0 ? 3 : 0
+        let diffusion = try (0..<diffusionScaleCount).map { scale -> ScalePlan in
             let radius = max(Int(configuration[Configuration.diffusionRadius + scale]), 0)
             return try makeBoxScale(
                 radius: radius, stride: Self.diffusionStride(radius), ringRadius: 0,
                 adaptiveCandidate: false)
         }
-        let halation = try (0..<3).map { scale -> ScalePlan in
+        let halationScaleCount = mask & FilmEngineFeature.halation != 0 ? 3 : 0
+        let halation = try (0..<halationScaleCount).map { scale -> ScalePlan in
             let radius = max(Int(configuration[Configuration.halationRadius + scale]), 0)
             return try makeBoxScale(
                 radius: radius, stride: Self.halationStride(radius),
@@ -751,15 +745,28 @@ public final class HandwrittenMetalSpatialExecutor {
             : nil
         let fastPath = try makeFastPathPlan(
             featureMask: mask, configuration: configuration,
-            diffusion: diffusion, halation: halation,
+            halation: halation,
             coupler: coupler, adjacency: adjacency, printMTF: printMTF,
             mtf: mtf, grain: grain)
         let multiresPath = try makeMultiresPathPlan(
             featureMask: mask, configuration: configuration,
             frameWidth: frameWidth, frameHeight: frameHeight,
-            diffusion: diffusion, halation: halation,
+            halation: halation,
             coupler: coupler, adjacency: adjacency, printMTF: printMTF,
             mtf: mtf, grain: grain)
+
+        // Only the specialized graphs sample this 2 MiB table. A generic fallback must not
+        // bake and wait for a GPU resource it never binds.
+        let halfResponseLUT: MTLTexture?
+        if fastPath?.exactSpecialized == true || multiresPath != nil {
+            guard let table = makeHalfResponseLUT(
+                    configuration: configurationBuffer, curves: curves) else {
+                throw PreparationError.allocationFailed("half-response lookup table")
+            }
+            halfResponseLUT = table
+        } else {
+            halfResponseLUT = nil
+        }
 
         let value = Prepared(
             width: frameWidth, height: frameHeight, featureMask: mask,
@@ -770,6 +777,11 @@ public final class HandwrittenMetalSpatialExecutor {
             adjacency: adjacency, adjacencySecondary: adjacencySecondary,
             chromaticFringe: chromaticFringe,
             printMTF: printMTF, mtf: mtf, grain: grain,
+            scratchKey: makeScratchKey(
+                width: frameWidth, height: frameHeight, featureMask: mask,
+                diffusion: diffusion, halation: halation,
+                adjacencySecondary: adjacencySecondary, chromaticFringe: chromaticFringe,
+                separateDevelopInput: fastPath?.developPrintPipeline != nil),
             fastPath: fastPath, multiresPath: multiresPath)
         lock.lock()
         prepared[key] = value
@@ -1097,7 +1109,27 @@ public final class HandwrittenMetalSpatialExecutor {
 
         // Development is in-place in densityOutput. It reads only the current pixel from this
         // texture; all neighbourhood fields have been materialized before the overwrite begins.
-        if !sameTexture(current, densityOutput) {
+        let releaseActive = state.featureMask
+            & (FilmEngineFeature.couplers | FilmEngineFeature.donorLayer) != 0
+        let fusedCopyRelease = state.fuseCopyRelease && !opticalOnly
+            && releaseActive && state.coupler == nil && !sameTexture(current, densityOutput)
+        if fusedCopyRelease {
+            var parameters = SpatialParameters(
+                extent: SIMD4(UInt32(width), UInt32(height), 0, 0),
+                geometry: SIMD4(sameTexture(current, frameScratch.work) ? 1 : 0, 0, 0, 0))
+            encoder.setComputePipelineState(copyReleasePipeline)
+            // When work is the source, read it through the read/write binding only.
+            encoder.setTexture(recordExposure, index: 0)
+            encoder.setTexture(densityOutput, index: 1)
+            encoder.setTexture(frameScratch.work, index: 2)
+            encoder.setTexture(state.curves, index: 3)
+            encoder.setBuffer(state.configurationBuffer, offset: 0, index: 0)
+            encoder.setBytes(&parameters, length: MemoryLayout<SpatialParameters>.stride, index: 1)
+            var copyMean = SIMD4<Float>.zero
+            encoder.setBytes(&copyMean, length: MemoryLayout<SIMD4<Float>>.stride, index: 2)
+            dispatch(encoder, width: width, height: height)
+            textureBarrier(encoder)
+        } else if !sameTexture(current, densityOutput) {
             encodeCopy(
                 encoder, source: current, destination: densityOutput,
                 flare: 0, mean: .inline(.zero), width: width, height: height)
@@ -1117,8 +1149,6 @@ public final class HandwrittenMetalSpatialExecutor {
         var adjacencySecondaryGeometry = SIMD4<UInt32>.zero
         var fringeGeometry = SIMD4<UInt32>.zero
         let couplerGrid = frameScratch.work
-        let releaseActive = state.featureMask
-            & (FilmEngineFeature.couplers | FilmEngineFeature.donorLayer) != 0
         if releaseActive {
             if let plan = state.coupler {
                 couplerGeometry = encodeGaussianField(
@@ -1128,13 +1158,13 @@ public final class HandwrittenMetalSpatialExecutor {
                     originX: originX, originY: originY,
                     configuration: state.configurationBuffer, curves: state.curves)
             } else {
-                // The reference realtime schedule stores released inhibitor in half even when it
-                // does not diffuse. Keep that pointwise seam, and let develop take the stride-one
-                // direct-read path rather than recomputing release in float registers.
-                encodeTransform(
-                    encoder, source: densityOutput, destination: couplerGrid,
-                    transform: 2, configuration: state.configurationBuffer,
-                    curves: state.curves, width: width, height: height)
+                // Preserve released inhibitor in its own half texture before development.
+                if !fusedCopyRelease {
+                    encodeTransform(
+                        encoder, source: densityOutput, destination: couplerGrid,
+                        transform: 2, configuration: state.configurationBuffer,
+                        curves: state.curves, width: width, height: height)
+                }
                 couplerGeometry = SIMD4(
                     UInt32(width), UInt32(height), 1, 0)
             }
@@ -1352,7 +1382,7 @@ public final class HandwrittenMetalSpatialExecutor {
         if release {
             if let coupler = state.coupler {
                 dispatches += coupler.fusedPipeline == nil ? 3 : 2
-            } else {
+            } else if !state.fuseCopyRelease || current == 1 {
                 dispatches += 1
             }
         }
@@ -1380,8 +1410,20 @@ public final class HandwrittenMetalSpatialExecutor {
               value.fastPath != nil || value.multiresPath != nil else { return false }
         value.fastPath = nil
         value.multiresPath = nil
+        value.scratchKey = makeScratchKey(
+            width: value.width, height: value.height, featureMask: value.featureMask,
+            diffusion: value.diffusion, halation: value.halation,
+            adjacencySecondary: value.adjacencySecondary,
+            chromaticFringe: value.chromaticFringe, separateDevelopInput: false)
         prepared[key] = value
         return true
+    }
+
+    /// Restores the separate copy and release dispatches for exact A/B tests.
+    func _disableCopyReleaseFusionForTesting(key: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        prepared[key]?.fuseCopyRelease = false
     }
 
     // MARK: - Encoding
@@ -2593,7 +2635,7 @@ public final class HandwrittenMetalSpatialExecutor {
 
     private func makeFastPathPlan(
         featureMask: Int32, configuration: [Float],
-        diffusion: [ScalePlan], halation: [ScalePlan],
+        halation: [ScalePlan],
         coupler: GaussianPlan?, adjacency: GaussianPlan?, printMTF: PrintPlan?,
         mtf: MTFPlan?, grain: GrainPlan
     ) throws -> FastPathPlan? {
@@ -2609,7 +2651,7 @@ public final class HandwrittenMetalSpatialExecutor {
         guard featureMask & required == required,
               featureMask & (FilmEngineFeature.diffusion
                   | FilmEngineFeature.annularHalation) == 0,
-              diffusion.count == 3, halation.count == 3,
+              halation.count == 3,
               halation.map(\.stride) == [4, 8, 8],
               halation.allSatisfy({ $0.fusedPipeline != nil }),
               let coupler, coupler.stride == 4, coupler.fusedPipeline != nil,
@@ -2747,7 +2789,7 @@ public final class HandwrittenMetalSpatialExecutor {
     private func makeMultiresPathPlan(
         featureMask: Int32, configuration: [Float],
         frameWidth: Int, frameHeight: Int,
-        diffusion: [ScalePlan], halation: [ScalePlan],
+        halation: [ScalePlan],
         coupler: GaussianPlan?, adjacency: GaussianPlan?, printMTF: PrintPlan?,
         mtf: MTFPlan?, grain: GrainPlan
     ) throws -> MultiresPathPlan? {
@@ -2767,7 +2809,7 @@ public final class HandwrittenMetalSpatialExecutor {
         guard featureMask & required == required,
               featureMask & forbidden == 0,
               frameWidth.isMultiple(of: 4), frameHeight.isMultiple(of: 4),
-              diffusion.count == 3, halation.count == 3,
+              halation.count == 3,
               halation.map(\.stride) == [4, 8, 8],
               halation.allSatisfy({ $0.fusedPipeline != nil }),
               let coupler, coupler.stride == 4,
@@ -3270,7 +3312,7 @@ public final class HandwrittenMetalSpatialExecutor {
     // MARK: - Scratch
 
     private func acquireScratch(for state: Prepared) -> Scratch? {
-        let key = scratchKey(for: state)
+        let key = state.scratchKey
         lock.lock()
         if let available = scratch[key]?.first(where: { !$0.leased }) {
             available.leased = true
@@ -3369,41 +3411,46 @@ public final class HandwrittenMetalSpatialExecutor {
         return value
     }
 
-    private func scratchKey(for state: Prepared) -> ScratchKey {
+    private func makeScratchKey(
+        width: Int, height: Int, featureMask: Int32,
+        diffusion: [ScalePlan], halation: [ScalePlan],
+        adjacencySecondary: GaussianPlan?, chromaticFringe: GaussianPlan?,
+        separateDevelopInput: Bool
+    ) -> ScratchKey {
         var widths = [Int](repeating: 1, count: 3)
         var heights = [Int](repeating: 1, count: 3)
         func include(_ plans: [ScalePlan]) {
             for (scale, plan) in plans.enumerated() {
                 widths[scale] = max(
-                    widths[scale], (state.width + plan.stride - 1) / plan.stride)
+                    widths[scale], (width + plan.stride - 1) / plan.stride)
                 heights[scale] = max(
-                    heights[scale], (state.height + plan.stride - 1) / plan.stride)
+                    heights[scale], (height + plan.stride - 1) / plan.stride)
             }
         }
-        if state.featureMask & FilmEngineFeature.diffusion != 0 {
-            include(state.diffusion)
+        if featureMask & FilmEngineFeature.diffusion != 0 {
+            include(diffusion)
         }
-        if state.featureMask & FilmEngineFeature.halation != 0 {
-            include(state.halation)
+        if featureMask & FilmEngineFeature.halation != 0 {
+            include(halation)
         }
         // The optical pyramid is dead after the light stage. Reuse its first surface to retain
         // the narrow adjacency field while the wider field uses grid A/B independently.
-        if state.adjacencySecondary != nil {
-            widths[0] = state.width
-            heights[0] = state.height
+        if adjacencySecondary != nil {
+            widths[0] = width
+            heights[0] = height
         }
         // The optical fields are dead at development. Retain the broad inhibitor field in
         // the second pyramid surface while the adjacency fields use the other scratch grids.
-        if let fringe = state.chromaticFringe {
-            widths[1] = max(widths[1], (state.width + 2 * fringe.stride - 2) / fringe.stride)
-            heights[1] = max(heights[1], (state.height + 2 * fringe.stride - 2) / fringe.stride)
+        if let fringe = chromaticFringe {
+            widths[1] = max(widths[1], (width + 2 * fringe.stride - 2) / fringe.stride)
+            heights[1] = max(heights[1], (height + 2 * fringe.stride - 2) / fringe.stride)
         }
         return ScratchKey(
-            width: state.width, height: state.height,
+            width: width, height: height,
             scale0Width: widths[0], scale0Height: heights[0],
             scale1Width: widths[1], scale1Height: heights[1],
             scale2Width: widths[2], scale2Height: heights[2],
-            separateDevelopInput: state.fastPath?.developPrintPipeline != nil)
+            separateDevelopInput: separateDevelopInput)
     }
 
     private func releaseScratch(_ value: Scratch) {

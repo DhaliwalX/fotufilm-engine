@@ -269,6 +269,30 @@ kernel void fotufilm_spatial_transform(
         float4(source.read(position)), p.geometry.x, configuration, curves)), position);
 }
 
+// The general graph copies optical light into the in-place developer, then extracts local
+// inhibitor release into work. Both operations are pointwise and share the same half input.
+// Retain the release texture: computing release inside development lets fast math change
+// rounding across the chemistry boundary, even with an explicit half cast.
+kernel void fotufilm_spatial_copy_release(
+    texture2d<half, access::read> source [[texture(0)]],
+    texture2d<half, access::write> lightOutput [[texture(1)]],
+    texture2d<half, access::read_write> release [[texture(2)]],
+    texture2d<float, access::read> curves [[texture(3)]],
+    const device float *configuration [[buffer(0)]],
+    constant SpatialParameters &p [[buffer(1)]],
+    constant float4 &copyMean [[buffer(2)]],
+    uint2 position [[thread_position_in_grid]]) {
+    if (any(position >= p.extent.xy)) return;
+    // Work can be reused only after this pixel's last optical read; no neighbor is read here.
+    float4 light = float4(p.geometry.x != 0u ? release.read(position) : source.read(position));
+    // Preserve even the signed-zero behavior of the original zero-flare copy and its half store.
+    float flare = as_type<float>(p.extent.z);
+    light.rgb = (1.0f - flare) * light.rgb + flare * copyMean.rgb;
+    half4 stored = half4(light);
+    lightOutput.write(stored, position);
+    release.write(half4(transformed(float4(stored), 2u, configuration, curves)), position);
+}
+
 kernel void fotufilm_spatial_downsample(
     texture2d<half, access::read> source [[texture(0)]],
     texture2d<half, access::write> destination [[texture(1)]],
