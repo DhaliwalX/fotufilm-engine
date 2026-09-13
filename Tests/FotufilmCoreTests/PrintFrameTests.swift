@@ -182,6 +182,107 @@ final class PrintFrameTests: XCTestCase {
         XCTAssertNil(configuration(.film, format: "4x5", stock: "portra400").sheetNotches)
     }
 
+    func testEdgeInscriptionsFollowStockAndGaugeWithoutInventingOtherMaterials() throws {
+        XCTAssertEqual(configuration(.film, stock: "portra400").edgePrinting?.marks.first?.text,
+                       "KODAK PORTRA 400")
+        XCTAssertEqual(configuration(.film).edgePrinting?.marks.first?.text, "ILFORD HP5 PLUS")
+        XCTAssertEqual(configuration(.film, stock: "velvia50").edgePrinting?.marks.first?.text, "FUJI RVP50")
+        for (stock, code, prefix) in [("vision500t", "5219", "EJ"), ("vision250d", "5207", "EN")] {
+            XCTAssertEqual(configuration(.film, format: "super35", stock: stock).edgePrinting?.marks.first?.text, code)
+            XCTAssertEqual(configuration(.film, format: "16mm", stock: stock).edgePrinting?.marks.first?.text, prefix)
+            XCTAssertNil(configuration(.film, format: "120", stock: stock).edgePrinting)
+        }
+        XCTAssertNil(configuration(.film, format: "4x5", stock: "portra400").edgePrinting)
+        XCTAssertNil(configuration(.film, format: "super8", stock: "vision500t").edgePrinting)
+        XCTAssertNil(configuration(.film, stock: "no-film").edgePrinting)
+        XCTAssertNil(configuration(.paper, stock: "portra400").edgePrinting)
+        XCTAssertNil(configuration(.none, stock: "portra400").edgePrinting)
+        XCTAssertNil(configuration(.film, format: "instaxmini", stock: "instaxmini").edgePrinting)
+    }
+
+    func testEdgeExposureUsesNegativeAndReversalDensityWithTheSameViewingLamp() {
+        for id in ["portra400", "hp5plus400", "vision500t"] {
+            let config = configuration(.film, stock: id)
+            XCTAssertLessThan(config.edgeRGB.x, config.baseRGB.x)
+            XCTAssertLessThan(config.edgeRGB.y, config.baseRGB.y)
+            XCTAssertLessThan(config.edgeRGB.z, config.baseRGB.z)
+        }
+        let reversal = configuration(.film, stock: "velvia50")
+        XCTAssertGreaterThan(reversal.edgeRGB.x, reversal.baseRGB.x)
+        XCTAssertGreaterThan(reversal.edgeRGB.y, reversal.baseRGB.y)
+        XCTAssertGreaterThan(reversal.edgeRGB.z, reversal.baseRGB.z)
+        let warm = PrintFrameConfiguration(frame: .film, formatID: "35mm", stockID: "portra400",
+                                           paper: .negative, viewingKelvin: 2856)
+        XCTAssertNotEqual(warm.edgeRGB, configuration(.film, stock: "portra400").edgeRGB)
+    }
+
+    func testEdgeMetadataRoundTripsAndRejectsUnprintableGeometry() throws {
+        let definition = try XCTUnwrap(FilmStock.presetDefinitions["portra400"])
+        let restored = try JSONDecoder().decode(FilmStockDefinition.self,
+                                                from: JSONEncoder().encode(definition))
+        XCTAssertEqual(restored.edgePrinting, definition.edgePrinting)
+        try restored.validate()
+        var invalid = restored
+        invalid.edgePrinting?[0].marks[0].xMM = .nan
+        XCTAssertThrowsError(try invalid.validate())
+        invalid = restored
+        invalid.edgePrinting?[0].marks[0].yMM = 10 // photograph aperture
+        XCTAssertThrowsError(try invalid.validate())
+        invalid = restored
+        invalid.edgePrinting?[0].marks[0].yMM = 3 // perforations
+        XCTAssertThrowsError(try invalid.validate())
+        invalid = restored
+        invalid.edgePrinting?[0].sources = ["not-a-source"]
+        XCTAssertThrowsError(try invalid.validate())
+        invalid = restored
+        invalid.edgePrinting?[0].formatID = "instaxmini"
+        XCTAssertThrowsError(try invalid.validate())
+        invalid = restored
+        invalid.edgePrinting?.append(restored.edgePrinting![0])
+        XCTAssertThrowsError(try invalid.validate())
+        // Old packs still decode and validate without markings.
+        invalid = restored
+        invalid.edgePrinting = nil
+        let old = try JSONDecoder().decode(FilmStockDefinition.self, from: JSONEncoder().encode(invalid))
+        XCTAssertNil(old.edgePrinting)
+        try old.validate()
+    }
+
+    func testLetteringIsVisibleInItsPhysicalBoxForBothImageOrientations() throws {
+        let source = try fixture()
+        for id in ["portra400", "hp5plus400", "velvia50", "vision500t"] {
+            let definition = try XCTUnwrap(FilmStock.presetDefinitions[id])
+            for printing in try XCTUnwrap(definition.edgePrinting) {
+                try definition.validate()
+                for portrait in [false, true] {
+                    let photo = portrait ? try XCTUnwrap(source.cropping(to: CGRect(x: 0, y: 0, width: 100, height: 200))) : source
+                    let config = configuration(.film, format: printing.formatID, stock: id)
+                    let g = try XCTUnwrap(config.geometry)
+                    let layout = PrintFrameRenderer.layout(width: photo.width, height: photo.height, configuration: config)
+                    let result = try XCTUnwrap(PrintFrameRenderer.render(photo, configuration: config))
+                    for mark in printing.marks {
+                        var box = CGRect(x: mark.xMM, y: mark.yMM, width: mark.widthMM, height: mark.heightMM)
+                        if !g.horizontalTransport {
+                            box = CGRect(x: g.widthMM - box.maxY, y: box.minX, width: box.height, height: box.width)
+                        }
+                        if layout.rotated {
+                            box = CGRect(x: g.heightMM - box.maxY, y: box.minX, width: box.height, height: box.width)
+                        }
+                        box = box.applying(CGAffineTransform(scaleX: layout.pixelsPerMM, y: layout.pixelsPerMM))
+                        box.origin.y = layout.size.height - box.maxY
+                        let patch = try XCTUnwrap(result.cropping(to: box.integral))
+                        let bytes = try pixels(patch)
+                        let colours = Set(stride(from: 0, to: bytes.count, by: 8).map { bytes.subdata(in: $0..<($0 + 8)) })
+                        XCTAssertGreaterThan(colours.count, 2, "Missing \(id) \(printing.formatID) \(mark.text), portrait=\(portrait)")
+                    }
+                    let crop = CGRect(x: layout.imageRect.minX, y: layout.size.height - layout.imageRect.maxY,
+                                      width: CGFloat(photo.width), height: CGFloat(photo.height))
+                    XCTAssertEqual(try pixels(XCTUnwrap(result.cropping(to: crop))), try pixels(photo))
+                }
+            }
+        }
+    }
+
     func testInstantBorderUsesTheActualIntegralFilmDimensions() throws {
         for (id, width) in [("instaxmini", 54.0), ("instaxsquare", 72.0), ("instaxwide", 108.0)] {
             let g = try XCTUnwrap(FilmBorderGeometry.preset(id))

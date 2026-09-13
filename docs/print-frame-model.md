@@ -58,7 +58,58 @@ modelled within a representative 20 mm span, ending 10 mm from the corner. These
 not measured manufacturer tolerances. A stock without a documented code has no invented
 notches and the frame menu identifies that missing information. Roll film and paper never
 receive sheet-film notches. The neutral background seen through cutouts is a scan-bed convention.
-No manufacturer edge lettering, fake frame numbers or random damage is added.
+Random edge fogging and gate damage are not added.
+
+## Edge printing
+
+Optional `FilmStockDefinition.edgePrinting` records carry the exact inscription, source URLs,
+physical text boxes and supported gauge. The renderer draws a representative segment of the
+manufacturer's edge print in the outer rebate, rotating it with the film. Roll-film markings are
+viewed from the base side, as in the source diagrams. The existing sheet view remains emulsion-side
+up for notch identification; sheet lettering has not been verified and is omitted.
+
+| Stock | Gauges with verified inscriptions | Inscription |
+| --- | --- | --- |
+| Portra 400 | 135, 120 | KODAK PORTRA 400 |
+| Ektar 100 | 135, 120 | KODAK EKTAR 100 |
+| Tri-X 400 | 135, 120 | KODAK 400 TX |
+| T-Max 100 | 135, 120 | KODAK 100 TMX |
+| HP5 Plus | 135 | ILFORD HP5 PLUS |
+| Velvia 50 | 135, 120 | FUJI / RVP50 |
+| Vision3 250D | 35 mm still, Super 35, Super 16 | 5207 / EN |
+| Vision3 500T | 35 mm still, Super 35, Super 16 | 5219 / EJ |
+| Double-X | 35 mm still, Super 35, Super 16 | 5222 / KE |
+
+Sources:
+
+- [Kodak Portra 400 product specification](https://www.kodakprofessional.com/photographers/film/color/kodak-professional-portra-400-film/516)
+  and [Ektar 100 specification](https://www.kodakprofessional.com/photographers/film/color/kodak-professional-ektar-100-film/530): literal edge-print names.
+- [Kodak Professional catalog, L-9 (2003)](https://filmcolors.org/wp-content/uploads/2025/11/2003KodakProfessionalCatalog_L9.pdf),
+  printed pp. 6R and 16R: 135 and 120 layout families and black-and-white stock inscriptions.
+  The old Portra NC/VC product names are not reused. Kodak's 120 dual numbering is distinct
+  from its 135 full/half-frame numbering; full/half-frame spacing on 135 is 38/19 mm.
+- [Ilford's processing examples](https://www.ilfordphoto.com/common-film-processing-problems/):
+  HP5 Plus lettering and full/half-frame locations in the overexposure example.
+- [Fujifilm Velvia 50, AF3-0221E2](https://asset.fujifilm.com/master/emea/files/2020-10/a71dda63e2662f012b3b74110794918a/films_velvia-50_datasheet_01.pdf),
+  PDF p. 6: RVP50 inscriptions and different 135/120 arrangements.
+- [Kodak 35 mm KEYKODE diagram](https://www.kodak.com/content/products-brochures/Film/post-production-35mm-keykode-diagram.pdf)
+  and [16 mm KEYKODE guide](https://www.kodak.com/content/products-brochures/Film/post-production-16mm-keykode-diagram.pdf),
+  PDF p. 2: gauge-specific production inscriptions. A single cinema frame shows only a stock-code
+  fragment, not an entire foot of KEYKODE data squeezed into one frame.
+
+These are reference cuts, not reproductions of an identified manufactured roll. The still-film
+numbers select a representative position; they are not the imported photograph's original frame
+number. Production batch, emulsion/roll serials, year and machine-readable barcodes are omitted.
+Unknown stock/gauge pairs, sheet film, Super 8, instant masks and paper fronts stay unlettered.
+
+The published diagrams and scans establish text and layout families but do not provide precise
+printer font outlines, exposure spectra or tolerances. System vector lettering and its millimetre
+boxes approximate those shapes and positions. Letter density is a representative 72% of the
+negative stock's density span, or 8% of a reversal stock's span above minimum density. The same
+stock dye spectra, light-box gain and lamp produce the resulting letter colour. This makes negative
+letters dark and reversal letters light without a universal painted amber colour. Edge density does
+not claim to measure the particular roll or follow its lab development. No source images or fonts
+are embedded. Image pixels, profiles and bit depth remain unchanged by the compositor.
 
 ## Film colour
 

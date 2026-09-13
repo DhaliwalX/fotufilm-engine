@@ -1,6 +1,7 @@
 #if canImport(CoreGraphics)
 import Foundation
 import CoreGraphics
+import CoreText
 #if canImport(FotufilmCore)
 import FotufilmCore
 #endif
@@ -70,6 +71,10 @@ public enum PrintFrameRenderer {
                 : placement.imageRect.applying(CGAffineTransform(scaleX: 1 / scale, y: 1 / scale))
             drawLustre(in: context, size: material.size, excluding: photo)
         } else if let geometry = configuration.geometry {
+            if let printing = configuration.edgePrinting {
+                drawEdgePrinting(in: context, geometry: geometry, printing: printing,
+                                 color: baseColor(configuration.edgeRGB))
+            }
             drawPerforations(in: context, geometry: geometry)
             if geometry.isSheet, let code = configuration.sheetNotches {
                 drawNotches(in: context, size: material.size, code: code)
@@ -102,9 +107,56 @@ public enum PrintFrameRenderer {
                 components: [CGFloat(rgb.x), CGFloat(rgb.y), CGFloat(rgb.z), 1])!
     }
 
-    /// The neutral scan-bed visible through the physical holes. No synthetic edge lettering,
-    /// roll numbers, edge fogging or random gate damage is represented as a stock property.
+    /// The neutral scan-bed visible through the physical holes.
     private static var cutoutColor: CGColor { baseColor(SIMD3(repeating: 0.96)) }
+
+    private static func drawEdgePrinting(in context: CGContext, geometry g: FilmBorderGeometry,
+                                         printing: FilmEdgePrinting, color: CGColor) {
+        context.saveGState()
+        // In the reference strip x is transport and y is across. Turn that strip with its
+        // perforations when the camera transports vertically; portrait rotation is outside.
+        if !g.horizontalTransport {
+            context.translateBy(x: g.widthMM, y: 0)
+            context.rotate(by: .pi / 2)
+        }
+        let along = g.horizontalTransport ? g.widthMM : g.heightMM
+        let across = g.horizontalTransport ? g.heightMM : g.widthMM
+        context.clip(to: CGRect(x: 0, y: 0, width: along, height: across))
+        // System vector lettering approximates the edge printer. No manufacturer font or
+        // scanned asset is shipped. Paths avoid display-sized hinting at small physical sizes.
+        let font = CTFontCreateWithName("Helvetica" as CFString, 100, nil)
+        context.setFillColor(color)
+        for mark in printing.marks {
+            let attributes = [kCTFontAttributeName: font] as CFDictionary
+            let string = CFAttributedStringCreate(nil, mark.text as CFString, attributes)!
+            let line = CTLineCreateWithAttributedString(string)
+            let path = CGMutablePath()
+            for run in CTLineGetGlyphRuns(line) as! [CTRun] {
+                let count = CTRunGetGlyphCount(run)
+                var glyphs = [CGGlyph](repeating: 0, count: count)
+                var positions = [CGPoint](repeating: .zero, count: count)
+                CTRunGetGlyphs(run, CFRange(location: 0, length: 0), &glyphs)
+                CTRunGetPositions(run, CFRange(location: 0, length: 0), &positions)
+                let runFont = (CTRunGetAttributes(run) as NSDictionary)[kCTFontAttributeName] as! CTFont
+                for i in 0..<count {
+                    if let glyph = CTFontCreatePathForGlyph(runFont, glyphs[i], nil) {
+                        path.addPath(glyph, transform: CGAffineTransform(translationX: positions[i].x,
+                                                                        y: positions[i].y))
+                    }
+                }
+            }
+            let bounds = path.boundingBoxOfPath
+            guard !bounds.isEmpty, !bounds.isNull else { continue }
+            context.saveGState()
+            context.translateBy(x: mark.xMM, y: mark.yMM)
+            context.scaleBy(x: mark.widthMM / bounds.width, y: mark.heightMM / bounds.height)
+            context.translateBy(x: -bounds.minX, y: -bounds.minY)
+            context.addPath(path)
+            context.fillPath()
+            context.restoreGState()
+        }
+        context.restoreGState()
+    }
 
     private static func drawPerforations(in context: CGContext, geometry g: FilmBorderGeometry) {
         guard let type = g.perforation else { return }
