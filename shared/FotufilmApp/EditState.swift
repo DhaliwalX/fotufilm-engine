@@ -376,6 +376,7 @@ struct EditState: Equatable {
     /// Where the developed image is finished. Most choices form a positive; `.negative` keeps the
     /// developed film itself as the output.
     var paper = PrintPaper.editorDefault
+    var printFrame = PrintFrame.none
     /// An edit can explicitly follow the loaded stock's physical reference path: still negative
     /// to RA-4 paper, motion negative to its native release print, and reversal to its direct
     /// positive. New edits instead use the HDR-capable digital reference selected above.

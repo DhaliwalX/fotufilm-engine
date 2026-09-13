@@ -29,7 +29,7 @@ extension EditState: Codable {
     static let bespokeKeys: [String] = [
         "stockID", "chosenFormatID", "sourceInterpretation", "captureIlluminantKelvin",
         "filmLightKelvin", "sourceLightIndex", "halationReturnRatio", "grainMottleShare", "couplerGapReach", "paper", "paperFollowsStock",
-        "seed", "shutterSeconds", "printLightKelvin", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop",
+        "seed", "shutterSeconds", "printLightKelvin", "printFrame", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop",
         "grade", "lensProfileID", "lensAdjustment", "lensFilterIDs", "lensFilterMetering", "selective",
     ]
 
@@ -92,6 +92,7 @@ extension EditState: Codable {
         paper = try c.decodeIfPresent(String.self, forKey: EditKey("paper"))
             .flatMap(PrintPaper.preset(id:)) ?? .ektacolorEdge
         paperFollowsStock = try c.decodeIfPresent(Bool.self, forKey: EditKey("paperFollowsStock")) ?? false
+        printFrame = try c.decodeIfPresent(PrintFrame.self, forKey: EditKey("printFrame")) ?? .none
         seed = try c.decodeIfPresent(UInt64.self, forKey: EditKey("seed")) ?? seed
         shutterSeconds = try c.decodeIfPresent(Double.self, forKey: EditKey("shutterSeconds"))
         printLightKelvin = try c.decodeIfPresent(Double.self, forKey: EditKey("printLightKelvin"))
@@ -142,6 +143,7 @@ extension EditState: Codable {
         try c.encode(couplerGapReach, forKey: EditKey("couplerGapReach"))
         try c.encode(paper.id, forKey: EditKey("paper"))
         try c.encode(paperFollowsStock, forKey: EditKey("paperFollowsStock"))
+        try c.encode(printFrame, forKey: EditKey("printFrame"))
         try c.encode(seed, forKey: EditKey("seed"))
         try c.encodeIfPresent(shutterSeconds, forKey: EditKey("shutterSeconds"))
         try c.encodeIfPresent(printLightKelvin, forKey: EditKey("printLightKelvin"))
