@@ -146,13 +146,28 @@ public struct PrintFrameConfiguration: Equatable, Sendable {
             detail = frame.detail
         case .film:
             if film?.isInstant == true {
+                // The integral film's attached white mask is separate from its image dyes.
                 baseRGB = SIMD3(repeating: 0.94)
-            } else if paper.isNegative, let stock = definition?.stock {
-                baseRGB = SpectralRuntime.negativeViewing(for: stock, look: negativeViewing).sample(.zero)
+            } else if let stock = definition?.stock {
+                let light = viewingKelvin.map(SpectralRuntime.printLightSPD)
+                let dyes = stock.spectralProfile.imageDyeDensity
+                if stock.isReversal {
+                    // An unexposed reversal rebate develops to maximum density, including each
+                    // stock's residual dye colour. It is not a universal display black.
+                    baseRGB = SpectralRuntime.transmissionRGB(
+                        density: stock.curves.map(\.dMax), dyes: dyes, illuminant: light)
+                } else {
+                    // The physical negative's clear rebate carries its own base-plus-fog and
+                    // orange mask. A common light-box gain keeps that tint; per-channel gains
+                    // would erase it. Scanner-normalized negative viewing remains explicit.
+                    let base = SpectralRuntime.transmissionRGB(
+                        density: stock.curves.map(\.dMin), dyes: dyes, illuminant: light)
+                    baseRGB = paper.isNegative && negativeViewing == .scanner
+                        ? SIMD3(repeating: 1)
+                        : base * (SpectralRuntime.lightBoxBaseLevel / max(base.x, base.y, base.z, 1e-6))
+                }
             } else {
-                // A positive border reads the unexposed rebate as black; no invented orange mask
-                // or manufacturer edge text is applied to a developed positive.
-                baseRGB = SIMD3(repeating: 0.002)
+                baseRGB = .zero
             }
             if !filmAvailable {
                 detail = "Choose a film and a matching physical film format."

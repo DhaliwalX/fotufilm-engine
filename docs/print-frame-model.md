@@ -53,7 +53,20 @@ modelled within a representative 20 mm span, ending 10 mm from the corner. These
 not measured manufacturer tolerances. A stock without a documented code has no invented
 notches and the frame menu identifies that missing information. Roll film and paper never
 receive sheet-film notches. The neutral background seen through cutouts is a scan-bed convention.
-No manufacturer edge lettering, fake frame numbers, random damage or orange rim is added.
+No manufacturer edge lettering, fake frame numbers or random damage is added.
+
+## Film colour
+
+Film Border depicts the material surrounding the image. Colour-negative borders use the stock's
+minimum-density records and dye spectra, retaining its base-plus-fog and orange mask. Monochrome
+negative borders retain their modelled clear-base tint. A common light-box gain is used for negatives,
+so it does not neutralise their colours. Reversal borders use the stock's maximum-density records:
+unexposed slide-film rebate develops dark. A chosen viewing light illuminates the border as well.
+Scanner-normalized negative viewing explicitly neutralises the clear base. Integral instant film keeps
+its attached white mask, which is a separate material from the image dyes.
+
+These colours follow the existing spectral stock models; they are not separately measured samples of
+individual roll edges. The photograph inside the aperture retains its selected development and colour.
 
 ## Paper construction
 
