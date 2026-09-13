@@ -3816,38 +3816,20 @@
           "value" : 0
         },
         {
-          "detail" : "Dark film rebate, sprocket holes, and amber edge markings.",
-          "id" : "film-35",
-          "label" : "35 mm Film",
+          "detail" : "The selected film gauge, with its physical edges and perforations.",
+          "id" : "film",
+          "label" : "Film Border",
           "value" : 1
         },
         {
-          "detail" : "An irregular black rebate on a warm photographic sheet.",
-          "id" : "contact",
-          "label" : "Contact Print",
+          "detail" : "The selected photographic paper, in a 4 × 6 inch lustre print.",
+          "id" : "paper",
+          "label" : "Paper Border",
           "value" : 2
-        },
-        {
-          "detail" : "An ivory border with a fine, lustrous paper surface.",
-          "id" : "baryta",
-          "label" : "Baryta Paper",
-          "value" : 3
-        },
-        {
-          "detail" : "Warm matte paper with visible fibres and a softly uneven edge.",
-          "id" : "cotton",
-          "label" : "Cotton Rag",
-          "value" : 4
-        },
-        {
-          "detail" : "A softly textured white border with a deep lower margin.",
-          "id" : "instant",
-          "label" : "Instant Print",
-          "value" : 5
         }
       ],
-      "detail" : "Finish a photograph with film edges or textured print paper.",
-      "documentation" : "Adds film-edge or paper borders outside the cropped photograph in the iPhone photo editor. Included in saved edits and exports; None leaves the image unchanged.",
+      "detail" : "Use the selected film gauge or photographic paper for the border.",
+      "documentation" : "Frames the photograph using the selected film gauge or a 4 × 6 inch lustre sheet of the selected reflection paper. Film perforations follow physical format geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports.",
       "drives" : [
 
       ],

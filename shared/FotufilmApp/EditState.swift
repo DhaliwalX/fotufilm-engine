@@ -528,6 +528,13 @@ struct EditState: Equatable {
         return paper.resolved(for: stock)
     }
 
+    var frameConfiguration: PrintFrameConfiguration {
+        PrintFrameConfiguration(frame: printFrame, formatID: formatID,
+                                stockID: stockID, paper: resolvedPaper,
+                                viewingKelvin: printLightKelvin.map(Float.init),
+                                negativeViewing: AppSettings.storedNegativeViewing)
+    }
+
     /// Whether the selected film and medium can carry a local HDR output request. The app setting
     /// decides the initial request when an editor opens; it does not remain a live dependency of
     /// the edit. Negative film is always delivered as SDR.

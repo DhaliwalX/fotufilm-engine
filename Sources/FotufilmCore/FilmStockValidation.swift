@@ -58,6 +58,21 @@ public extension FilmStockDefinition {
             try Self.checkIdentifier(nativeFormatID, field: "nativeFormatID",
                                      limit: 32, fail: fail)
         }
+        if let code = sheetNotches {
+            guard let url = URL(string: code.source), url.scheme == "https", url.host != nil,
+                  code.notches.count > 0, code.notches.count <= 8 else {
+                throw fail("sheetNotches", "requires a source URL and one to eight notches")
+            }
+            var previousEnd = 0.0
+            for notch in code.notches {
+                guard notch.position.isFinite, notch.width.isFinite, notch.depth.isFinite,
+                      notch.width > 0, notch.depth > 0, notch.depth <= 0.25,
+                      notch.position >= previousEnd, notch.position + notch.width <= 1 else {
+                    throw fail("sheetNotches", "notches must be finite, ordered and inside the code span")
+                }
+                previousEnd = notch.position + notch.width
+            }
+        }
         try check("referenceIlluminantKelvin",
                   referenceIlluminantKelvin ?? 5500, 2000...12000)
         if let spectralLineage {

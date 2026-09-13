@@ -13,6 +13,8 @@ public struct FilmStockDefinition: Codable, Sendable {
     /// The gauge this stock is known on — a `FilmFormat.presets` id, such as "super35" for a
     /// motion-picture negative or "120" for a roll film whose reputation was made in medium format.
     public var nativeFormatID: String?
+    /// Documented sheet-film identification pattern; absent means no verified code.
+    public var sheetNotches: SheetFilmNotchCode?
     /// The illuminant the stock is balanced to record neutrally, in kelvin. Absent means the
     /// ordinary 5500 K daylight balance; tungsten stocks state 3200 K in their pack record.
     public var referenceIlluminantKelvin: Float?
