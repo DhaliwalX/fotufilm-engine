@@ -52,6 +52,23 @@ public struct SheetFilmNotchCode: Codable, Equatable, Sendable {
     }
 }
 
+/// A representative cut from documented edge printing, viewed from the base side.
+/// Coordinates are millimetres: x along transport, y across the film, origin lower left.
+/// The boxes specify approximate inscription proportions, not measured printer tolerances.
+/// Unknown batch/roll numbers and machine-readable codes must not be fabricated.
+public struct FilmEdgePrinting: Codable, Equatable, Sendable {
+    public struct Mark: Codable, Equatable, Sendable {
+        public var text: String
+        public var xMM: Double
+        public var yMM: Double
+        public var widthMM: Double
+        public var heightMM: Double
+    }
+    public var formatID: String
+    public var sources: [String]
+    public var marks: [Mark]
+}
+
 /// Millimetre geometry before the finished photograph is fitted into the camera aperture.
 /// x runs across the film, y along transport, except 135 stills which transport horizontally.
 public struct FilmBorderGeometry: Equatable, Sendable {
@@ -121,6 +138,9 @@ public struct PrintFrameConfiguration: Equatable, Sendable {
     public let frame: PrintFrame
     public let geometry: FilmBorderGeometry?
     public let sheetNotches: SheetFilmNotchCode?
+    public let edgePrinting: FilmEdgePrinting?
+    /// The edge exposure viewed through the same stock and lamp as its rebate.
+    public let edgeRGB: SIMD3<Float>
     /// Display-linear P3, converted into the photograph's output profile by the compositor.
     public let baseRGB: SIMD3<Float>
     public let detail: String
@@ -140,6 +160,29 @@ public struct PrintFrameConfiguration: Equatable, Sendable {
         self.frame = frame == .film && !filmAvailable || frame == .paper && !reflective ? .none : frame
         geometry = self.frame == .film ? film : nil
         sheetNotches = geometry?.isSheet == true ? definition?.sheetNotches : nil
+        edgePrinting = self.frame == .film
+            ? definition?.edgePrinting?.first { $0.formatID == formatID } : nil
+        if self.frame == .film, let stock = definition?.stock, film?.isInstant == false {
+            let light = viewingKelvin.map(SpectralRuntime.printLightSPD)
+            let dyes = stock.spectralProfile.imageDyeDensity
+            let clear = SpectralRuntime.transmissionRGB(
+                density: stock.curves.map(\.dMin), dyes: dyes, illuminant: light)
+            // A representative developed edge exposure, not a measured manufacturer's
+            // edge-printer calibration. Reversal clears exposed letters; negatives darken.
+            let density = stock.curves.map { curve in
+                curve.dMin + (curve.dMax - curve.dMin) * (stock.isReversal ? 0.08 : 0.72)
+            }
+            let exposed = SpectralRuntime.transmissionRGB(density: density, dyes: dyes, illuminant: light)
+            if stock.isReversal {
+                edgeRGB = exposed
+            } else if paper.isNegative && negativeViewing == .scanner {
+                edgeRGB = exposed / SIMD3(max(clear.x, 1e-6), max(clear.y, 1e-6), max(clear.z, 1e-6))
+            } else {
+                edgeRGB = exposed * (SpectralRuntime.lightBoxBaseLevel / max(clear.x, clear.y, clear.z, 1e-6))
+            }
+        } else {
+            edgeRGB = .zero
+        }
         switch frame {
         case .none:
             baseRGB = .zero

@@ -1,4 +1,5 @@
 {
+  "edgePrinting": [{"formatID":"35mm","sources":["https://asset.fujifilm.com/master/emea/files/2020-10/a71dda63e2662f012b3b74110794918a/films_velvia-50_datasheet_01.pdf"],"marks":[{"text":"FUJI RVP50","xMM":12,"yMM":33.3,"widthMM":7.7,"heightMM":1.15},{"text":"1","xMM":9,"yMM":33.15,"widthMM":0.7,"heightMM":1.4},{"text":"1","xMM":9,"yMM":0.35,"widthMM":0.7,"heightMM":1.4},{"text":"1A","xMM":28,"yMM":0.4,"widthMM":1.45,"heightMM":1.05}]},{"formatID":"120","sources":["https://asset.fujifilm.com/master/emea/files/2020-10/a71dda63e2662f012b3b74110794918a/films_velvia-50_datasheet_01.pdf"],"marks":[{"text":"FUJI","xMM":2,"yMM":58.95,"widthMM":3.7,"heightMM":1.2},{"text":"2","xMM":8,"yMM":58.7,"widthMM":0.9,"heightMM":1.6},{"text":"RVP50","xMM":12,"yMM":58.95,"widthMM":5.2,"heightMM":1.2}]}],
   "adjacencyRadiusMM": 0.04406,
   "adjacencyStrength": 0.688709,
   "couplerDiffusionMM": 0,

@@ -1,4 +1,5 @@
 {
+  "edgePrinting": [{"formatID":"35mm","sources":["https://www.ilfordphoto.com/common-film-processing-problems/"],"marks":[{"text":"ILFORD HP5 PLUS","xMM":2,"yMM":33.3,"widthMM":11.55,"heightMM":1.15},{"text":"1","xMM":9,"yMM":0.35,"widthMM":0.7,"heightMM":1.4},{"text":"1A","xMM":28,"yMM":0.4,"widthMM":1.45,"heightMM":1.05}]}],
   "adjacencyRadiusMM": 0.035,
   "adjacencyStrength": 0.18,
   "couplerDiffusionMM": 0,

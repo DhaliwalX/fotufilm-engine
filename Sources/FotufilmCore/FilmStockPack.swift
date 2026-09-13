@@ -15,6 +15,8 @@ public struct FilmStockDefinition: Codable, Sendable {
     public var nativeFormatID: String?
     /// Documented sheet-film identification pattern; absent means no verified code.
     public var sheetNotches: SheetFilmNotchCode?
+    /// Stock- and gauge-specific inscriptions. Missing records leave the edge unlettered.
+    public var edgePrinting: [FilmEdgePrinting]?
     /// The illuminant the stock is balanced to record neutrally, in kelvin. Absent means the
     /// ordinary 5500 K daylight balance; tungsten stocks state 3200 K in their pack record.
     public var referenceIlluminantKelvin: Float?

@@ -73,6 +73,46 @@ public extension FilmStockDefinition {
                 previousEnd = notch.position + notch.width
             }
         }
+        if let edgePrinting {
+            guard !edgePrinting.isEmpty, edgePrinting.count <= 4,
+                  Set(edgePrinting.map(\.formatID)).count == edgePrinting.count else {
+                throw fail("edgePrinting", "requires one to four unique gauge records")
+            }
+            for printing in edgePrinting {
+                guard let g = FilmBorderGeometry.preset(printing.formatID), !g.isInstant, !g.isSheet,
+                      !printing.sources.isEmpty, printing.sources.count <= 4,
+                      printing.sources.allSatisfy({ source in
+                          guard let url = URL(string: source) else { return false }
+                          return source.count <= 512 && url.scheme == "https" && url.host != nil
+                      }), !printing.marks.isEmpty, printing.marks.count <= 12 else {
+                    throw fail("edgePrinting", "requires a roll gauge, source URLs and one to twelve inscriptions")
+                }
+                let along = g.horizontalTransport ? g.widthMM : g.heightMM
+                let across = g.horizontalTransport ? g.heightMM : g.widthMM
+                // Text lives outside the perforations (or in the unperforated 120 rebate).
+                let rail = printing.formatID == "120" ? 2.5
+                    : printing.formatID == "super8" ? 0.51
+                    : printing.formatID == "16mm" ? 0.8 : 2.01
+                for mark in printing.marks {
+                    try Self.checkText(mark.text, field: "edgePrinting.text", limit: 48, required: true, fail: fail)
+                    guard [mark.xMM, mark.yMM, mark.widthMM, mark.heightMM].allSatisfy(\.isFinite),
+                          mark.xMM >= 0, mark.yMM >= 0, mark.widthMM > 0, mark.heightMM > 0,
+                          mark.xMM + mark.widthMM <= along,
+                          mark.yMM + mark.heightMM <= across else {
+                        throw fail("edgePrinting", "inscriptions must fit the outer film rebate in millimetres")
+                    }
+                    let onRail = mark.yMM + mark.heightMM <= rail || mark.yMM >= across - rail
+                    // 16 mm human-readable signing also occupies the space between holes
+                    // on the perforated edge; a Super 16 aperture starts 2.85 mm inboard.
+                    let betweenSixteenPerfs = printing.formatID == "16mm"
+                        && mark.yMM >= across - 2.85 && mark.xMM >= 0.635
+                        && mark.xMM + mark.widthMM <= along - 0.635
+                    guard onRail || betweenSixteenPerfs else {
+                        throw fail("edgePrinting", "inscriptions cannot cross the aperture or perforations")
+                    }
+                }
+            }
+        }
         try check("referenceIlluminantKelvin",
                   referenceIlluminantKelvin ?? 5500, 2000...12000)
         if let spectralLineage {

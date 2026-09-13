@@ -1,4 +1,5 @@
 {
+  "edgePrinting": [{"formatID":"35mm","sources":["https://www.kodak.com/content/products-brochures/Film/post-production-35mm-keykode-diagram.pdf"],"marks":[{"text":"EASTMAN","xMM":1,"yMM":0.55,"widthMM":8.5,"heightMM":0.75},{"text":"5222","xMM":17,"yMM":0.55,"widthMM":4.2,"heightMM":0.75}]},{"formatID":"super35","sources":["https://www.kodak.com/content/products-brochures/Film/post-production-35mm-keykode-diagram.pdf"],"marks":[{"text":"5222","xMM":1,"yMM":0.55,"widthMM":4.2,"heightMM":0.75}]},{"formatID":"16mm","sources":["https://www.kodak.com/content/products-brochures/Film/post-production-16mm-keykode-diagram.pdf"],"marks":[{"text":"KE","xMM":1.3,"yMM":14.2,"widthMM":1.4,"heightMM":0.8}]}],
   "adjacencyRadiusMM": 0.101803,
   "adjacencyStrength": 0.650079,
   "couplerDiffusionMM": 0,
