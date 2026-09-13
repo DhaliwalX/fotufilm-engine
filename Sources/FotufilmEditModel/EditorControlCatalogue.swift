@@ -1212,6 +1212,22 @@ public enum EditorControlCatalogue {
 
     private static let print: [EditorControl] = [
         EditorControl(
+            .printFrame, title: "Frame",
+            detail: "Finish a photograph with film edges or textured print paper.",
+            section: .printPaper,
+            kind: .menu(.fixed(PrintFrame.allCases.enumerated().map {
+                EditorMenuChoice(Double($0.offset), $0.element.name,
+                                 detail: $0.element.detail, id: $0.element.id)
+            })),
+            surfaces: [.app],
+            omitted: [.desktop: "Frame finishing is offered in the iPhone photo editor.",
+                      .android: "Frame finishing is offered in the iPhone photo editor.",
+                      .resolve: "The host owns output framing.",
+                      .finalcut: "The host owns output framing.",
+                      .web: "Frame finishing is offered in the iPhone photo editor.",
+                      .cli: "Frame finishing is offered in the iPhone photo editor."],
+            documentation: "Adds film-edge or paper borders outside the cropped photograph in the iPhone photo editor. Included in saved edits and exports; None leaves the image unchanged."),
+        EditorControl(
             .paper, title: "Output Medium",
             detail: "Choose how the film is printed, scanned, or viewed.",
             section: .printPaper, kind: .menu(.dynamic(.papers)), availability: .printStage,

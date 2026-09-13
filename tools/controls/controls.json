@@ -3807,6 +3807,69 @@
       "title" : "Highlights Level"
     },
     {
+      "availability" : "always",
+      "choices" : [
+        {
+          "detail" : "The photograph without a border.",
+          "id" : "none",
+          "label" : "None",
+          "value" : 0
+        },
+        {
+          "detail" : "Dark film rebate, sprocket holes, and amber edge markings.",
+          "id" : "film-35",
+          "label" : "35 mm Film",
+          "value" : 1
+        },
+        {
+          "detail" : "An irregular black rebate on a warm photographic sheet.",
+          "id" : "contact",
+          "label" : "Contact Print",
+          "value" : 2
+        },
+        {
+          "detail" : "An ivory border with a fine, lustrous paper surface.",
+          "id" : "baryta",
+          "label" : "Baryta Paper",
+          "value" : 3
+        },
+        {
+          "detail" : "Warm matte paper with visible fibres and a softly uneven edge.",
+          "id" : "cotton",
+          "label" : "Cotton Rag",
+          "value" : 4
+        },
+        {
+          "detail" : "A softly textured white border with a deep lower margin.",
+          "id" : "instant",
+          "label" : "Instant Print",
+          "value" : 5
+        }
+      ],
+      "detail" : "Finish a photograph with film edges or textured print paper.",
+      "documentation" : "Adds film-edge or paper borders outside the cropped photograph in the iPhone photo editor. Included in saved edits and exports; None leaves the image unchanged.",
+      "drives" : [
+
+      ],
+      "field" : "printFrame",
+      "group" : "print",
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "Frame finishing is offered in the iPhone photo editor.",
+        "cli" : "Frame finishing is offered in the iPhone photo editor.",
+        "desktop" : "Frame finishing is offered in the iPhone photo editor.",
+        "finalcut" : "The host owns output framing.",
+        "resolve" : "The host owns output framing.",
+        "web" : "Frame finishing is offered in the iPhone photo editor."
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "surfaces" : [
+        "app"
+      ],
+      "title" : "Frame"
+    },
+    {
       "availability" : "printStage",
       "commandLineFlag" : "--paper",
       "commandLineGeneric" : false,

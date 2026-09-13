@@ -305,17 +305,18 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertFalse(bleach.availability.admits(stock: nil))
     }
 
-    func testThePrintSectionIsAbsentOnAReversalStock() throws {
+    func testOnlyFramingRemainsInThePrintSectionOnAReversalStock() throws {
         let reversal = try preset("example-reversal-64")
         let offered = EditorControlCatalogue.controls(in: .printPaper,
                                                       for: reversal)
-        XCTAssertTrue(offered.isEmpty)
+        XCTAssertEqual(offered.map(\.field), [.printFrame])
+        XCTAssertTrue(EditorControlCatalogue.control(.printFrame)!.availability.admits(stock: nil))
 
         let negative = try preset("example-negative-400")
         XCTAssertEqual(
             EditorControlCatalogue.controls(in: .printPaper, for: negative)
                 .map(\.field),
-                       [.paper, .printLight, .printCorrection])
+                       [.printFrame, .paper, .printLight, .printCorrection])
         XCTAssertEqual(EditorControlCatalogue.controls(in: .printLamp, for: negative).map(\.field),
                        [.enlarger, .printerEnabled, .printerLamp, .printerExposure,
                         .printerMagenta, .printerYellow])

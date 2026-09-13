@@ -99,6 +99,8 @@ extension EditorControlField {
 
         case .paper:
             return .bespoke { !$0.paperFollowsStock }
+        case .printFrame:
+            return .bespoke { $0.printFrame != .none }
         case .printLight:
             return .bespoke { $0.printLightKelvin != nil }
         case .enlarger:
@@ -246,6 +248,7 @@ extension EditState {
     }
 
     mutating func reset(_ field: EditorControlField) {
+        if field == .printFrame { printFrame = .none; return }
         if field == .halationReturn { halationReturnRatio = nil; return }
         guard let control = EditorControlCatalogue.control(field) else { return }
         switch field.access {
