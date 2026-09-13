@@ -3679,6 +3679,7 @@
   "isMonochrome": true,
   "isReversal": false,
   "name": "HP5 Plus",
+  "sheetNotches": {"source": "https://www.ilfordphoto.com/wp/wp-content/uploads/2017/06/Notch-Codes-Guide..pdf", "notches": [{"position": 0, "width": 0.17721518987341772, "depth": 0.04430379746835443}, {"position": 0.6329113924050633, "width": 0.0759493670886076, "depth": 0.0379746835443038}, {"position": 0.8164556962025317, "width": 0.17721518987341772, "depth": 0.04430379746835443}]},
   "nativeFormatID": "35mm",
   "paperCurve": {
     "dMin": 0.05,

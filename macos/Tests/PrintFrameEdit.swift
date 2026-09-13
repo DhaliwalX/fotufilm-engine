@@ -24,6 +24,19 @@ enum PrintFrameEditCheck {
     static func main() throws {
         let legacy = try JSONDecoder().decode(EditState.self, from: Data("{}".utf8))
         precondition(legacy.printFrame == .none)
+        for (value, expected) in [("film-35", PrintFrame.film), ("instant", .film),
+                                  ("baryta", .paper), ("cotton", .paper), ("contact", .paper)] {
+            let saved = Data("{\"printFrame\":\"\(value)\"}".utf8)
+            let restored = try JSONDecoder().decode(EditState.self, from: saved)
+            precondition(restored.printFrame == expected)
+        }
+        var film = legacy
+        film.stockID = "hp5plus400"
+        film.printFrame = .film
+        film.chosenFormatID = nil
+        precondition(film.frameConfiguration.geometry == FilmBorderGeometry.preset("35mm"))
+        film.chosenFormatID = "4x5"
+        precondition(film.frameConfiguration.sheetNotches?.notches.count == 3)
         for frame in PrintFrame.allCases {
             var edit = legacy
             edit.printFrame = frame
@@ -40,16 +53,16 @@ enum PrintFrameEditCheck {
             preconditionFailure("invalid frame was accepted")
         } catch { }
         let session = EditSession()
-        session.edit.printFrame = .film35
+        session.edit.printFrame = .film
         precondition(session.canUndo)
         session.undo()
         precondition(session.edit.printFrame == .none)
         session.redo()
-        precondition(session.edit.printFrame == .film35)
+        precondition(session.edit.printFrame == .film)
         let checkpoint = session.historyCheckpoint()
-        session.edit.printFrame = .cotton
+        session.edit.printFrame = .paper
         session.restoreHistoryCheckpoint(checkpoint)
-        precondition(session.edit.printFrame == .film35)
+        precondition(session.edit.printFrame == .film)
         print("Print frame edit checks passed: legacy edits, persistence, invalid data, reset, undo, redo, and cancel.")
     }
 }

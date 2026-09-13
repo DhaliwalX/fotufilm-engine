@@ -1,49 +1,50 @@
 #if canImport(CoreGraphics)
 import Foundation
 import CoreGraphics
-import CoreText
 #if canImport(FotufilmCore)
 import FotufilmCore
 #endif
 
-/// A resolution-independent border. The photograph is placed at its original pixel size;
-/// the deterministic material marks live only outside it. Both CPU and Metal developments
-/// use this same finishing pass, after image formation and histogram measurement.
+/// One finishing pass for CPU/Metal developments, canvas, thumbnails and export.
+/// Physical geometry stays fixed; a different crop is fitted into the aperture without resampling.
 public enum PrintFrameRenderer {
     public struct Layout {
         public let size: CGSize
         /// Core Graphics coordinates, with the origin at the lower left.
         public let imageRect: CGRect
+        public let pixelsPerMM: CGFloat
+        public let rotated: Bool
     }
 
-    public static func layout(width: Int, height: Int, frame: PrintFrame) -> Layout {
-        guard frame != .none else {
+    public static func layout(width: Int, height: Int,
+                              configuration: PrintFrameConfiguration) -> Layout {
+        guard configuration.frame != .none else {
             return Layout(size: CGSize(width: width, height: height),
-                          imageRect: CGRect(x: 0, y: 0, width: width, height: height))
+                          imageRect: CGRect(x: 0, y: 0, width: width, height: height),
+                          pixelsPerMM: 1, rotated: false)
         }
-        let unit = CGFloat(min(width, height)) / 1000
-        let margin: CGFloat
-        switch frame {
-        case .film35: margin = 125
-        case .contact: margin = 85
-        case .baryta: margin = 80
-        case .cotton: margin = 100
-        case .instant: margin = 70
-        case .none: margin = 0
-        }
-        let side = max(1, (margin * unit).rounded())
-        let bottom = frame == .instant ? max(1, (270 * unit).rounded()) : side
-        return Layout(size: CGSize(width: CGFloat(width) + side * 2,
-                                   height: CGFloat(height) + side + bottom),
-                      imageRect: CGRect(x: side, y: bottom,
-                                        width: CGFloat(width), height: CGFloat(height)))
+        let material = materialGeometry(configuration)
+        let aperture = material.aperture
+        let rotated = aperture.width != aperture.height
+            && (width > height) != (aperture.width > aperture.height)
+        let scale = max(CGFloat(rotated ? height : width) / aperture.width,
+                        CGFloat(rotated ? width : height) / aperture.height)
+        let rawSize = CGSize(width: material.size.width * scale, height: material.size.height * scale)
+        let size = CGSize(width: ceil(rotated ? rawSize.height : rawSize.width),
+                          height: ceil(rotated ? rawSize.width : rawSize.height))
+        let centre = rotated
+            ? CGPoint(x: rawSize.height - aperture.midY * scale, y: aperture.midX * scale)
+            : CGPoint(x: aperture.midX * scale, y: aperture.midY * scale)
+        return Layout(size: size,
+                      imageRect: CGRect(x: (centre.x - CGFloat(width) / 2).rounded(),
+                                        y: (centre.y - CGFloat(height) / 2).rounded(),
+                                        width: CGFloat(width), height: CGFloat(height)),
+                      pixelsPerMM: scale, rotated: rotated)
     }
 
-    public static func render(_ image: CGImage, frame: PrintFrame) -> CGImage? {
-        guard frame != .none else { return image }
-        let placement = layout(width: image.width, height: image.height, frame: frame)
-        // Keep 16-bit output and the source profile, including P3 and HLG. Border colors are
-        // specified in sRGB and converted by Quartz into that destination profile.
+    public static func render(_ image: CGImage, configuration: PrintFrameConfiguration) -> CGImage? {
+        guard configuration.frame != .none else { return image }
+        let placement = layout(width: image.width, height: image.height, configuration: configuration)
         guard let space = image.colorSpace, space.model == .rgb,
               let context = CGContext(data: nil, width: Int(placement.size.width),
                                       height: Int(placement.size.height), bitsPerComponent: 16,
@@ -51,147 +52,139 @@ public enum PrintFrameRenderer {
                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
                                         | CGBitmapInfo.byteOrder16Little.rawValue)
         else { return nil }
-        let unit = CGFloat(min(image.width, image.height)) / 1000
+        let material = materialGeometry(configuration)
+        context.setFillColor(baseColor(configuration.baseRGB))
+        context.fill(CGRect(origin: .zero, size: placement.size))
         context.saveGState()
-        context.scaleBy(x: unit, y: unit)
-        let bounds = CGRect(origin: .zero, size: placement.size)
-            .applying(CGAffineTransform(scaleX: 1 / unit, y: 1 / unit))
-        let window = placement.imageRect
-            .applying(CGAffineTransform(scaleX: 1 / unit, y: 1 / unit))
-        drawMaterial(in: context, bounds: bounds, window: window, frame: frame)
+        context.scaleBy(x: placement.pixelsPerMM, y: placement.pixelsPerMM)
+        if placement.rotated {
+            context.translateBy(x: material.size.height, y: 0)
+            context.rotate(by: .pi / 2)
+        }
+        if configuration.frame == .paper {
+            let scale = placement.pixelsPerMM
+            let photo = placement.rotated
+                ? CGRect(x: placement.imageRect.minY / scale,
+                         y: material.size.height - placement.imageRect.maxX / scale,
+                         width: placement.imageRect.height / scale, height: placement.imageRect.width / scale)
+                : placement.imageRect.applying(CGAffineTransform(scaleX: 1 / scale, y: 1 / scale))
+            drawLustre(in: context, size: material.size, excluding: photo)
+        } else if let geometry = configuration.geometry {
+            drawPerforations(in: context, geometry: geometry)
+            if geometry.isSheet, let code = configuration.sheetNotches {
+                drawNotches(in: context, size: material.size, code: code)
+            }
+        }
         context.restoreGState()
+        // Copy at integer pixel coordinates after the border is drawn. The original profile,
+        // 16-bit depth and every photograph pixel survive, including P3 and HLG delivery.
         context.interpolationQuality = .none
         context.setBlendMode(.copy)
         context.draw(image, in: placement.imageRect)
         return context.makeImage()
     }
 
-    private static func color(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat,
-                              _ alpha: CGFloat = 1) -> CGColor {
-        CGColor(colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
-                components: [r, g, b, alpha])!
+    private static func materialGeometry(_ configuration: PrintFrameConfiguration)
+        -> (size: CGSize, aperture: CGRect) {
+        if let g = configuration.geometry {
+            return (CGSize(width: g.widthMM, height: g.heightMM),
+                    CGRect(x: g.apertureX, y: g.apertureY,
+                           width: g.apertureWidth, height: g.apertureHeight))
+        }
+        // A real 4 × 6 inch sheet cut from a paper roll, with a chosen 3 mm easel margin.
+        // Sheet/crop size is a presentation choice; it is not an intrinsic size of the emulsion.
+        return (CGSize(width: 152.4, height: 101.6),
+                CGRect(x: 3, y: 3, width: 146.4, height: 95.6))
     }
 
-    private static func drawMaterial(in context: CGContext, bounds: CGRect,
-                                     window: CGRect, frame: PrintFrame) {
-        let film = frame == .film35
-        let base: CGColor
-        switch frame {
-        case .film35: base = color(0.055, 0.042, 0.032)
-        case .contact: base = color(0.92, 0.895, 0.84)
-        case .baryta: base = color(0.965, 0.956, 0.93)
-        case .cotton: base = color(0.94, 0.92, 0.865)
-        case .instant: base = color(0.96, 0.954, 0.935)
-        case .none: return
+    private static func baseColor(_ rgb: SIMD3<Float>) -> CGColor {
+        CGColor(colorSpace: CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3)!,
+                components: [CGFloat(rgb.x), CGFloat(rgb.y), CGFloat(rgb.z), 1])!
+    }
+
+    /// The neutral scan-bed visible through the physical holes. No synthetic edge lettering,
+    /// roll numbers, edge fogging or random gate damage is represented as a stock property.
+    private static var cutoutColor: CGColor { baseColor(SIMD3(repeating: 0.96)) }
+
+    private static func drawPerforations(in context: CGContext, geometry g: FilmBorderGeometry) {
+        guard let type = g.perforation else { return }
+        let width: CGFloat, height: CGFloat, radius: CGFloat, edge: CGFloat
+        switch type {
+        case .kodakStandard: (width, height, radius, edge) = (2.794, 1.981, 0.51, 2.01)
+        case .bellHowell: (width, height, radius, edge) = (2.794, 1.854, 0, 2.01)
+        case .sixteen: (width, height, radius, edge) = (1.829, 1.270, 0.25, 0.914)
+        case .superEight: (width, height, radius, edge) = (0.914, 1.143, 0.13, 0.51)
         }
-        context.setFillColor(base)
-        context.fill(bounds)
         context.saveGState()
-        context.addRect(bounds)
-        context.addRect(window)
-        context.clip(using: .evenOdd)
-
-        var random = MaterialRandom()
-        // Marks use normalized paper coordinates, so export does not acquire a new texture
-        // and changing the film grain seed does not change the physical sheet.
-        let count = Int(bounds.width * bounds.height / 55)
-        for _ in 0..<count {
-            let x = random.next() * bounds.width
-            let y = random.next() * bounds.height
-            let strength = random.next()
-            guard !window.insetBy(dx: -1, dy: -1).contains(CGPoint(x: x, y: y)) else { continue }
-            let dark = strength < 0.5
-            let alpha: CGFloat = frame == .cotton ? 0.075 : film ? 0.035 : 0.025
-            context.setFillColor(dark ? color(0.30, 0.25, 0.18, alpha)
-                                     : color(1, 0.99, 0.94, alpha))
-            let length: CGFloat = frame == .cotton ? 2 + strength * 5 : 0.8 + strength * 1.4
-            context.fillEllipse(in: CGRect(x: x, y: y, width: length,
-                                           height: frame == .cotton ? 0.6 : length))
+        // Put both still and motion perforations in coordinates across/along film transport.
+        if g.horizontalTransport {
+            context.translateBy(x: 0, y: g.heightMM)
+            context.rotate(by: -.pi / 2)
         }
-
-        if film || frame == .contact {
-            // A slightly wandering rebate with a warm emulsion lip, entirely outside the image.
-            let outer = window.insetBy(dx: film ? -10 : -16, dy: film ? -10 : -16)
-            context.setFillColor(color(0.085, 0.068, 0.047))
-            context.addPath(roughRect(outer, amplitude: 1.8))
-            context.fillPath()
-            context.setStrokeColor(color(0.47, 0.25, 0.095, film ? 0.6 : 0.35))
-            context.setLineWidth(1.7)
-            context.addPath(roughRect(window.insetBy(dx: -2, dy: -2), amplitude: 0.8))
-            context.strokePath()
-        } else {
-            context.setStrokeColor(color(0.40, 0.36, 0.28, 0.20))
-            context.setLineWidth(1.5)
-            context.stroke(window.insetBy(dx: -0.75, dy: -0.75))
+        let across = CGFloat(g.horizontalTransport ? g.heightMM : g.widthMM)
+        let along = CGFloat(g.horizontalTransport ? g.widthMM : g.heightMM)
+        context.clip(to: CGRect(x: 0, y: 0, width: across, height: along))
+        let pitch = CGFloat(g.pitchMM)
+        // 16 mm holes align with the frame line; Super 8 holes align with the frame centre.
+        let first: CGFloat = type == .sixteen ? 0 : pitch / 2
+        let rows: [CGFloat] = g.rows == 2 ? [edge, across - edge - width] : [edge]
+        context.setFillColor(cutoutColor)
+        for x in rows {
+            var centre = first
+            while centre <= along {
+                let rect = CGRect(x: x, y: centre - height / 2, width: width, height: height)
+                if type == .bellHowell {
+                    // BH is a circle clipped by two parallel flats, not a rounded KS rectangle.
+                    context.saveGState()
+                    context.clip(to: rect)
+                    context.fillEllipse(in: CGRect(x: x, y: centre - width / 2,
+                                                   width: width, height: width))
+                    context.restoreGState()
+                } else {
+                    context.addPath(CGPath(roundedRect: rect, cornerWidth: radius,
+                                           cornerHeight: radius, transform: nil))
+                    context.fillPath()
+                }
+                centre += pitch
+            }
         }
-
-        if frame == .cotton {
-            context.setStrokeColor(color(0.66, 0.60, 0.48, 0.25))
-            context.setLineWidth(2)
-            context.addPath(roughRect(bounds.insetBy(dx: 3, dy: 3), amplitude: 2.2))
-            context.strokePath()
-        }
-        if film { drawFilmEdges(in: context, bounds: bounds, window: window) }
         context.restoreGState()
     }
 
-    private static func roughRect(_ rect: CGRect, amplitude: CGFloat) -> CGPath {
-        let path = CGMutablePath()
-        let corners = [CGPoint(x: rect.minX, y: rect.minY),
-                       CGPoint(x: rect.maxX, y: rect.minY),
-                       CGPoint(x: rect.maxX, y: rect.maxY),
-                       CGPoint(x: rect.minX, y: rect.maxY)]
-        var random = MaterialRandom()
-        path.move(to: corners[0])
-        for side in 0..<4 {
-            let a = corners[side], b = corners[(side + 1) % 4]
-            let steps = max(1, Int(hypot(b.x - a.x, b.y - a.y) / 5))
-            for step in 1...steps {
-                let t = CGFloat(step) / CGFloat(steps)
-                let jitter = step == steps ? 0 : (random.next() - 0.5) * amplitude * 2
-                path.addLine(to: CGPoint(x: a.x + (b.x - a.x) * t + (a.x == b.x ? jitter : 0),
-                                        y: a.y + (b.y - a.y) * t + (a.y == b.y ? jitter : 0)))
-            }
+    private static func drawNotches(in context: CGContext, size: CGSize, code: SheetFilmNotchCode) {
+        // The code occupies the upper right edge when the sheet is upright, emulsion facing us.
+        // Manufacturer diagrams specify shapes/order, not absolute dimensions: a 20 mm code
+        // span and 10 mm corner setback are presentation conventions, documented as such.
+        let span: CGFloat = 20
+        let start = size.width - 10 - span
+        context.setFillColor(cutoutColor)
+        for notch in code.notches {
+            let rect = CGRect(x: start + CGFloat(notch.position) * span,
+                              y: size.height - CGFloat(notch.depth) * span,
+                              width: CGFloat(notch.width) * span,
+                              height: CGFloat(notch.depth) * span * 2)
+            context.fillEllipse(in: rect)
         }
-        path.closeSubpath()
-        return path
     }
 
-    private static func drawFilmEdges(in context: CGContext, bounds: CGRect, window: CGRect) {
-        context.saveGState()
-        var bounds = bounds, window = window
-        if window.height > window.width {
-            context.translateBy(x: bounds.width, y: 0)
-            context.rotate(by: .pi / 2)
-            bounds = CGRect(x: 0, y: 0, width: bounds.height, height: bounds.width)
-            window = CGRect(x: window.minY, y: window.minX,
-                            width: window.height, height: window.width)
-        }
-        // Eight perforations across a nominal 36 mm still frame. A chosen crop is presented
-        // inside that window; these marks describe the border, not the capture's real gauge.
-        let pitch = window.width / 8
-        let holeWidth = min(70, pitch * 0.45)
-        for index in 0..<8 {
-            let x = window.minX + pitch * (CGFloat(index) + 0.5) - holeWidth / 2
-            for y in [CGFloat(27), bounds.maxY - 82] {
-                context.setFillColor(color(0.83, 0.805, 0.735))
-                context.addPath(CGPath(roundedRect: CGRect(x: x, y: y, width: holeWidth, height: 55),
-                                       cornerWidth: 8, cornerHeight: 8, transform: nil))
-                context.fillPath()
+    private static func drawLustre(in context: CGContext, size: CGSize, excluding photo: CGRect) {
+        // Fine resin-coated stipple, never cotton fibres or deckled paper. The visible finish
+        // is a restrained procedural approximation, not measured surface microtopography.
+        var random = MaterialRandom()
+        context.setFillColor(CGColor(gray: 0.12, alpha: 0.035))
+        let pitch: CGFloat = 0.17
+        var y: CGFloat = 0
+        while y < size.height {
+            var x: CGFloat = 0
+            while x < size.width {
+                let point = CGPoint(x: x + random.next() * pitch, y: y + random.next() * pitch)
+                if !photo.contains(point) {
+                    context.fillEllipse(in: CGRect(x: point.x, y: point.y, width: 0.065, height: 0.065))
+                }
+                x += pitch
             }
+            y += pitch
         }
-        let amber = color(0.81, 0.48, 0.16, 0.88)
-        let font = CTFontCreateWithName("Menlo" as CFString, 17, nil)
-        for (text, point) in [("FOTUFILM  •  35", CGPoint(x: window.minX + 12, y: 94)),
-                              ("01     ▸", CGPoint(x: window.maxX - 115, y: bounds.maxY - 114))] {
-            let string = NSAttributedString(string: text, attributes: [
-                NSAttributedString.Key(kCTFontAttributeName as String): font,
-                NSAttributedString.Key(kCTForegroundColorAttributeName as String): amber,
-            ])
-            context.textPosition = point
-            CTLineDraw(CTLineCreateWithAttributedString(string), context)
-        }
-        context.restoreGState()
     }
 
     private struct MaterialRandom {
