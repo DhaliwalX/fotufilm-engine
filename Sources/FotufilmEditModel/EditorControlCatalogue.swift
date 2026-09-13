@@ -1213,7 +1213,7 @@ public enum EditorControlCatalogue {
     private static let print: [EditorControl] = [
         EditorControl(
             .printFrame, title: "Frame",
-            detail: "Use the selected film gauge or photographic paper for the border.",
+            detail: "Choose a film, paper, or worn emulsion border.",
             section: .printPaper,
             kind: .menu(.fixed(PrintFrame.allCases.enumerated().map {
                 EditorMenuChoice(Double($0.offset), $0.element.name,
@@ -1226,7 +1226,7 @@ public enum EditorControlCatalogue {
                       .finalcut: "The host owns output framing.",
                       .web: "Frame finishing is offered in the iPhone photo editor.",
                       .cli: "Frame finishing is offered in the iPhone photo editor."],
-            documentation: "Frames the photograph using the selected film gauge or a 4 × 6 inch lustre sheet of the selected reflection paper. Film perforations follow physical format geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports."),
+            documentation: "Choose Film Border for the selected film gauge, Paper Border for a 4 × 6 inch lustre print, or Emulsion Border for a dark, uneven edge on a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports."),
         EditorControl(
             .paper, title: "Output Medium",
             detail: "Choose how the film is printed, scanned, or viewed.",

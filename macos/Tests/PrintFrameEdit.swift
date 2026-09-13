@@ -56,7 +56,7 @@ enum PrintFrameEditCheck {
             let denseFilm = SpectralRuntime.negativeViewing(for: stock, look: .lightBox).sample(SIMD3(repeating: 1))
             precondition(denseFilm.x < clearFilm.x && denseFilm.y < clearFilm.y && denseFilm.z < clearFilm.z)
         }
-        for frame in [PrintFrame.none, .paper] {
+        for frame in [PrintFrame.none, .paper, .emulsion] {
             film.printFrame = frame
             precondition(film.filmFrameNegative == nil)
             precondition(film.frameRenderState == film)

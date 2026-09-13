@@ -97,11 +97,11 @@
 </table>
 <h3>Print</h3>
 <p>In the iPhone photo editor, open <strong>Print → Output → Frame</strong> and choose
-              <strong>None</strong>, <strong>Film Border</strong>, or <strong>Paper Border</strong>.
+              <strong>None</strong>, <strong>Film Border</strong>, <strong>Paper Border</strong>, or <strong>Emulsion Border</strong>.
               Film Border follows the stock’s native format, or an explicit Film Gauge choice, with
               physical aperture proportions, perforations, and the stock’s own base color. Negative stocks
               show their developed negative on a standard light box, including the color mask; reversal
-              and instant film stay positive. None and Paper Border restore the selected output medium.
+              and instant film stay positive. None, Paper Border, and Emulsion Border restore the selected output medium.
               Documented film-edge names and identification codes follow the stock and gauge, with
               dark lettering on negatives and light lettering on reversal film. The typeface and edge
               exposure are approximations; frame numbers represent a sample position, not capture metadata.
@@ -114,10 +114,16 @@
               stretching or resampling the developed image. Negative film is delivered in SDR. Frames are saved
               with the edit, included in Undo, Redo, and photo exports, and add to export dimensions.
               Frames are offered in the iPhone photo editor, not video.</p>
+<p><strong>Emulsion Border</strong> adds a dark, uneven band with a softly worn outer edge,
+              subtle brown traces, and a white paper margin. It follows the photo’s crop and keeps
+              the chosen output medium. Reflection outputs use the selected paper’s base and Viewing Light;
+              other outputs use a neutral white mount. This is a styled border, with no specific film
+              gauge, notch code, or manufacturer lettering. Its texture stays consistent between
+              previews and exports, and the photograph’s pixels remain unchanged.</p>
 <table>
 <thead><tr><th>Control</th><th>Description</th><th>Default</th></tr></thead>
 <tbody data-controls="print">
-  <tr><td>Frame</td><td>Frames the photograph using the selected film gauge or a 4 × 6 inch lustre sheet of the selected reflection paper. Film perforations follow physical format geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports.</td><td>None</td></tr>
+  <tr><td>Frame</td><td>Choose Film Border for the selected film gauge, Paper Border for a 4 × 6 inch lustre print, or Emulsion Border for a dark, uneven edge on a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports.</td><td>None</td></tr>
   <tr><td>Output Medium</td><td>Selects the print paper, projection print, scan, display reference or the negative itself.</td><td>Digital Reference</td></tr>
   <tr><td>Viewing Illuminant</td><td>Changes the viewing lamp without re-timing the developed print; digital media ignore it.</td><td>Medium reference</td></tr>
   <tr><td>Channel Contrast Match</td><td>Optional digital channel-contrast correction. Off by default to preserve measured slopes; this is not a physical printer-light control.</td><td>0%</td></tr>

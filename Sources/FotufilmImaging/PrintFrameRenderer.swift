@@ -24,6 +24,16 @@ public enum PrintFrameRenderer {
                           imageRect: CGRect(x: 0, y: 0, width: width, height: height),
                           pixelsPerMM: 1, rotated: false)
         }
+        if configuration.frame == .emulsion {
+            // A crop-following mount, not a claim of physical film or paper dimensions.
+            let short = CGFloat(min(width, height))
+            let horizontal = ceil(short * 0.095), vertical = ceil(short * 0.135)
+            return Layout(size: CGSize(width: CGFloat(width) + 2 * horizontal,
+                                       height: CGFloat(height) + 2 * vertical),
+                          imageRect: CGRect(x: horizontal, y: vertical,
+                                            width: CGFloat(width), height: CGFloat(height)),
+                          pixelsPerMM: 1, rotated: false)
+        }
         let material = materialGeometry(configuration)
         let aperture = material.aperture
         let rotated = aperture.width != aperture.height
@@ -62,7 +72,9 @@ public enum PrintFrameRenderer {
             context.translateBy(x: material.size.height, y: 0)
             context.rotate(by: .pi / 2)
         }
-        if configuration.frame == .paper {
+        if configuration.frame == .emulsion {
+            guard EmulsionBorderRenderer.draw(in: context, around: placement.imageRect) else { return nil }
+        } else if configuration.frame == .paper {
             let scale = placement.pixelsPerMM
             let photo = placement.rotated
                 ? CGRect(x: placement.imageRect.minY / scale,

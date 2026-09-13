@@ -1,14 +1,15 @@
 import Foundation
 
-/// Finishing follows the loaded film and output medium, not an unrelated decorative material.
+/// Physical film/paper finishing and an explicitly styled emulsion border.
 public enum PrintFrame: String, CaseIterable, Codable, Sendable, Identifiable {
-    case none, film, paper
+    case none, film, paper, emulsion
     public var id: String { rawValue }
     public var name: String {
         switch self {
         case .none: return "None"
         case .film: return "Film Border"
         case .paper: return "Paper Border"
+        case .emulsion: return "Emulsion Border"
         }
     }
     public var detail: String {
@@ -16,6 +17,7 @@ public enum PrintFrame: String, CaseIterable, Codable, Sendable, Identifiable {
         case .none: return "The photograph without a border."
         case .film: return "The selected film gauge, with its physical edges and perforations."
         case .paper: return "The selected photographic paper, in a 4 × 6 inch lustre print."
+        case .emulsion: return "A dark, uneven edge with soft wear and a white paper margin."
         }
     }
 
@@ -27,6 +29,7 @@ public enum PrintFrame: String, CaseIterable, Codable, Sendable, Identifiable {
         case "none": self = .none
         case "film", "film-35", "instant": self = .film
         case "paper", "contact", "baryta", "cotton": self = .paper
+        case "emulsion": self = .emulsion
         default:
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unknown print frame")
         }
@@ -223,6 +226,11 @@ public struct PrintFrameConfiguration: Equatable, Sendable {
             baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? .zero
             detail = reflective ? "\(paper.name) · lustre · 4 × 6 in"
                 : "Choose Ektacolor Edge, ENDURA Premier, or Crystal Archive paper."
+        case .emulsion:
+            // Reflection outputs retain their modelled paper white. Other outputs use a
+            // neutral presentation mount; this style does not identify a manufactured stock.
+            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? SIMD3(repeating: 0.91)
+            detail = frame.detail
         }
     }
 }
