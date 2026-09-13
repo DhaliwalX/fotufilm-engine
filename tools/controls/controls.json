@@ -3826,10 +3826,16 @@
           "id" : "paper",
           "label" : "Paper Border",
           "value" : 2
+        },
+        {
+          "detail" : "A dark, uneven edge with soft wear and a white paper margin.",
+          "id" : "emulsion",
+          "label" : "Emulsion Border",
+          "value" : 3
         }
       ],
-      "detail" : "Use the selected film gauge or photographic paper for the border.",
-      "documentation" : "Frames the photograph using the selected film gauge or a 4 × 6 inch lustre sheet of the selected reflection paper. Film perforations follow physical format geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports.",
+      "detail" : "Choose a film, paper, or worn emulsion border.",
+      "documentation" : "Choose Film Border for the selected film gauge, Paper Border for a 4 × 6 inch lustre print, or Emulsion Border for a dark, uneven edge on a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports.",
       "drives" : [
 
       ],

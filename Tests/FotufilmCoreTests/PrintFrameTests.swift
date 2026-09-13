@@ -118,6 +118,74 @@ final class PrintFrameTests: XCTestCase {
         XCTAssertNil(edge.geometry)
     }
 
+    func testEmulsionKeepsTheCropAndIsAvailableWithoutFilmOrReflectionPaper() throws {
+        for (w, h) in [(200, 300), (300, 200), (200, 200), (1000, 1)] {
+            for format in ["35mm", "120", "4x5", "unknown"] {
+                let config = configuration(.emulsion, format: format, paper: .screen, stock: "original")
+                XCTAssertEqual(config.frame, .emulsion)
+                XCTAssertNil(config.geometry)
+                XCTAssertNil(config.sheetNotches)
+                XCTAssertNil(config.edgePrinting)
+                let layout = PrintFrameRenderer.layout(width: w, height: h, configuration: config)
+                XCTAssertEqual(layout.imageRect.size, CGSize(width: w, height: h))
+                let x = ceil(Double(min(w, h)) * 0.095), y = ceil(Double(min(w, h)) * 0.135)
+                XCTAssertEqual(layout.imageRect.minX, x)
+                XCTAssertEqual(layout.imageRect.minY, y)
+                XCTAssertEqual(layout.size, CGSize(width: Double(w) + 2 * x, height: Double(h) + 2 * y))
+            }
+        }
+        // An extreme panorama must not allocate a texture proportional to its aspect ratio.
+        let context = try XCTUnwrap(CGContext(data: nil, width: 1000, height: 1, bitsPerComponent: 8,
+            bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        let framed = try XCTUnwrap(PrintFrameRenderer.render(XCTUnwrap(context.makeImage()),
+            configuration: configuration(.emulsion)))
+        XCTAssertEqual(framed.width, 1002)
+        XCTAssertEqual(framed.height, 3)
+    }
+
+    func testEmulsionMountUsesPaperWhiteAndPreservesItsViewingLight() {
+        for paper in [PrintPaper.ektacolorEdge, .enduraPremier, .crystalArchive] {
+            for kelvin in [Float(2856), 5000, 6500] {
+                let emulsion = PrintFrameConfiguration(frame: .emulsion, formatID: nil,
+                    stockID: "original", paper: paper, viewingKelvin: kelvin)
+                let sheet = PrintFrameConfiguration(frame: .paper, formatID: nil,
+                    stockID: "original", paper: paper, viewingKelvin: kelvin)
+                XCTAssertEqual(emulsion.frame, .emulsion)
+                XCTAssertEqual(emulsion.baseRGB, sheet.baseRGB)
+            }
+        }
+        for paper in [PrintPaper.screen, .negative, .labScan, .vision2383] {
+            let config = configuration(.emulsion, paper: paper)
+            XCTAssertEqual(config.frame, .emulsion)
+            XCTAssertEqual(config.baseRGB, SIMD3(repeating: 0.91))
+        }
+    }
+
+    func testEmulsionHasADarkBandWornOuterEdgeAndCleanMount() throws {
+        let source = try fixture()
+        let config = configuration(.emulsion, paper: .screen)
+        let result = try XCTUnwrap(PrintFrameRenderer.render(source, configuration: config))
+        let data = try pixels(result)
+        func rgb(_ x: Int, _ y: Int) -> SIMD3<Float> {
+            let offset = (y * result.width + x) * 8
+            return SIMD3((0..<3).map { channel in
+                let i = offset + channel * 2
+                return Float(UInt16(data[i]) | UInt16(data[i + 1]) << 8) / 65535
+            })
+        }
+        let white = rgb(0, 0)
+        for point in [(3, 100), (result.width - 3, 100), (150, 3), (150, result.height - 3)] {
+            XCTAssertEqual(rgb(point.0, point.1), white, "Outer paper should remain clean")
+        }
+        let band = rgb(17, 100)
+        XCTAssertLessThan(max(band.x, band.y, band.z), 0.15)
+        let fringe = (50..<150).map { rgb(12, $0).x }
+        XCTAssertGreaterThan(fringe.max()! - fringe.min()!, 0.08, "The edge should have varying coverage")
+        let otherGauge = configuration(.emulsion, format: "4x5", paper: .screen, stock: "portra400")
+        XCTAssertEqual(data, try pixels(XCTUnwrap(PrintFrameRenderer.render(source, configuration: otherGauge))))
+    }
+
     func testNotchPatternsFollowTheStockOnlyOnSheetFilm() throws {
         let fp4 = configuration(.film, format: "4x5", stock: "fp4plus125")
         let hp5 = configuration(.film, format: "4x5")
@@ -299,9 +367,15 @@ final class PrintFrameTests: XCTestCase {
         for name in [CGColorSpace.displayP3, CGColorSpace.itur_2100_HLG] {
             let space = try XCTUnwrap(CGColorSpace(name: name))
             let source = try fixture(space: space)
-            let result = try XCTUnwrap(PrintFrameRenderer.render(source, configuration: configuration(.paper)))
-            XCTAssertEqual(result.colorSpace, space)
-            XCTAssertEqual(result.bitsPerComponent, 16)
+            for frame in [PrintFrame.paper, .emulsion] {
+                let result = try XCTUnwrap(PrintFrameRenderer.render(source, configuration: configuration(frame)))
+                XCTAssertEqual(result.colorSpace, space)
+                XCTAssertEqual(result.bitsPerComponent, 16)
+                let layout = PrintFrameRenderer.layout(width: source.width, height: source.height, configuration: configuration(frame))
+                let crop = CGRect(x: layout.imageRect.minX, y: layout.size.height - layout.imageRect.maxY,
+                                  width: CGFloat(source.width), height: CGFloat(source.height))
+                XCTAssertEqual(try pixels(XCTUnwrap(result.cropping(to: crop))), try pixels(source))
+            }
         }
     }
 

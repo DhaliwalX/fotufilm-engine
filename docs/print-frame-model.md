@@ -1,9 +1,9 @@
-# Physical print borders
+# Print borders
 
-The iPhone photo editor offers None, Film Border and Paper Border. Film Border shows a negative
+The iPhone photo editor offers None, Film Border, Paper Border and Emulsion Border. Film Border shows a negative
 stock's developed negative on its film, using the existing density-to-transmission renderer.
 Reversal and integral instant film retain their developed positive image. The paper selection
-is retained: None and Paper Border return to the chosen output medium. Menu previews, the canvas,
+is retained: None, Paper Border and Emulsion Border return to the chosen output medium. Menu previews, the canvas,
 zoomed detail, saved thumbnails and exports use the same material-dependent image.
 
 Border metadata lives with film stock definitions. The finishing compositor runs after image
@@ -147,3 +147,25 @@ RA-4 curve proxy. Fine surface stipple is procedural: published surface names do
 measured microtopography. Cotton fibres, baryta bases, deckled edges and artificial ageing are
 not appropriate to these stocks and are not offered. Screen, scans, negatives and motion-picture
 print films do not become paper sheets; Paper Border is inactive on those outputs.
+
+
+## Emulsion Border
+
+Emulsion Border is a reference-inspired presentation style: a dense blue-black band, gently
+uneven silhouette, mottled translucent residue, a few subdued brown traces, and a clean white
+mount. It does not identify or claim measured properties of a particular film, transfer process,
+or paper product. The existing Film Border and Paper Border retain their physical constructions.
+No perforations, sheet notches, frame numbers or manufacturer inscriptions are added to this style.
+
+The mount follows the chosen crop, without fitting it to a film aperture or fixed paper aspect.
+Horizontal margins are 9.5% and vertical margins 13.5% of the photograph's short side, rounded up
+to whole pixels. The dark band is approximately 3.2% of that side, with variable outer wear.
+These proportions are presentation choices. Reflection outputs retain their selected paper's
+modelled base and Viewing Light; all other outputs use a neutral mount at 0.91 display-linear P3.
+The chosen output medium is preserved, including an explicitly selected Negative output.
+
+The procedural edge is deterministic in coordinates normalised to the photo's short side.
+Its separate sRGB texture is bounded to 2048 pixels on its long side, then colour-managed into
+the output profile. The original photograph is copied last at full resolution, with no cropping,
+resampling or texture painted over it. The mounted output retains 16-bit precision and the
+photograph's colour profile, including P3 and HLG. No scanned borders or reference photos ship.
