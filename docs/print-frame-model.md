@@ -72,8 +72,8 @@ up for notch identification; sheet lettering has not been verified and is omitte
 | --- | --- | --- |
 | Portra 400 | 135, 120 | KODAK PORTRA 400 |
 | Ektar 100 | 135, 120 | KODAK EKTAR 100 |
-| Tri-X 400 | 135, 120 | KODAK 400 TX |
-| T-Max 100 | 135, 120 | KODAK 100 TMX |
+| Tri-X 400 | 135, 120 | KODAK 400TX |
+| T-Max 100 | 135, 120 | KODAK 100TMX |
 | HP5 Plus | 135 | ILFORD HP5 PLUS |
 | Velvia 50 | 135, 120 | FUJI / RVP50 |
 | Vision3 250D | 35 mm still, Super 35, Super 16 | 5207 / EN |
@@ -84,6 +84,9 @@ Sources:
 
 - [Kodak Portra 400 product specification](https://www.kodakprofessional.com/photographers/film/color/kodak-professional-portra-400-film/516)
   and [Ektar 100 specification](https://www.kodakprofessional.com/photographers/film/color/kodak-professional-ektar-100-film/530): literal edge-print names.
+- [Kodak T-Max 100 specification](https://kodakprofessional.com/photographers/film/black-white/kodak-professional-t-max-100-film/525)
+  and [Tri-X specification](https://www.kodakprofessional.com/photographers/film/black-white/kodak-professional-tri-x-films/515):
+  compact 100TMX and 400TX edge-print identifiers.
 - [Kodak Professional catalog, L-9 (2003)](https://filmcolors.org/wp-content/uploads/2025/11/2003KodakProfessionalCatalog_L9.pdf),
   printed pp. 6R and 16R: 135 and 120 layout families and black-and-white stock inscriptions.
   The old Portra NC/VC product names are not reused. Kodak's 120 dual numbering is distinct
