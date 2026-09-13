@@ -684,7 +684,7 @@ public struct ControlsExport {
             "        ControlAvailability.ALWAYS -> true",
             "        ControlAvailability.FILM -> stock != null",
             "        ControlAvailability.COLOUR_NEGATIVE -> stock != null && !stock.isMonochrome && !stock.isReversal",
-            "        ControlAvailability.PRINT_STAGE -> stock != null && !stock.isReversal",
+            "        ControlAvailability.PRINT_STAGE -> stock != null",
             "        ControlAvailability.STATED_RECIPROCITY -> false",
             "        ControlAvailability.COUPLER_GEOMETRY -> stock != null && !stock.isMonochrome",
             "        ControlAvailability.INTERLAYER_INHIBITION -> stock != null && !stock.isMonochrome",

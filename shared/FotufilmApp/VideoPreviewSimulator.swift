@@ -460,8 +460,7 @@ final class VideoPreviewSimulator: NSObject, ObservableObject, @unchecked Sendab
         guard let printed = Self.encodeDeveloped(
                   output, width: width, height: height,
                   transfer: .shoulderedSRGB, colorSpace: p3,
-                  shoulderKnee: FilmSDRDelivery.shoulderKnee(
-                    isReversal: stock.isReversal)),
+                  shoulderKnee: options.sdrShoulderKnee(for: stock)),
               let source = Self.encodeDeveloped(
                   input, width: width, height: height,
                   transfer: .srgb, colorSpace: p3) else { return nil }
@@ -546,8 +545,7 @@ final class VideoPreviewSimulator: NSObject, ObservableObject, @unchecked Sendab
         guard let printed = encodeDeveloped(
                   output, width: width, height: height,
                   transfer: .shoulderedSRGB, colorSpace: p3,
-                  shoulderKnee: FilmSDRDelivery.shoulderKnee(
-                    isReversal: stock.isReversal)),
+                  shoulderKnee: options.sdrShoulderKnee(for: stock)),
               let source = encodeDeveloped(
                   input, width: width, height: height,
                   transfer: .srgb, colorSpace: p3) else { return nil }

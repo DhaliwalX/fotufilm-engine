@@ -25,8 +25,12 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// An idealized direct digital reference, with no scanner or physical print stage.
     case screen
     /// The developed negative itself, viewed by transmission rather than printed or inverted.
-    /// Kept last because `allCases` order is a persisted host ABI.
+    /// Its index is persisted by plugin hosts; append new media after this entry.
     case negative
+    /// Ilfochrome Classic (formerly Cibachrome), normal and medium contrast.
+    /// Tone-scale approximations from Ilford TDS 307US; receiver spectra remain a proxy.
+    case ilfochromeCPS1K = "ilfochrome-cps-1k"
+    case ilfochromeCLM1K = "ilfochrome-clm-1k"
 
     /// Default for engine and headless callers.
     public static let `default`: PrintPaper = .ektacolorEdge
@@ -49,6 +53,8 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         case .telecine: return "Telecine"
         case .screen: return "Digital Reference"
         case .negative: return "Negative"
+        case .ilfochromeCPS1K: return "Ilfochrome Classic CPS.1K (Cibachrome)"
+        case .ilfochromeCLM1K: return "Ilfochrome Classic CLM.1K (Cibachrome)"
         }
     }
 
@@ -72,12 +78,22 @@ public enum PrintPaper: String, CaseIterable, Sendable {
             return "A Rec.709 video transfer with slightly raised blacks and softer highlights than Lab Scan."
         case .screen:
             return "Display the image directly, without paper or scanner effects. Reversal films support HDR output."
+        case .ilfochromeCPS1K:
+            return "Normal-contrast positive paper for slide film. Approximate color response; more paper exposure lightens the print."
+        case .ilfochromeCLM1K:
+            return "Medium-contrast positive paper for slide film, softer than CPS.1K. Approximate color response."
         case .negative:
             return "View the developed negative before printing or conversion to a positive."
         }
     }
 
-    public static func preset(id: String) -> PrintPaper? { PrintPaper(rawValue: id) }
+    public static func preset(id: String) -> PrintPaper? {
+        switch id {
+        case "ilfochrome", "cibachrome", "cibachrome-cps-1k": return .ilfochromeCPS1K
+        case "cibachrome-clm-1k": return .ilfochromeCLM1K
+        default: return PrintPaper(rawValue: id)
+        }
+    }
 
     /// Whether output on this medium can hold light above display white.
     public var showsHDR: Bool { self == .screen }
@@ -91,9 +107,22 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// Whether the finished output is the developed negative itself.
     public var isNegative: Bool { self == .negative }
 
-    /// The output media a stock can reach. A reversal stock has no developed negative to expose.
+    /// Positive-to-positive paper loses density as exposure increases.
+    public var isPositivePaper: Bool { self == .ilfochromeCPS1K || self == .ilfochromeCLM1K }
+
+    /// Direction of the paper's exposure axis, carried by the shared print configuration.
+    var exposureDirection: Float { isPositivePaper ? -1 : 1 }
+
+    /// Whether developed film is viewed directly, without exposing another emulsion.
+    func viewsFilmDirectly(for stock: FilmStock) -> Bool {
+        stock.isReversal && !isPositivePaper
+    }
+
+    /// Transparent positives print onto positive paper. Integral instant sheets are already prints.
     public static func choices(for stock: FilmStock) -> [PrintPaper] {
-        stock.isReversal ? [.screen] : allCases
+        if stock.isReflectionPrint { return [.screen] }
+        if stock.isReversal { return [.screen, .ilfochromeCPS1K, .ilfochromeCLM1K] }
+        return allCases.filter { !$0.isPositivePaper }
     }
 
     /// The medium a stock actually reaches when the edit asks for this one: the request where it
@@ -114,11 +143,12 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     }
 
     /// Preview media for the selected gauge, with an explicitly named native medium first.
-    /// Reversal film is viewed directly. Negative film offers the three photo or
+    /// Reversal film offers positive paper and direct viewing. Negative film offers the three photo or
     /// projection variants; motion-picture gauges also offer Telecine.
     public static func stripChoices(for stock: FilmStock,
                                     gauge: FilmFormat) -> [PrintPaper] {
-        guard !stock.isReversal else { return [.screen] }
+        if stock.isReflectionPrint { return [.screen] }
+        if stock.isReversal { return [.ilfochromeCPS1K, .ilfochromeCLM1K, .screen] }
         var media: [PrintPaper] = gauge.isMotionPicture
             ? [.vision2383, .vision2393, .eternaCP, .telecine]
             : [.ektacolorEdge, .enduraPremier, .crystalArchive]
@@ -138,7 +168,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     public var viewingFlare: Float {
         switch self {
         case .vision2383, .vision2393, .eternaCP: return 1.0 / 2000.0
-        case .ektacolorEdge, .enduraPremier, .crystalArchive: return 1.0 / 400.0
+        case .ektacolorEdge, .enduraPremier, .crystalArchive, .ilfochromeCPS1K, .ilfochromeCLM1K: return 1.0 / 400.0
         case .labScan, .telecine, .screen, .negative: return 0
         }
     }
@@ -166,7 +196,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// second viewing-light transform.
     public var acceptsViewingIlluminant: Bool {
         switch self {
-        case .ektacolorEdge, .enduraPremier, .crystalArchive, .vision2383, .vision2393, .eternaCP:
+        case .ektacolorEdge, .enduraPremier, .crystalArchive, .ilfochromeCPS1K, .ilfochromeCLM1K, .vision2383, .vision2393, .eternaCP:
             return true
         case .labScan, .telecine, .screen, .negative:
             return false
@@ -200,7 +230,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// no physical imaging stage and uses zero.
     public var enlargerBlurMM: Float {
         switch self {
-        case .ektacolorEdge, .enduraPremier, .crystalArchive: return 0.004
+        case .ektacolorEdge, .enduraPremier, .crystalArchive, .ilfochromeCPS1K, .ilfochromeCLM1K: return 0.004
         case .vision2383, .vision2393, .eternaCP: return 0.003
         case .labScan: return 0.007
         // The Spirit's documented geometry: a 1920-photosite detail array
@@ -226,7 +256,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         // like, and short of undoing the aperture entirely.
         case .telecine: return 0.8
         case .ektacolorEdge, .enduraPremier, .crystalArchive, .vision2383, .vision2393, .eternaCP,
-             .screen, .negative:
+             .screen, .negative, .ilfochromeCPS1K, .ilfochromeCLM1K:
             return 0
         }
     }
@@ -237,7 +267,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
 
     /// Whether timing can balance the film records while forming this output. A viewed negative
     /// has no print exposure to correct, and the digital reference already reads records directly.
-    public var acceptsPrintCorrection: Bool { !readsLayersDirectly && !isNegative }
+    public var acceptsPrintCorrection: Bool { !readsLayersDirectly && !isNegative && !isPositivePaper }
 
     /// Nominal visual mid-grey, relative to clear white and after viewing flare, used by
     /// reflection/digital outputs and the single-record monochrome convention. Colour cine

@@ -64,13 +64,14 @@ public enum Enlarger: String, CaseIterable, Sendable, Codable {
     /// usually found above 1.1 (Hunt, *The Reproduction of Colour*, 6th edn, p. 306).
     public static let dyeCallierCoefficient: Float = 1.05
 
-    /// Whether this head is in the path at all: only an optical enlargement of a negative onto a
-    /// reflection sheet has a lamp house. A reversal is its own positive, a viewed negative is
+    /// Whether this head is in the path at all: only an optical enlargement of film onto a
+    /// reflection sheet has a lamp house. A directly viewed reversal or negative is
     /// not printed, a scan's LEDs read the film directly, the screen reads the layers, a cinema
     /// release print is contact-printed with the emulsions touching, and an instant print
     /// develops in the camera.
     public static func illuminates(stock: FilmStock, paper: PrintPaper) -> Bool {
-        !stock.isReversal && !stock.isReflectionPrint
+        !paper.viewsFilmDirectly(for: stock) && !stock.isReflectionPrint
+            && paper.resolved(for: stock) == paper
             && !paper.isNegative && !paper.isScan
             && !paper.readsLayersDirectly && !paper.isProjected
     }

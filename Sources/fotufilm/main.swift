@@ -1210,7 +1210,7 @@ if let id = flags["--printer"] {
     guard id == "simulated-tungsten" else { fail("Unknown printer '\(id)'; expected simulated-tungsten") }
     guard flags["--negative"] == nil,
           Enlarger.illuminates(stock: stock, paper: options.paper(for: stock)) else {
-        fail("The simulated printer requires a negative enlarged onto reflection paper")
+        fail("The simulated printer requires film enlarged onto compatible reflection paper")
     }
     func printerValue(_ flag: String, default fallback: Float, range: ClosedRange<Float>) -> Float {
         guard let text = flags[flag] else { return fallback }

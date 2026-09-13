@@ -235,8 +235,7 @@ final class InspectorViewController: SessionViewController {
 
     /// Only a physical reflection or projection print has a viewing illuminant to replace.
     private var showsViewingLight: Bool {
-        model.edit.hasFilm && !(model.edit.stock?.isReversal ?? false)
-            && model.edit.resolvedPaper.acceptsViewingIlluminant
+        model.edit.hasFilm && model.edit.resolvedPaper.acceptsViewingIlluminant
     }
 
     /// Only an optically enlarged reflection print has a lamp house to choose.
@@ -604,7 +603,7 @@ final class InspectorViewController: SessionViewController {
         for row in rows(in: .printLamp) { lamp.add(row) }
         lamp.add(NoteRow { [model] in
             model.edit.printerEnabled
-                ? "A simulated tungsten lamp and colour filters expose the paper through the negative. More paper exposure makes a darker print."
+                ? "A simulated tungsten lamp and colour filters expose the paper through the film. More exposure darkens negative paper and lightens positive paper."
                 : "Enable Simulated Printer to adjust lamp temperature, paper exposure and filtration."
         })
         return [print, lamp]
@@ -613,7 +612,7 @@ final class InspectorViewController: SessionViewController {
     private func paperRows() -> [FormRowView] {
         let papers = model.edit.stock.map(PrintPaper.choices(for:))
             ?? PrintPaper.allCases
-        let canFollowStock = model.edit.stock?.isReversal != true
+        let canFollowStock = model.edit.stock?.isReflectionPrint != true
         let options: [(title: String, value: OutputMediumChoice)] =
             (canFollowStock ? [("Match Film", .matchFilm)] : [])
             + papers.map { ($0.name, .medium($0)) }
@@ -640,8 +639,11 @@ final class InspectorViewController: SessionViewController {
                 }
                 return model.edit.resolvedPaper.detail
             }
-            if stock.isReversal {
-                return "This film is already a positive, so you see it directly instead of printing it onto another medium."
+            if stock.isReflectionPrint {
+                return "This instant sheet is already a finished print."
+            }
+            if stock.isReversal && model.edit.resolvedPaper == .screen {
+                return "View this positive directly, or choose Ilfochrome/Cibachrome for a reflection print."
             }
             if model.edit.resolvedPaper.isNegative {
                 return model.edit.resolvedPaper.detail

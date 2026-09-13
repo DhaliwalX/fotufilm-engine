@@ -1226,7 +1226,7 @@ public enum EditorControlCatalogue {
                       .finalcut: "The host owns output framing.",
                       .web: "Frame finishing is offered in the iPhone photo editor.",
                       .cli: "Frame finishing is offered in the iPhone photo editor."],
-            documentation: "Choose Film Border for the selected film gauge, Paper Border for a 4 × 6 inch lustre print, or Emulsion Border for a dark, uneven edge on a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports."),
+            documentation: "Choose Film Border for the selected film gauge, Paper Border for a 4 × 6 inch print, or Emulsion Border for a dark, uneven edge on a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports."),
         EditorControl(
             .paper, title: "Output Medium",
             detail: "Choose how the film is printed, scanned, or viewed.",
@@ -1239,16 +1239,16 @@ public enum EditorControlCatalogue {
                 hint: "Choose where the finished image lives. Match Film uses RA-4 paper for a still "
                     + "negative, the stock's native release print for a motion negative, and the "
                     + "direct positive for reversal film. Digital Reference is the HDR path; paper, "
-                    + "projection, Lab Scan, Telecine and Negative are SDR. Negative is available "
+                    + "projection, Lab Scan, Telecine and Negative are SDR. Slide film also supports Ilfochrome/Cibachrome positive paper. Negative is available "
                     + "only for negative film.",
                 kind: .choice(.dynamic(.papers), value: -1), order: 10),
             commandLine: CommandLineFlag("--paper", placeholder: "<name>",
                                          help: "Output medium: ektacolor-edge (default), endura-premier, "
                                              + "crystal-archive, vision-2383, vision-2393, eterna-cp, "
-                                             + "lab-scan, telecine, screen or negative. Photo and "
+                                             + "lab-scan, telecine, screen, negative or ilfochrome-cps-1k/ilfochrome-clm-1k (cibachrome alias). Photo and "
                                              + "projection variants are digitised from the manufacturers' "
-                                             + "published datasheets. Reversal stocks use screen "
-                                             + "regardless of the requested medium.",
+                                             + "published datasheets; Ilfochrome uses published tone specifications with approximate color. Reversal stocks support "
+                                             + "screen and Ilfochrome; instant sheets use screen.",
                                          generic: false),
             documentation: "Selects the print paper, projection print, scan, display reference or the negative itself."),
         EditorControl(
@@ -1378,7 +1378,7 @@ public enum EditorControlCatalogue {
             documentation: "Changes the spectrum illuminating the negative."),
         EditorControl(
             .printerExposure, title: "Paper Exposure",
-            detail: "More light on the paper makes a darker print",
+            detail: "More light darkens negative paper and lightens positive paper",
             section: .printLamp,
             kind: .slider(EditorControlScale(-6...6, neutral: 0, unit: .stops)),
             availability: .printStage, persistence: .bespoke, drives: ["printer"],
@@ -1386,7 +1386,7 @@ public enum EditorControlCatalogue {
             commandLine: CommandLineFlag("--printer-ev", placeholder: "<ev>",
                 help: "Paper exposure, -6...6 stops (default: 0); +1 doubles light. Requires --printer simulated-tungsten",
                 generic: false),
-            documentation: "One stop doubles the light exposing the paper and darkens the positive print."),
+            documentation: "One stop doubles the light exposing the paper: negative paper darkens and positive paper lightens."),
         EditorControl(
             .printerMagenta, title: "Magenta Filter",
             detail: "Reduce the green light reaching the paper",

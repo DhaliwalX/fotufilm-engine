@@ -108,7 +108,7 @@ final class NegativeViewingTests: XCTestCase {
     func testNegativeIsOfferedOnlyForStocksThatHaveOne() {
         XCTAssertTrue(PrintPaper.choices(for: TestStocks.negative).contains(.negative))
         XCTAssertTrue(PrintPaper.choices(for: TestStocks.monochrome).contains(.negative))
-        XCTAssertEqual(PrintPaper.choices(for: TestStocks.reversal), [.screen])
+        XCTAssertEqual(PrintPaper.choices(for: TestStocks.reversal), [.screen, .ilfochromeCPS1K, .ilfochromeCLM1K])
         XCTAssertEqual(PrintPaper.negative.resolved(for: TestStocks.reversal), .screen)
     }
 
@@ -134,7 +134,7 @@ final class NegativeViewingTests: XCTestCase {
                                             paper: .negative).paperOutput)
         XCTAssertFalse(PrintPaper.negative.acceptsViewingIlluminant)
         XCTAssertFalse(PrintPaper.negative.acceptsPrintCorrection)
-        XCTAssertEqual(PrintPaper.allCases.last, .negative,
+        XCTAssertEqual(PrintPaper.allCases[9], .negative,
                        "existing persisted medium indices must not move")
     }
 

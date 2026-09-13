@@ -16,7 +16,7 @@ public enum PrintFrame: String, CaseIterable, Codable, Sendable, Identifiable {
         switch self {
         case .none: return "The photograph without a border."
         case .film: return "The selected film gauge, with its physical edges and perforations."
-        case .paper: return "The selected photographic paper, in a 4 × 6 inch lustre print."
+        case .paper: return "The selected photographic paper, in a 4 × 6 inch print."
         case .emulsion: return "A dark, uneven edge with soft wear and a white paper margin."
         }
     }
@@ -147,6 +147,8 @@ public struct PrintFrameConfiguration: Equatable, Sendable {
     /// Display-linear P3, converted into the photograph's output profile by the compositor.
     public let baseRGB: SIMD3<Float>
     public let detail: String
+    /// Positive polyester media are smooth; the existing RC papers use a lustre approximation.
+    public let hasLustre: Bool
 
     public init(frame: PrintFrame, formatID: String?, stockID: String,
                 paper: PrintPaper, viewingKelvin: Float? = nil,
@@ -157,7 +159,8 @@ public struct PrintFrameConfiguration: Equatable, Sendable {
         let nativeInstant = nativeID.flatMap { FilmBorderGeometry.preset($0) }?.isInstant == true
         let film = formatID.flatMap { FilmBorderGeometry.preset($0, motionPictureStock: motionStock) }
         let name = formatID.flatMap(FilmFormat.preset(id:))?.name ?? "Film"
-        let reflective = paper == .ektacolorEdge || paper == .enduraPremier || paper == .crystalArchive
+        let reflective = paper.acceptsViewingIlluminant && !paper.isProjected
+        hasLustre = !paper.isPositivePaper
         let filmAvailable = definition != nil && film != nil
             && ((film?.isInstant != true && !nativeInstant) || nativeID == formatID)
         self.frame = frame == .film && !filmAvailable || frame == .paper && !reflective ? .none : frame
@@ -224,8 +227,8 @@ public struct PrintFrameConfiguration: Equatable, Sendable {
             }
         case .paper:
             baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? .zero
-            detail = reflective ? "\(paper.name) · lustre · 4 × 6 in"
-                : "Choose Ektacolor Edge, ENDURA Premier, or Crystal Archive paper."
+            detail = reflective ? "\(paper.name) · \(hasLustre ? "lustre" : "high gloss") · 4 × 6 in"
+                : "Choose a reflection paper such as Ektacolor Edge or Ilfochrome."
         case .emulsion:
             // Reflection outputs retain their modelled paper white. Other outputs use a
             // neutral presentation mount; this style does not identify a manufactured stock.
@@ -236,7 +239,8 @@ public struct PrintFrameConfiguration: Equatable, Sendable {
 }
 
 extension PrintPaper {
-    /// An unexposed border uses the receiver's existing minimum-density records and viewing
+    /// An unexposed border uses minimum density for negative paper and maximum density
+    /// for positive paper, under the viewing
     /// lamp. Crystal Archive shares the engine's explicitly documented RA-4 curve proxy.
     /// This is the model's paper base, not a new measured substrate-reflectance claim.
     func frameBaseRGB(viewingKelvin: Float?) -> SIMD3<Float>? {
@@ -248,6 +252,8 @@ extension PrintPaper {
             density = SIMD3(EnduraPremierPaperSpectra.redCurve.dMin,
                             EnduraPremierPaperSpectra.greenCurve.dMin, EnduraPremierPaperSpectra.blueCurve.dMin)
         case .crystalArchive: density = SIMD3(repeating: Self.ra4PrintCurve.dMin)
+        case .ilfochromeCPS1K: density = SIMD3(repeating: Self.ilfochromeNormalCurve.dMax)
+        case .ilfochromeCLM1K: density = SIMD3(repeating: Self.ilfochromeMediumCurve.dMax)
         default: return nil
         }
         let receiver = SpectralRuntime.PrintReceiver(dyes: analyticalDyes, flare: viewingFlare,
