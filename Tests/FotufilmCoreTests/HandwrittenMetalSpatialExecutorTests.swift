@@ -5,6 +5,177 @@ import XCTest
 import Metal
 
 final class HandwrittenMetalSpatialExecutorTests: XCTestCase {
+    func testCopyReleaseFusionMatchesEveryFiniteHalfExposureBitwise() throws {
+        let width = 256, height = 256
+        var input = [Float16](repeating: 0, count: width * height * 4)
+        for pixel in 0..<(width * height) {
+            for channel in 0..<4 {
+                // Every finite half pattern reaches every record, including signed zero,
+                // subnormals, negative inputs, and the largest finite HDR exposures.
+                let value = Float16(bitPattern: UInt16(truncatingIfNeeded:
+                    pixel &+ channel * 15_731))
+                input[pixel * 4 + channel] = value.isFinite ? value : 0
+            }
+        }
+        var donor = TestStocks.negative
+        donor.donorLayers = [TestStocks.donor]
+        var sampled = donor
+        let knots: [Float] = [-5, -3, -1.2, -0.7, 0, 0.3, 1, 3.5]
+        sampled.curves = try sampled.curves.map { original in
+            var curve = original
+            curve.sampled = try SampledCharacteristicCurve(logExposure: knots,
+                density: knots.map { original.density(logExposure: $0) })
+            return curve
+        }
+        for var stock in [TestStocks.negative, donor, sampled] {
+            stock.emulsionDiffusionMM = [0, 0, 0]
+            stock.couplerDiffusionMM = 0
+            stock.adjacencyStrength = 0
+            var options = FotufilmEngine.Options()
+            options.localTone = false
+            options.halationScale = 0
+            options.grainScale = 0
+            options.paper = .screen
+            try assertGenericOptimizationsBitwise(stock: stock, options: options,
+                width: width, height: height, input: input, savedDispatches: 1)
+        }
+    }
+
+    func testGenericPreparationAndFusionPreserveSpatialFieldsAndGrainBits() throws {
+        let width = 161, height = 99 // partial tiles expose boundary and scratch reuse errors
+        var donor = TestStocks.negative
+        donor.donorLayers = [TestStocks.donor]
+        donor.couplerDiffusionMM = 0
+        donor.chromaticFringeAmount = 0.3
+        var screened = TestStocks.negative
+        screened.adjacencyModel = .screenedDiffusion
+        var local = TestStocks.negative
+        local.couplerDiffusionMM = 0
+        var disabled = TestStocks.negative
+        disabled.couplerInhibition = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
+        disabled.adjacencyStrength = 0
+        var linearRelease = local
+        linearRelease.couplerReleaseGamma = [1, 1, 1]
+        for (index, stock) in [local, TestStocks.reversal, TestStocks.monochrome,
+                               donor, screened, disabled, linearRelease].enumerated() {
+            var options = FotufilmEngine.Options()
+            options.localTone = false
+            options.paper = index.isMultiple(of: 2) ? .screen : nil
+            options.grainMottleShare = 0.3
+            options.seed = .max
+            // No halo leaves optical light in work, exercising the fused in-place read there.
+            options.halationScale = [0, 3, 6].contains(index) ? 0 : 1
+            let invocation = FilmEngineInvocation(stock: stock, options: options,
+                width: width, height: height)
+            let release = invocation.featureMask
+                & (FilmEngineFeature.couplers | FilmEngineFeature.donorLayer) != 0
+            let diffused = invocation.featureMask & FilmEngineFeature.couplerDiffusion != 0
+            try assertGenericOptimizationsBitwise(stock: stock, options: options,
+                width: width, height: height,
+                input: recordExposure(width: width, height: height),
+                savedDispatches: release && !diffused ? 1 : 0,
+                frames: [0, 0x1_FFFF_FFFF, 0])
+        }
+    }
+
+    private func assertGenericOptimizationsBitwise(
+        stock: FilmStock, options: FotufilmEngine.Options,
+        width: Int, height: Int, input: [Float16], savedDispatches: Int,
+        frames: [UInt64] = [0]
+    ) throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let queue = try XCTUnwrap(device.makeCommandQueue())
+        let executor = try XCTUnwrap(HandwrittenMetalSpatialExecutor(
+            device: device, optimizationVariant: .exactSpecialized))
+        for key in ["optimized", "original"] {
+            try executor.prepareChecked(key: key, stock: stock, options: options,
+                frameWidth: width, frameHeight: height)
+            _ = executor._disableFastPathForTesting(key: key)
+        }
+        executor._disableCopyReleaseFusionForTesting(key: "original")
+        let optimizedPlan = try XCTUnwrap(executor.executionPlan(forKey: "optimized"))
+        let originalPlan = try XCTUnwrap(executor.executionPlan(forKey: "original"))
+        XCTAssertEqual(optimizedPlan.name, "generic")
+        XCTAssertEqual(originalPlan.dispatchCount - optimizedPlan.dispatchCount, savedDispatches)
+        let source = try texture(device: device, width: width, height: height,
+            usage: [.shaderRead], values: input)
+        let output = try texture(device: device, width: width, height: height,
+            usage: [.shaderRead, .shaderWrite])
+        var previous: [UInt64: [UInt16]] = [:]
+        for frame in frames {
+            try encode(executor: executor, queue: queue, source: source,
+                destination: output, key: "original", frameIndex: frame)
+            let original = values(output).map(\.bitPattern)
+            try encode(executor: executor, queue: queue, source: source,
+                destination: output, key: "optimized", frameIndex: frame)
+            let optimized = values(output).map(\.bitPattern)
+            if let first = original.indices.first(where: { original[$0] != optimized[$0] }) {
+                let count = original.indices.filter { original[$0] != optimized[$0] }.count
+                XCTFail("\(stock.name), frame \(frame): \(count) unequal components; first at \(first): "
+                    + "\(Float16(bitPattern: original[first])) vs \(Float16(bitPattern: optimized[first]))")
+            }
+            if let earlier = previous[frame] {
+                XCTAssertTrue(earlier == optimized, "scratch reuse must preserve the random sequence")
+            }
+            previous[frame] = optimized
+        }
+        XCTAssertTrue(values(source).map(\.bitPattern) == input.map(\.bitPattern),
+            "fusing release must not overwrite the input")
+    }
+
+    func testCopyReleaseFusionPairedPerformance() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["FOTUFILM_SPATIAL_FUSION_BENCH"] == "1",
+                          "opt-in paired GPU benchmark; run without parallel GPU workloads")
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let queue = try XCTUnwrap(device.makeCommandQueue())
+        let executor = try XCTUnwrap(HandwrittenMetalSpatialExecutor(device: device))
+        let width = 1920, height = 1080
+        var stock = TestStocks.negative
+        stock.couplerDiffusionMM = 0
+        stock.adjacencyStrength = 0
+        var options = FotufilmEngine.Options()
+        options.localTone = false
+        options.grainScale = 0
+        options.halationScale = 0
+        options.paper = .screen
+        for key in ["original", "optimized"] {
+            try executor.prepareChecked(key: key, stock: stock, options: options,
+                frameWidth: width, frameHeight: height)
+        }
+        executor._disableCopyReleaseFusionForTesting(key: "original")
+        let source = try texture(device: device, width: width, height: height,
+            usage: [.shaderRead], values: recordExposure(width: width, height: height))
+        let original = try texture(device: device, width: width, height: height,
+            usage: [.shaderRead, .shaderWrite])
+        let optimized = try texture(device: device, width: width, height: height,
+            usage: [.shaderRead, .shaderWrite])
+        var times: [String: [Double]] = [:]
+        for pair in 0..<36 {
+            let order = pair.isMultiple(of: 2) ? ["original", "optimized"] : ["optimized", "original"]
+            for key in order {
+                let command = try XCTUnwrap(queue.makeCommandBuffer())
+                XCTAssertTrue(executor.encodeDevelopedDensity(recordExposure: source,
+                    densityOutput: key == "original" ? original : optimized,
+                    key: key, frameIndex: 0, commandBuffer: command))
+                command.commit()
+                command.waitUntilCompleted()
+                XCTAssertEqual(command.status, .completed)
+                if let error = command.error { throw error }
+                if pair >= 4 {
+                    times[key, default: []].append((command.gpuEndTime - command.gpuStartTime) * 1_000)
+                }
+            }
+        }
+        XCTAssertTrue(values(original).map(\.bitPattern) == values(optimized).map(\.bitPattern))
+        for key in ["original", "optimized"] {
+            let samples = try XCTUnwrap(times[key]).sorted()
+            let median = (samples[15] + samples[16]) / 2
+            print("Copy/release \(device.name), 1920x1080 \(key): "
+                + "\(executor.executionPlan(forKey: key)!.dispatchCount) dispatches, "
+                + "GPU median \(median) ms, p95 \(samples[30]) ms (32 paired samples)")
+        }
+    }
+
     func testReversalGrainProfileReachesHandwrittenDevelopment() throws {
         let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
         let queue = try XCTUnwrap(device.makeCommandQueue())
