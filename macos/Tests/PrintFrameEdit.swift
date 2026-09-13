@@ -15,7 +15,7 @@ enum AppSettings {
     static let storedCouplerSelf = 1.0
     static let storedHalationModel = HalationModel.legacy
     static let storedEstimatedHalationEnabled = false
-    static let storedNegativeViewing = NegativeViewing.lightBox
+    static let storedNegativeViewing = NegativeViewing.scanner
 }
 
 @main
@@ -37,6 +37,41 @@ enum PrintFrameEditCheck {
         precondition(film.frameConfiguration.geometry == FilmBorderGeometry.preset("35mm"))
         film.chosenFormatID = "4x5"
         precondition(film.frameConfiguration.sheetNotches?.notches.count == 3)
+        film.paper = .enduraPremier
+        film.paperFollowsStock = false
+        film.printLightKelvin = 2856
+        precondition(film.filmFrameNegative == .lightBox)
+        let negative = film.frameRenderState
+        precondition(negative.resolvedPaper == .negative)
+        precondition(negative.options.negativeViewing == .lightBox)
+        precondition(!negative.supportsHDROutput)
+        precondition(film.paper == .enduraPremier)
+        precondition(film.frameRenderState.frameRenderState == negative)
+        for stockID in ["portra400", "hp5plus400"] {
+            film.stockID = stockID
+            let stock = film.stock!
+            let clearFilm = SpectralRuntime.negativeViewing(for: stock, look: .lightBox).sample(.zero)
+            let border = film.frameConfiguration.baseRGB
+            for channel in 0..<3 { precondition(abs(clearFilm[channel] - border[channel]) < 0.00001) }
+            let denseFilm = SpectralRuntime.negativeViewing(for: stock, look: .lightBox).sample(SIMD3(repeating: 1))
+            precondition(denseFilm.x < clearFilm.x && denseFilm.y < clearFilm.y && denseFilm.z < clearFilm.z)
+        }
+        for frame in [PrintFrame.none, .paper] {
+            film.printFrame = frame
+            precondition(film.filmFrameNegative == nil)
+            precondition(film.frameRenderState == film)
+            precondition(film.frameRenderState.resolvedPaper == .enduraPremier)
+        }
+        for stockID in ["ektachromee100", "instaxmini", "original", "missing-stock"] {
+            film.stockID = stockID
+            film.chosenFormatID = nil
+            film.printFrame = .film
+            precondition(film.filmFrameNegative == nil)
+            precondition(film.frameRenderState == film)
+        }
+        film.stockID = "hp5plus400"
+        film.chosenFormatID = "unknown"
+        precondition(film.filmFrameNegative == nil)
         for frame in PrintFrame.allCases {
             var edit = legacy
             edit.printFrame = frame
@@ -63,6 +98,6 @@ enum PrintFrameEditCheck {
         session.edit.printFrame = .paper
         session.restoreHistoryCheckpoint(checkpoint)
         precondition(session.edit.printFrame == .film)
-        print("Print frame edit checks passed: legacy edits, persistence, invalid data, reset, undo, redo, and cancel.")
+        print("Print frame edit checks passed: negative delivery, matching rebate, retained paper, direct positives, persistence, reset, undo, redo, and cancel.")
     }
 }

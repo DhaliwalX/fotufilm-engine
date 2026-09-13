@@ -531,15 +531,33 @@ struct EditState: Equatable {
     var frameConfiguration: PrintFrameConfiguration {
         PrintFrameConfiguration(frame: printFrame, formatID: formatID,
                                 stockID: stockID, paper: resolvedPaper,
-                                viewingKelvin: printLightKelvin.map(Float.init),
-                                negativeViewing: AppSettings.storedNegativeViewing)
+                                viewingKelvin: printFrame == .film ? nil : printLightKelvin.map(Float.init),
+                                negativeViewing: .lightBox)
+    }
+
+    /// A negative stock is seen by transmission on the same reference light box as its rebate.
+    /// Direct-positive and integral film retain their developed positive image.
+    var filmFrameNegative: NegativeViewing? {
+        guard printFrame == .film, stock?.isReversal == false else { return nil }
+        let frame = frameConfiguration
+        return frame.frame == .film && frame.geometry?.isInstant == false ? .lightBox : nil
+    }
+
+    /// Photo framing changes the delivered medium without replacing the user's paper selection.
+    /// Use this derived state for photo previews, detail measurements and exports together.
+    var frameRenderState: EditState {
+        guard filmFrameNegative != nil else { return self }
+        var rendered = self
+        rendered.paper = .negative
+        rendered.paperFollowsStock = false
+        return rendered
     }
 
     /// Whether the selected film and medium can carry a local HDR output request. The app setting
     /// decides the initial request when an editor opens; it does not remain a live dependency of
     /// the edit. Negative film is always delivered as SDR.
     var supportsHDROutput: Bool {
-        resolvedPaper.showsHDR && StockPreset.supportsHDRDelivery(for: stockID)
+        filmFrameNegative == nil && resolvedPaper.showsHDR && StockPreset.supportsHDRDelivery(for: stockID)
     }
 
     var whiteBalance: WhiteBalance {
@@ -596,7 +614,7 @@ struct EditState: Equatable {
         let outputMedium = resolvedPaper
         o.paper = outputMedium
         if outputMedium.isNegative {
-            o.negativeViewing = AppSettings.storedNegativeViewing
+            o.negativeViewing = filmFrameNegative ?? AppSettings.storedNegativeViewing
         }
         o.format = FilmFormat.preset(id: formatID) ?? .still35
         o.seed = seed
