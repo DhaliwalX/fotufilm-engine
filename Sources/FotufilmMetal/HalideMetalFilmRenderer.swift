@@ -1876,51 +1876,80 @@ public final class HalideMetalFilmRenderer {
         } catch { print(error.localizedDescription); return nil }
     }
 
-    private static func convertSRGBToEncodedDisplayP3(
+    static func convertSRGBToEncodedDisplayP3(
         _ input: [UInt8], into output: inout [UInt8]
     ) {
-        precondition(input.count == output.count && input.count.isMultiple(of: 4))
         let decode = byteDecodeTable
-        for offset in stride(from: 0, to: input.count, by: 4) {
-            let alpha = input[offset + 3]
-            let denominator = alpha > 0 && alpha < 255 ? Float(alpha) : 255
-            let srgb = SIMD3<Float>(
-                alpha == 0 || alpha == 255
-                    ? decode[Int(input[offset])]
-                    : ColorScience.srgbToLinear(min(Float(input[offset]) / denominator, 1)),
-                alpha == 0 || alpha == 255
-                    ? decode[Int(input[offset + 1])]
-                    : ColorScience.srgbToLinear(min(Float(input[offset + 1]) / denominator, 1)),
-                alpha == 0 || alpha == 255
-                    ? decode[Int(input[offset + 2])]
-                    : ColorScience.srgbToLinear(min(Float(input[offset + 2]) / denominator, 1)))
-            let displayP3 = ColorScience.linearSRGBToDisplayP3(srgb)
-            let scale = alpha > 0 && alpha < 255 ? Float(alpha) : 255
-            for channel in 0..<3 {
-                let encoded = encodeTransfer(displayP3[channel])
-                output[offset + channel] = UInt8(
-                    min(max((encoded * scale).rounded(), 0), 255))
+        convertBytes(input, into: &output) { input, output, first, end in
+            for offset in stride(from: first, to: end, by: 4) {
+                let alpha = input[offset + 3]
+                let denominator = alpha > 0 && alpha < 255 ? Float(alpha) : 255
+                let srgb = SIMD3<Float>(
+                    alpha == 0 || alpha == 255
+                        ? decode[Int(input[offset])]
+                        : ColorScience.srgbToLinear(min(Float(input[offset]) / denominator, 1)),
+                    alpha == 0 || alpha == 255
+                        ? decode[Int(input[offset + 1])]
+                        : ColorScience.srgbToLinear(min(Float(input[offset + 1]) / denominator, 1)),
+                    alpha == 0 || alpha == 255
+                        ? decode[Int(input[offset + 2])]
+                        : ColorScience.srgbToLinear(min(Float(input[offset + 2]) / denominator, 1)))
+                let displayP3 = ColorScience.linearSRGBToDisplayP3(srgb)
+                let scale = alpha > 0 && alpha < 255 ? Float(alpha) : 255
+                for channel in 0..<3 {
+                    let encoded = encodeTransfer(displayP3[channel])
+                    output[offset + channel] = UInt8(
+                        min(max((encoded * scale).rounded(), 0), 255))
+                }
+                output[offset + 3] = alpha
             }
-            output[offset + 3] = alpha
         }
     }
 
-    private static func convertEncodedDisplayP3ToSRGB(
+    static func convertEncodedDisplayP3ToSRGB(
         _ input: [UInt8], into output: inout [UInt8]
     ) {
-        precondition(input.count == output.count && input.count.isMultiple(of: 4))
         let decode = byteDecodeTable
-        for offset in stride(from: 0, to: input.count, by: 4) {
-            let displayP3 = SIMD3<Float>(
-                decode[Int(input[offset])], decode[Int(input[offset + 1])],
-                decode[Int(input[offset + 2])])
-            let srgb = ColorScience.linearDisplayP3ToSRGB(displayP3)
-            for channel in 0..<3 {
-                let encoded = encodeTransfer(srgb[channel])
-                output[offset + channel] = UInt8(
-                    min(max((encoded * 255).rounded(), 0), 255))
+        convertBytes(input, into: &output) { input, output, first, end in
+            for offset in stride(from: first, to: end, by: 4) {
+                let displayP3 = SIMD3<Float>(
+                    decode[Int(input[offset])], decode[Int(input[offset + 1])],
+                    decode[Int(input[offset + 2])])
+                let srgb = ColorScience.linearDisplayP3ToSRGB(displayP3)
+                for channel in 0..<3 {
+                    let encoded = encodeTransfer(srgb[channel])
+                    output[offset + channel] = UInt8(
+                        min(max((encoded * 255).rounded(), 0), 255))
+                }
+                output[offset + 3] = input[offset + 3]
             }
-            output[offset + 3] = input[offset + 3]
+        }
+    }
+
+    /// Each span reads the source and writes disjoint whole RGBA pixels. Keep small
+    /// images on the caller's thread; borrow pointers once so stores cannot repeat
+    /// Array copy-on-write checks in the pixel loop.
+    private static func convertBytes(
+        _ input: [UInt8], into output: inout [UInt8],
+        _ body: (UnsafePointer<UInt8>, UnsafeMutablePointer<UInt8>, Int, Int) -> Void
+    ) {
+        precondition(input.count == output.count && input.count.isMultiple(of: 4))
+        guard !input.isEmpty else { return }
+        input.withUnsafeBufferPointer { source in
+            output.withUnsafeMutableBufferPointer { destination in
+                let chunk = 1 << 18
+                let chunks = (source.count + chunk - 1) / chunk
+                let input = source.baseAddress!
+                let output = destination.baseAddress!
+                if chunks > 1 {
+                    DispatchQueue.concurrentPerform(iterations: chunks) { part in
+                        body(input, output, part * chunk,
+                             min(source.count, (part + 1) * chunk))
+                    }
+                } else {
+                    body(input, output, 0, source.count)
+                }
+            }
         }
     }
 

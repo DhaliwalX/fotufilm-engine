@@ -90,11 +90,11 @@ for ARCH in "${ARCHS[@]}"; do
   echo "--- $ARCH ---"
   tools/generate-halide-aot.sh "$KERNEL_PLATFORM" "$KERNELS"
 
-  rm -rf "$OBJ"; mkdir -p "$OBJ"
+  mkdir -p "$OBJ"
 
   WINDOWED_HOST=0
   if [[ "$ARCH" == "arm64" ]]; then WINDOWED_HOST=1; fi
-  xcrun clang++ -std=c++17 -O2 -gline-tables-only -flto=thin \
+  python3 tools/compile-if-needed.py xcrun clang++ -std=c++17 -O2 -gline-tables-only -flto=thin \
     -fvisibility=hidden -fvisibility-inlines-hidden \
     -ffile-prefix-map="$PWD"=Fotufilm -fdebug-prefix-map="$PWD"=Fotufilm \
     -fmacro-prefix-map="$PWD"=Fotufilm \
@@ -106,7 +106,7 @@ for ARCH in "${ARCHS[@]}"; do
     -o "$OBJ/FotufilmHalideIOS.o"
 
   for source in FotufilmPlugin WorkingSpace; do
-    xcrun clang++ -std=c++17 -O2 -gline-tables-only -flto=thin \
+    python3 tools/compile-if-needed.py xcrun clang++ -std=c++17 -O2 -gline-tables-only -flto=thin \
       -ffile-prefix-map="$PWD"=Fotufilm -fdebug-prefix-map="$PWD"=Fotufilm \
       -fmacro-prefix-map="$PWD"=Fotufilm \
       -ffunction-sections -fdata-sections -c \
@@ -116,7 +116,7 @@ for ARCH in "${ARCHS[@]}"; do
       -o "$OBJ/$source.o"
   done
 
-  xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
+  python3 tools/compile-if-needed.py xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
     -ISources/FotufilmHalide/include \
     -sdk "$SDK" \
     -target "$TARGET" \
@@ -216,20 +216,16 @@ if [[ " $* " == *" --test "* ]]; then
     x86_64) KERNELS="build/halide-macos-intel" ;;
   esac
   for source in HostHarness ParityFrame TranscodeParity; do
-    xcrun clang++ -std=c++17 -O2 -c \
+    python3 tools/compile-if-needed.py xcrun clang++ -std=c++17 -O2 -c \
       -isysroot "$SDK" -target "$ARCH-apple-macos$DEPLOYMENT" \
       "${VERSION_DEFINES[@]}" \
       -Iresolve "resolve/tests/$source.cpp" \
       -o "$OBJ/$source.o"
   done
   xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
-    -ISources/FotufilmHalide/include \
     -sdk "$SDK" -target "$ARCH-apple-macos$DEPLOYMENT" \
-    -swift-version 5 -O -parse-as-library \
-    "$FOTUFILM_CORE_SOURCE_DIR"/*.swift \
-    Sources/FotufilmMetal/*.swift \
-    "$FOTUFILM_PACK_KEY_SOURCE" \
-    Sources/FotufilmEditModel/*.swift resolve/FotufilmBridge.swift resolve/FotufilmBridgeControls.swift resolve/Generated/FotufilmBridgeSlots.swift \
+    -emit-executable \
+    "$OBJ/FotufilmSwift.o" \
     "$OBJ/FotufilmHalideIOS.o" "$OBJ/FotufilmPlugin.o" "$OBJ/WorkingSpace.o" \
     "$OBJ/HostHarness.o" "$OBJ/ParityFrame.o" "$OBJ/TranscodeParity.o" \
     "$KERNELS"/*.a \

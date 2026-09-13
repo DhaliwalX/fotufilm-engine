@@ -1859,7 +1859,8 @@ kernel void fotufilm_spatial_develop_print(
     texture2d<float, access::read> curves [[texture(0)]],
     texture2d<half, access::read> couplerGrid [[texture(1)]],
     texture2d<half, access::read> adjacencyGrid [[texture(2)]],
-    texture2d<half, access::read_write> io [[texture(3)]],
+    texture2d<half, access::read> storedLog [[texture(3)]],
+    texture2d<half, access::write> output [[texture(4)]],
     const device float *configuration [[buffer(0)]],
     const device float *finePoisson [[buffer(1)]],
     const device float *fineNormal [[buffer(2)]],
@@ -2027,7 +2028,7 @@ kernel void fotufilm_spatial_develop_print(
             float3 adjacent = threadgroup_grid_sample(
                 adjacencyTile, adjacencySpan, adjacencyBase,
                 adjacencyCoordinate, p.adjacency.xy).rgb;
-            float4 logarithmic = float4(io.read(uint2(frame)));
+            float4 logarithmic = float4(storedLog.read(uint2(frame)));
             float3 density = developed_density_from_log(
                 logarithmic, released, adjacent, fineField, mottleField,
                 configuration, curves, p);
@@ -2088,7 +2089,7 @@ kernel void fotufilm_spatial_develop_print(
     float3 density = -log(max(read, 1.0e-6f)) * kInverseLn10;
     // This store is the dispatch-9 handoff. A fused composite-tail specialization consumes
     // `density` here directly and does not require another full-resolution texture copy.
-    io.write(half4(half3(density), 1.0h), position);
+    output.write(half4(half3(density), 1.0h), position);
 }
 
 kernel void fotufilm_spatial_fused_print_mtf(

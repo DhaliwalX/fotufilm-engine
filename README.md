@@ -83,8 +83,27 @@ On a Mac, install Xcode 26 or newer and Halide:
 ```sh
 brew install halide
 swift build
-swift test -c release --parallel
+python3 tools/test-engine.py
 ```
+
+The test command builds the release test bundle and runs every discovered test in
+up to eight persistent workers. It checks that each test ran exactly once and
+records worker logs and a timing report in `build/engine-tests`. Use
+`--workers 2` on a smaller machine. The previous report helps balance later runs;
+it never substitutes for running tests.
+
+On macOS, Swift package builds reuse compiled Halide CPU and Metal kernels across
+processes. The test command stores them in `.build/compiled-kernels`; other package
+clients use the macOS user cache directory. These files contain compiled code,
+not photos or rendered results. Engine binaries, Halide, compiler, SDK, target
+and compilation settings identify each cache entry, so first runs and runs after
+relinking can take longer. Missing or invalid entries are rebuilt; unavailable
+caches fall back to normal JIT compilation. Set `FOTUFILM_COMPILED_CACHE=0` to
+disable reuse, or remove
+`.build/compiled-kernels` to clear the test cache.
+
+The standard `swift test -c release --parallel` command remains supported for
+testing with SwiftPM's process scheduling.
 
 The engine/desktop test workflow runs manually; Apple AOT releases also run automatically
 when their build inputs change on main.
@@ -136,6 +155,12 @@ Open `build/macos/Fotufilm.app`. The build also includes the Resolve plugin.
 To include the Final Cut plugin, install Apple's FxPlug SDK first. See the
 [Resolve guide](resolve/README.md) and [Final Cut guide](finalcut/README.md)
 for separate builds and installation steps.
+
+Mac, Resolve, and Final Cut rebuilds reuse compiled objects after checking source
+and header contents, compiler, flags, and SDK dependencies. Linking, bundle assembly,
+signing, audits, and requested tests still run. Set `FOTUFILM_BUILD_CACHE=0` to
+force recompilation, or remove `build/macos/obj`, `build/resolve/obj-*`, and
+`build/finalcut/obj-*`.
 
 After building, check camera-log conversion and the full-float video decode path:
 

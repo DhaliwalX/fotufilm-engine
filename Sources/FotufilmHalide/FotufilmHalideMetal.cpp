@@ -7,6 +7,7 @@
     && (defined(__APPLE__) || defined(FOTUFILM_HALIDE_CUDA))
 
 #include "FotufilmHalideShared.h"
+#include "FotufilmCompiledCache.h"
 
 #include <algorithm>
 #include <cmath>
@@ -352,6 +353,9 @@ void gpu_pointwise(Func function, Var x, Var y, Var channel, int channels) {
         .gpu_tile(x, y, block_x, block_y, thread_x, thread_y,
                   gpu_tile_x(), gpu_tile_y(),
                   Halide::TailStrategy::GuardWithIf, gpu_device_api());
+    // Keep the boundary guards in the kernel. Splitting this dynamic geometry into
+    // edge/interior loops costs seconds per JIT variant without improving Metal throughput.
+    if (gpu_device_api() == DeviceAPI::Metal) function.never_partition_all();
 }
 
 /// Materializes `values` as one full-frame GPU pass and returns the view its consumers read.
@@ -2439,7 +2443,36 @@ public:
         }
         pipeline_ = Pipeline(output);
 #if !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
-        pipeline_.compile_jit(gpu_target());
+        if (!cached_.prepare(pipeline_,
+            "frame:" + std::to_string(feature_mask) + ":" + std::to_string(windowed),
+            {input_, configuration_, exposure_lut_, film_lut_, paper_lut_,
+            width_, height_,
+            mtf_sigma_0_, mtf_sigma_1_, mtf_sigma_2_, mtf_luma_sigma_,
+            mtf_radius_0_, mtf_radius_1_, mtf_radius_2_, mtf_luma_radius_,
+            halation_radius_0_, halation_radius_1_, halation_radius_2_,
+            coupler_sigma_, coupler_radius_, adjacency_sigma_, adjacency_radius_,
+            adjacency_secondary_sigma_, adjacency_secondary_radius_,
+            fringe_sigma_, fringe_radius_,
+            // The mottle pair is read by the `_mottle` twins alone; everywhere else they are
+            // the same harmless unused parameters the diffusion strides already are, kept in
+            // every signature so the shim's single FrameFunction shape holds.
+            grain_sigma_, grain_radius_, grain_lambda_,
+            mottle_lambda_, mottle_radius_, print_mtf_radius_,
+            seed_, reversal_,
+            origin_x_, origin_y_,
+            halation_stride_0_, halation_stride_1_, halation_stride_2_,
+            halation_strided_radius_0_, halation_strided_radius_1_,
+            halation_strided_radius_2_,
+            // Unconditionally, though only the variants whose mask carries
+            // FOTUFILM_FRAME_DIFFUSION reference them: a scalar the pipeline never reads is a
+            // harmless unused function parameter (the texture-flat variants already carry the
+            // halation strides this way), and one shared argument list is what keeps every
+            // variant callable through the shim's single FrameFunction shape.
+            diffusion_stride_0_, diffusion_stride_1_, diffusion_stride_2_,
+            diffusion_strided_radius_0_, diffusion_strided_radius_1_,
+            diffusion_strided_radius_2_,}, gpu_target())) {
+            pipeline_.compile_jit(gpu_target());
+        }
 #endif
     }
 
@@ -2608,8 +2641,12 @@ public:
             static_cast<PixelOut *>(nullptr), width, height, 4);
         const Target target = gpu_target();
         const DeviceAPI api = gpu_device_api();
-        if (input_buffer.device_wrap_native(api, input_handle, target) != 0 ||
-            output_buffer.device_wrap_native(api, output_handle, target) != 0) {
+        if ((cached_
+                ? input_buffer.get()->device_wrap_native(cached_.device_interface(), input_handle)
+                : input_buffer.device_wrap_native(api, input_handle, target)) != 0 ||
+            (cached_
+                ? output_buffer.get()->device_wrap_native(cached_.device_interface(), output_handle)
+                : output_buffer.device_wrap_native(api, output_handle, target)) != 0) {
             if (input_buffer.has_device_allocation()) input_buffer.device_detach_native();
             if (output_buffer.has_device_allocation()) output_buffer.device_detach_native();
             throw Halide::RuntimeError("Unable to wrap caller device buffer");
@@ -2658,9 +2695,12 @@ private:
         film_buffer_.set_host_dirty();
         paper_buffer_.set_host_dirty();
         const Target target = gpu_target();
-        exposure_buffer_.copy_to_device(gpu_device_api(), target);
-        film_buffer_.copy_to_device(gpu_device_api(), target);
-        paper_buffer_.copy_to_device(gpu_device_api(), target);
+        if (cached_) exposure_buffer_.get()->copy_to_device(cached_.device_interface());
+        else exposure_buffer_.copy_to_device(gpu_device_api(), target);
+        if (cached_) film_buffer_.get()->copy_to_device(cached_.device_interface());
+        else film_buffer_.copy_to_device(gpu_device_api(), target);
+        if (cached_) paper_buffer_.get()->copy_to_device(cached_.device_interface());
+        else paper_buffer_.copy_to_device(gpu_device_api(), target);
         lut_cache_id_ = cache_id;
     }
 
@@ -2742,7 +2782,8 @@ private:
         reversal_.set(reversal);
         origin_x_.set(origin_x);
         origin_y_.set(origin_y);
-        pipeline_.realize(output_buffer, gpu_target());
+        if (cached_) cached_.realize(output_buffer);
+        else pipeline_.realize(output_buffer, gpu_target());
     }
 
     const bool float_io_;
@@ -2812,6 +2853,7 @@ private:
     Param<int32_t> origin_x_, origin_y_;
     Param<int32_t> runtime_features_;
     Pipeline pipeline_;
+    compiled_cache::Pipeline cached_;
     Buffer<> exposure_buffer_;
     Buffer<float> film_buffer_, paper_buffer_;
     uint64_t lut_cache_id_ = 0;

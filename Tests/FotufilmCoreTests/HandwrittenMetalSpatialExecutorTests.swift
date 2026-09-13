@@ -168,7 +168,8 @@ final class HandwrittenMetalSpatialExecutorTests: XCTestCase {
     func testFusedDevelopPrintSupportedGraphTracksGenericGraph() throws {
         try assertVariant(
             .fusedDevelopPrint, expectedName: "nine-dispatch",
-            expectedDispatches: 9, expectedMaximumThreadgroupBytes: 22_816)
+            expectedDispatches: 9, expectedMaximumThreadgroupBytes: 22_816,
+            width: 1025, height: 97, repeatFrames: 4)
     }
 
     func testCompactBlur15SupportedGraphTracksGenericGraph() throws {
@@ -497,7 +498,8 @@ final class HandwrittenMetalSpatialExecutorTests: XCTestCase {
         grainScale: Float = 1,
         paper: PrintPaper? = nil,
         maximumAllowedError: Float = 0.012,
-        meanAllowedError: Float = 0.0015
+        meanAllowedError: Float = 0.0015,
+        width: Int = 160, height: Int = 96, repeatFrames: Int = 1
     ) throws {
         let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
         let queue = try XCTUnwrap(device.makeCommandQueue())
@@ -507,8 +509,6 @@ final class HandwrittenMetalSpatialExecutorTests: XCTestCase {
                 optimizationVariant: variant,
                 dispatchProfilingEnabled: profileDispatches))
         let stock = try fastPathFixtureStock()
-        let width = 160
-        let height = 96
         var options = FotufilmEngine.Options()
         options.localTone = false
         options.flareScale = 0
@@ -517,7 +517,7 @@ final class HandwrittenMetalSpatialExecutorTests: XCTestCase {
         // Match UHD 35 mm's vertical pixels/mm at a small test extent. Spatial radii and every
         // decimation decision are therefore the same as the 4K realtime graph.
         options.format = FilmFormat(
-            name: "PRO 400H nine-dispatch fixture", frameHeightMM: 96 / 90)
+            name: "PRO 400H nine-dispatch fixture", frameHeightMM: Float(height) / 90)
 
         let fastKey = #function + "-" + variant.rawValue + "-fast"
         let genericKey = #function + "-" + variant.rawValue + "-generic"
@@ -574,6 +574,14 @@ final class HandwrittenMetalSpatialExecutorTests: XCTestCase {
             key: genericKey, frameIndex: 0x1020_3040)
 
         let fastValues = values(fast)
+        // More tiles than can run together expose cross-threadgroup apron hazards. Reusing
+        // scratch with the same seed must also reproduce every stored half exactly.
+        for _ in 1..<repeatFrames {
+            try encode(
+                executor: executor, queue: queue, source: source, destination: fast,
+                key: fastKey, frameIndex: 0x1020_3040)
+            XCTAssertTrue(values(fast) == fastValues, "repeated frame must be deterministic")
+        }
         let genericValues = values(generic)
         var maximumError: Float = 0
         var maximumErrorIndex = 0
