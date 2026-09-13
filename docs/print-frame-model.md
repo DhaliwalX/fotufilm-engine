@@ -1,8 +1,13 @@
 # Physical print borders
 
-The iPhone photo editor offers None, Film Border and Paper Border. Border metadata lives with
-film stock definitions. The finishing compositor is shared by preview and export and runs after
-image formation, with no photograph resampling or changes to its colour profile.
+The iPhone photo editor offers None, Film Border and Paper Border. Film Border shows a negative
+stock's developed negative on its film, using the existing density-to-transmission renderer.
+Reversal and integral instant film retain their developed positive image. The paper selection
+is retained: None and Paper Border return to the chosen output medium. Menu previews, the canvas,
+zoomed detail, saved thumbnails and exports use the same material-dependent image.
+
+Border metadata lives with film stock definitions. The finishing compositor runs after image
+formation, with no photograph resampling or changes to its colour profile. Negative delivery is SDR.
 
 ## Film geometry
 
@@ -61,12 +66,14 @@ Film Border depicts the material surrounding the image. Colour-negative borders 
 minimum-density records and dye spectra, retaining its base-plus-fog and orange mask. Monochrome
 negative borders retain their modelled clear-base tint. A common light-box gain is used for negatives,
 so it does not neutralise their colours. Reversal borders use the stock's maximum-density records:
-unexposed slide-film rebate develops dark. A chosen viewing light illuminates the border as well.
-Scanner-normalized negative viewing explicitly neutralises the clear base. Integral instant film keeps
-its attached white mask, which is a separate material from the image dyes.
+unexposed slide-film rebate develops dark. Film Border uses the renderer's standard reference
+light box for both the image and its rebate, retaining the mask even when the separate negative
+preview preference is Scanner. Viewing Light remains the paper's setting and is restored with
+that output. Integral instant film keeps its attached white mask, separate from the image dyes.
 
 These colours follow the existing spectral stock models; they are not separately measured samples of
-individual roll edges. The photograph inside the aperture retains its selected development and colour.
+individual roll edges. The photograph inside the aperture retains the stock's development,
+grain and exposure; its density is viewed through the film instead of printed to paper.
 
 ## Paper construction
 
