@@ -1111,6 +1111,12 @@ if let model = flags["--grain-model"] {
         exit(2)
     }
 }
+if let text = flags["--halation-return"] {
+    guard let percent = Float(text), percent.isFinite, (0...100).contains(percent) else {
+        fail("--halation-return requires a percentage from 0 through 100")
+    }
+    options.halationReturnRatio = percent / 100
+}
 if let z = flags["--halation-haze"] { options.halationHazeMM = Float(z) }
 if let path = flags["--transport"] {
     do {

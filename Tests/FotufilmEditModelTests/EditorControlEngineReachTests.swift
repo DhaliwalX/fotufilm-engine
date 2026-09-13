@@ -126,6 +126,19 @@ final class EditorControlEngineReachTests: XCTestCase {
 
     // MARK: - Emulsion
 
+    func testHalationReturnReachesTheEngineAndFollowsTheStockDefault() throws {
+        try assertReachesTheEngine(.halationReturn) { $0.halationReturnRatio = 0.12 }
+        for id in ["cinestill800t", "cinestill400d", "gold200"] {
+            let stock = try XCTUnwrap(FilmStock.named(id))
+            let control = try XCTUnwrap(EditorControlCatalogue.controls(for: stock).first { $0.field == .halationReturn })
+            let scale = try XCTUnwrap(control.kind.scale)
+            XCTAssertEqual(scale.neutral, Double(stock.halationStrength[0]))
+            if id.hasPrefix("cinestill") { XCTAssertEqual(scale.unit.format(scale.neutral), "12%") }
+        }
+        XCTAssertFalse(EditorControlCatalogue.controls(for: nil).contains { $0.field == .halationReturn })
+        XCTAssertFalse(EditorControlCatalogue.controls(for: FilmStock.noFilm).contains { $0.field == .halationReturn })
+    }
+
     func testHaloColourReachesTheEngine() throws {
         let colour = Float(try travel(.halationColour).range.upperBound)
         try assertReachesTheEngine(.halationColour) {

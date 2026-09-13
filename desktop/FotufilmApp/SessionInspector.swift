@@ -455,6 +455,12 @@ final class InspectorViewController: SessionViewController {
         return format
     }
 
+    private func filmReturnResetRow() -> ButtonRow {
+        ButtonRow("Use Film Return", bordered: false, enabled: { [model] in model.edit.halationReturnRatio != nil }) { [model] in
+            model.edit.reset(.halationReturn)
+        }
+    }
+
     #if canImport(UIKit)
     private func filmSections() -> [FormSectionView] {
         var sections: [FormSectionView] = []
@@ -477,6 +483,9 @@ final class InspectorViewController: SessionViewController {
 
         let character = FormSectionView(title: "Character")
         for row in rows(in: .filmGrain) + rows(in: .filmEmulsion) { character.add(row) }
+        if model.edit.stock?.halationStrength.first.map({ $0 > 0 }) == true {
+            character.add(filmReturnResetRow())
+        }
         character.add(ButtonRow("New Grain Pattern") { [model] in
             model.edit.rerollGrain()
         })
@@ -504,7 +513,7 @@ final class InspectorViewController: SessionViewController {
 
     #else
     private func isHalation(_ control: EditorControl) -> Bool {
-        control.host?.group == .halation || control.host?.group == .halationSpectrum
+        control.field == .halationReturn || control.host?.group == .halation || control.host?.group == .halationSpectrum
     }
 
     private func filmSections() -> [FormSectionView] {
@@ -522,6 +531,9 @@ final class InspectorViewController: SessionViewController {
         for row in rows(in: .filmLab, matching: { $0.field == .expired }) { condition.add(row) }
         let halation = FormSectionView(title: "Halation")
         for row in rows(in: .filmEmulsion, matching: isHalation) { halation.add(row) }
+        if model.edit.stock?.halationStrength.first.map({ $0 > 0 }) == true {
+            halation.add(filmReturnResetRow())
+        }
         stock.addNotes(from: hintSection())
         return [stock, formatSection(), condition, halation]
     }

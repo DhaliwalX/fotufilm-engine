@@ -30,6 +30,7 @@ public enum LayeredTransportRenderer {
 
     private static func prepare(model: LayeredTransport, stock: FilmStock,
                                 options: FotufilmEngine.Options) throws -> Prepared {
+        let model = try HalationReturn.applying(options.halationReturnRatio, to: model)
         let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
         var key: UInt64 = 0xcbf29ce484222325
         for byte in try encoder.encode(model) { key = (key ^ UInt64(byte)) &* 0x100000001b3 }

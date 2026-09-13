@@ -28,7 +28,7 @@ extension EditState: Codable {
 
     static let bespokeKeys: [String] = [
         "stockID", "chosenFormatID", "sourceInterpretation", "captureIlluminantKelvin",
-        "filmLightKelvin", "sourceLightIndex", "grainMottleShare", "couplerGapReach", "paper", "paperFollowsStock",
+        "filmLightKelvin", "sourceLightIndex", "halationReturnRatio", "grainMottleShare", "couplerGapReach", "paper", "paperFollowsStock",
         "seed", "shutterSeconds", "printLightKelvin", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop",
         "grade", "lensProfileID", "lensAdjustment", "lensFilterIDs", "lensFilterMetering", "selective",
     ]
@@ -84,6 +84,8 @@ extension EditState: Codable {
             throw DecodingError.dataCorruptedError(forKey: EditKey("sourceLightKelvin"),
                 in: c, debugDescription: "Source illuminant must be between 1000 and 25000 K")
         }
+        halationReturnRatio = try c.decodeIfPresent(Double.self, forKey: EditKey("halationReturnRatio"))
+        if let ratio = halationReturnRatio { try HalationReturn.validate(Float(ratio)) }
         grainMottleShare = try c.decodeIfPresent(Double.self, forKey: EditKey("grainMottleShare"))
         couplerGapReach = try c.decodeIfPresent([Double].self, forKey: EditKey("couplerGapReach"))
             ?? couplerGapReach
@@ -135,6 +137,7 @@ extension EditState: Codable {
         try c.encodeIfPresent(captureIlluminantKelvin, forKey: EditKey("captureIlluminantKelvin"))
         try c.encodeIfPresent(filmLightKelvin, forKey: EditKey("filmLightKelvin"))
         try c.encode(sourceLightIndex, forKey: EditKey("sourceLightIndex"))
+        try c.encodeIfPresent(halationReturnRatio, forKey: EditKey("halationReturnRatio"))
         try c.encodeIfPresent(grainMottleShare, forKey: EditKey("grainMottleShare"))
         try c.encode(couplerGapReach, forKey: EditKey("couplerGapReach"))
         try c.encode(paper.id, forKey: EditKey("paper"))

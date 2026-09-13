@@ -35,6 +35,12 @@ final class GoldenImageTests: XCTestCase {
         try checkGoldens(stocks)
     }
 
+    func testCineStillMatchesItsGoldens() throws {
+        let stocks = GoldenStocks.all.filter { ["cinestill800t", "cinestill400d"].contains($0.id) }
+        XCTAssertEqual(stocks.count, 2)
+        try checkGoldens(stocks)
+    }
+
     func testGold200MatchesItsGoldens() throws {
         let stock = try XCTUnwrap(GoldenStocks.all.first { $0.id == "gold200" })
         try checkGoldens([stock])

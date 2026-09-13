@@ -59,6 +59,9 @@ public struct FotufilmEngine {
         public var grainModel: GrainModel = .clumpField
         /// Multiplier on the fraction of light the base returns (0 disables halation).
         public var halationScale: Float = 1
+        /// Red returned/direct exposure ratio, 0...1, before amount and spectrum edits.
+        /// Nil follows the stock. An override scales all record returns together.
+        public var halationReturnRatio: Float? = nil
         /// How much the halo keeps the source's own colour instead of the stock's layered
         /// red, 0…1. The returning light re-enters the emulsion from below, so the bottom
         /// (red) record takes nearly all of it and a colour film's ring is red whatever the

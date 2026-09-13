@@ -915,7 +915,8 @@ public struct FilmEngineInvocation {
 
         // The look scale rides here rather than in the sheet's strengths so the calibrated
         // triple stays readable as physics and a scale of 1/lookScale recovers it exactly.
-        var returned = stock.halationStrength.map {
+        var returned = try HalationReturn.ratios(
+            for: stock, overriding: noFilm ? nil : options.halationReturnRatio).map {
             max($0, 0) * options.halationScale * stock.halationLookScale
         }
         // A drawn return spectrum multiplies what comes back at each wavelength, reduced through

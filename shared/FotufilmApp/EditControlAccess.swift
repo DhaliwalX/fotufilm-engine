@@ -46,6 +46,7 @@ extension EditorControlField {
             return .unstored("a still has no timeline")
         case .seed:
             return .bespoke { $0.seed != EditState.defaults.seed }
+        case .halationReturn: return .optionalNumber(\.halationReturnRatio)
         case .halation: return .number(\.halation)
         case .halationColour: return .number(\.halationColour)
         case .halationSpectrum: return .curve(\.halationSpectrum)
@@ -158,6 +159,7 @@ extension EditState {
     }
 
     func value(of field: EditorControlField) -> Double? {
+        if field == .halationReturn { return resolvedHalationReturnRatio }
         switch field.access {
         case .number(let path):
             return Self.encoding(of: field).displayed(fromStored: self[keyPath: path])
@@ -224,6 +226,7 @@ extension EditState {
     }
 
     func isMoved(_ field: EditorControlField) -> Bool {
+        if field == .halationReturn { return halationReturnRatio != nil }
         guard let control = EditorControlCatalogue.control(field) else { return false }
         switch field.access {
         case .number, .derived, .optionalNumber:
@@ -243,6 +246,7 @@ extension EditState {
     }
 
     mutating func reset(_ field: EditorControlField) {
+        if field == .halationReturn { halationReturnRatio = nil; return }
         guard let control = EditorControlCatalogue.control(field) else { return }
         switch field.access {
         case .number, .derived, .optionalNumber:

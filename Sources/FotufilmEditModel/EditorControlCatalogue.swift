@@ -460,6 +460,21 @@ public enum EditorControlCatalogue {
                                          help: "Use provisional spatial profiles where a stock has no "
                                              + "independently calibrated profile (default: off)")),
         EditorControl(
+            .halationReturn, title: "Halation Return",
+            detail: "Red returned/direct exposure percentage; follows the selected film until adjusted.",
+            section: .filmEmulsion,
+            kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
+            availability: .film,
+            persistence: .bespoke, binding: .halationReturnRatio,
+            surfaces: [.app, .desktop, .cli],
+            omitted: [.android: "Return overrides are not yet offered in the Android editor",
+                      .resolve: "Return overrides are not yet offered in plugin hosts",
+                      .finalcut: "Return overrides are not yet offered in plugin hosts", .web: webBaked],
+            commandLine: CommandLineFlag("--halation-return", placeholder: "<percent>",
+                help: "Red returned/direct exposure percentage, 0-100 (default: film; CineStill 12)",
+                generic: false, range: 0...100),
+            documentation: "Sets the red returned/direct exposure percentage and preserves the film’s return colour balance. CineStill 800T and 400D default to 12%. Use Film Return restores the selected film’s value."),
+        EditorControl(
             .halationColour, title: "Halo Colour",
             detail: "Control how much the halo keeps the color of the light source.",
             section: .filmEmulsion,
@@ -1550,6 +1565,19 @@ public extension EditorControlCatalogue {
         all.compactMap { control in
             guard control.offered(on: surface) else { return nil }
             guard control.availability.admits(stock: stock) else { return nil }
+            if control.field == .halationReturn {
+                guard let red = stock?.halationStrength.first, red > 0 else { return nil }
+                return EditorControl(
+                    control.field, title: control.title, detail: control.detail,
+                    section: control.section,
+                    kind: .slider(EditorControlScale(0...1,
+                                                     neutral: Double(red), unit: .percent)),
+                    availability: control.availability, foldsUnder: control.foldsUnder,
+                    scope: control.scope, persistence: control.persistence, binding: control.binding,
+                    drives: control.drives, surfaces: control.surfaces, omitted: control.omitted,
+                    host: control.host, web: control.web, commandLine: control.commandLine,
+                    documentation: control.documentation)
+            }
             guard control.field == .push, let stock else { return control }
             let stops = ([Float(0)] + stock.supportedDevelopmentStops)
                 .sorted()
