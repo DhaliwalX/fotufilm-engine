@@ -1,5 +1,8 @@
 name: Engine and desktop
 on:
+  pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -11,7 +14,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 90
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
       - run: xcodebuild -version
@@ -31,12 +34,17 @@ jobs:
         run: python3 tools/test-engine.py --workers 2
       - run: swift build
       - run: finalcut/build.sh --test
+        if: github.event_name == 'workflow_dispatch'
       - run: macos/build.sh --test
+        if: github.event_name == 'workflow_dispatch'
       - run: tools/verify-aot-parity.sh
+        if: github.event_name == 'workflow_dispatch'
       - uses: actions/setup-node@v4
+        if: github.event_name == 'workflow_dispatch'
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci && npm run build
+        if: github.event_name == 'workflow_dispatch'
         working-directory: web

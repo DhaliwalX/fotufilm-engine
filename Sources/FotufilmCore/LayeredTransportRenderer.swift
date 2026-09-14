@@ -86,14 +86,14 @@ public enum LayeredTransportRenderer {
                                execution: TransportExecution? = nil,
                                invocation suppliedInvocation: FilmEngineInvocation? = nil,
                                pixelPitchMM: Double? = nil) throws -> ImageBuffer {
+        try image.validate()
         guard execution != nil || (HalideBackend.isAvailable && options.transportBackend.isAvailable) else {
             throw TransportError.backend("requested transport backend is unavailable")
         }
         guard stock.donorLayers.isEmpty else {
             throw TransportError.unsupported("Layered Transport does not yet support donor-layer stocks; select Legacy for this stock")
         }
-        guard image.width > 0 && image.height > 0, image.planes.count == 3,
-              image.planes.allSatisfy({ $0.count == image.pixelCount && $0.allSatisfy(\.isFinite) }),
+        guard image.width > 0 && image.height > 0,
               options.halationScale.isFinite && options.halationScale >= 0,
               stock.halationLookScale.isFinite && stock.halationLookScale >= 0,
               options.frameCoverage.isFinite, options.format.frameHeightMM.isFinite,

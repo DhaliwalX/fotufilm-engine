@@ -372,7 +372,7 @@ public final class HalideMetalFilmRenderer {
                 frameWidth: frameHeight, frameHeight: frameHeight)
     }
 
-    /// Convenience allocating form.
+    /// Convenience allocating form: premultiplied sRGB RGBA in and out, preserving alpha.
     public func processSRGB8(
         _ pixels: [UInt8], width: Int, height: Int,
         stock: FilmStock, options: FotufilmEngine.Options,
@@ -1912,14 +1912,19 @@ public final class HalideMetalFilmRenderer {
         let decode = byteDecodeTable
         convertBytes(input, into: &output) { input, output, first, end in
             for offset in stride(from: first, to: end, by: 4) {
+                let alpha = Float(input[offset + 3])
+                let denominator = alpha > 0 ? alpha : 255
+                func decoded(_ channel: Int) -> Float {
+                    alpha == 255 ? decode[Int(input[offset + channel])]
+                        : ColorScience.srgbToLinear(min(Float(input[offset + channel]) / denominator, 1))
+                }
                 let displayP3 = SIMD3<Float>(
-                    decode[Int(input[offset])], decode[Int(input[offset + 1])],
-                    decode[Int(input[offset + 2])])
+                    decoded(0), decoded(1), decoded(2))
                 let srgb = ColorScience.linearDisplayP3ToSRGB(displayP3)
                 for channel in 0..<3 {
                     let encoded = encodeTransfer(srgb[channel])
                     output[offset + channel] = UInt8(
-                        min(max((encoded * 255).rounded(), 0), 255))
+                        min(max((encoded * alpha).rounded(), 0), alpha))
                 }
                 output[offset + 3] = input[offset + 3]
             }

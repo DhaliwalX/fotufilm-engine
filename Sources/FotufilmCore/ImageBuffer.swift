@@ -8,6 +8,22 @@ public struct ImageBuffer {
 
     public var pixelCount: Int { width * height }
 
+    /// Checks the mutable planes before a renderer lends their storage to a native backend.
+    /// Empty images are valid; nonempty images need three finite, equally sized planes.
+    public func validate() throws {
+        let (count, overflow) = width.multipliedReportingOverflow(by: height)
+        guard width >= 0, height >= 0, width <= Int32.max, height <= Int32.max,
+              !overflow, count <= Int(Int32.max) / 3 else {
+            throw TransportError.invalid("image dimensions exceed the renderer's supported range")
+        }
+        guard planes.count == 3, planes.allSatisfy({ $0.count == count }) else {
+            throw TransportError.invalid("image requires three planes with width × height samples each")
+        }
+        guard planes.allSatisfy({ $0.allSatisfy(\.isFinite) }) else {
+            throw TransportError.invalid("image samples must be finite")
+        }
+    }
+
     public init(width: Int, height: Int, fill: Float = 0) {
         self.width = width
         self.height = height

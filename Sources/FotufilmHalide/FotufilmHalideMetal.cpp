@@ -2404,9 +2404,6 @@ public:
                 x + origin_x_, y + origin_y_, safe_channel,
                 Halide::cast<int32_t>(
                     configuration_(FOTUFILM_CONFIG_FRAME_WIDTH)), seed_);
-            Expr color = Halide::cast<uint8_t>(Halide::clamp(
-                Halide::floor(srgb(x, y, safe_channel) * 255.0f + 0.5f + dither),
-                0.0f, 255.0f));
             Expr alpha = density_in_
                 ? Halide::cast<uint8_t>(Halide::clamp(
                       Halide::cast<float>(input_(
@@ -2414,6 +2411,10 @@ public:
                           Halide::min(y, input_.dim(1).extent() - 1), 3)),
                       0.0f, 255.0f))
                 : input_(x, y, 3);
+            Expr coverage = Halide::cast<float>(alpha);
+            Expr color = Halide::cast<uint8_t>(Halide::clamp(
+                Halide::floor(srgb(x, y, safe_channel) * coverage + 0.5f + dither),
+                0.0f, coverage));
             output(x, y, channel) = Halide::select(channel == 3, alpha, color);
         }
         output.output_buffer().dim(0).set_stride(4);

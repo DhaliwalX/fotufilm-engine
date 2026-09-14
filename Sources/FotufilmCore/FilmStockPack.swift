@@ -761,36 +761,82 @@ public struct FilmStockPack: Sendable {
 
     /// The process-wide pack.
     public static var shared: FilmStockPack {
-        if let loaded = sharedStorage.withLock({ $0 }) { return loaded }
-        let pack: FilmStockPack
-        do {
-            pack = try load()
-            loadErrorStorage.withLock { $0 = nil }
-        } catch {
-            loadErrorStorage.withLock { $0 = error }
-            pack = FilmStockPack()
-        }
-        sharedStorage.withLock { $0 = pack }
-        return pack
+        sharedCache.shared
     }
 
     @discardableResult
     public static func reload() -> FilmStockPack {
-        sharedStorage.withLock { $0 = nil }
-        generationStorage.withLock { $0 += 1 }
-        return shared
+        sharedCache.reload()
     }
 
-    public static var generation: Int { generationStorage.withLock { $0 } }
+    public static var generation: Int { sharedCache.generation }
 
-    public static var loadError: Error? { loadErrorStorage.withLock { $0 } }
+    public static var loadError: Error? { sharedCache.loadError }
 
-    private static let sharedStorage = Mutex<FilmStockPack?>(nil)
-    private static let loadErrorStorage = Mutex<Error?>(nil)
-    private static let generationStorage = Mutex<Int>(0)
+    private static let sharedCache = FilmStockPackCache { try load() }
     private static let installedSealedStorage = Mutex<[URL]>([])
     private static let embeddedSealedStorage = Mutex<[URL]>([])
     private static let embeddedStockStorage = Mutex<[URL]>([])
+}
+
+/// One load per generation. I/O runs outside the lock so a reload can supersede a slow load;
+/// only the current generation may publish a pack or error, and stale readers retry.
+final class FilmStockPackCache: @unchecked Sendable {
+    private let condition = NSCondition()
+    private let loader: () throws -> FilmStockPack
+    private var currentGeneration = 0
+    private var loaded: FilmStockPack?
+    private var error: Error?
+    private var loading = Set<Int>()
+
+    init(loader: @escaping () throws -> FilmStockPack) { self.loader = loader }
+
+    var generation: Int {
+        condition.lock(); defer { condition.unlock() }
+        return currentGeneration
+    }
+
+    var loadError: Error? {
+        condition.lock(); defer { condition.unlock() }
+        return error
+    }
+
+    func reload() -> FilmStockPack {
+        condition.lock()
+        currentGeneration += 1
+        loaded = nil
+        error = nil
+        condition.broadcast()
+        condition.unlock()
+        return shared
+    }
+
+    var shared: FilmStockPack {
+        condition.lock()
+        while true {
+            if let loaded {
+                condition.unlock()
+                return loaded
+            }
+            let generation = currentGeneration
+            if loading.contains(generation) {
+                condition.wait()
+                continue
+            }
+            loading.insert(generation)
+            condition.unlock()
+            let result = Result { try loader() }
+            condition.lock()
+            loading.remove(generation)
+            if generation == currentGeneration {
+                switch result {
+                case let .success(pack): loaded = pack; error = nil
+                case let .failure(failure): loaded = FilmStockPack(); error = failure
+                }
+            }
+            condition.broadcast()
+        }
+    }
 }
 
 public extension FilmStockPack {

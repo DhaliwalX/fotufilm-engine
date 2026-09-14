@@ -1272,6 +1272,19 @@ int32_t fotufilm_halide_process_strip(
     const float *paper_output_lut, int32_t lut_dimension,
     int32_t feature_mask, uint32_t seed);
 
+/// A contiguous tile including its spatial apron. Only the named interior rectangle is
+/// copied to the frame-sized output planes, at origin + interior coordinates.
+int32_t fotufilm_halide_process_tile(
+    const float *input_r, const float *input_g, const float *input_b,
+    float *output_r, float *output_g, float *output_b,
+    int32_t width, int32_t height, int32_t output_width, int32_t output_height,
+    int32_t origin_x, int32_t origin_y, int32_t interior_left, int32_t interior_top,
+    int32_t interior_width, int32_t interior_height,
+    const float *configuration,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    int32_t feature_mask, uint32_t seed);
+
 /// Single-plane blur kernels used by the public Blur API.
 int32_t fotufilm_halide_gaussian(
     const float *input, float *output, int32_t width, int32_t height,
