@@ -128,6 +128,9 @@ for all four targets. Only the publishing job uses GitHub's built-in token; no p
 access token is required. Archives include licence notices, exclude host tools and local
 paths, and pass a full bridge-link check before publication. These are linkage and
 archive checks, not GPU execution tests. AOT releases never become the app's Latest release.
+Only the newest release per target is kept: once a run has published or confirmed the current
+key, it deletes the platform's older `aot-*` releases and tags, so consumers must pin the engine
+commit that produced the surviving release.
 The compiler contract is in `tools/aot-toolchain.json`; update it deliberately when
 upgrading the toolchain. For a local publisher, install `cmake`, `ninja`, `llvm@22`,
 `lld@22` and `flatbuffers` with Homebrew, set `LLVM_ROOT` and `LLD_ROOT` to those versioned

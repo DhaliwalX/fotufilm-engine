@@ -27,6 +27,21 @@ export FOTUFILM_AOT_NO_FETCH=1
 export FOTUFILM_AOT_REQUIRE_PREBUILT=0
 command -v gh >/dev/null || { echo "gh CLI is required to publish." >&2; exit 1; }
 
+# Only the newest kernel set per platform stays published. Consumers pin engine main, which is what
+# this run built, so every other release for the platform is superseded. The anchored pattern keeps
+# the macos job from deleting macos-intel releases; the tag goes with the release so nothing is
+# left behind that looks like a fetchable version.
+prune_superseded() {
+  local platform="$1" keep="$2" old
+  gh release list --repo "$REPOSITORY" --limit 200 --json tagName \
+    --jq ".[].tagName | select(test(\"^aot-${platform}-[0-9a-f]{16}\$\"))" |
+  while read -r old; do
+    [[ "$old" == "$keep" ]] && continue
+    gh release delete "$old" --repo "$REPOSITORY" --yes --cleanup-tag
+    echo "Deleted superseded $old"
+  done
+}
+
 for PLATFORM in "${PLATFORMS[@]}"; do
   TAG="$(python3 tools/aot-release.py tag "$PLATFORM")"
   if RELEASE="$(gh release view "$TAG" --repo "$REPOSITORY" --json isDraft,assets 2>/dev/null)"; then
@@ -34,6 +49,7 @@ for PLATFORM in "${PLATFORMS[@]}"; do
       jq -e '[.assets[].name] | sort == ["aot-manifest.json", "kernels.tar.gz", "kernels.tar.gz.sha256"]' \
         <<<"$RELEASE" >/dev/null || { echo "$TAG is published but incomplete; refusing to overwrite." >&2; exit 1; }
       echo "$TAG is already published; skipping unchanged inputs."
+      prune_superseded "$PLATFORM" "$TAG"
       continue
     fi
   fi
@@ -71,4 +87,5 @@ for PLATFORM in "${PLATFORMS[@]}"; do
     "$WORK/release/kernels.tar.gz" "$WORK/release/kernels.tar.gz.sha256" "$WORK/release/aot-manifest.json"
   gh release edit "$TAG" --repo "$REPOSITORY" --draft=false --latest=false
   echo "Published https://github.com/$REPOSITORY/releases/tag/$TAG"
+  prune_superseded "$PLATFORM" "$TAG"
 done
