@@ -18,6 +18,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: xcodebuild -version
+      # Package.swift detects Halide while resolving targets, before any SwiftPM build.
+      - run: brew install halide
       - run: python3 tools/check-source-boundary.py
       - run: swift run fotufilm-controls --check
       - run: python3 tools/test-source-boundary.py
@@ -25,7 +27,6 @@ jobs:
       - run: python3 tools/test-compile-if-needed.py
       - run: python3 tools/test-aot-release.py
       - run: python3 tools/test-audit-bundle-paths.py
-      - run: brew install halide
       - run: python3 tools/test-compiled-cache.py
       - run: python3 tools/test-test-engine.py
       - run: bash tools/test-grain-coverage.sh
