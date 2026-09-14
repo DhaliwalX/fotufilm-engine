@@ -305,6 +305,12 @@ public struct FotufilmEngine {
         public func paper(for stock: FilmStock) -> PrintPaper {
             paper?.resolved(for: stock) ?? PrintPaper.default(for: stock)
         }
+
+        /// Physical prints use the standard SDR shoulder; only a directly viewed reversal
+        /// needs the earlier roll-off for its extended highlight range.
+        public func sdrShoulderKnee(for stock: FilmStock) -> Float {
+            FilmSDRDelivery.shoulderKnee(isReversal: paper(for: stock).supportsHDRDelivery(for: stock))
+        }
     }
 
     public var stock: FilmStock
@@ -357,8 +363,7 @@ public struct FotufilmEngine {
         let out = process(linearRGB: linear)
         var result = pixels
         let ditherSeed = UInt32(truncatingIfNeeded: options.seed)
-        let shoulderKnee = FilmSDRDelivery.shoulderKnee(
-            isReversal: stock.isReversal)
+        let shoulderKnee = options.sdrShoulderKnee(for: stock)
         for i in 0..<(width * height) {
             let displayP3 = SIMD3<Float>(
                 ColorScience.displayShoulder(out.planes[0][i], knee: shoulderKnee),
@@ -438,8 +443,7 @@ public struct FotufilmEngine {
         timing.mark("engine")
         var result = pixels
         let ditherSeed = UInt32(truncatingIfNeeded: options.seed)
-        let shoulderKnee = FilmSDRDelivery.shoulderKnee(
-            isReversal: stock.isReversal)
+        let shoulderKnee = options.sdrShoulderKnee(for: stock)
         result.withUnsafeMutableBufferPointer { destination in
             out.planes[0].withUnsafeBufferPointer { plane0 in
                 out.planes[1].withUnsafeBufferPointer { plane1 in

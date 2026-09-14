@@ -254,8 +254,7 @@ public enum EditorControlAvailability: String, Sendable, Equatable, Codable {
             guard let stock else { return false }
             return !stock.isMonochrome && !stock.isReversal
         case .printStage:
-            guard let stock else { return false }
-            return !stock.isReversal
+            return stock != nil
         case .statedReciprocity:
             guard let stated = stock?.reciprocityFailure else { return false }
             return stated.lostStopsPerDecade > 0

@@ -44,7 +44,7 @@ flowchart LR
 5. **View the result.** The output stage models how light passes through the
    developed film. A print medium adds its own spectral response and development
    curves; scan modes convert the negative to a positive. Reversal film produces
-   a positive for direct viewing. The result is converted back to display colour.
+   a positive for direct viewing or printing onto Ilfochrome/Cibachrome paper. The result is converted back to display colour.
 
 These stages explain why the controls work together: exposure moves the image
 along the film's response curve, film format changes the scale of its texture,
@@ -228,9 +228,9 @@ See [Build support](docs/support.html) for stock-pack setup.
 
 ## Print media
 
-The output media are digitised from the manufacturers' own published datasheets, on the
-same 380-780 nm grid at 5 nm the film model uses. Each carries the sheet's dye spectra,
-layer sensitivities and characteristic curves.
+The six negative-to-positive physical media below are digitised from the manufacturers'
+published datasheets, on the same 380-780 nm grid at 5 nm the film model uses.
+Ilfochrome/Cibachrome adds two positive-to-positive papers with approximate profiles.
 
 | Medium | Source |
 | --- | --- |
@@ -240,6 +240,22 @@ layer sensitivities and characteristic curves.
 | Kodak Vision 2383 | Kodak H-1-2383 (March 2022) |
 | Kodak Vision Premier 2393 | Kodak 2393 curve sheets |
 | Fujifilm ETERNA-CP 3513DI | Fujifilm ETERNA-CP 3513DI brochure |
+| Ilfochrome Classic CPS.1K (Cibachrome), normal contrast | Ilford TDS 307US (August 2003), tone specifications |
+| Ilfochrome Classic CLM.1K (Cibachrome), medium contrast | Ilford TDS 307US (August 2003), tone specifications |
+
+For slide film, choose Ilfochrome Classic CPS.1K or the softer CLM.1K in **Output Medium**.
+The CLI accepts `--paper ilfochrome-cps-1k` or `--paper ilfochrome-clm-1k`;
+`ilfochrome` and `cibachrome` both select CPS.1K. Match Film still defaults to direct viewing.
+Instant sheets remain direct-view only, and negative films retain their existing media.
+Positive paper supports viewing light and the simulated optical printer; increasing
+printer exposure lightens the print. Paper output is SDR.
+
+These profiles use the [Ilford Deluxe media datasheet](https://www.bonavolta.ch/hobby/files/Ilfochrome_CPS_CLM_E.pdf),
+p. 1: visual density ranges of 2.0/2.05 D and mid-tone contrasts of 1.40/1.15.
+The curves' endpoints are approximate. The publication does not supply spectral sensitivities
+or dye spectra; the current color model uses the Ektacolor receiver as a provisional basis.
+It does not reproduce measured Ilfochrome azo-dye color. Cibachrome aliases the same family;
+a separate historical coating is not simulated.
 
 A sheet that publishes one characteristic curve develops all three records along it;
 E-7020, E-4070, 2383, 2393 and ETERNA-CP publish three and are carried per record. The lab scan and

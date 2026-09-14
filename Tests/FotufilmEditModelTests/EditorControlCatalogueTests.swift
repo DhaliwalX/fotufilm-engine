@@ -305,11 +305,11 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertFalse(bleach.availability.admits(stock: nil))
     }
 
-    func testOnlyFramingRemainsInThePrintSectionOnAReversalStock() throws {
+    func testReversalOffersPrintControlsForPositivePaper() throws {
         let reversal = try preset("example-reversal-64")
         let offered = EditorControlCatalogue.controls(in: .printPaper,
                                                       for: reversal)
-        XCTAssertEqual(offered.map(\.field), [.printFrame])
+        XCTAssertEqual(offered.map(\.field), [.printFrame, .paper, .printLight, .printCorrection])
         XCTAssertTrue(EditorControlCatalogue.control(.printFrame)!.availability.admits(stock: nil))
 
         let negative = try preset("example-negative-400")
@@ -320,7 +320,9 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertEqual(EditorControlCatalogue.controls(in: .printLamp, for: negative).map(\.field),
                        [.enlarger, .printerEnabled, .printerLamp, .printerExposure,
                         .printerMagenta, .printerYellow])
-        XCTAssertTrue(EditorControlCatalogue.controls(in: .printLamp, for: reversal).isEmpty)
+        XCTAssertEqual(EditorControlCatalogue.controls(in: .printLamp, for: reversal).map(\.field),
+                       [.enlarger, .printerEnabled, .printerLamp, .printerExposure,
+                        .printerMagenta, .printerYellow])
     }
 
     /// The grade is available in Light & Color for every develop, film or not, so it survives a

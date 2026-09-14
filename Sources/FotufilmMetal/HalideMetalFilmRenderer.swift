@@ -1868,7 +1868,7 @@ public final class HalideMetalFilmRenderer {
                 let alpha = Float(pixels[i*4+3])/255
                 for c in 0..<3 {
                     let value = ColorScience.linearToSrgb(ColorScience.displayShoulder(
-                        rgb[c], knee: stock.isReversal ? 0.7 : 0.9)) * alpha
+                        rgb[c], knee: options.sdrShoulderKnee(for: stock))) * alpha
                     bytes[4*i+c] = UInt8(min(max((255*value).rounded(),0),255))
                 }
             }

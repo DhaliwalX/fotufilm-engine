@@ -169,3 +169,11 @@ Its separate sRGB texture is bounded to 2048 pixels on its long side, then colou
 the output profile. The original photograph is copied last at full resolution, with no cropping,
 resampling or texture painted over it. The mounted output retains 16-bit precision and the
 photograph's colour profile, including P3 and HLG. No scanned borders or reference photos ship.
+
+## Positive paper
+
+Ilfochrome/Cibachrome uses the same 4 × 6 inch presentation geometry. Its unexposed
+margin retains maximum dye density and is dark. The polyester surface is represented
+as smooth, without the RC lustre stipple. Border color shares the positive paper's
+provisional receiver model; it is not a measured substrate spectrum. Film Border
+shows the original reversal transparency while retaining the chosen paper for later use.

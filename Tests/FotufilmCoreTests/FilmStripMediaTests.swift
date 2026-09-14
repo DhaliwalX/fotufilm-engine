@@ -49,9 +49,10 @@ final class FilmStripMediaTests: XCTestCase {
         }
     }
 
-    func testReversalUsesItsDirectPositiveOnEveryGauge() {
+    func testReversalOffersPositivePaperAndDirectViewingOnEveryGauge() {
         for gauge in FilmFormat.presets.map(\.format) {
-            XCTAssertEqual(PrintPaper.stripChoices(for: TestStocks.reversal, gauge: gauge), [.screen])
+            XCTAssertEqual(PrintPaper.stripChoices(for: TestStocks.reversal, gauge: gauge),
+                           [.ilfochromeCPS1K, .ilfochromeCLM1K, .screen])
         }
     }
 }

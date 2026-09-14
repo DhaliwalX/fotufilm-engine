@@ -994,7 +994,7 @@ public struct FilmEngineInvocation {
         // spacing. The residual is `sigma² - sampledGaussianVariance(sigma)`, which changes
         // continuously as the sampled kernel gains support. Apply the residual to the spread arm
         // of `keep·δ + (1-keep)·spread`. Base this on viewing mode, not pipeline span, so
-        // `negative` followed by `print` matches `full`; reversal and light-box viewing omit it.
+        // `negative` followed by `print` matches `full`; direct film viewing omits it.
         let negativeViewing = options.negativeViewing
             ?? (printMedium.isNegative ? NegativeViewing.lightBox : nil)
         // An output medium only applies to a span that writes a finished image. The raw negative
@@ -1004,7 +1004,7 @@ public struct FilmEngineInvocation {
             && negativeViewing != nil && !stock.isReversal
         let enlargerSigmaPixels = printMedium.enlargerBlurMM * pxPerMM
         let enlargerFoldPixels: Float = {
-            guard !showingNegative, !stock.isReversal, selected(.enlarger),
+            guard !showingNegative, !printMedium.viewsFilmDirectly(for: stock), selected(.enlarger),
                   enlargerSigmaPixels > 0
             else { return 0 }
             let shortfall = enlargerSigmaPixels * enlargerSigmaPixels
@@ -1102,19 +1102,20 @@ public struct FilmEngineInvocation {
         let mottleLambda = clumpsPerPixel
             / (mottleSizeRatio * mottleSizeRatio)
         // The enlarger lens and the paper's own scattering, as one Gaussian on the film's scale.
-        // Only when something actually images the negative: viewing the negative itself, or a
-        // reversal stock that is its own positive, has no enlarger in the path.
+        // Only when something actually images the film: direct viewing has no enlarger.
         // Nothing images the negative in `PipelineStage.negative`, and in `.texture` the
         // enlarger is one of the selectable spatial stages rather than part of a print.
-        let printMTFActive = !showingNegative && !stock.isReversal
+        let printMTFActive = !showingNegative && !printMedium.viewsFilmDirectly(for: stock)
             && printMedium.enlargerBlurMM > 0
             && options.stage != .negative && selected(.enlarger)
         let printMTFSigma = max(printMedium.enlargerBlurMM * pxPerMM,
                                 Self.grainSigmaFloorPixels)
         let printMTFRadius = printMTFActive ? Self.gaussianRadius(printMTFSigma) : 0
-        let masking = printer == nil
+        let contrast = printer == nil
             ? stock.printingContrastScale(correction: options.printCorrection, paper: printMedium)
             : [Float](repeating: 1, count: 3)
+        // Reverse the positive paper's exposure axis in the existing shared CPU/Metal slots.
+        let masking = contrast.map { $0 * printMedium.exposureDirection }
         // The paper's three records, each anchored at its own calibrated
         // midpoint so a neutral mid-grey prints neutral through records that
         // do not share a curve. Green keeps the legacy slots; red and blue
@@ -1122,10 +1123,10 @@ public struct FilmEngineInvocation {
         let paperCurves = printMedium.printCurves(for: stock)
         let paper = paperCurves[1]
         var xMids = printMedium.printExposureMidpoints(for: stock)
-        // Paper exposure shifts log light after negative transmission, before the paper curves.
+        // Paper exposure shifts log light after film transmission, before the paper curves.
         // Reuse the midpoint slots to preserve the packed ABI and avoid rebuilding spectral LUTs.
         if let printer, printer.exposureEV != 0 {
-            let shift = printer.exposureEV * log10(Float(2))
+            let shift = printMedium.exposureDirection * printer.exposureEV * log10(Float(2))
             xMids = xMids.map { $0 + shift }
         }
         let xMid = xMids[1]
@@ -1217,7 +1218,7 @@ public struct FilmEngineInvocation {
         if printMTFActive && printMTFRadius > 0 {
             featureMask |= FilmEngineFeature.printMTF
         }
-        if stock.isReversal || showingNegative {
+        if printMedium.viewsFilmDirectly(for: stock) || showingNegative {
             featureMask |= FilmEngineFeature.reversal
         }
         if stock.isMonochrome { featureMask |= FilmEngineFeature.monochrome }

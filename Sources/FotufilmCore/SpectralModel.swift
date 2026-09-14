@@ -253,7 +253,7 @@ public struct SpectralPipelineTables: Sendable {
     public let exposure: SpectralLUT
     /// Negative: density -> relative log paper exposures.
     public let filmOutput: SpectralLUT
-    /// Paper layer density -> display-linear RGB; nil for reversal.
+    /// Paper layer density -> display-linear RGB; nil when film is viewed directly.
     public let paperOutput: SpectralLUT?
 }
 
@@ -342,9 +342,10 @@ public enum SpectralRuntime {
                               printViewingKelvin: Float? = nil,
                               callier: Float = 1,
                               printer: PrinterProfile? = nil) -> SpectralPipelineTables {
+        let paper = paper.resolved(for: stock)
         let printer = PrinterProfile.resolved(printer, stock: stock, paper: paper)
         let bleachBypass = retainedSilverFraction(bleachBypass, stock: stock)
-        let printViewingKelvin = (stock.isReversal || !paper.acceptsViewingIlluminant) ? nil
+        let printViewingKelvin = !paper.acceptsViewingIlluminant ? nil
             : printLightKelvin(printViewingKelvin)
         let callier = callierCoefficient(callier, stock: stock, paper: paper)
         let key = cacheIdentifier(for: stock, paper: paper, bleachBypass: bleachBypass,
@@ -437,6 +438,7 @@ public enum SpectralRuntime {
                                        printViewingKelvin: Float? = nil,
                                        callier: Float = 1,
                                        printer: PrinterProfile? = nil) -> UInt64 {
+        let paper = paper.resolved(for: stock)
         var h = stock.spectralProfile.signature
         func add(_ v: Float) { h = (h ^ UInt64(v.bitPattern)) &* 0x100000001b3 }
         // The exposure LUT is normalized against the illuminant this emulsion was balanced for.
@@ -465,7 +467,7 @@ public enum SpectralRuntime {
         h = (h ^ UInt64(stock.isReversal ? 1 : 0)) &* 0x100000001b3
         h = (h ^ UInt64(stock.isMonochrome ? 1 : 0)) &* 0x100000001b3
         h = (h ^ UInt64(stock.isReflectionPrint ? 1 : 0)) &* 0x100000001b3
-        if !stock.isReversal {
+        if !paper.viewsFilmDirectly(for: stock) {
             for byte in paper.rawValue.utf8 { h = (h ^ UInt64(byte)) &* 0x100000001b3 }
         }
         // Hashed only away from their off positions, so every identity that existed before
@@ -474,7 +476,7 @@ public enum SpectralRuntime {
         if bleach > 0 {
             h = (h ^ UInt64(bleach.bitPattern)) &* 0x100000001b3
         }
-        if !stock.isReversal, paper.acceptsViewingIlluminant,
+        if paper.acceptsViewingIlluminant,
            let kelvin = printLightKelvin(printViewingKelvin) {
             h = (h ^ UInt64(kelvin.bitPattern)) &* 0x9E3779B97F4A7C15
         }
@@ -502,7 +504,7 @@ public enum SpectralRuntime {
         // Output characterization is fixed at the stock's reference light. The invocation
         // replaces this exposure table with the scene spectrum after calibration is built.
         let exposure = exposureTable(for: stock, illuminant: filmReferenceIlluminant(for: stock))
-        if stock.isReversal {
+        if paper.viewsFilmDirectly(for: stock) {
             let basis = neutralDensityBasis(for: stock)
             func aligned(_ density: [Float]) -> [Float] { basis(density) }
             let balance = reversalBalance(for: stock, aligned: aligned)
@@ -533,7 +535,9 @@ public enum SpectralRuntime {
         } else {
             let paperSensitivity = paper.sensitivity
             let dMin = stock.curves.map(\.dMin)
-            let midDensity = (0..<3).map { stock.curves[$0].density(logExposure: 0) }
+            let basis = stock.isReversal ? neutralDensityBasis(for: stock) : nil
+            func aligned(_ density: [Float]) -> [Float] { basis?(density) ?? density }
+            let midDensity = aligned((0..<3).map { stock.developedDensity(layer: $0, logExposure: 0) })
             // Retained silver darkens the mid-grey too, and the print re-anchors on it — a
             // lab times a skip-bleach negative through its own extra density, so what
             // survives onto the paper is the added contrast and the lost chroma, not a
@@ -570,7 +574,7 @@ public enum SpectralRuntime {
             let castOffset = referenceCastOffset(midEnergy: midEnergy,
                                                  stock: stock, paper: paper)
             printing = buildDensityLUT(stock: stock) { density in
-                let energy = paperExposure(density: density.map { $0 * callier },
+                let energy = paperExposure(density: aligned(density).map { $0 * callier },
                                            dyes: stock.spectralProfile.imageDyeDensity,
                                            lamp: lamp, paperSensitivity: paperSensitivity,
                                            neutralDensity: silverCallier * retainedSilverDensity(
@@ -1981,7 +1985,7 @@ public enum SpectralRuntime {
     /// added to developed densities. Cine media use their published LAD targets instead.
     private static let reflectionPrintDensityTrims: [PrintPaper: SIMD3<Float>] = {
         Dictionary(uniqueKeysWithValues:
-            [PrintPaper.ektacolorEdge, .enduraPremier, .crystalArchive].map { paper in
+            [PrintPaper.ektacolorEdge, .enduraPremier, .crystalArchive, .ilfochromeCPS1K, .ilfochromeCLM1K].map { paper in
                 let anchor = paper.anchorDensity
                 let light = referenceViewingLight(for: paper)
                 return (paper, solveReflectionPrintSetup(
@@ -2187,6 +2191,7 @@ extension SpectralRuntime {
                                  paper: PrintPaper = .default,
                                  printCorrection: Float,
                                  callier: Float = 1) -> [Float] {
+        let paper = paper.resolved(for: stock)
         let callier = callierCoefficient(callier, stock: stock, paper: paper)
         // Display-linear print RGB is Display P3, so its luminance uses the P3 weights.
         let luma = ColorScience.displayP3LuminanceWeights
@@ -2195,7 +2200,7 @@ extension SpectralRuntime {
         }
         let perStop = Float(log10(2.0))
 
-        if stock.isReversal {
+        if paper.viewsFilmDirectly(for: stock) {
             let basis = neutralDensityBasis(for: stock)
             func aligned(_ density: [Float]) -> [Float] { basis(density) }
             let balance = reversalBalance(for: stock, aligned: aligned)
@@ -2222,7 +2227,9 @@ extension SpectralRuntime {
         }
 
         let paperSensitivity = paper.sensitivity
-        let midDensity = (0..<3).map { stock.curves[$0].density(logExposure: 0) }
+        let basis = stock.isReversal ? neutralDensityBasis(for: stock) : nil
+        func aligned(_ density: [Float]) -> [Float] { basis?(density) ?? density }
+        let midDensity = aligned((0..<3).map { stock.developedDensity(layer: $0, logExposure: 0) })
         let illumination = printingIllumination(stock: stock, paper: paper,
             density: midDensity.map { $0 * callier }, dyes: stock.spectralProfile.imageDyeDensity)
         let lamp = illumination.lamp
@@ -2246,7 +2253,7 @@ extension SpectralRuntime {
                     return neutralMid - neutralDensity(stock, exposure)
                 })
             } else {
-                let energy = paperExposure(density: density.map { $0 * callier },
+                let energy = paperExposure(density: aligned(density).map { $0 * callier },
                                            dyes: stock.spectralProfile.imageDyeDensity,
                                            lamp: lamp, paperSensitivity: paperSensitivity)
                 // The same reference cast the printing LUT carries — this
@@ -2262,7 +2269,7 @@ extension SpectralRuntime {
             let printed = (0..<3).map { channel in
                 curves[channel].density(
                     logExposure: xMids[channel] + masking[channel]
-                        * relative[channel]) - curves[channel].dMin
+                        * paper.exposureDirection * relative[channel]) - curves[channel].dMin
             }
             let rgb: SIMD3<Float>
             if paper.isScan {

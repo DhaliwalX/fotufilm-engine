@@ -758,8 +758,8 @@ enum FilmRender {
         let sdrConversion: AnyFilmOutputConverter = film == nil
             ? AnyFilmOutputConverter(FilmOutputConversion.displayP3)
             : AnyFilmOutputConverter(FilmDisplayP3SDRConversion(
-                shoulderKnee: FilmSDRDelivery.shoulderKnee(
-                    isReversal: stock?.isReversal == true)))
+                shoulderKnee: stock.map { options.sdrShoulderKnee(for: $0) }
+                    ?? FilmSDRDelivery.standardShoulderKnee))
         // The same delivery, named so the engine can take it in the producing kernel instead of
         // handing back display-linear light for the host to walk. Three things have to hold: the
         // engine's streaming path is the one developing (the film-free and viewport paths do
@@ -778,8 +778,8 @@ enum FilmRender {
            film.engine.carriesOutputTransform(
                stock: film.stock, options: options, width: width,
                height: height, exactMath: exact) {
-            outputTransform = .displayP3(shoulderKnee: FilmSDRDelivery.shoulderKnee(
-                isReversal: stock?.isReversal == true))
+            outputTransform = .displayP3(shoulderKnee: stock.map { options.sdrShoulderKnee(for: $0) }
+                ?? FilmSDRDelivery.standardShoulderKnee)
         }
         if wantsKernelDelivery, let plainEngine,
            plainEngine.carriesOutputTransform(

@@ -520,8 +520,8 @@ struct EditState: Equatable {
     var hasFilm: Bool { !StockPreset.isNoFilm(stockID) }
 
     /// The medium this edit really develops on. Silence follows the stock's physical reference
-    /// path; an explicit selection is honoured wherever that stock can reach it. A reversal stock
-    /// always resolves to its direct positive.
+    /// path; an explicit selection is honoured wherever that stock can reach it, including
+    /// positive paper for a reversal transparency.
     var resolvedPaper: PrintPaper {
         guard let stock else { return paper }
         if paperFollowsStock { return PrintPaper.default(for: stock) }
@@ -546,9 +546,11 @@ struct EditState: Equatable {
     /// Photo framing changes the delivered medium without replacing the user's paper selection.
     /// Use this derived state for photo previews, detail measurements and exports together.
     var frameRenderState: EditState {
-        guard filmFrameNegative != nil else { return self }
+        let slideInFilmFrame = stock?.isReversal == true && resolvedPaper.isPositivePaper
+            && frameConfiguration.frame == .film
+        guard filmFrameNegative != nil || slideInFilmFrame else { return self }
         var rendered = self
-        rendered.paper = .negative
+        rendered.paper = slideInFilmFrame ? .screen : .negative
         rendered.paperFollowsStock = false
         return rendered
     }

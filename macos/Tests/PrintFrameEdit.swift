@@ -69,6 +69,22 @@ enum PrintFrameEditCheck {
             precondition(film.filmFrameNegative == nil)
             precondition(film.frameRenderState == film)
         }
+        var positive = legacy
+        positive.stockID = "provia100f"
+        positive.paper = .ilfochromeCLM1K
+        positive.paperFollowsStock = false
+        precondition(positive.resolvedPaper == .ilfochromeCLM1K)
+        precondition(!positive.supportsHDROutput)
+        let restoredPositive = try JSONDecoder().decode(EditState.self,
+            from: JSONEncoder().encode(positive))
+        precondition(restoredPositive == positive)
+        positive.printFrame = .paper
+        precondition(positive.frameConfiguration.frame == .paper)
+        precondition(positive.frameRenderState.resolvedPaper == .ilfochromeCLM1K)
+        positive.printFrame = .film
+        precondition(positive.frameRenderState.resolvedPaper == .screen)
+        precondition(positive.paper == .ilfochromeCLM1K)
+        precondition(positive.frameRenderState.frameRenderState == positive.frameRenderState)
         film.stockID = "hp5plus400"
         film.chosenFormatID = "unknown"
         precondition(film.filmFrameNegative == nil)

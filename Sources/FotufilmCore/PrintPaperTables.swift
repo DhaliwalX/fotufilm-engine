@@ -7,9 +7,10 @@ extension PrintPaper {
     /// measured RA-4 dye basis only to retain the negative-to-positive spectral coupling; it is
     /// not presented as a measured display or a physical sheet. Negative output bypasses this
     /// positive-medium table, so its entry is only unreachable scaffolding for exhaustive access.
+    /// Ilfochrome uses the Ektacolor spectra as a provisional receiver, not measured azo dyes.
     var dyes: [[Float]] {
         switch self {
-        case .ektacolorEdge, .screen, .negative: return SpectralGrid.paperDyes
+        case .ektacolorEdge, .screen, .negative, .ilfochromeCPS1K, .ilfochromeCLM1K: return SpectralGrid.paperDyes
         case .enduraPremier: return SpectralGrid.enduraPremierDyes
         case .crystalArchive: return SpectralGrid.crystalArchiveDyes
         case .vision2383: return SpectralGrid.vision2383Dyes
@@ -26,7 +27,7 @@ extension PrintPaper {
     /// been unmixed; `dyes` stays the partitioned basis the neutral axis is built on.
     var analyticalDyes: [[Float]] {
         switch self {
-        case .ektacolorEdge, .screen, .negative, .labScan, .telecine:
+        case .ektacolorEdge, .screen, .negative, .labScan, .telecine, .ilfochromeCPS1K, .ilfochromeCLM1K:
             return SpectralGrid.paperDyeAmounts
         case .enduraPremier: return SpectralGrid.enduraPremierDyeAmounts
         case .crystalArchive: return SpectralGrid.crystalArchiveDyeAmounts
@@ -42,7 +43,7 @@ extension PrintPaper {
     /// Screen and negative output bypass paper exposure.
     var sensitivity: [[Float]] {
         switch self {
-        case .ektacolorEdge, .screen, .negative: return SpectralGrid.paperSensitivity
+        case .ektacolorEdge, .screen, .negative, .ilfochromeCPS1K, .ilfochromeCLM1K: return SpectralGrid.paperSensitivity
         case .enduraPremier: return SpectralGrid.enduraPremierSensitivity
         case .crystalArchive: return SpectralGrid.crystalArchiveSensitivity
         case .vision2383: return SpectralGrid.vision2383Sensitivity
@@ -82,7 +83,7 @@ extension PrintPaper {
         if let aim = ladStatusA, !stock.isMonochrome, !stock.isReversal {
             return (0..<3).map { curves[$0].logExposure(density: aim[$0]) }
         }
-        let offset = acceptsViewingIlluminant && !stock.isMonochrome && !stock.isReversal
+        let offset = acceptsViewingIlluminant && !stock.isMonochrome
             ? SpectralRuntime.reflectionPrintDensityTrim(for: self) : .zero
         return (0..<3).map {
             curves[$0].logExposure(density: curves[$0].dMin + anchorDensity + offset[$0])
@@ -112,7 +113,7 @@ extension PrintPaper {
     /// sheet that publishes one curve develops all three records along it,
     /// which is exactly the single-curve stage this generalizes.
     func printCurves(for stock: FilmStock) -> [CharacteristicCurve] {
-        guard !stock.isReversal else {
+        guard !viewsFilmDirectly(for: stock) else {
             return [stock.paperCurve, stock.paperCurve, stock.paperCurve]
         }
         // A monochrome negative prints through one exposure and the engine
@@ -128,6 +129,10 @@ extension PrintPaper {
 
     private func colourRecords(for stock: FilmStock) -> [CharacteristicCurve] {
         switch self {
+        case .ilfochromeCPS1K:
+            return Array(repeating: Self.ilfochromeNormalCurve, count: 3)
+        case .ilfochromeCLM1K:
+            return Array(repeating: Self.ilfochromeMediumCurve, count: 3)
         case .ektacolorEdge:
             return [PrintPaper.ra4PrintCurveRed, PrintPaper.ra4PrintCurve,
                     PrintPaper.ra4PrintCurveBlue]
@@ -165,6 +170,25 @@ extension PrintPaper {
             return [PrintPaper.telecineCurve, PrintPaper.telecineCurve,
                     PrintPaper.telecineCurve]
         }
+    }
+
+    /// Ilford TDS 307US (August 2003), p. 1: CPS.1K has visual density range 2.0
+    /// and mid-tone contrast 1.40; CLM.1K has 2.05 and 1.15. The sheet does not
+    /// publish channel curves, dye spectra or layer sensitivities. Use equal records,
+    /// a soft toe/shoulder approximation and explicitly provisional RA-4 receiver spectra.
+    /// No claim is made to measured Ilfochrome color or a separate Cibachrome emulsion.
+    /// https://www.bonavolta.ch/hobby/files/Ilfochrome_CPS_CLM_E.pdf
+    static let ilfochromeNormalCurve = ilfochromeCurve(range: 2.0, contrast: 1.40)
+    static let ilfochromeMediumCurve = ilfochromeCurve(range: 2.05, contrast: 1.15)
+
+    private static func ilfochromeCurve(range: Float, contrast: Float) -> CharacteristicCurve {
+        // A symmetric soft toe/shoulder with width 10% of their separation. Correct the
+        // asymptotic gamma so the actual center slope equals the published mid-tone value.
+        let gamma = contrast / tanh(Float(2.5))
+        let span = range / gamma
+        return CharacteristicCurve(dMin: 0, gamma: gamma,
+            toe: -span / 2, toeWidth: span / 10,
+            shoulder: span / 2, shoulderWidth: span / 10)
     }
 
     /// KODAK EKTACOLOR EDGE records from E-7020 page 3, fitted by `extract_fit.py`.

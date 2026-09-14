@@ -19,9 +19,9 @@ extension PrinterProfile {
         public let limited: Bool
     }
 
-    /// Adjusts this printer against a chosen developed-negative reference patch. `targetDensity`
-    /// is the desired reference negative, printed under the fixed simulatedTungsten setup.
-    /// Apply the returned printer to the entire negative. No pixelwise colour correction or
+    /// Adjusts this printer against a chosen developed-film reference patch. `targetDensity`
+    /// is the desired reference film, printed under the fixed simulatedTungsten setup.
+    /// Apply the returned printer to the entire frame. No pixelwise colour correction or
     /// automatic scene/skin selection occurs. Supply the developed stock used by the renderer.
     public func matching(_ mode: Matching, referenceDensity: SIMD3<Float>,
                          targetDensity: SIMD3<Float>, stock: FilmStock,
@@ -39,14 +39,15 @@ extension PrinterProfile {
         let silverCallier = callier == 1 ? Float(1) : Enlarger.silverCallierCoefficient
         let bleach = SpectralRuntime.retainedSilverFraction(bleachBypass, stock: stock)
         let dMin = stock.curves.map(\.dMin)
+        let basis = stock.isReversal ? SpectralRuntime.neutralDensityBasis(for: stock) : nil
         func energy(_ density: [Float], _ p: PrinterProfile) -> SIMD3<Float> {
             SpectralRuntime.paperExposure(
-                density: density.map { $0 * callier }, dyes: stock.spectralProfile.imageDyeDensity,
+                density: (basis?(density) ?? density).map { $0 * callier }, dyes: stock.spectralProfile.imageDyeDensity,
                 lamp: p.filteredSpectrum, paperSensitivity: paper.sensitivity,
                 neutralDensity: silverCallier * SpectralRuntime.retainedSilverDensity(
                     density, dMin: dMin, fraction: bleach)) * exp2(p.exposureEV)
         }
-        let calibration = energy(stock.curves.map { $0.density(logExposure: 0) }, .simulatedTungsten)
+        let calibration = energy((0..<3).map { stock.developedDensity(layer: $0, logExposure: 0) }, .simulatedTungsten)
         let targetEnergy = energy(array(targetDensity), .simulatedTungsten)
         guard (array(calibration) + array(targetEnergy)).allSatisfy({ $0.isFinite && $0 > 1e-20 }) else {
             throw MatchingError.invalidReference
@@ -58,7 +59,7 @@ extension PrinterProfile {
                                            printer: .simulatedTungsten).paperOutput!
         func rgb(_ e: SIMD3<Float>) -> SIMD3<Float> {
             let value = output.sample(SIMD3((0..<3).map { c in
-                let x = mids[c] + log10(max(e[c], 1e-20) / calibration[c])
+                let x = mids[c] + paper.exposureDirection * log10(max(e[c], 1e-20) / calibration[c])
                 return (curves[c].density(logExposure: x) - curves[c].dMin)
                     / (curves[c].dMax - curves[c].dMin)
             }))
@@ -88,10 +89,10 @@ extension PrinterProfile {
         }
         if mode == .fixed { return finish() }
         if mode == .density {
-            let target = luminance(targetRGB)
+            let target = paper.exposureDirection * luminance(targetRGB)
             func level(_ ev: Float) -> Float {
                 var test = p; test.exposureEV = ev
-                return luminance(rgb(response(test)))
+                return paper.exposureDirection * luminance(rgb(response(test)))
             }
             if abs(level(p.exposureEV) - target) < 1e-7 { return finish() }
             var lo = Self.exposureRange.lowerBound, hi = Self.exposureRange.upperBound

@@ -558,7 +558,7 @@ func fotufilm_bridge_texture_stage_available(_ stockIndex: Int32, _ index: Int32
 @_cdecl("fotufilm_bridge_stock_prints")
 func fotufilm_bridge_stock_prints(_ stockIndex: Int32) -> Int32 {
     guard let stock = stock(at: stockIndex) else { return 0 }
-    return stock.isReversal ? 0 : 1
+    return PrintPaper.choices(for: stock).count > 1 ? 1 : 0
 }
 
 @_cdecl("fotufilm_bridge_control_capabilities")
@@ -574,7 +574,7 @@ func fotufilm_bridge_control_capabilities(_ stockIndex: Int32, _ paperIndex: Int
         flags |= 64
     }
     if stock.reciprocityFailure != nil { flags |= 4 }
-    if paper.acceptsViewingIlluminant && !stock.isReversal { flags |= 8 }
+    if paper.acceptsViewingIlluminant { flags |= 8 }
     if paper.acceptsPrintCorrection && !stock.isMonochrome && !stock.isReversal { flags |= 16 }
     if Enlarger.illuminates(stock: stock, paper: paper) { flags |= 128 }
     if EditorControlAvailability.interlayerInhibition.admits(stock: stock) { flags |= 256 }

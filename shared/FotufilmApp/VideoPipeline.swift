@@ -1024,8 +1024,7 @@ enum VideoPipeline {
         // log capacity is not declared content headroom; HLG and PQ are bounded transfers.
         options.sceneHeadroom = sourceEncoding.cameraEncoding?.declaredHeadroom
             ?? (sourceEncoding == .standard ? sourceColor.sceneHeadroom : 1)
-        let sdrShoulderKnee = FilmSDRDelivery.shoulderKnee(
-            isReversal: stock.isReversal)
+        let sdrShoulderKnee = options.sdrShoulderKnee(for: stock)
 
         let developScale = deepInput ? 1.0 : (developLongEdge.map {
             min(1, Double($0) / Double(max(width, height)))

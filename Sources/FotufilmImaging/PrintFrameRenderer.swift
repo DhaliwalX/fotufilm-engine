@@ -81,7 +81,9 @@ public enum PrintFrameRenderer {
                          y: material.size.height - placement.imageRect.maxX / scale,
                          width: placement.imageRect.height / scale, height: placement.imageRect.width / scale)
                 : placement.imageRect.applying(CGAffineTransform(scaleX: 1 / scale, y: 1 / scale))
-            drawLustre(in: context, size: material.size, excluding: photo)
+            if configuration.hasLustre {
+                drawLustre(in: context, size: material.size, excluding: photo)
+            }
         } else if let geometry = configuration.geometry {
             if let printing = configuration.edgePrinting {
                 drawEdgePrinting(in: context, geometry: geometry, printing: printing,
