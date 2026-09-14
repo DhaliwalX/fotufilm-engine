@@ -54,6 +54,7 @@ enum HalideBackend {
                         memoryBudget: Int = defaultMemoryBudget,
                         noFilm: Bool = false,
                         outputTransform: FilmOutputTransform? = nil) throws -> ImageBuffer? {
+        try image.validate()
         let width = image.width, height = image.height
         guard width > 0, height > 0 else {
             return isAvailable ? ImageBuffer(width: width, height: height) : nil
@@ -79,9 +80,10 @@ enum HalideBackend {
         }
 
         let apron = max(1, invocation.spatialSupport)
-        let rows = stripRows(width: width, height: height, apron: apron,
-                             budget: memoryBudget)
-        if rows < height, invocation.featureMask & FilmEngineFeature.flare != 0 {
+        let tile = try tileSize(width: width, height: height, apron: apron,
+                                budget: memoryBudget)
+        if (tile.width < width || tile.height < height),
+           invocation.featureMask & FilmEngineFeature.flare != 0 {
             invocation.flareMean = measuredGlare(image: image, invocation: invocation)
         }
 
@@ -98,23 +100,46 @@ enum HalideBackend {
                                 var result: Int32 = 0
                                 var top = 0
                                 while top < height && result == 0 {
-                                    let bottom = min(height, top + rows)
+                                    let bottom = min(height, top + tile.height)
                                     let from = max(0, top - apron)
                                     let to = min(height, bottom + apron)
-                                    let offset = from * width
-                                    result = fotufilm_halide_process_strip(
-                                        inputR! + offset, inputG! + offset,
-                                        inputB! + offset,
-                                        outputR.baseAddress, outputG.baseAddress,
-                                        outputB.baseAddress,
-                                        Int32(width), Int32(to - from),
-                                        Int32(width), Int32(height),
-                                        0, Int32(from),
-                                        Int32(top - from), Int32(bottom - top),
-                                        configuration.baseAddress,
-                                        exposure, film, paper,
-                                        Int32(invocation.spectral.exposure.dimension),
-                                        invocation.featureMask, invocation.seed)
+                                    var left = 0
+                                    while left < width && result == 0 {
+                                        let right = min(width, left + tile.width)
+                                        let start = max(0, left - apron)
+                                        let end = min(width, right + apron)
+                                        func render(_ r: UnsafePointer<Float>, _ g: UnsafePointer<Float>,
+                                                    _ b: UnsafePointer<Float>) -> Int32 {
+                                            fotufilm_halide_process_tile(
+                                                r, g, b, outputR.baseAddress, outputG.baseAddress,
+                                                outputB.baseAddress, Int32(end - start), Int32(to - from),
+                                                Int32(width), Int32(height), Int32(start), Int32(from),
+                                                Int32(left - start), Int32(top - from),
+                                                Int32(right - left), Int32(bottom - top),
+                                                configuration.baseAddress, exposure, film, paper,
+                                                Int32(invocation.spectral.exposure.dimension),
+                                                invocation.featureMask, invocation.seed)
+                                        }
+                                        if start == 0 && end == width {
+                                            let offset = from * width
+                                            result = render(inputR! + offset, inputG! + offset, inputB! + offset)
+                                        } else {
+                                            // The C bridge takes contiguous planes. Include these three
+                                            // bounded copies in the tile's intermediate-memory estimate.
+                                            let tileWidth = end - start
+                                            let tileCount = tileWidth * (to - from)
+                                            let storage = UnsafeMutablePointer<Float>.allocate(capacity: tileCount * 3)
+                                            defer { storage.deallocate() }
+                                            for (channel, source) in [inputR!, inputG!, inputB!].enumerated() {
+                                                for row in from..<to {
+                                                    (storage + channel * tileCount + (row - from) * tileWidth)
+                                                        .initialize(from: source + row * width + start, count: tileWidth)
+                                                }
+                                            }
+                                            result = render(storage, storage + tileCount, storage + 2 * tileCount)
+                                        }
+                                        left = right
+                                    }
                                     top = bottom
                                 }
                                 return result
@@ -156,26 +181,37 @@ enum HalideBackend {
     /// the fused develop-and-print pipeline.
     static let processBytesPerPixel = 64
 
-    /// Rows of finished output per strip.
+    /// Rows of finished output per strip, or zero if even one interior row cannot fit.
     static func stripRows(width: Int, height: Int, apron: Int, budget: Int) -> Int {
         let perRow = max(width * processBytesPerPixel, 1)
-        let usable = budget / perRow - 2 * apron
-        if usable >= max(minimumStripRows, apron) { return min(height, usable) }
-        // Below that the smallest strip is the *worst* choice, not the safest one. A strip
-        // carries an apron of `apron` rows on each side, so it computes `rows + 2 * apron` to
-        // deliver `rows`: once the apron is the larger of the two, cutting the frame up
-        // multiplies the work without saving anything. It does not even save memory — the
-        // resident window is `rows + 2 * apron`, which for a 64-row strip behind a 577-row
-        // apron is larger than the whole 1080-row frame it was trying to avoid holding.
-        //
-        // Measured, on a frame carrying a lens diffusion filter's halo: 64-row strips at 1080p
-        // computed 13.75x the frame and at 4K 27x, which is exactly the slowdown the stage
-        // appeared to have until this was the thing that had it.
-        return height
+        if height <= budget / perRow { return height }
+        return max(0, min(height, budget / perRow - 2 * apron))
     }
 
-    /// Interior rows in the smallest strip the engine will cut.
-    static let minimumStripRows = 64
+    /// Prefer strips that do useful work beyond their blur overlap. Otherwise split both axes,
+    /// preserving the complete spatial support instead of silently raising the memory budget.
+    static func tileSize(width: Int, height: Int, apron: Int, budget: Int) throws
+        -> (width: Int, height: Int) {
+        guard width > 0, height > 0, apron >= 0, budget > 0 else {
+            throw TransportError.invalid("render dimensions and memory budget must be positive")
+        }
+        let rows = stripRows(width: width, height: height, apron: apron, budget: budget)
+        if rows == height || rows >= max(64, apron) { return (width, rows) }
+
+        let pixels = budget / (processBytesPerPixel + 3 * MemoryLayout<Float>.stride)
+        let minimumWidth = min(width, 2 * apron + 1)
+        let minimumHeight = min(height, 2 * apron + 1)
+        guard pixels / minimumWidth >= minimumHeight else {
+            // A narrow strip may still fit because it borrows the caller's input without copies.
+            if rows > 0 { return (width, rows) }
+            throw TransportError.backend("CPU render memory budget is too small for the image's spatial support")
+        }
+        var paddedHeight = min(height, max(minimumHeight, Int(Double(pixels).squareRoot())))
+        let paddedWidth = min(width, max(minimumWidth, pixels / paddedHeight))
+        paddedHeight = min(height, pixels / paddedWidth)
+        return (paddedWidth == width ? width : paddedWidth - 2 * apron,
+                paddedHeight == height ? height : paddedHeight - 2 * apron)
+    }
 
     /// Lends the input planes and a freshly allocated set of output planes to
     /// one of the C entry points.
@@ -190,6 +226,7 @@ enum HalideBackend {
             FilmEngineInvocation, UnsafePointer<Float>?
         ) -> Int32
     ) throws -> ImageBuffer? {
+        try image.validate()
         let width = image.width, height = image.height
         guard width > 0, height > 0 else {
             return isAvailable ? ImageBuffer(width: width, height: height) : nil

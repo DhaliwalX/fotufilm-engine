@@ -105,7 +105,8 @@ disable reuse, or remove
 The standard `swift test -c release --parallel` command remains supported for
 testing with SwiftPM's process scheduling.
 
-The engine/desktop test workflow runs manually; Apple AOT releases also run automatically
+The engine test workflow runs on every pull request and push to main. Manual runs also
+check the desktop apps, plugins, AOT parity, and website. Apple AOT releases run automatically
 when their build inputs change on main.
 
 If Halide is installed elsewhere, set `HALIDE_ROOT` to its installation folder.

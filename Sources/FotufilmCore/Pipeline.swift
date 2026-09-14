@@ -332,18 +332,28 @@ public struct FotufilmEngine {
 
     /// Recoverable development, preparation, and backend errors for either rendering model.
     public func processChecked(linearRGB image: ImageBuffer) throws -> ImageBuffer {
+        try processChecked(linearRGB: image, cpuMemoryBudget: HalideBackend.defaultMemoryBudget)
+    }
+
+    /// Combined Legacy CPU rendering with an explicit intermediate-memory estimate in bytes.
+    /// The default overload uses 192 MiB, excluding input/output frames and compilation caches.
+    /// Broad spatial effects may need a larger budget; insufficient budgets throw before rendering.
+    /// Layered Transport uses its own memory plan and does not use this limit.
+    public func processChecked(linearRGB image: ImageBuffer, cpuMemoryBudget: Int) throws -> ImageBuffer {
         if let model = options.transportConstruction(for: stock) {
             return try LayeredTransportRenderer.process(image: image, stock: stock,
                                                          options: options, model: model)
         }
         var plain = stock; plain.layeredTransport = nil
-        guard let output = try HalideBackend.process(image: image, stock: plain, options: options) else {
+        guard let output = try HalideBackend.process(image: image, stock: plain, options: options,
+                                                    memoryBudget: cpuMemoryBudget) else {
             throw TransportError.backend(Self.missingEngineMessage)
         }
         return output
     }
 
-    /// Convenience: 8-bit sRGB interleaved RGB(A) in, same format out.
+    /// Convenience: 8-bit sRGB interleaved RGB or premultiplied RGBA in, same format out.
+    /// Alpha and any extra bytes are preserved; fully transparent output has zero RGB.
     public func processSRGB8(_ pixels: [UInt8], width: Int, height: Int, bytesPerPixel: Int = 4) -> [UInt8] {
         precondition(pixels.count >= width * height * bytesPerPixel)
         var linear = ImageBuffer(width: width, height: height)
@@ -365,6 +375,7 @@ public struct FotufilmEngine {
         let ditherSeed = UInt32(truncatingIfNeeded: options.seed)
         let shoulderKnee = options.sdrShoulderKnee(for: stock)
         for i in 0..<(width * height) {
+            let alpha = bytesPerPixel >= 4 ? Float(pixels[i * bytesPerPixel + 3]) : 255
             let displayP3 = SIMD3<Float>(
                 ColorScience.displayShoulder(out.planes[0][i], knee: shoulderKnee),
                 ColorScience.displayShoulder(out.planes[1][i], knee: shoulderKnee),
@@ -373,14 +384,15 @@ public struct FotufilmEngine {
             for c in 0..<3 {
                 let v = ColorScience.linearToSrgb(clamp(srgb[c], 0, 1))
                 let dither = triangularDither(index: UInt32(i), channel: UInt32(c), seed: ditherSeed)
-                result[i * bytesPerPixel + c] = UInt8(clamp(v * 255 + 0.5 + dither, 0, 255))
+                result[i * bytesPerPixel + c] = UInt8(clamp(v * alpha + 0.5 + dither, 0, alpha))
             }
         }
         return result
     }
 
     /// Convenience: 8-bit Display P3 interleaved RGB(A) in — P3 primaries under the sRGB
-    /// transfer, an Android or Apple "Display P3" bitmap — and the same format out. Ingest
+    /// transfer, an Android or Apple "Display P3" bitmap — and the same format out. RGBA is
+    /// premultiplied on input and output, with alpha preserved and zero RGB at zero alpha. Ingest
     /// steps the decoded P3 into the Rec.2020 working space; the developed print is already
     /// Display P3, so the way out is transfer-encoding alone, with no change of primaries.
     public func processDisplayP38(_ pixels: [UInt8], width: Int, height: Int,
@@ -455,6 +467,7 @@ public struct FotufilmEngine {
                             let row = y * width
                             for x in 0..<width {
                                 let i = row + x
+                                let alpha = bytesPerPixel >= 4 ? Float(bytes[i * bytesPerPixel + 3]) : 255
                                 for c in 0..<3 {
                                     let rolled = ColorScience.displayShoulder(
                                         planes[c][i], knee: shoulderKnee)
@@ -462,7 +475,7 @@ public struct FotufilmEngine {
                                     let dither = triangularDither(
                                         index: UInt32(i), channel: UInt32(c), seed: ditherSeed)
                                     bytes[i * bytesPerPixel + c] =
-                                        UInt8(clamp(v * 255 + 0.5 + dither, 0, 255))
+                                        UInt8(clamp(v * alpha + 0.5 + dither, 0, alpha))
                                 }
                             }
                         }

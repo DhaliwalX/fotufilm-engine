@@ -189,35 +189,52 @@ extern "C" int32_t fotufilm_halide_process_strip(
     const float *configuration, const float *exposure_lut,
     const float *film_output_lut, const float *paper_output_lut,
     int32_t lut_dimension, int32_t feature_mask, uint32_t seed) {
+    return fotufilm_halide_process_tile(
+        input_r, input_g, input_b, output_r, output_g, output_b,
+        width, height, output_width, output_height, origin_x, origin_y,
+        0, interior_top, width, interior_height, configuration, exposure_lut,
+        film_output_lut, paper_output_lut, lut_dimension, feature_mask, seed);
+}
+
+extern "C" int32_t fotufilm_halide_process_tile(
+    const float *input_r, const float *input_g, const float *input_b,
+    float *output_r, float *output_g, float *output_b,
+    int32_t width, int32_t height, int32_t output_width, int32_t output_height,
+    int32_t origin_x, int32_t origin_y, int32_t interior_left, int32_t interior_top,
+    int32_t interior_width, int32_t interior_height,
+    const float *configuration, const float *exposure_lut,
+    const float *film_output_lut, const float *paper_output_lut,
+    int32_t lut_dimension, int32_t feature_mask, uint32_t seed) {
     if (!input_r || !input_g || !input_b || !output_r || !output_g || !output_b ||
         !configuration || !exposure_lut || !film_output_lut ||
         !paper_output_lut || width <= 0 || height <= 0 ||
-        output_width < width || interior_top < 0 || interior_height < 0 ||
-        interior_top + interior_height > height ||
+        output_width < width || output_height < height || origin_x < 0 || origin_y < 0 ||
+        origin_x > output_width - width || origin_y > output_height - height ||
+        interior_left < 0 || interior_width <= 0 || interior_width > width ||
+        interior_left > width - interior_width ||
+        interior_top < 0 || interior_height <= 0 || interior_height > height ||
+        interior_top > height - interior_height ||
         lut_dimension != kLutDimension) return -1;
     Buffer<float> density(width, height, 3);
     int error = run_develop(input_r, input_g, input_b, density, width, height,
                             configuration, exposure_lut, feature_mask, seed,
                             origin_x, origin_y);
     if (error) return error;
-    Buffer<float> result(width, interior_height, 3);
+    Buffer<float> result(interior_width, interior_height, 3);
+    result.translate(0, interior_left);
     result.translate(1, interior_top);
     error = run_print(density, result, configuration, film_output_lut,
                       paper_output_lut, feature_mask);
     if (error) return error;
-    const int64_t strip_plane = static_cast<int64_t>(width) * interior_height;
-    const int64_t frame_plane = static_cast<int64_t>(output_width) * output_height;
     float *destination[3] = {output_r, output_g, output_b};
     for (int channel = 0; channel < 3; ++channel) {
         for (int row = 0; row < interior_height; ++row) {
-            const float *source = result.data() + channel * strip_plane
-                + static_cast<int64_t>(row) * width;
+            const float *source = &result(interior_left, interior_top + row, channel);
             const int64_t target =
                 static_cast<int64_t>(origin_y + interior_top + row) * output_width
-                + origin_x;
-            if (target + width > frame_plane) break;
+                + origin_x + interior_left;
             std::memcpy(destination[channel] + target, source,
-                        width * sizeof(float));
+                        interior_width * sizeof(float));
         }
     }
     return 0;
