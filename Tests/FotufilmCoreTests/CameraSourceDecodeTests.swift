@@ -78,6 +78,52 @@ final class CameraSourceDecodeTests: XCTestCase {
 
     // MARK: Inverse exactness
 
+    func testRGBDecoderPreservesSceneAnchorsAndPremultipliedAlpha() {
+        for encoding in CameraLogEncoding.allCases {
+            let decoder = CameraLogDecoder(encoding)
+            for reflectance in [0.0, 0.18, 0.9, 2.0] {
+                let signal = encode(encoding.curve, reflectance)
+                for alpha in [Float(1), 0.25] {
+                    var pixels: [Float] = [signal * alpha, signal * alpha, signal * alpha, alpha]
+                    let clean = pixels.withUnsafeMutableBufferPointer {
+                        decoder.decodeRGBA($0.baseAddress!, into: $0.baseAddress!, count: 1,
+                                           premultiplied: true)
+                    }
+                    XCTAssertTrue(clean)
+                    for value in pixels.prefix(3) {
+                        XCTAssertEqual(value, Float(reflectance), accuracy: 2e-5,
+                                       "\(encoding): no hidden exposure scaling or highlight clipping")
+                    }
+                    XCTAssertEqual(pixels[3], alpha)
+                }
+            }
+        }
+    }
+
+    func testRGBDecoderUsesCameraPrimariesAndRepairsInvalidValues() {
+        let signal = encode(.appleLog, 0.18)
+        let source: [Float] = [signal, 0.2, 0.7, 0.5, .nan, .infinity, -.infinity, .nan]
+        var log1 = [Float](repeating: 0, count: source.count)
+        var log2 = log1
+        for (encoding, isLog2) in [(CameraLogEncoding.appleLog, false), (.appleLog2, true)] {
+            var output = log1
+            let clean = source.withUnsafeBufferPointer { input in
+                output.withUnsafeMutableBufferPointer {
+                    CameraLogDecoder(encoding).decodeRGBA(input.baseAddress!, into: $0.baseAddress!,
+                                                          count: 2, premultiplied: false)
+                }
+            }
+            XCTAssertFalse(clean)
+            XCTAssertTrue(output.allSatisfy(\.isFinite))
+            XCTAssertEqual(output[3], 0.5)
+            XCTAssertEqual(output[7], 1)
+            if isLog2 { log2 = output } else { log1 = output }
+        }
+        XCTAssertEqual(log1[0], 0.18, accuracy: 1e-6)
+        XCTAssertNotEqual(Array(log1.prefix(3)), Array(log2.prefix(3)),
+                          "Apple Log 2 shares the transfer, not the primaries")
+    }
+
     func testSLog3MidGreyAnchor() {
         XCTAssertEqual(CameraLogCurve.slog3ToLinear(420.0 / 1023.0), 0.18,
                        accuracy: 1e-6)

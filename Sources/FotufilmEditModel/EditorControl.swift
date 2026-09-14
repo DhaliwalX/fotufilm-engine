@@ -31,7 +31,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case rotation, flip
     case selective
 
-    case colorSpace, stage, textureStages, renderMode
+    case colorSpace, colorManagement, inputColorSpace, outputColorSpace, stage, textureStages, renderMode
 }
 
 public enum EditorControlGroup: String, CaseIterable, Sendable {

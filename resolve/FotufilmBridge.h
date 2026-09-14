@@ -22,6 +22,14 @@ typedef void *FotufilmBridgeContext;
 FotufilmBridgeContext fotufilm_bridge_context_create(void);
 void fotufilm_bridge_context_destroy(FotufilmBridgeContext context);
 
+/// Camera choices follow the eight working spaces in the Resolve Input Color Space menu.
+/// Shared core curves decode full-range RGB to scene-linear Rec.2020 (grey = 0.18).
+int32_t fotufilm_bridge_camera_input_count(void);
+int32_t fotufilm_bridge_camera_input_name(int32_t index, char *out, int32_t capacity);
+/// 1 = clean, 0 = repaired non-finite pixels, -1 = invalid arguments. Rows may be decoded concurrently.
+int32_t fotufilm_bridge_decode_camera(int32_t index, const float *input, float *output,
+                                    int32_t count, int32_t premultiplied);
+
 /// Pipeline spans in stable index order; hosts persist the stage ID.
 /// Full maps scene light to a finished print. Negative maps scene light to diffuse base-10 layer
 /// density. Print maps those densities to a finished print. Texture returns scene-linear Rec.2020

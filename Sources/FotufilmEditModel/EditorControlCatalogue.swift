@@ -5,6 +5,37 @@ import FotufilmCore
 #endif
 
 public enum EditorControlCatalogue {
+    // Persisted Resolve menu order. Keep the eight working spaces aligned with WorkingSpace.h;
+    // camera choices follow them and are append-only. The legacy timeline menu has its own Auto slot.
+    public static let pluginWorkingSpaces: [EditorMenuChoice] = [
+        EditorMenuChoice(0, "Rec.709 / Gamma 2.4", id: "rec709Gamma24"),
+        EditorMenuChoice(1, "sRGB", id: "srgb"),
+        EditorMenuChoice(2, "DaVinci Wide Gamut / Intermediate", id: "davinciIntermediate"),
+        EditorMenuChoice(3, "ACEScct (AP1)", id: "acescct"),
+        EditorMenuChoice(4, "ACEScg (AP1)", id: "acescg"),
+        EditorMenuChoice(5, "Linear Rec.709", id: "linearRec709"),
+        EditorMenuChoice(6, "Linear Display P3", id: "linearDisplayP3"),
+        EditorMenuChoice(7, "Linear Rec.2020", id: "linearRec2020"),
+    ]
+    public static let pluginCameraInputs: [(encoding: CameraLogEncoding, label: String)] = [
+        (.appleLog, "Apple Log / Rec.2020"),
+        (.appleLog2, "Apple Log 2 / Apple Wide Gamut"),
+        (.slog3Cine, "S-Log3 / S-Gamut3.Cine"),
+        (.slog3, "S-Log3 / S-Gamut3"),
+        (.slog2, "S-Log2 / S-Gamut"),
+        (.flog, "F-Log / F-Gamut"),
+        (.flog2, "F-Log2 / F-Gamut"),
+        (.flog2C, "F-Log2 C / F-Gamut C"),
+        (.hlg, "HLG / Rec.2020"),
+    ]
+    public static let pluginInputSpaces: [EditorMenuChoice] = pluginWorkingSpaces
+        + pluginCameraInputs.enumerated().map { index, item in
+            EditorMenuChoice(Double(8 + index), item.label, id: item.encoding.rawValue)
+        }
+    private static let colorManagementModes: [EditorMenuChoice] = [
+        EditorMenuChoice(0, "Timeline", id: "timeline"),
+        EditorMenuChoice(1, "Fotufilm", id: "fotufilm"),
+    ]
     /// Stable menu order shared by editors and plugin hosts. Zero follows the selected stock;
     /// nil is the custom-temperature entry, not a measured capture spectrum.
     public static let sourceLights: [EditorMenuChoice] = [
@@ -41,7 +72,8 @@ public enum EditorControlCatalogue {
         HostAuxiliary(ofxName: "status", fxplugID: 37, group: nil, label: "Status",
                       kind: .label(text: "", hint: nil), surfaces: [.finalcut], order: 0),
         HostAuxiliary(ofxName: "colorSpaceStatus", group: .input, label: "Decoded Input",
-                      hint: "The input encoding Fotufilm will decode. Host means Resolve supplied an "
+                      hint: "Fotufilm mode shows the selected input and output. In Timeline mode, "
+                          + "Host means Resolve supplied an "
                           + "exact OFX colour-space tag. Assumed means Resolve supplied Raw or no tag; "
                           + "select Timeline Color Space explicitly if that assumption does not match "
                           + "the image arriving at this node.",
@@ -1501,6 +1533,43 @@ public enum EditorControlCatalogue {
     ]
 
     private static let pipeline: [EditorControl] = [
+        EditorControl(
+            .colorManagement, title: "Color Management",
+            detail: "Use the timeline space or let Fotufilm convert between selected spaces.",
+            section: .pipeline, kind: .menu(.fixed(colorManagementModes)), scope: .hostOnly,
+            surfaces: [.resolve],
+            omitted: hostOnly.merging([.finalcut: "Final Cut supplies linear light in the library's primaries"]) { $1 },
+            host: HostParameter(
+                slot: nil, ofxName: "colorManagement", group: .input, label: "Color Management",
+                hint: "Timeline reads and returns Timeline Color Space, preserving existing grades. "
+                    + "Fotufilm converts the selected Input Color Space to scene light, develops the film, "
+                    + "and encodes the selected Output Color Space. Match the pixels reaching this node; "
+                    + "upstream host conversions still count. Do not add another display tone map after a finished print.",
+                kind: .choice(.fixed(colorManagementModes), value: 0), animates: false, order: 0)),
+        EditorControl(
+            .inputColorSpace, title: "Input Color Space",
+            detail: "The encoding arriving at the Fotufilm node.",
+            section: .pipeline, kind: .menu(.fixed(pluginInputSpaces)), scope: .hostOnly,
+            surfaces: [.resolve],
+            omitted: hostOnly.merging([.finalcut: "Final Cut supplies linear light in the library's primaries"]) { $1 },
+            host: HostParameter(
+                slot: nil, ofxName: "inputColorSpace", group: .input, label: "Input Color Space",
+                hint: "The actual input pixels, after any upstream nodes or host color management. "
+                    + "In an unmanaged DaVinci YRGB project, camera log can enter directly without an input CST. "
+                    + "Only used in Fotufilm mode; Print Only receives density data and ignores this setting.",
+                kind: .choice(.fixed(pluginInputSpaces), value: 8), animates: false, order: 11)),
+        EditorControl(
+            .outputColorSpace, title: "Output Color Space",
+            detail: "The encoding Fotufilm returns to Resolve.",
+            section: .pipeline, kind: .menu(.fixed(pluginWorkingSpaces)), scope: .hostOnly,
+            surfaces: [.resolve],
+            omitted: hostOnly.merging([.finalcut: "Final Cut supplies linear light in the library's primaries"]) { $1 },
+            host: HostParameter(
+                slot: nil, ofxName: "outputColorSpace", group: .input, label: "Output Color Space",
+                hint: "Encode the finished print into this space without another tone map. "
+                    + "Match Resolve's monitoring and export settings to it. Only used in Fotufilm mode; "
+                    + "Negative Only writes density data and ignores this setting. Texture Only returns scene light in this space.",
+                kind: .choice(.fixed(pluginWorkingSpaces), value: 0), animates: false, order: 12)),
         EditorControl(
             .colorSpace, title: "Timeline Color Space",
             detail: "What this node is being handed",

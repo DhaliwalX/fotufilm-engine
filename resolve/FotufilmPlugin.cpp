@@ -248,6 +248,13 @@ constexpr const char *kStockParam = "stock";
 constexpr const char *kFormatParam = "format";
 constexpr const char *kPaperParam = "paper";
 constexpr const char *kColorSpaceParam = "colorSpace";
+constexpr const char *kColorManagementParam = "colorManagement";
+constexpr const char *kInputColorSpaceParam = "inputColorSpace";
+constexpr const char *kOutputColorSpaceParam = "outputColorSpace";
+// Fixed menu boundary: the working-space choices predate the appended camera inputs.
+constexpr int kWorkingSpaceChoices = 8;
+static_assert(static_cast<int>(fotufilm::Encoding::Count) == kWorkingSpaceChoices,
+              "Update the managed menus explicitly without renumbering camera inputs");
 constexpr const char *kSeedParam = "seed";
 /// The three filter threads and the diffusion filter, which are the menus in the Lens group whose
 /// entries come out of an engine catalogue and therefore need a durable identity beside them.
@@ -323,6 +330,7 @@ struct Instance {
     OfxParamHandle format = nullptr;
     OfxParamHandle paper = nullptr;
     OfxParamHandle colorSpace = nullptr;
+    OfxParamHandle colorManagement = nullptr, inputColorSpace = nullptr, outputColorSpace = nullptr;
     OfxParamHandle seed = nullptr;
     OfxParamHandle stockID = nullptr;
     OfxParamHandle formatID = nullptr;
@@ -705,9 +713,14 @@ OfxStatus describe(OfxImageEffectHandle effect) {
     }
     gProperty->propSetString(properties, kOfxImageEffectPropClipPreferencesSlaveParam,
                              static_cast<int>(2 + gTextureParams.size()), "grainAnimation");
+    const char *colorSlaves[] = {kColorManagementParam, kInputColorSpaceParam, kOutputColorSpaceParam};
+    for (int i = 0; i < 3; ++i) {
+        gProperty->propSetString(properties, kOfxImageEffectPropClipPreferencesSlaveParam,
+                                 static_cast<int>(3 + gTextureParams.size() + i), colorSlaves[i]);
+    }
     // OFX 1.5 colour management. Resolve exposes its timeline conversion in Full native mode;
-    // ask for that mode, then request the exact linear Rec.2020 space the engine wants below.
-    // The render still checks the selected tag instead of assuming the request was honoured.
+    // ask for that mode. Timeline requests linear Rec.2020 and checks the returned tag;
+    // Fotufilm mode requests Raw and uses the user's explicit input/output choices.
     // The config declaration is mandatory on both sides of a native negotiation.
     gProperty->propSetString(properties, kOfxImageEffectPropColourManagementStyle, 0,
                              kOfxImageEffectColourManagementFull);
@@ -1398,14 +1411,37 @@ void updateColourSpaceStatus(Instance *instance) {
     int choice = kColorSpaceAuto;
     if (instance->colorSpace) gParameter->paramGetValue(instance->colorSpace, &choice);
 
-    const bool printOnly = effectiveStage(instance, 0) == FOTUFILM_BRIDGE_STAGE_PRINT;
+    const int stage = effectiveStage(instance, 0);
+    const bool printOnly = stage == FOTUFILM_BRIDGE_STAGE_PRINT;
+    const bool negativeOnly = stage == FOTUFILM_BRIDGE_STAGE_NEGATIVE;
+    const bool managed = choiceValue(instance->colorManagement) == 1;
+    showParameter(instance->colorSpace, !managed);
+    showParameter(instance->inputColorSpace, managed);
+    showParameter(instance->outputColorSpace, managed);
+    enableParameter(instance->colorSpace, !managed);
+    enableParameter(instance->inputColorSpace, managed && !printOnly);
+    enableParameter(instance->outputColorSpace, managed && !negativeOnly);
     OfxPropertySetHandle properties = nullptr;
     if (gParameter->paramGetPropertySet(instance->colorSpaceStatus, &properties) == kOfxStatOK) {
         gProperty->propSetString(properties, kOfxPropLabel, 0,
-                                 printOnly ? "Output Encoding" : "Decoded Input");
+                                 managed ? "Color Transform" : printOnly ? "Output Encoding" : "Decoded Input");
     }
     char text[512];
-    if (printOnly && menuEncoding(choice) == fotufilm::Encoding::Count) {
+    if (managed) {
+        const int input = choiceValue(instance->inputColorSpace);
+        const int output = choiceValue(instance->outputColorSpace);
+        char inputName[160] = "Unsupported input";
+        if (printOnly) std::snprintf(inputName, sizeof(inputName), "Density");
+        else if (input >= 0 && input < kWorkingSpaceChoices)
+            std::snprintf(inputName, sizeof(inputName), "%s",
+                          compactEncodingLabel(static_cast<fotufilm::Encoding>(input)));
+        else if (input >= kWorkingSpaceChoices)
+            fotufilm_bridge_camera_input_name(input - kWorkingSpaceChoices, inputName, sizeof(inputName));
+        const char *outputName = negativeOnly ? "Density"
+            : output >= 0 && output < kWorkingSpaceChoices
+                ? compactEncodingLabel(static_cast<fotufilm::Encoding>(output)) : "Unsupported output";
+        std::snprintf(text, sizeof(text), "%s -> %s", inputName, outputName);
+    } else if (printOnly && menuEncoding(choice) == fotufilm::Encoding::Count) {
         std::snprintf(text, sizeof(text), "Required: select Timeline Color Space");
     } else if (menuEncoding(choice) != fotufilm::Encoding::Count) {
         const auto encoding = menuEncoding(choice);
@@ -1443,6 +1479,7 @@ void updateColourSpaceStatus(Instance *instance) {
 
 /// Ask an OFX 1.5 host to do the cheapest exact conversion: hand Source to us in the engine's
 /// linear Rec.2020 working space. The property name is clip-specific for this action.
+/// Fotufilm mode instead requests Raw, leaving the explicit input conversion to the plugin.
 ///
 /// Except on a Print Only node, where what arrives is not colour at all. Its Source is the
 /// developed negative's densities, and the one thing a host must do with them is nothing — so it
@@ -1473,17 +1510,18 @@ OfxStatus getClipPreferences(OfxImageEffectHandle effect, OfxPropertySetHandle o
 
     // Best effort, and the action succeeds either way: the property is OFX 1.5's, and a host
     // that predates it or refuses the clip-specific spelling has only declined a request. The
-    // render reads the tag on every image rather than trusting this was honoured, so failing the
-    // whole action here would take the frame-varying declaration above down with it for nothing.
+    // Timeline Auto reads the image tag; Fotufilm mode relies on the user's input selection.
+    // Failing this action would also discard the frame-varying declaration above.
     const std::string preferred =
         std::string(kOfxImageClipPropPreferredColourspaces) + "_" +
         kOfxImageEffectSimpleSourceClipName;
     const OfxStatus status = gProperty->propSetString(
         outArgs, preferred.c_str(), 0,
-        interchange ? kOfxColourspaceRaw : kOfxColourspaceLinRec2020);
+        interchange || (instance && choiceValue(instance->colorManagement) == 1)
+            ? kOfxColourspaceRaw : kOfxColourspaceLinRec2020);
     if (status != kOfxStatOK) {
-        report("the host declined the preferred input colourspace (%s, status %d); the "
-               "render will read the tag on each image instead", preferred.c_str(),
+        report("the host declined the preferred input colourspace (%s, status %d); "
+               "verify the selected input space against the pixels reaching this node", preferred.c_str(),
                static_cast<int>(status));
     }
     return kOfxStatOK;
@@ -1491,6 +1529,7 @@ OfxStatus getClipPreferences(OfxImageEffectHandle effect, OfxPropertySetHandle o
 
 /// Declares output colourspace to the OFX host. Full and Texture cross-reference Source. Negative
 /// and Print declare Raw so density interchange is not transformed and Print output is not encoded twice.
+/// Fotufilm mode always declares Raw because output encoding is explicitly selected by the user.
 OfxStatus getOutputColourspace(OfxImageEffectHandle effect,
                                OfxPropertySetHandle outArgs) {
     if (!outArgs) return kOfxStatErrBadHandle;
@@ -1499,7 +1538,8 @@ OfxStatus getOutputColourspace(OfxImageEffectHandle effect,
     const bool split = stage == FOTUFILM_BRIDGE_STAGE_NEGATIVE ||
                        stage == FOTUFILM_BRIDGE_STAGE_PRINT;
     return gProperty->propSetString(outArgs, kOfxImageClipPropColourspace, 0,
-                                    split ? kOfxColourspaceRaw : "OfxColourspace_Source");
+                                    split || (instance && choiceValue(instance->colorManagement) == 1)
+                                        ? kOfxColourspaceRaw : "OfxColourspace_Source");
 }
 
 /// Brings a freshly created instance's menus and ids into agreement. A new node has empty ids and
@@ -1657,6 +1697,9 @@ OfxStatus createInstance(OfxImageEffectHandle effect) {
     gParameter->paramGetHandle(set, kFormatParam, &instance->format, nullptr);
     gParameter->paramGetHandle(set, kPaperParam, &instance->paper, nullptr);
     gParameter->paramGetHandle(set, kColorSpaceParam, &instance->colorSpace, nullptr);
+    gParameter->paramGetHandle(set, kColorManagementParam, &instance->colorManagement, nullptr);
+    gParameter->paramGetHandle(set, kInputColorSpaceParam, &instance->inputColorSpace, nullptr);
+    gParameter->paramGetHandle(set, kOutputColorSpaceParam, &instance->outputColorSpace, nullptr);
     gParameter->paramGetHandle(set, kSeedParam, &instance->seed, nullptr);
     gParameter->paramGetHandle(set, kStockIDParam, &instance->stockID, nullptr);
     gParameter->paramGetHandle(set, kFormatIDParam, &instance->formatID, nullptr);
@@ -1735,7 +1778,10 @@ OfxStatus instanceChanged(OfxImageEffectHandle effect, OfxPropertySetHandle inAr
         choiceValue(instance->parameters[FOTUFILM_BRIDGE_GRAIN_MODEL]) == 1) {
         gParameter->paramSetValue(instance->parameters[FOTUFILM_BRIDGE_GRAIN_MODEL], 0);
     }
-    if (std::strcmp(name, kColorSpaceParam) == 0) {
+    if (std::strcmp(name, kColorSpaceParam) == 0 ||
+        std::strcmp(name, kColorManagementParam) == 0 ||
+        std::strcmp(name, kInputColorSpaceParam) == 0 ||
+        std::strcmp(name, kOutputColorSpaceParam) == 0) {
         updateColourSpaceStatus(instance);
         return kOfxStatOK;
     }
@@ -2204,6 +2250,7 @@ struct DecodeState {
     bool watchRange;
     std::atomic<float> *peak;
     std::atomic<bool> *repaired;
+    int cameraInput = -1;
 };
 
 /// Decodes rows [begin, end) out of the host's image and into the engine's input, scanning for the
@@ -2226,9 +2273,11 @@ void decodeRows(int begin, int end, void *context) {
         const float *in = state.source->row(state.source->bounds.y2 - 1 - row);
         float *out = state.frame + static_cast<size_t>(row) * state.processWidth * 4;
         float *decoded = resampling ? scratch.data() : out;
-        const fotufilm::DecodeReport report = fotufilm::decodePixels(
-            state.encoding, *state.transform, in, decoded, state.sourceWidth,
-            state.premultiplied, state.watchRange);
+        const fotufilm::DecodeReport report = state.cameraInput >= 0
+            ? fotufilm::DecodeReport{fotufilm_bridge_decode_camera(
+                state.cameraInput, in, decoded, state.sourceWidth, state.premultiplied) == 1, 0}
+            : fotufilm::decodePixels(state.encoding, *state.transform, in, decoded, state.sourceWidth,
+                                    state.premultiplied, state.watchRange);
         if (!report.clean) clean = false;
         peak = std::max(peak, report.peak);
         if (resampling && !fotufilm::resampleRow(decoded, state.sourceWidth, out,
@@ -2447,7 +2496,13 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
         space = kColorSpaceAuto;
     }
     // Print Only receives density data, so Auto cannot infer the output colour space from the input.
-    if (readsInterchange && menuEncoding(space) == fotufilm::Encoding::Count) {
+    const int management = choiceValue(instance->colorManagement, time);
+    const bool managed = management == 1;
+    if (management < 0 || management > 1) {
+        post(kOfxMessageError, effect, "Unsupported Fotufilm Color Management mode");
+        return kOfxStatFailed;
+    }
+    if (!managed && readsInterchange && menuEncoding(space) == fotufilm::Encoding::Count) {
         post(kOfxMessageError, effect,
              "Fotufilm's Print Only stage needs Timeline Color Space set explicitly. What "
              "arrives at this node is a developed negative — density, not colour — so there "
@@ -2455,14 +2510,28 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
              "Set it to the space this timeline works in.");
         return kOfxStatFailed;
     }
-    const fotufilm::Encoding encoding =
-        resolveEncoding(instance, effect, source.handle, space);
+    const int inputChoice = choiceValue(instance->inputColorSpace, time);
+    const int outputChoice = choiceValue(instance->outputColorSpace, time);
+    if (managed && ((!readsInterchange && (inputChoice < 0 ||
+                        inputChoice >= kWorkingSpaceChoices + fotufilm_bridge_camera_input_count())) ||
+                    (!writesInterchange && (outputChoice < 0 || outputChoice >= kWorkingSpaceChoices)))) {
+        post(kOfxMessageError, effect, "Unsupported Fotufilm input or output color space; choose a listed space");
+        return kOfxStatFailed;
+    }
+    const int cameraInput = managed && !readsInterchange && inputChoice >= kWorkingSpaceChoices
+        ? inputChoice - kWorkingSpaceChoices : -1;
+    const fotufilm::Encoding encoding = managed
+        ? (readsInterchange || cameraInput >= 0 ? fotufilm::Encoding::LinearRec2020
+                                              : static_cast<fotufilm::Encoding>(inputChoice))
+        : resolveEncoding(instance, effect, source.handle, space);
     if (encoding == fotufilm::Encoding::Count) return kOfxStatFailed;
+    const fotufilm::Encoding outputEncoding = managed && !writesInterchange
+        ? static_cast<fotufilm::Encoding>(outputChoice) : encoding;
     const fotufilm::Transform transform = fotufilm::transformFor(encoding);
-    // Texture output remains in the scene working space, so invert the input basis for output.
-    fotufilm::Transform outputBasis = transform;
+    // Input and output may have different primaries. Texture output remains scene light.
+    fotufilm::Transform outputBasis = fotufilm::transformFor(outputEncoding);
     if (deliversSceneBasis) {
-        std::memcpy(outputBasis.fromWorking, transform.fromScene,
+        std::memcpy(outputBasis.fromWorking, outputBasis.fromScene,
                     sizeof(outputBasis.fromWorking));
     }
     const bool premultiplied = isPremultiplied(instance->sourceClip);
@@ -2561,7 +2630,7 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
         // the node that made them.
         CopyState copyState{&source, scene, width, 0};
         forRows(0, height, copyRows, &copyState);
-    } else if (processWidth == width) {
+    } else if (cameraInput < 0 && processWidth == width) {
         float devicePeak = 0;
         bool deviceRepaired = false;
         if (staged) {
@@ -2592,7 +2661,7 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
         // transcendentals are libm's rather than Metal's and the frame is a few parts in ten
         // million from the one the device would have made. Worth one message: a node that has
         // silently changed decoders is not the same node it was.
-        if (processWidth == width && !instance->warnedHostDecodeFallback) {
+        if (cameraInput < 0 && processWidth == width && !instance->warnedHostDecodeFallback) {
             instance->warnedHostDecodeFallback = true;
             char message[512] = "";
             fotufilm_bridge_last_error(instance->bridge, message, sizeof(message));
@@ -2603,7 +2672,7 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
         }
         DecodeState decodeState{&source,      scene,       width,      processWidth,
                                 premultiplied, encoding,   &transform, watchRange,
-                                &peak,        &repairedInput};
+                                &peak,        &repairedInput, cameraInput};
         forRows(0, height, decodeRows, &decodeState);
     }
     const auto decodeEnded = Profile::now();
@@ -2644,13 +2713,13 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
     // Fit a finished print into the host gamut in Halide before its transfer. The CPU
     // fallback uses the same fit when a frame needs resampling or lacks an encode variant.
     const bool fitGamut = !writesInterchange && !deliversSceneBasis
-                          && fotufilm::deliveryLeavesGamut(encoding);
+                          && fotufilm::deliveryLeavesGamut(outputEncoding);
     const bool encodeInKernel =
         !writesInterchange && processWidth == source.width()
         && fotufilm_bridge_encodes_output(instance->bridge, stock, format, paper,
                                          parameters, processWidth, height,
                                          (staged && viewerFrame) ? 1 : 0) != 0;
-    const fotufilm::OutputTransform curve = fotufilm::outputTransformFor(encoding);
+    const fotufilm::OutputTransform curve = fotufilm::outputTransformFor(outputEncoding);
     FotufilmOutputTransform outputTransform{};
     outputTransform.transfer = curve.shape;
     outputTransform.premultiplied = premultiplied ? 1 : 0;
@@ -2664,7 +2733,7 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
                     sizeof(outputTransform.gamutLuminance));
     }
 
-    WriteState state{&source, &output, renderWindow, processWidth, encoding,
+    WriteState state{&source, &output, renderWindow, processWidth, outputEncoding,
                      &outputBasis, premultiplied,
                      encodeInKernel || writesInterchange, fitGamut};
 
@@ -2801,6 +2870,8 @@ OfxStatus isIdentity(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs,
                      OfxPropertySetHandle outArgs) {
     Instance *instance = instanceOf(effect);
     if (!instance || !outArgs) return kOfxStatReplyDefault;
+    // Even empty Texture Only must perform independently selected input/output conversions.
+    if (choiceValue(instance->colorManagement) != 0) return kOfxStatReplyDefault;
     // Except where the selection could not be read at all: a panel described before the engine
     // came up has no toggles on it, and the zero that reads back is not the user asking for
     // nothing. Answering the default sends the host to the render, which refuses and says so.
