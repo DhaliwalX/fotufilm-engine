@@ -5,6 +5,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tarfile
@@ -18,6 +19,17 @@ spec.loader.exec_module(aot)
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_host_shim_includes_every_registered_variant(self):
+        # Swift tests use JIT kernels; only Apple AOT builds compile this shim.
+        # Catch missing declarations on the lightweight pull-request job too.
+        header = (aot.ROOT / "Sources/FotufilmHalide/include/FotufilmHalide.h").read_text()
+        shim = (aot.ROOT / "Sources/FotufilmHalide/FotufilmHalideIOS.cpp").read_text()
+        variants = set(re.findall(r"^\s+X\((\w+),", header, re.MULTILINE))
+        includes = set(re.findall(r'^#include "fotufilm_halide_ios_(\w+)\.h"',
+                                  shim, re.MULTILINE))
+        self.assertTrue(variants, "No registered AOT variants found")
+        self.assertEqual(variants - includes, set(), "AOT variants missing host-shim headers")
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
