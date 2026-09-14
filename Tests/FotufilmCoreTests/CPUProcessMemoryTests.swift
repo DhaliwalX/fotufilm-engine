@@ -2,6 +2,16 @@ import XCTest
 @testable import FotufilmCore
 
 final class CPUProcessMemoryTests: XCTestCase {
+    func testCheckedAPICanRejectOrExplicitlyBudgetSpatialSupport() throws {
+        try XCTSkipUnless(HalideBackend.isAvailable, "Halide required")
+        let image = ImageBuffer(width: 8, height: 8, fill: 0.18)
+        let engine = FotufilmEngine(stock: TestStocks.negative)
+        XCTAssertThrowsError(try engine.processChecked(linearRGB: image, cpuMemoryBudget: 1))
+        let explicit = try engine.processChecked(linearRGB: image, cpuMemoryBudget: 8 * 8 * 64)
+        let ordinary = try engine.processChecked(linearRGB: image)
+        XCTAssertEqual(explicit.planes, ordinary.planes)
+    }
+
     func testLargeReleasedStocksStayWithinEstimatedBudget() throws {
         let budget = HalideBackend.defaultMemoryBudget
         for id in ["portra400", "cinestill800t", "hp5plus400"] {

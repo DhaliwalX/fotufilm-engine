@@ -332,12 +332,21 @@ public struct FotufilmEngine {
 
     /// Recoverable development, preparation, and backend errors for either rendering model.
     public func processChecked(linearRGB image: ImageBuffer) throws -> ImageBuffer {
+        try processChecked(linearRGB: image, cpuMemoryBudget: HalideBackend.defaultMemoryBudget)
+    }
+
+    /// Combined Legacy CPU rendering with an explicit intermediate-memory estimate in bytes.
+    /// The default overload uses 192 MiB, excluding input/output frames and compilation caches.
+    /// Broad spatial effects may need a larger budget; insufficient budgets throw before rendering.
+    /// Layered Transport uses its own memory plan and does not use this limit.
+    public func processChecked(linearRGB image: ImageBuffer, cpuMemoryBudget: Int) throws -> ImageBuffer {
         if let model = options.transportConstruction(for: stock) {
             return try LayeredTransportRenderer.process(image: image, stock: stock,
                                                          options: options, model: model)
         }
         var plain = stock; plain.layeredTransport = nil
-        guard let output = try HalideBackend.process(image: image, stock: plain, options: options) else {
+        guard let output = try HalideBackend.process(image: image, stock: plain, options: options,
+                                                    memoryBudget: cpuMemoryBudget) else {
             throw TransportError.backend(Self.missingEngineMessage)
         }
         return output

@@ -24,20 +24,23 @@ final class LensFilterPerformanceTests: XCTestCase {
     }
 
     private func milliseconds(_ options: FotufilmEngine.Options,
-                              width: Int, height: Int, runs: Int = 5) -> Double {
+                              width: Int, height: Int, runs: Int = 5) throws -> Double {
         let image = scene(width: width, height: height)
         let simulator = FotufilmEngine(stock: Self.stock, options: options)
-        _ = simulator.process(linearRGB: image)      // warm the pipeline and the tables
+        // Compare the filters under the same whole-frame schedule. Broad diffusion can need
+        // more overlap than the default budget permits; the benchmark explicitly budgets for it.
+        let budget = width * height * HalideBackend.processBytesPerPixel
+        _ = try simulator.processChecked(linearRGB: image, cpuMemoryBudget: budget)
         var best = Double.infinity
         for _ in 0..<runs {
             let start = Date()
-            _ = simulator.process(linearRGB: image)
+            _ = try simulator.processChecked(linearRGB: image, cpuMemoryBudget: budget)
             best = min(best, Date().timeIntervalSince(start))
         }
         return best * 1000
     }
 
-    func testWhatTheFiltersCost() {
+    func testWhatTheFiltersCost() throws {
         var load: Double = 0
         getloadavg(&load, 1)
         print(String(format: "load average at start: %.2f", load))
@@ -46,18 +49,18 @@ final class LensFilterPerformanceTests: XCTestCase {
             print("\n--- \(width)x\(height), CPU Halide, grain off ---")
             var bare = FotufilmEngine.Options()
             bare.grainScale = 0
-            let baseline = milliseconds(bare, width: width, height: height)
+            let baseline = try milliseconds(bare, width: width, height: height)
             print(String(format: "  %-42@ %7.1f ms", "no filter" as NSString, baseline))
 
             var absorbing = bare
             absorbing.lensFilters = LensFilterStack(.wratten85B)
-            let withFilter = milliseconds(absorbing, width: width, height: height)
+            let withFilter = try milliseconds(absorbing, width: width, height: height)
             print(String(format: "  %-42@ %7.1f ms  %+6.1f ms", "85B (absorbing)" as NSString,
                          withFilter, withFilter - baseline))
 
             var stacked = bare
             stacked.lensFilters = LensFilterStack([.wratten85B, .nd09, .cc(.magenta, density: 0.20)])
-            let withStack = milliseconds(stacked, width: width, height: height)
+            let withStack = try milliseconds(stacked, width: width, height: height)
             print(String(format: "  %-42@ %7.1f ms  %+6.1f ms", "85B + ND0.9 + CC20M" as NSString,
                          withStack, withStack - baseline))
 
@@ -71,7 +74,7 @@ final class LensFilterPerformanceTests: XCTestCase {
                 var misty = bare
                 misty.diffusionFilter = DiffusionFilter.preset(family, grade: grade)
                 misty.focalLengthMM = focal
-                let cost = milliseconds(misty, width: width, height: height)
+                let cost = try milliseconds(misty, width: width, height: height)
                 print(String(format: "  %-42@ %7.1f ms  %+6.1f ms  (%+.0f%%)",
                              label as NSString, cost, cost - baseline,
                              (cost / baseline - 1) * 100))
