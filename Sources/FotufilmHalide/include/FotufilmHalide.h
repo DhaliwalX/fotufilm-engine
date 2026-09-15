@@ -732,6 +732,18 @@ enum {
     X(negative_no_interimage_no_mtf_grainless,                             \
       FOTUFILM_AOT_ENLARGED(FOTUFILM_AOT_SLIDE_NO_MTF                       \
                            & ~FOTUFILM_FRAME_GRAIN))                       \
+    X(negative_no_interimage_no_adjacency, \
+      FOTUFILM_AOT_ENLARGED(FOTUFILM_AOT_SLIDE & ~FOTUFILM_FRAME_ADJACENCY)) \
+    X(negative_no_interimage_no_adjacency_disc, \
+      FOTUFILM_AOT_ENLARGED(FOTUFILM_AOT_DISC(FOTUFILM_AOT_SLIDE) & ~FOTUFILM_FRAME_ADJACENCY)) \
+    X(negative_no_interimage_no_adjacency_grainless, \
+      FOTUFILM_AOT_ENLARGED((FOTUFILM_AOT_SLIDE & ~FOTUFILM_FRAME_GRAIN) & ~FOTUFILM_FRAME_ADJACENCY)) \
+    X(negative_no_interimage_no_adjacency_no_mtf, \
+      FOTUFILM_AOT_ENLARGED(FOTUFILM_AOT_SLIDE_NO_MTF & ~FOTUFILM_FRAME_ADJACENCY)) \
+    X(negative_no_interimage_no_adjacency_no_mtf_disc, \
+      FOTUFILM_AOT_ENLARGED(FOTUFILM_AOT_DISC(FOTUFILM_AOT_SLIDE_NO_MTF) & ~FOTUFILM_FRAME_ADJACENCY)) \
+    X(negative_no_interimage_no_adjacency_no_mtf_grainless, \
+      FOTUFILM_AOT_ENLARGED((FOTUFILM_AOT_SLIDE_NO_MTF & ~FOTUFILM_FRAME_GRAIN) & ~FOTUFILM_FRAME_ADJACENCY)) \
     X(slide, FOTUFILM_AOT_SLIDE)                                             \
     X(slide_disc, FOTUFILM_AOT_DISC(FOTUFILM_AOT_SLIDE))                     \
     X(slide_grainless, FOTUFILM_AOT_SLIDE & ~FOTUFILM_FRAME_GRAIN)            \

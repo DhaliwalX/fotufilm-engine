@@ -134,6 +134,12 @@ final class FrameVariantTests: XCTestCase {
         enlarged(slideNoMTF),
         enlarged(slideNoMTF | FilmEngineFeature.discGrain),
         enlarged(slideNoMTF & ~FilmEngineFeature.grain),
+        enlarged(slide & ~FilmEngineFeature.adjacency),
+        enlarged((slide | FilmEngineFeature.discGrain) & ~FilmEngineFeature.adjacency),
+        enlarged(slide & ~(FilmEngineFeature.grain | FilmEngineFeature.adjacency)),
+        enlarged(slideNoMTF & ~FilmEngineFeature.adjacency),
+        enlarged((slideNoMTF | FilmEngineFeature.discGrain) & ~FilmEngineFeature.adjacency),
+        enlarged(slideNoMTF & ~(FilmEngineFeature.grain | FilmEngineFeature.adjacency)),
         slide,
         slide | FilmEngineFeature.discGrain,
         slide & ~FilmEngineFeature.grain,
@@ -297,7 +303,9 @@ final class FrameVariantTests: XCTestCase {
     }
 
     func testColorNegativesWithoutInterimageSelectWithoutUnusedCouplers() {
-        for capture in [Self.slide, Self.slideNoMTF] {
+        for capture in [Self.slide, Self.slideNoMTF,
+                        Self.slide & ~FilmEngineFeature.adjacency,
+                        Self.slideNoMTF & ~FilmEngineFeature.adjacency] {
             for grain in [capture, capture | FilmEngineFeature.discGrain,
                           capture & ~FilmEngineFeature.grain] {
                 let mask = Self.enlarged(grain)
