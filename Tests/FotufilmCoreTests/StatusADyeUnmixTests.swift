@@ -62,4 +62,21 @@ final class StatusADyeUnmixTests: XCTestCase {
         let actual = Densitometry.statusADensity(amounts: SIMD3(amounts), dyes: dyes)
         for c in 0..<3 { XCTAssertEqual(actual[c], target[c], accuracy: 0.00002) }
     }
+
+    func testDirectViewBalancesTheInterpolatedReferenceGray() {
+        var stock = FilmStock.presets["example-reversal-64"]!
+        stock.spectralProfile.imageDyeDensity = dyes
+        stock.curves = (0..<3).map { c in
+            CharacteristicCurve(dMin: 0.08 + Float(c)*0.013, gamma: 1.7,
+                toe: -1.4 + Float(c)*0.017, toeWidth: 0.18,
+                shoulder: 0.53 + Float(c)*0.025, shoulderWidth: 0.22)
+        }
+        let table = SpectralRuntime.tables(for: stock, paper: .screen).filmOutput
+        let p = SIMD3<Float>((0..<3).map {
+            (stock.developedDensity(layer: $0, logExposure: 0)-stock.curves[$0].dMin)
+                / (stock.curves[$0].dMax-stock.curves[$0].dMin)
+        })
+        let rgb = table.sample(p)
+        for c in 0..<3 { XCTAssertEqual(rgb[c], 0.18, accuracy: 0.000002) }
+    }
 }
