@@ -254,7 +254,7 @@ extension PrintPaper {
         case .ilfochromeCLM1K: density = SIMD3(repeating: Self.ilfochromeMediumCurve.dMax)
         default: return nil
         }
-        let receiver = SpectralRuntime.PrintReceiver(dyes: analyticalDyes, flare: viewingFlare,
+        let receiver = SpectralRuntime.PrintReceiver(dyes: analyticalDyes,
             viewingLight: viewingKelvin.map(SpectralRuntime.printLightSPD) ?? Illuminant.d50,
             unmix: PrintDyeUnmix(dyes: analyticalDyes))
         return receiver.rgb(density: density)

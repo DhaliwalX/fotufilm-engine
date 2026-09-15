@@ -72,7 +72,7 @@ final class ExpiredFilmTests: XCTestCase {
             let activation = SIMD3<Float>((0..<3).map { channel in
                 let curve = paperCurves[channel]
                 let xMid = curve.logExposure(
-                    density: curve.dMin + paper.anchorDensity)
+                    density: curve.dMin + paper.midDensity)
                 return (curve.density(logExposure: xMid + logE[channel])
                         - curve.dMin) / (curve.dMax - curve.dMin)
             })
