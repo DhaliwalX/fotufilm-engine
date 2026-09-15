@@ -40,10 +40,11 @@ extension PrintPaper {
     /// Layer sensitivities with publication tails extended. Release prints preserve the
     /// publication's inter-layer speed scale: it determines the additive printer's beam mix.
     /// Per-layer normalization is harmless only for paths without a spectral timing solve.
-    /// Screen and negative output bypass paper exposure.
+    /// Digital Reference uses fixed receiver bands; viewed negatives bypass this stage.
     var sensitivity: [[Float]] {
         switch self {
-        case .ektacolorEdge, .screen, .negative, .ilfochromeCPS1K, .ilfochromeCLM1K: return SpectralGrid.paperSensitivity
+        case .screen: return DigitalReferenceReceiver.sensitivity
+        case .ektacolorEdge, .negative, .ilfochromeCPS1K, .ilfochromeCLM1K: return SpectralGrid.paperSensitivity
         case .enduraPremier: return SpectralGrid.enduraPremierSensitivity
         case .crystalArchive: return SpectralGrid.crystalArchiveSensitivity
         case .vision2383: return SpectralGrid.vision2383Sensitivity
@@ -101,8 +102,7 @@ extension PrintPaper {
     /// The characteristic curve the print's timing is reckoned against: the
     /// green record where the sheet publishes three, which is the record a
     /// printer times and filters to. `screen` is not a material: its
-    /// `paperCurve` is the density scale a direct read is normalized onto,
-    /// not a claim about paper.
+    /// color-negative receiver has one fixed tone curve, independent of the film profile.
     func printCurve(for stock: FilmStock) -> CharacteristicCurve {
         printCurves(for: stock)[1]
     }
@@ -145,7 +145,10 @@ extension PrintPaper {
             // channels rather than assigning unmeasured Kodak red/blue differences to Fuji paper.
             return [PrintPaper.ra4PrintCurve, PrintPaper.ra4PrintCurve,
                     PrintPaper.ra4PrintCurve]
-        case .screen, .negative:
+        case .screen:
+            let curve = stock.isMonochrome ? stock.paperCurve : DigitalReferenceReceiver.curve
+            return [curve, curve, curve]
+        case .negative:
             return [stock.paperCurve, stock.paperCurve, stock.paperCurve]
         case .vision2383:
             return [Vision2383PrintSpectra.redCurve,

@@ -22,7 +22,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// printing-density-class sensor bands (SMPTE RP 180), characterizes that
     /// receiver with TAF timing, and inverts it into a Rec.709 video signal.
     case telecine
-    /// An idealized direct digital reference, with no scanner or physical print stage.
+    /// A fixed digital receiver for negatives; reversal film is viewed directly.
     case screen
     /// The developed negative itself, viewed by transmission rather than printed or inverted.
     /// Its index is persisted by plugin hosts; append new media after this entry.
@@ -77,7 +77,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         case .telecine:
             return "A Rec.709 video transfer with slightly raised blacks and softer highlights than Lab Scan."
         case .screen:
-            return "Display the image directly, without paper or scanner effects. Reversal films support HDR output."
+            return "A fixed digital receiver preserves negative-film color and tone. Reversal films are viewed directly and support HDR output."
         case .ilfochromeCPS1K:
             return "Normal-contrast positive paper for slide film. Approximate color response; more paper exposure lightens the print."
         case .ilfochromeCLM1K:
@@ -261,13 +261,15 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         }
     }
 
-    /// Whether printing reads each film layer independently instead of integrating enlarger light
-    /// through all film dyes. This is the idealized digital-reference path, not a physical claim.
-    public var readsLayersDirectly: Bool { self == .screen }
+    /// Monochrome keeps its established direct read. Color negatives pass through the
+    /// fixed digital receiver, preserving each layer's curve and the image-dye spectra.
+    public func readsLayersDirectly(for stock: FilmStock) -> Bool {
+        self == .screen && stock.isMonochrome
+    }
 
     /// Whether timing can balance the film records while forming this output. A viewed negative
-    /// has no print exposure to correct, and the digital reference already reads records directly.
-    public var acceptsPrintCorrection: Bool { !readsLayersDirectly && !isNegative && !isPositivePaper }
+    /// has no print exposure to correct. Digital Reference preserves individual channel contrast.
+    public var acceptsPrintCorrection: Bool { self != .screen && !isNegative && !isPositivePaper }
 
     /// Nominal visual mid-grey, relative to clear white and after viewing flare, used by
     /// reflection/digital outputs and the single-record monochrome convention. Colour cine

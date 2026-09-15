@@ -9,7 +9,10 @@ extension SpectralRuntime {
                                      neutralDensity: Float = 0)
         -> (lamp: [Float], referenceEnergy: SIMD3<Float>) {
         guard paper.isProjected else {
-            let lamp = paper.isScan ? SpectralGrid.equalEnergy : SpectralGrid.enlarger3200K
+            let lamp = paper == .screen ? DigitalReferenceReceiver.illuminant
+                : (paper.isScan ? SpectralGrid.equalEnergy : SpectralGrid.enlarger3200K)
+            // Digital Reference balances a single negative exposure, then uses the same lamp
+            // and receiver at every density, without a selected-film curve or scene-color inverse.
             return (lamp, paperExposure(density: density, dyes: dyes, lamp: lamp,
                 paperSensitivity: paper.sensitivity, neutralDensity: neutralDensity))
         }
