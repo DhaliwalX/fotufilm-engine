@@ -33,6 +33,8 @@ jobs:
       # The runner isolates the largest Metal grain test, then audits the complete suite.
       - name: Complete release tests
         run: python3 tools/test-engine.py --workers 2
+      - name: Shared custom-stock draft round trips
+        run: python3 tools/test-custom-stock-draft.py
       - run: swift build
       - run: finalcut/build.sh --test
         if: github.event_name == 'workflow_dispatch'

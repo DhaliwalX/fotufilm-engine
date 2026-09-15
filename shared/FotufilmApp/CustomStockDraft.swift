@@ -85,9 +85,12 @@ struct CustomStockDraft: Codable, Equatable {
     /// Drawn sensitivity, one row per layer — R/G/B for a colour film, a single row for a
     /// panchromatic one. Rows live on their own peak of 1; the engine renormalises at use.
     var sensitivityPoints: [[SpectralControlPoint]] = []
-    /// Drawn dye shares, C/M/Y, colour films only. The rows are renormalised on the way out so
-    /// the three sum to one at every wavelength, which is the form the engine consumes.
+    /// Drawn dye curves, C/M/Y, colour films only. Legacy profiles use normalized shares;
+    /// profiles with a separate minimum spectrum retain their absolute dye amplitudes.
     var dyePoints: [[SpectralControlPoint]] = []
+    /// Retained when an installed film with independently specified base absorption is copied.
+    /// Optional so older saved drafts keep their original spectral interpretation.
+    var minimumDensitySpectrum: [Float]? = nil
     /// The loaded id of the stock the drawn record descends from, if it descends from one.
     var spectralLineage: String? = nil
 
@@ -254,6 +257,18 @@ struct CustomStockDraft: Codable, Equatable {
             draft.dyeSet = DyeSet(family: dyeFamily) ?? .kodakNegative
         case let .monochrome(rgbWeights):
             draft.monoWeights = rgbWeights
+        case let .separatedBase(layerSensitivity, imageDyeDensity, minimumDensity):
+            draft.spectralModel = .drawn
+            // Keep each calibrated sample. Peak normalization or point simplification would
+            // change the specified absorption and the reference exposure on a round trip.
+            func points(_ row: [Float]) -> [SpectralControlPoint] {
+                zip(SpectralGrid.wavelengths, row).map {
+                    SpectralControlPoint(nm: $0.0, value: $0.1)
+                }
+            }
+            draft.sensitivityPoints = layerSensitivity.map(points)
+            draft.dyePoints = imageDyeDensity.map(points)
+            draft.minimumDensitySpectrum = minimumDensity
         case let .samples(layerSensitivity, imageDyeDensity):
             // Preserve every sampled row so measured spectra are not reduced to fitted lobes.
             draft.spectralModel = .drawn
@@ -444,6 +459,11 @@ struct CustomStockDraft: Codable, Equatable {
         }
         let rows = drawnSensitivityPoints().map(SpectralCurve.resampled)
         let sensitivity = isMonochrome ? [rows[0], rows[0], rows[0]] : rows
+        if let minimumDensitySpectrum, !isMonochrome {
+            return .separatedBase(layerSensitivity: sensitivity,
+                imageDyeDensity: drawnDyePoints().map(SpectralCurve.resampled),
+                minimumDensity: minimumDensitySpectrum)
+        }
         let dyes = isMonochrome
             ? SpectralGrid.familyDyeDensities(.monochrome)
             : SpectralGrid.partitionedDyes(
