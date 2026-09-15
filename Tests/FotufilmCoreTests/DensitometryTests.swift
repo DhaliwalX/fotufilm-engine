@@ -117,7 +117,7 @@ final class DensitometryTests: XCTestCase {
             for channel in 0..<3 {
                 XCTAssertEqual(rgb[channel], pow(10, -paper.midDensity), accuracy: 1e-4)
                 let curve = curves[channel]
-                let untrimmed = curve.logExposure(density: curve.dMin + paper.anchorDensity)
+                let untrimmed = curve.logExposure(density: curve.dMin + paper.midDensity)
                 let shift = midpoints[channel] - untrimmed
                 XCTAssertLessThan(abs(shift), 0.05, "log exposure, not density units")
                 for exposure in [curve.toe - 10, curve.shoulder + 10] {

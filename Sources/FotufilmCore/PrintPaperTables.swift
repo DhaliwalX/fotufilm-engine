@@ -87,7 +87,7 @@ extension PrintPaper {
         let offset = acceptsViewingIlluminant && !stock.isMonochrome
             ? SpectralRuntime.reflectionPrintDensityTrim(for: self) : .zero
         return (0..<3).map {
-            curves[$0].logExposure(density: curves[$0].dMin + anchorDensity + offset[$0])
+            curves[$0].logExposure(density: curves[$0].dMin + midDensity + offset[$0])
         }
     }
 

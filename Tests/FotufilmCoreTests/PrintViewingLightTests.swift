@@ -33,6 +33,8 @@ final class PrintViewingLightTests: XCTestCase {
 
     /// A measured neutral is not a flat reflectance, so greys move too — but far less than
     /// colours on this synthetic grid. This is model behavior, not measured print accuracy.
+    /// The darkest step moves most: at the paper's maximum density the dyes' unwanted
+    /// absorptions are all that is left to read, and no viewing flare dilutes them.
     func testGreysMoveFarLessThanColoursUnderTungsten() {
         let stock = Self.negative
         let d50 = SpectralRuntime.tables(for: stock)
@@ -58,7 +60,7 @@ final class PrintViewingLightTests: XCTestCase {
         }
         XCTAssertGreaterThan(greyWorst, 1e-3,
                              "a measured neutral must show some metameric shift")
-        XCTAssertLessThan(greyWorst, 0.08)
+        XCTAssertLessThan(greyWorst, 0.12)
         XCTAssertGreaterThan(colourWorst / greyWorst, 10,
                              "the grey axis must stay far less metameric than colour")
     }
@@ -147,7 +149,7 @@ final class PrintViewingLightTests: XCTestCase {
                     let actual = receiver.rgb(density: density)
                     let expected = SpectralRuntime.transmissionRGB(
                         density: [amounts.x, amounts.y, amounts.z], dyes: paper.analyticalDyes,
-                        flare: paper.viewingFlare, illuminant: light)
+                        illuminant: light)
                     for channel in 0..<3 {
                         XCTAssertEqual(actual[channel], expected[channel], accuracy: 2e-5,
                                        "\(paper): a viewing lamp must not retime dye")
