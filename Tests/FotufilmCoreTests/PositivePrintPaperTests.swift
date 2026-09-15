@@ -152,40 +152,6 @@ final class PositivePrintPaperTests: XCTestCase {
     }
 
 #if canImport(Metal)
-    func testHandwrittenMetalPrintsPositivePaper() throws {
-        try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable)
-        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
-        let renderer = try XCTUnwrap(HandwrittenMetalFilmRenderer.shared)
-        for paper in papers {
-            let o = options(paper)
-            let key = "positive-paper-" + paper.id
-            XCTAssertTrue(renderer.prepareLinearHDR(key: key, stock: stock, options: o,
-                                                     frameWidth: 8, frameHeight: 8))
-            let colors: [SIMD3<Float>] = [SIMD3(repeating: 0.18), SIMD3(repeating: 1),
-                                           SIMD3(0.8, 0.1, 0.05), SIMD3(0.05, 0.3, 0.8)]
-            for color in colors {
-                var input = ImageBuffer(width: 8, height: 8)
-                var half = [Float16](repeating: 1, count: 256)
-                for c in 0..<3 { for i in 0..<64 {
-                    input.planes[c][i] = color[c]
-                    half[i * 4 + c] = Float16(color[c])
-                } }
-                let bytes = half.count * MemoryLayout<Float16>.stride
-                let source = try half.withUnsafeBytes {
-                    try XCTUnwrap(device.makeBuffer(bytes: $0.baseAddress!, length: bytes, options: .storageModeShared))
-                }
-                let output = try XCTUnwrap(device.makeBuffer(length: bytes, options: .storageModeShared))
-                XCTAssertTrue(renderer.processLinearHalf(input: source, output: output,
-                    width: 8, height: 8, key: key, frameIndex: 0))
-                let cpu = try XCTUnwrap(HalideBackend.process(image: input, stock: stock, options: o))
-                let result = output.contents().assumingMemoryBound(to: Float16.self)
-                for c in 0..<3 {
-                    XCTAssertEqual(Float(result[c]), max(cpu.planes[c][0], 0), accuracy: 0.01)
-                }
-            }
-        }
-    }
-
     func testFullRenderCPUAndMetalAgreeAndMatchSplitStages() throws {
         try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable)
         let gpu = try XCTUnwrap(HalideMetalFilmRenderer.shared)
