@@ -35,6 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 tools/test-aot-release.py
+      - run: python3 tools/test-prune-aot-releases.py
       - run: python3 tools/check-source-boundary.py
       - run: bash -n tools/generate-halide-aot.sh tools/publish-aot-release.sh tools/build-halide.sh
 
@@ -97,3 +98,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: tools/publish-aot-release.sh "${{ matrix.platform }}"
+
+  retain-current:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Keep the current complete AOT set
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/prune-aot-releases.py --apply
