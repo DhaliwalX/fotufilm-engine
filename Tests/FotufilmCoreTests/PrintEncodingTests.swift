@@ -2,10 +2,42 @@
 import XCTest
 import CoreImage
 import CoreGraphics
+import ImageIO
 @testable import FotufilmCore
 @testable import FotufilmImaging
 
 final class PrintEncodingTests: XCTestCase {
+    func testTIFFRoundTripRetainsSixteenBitSamplesAndP3Profile() throws {
+        let values: [UInt16] = [1234, 5678, 9012, 65535, 54321, 45678, 34567, 65535]
+        let pixels = UnsafeMutableBufferPointer<UInt16>.allocate(capacity: values.count)
+        _ = pixels.initialize(from: values)
+        let p3 = try XCTUnwrap(CGColorSpace(name: CGColorSpace.displayP3))
+        let image = try XCTUnwrap(PrintEncoding.makeImage(takingOwnershipOf: pixels,
+            width: 2, height: 1, colorSpace: p3))
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("scan-master-\(UUID().uuidString).tiff")
+        defer { try? FileManager.default.removeItem(at: url) }
+        XCTAssertTrue(PrintEncoding.writeTIFF(image, to: url))
+        let source = try XCTUnwrap(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let decoded = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        XCTAssertEqual(decoded.bitsPerComponent, 16)
+        XCTAssertEqual(decoded.colorSpace?.name, p3.name)
+        let properties = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+            as? [String: Any])
+        let tiff = try XCTUnwrap(properties[kCGImagePropertyTIFFDictionary as String]
+            as? [String: Any])
+        XCTAssertEqual(tiff[kCGImagePropertyTIFFCompression as String] as? Int, 5)
+        var readback = [UInt16](repeating: 0, count: values.count)
+        try readback.withUnsafeMutableBytes { raw in
+            let context = try XCTUnwrap(CGContext(data: raw.baseAddress, width: 2, height: 1,
+                bitsPerComponent: 16, bytesPerRow: 16, space: p3,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                    | CGBitmapInfo.byteOrder16Little.rawValue))
+            context.draw(decoded, in: CGRect(x: 0, y: 0, width: 2, height: 1))
+        }
+        XCTAssertEqual(readback, values, "TIFF discarded precision or changed the color profile")
+    }
+
     func testEngineOutputConverterPacksRowsAndProvidesColorTag() throws {
         let source: [Float] = [1, 0, 0, 1]
         var destination = [UInt16](repeating: 0, count: source.count)

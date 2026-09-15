@@ -207,15 +207,13 @@ extension PrintPaper {
         dMin: 0.090, gamma: 8.5,
         toe: -1.479, toeWidth: 0.155, shoulder: -1.222, shoulderWidth: 0.176)
 
-    /// Minilab inversion on the RA-4 log-exposure axis, keeping the paper's toe and shoulder
-    /// positions. A digital inversion has no dye D-max and sets its own black and white points, so
-    /// the range and the highlight roll-off are the scan's own, fitted against 166 same-lab
-    /// daylight minilab scans: their median 0.1 percentile is 0.00202 of display white and their
-    /// median 1st percentile is 0.0208 of the frame's own median, which this reproduces at
-    /// 0.00241 and 0.0234 over fifteen rendered scenes.
+    /// Editable scan tone scale, independent of a paper's limited density range. Equal toe and
+    /// shoulder widths keep their softplus difference positive instead of crossing below D-min
+    /// and clipping bright scene detail. The broad transitions retain separation for 16-bit
+    /// delivery; 3.6 D is the receiver's asymptotic range, not a measured scanner specification.
     static let labScanCurve = CharacteristicCurve(
-        dMin: 0.051, gamma: 7.5,
-        toe: -1.541, toeWidth: 0.11, shoulder: -1.182, shoulderWidth: 0.152)
+        dMin: 0, gamma: 3,
+        toe: -1, toeWidth: 0.3, shoulder: 0.2, shoulderWidth: 0.3)
 
     /// Telecine inversion on the RA-4 log-exposure axis. Gamma is 5.7, D-max is 2.10, and the
     /// 0.12 shoulder represents film white at 86 IRE with headroom to 100 IRE. The shared
@@ -231,15 +229,8 @@ extension PrintPaper {
     static let labScanReferenceMidRatio = SIMD2<Float>(0.5609019, -0.444564)
     static let labScanReferenceBalance: [Float] = [1.0579212, 1.0, 0.880968]
 
-    /// Maximum retained cast magnitude in log paper exposure. What a viewer sees is this offset
-    /// carried through `labScanCurve`'s own slope at the mid anchor, so the ceiling has to be
-    /// refitted whenever that curve is: the gamma 4.4 → 7.5 refit more than doubled that slope
-    /// (1.81 → 4.00 D per decade) and left every stock scanning at up to 0.19 D off neutral.
-    ///
-    /// Refitted 2026-08-29 against the same-lab corpus of 163 minilab scans, on the paired
-    /// engine-vs-real Δ Oklab b the original fit used. Over the four stocks that corpus can call
-    /// (Ultramax, C200, Superia, CineStill 400D) the median engine/real ratio is 1.02 on the mids
-    /// band and 1.00 globally; the two axes cross 1.0 together here.
+    /// Maximum retained reference-profile cast in log receiver exposure. The softer scan curve
+    /// carries this exposure difference with its own slope; it is not a finished minilab grade.
     static let labScanCastCeiling: Float = 0.029
 }
 

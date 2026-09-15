@@ -2,6 +2,8 @@
 import CoreGraphics
 import CoreImage
 import Foundation
+import ImageIO
+import UniformTypeIdentifiers
 
 #if canImport(FotufilmCore)
 import FotufilmCore
@@ -11,6 +13,22 @@ import FotufilmCore
 /// is a delivery concern — wrapping memory as an image and naming a colour space — rather than
 /// image formation, so the portable half stands without it.
 extension PrintEncoding {
+    /// Writes a developed 16-bit RGB image losslessly, retaining its color-space profile.
+    /// Reject an already reduced source rather than labeling an 8-bit image a 16-bit master.
+    public static func writeTIFF(_ image: CGImage, to url: URL,
+                                 properties: [String: Any] = [:]) -> Bool {
+        guard image.bitsPerComponent == 16, image.colorSpace?.model == .rgb,
+              let destination = CGImageDestinationCreateWithURL(
+                url as CFURL, UTType.tiff.identifier as CFString, 1, nil) else { return false }
+        var carried = properties
+        carried[kCGImagePropertyDepth as String] = 16
+        var tiff = carried[kCGImagePropertyTIFFDictionary as String] as? [String: Any] ?? [:]
+        tiff[kCGImagePropertyTIFFCompression as String] = 5 // Lossless LZW.
+        carried[kCGImagePropertyTIFFDictionary as String] = tiff
+        CGImageDestinationAddImage(destination, image, carried as CFDictionary)
+        return CGImageDestinationFinalize(destination)
+    }
+
 
     /// Wraps a finished 16-bit RGBA buffer as a CGImage without copying it.
     public static func makeImage(

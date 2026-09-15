@@ -14,9 +14,8 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     case vision2393 = "vision-2393"
     /// FUJIFILM ETERNA-CP Color Positive Film 3513DI, measured.
     case eternaCP = "eterna-cp"
-    /// The minilab scanner's finished positive: a trichromatic LED read of the
-    /// negative inverted in software, the way most real colour negative is
-    /// finished today.
+    /// An editable positive scan: a trichromatic LED read of the negative with broad tonal
+    /// transitions that preserve shadow and highlight separation for high-precision files.
     case labScan = "lab-scan"
     /// The video transfer: a telecine machine reads the negative through
     /// printing-density-class sensor bands (SMPTE RP 180), characterizes that
@@ -73,9 +72,9 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         case .eternaCP:
             return "Fujifilm cinema print film with a cooler color balance and softer contrast than Kodak print films."
         case .labScan:
-            return "A digital scan with deep blacks and strong contrast."
+            return "An editable digital scan with gentle contrast and retained shadow and highlight detail. Choose TIFF for a 16-bit master."
         case .telecine:
-            return "A Rec.709 video transfer with slightly raised blacks and softer highlights than Lab Scan."
+            return "A Rec.709 video transfer with timed color, raised blacks and a finished contrast curve."
         case .screen:
             return "A fixed digital receiver preserves negative-film color and tone. Reversal films are viewed directly and support HDR output."
         case .ilfochromeCPS1K:

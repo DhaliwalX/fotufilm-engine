@@ -268,6 +268,10 @@ a separate historical coating is not simulated.
 A sheet that publishes one characteristic curve develops all three records along it;
 E-7020, E-4070, 2383, 2393 and ETERNA-CP publish three and are carried per record. The lab scan and
 telecine are inversions rather than sheets, and are described in `PrintPaperTables.swift`.
+Lab Scan produces an editable positive with gentle contrast and smooth shadow/highlight
+transitions. Native photo export defaults to a lossless 16-bit Display P3 TIFF with its
+color profile. Telecine retains its finished Rec.709 transfer. Existing Lab Scan edits
+render differently with the new curve.
 
 Colour release prints time the reference negative to the published gross Status A
 LAD aims: 1.09/1.06/1.03 for Kodak 2383 and 2393, and 1.10/1.05/1.05 for ETERNA-CP.

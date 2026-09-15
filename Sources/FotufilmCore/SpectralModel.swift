@@ -775,6 +775,30 @@ public enum SpectralRuntime {
         return SIMD3(repeating: luminance) + scale * (colour - SIMD3(repeating: luminance))
     }
 
+    /// Compresses colors near the SDR gamut boundary along their own luminance axis. The smooth
+    /// radius shoulder keeps all three channels inside 0...1 without a hard channel clamp, while
+    /// leaving neutrals and colors below 90% of the available chroma unchanged.
+    static func compressedToDisplayGamut(_ colour: SIMD3<Float>,
+                                         luminance: Float) -> SIMD3<Float> {
+        guard luminance > 0, luminance < 1 else {
+            return SIMD3(repeating: clamp(luminance, 0, 1))
+        }
+        let neutral = SIMD3<Float>(repeating: luminance)
+        let chroma = colour - neutral
+        var radius: Float = 0
+        for channel in 0..<3 {
+            let distance = chroma[channel] >= 0
+                ? chroma[channel] / (1 - luminance) : -chroma[channel] / luminance
+            radius = max(radius, distance)
+        }
+        let knee: Float = 0.9
+        guard radius > knee else { return colour }
+        let room = 1 - knee
+        let over = radius - knee
+        let compressed = knee + room * over / (over + room)
+        return neutral + chroma * (compressed / radius)
+    }
+
     /// Characterizes a scan's complete response: film capture and development, image dyes, the
     /// receiver bands the machine reads through — a minilab's LEDs, a telecine's RP 180 printing
     /// density — its balance, and the inversion curve. The medium's tone and intended neutral cast
@@ -785,10 +809,8 @@ public enum SpectralRuntime {
         let inverse: SpectralResponseInverse
         let range: Float
         let deliversRec709: Bool
-        /// Where the medium's own clip begins and ends, in output luminance. The video curve is
-        /// the shallower of the two and runs out of record separation earlier than a scan whose
-        /// inversion uses the whole container, so it starts giving up its chroma sooner.
-        let clipInterval: (Float, Float)
+        /// The finished video transfer gives up highlight chroma near its white point.
+        let clipInterval: (Float, Float) = (0.76, 0.84)
 
         init(paper: PrintPaper, stock: FilmStock, exposure: SpectralLUT,
              printing: SpectralLUT) {
@@ -796,7 +818,6 @@ public enum SpectralRuntime {
             let scanRange = curve.dMax - curve.dMin
             range = scanRange
             deliversRec709 = paper.deliversRec709
-            clipInterval = paper == .telecine ? (0.76, 0.84) : (0.78, 0.86)
             let midpoint = curve.logExposure(
                 density: curve.dMin + paper.anchorDensity)
             let masking = stock.printingContrastScale(
@@ -848,9 +869,9 @@ public enum SpectralRuntime {
             let recoveredLuminance = luminance(calibrated)
             guard recoveredLuminance > 1e-6 else { return uncalibrated }
 
-            calibrated = SpectralRuntime.heldToGamut(calibrated,
-                                                     luminance: recoveredLuminance)
             if deliversRec709 {
+                calibrated = SpectralRuntime.heldToGamut(calibrated,
+                                                         luminance: recoveredLuminance)
                 // A video transfer leaves the machine as a Rec.709 signal, which cannot carry
                 // colour outside those primaries. Hold the timed colour at that boundary in 709
                 // before delivering it on the engine's wider P3 basis, instead of shipping a
@@ -862,6 +883,12 @@ public enum SpectralRuntime {
             }
             let outputLuminance = luminance(uncalibrated)
             calibrated *= outputLuminance / recoveredLuminance
+            if !deliversRec709 {
+                // The editable scan keeps highlight color. Compress only the chroma that the
+                // delivery gamut cannot hold, instead of fading every bright color to white.
+                return SpectralRuntime.compressedToDisplayGamut(
+                    calibrated, luminance: outputLuminance)
+            }
 
             // The receiver's toe and shoulder densities hold no invertible chromatic signal, so
             // the characterization is faded out at both ends. It fades to the neutral axis rather

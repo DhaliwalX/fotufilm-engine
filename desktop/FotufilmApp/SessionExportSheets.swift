@@ -327,6 +327,7 @@ final class PhotoExportSheetController: ExportSheetController {
          render: @escaping (PhotoRenderRequest) -> Void) {
         self.sourceSize = sourceSize
         self.state = state
+        format = state.resolvedPaper == .labScan ? .tiff : .jpeg
         self.sensorFrame = sensorFrame
         self.originalRAWAvailable = originalRAWAvailable
         self.render = render

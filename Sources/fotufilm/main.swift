@@ -61,7 +61,7 @@ Options:
   --background <c>  Scene-linear Rec.2020 background for associated-alpha input:
                      black, white, or R,G,B (default: black). The source is
                      composited before film processing and the output is opaque
-  --depth <8|16>     Output bit depth (default: 8, dithered; 16 for PNG/TIFF)
+  --depth <8|16>     Output bit depth (default: 16 for TIFF; otherwise 8, dithered)
   --hlg              Write the print as 16-bit Rec.2020 HLG instead of sRGB.
                      Implies --depth 16.
   --transport <json> Opt in to a layered transport construction (experimental)
@@ -602,6 +602,10 @@ func writeImage(_ image: CGImage, path: String) {
     if lower.hasSuffix(".jpg") || lower.hasSuffix(".jpeg") {
         type = UTType.jpeg.identifier
     } else if lower.hasSuffix(".tif") || lower.hasSuffix(".tiff") {
+        if image.bitsPerComponent == 16 {
+            guard PrintEncoding.writeTIFF(image, to: url) else { fail("Could not write: \(path)") }
+            return
+        }
         type = UTType.tiff.identifier
     } else if lower.hasSuffix(".heic") || lower.hasSuffix(".heif") {
         type = UTType.heic.identifier
@@ -1531,7 +1535,9 @@ if let stagesPath = flags["--dump-wasm-stages"] {
 let hlgOutput = flags["--hlg"] != nil
 // Eight bits of an HLG signal is banding, not a delivery: the curve spends its lower half on
 // the range sRGB gives its whole range to.
-let depth = hlgOutput ? 16 : (flags["--depth"].flatMap { Int($0) } ?? 8)
+let isTIFFOutput = ["tif", "tiff"].contains(URL(fileURLWithPath: positional[1])
+    .pathExtension.lowercased())
+let depth = hlgOutput ? 16 : (flags["--depth"].flatMap { Int($0) } ?? (isTIFFOutput ? 16 : 8))
 guard depth == 8 || depth == 16 else { fail("--depth must be 8 or 16") }
 let balance = WhiteBalance(
     kelvin: flags["--wb"].flatMap { Float($0) } ?? WhiteBalance.neutralKelvin,

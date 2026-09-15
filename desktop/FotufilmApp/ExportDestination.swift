@@ -9,6 +9,9 @@ import FotufilmCore
 #if canImport(FotufilmMetal)
 import FotufilmMetal
 #endif
+#if canImport(FotufilmImaging)
+import FotufilmImaging
+#endif
 
 #if canImport(UIKit)
 import UIKit
@@ -140,7 +143,7 @@ enum PhotoExportFormat: String, CaseIterable, Identifiable, Sendable {
         case .jpeg: return "Display P3 SDR · compact and compatible"
         case .png: return "Display P3 SDR · lossless, larger file"
         case .heic: return "Display P3 SDR, or HDR when enabled"
-        case .tiff: return "Display P3 SDR · lossless archival image"
+        case .tiff: return "16-bit Display P3 SDR · lossless TIFF with color profile"
         }
     }
 
@@ -498,9 +501,6 @@ extension Rendered {
                quality: CGFloat = 0.95,
                metadata policy: ExportMetadataPolicy) -> Bool {
         try? FileManager.default.removeItem(at: url)
-        guard let destination = CGImageDestinationCreateWithURL(
-            url as CFURL, format.contentType.identifier as CFString, 1, nil)
-        else { return false }
         var properties: [String: Any] = [:]
         if format == .jpeg || format == .heic {
             properties[kCGImageDestinationLossyCompressionQuality as String] = quality
@@ -511,6 +511,12 @@ extension Rendered {
         if let metadata = metadata(applying: policy) {
             properties.merge(metadata) { kept, _ in kept }
         }
+        if format == .tiff {
+            return PrintEncoding.writeTIFF(image, to: url, properties: properties)
+        }
+        guard let destination = CGImageDestinationCreateWithURL(
+            url as CFURL, format.contentType.identifier as CFString, 1, nil)
+        else { return false }
         CGImageDestinationAddImage(
             destination, image,
             properties.isEmpty ? nil : properties as CFDictionary)
