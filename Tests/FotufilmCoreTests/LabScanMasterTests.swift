@@ -88,6 +88,25 @@ final class LabScanMasterTests: XCTestCase {
         }
     }
 
+    func testNeutralShadowsStayNeutralAtTheFilmsBlackFloor() throws {
+        let input = ramp()
+        var film = TestStocks.negative
+        film.emulsionDiffusionMM = [0, 0, 0]
+        film.emulsionDiffusionSecondaryMM = [0, 0, 0]
+        film.adjacencyStrength = 0
+        let output = try FotufilmEngine(stock: film, options: options)
+            .processChecked(linearRGB: input)
+        for column in 0..<2 {
+            let i = 4 * input.width + column * 8 + 4
+            let rgb = (0..<3).map { output.planes[$0][i] }
+            XCTAssertEqual(rgb.max()!, rgb.min()!, accuracy: 2e-5,
+                           "neutral toe gained false color at \(stops[column]) EV: \(rgb)")
+        }
+        let dark = output.planes[1][4 * input.width + 12]
+        let brighter = output.planes[1][4 * input.width + 20]
+        XCTAssertGreaterThan(brighter, dark, "neutralizing color must retain shadow detail")
+    }
+
     #if canImport(Metal)
     func testScanRampAgreesOnCPUAndMetal() throws {
         let gpu = try XCTUnwrap(HalideMetalFilmRenderer.shared)
