@@ -1110,6 +1110,210 @@ int testPlugin() {
                                      handleOf(renderArgs), nullptr) == kOfxStatOK;
         };
 
+        // Direct input/output routing must equal the established timeline path plus an encoding
+        // conversion, without another film pass, tone map, exposure scale, or host conversion.
+        {
+            std::printf("independent input/output color management\n");
+            const auto original = source->pixels;
+            const int oldPaper = getInt(instance.params, "paper");
+            check(getInt(instance.params, "colorManagement") == 0,
+                  "existing projects default to Timeline color management");
+            check(optionCount(instance.params, "inputColorSpace") ==
+                      8u + fotufilm_bridge_camera_input_count() &&
+                  optionCount(instance.params, "outputColorSpace") == 8,
+                  "offers separate camera/working input and working/display output menus");
+            auto difference = [](const std::vector<float> &a, const std::vector<float> &b) {
+                float worst = 0;
+                for (size_t i = 0; i < a.size(); ++i) {
+                    if (!std::isfinite(a[i]) || !std::isfinite(b[i])) return INFINITY;
+                    worst = std::max(worst, std::fabs(a[i] - b[i]));
+                }
+                return worst;
+            };
+            check(renderNow(), "renders the unchanged timeline configuration");
+            const auto legacy = output->pixels;
+            setChoice(plugin, instanceHandle, instance.params, "colorManagement", 1);
+            setChoice(plugin, instanceHandle, instance.params, "inputColorSpace", 6);
+            setChoice(plugin, instanceHandle, instance.params, "outputColorSpace", 6);
+            check(renderNow() && output->pixels == legacy,
+                  "independent equal spaces reproduce the legacy render exactly");
+            int timelineHidden = 0, inputHidden = 1, outputHidden = 1;
+            propGetInt(handleOf(instance.params.params.at("colorSpace")->properties),
+                       kOfxParamPropSecret, 0, &timelineHidden);
+            propGetInt(handleOf(instance.params.params.at("inputColorSpace")->properties),
+                       kOfxParamPropSecret, 0, &inputHidden);
+            propGetInt(handleOf(instance.params.params.at("outputColorSpace")->properties),
+                       kOfxParamPropSecret, 0, &outputHidden);
+            check(timelineHidden == 1 && inputHidden == 0 && outputHidden == 0,
+                  "Fotufilm mode shows both independent menus and hides the timeline selector");
+            check(getString(instance.params, "colorSpaceStatus").find(" -> ") != std::string::npos,
+                  "the status line names the selected input and output");
+
+            PropertySet *prefs = newPropertySet(), *outputSpace = newPropertySet();
+            plugin->mainEntry(kOfxImageEffectActionGetClipPreferences, instanceHandle, nullptr, handleOf(prefs));
+            plugin->mainEntry(kOfxImageEffectActionGetOutputColourspace, instanceHandle, nullptr, handleOf(outputSpace));
+            char *requested = nullptr, *returned = nullptr;
+            propGetString(handleOf(prefs), "OfxImageClipPropPreferredColourspaces_Source", 0, &requested);
+            propGetString(handleOf(outputSpace), kOfxImageClipPropColourspace, 0, &returned);
+            check(requested && returned && std::strcmp(requested, kOfxColourspaceRaw) == 0 &&
+                  std::strcmp(returned, kOfxColourspaceRaw) == 0,
+                  "manual routing requests unconverted pixels and avoids a second host color conversion");
+
+            std::vector<float> expected(legacy.size());
+            for (int o = 0; o < 8; ++o) {
+                const auto encoding = static_cast<fotufilm::Encoding>(o);
+                fotufilm::encodePixels(encoding, fotufilm::transformFor(encoding), legacy.data(),
+                                       expected.data(), width * height, false,
+                                       fotufilm::deliveryLeavesGamut(encoding));
+                setChoice(plugin, instanceHandle, instance.params, "outputColorSpace", o);
+                char message[240] = "";
+                std::snprintf(message, sizeof(message), "%s output matches CPU encoding of the same print",
+                              fotufilm::encodingLabel(encoding));
+                check(renderNow() && difference(output->pixels, expected) < 2e-4f, message);
+            }
+
+            // Cross several 256-row GPU windows. Small preview-sized frames do not
+            // exercise circular storage, whose display-output reads once escaped the
+            // 512-row allocation when gamut fitting was enabled.
+            {
+                const int tallWidth = 96, tallHeight = 1025;
+                auto resizeClips = [&](int w, int h) {
+                    for (Clip *clip : {source, output}) {
+                        clip->pixels.assign(static_cast<size_t>(w) * h * 4, 0.0f);
+                        propSetPointer(handleOf(clip->image), kOfxImagePropData, 0,
+                                       clip->pixels.data());
+                        const int bounds[4] = {0, 0, w, h};
+                        propSetIntN(handleOf(clip->image), kOfxImagePropBounds, 4, bounds);
+                        propSetInt(handleOf(clip->image), kOfxImagePropRowBytes, 0,
+                                   w * 4 * static_cast<int>(sizeof(float)));
+                        propSetIntN(handleOf(renderArgs), kOfxImageEffectPropRenderWindow, 4, bounds);
+                    }
+                };
+                resizeClips(tallWidth, tallHeight);
+                for (int y = 0; y < tallHeight; ++y) for (int x = 0; x < tallWidth; ++x) {
+                    float *pixel = source->pixels.data() + (static_cast<size_t>(y) * tallWidth + x) * 4;
+                    const float u = float(x) / (tallWidth - 1), v = float(y) / (tallHeight - 1);
+                    pixel[0] = 0.25f + 0.4f * u * u;
+                    pixel[1] = 0.25f + 0.4f * v;
+                    pixel[2] = 0.25f + 0.4f * (1 - u) * v;
+                    pixel[3] = 1;
+                }
+                const int inputCount = 8 + fotufilm_bridge_camera_input_count();
+                for (int input = 0; input < inputCount; ++input) {
+                    setChoice(plugin, instanceHandle, instance.params, "inputColorSpace", input);
+                    setChoice(plugin, instanceHandle, instance.params, "outputColorSpace", 6);
+                    check(renderNow(), "renders the tall linear print used to check display output");
+                    const auto tallLinear = output->pixels;
+                    std::vector<float> tallExpected(tallLinear.size());
+                    // All output options, switching fitting on and off on one instance.
+                    for (int o : {0, 3, 1, 6, 5, 2, 4, 7, 0}) {
+                        const auto encoding = static_cast<fotufilm::Encoding>(o);
+                        fotufilm::encodePixels(encoding, fotufilm::transformFor(encoding),
+                            tallLinear.data(), tallExpected.data(), tallWidth * tallHeight, false,
+                            fotufilm::deliveryLeavesGamut(encoding));
+                        setChoice(plugin, instanceHandle, instance.params, "outputColorSpace", o);
+                        char message[240] = "";
+                        std::snprintf(message, sizeof(message),
+                            "tall input %d -> %s matches CPU conversion across GPU window boundaries",
+                            input, fotufilm::encodingLabel(encoding));
+                        check(renderNow() && difference(output->pixels, tallExpected) < 2e-4f, message);
+                    }
+                }
+                setChoice(plugin, instanceHandle, instance.params, "inputColorSpace", 6);
+                resizeClips(width, height);
+                std::copy(original.begin(), original.end(), source->pixels.begin());
+            }
+            setChoice(plugin, instanceHandle, instance.params, "outputColorSpace", 0);
+
+            std::vector<float> camera(original.size()), linear(original.size());
+            for (size_t i = 0; i < camera.size(); ++i)
+                camera[i] = i % 4 == 3 ? 1.0f : 0.3f + original[i] * 0.3f;
+            for (int c = 0; c < fotufilm_bridge_camera_input_count(); ++c) {
+                check(fotufilm_bridge_decode_camera(c, camera.data(), linear.data(), width * height, 0) == 1,
+                      "decodes a supported camera input into finite scene light");
+                std::copy(linear.begin(), linear.end(), source->pixels.begin());
+                setParam(instance.params, "inputColorSpace", 7);
+                check(renderNow(), "renders independently decoded scene-linear input");
+                const auto reference = output->pixels;
+                std::copy(camera.begin(), camera.end(), source->pixels.begin());
+                setChoice(plugin, instanceHandle, instance.params, "inputColorSpace", 8 + c);
+                const bool ok = renderNow();
+                char name[160] = "", message[240] = "";
+                fotufilm_bridge_camera_input_name(c, name, sizeof(name));
+                const float error = difference(output->pixels, reference);
+                std::snprintf(message, sizeof(message), "%s direct input matches external decode (%.2g)", name, error);
+                check(ok && error < 2e-4f, message);
+            }
+            setChoice(plugin, instanceHandle, instance.params, "inputColorSpace", 8);
+            check(renderNow(), "renders Apple Log directly for delivery");
+            const auto full = output->pixels;
+            propSetInt(handleOf(renderArgs), kOfxImageEffectPropInteractiveRenderStatus, 0, 1);
+            check(renderNow() && difference(output->pixels, full) < 2e-4f,
+                  "direct Apple Log uses the same color routing for viewer and delivery");
+            propSetInt(handleOf(renderArgs), kOfxImageEffectPropInteractiveRenderStatus, 0, 0);
+            check(plugin->mainEntry(kOfxActionDestroyInstance, instanceHandle, nullptr, nullptr) == kOfxStatOK &&
+                  plugin->mainEntry(kOfxActionCreateInstance, instanceHandle, nullptr, nullptr) == kOfxStatOK,
+                  "reopens the plugin over saved color settings");
+            check(getInt(instance.params, "colorManagement") == 1 &&
+                  getInt(instance.params, "inputColorSpace") == 8 &&
+                  getInt(instance.params, "outputColorSpace") == 0 &&
+                  renderNow() && difference(output->pixels, full) < 2e-4f,
+                  "mode, independent choices and rendered appearance survive reopening");
+            if (const char *path = std::getenv("FOTUFILM_COLOR_DUMP"))
+                check(parity::writeDump(path, full.data(), width, height),
+                      "writes the direct Apple Log validation frame");
+
+            setChoice(plugin, instanceHandle, instance.params, "stage", 1);
+            setParam(instance.params, "outputColorSpace", 999);
+            check(renderNow(), "Negative Only ignores the output color menu and writes density");
+            std::copy(output->pixels.begin(), output->pixels.end(), source->pixels.begin());
+            setChoice(plugin, instanceHandle, instance.params, "stage", 2);
+            setParam(instance.params, "inputColorSpace", 999);
+            setParam(instance.params, "outputColorSpace", 0);
+            check(renderNow() && difference(output->pixels, full) < 2e-4f,
+                  "Print Only ignores input encoding and matches Full in the selected output space");
+
+            setChoice(plugin, instanceHandle, instance.params, "stage", 3);
+            setParam(instance.params, "inputColorSpace", 8);
+            setParam(instance.params, "outputColorSpace", 7);
+            std::vector<std::pair<std::string, int>> textureValues;
+            for (const auto &entry : instance.params.params) {
+                if (entry.first.find("texture_") != 0) continue;
+                textureValues.push_back({entry.first, getInt(instance.params, entry.first.c_str())});
+                setParam(instance.params, entry.first.c_str(), 0);
+            }
+            PropertySet *identity = newPropertySet();
+            check(plugin->mainEntry(kOfxImageEffectActionIsIdentity, instanceHandle,
+                                    handleOf(renderArgs), handleOf(identity)) == kOfxStatReplyDefault,
+                  "empty Texture Only cannot bypass a requested color conversion");
+            std::copy(camera.begin(), camera.end(), source->pixels.begin());
+            fotufilm_bridge_decode_camera(0, camera.data(), linear.data(), width * height, 0);
+            for (int o = 0; o < 8; ++o) {
+                const auto encoding = static_cast<fotufilm::Encoding>(o);
+                auto basis = fotufilm::transformFor(encoding);
+                std::memcpy(basis.fromWorking, basis.fromScene, sizeof(basis.fromWorking));
+                fotufilm::encodePixels(encoding, basis, linear.data(), expected.data(), width * height,
+                                       false, false);
+                setParam(instance.params, "outputColorSpace", o);
+                check(renderNow() && difference(output->pixels, expected) < 2e-4f,
+                      "Texture Only converts scene light into the selected output primaries and curve");
+            }
+            for (const auto &entry : textureValues) setParam(instance.params, entry.first.c_str(), entry.second);
+            setChoice(plugin, instanceHandle, instance.params, "stage", 0);
+            setParam(instance.params, "inputColorSpace", 999);
+            check(!renderNow(), "invalid managed input is rejected without guessing");
+            setParam(instance.params, "inputColorSpace", 8);
+            setParam(instance.params, "outputColorSpace", 999);
+            check(!renderNow(), "invalid managed output is rejected without guessing");
+            setChoice(plugin, instanceHandle, instance.params, "colorManagement", 0);
+            std::copy(original.begin(), original.end(), source->pixels.begin());
+            setParam(instance.params, "paper", oldPaper);
+            check(renderNow() && output->pixels == legacy,
+                  "returning to Timeline restores the original grade and ignores inactive managed choices");
+            setParam(instance.params, "inputColorSpace", 8);
+            setParam(instance.params, "outputColorSpace", 0);
+        }
+
         // Counted over every stock, because which papers a stock can tell apart depends on the
         // stock: a reversal one has no print at all, and a monochrome negative carries no colour
         // for two similar colour papers to disagree about. A paper that no stock distinguishes,

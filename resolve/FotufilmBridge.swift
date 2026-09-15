@@ -2,6 +2,30 @@ import Foundation
 
 import FotufilmHalide
 
+private let cameraInputDecoders = EditorControlCatalogue.pluginCameraInputs.map {
+    CameraLogDecoder($0.encoding)
+}
+
+@_cdecl("fotufilm_bridge_camera_input_count")
+func fotufilm_bridge_camera_input_count() -> Int32 { Int32(cameraInputDecoders.count) }
+
+@_cdecl("fotufilm_bridge_camera_input_name")
+func fotufilm_bridge_camera_input_name(_ index: Int32, _ out: UnsafeMutablePointer<CChar>?,
+                                       _ capacity: Int32) -> Int32 {
+    guard cameraInputDecoders.indices.contains(Int(index)) else { return -1 }
+    return copyOut(EditorControlCatalogue.pluginCameraInputs[Int(index)].label, out, capacity)
+}
+
+@_cdecl("fotufilm_bridge_decode_camera")
+func fotufilm_bridge_decode_camera(_ index: Int32, _ input: UnsafePointer<Float>?,
+                                   _ output: UnsafeMutablePointer<Float>?, _ count: Int32,
+                                   _ premultiplied: Int32) -> Int32 {
+    guard cameraInputDecoders.indices.contains(Int(index)), count >= 0,
+          let input, let output else { return -1 }
+    return cameraInputDecoders[Int(index)].decodeRGBA(input, into: output, count: Int(count),
+                                                     premultiplied: premultiplied != 0) ? 1 : 0
+}
+
 /// Loading mutates the process-wide stock registry once. Rendering does not take this lock: each
 /// effect instance owns its mutable Metal arguments and LUT cache in the context below.
 private let initializationLock = NSLock()

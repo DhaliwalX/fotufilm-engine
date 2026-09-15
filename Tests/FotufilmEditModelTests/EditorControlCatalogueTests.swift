@@ -4,6 +4,23 @@ import FotufilmCore
 
 final class EditorControlCatalogueTests: XCTestCase {
 
+    func testResolveColorModesKeepPersistentChoicesAndSeparateMenus() throws {
+        XCTAssertEqual(EditorControlCatalogue.pluginWorkingSpaces.map(\.value),
+                       (0..<8).map { Optional(Double($0)) })
+        XCTAssertEqual(EditorControlCatalogue.pluginCameraInputs.map(\.encoding),
+                       [.appleLog, .appleLog2, .slog3Cine, .slog3, .slog2, .flog, .flog2, .flog2C, .hlg])
+        XCTAssertEqual(EditorControlCatalogue.pluginInputSpaces.count, 17)
+        for field in [EditorControlField.colorManagement, .inputColorSpace, .outputColorSpace] {
+            let control = try XCTUnwrap(EditorControlCatalogue.control(field))
+            XCTAssertEqual(control.surfaces, [.resolve])
+            XCTAssertNil(control.host?.slot, "color routing must not renumber engine parameters")
+            XCTAssertEqual(control.host?.animates, false)
+        }
+        let mode = try XCTUnwrap(EditorControlCatalogue.control(.colorManagement)?.host)
+        guard case .choice(_, let value) = mode.kind else { return XCTFail("mode must be a menu") }
+        XCTAssertEqual(value, 0, "old projects keep the Timeline workflow")
+    }
+
     // MARK: - The list accounts for itself
 
     func testEveryFieldIsEitherCataloguedOrPending() {

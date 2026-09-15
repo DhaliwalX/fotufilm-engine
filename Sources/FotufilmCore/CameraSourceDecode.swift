@@ -427,3 +427,42 @@ public enum CameraLogEncoding: String, CaseIterable, Codable, Sendable, Identifi
                     normalization: .sceneReflectance)
     }
 }
+
+/// A reusable CPU decoder for floating-point camera RGB, including OFX host rows. It preserves
+/// scene reflectance (18% grey = 0.18), negative values and highlights above white. Range expansion
+/// from video YCbCr belongs to the host; these pixels are already full-range RGB.
+public struct CameraLogDecoder: Sendable {
+    private let curve: CameraLogCurve
+    private let matrix: [Float]
+
+    public init(_ encoding: CameraLogEncoding) {
+        curve = encoding.curve
+        matrix = encoding.gamut.toRec2020.map(Float.init)
+    }
+
+    /// Input and output may coincide. Alpha passes through; non-finite RGB becomes black and
+    /// non-finite alpha becomes opaque. False reports a repair or an invalid pixel count.
+    public func decodeRGBA(_ input: UnsafePointer<Float>, into output: UnsafeMutablePointer<Float>,
+                           count: Int, premultiplied: Bool) -> Bool {
+        guard count >= 0, count <= Int.max / 4 else { return false }
+        var clean = true
+        func finite(_ value: Float, fallback: Float = 0) -> Float {
+            if value.isFinite { return value }
+            clean = false
+            return fallback
+        }
+        for pixel in 0..<count {
+            let i = pixel * 4
+            let alpha = finite(input[i + 3], fallback: 1)
+            let scale: Float = premultiplied && alpha > 0 && alpha != 1 ? 1 / alpha : 1
+            let r = finite(curve.linear(finite(finite(input[i]) * scale)))
+            let g = finite(curve.linear(finite(finite(input[i + 1]) * scale)))
+            let b = finite(curve.linear(finite(finite(input[i + 2]) * scale)))
+            output[i] = finite(matrix[0] * r + matrix[1] * g + matrix[2] * b)
+            output[i + 1] = finite(matrix[3] * r + matrix[4] * g + matrix[5] * b)
+            output[i + 2] = finite(matrix[6] * r + matrix[7] * g + matrix[8] * b)
+            output[i + 3] = alpha
+        }
+        return clean
+    }
+}

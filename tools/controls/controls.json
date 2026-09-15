@@ -13,7 +13,7 @@
     },
     {
       "group" : "input",
-      "hint" : "The input encoding Fotufilm will decode. Host means Resolve supplied an exact OFX colour-space tag. Assumed means Resolve supplied Raw or no tag; select Timeline Color Space explicitly if that assumption does not match the image arriving at this node.",
+      "hint" : "Fotufilm mode shows the selected input and output. In Timeline mode, Host means Resolve supplied an exact OFX colour-space tag. Assumed means Resolve supplied Raw or no tag; select Timeline Color Space explicitly if that assumption does not match the image arriving at this node.",
       "kind" : "label",
       "label" : "Decoded Input",
       "ofxName" : "colorSpaceStatus",
@@ -4613,6 +4613,462 @@
         "desktop"
       ],
       "title" : "Selective"
+    },
+    {
+      "availability" : "always",
+      "choices" : [
+        {
+          "detail" : "",
+          "id" : "timeline",
+          "label" : "Timeline",
+          "value" : 0
+        },
+        {
+          "detail" : "",
+          "id" : "fotufilm",
+          "label" : "Fotufilm",
+          "value" : 1
+        }
+      ],
+      "detail" : "Use the timeline space or let Fotufilm convert between selected spaces.",
+      "drives" : [
+
+      ],
+      "field" : "colorManagement",
+      "group" : "pipeline",
+      "host" : {
+        "animates" : false,
+        "bridge" : "identity",
+        "choices" : [
+          {
+            "detail" : "",
+            "id" : "timeline",
+            "label" : "Timeline",
+            "value" : 0
+          },
+          {
+            "detail" : "",
+            "id" : "fotufilm",
+            "label" : "Fotufilm",
+            "value" : 1
+          }
+        ],
+        "composed" : false,
+        "group" : "input",
+        "hint" : "Timeline reads and returns Timeline Color Space, preserving existing grades. Fotufilm converts the selected Input Color Space to scene light, develops the film, and encodes the selected Output Color Space. Match the pixels reaching this node; upstream host conversions still count. Do not add another display tone map after a finished print.",
+        "kind" : "choice",
+        "label" : "Color Management",
+        "ofxName" : "colorManagement",
+        "order" : 0,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "a plugin host's own setting, with no meaning on a photograph",
+        "app" : "a plugin host's own setting, with no meaning on a photograph",
+        "cli" : "the command line renders the full pipeline end to end",
+        "desktop" : "a plugin host's own setting, with no meaning on a photograph",
+        "finalcut" : "Final Cut supplies linear light in the library's primaries",
+        "web" : "the demo renders one still through a sealed pack"
+      },
+      "scope" : "hostOnly",
+      "section" : "pipeline",
+      "surfaces" : [
+        "resolve"
+      ],
+      "title" : "Color Management"
+    },
+    {
+      "availability" : "always",
+      "choices" : [
+        {
+          "detail" : "",
+          "id" : "rec709Gamma24",
+          "label" : "Rec.709 / Gamma 2.4",
+          "value" : 0
+        },
+        {
+          "detail" : "",
+          "id" : "srgb",
+          "label" : "sRGB",
+          "value" : 1
+        },
+        {
+          "detail" : "",
+          "id" : "davinciIntermediate",
+          "label" : "DaVinci Wide Gamut / Intermediate",
+          "value" : 2
+        },
+        {
+          "detail" : "",
+          "id" : "acescct",
+          "label" : "ACEScct (AP1)",
+          "value" : 3
+        },
+        {
+          "detail" : "",
+          "id" : "acescg",
+          "label" : "ACEScg (AP1)",
+          "value" : 4
+        },
+        {
+          "detail" : "",
+          "id" : "linearRec709",
+          "label" : "Linear Rec.709",
+          "value" : 5
+        },
+        {
+          "detail" : "",
+          "id" : "linearDisplayP3",
+          "label" : "Linear Display P3",
+          "value" : 6
+        },
+        {
+          "detail" : "",
+          "id" : "linearRec2020",
+          "label" : "Linear Rec.2020",
+          "value" : 7
+        },
+        {
+          "detail" : "",
+          "id" : "appleLog",
+          "label" : "Apple Log / Rec.2020",
+          "value" : 8
+        },
+        {
+          "detail" : "",
+          "id" : "appleLog2",
+          "label" : "Apple Log 2 / Apple Wide Gamut",
+          "value" : 9
+        },
+        {
+          "detail" : "",
+          "id" : "slog3Cine",
+          "label" : "S-Log3 / S-Gamut3.Cine",
+          "value" : 10
+        },
+        {
+          "detail" : "",
+          "id" : "slog3",
+          "label" : "S-Log3 / S-Gamut3",
+          "value" : 11
+        },
+        {
+          "detail" : "",
+          "id" : "slog2",
+          "label" : "S-Log2 / S-Gamut",
+          "value" : 12
+        },
+        {
+          "detail" : "",
+          "id" : "flog",
+          "label" : "F-Log / F-Gamut",
+          "value" : 13
+        },
+        {
+          "detail" : "",
+          "id" : "flog2",
+          "label" : "F-Log2 / F-Gamut",
+          "value" : 14
+        },
+        {
+          "detail" : "",
+          "id" : "flog2C",
+          "label" : "F-Log2 C / F-Gamut C",
+          "value" : 15
+        },
+        {
+          "detail" : "",
+          "id" : "hlg",
+          "label" : "HLG / Rec.2020",
+          "value" : 16
+        }
+      ],
+      "detail" : "The encoding arriving at the Fotufilm node.",
+      "drives" : [
+
+      ],
+      "field" : "inputColorSpace",
+      "group" : "pipeline",
+      "host" : {
+        "animates" : false,
+        "bridge" : "identity",
+        "choices" : [
+          {
+            "detail" : "",
+            "id" : "rec709Gamma24",
+            "label" : "Rec.709 / Gamma 2.4",
+            "value" : 0
+          },
+          {
+            "detail" : "",
+            "id" : "srgb",
+            "label" : "sRGB",
+            "value" : 1
+          },
+          {
+            "detail" : "",
+            "id" : "davinciIntermediate",
+            "label" : "DaVinci Wide Gamut / Intermediate",
+            "value" : 2
+          },
+          {
+            "detail" : "",
+            "id" : "acescct",
+            "label" : "ACEScct (AP1)",
+            "value" : 3
+          },
+          {
+            "detail" : "",
+            "id" : "acescg",
+            "label" : "ACEScg (AP1)",
+            "value" : 4
+          },
+          {
+            "detail" : "",
+            "id" : "linearRec709",
+            "label" : "Linear Rec.709",
+            "value" : 5
+          },
+          {
+            "detail" : "",
+            "id" : "linearDisplayP3",
+            "label" : "Linear Display P3",
+            "value" : 6
+          },
+          {
+            "detail" : "",
+            "id" : "linearRec2020",
+            "label" : "Linear Rec.2020",
+            "value" : 7
+          },
+          {
+            "detail" : "",
+            "id" : "appleLog",
+            "label" : "Apple Log / Rec.2020",
+            "value" : 8
+          },
+          {
+            "detail" : "",
+            "id" : "appleLog2",
+            "label" : "Apple Log 2 / Apple Wide Gamut",
+            "value" : 9
+          },
+          {
+            "detail" : "",
+            "id" : "slog3Cine",
+            "label" : "S-Log3 / S-Gamut3.Cine",
+            "value" : 10
+          },
+          {
+            "detail" : "",
+            "id" : "slog3",
+            "label" : "S-Log3 / S-Gamut3",
+            "value" : 11
+          },
+          {
+            "detail" : "",
+            "id" : "slog2",
+            "label" : "S-Log2 / S-Gamut",
+            "value" : 12
+          },
+          {
+            "detail" : "",
+            "id" : "flog",
+            "label" : "F-Log / F-Gamut",
+            "value" : 13
+          },
+          {
+            "detail" : "",
+            "id" : "flog2",
+            "label" : "F-Log2 / F-Gamut",
+            "value" : 14
+          },
+          {
+            "detail" : "",
+            "id" : "flog2C",
+            "label" : "F-Log2 C / F-Gamut C",
+            "value" : 15
+          },
+          {
+            "detail" : "",
+            "id" : "hlg",
+            "label" : "HLG / Rec.2020",
+            "value" : 16
+          }
+        ],
+        "composed" : false,
+        "group" : "input",
+        "hint" : "The actual input pixels, after any upstream nodes or host color management. In an unmanaged DaVinci YRGB project, camera log can enter directly without an input CST. Only used in Fotufilm mode; Print Only receives density data and ignores this setting.",
+        "kind" : "choice",
+        "label" : "Input Color Space",
+        "ofxName" : "inputColorSpace",
+        "order" : 11,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "value" : 8,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "a plugin host's own setting, with no meaning on a photograph",
+        "app" : "a plugin host's own setting, with no meaning on a photograph",
+        "cli" : "the command line renders the full pipeline end to end",
+        "desktop" : "a plugin host's own setting, with no meaning on a photograph",
+        "finalcut" : "Final Cut supplies linear light in the library's primaries",
+        "web" : "the demo renders one still through a sealed pack"
+      },
+      "scope" : "hostOnly",
+      "section" : "pipeline",
+      "surfaces" : [
+        "resolve"
+      ],
+      "title" : "Input Color Space"
+    },
+    {
+      "availability" : "always",
+      "choices" : [
+        {
+          "detail" : "",
+          "id" : "rec709Gamma24",
+          "label" : "Rec.709 / Gamma 2.4",
+          "value" : 0
+        },
+        {
+          "detail" : "",
+          "id" : "srgb",
+          "label" : "sRGB",
+          "value" : 1
+        },
+        {
+          "detail" : "",
+          "id" : "davinciIntermediate",
+          "label" : "DaVinci Wide Gamut / Intermediate",
+          "value" : 2
+        },
+        {
+          "detail" : "",
+          "id" : "acescct",
+          "label" : "ACEScct (AP1)",
+          "value" : 3
+        },
+        {
+          "detail" : "",
+          "id" : "acescg",
+          "label" : "ACEScg (AP1)",
+          "value" : 4
+        },
+        {
+          "detail" : "",
+          "id" : "linearRec709",
+          "label" : "Linear Rec.709",
+          "value" : 5
+        },
+        {
+          "detail" : "",
+          "id" : "linearDisplayP3",
+          "label" : "Linear Display P3",
+          "value" : 6
+        },
+        {
+          "detail" : "",
+          "id" : "linearRec2020",
+          "label" : "Linear Rec.2020",
+          "value" : 7
+        }
+      ],
+      "detail" : "The encoding Fotufilm returns to Resolve.",
+      "drives" : [
+
+      ],
+      "field" : "outputColorSpace",
+      "group" : "pipeline",
+      "host" : {
+        "animates" : false,
+        "bridge" : "identity",
+        "choices" : [
+          {
+            "detail" : "",
+            "id" : "rec709Gamma24",
+            "label" : "Rec.709 / Gamma 2.4",
+            "value" : 0
+          },
+          {
+            "detail" : "",
+            "id" : "srgb",
+            "label" : "sRGB",
+            "value" : 1
+          },
+          {
+            "detail" : "",
+            "id" : "davinciIntermediate",
+            "label" : "DaVinci Wide Gamut / Intermediate",
+            "value" : 2
+          },
+          {
+            "detail" : "",
+            "id" : "acescct",
+            "label" : "ACEScct (AP1)",
+            "value" : 3
+          },
+          {
+            "detail" : "",
+            "id" : "acescg",
+            "label" : "ACEScg (AP1)",
+            "value" : 4
+          },
+          {
+            "detail" : "",
+            "id" : "linearRec709",
+            "label" : "Linear Rec.709",
+            "value" : 5
+          },
+          {
+            "detail" : "",
+            "id" : "linearDisplayP3",
+            "label" : "Linear Display P3",
+            "value" : 6
+          },
+          {
+            "detail" : "",
+            "id" : "linearRec2020",
+            "label" : "Linear Rec.2020",
+            "value" : 7
+          }
+        ],
+        "composed" : false,
+        "group" : "input",
+        "hint" : "Encode the finished print into this space without another tone map. Match Resolve's monitoring and export settings to it. Only used in Fotufilm mode; Negative Only writes density data and ignores this setting. Texture Only returns scene light in this space.",
+        "kind" : "choice",
+        "label" : "Output Color Space",
+        "ofxName" : "outputColorSpace",
+        "order" : 12,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "a plugin host's own setting, with no meaning on a photograph",
+        "app" : "a plugin host's own setting, with no meaning on a photograph",
+        "cli" : "the command line renders the full pipeline end to end",
+        "desktop" : "a plugin host's own setting, with no meaning on a photograph",
+        "finalcut" : "Final Cut supplies linear light in the library's primaries",
+        "web" : "the demo renders one still through a sealed pack"
+      },
+      "scope" : "hostOnly",
+      "section" : "pipeline",
+      "surfaces" : [
+        "resolve"
+      ],
+      "title" : "Output Color Space"
     },
     {
       "availability" : "always",

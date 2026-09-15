@@ -40,7 +40,8 @@ updated together; packs that need a newer version are skipped.
 
 1. Add **Fotufilm** to a node.
 2. Choose a film. **Match Film** selects that film's default gauge.
-3. Check **Timeline Color Space** and its status line under **Input**.
+3. Choose **Color Management** under **Input**: **Timeline** for the existing timeline workflow,
+   or **Fotufilm** to select **Input Color Space** and **Output Color Space** independently.
 4. Leave **Stage** (under **Pipeline**) on **Full** to render the complete film and print process.
 5. Adjust light and colour, lens filters, development, grain, halation, and output medium.
 
@@ -55,7 +56,10 @@ starts closed. Start with these settings:
 <table>
 <thead><tr><th>Control</th><th>Group</th><th>What it does</th></tr></thead>
 <tbody data-controls="resolve-controls">
+  <tr><td>Color Management</td><td>Input</td><td>Timeline reads and returns Timeline Color Space, preserving existing grades.</td></tr>
   <tr><td>Timeline Color Space</td><td>Input</td><td>What this node is being handed — the one control that is not taste.</td></tr>
+  <tr><td>Input Color Space</td><td>Input</td><td>The actual input pixels, after any upstream nodes or host color management.</td></tr>
+  <tr><td>Output Color Space</td><td>Input</td><td>Encode the finished print into this space without another tone map.</td></tr>
   <tr><td>Stock</td><td>Film</td><td>The emulsion.</td></tr>
   <tr><td>Film Format</td><td>Film</td><td>The gauge the frame is exposed on.</td></tr>
   <tr><td>Film Frame Coverage (%)</td><td>Film</td><td>Short edge of the film frame retained after cropping.</td></tr>
@@ -115,18 +119,52 @@ A smaller film format makes grain and other spatial effects larger in the image.
 **Output Medium** selects how the developed film is viewed or printed. The status
 fields show the format, medium, and renderer actually in use.
 
-## Match the input color space
+## Color management
+
+**Timeline** is the default and preserves saved grades. Fotufilm reads and returns
+**Timeline Color Space**. Keep your existing CST nodes or host conversions in this mode.
 
 **Auto (from host)** uses the color information Resolve provides. Check the status
 line to see the space it selected. In an unmanaged Resolve YRGB project, an image
 tagged Raw is treated as DaVinci Wide Gamut / Intermediate. Select the input space
 manually if your node receives a different space.
 
-Finished prints are fitted to narrower timeline primaries before output encoding.
-Colors already inside that gamut are unchanged.
+**Fotufilm** exposes two separate menus:
 
-Unknown named spaces produce an error. Hosts without color tags use Rec.709 Gamma
-2.4. Log or linear footage can retain highlight detail that an SDR image has lost.
+- **Input Color Space** describes the pixels actually arriving at the node. It supports the
+  eight working spaces below plus Apple Log / Rec.2020, Apple Log 2 / Apple Wide Gamut,
+  S-Log3 / S-Gamut3.Cine, S-Log3 / S-Gamut3, S-Log2 / S-Gamut, F-Log / F-Gamut,
+  F-Log2 / F-Gamut, F-Log2 C / F-Gamut C, and HLG / Rec.2020.
+- **Output Color Space** independently selects Rec.709 / Gamma 2.4, sRGB,
+  DaVinci Wide Gamut / Intermediate, ACEScct (AP1), ACEScg (AP1), Linear Rec.709,
+  Linear Display P3, or Linear Rec.2020.
+
+For a direct Apple Log to SDR workflow, use an unmanaged **DaVinci YRGB** project,
+choose **Fotufilm**, **Apple Log / Rec.2020** input, and **Rec.709 / Gamma 2.4** output.
+An input or output CST is unnecessary. Set Resolve's timeline/monitoring and delivery
+color and gamma settings to match the output. The plugin changes image pixels; it
+does not change the project's settings or the file's export tags.
+
+Input means the image reaching this node, not necessarily the camera original. If an
+upstream node or color-managed project already converted Apple Log to DWG / Intermediate,
+select DWG / Intermediate instead. Fotufilm requests unconverted OFX pixels in this mode
+and declares its output Raw to avoid another OFX conversion. This does not undo other
+nodes or a project's output transform.
+
+The film model always works in scene-linear Rec.2020. Full and Print Only deliver an
+already finished print; disable additional output tone mapping and OOTFs after them,
+even when the selected output encoding is log. Finished prints are fitted to narrower
+output primaries without changing in-gamut colors or adding another tone curve.
+
+Negative Only ignores Output Color Space and writes density data. Print Only ignores
+Input Color Space and reads density directly. Texture Only converts scene light into
+the selected output space, even when no texture stages are enabled. Mode and space
+choices are saved per node and cannot be animated. Switching modes retains each mode's choices.
+
+In Timeline Auto, unknown named spaces produce an error and hosts without color tags use
+Rec.709 Gamma 2.4. Fotufilm mode requires explicit supported choices; it never guesses
+a camera format from file metadata. Camera decoding uses the shared core curves on CPU
+in both preview and delivery; the film renderer still follows Render Mode.
 
 ## Pipeline stages
 

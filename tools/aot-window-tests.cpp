@@ -45,6 +45,9 @@ int main(int argc, char **argv) {
         int coupler_radius = 2;
         float fringe_sigma = 0;
         bool screened = false;
+        // 0: linear P3, 1: linear Rec.709, 2: Rec.709 Gamma 2.4, 3: sRGB.
+        int delivery = 0;
+        bool monochrome = false;
     };
     const Case cases[] = {
         {"first-window", 32, 512, 0, 1, 1},
@@ -61,6 +64,12 @@ int main(int argc, char **argv) {
         {"chromatic-fringe-small-fallback", 65, 769, 0, 1, 1, 2, 2.0f},
         {"chromatic-fringe-fallback", 65, 769, 0, 1, 1, 2, 50.0f},
         {"screened-adjacency-fallback", 65, 769, 0, 1, 1, 2, 0, true},
+        {"portrait-rec709", 1080, 1920, 0, 1, 1, 2, 0, false, 2},
+        {"partial-window-srgb", 65, 513, 0, 1, 1, 2, 0, false, 3},
+        {"odd-frame-linear709", 1919, 1081, 0, 1, 1, 2, 0, false, 1},
+        {"portrait-monochrome-rec709", 1080, 1920, 0, 1, 1, 2, 0, false, 2, true},
+        {"partial-monochrome-srgb", 65, 769, 0, 1, 1, 2, 0, false, 3, true},
+        {"linear709-one-window", 32, 512, 0, 1, 1, 2, 0, false, 1},
     };
     for (const Case &test : cases) {
         auto c = configuration;
@@ -96,8 +105,31 @@ int main(int argc, char **argv) {
         c[FOTUFILM_CONFIG_OUTPUT_PREMULTIPLIED] = 0;
         c[FOTUFILM_CONFIG_OUTPUT_GAMUT] = 0;
         c[FOTUFILM_CONFIG_OUTPUT_SHOULDER] = -1;
+        if (test.delivery) {
+            // A real display conversion reads all three channels from folded film rows.
+            // Exercise both fitting branches, including saturated negative/out-of-range RGB.
+            const float p3_to_709[] = {
+                1.2249402f, -0.2249402f, 0,
+                -0.0420570f, 1.0420570f, 0,
+                -0.0196376f, -0.0786360f, 1.0982736f,
+            };
+            std::memcpy(c.data() + FOTUFILM_CONFIG_OUTPUT_MATRIX, p3_to_709, sizeof(p3_to_709));
+            c[FOTUFILM_CONFIG_OUTPUT_GAMUT] = 1;
+            c[FOTUFILM_CONFIG_OUTPUT_GAMUT + 1] = 0.2126f;
+            c[FOTUFILM_CONFIG_OUTPUT_GAMUT + 2] = 0.7152f;
+            c[FOTUFILM_CONFIG_OUTPUT_GAMUT + 3] = 0.0722f;
+        }
+        if (test.delivery >= 2) {
+            c[FOTUFILM_CONFIG_OUTPUT_TRANSFER] = 1;
+            const float gamma24[] = {1, 1, 1.0f / 2.4f, 0, 0, 0};
+            const float srgb[] = {12.92f, 1.055f, 1.0f / 2.4f, -0.055f, 0.0031308f, 0};
+            std::memcpy(c.data() + FOTUFILM_CONFIG_OUTPUT_COEFFICIENTS,
+                        test.delivery == 3 ? srgb : gamma24, sizeof(gamma24));
+        }
         const int mask = FOTUFILM_AOT_BASIC_STAGES
-            | FOTUFILM_FRAME_ENCODE_OUT | FOTUFILM_FRAME_OUTPUT_LINEAR
+            | FOTUFILM_FRAME_ENCODE_OUT
+            | (test.delivery >= 2 ? FOTUFILM_FRAME_OUTPUT_POWER : FOTUFILM_FRAME_OUTPUT_LINEAR)
+            | (test.monochrome ? FOTUFILM_FRAME_MONOCHROME : 0)
             | (header[4] & (FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_REVERSAL));
         std::vector<float> input(size_t(test.width) * test.height * 4), output(input.size());
         for (int frame = 0; frame < 2; ++frame) {
