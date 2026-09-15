@@ -13,7 +13,7 @@ import FotufilmImaging
 import FotufilmMetal
 #endif
 
-/// Shared x420/HLG/Apple Log capture metadata helpers. Camera pixels are decoded by the
+/// Shared x420/x422/HLG/Apple Log capture metadata helpers. Camera pixels are decoded by the
 /// handwritten full-frame graph; the buffer converters below exist only for developer benchmarks.
 final class HLGConverter {
     /// Which curve and gamut the capture is carrying.
@@ -133,7 +133,7 @@ final class HLGConverter {
         guard Self.isCompatibleFrame(pixelBuffer, transfer: transfer) else {
             if !reportedIncompatibleFrame {
                 reportedIncompatibleFrame = true
-                print("Fotufilm: discarded an HDR frame that was not x420 "
+                print("Fotufilm: discarded an HDR frame that was not 10-bit "
                       + transfer.displayName)
             }
             return false
@@ -186,10 +186,16 @@ final class HLGConverter {
         return commands.status == .completed
     }
 
+    /// The two 10-bit bi-planar layouts the capture kernels read: 4:2:0 and, for Apple Log on
+    /// the 15/16 Pro, 4:2:2. Samples sit left-justified in 16-bit words in both.
+    static func isTenBitPlanar(_ pixelFormat: OSType) -> Bool {
+        pixelFormat == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
+            || pixelFormat == kCVPixelFormatType_422YpCbCr10BiPlanarVideoRange
+    }
+
     static func isCompatibleFrame(_ pixelBuffer: CVPixelBuffer,
                                   transfer: Transfer) -> Bool {
-        guard CVPixelBufferGetPixelFormatType(pixelBuffer)
-                == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange,
+        guard isTenBitPlanar(CVPixelBufferGetPixelFormatType(pixelBuffer)),
               CVPixelBufferGetPlaneCount(pixelBuffer) == 2
         else { return false }
         return CapturedFrameColour.isCompatible(attachments(of: pixelBuffer),
@@ -219,6 +225,8 @@ final class HLGConverter {
         return (value as! CFString) as String
     }
 
+    /// The normalised shift that lands a chroma sample on the luma pixel it is sited against.
+    /// A plane subsampled on one axis only (4:2:2) has no vertical siting to correct.
     static func chromaOffset(
         for pixelBuffer: CVPixelBuffer, width: Int, height: Int
     ) -> SIMD2<Float> {
@@ -228,8 +236,10 @@ final class HLGConverter {
         else { return .zero }
         guard CFGetTypeID(attachment) == CFStringGetTypeID() else { return .zero }
         let location = attachment as! CFString
+        let fullHeightChroma = CVPixelBufferGetPlaneCount(pixelBuffer) == 2
+            && CVPixelBufferGetHeightOfPlane(pixelBuffer, 1) == height
         let halfX = 0.5 / Float(width)
-        let halfY = 0.5 / Float(height)
+        let halfY = fullHeightChroma ? 0 : 0.5 / Float(height)
         if CFEqual(location, kCVImageBufferChromaLocation_Left) {
             return SIMD2(halfX, 0)
         } else if CFEqual(location, kCVImageBufferChromaLocation_TopLeft) {
