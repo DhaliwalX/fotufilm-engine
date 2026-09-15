@@ -6,19 +6,22 @@ extension SpectralRuntime {
     /// head cannot reach an aim, its residual must survive, not be divided away per record.
     static func printingIllumination(stock: FilmStock, paper: PrintPaper,
                                      density: [Float], dyes: [[Float]],
-                                     neutralDensity: Float = 0)
+                                     neutralDensity: Float = 0, densityScale: Float = 1)
         -> (lamp: [Float], referenceEnergy: SIMD3<Float>) {
+        let offset = filmDensityOffset(for: stock, scale: densityScale)
         guard paper.isProjected else {
             let lamp = paper == .screen ? DigitalReferenceReceiver.illuminant
                 : (paper.isScan ? SpectralGrid.equalEnergy : SpectralGrid.enlarger3200K)
             // Digital Reference balances a single negative exposure, then uses the same lamp
             // and receiver at every density, without a selected-film curve or scene-color inverse.
             return (lamp, paperExposure(density: density, dyes: dyes, lamp: lamp,
-                paperSensitivity: paper.sensitivity, neutralDensity: neutralDensity))
+                paperSensitivity: paper.sensitivity, neutralDensity: neutralDensity,
+                densityOffset: offset))
         }
         let aim = paper.printingAim(for: stock)
         let raw = releasePrinterLamp(density: density, dyes: dyes,
-            sensitivity: paper.sensitivity, target: aim, neutralDensity: neutralDensity)
+            sensitivity: paper.sensitivity, target: aim, neutralDensity: neutralDensity,
+            densityOffset: offset)
         let peak = max(raw.max() ?? 0, 1e-12)
         return (raw.map { $0 / peak }, aim / peak)
     }
@@ -28,12 +31,12 @@ extension SpectralRuntime {
     /// from the sensitivity measurement density to the processed-print setup density.
     static func releasePrinterLamp(density: [Float], dyes: [[Float]],
                                    sensitivity: [[Float]], target: SIMD3<Float>,
-                                   neutralDensity: Float = 0) -> [Float] {
+                                   neutralDensity: Float = 0, densityOffset: [Float]? = nil) -> [Float] {
         let beams = SpectralGrid.releasePrinterBeams
         let response = beams.map {
             paperExposure(density: density, dyes: dyes, lamp: $0,
                           paperSensitivity: sensitivity,
-                          neutralDensity: neutralDensity)
+                          neutralDensity: neutralDensity, densityOffset: densityOffset)
         }
         // Normalize columns before solving so a dense orange mask does not make the
         // blue light numerically insignificant. Undo this numerical preconditioning in

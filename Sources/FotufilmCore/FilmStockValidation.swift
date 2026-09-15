@@ -526,6 +526,16 @@ extension FilmStockDefinition.SpectralSpec {
         }
 
         switch self {
+        case let .separatedBase(layerSensitivity, imageDyeDensity, minimumDensity):
+            try checkSamples(layerSensitivity, field: "spectral.layerSensitivity",
+                             range: 0...1e4, needsSignal: true)
+            try checkSamples(imageDyeDensity, field: "spectral.imageDyeDensity",
+                             range: 0...100, needsSignal: false)
+            guard minimumDensity.count == SpectralGrid.count,
+                  minimumDensity.allSatisfy({ $0.isFinite && (0...100).contains($0) }) else {
+                throw fail("spectral.minimumDensity",
+                           "requires 81 finite densities in 0...100 on the 380...780 nm grid")
+            }
         case let .samples(layerSensitivity, imageDyeDensity):
             try checkSamples(layerSensitivity, field: "spectral.layerSensitivity",
                              range: 0...1e4, needsSignal: true)

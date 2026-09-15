@@ -42,10 +42,10 @@ extension PrinterProfile {
         let basis = stock.isReversal ? SpectralRuntime.neutralDensityBasis(for: stock) : nil
         func energy(_ density: [Float], _ p: PrinterProfile) -> SIMD3<Float> {
             SpectralRuntime.paperExposure(
-                density: (basis?(density) ?? density).map { $0 * callier }, dyes: stock.spectralProfile.imageDyeDensity,
+                density: (basis?(density) ?? density).map { $0 * callier }, stock: stock,
                 lamp: p.filteredSpectrum, paperSensitivity: paper.sensitivity,
                 neutralDensity: silverCallier * SpectralRuntime.retainedSilverDensity(
-                    density, dMin: dMin, fraction: bleach)) * exp2(p.exposureEV)
+                    density, dMin: dMin, fraction: bleach), densityScale: callier) * exp2(p.exposureEV)
         }
         let calibration = energy((0..<3).map { stock.developedDensity(layer: $0, logExposure: 0) }, .simulatedTungsten)
         let targetEnergy = energy(array(targetDensity), .simulatedTungsten)

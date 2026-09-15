@@ -170,15 +170,14 @@ public struct PrintFrameConfiguration: Equatable, Sendable {
             ? definition?.edgePrinting?.first { $0.formatID == formatID } : nil
         if self.frame == .film, let stock = definition?.stock, film?.isInstant == false {
             let light = viewingKelvin.map(SpectralRuntime.printLightSPD)
-            let dyes = stock.spectralProfile.imageDyeDensity
             let clear = SpectralRuntime.transmissionRGB(
-                density: stock.curves.map(\.dMin), dyes: dyes, illuminant: light)
+                density: stock.curves.map(\.dMin), stock: stock, illuminant: light)
             // A representative developed edge exposure, not a measured manufacturer's
             // edge-printer calibration. Reversal clears exposed letters; negatives darken.
             let density = stock.curves.map { curve in
                 curve.dMin + (curve.dMax - curve.dMin) * (stock.isReversal ? 0.08 : 0.72)
             }
-            let exposed = SpectralRuntime.transmissionRGB(density: density, dyes: dyes, illuminant: light)
+            let exposed = SpectralRuntime.transmissionRGB(density: density, stock: stock, illuminant: light)
             if stock.isReversal {
                 edgeRGB = exposed
             } else if paper.isNegative && negativeViewing == .scanner {
@@ -199,18 +198,17 @@ public struct PrintFrameConfiguration: Equatable, Sendable {
                 baseRGB = SIMD3(repeating: 0.94)
             } else if let stock = definition?.stock {
                 let light = viewingKelvin.map(SpectralRuntime.printLightSPD)
-                let dyes = stock.spectralProfile.imageDyeDensity
                 if stock.isReversal {
                     // An unexposed reversal rebate develops to maximum density, including each
                     // stock's residual dye colour. It is not a universal display black.
                     baseRGB = SpectralRuntime.transmissionRGB(
-                        density: stock.curves.map(\.dMax), dyes: dyes, illuminant: light)
+                        density: stock.curves.map(\.dMax), stock: stock, illuminant: light)
                 } else {
                     // The physical negative's clear rebate carries its own base-plus-fog and
                     // orange mask. A common light-box gain keeps that tint; per-channel gains
                     // would erase it. Scanner-normalized negative viewing remains explicit.
                     let base = SpectralRuntime.transmissionRGB(
-                        density: stock.curves.map(\.dMin), dyes: dyes, illuminant: light)
+                        density: stock.curves.map(\.dMin), stock: stock, illuminant: light)
                     baseRGB = paper.isNegative && negativeViewing == .scanner
                         ? SIMD3(repeating: 1)
                         : base * (SpectralRuntime.lightBoxBaseLevel / max(base.x, base.y, base.z, 1e-6))

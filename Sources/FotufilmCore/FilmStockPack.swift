@@ -285,6 +285,10 @@ public struct FilmStockDefinition: Codable, Sendable {
     public enum SpectralSpec: Codable, Sendable {
         /// Fully specified: sensitivity and image-dye density per layer, already on `SpectralGrid`.
         case samples(layerSensitivity: [[Float]], imageDyeDensity: [[Float]])
+        /// Whole-film minimum density plus dye spectra per unit of net record density.
+        /// A distinct kind makes older readers reject this model instead of ignoring its base.
+        case separatedBase(layerSensitivity: [[Float]], imageDyeDensity: [[Float]],
+                           minimumDensity: [Float])
         /// Measured layer sensitivities, with image dyes taken from a process family.
         case measured(layerSensitivity: [[Float]], dyeFamily: FilmDyeFamily)
         /// Generated asymmetric-Gaussian layers from peak wavelengths.
@@ -293,7 +297,7 @@ public struct FilmStockDefinition: Codable, Sendable {
         case monochrome(rgbWeights: [Float])
 
         private enum CodingKeys: String, CodingKey {
-            case kind, layerSensitivity, imageDyeDensity, dyeFamily
+            case kind, layerSensitivity, imageDyeDensity, dyeFamily, minimumDensity
             case peaksNM, widthsNM, rgbWeights
         }
 
@@ -301,6 +305,11 @@ public struct FilmStockDefinition: Codable, Sendable {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             let kind = try container.decode(String.self, forKey: .kind)
             switch kind {
+            case "separatedBase":
+                self = .separatedBase(
+                    layerSensitivity: try container.decode([[Float]].self, forKey: .layerSensitivity),
+                    imageDyeDensity: try container.decode([[Float]].self, forKey: .imageDyeDensity),
+                    minimumDensity: try container.decode([Float].self, forKey: .minimumDensity))
             case "samples":
                 self = .samples(
                     layerSensitivity: try container.decode([[Float]].self, forKey: .layerSensitivity),
@@ -321,13 +330,18 @@ public struct FilmStockDefinition: Codable, Sendable {
                 throw DecodingError.dataCorruptedError(
                     forKey: .kind, in: container,
                     debugDescription: "unknown spectral kind '\(kind)'; expected "
-                        + "samples, measured, color or monochrome")
+                        + "samples, separatedBase, measured, color or monochrome")
             }
         }
 
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             switch self {
+            case let .separatedBase(layerSensitivity, imageDyeDensity, minimumDensity):
+                try container.encode("separatedBase", forKey: .kind)
+                try container.encode(layerSensitivity, forKey: .layerSensitivity)
+                try container.encode(imageDyeDensity, forKey: .imageDyeDensity)
+                try container.encode(minimumDensity, forKey: .minimumDensity)
             case let .samples(layerSensitivity, imageDyeDensity):
                 try container.encode("samples", forKey: .kind)
                 try container.encode(layerSensitivity, forKey: .layerSensitivity)
@@ -349,6 +363,10 @@ public struct FilmStockDefinition: Codable, Sendable {
 
         public var profile: FilmSpectralProfile {
             switch self {
+            case let .separatedBase(layerSensitivity, imageDyeDensity, minimumDensity):
+                return FilmSpectralProfile(layerSensitivity: layerSensitivity,
+                                          imageDyeDensity: imageDyeDensity,
+                                          minimumDensity: minimumDensity)
             case let .samples(layerSensitivity, imageDyeDensity):
                 return FilmSpectralProfile(layerSensitivity: layerSensitivity,
                                            imageDyeDensity: imageDyeDensity)
@@ -436,9 +454,16 @@ public extension FilmStockDefinition {
         self.nativeFormatID = nativeFormatID
         self.referenceIlluminantKelvin = stock.referenceIlluminantKelvin
         self.sensitivity = stock.sensitivity
-        self.spectral = .samples(
-            layerSensitivity: stock.spectralProfile.layerSensitivity,
-            imageDyeDensity: stock.spectralProfile.imageDyeDensity)
+        if let minimumDensity = stock.spectralProfile.minimumDensity {
+            self.spectral = .separatedBase(
+                layerSensitivity: stock.spectralProfile.layerSensitivity,
+                imageDyeDensity: stock.spectralProfile.imageDyeDensity,
+                minimumDensity: minimumDensity)
+        } else {
+            self.spectral = .samples(
+                layerSensitivity: stock.spectralProfile.layerSensitivity,
+                imageDyeDensity: stock.spectralProfile.imageDyeDensity)
+        }
         self.curves = stock.curves.map(CurveSpec.init)
         self.donorLayers = stock.donorLayers.isEmpty
             ? nil : stock.donorLayers.map(DonorLayerSpec.init)

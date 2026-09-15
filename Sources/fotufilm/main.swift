@@ -274,7 +274,10 @@ if flags["--dump-spectra"] != nil {
     for (key, stock) in FilmStock.presets.sorted(by: { $0.key < $1.key }) {
         let sensitivity = stock.spectralProfile.layerSensitivity.map(arrayJSON).joined(separator: ",")
         let dyes = stock.spectralProfile.imageDyeDensity.map(arrayJSON).joined(separator: ",")
-        stocks.append("\"\(key)\":{\"name\":\"\(stock.name)\",\"sensitivity\":[\(sensitivity)],\"dyes\":[\(dyes)]}")
+        let minimum = stock.spectralProfile.minimumDensity.map {
+            ",\"minimumDensity\":\(arrayJSON($0))"
+        } ?? ""
+        stocks.append("\"\(key)\":{\"name\":\"\(stock.name)\",\"sensitivity\":[\(sensitivity)],\"dyes\":[\(dyes)]\(minimum)}")
     }
     print("{\"wavelengths\":\(arrayJSON(SpectralGrid.wavelengths)),\"stocks\":{\(stocks.joined(separator: ","))}}")
     exit(0)
