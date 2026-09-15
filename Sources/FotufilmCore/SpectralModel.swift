@@ -809,6 +809,9 @@ public enum SpectralRuntime {
         let inverse: SpectralResponseInverse
         let range: Float
         let deliversRec709: Bool
+        /// Actual no-light receiver level for an editable scan. A film's finite base response
+        /// can sit above the receiver curve's mathematical D-max floor.
+        let shadowFloor: Float
         /// The finished video transfer gives up highlight chroma near its white point.
         let clipInterval: (Float, Float) = (0.76, 0.84)
 
@@ -840,6 +843,14 @@ public enum SpectralRuntime {
                 }) / scanRange
             }
             inverse = SpectralResponseInverse(response: response)
+            if deliversRec709 {
+                shadowFloor = pow(10, -scanRange)
+            } else {
+                let black = response.sample(.zero) * scanRange
+                let w = ColorScience.displayP3LuminanceWeights
+                shadowFloor = w.0 * pow(10, -black.x) + w.1 * pow(10, -black.y)
+                    + w.2 * pow(10, -black.z)
+            }
         }
 
         func callAsFunction(_ density: SIMD3<Float>) -> SIMD3<Float> {
@@ -867,7 +878,12 @@ public enum SpectralRuntime {
                                         pow(10, -neutralDensity.z))
             calibrated *= neutralReceiver / max(luminance(neutralReceiver), 1e-6)
             let recoveredLuminance = luminance(calibrated)
-            guard recoveredLuminance > 1e-6 else { return uncalibrated }
+            guard recoveredLuminance > 1e-6 else {
+                // A zero-light inverse has no usable color estimate. Its raw measurement
+                // bands are not display primaries; keep the scan's measured luminance.
+                return deliversRec709 ? uncalibrated
+                    : SIMD3(repeating: luminance(uncalibrated))
+            }
 
             if deliversRec709 {
                 calibrated = SpectralRuntime.heldToGamut(calibrated,
@@ -884,10 +900,16 @@ public enum SpectralRuntime {
             let outputLuminance = luminance(uncalibrated)
             calibrated *= outputLuminance / recoveredLuminance
             if !deliversRec709 {
-                // The editable scan keeps highlight color. Compress only the chroma that the
-                // delivery gamut cannot hold, instead of fading every bright color to white.
+                // Near the modeled no-light floor the inverse becomes poorly conditioned.
+                // Suppress its false chroma while preserving every luminance step.
+                let shadow = clamp((shadowFloor * 2 - outputLuminance)
+                    / max(shadowFloor * 0.5, 1e-9), 0, 1)
+                let hold = shadow * shadow * (3 - 2 * shadow)
+                let scanned = calibrated
+                    + hold * (SIMD3(repeating: outputLuminance) - calibrated)
+                // Keep highlight color; only compress chroma the delivery gamut cannot hold.
                 return SpectralRuntime.compressedToDisplayGamut(
-                    calibrated, luminance: outputLuminance)
+                    scanned, luminance: outputLuminance)
             }
 
             // The receiver's toe and shoulder densities hold no invertible chromatic signal, so
