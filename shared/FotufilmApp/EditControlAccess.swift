@@ -144,7 +144,8 @@ extension EditorControlField {
         case .selective:
             return .bespoke { $0.selective != nil }
 
-        case .colorSpace, .stage, .textureStages, .renderMode:
+        case .colorManagement, .inputColorSpace, .outputColorSpace,
+             .colorSpace, .stage, .textureStages, .renderMode:
             return .unstored("a plugin host's own setting")
         }
     }
