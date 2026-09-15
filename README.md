@@ -71,6 +71,11 @@ these properties for colour negative, black-and-white, and reversal films. See
 [Included films](#included-films) and [Print media](#print-media) for the bundled
 data and its sources.
 
+Profiles can supply a separate wavelength-dependent minimum-density spectrum.
+The output model then adds absorption from dye formed above each record's minimum,
+so the film base and mask are counted once. A measured neutral spectrum constrains
+the combined absorption; it does not uniquely identify the individual dyes.
+
 The model combines published measurements with physical and statistical
 approximations. RGB cannot uniquely recover the original scene spectrum, and
 clipped highlights cannot supply missing exposure. Digitised curves are limited
