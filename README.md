@@ -137,7 +137,7 @@ default release kernels; select `FOTUFILM_AOT_NO_FETCH=1` when testing another c
 The **Apple AOT releases** workflow runs on kernel/build-input changes merged to `main`,
 and supports manual runs. It uses GitHub's standard `macos-26` runner, builds the pinned
 Halide source with LLVM 22.1.8 and Xcode 26.6, and publishes missing content-keyed releases
-for all four targets. Only the publishing job uses GitHub's built-in token; no personal
+for all four targets. Publishing and retention use GitHub's built-in token; no personal
 access token is required. Archives include licence notices, exclude host tools and local
 paths, and pass a full bridge-link check before publication. These are linkage and
 archive checks, not GPU execution tests. AOT releases never become the app's Latest release.
