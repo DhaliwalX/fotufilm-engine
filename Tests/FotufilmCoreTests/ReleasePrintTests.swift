@@ -95,7 +95,7 @@ final class ReleasePrintTests: XCTestCase {
                     where wavelength <= 400 || wavelength >= 730 {
                     XCTAssertEqual(lamp[i], 0)
                 }
-                let mid = SpectralRuntime.paperExposure(density: density, dyes: dyes,
+                let mid = SpectralRuntime.paperExposure(density: density, stock: stock,
                     lamp: lamp, paperSensitivity: paper.sensitivity)
                 XCTAssertGreaterThan(mid.y, 0)
                 for channel in 0..<3 {
@@ -104,13 +104,13 @@ final class ReleasePrintTests: XCTestCase {
                 }
                 // Filtering alters relative colour responses, not just the scalar anchor.
                 let bare = SpectralGrid.enlarger3200K
-                let bareMid = SpectralRuntime.paperExposure(density: density, dyes: dyes,
+                let bareMid = SpectralRuntime.paperExposure(density: density, stock: stock,
                     lamp: bare, paperSensitivity: paper.sensitivity)
                 var coloured = density
                 coloured[2] += 0.8
-                let timed = SpectralRuntime.paperExposure(density: coloured, dyes: dyes,
+                let timed = SpectralRuntime.paperExposure(density: coloured, stock: stock,
                     lamp: lamp, paperSensitivity: paper.sensitivity) / mid
-                let untimed = SpectralRuntime.paperExposure(density: coloured, dyes: dyes,
+                let untimed = SpectralRuntime.paperExposure(density: coloured, stock: stock,
                     lamp: bare, paperSensitivity: paper.sensitivity) / bareMid
                 let delta = timed - untimed
                 XCTAssertGreaterThan((delta * delta).sum(), 1e-7)
