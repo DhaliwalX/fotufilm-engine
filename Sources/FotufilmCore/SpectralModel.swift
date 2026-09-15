@@ -1016,13 +1016,37 @@ public enum SpectralRuntime {
     }
 
     /// What a direct positive's developed dyes are divided by before they are shown, per layer.
-    private static func reversalBalance(
+    static func reversalBalance(
         for stock: FilmStock, aligned: ([Float]) -> [Float]
     ) -> SIMD3<Float> {
         let mid = aligned((0..<3).map {
             stock.developedDensity(layer: $0, logExposure: 0)
         })
-        let rawMid = transmissionRGB(density: mid, stock: stock)
+        var rawMid = transmissionRGB(density: mid, stock: stock)
+        if !stock.isReflectionPrint {
+            // Balance the reference sample as the renderer reads it. The
+            // wavelength integral is curved between LUT nodes, so balancing
+            // only its analytic midpoint leaves a small RGB cast after lookup.
+            // Evaluate just the containing cell using the same interpolation.
+            let ranges = stock.curves.map { $0.dMax - $0.dMin }
+            let q = SIMD3<Float>((0..<3).map {
+                let density = stock.developedDensity(layer: $0, logExposure: 0)
+                return clamp((density-stock.curves[$0].dMin)/max(ranges[$0], 1e-6), 0, 1)
+                    * Float(lutDimension-1)
+            })
+            let origin = (0..<3).map { min(Int(q[$0]), lutDimension-2) }
+            var values: [Float] = []
+            for z in 0..<2 { for y in 0..<2 { for x in 0..<2 {
+                let offsets = [x, y, z]
+                let density = (0..<3).map {
+                    stock.curves[$0].dMin + Float(origin[$0]+offsets[$0]) / Float(lutDimension-1)*ranges[$0]
+                }
+                let rgb = transmissionRGB(density: aligned(density), stock: stock)
+                values += [max(rgb.x, 0), max(rgb.y, 0), max(rgb.z, 0), 1]
+            } } }
+            rawMid = SpectralLUT(dimension: 2, values: values).sample(
+                q - SIMD3<Float>(origin.map(Float.init)))
+        }
         let balance = SIMD3<Float>(0.18 / max(rawMid.x, 1e-6),
                                    0.18 / max(rawMid.y, 1e-6),
                                    0.18 / max(rawMid.z, 1e-6))

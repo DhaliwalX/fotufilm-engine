@@ -121,8 +121,11 @@ final class PositivePrintPaperTests: XCTestCase {
                 let rgb = SIMD3(output.planes[0][i], output.planes[1][i], output.planes[2][i])
                 let luma = w.0 * rgb.x + w.1 * rgb.y + w.2 * rgb.z
                 XCTAssertGreaterThan(luma, previous)
-                // The analytic wavelength integral bypasses the renderer's two 33-cube interpolations.
-                XCTAssertEqual(luma, reference[i], accuracy: 0.006)
+                // The analytic integral bypasses two 33³ interpolations. Bound
+                // their combined visible error to one SDR code value across
+                // the wedge, including the dark values a linear bound misses.
+                XCTAssertEqual(ColorScience.linearToSrgb(luma),
+                               ColorScience.linearToSrgb(reference[i]), accuracy: 1/255)
                 XCTAssertTrue((0..<3).allSatisfy { rgb[$0].isFinite && rgb[$0] >= 0 && rgb[$0] <= 1.001 })
                 previous = luma
                 if stops[i] == 0 { XCTAssertEqual(luma, pow(10, -paper.midDensity), accuracy: 0.004) }
@@ -144,7 +147,15 @@ final class PositivePrintPaperTests: XCTestCase {
                     let match = try PrinterProfile.simulatedTungsten.matching(mode,
                         referenceDensity: reference, targetDensity: target, stock: stock, paper: paper)
                     XCTAssertFalse(match.limited)
-                    XCTAssertLessThan(match.residual, 0.005)
+                    if mode == .density {
+                        // Exposure alone matches luminance; the film's actual
+                        // record crossover can leave a color difference.
+                        let w = ColorScience.displayP3LuminanceWeights
+                        let delta = match.referenceRGB - match.targetRGB
+                        XCTAssertLessThan(abs(w.0*delta.x + w.1*delta.y + w.2*delta.z), 0.00001)
+                    } else {
+                        XCTAssertLessThan(match.residual, 0.005)
+                    }
                     XCTAssertLessThan(match.printer.exposureEV * stop, 0)
                 }
             }
