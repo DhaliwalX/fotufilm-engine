@@ -91,6 +91,18 @@ public struct CharacteristicCurve: Sendable {
     public func logExposure(density target: Float) -> Float {
         var lo: Float = sampled?.logExposure.first ?? (toe - 6)
         var hi: Float = sampled?.logExposure.last ?? (shoulder + 6)
+        if let sampled, target > sampled.density.last! {
+            // A lower final sample does not bracket densities near an interior
+            // peak. Find the first rising crossing, or clamp to the actual peak
+            // when the requested density is unattainable.
+            guard let upper = sampled.density.firstIndex(where: { $0 >= target }) else {
+                let peak = sampled.density.indices.max { sampled.density[$0] < sampled.density[$1] }!
+                return sampled.logExposure[peak]
+            }
+            guard upper > 0 else { return sampled.logExposure[0] }
+            lo = sampled.logExposure[upper - 1]
+            hi = sampled.logExposure[upper]
+        }
         for _ in 0..<60 {
             let mid = (lo + hi) / 2
             if density(logExposure: mid) < target { lo = mid } else { hi = mid }

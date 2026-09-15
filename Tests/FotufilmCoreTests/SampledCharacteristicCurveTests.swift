@@ -13,6 +13,12 @@ final class SampledCharacteristicCurveTests: XCTestCase {
         XCTAssertEqual(curve.dMax, minimum + 2)
         XCTAssertEqual(curve.density(logExposure: 1), minimum + 2)
         XCTAssertEqual(curve.density(logExposure: 10), minimum + 1.8)
+        for target in [minimum + 1.9, minimum + 2] {
+            let exposure = curve.logExposure(density: target)
+            XCTAssertEqual(curve.density(logExposure: exposure), target, accuracy: 1e-6)
+            XCTAssertLessThanOrEqual(exposure, 1)
+        }
+        XCTAssertEqual(curve.logExposure(density: minimum + 3), 1)
         for exposure in stride(from: Float(-3), through: 3, by: 0.01) {
             XCTAssertLessThanOrEqual(curve.density(logExposure: exposure), curve.dMax + 1e-6)
         }
