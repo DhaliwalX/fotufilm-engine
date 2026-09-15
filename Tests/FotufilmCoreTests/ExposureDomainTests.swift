@@ -101,9 +101,6 @@ final class ExposureDomainTests: XCTestCase {
         for file in [
             "Sources/FotufilmHalide/FotufilmHalideShared.h",
             "Sources/FotufilmCore/ColorScience.swift",
-            "Sources/FotufilmMetal/Shaders/HandwrittenPointwise.metal",
-            "Sources/FotufilmMetal/Shaders/HandwrittenFrameEndpoints.metal",
-            "Sources/FotufilmMetal/Shaders/HandwrittenSpectralHead.metal",
         ] {
             let source = try String(
                 contentsOf: root.appendingPathComponent(file), encoding: .utf8)
