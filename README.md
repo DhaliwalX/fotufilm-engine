@@ -118,34 +118,21 @@ The standard `swift test -c release --parallel` command remains supported for
 testing with SwiftPM's process scheduling.
 
 The engine test workflow runs on every pull request and push to main. Manual runs also
-check the desktop apps, plugins, AOT parity, and website. Apple AOT releases run automatically
-when their build inputs change on main.
+check the desktop apps, plugins, AOT parity, and website.
 
 If Halide is installed elsewhere, set `HALIDE_ROOT` to its installation folder.
 
 ### Apple AOT kernels
 
-`tools/generate-halide-aot.sh device` (or `simulator`, `macos`, `macos-intel`)
-first fetches matching precompiled kernels from the public engine's GitHub releases.
-Downloads need no token or installed Halide compiler. SHA-256 checksums and a manifest
-verify the source inputs, platform, compiler recipe and every archive/header before use.
-If a release is unavailable, local builds can generate with `HALIDE_ROOT` instead.
-Set `FOTUFILM_AOT_REQUIRE_PREBUILT=1` in CI to require a published set, or
-`FOTUFILM_AOT_NO_FETCH=1` to test local generation. Schedule overrides do not substitute
-default release kernels; select `FOTUFILM_AOT_NO_FETCH=1` when testing another compiler.
+Build kernels locally with `FOTUFILM_AOT_NO_FETCH=1 tools/generate-halide-aot.sh device`
+(or `simulator`, `macos`, `macos-intel`). Set `HALIDE_ROOT` to the compiler installation.
+Generated archives include licence notices and pass source, platform and file-hash checks.
+Use `tools/verify-aot-parity.sh` to compare the generated kernels with the reference path.
 
-The **Apple AOT releases** workflow runs on kernel/build-input changes merged to `main`,
-and supports manual runs. It uses GitHub's standard `macos-26` runner, builds the pinned
-Halide source with LLVM 22.1.8 and Xcode 26.6, and publishes missing content-keyed releases
-for all four targets. Only the publishing job uses GitHub's built-in token; no personal
-access token is required. Archives include licence notices, exclude host tools and local
-paths, and pass a full bridge-link check before publication. These are linkage and
-archive checks, not GPU execution tests. AOT releases never become the app's Latest release.
 The compiler contract is in `tools/aot-toolchain.json`; update it deliberately when
-upgrading the toolchain. For a local publisher, install `cmake`, `ninja`, `llvm@22`,
-`lld@22` and `flatbuffers` with Homebrew, set `LLVM_ROOT` and `LLD_ROOT` to those versioned
-formula prefixes, and build with `tools/build-halide.sh`. Then run
-`tools/publish-aot-release.sh` from a clean, merged engine checkout.
+upgrading the toolchain. Install `cmake`, `ninja`, `llvm@22`, `lld@22` and `flatbuffers`
+with Homebrew, set `LLVM_ROOT` and `LLD_ROOT` to those versioned formula prefixes,
+and build the compiler with `tools/build-halide.sh`.
 
 ### Command-line use
 
