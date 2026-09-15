@@ -525,7 +525,7 @@ public enum SpectralRuntime {
         }
 
         let printing: SpectralLUT
-        if paper.readsLayersDirectly {
+        if paper.readsLayersDirectly(for: stock) {
             let reading = screenReading(for: stock)
             printing = buildLUT { p in
                 SIMD3(interpolate(reading[0], at: p.x),
@@ -580,15 +580,17 @@ public enum SpectralRuntime {
                                            neutralDensity: silverCallier * retainedSilverDensity(
                                                density, dMin: dMin,
                                                fraction: bleachBypass))
-                return SIMD3<Float>(
+                let relative = SIMD3<Float>(
                     log10(max(energy.x, 1e-12) / max(midEnergy.x, 1e-12)),
                     log10(max(energy.y, 1e-12) / max(midEnergy.y, 1e-12)),
                     log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12))) + castOffset
+                return paper == .screen ? DigitalReferenceReceiver.read(relative) : relative
             }
         }
 
-        // Integrate all output media through the overlaid dye spectra and observer. Each dye
-        // absorbs across multiple display bands. `partition` normalizes the dye sum at every
+        // Physical output media integrate through overlaid dye spectra and the observer; digital
+        // receivers deliver display RGB. Each physical dye absorbs across multiple display bands.
+        // `partition` normalizes the dye sum at every
         // wavelength, so equal densities still transmit `10^-d` and preserve the neutral axis.
         // One range per record: the engine hands over each channel's
         // activation on its own curve, so each is read back through that
@@ -606,7 +608,13 @@ public enum SpectralRuntime {
         let viewingLight = printViewingKelvin.map(printLightSPD)
             ?? referenceViewingLight(for: paper)
         let paperOutput: SpectralLUT
-        if paper.isScan {
+        if paper == .screen && !stock.isMonochrome {
+            paperOutput = buildLUT { activation in
+                DigitalReferenceReceiver.rgb(density: SIMD3(
+                    activation.x * paperRanges[0], activation.y * paperRanges[1],
+                    activation.z * paperRanges[2]))
+            }
+        } else if paper.isScan {
             // The scan's output is a digital inversion with no viewing dyes or lamp. Lab Scan
             // and Telecine both characterize their receiver records into display colour; the
             // receiver bands are measurements, not display primaries.
@@ -626,21 +634,6 @@ public enum SpectralRuntime {
                 return paper.deliversRec709
                     ? ColorScience.linearSRGBToDisplayP3(rgb) : rgb
             }
-        } else if paper == .screen, !stock.isMonochrome {
-            let screenCalibration = ScreenOutputCalibration(stock: stock, exposure: exposure)
-            let baseline = buildLUT { activation in
-                transmissionRGB(
-                    density: [activation.x * paperRanges[0],
-                              activation.y * paperRanges[1],
-                              activation.z * paperRanges[2]],
-                    dyes: PrintPaper.screen.dyes)
-            }
-            let calibrated = buildLUT { activation in
-                screenCalibration(SIMD3(activation.x * paperRanges[0],
-                                        activation.y * paperRanges[1],
-                                        activation.z * paperRanges[2]))
-            }
-            paperOutput = smoothCorrection(calibrated, against: baseline)
         } else if !stock.isMonochrome {
             let receiver = printReceiver(stock: stock, paper: paper,
                                          viewingLight: viewingLight)
@@ -670,8 +663,8 @@ public enum SpectralRuntime {
          + stock.curves[2].density(logExposure: logExposure)) / 3
     }
 
-    /// Samples of the density-to-log-exposure map a direct read applies to
-    /// each film layer, over that layer's own dMin...dMax.
+    /// Legacy direct read for monochrome Screen output. Color negatives use the fixed
+    /// spectral receiver so their individual curves and dye interactions remain active.
     private static let screenReadingSamples = 1024
 
     private static func screenReading(for stock: FilmStock) -> [[Float]] {
@@ -885,163 +878,6 @@ public enum SpectralRuntime {
             let hold = endpoint * endpoint * (3 - 2 * endpoint)
             return calibrated
                 + hold * (SIMD3(repeating: outputLuminance) - calibrated)
-        }
-    }
-
-    /// Characterizes the three film records back to the colourimetric scene basis before Screen
-    /// displays them. A record is a broad spectral measurement, not a display primary: treating
-    /// its red and green exposures as P3 red and green preserves greys but rotates saturated
-    /// yellow toward green. Inverting the stock's exact three-dimensional exposure cube resolves
-    /// that nonlinear measurement while preserving neutral white exactly.
-    private struct ScreenOutputCalibration: Sendable {
-        let screenCurve: CharacteristicCurve
-        let screenMid: Float
-        let neutralMid: Float
-        let logExposureLow: Float
-        let logExposureHigh: Float
-        let neutralDensityTable: [Float]
-        let inverse: SpectralResponseInverse
-        let captureToRec2020: [SIMD3<Float>]
-
-        private static let inverseSamples = 4096
-
-        init(stock: FilmStock, exposure: SpectralLUT) {
-            screenCurve = stock.paperCurve
-            screenMid = screenCurve.logExposure(
-                density: screenCurve.dMin + PrintPaper.screen.anchorDensity)
-            neutralMid = SpectralRuntime.neutralDensity(stock, 0)
-            let low = stock.curves.map { $0.toe - 6 }.min() ?? -8
-            let high = stock.curves.map { $0.shoulder + 6 }.max() ?? 8
-            logExposureLow = low
-            logExposureHigh = high
-            neutralDensityTable = (0...Self.inverseSamples).map { sample in
-                let fraction = Float(sample) / Float(Self.inverseSamples)
-                return SpectralRuntime.neutralDensity(
-                    stock, low + fraction * (high - low))
-            }
-            inverse = SpectralResponseInverse(response: exposure)
-            let profile = CameraSpectralProfile(
-                id: "film-screen-\(stock.name)",
-                gridSensitivity: Array(stock.spectralProfile.layerSensitivity.prefix(3)))
-            captureToRec2020 = profile.matrixToRec2020()
-        }
-
-        func callAsFunction(_ density: SIMD3<Float>) -> SIMD3<Float> {
-            let uncalibrated = SpectralRuntime.transmissionRGB(
-                density: [density.x, density.y, density.z],
-                dyes: PrintPaper.screen.dyes, flare: PrintPaper.screen.viewingFlare)
-            let relative = SIMD3<Float>((0..<3).map { channel in
-                screenCurve.logExposure(density: screenCurve.dMin + density[channel])
-                    - screenMid
-            })
-            let records = SIMD3<Float>((0..<3).map { channel in
-                pow(10, logExposure(neutralDensity: neutralMid - relative[channel]))
-            })
-            let rec2020 = inverseScene(records: records)
-            var calibrated = ColorScience.linearRec2020ToDisplayP3(rec2020)
-            let weights = ColorScience.displayP3LuminanceWeights
-            func luminance(_ value: SIMD3<Float>) -> Float {
-                weights.0 * value.x + weights.1 * value.y + weights.2 * value.z
-            }
-            let uncalibratedSpread = max(uncalibrated.x, uncalibrated.y, uncalibrated.z)
-                - min(uncalibrated.x, uncalibrated.y, uncalibrated.z)
-            let outputLuminance = luminance(uncalibrated)
-            let neutral = SIMD3<Float>(repeating: outputLuminance)
-            let recoveredLuminance = luminance(calibrated)
-            guard recoveredLuminance > 1e-6 else { return neutral }
-
-            // Bring a colour outside Display P3 toward its own luminance axis until its first
-            // negative component reaches zero. This retains luminance and hue direction instead
-            // of independently clipping channels at the display boundary.
-            var gamutScale: Float = 1
-            for channel in 0..<3 where calibrated[channel] < 0 {
-                gamutScale = min(gamutScale,
-                                 recoveredLuminance
-                                     / (recoveredLuminance - calibrated[channel]))
-            }
-            calibrated = SIMD3(repeating: recoveredLuminance)
-                + gamutScale * (calibrated - SIMD3(repeating: recoveredLuminance))
-            calibrated *= outputLuminance / recoveredLuminance
-
-            // This stage corrects the receiver's hue; it must not manufacture an entirely new
-            // saturated colour. Constrained inverse solutions can otherwise land on different
-            // RGB cube faces in adjacent cells, and luminance normalization amplifies the jump.
-            let calibratedSpread = max(calibrated.x, calibrated.y, calibrated.z)
-                - min(calibrated.x, calibrated.y, calibrated.z)
-            let maximumSpread = uncalibratedSpread * 1.2
-            if calibratedSpread > maximumSpread {
-                calibrated = neutral + (maximumSpread / calibratedSpread)
-                    * (calibrated - neutral)
-            }
-            let colourCorrection = calibrated - uncalibrated
-            let correctionMagnitude = max(
-                abs(colourCorrection.x), abs(colourCorrection.y),
-                abs(colourCorrection.z))
-            let maximumCorrection = uncalibratedSpread * 0.11
-            if correctionMagnitude > maximumCorrection {
-                calibrated = uncalibrated
-                    + (maximumCorrection / correctionMagnitude) * colourCorrection
-            }
-
-            // The inverse is ill-conditioned around neutral in deep shadows. A hard cutoff here
-            // made adjacent LUT cells alternate between neutral and fully reconstructed chroma,
-            // which showed as blue contours in smooth dark gradients. Ease across the same
-            // uncertainty range while keeping the receiver's luminance fixed.
-            let chroma = clamp((uncalibratedSpread - 0.003) / (0.009 - 0.003), 0, 1)
-            let chromaWeight = chroma * chroma * (3 - 2 * chroma)
-            calibrated = neutral + chromaWeight * (calibrated - neutral)
-
-            // Once the negative is in its shoulder, tiny record differences no longer carry
-            // trustworthy chroma. Fade the inverse before that ill-conditioned region can turn
-            // interpolation noise into coloured highlights; the original neutral receiver owns
-            // the clipped end of Screen's tone scale.
-            let highlight = clamp((outputLuminance - 0.76) / (0.84 - 0.76), 0, 1)
-            let hold = highlight * highlight * (3 - 2 * highlight)
-            return calibrated + hold * (uncalibrated - calibrated)
-        }
-
-        private func logExposure(neutralDensity target: Float) -> Float {
-            if target <= neutralDensityTable[0] { return logExposureLow }
-            if target >= neutralDensityTable[neutralDensityTable.count - 1] {
-                return logExposureHigh
-            }
-            var low = 0
-            var high = neutralDensityTable.count - 1
-            while high - low > 1 {
-                let middle = (low + high) / 2
-                if neutralDensityTable[middle] < target { low = middle } else { high = middle }
-            }
-            let span = neutralDensityTable[high] - neutralDensityTable[low]
-            let fraction = span > 1e-8 ? (target - neutralDensityTable[low]) / span : 0
-            let position = (Float(low) + fraction) / Float(Self.inverseSamples)
-            return logExposureLow + position * (logExposureHigh - logExposureLow)
-        }
-
-        /// Inverts the exact stock exposure cube used by the renderer. The least-squares matrix is
-        /// only the initial estimate; three-dimensional Newton refinement resolves the nonlinear
-        /// spectral reconstruction, which a matrix alone cannot undo near saturated yellow.
-        private func inverseScene(records: SIMD3<Float>) -> SIMD3<Float> {
-            let recordPeak = max(records.x, records.y, records.z)
-            guard recordPeak > 1e-8 else { return .zero }
-            let recordFloor = min(records.x, records.y, records.z)
-            if (recordPeak - recordFloor) / recordPeak < 1e-4 {
-                return SIMD3(repeating: SpectralRuntime.reconstructionAnchor)
-            }
-            let target = records * (SpectralRuntime.reconstructionAnchor / recordPeak)
-            var scene = SIMD3(dot(captureToRec2020[0], target),
-                              dot(captureToRec2020[1], target),
-                              dot(captureToRec2020[2], target))
-            scene = SIMD3(clamp(scene.x, 0, 1), clamp(scene.y, 0, 1),
-                          clamp(scene.z, 0, 1))
-            if max(scene.x, scene.y, scene.z) < 1e-6 {
-                scene = SIMD3(repeating: SpectralRuntime.reconstructionAnchor)
-            }
-
-            return inverse.solve(target: target, initial: scene)
-        }
-
-        private func dot(_ row: SIMD3<Float>, _ value: SIMD3<Float>) -> Float {
-            row.x * value.x + row.y * value.y + row.z * value.z
         }
     }
 
@@ -1264,52 +1100,6 @@ public enum SpectralRuntime {
                 stock.curves[2].dMin + p.z * ranges[2],
             ])
         }
-    }
-
-    /// Low-pass the colour-characterization correction rather than the output itself. The
-    /// receiver's tone scale remains exact while isolated inverse solutions cannot become a
-    /// visible cell in the delivered 3D LUT.
-    private static func smoothCorrection(
-        _ calibrated: SpectralLUT, against baseline: SpectralLUT
-    ) -> SpectralLUT {
-        precondition(calibrated.dimension == baseline.dimension)
-        let d = calibrated.dimension
-        var values = calibrated.values
-        values.withUnsafeMutableBufferPointer { destination in
-            DispatchQueue.concurrentPerform(iterations: d) { z in
-                for y in 0..<d {
-                    for x in 0..<d {
-                        let coordinate = SIMD3(x, y, z)
-                        let centre = ((z * d + y) * d + x) * 4
-                        for channel in 0..<3 {
-                            let centreCorrection = calibrated.values[centre + channel]
-                                - baseline.values[centre + channel]
-                            var neighbourCorrection: Float = 0
-                            var neighbourCount: Float = 0
-                            for axis in 0..<3 {
-                                for offset in [-1, 1] {
-                                    var neighbour = coordinate
-                                    neighbour[axis] += offset
-                                    guard neighbour[axis] >= 0, neighbour[axis] < d else {
-                                        continue
-                                    }
-                                    let index = ((neighbour.z * d + neighbour.y) * d
-                                                 + neighbour.x) * 4 + channel
-                                    neighbourCorrection += calibrated.values[index]
-                                        - baseline.values[index]
-                                    neighbourCount += 1
-                                }
-                            }
-                            let averaged = neighbourCorrection / max(neighbourCount, 1)
-                            destination[centre + channel] = baseline.values[centre + channel]
-                                + 0.5 * (centreCorrection + averaged)
-                        }
-                        destination[centre + 3] = calibrated.values[centre + 3]
-                    }
-                }
-            }
-        }
-        return SpectralLUT(dimension: d, values: values)
     }
 
     /// The fixed illuminant this emulsion was balanced under. This is a property of the stock,
@@ -2246,8 +2036,8 @@ extension SpectralRuntime {
             let density = (0..<3).map {
                 stock.developedDensity(layer: $0, logExposure: s * perStop)
             }
-            let relative: SIMD3<Float>
-            if paper.readsLayersDirectly {
+            var relative: SIMD3<Float>
+            if paper.readsLayersDirectly(for: stock) {
                 relative = SIMD3((0..<3).map { layer -> Float in
                     let exposure = stock.curves[layer].logExposure(density: density[layer])
                     return neutralMid - neutralDensity(stock, exposure)
@@ -2265,6 +2055,7 @@ extension SpectralRuntime {
                     log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12)))
                     + referenceCastOffset(midEnergy: midEnergy, stock: stock,
                                           paper: paper)
+                if paper == .screen { relative = DigitalReferenceReceiver.read(relative) }
             }
             let printed = (0..<3).map { channel in
                 curves[channel].density(
@@ -2272,7 +2063,10 @@ extension SpectralRuntime {
                         * paper.exposureDirection * relative[channel]) - curves[channel].dMin
             }
             let rgb: SIMD3<Float>
-            if paper.isScan {
+            if paper == .screen && !stock.isMonochrome {
+                rgb = DigitalReferenceReceiver.rgb(
+                    density: SIMD3(printed[0], printed[1], printed[2]))
+            } else if paper.isScan {
                 // A scan's characterization holds the receiver's luminance exactly, so this
                 // neutral mirror needs only the receiver. The 709 delivery is likewise a
                 // luminance-preserving change of primaries.

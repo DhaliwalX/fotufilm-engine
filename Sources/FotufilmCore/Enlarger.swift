@@ -66,14 +66,14 @@ public enum Enlarger: String, CaseIterable, Sendable, Codable {
 
     /// Whether this head is in the path at all: only an optical enlargement of film onto a
     /// reflection sheet has a lamp house. A directly viewed reversal or negative is
-    /// not printed, a scan's LEDs read the film directly, the screen reads the layers, a cinema
-    /// release print is contact-printed with the emulsions touching, and an instant print
+    /// not printed, a scan's LEDs read the film directly, Digital Reference uses a fixed receiver,
+    /// a cinema release print is contact-printed with the emulsions touching, and an instant print
     /// develops in the camera.
     public static func illuminates(stock: FilmStock, paper: PrintPaper) -> Bool {
         !paper.viewsFilmDirectly(for: stock) && !stock.isReflectionPrint
             && paper.resolved(for: stock) == paper
             && !paper.isNegative && !paper.isScan
-            && !paper.readsLayersDirectly && !paper.isProjected
+            && paper != .screen && !paper.isProjected
     }
 
     /// The factor the negative's diffuse densities are multiplied by on their way to the paper.
