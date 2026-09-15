@@ -38,6 +38,12 @@ extension FilmStock {
             aged.curves[layer].toe += lostStops * perStop
             aged.curves[layer].shoulder += lostStops * perStop
             aged.curves[layer].dMin += fog
+            // A separately specified minimum must gain the same developed fog. Otherwise
+            // subtracting the aged record minima would remove the new absorption again.
+            if let minimum = aged.spectralProfile.minimumDensity {
+                aged.spectralProfile.minimumDensity = zip(minimum,
+                    spectralProfile.imageDyeDensity[layer]).map { $0 + fog * $1 }
+            }
             aged.curves[layer].sampled = curves[layer].sampled?.shifted(
                 logExposure: lostStops * perStop, density: fog)
         }

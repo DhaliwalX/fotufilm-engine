@@ -52,6 +52,20 @@ final class FilmAbsorptionTests: XCTestCase {
         }
     }
 
+    func testAgeingRetainsDevelopedFogInIndependentMinimum() {
+        let fresh = fixture()
+        let aged = fresh.expired(years: 20)
+        let density = aged.curves.map(\.dMin)
+        // The aged minimum must absorb exactly like adding its developed fog to the
+        // fresh negative; changing the record origin must not erase that absorption.
+        assertEqual(SpectralRuntime.transmissionRGB(density: density, stock: aged),
+                    SpectralRuntime.transmissionRGB(density: density, stock: fresh))
+        XCTAssertTrue(zip(aged.spectralProfile.minimumDensity!,
+                          fresh.spectralProfile.minimumDensity!).allSatisfy { $0 > $1 })
+        XCTAssertEqual(fresh.expired(years: 0).spectralProfile.minimumDensity,
+                       fresh.spectralProfile.minimumDensity)
+    }
+
     func testLegacyAbsorptionIsBitIdentical() {
         let stock = TestStocks.negative, dyes = stock.spectralProfile.imageDyeDensity
         XCTAssertNil(SpectralRuntime.filmDensityOffset(for: stock))
