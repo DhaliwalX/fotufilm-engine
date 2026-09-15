@@ -144,7 +144,12 @@ final class AccuracyBaselineTests: XCTestCase {
             midGreyError: neutral.midGrey,
             blueSkyRedRatio: stock.isMonochrome ? nil : skyMetrics(of: stock).red,
             hueStep: stock.isMonochrome ? nil : skyMetrics(of: stock).step,
-            reversalSpreadRatio: stock.isReversal ? wedgeRatio(of: stock) : nil)
+            // Equal dye amounts are not an accuracy target for transparent
+            // film: the spectral Status A solver preserves record densities.
+            // Its closure is checked by StatusADyeUnmixTests. Retain this
+            // empirical-alignment metric only for integral reflection profiles.
+            reversalSpreadRatio: stock.isReversal && stock.isReflectionPrint
+                ? wedgeRatio(of: stock) : nil)
     }
 
     private func recordMetrics(
