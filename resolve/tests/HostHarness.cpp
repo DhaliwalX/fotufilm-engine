@@ -1171,6 +1171,58 @@ int testPlugin() {
                               fotufilm::encodingLabel(encoding));
                 check(renderNow() && difference(output->pixels, expected) < 2e-4f, message);
             }
+
+            // Cross several 256-row GPU windows. Small preview-sized frames do not
+            // exercise circular storage, whose display-output reads once escaped the
+            // 512-row allocation when gamut fitting was enabled.
+            {
+                const int tallWidth = 96, tallHeight = 1025;
+                auto resizeClips = [&](int w, int h) {
+                    for (Clip *clip : {source, output}) {
+                        clip->pixels.assign(static_cast<size_t>(w) * h * 4, 0.0f);
+                        propSetPointer(handleOf(clip->image), kOfxImagePropData, 0,
+                                       clip->pixels.data());
+                        const int bounds[4] = {0, 0, w, h};
+                        propSetIntN(handleOf(clip->image), kOfxImagePropBounds, 4, bounds);
+                        propSetInt(handleOf(clip->image), kOfxImagePropRowBytes, 0,
+                                   w * 4 * static_cast<int>(sizeof(float)));
+                        propSetIntN(handleOf(renderArgs), kOfxImageEffectPropRenderWindow, 4, bounds);
+                    }
+                };
+                resizeClips(tallWidth, tallHeight);
+                for (int y = 0; y < tallHeight; ++y) for (int x = 0; x < tallWidth; ++x) {
+                    float *pixel = source->pixels.data() + (static_cast<size_t>(y) * tallWidth + x) * 4;
+                    const float u = float(x) / (tallWidth - 1), v = float(y) / (tallHeight - 1);
+                    pixel[0] = 0.25f + 0.4f * u * u;
+                    pixel[1] = 0.25f + 0.4f * v;
+                    pixel[2] = 0.25f + 0.4f * (1 - u) * v;
+                    pixel[3] = 1;
+                }
+                const int inputCount = 8 + fotufilm_bridge_camera_input_count();
+                for (int input = 0; input < inputCount; ++input) {
+                    setChoice(plugin, instanceHandle, instance.params, "inputColorSpace", input);
+                    setChoice(plugin, instanceHandle, instance.params, "outputColorSpace", 6);
+                    check(renderNow(), "renders the tall linear print used to check display output");
+                    const auto tallLinear = output->pixels;
+                    std::vector<float> tallExpected(tallLinear.size());
+                    // All output options, switching fitting on and off on one instance.
+                    for (int o : {0, 3, 1, 6, 5, 2, 4, 7, 0}) {
+                        const auto encoding = static_cast<fotufilm::Encoding>(o);
+                        fotufilm::encodePixels(encoding, fotufilm::transformFor(encoding),
+                            tallLinear.data(), tallExpected.data(), tallWidth * tallHeight, false,
+                            fotufilm::deliveryLeavesGamut(encoding));
+                        setChoice(plugin, instanceHandle, instance.params, "outputColorSpace", o);
+                        char message[240] = "";
+                        std::snprintf(message, sizeof(message),
+                            "tall input %d -> %s matches CPU conversion across GPU window boundaries",
+                            input, fotufilm::encodingLabel(encoding));
+                        check(renderNow() && difference(output->pixels, tallExpected) < 2e-4f, message);
+                    }
+                }
+                setChoice(plugin, instanceHandle, instance.params, "inputColorSpace", 6);
+                resizeClips(width, height);
+                std::copy(original.begin(), original.end(), source->pixels.begin());
+            }
             setChoice(plugin, instanceHandle, instance.params, "outputColorSpace", 0);
 
             std::vector<float> camera(original.size()), linear(original.size());

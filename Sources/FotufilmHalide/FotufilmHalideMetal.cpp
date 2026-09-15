@@ -2437,9 +2437,12 @@ public:
         } else {
             gpu_pointwise(output, x, y, channel, 4);
         }
-        // Specialize on the host-visible configuration before dispatch. This removes
-        // the gamut dot product and divisions entirely when fitting is disabled.
-        if (float_io_ && encode_out_) {
+        // Specialize only full-frame graphs. Halide's folding pass does not rewrite
+        // the folded-buffer reads consistently across both consumer specializations:
+        // the gamut-enabled branch can address rows past the circular allocation.
+        // Keep one consumer loop for windowed graphs; host_output_encode's uniform
+        // configuration select still skips fitting when it is disabled.
+        if (float_io_ && encode_out_ && !windowed) {
             output.specialize(configuration_(FOTUFILM_CONFIG_OUTPUT_GAMUT) == 0.0f);
         }
         pipeline_ = Pipeline(output);
