@@ -1037,16 +1037,22 @@ public enum SpectralRuntime {
         return balance / max(level, 1e-6)
     }
 
-    /// Per-layer map carrying a reversal stock's published Status A densities
-    /// onto the density basis the image-dye model reads.
+    /// Carries record densities onto the image-dye amount basis. Transparent
+    /// reversals use spectral Status A inversion; integral reflection profiles
+    /// retain their existing empirical neutral alignment.
     struct NeutralDensityBasis: Sendable {
         /// Per layer: constant through third order in published density. The cubic term is
         /// needed by source curves with two independently shaped positive components; a
         /// quadratic leaves their neutral records visibly separated through the bend.
         var coefficients: [SIMD4<Float>]
+        var statusA: StatusADyeUnmix? = nil
 
         func callAsFunction(_ density: [Float]) -> [Float] {
-            (0..<3).map { layer in
+            if let statusA {
+                let a = statusA.amounts(forStatusA: SIMD3(density[0], density[1], density[2]))
+                return [a.x, a.y, a.z]
+            }
+            return (0..<3).map { layer in
                 let c = coefficients[layer]
                 let d = density[layer]
                 return max(c.x + c.y * d + c.z * d * d + c.w * d * d * d, 0)
@@ -1059,6 +1065,10 @@ public enum SpectralRuntime {
         // Equalizing those amounts would invalidate its measured spectral constraints.
         if stock.spectralProfile.minimumDensity != nil {
             return NeutralDensityBasis(coefficients: Array(repeating: SIMD4(0, 1, 0, 0), count: 3))
+        }
+        if stock.isReversal && !stock.isReflectionPrint {
+            return NeutralDensityBasis(coefficients: [],
+                statusA: StatusADyeUnmix(dyes: stock.spectralProfile.imageDyeDensity))
         }
         let termCount = stock.isReflectionPrint ? 4 : 3
         var normal = [[Double]](repeating: [Double](repeating: 0, count: 16), count: 3)

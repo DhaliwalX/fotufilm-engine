@@ -170,14 +170,17 @@ public struct PrintFrameConfiguration: Equatable, Sendable {
             ? definition?.edgePrinting?.first { $0.formatID == formatID } : nil
         if self.frame == .film, let stock = definition?.stock, film?.isInstant == false {
             let light = viewingKelvin.map(SpectralRuntime.printLightSPD)
+            let basis = stock.isReversal ? SpectralRuntime.neutralDensityBasis(for: stock) : nil
             let clear = SpectralRuntime.transmissionRGB(
-                density: stock.curves.map(\.dMin), stock: stock, illuminant: light)
+                density: basis?(stock.curves.map(\.dMin)) ?? stock.curves.map(\.dMin),
+                stock: stock, illuminant: light)
             // A representative developed edge exposure, not a measured manufacturer's
             // edge-printer calibration. Reversal clears exposed letters; negatives darken.
             let density = stock.curves.map { curve in
                 curve.dMin + (curve.dMax - curve.dMin) * (stock.isReversal ? 0.08 : 0.72)
             }
-            let exposed = SpectralRuntime.transmissionRGB(density: density, stock: stock, illuminant: light)
+            let exposed = SpectralRuntime.transmissionRGB(density: basis?(density) ?? density,
+                                                          stock: stock, illuminant: light)
             if stock.isReversal {
                 edgeRGB = exposed
             } else if paper.isNegative && negativeViewing == .scanner {

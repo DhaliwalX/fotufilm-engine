@@ -46,6 +46,12 @@ final class GoldenImageTests: XCTestCase {
         try checkGoldens([stock])
     }
 
+    func testTransparentReversalProfilesMatchExistingGoldens() throws {
+        let stocks = GoldenStocks.all.filter { $0.stock.isReversal && !$0.stock.isReflectionPrint }
+        XCTAssertFalse(stocks.isEmpty)
+        try checkGoldens(stocks)
+    }
+
     private func checkGoldens(_ stocks: [GoldenStocks.Entry]) throws {
         try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable,
                           "the Halide engine is the only processing backend")
