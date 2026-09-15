@@ -34,6 +34,14 @@ final class SampledMetalCurveTests: XCTestCase {
         var mixed = try XCTUnwrap(FilmStock.named("gold200"))
         mixed.curves[1].sampled = nil
         fixtures.append(("mixed analytic and sampled", mixed))
+        var interiorPeak = mixed
+        for channel in [0, 2] {
+            let minimum = interiorPeak.curves[channel].dMin
+            interiorPeak.curves[channel].sampled = try SampledCharacteristicCurve(
+                logExposure: [-3, -1, 1, 3],
+                density: [minimum, minimum + 1, minimum + 2, minimum + 1.8])
+        }
+        fixtures.append(("interior maximum and lower endpoint", interiorPeak))
         var shifted = try XCTUnwrap(FilmStock.named("gold200"))
         for channel in 0..<3 {
             let original = try XCTUnwrap(shifted.curves[channel].sampled)
