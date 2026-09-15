@@ -173,9 +173,6 @@ if [[ -d macos/AppIcon.icon ]]; then
   fi
 fi
 
-# Keep the verified shader cache outside the bundle rebuilt above.
-tools/build-handwritten-metallib.sh macosx "$OBJ/HandwrittenFotufilm.metallib"
-cp "$OBJ/HandwrittenFotufilm.metallib" "$APP/Contents/Resources/HandwrittenFotufilm.metallib"
 tools/audit-apple-bundle.sh "$APP"
 
 # Sign the app, so the Keychain recognises it from one build to the next.
