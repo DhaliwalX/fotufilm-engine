@@ -75,13 +75,13 @@ final class PrinterProfileTests: XCTestCase {
         let edited = PrinterProfile(lampKelvin: 2800, magenta: 0.8, yellow: 0.2)
         let reference = stock.curves.map { $0.density(logExposure: 0) }
         let calibration = SpectralRuntime.paperExposure(density: reference,
-            dyes: stock.spectralProfile.imageDyeDensity, lamp: baseline.filteredSpectrum,
+            stock: stock, lamp: baseline.filteredSpectrum,
             paperSensitivity: paper.sensitivity)
         let table = SpectralRuntime.tables(for: stock, printer: edited)
         let p = SIMD3<Float>(0.25, 0.5, 0.75) // exact LUT lattice point
         let density = (0..<3).map { stock.curves[$0].dMin + p[$0] * (stock.curves[$0].dMax - stock.curves[$0].dMin) }
         let e = SpectralRuntime.paperExposure(density: density,
-            dyes: stock.spectralProfile.imageDyeDensity, lamp: edited.filteredSpectrum,
+            stock: stock, lamp: edited.filteredSpectrum,
             paperSensitivity: paper.sensitivity)
         let actual = table.filmOutput.sample(p)
         for c in 0..<3 { XCTAssertEqual(actual[c], log10(e[c] / calibration[c]), accuracy: 2e-5) }
