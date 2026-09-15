@@ -74,7 +74,7 @@ public struct CharacteristicCurve: Sendable {
 
     /// Maximum achievable density.
     public var dMax: Float {
-        if let sampled { return sampled.density[sampled.density.count - 1] }
+        if let sampled { return sampled.density.max()! }
         return dMin + gamma * (shoulder - toe) + (secondary?.densityRange ?? 0)
     }
 

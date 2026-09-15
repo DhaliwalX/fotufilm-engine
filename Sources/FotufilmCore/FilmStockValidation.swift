@@ -466,9 +466,8 @@ extension FilmStockDefinition.CurveSpec {
         if let sampled {
             guard sampled.logExposure.allSatisfy({ (-12...12).contains($0) }),
                   sampled.density.allSatisfy({ $0 >= dMin && $0 <= 20 }),
-                  sampled.density.first == dMin,
-                  sampled.density.last == sampled.density.max() else {
-                throw fail("\(field).sampled", "requires bounded densities, a dMin first endpoint, and a maximum-density last endpoint")
+                  sampled.density.first == dMin else {
+                throw fail("\(field).sampled", "requires bounded densities and a dMin first endpoint")
             }
         }
     }

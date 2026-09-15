@@ -2,6 +2,36 @@ import XCTest
 @testable import FotufilmCore
 
 final class SampledCharacteristicCurveTests: XCTestCase {
+    func testInteriorMaximumSurvivesValidationRoundTripAndConstantTail() throws {
+        var definition = try XCTUnwrap(FilmStock.presetDefinitions["gold200"])
+        let minimum = definition.curves[0].dMin
+        definition.curves[0].sampled = try SampledCharacteristicCurve(
+            logExposure: [-3, -1, 1, 3], density: [minimum, minimum + 1, minimum + 2, minimum + 1.8])
+        let restored = try JSONDecoder().decode(FilmStockDefinition.self,
+            from: JSONEncoder().encode(definition)).validated().stock
+        let curve = restored.curves[0]
+        XCTAssertEqual(curve.dMax, minimum + 2)
+        XCTAssertEqual(curve.density(logExposure: 1), minimum + 2)
+        XCTAssertEqual(curve.density(logExposure: 10), minimum + 1.8)
+        for exposure in stride(from: Float(-3), through: 3, by: 0.01) {
+            XCTAssertLessThanOrEqual(curve.density(logExposure: exposure), curve.dMax + 1e-6)
+        }
+        let record = try XCTUnwrap(curve.sampled)
+        var configuration = [Float](repeating: 0, count: FilmEngineInvocation.configurationCount)
+        let offset = FilmEngineInvocation.sampledCurvesOffset
+        configuration[offset] = Float(record.logExposure.count)
+        for i in record.logExposure.indices {
+            configuration[offset + 1 + i * 3] = record.logExposure[i]
+            configuration[offset + 2 + i * 3] = record.density[i]
+            configuration[offset + 3 + i * 3] = record.slopes[i]
+        }
+        for exposure: Float in [1, 1.5, 3, 10] {
+            XCTAssertEqual(try XCTUnwrap(FilmEngineInvocation.sampledFilmDensity(
+                configuration: configuration, channel: 0, logExposure: exposure)),
+                curve.density(logExposure: exposure), accuracy: 1e-6)
+        }
+    }
+
     func testNonuniformSamplesAndLocalExtremaArePreservedWithoutOvershoot() throws {
         let samples = try SampledCharacteristicCurve(
             logExposure: [-2, -1.25, 0.2, 0.8, 2], density: [0.1, 0.6, 0.5, 1.1, 1.5])
