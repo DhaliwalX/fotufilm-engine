@@ -105,7 +105,7 @@ public struct ColorGrade: Equatable, Sendable, Codable {
     }
 
     /// The grade applied to one display-linear print value, in and out, matching `color_grade` in
-    /// FotufilmHalideShared.h expression for expression.
+    /// FotufilmHalide/Stages/Transfer.h expression for expression.
     public func apply(_ value: SIMD3<Float>,
                       in space: Space = .linear) -> SIMD3<Float> {
         let lift = self.lift, gain = self.gain, exponent = self.inverseGamma

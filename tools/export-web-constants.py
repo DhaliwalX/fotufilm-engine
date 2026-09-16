@@ -9,7 +9,8 @@ import tempfile
 
 root = Path(__file__).resolve().parents[1]
 header = root / 'Sources/FotufilmHalide/include/FotufilmHalide.h'
-names = list(dict.fromkeys(re.findall(r'^\s*(FOTUFILM_CONFIG_\w+)\s*(?:=|,)', header.read_text(), re.M)))
+layout = json.loads((root / 'Sources/FotufilmHalide/config-layout.json').read_text())
+names = ['FOTUFILM_CONFIG_' + field['name'] for field in layout['fields']]
 names += ['FOTUFILM_FRAME_CONFIGURATION_COUNT']
 with tempfile.TemporaryDirectory() as temporary:
     source = Path(temporary) / 'constants.cpp'

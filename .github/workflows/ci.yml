@@ -21,8 +21,10 @@ jobs:
       # Package.swift detects Halide while resolving targets, before any SwiftPM build.
       - run: brew install halide
       - run: python3 tools/check-source-boundary.py
+      - run: python3 tools/generate-config-layout.py --check
       - run: swift run fotufilm-controls --check
       - run: python3 tools/test-source-boundary.py
+      - run: python3 tools/test-config-layout.py
       - run: python3 tools/test-film-profiles.py
       - run: python3 tools/test-compile-if-needed.py
       - run: python3 tools/test-aot-release.py

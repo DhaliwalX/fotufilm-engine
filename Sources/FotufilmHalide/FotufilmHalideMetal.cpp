@@ -7,6 +7,7 @@
     && (defined(__APPLE__) || defined(FOTUFILM_HALIDE_CUDA))
 
 #include "FotufilmHalideShared.h"
+#include "FotufilmHalideFrameParams.h"
 #include "FotufilmCompiledCache.h"
 
 #include <algorithm>
@@ -1053,11 +1054,12 @@ private:
     std::mutex mutex_;
 };
 
-class MetalFramePipeline {
+class MetalFramePipeline : FrameParams {
 public:
     MetalFramePipeline(int32_t feature_mask, const std::string &suffix,
                        bool windowed = false)
-        : float_io_((feature_mask & FOTUFILM_FRAME_FLOAT_IO) != 0),
+        : FrameParams("frame_", suffix),
+          float_io_((feature_mask & FOTUFILM_FRAME_FLOAT_IO) != 0),
           realtime_(!float_io_
                     || (feature_mask & FOTUFILM_FRAME_REALTIME) != 0),
           approximate_((feature_mask & FOTUFILM_FRAME_EXACT_MATH) == 0),
@@ -1091,48 +1093,9 @@ public:
                         1, "frame_exposure_lut" + suffix),
           film_lut_(Float(32), 1, "frame_film_lut" + suffix),
           paper_lut_(Float(32), 1, "frame_paper_lut" + suffix),
-          width_("frame_width" + suffix), height_("frame_height" + suffix),
-          mtf_sigma_0_("frame_mtf_sigma_0" + suffix),
-          mtf_sigma_1_("frame_mtf_sigma_1" + suffix),
-          mtf_sigma_2_("frame_mtf_sigma_2" + suffix),
-          mtf_radius_0_("frame_mtf_radius_0" + suffix),
-          mtf_radius_1_("frame_mtf_radius_1" + suffix),
-          mtf_radius_2_("frame_mtf_radius_2" + suffix),
-          mtf_luma_sigma_("frame_mtf_luma_sigma" + suffix),
-          mtf_luma_radius_("frame_mtf_luma_radius" + suffix),
           halation_radius_0_("frame_halation_radius_0" + suffix),
           halation_radius_1_("frame_halation_radius_1" + suffix),
           halation_radius_2_("frame_halation_radius_2" + suffix),
-          halation_stride_0_("frame_halation_stride_0" + suffix),
-          halation_stride_1_("frame_halation_stride_1" + suffix),
-          halation_stride_2_("frame_halation_stride_2" + suffix),
-          halation_strided_radius_0_("frame_halation_strided_radius_0" + suffix),
-          halation_strided_radius_1_("frame_halation_strided_radius_1" + suffix),
-          halation_strided_radius_2_("frame_halation_strided_radius_2" + suffix),
-          diffusion_stride_0_("frame_diffusion_stride_0" + suffix),
-          diffusion_stride_1_("frame_diffusion_stride_1" + suffix),
-          diffusion_stride_2_("frame_diffusion_stride_2" + suffix),
-          diffusion_strided_radius_0_("frame_diffusion_strided_radius_0" + suffix),
-          diffusion_strided_radius_1_("frame_diffusion_strided_radius_1" + suffix),
-          diffusion_strided_radius_2_("frame_diffusion_strided_radius_2" + suffix),
-          coupler_sigma_("frame_coupler_sigma" + suffix),
-          coupler_radius_("frame_coupler_radius" + suffix),
-          adjacency_sigma_("frame_adjacency_sigma" + suffix),
-          adjacency_radius_("frame_adjacency_radius" + suffix),
-          adjacency_secondary_sigma_("frame_adjacency_secondary_sigma" + suffix),
-          adjacency_secondary_radius_("frame_adjacency_secondary_radius" + suffix),
-          fringe_sigma_("frame_fringe_sigma" + suffix),
-          fringe_radius_("frame_fringe_radius" + suffix),
-          grain_sigma_("frame_grain_sigma" + suffix),
-          grain_radius_("frame_grain_radius" + suffix),
-          grain_lambda_("frame_grain_lambda" + suffix),
-          mottle_lambda_("frame_mottle_lambda" + suffix),
-          mottle_radius_("frame_mottle_radius" + suffix),
-          print_mtf_radius_("frame_print_mtf_radius" + suffix),
-          seed_("frame_seed" + suffix),
-          reversal_("frame_reversal" + suffix),
-          origin_x_("frame_origin_x" + suffix),
-          origin_y_("frame_origin_y" + suffix),
           runtime_features_("frame_features" + suffix) {
         WindowedFrameSchedule window_schedule(windowed);
         feature_mask &= ~ablated_features();
@@ -2721,71 +2684,10 @@ private:
         exposure_lut_.set(exposure_buffer_);
         film_lut_.set(film_buffer_);
         paper_lut_.set(paper_buffer_);
-        width_.set(width);
-        height_.set(height);
-        mtf_sigma_0_.set(std::max(configuration[kMtfSigmaOffset], 0.151f));
-        mtf_sigma_1_.set(std::max(configuration[kMtfSigmaOffset + 1], 0.151f));
-        mtf_sigma_2_.set(std::max(configuration[kMtfSigmaOffset + 2], 0.151f));
-        mtf_radius_0_.set(std::max(0, int(configuration[kMtfRadiusOffset])));
-        mtf_radius_1_.set(std::max(0, int(configuration[kMtfRadiusOffset + 1])));
-        mtf_radius_2_.set(std::max(0, int(configuration[kMtfRadiusOffset + 2])));
-        mtf_luma_sigma_.set(std::max(configuration[kMtfLumaSigmaOffset], 0.151f));
-        mtf_luma_radius_.set(std::max({
-            0,
-            int(configuration[kMtfLumaRadiusOffset]),
-            int(configuration[FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS]),
-            int(configuration[FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS + 1]),
-            int(configuration[FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS + 2]),
-        }));
+        set_frame(configuration, width, height, seed, reversal, origin_x, origin_y);
         halation_radius_0_.set(std::max(0, int(configuration[kHalationRadiusOffset])));
         halation_radius_1_.set(std::max(0, int(configuration[kHalationRadiusOffset + 1])));
         halation_radius_2_.set(std::max(0, int(configuration[kHalationRadiusOffset + 2])));
-        Param<int32_t> *strides[3] = {
-            &halation_stride_0_, &halation_stride_1_, &halation_stride_2_};
-        Param<int32_t> *strided_radii[3] = {
-            &halation_strided_radius_0_, &halation_strided_radius_1_,
-            &halation_strided_radius_2_};
-        for (int scale = 0; scale < 3; ++scale) {
-            const int32_t radius = std::max(
-                0, int(configuration[kHalationRadiusOffset + scale]));
-            const int32_t stride = fotufilm_halation_stride(radius);
-            strides[scale]->set(stride);
-            strided_radii[scale]->set(
-                fotufilm_halation_strided_radius(radius, stride));
-        }
-        Param<int32_t> *diffusion_strides[3] = {
-            &diffusion_stride_0_, &diffusion_stride_1_, &diffusion_stride_2_};
-        Param<int32_t> *diffusion_strided_radii[3] = {
-            &diffusion_strided_radius_0_, &diffusion_strided_radius_1_,
-            &diffusion_strided_radius_2_};
-        for (int scale = 0; scale < 3; ++scale) {
-            const int32_t radius = std::max(
-                0, int(configuration[FOTUFILM_CONFIG_DIFFUSION_RADIUS + scale]));
-            const int32_t stride = fotufilm_diffusion_stride(radius);
-            diffusion_strides[scale]->set(stride);
-            diffusion_strided_radii[scale]->set(
-                fotufilm_halation_strided_radius(radius, stride));
-        }
-        coupler_sigma_.set(std::max(configuration[kCouplerSigmaOffset], 0.151f));
-        coupler_radius_.set(std::max(0, int(configuration[kCouplerRadiusOffset])));
-        adjacency_sigma_.set(std::max(configuration[kAdjacencySigmaOffset], 0.151f));
-        adjacency_radius_.set(std::max(0, int(configuration[kAdjacencyRadiusOffset])));
-        adjacency_secondary_sigma_.set(std::max(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA], 0.151f));
-        adjacency_secondary_radius_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS])));
-        fringe_sigma_.set(std::max(configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA], 0.151f));
-        fringe_radius_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS])));
-        grain_sigma_.set(std::max(configuration[kGrainSigmaOffset], 0.151f));
-        grain_radius_.set(std::max(0, int(configuration[kGrainRadiusOffset])));
-        grain_lambda_.set(configuration[kGrainLambdaOffset]);
-        mottle_lambda_.set(configuration[FOTUFILM_CONFIG_MOTTLE_LAMBDA]);
-        mottle_radius_.set(
-            std::max(0, int(configuration[FOTUFILM_CONFIG_MOTTLE_RADIUS])));
-        print_mtf_radius_.set(
-            std::max(0, int(configuration[FOTUFILM_CONFIG_PRINT_MTF_RADIUS])));
-        seed_.set(seed);
-        reversal_.set(reversal);
-        origin_x_.set(origin_x);
-        origin_y_.set(origin_y);
         if (cached_) cached_.realize(output_buffer);
         else pipeline_.realize(output_buffer, gpu_target());
     }
@@ -2831,30 +2733,7 @@ private:
     Buffer<float> srgb_decode_ = srgb_decode_values();
     Buffer<float> srgb_encode_ = srgb_encode_values();
     ImageParam input_, configuration_, exposure_lut_, film_lut_, paper_lut_;
-    Param<int32_t> width_, height_;
-    Param<float> mtf_sigma_0_, mtf_sigma_1_, mtf_sigma_2_, mtf_luma_sigma_;
-    Param<int32_t> mtf_radius_0_, mtf_radius_1_, mtf_radius_2_, mtf_luma_radius_;
     Param<int32_t> halation_radius_0_, halation_radius_1_, halation_radius_2_;
-    Param<int32_t> halation_stride_0_, halation_stride_1_, halation_stride_2_;
-    // Referenced only when FOTUFILM_FRAME_DIFFUSION is set, so no AOT pipeline sees them and the
-    // compiled signatures are unchanged — the same arrangement the mottle params have.
-    Param<int32_t> diffusion_stride_0_, diffusion_stride_1_, diffusion_stride_2_;
-    Param<int32_t> diffusion_strided_radius_0_, diffusion_strided_radius_1_,
-                   diffusion_strided_radius_2_;
-    Param<int32_t> halation_strided_radius_0_, halation_strided_radius_1_,
-                   halation_strided_radius_2_;
-    Param<float> fringe_sigma_;
-    Param<int32_t> fringe_radius_;
-    Param<float> adjacency_secondary_sigma_;
-    Param<int32_t> adjacency_secondary_radius_;
-    Param<float> coupler_sigma_, adjacency_sigma_, grain_sigma_, grain_lambda_,
-                 mottle_lambda_;
-    Param<int32_t> mottle_radius_;
-    Param<int32_t> coupler_radius_, adjacency_radius_, grain_radius_;
-    Param<int32_t> print_mtf_radius_;
-    Param<uint32_t> seed_;
-    Param<int32_t> reversal_;
-    Param<int32_t> origin_x_, origin_y_;
     Param<int32_t> runtime_features_;
     Pipeline pipeline_;
     compiled_cache::Pipeline cached_;

@@ -1,0 +1,431 @@
+{
+  "schema": 1,
+  "constants": {
+    "COUPLER_WARP_SAMPLES": {
+      "value": 128
+    },
+    "COUPLER_WARP_MIN": {
+      "value": -4
+    },
+    "COUPLER_WARP_MAX": {
+      "value": 4
+    },
+    "TONE_GRID_EDGE": {
+      "value": 64
+    },
+    "TONE_GRID_CELLS": {
+      "value": "TONE_GRID_EDGE * TONE_GRID_EDGE"
+    },
+    "SAMPLED_CURVE_MAX_SAMPLES": {
+      "value": 1024
+    },
+    "SAMPLED_CURVE_STRIDE": {
+      "value": "1 + 3 * SAMPLED_CURVE_MAX_SAMPLES"
+    }
+  },
+  "fields": [
+    {
+      "name": "CURVES",
+      "count": 18
+    },
+    {
+      "name": "HALATION",
+      "count": 3
+    },
+    {
+      "name": "COUPLER",
+      "count": 9
+    },
+    {
+      "name": "GRAIN",
+      "count": 3
+    },
+    {
+      "name": "PAPER",
+      "count": 6
+    },
+    {
+      "name": "MASKING",
+      "count": 3
+    },
+    {
+      "name": "MTF_SIGMA",
+      "count": 3
+    },
+    {
+      "name": "MTF_RADIUS",
+      "count": 3
+    },
+    {
+      "name": "HALATION_RADIUS",
+      "count": 3
+    },
+    {
+      "name": "COUPLER_SIGMA",
+      "count": 1
+    },
+    {
+      "name": "COUPLER_RADIUS",
+      "count": 1
+    },
+    {
+      "name": "ADJACENCY_SIGMA",
+      "count": 1
+    },
+    {
+      "name": "ADJACENCY_RADIUS",
+      "count": 1
+    },
+    {
+      "name": "GRAIN_SIGMA",
+      "count": 1
+    },
+    {
+      "name": "GRAIN_RADIUS",
+      "count": 1
+    },
+    {
+      "name": "FLARE",
+      "count": 1
+    },
+    {
+      "name": "COUPLER_SCALE",
+      "count": 1
+    },
+    {
+      "name": "ADJACENCY_STRENGTH",
+      "count": 1
+    },
+    {
+      "name": "GRAIN_LAMBDA",
+      "count": 1
+    },
+    {
+      "name": "EXPOSURE_GAIN",
+      "count": 1
+    },
+    {
+      "name": "PAPER_MIDPOINT",
+      "count": 1
+    },
+    {
+      "name": "FLARE_MEAN",
+      "count": 3
+    },
+    {
+      "name": "COUPLER_WARP",
+      "count": "3 * COUPLER_WARP_SAMPLES"
+    },
+    {
+      "name": "WHITE_BALANCE",
+      "count": 3
+    },
+    {
+      "name": "HIGHLIGHTS",
+      "count": 1
+    },
+    {
+      "name": "SHADOWS",
+      "count": 1
+    },
+    {
+      "name": "SATURATION",
+      "count": 1
+    },
+    {
+      "name": "VIBRANCE",
+      "count": 1
+    },
+    {
+      "name": "HALATION_KERNEL",
+      "count": 9
+    },
+    {
+      "name": "GRAIN_CORRELATION",
+      "count": 1
+    },
+    {
+      "name": "MTF_LUMA_SHARE",
+      "count": 1
+    },
+    {
+      "name": "MTF_LUMA_SIGMA",
+      "count": 1
+    },
+    {
+      "name": "MTF_LUMA_RADIUS",
+      "count": 1
+    },
+    {
+      "name": "GRADE_LIFT",
+      "count": 3
+    },
+    {
+      "name": "GRADE_GAIN",
+      "count": 3
+    },
+    {
+      "name": "GRADE_INV_GAMMA",
+      "count": 3
+    },
+    {
+      "name": "FRAME_WIDTH",
+      "count": 1
+    },
+    {
+      "name": "FRAME_HEIGHT",
+      "count": 1
+    },
+    {
+      "name": "TONE_GRID_WIDTH",
+      "count": 1
+    },
+    {
+      "name": "TONE_GRID_HEIGHT",
+      "count": 1
+    },
+    {
+      "name": "TONE_GRID_A",
+      "count": "TONE_GRID_CELLS"
+    },
+    {
+      "name": "TONE_GRID_B",
+      "count": "TONE_GRID_CELLS"
+    },
+    {
+      "name": "GRAIN_MODE",
+      "count": 1,
+      "doc": "Non-zero to develop grain as a Boolean model of discs rather than as a blurred clump field."
+    },
+    {
+      "name": "GRAIN_DISC_RADIUS",
+      "count": 1,
+      "doc": "Grain radius in pixels. The Boolean path is only taken once this reaches a pixel, below which the clump field is already the model's own limit and far cheaper."
+    },
+    {
+      "name": "GRAIN_DISC",
+      "count": 3,
+      "doc": "Per-layer density amplitude for the Boolean path, calibrated so the covered fraction read through a 48 um aperture carries the stock's published granularity."
+    },
+    {
+      "name": "GRADE_SPACE",
+      "count": 1,
+      "doc": "Non-zero to run the three-way grade on the sRGB-encoded signal, the way a grading suite's three-way corrector does, rather than on display-linear light. Appended last so that adding it renumbered nothing."
+    },
+    {
+      "name": "MOTTLE_SIGMA",
+      "count": 1,
+      "doc": "The grain-size mixture's second clump field — the soft mottle the coarse crystal population lays under the sharp grain. Blur sigma and radius in pixels, the coarse population's own clumps-per-pixel, and per-layer density amplitudes[3] carrying that component's share of the published granularity. Appended last so that adding them renumbered nothing."
+    },
+    {
+      "name": "MOTTLE_RADIUS",
+      "count": 1
+    },
+    {
+      "name": "MOTTLE_LAMBDA",
+      "count": 1
+    },
+    {
+      "name": "MOTTLE",
+      "count": 3
+    },
+    {
+      "name": "PAPER_RED",
+      "count": 6,
+      "doc": "The paper's red and blue records, six curve parameters each, with the green record staying in the legacy FOTUFILM_CONFIG_PAPER slot; then the two records' own calibrated midpoints, the per-channel analogue of FOTUFILM_CONFIG_PAPER_MIDPOINT. A paper that publishes one curve packs it in all three slots. Appended last so that adding them renumbered nothing."
+    },
+    {
+      "name": "PAPER_BLUE",
+      "count": 6
+    },
+    {
+      "name": "PAPER_MIDPOINT_RED",
+      "count": 1
+    },
+    {
+      "name": "PAPER_MIDPOINT_BLUE",
+      "count": 1
+    },
+    {
+      "name": "GRAIN_LAW",
+      "count": 1,
+      "doc": "Which granularity-against-density law the emulsion obeys. 0 is a chromogenic negative, whose measured curve peaks just above D-min and falls (the shape's coefficients are in FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE); 1 is opaque silver, whose Boolean aperture variance goes as `D * 10^(0.21004 D + 0.06114 D^2)`; 2 explicitly retains Selwyn's `sigma ∝ sqrt(D)`; 3 is dye reversal's saturating power law. Mirrors `GrainDensityLaw`."
+    },
+    {
+      "name": "GRAIN_ANCHOR",
+      "count": 3,
+      "doc": "Per-layer net density the stock's published granularity is read at, and the per-layer developed fog added to both that anchor and the pixel's own density. The fog is what keeps granularity finite rather than zero where the negative is clear."
+    },
+    {
+      "name": "GRAIN_FOG",
+      "count": 3
+    },
+    {
+      "name": "GRAIN_SIGMA_LAYER",
+      "count": 3,
+      "doc": "Per-layer blur sigma in pixels for the sharp grain field and for the coarse mottle. The blue-sensitive layer of a colour negative carries the coarsest crystals, so its grain is lower in frequency and not merely louder. FOTUFILM_CONFIG_GRAIN_RADIUS and FOTUFILM_CONFIG_MOTTLE_RADIUS stay scalar: they are the widest of the three kernels, and the narrower ones have decayed to nothing out there."
+    },
+    {
+      "name": "MOTTLE_SIGMA_LAYER",
+      "count": 3
+    },
+    {
+      "name": "PRINT_MTF_SIGMA",
+      "count": 1,
+      "doc": "Gaussian sigma and radius, in pixels, of the enlarger lens and the paper's own light scattering. It acts on the light the negative transmits, so the pipeline applies it in transmittance rather than in density."
+    },
+    {
+      "name": "PRINT_MTF_RADIUS",
+      "count": 1
+    },
+    {
+      "name": "OUTPUT_MATRIX",
+      "count": 9,
+      "doc": "Optional final row-major matrix, transfer, and premultiplication used by FOTUFILM_FRAME_ENCODE_OUT. Other variants return display-linear light.  0  identity — the host's space is already linear. 1  power law, sign-preserving: |v| <= c4 ? |v| * c0 : c1 * pow(|v|, c2) + c3, carried back across zero by the sign. Rec.709 gamma 2.4 and sRGB. 2  logarithmic, signed: v <= c4 ? v * c0 + c3 : c1 * log2(v + c5) + c2. DaVinci Intermediate and ACEScct.  `fotufilm::outputTransformFor` defines the coefficients."
+    },
+    {
+      "name": "OUTPUT_TRANSFER",
+      "count": 1
+    },
+    {
+      "name": "OUTPUT_COEFFICIENTS",
+      "count": 6
+    },
+    {
+      "name": "OUTPUT_PREMULTIPLIED",
+      "count": 1
+    },
+    {
+      "name": "PRINT_SHARPEN",
+      "count": 1,
+      "doc": "The share of the detail under the print MTF's blur the finish returns, 0...1. An enlarger keeps 0; a scan finish keeps most of it, because a minilab sharpens its read. Appended after the output transform so that adding it renumbered nothing."
+    },
+    {
+      "name": "DIFFUSION_DIRECT",
+      "count": 1,
+      "doc": "The lens diffusion filter — mist, fog, black mist — which is the only stage that runs ahead of the emulsion, because the filter it models is screwed onto the front of the lens. Appended last so that adding it renumbered nothing.  The share of the beam that reached the film without meeting a particle. Perfectly sharp, and what keeps a diffused picture from looking defocused."
+    },
+    {
+      "name": "DIFFUSION_KERNEL",
+      "count": 9,
+      "doc": "How much of the scattered light each of the three scales carries, per record: `[record * 3 + scale]`, already multiplied by the scattered share. The records differ because the scattering angle goes as the wavelength, so a red halo is wider than a blue one; a row summing to less than the scattered share is light that went past the widest scale, and it has already been added to FOTUFILM_CONFIG_FLARE rather than dropped."
+    },
+    {
+      "name": "DIFFUSION_RADIUS",
+      "count": 3,
+      "doc": "Pixel radius of each scale. Strides and strided radii are derived from these by the same `fotufilm_halation_stride` rule the halation pyramid uses."
+    },
+    {
+      "name": "DONOR_CURVE",
+      "count": 6,
+      "doc": "The donor capture layer — a coated layer that develops and releases inhibitor but forms no image dye of its own (REALA's 4th Color Layer). Six H&D parameters for its own development curve, then one release weight per dye-forming receiver, in the engine's R, G, B record order. Read only when FOTUFILM_FRAME_DONOR_LAYER is set; appended last so that adding them renumbered nothing."
+    },
+    {
+      "name": "DONOR_RELEASE",
+      "count": 3
+    },
+    {
+      "name": "HALATION_RING_RADIUS",
+      "count": 3,
+      "doc": "Reserved legacy annular-basis radii. Continuous physical kernels leave these zero."
+    },
+    {
+      "name": "HALATION_MATRIX",
+      "count": 9,
+      "doc": "Row-major 3x3 spectral halation return matrix, receiver rows by source columns, in the mix domain: entry [c][j] is the share of receiver c's developed exposure that arrives as source record j's base-returned light. Rows sum to the receiver's legacy mix share, so a diagonal of the old FOTUFILM_CONFIG_HALATION values reproduces the scalar mix exactly; the off-diagonal terms are what the per-wavelength stack transmission (the orange mask favouring deep red on the return trip) routes between records. The scalar shares at FOTUFILM_CONFIG_HALATION are still written but no longer read by the kernels."
+    },
+    {
+      "name": "CURVE_SECONDARY",
+      "count": 15,
+      "doc": "Five parameters per dye-forming record for an optional second coated speed group: gamma, toe, toe width, shoulder, shoulder width. A zero gamma is the original six-parameter curve exactly. Appended so no existing configuration offset moves."
+    },
+    {
+      "name": "MTF_SECONDARY_SIGMA",
+      "count": 3,
+      "doc": "A second positive Gaussian diffusion scale per record, followed by its radii and the primary scale's blend shares. Shares of one are the original single-Gaussian MTF exactly."
+    },
+    {
+      "name": "MTF_SECONDARY_RADIUS",
+      "count": 3
+    },
+    {
+      "name": "MTF_PRIMARY_SHARE",
+      "count": 3
+    },
+    {
+      "name": "COUPLER_RELEASE_GAMMA",
+      "count": 3,
+      "doc": "Hill exponents for normalized inhibitor release by each dye-forming donor, followed by the optional donor-only layer's exponent. 1 is the historical linear law."
+    },
+    {
+      "name": "DONOR_RELEASE_GAMMA",
+      "count": 1
+    },
+    {
+      "name": "DONOR_DIFFUSION_KERNEL",
+      "count": 3,
+      "doc": "Lens-diffusion scale weights for the optional donor capture record. Kept separate from the three dye-forming rows above so existing configuration offsets remain fixed."
+    },
+    {
+      "name": "DEVELOP_COMPLEMENT",
+      "count": 1,
+      "doc": "Whether development complements the formed density to a direct positive: 1 on a genuine reversal stock, 0 otherwise. Distinct from FOTUFILM_FRAME_REVERSAL, which also routes a negative shown on a light box or scanner past the paper; that negative is still developed as a negative, so its density law and its grain are evaluated in its own density."
+    },
+    {
+      "name": "GRAIN_DENSITY_PROFILE",
+      "count": 3,
+      "doc": "The chromogenic negative's granularity-against-density shape, read only under FOTUFILM_CONFIG_GRAIN_LAW 0: the coarse sub-layer's variance amplitude, the toe density over which anything develops at all, and the density over which that coarse population decays onto the fine one. Mirrors `FilmStock.grainDensityProfile`."
+    },
+    {
+      "name": "OUTPUT_SHOULDER",
+      "count": 1,
+      "doc": "The knee of the SDR shoulder the host's delivery asks for, applied between the output matrix and the output transfer — the step `FilmOutputConversion` takes on the host, moved into the kernel so the encode variants can carry a shouldered delivery rather than only a bare one. Negative means no shoulder, which is the identity a linear or unshouldered space wants; 0.9 is the standard print knee and 0.7 the reversal one. Read only under FOTUFILM_FRAME_ENCODE_OUT; appended without renumbering earlier fields."
+    },
+    {
+      "name": "OUTPUT_GAMUT",
+      "count": 4,
+      "doc": "Enabled flag followed by three host-primary luminance weights. Fits chroma after the output matrix while preserving luminance and above-white highlights; zero disables it."
+    },
+    {
+      "name": "SAMPLED_CURVES",
+      "count": "3 * SAMPLED_CURVE_STRIDE",
+      "doc": "Three records: sample count, then (log exposure, density, tangent) triples."
+    },
+    {
+      "name": "ADJACENCY_MODEL",
+      "count": 1,
+      "doc": "0: Gaussian/log-exposure adjacency; 1: screened diffusion/Nelson density response."
+    },
+    {
+      "name": "ADJACENCY_SECONDARY_SIGMA",
+      "count": 1
+    },
+    {
+      "name": "ADJACENCY_SECONDARY_RADIUS",
+      "count": 1
+    },
+    {
+      "name": "CHROMATIC_FRINGE_AMOUNT",
+      "count": 1,
+      "doc": "Broad transport changes off-diagonal inhibition only; zero amount preserves legacy output."
+    },
+    {
+      "name": "CHROMATIC_FRINGE_SIGMA",
+      "count": 1
+    },
+    {
+      "name": "CHROMATIC_FRINGE_RADIUS",
+      "count": 1
+    },
+    {
+      "name": "RECORD_INPUT",
+      "count": 1,
+      "doc": "Typed record-exposure input seam. Zero is ordinary scene input."
+    },
+    {
+      "name": "GRAIN_REVERSAL_PROFILE",
+      "count": 2,
+      "doc": "Dye reversal's [exponent p, shoulder density Ds], read under grain law 3."
+    }
+  ]
+}

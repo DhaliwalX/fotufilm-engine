@@ -67,7 +67,7 @@ final class WideGamutSceneTests: XCTestCase {
             "-0.001210340", "0.017601717", "0.983608623",
         ]
         let luma = ["0.2627002", "0.6779981", "0.0593017"]
-        try assertContains("Sources/FotufilmHalide/FotufilmHalideShared.h", ingest + luma)
+        try assertContains("Sources/FotufilmHalide/Stages/Exposure.h", ingest + luma)
         try assertContains("Sources/FotufilmCore/ColorScience.swift", ingest + luma)
         try assertContains(
             "Sources/FotufilmHalide/FotufilmMetalGrain.mm",
