@@ -565,7 +565,11 @@ struct EditState: Equatable {
     /// decides the initial request when an editor opens; it does not remain a live dependency of
     /// the edit. Negative film is always delivered as SDR.
     var supportsHDROutput: Bool {
-        filmFrameNegative == nil && resolvedPaper.showsHDR && StockPreset.supportsHDRDelivery(for: stockID)
+        guard filmFrameNegative == nil, resolvedPaper.showsHDR,
+              StockPreset.supportsHDRDelivery(for: stockID) else { return false }
+        // A positive levelled by the screen conversion is normalised to SDR.
+        guard let stock else { return true }
+        return !resolvedPaper.levelsPositive(for: stock, digitalReference: digitalReference)
     }
 
     var whiteBalance: WhiteBalance {

@@ -1118,8 +1118,12 @@ public struct FilmEngineInvocation {
             : [Float](repeating: 1, count: 3)
         // Digital Reference's graded styles level the receiver's read in these same slots: the
         // film base to the graded curve's black, and — per frame, when the host has metered
-        // one — the frame's brightest content to its white. No table is rebuilt for it.
-        let levels = printMedium == .screen
+        // one — the frame's brightest content to its white. No table is rebuilt for it. A
+        // positive takes the paper stage for them too; in `.texture` nothing prints, and the
+        // kernel's reversal branch keeps the slide's polarity for the texture it carries back.
+        let levelsPositive = printMedium.levelsPositive(
+            for: stock, digitalReference: options.digitalReference) && options.stage != .texture
+        let levels = printMedium == .screen && (levelsPositive || !stock.isReversal)
             ? DigitalReferenceReceiver.levels(for: stock, style: options.digitalReference,
                                               sceneHighlightStops: options.sceneHighlightStops)
             : (scale: Float(1), shift: Float(0))
@@ -1231,7 +1235,7 @@ public struct FilmEngineInvocation {
         if printMTFActive && printMTFRadius > 0 {
             featureMask |= FilmEngineFeature.printMTF
         }
-        if printMedium.viewsFilmDirectly(for: stock) || showingNegative {
+        if (printMedium.viewsFilmDirectly(for: stock) && !levelsPositive) || showingNegative {
             featureMask |= FilmEngineFeature.reversal
         }
         if stock.isMonochrome { featureMask |= FilmEngineFeature.monochrome }
@@ -1470,8 +1474,8 @@ public struct FilmEngineInvocation {
         // all, so there is nothing for it to key and nothing to measure.
         self.localToneEnabled = options.localTone && options.stage.readsScene
         self.configuration = configuration
-        if !noFilm, !showingNegative, printMedium == .screen,
-           !stock.isMonochrome, !stock.isReversal, options.stage.readsScene,
+        if !noFilm, !showingNegative, printMedium == .screen, !stock.isReflectionPrint,
+           !stock.isReversal || levelsPositive, options.stage.readsScene,
            options.digitalReference == .autoLevels, options.sceneHighlightStops == nil {
             self.screenMeterStock = stock
             self.screenMeterLevels = levels

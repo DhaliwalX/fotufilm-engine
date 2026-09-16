@@ -701,9 +701,7 @@ enum FilmRender {
         // The requested delivery range is independent of the source. Negative film keeps the
         // source's full exposure range through development, but only direct-positive film and the
         // no-film path may be delivered above display white.
-        let supportsHDR = stock.map {
-            options.paper(for: $0).supportsHDRDelivery(for: $0)
-        } ?? true
+        let supportsHDR = stock.map { options.supportsHDRDelivery(for: $0) } ?? true
         let wantsHDR = hdr && dynamicRange == .hdr && supportsHDR
         let inputConversion = scene.inputConversion
         if let negative {

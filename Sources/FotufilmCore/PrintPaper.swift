@@ -117,6 +117,15 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         stock.isReversal && !isPositivePaper
     }
 
+    /// Whether a transparent positive is delivered through the paper stage instead: Digital
+    /// Reference's graded styles normalise a slide to SDR the way a scanner does, and the gain
+    /// rides the paper slots so no table is rebuilt per frame. Nothing images the film — there is
+    /// still no enlarger and no print MTF — and an integral print is already a print.
+    func levelsPositive(for stock: FilmStock, digitalReference: DigitalReferenceStyle) -> Bool {
+        self == .screen && stock.isReversal && !stock.isReflectionPrint
+            && digitalReference.usesGradedCurve
+    }
+
     /// Transparent positives print onto positive paper. Integral instant sheets are already prints.
     public static func choices(for stock: FilmStock) -> [PrintPaper] {
         if stock.isReflectionPrint { return [.screen] }

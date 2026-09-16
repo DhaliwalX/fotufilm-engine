@@ -194,9 +194,10 @@ public struct FotufilmEngine {
         /// This also selects the appearance of the `.negative` output medium; when that medium is
         /// chosen and this value is nil, the engine uses `.lightBox`.
         public var negativeViewing: NegativeViewing? = nil
-        /// How a colour negative's tone is placed on Digital Reference: a fixed calibrated
-        /// exposure, a graded paper curve at that exposure, or per-frame levels on that curve.
-        /// Other media, monochrome and reversal stocks ignore it.
+        /// How developed film's tone is placed on Digital Reference: a fixed calibrated exposure,
+        /// a graded paper curve at that exposure, or per-frame levels on that curve. A positive
+        /// has no curve to grade, so the graded styles normalise it to SDR instead — its clear
+        /// base or its brightest content to white. Other media and integral prints ignore it.
         public var digitalReference: DigitalReferenceStyle = .default
         /// The frame's brightest content, metered by the host as scene stops over mid-grey after
         /// `exposureEV`, for `.autoLevels` to place near white. Nil requests the shared renderer's
@@ -315,10 +316,20 @@ public struct FotufilmEngine {
             paper?.resolved(for: stock) ?? PrintPaper.default(for: stock)
         }
 
+        /// Whether this render may deliver light above display white: a directly viewed
+        /// positive on a medium that shows it. A positive levelled by a Digital Reference style
+        /// has been normalised to SDR — its base or its brightest content is white — so it is
+        /// delivered like a print.
+        public func supportsHDRDelivery(for stock: FilmStock) -> Bool {
+            let medium = paper(for: stock)
+            return medium.supportsHDRDelivery(for: stock)
+                && !medium.levelsPositive(for: stock, digitalReference: digitalReference)
+        }
+
         /// Physical prints use the standard SDR shoulder; only a directly viewed reversal
         /// needs the earlier roll-off for its extended highlight range.
         public func sdrShoulderKnee(for stock: FilmStock) -> Float {
-            FilmSDRDelivery.shoulderKnee(isReversal: paper(for: stock).supportsHDRDelivery(for: stock))
+            FilmSDRDelivery.shoulderKnee(isReversal: supportsHDRDelivery(for: stock))
         }
     }
 

@@ -62,7 +62,18 @@ final class PositivePrintPaperTests: XCTestCase {
 
     func testPaperSDRDeliveryDoesNotApplyTheSlideHighlightShoulder() throws {
         try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable)
-        XCTAssertEqual(options(.screen).sdrShoulderKnee(for: stock), FilmSDRDelivery.reversalShoulderKnee)
+        // The slide shoulder belongs to the direct view. A levelled screen conversion has
+        // already placed white, so it is delivered like a print.
+        var direct = options(.screen)
+        direct.digitalReference = .referenceExposure
+        XCTAssertEqual(direct.sdrShoulderKnee(for: stock), FilmSDRDelivery.reversalShoulderKnee)
+        XCTAssertTrue(direct.supportsHDRDelivery(for: stock))
+        for style in [DigitalReferenceStyle.gradedPrint, .autoLevels] {
+            var levelled = options(.screen)
+            levelled.digitalReference = style
+            XCTAssertEqual(levelled.sdrShoulderKnee(for: stock), FilmSDRDelivery.standardShoulderKnee)
+            XCTAssertFalse(levelled.supportsHDRDelivery(for: stock))
+        }
         for paper in papers {
             let o = options(paper)
             XCTAssertEqual(o.sdrShoulderKnee(for: stock), FilmSDRDelivery.standardShoulderKnee)
@@ -82,8 +93,13 @@ final class PositivePrintPaperTests: XCTestCase {
     }
 
     func testPositivePaperHasSeparateTablesAndViewingLight() throws {
-        let direct = SpectralRuntime.tables(for: stock, paper: .screen)
+        // Digital Reference at a reference exposure is the direct view; its levelled styles take
+        // the paper stage with the slide's own transmittance, not a positive paper's.
+        let direct = SpectralRuntime.tables(for: stock, paper: .screen,
+                                            digitalReference: .referenceExposure)
         XCTAssertNil(direct.paperOutput)
+        XCTAssertNotNil(SpectralRuntime.tables(for: stock, paper: .screen,
+                                               digitalReference: .autoLevels).paperOutput)
         for paper in papers {
             let base = SpectralRuntime.tables(for: stock, paper: paper)
             let warm = SpectralRuntime.tables(for: stock, paper: paper, printViewingKelvin: 2856)

@@ -238,6 +238,9 @@ public enum EditorControlAvailability: String, Sendable, Equatable, Codable {
     case always
     case film
     case colourNegative
+    /// Film that is developed as a transparency — negative or positive — rather than as an
+    /// integral print.
+    case transparentFilm
     case printStage
     case statedReciprocity
     case couplerGeometry
@@ -253,6 +256,9 @@ public enum EditorControlAvailability: String, Sendable, Equatable, Codable {
         case .colourNegative:
             guard let stock else { return false }
             return !stock.isMonochrome && !stock.isReversal
+        case .transparentFilm:
+            guard let stock else { return false }
+            return !stock.isReflectionPrint
         case .printStage:
             return stock != nil
         case .statedReciprocity:

@@ -102,8 +102,9 @@ extension PrintPaper {
 
     /// The characteristic curve the print's timing is reckoned against: the
     /// green record where the sheet publishes three, which is the record a
-    /// printer times and filters to. `screen` is not a material: its
-    /// color-negative receiver has one fixed tone curve, independent of the film profile.
+    /// printer times and filters to. `screen` is not a material: its colour-negative receiver
+    /// has one fixed tone curve, independent of the film profile, and its graded styles a
+    /// straight line the output table grades.
     func printCurve(for stock: FilmStock,
                     digitalReference: DigitalReferenceStyle = .default) -> CharacteristicCurve {
         printCurves(for: stock, digitalReference: digitalReference)[1]
@@ -116,6 +117,10 @@ extension PrintPaper {
     /// which is exactly the single-curve stage this generalizes.
     func printCurves(for stock: FilmStock,
                      digitalReference: DigitalReferenceStyle = .default) -> [CharacteristicCurve] {
+        if levelsPositive(for: stock, digitalReference: digitalReference) {
+            let curve = DigitalReferenceReceiver.positiveCurve
+            return [curve, curve, curve]
+        }
         guard !viewsFilmDirectly(for: stock) else {
             return [stock.paperCurve, stock.paperCurve, stock.paperCurve]
         }
@@ -150,8 +155,7 @@ extension PrintPaper {
             return [PrintPaper.ra4PrintCurve, PrintPaper.ra4PrintCurve,
                     PrintPaper.ra4PrintCurve]
         case .screen:
-            let curve = stock.isMonochrome
-                ? stock.paperCurve : DigitalReferenceReceiver.curve(for: digitalReference)
+            let curve = DigitalReferenceReceiver.curve(for: digitalReference, stock: stock)
             return [curve, curve, curve]
         case .negative:
             return [stock.paperCurve, stock.paperCurve, stock.paperCurve]

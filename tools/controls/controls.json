@@ -4101,7 +4101,7 @@
       "title" : "Negative Viewing"
     },
     {
-      "availability" : "colourNegative",
+      "availability" : "transparentFilm",
       "binding" : "digitalReferenceIndex",
       "choices" : [
         {
@@ -4111,13 +4111,13 @@
           "value" : 0
         },
         {
-          "detail" : "Fixed exposure through a graded paper curve with a soft highlight shoulder.",
+          "detail" : "Fixed exposure through a graded paper curve with a soft highlight shoulder; a positive's clear base sets white.",
           "id" : "graded-print",
           "label" : "Graded Print",
           "value" : 1
         },
         {
-          "detail" : "The frame's brightest content sets white and the film base sets black.",
+          "detail" : "The frame's brightest content sets white and a negative's film base sets black.",
           "id" : "auto-levels",
           "label" : "Auto Levels",
           "value" : 2
@@ -4127,8 +4127,8 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Screen conversion: reference-exposure, graded-print, or auto-levels (default).",
       "commandLinePlaceholder" : "<style>",
-      "detail" : "Choose how a colour negative is converted on Digital Reference.",
-      "documentation" : "Colour negatives on Digital Reference: fixed Reference Exposure, Graded Print, or per-frame Auto Levels (default).",
+      "detail" : "Choose how developed film is converted on Digital Reference.",
+      "documentation" : "Film on Digital Reference: fixed Reference Exposure, Graded Print, or per-frame Auto Levels (default). On a positive the graded styles set white from the clear base or the frame's brightest content.",
       "drives" : [
 
       ],
@@ -4160,7 +4160,7 @@
         "composed" : false,
         "fxplugID" : 95,
         "group" : "output",
-        "hint" : "Reference Exposure holds calibrated exposure; Graded Print softens highlights; Auto Levels meters frame highlights. Colour negatives on Digital Reference only.",
+        "hint" : "Reference Exposure holds calibrated exposure; Graded Print softens highlights; Auto Levels meters frame highlights. A positive is normalised to SDR instead: its base or its brightest content to white. Digital Reference only.",
         "kind" : "choice",
         "label" : "Screen Conversion",
         "ofxName" : "digitalReference",

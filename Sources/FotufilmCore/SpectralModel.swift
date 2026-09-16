@@ -290,6 +290,10 @@ public enum SpectralRuntime {
     /// engine invocation.
     static let balanceLock = NSLock()
     nonisolated(unsafe) static var balanceCache = BoundedCache<UInt64, [Float]>(limit: 256)
+    /// A positive's Digital Reference read, on the balance lock: the levels ask for it once per
+    /// invocation and once per metered frame.
+    nonisolated(unsafe) static var positiveReadCache =
+        BoundedCache<UInt64, PositiveScreenRead>(limit: 64)
 
     /// Diagnostic: what the process is holding in table sets — how many, and how many bytes of
     /// LUT they come to. Read by the editor soak to watch the cache grow with a session.
@@ -486,9 +490,11 @@ public enum SpectralRuntime {
         if !paper.viewsFilmDirectly(for: stock) {
             for byte in paper.rawValue.utf8 { h = (h ^ UInt64(byte)) &* 0x100000001b3 }
         }
-        // The Digital Reference style changes the screen tables of a colour negative and nothing
-        // else, so every other identity is exactly what it was.
-        if paper == .screen, !stock.isMonochrome, !paper.viewsFilmDirectly(for: stock) {
+        // The Digital Reference style changes the screen tables of developed film and nothing
+        // else, so every other identity is exactly what it was. A positive's reference exposure
+        // is the direct view it always was; only the levelled styles build other tables.
+        if paper == .screen, !stock.isReflectionPrint,
+           !stock.isReversal || digitalReference.usesGradedCurve {
             for byte in digitalReference.rawValue.utf8 {
                 h = (h ^ UInt64(byte)) &* 0x9E3779B97F4A7C15
             }
@@ -529,6 +535,26 @@ public enum SpectralRuntime {
         // Output characterization is fixed at the stock's reference light. The invocation
         // replaces this exposure table with the scene spectrum after calibration is built.
         let exposure = exposureTable(for: stock, illuminant: filmReferenceIlluminant(for: stock))
+        if paper.levelsPositive(for: stock, digitalReference: digitalReference) {
+            // The slide's own transmittance, as the direct view renders it, handed to the paper
+            // stage as density above its 18% mid-grey so the levels can ride the paper slots.
+            // The straight positive curve adds them back and the output table transmits.
+            let read = positiveScreenRead(for: stock)
+            let printing = buildDensityLUT(stock: stock) { density in
+                let rgb = read.transmittance(density: density)
+                return SIMD3(-log10(max(rgb.x, 1e-6) / 0.18), -log10(max(rgb.y, 1e-6) / 0.18),
+                             -log10(max(rgb.z, 1e-6) / 0.18))
+            }
+            let paperRanges = paper.printCurves(for: stock, digitalReference: digitalReference)
+                .map { $0.dMax - $0.dMin }
+            let paperOutput = buildLUT { activation in
+                DigitalReferenceReceiver.positiveRGB(density: SIMD3(
+                    activation.x * paperRanges[0], activation.y * paperRanges[1],
+                    activation.z * paperRanges[2]))
+            }
+            return SpectralPipelineTables(exposure: exposure, filmOutput: printing,
+                                          paperOutput: paperOutput)
+        }
         if paper.viewsFilmDirectly(for: stock) {
             let basis = neutralDensityBasis(for: stock)
             func aligned(_ density: [Float]) -> [Float] { basis(density) }
@@ -552,10 +578,15 @@ public enum SpectralRuntime {
         let printing: SpectralLUT
         if paper.readsLayersDirectly(for: stock) {
             let reading = screenReading(for: stock)
+            // The same film-base black a colour negative gets at a reference exposure.
+            let shadowScale = screenShadowScale(stock: stock, paper: paper,
+                                                digitalReference: digitalReference)
             printing = buildLUT { p in
-                SIMD3(interpolate(reading[0], at: p.x),
-                      interpolate(reading[1], at: p.y),
-                      interpolate(reading[2], at: p.z))
+                let read = SIMD3(interpolate(reading[0], at: p.x),
+                                 interpolate(reading[1], at: p.y),
+                                 interpolate(reading[2], at: p.z))
+                return SIMD3((0..<3).map {
+                    DigitalReferenceReceiver.stretchShadows(read[$0], scale: shadowScale) })
             }
         } else {
             let paperSensitivity = paper.sensitivity
@@ -641,11 +672,11 @@ public enum SpectralRuntime {
         let viewingLight = printViewingKelvin.map(printLightSPD)
             ?? referenceViewingLight(for: paper)
         let paperOutput: SpectralLUT
-        if paper == .screen && !stock.isMonochrome {
+        if paper == .screen {
             paperOutput = buildLUT { activation in
                 DigitalReferenceReceiver.rgb(density: SIMD3(
                     activation.x * paperRanges[0], activation.y * paperRanges[1],
-                    activation.z * paperRanges[2]), style: digitalReference)
+                    activation.z * paperRanges[2]), style: digitalReference, stock: stock)
             }
         } else if paper.isScan {
             // The scan's output is a digital inversion with no viewing dyes or lamp. Lab Scan
@@ -1836,10 +1867,61 @@ public enum SpectralRuntime {
     /// target: 1 everywhere except a colour negative on Digital Reference at a reference exposure.
     static func screenShadowScale(stock: FilmStock, paper: PrintPaper,
                                   digitalReference: DigitalReferenceStyle) -> Float {
-        guard paper == .screen, !stock.isMonochrome, !stock.isReversal,
+        guard paper == .screen, !stock.isReversal,
               digitalReference == .referenceExposure else { return 1 }
-        return DigitalReferenceReceiver.referenceBaseTarget
+        return DigitalReferenceReceiver.referenceBaseTarget(for: stock)
             / DigitalReferenceReceiver.baseRead(for: stock)
+    }
+
+    /// A transparent positive as Digital Reference reads it: the direct view's own spectral
+    /// transmittance with its mid-grey balanced to 18%, and the two readings the levelled styles
+    /// place — the clear base and the neutral wedge. Cached per stock; the tables and the
+    /// per-frame levels both ask for it.
+    struct PositiveScreenRead: Sendable {
+        let stock: FilmStock
+        let basis: NeutralDensityBasis
+        let balance: SIMD3<Float>
+        /// The clear base's brightest channel, as a density below display white: negative when
+        /// the base sits above it, which a slide balanced to 18% at mid-grey always does.
+        let base: Float
+
+        /// Display-linear RGB at record densities, mid-grey at 18%.
+        func transmittance(density: [Float]) -> SIMD3<Float> {
+            let rgb = SpectralRuntime.transmissionRGB(density: basis(density), stock: stock) * balance
+            return SIMD3(max(rgb.x, 0), max(rgb.y, 0), max(rgb.z, 0))
+        }
+
+        /// The neutral wedge's luminance at `stops` over mid-grey, as a density below display
+        /// white: 0.744 at mid-grey.
+        func luminance(stops: Float) -> Float {
+            let density = (0..<3).map {
+                stock.developedDensity(layer: $0, logExposure: stops * log10(2))
+            }
+            let rgb = transmittance(density: density)
+            let weights = ColorScience.displayP3LuminanceWeights
+            let y = weights.0 * rgb.x + weights.1 * rgb.y + weights.2 * rgb.z
+            return -log10(max(y, 1e-6))
+        }
+    }
+
+    static func positiveScreenRead(for stock: FilmStock) -> PositiveScreenRead {
+        let key = cacheIdentifier(for: stock, paper: .screen)
+        balanceLock.lock()
+        if let found = positiveReadCache.value(for: key) {
+            balanceLock.unlock()
+            return found
+        }
+        balanceLock.unlock()
+        let basis = neutralDensityBasis(for: stock)
+        let balance = reversalBalance(for: stock, aligned: { basis($0) })
+        let white = transmissionRGB(density: basis(stock.curves.map(\.dMin)), stock: stock) * balance
+        let read = PositiveScreenRead(
+            stock: stock, basis: basis, balance: balance,
+            base: -log10(max(white.x, white.y, white.z, 1e-6)))
+        balanceLock.lock()
+        positiveReadCache.insert(read, for: key)
+        balanceLock.unlock()
+        return read
     }
 
     static func referenceCastOffset(midEnergy: SIMD3<Float>, stock: FilmStock,
@@ -2125,6 +2207,25 @@ extension SpectralRuntime {
         }
         let perStop = Float(log10(2.0))
 
+        if paper.levelsPositive(for: stock, digitalReference: digitalReference) {
+            // The same shift the kernel applies through its mid-point slots, on the same read.
+            let read = positiveScreenRead(for: stock)
+            let shift = DigitalReferenceReceiver.levels(
+                for: stock, style: digitalReference, sceneHighlightStops: sceneHighlightStops).shift
+            let curve = DigitalReferenceReceiver.positiveCurve
+            let xMid = curve.logExposure(density: curve.dMin + DigitalReferenceReceiver.anchorDensity)
+            return stops.map { s in
+                let density = (0..<3).map {
+                    stock.developedDensity(layer: $0, logExposure: s * perStop)
+                }
+                let rgb = read.transmittance(density: density)
+                let printed = SIMD3<Float>((0..<3).map { c in
+                    curve.density(logExposure: xMid + shift - log10(max(rgb[c], 1e-6) / 0.18))
+                        - curve.dMin
+                })
+                return luminance(DigitalReferenceReceiver.positiveRGB(density: printed))
+            }
+        }
         if paper.viewsFilmDirectly(for: stock) {
             let basis = neutralDensityBasis(for: stock)
             func aligned(_ density: [Float]) -> [Float] { basis(density) }
@@ -2166,7 +2267,7 @@ extension SpectralRuntime {
                                                   paper: paper)
         let shadowScale = screenShadowScale(stock: stock, paper: paper,
                                             digitalReference: digitalReference)
-        if paper == .screen, !stock.isMonochrome {
+        if paper == .screen {
             // The same levels the kernel applies through its mid-point and contrast slots.
             let levels = DigitalReferenceReceiver.levels(
                 for: stock, style: digitalReference, sceneHighlightStops: sceneHighlightStops)
@@ -2184,7 +2285,8 @@ extension SpectralRuntime {
             if paper.readsLayersDirectly(for: stock) {
                 relative = SIMD3((0..<3).map { layer -> Float in
                     let exposure = stock.curves[layer].logExposure(density: density[layer])
-                    return neutralMid - neutralDensity(stock, exposure)
+                    return DigitalReferenceReceiver.stretchShadows(
+                        neutralMid - neutralDensity(stock, exposure), scale: shadowScale)
                 })
             } else {
                 let energy = paperExposure(density: aligned(density).map { $0 * callier },
@@ -2211,9 +2313,10 @@ extension SpectralRuntime {
                         * paper.exposureDirection * relative[channel]) - curves[channel].dMin
             }
             let rgb: SIMD3<Float>
-            if paper == .screen && !stock.isMonochrome {
+            if paper == .screen {
                 rgb = DigitalReferenceReceiver.rgb(
-                    density: SIMD3(printed[0], printed[1], printed[2]), style: digitalReference)
+                    density: SIMD3(printed[0], printed[1], printed[2]), style: digitalReference,
+                    stock: stock)
             } else if paper.isScan {
                 // A scan's characterization holds the receiver's luminance exactly, so this
                 // neutral mirror needs only the receiver. The 709 delivery is likewise a

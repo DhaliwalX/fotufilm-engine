@@ -326,7 +326,8 @@ final class EditorControlCatalogueTests: XCTestCase {
         let reversal = try preset("example-reversal-64")
         let offered = EditorControlCatalogue.controls(in: .printPaper,
                                                       for: reversal)
-        XCTAssertEqual(offered.map(\.field), [.printFrame, .paper, .printLight, .printCorrection])
+        XCTAssertEqual(offered.map(\.field),
+                       [.printFrame, .paper, .printLight, .printCorrection, .digitalReference])
         XCTAssertTrue(EditorControlCatalogue.control(.printFrame)!.availability.admits(stock: nil))
 
         let negative = try preset("example-negative-400")

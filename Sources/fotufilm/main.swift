@@ -154,7 +154,7 @@ if flags["--list-web-media"] != nil {
         ["id": id, "default": PrintPaper.default(for: stock).id,
          "choices": PrintPaper.choices(for: stock).map { medium -> [String: Any] in
              var entry: [String: Any] = ["id": medium.id, "name": medium.name, "detail": medium.detail]
-             if medium == .screen && !stock.isMonochrome && !stock.isReversal {
+             if medium == .screen && !stock.isReflectionPrint {
                  let fixed = DigitalReferenceStyle.autoLevels.receiverLevels(for: stock)
                  entry["screenConversions"] = DigitalReferenceStyle.allCases.map { style -> [String: Any] in
                      var conversion: [String: Any] = ["id": style.id, "name": style.name, "detail": style.detail]
