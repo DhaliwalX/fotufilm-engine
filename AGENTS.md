@@ -12,3 +12,7 @@ Declare every user-facing control once in Sources/FotufilmEditModel/EditorContro
 run `swift run fotufilm-controls` (with `--consumer <path>` for the private checkout) to regenerate
 the bridge slots, plugin ids, Motion template, web controls, Kotlin sources and documentation tables.
 CI runs the same command with `--check`.
+The packed configuration layout and the AOT variant list live in
+Sources/FotufilmHalide/config-layout.json and aot-variants.json; edit those and run
+`python3 tools/generate-config-layout.py` / `python3 tools/generate-aot-variants.py` rather than
+the generated headers. CI checks both with `--check`.

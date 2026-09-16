@@ -1,0 +1,995 @@
+{
+  "schema": 1,
+  "spans": [
+    {
+      "name": "ALL_STAGES",
+      "mask": "(MTF | MTF_LUMA | HALATION | COUPLERS | COUPLER_DIFFUSION | ADJACENCY | GRAIN | PRINT_MTF | DIFFUSION)",
+      "doc": "Full spatial-stage mask, including post-grain enlarger blur. Zero radius makes enlarger blur identity, avoiding a separate variant family. Capture glare remains opt-in through `FOTUFILM_AOT_FLARE` because most input has already passed through a lens."
+    },
+    {
+      "name": "HEAD",
+      "mask": "(ALL_STAGES & ~(GRAIN | PRINT_MTF))",
+      "doc": "The stages up to but not including grain, which is where the split schedule cuts."
+    },
+    {
+      "name": "TAIL",
+      "mask": "(GRAIN | PRINT_MTF | DENSITY_IN)",
+      "doc": "Grain and the enlarger: the half of develop that runs after the cut."
+    },
+    {
+      "name": "NEGATIVE_SPAN",
+      "mask": "((ALL_STAGES & ~PRINT_MTF) | DENSITY_OUT)",
+      "doc": "`PipelineStage.negative`: every stage up to and including grain, and nothing that images the negative afterwards. The same cut the hybrid still renderer makes, moved past grain so that what crosses the boundary is a developed negative rather than a latent one."
+    },
+    {
+      "name": "PRINT_SPAN",
+      "mask": "(PRINT_MTF | DENSITY_IN)",
+      "doc": "`PipelineStage.print`: the enlarger and the print medium, reading densities. Everything the negative span already ran is absent, which is what makes the two spans together run each stage exactly once."
+    },
+    {
+      "name": "TEXTURE_SPAN",
+      "mask": "(ALL_STAGES | TEXTURE)",
+      "doc": "`PipelineStage.texture`: the same stages the negative span runs, differenced against a development with none of them. The enlarger is in, because it is one of the selectable spatial stages here rather than the print it belongs to in a full render."
+    },
+    {
+      "name": "TEXTURE_FLAT_SPAN",
+      "mask": "(FLARE | COUPLERS | TEXTURE)",
+      "doc": "Texture span for an empty spatial selection. It requires an exact variant because unused near-identity stages would enter only one side of the density difference. Pointwise glare and coupler inhibition remain on both sides and cancel."
+    },
+    {
+      "name": "NEGATIVE",
+      "mask": "(MTF | HALATION | COUPLERS | COUPLER_DIFFUSION | ADJACENCY | GRAIN)",
+      "doc": "A colour negative: DIR couplers that diffuse, and no luminance MTF arm. This is a stock that gets printed, not the light-box view of one — that borrows the reversal flag instead."
+    },
+    {
+      "name": "SLIDE",
+      "mask": "(MTF | HALATION | ADJACENCY | GRAIN)",
+      "doc": "A transparency or a black-and-white stock without an interimage correction."
+    },
+    {
+      "name": "SLIDE_INTERIMAGE",
+      "mask": "(SLIDE | COUPLERS)",
+      "doc": "A transparency whose development carries a pointwise interimage correction."
+    },
+    {
+      "name": "SLIDE_NO_MTF",
+      "mask": "(SLIDE & ~MTF)",
+      "doc": "The same without the emulsion MTF, which is compiled out when the stock's diffusion does not reach a pixel at the frame's size."
+    },
+    {
+      "name": "BASIC_STAGES",
+      "mask": "((ALL_STAGES & ~(MTF_LUMA | DIFFUSION)) | FLOAT_IO | REALTIME)",
+      "doc": "Common float video graphs. AOT windowed twins keep the same arguments and physics, with their intermediate rows stored in bounded circular buffers."
+    }
+  ],
+  "families": [
+    {
+      "name": "DISC",
+      "adds": "DISC_GRAIN"
+    },
+    {
+      "name": "EXTENDED_MTF",
+      "adds": "MTF_LUMA",
+      "doc": "A measured two-component emulsion MTF uses the existing luminance-MTF arm to carry its second positive blur. Unlike an unused luminance arm, dropping this bit changes the trace."
+    },
+    {
+      "name": "DONOR",
+      "adds": "DONOR_LAYER",
+      "doc": "Adds the donor capture layer. Donor stocks require this exact variant because the host-side warp includes its counterweight. Non-donor stocks supply zero release, so donor variants remain valid supersets for plain requests."
+    },
+    {
+      "name": "MOTTLE",
+      "adds": "GRAIN_MOTTLE",
+      "doc": "The grain-size mixture — a coarse second clump field under the sharp one. Like the donor family this is a *tight* twin: the host splits the published granularity's variance between the two fields before the kernel runs, so a variant that lacks the stage renders the sharp field at its reduced amplitude and never lays the coarse half back. See the `_mottle` entries at the end of the variant list for how the family is scoped."
+    },
+    {
+      "name": "FLARE",
+      "adds": "FLARE",
+      "doc": "Capture veiling glare, which the stage masks above deliberately leave out. The family built from this is intentionally *not* tight: each entry carries every stage, so a glare-on render of a stock that uses no couplers still finds a variant and runs the coupler stage at zero strength. That is the trade the opt-in deserves — a frame that asks for glare is the rare one, and a tight twin of all seventy-eight would cost the shipped library its whole size again to save a stage on a path almost nothing takes."
+    },
+    {
+      "name": "ENLARGED",
+      "adds": "PRINT_MTF",
+      "doc": "A stock that goes through an enlarger onto paper. Negatives without interimage correction share the slide's capture stages, but still need the print MTF. Keep an enlarged colour family for those negatives as well as the monochrome variants. A reversal can use an enlarged variant with the print radius at zero when no tighter variant is available."
+    }
+  ],
+  "axes": {
+    "stage": [
+      "ALL_STAGES",
+      "GRAIN_MOTTLE",
+      "FLARE",
+      "DISC_GRAIN",
+      "DONOR_LAYER"
+    ],
+    "exact": [
+      "MONOCHROME",
+      "FLOAT_IO",
+      "REALTIME",
+      "EXACT_MATH",
+      "DENSITY_OUT",
+      "DENSITY_IN",
+      "FLARE_MEASURE",
+      "ENCODE_OUT",
+      "OUTPUT_LINEAR",
+      "OUTPUT_POWER",
+      "OUTPUT_LOG",
+      "LIGHT_OUT",
+      "FIELDS_IN",
+      "TEXTURE",
+      "NO_FILM"
+    ]
+  },
+  "variants": [
+    {
+      "name": "color",
+      "mask": "ALL_STAGES"
+    },
+    {
+      "name": "color_disc",
+      "mask": "DISC(ALL_STAGES)"
+    },
+    {
+      "name": "monochrome",
+      "mask": "ALL_STAGES | MONOCHROME"
+    },
+    {
+      "name": "monochrome_disc",
+      "mask": "DISC(ALL_STAGES | MONOCHROME)"
+    },
+    {
+      "name": "color_float",
+      "mask": "ALL_STAGES | FLOAT_IO"
+    },
+    {
+      "name": "color_float_disc",
+      "mask": "DISC(ALL_STAGES | FLOAT_IO)"
+    },
+    {
+      "name": "monochrome_float",
+      "mask": "ALL_STAGES | MONOCHROME | FLOAT_IO"
+    },
+    {
+      "name": "monochrome_float_disc",
+      "mask": "DISC(ALL_STAGES | MONOCHROME | FLOAT_IO)"
+    },
+    {
+      "name": "color_float_exact",
+      "mask": "ALL_STAGES | FLOAT_IO | EXACT_MATH"
+    },
+    {
+      "name": "color_float_exact_disc",
+      "mask": "DISC(ALL_STAGES | FLOAT_IO | EXACT_MATH)"
+    },
+    {
+      "name": "monochrome_float_exact",
+      "mask": "ALL_STAGES | MONOCHROME | FLOAT_IO | EXACT_MATH"
+    },
+    {
+      "name": "monochrome_float_exact_disc",
+      "mask": "DISC(ALL_STAGES | MONOCHROME | FLOAT_IO | EXACT_MATH)"
+    },
+    {
+      "name": "color_float_realtime",
+      "mask": "ALL_STAGES | FLOAT_IO | REALTIME"
+    },
+    {
+      "name": "color_float_realtime_disc",
+      "mask": "DISC(ALL_STAGES | FLOAT_IO | REALTIME)"
+    },
+    {
+      "name": "monochrome_float_realtime",
+      "mask": "ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME"
+    },
+    {
+      "name": "monochrome_float_realtime_disc",
+      "mask": "DISC(ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME)"
+    },
+    {
+      "name": "color_float_realtime_no_print",
+      "mask": "SLIDE | FLOAT_IO | REALTIME"
+    },
+    {
+      "name": "monochrome_float_realtime_no_print",
+      "mask": "SLIDE | MONOCHROME | FLOAT_IO | REALTIME"
+    },
+    {
+      "name": "color_float_realtime_encode_linear",
+      "mask": "ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR"
+    },
+    {
+      "name": "color_float_realtime_encode_linear_disc",
+      "mask": "DISC(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR)"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_linear",
+      "mask": "ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_linear_disc",
+      "mask": "DISC(ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR)"
+    },
+    {
+      "name": "color_float_realtime_encode_power",
+      "mask": "ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER"
+    },
+    {
+      "name": "color_float_realtime_encode_power_disc",
+      "mask": "DISC(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER)"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_power",
+      "mask": "ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_power_disc",
+      "mask": "DISC(ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER)"
+    },
+    {
+      "name": "color_float_realtime_encode_log",
+      "mask": "ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG"
+    },
+    {
+      "name": "color_float_realtime_encode_log_disc",
+      "mask": "DISC(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG)"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_log",
+      "mask": "ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_log_disc",
+      "mask": "DISC(ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG)"
+    },
+    {
+      "name": "color_float_realtime_encode_linear_no_print",
+      "mask": "SLIDE | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_linear_no_print",
+      "mask": "SLIDE | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR"
+    },
+    {
+      "name": "color_float_realtime_encode_power_no_print",
+      "mask": "SLIDE | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_power_no_print",
+      "mask": "SLIDE | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER"
+    },
+    {
+      "name": "color_float_realtime_encode_log_no_print",
+      "mask": "SLIDE | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_log_no_print",
+      "mask": "SLIDE | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG"
+    },
+    {
+      "name": "color_float_realtime_measure_encode_log",
+      "mask": "ALL_STAGES | FLOAT_IO | REALTIME | FLARE_MEASURE | FLARE | ENCODE_OUT | OUTPUT_LOG"
+    },
+    {
+      "name": "color_float_realtime_measure_encode_log_disc",
+      "mask": "DISC(ALL_STAGES | FLOAT_IO | REALTIME | FLARE_MEASURE | FLARE | ENCODE_OUT | OUTPUT_LOG)"
+    },
+    {
+      "name": "monochrome_float_realtime_measure_encode_log",
+      "mask": "ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | FLARE_MEASURE | FLARE | ENCODE_OUT | OUTPUT_LOG"
+    },
+    {
+      "name": "monochrome_float_realtime_measure_encode_log_disc",
+      "mask": "DISC(ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | FLARE_MEASURE | FLARE | ENCODE_OUT | OUTPUT_LOG)"
+    },
+    {
+      "name": "color_float_realtime_measure_encode_log_no_print",
+      "mask": "SLIDE | FLOAT_IO | REALTIME | FLARE_MEASURE | FLARE | ENCODE_OUT | OUTPUT_LOG"
+    },
+    {
+      "name": "monochrome_float_realtime_measure_encode_log_no_print",
+      "mask": "SLIDE | MONOCHROME | FLOAT_IO | REALTIME | FLARE_MEASURE | FLARE | ENCODE_OUT | OUTPUT_LOG"
+    },
+    {
+      "name": "color_flare",
+      "mask": "FLARE(ALL_STAGES)"
+    },
+    {
+      "name": "color_flare_disc",
+      "mask": "DISC(FLARE(ALL_STAGES))"
+    },
+    {
+      "name": "color_float_flare",
+      "mask": "FLARE(ALL_STAGES | FLOAT_IO)"
+    },
+    {
+      "name": "color_float_flare_disc",
+      "mask": "DISC(FLARE(ALL_STAGES | FLOAT_IO))"
+    },
+    {
+      "name": "color_float_exact_flare",
+      "mask": "FLARE(ALL_STAGES | FLOAT_IO | EXACT_MATH)"
+    },
+    {
+      "name": "color_float_exact_flare_disc",
+      "mask": "DISC(FLARE(ALL_STAGES | FLOAT_IO | EXACT_MATH))"
+    },
+    {
+      "name": "color_float_realtime_flare",
+      "mask": "FLARE(ALL_STAGES | FLOAT_IO | REALTIME)"
+    },
+    {
+      "name": "color_float_realtime_flare_disc",
+      "mask": "DISC(FLARE(ALL_STAGES | FLOAT_IO | REALTIME))"
+    },
+    {
+      "name": "color_float_realtime_encode_linear_flare",
+      "mask": "FLARE(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR)"
+    },
+    {
+      "name": "color_float_realtime_encode_linear_flare_disc",
+      "mask": "DISC(FLARE(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR))"
+    },
+    {
+      "name": "color_float_realtime_encode_power_flare",
+      "mask": "FLARE(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER)"
+    },
+    {
+      "name": "color_float_realtime_encode_power_flare_disc",
+      "mask": "DISC(FLARE(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER))"
+    },
+    {
+      "name": "color_float_realtime_encode_log_flare",
+      "mask": "FLARE(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG)"
+    },
+    {
+      "name": "color_float_realtime_encode_log_flare_disc",
+      "mask": "DISC(FLARE(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG))"
+    },
+    {
+      "name": "monochrome_flare",
+      "mask": "FLARE(ALL_STAGES | MONOCHROME)"
+    },
+    {
+      "name": "monochrome_flare_disc",
+      "mask": "DISC(FLARE(ALL_STAGES | MONOCHROME))"
+    },
+    {
+      "name": "monochrome_float_flare",
+      "mask": "FLARE(ALL_STAGES | MONOCHROME | FLOAT_IO)"
+    },
+    {
+      "name": "monochrome_float_flare_disc",
+      "mask": "DISC(FLARE(ALL_STAGES | MONOCHROME | FLOAT_IO))"
+    },
+    {
+      "name": "monochrome_float_exact_flare",
+      "mask": "FLARE(ALL_STAGES | MONOCHROME | FLOAT_IO | EXACT_MATH)"
+    },
+    {
+      "name": "monochrome_float_exact_flare_disc",
+      "mask": "DISC(FLARE(ALL_STAGES | MONOCHROME | FLOAT_IO | EXACT_MATH))"
+    },
+    {
+      "name": "monochrome_float_realtime_flare",
+      "mask": "FLARE(ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME)"
+    },
+    {
+      "name": "monochrome_float_realtime_flare_disc",
+      "mask": "DISC(FLARE(ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME))"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_linear_flare",
+      "mask": "FLARE(ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR)"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_linear_flare_disc",
+      "mask": "DISC(FLARE(ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR))"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_power_flare",
+      "mask": "FLARE(ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER)"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_power_flare_disc",
+      "mask": "DISC(FLARE(ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER))"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_log_flare",
+      "mask": "FLARE(ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG)"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_log_flare_disc",
+      "mask": "DISC(FLARE(ALL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG))"
+    },
+    {
+      "name": "negative",
+      "mask": "ENLARGED(NEGATIVE)"
+    },
+    {
+      "name": "negative_disc",
+      "mask": "ENLARGED(DISC(NEGATIVE))"
+    },
+    {
+      "name": "negative_grainless",
+      "mask": "ENLARGED(NEGATIVE & ~GRAIN)"
+    },
+    {
+      "name": "negative_extended_mtf",
+      "mask": "ENLARGED(EXTENDED_MTF(NEGATIVE))"
+    },
+    {
+      "name": "negative_no_adjacency_extended_mtf",
+      "mask": "ENLARGED(EXTENDED_MTF( NEGATIVE & ~ADJACENCY))"
+    },
+    {
+      "name": "negative_grainless_extended_mtf",
+      "mask": "ENLARGED(EXTENDED_MTF( NEGATIVE & ~GRAIN))"
+    },
+    {
+      "name": "negative_no_adjacency_grainless_extended_mtf",
+      "mask": "ENLARGED(EXTENDED_MTF( NEGATIVE & ~ADJACENCY & ~GRAIN))"
+    },
+    {
+      "name": "negative_no_interimage",
+      "mask": "ENLARGED(SLIDE)"
+    },
+    {
+      "name": "negative_no_interimage_disc",
+      "mask": "ENLARGED(DISC(SLIDE))"
+    },
+    {
+      "name": "negative_no_interimage_grainless",
+      "mask": "ENLARGED(SLIDE & ~GRAIN)"
+    },
+    {
+      "name": "negative_no_interimage_no_mtf",
+      "mask": "ENLARGED(SLIDE_NO_MTF)"
+    },
+    {
+      "name": "negative_no_interimage_no_mtf_disc",
+      "mask": "ENLARGED(DISC(SLIDE_NO_MTF))"
+    },
+    {
+      "name": "negative_no_interimage_no_mtf_grainless",
+      "mask": "ENLARGED(SLIDE_NO_MTF & ~GRAIN)"
+    },
+    {
+      "name": "negative_no_interimage_no_adjacency",
+      "mask": "ENLARGED(SLIDE & ~ADJACENCY)"
+    },
+    {
+      "name": "negative_no_interimage_no_adjacency_disc",
+      "mask": "ENLARGED(DISC(SLIDE) & ~ADJACENCY)"
+    },
+    {
+      "name": "negative_no_interimage_no_adjacency_grainless",
+      "mask": "ENLARGED((SLIDE & ~GRAIN) & ~ADJACENCY)"
+    },
+    {
+      "name": "negative_no_interimage_no_adjacency_no_mtf",
+      "mask": "ENLARGED(SLIDE_NO_MTF & ~ADJACENCY)"
+    },
+    {
+      "name": "negative_no_interimage_no_adjacency_no_mtf_disc",
+      "mask": "ENLARGED(DISC(SLIDE_NO_MTF) & ~ADJACENCY)"
+    },
+    {
+      "name": "negative_no_interimage_no_adjacency_no_mtf_grainless",
+      "mask": "ENLARGED((SLIDE_NO_MTF & ~GRAIN) & ~ADJACENCY)"
+    },
+    {
+      "name": "slide",
+      "mask": "SLIDE"
+    },
+    {
+      "name": "slide_disc",
+      "mask": "DISC(SLIDE)"
+    },
+    {
+      "name": "slide_grainless",
+      "mask": "SLIDE & ~GRAIN"
+    },
+    {
+      "name": "slide_interimage",
+      "mask": "SLIDE_INTERIMAGE"
+    },
+    {
+      "name": "slide_interimage_grainless",
+      "mask": "SLIDE_INTERIMAGE & ~GRAIN"
+    },
+    {
+      "name": "slide_interimage_extended_mtf",
+      "mask": "EXTENDED_MTF(SLIDE_INTERIMAGE)"
+    },
+    {
+      "name": "slide_interimage_no_adjacency_extended_mtf",
+      "mask": "EXTENDED_MTF(SLIDE_INTERIMAGE & ~ADJACENCY)"
+    },
+    {
+      "name": "slide_interimage_grainless_extended_mtf",
+      "mask": "EXTENDED_MTF(SLIDE_INTERIMAGE & ~GRAIN)"
+    },
+    {
+      "name": "slide_interimage_no_adjacency_grainless_extended_mtf",
+      "mask": "EXTENDED_MTF(SLIDE_INTERIMAGE & ~ADJACENCY & ~GRAIN)"
+    },
+    {
+      "name": "slide_extended_mtf",
+      "mask": "EXTENDED_MTF(SLIDE)"
+    },
+    {
+      "name": "slide_no_adjacency_extended_mtf",
+      "mask": "EXTENDED_MTF(SLIDE & ~ADJACENCY)"
+    },
+    {
+      "name": "slide_grainless_extended_mtf",
+      "mask": "EXTENDED_MTF(SLIDE & ~GRAIN)"
+    },
+    {
+      "name": "slide_no_adjacency_grainless_extended_mtf",
+      "mask": "EXTENDED_MTF(SLIDE & ~ADJACENCY & ~GRAIN)"
+    },
+    {
+      "name": "slide_mono",
+      "mask": "ENLARGED(SLIDE | MONOCHROME)"
+    },
+    {
+      "name": "slide_mono_disc",
+      "mask": "ENLARGED(DISC(SLIDE | MONOCHROME))"
+    },
+    {
+      "name": "slide_mono_grainless",
+      "mask": "ENLARGED((SLIDE & ~GRAIN) | MONOCHROME)"
+    },
+    {
+      "name": "slide_mono_extended_mtf",
+      "mask": "ENLARGED(EXTENDED_MTF( SLIDE | MONOCHROME))"
+    },
+    {
+      "name": "slide_mono_extended_mtf_disc",
+      "mask": "ENLARGED(DISC(EXTENDED_MTF( SLIDE | MONOCHROME)))"
+    },
+    {
+      "name": "slide_mono_no_adjacency_extended_mtf",
+      "mask": "ENLARGED(EXTENDED_MTF( (SLIDE & ~ADJACENCY) | MONOCHROME))"
+    },
+    {
+      "name": "slide_mono_grainless_extended_mtf",
+      "mask": "ENLARGED(EXTENDED_MTF( (SLIDE & ~GRAIN) | MONOCHROME))"
+    },
+    {
+      "name": "slide_mono_no_adjacency_grainless_extended_mtf",
+      "mask": "ENLARGED(EXTENDED_MTF( (SLIDE & ~ADJACENCY & ~GRAIN) | MONOCHROME))"
+    },
+    {
+      "name": "slide_mono_no_mtf",
+      "mask": "ENLARGED(SLIDE_NO_MTF | MONOCHROME)"
+    },
+    {
+      "name": "slide_mono_no_mtf_disc",
+      "mask": "ENLARGED(DISC(SLIDE_NO_MTF | MONOCHROME))"
+    },
+    {
+      "name": "slide_mono_no_mtf_grainless",
+      "mask": "ENLARGED((SLIDE_NO_MTF & ~GRAIN) | MONOCHROME)"
+    },
+    {
+      "name": "color_float_measure",
+      "mask": "ALL_STAGES | FLOAT_IO | FLARE_MEASURE | FLARE"
+    },
+    {
+      "name": "color_float_measure_disc",
+      "mask": "DISC(ALL_STAGES | FLOAT_IO | FLARE_MEASURE | FLARE)"
+    },
+    {
+      "name": "monochrome_float_measure",
+      "mask": "ALL_STAGES | MONOCHROME | FLOAT_IO | FLARE_MEASURE | FLARE"
+    },
+    {
+      "name": "monochrome_float_measure_disc",
+      "mask": "DISC(ALL_STAGES | MONOCHROME | FLOAT_IO | FLARE_MEASURE | FLARE)"
+    },
+    {
+      "name": "color_float_encode",
+      "mask": "ALL_STAGES | FLOAT_IO | ENCODE_OUT"
+    },
+    {
+      "name": "color_float_encode_disc",
+      "mask": "DISC(ALL_STAGES | FLOAT_IO | ENCODE_OUT)"
+    },
+    {
+      "name": "color_float_measure_encode",
+      "mask": "ALL_STAGES | FLOAT_IO | FLARE_MEASURE | FLARE | ENCODE_OUT"
+    },
+    {
+      "name": "color_float_measure_encode_disc",
+      "mask": "DISC(ALL_STAGES | FLOAT_IO | FLARE_MEASURE | FLARE | ENCODE_OUT)"
+    },
+    {
+      "name": "monochrome_float_encode",
+      "mask": "ALL_STAGES | MONOCHROME | FLOAT_IO | ENCODE_OUT"
+    },
+    {
+      "name": "monochrome_float_encode_disc",
+      "mask": "DISC(ALL_STAGES | MONOCHROME | FLOAT_IO | ENCODE_OUT)"
+    },
+    {
+      "name": "monochrome_float_measure_encode",
+      "mask": "ALL_STAGES | MONOCHROME | FLOAT_IO | FLARE_MEASURE | FLARE | ENCODE_OUT"
+    },
+    {
+      "name": "monochrome_float_measure_encode_disc",
+      "mask": "DISC(ALL_STAGES | MONOCHROME | FLOAT_IO | FLARE_MEASURE | FLARE | ENCODE_OUT)"
+    },
+    {
+      "name": "color_float_light",
+      "mask": "FLARE | MTF | MTF_LUMA | FLOAT_IO | LIGHT_OUT | DIFFUSION"
+    },
+    {
+      "name": "monochrome_float_light",
+      "mask": "FLARE | MTF | MTF_LUMA | FLOAT_IO | LIGHT_OUT | MONOCHROME | DIFFUSION"
+    },
+    {
+      "name": "color_float_fields",
+      "mask": "ALL_STAGES | FLOAT_IO | FIELDS_IN"
+    },
+    {
+      "name": "color_float_fields_disc",
+      "mask": "DISC(ALL_STAGES | FLOAT_IO | FIELDS_IN)"
+    },
+    {
+      "name": "monochrome_float_fields",
+      "mask": "ALL_STAGES | MONOCHROME | FLOAT_IO | FIELDS_IN"
+    },
+    {
+      "name": "monochrome_float_fields_disc",
+      "mask": "DISC(ALL_STAGES | MONOCHROME | FLOAT_IO | FIELDS_IN)"
+    },
+    {
+      "name": "color_head",
+      "mask": "HEAD | DENSITY_OUT"
+    },
+    {
+      "name": "monochrome_head",
+      "mask": "HEAD | DENSITY_OUT | MONOCHROME"
+    },
+    {
+      "name": "color_tail",
+      "mask": "TAIL"
+    },
+    {
+      "name": "color_tail_disc",
+      "mask": "DISC(TAIL)"
+    },
+    {
+      "name": "monochrome_tail",
+      "mask": "TAIL | MONOCHROME"
+    },
+    {
+      "name": "monochrome_tail_disc",
+      "mask": "DISC(TAIL | MONOCHROME)"
+    },
+    {
+      "name": "color_float_realtime_negative",
+      "mask": "NEGATIVE_SPAN | FLOAT_IO | REALTIME"
+    },
+    {
+      "name": "monochrome_float_realtime_negative",
+      "mask": "NEGATIVE_SPAN | MONOCHROME | FLOAT_IO | REALTIME"
+    },
+    {
+      "name": "color_float_realtime_print",
+      "mask": "PRINT_SPAN | FLOAT_IO | REALTIME"
+    },
+    {
+      "name": "monochrome_float_realtime_print",
+      "mask": "PRINT_SPAN | MONOCHROME | FLOAT_IO | REALTIME"
+    },
+    {
+      "name": "color_float_realtime_texture",
+      "mask": "TEXTURE_SPAN | FLOAT_IO | REALTIME"
+    },
+    {
+      "name": "monochrome_float_realtime_texture",
+      "mask": "TEXTURE_SPAN | MONOCHROME | FLOAT_IO | REALTIME"
+    },
+    {
+      "name": "color_float_negative",
+      "mask": "NEGATIVE_SPAN | FLOAT_IO"
+    },
+    {
+      "name": "monochrome_float_negative",
+      "mask": "NEGATIVE_SPAN | MONOCHROME | FLOAT_IO"
+    },
+    {
+      "name": "color_float_print",
+      "mask": "PRINT_SPAN | FLOAT_IO"
+    },
+    {
+      "name": "monochrome_float_print",
+      "mask": "PRINT_SPAN | MONOCHROME | FLOAT_IO"
+    },
+    {
+      "name": "color_float_texture",
+      "mask": "TEXTURE_SPAN | FLOAT_IO"
+    },
+    {
+      "name": "monochrome_float_texture",
+      "mask": "TEXTURE_SPAN | MONOCHROME | FLOAT_IO"
+    },
+    {
+      "name": "color_float_realtime_texture_flat",
+      "mask": "TEXTURE_FLAT_SPAN | FLOAT_IO | REALTIME"
+    },
+    {
+      "name": "monochrome_float_realtime_texture_flat",
+      "mask": "TEXTURE_FLAT_SPAN | MONOCHROME | FLOAT_IO | REALTIME"
+    },
+    {
+      "name": "color_float_texture_flat",
+      "mask": "TEXTURE_FLAT_SPAN | FLOAT_IO"
+    },
+    {
+      "name": "monochrome_float_texture_flat",
+      "mask": "TEXTURE_FLAT_SPAN | MONOCHROME | FLOAT_IO"
+    },
+    {
+      "name": "color_donor",
+      "mask": "DONOR(ALL_STAGES)",
+      "doc": "The `_donor` twins; see FOTUFILM_AOT_DONOR."
+    },
+    {
+      "name": "color_float_donor",
+      "mask": "DONOR(ALL_STAGES | FLOAT_IO)"
+    },
+    {
+      "name": "color_float_exact_donor",
+      "mask": "DONOR(ALL_STAGES | FLOAT_IO | EXACT_MATH)"
+    },
+    {
+      "name": "color_float_realtime_donor",
+      "mask": "DONOR(ALL_STAGES | FLOAT_IO | REALTIME)"
+    },
+    {
+      "name": "color_float_realtime_encode_linear_donor",
+      "mask": "DONOR(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR)"
+    },
+    {
+      "name": "color_float_realtime_encode_power_donor",
+      "mask": "DONOR(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER)"
+    },
+    {
+      "name": "color_float_realtime_encode_log_donor",
+      "mask": "DONOR(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG)"
+    },
+    {
+      "name": "color_float_realtime_measure_encode_log_donor",
+      "mask": "DONOR(ALL_STAGES | FLOAT_IO | REALTIME | FLARE_MEASURE | FLARE | ENCODE_OUT | OUTPUT_LOG)"
+    },
+    {
+      "name": "color_flare_donor",
+      "mask": "DONOR(FLARE(ALL_STAGES))"
+    },
+    {
+      "name": "color_float_flare_donor",
+      "mask": "DONOR(FLARE(ALL_STAGES | FLOAT_IO))"
+    },
+    {
+      "name": "color_float_exact_flare_donor",
+      "mask": "DONOR(FLARE(ALL_STAGES | FLOAT_IO | EXACT_MATH))"
+    },
+    {
+      "name": "color_float_realtime_flare_donor",
+      "mask": "DONOR(FLARE(ALL_STAGES | FLOAT_IO | REALTIME))"
+    },
+    {
+      "name": "color_float_realtime_encode_linear_flare_donor",
+      "mask": "DONOR(FLARE(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR))"
+    },
+    {
+      "name": "color_float_realtime_encode_power_flare_donor",
+      "mask": "DONOR(FLARE(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER))"
+    },
+    {
+      "name": "color_float_realtime_encode_log_flare_donor",
+      "mask": "DONOR(FLARE(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG))"
+    },
+    {
+      "name": "negative_donor",
+      "mask": "DONOR(ENLARGED(NEGATIVE))"
+    },
+    {
+      "name": "negative_grainless_donor",
+      "mask": "DONOR(ENLARGED( NEGATIVE & ~GRAIN))"
+    },
+    {
+      "name": "negative_extended_mtf_donor",
+      "mask": "DONOR(ENLARGED( EXTENDED_MTF(NEGATIVE)))"
+    },
+    {
+      "name": "negative_no_adjacency_extended_mtf_donor",
+      "mask": "DONOR(ENLARGED( EXTENDED_MTF(NEGATIVE & ~ADJACENCY)))"
+    },
+    {
+      "name": "negative_grainless_extended_mtf_donor",
+      "mask": "DONOR(ENLARGED( EXTENDED_MTF(NEGATIVE & ~GRAIN)))"
+    },
+    {
+      "name": "negative_no_adjacency_grainless_extended_mtf_donor",
+      "mask": "DONOR(ENLARGED( EXTENDED_MTF(NEGATIVE & ~ADJACENCY & ~GRAIN)))"
+    },
+    {
+      "name": "color_float_measure_donor",
+      "mask": "DONOR(ALL_STAGES | FLOAT_IO | FLARE_MEASURE | FLARE)"
+    },
+    {
+      "name": "color_float_encode_donor",
+      "mask": "DONOR(ALL_STAGES | FLOAT_IO | ENCODE_OUT)"
+    },
+    {
+      "name": "color_float_measure_encode_donor",
+      "mask": "DONOR(ALL_STAGES | FLOAT_IO | FLARE_MEASURE | FLARE | ENCODE_OUT)"
+    },
+    {
+      "name": "color_float_fields_donor",
+      "mask": "DONOR(ALL_STAGES | FLOAT_IO | FIELDS_IN)"
+    },
+    {
+      "name": "color_head_donor",
+      "mask": "DONOR(HEAD | DENSITY_OUT)"
+    },
+    {
+      "name": "color_float_realtime_negative_donor",
+      "mask": "DONOR(NEGATIVE_SPAN | FLOAT_IO | REALTIME)"
+    },
+    {
+      "name": "color_float_realtime_texture_donor",
+      "mask": "DONOR(TEXTURE_SPAN | FLOAT_IO | REALTIME)"
+    },
+    {
+      "name": "color_float_negative_donor",
+      "mask": "DONOR(NEGATIVE_SPAN | FLOAT_IO)"
+    },
+    {
+      "name": "color_float_texture_donor",
+      "mask": "DONOR(TEXTURE_SPAN | FLOAT_IO)"
+    },
+    {
+      "name": "color_float_realtime_texture_flat_donor",
+      "mask": "DONOR(TEXTURE_FLAT_SPAN | FLOAT_IO | REALTIME)"
+    },
+    {
+      "name": "color_float_texture_flat_donor",
+      "mask": "DONOR(TEXTURE_FLAT_SPAN | FLOAT_IO)"
+    },
+    {
+      "name": "color_mottle",
+      "mask": "MOTTLE(DONOR(FLARE( ALL_STAGES)))",
+      "doc": "The `_mottle` twins: the grain-size mixture, served wherever a caller asks for it — today the editor's Mottle control, which reaches a still's print as readily as a clip's frames. Tight the way the donor family is tight, and for the same shape of reason: the host splits the published granularity's variance between the sharp field and the coarse one, so a variant without the stage keeps the reduced sharp amplitude and loses the coarse half — quieter grain, not merely uncoarsened. Seven exact-bit classes per colour arm, each carrying every superset-able stage (flare, donor, the full stage set): a plain, flare, donor or no-print request is covered by the harmless-extra rule, while anything in `select_variant`'s `exact_bits` needs its own twin. FOTUFILM_FRAME_FLOAT_IO and FOTUFILM_FRAME_REALTIME are both in that set, which is the whole reason the first three classes exist. The family shipped realtime-only once, while the eight-bit surfaces — `processRGBA8`, preview develops and SDR export frames alike — and the staged deep road set neither bit. Those fell through to the degrade below, and a phone rendered an explicit mixture about 19% quieter than no mixture at all. The engine keeps every other road out of this family — the mixture is suppressed for the disc model, and for any span but the full one — and `select_variant` degrades a stray mottle request to its sharp-only variant rather than refusing the frame."
+    },
+    {
+      "name": "monochrome_mottle",
+      "mask": "MOTTLE(FLARE(ALL_STAGES) | MONOCHROME)"
+    },
+    {
+      "name": "color_float_mottle",
+      "mask": "MOTTLE(DONOR(FLARE( ALL_STAGES)) | FLOAT_IO)"
+    },
+    {
+      "name": "monochrome_float_mottle",
+      "mask": "MOTTLE(FLARE(ALL_STAGES) | MONOCHROME | FLOAT_IO)"
+    },
+    {
+      "name": "color_float_realtime_mottle",
+      "mask": "MOTTLE(DONOR(FLARE( ALL_STAGES)) | FLOAT_IO | REALTIME)"
+    },
+    {
+      "name": "monochrome_float_realtime_mottle",
+      "mask": "MOTTLE(FLARE(ALL_STAGES) | MONOCHROME | FLOAT_IO | REALTIME)"
+    },
+    {
+      "name": "color_float_realtime_encode_linear_mottle",
+      "mask": "MOTTLE(DONOR(FLARE( ALL_STAGES)) | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR)"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_linear_mottle",
+      "mask": "MOTTLE(FLARE(ALL_STAGES) | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR)"
+    },
+    {
+      "name": "color_float_realtime_encode_power_mottle",
+      "mask": "MOTTLE(DONOR(FLARE( ALL_STAGES)) | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER)"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_power_mottle",
+      "mask": "MOTTLE(FLARE(ALL_STAGES) | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER)"
+    },
+    {
+      "name": "color_float_realtime_encode_log_mottle",
+      "mask": "MOTTLE(DONOR(FLARE( ALL_STAGES)) | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG)"
+    },
+    {
+      "name": "monochrome_float_realtime_encode_log_mottle",
+      "mask": "MOTTLE(FLARE(ALL_STAGES) | MONOCHROME | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG)"
+    },
+    {
+      "name": "color_float_realtime_measure_encode_log_mottle",
+      "mask": "MOTTLE(DONOR(FLARE( ALL_STAGES)) | FLOAT_IO | REALTIME | FLARE_MEASURE | ENCODE_OUT | OUTPUT_LOG)"
+    },
+    {
+      "name": "monochrome_float_realtime_measure_encode_log_mottle",
+      "mask": "MOTTLE(FLARE(ALL_STAGES) | MONOCHROME | FLOAT_IO | REALTIME | FLARE_MEASURE | ENCODE_OUT | OUTPUT_LOG)"
+    },
+    {
+      "name": "color_tail_mottle",
+      "mask": "MOTTLE(TAIL)",
+      "doc": "The split recording road develops grain in the tail span, and the tail mask carries the mixture bit through, so the tail needs its own twins for the same tight reason the family above exists."
+    },
+    {
+      "name": "monochrome_tail_mottle",
+      "mask": "MOTTLE(TAIL | MONOCHROME)"
+    },
+    {
+      "name": "no_film_float",
+      "mask": "NO_FILM | FLOAT_IO",
+      "doc": "No film in the gate: `PlainDevelop` as a kernel. Its own small family rather than a corner of the others, because FOTUFILM_FRAME_NO_FILM is an exact bit — a variant that develops film is not a richer version of one that develops none, it is a different picture — so a request for it can be served by nothing else. Four, because the two bits a still varies are whether the host's own last step is taken in the kernel and whether the transcendentals are exact; no realtime twin until a preview asks for one, and no monochrome twin because `FilmStock.noFilm` is not a monochrome stock."
+    },
+    {
+      "name": "no_film_float_encode",
+      "mask": "NO_FILM | FLOAT_IO | ENCODE_OUT"
+    },
+    {
+      "name": "no_film_float_exact",
+      "mask": "NO_FILM | FLOAT_IO | EXACT_MATH"
+    },
+    {
+      "name": "no_film_float_exact_encode",
+      "mask": "NO_FILM | FLOAT_IO | EXACT_MATH | ENCODE_OUT"
+    }
+  ],
+  "basic": {
+    "variants": [
+      {
+        "name": "color_float_realtime_basic",
+        "mask": "BASIC_STAGES",
+        "doc": "Full float video with ordinary emulsion MTF and no lens diffusion. The selector only chooses these when those extra stages are absent; active features retain their variants."
+      },
+      {
+        "name": "color_float_realtime_encode_linear_basic",
+        "mask": "BASIC_STAGES | ENCODE_OUT | OUTPUT_LINEAR"
+      },
+      {
+        "name": "color_float_realtime_encode_power_basic",
+        "mask": "BASIC_STAGES | ENCODE_OUT | OUTPUT_POWER"
+      },
+      {
+        "name": "color_float_realtime_encode_log_basic",
+        "mask": "BASIC_STAGES | ENCODE_OUT | OUTPUT_LOG"
+      },
+      {
+        "name": "monochrome_float_realtime_basic",
+        "mask": "BASIC_STAGES | MONOCHROME"
+      },
+      {
+        "name": "monochrome_float_realtime_encode_linear_basic",
+        "mask": "BASIC_STAGES | MONOCHROME | ENCODE_OUT | OUTPUT_LINEAR"
+      },
+      {
+        "name": "monochrome_float_realtime_encode_power_basic",
+        "mask": "BASIC_STAGES | MONOCHROME | ENCODE_OUT | OUTPUT_POWER"
+      },
+      {
+        "name": "monochrome_float_realtime_encode_log_basic",
+        "mask": "BASIC_STAGES | MONOCHROME | ENCODE_OUT | OUTPUT_LOG"
+      }
+    ]
+  },
+  "extras": {
+    "names": [
+      "measure_tone",
+      "measure_flare",
+      "measure_flare_fast",
+      "decode",
+      "decode_realtime",
+      "halation_fields"
+    ]
+  }
+}
