@@ -172,14 +172,29 @@ enum DigitalReferenceReceiver {
     static var gradedBaseRead: Float { (gradedBaseVal - gradedAnchorVal) * gradedReadPerVal }
     static var gradedWhiteRead: Float { (gradedWhiteVal - gradedAnchorVal) * gradedReadPerVal }
 
+    /// The calibrated graded curve's paper grade — the public entry points' default, spelled out
+    /// there as the literal 2 — and the range a variable-contrast paper offers.
+    static let referenceGrade: Float = 2
+    static let gradeRange: ClosedRange<Float> = 0...5
+
+    /// The graded curve's straight-line slope at a paper grade. ISO(R) log-exposure ranges run
+    /// from about 160 at grade 0 to 52 at grade 5, an even 0.225 per grade in the log, and the
+    /// slope is their reciprocal about the calibrated 2.894 at grade 2.
+    static func gradedSlope(grade: Float) -> Float {
+        let grade = min(max(grade, gradeRange.lowerBound), gradeRange.upperBound)
+        return 2.894 * exp(0.225 * (grade - referenceGrade))
+    }
+
     /// A graded paper's H&D curve, per channel, from the unit stretch to display-linear
     /// transmittance. A straight line of slope `k` through the pivot, a slight midtone S, a soft
     /// softplus shoulder into paper white and a firmer softplus toe into paper black at 2.3 D,
     /// then black-point compensation so that paper black is display black. The pivot is solved so
-    /// the anchor prints 18% after compensation.
-    static func gradedTransmittance(val: Float) -> Float {
+    /// the anchor prints 18% after compensation at every grade: the anchor's own point on the
+    /// line, `vStar`, is held and the pivot moves with the slope.
+    static func gradedTransmittance(val: Float, grade: Float = referenceGrade) -> Float {
         func softplus(_ x: Float) -> Float { x > 0 ? x + log1p(exp(-x)) : log1p(exp(x)) }
-        let k: Float = 2.894, pivot: Float = 0.2197, vStar: Float = 0.6955
+        let k = gradedSlope(grade: grade), vStar: Float = 0.6955
+        let pivot = gradedAnchorVal - vStar / k
         let dMinEff: Float = 0.004, dMaxEff: Float = 2.295, aHl: Float = 3.0, aSh: Float = 6.0
         var v = k * (val - pivot)
         v += 0.05 * 0.6 * tanh((v - vStar) / 0.6)
@@ -299,6 +314,34 @@ enum DigitalReferenceReceiver {
         })
     }
 
+    /// The log exposure the screen conversion's exposure adds to every read, in the paper
+    /// mid-point slots, for a change of `stops` in what mid-grey displays at. A positive's
+    /// levelled density is its own, so a stop is a stop. A negative's read is amplified by the
+    /// curve it prints through, whose slope at the anchor depends on the style, the grade and
+    /// the stock's own curve, so the read that moves mid-grey by exactly the stated stops is
+    /// solved on that curve rather than guessed from its nominal gamma. Lighter is less density.
+    static func exposureShift(stops: Float, stock: FilmStock, style: DigitalReferenceStyle,
+                              grade: Float) -> Float {
+        guard stops != 0 else { return 0 }
+        if stock.isReversal { return -stops * log10(2) }
+        let curve = curve(for: style, stock: stock)
+        let xMid = curve.logExposure(density: curve.dMin + anchorDensity)
+        // Mid-grey's green output at a read shift, exactly as the kernel and output table place it.
+        func output(_ shift: Float) -> Float {
+            let density = curve.density(logExposure: xMid + shift) - curve.dMin
+            return rgb(density: SIMD3(repeating: density), style: style, stock: stock,
+                       grade: grade).y
+        }
+        let target = output(0) * exp2(stops)
+        // Output falls as the read rises; bisect the read for the target.
+        var low: Float = -3, high: Float = 3
+        for _ in 0..<40 {
+            let mid = (low + high) / 2
+            if output(mid) > target { low = mid } else { high = mid }
+        }
+        return (low + high) / 2
+    }
+
     /// Digital output has display primaries, not a second set of photographic paper dyes.
     /// `density` is each record's kernel-curve density above base. For `.referenceExposure` that
     /// is the reference curve's own density, carried to display black by black-point compensation
@@ -306,14 +349,14 @@ enum DigitalReferenceReceiver {
     /// the anchor plus the levelled relative log exposure, and the graded curve is applied here.
     /// A positive's density is its own, levelled, and is simply transmitted.
     static func rgb(density: SIMD3<Float>, style: DigitalReferenceStyle,
-                    stock: FilmStock) -> SIMD3<Float> {
+                    stock: FilmStock, grade: Float = referenceGrade) -> SIMD3<Float> {
         if stock.isReversal { return positiveRGB(density: density) }
         let referenceCurve = referenceCurve(for: stock)
         if style.usesGradedCurve {
             let val = (density - anchorDensity) / gradedReadPerVal + gradedAnchorVal
             let baseTarget = referenceBaseTarget(for: stock)
             func mixed(_ relative: Float, _ value: Float) -> Float {
-                let highlight = gradedTransmittance(val: value)
+                let highlight = gradedTransmittance(val: value, grade: grade)
                 let anchor = referenceCurve.logExposure(density: referenceCurve.dMin + anchorDensity)
                 let shadowRead = stretchShadows(relative, scale: baseTarget / gradedBaseRead)
                 let shadowDensity = referenceCurve.density(logExposure: anchor + shadowRead)

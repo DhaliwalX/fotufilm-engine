@@ -1148,7 +1148,11 @@ void updateContextControls(Instance *instance, OfxTime time) {
     enable(FOTUFILM_BRIDGE_FRINGE_AMOUNT, interlayer);
     enable(FOTUFILM_BRIDGE_FRINGE_RADIUS, interlayer &&
            controlValue(instance, FOTUFILM_BRIDGE_FRINGE_AMOUNT, time) > 0);
-    enable(FOTUFILM_BRIDGE_DIGITAL_REFERENCE, print && (capabilities & FOTUFILM_CONTROL_SCREEN_CONVERSION) != 0);
+    const bool screen = print && (capabilities & FOTUFILM_CONTROL_SCREEN_CONVERSION) != 0;
+    enable(FOTUFILM_BRIDGE_DIGITAL_REFERENCE, screen);
+    enable(FOTUFILM_BRIDGE_SCREEN_EXPOSURE, screen);
+    enable(FOTUFILM_BRIDGE_SCREEN_GRADE, screen && (capabilities & FOTUFILM_CONTROL_SCREEN_GRADE) != 0
+           && controlValue(instance, FOTUFILM_BRIDGE_DIGITAL_REFERENCE, time) != 0);
     enable(FOTUFILM_BRIDGE_ENLARGER, print && (capabilities & FOTUFILM_CONTROL_ENLARGER) != 0);
     enable(FOTUFILM_BRIDGE_SHUTTER_SECONDS, (capabilities & FOTUFILM_CONTROL_RECIPROCITY) != 0);
     enable(FOTUFILM_BRIDGE_PRINT_LIGHT, print && (capabilities & FOTUFILM_CONTROL_VIEWING_LIGHT) != 0);

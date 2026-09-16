@@ -40,6 +40,8 @@ enum {
     kFotufilmParam_PrintLight = 25,
     kFotufilmParam_Enlarger = 91,
     kFotufilmParam_DigitalReference = 95,
+    kFotufilmParam_ScreenGrade = 96,
+    kFotufilmParam_ScreenExposure = 97,
     kFotufilmParam_PrintCorrection = 20,
     kFotufilmParam_NegativeViewing = 80,
     kFotufilmParam_Stage = 1,

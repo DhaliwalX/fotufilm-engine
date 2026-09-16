@@ -108,6 +108,8 @@ starts closed. Start with these settings:
   <tr><td>Viewing Illuminant</td><td>Output</td><td>Choose the light used to judge a physical print.</td></tr>
   <tr><td>Enlarger</td><td>Output</td><td>The lamp house a reflection print is enlarged under.</td></tr>
   <tr><td>Screen Conversion</td><td>Output</td><td>Reference Exposure holds calibrated exposure; Graded Print softens highlights; Auto Levels meters frame highlights.</td></tr>
+  <tr><td>Paper Grade</td><td>Output</td><td>Variable-contrast paper grade 0–5 for Graded Print and Auto Levels on Digital Reference: grade 2 is the calibrated curve, softer grades roll highlights off earlier, harder grades later.</td></tr>
+  <tr><td>Screen Exposure</td><td>Output</td><td>Exposure of the Digital Reference conversion in stops on top of the chosen style; positive lightens.</td></tr>
   <tr><td>Channel Contrast Match</td><td>Output</td><td>Digital correction of channel-contrast mismatch, not physical printer timing.</td></tr>
   <tr><td>Negative Viewing</td><td>Output</td><td>How the developed negative is read when Output Medium is Negative.</td></tr>
   <tr><td>Stage</td><td>Pipeline</td><td>Which span of the pipeline this node performs.</td></tr>

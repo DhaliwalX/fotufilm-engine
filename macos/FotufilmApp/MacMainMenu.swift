@@ -365,6 +365,8 @@ private final class EditHistoryMenuDelegate: NSObject, NSMenuDelegate {
             return "Viewing Illuminant"
         }
         if new.digitalReference != old.digitalReference { return "Screen Conversion" }
+        if new.screenGrade != old.screenGrade { return "Paper Grade" }
+        if new.screenExposure != old.screenExposure { return "Screen Exposure" }
         if new.enlarger != old.enlarger {
             return "Enlarger"
         }

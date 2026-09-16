@@ -1137,9 +1137,13 @@ public struct FilmEngineInvocation {
         let paperCurves = printMedium.printCurves(for: stock,
                                                   digitalReference: options.digitalReference)
         let paper = paperCurves[1]
+        // The screen exposure rides the same slots, a constant the meter's deltas leave alone.
+        let screenShift = levels.shift + SpectralRuntime.screenExposureShift(
+            options.screenExposureEV, stock: stock, paper: printMedium,
+            digitalReference: options.digitalReference, screenGrade: options.screenGrade)
         var xMids = printMedium.printExposureMidpoints(
             for: stock, digitalReference: options.digitalReference)
-            .map { $0 + printMedium.exposureDirection * levels.shift }
+            .map { $0 + printMedium.exposureDirection * screenShift }
         // Paper exposure shifts log light after film transmission, before the paper curves.
         // Reuse the midpoint slots to preserve the packed ABI and avoid rebuilding spectral LUTs.
         if let printer, printer.exposureEV != 0 {
@@ -1504,13 +1508,15 @@ public struct FilmEngineInvocation {
                 bleachBypass: options.bleachBypass,
                 printViewingKelvin: options.printViewingKelvin,
                 callier: callier, printer: printer,
-                digitalReference: options.digitalReference)
+                digitalReference: options.digitalReference,
+                screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV)
             self.spectralCacheID = SpectralRuntime.cacheIdentifier(
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
                 printViewingKelvin: options.printViewingKelvin,
                 callier: callier, printer: printer,
-                digitalReference: options.digitalReference)
+                digitalReference: options.digitalReference,
+                screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV)
         }
         // One resolved spectrum controls both integration and upload identity. Source pixels
         // have already been neutralized at capture; applying RGB WB here would count light twice.

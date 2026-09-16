@@ -105,6 +105,8 @@ extension EditorControlField {
             return .bespoke { $0.printLightKelvin != nil }
         case .digitalReference:
             return .bespoke { $0.digitalReference != .default }
+        case .screenGrade: return .number(\.screenGrade)
+        case .screenExposure: return .number(\.screenExposure)
         case .enlarger:
             return .bespoke { $0.enlarger != .default }
         case .printerEnabled: return .flag(\.printerEnabled)

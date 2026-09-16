@@ -241,7 +241,13 @@ final class InspectorViewController: SessionViewController {
     /// Only an optically enlarged reflection print has a lamp house to choose.
     private var showsScreenConversion: Bool {
         guard let stock = model.edit.stock else { return false }
-        return model.edit.resolvedPaper == .screen && !stock.isMonochrome && !stock.isReversal
+        return model.edit.resolvedPaper == .screen && !stock.isReflectionPrint
+    }
+
+    /// The paper grade belongs to the graded curve, which only a negative prints through.
+    private var showsScreenGrade: Bool {
+        guard showsScreenConversion, let stock = model.edit.stock else { return false }
+        return !stock.isReversal && model.edit.digitalReference != .referenceExposure
     }
 
     private var showsEnlarger: Bool {
@@ -389,7 +395,8 @@ final class InspectorViewController: SessionViewController {
             switch control.field {
             case .sceneLightKelvin:
                 return EditorControlCatalogue.sourceLights[model.edit.sourceLightIndex].id == "custom"
-            case .digitalReference: return showsScreenConversion
+            case .digitalReference, .screenExposure: return showsScreenConversion
+            case .screenGrade: return showsScreenGrade
             case .enlarger: return showsEnlarger
             case .printCorrection: return showsPrintCorrection
             default: return true

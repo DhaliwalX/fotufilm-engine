@@ -602,6 +602,7 @@ func fotufilm_bridge_control_capabilities(_ stockIndex: Int32, _ paperIndex: Int
     if paper.acceptsPrintCorrection && !stock.isMonochrome && !stock.isReversal { flags |= 16 }
     if Enlarger.illuminates(stock: stock, paper: paper) { flags |= 128 }
     if paper == .screen && !stock.isReflectionPrint { flags |= 512 }
+    if paper == .screen && !stock.isReversal { flags |= 1024 }
     if EditorControlAvailability.interlayerInhibition.admits(stock: stock) { flags |= 256 }
     return flags
 }

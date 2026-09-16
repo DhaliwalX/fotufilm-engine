@@ -204,6 +204,17 @@ public struct FotufilmEngine {
         /// whole-frame meter. An invocation without scene pixels falls back to the fixed graded
         /// print. Video hosts can supply a temporally smoothed measurement.
         public var sceneHighlightStops: Float? = nil
+        /// The contrast of the graded paper curve Digital Reference's graded styles print a
+        /// negative through, as a variable-contrast paper grade 0…5. Grade 2 is the calibrated
+        /// curve; softer grades roll highlights off earlier, harder grades later, each holding
+        /// mid-grey at 18% and the film base at display black. Reference Exposure, positives and
+        /// other media ignore it.
+        public var screenGrade: Float = 2
+        /// The exposure of the screen conversion, in stops on top of the chosen style: positive
+        /// lightens, the way a scanner's exposure does. On a negative it is the printer's exposure
+        /// with the sign a screen expects; on a positive it is the scanner's gain. Other media
+        /// ignore it.
+        public var screenExposureEV: Float = 0
         /// Which span of the pipeline this render performs. `.full` — the default — is scene
         /// light in and a finished image out, and is what every render did before the seam had a
         /// name. The other three cut the pipeline at the density boundary the engine has always

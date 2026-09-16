@@ -390,6 +390,8 @@ struct EditState: Equatable {
     /// diffuse read and changes nothing; `.condenser` prints a silver negative harder through
     /// the Callier effect. Read only where `Enlarger.illuminates` the medium.
     var digitalReference = DigitalReferenceStyle.default
+    var screenGrade = Double(FotufilmEngine.Options().screenGrade)
+    var screenExposure = Double(FotufilmEngine.Options().screenExposureEV)
     var enlarger = Enlarger.default
     /// Retain lamp settings when switched off; older edits keep the original print model.
     var printerEnabled = false

@@ -11,8 +11,10 @@ final class DigitalReferenceReceiverTests: XCTestCase {
     /// these interventions test whether the output preserves the negative's information.
     private func positive(_ stock: FilmStock, exposure: SIMD3<Float>,
                           style: DigitalReferenceStyle = .default,
-                          sceneHighlightStops: Float? = nil) -> SIMD3<Float> {
-        let tables = SpectralRuntime.tables(for: stock, paper: .screen, digitalReference: style)
+                          sceneHighlightStops: Float? = nil,
+                          grade: Float = 2, screenExposure: Float = 0) -> SIMD3<Float> {
+        let tables = SpectralRuntime.tables(for: stock, paper: .screen, digitalReference: style,
+                                            screenGrade: grade, screenExposureEV: screenExposure)
         let activation = SIMD3<Float>((0..<3).map { c in
             let curve = stock.curves[c]
             let density = stock.developedDensity(layer: c, logExposure: exposure[c])
@@ -26,9 +28,12 @@ final class DigitalReferenceReceiverTests: XCTestCase {
                                                                  digitalReference: style)
         let levels = DigitalReferenceReceiver.levels(for: stock, style: style,
                                                      sceneHighlightStops: sceneHighlightStops)
+        let shift = levels.shift + SpectralRuntime.screenExposureShift(
+            screenExposure, stock: stock, paper: .screen, digitalReference: style,
+            screenGrade: grade)
         let printed = SIMD3<Float>((0..<3).map { c in
             let curve = curves[c]
-            let x = midpoints[c] + levels.shift + levels.scale * relative[c]
+            let x = midpoints[c] + shift + levels.scale * relative[c]
             return (curve.density(logExposure: x) - curve.dMin) / (curve.dMax - curve.dMin)
         })
         return paperOutput.sample(printed)
@@ -289,6 +294,72 @@ final class DigitalReferenceReceiverTests: XCTestCase {
                                                  sceneHighlightStops: 2)),
                               8 / (255 * 12.92), id)
         }
+    }
+
+    func testPaperGradeChangesHighlightContrastOnly() throws {
+        // A softer grade rolls highlights off earlier and a harder one later, while mid-grey and
+        // the film-base black hold at every grade. Reference Exposure and positives ignore it.
+        let weights = ColorScience.displayP3LuminanceWeights
+        func luminance(_ rgb: SIMD3<Float>) -> Float {
+            weights.0 * rgb.x + weights.1 * rgb.y + weights.2 * rgb.z
+        }
+        let high = SIMD3<Float>(repeating: 2 * log10(2))
+        for id in ["gold200", "acros100"] {
+            let film = try XCTUnwrap(FilmStock.named(id), id)
+            for style in [DigitalReferenceStyle.gradedPrint, .autoLevels] {
+                var previous: Float = 0
+                for grade: Float in [0, 1, 2, 3, 5] {
+                    let grey = positive(film, exposure: .zero, style: style, grade: grade)
+                    XCTAssertEqual(grey.y, 0.18, accuracy: 0.006, "\(id) \(style) grade \(grade)")
+                    XCTAssertLessThan(positive(film, exposure: SIMD3(repeating: -8), style: style,
+                                               grade: grade).y, 1.5 / (255 * 12.92),
+                                      "\(id) \(style) grade \(grade)")
+                    let bright = luminance(positive(film, exposure: high, style: style, grade: grade))
+                    XCTAssertGreaterThan(bright, previous, "\(id) \(style) grade \(grade)")
+                    previous = bright
+                }
+            }
+            XCTAssertEqual(positive(film, exposure: high, style: .referenceExposure, grade: 5).y,
+                           positive(film, exposure: high, style: .referenceExposure).y, accuracy: 1e-6)
+        }
+        let slide = try XCTUnwrap(FilmStock.named("velvia50"))
+        XCTAssertEqual(positive(slide, exposure: .zero, style: .gradedPrint, grade: 5).y,
+                       positive(slide, exposure: .zero, style: .gradedPrint).y, accuracy: 1e-6)
+    }
+
+    func testScreenExposureMovesMidGreyByTheStatedStops() throws {
+        // A stop of screen exposure is a stop at mid-grey on every path: a negative's read moves
+        // by a stop over its curve's gain, a levelled positive's density by a stop, and a
+        // positive's direct view carries the doubling in its own table.
+        let weights = ColorScience.displayP3LuminanceWeights
+        func luminance(_ rgb: SIMD3<Float>) -> Float {
+            weights.0 * rgb.x + weights.1 * rgb.y + weights.2 * rgb.z
+        }
+        for id in ["gold200", "acros100", "velvia50"] {
+            let film = try XCTUnwrap(FilmStock.named(id), id)
+            for style in Self.styles {
+                for stops: Float in [-1, 1] {
+                    let moved = luminance(positive(film, exposure: .zero, style: style,
+                                                   screenExposure: stops))
+                    let rest = luminance(positive(film, exposure: .zero, style: style))
+                    XCTAssertEqual(log2(moved / rest), stops, accuracy: 0.2,
+                                   "\(id) \(style) \(stops) stops")
+                }
+            }
+        }
+        // The direct view's table changes identity only away from rest.
+        let slide = try XCTUnwrap(FilmStock.named("velvia50"))
+        let rest = SpectralRuntime.cacheIdentifier(for: slide, paper: .screen,
+                                                   digitalReference: .referenceExposure)
+        XCTAssertEqual(rest, SpectralRuntime.cacheIdentifier(
+            for: slide, paper: .screen, digitalReference: .referenceExposure, screenExposureEV: 0))
+        XCTAssertNotEqual(rest, SpectralRuntime.cacheIdentifier(
+            for: slide, paper: .screen, digitalReference: .referenceExposure, screenExposureEV: 1))
+        // A negative's tables do not carry the exposure at all: it rides the paper slots.
+        let negative = try XCTUnwrap(FilmStock.named("gold200"))
+        XCTAssertEqual(
+            SpectralRuntime.cacheIdentifier(for: negative, paper: .screen, screenExposureEV: 1),
+            SpectralRuntime.cacheIdentifier(for: negative, paper: .screen))
     }
 
     /// The direct view a positive's reference exposure is.

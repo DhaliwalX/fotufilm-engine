@@ -15,6 +15,8 @@ final class CommandLineControlsTests: XCTestCase {
             XCTAssertEqual(try applying(.digitalReference, style.rawValue).digitalReference, style)
         }
         XCTAssertThrowsError(try applying(.digitalReference, "unknown"))
+        XCTAssertEqual(try applying(.screenGrade, "3.5").screenGrade, 3.5)
+        XCTAssertEqual(try applying(.screenExposure, "-1.5").screenExposureEV, -1.5)
     }
 
     func testFringeFlagsKeepTheirExistingLimits() throws {

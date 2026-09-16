@@ -107,6 +107,8 @@
       <target object="9001001" channel="./36/25" name="Viewing Illuminant"/>
       <target object="9001001" channel="./36/91" name="Enlarger"/>
       <target object="9001001" channel="./36/95" name="Screen Conversion"/>
+      <target object="9001001" channel="./36/96" name="Paper Grade"/>
+      <target object="9001001" channel="./36/97" name="Screen Exposure"/>
       <target object="9001001" channel="./36/20" name="Channel Contrast Match"/>
       <target object="9001001" channel="./36/80" name="Negative Viewing"/>
       <target object="9001001" channel="./30/1" name="Stage"/>
@@ -244,6 +246,8 @@
             <parameter name="Viewing Illuminant" id="25" flags="12901744656" default="0" value="0"/>
             <parameter name="Enlarger" id="91" flags="12901744656" default="0" value="0"/>
             <parameter name="Screen Conversion" id="95" flags="12901744656" default="2" value="2"/>
+            <parameter name="Paper Grade" id="96" flags="12901679120" default="2" value="2"/>
+            <parameter name="Screen Exposure" id="97" flags="12901679120" default="0" value="0"/>
             <parameter name="Channel Contrast Match" id="20" flags="12901679120" default="0" value="0"/>
             <parameter name="Negative Viewing" id="80" flags="12901744656" default="0" value="0"/>
           </parameter>
