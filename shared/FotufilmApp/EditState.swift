@@ -78,12 +78,17 @@ struct StockPreset: Identifiable {
     private static var cached: [StockPreset]?
     private static var cachedGeneration = -1
 
-    /// The stock the app would choose for itself, before any pack or setting has a say: the first
-    /// film on the wall.
-    /// The first film this build may load — the purchase decides how deep into the catalogue
-    /// "first" reaches, and a free launch must not start on a film its own picker refuses.
+    /// The film the house hands out: Gold 200, the everyday colour negative, which every build
+    /// may load. A pack without it falls back to the first film on the wall this build may load —
+    /// the purchase decides how deep into the catalogue "first" reaches, and a free launch must
+    /// not start on a film its own picker refuses.
+    static let houseStockID = "gold200"
+
     static var houseDefaultID: String {
-        (all.first { ProAccess.allowsStock($0.id) } ?? all.first)?.id ?? ""
+        if all.contains(where: { $0.id == houseStockID }), ProAccess.allowsStock(houseStockID) {
+            return houseStockID
+        }
+        return (all.first { ProAccess.allowsStock($0.id) } ?? all.first)?.id ?? ""
     }
 
     /// What a new photograph starts on: the user's choice in settings, or the house default when
