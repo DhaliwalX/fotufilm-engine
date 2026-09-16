@@ -340,6 +340,12 @@ public struct ControlsExport {
         }
         return "export const CONTROLS = [\n" + entries.joined(separator: "\n") + "\n]\n"
             + "export const VIDEO_LABELS = {\n" + labels.joined(separator: "\n") + "\n}\n"
+            + "export const SCREEN_CONVERSION = " + String(decoding: try! JSONSerialization.data(
+                withJSONObject: ["title": EditorControlCatalogue.control(.digitalReference)!.title,
+                                 "default": DigitalReferenceStyle.default.id,
+                                 "choices": DigitalReferenceStyle.allCases.map {
+                                     ["id": $0.id, "name": $0.name, "detail": $0.detail]
+                                 }], options: [.sortedKeys]), as: UTF8.self) + "\n"
     }
 
     static func wasmControls() -> String {
@@ -363,6 +369,7 @@ public struct ControlsExport {
     }
 
     static func documentedDefault(_ control: EditorControl) -> String {
+        if control.field == .digitalReference { return DigitalReferenceStyle.default.name }
         if control.field == .halationReturn { return "Selected film (CineStill: 12%)" }
         switch control.kind {
         case .slider(let scale), .chips(let scale, _):
@@ -473,6 +480,7 @@ public struct ControlsExport {
         KotlinField(name: "printLightKelvin", type: "Double?", defaultValue: "null", control: nil),
         KotlinField(name: "paper", type: "String", defaultValue: "\"\(PrintPaper.editorDefault.id)\"", control: nil),
         KotlinField(name: "paperFollowsStock", type: "Boolean", defaultValue: "false", control: nil),
+        KotlinField(name: "digitalReference", type: "String", defaultValue: "\"\(DigitalReferenceStyle.default.id)\"", control: nil),
         KotlinField(name: "enlarger", type: "String", defaultValue: "\"\(Enlarger.default.id)\"", control: nil),
         KotlinField(name: "seed", type: "Long", defaultValue: "0x46494C4DL", control: nil),
         KotlinField(name: "rotation", type: "Int", defaultValue: "0", control: nil),
@@ -627,6 +635,11 @@ public struct ControlsExport {
             "    val offeredOnAndroid: Boolean,",
             ") {",
             "    val group: ControlGroup get() = section.group",
+            "}",
+            "",
+            "object OutputMedia {",
+            "    val all = listOf(\(PrintPaper.allCases.enumerated().map { index, paper in "MenuChoice(\(kotlinString(paper.rawValue)), \(kotlinString(paper.name)), \"\", \(index + 1).0)" }.joined(separator: ", ")))",
+            "    fun choices(stock: StockPreset?) = all.filter { if (stock?.isReflectionPrint == true) it.id == \"screen\" else if (stock?.isReversal == true) it.id == \"screen\" || it.id.startsWith(\"ilfochrome-\") else !it.id.startsWith(\"ilfochrome-\") }",
             "}",
             "",
             "object EditorControls {",
@@ -792,6 +805,7 @@ public struct ControlsExport {
             "        state.printLightKelvin?.let { json.put(\"printLightKelvin\", it) }",
             "        json.put(\"paper\", state.paper)",
             "        json.put(\"paperFollowsStock\", state.paperFollowsStock)",
+            "        json.put(\"digitalReference\", state.digitalReference)",
             "        json.put(\"enlarger\", state.enlarger)",
             "        json.put(\"seed\", state.seed)",
             "        json.put(\"rotation\", state.rotation)",
@@ -824,6 +838,7 @@ public struct ControlsExport {
             "        if (json.has(\"printLightKelvin\")) state = state.copy(printLightKelvin = json.getDouble(\"printLightKelvin\"))",
             "        if (json.has(\"paper\")) state = state.copy(paper = json.getString(\"paper\"))",
             "        if (json.has(\"paperFollowsStock\")) state = state.copy(paperFollowsStock = json.getBoolean(\"paperFollowsStock\"))",
+            "        if (json.has(\"digitalReference\")) state = state.copy(digitalReference = json.getString(\"digitalReference\"))",
             "        if (json.has(\"enlarger\")) state = state.copy(enlarger = json.getString(\"enlarger\"))",
             "        if (json.has(\"seed\")) state = state.copy(seed = json.getLong(\"seed\"))",
             "        if (json.has(\"rotation\")) state = state.copy(rotation = ((json.getInt(\"rotation\") % 4) + 4) % 4)",

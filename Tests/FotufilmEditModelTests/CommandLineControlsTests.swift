@@ -9,6 +9,14 @@ final class CommandLineControlsTests: XCTestCase {
         return options
     }
 
+    func testScreenStylesReachTheEngineAndRejectUnknownValues() throws {
+        XCTAssertEqual(FotufilmEngine.Options().digitalReference, .autoLevels)
+        for style in DigitalReferenceStyle.allCases {
+            XCTAssertEqual(try applying(.digitalReference, style.rawValue).digitalReference, style)
+        }
+        XCTAssertThrowsError(try applying(.digitalReference, "unknown"))
+    }
+
     func testFringeFlagsKeepTheirExistingLimits() throws {
         for value in ["-0.1", "1.1", "nan", "inf", "1e300"] {
             XCTAssertThrowsError(try applying(.chromaticFringeAmount, value), value)

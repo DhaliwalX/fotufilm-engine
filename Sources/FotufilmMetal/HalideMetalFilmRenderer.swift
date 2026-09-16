@@ -172,11 +172,11 @@ public final class HalideMetalFilmRenderer {
             validating: stock, options: options, width: width,
             height: height, frameIndex: frameIndex)
         else { return nil }
-        if invocation.localToneActive
+        if invocation.sceneMeteringActive
             || invocation.featureMask & FilmEngineFeature.flare != 0 {
             guard input.storageMode == .shared else { return nil }
             let pixels = input.contents().assumingMemoryBound(to: UInt8.self)
-            if invocation.localToneActive {
+            if invocation.sceneMeteringActive {
                 invocation.measureToneBase(
                     encodedDisplayP3RGBA: pixels, width: width, height: height)
             }
@@ -219,11 +219,11 @@ public final class HalideMetalFilmRenderer {
             height: height, frameIndex: frameIndex)
         else { return nil }
         if realtime { invocation.featureMask |= FilmEngineFeature.realtime }
-        if invocation.localToneActive
+        if invocation.sceneMeteringActive
             || invocation.featureMask & FilmEngineFeature.flare != 0 {
             guard input.storageMode == .shared else { return nil }
             let pixels = input.contents().assumingMemoryBound(to: Float.self)
-            if invocation.localToneActive {
+            if invocation.sceneMeteringActive {
                 var measurement = invocation.toneBaseMeasurement()
                 measurement.add(linearRGBA: pixels, rows: 0..<height)
                 invocation.setToneBase(measurement)
@@ -305,6 +305,7 @@ public final class HalideMetalFilmRenderer {
         else { return nil }
         if realtime { invocation.featureMask |= FilmEngineFeature.realtime }
 
+        invocation.copyScreenLevels(from: measured.invocation)
         if invocation.localToneActive {
             let measuredWidth = Int(measured.invocation.configuration[
                 FilmEngineInvocation.toneGridSizeOffset])
@@ -409,7 +410,7 @@ public final class HalideMetalFilmRenderer {
             height: height, frameIndex: frameIndex)
         else { return false }
         pixels.withUnsafeBufferPointer { input in
-            if invocation.localToneActive {
+            if invocation.sceneMeteringActive {
                 invocation.measureToneBase(srgbRGBA: input.baseAddress!,
                                            width: width, height: height)
             }
@@ -1207,7 +1208,7 @@ public final class HalideMetalFilmRenderer {
             return run(0, band(rows)) == 0
         }
 
-        if invocation.localToneActive {
+        if invocation.sceneMeteringActive {
             var measurement = invocation.toneBaseMeasurement()
             let gridWidth = measurement.gridWidth
             var cellSums = [Float](repeating: 0, count: bandRows * gridWidth)
@@ -1589,7 +1590,7 @@ public final class HalideMetalFilmRenderer {
             validating: stock, options: options, width: frameWidth,
             height: frameHeight, frameIndex: frameIndex)
         else { return false }
-        guard !invocation.localToneActive,
+        guard !invocation.sceneMeteringActive,
               invocation.featureMask & FilmEngineFeature.flare == 0 else { return false }
         let inputHandle = UInt64(UInt(bitPattern:
             Unmanaged.passUnretained(input as AnyObject).toOpaque()))
@@ -1777,7 +1778,7 @@ public final class HalideMetalFilmRenderer {
             height: frameHeight, frameIndex: frameIndex)
         else { return false }
         if realtime { invocation.featureMask |= FilmEngineFeature.realtime }
-        guard !invocation.localToneActive,
+        guard !invocation.sceneMeteringActive,
               invocation.featureMask & FilmEngineFeature.flare == 0 else { return false }
         let inputHandle = UInt64(UInt(bitPattern:
             Unmanaged.passUnretained(input as AnyObject).toOpaque()))

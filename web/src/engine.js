@@ -1,6 +1,7 @@
 import { loadMediumBytes } from './output-media.js'
 import { yieldToBrowser } from './yield.js'
 import { measureTone, toneKey } from './tone-base.js'
+import { applyScreenLevels } from './screen-conversion.js'
 import { CONFIG } from './engine-constants.js'
 import { runtimeAssetUrl, createRuntimeLoader, supportsWebgpuRuntime } from './runtime-assets.js'
 import { packedGrade, whiteBalanceGains, applyColorControls } from './color-controls.js'
@@ -630,10 +631,12 @@ class Developer {
     }
     this.controls = controls
     this.applyControls(controls)
-    if (controls.localTone && (controls.highlights || controls.shadows)) {
+    if (this.pack?.screenMeter || (controls.localTone && (controls.highlights || controls.shadows))) {
       onProgress('Measuring local highlights and shadows')
       const grid = await measuredTone(source, controls, whiteBalanceGains(controls.temperature, controls.tint))
       const offset = this.configPtr / 4
+      applyScreenLevels(this.module.HEAPF32.subarray(offset, offset + this.configuration.length),
+                        this.pack?.screenMeter, grid.regionStops)
       this.module.HEAPF32[offset + CONFIG.TONE_GRID_WIDTH] = grid.width
       this.module.HEAPF32[offset + CONFIG.TONE_GRID_HEIGHT] = grid.height
       this.module.HEAPF32.set(grid.a, offset + CONFIG.TONE_GRID_A)

@@ -253,6 +253,24 @@ extension FilmEngineInvocation {
                 || configuration[Self.sceneAdjustOffset + 1] != 0)
     }
 
+    /// Auto Levels and local tone share one whole-frame measurement on CPU and Metal.
+    public var sceneMeteringActive: Bool { localToneActive || screenMeterStock != nil }
+
+    public mutating func copyScreenLevels(from measured: FilmEngineInvocation) {
+        guard screenMeterStock != nil else { return }
+        applyScreenLevels(measured.screenMeterLevels)
+    }
+
+    private mutating func applyScreenLevels(_ levels: (scale: Float, shift: Float)) {
+        let ratio = levels.scale / screenMeterLevels.scale
+        for c in 0..<3 { configuration[Int(FOTUFILM_CONFIG_MASKING) + c] *= ratio }
+        for offset in [Int(FOTUFILM_CONFIG_PAPER_MIDPOINT), Self.paperMidpointRedOffset,
+                       Self.paperMidpointBlueOffset] {
+            configuration[offset] += levels.shift - screenMeterLevels.shift
+        }
+        screenMeterLevels = levels
+    }
+
     /// A fresh accumulator sized and weighted for this invocation's frame,
     /// white balance, and exposure.
     public func toneBaseMeasurement() -> ToneBaseMeasurement {
@@ -268,6 +286,11 @@ extension FilmEngineInvocation {
     /// Solves the accumulated measurement and pins the grid into the packed
     /// configuration, replacing the identity default.
     public mutating func setToneBase(_ measurement: ToneBaseMeasurement) {
+        if let stock = screenMeterStock,
+           let scene = AutoAdjustment.SceneStops(regionStops: measurement.regionStops()) {
+            applyScreenLevels(DigitalReferenceReceiver.levels(
+                for: stock, style: .autoLevels, sceneHighlightStops: scene.bright))
+        }
         let (a, b) = measurement.solvedCoefficients()
         configuration[Self.toneGridSizeOffset] = Float(measurement.gridWidth)
         configuration[Self.toneGridSizeOffset + 1] = Float(measurement.gridHeight)

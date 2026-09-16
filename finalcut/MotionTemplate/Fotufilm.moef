@@ -106,6 +106,7 @@
       <target object="9001001" channel="./36/4" name="Output Medium"/>
       <target object="9001001" channel="./36/25" name="Viewing Illuminant"/>
       <target object="9001001" channel="./36/91" name="Enlarger"/>
+      <target object="9001001" channel="./36/95" name="Screen Conversion"/>
       <target object="9001001" channel="./36/20" name="Channel Contrast Match"/>
       <target object="9001001" channel="./36/80" name="Negative Viewing"/>
       <target object="9001001" channel="./30/1" name="Stage"/>
@@ -242,6 +243,7 @@
             <parameter name="Output Medium" id="4" flags="12901744656" default="12" value="12"/>
             <parameter name="Viewing Illuminant" id="25" flags="12901744656" default="0" value="0"/>
             <parameter name="Enlarger" id="91" flags="12901744656" default="0" value="0"/>
+            <parameter name="Screen Conversion" id="95" flags="12901744656" default="2" value="2"/>
             <parameter name="Channel Contrast Match" id="20" flags="12901679120" default="0" value="0"/>
             <parameter name="Negative Viewing" id="80" flags="12901744656" default="0" value="0"/>
           </parameter>

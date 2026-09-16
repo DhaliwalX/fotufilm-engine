@@ -79,8 +79,9 @@ extension PrintPaper {
     /// Fixed printer exposure-axis origins. Reflection paper is visually balanced under its
     /// reference lamp; cine film uses the published gross LAD aims. Viewing another lamp
     /// cannot move these exposures. Monochrome retains the single-record neutral convention.
-    func printExposureMidpoints(for stock: FilmStock) -> [Float] {
-        let curves = printCurves(for: stock)
+    func printExposureMidpoints(for stock: FilmStock,
+                                digitalReference: DigitalReferenceStyle = .default) -> [Float] {
+        let curves = printCurves(for: stock, digitalReference: digitalReference)
         if let aim = ladStatusA, !stock.isMonochrome, !stock.isReversal {
             return (0..<3).map { curves[$0].logExposure(density: aim[$0]) }
         }
@@ -103,8 +104,9 @@ extension PrintPaper {
     /// green record where the sheet publishes three, which is the record a
     /// printer times and filters to. `screen` is not a material: its
     /// color-negative receiver has one fixed tone curve, independent of the film profile.
-    func printCurve(for stock: FilmStock) -> CharacteristicCurve {
-        printCurves(for: stock)[1]
+    func printCurve(for stock: FilmStock,
+                    digitalReference: DigitalReferenceStyle = .default) -> CharacteristicCurve {
+        printCurves(for: stock, digitalReference: digitalReference)[1]
     }
 
     /// The characteristic curves the print's three records develop along, in
@@ -112,7 +114,8 @@ extension PrintPaper {
     /// yellow-forming layers as read through red, green and blue filters. A
     /// sheet that publishes one curve develops all three records along it,
     /// which is exactly the single-curve stage this generalizes.
-    func printCurves(for stock: FilmStock) -> [CharacteristicCurve] {
+    func printCurves(for stock: FilmStock,
+                     digitalReference: DigitalReferenceStyle = .default) -> [CharacteristicCurve] {
         guard !viewsFilmDirectly(for: stock) else {
             return [stock.paperCurve, stock.paperCurve, stock.paperCurve]
         }
@@ -121,13 +124,14 @@ extension PrintPaper {
         // record — the green curve — three times. Per-record spread would be
         // unreachable in the render and only skew the analytic mirrors.
         if stock.isMonochrome {
-            let timing = colourRecords(for: stock)[1]
+            let timing = colourRecords(for: stock, digitalReference: digitalReference)[1]
             return [timing, timing, timing]
         }
-        return colourRecords(for: stock)
+        return colourRecords(for: stock, digitalReference: digitalReference)
     }
 
-    private func colourRecords(for stock: FilmStock) -> [CharacteristicCurve] {
+    private func colourRecords(for stock: FilmStock,
+                               digitalReference: DigitalReferenceStyle) -> [CharacteristicCurve] {
         switch self {
         case .ilfochromeCPS1K:
             return Array(repeating: Self.ilfochromeNormalCurve, count: 3)
@@ -146,7 +150,8 @@ extension PrintPaper {
             return [PrintPaper.ra4PrintCurve, PrintPaper.ra4PrintCurve,
                     PrintPaper.ra4PrintCurve]
         case .screen:
-            let curve = stock.isMonochrome ? stock.paperCurve : DigitalReferenceReceiver.curve
+            let curve = stock.isMonochrome
+                ? stock.paperCurve : DigitalReferenceReceiver.curve(for: digitalReference)
             return [curve, curve, curve]
         case .negative:
             return [stock.paperCurve, stock.paperCurve, stock.paperCurve]

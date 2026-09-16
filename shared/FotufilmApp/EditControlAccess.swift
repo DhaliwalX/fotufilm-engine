@@ -103,6 +103,8 @@ extension EditorControlField {
             return .bespoke { $0.printFrame != .none }
         case .printLight:
             return .bespoke { $0.printLightKelvin != nil }
+        case .digitalReference:
+            return .bespoke { $0.digitalReference != .default }
         case .enlarger:
             return .bespoke { $0.enlarger != .default }
         case .printerEnabled: return .flag(\.printerEnabled)
@@ -249,6 +251,7 @@ extension EditState {
     }
 
     mutating func reset(_ field: EditorControlField) {
+        if field == .digitalReference { digitalReference = .default; return }
         if field == .printFrame { printFrame = .none; return }
         if field == .halationReturn { halationReturnRatio = nil; return }
         guard let control = EditorControlCatalogue.control(field) else { return }

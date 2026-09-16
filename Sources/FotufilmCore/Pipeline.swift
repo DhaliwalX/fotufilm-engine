@@ -194,6 +194,15 @@ public struct FotufilmEngine {
         /// This also selects the appearance of the `.negative` output medium; when that medium is
         /// chosen and this value is nil, the engine uses `.lightBox`.
         public var negativeViewing: NegativeViewing? = nil
+        /// How a colour negative's tone is placed on Digital Reference: a fixed calibrated
+        /// exposure, a graded paper curve at that exposure, or per-frame levels on that curve.
+        /// Other media, monochrome and reversal stocks ignore it.
+        public var digitalReference: DigitalReferenceStyle = .default
+        /// The frame's brightest content, metered by the host as scene stops over mid-grey after
+        /// `exposureEV`, for `.autoLevels` to place near white. Nil requests the shared renderer's
+        /// whole-frame meter. An invocation without scene pixels falls back to the fixed graded
+        /// print. Video hosts can supply a temporally smoothed measurement.
+        public var sceneHighlightStops: Float? = nil
         /// Which span of the pipeline this render performs. `.full` — the default — is scene
         /// light in and a finished image out, and is what every render did before the seam had a
         /// name. The other three cut the pipeline at the density boundary the engine has always

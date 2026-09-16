@@ -463,6 +463,8 @@ public struct FilmEngineInvocation {
     public var seed: UInt32
     /// Whether the tone controls may key to the regional base (Options.localTone).
     public let localToneEnabled: Bool
+    var screenMeterStock: FilmStock? = nil
+    var screenMeterLevels: (scale: Float, shift: Float) = (1, 0)
     /// Pixels of context a tile must carry on each cut edge for its interior to develop exactly as
     /// it would inside the whole frame.
     public let spatialSupport: Int
@@ -1111,18 +1113,29 @@ public struct FilmEngineInvocation {
         let printMTFSigma = max(printMedium.enlargerBlurMM * pxPerMM,
                                 Self.grainSigmaFloorPixels)
         let printMTFRadius = printMTFActive ? Self.gaussianRadius(printMTFSigma) : 0
-        let contrast = printer == nil
+        var contrast = printer == nil
             ? stock.printingContrastScale(correction: options.printCorrection, paper: printMedium)
             : [Float](repeating: 1, count: 3)
+        // Digital Reference's graded styles level the receiver's read in these same slots: the
+        // film base to the graded curve's black, and — per frame, when the host has metered
+        // one — the frame's brightest content to its white. No table is rebuilt for it.
+        let levels = printMedium == .screen
+            ? DigitalReferenceReceiver.levels(for: stock, style: options.digitalReference,
+                                              sceneHighlightStops: options.sceneHighlightStops)
+            : (scale: Float(1), shift: Float(0))
+        contrast = contrast.map { $0 * levels.scale }
         // Reverse the positive paper's exposure axis in the existing shared CPU/Metal slots.
         let masking = contrast.map { $0 * printMedium.exposureDirection }
         // The paper's three records, each anchored at its own calibrated
         // midpoint so a neutral mid-grey prints neutral through records that
         // do not share a curve. Green keeps the legacy slots; red and blue
         // ride the appended ones.
-        let paperCurves = printMedium.printCurves(for: stock)
+        let paperCurves = printMedium.printCurves(for: stock,
+                                                  digitalReference: options.digitalReference)
         let paper = paperCurves[1]
-        var xMids = printMedium.printExposureMidpoints(for: stock)
+        var xMids = printMedium.printExposureMidpoints(
+            for: stock, digitalReference: options.digitalReference)
+            .map { $0 + printMedium.exposureDirection * levels.shift }
         // Paper exposure shifts log light after film transmission, before the paper curves.
         // Reuse the midpoint slots to preserve the packed ABI and avoid rebuilding spectral LUTs.
         if let printer, printer.exposureEV != 0 {
@@ -1457,6 +1470,12 @@ public struct FilmEngineInvocation {
         // all, so there is nothing for it to key and nothing to measure.
         self.localToneEnabled = options.localTone && options.stage.readsScene
         self.configuration = configuration
+        if !noFilm, !showingNegative, printMedium == .screen,
+           !stock.isMonochrome, !stock.isReversal, options.stage.readsScene,
+           options.digitalReference == .autoLevels, options.sceneHighlightStops == nil {
+            self.screenMeterStock = stock
+            self.screenMeterLevels = levels
+        }
         if noFilm {
             // Nothing samples these: the variant compiles no spectral recovery, no film cube and
             // no paper cube. Deriving a stock's tables to hand a kernel that will not read them
@@ -1480,12 +1499,14 @@ public struct FilmEngineInvocation {
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
                 printViewingKelvin: options.printViewingKelvin,
-                callier: callier, printer: printer)
+                callier: callier, printer: printer,
+                digitalReference: options.digitalReference)
             self.spectralCacheID = SpectralRuntime.cacheIdentifier(
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
                 printViewingKelvin: options.printViewingKelvin,
-                callier: callier, printer: printer)
+                callier: callier, printer: printer,
+                digitalReference: options.digitalReference)
         }
         // One resolved spectrum controls both integration and upload identity. Source pixels
         // have already been neutralized at capture; applying RGB WB here would count light twice.

@@ -72,7 +72,7 @@ enum HalideBackend {
             }
             invocation.setOutputTransform(outputTransform)
         }
-        if invocation.localToneActive {
+        if invocation.sceneMeteringActive {
             withPlanarPointers(image.planes) { red, green, blue in
                 invocation.measureToneBase(planarR: red!, g: green!, b: blue!,
                                            width: width, height: height)
@@ -246,7 +246,7 @@ enum HalideBackend {
             }
             invocation.setOutputTransform(outputTransform)
         }
-        if measuresScene, invocation.localToneActive {
+        if measuresScene, invocation.sceneMeteringActive {
             withPlanarPointers(image.planes) { red, green, blue in
                 invocation.measureToneBase(planarR: red!, g: green!, b: blue!,
                                            width: width, height: height)

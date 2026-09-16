@@ -239,6 +239,11 @@ final class InspectorViewController: SessionViewController {
     }
 
     /// Only an optically enlarged reflection print has a lamp house to choose.
+    private var showsScreenConversion: Bool {
+        guard let stock = model.edit.stock else { return false }
+        return model.edit.resolvedPaper == .screen && !stock.isMonochrome && !stock.isReversal
+    }
+
     private var showsEnlarger: Bool {
         guard model.edit.hasFilm, let stock = model.edit.stock else { return false }
         return Enlarger.illuminates(stock: stock, paper: model.edit.resolvedPaper)
@@ -384,6 +389,7 @@ final class InspectorViewController: SessionViewController {
             switch control.field {
             case .sceneLightKelvin:
                 return EditorControlCatalogue.sourceLights[model.edit.sourceLightIndex].id == "custom"
+            case .digitalReference: return showsScreenConversion
             case .enlarger: return showsEnlarger
             case .printCorrection: return showsPrintCorrection
             default: return true
@@ -427,6 +433,13 @@ final class InspectorViewController: SessionViewController {
                     .map { (title: $0.label, value: $0.value) },
                 get: { [model] in model.edit.printLightKelvin },
                 set: { [model] in model.edit.printLightKelvin = $0 })]
+        case .digitalReference:
+            guard showsScreenConversion else { return [] }
+            return [PopUpRow<DigitalReferenceStyle>(
+                control.title, options: DigitalReferenceStyle.allCases.map { ($0.name, $0) },
+                get: { [model] in model.edit.digitalReference },
+                set: { [model] in model.edit.digitalReference = $0 }),
+                NoteRow { [model] in model.edit.digitalReference.detail }]
         case .enlarger:
             guard showsEnlarger else { return [] }
             return [PopUpRow<Enlarger>(

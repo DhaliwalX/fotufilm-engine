@@ -1,5 +1,58 @@
 import Foundation
 
+/// How a colour negative's tone is placed on Digital Reference. All three share the fixed
+/// spectral receiver and the film-base black: the darkest exposure a negative can deliver, its
+/// own base, renders as display black. They differ in the curve above it and in whether the
+/// frame's own highlights set white.
+public enum DigitalReferenceStyle: String, CaseIterable, Sendable, Identifiable, Codable {
+    /// A print made at a standard, calibrated exposure: mid-grey at a fixed density, one fixed
+    /// receiver curve for every stock. Deterministic and batch-consistent; the stock's own contrast
+    /// and the scene's colour survive as they are.
+    case referenceExposure = "reference-exposure"
+    /// The same fixed anchoring with a graded paper's characteristic curve: a straight line at
+    /// grade-2 contrast that rolls into paper white through a soft shoulder and into paper black
+    /// through a firm toe. A uniform highlight roll-off across stocks.
+    case gradedPrint = "graded-print"
+    /// Per-frame levels on the graded curve: the frame's brightest content sets white and the film
+    /// base sets black, the way a minilab scanner normalises each frame. Resolves bright windows
+    /// and skies by re-exposing the rest of the frame around them.
+    case autoLevels = "auto-levels"
+
+    public static let `default`: DigitalReferenceStyle = .autoLevels
+
+    public var id: String { rawValue }
+
+    /// Affine receiver placement for hosts that prepare their own packed configurations.
+    /// The scene measurement is in stops over mid-grey, after input exposure.
+    public func receiverLevels(for stock: FilmStock, sceneHighlightStops: Float? = nil)
+        -> (scale: Float, shift: Float) {
+        DigitalReferenceReceiver.levels(for: stock, style: self,
+                                       sceneHighlightStops: sceneHighlightStops)
+    }
+
+    public var name: String {
+        switch self {
+        case .referenceExposure: return "Reference Exposure"
+        case .gradedPrint: return "Graded Print"
+        case .autoLevels: return "Auto Levels"
+        }
+    }
+
+    public var detail: String {
+        switch self {
+        case .referenceExposure:
+            return "Fixed calibrated exposure; mid-grey and contrast never depend on the frame."
+        case .gradedPrint:
+            return "Fixed exposure through a graded paper curve with a soft highlight shoulder."
+        case .autoLevels:
+            return "The frame's brightest content sets white and the film base sets black."
+        }
+    }
+
+    /// Whether the tone curve lives in the output table rather than the kernel's paper curve.
+    var usesGradedCurve: Bool { self != .referenceExposure }
+}
+
 /// Fixed spectral receiver for color negatives on Digital Reference. Equal-energy illumination
 /// reads the developed image dyes through broad RA-4 sensitivity bands. A common density matrix
 /// separates their overlap against the public synthetic negative dye basis, then a common curve
@@ -12,11 +65,122 @@ enum DigitalReferenceReceiver {
     static let illuminant = SpectralGrid.equalEnergy
     static let sensitivity = SpectralGrid.paperSensitivity
 
-    /// Common digital density scale, independent of the selected negative's legacy paper curve.
-    /// Retains the previous still-film display range without fitting away stock differences.
-    static let curve = CharacteristicCurve(
+    /// The receiver's mid-grey density above base, `PrintPaper.screen.midDensity`.
+    static let anchorDensity: Float = 0.744
+
+    /// Common digital density scale for `.referenceExposure`, independent of the selected
+    /// negative's legacy paper curve. Retains the previous still-film display range without
+    /// fitting away stock differences.
+    static let referenceCurve = CharacteristicCurve(
         dMin: 0.07, gamma: 2.60, toe: -0.52, toeWidth: 0.16,
         shoulder: 0.42, shoulderWidth: 0.14)
+
+    /// A straight line for the graded styles, so the kernel hands the output table the receiver's
+    /// relative log exposure and the graded curve is applied there. Its range covers 0.8 above the
+    /// anchor (4.6 stops on a gamma-0.6 negative, past where the graded shoulder is white) and 0.9
+    /// below it (past every stock's base once the levels have placed it).
+    static let straightCurve = CharacteristicCurve(
+        dMin: 0, gamma: 1, toe: -0.8, toeWidth: 0.01,
+        shoulder: 0.9, shoulderWidth: 0.01)
+
+    static func curve(for style: DigitalReferenceStyle) -> CharacteristicCurve {
+        style.usesGradedCurve ? straightCurve : referenceCurve
+    }
+
+    // MARK: Film-base black
+
+    /// Receiver log exposure, relative to the anchor, where `.referenceExposure` places the film
+    /// base: 0.03 D short of the curve's asymptote, so black-point compensation carries it to zero.
+    static let referenceBaseTarget: Float = {
+        let anchor = referenceCurve.logExposure(density: referenceCurve.dMin + anchorDensity)
+        return referenceCurve.logExposure(density: referenceCurve.dMax - 0.03) - anchor
+    }()
+
+    /// Shadow-side stretch for `.referenceExposure`: 1 at the anchor, `scale` well below it, C1 at
+    /// the join, so the highlight side is untouched and the base lands on the target.
+    static func stretchShadows(_ v: Float, scale: Float) -> Float {
+        guard v > 0 else { return v }
+        return v + (scale - 1) * v * (1 - exp(-v / 0.08))
+    }
+
+    /// The stock's base-to-mid-grey distance on the green record, which is what the receiver reads
+    /// for a neutral wedge: its unmix holds an equal-channel exposure exactly on the neutral axis.
+    static func baseRead(for stock: FilmStock) -> Float {
+        let green = stock.curves[1]
+        return max(green.density(logExposure: 0) - green.dMin, 0.05)
+    }
+
+    /// Receiver read at a scene exposure `stops` over mid-grey: denser negative, less light.
+    static func read(for stock: FilmStock, stops: Float) -> Float {
+        let green = stock.curves[1]
+        return green.density(logExposure: 0) - green.density(logExposure: stops * log10(2))
+    }
+
+    // MARK: Graded curve
+
+    /// Normalised log value the graded curve's anchor sits at; the unit stretch runs from the
+    /// frame's dense end (0) to its thin end (1), and 0.46 is where a typical negative's mid-grey
+    /// falls on it.
+    static let gradedAnchorVal: Float = 0.46
+    /// The film base on the unit stretch. The shadow half anchors this to display black.
+    static let gradedBaseVal: Float = 1.0
+    /// Where the frame's brightest content is placed by `.autoLevels`: just inside the dense end,
+    /// so the very peak goes to white and the content below it keeps the shoulder's separation.
+    static let gradedWhiteVal: Float = 0.02
+    /// Receiver log exposure per unit of the stretch: a typical negative's base-to-mid distance
+    /// spans the 0.54 between the anchor and the thin end.
+    static let gradedReadPerVal: Float = 0.73 / 0.54
+
+    /// Read units the graded styles place the base and the frame white at.
+    static var gradedBaseRead: Float { (gradedBaseVal - gradedAnchorVal) * gradedReadPerVal }
+    static var gradedWhiteRead: Float { (gradedWhiteVal - gradedAnchorVal) * gradedReadPerVal }
+
+    /// A graded paper's H&D curve, per channel, from the unit stretch to display-linear
+    /// transmittance. A straight line of slope `k` through the pivot, a slight midtone S, a soft
+    /// softplus shoulder into paper white and a firmer softplus toe into paper black at 2.3 D,
+    /// then black-point compensation so that paper black is display black. The pivot is solved so
+    /// the anchor prints 18% after compensation.
+    static func gradedTransmittance(val: Float) -> Float {
+        func softplus(_ x: Float) -> Float { x > 0 ? x + log1p(exp(-x)) : log1p(exp(x)) }
+        let k: Float = 2.894, pivot: Float = 0.2197, vStar: Float = 0.6955
+        let dMinEff: Float = 0.004, dMaxEff: Float = 2.295, aHl: Float = 3.0, aSh: Float = 6.0
+        var v = k * (val - pivot)
+        v += 0.05 * 0.6 * tanh((v - vStar) / 0.6)
+        let v1 = dMinEff + softplus(aHl * (v - dMinEff)) / aHl
+        let d = dMaxEff - softplus(aSh * (dMaxEff - v1)) / aSh
+        let black = pow(10, -2.3) as Float
+        return min(max((pow(10, -d) - black) / (1 - black), 0), 1)
+    }
+
+    // MARK: Levels
+
+    /// The affine the kernel applies to the receiver's relative log exposure for the graded
+    /// styles, in the paper mid-point and contrast slots: `read' = scale * read + shift`. The film
+    /// base always lands on `gradedBaseRead`. `.gradedPrint` holds the anchor and scales only for
+    /// the base; `.autoLevels` also places the frame's metered highlight on `gradedWhiteRead`,
+    /// falling back to the fixed graded print when no measurement is available.
+    static func levels(for stock: FilmStock, style: DigitalReferenceStyle,
+                       sceneHighlightStops: Float?) -> (scale: Float, shift: Float) {
+        guard style.usesGradedCurve, !stock.isMonochrome, !stock.isReversal else { return (1, 0) }
+        let base = baseRead(for: stock)
+        switch style {
+        case .referenceExposure:
+            return (1, 0)
+        case .gradedPrint:
+            return (gradedBaseRead / base, 0)
+        case .autoLevels:
+            guard let measured = sceneHighlightStops, measured.isFinite else {
+                return (gradedBaseRead / base, 0)
+            }
+            let stops = min(max(measured, 0.5), 12)
+            let high = read(for: stock, stops: stops)
+            // Bounded so a flat frame is not stretched without limit; a metered highlight
+            // within half a stop of mid-grey is treated as no highlight at all.
+            let scale = min(max((gradedBaseRead - gradedWhiteRead) / max(base - high, 0.1),
+                                0.5), 2.0)
+            return (scale, gradedBaseRead - scale * base)
+        }
+    }
 
     /// The receiver's small-signal density response at a neutral synthetic negative. Because
     /// the reference dyes partition unity, equal amounts transmit a constant spectrum. The
@@ -57,7 +221,33 @@ enum DigitalReferenceReceiver {
     }
 
     /// Digital output has display primaries, not a second set of photographic paper dyes.
-    static func rgb(density: SIMD3<Float>) -> SIMD3<Float> {
-        SIMD3(pow(10, -density.x), pow(10, -density.y), pow(10, -density.z))
+    /// `density` is each record's kernel-curve density above base. For `.referenceExposure` that
+    /// is the receiver curve's own density, carried to display black by black-point compensation
+    /// of the curve's floor. For the graded styles the kernel curve is straight, so the density is
+    /// the anchor plus the levelled relative log exposure, and the graded curve is applied here.
+    static func rgb(density: SIMD3<Float>, style: DigitalReferenceStyle) -> SIMD3<Float> {
+        if style.usesGradedCurve {
+            let val = (density - anchorDensity) / gradedReadPerVal + gradedAnchorVal
+            func mixed(_ relative: Float, _ value: Float) -> Float {
+                let highlight = gradedTransmittance(val: value)
+                let anchor = referenceCurve.logExposure(density: referenceCurve.dMin + anchorDensity)
+                let shadowRead = stretchShadows(relative, scale: referenceBaseTarget / gradedBaseRead)
+                let shadowDensity = referenceCurve.density(logExposure: anchor + shadowRead)
+                    - referenceCurve.dMin
+                let floor = pow(10, -(referenceCurve.dMax - referenceCurve.dMin)) as Float
+                let shadow = max((pow(10, -shadowDensity) - floor) / (1 - floor), 0)
+                // C1 blend through mid-grey: the graded highlight shoulder over film-base blacks.
+                let t = min(max((relative + 0.04) / 0.08, 0), 1)
+                let blend = t * t * (3 - 2 * t)
+                return highlight * (1 - blend) + shadow * blend
+            }
+            let relative = density - anchorDensity
+            return SIMD3(mixed(relative.x, val.x), mixed(relative.y, val.y),
+                         mixed(relative.z, val.z))
+        }
+        let floor = pow(10, -(referenceCurve.dMax - referenceCurve.dMin)) as Float
+        let t = SIMD3(pow(10, -density.x), pow(10, -density.y), pow(10, -density.z))
+        let c = (t - floor) / (1 - floor)
+        return SIMD3(max(c.x, 0), max(c.y, 0), max(c.z, 0))
     }
 }

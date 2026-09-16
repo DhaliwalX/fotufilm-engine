@@ -389,6 +389,7 @@ struct EditState: Equatable {
     /// The lamp house a reflection print is enlarged under. `.diffuser` is the sheets' own
     /// diffuse read and changes nothing; `.condenser` prints a silver negative harder through
     /// the Callier effect. Read only where `Enlarger.illuminates` the medium.
+    var digitalReference = DigitalReferenceStyle.default
     var enlarger = Enlarger.default
     /// Retain lamp settings when switched off; older edits keep the original print model.
     var printerEnabled = false
@@ -616,6 +617,7 @@ struct EditState: Equatable {
         }
         o.shutterSeconds = shutterSeconds.map(Float.init)
         o.printViewingKelvin = printLightKelvin.map(Float.init)
+        o.digitalReference = digitalReference
         o.enlarger = enlarger
         o.printer = printerEnabled ? printerProfile.normalized : nil
         let outputMedium = resolvedPaper

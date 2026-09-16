@@ -197,6 +197,9 @@ final class SpectrumSceneTests: XCTestCase {
                         gaps: [Float], selfScale: Float = 1) -> RGBAImage {
         var options = FotufilmEngine.Options()
         options.paper = .screen
+        // Compare coupler visibility at one fixed exposure: per-frame Auto Levels would
+        // retime the sweep and checker independently and confound this colour measurement.
+        options.digitalReference = .referenceExposure
         options.grainScale = 0
         // This instrument measures coupler geometry, not deliberate off-balance lighting.
         // Give every emulsion the illuminant it was designed for so its neutral ramp stays neutral.

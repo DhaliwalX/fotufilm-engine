@@ -89,8 +89,8 @@ export class RenderSession {
     this.activeWork = null
     this.running = false
   }
-  async pack(id, medium = null, halationModel = 'legacy') {
-    const key = `${id}:${medium || 'default'}:${halationModel}`
+  async pack(id, medium = null, halationModel = 'legacy', digitalReference = 'auto-levels') {
+    const key = `${id}:${medium || 'default'}:${halationModel}:${digitalReference}`
     if (this.packs.has(key)) {
       const value = this.packs.get(key)
       this.packs.delete(key)
@@ -105,28 +105,32 @@ export class RenderSession {
           'Layered Transport uses the film’s default output medium.',
         )
       pack = await loadPack(assetUrl(`packs/${id}.layered.pack`))
-    } else if (medium) {
+    } else {
       this.catalog ??= loadStockIndex().catch((error) => {
         this.catalog = null
         throw error
       })
       const stock = (await this.catalog).find((item) => item.id === id)
-      const choice = stock?.media.find((item) => item.id === medium)
+      const mediumChoice = stock?.media.find((item) => item.id === (medium || stock.defaultMedium))
+      const choice = mediumChoice?.screenConversions
+        ? mediumChoice.screenConversions.find(item => item.id === digitalReference)
+        : mediumChoice
       if (!choice)
         throw new Error(
           'This output medium is unavailable for the selected film.',
         )
-      const base = await this.pack(id)
+      const base = await loadPack(assetUrl(`packs/${id}.pack`))
       pack = choice.pack
         ? parsePack(
             await loadMediumBytes(
-              base.pack.bytes,
+              base.bytes,
               assetUrl(`packs/${choice.pack}`),
             ),
           )
-        : base.pack
+        : base
       stagesUrl = choice.stages ? assetUrl(`packs/${choice.stages}`) : null
-    } else pack = await loadPack(assetUrl(`packs/${id}.pack`))
+      if (choice.meter) pack = { ...pack, screenMeter: choice.meter }
+    }
     const entry = { pack, stages: null, stagesUrl }
     this.packs.set(key, entry)
     if (this.packs.size > 4) this.packs.delete(this.packs.keys().next().value)
@@ -255,7 +259,7 @@ export class RenderSession {
     if (
       edit.stock !== null &&
       !this.packs.has(
-        `${stock}:${edit.medium || 'default'}:${edit.halationModel || 'legacy'}`,
+        `${stock}:${edit.medium || 'default'}:${edit.halationModel || 'legacy'}:${edit.digitalReference || 'auto-levels'}`,
       )
     )
       report(
@@ -266,7 +270,7 @@ export class RenderSession {
     const entry =
       edit.stock === null
         ? null
-        : await this.pack(stock, edit.medium, edit.halationModel)
+        : await this.pack(stock, edit.medium, edit.halationModel, edit.digitalReference)
     if (this.closed || stale()) return null
     if (!entry && !this.normalReady) report('Loading light and color engine')
     const developer = await this.renderer(
@@ -399,11 +403,11 @@ export class RenderSession {
       work,
     )
   }
-  stages(stock, medium = null, halationModel = 'legacy') {
+  stages(stock, medium = null, halationModel = 'legacy', digitalReference = 'auto-levels') {
     if (halationModel === 'layered') return Promise.resolve([])
     return this.enqueue(
       async () => {
-        const entry = await this.pack(stock, medium)
+        const entry = await this.pack(stock, medium, halationModel, digitalReference)
         entry.stages ??= await loadStages(
           assetUrl(`packs/${stock}.stages`),
           entry.pack,

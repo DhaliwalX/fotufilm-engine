@@ -333,7 +333,7 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertEqual(
             EditorControlCatalogue.controls(in: .printPaper, for: negative)
                 .map(\.field),
-                       [.printFrame, .paper, .printLight, .printCorrection])
+                       [.printFrame, .paper, .printLight, .printCorrection, .digitalReference])
         XCTAssertEqual(EditorControlCatalogue.controls(in: .printLamp, for: negative).map(\.field),
                        [.enlarger, .printerEnabled, .printerLamp, .printerExposure,
                         .printerMagenta, .printerYellow])

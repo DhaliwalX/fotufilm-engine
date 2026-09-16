@@ -24,6 +24,17 @@ enum PrintFrameEditCheck {
     static func main() throws {
         let legacy = try JSONDecoder().decode(EditState.self, from: Data("{}".utf8))
         precondition(legacy.printFrame == .none)
+        precondition(legacy.digitalReference == .autoLevels)
+        for style in DigitalReferenceStyle.allCases {
+            var edit = legacy
+            edit.digitalReference = style
+            let restored = try JSONDecoder().decode(EditState.self, from: JSONEncoder().encode(edit))
+            precondition(restored == edit)
+            precondition(restored.options.digitalReference == style)
+            precondition(edit.isMoved(.digitalReference) == (style != .default))
+            edit.reset(.digitalReference)
+            precondition(edit.digitalReference == .default)
+        }
         for (value, expected) in [("film-35", PrintFrame.film), ("instant", .film),
                                   ("baryta", .paper), ("cotton", .paper), ("contact", .paper)] {
             let saved = Data("{\"printFrame\":\"\(value)\"}".utf8)

@@ -1471,6 +1471,9 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
                                           atTime:time];
     const int32_t capabilities = engine.ready
         ? fotufilm_bridge_control_capabilities((int32_t)stock, (int32_t)gatedPaper) : 0;
+    [setting setParameterFlags:(gating.prints && (capabilities & FOTUFILM_CONTROL_SCREEN_CONVERSION))
+                                   ? kFxParameterFlag_DEFAULT : kFxParameterFlag_DISABLED
+                   toParameter:kFotufilmParam_DigitalReference];
     [setting setParameterFlags:(gating.prints && (capabilities & FOTUFILM_CONTROL_ENLARGER))
                                    ? kFxParameterFlag_DEFAULT : kFxParameterFlag_DISABLED
                    toParameter:kFotufilmParam_Enlarger];

@@ -353,7 +353,9 @@ public enum SpectralRuntime {
                               bleachBypass: Float = 0,
                               printViewingKelvin: Float? = nil,
                               callier: Float = 1,
-                              printer: PrinterProfile? = nil) -> SpectralPipelineTables {
+                              printer: PrinterProfile? = nil,
+                              digitalReference: DigitalReferenceStyle = .default)
+        -> SpectralPipelineTables {
         let paper = paper.resolved(for: stock)
         let printer = PrinterProfile.resolved(printer, stock: stock, paper: paper)
         let bleachBypass = retainedSilverFraction(bleachBypass, stock: stock)
@@ -362,7 +364,7 @@ public enum SpectralRuntime {
         let callier = callierCoefficient(callier, stock: stock, paper: paper)
         let key = cacheIdentifier(for: stock, paper: paper, bleachBypass: bleachBypass,
                                   printViewingKelvin: printViewingKelvin, callier: callier,
-                                  printer: printer)
+                                  printer: printer, digitalReference: digitalReference)
         lock.lock()
         while true {
             if let found = cache.value(for: key) {
@@ -380,7 +382,7 @@ public enum SpectralRuntime {
 
         let built = buildTables(for: stock, paper: paper, bleachBypass: bleachBypass,
                                 printViewingKelvin: printViewingKelvin, callier: callier,
-                                printer: printer)
+                                printer: printer, digitalReference: digitalReference)
 
         lock.lock()
         cache.insert(built, for: key)
@@ -449,7 +451,9 @@ public enum SpectralRuntime {
                                        bleachBypass: Float = 0,
                                        printViewingKelvin: Float? = nil,
                                        callier: Float = 1,
-                                       printer: PrinterProfile? = nil) -> UInt64 {
+                                       printer: PrinterProfile? = nil,
+                                       digitalReference: DigitalReferenceStyle = .default)
+        -> UInt64 {
         let paper = paper.resolved(for: stock)
         var h = stock.spectralProfile.signature
         func add(_ v: Float) { h = (h ^ UInt64(v.bitPattern)) &* 0x100000001b3 }
@@ -482,6 +486,13 @@ public enum SpectralRuntime {
         if !paper.viewsFilmDirectly(for: stock) {
             for byte in paper.rawValue.utf8 { h = (h ^ UInt64(byte)) &* 0x100000001b3 }
         }
+        // The Digital Reference style changes the screen tables of a colour negative and nothing
+        // else, so every other identity is exactly what it was.
+        if paper == .screen, !stock.isMonochrome, !paper.viewsFilmDirectly(for: stock) {
+            for byte in digitalReference.rawValue.utf8 {
+                h = (h ^ UInt64(byte)) &* 0x9E3779B97F4A7C15
+            }
+        }
         // Hashed only away from their off positions, so every identity that existed before
         // these levers is exactly the identity it was.
         let bleach = retainedSilverFraction(bleachBypass, stock: stock)
@@ -512,7 +523,9 @@ public enum SpectralRuntime {
                                     bleachBypass: Float = 0,
                                     printViewingKelvin: Float? = nil,
                                     callier: Float = 1,
-                                    printer: PrinterProfile? = nil) -> SpectralPipelineTables {
+                                    printer: PrinterProfile? = nil,
+                                    digitalReference: DigitalReferenceStyle = .default)
+        -> SpectralPipelineTables {
         // Output characterization is fixed at the stock's reference light. The invocation
         // replaces this exposure table with the scene spectrum after calibration is built.
         let exposure = exposureTable(for: stock, illuminant: filmReferenceIlluminant(for: stock))
@@ -585,6 +598,11 @@ public enum SpectralRuntime {
             // minilab leaves in the file.
             let castOffset = referenceCastOffset(midEnergy: midEnergy,
                                                  stock: stock, paper: paper)
+            // Digital Reference at a reference exposure carries the film base to display
+            // black by stretching only the shadow side of the read, so the stock's highlight
+            // contrast stays its own. The graded styles level the whole read in the kernel.
+            let shadowScale = screenShadowScale(stock: stock, paper: paper,
+                                                digitalReference: digitalReference)
             printing = buildDensityLUT(stock: stock) { density in
                 let energy = paperExposure(density: aligned(density).map { $0 * callier },
                                            stock: stock,
@@ -596,7 +614,10 @@ public enum SpectralRuntime {
                     log10(max(energy.x, 1e-12) / max(midEnergy.x, 1e-12)),
                     log10(max(energy.y, 1e-12) / max(midEnergy.y, 1e-12)),
                     log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12))) + castOffset
-                return paper == .screen ? DigitalReferenceReceiver.read(relative) : relative
+                guard paper == .screen else { return relative }
+                let read = DigitalReferenceReceiver.read(relative)
+                return SIMD3((0..<3).map {
+                    DigitalReferenceReceiver.stretchShadows(read[$0], scale: shadowScale) })
             }
         }
 
@@ -607,7 +628,7 @@ public enum SpectralRuntime {
         // One range per record: the engine hands over each channel's
         // activation on its own curve, so each is read back through that
         // curve's density range.
-        let paperRanges = paper.printCurves(for: stock)
+        let paperRanges = paper.printCurves(for: stock, digitalReference: digitalReference)
             .map { $0.dMax - $0.dMin }
         // The lamp the finished positive is read under. A reflection print defaults to the D50
         // judging booth used for critical print evaluation. A projected print defaults to the
@@ -624,7 +645,7 @@ public enum SpectralRuntime {
             paperOutput = buildLUT { activation in
                 DigitalReferenceReceiver.rgb(density: SIMD3(
                     activation.x * paperRanges[0], activation.y * paperRanges[1],
-                    activation.z * paperRanges[2]))
+                    activation.z * paperRanges[2]), style: digitalReference)
             }
         } else if paper.isScan {
             // The scan's output is a digital inversion with no viewing dyes or lamp. Lab Scan
@@ -1811,6 +1832,16 @@ public enum SpectralRuntime {
     /// medium that times per stock, and for monochrome — one exposure, output
     /// forced neutral, so a colour offset would be unreachable paint. The reference and the
     /// ceiling default to the medium's committed profile; a test hands in its own.
+    /// Shadow-side stretch that lands the stock's film base on the reference receiver's black
+    /// target: 1 everywhere except a colour negative on Digital Reference at a reference exposure.
+    static func screenShadowScale(stock: FilmStock, paper: PrintPaper,
+                                  digitalReference: DigitalReferenceStyle) -> Float {
+        guard paper == .screen, !stock.isMonochrome, !stock.isReversal,
+              digitalReference == .referenceExposure else { return 1 }
+        return DigitalReferenceReceiver.referenceBaseTarget
+            / DigitalReferenceReceiver.baseRead(for: stock)
+    }
+
     static func referenceCastOffset(midEnergy: SIMD3<Float>, stock: FilmStock,
                                     paper: PrintPaper,
                                     reference: SIMD2<Float> = PrintPaper.labScanReferenceMidRatio,
@@ -2082,7 +2113,9 @@ extension SpectralRuntime {
     static func neutralToneScale(stops: [Float], stock: FilmStock,
                                  paper: PrintPaper = .default,
                                  printCorrection: Float,
-                                 callier: Float = 1) -> [Float] {
+                                 callier: Float = 1,
+                                 digitalReference: DigitalReferenceStyle = .default,
+                                 sceneHighlightStops: Float? = nil) -> [Float] {
         let paper = paper.resolved(for: stock)
         let callier = callierCoefficient(callier, stock: stock, paper: paper)
         // Display-linear print RGB is Display P3, so its luminance uses the P3 weights.
@@ -2127,10 +2160,19 @@ extension SpectralRuntime {
         let lamp = illumination.lamp
         let midEnergy = illumination.referenceEnergy
         let neutralMid = neutralDensity(stock, 0)
-        let curves = paper.printCurves(for: stock)
-        let xMids = paper.printExposureMidpoints(for: stock)
-        let masking = stock.printingContrastScale(correction: printCorrection,
+        let curves = paper.printCurves(for: stock, digitalReference: digitalReference)
+        var xMids = paper.printExposureMidpoints(for: stock, digitalReference: digitalReference)
+        var masking = stock.printingContrastScale(correction: printCorrection,
                                                   paper: paper)
+        let shadowScale = screenShadowScale(stock: stock, paper: paper,
+                                            digitalReference: digitalReference)
+        if paper == .screen, !stock.isMonochrome {
+            // The same levels the kernel applies through its mid-point and contrast slots.
+            let levels = DigitalReferenceReceiver.levels(
+                for: stock, style: digitalReference, sceneHighlightStops: sceneHighlightStops)
+            masking = masking.map { $0 * levels.scale }
+            xMids = xMids.map { $0 + paper.exposureDirection * levels.shift }
+        }
         let viewingLight = referenceViewingLight(for: paper)
         let receiver = printReceiver(stock: stock, paper: paper,
                                      viewingLight: viewingLight)
@@ -2157,7 +2199,11 @@ extension SpectralRuntime {
                     log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12)))
                     + referenceCastOffset(midEnergy: midEnergy, stock: stock,
                                           paper: paper)
-                if paper == .screen { relative = DigitalReferenceReceiver.read(relative) }
+                if paper == .screen {
+                    let read = DigitalReferenceReceiver.read(relative)
+                    relative = SIMD3((0..<3).map {
+                        DigitalReferenceReceiver.stretchShadows(read[$0], scale: shadowScale) })
+                }
             }
             let printed = (0..<3).map { channel in
                 curves[channel].density(
@@ -2167,7 +2213,7 @@ extension SpectralRuntime {
             let rgb: SIMD3<Float>
             if paper == .screen && !stock.isMonochrome {
                 rgb = DigitalReferenceReceiver.rgb(
-                    density: SIMD3(printed[0], printed[1], printed[2]))
+                    density: SIMD3(printed[0], printed[1], printed[2]), style: digitalReference)
             } else if paper.isScan {
                 // A scan's characterization holds the receiver's luminance exactly, so this
                 // neutral mirror needs only the receiver. The 709 delivery is likewise a

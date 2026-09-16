@@ -29,7 +29,7 @@ extension EditState: Codable {
     static let bespokeKeys: [String] = [
         "stockID", "chosenFormatID", "sourceInterpretation", "captureIlluminantKelvin",
         "filmLightKelvin", "sourceLightIndex", "halationReturnRatio", "grainMottleShare", "couplerGapReach", "paper", "paperFollowsStock",
-        "seed", "shutterSeconds", "printLightKelvin", "printFrame", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop",
+        "seed", "shutterSeconds", "printLightKelvin", "printFrame", "digitalReference", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop",
         "grade", "lensProfileID", "lensAdjustment", "lensFilterIDs", "lensFilterMetering", "selective",
     ]
 
@@ -96,6 +96,7 @@ extension EditState: Codable {
         seed = try c.decodeIfPresent(UInt64.self, forKey: EditKey("seed")) ?? seed
         shutterSeconds = try c.decodeIfPresent(Double.self, forKey: EditKey("shutterSeconds"))
         printLightKelvin = try c.decodeIfPresent(Double.self, forKey: EditKey("printLightKelvin"))
+        digitalReference = try c.decodeIfPresent(DigitalReferenceStyle.self, forKey: EditKey("digitalReference")) ?? .default
         enlarger = try c.decodeIfPresent(String.self, forKey: EditKey("enlarger"))
             .flatMap(Enlarger.preset(id:)) ?? .default
         printerProfile = try c.decodeIfPresent(PrinterProfile.self, forKey: EditKey("printerProfile"))?
@@ -147,6 +148,7 @@ extension EditState: Codable {
         try c.encode(seed, forKey: EditKey("seed"))
         try c.encodeIfPresent(shutterSeconds, forKey: EditKey("shutterSeconds"))
         try c.encodeIfPresent(printLightKelvin, forKey: EditKey("printLightKelvin"))
+        try c.encode(digitalReference, forKey: EditKey("digitalReference"))
         try c.encode(enlarger.id, forKey: EditKey("enlarger"))
         try c.encode(printerProfile.normalized, forKey: EditKey("printerProfile"))
         try c.encode(rotation, forKey: EditKey("rotation"))

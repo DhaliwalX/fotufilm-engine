@@ -56,12 +56,20 @@ selects the simulated scene light. In the Mac app and plugins, choose a preset o
 **Custom** temperature to simulate another source, independently of print viewing light. In the CLI, use
 `--scene-kelvin 5500` for an explicit source; omission follows the selected stock.
 
-**Digital Reference** uses a fixed spectral receiver and tone curve for colour negatives.
-It preserves the selected film's individual layer curves and dye interactions, with a
-single reference exposure balanced to neutral grey. One common receiver colour calibration
-applies to every negative. The receiver is idealized; it is
-not a measured scanner or display. Black-and-white conversion and the direct positive
-view of reversal film retain their existing behavior.
+**Digital Reference** converts colour negatives with a shared spectral receiver and
+three **Screen Conversion** choices. **Reference Exposure** holds calibrated mid-grey
+and the film's contrast. **Graded Print** keeps film-base blacks and uses a gentler
+highlight curve. **Auto Levels** (default) meters the frame's bright regions and places
+them near white, retaining highlight separation by darkening the rest of a bright scene.
+All three use one green-record scale to preserve colour differences between layers;
+they do not balance each colour channel independently. The film base anchors display
+black. These are idealized conversion models, not measured scanner profiles.
+Monochrome and reversal films retain their existing conversion.
+
+Choose a mode with `--paper screen --digital-reference reference-exposure|graded-print|auto-levels`.
+The Mac editor saves the choice with each photograph. Auto Levels measures each frame;
+for consistent exposure across a video or a batch, use one of the fixed modes. Engine
+hosts can supply a temporally smoothed `sceneHighlightStops` measurement for video.
 
 ## Profiles and model limits
 
