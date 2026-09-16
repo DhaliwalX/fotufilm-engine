@@ -59,7 +59,9 @@ selects the simulated scene light. In the Mac app and plugins, choose a preset o
 **Digital Reference** uses a fixed spectral receiver and tone curve for colour negatives.
 It preserves the selected film's individual layer curves and dye interactions, with a
 single reference exposure balanced to neutral grey. One common receiver colour calibration
-applies to every negative. The receiver is idealized; it is
+applies to every negative. Its tone curve reaches display black: the darkest exposures a
+negative can deliver render at zero rather than on a paper-like floor, and tones more than
+about 1.5 stops below mid-grey fall off faster than a print's. The receiver is idealized; it is
 not a measured scanner or display. Black-and-white conversion and the direct positive
 view of reversal film retain their existing behavior.
 

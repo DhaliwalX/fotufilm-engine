@@ -146,6 +146,45 @@ final class DigitalReferenceReceiverTests: XCTestCase {
         }
     }
 
+    func testShadowPopulationLeavesTheAnchorAlone() {
+        let anchor = PrintPaper.screen.anchorDensity
+        XCTAssertLessThan(DigitalReferenceReceiver.shadowDensity(above: anchor), 0.005,
+                          "the shadow population must not move mid-grey")
+        XCTAssertLessThan(DigitalReferenceReceiver.shadowDensity(above: 0), 1e-3,
+                          "nor white")
+        // Two stops of scene shadow on a gamma-0.6 negative is 0.36 log exposure on the receiver.
+        let twoStops = anchor + DigitalReferenceReceiver.curve.gamma * 0.36
+        XCTAssertGreaterThan(DigitalReferenceReceiver.shadowDensity(above: twoStops), 0.3)
+    }
+
+    func testColorNegativeSceneBlackReachesDisplayBlack() throws {
+        // One 8-bit sRGB code is 3.0e-4 of display white. The darkest receiver exposure any of
+        // these negatives can deliver is its own base, and every record must land within a code
+        // of zero there rather than on the paper-like floor the receiver used to carry.
+        let oneCode: Float = 1 / (255 * 12.92)
+        var scene = ImageBuffer(width: 4, height: 4)
+        var options = FotufilmEngine.Options()
+        options.paper = .screen; options.grainScale = 0; options.halationScale = 0
+        options.flareScale = 0; options.localTone = false
+        for id in ["portra400", "gold200", "superia400", "vision500t", "cinestill400d"] {
+            let film = try XCTUnwrap(FilmStock.named(id), id)
+            let output = try FotufilmEngine(stock: film, options: options)
+                .processChecked(linearRGB: scene)
+            for c in 0..<3 {
+                XCTAssertLessThan(output.planes[c][5], 1.5 * oneCode, "\(id) channel \(c)")
+                XCTAssertGreaterThanOrEqual(output.planes[c][5], 0, "\(id) channel \(c)")
+            }
+        }
+        // Mid-grey stays on the anchor.
+        for c in 0..<3 { for i in 0..<16 { scene.planes[c][i] = 0.18 } }
+        let gold = try XCTUnwrap(FilmStock.named("gold200"))
+        let grey = try FotufilmEngine(stock: gold, options: options).processChecked(linearRGB: scene)
+        let weights = ColorScience.displayP3LuminanceWeights
+        let y = weights.0 * grey.planes[0][5] + weights.1 * grey.planes[1][5]
+            + weights.2 * grey.planes[2][5]
+        XCTAssertEqual(y, 0.18, accuracy: 0.006)
+    }
+
     func testScreenNeutralRampIsFiniteMonotonicAndMatchesToneAnalysis() {
         let stops = stride(from: Float(-6), through: 4, by: 0.125).map { $0 }
         let weights = ColorScience.displayP3LuminanceWeights
