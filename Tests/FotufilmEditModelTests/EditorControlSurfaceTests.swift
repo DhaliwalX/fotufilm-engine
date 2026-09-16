@@ -181,7 +181,13 @@ final class EditorControlSurfaceTests: XCTestCase {
             case .toggle(let restingOn): value = .flag(!restingOn)
             case .curve(let curve): value = .curve(curve.handles.map { _ in curve.range.upperBound })
             case .menu(.fixed(let choices)):
-                value = .choice(choices.indices.last ?? 1)
+                // Some menus default to the final choice (Auto Levels). Pick a choice that
+                // actually differs from the options instead of assuming the final one does.
+                value = .choice(choices.indices.first(where: { index in
+                    var candidate = resting
+                    binding.apply(.choice(index), to: &candidate)
+                    return describe(candidate) != describe(resting)
+                }) ?? 0)
             case .menu(.dynamic): value = .choice(1)
             case .takeover: value = .number(7)
             }

@@ -1,4 +1,4 @@
-import { VIDEO_LABELS } from './generated/controls.js'
+import { VIDEO_LABELS, SCREEN_CONVERSION } from './generated/controls.js'
 import VideoControls from './VideoControls.jsx'
 import { VIDEO_ACCEPT, isVideoFile, importVideo } from './video-import.js'
 import {
@@ -404,7 +404,7 @@ export default function App() {
     let cancelled = false
     setStages([])
     session
-      .stages(stockId, edit.medium, edit.halationModel)
+      .stages(stockId, edit.medium, edit.halationModel, edit.digitalReference)
       .then((next) => {
         if (!cancelled) setStages(next)
       })
@@ -414,7 +414,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [panel, session, stockId, edit.medium, edit.halationModel])
+  }, [panel, session, stockId, edit.medium, edit.halationModel, edit.digitalReference])
 
   async function acceptFiles(incoming) {
     if (exporting) return
@@ -1218,6 +1218,16 @@ export default function App() {
                       setDifference(false)
                     }}
                   />
+                  {(edit.medium || selectedStock?.defaultMedium) === 'screen' &&
+                    selectedStock?.media.find(m => m.id === 'screen')?.screenConversions && (
+                    <Selector label={SCREEN_CONVERSION.title} size="sm" width="100%"
+                      isDisabled={exporting || !active || edit.halationModel === 'layered'}
+                      value={edit.digitalReference || SCREEN_CONVERSION.default}
+                      options={SCREEN_CONVERSION.choices.map(c => ({value:c.id, label:c.name}))}
+                      onChange={digitalReference => {
+                        endEdit(); patch({ digitalReference }); setStage(null); setDifference(false)
+                      }} />
+                  )}
                   {selectedStock && (
                     <p className="medium-detail">
                       {(edit.medium || selectedStock.defaultMedium) === 'screen'

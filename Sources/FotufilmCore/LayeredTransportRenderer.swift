@@ -114,7 +114,7 @@ public enum LayeredTransportRenderer {
         let t = prepared.compilation.interpolation(amount: amount)
         var invocation = try suppliedInvocation ?? FilmEngineInvocation(validating: plain, options: settings,
                                              width: image.width, height: image.height, frameIndex: frameIndex)
-        if invocation.localToneActive && suppliedInvocation == nil {
+        if invocation.sceneMeteringActive && suppliedInvocation == nil {
             withPlanes(image.planes) { r, g, b in
                 invocation.measureToneBase(planarR: r, g: g, b: b, width: image.width, height: image.height)
             }

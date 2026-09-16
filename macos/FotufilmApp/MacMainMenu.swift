@@ -364,6 +364,7 @@ private final class EditHistoryMenuDelegate: NSObject, NSMenuDelegate {
         if new.printLightKelvin != old.printLightKelvin {
             return "Viewing Illuminant"
         }
+        if new.digitalReference != old.digitalReference { return "Screen Conversion" }
         if new.enlarger != old.enlarger {
             return "Enlarger"
         }

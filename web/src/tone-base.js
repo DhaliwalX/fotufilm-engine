@@ -66,6 +66,7 @@ export async function measureTone(source, controls, decode, balance) {
   })
   const b = mean.map((v, i) => (1 - a[i]) * v)
   return {
+    regionStops: Float32Array.from(g),
     width: gw,
     height: gh,
     a: Float32Array.from(boxMean(a, gw, gh, radius)),

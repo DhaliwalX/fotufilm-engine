@@ -152,8 +152,26 @@ if flags["--list-stocks"] != nil || flags["--list-stock-capabilities"] != nil {
 if flags["--list-web-media"] != nil {
     let records: [[String: Any]] = FilmStock.presets.sorted(by: { $0.key < $1.key }).map { id, stock in
         ["id": id, "default": PrintPaper.default(for: stock).id,
-         "choices": PrintPaper.choices(for: stock).map {
-             ["id": $0.id, "name": $0.name, "detail": $0.detail]
+         "choices": PrintPaper.choices(for: stock).map { medium -> [String: Any] in
+             var entry: [String: Any] = ["id": medium.id, "name": medium.name, "detail": medium.detail]
+             if medium == .screen && !stock.isMonochrome && !stock.isReversal {
+                 let fixed = DigitalReferenceStyle.autoLevels.receiverLevels(for: stock)
+                 entry["screenConversions"] = DigitalReferenceStyle.allCases.map { style -> [String: Any] in
+                     var conversion: [String: Any] = ["id": style.id, "name": style.name, "detail": style.detail]
+                     if style == .autoLevels {
+                         // Native-solved affine samples; browser hosts interpolate the small table
+                         // rather than reproducing film characteristic curves in JavaScript.
+                         conversion["meter"] = ["min": 0.5, "max": 12.0,
+                             "adjustments": (0...512).map { i -> [Float] in
+                                 let levels = style.receiverLevels(for: stock,
+                                     sceneHighlightStops: 0.5 + Float(i) * 11.5 / 512)
+                                 return [levels.scale / fixed.scale, levels.shift - fixed.shift]
+                             }]
+                     }
+                     return conversion
+                 }
+             }
+             return entry
          }]
     }
     do {

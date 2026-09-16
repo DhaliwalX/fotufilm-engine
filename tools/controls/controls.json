@@ -228,7 +228,7 @@
       "text" : "Not yet examined"
     }
   ],
-  "bridgeSlotCount" : 53,
+  "bridgeSlotCount" : 54,
   "bridgeSlots" : [
     "EXPOSURE_EV",
     "TEMPERATURE",
@@ -282,7 +282,8 @@
     "HALATION_MODEL",
     "FRINGE_AMOUNT",
     "FRINGE_RADIUS",
-    "ENLARGER"
+    "ENLARGER",
+    "DIGITAL_REFERENCE"
   ],
   "controls" : [
     {
@@ -4098,6 +4099,96 @@
         "cli"
       ],
       "title" : "Negative Viewing"
+    },
+    {
+      "availability" : "colourNegative",
+      "binding" : "digitalReferenceIndex",
+      "choices" : [
+        {
+          "detail" : "Fixed calibrated exposure; mid-grey and contrast never depend on the frame.",
+          "id" : "reference-exposure",
+          "label" : "Reference Exposure",
+          "value" : 0
+        },
+        {
+          "detail" : "Fixed exposure through a graded paper curve with a soft highlight shoulder.",
+          "id" : "graded-print",
+          "label" : "Graded Print",
+          "value" : 1
+        },
+        {
+          "detail" : "The frame's brightest content sets white and the film base sets black.",
+          "id" : "auto-levels",
+          "label" : "Auto Levels",
+          "value" : 2
+        }
+      ],
+      "commandLineFlag" : "--digital-reference",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Screen conversion: reference-exposure, graded-print, or auto-levels (default).",
+      "commandLinePlaceholder" : "<style>",
+      "detail" : "Choose how a colour negative is converted on Digital Reference.",
+      "documentation" : "Colour negatives on Digital Reference: fixed Reference Exposure, Graded Print, or per-frame Auto Levels (default).",
+      "drives" : [
+
+      ],
+      "field" : "digitalReference",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "choices" : [
+          {
+            "detail" : "",
+            "id" : "reference-exposure",
+            "label" : "Reference Exposure",
+            "value" : 0
+          },
+          {
+            "detail" : "",
+            "id" : "graded-print",
+            "label" : "Graded Print",
+            "value" : 1
+          },
+          {
+            "detail" : "",
+            "id" : "auto-levels",
+            "label" : "Auto Levels",
+            "value" : 2
+          }
+        ],
+        "composed" : false,
+        "fxplugID" : 95,
+        "group" : "output",
+        "hint" : "Reference Exposure holds calibrated exposure; Graded Print softens highlights; Auto Levels meters frame highlights. Colour negatives on Digital Reference only.",
+        "kind" : "choice",
+        "label" : "Screen Conversion",
+        "ofxName" : "digitalReference",
+        "order" : 26,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 53,
+        "slotSymbol" : "DIGITAL_REFERENCE",
+        "value" : 2,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "menu",
+      "omitted" : {
+
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Screen Conversion"
     },
     {
       "availability" : "printStage",

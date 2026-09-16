@@ -227,7 +227,7 @@ for (width, height) in sizes {
                 linearRGBA: pixels.baseAddress!, width: width, height: height)
         }
     }
-    if invocation.localToneActive {
+    if invocation.sceneMeteringActive {
         var measurement = invocation.toneBaseMeasurement()
         interleaved.withUnsafeBufferPointer { pixels in
             measurement.add(linearRGBA: pixels.baseAddress!, rows: 0..<height)

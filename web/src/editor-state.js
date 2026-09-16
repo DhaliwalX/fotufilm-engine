@@ -97,6 +97,7 @@ export const fullCrop = () => [
 export const defaultEdit = (stock = null) => ({
   stock,
   medium: null,
+  digitalReference: 'auto-levels',
   video: { encoding: 'standard', trimStart: 0, trimEnd: null, audio: true },
   halationModel: 'legacy',
   params: Object.fromEntries(SLIDERS.map((s) => [s.key, s.def])),
@@ -220,6 +221,8 @@ export function parseEdit(json, stockIDs) {
       typeof edit.video.audio !== 'boolean')
   )
     throw new Error('Invalid video settings.')
+  if (edit.digitalReference != null && !['reference-exposure', 'graded-print', 'auto-levels'].includes(edit.digitalReference))
+    throw new Error('Invalid screen conversion.')
   if (
     edit.medium != null &&
     (typeof edit.medium !== 'string' || !/^[a-z0-9-]+$/.test(edit.medium))
@@ -258,6 +261,7 @@ export function parseEdit(json, stockIDs) {
     ...base,
     ...Object.fromEntries(Object.keys(base).map((key) => [key, edit[key]])),
     medium: edit.medium ?? null,
+    digitalReference: edit.digitalReference ?? 'auto-levels',
     video: edit.video ?? base.video,
     halationModel: edit.halationModel ?? 'legacy',
     params: Object.fromEntries(SLIDERS.map((s) => [s.key, edit.params[s.key]])),

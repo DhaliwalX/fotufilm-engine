@@ -50,20 +50,26 @@ def main():
             bases = {kind: (args.packs / f"{stock['id']}.{kind}").read_bytes()
                      for kind in ('pack', 'stages')}
             for medium in stock['choices']:
-                if medium['id'] == stock['default']:
-                    continue
-                for kind in ('pack', 'stages'):
-                    output = Path(temporary) / f'output.{kind}'
-                    subprocess.run([cli, f'--dump-wasm-{kind}', str(output),
-                                    '--stock', stock['id'], '--paper', medium['id'],
-                                    '--pack-size', args.pack_size], check=True,
-                                   stdout=subprocess.DEVNULL)
-                    target = output.read_bytes()
-                    if kind == 'pack':
-                        variants.update(masks(target))
-                    filename = f"{medium['id']}.{kind}.delta"
-                    (stock_dir / filename).write_bytes(delta(bases[kind], target))
-                    medium[kind] = f"media/{stock['id']}/{filename}"
+                conversions = medium.get('screenConversions', [])
+                targets = [(medium, None)] + [(choice, choice['id']) for choice in conversions]
+                for entry, style in targets:
+                    if style is None and medium['id'] == stock['default']:
+                        continue
+                    suffix = medium['id'] + (f"-{style}" if style else "")
+                    for kind in ('pack', 'stages'):
+                        output = Path(temporary) / f'output.{kind}'
+                        command = [cli, f'--dump-wasm-{kind}', str(output),
+                                   '--stock', stock['id'], '--paper', medium['id'],
+                                   '--pack-size', args.pack_size]
+                        if style:
+                            command += ['--digital-reference', style]
+                        subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
+                        target = output.read_bytes()
+                        if kind == 'pack':
+                            variants.update(masks(target))
+                        filename = f"{suffix}.{kind}.delta"
+                        (stock_dir / filename).write_bytes(delta(bases[kind], target))
+                        entry[kind] = f"media/{stock['id']}/{filename}"
             print(f"{stock['id']}: {len(stock['choices'])} output media", flush=True)
     # Publish the index only after every referenced asset exists.
     (args.packs / 'media.json').write_text(json.dumps(catalog, separators=(',', ':')) + '\n')

@@ -205,6 +205,7 @@ public enum EngineBinding: Equatable, Sendable {
     case stageIndex
     case textureStagesMask
     case seed
+    case digitalReferenceIndex
     case enlargerIndex
     case whiteBalanceKelvin
     case whiteBalanceDuv
@@ -249,6 +250,7 @@ public enum EngineBinding: Equatable, Sendable {
         case .stageIndex: return ["stage"]
         case .textureStagesMask: return ["textureStages"]
         case .seed: return ["seed"]
+        case .digitalReferenceIndex: return ["digitalReference"]
         case .enlargerIndex: return ["enlarger"]
         case .whiteBalanceKelvin, .whiteBalanceDuv: return ["whiteBalance"]
         case .halationScale: return ["halationScale"]
@@ -357,6 +359,10 @@ public enum EngineBinding: Equatable, Sendable {
             }
         case .seed:
             if let number = value.number { options.seed = UInt64(max(0, number)) }
+        case .digitalReferenceIndex:
+            if let index = value.choice, DigitalReferenceStyle.allCases.indices.contains(index) {
+                options.digitalReference = DigitalReferenceStyle.allCases[index]
+            }
         case .enlargerIndex:
             if let index = value.choice, Enlarger.allCases.indices.contains(index) {
                 options.enlarger = Enlarger.allCases[index]

@@ -9,23 +9,30 @@ final class DigitalReferenceReceiverTests: XCTestCase {
 
     /// Walks only development and the receiver. Independent layer exposure is intentional:
     /// these interventions test whether the output preserves the negative's information.
-    private func positive(_ stock: FilmStock, exposure: SIMD3<Float>) -> SIMD3<Float> {
-        let tables = SpectralRuntime.tables(for: stock, paper: .screen)
+    private func positive(_ stock: FilmStock, exposure: SIMD3<Float>,
+                          style: DigitalReferenceStyle = .default,
+                          sceneHighlightStops: Float? = nil) -> SIMD3<Float> {
+        let tables = SpectralRuntime.tables(for: stock, paper: .screen, digitalReference: style)
         let activation = SIMD3<Float>((0..<3).map { c in
             let curve = stock.curves[c]
             let density = stock.developedDensity(layer: c, logExposure: exposure[c])
             return (density - curve.dMin) / (curve.dMax - curve.dMin)
         })
         let relative = tables.filmOutput.sample(activation)
-        let curves = PrintPaper.screen.printCurves(for: stock)
-        let midpoints = PrintPaper.screen.printExposureMidpoints(for: stock)
+        let curves = PrintPaper.screen.printCurves(for: stock, digitalReference: style)
+        let midpoints = PrintPaper.screen.printExposureMidpoints(for: stock,
+                                                                 digitalReference: style)
+        let levels = DigitalReferenceReceiver.levels(for: stock, style: style,
+                                                     sceneHighlightStops: sceneHighlightStops)
         let printed = SIMD3<Float>((0..<3).map { c in
             let curve = curves[c]
-            return (curve.density(logExposure: midpoints[c] + relative[c]) - curve.dMin)
-                / (curve.dMax - curve.dMin)
+            let x = midpoints[c] + levels.shift + levels.scale * relative[c]
+            return (curve.density(logExposure: x) - curve.dMin) / (curve.dMax - curve.dMin)
         })
         return tables.paperOutput!.sample(printed)
     }
+
+    private static let styles = DigitalReferenceStyle.allCases
 
     private func distance(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float {
         (a - b).maxMagnitude
@@ -70,10 +77,16 @@ final class DigitalReferenceReceiverTests: XCTestCase {
         changed.paperCurve.gamma *= 1.5
         changed.curves.reverse()
         changed.spectralProfile.layerSensitivity.reverse()
+        for style in Self.styles {
+            let original = SpectralRuntime.tables(for: stock, paper: .screen,
+                                                  digitalReference: style)
+            let other = SpectralRuntime.tables(for: changed, paper: .screen,
+                                               digitalReference: style)
+            XCTAssertEqual(original.paperOutput!.values, other.paperOutput!.values,
+                           "\(style): the receiver must not characterize away each film's capture response")
+        }
         let original = SpectralRuntime.tables(for: stock, paper: .screen)
         let other = SpectralRuntime.tables(for: changed, paper: .screen)
-        XCTAssertEqual(original.paperOutput!.values, other.paperOutput!.values,
-                       "the receiver must not characterize away each film's capture response")
         let density = SIMD3<Float>(0.2, 0.5, 0.8)
         XCTAssertNotEqual(original.filmOutput.sample(density), other.filmOutput.sample(density))
         XCTAssertEqual(PrintPaper.screen.printCurves(for: stock).map(\.gamma),
@@ -146,60 +159,112 @@ final class DigitalReferenceReceiverTests: XCTestCase {
         }
     }
 
-    func testShadowPopulationLeavesTheAnchorAlone() {
-        let anchor = PrintPaper.screen.anchorDensity
-        XCTAssertLessThan(DigitalReferenceReceiver.shadowDensity(above: anchor), 0.005,
-                          "the shadow population must not move mid-grey")
-        XCTAssertLessThan(DigitalReferenceReceiver.shadowDensity(above: 0), 1e-3,
-                          "nor white")
-        // Two stops of scene shadow on a gamma-0.6 negative is 0.36 log exposure on the receiver.
-        let twoStops = anchor + DigitalReferenceReceiver.curve.gamma * 0.36
-        XCTAssertGreaterThan(DigitalReferenceReceiver.shadowDensity(above: twoStops), 0.3)
-    }
-
-    func testColorNegativeSceneBlackReachesDisplayBlack() throws {
-        // One 8-bit sRGB code is 3.0e-4 of display white. The darkest receiver exposure any of
-        // these negatives can deliver is its own base, and every record must land within a code
-        // of zero there rather than on the paper-like floor the receiver used to carry.
+    func testEveryStyleHoldsMidGreyAndReachesDisplayBlack() throws {
+        // One 8-bit sRGB code is 3.0e-4 of display white. The darkest receiver exposure any
+        // negative can deliver is its own base, and the green record must land within a code of
+        // zero there on every style, while mid-grey stays on the 18% anchor.
         let oneCode: Float = 1 / (255 * 12.92)
-        var scene = ImageBuffer(width: 4, height: 4)
-        var options = FotufilmEngine.Options()
-        options.paper = .screen; options.grainScale = 0; options.halationScale = 0
-        options.flareScale = 0; options.localTone = false
-        for id in ["portra400", "gold200", "superia400", "vision500t", "cinestill400d"] {
-            let film = try XCTUnwrap(FilmStock.named(id), id)
-            let output = try FotufilmEngine(stock: film, options: options)
-                .processChecked(linearRGB: scene)
-            for c in 0..<3 {
-                XCTAssertLessThan(output.planes[c][5], 1.5 * oneCode, "\(id) channel \(c)")
-                XCTAssertGreaterThanOrEqual(output.planes[c][5], 0, "\(id) channel \(c)")
+        for style in Self.styles {
+            for id in ["portra400", "gold200", "superia200", "vision500t", "eterna500"] {
+                let film = try XCTUnwrap(FilmStock.named(id), id)
+                let base = positive(film, exposure: SIMD3(repeating: -8), style: style)
+                XCTAssertLessThan(base.y, 1.5 * oneCode, "\(id) \(style)")
+                XCTAssertGreaterThanOrEqual(min(base.x, base.y, base.z), 0, "\(id) \(style)")
+                let grey = positive(film, exposure: .zero, style: style)
+                XCTAssertLessThan(distance(grey, SIMD3(repeating: 0.18)), 0.005,
+                                  "\(id) \(style): the anchor must stay on mid-grey")
             }
         }
-        // Mid-grey stays on the anchor.
-        for c in 0..<3 { for i in 0..<16 { scene.planes[c][i] = 0.18 } }
-        let gold = try XCTUnwrap(FilmStock.named("gold200"))
-        let grey = try FotufilmEngine(stock: gold, options: options).processChecked(linearRGB: scene)
+    }
+
+    func testAutoLevelsPlacesTheMeteredHighlightAtWhite() throws {
+        let film = try XCTUnwrap(FilmStock.named("gold200"))
         let weights = ColorScience.displayP3LuminanceWeights
-        let y = weights.0 * grey.planes[0][5] + weights.1 * grey.planes[1][5]
-            + weights.2 * grey.planes[2][5]
-        XCTAssertEqual(y, 0.18, accuracy: 0.006)
+        func luminance(_ rgb: SIMD3<Float>) -> Float {
+            weights.0 * rgb.x + weights.1 * rgb.y + weights.2 * rgb.z
+        }
+        // Without a meter the frame renders as the graded print.
+        for stops: Float in [-3, 0, 2] {
+            let exposure = SIMD3<Float>(repeating: stops * log10(2))
+            XCTAssertLessThan(distance(positive(film, exposure: exposure, style: .autoLevels),
+                                       positive(film, exposure: exposure, style: .gradedPrint)),
+                              1e-5)
+        }
+        // A frame whose brightest content sits eight stops up lands that content near white and
+        // moves its mid-grey down; one whose brightest content is two stops up brightens it.
+        let bright = SIMD3<Float>(repeating: 8 * log10(2))
+        let high = luminance(positive(film, exposure: bright, style: .autoLevels,
+                                      sceneHighlightStops: 8))
+        XCTAssertGreaterThan(high, 0.85)
+        XCTAssertLessThan(luminance(positive(film, exposure: .zero, style: .autoLevels,
+                                             sceneHighlightStops: 8)), 0.12)
+        XCTAssertGreaterThan(luminance(positive(film, exposure: .zero, style: .autoLevels,
+                                                sceneHighlightStops: 2)), 0.25)
+        // The base is black whatever the frame holds.
+        for stops: Float in [1, 4, 10] {
+            XCTAssertLessThan(positive(film, exposure: SIMD3(repeating: -8), style: .autoLevels,
+                                       sceneHighlightStops: stops).y, 1.5 / (255 * 12.92))
+        }
+    }
+
+    func testStylesDifferOnlyWhereTheyShould() throws {
+        let film = try XCTUnwrap(FilmStock.named("gold200"))
+        // The graded print rolls highlights into paper white where the reference exposure lets
+        // them run on toward display white; both share the film-base black.
+        let high = SIMD3<Float>(repeating: 3 * log10(2))
+        XCTAssertLessThan(positive(film, exposure: high, style: .gradedPrint).y,
+                          positive(film, exposure: high, style: .referenceExposure).y)
+        let mid = SIMD3<Float>(repeating: -1 * log10(2))
+        XCTAssertEqual(positive(film, exposure: mid, style: .gradedPrint).y,
+                       positive(film, exposure: mid, style: .referenceExposure).y, accuracy: 0.02)
     }
 
     func testScreenNeutralRampIsFiniteMonotonicAndMatchesToneAnalysis() {
         let stops = stride(from: Float(-6), through: 4, by: 0.125).map { $0 }
         let weights = ColorScience.displayP3LuminanceWeights
-        for film in [stock, TestStocks.monochrome] {
+        for (film, style) in [(stock, DigitalReferenceStyle.referenceExposure),
+                              (stock, .gradedPrint), (stock, .autoLevels),
+                              (TestStocks.monochrome, .default)] {
             let analytic = SpectralRuntime.neutralToneScale(stops: stops, stock: film,
-                                                           paper: .screen, printCorrection: 0)
+                                                           paper: .screen, printCorrection: 0,
+                                                           digitalReference: style)
             var previous: Float = -1
             for (index, stop) in stops.enumerated() {
-                let rgb = positive(film, exposure: SIMD3(repeating: stop * log10(Float(2))))
+                let rgb = positive(film, exposure: SIMD3(repeating: stop * log10(Float(2))),
+                                   style: style)
                 XCTAssertTrue((0..<3).allSatisfy { rgb[$0].isFinite && rgb[$0] >= 0 })
                 let y = weights.0 * rgb.x + weights.1 * rgb.y + weights.2 * rgb.z
                 XCTAssertGreaterThanOrEqual(y + 2e-4, previous)
                 XCTAssertEqual(y, analytic[index], accuracy: 0.006,
-                               "auto exposure must use the same tone scale as the receiver")
+                               "\(style): auto exposure must use the same tone scale as the receiver")
                 previous = y
+            }
+        }
+    }
+
+    func testMeterOnlyChangesAutoLevelsAndPreservesTables() throws {
+        let film = try XCTUnwrap(FilmStock.named("gold200"))
+        for style in Self.styles {
+            var options = FotufilmEngine.Options()
+            options.paper = .screen; options.digitalReference = style
+            options.localTone = false
+            var invocation = try FilmEngineInvocation(validating: film, options: options,
+                                                       width: 16, height: 16)
+            let original = invocation.configuration
+            let cache = invocation.spectralCacheID
+            let pixels = [Float](repeating: 8, count: 16 * 16 * 4)
+            var measurement = invocation.toneBaseMeasurement()
+            pixels.withUnsafeBufferPointer { measurement.add(linearRGBA: $0.baseAddress!, rows: 0..<16) }
+            invocation.setToneBase(measurement)
+            let metered = invocation.configuration
+            invocation.setToneBase(measurement)
+            XCTAssertEqual(invocation.configuration, metered, "Repeated measurements must not accumulate")
+            XCTAssertEqual(invocation.spectralCacheID, cache, "Metering must not rebuild spectral tables")
+            let midpoint = FilmEngineInvocation.paperMidpointRedOffset
+            if style == .autoLevels {
+                XCTAssertNotEqual(original[midpoint], metered[midpoint])
+            } else {
+                XCTAssertEqual(original[midpoint], metered[midpoint])
             }
         }
     }
@@ -222,7 +287,9 @@ final class DigitalReferenceReceiverTests: XCTestCase {
         var options = FotufilmEngine.Options()
         options.paper = .screen; options.grainScale = 0; options.halationScale = 0
         options.localTone = false
-        for id in ["portra400", "gold200", "superia400", "vision500t"] {
+        for style in Self.styles {
+            options.digitalReference = style
+            for id in ["portra400", "gold200", "superia400", "vision500t"] {
             let film = try XCTUnwrap(FilmStock.named(id), id)
             let cpu = try FotufilmEngine(stock: film, options: options).processChecked(linearRGB: scene)
             let metal = try XCTUnwrap(gpu.processLinearFloat(rgba, width: width, height: height,
@@ -231,6 +298,7 @@ final class DigitalReferenceReceiverTests: XCTestCase {
                 XCTAssertTrue(cpu.planes[c][i].isFinite && metal[4 * i + c].isFinite)
                 XCTAssertEqual(cpu.planes[c][i], metal[4 * i + c], accuracy: 2e-4, id)
             }}
+            }
         }
     }
     #endif

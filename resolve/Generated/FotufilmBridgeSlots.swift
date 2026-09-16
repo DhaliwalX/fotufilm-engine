@@ -52,5 +52,6 @@ enum BridgeSlot {
     static let fringeAmount = 50
     static let fringeRadius = 51
     static let enlarger = 52
-    static let count = 53
+    static let digitalReference = 53
+    static let count = 54
 }

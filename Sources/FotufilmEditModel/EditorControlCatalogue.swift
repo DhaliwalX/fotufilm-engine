@@ -130,7 +130,7 @@ public enum EditorControlCatalogue {
 
     public static let retiredFxplugIDs: [Int] = [33]
     public static let fxplugTextureStageIDs: ClosedRange<Int> = 40...71
-    public static let bridgeSlotCount = 53
+    public static let bridgeSlotCount = 54
 
     static let hostOnly: [EditorSurface: String] = [
         .app: "a plugin host's own setting, with no meaning on a photograph",
@@ -1355,6 +1355,29 @@ public enum EditorControlCatalogue {
                                              + "has no negative",
                                          generic: false)),
         EditorControl(
+            .digitalReference, title: "Screen Conversion",
+            detail: "Choose how a colour negative is converted on Digital Reference.",
+            section: .printPaper,
+            kind: .menu(.fixed(DigitalReferenceStyle.allCases.enumerated().map {
+                EditorMenuChoice(Double($0.offset), $0.element.name,
+                                 detail: $0.element.detail, id: $0.element.rawValue)
+            })),
+            availability: .colourNegative, persistence: .bespoke,
+            binding: .digitalReferenceIndex,
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .web, .cli],
+            host: HostParameter(
+                slot: 53, slotSymbol: "DIGITAL_REFERENCE", ofxName: "digitalReference",
+                fxplugID: 95, group: .output, label: "Screen Conversion",
+                hint: "Reference Exposure holds calibrated exposure; Graded Print softens highlights; "
+                    + "Auto Levels meters frame highlights. Colour negatives on Digital Reference only.",
+                kind: .choice(.fixed(DigitalReferenceStyle.allCases.enumerated().map {
+                    EditorMenuChoice(Double($0.offset), $0.element.name, id: $0.element.rawValue)
+                }), value: 2), order: 26),
+            commandLine: CommandLineFlag("--digital-reference", placeholder: "<style>",
+                help: "Screen conversion: reference-exposure, graded-print, or auto-levels (default)."),
+            documentation: "Colour negatives on Digital Reference: fixed Reference Exposure, "
+                + "Graded Print, or per-frame Auto Levels (default)."),
+        EditorControl(
             .enlarger, title: "Enlarger",
             detail: "Choose the enlarger lighting used to make the print.",
             section: .printLamp,
@@ -1725,6 +1748,7 @@ public enum EngineOptionCoverage: Sendable, Equatable {
 
 public extension EngineOptionCoverage {
     static let unbound: [String: EngineOptionCoverage] = [
+        "sceneHighlightStops": .derived("whole-frame highlight meter, optionally smoothed by a video host"),
         "sceneHeadroom": .derived(
             "the source interpretation the overflow menu sets, against the source's declared range"),
         "grainMottleSizeRatio": .derived(

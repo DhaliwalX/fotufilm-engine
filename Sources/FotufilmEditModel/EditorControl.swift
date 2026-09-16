@@ -21,7 +21,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case lensCorrection, lensProfile, lensAmount
     case lensDistortion, lensVignetting, lensRedCyan, lensBlueYellow
 
-    case paper, printFrame, printLight, enlarger, printCorrection, negativeViewing, gradeSpace
+    case paper, digitalReference, printFrame, printLight, enlarger, printCorrection, negativeViewing, gradeSpace
     case printerEnabled, printerLamp, printerExposure, printerMagenta, printerYellow
     case gradeShadowsWarmth, gradeShadowsTint, gradeShadowsLevel
     case gradeMidtonesWarmth, gradeMidtonesTint, gradeMidtonesLevel
