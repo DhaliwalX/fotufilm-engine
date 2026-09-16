@@ -2834,6 +2834,12 @@ int testPlugin() {
                 const char *companion;
                 double companionValue;
             };
+            int screenPaper = -1;
+            for (int i = 0; i < fotufilm_bridge_paper_count(); ++i) {
+                char id[80]; fotufilm_bridge_paper_id(i, id, sizeof(id));
+                if (std::strcmp(id, "screen") == 0) screenPaper = i;
+            }
+            check(screenPaper >= 0, "finds Digital Reference for the conversion sweep");
             const Lever levers[] = {
                 {"exposure", 1.0, nullptr, 0},
                 {"temperature", 3200, nullptr, 0},
@@ -2847,6 +2853,7 @@ int testPlugin() {
                 {"grain", 0, nullptr, 0},
                 {"halation", 0, nullptr, 0},
                 {"halationModel", 1, nullptr, 0},
+                {"digitalReference", 0, "paper", static_cast<double>(screenPaper)},
                 {"couplers", 0, nullptr, 0},
                 {"flare", 2.0, nullptr, 0},
                 {"estimatedHalation", 1, nullptr, 0},
@@ -2914,7 +2921,12 @@ int testPlugin() {
                             !(fotufilm_bridge_control_capabilities(stock, 0) & FOTUFILM_CONTROL_RECIPROCITY)) continue;
                         rest(stock);
                         if (lever.companion) {
-                            setParam(instance.params, lever.companion, lever.companionValue);
+                            if (std::strcmp(lever.companion, "paper") == 0) {
+                                setChoice(plugin, instanceHandle, instance.params, "paper",
+                                          static_cast<int>(lever.companionValue));
+                            } else {
+                                setParam(instance.params, lever.companion, lever.companionValue);
+                            }
                         }
                         if (!renderNow()) continue;
                         const std::vector<float> reference = output->pixels;

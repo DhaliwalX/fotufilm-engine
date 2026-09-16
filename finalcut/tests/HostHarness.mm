@@ -1033,6 +1033,48 @@ int main(int argc, const char *argv[]) {
             host.values[@(kFotufilmParam_Push)] = @0.0;
         }
 
+        printf("screen conversion\n");
+        {
+            FakeHost *screenHost = [[FakeHost alloc] init];
+            id<FxTileableEffect> screenEffect = makeEffect(screenHost);
+            NSError *screenError = nil;
+            int screenPaper = -1;
+            for (int i = 0; i < fotufilm_bridge_paper_count(); ++i) {
+                char id[80]; fotufilm_bridge_paper_id(i, id, sizeof(id));
+                if (std::strcmp(id, "screen") == 0) screenPaper = i;
+            }
+            const int colourNegative = firstStock(^(int32_t stock) {
+                return (fotufilm_bridge_control_capabilities(stock, screenPaper) &
+                        FOTUFILM_CONTROL_SCREEN_CONVERSION) != 0;
+            });
+            expect(screenPaper >= 0 && colourNegative >= 0, "finds a colour negative on Digital Reference");
+            chooseStock(screenEffect, screenHost, colourNegative);
+            screenHost.values[@(kFotufilmParam_Paper)] = @(screenPaper);
+            screenHost.values[@(kFotufilmParam_PaperID)] = @"";
+            [screenEffect parameterChanged:kFotufilmParam_Paper atTime:kCMTimeZero error:&screenError];
+            expect(!dimmed(screenHost, kFotufilmParam_DigitalReference), "Screen Conversion is available on Digital Reference");
+            std::vector<float> frames[3];
+            for (int style = 0; style < 3; ++style) {
+                screenHost.values[@(kFotufilmParam_DigitalReference)] = @(style);
+                [screenEffect parameterChanged:kFotufilmParam_DigitalReference atTime:kCMTimeZero error:&screenError];
+                expect(develop(screenEffect, screenHost, 96, 64, ^(int x, int y, float *rgba) {
+                    float light = 0.01f + 8.0f * x / 95.0f;
+                    rgba[0] = light; rgba[1] = light * 0.8f; rgba[2] = light * 0.6f; rgba[3] = 1;
+                }, &frames[style]), "renders the selected screen conversion");
+            }
+            for (int a = 0; a < 3; ++a) for (int b = a + 1; b < 3; ++b) {
+                double energy = 0;
+                for (size_t i = 0; i < frames[a].size() && i < frames[b].size(); ++i) {
+                    double delta = frames[a][i] - frames[b][i]; energy += delta * delta;
+                }
+                expect(energy > 1e-6, "each screen conversion produces a distinct frame");
+            }
+            screenHost.values[@(kFotufilmParam_Paper)] = @0;
+            screenHost.values[@(kFotufilmParam_PaperID)] = @"";
+            [screenEffect parameterChanged:kFotufilmParam_Paper atTime:kCMTimeZero error:&screenError];
+            expect(dimmed(screenHost, kFotufilmParam_DigitalReference), "physical paper disables Screen Conversion");
+        }
+
         printf("per-stock gating\n");
         {
             // What a film has is the film's own data. A control the chosen stock cannot back is
