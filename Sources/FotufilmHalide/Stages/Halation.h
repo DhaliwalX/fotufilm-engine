@@ -39,6 +39,12 @@ inline Halide::Expr halation_mix(Halide::ImageParam &configuration,
         + configuration(row + 2) * returned(2);
 }
 
+inline Halide::Expr veiling_glare(Halide::ImageParam &configuration,
+                                  Halide::Expr direct, Halide::Expr mean) {
+    Halide::Expr fraction = configuration(FOTUFILM_CONFIG_FLARE);
+    return (1.0f - fraction) * direct + fraction * mean;
+}
+
 /// The lens diffusion filter's mix, at one pixel of one record.
 ///
 /// Unlike halation's, this is not a blend between a direct and a scattered term: the two shares

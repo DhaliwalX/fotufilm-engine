@@ -252,6 +252,23 @@ inline Halide::Expr disc_grain(Halide::ImageParam &configuration,
                                      radius, seed, Expr(kGrainSharedLayer)));
 }
 
+inline Halide::Expr clump_grain(Halide::ImageParam &configuration, Halide::Expr channel,
+                                Halide::Expr modulation, Halide::Expr grain_field,
+                                Halide::Expr mottle_field = Halide::Expr()) {
+    Halide::Expr clump = configuration(FOTUFILM_CONFIG_GRAIN + channel)
+        * modulation * grain_field;
+    if (mottle_field.defined()) {
+        clump = clump + configuration(FOTUFILM_CONFIG_MOTTLE + channel)
+            * modulation * mottle_field;
+    }
+    return clump;
+}
+
+inline Halide::Expr selected_grain(Halide::Expr disc_mode, Halide::Expr clump,
+                                   Halide::Expr disc = Halide::Expr()) {
+    return disc.defined() ? Halide::select(disc_mode, disc, clump) : clump;
+}
+
 inline Halide::Expr grain_correlate(Halide::ImageParam &configuration,
                                     Halide::Func base_noise, Halide::Expr x,
                                     Halide::Expr y, Halide::Expr channel) {

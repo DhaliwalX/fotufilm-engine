@@ -6,6 +6,7 @@
 
 #include "FotufilmHalideShared.h"
 #include "FotufilmHalideFrameParams.h"
+#include "Schedule/Cpu.h"
 #include "FotufilmCompiledCache.h"
 
 #include <algorithm>
@@ -28,301 +29,9 @@ using Halide::RDom;
 using Halide::Var;
 
 using namespace fotufilm;
+using namespace fotufilm::cpu;
 
 namespace {
-
-constexpr int kVectorWidth = 8;
-constexpr int kStripHeight = 32;
-
-Halide::Target reference_target() {
-    return Halide::get_jit_target_from_environment().with_feature(Halide::Target::StrictFloat);
-}
-
-Expr typed_zero(const Func &function) {
-    return Halide::cast(function.value().type(), 0);
-}
-
-/// Standard schedule for a full-frame pointwise stage: channels unrolled, rows in parallel,
-/// vectorized across x.
-void cpu_pointwise(Func function, Var x, Var y, Var c, int planes = 3) {
-    function.compute_root().bound(c, 0, planes).reorder(c, x, y).unroll(c)
-        .vectorize(x, kVectorWidth, Halide::TailStrategy::GuardWithIf).parallel(y);
-}
-
-/// Standard schedule for a separable blur's two passes: a pure Func whose taps accumulate in
-/// registers (Halide's inline `sum`) rather than as a zero-fill pass plus a read-modify-write
-/// update over a materialized buffer.
-void cpu_separable(Func function, Var x, Var y, Var c, int channels) {
-    function.compute_root().bound(c, 0, channels).reorder(c, x, y).unroll(c)
-        .vectorize(x, kVectorWidth, Halide::TailStrategy::GuardWithIf).parallel(y);
-}
-
-/// A separable Gaussian carrying one sigma per channel, over the widest of the three radii — the
-/// narrower kernels simply decay to nothing out there.
-Func gaussian(Func source, Expr sigma0, Expr sigma1, Expr sigma2,
-              Expr radius, Expr width, Expr height,
-              const std::string &name, int channels = 3) {
-    Var x("x"), y("y"), c("c"), k("k");
-    Expr sigma = Halide::select(c == 0, sigma0, c == 1, sigma1, sigma2);
-    Func kernel(name + "_kernel");
-    kernel(k, c) = Halide::exp(-Halide::cast<float>(k * k) / (2.0f * sigma * sigma));
-    kernel.compute_root();
-    RDom normalization_taps(-radius, radius * 2 + 1, name + "_norm_taps");
-    Func normalization(name + "_normalization");
-    normalization(c) = Halide::sum(kernel(normalization_taps.x, c),
-                                   name + "_norm_sum");
-    normalization.compute_root();
-
-    Func bounded = constant_exterior(source, typed_zero(source),
-                                     {{0, width}, {0, height}, {0, channels}});
-    RDom horizontal_taps(-radius, radius * 2 + 1, name + "_horizontal_taps");
-    Func horizontal(name + "_horizontal");
-    Expr horizontal_weight = Halide::sum(
-        Halide::select(x + horizontal_taps.x >= 0
-                           && x + horizontal_taps.x < width,
-                       kernel(horizontal_taps.x, c), 0.0f),
-        name + "_horizontal_weight");
-    horizontal(x, y, c) = Halide::sum(
-        bounded(x + horizontal_taps.x, y, c) * kernel(horizontal_taps.x, c),
-        name + "_horizontal_sum") / Halide::max(horizontal_weight, 1.0e-12f);
-    cpu_separable(horizontal, x, y, c, channels);
-
-    RDom vertical_taps(-radius, radius * 2 + 1, name + "_vertical_taps");
-    Func vertical(name);
-    Expr vertical_weight = Halide::sum(
-        Halide::select(y + vertical_taps.x >= 0
-                           && y + vertical_taps.x < height,
-                       kernel(vertical_taps.x, c), 0.0f),
-        name + "_vertical_weight");
-    vertical(x, y, c) = Halide::sum(
-        horizontal(x, y + vertical_taps.x, c) * kernel(vertical_taps.x, c),
-        name + "_vertical_sum") / Halide::max(vertical_weight, 1.0e-12f);
-    cpu_separable(vertical, x, y, c, channels);
-    return vertical;
-}
-
-/// Three chained box blurs collapsed into one convolution per direction.
-Func triple_box_blur(Func source, Expr radius, Expr width, Expr height,
-                     const std::string &name, int channels = 3) {
-    Var x("x"), y("y"), c("c"), k("k");
-    Expr box_scale = 1.0f / Halide::cast<float>(radius * 2 + 1);
-    Func box(name + "_box");
-    box(k) = Halide::select(Halide::abs(k) <= radius, box_scale, 0.0f);
-    RDom fold_once(-radius, radius * 2 + 1, name + "_fold_once");
-    Func box_twice(name + "_box_twice");
-    box_twice(k) = Halide::sum(box(k - fold_once.x), name + "_fold_once_sum")
-        * box_scale;
-    RDom fold_again(-radius, radius * 2 + 1, name + "_fold_again");
-    Func kernel(name + "_kernel");
-    kernel(k) = Halide::sum(box_twice(k - fold_again.x), name + "_fold_again_sum")
-        * box_scale;
-    box.compute_root();
-    box_twice.compute_root();
-    kernel.compute_root();
-
-    Func bounded = constant_exterior(
-        source, typed_zero(source), {{0, width}, {0, height}, {0, channels}});
-    RDom horizontal_taps(-radius * 3, radius * 6 + 1, name + "_horizontal_taps");
-    Func horizontal(name + "_horizontal");
-    Expr horizontal_weight = Halide::sum(
-        Halide::select(x + horizontal_taps.x >= 0
-                           && x + horizontal_taps.x < width,
-                       kernel(horizontal_taps.x), 0.0f),
-        name + "_horizontal_weight");
-    horizontal(x, y, c) = Halide::sum(
-        bounded(x + horizontal_taps.x, y, c) * kernel(horizontal_taps.x),
-        name + "_horizontal_sum") / Halide::max(horizontal_weight, 1.0e-12f);
-    cpu_separable(horizontal, x, y, c, channels);
-
-    RDom vertical_taps(-radius * 3, radius * 6 + 1, name + "_vertical_taps");
-    Func vertical(name);
-    Expr vertical_weight = Halide::sum(
-        Halide::select(y + vertical_taps.x >= 0
-                           && y + vertical_taps.x < height,
-                       kernel(vertical_taps.x), 0.0f),
-        name + "_vertical_weight");
-    vertical(x, y, c) = Halide::sum(
-        horizontal(x, y + vertical_taps.x, c) * kernel(vertical_taps.x),
-        name + "_vertical_sum") / Halide::max(vertical_weight, 1.0e-12f);
-    cpu_separable(vertical, x, y, c, channels);
-    return vertical;
-}
-
-/// One box-blur pass computed with running (prefix) sums, so a wide radius costs O(1) per pixel
-/// instead of O(radius).
-Func box_blur(Func source, Param<int32_t> &radius,
-              Param<int32_t> &width, Param<int32_t> &height,
-              const std::string &name) {
-    Var x("x"), y("y"), c("c"), xo("xo"), xi("xi"), yo("yo"), yi("yi");
-    Func bounded = constant_exterior(
-        source, typed_zero(source), {{0, width}, {0, height}, {0, 3}});
-
-    Func hsum(name + "_hsum");
-    hsum(x, y, c) = 0.0f;
-    RDom rx(0, width + 2 * radius, name + "_rx");
-    hsum(rx - radius, y, c) = hsum(rx - radius - 1, y, c) + bounded(rx - radius, y, c);
-    Func horizontal(name + "_horizontal");
-    Expr horizontal_count = Halide::cast<float>(
-        Halide::max(0, Halide::min(width - 1, x + radius)
-                           - Halide::max(0, x - radius) + 1));
-    horizontal(x, y, c) = (hsum(x + radius, y, c) - hsum(x - radius - 1, y, c))
-        / Halide::max(horizontal_count, 1.0f);
-
-    Func hbounded = constant_exterior(horizontal, typed_zero(horizontal),
-                                      {{0, width}, {0, height}, {0, 3}});
-    Func vsum(name + "_vsum");
-    vsum(x, y, c) = 0.0f;
-    RDom ry(0, height + 2 * radius, name + "_ry");
-    vsum(x, ry - radius, c) = vsum(x, ry - radius - 1, c) + hbounded(x, ry - radius, c);
-    Func vertical(name);
-    Expr vertical_count = Halide::cast<float>(
-        Halide::max(0, Halide::min(height - 1, y + radius)
-                           - Halide::max(0, y - radius) + 1));
-    vertical(x, y, c) = (vsum(x, y + radius, c) - vsum(x, y - radius - 1, c))
-        / Halide::max(vertical_count, 1.0f);
-
-    horizontal.compute_root()
-        .split(y, yo, yi, kStripHeight, Halide::TailStrategy::GuardWithIf)
-        .reorder(c, x, yi, yo).bound(c, 0, 3).unroll(c)
-        .vectorize(x, kVectorWidth, Halide::TailStrategy::GuardWithIf)
-        .parallel(yo);
-    hsum.compute_at(horizontal, yo);
-    hsum.update().reorder(c, rx, y).unroll(c);
-
-    vertical.compute_root()
-        .split(x, xo, xi, kStripHeight, Halide::TailStrategy::GuardWithIf)
-        .reorder(c, xi, y, xo).bound(c, 0, 3).unroll(c)
-        .vectorize(xi, kVectorWidth, Halide::TailStrategy::GuardWithIf)
-        .parallel(xo);
-    vsum.compute_at(vertical, xo);
-    vsum.update().reorder(c, x, ry).unroll(c);
-    return vertical;
-}
-
-/// A Gaussian whose sigma spans many pixels, run on a frame-anchored decimated grid: box-average
-/// down by a power-of-two stride, blur there with the rescaled sigma, and sample back up
-/// bilinearly.
-Func cpu_gaussian_decimated(Func source, Expr sigma, Expr radius,
-                            Expr origin_x, Expr origin_y,
-                            Expr width, Expr height, const std::string &name,
-                            int channels = 3) {
-    Var x("x"), y("y"), c("c");
-    Expr stride = gaussian_stride(sigma);
-    Expr phase_x = origin_x % stride;
-    Expr phase_y = origin_y % stride;
-    Expr down_width = (width + phase_x + stride - 1) / stride;
-    Expr down_height = (height + phase_y + stride - 1) / stride;
-    Func bounded_source = constant_exterior(
-        source, typed_zero(source), {{0, width}, {0, height}, {0, channels}});
-    RDom cell(0, stride, 0, stride, name + "_cell");
-    Func down(name + "_down");
-    Expr source_x = x * stride - phase_x + cell.x;
-    Expr source_y = y * stride - phase_y + cell.y;
-    Expr valid = Halide::select(source_x >= 0 && source_x < width
-                                    && source_y >= 0 && source_y < height,
-                                1.0f, 0.0f);
-    Expr cell_count = Halide::sum(valid, name + "_down_weight");
-    down(x, y, c) = Halide::sum(
-        bounded_source(x * stride - phase_x + cell.x,
-                       y * stride - phase_y + cell.y, c),
-        name + "_down_sum") / Halide::max(cell_count, 1.0f);
-    cpu_separable(down, x, y, c, channels);
-
-    Expr small_sigma = decimated_gaussian_sigma(sigma, stride);
-    Func blurred = gaussian(down, small_sigma, small_sigma, small_sigma,
-                            decimated_gaussian_radius(radius, stride),
-                            down_width, down_height, name + "_spread", channels);
-    Func bounded_blur = constant_exterior(
-        blurred, typed_zero(blurred),
-        {{0, down_width}, {0, down_height}, {0, channels}});
-    Expr sample_x = (Halide::cast<float>(x + phase_x) + 0.5f)
-        / Halide::cast<float>(stride) - 0.5f;
-    Expr sample_y = (Halide::cast<float>(y + phase_y) + 0.5f)
-        / Halide::cast<float>(stride) - 0.5f;
-    Expr x0 = Halide::cast<int32_t>(Halide::floor(sample_x));
-    Expr y0 = Halide::cast<int32_t>(Halide::floor(sample_y));
-    Expr fx = sample_x - Halide::floor(sample_x);
-    Expr fy = sample_y - Halide::floor(sample_y);
-    Func up(name);
-    Expr w00 = (1.0f - fx) * (1.0f - fy), w01 = (1.0f - fx) * fy;
-    Expr w10 = fx * (1.0f - fy), w11 = fx * fy;
-    auto valid_sample = [&](Expr sx, Expr sy) {
-        return Halide::select(sx >= 0 && sx < down_width
-                                  && sy >= 0 && sy < down_height, 1.0f, 0.0f);
-    };
-    Expr sample_weight = w00 * valid_sample(x0, y0) + w01 * valid_sample(x0, y0 + 1)
-        + w10 * valid_sample(x0 + 1, y0) + w11 * valid_sample(x0 + 1, y0 + 1);
-    up(x, y, c) = (w00 * bounded_blur(x0, y0, c)
-                       + w01 * bounded_blur(x0, y0 + 1, c)
-                       + w10 * bounded_blur(x0 + 1, y0, c)
-                       + w11 * bounded_blur(x0 + 1, y0 + 1, c))
-        / Halide::max(sample_weight, 1.0e-12f);
-    return up;
-}
-
-/// One halation scale, evaluated on its own decimated grid: box-average down by `stride`, run the
-/// collapsed triple box there with the rescaled radius, and sample back up bilinearly.
-Expr halation_scale(Func light, Expr stride, Expr strided_radius,
-                    Expr width, Expr height, Expr origin_x, Expr origin_y,
-                    Var x, Var y, Var c, Expr ring_radius, bool annular,
-                    const std::string &name, int channels = 3) {
-    Expr phase_x = origin_x % stride;
-    Expr phase_y = origin_y % stride;
-    Expr down_width = (width + phase_x + stride - 1) / stride;
-    Expr down_height = (height + phase_y + stride - 1) / stride;
-    Func bounded_source = constant_exterior(
-        light, typed_zero(light), {{0, width}, {0, height}, {0, channels}});
-    RDom cell(0, stride, 0, stride, name + "_cell");
-    Func down(name + "_down");
-    Expr source_x = x * stride - phase_x + cell.x;
-    Expr source_y = y * stride - phase_y + cell.y;
-    Expr valid = Halide::select(source_x >= 0 && source_x < width
-                                    && source_y >= 0 && source_y < height,
-                                1.0f, 0.0f);
-    Expr cell_count = Halide::sum(valid, name + "_down_weight");
-    down(x, y, c) = Halide::sum(
-        bounded_source(x * stride - phase_x + cell.x,
-                       y * stride - phase_y + cell.y, c),
-        name + "_down_sum") / Halide::max(cell_count, 1.0f);
-    cpu_separable(down, x, y, c, channels);
-
-    Func blurred = triple_box_blur(down, strided_radius, down_width, down_height,
-                                   name + "_spread", channels);
-    Func bounded_blur = constant_exterior(
-        blurred, typed_zero(blurred),
-        {{0, down_width}, {0, down_height}, {0, channels}});
-    Expr sample_x = (Halide::cast<float>(x + phase_x) + 0.5f)
-        / Halide::cast<float>(stride) - 0.5f;
-    Expr sample_y = (Halide::cast<float>(y + phase_y) + 0.5f)
-        / Halide::cast<float>(stride) - 0.5f;
-    Expr x0 = Halide::cast<int32_t>(Halide::floor(sample_x));
-    Expr y0 = Halide::cast<int32_t>(Halide::floor(sample_y));
-    Expr fx = sample_x - Halide::floor(sample_x);
-    Expr fy = sample_y - Halide::floor(sample_y);
-    Expr w00 = (1.0f - fx) * (1.0f - fy), w01 = (1.0f - fx) * fy;
-    Expr w10 = fx * (1.0f - fy), w11 = fx * fy;
-    auto valid_sample = [&](Expr sx, Expr sy) {
-        return Halide::select(sx >= 0 && sx < down_width
-                                  && sy >= 0 && sy < down_height, 1.0f, 0.0f);
-    };
-    Expr sample_weight = w00 * valid_sample(x0, y0) + w01 * valid_sample(x0, y0 + 1)
-        + w10 * valid_sample(x0 + 1, y0) + w11 * valid_sample(x0 + 1, y0 + 1);
-    Expr center = (w00 * bounded_blur(x0, y0, c)
-                       + w01 * bounded_blur(x0, y0 + 1, c)
-                       + w10 * bounded_blur(x0 + 1, y0, c)
-                       + w11 * bounded_blur(x0 + 1, y0 + 1, c))
-        / Halide::max(sample_weight, 1.0e-12f);
-    if (!annular) return center;
-    auto at = [&](Expr sx, Expr sy) { return bounded_blur(sx, sy, c); };
-    auto valid_ring_sample = [&](Expr sx, Expr sy) {
-        return Halide::select(sx >= 0 && sx < down_width
-                                  && sy >= 0 && sy < down_height, 1.0f, 0.0f);
-    };
-    Expr radius_on_grid = ring_radius / Halide::cast<float>(stride);
-    return annular_sample(at, sample_x, sample_y, radius_on_grid)
-        / Halide::max(annular_sample(valid_ring_sample, sample_x, sample_y,
-                                    radius_on_grid), 1.0e-12f);
-}
 
 Buffer<float> planar_buffer(const float *r, const float *g, const float *b,
                             int32_t width, int32_t height) {
@@ -476,9 +185,7 @@ public:
             mean.compute_root().bound(c, 0, 3);
 
             Func flared("develop_flared" + suffix);
-            Expr fraction = configuration_(FOTUFILM_CONFIG_FLARE);
-            flared(x, y, c) = (1.0f - fraction) * exposure(x, y, c)
-                + fraction * mean(c);
+            flared(x, y, c) = veiling_glare(configuration_, exposure(x, y, c), mean(c));
             light = flared;
             light_stored = false;
         }
@@ -582,10 +289,9 @@ public:
         if (use_couplers || use_adjacency || use_donor) {
             cpu_pointwise(log_exposure, x, y, c);
             Func activation("develop_activation" + suffix);
-            Expr base = FOTUFILM_CONFIG_CURVES + c * 6;
-            activation(x, y, c) =
-                (sample_film_curve(configuration_, curves, log_exposure(x, y, c), c)
-                 - configuration_(base)) / film_curve_range(configuration_, c);
+            activation(x, y, c) = film_activation(
+                configuration_, c,
+                sample_film_curve(configuration_, curves, log_exposure(x, y, c), c));
             cpu_pointwise(activation, x, y, c);
             Func released("develop_released" + suffix);
             released(x, y, c) = coupler_release(configuration_, c, activation(x, y, c));
@@ -659,58 +365,42 @@ public:
                         configuration_, c, coupler_diffused(x, y, 0),
                         coupler_diffused(x, y, 1), coupler_diffused(x, y, 2));
                     if (use_coupler_diffusion) {
-                        Expr fringe = chromatic_fringe_inhibition(
-                            configuration_, c,
+                        inhibition = fringe_inhibition(
+                            configuration_, c, inhibition, fringe_radius_,
                             fringe_diffused(x, y, 0) - coupler_diffused(x, y, 0),
                             fringe_diffused(x, y, 1) - coupler_diffused(x, y, 1),
                             fringe_diffused(x, y, 2) - coupler_diffused(x, y, 2));
-                        inhibition = Halide::select(fringe_radius_ > 0,
-                            inhibition + fringe, inhibition);
                     }
                 }
                 if (use_donor) {
                     inhibition = inhibition
-                        + configuration_(FOTUFILM_CONFIG_DONOR_RELEASE + c)
-                        * donor_diffused(x, y, 0)
-                        * configuration_(FOTUFILM_CONFIG_COUPLER_SCALE);
+                        + donor_inhibition(configuration_, c, donor_diffused(x, y, 0));
                 }
-                Expr u = log_exposure(x, y, c) - inhibition;
-                inhibited = u + coupler_warp(configuration_, c, u);
+                inhibited = inhibited_log_exposure(
+                    configuration_, c, log_exposure(x, y, c), inhibition);
             }
             Expr shift = 0.0f;
-            if (use_adjacency) {
-                shift = Halide::select(
-                    configuration_(FOTUFILM_CONFIG_ADJACENCY_MODEL) > 0.5f, 0.0f,
-                    -configuration_(FOTUFILM_CONFIG_ADJACENCY_STRENGTH) * adjacency_residual);
-            }
+            if (use_adjacency) shift = adjacency_shift(configuration_, adjacency_residual);
             shifted(x, y, c) = inhibited - shift;
             effective_log = shifted;
         }
 
         Func density("develop_density" + suffix);
-        Expr density_base = FOTUFILM_CONFIG_CURVES + c * 6;
-        Expr d_min = configuration_(density_base);
-        Expr range = film_curve_range(configuration_, c);
         // The developed negative, complemented on a reversal stock to its measured direct-positive
         // densities. `density_in` is handed exactly this quantity instead of computing it —
-        // `NegativeInterchange`, per layer, in the same order. Keyed on the configuration rather
-        // than on FOTUFILM_FRAME_REVERSAL: that bit also routes a negative shown on a light box or
-        // scanner past the paper, and such a negative is developed as a negative, so everything
-        // downstream — the grain's density law included — reads its own density.
-        auto developed_density = [&](Func log_exposure_source, bool spatial) {
+        // `NegativeInterchange`, per layer, in the same order.
+        auto developed = [&](Func log_exposure_source, bool spatial) {
             Expr formed = sample_film_curve(configuration_, curves, log_exposure_source(x, y, c), c);
             if (use_adjacency && spatial) {
                 formed = adjacency_density(configuration_, c, formed, adjacency_residual);
             }
-            return Halide::select(
-                configuration_(FOTUFILM_CONFIG_DEVELOP_COMPLEMENT) > 0.5f,
-                d_min + range - (formed - d_min), formed);
+            return developed_density(configuration_, c, formed);
         };
         if (density_in) {
             density(x, y, c) = Halide::mux(
                 c, {input_r_(x, y), input_g_(x, y), input_b_(x, y)});
         } else {
-            density(x, y, c) = developed_density(effective_log, true);
+            density(x, y, c) = developed(effective_log, true);
         }
 
         // The other development `texture` differences against: the same curve, the same couplers'
@@ -728,9 +418,9 @@ public:
                 Expr inhibition = 0.0f;
                 if (use_couplers) {
                     Func flat_activation("develop_flat_activation" + suffix);
-                    flat_activation(x, y, c) =
-                        (sample_film_curve(configuration_, curves, flat_log(x, y, c), c)
-                         - configuration_(density_base)) / range;
+                    flat_activation(x, y, c) = film_activation(
+                        configuration_, c,
+                        sample_film_curve(configuration_, curves, flat_log(x, y, c), c));
                     cpu_pointwise(flat_activation, x, y, c);
                     Func flat_released("develop_flat_released" + suffix);
                     flat_released(x, y, c) = coupler_release(
@@ -746,15 +436,13 @@ public:
                 // is the mode's contract.
                 if (use_donor) {
                     inhibition = inhibition
-                        + configuration_(FOTUFILM_CONFIG_DONOR_RELEASE + c)
-                        * donor_released(x, y, 0)
-                        * configuration_(FOTUFILM_CONFIG_COUPLER_SCALE);
+                        + donor_inhibition(configuration_, c, donor_released(x, y, 0));
                 }
-                Expr u = flat_log(x, y, c) - inhibition;
-                flat_shifted(x, y, c) = u + coupler_warp(configuration_, c, u);
+                flat_shifted(x, y, c) = inhibited_log_exposure(
+                    configuration_, c, flat_log(x, y, c), inhibition);
                 flat_effective = flat_shifted;
             }
-            flat_density(x, y, c) = developed_density(flat_effective, false);
+            flat_density(x, y, c) = developed(flat_effective, false);
             cpu_pointwise(flat_density, x, y, c);
         }
 
@@ -787,11 +475,9 @@ public:
                 configuration_(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 2),
                 grain_radius_, width_, height_,
                 "develop_grain_field" + suffix);
-            Expr amount = Halide::clamp((density(x, y, c) - d_min) / range, 0.0f, 1.0f);
-            Expr modulation = grain_density_modulation(
-                configuration_, c, amount * range);
-            Expr clump = configuration_(FOTUFILM_CONFIG_GRAIN + c)
-                * modulation * grain_field(x, y, c);
+            DensityPosition position = density_position(configuration_, c, density(x, y, c));
+            Expr modulation = grain_density_modulation(configuration_, c, position.net);
+            Expr mottle;
             if (use_mottle) {
                 // The mixture's coarse crystal population: an independent
                 // Poisson field on its own hash streams, blurred at its own
@@ -821,17 +507,15 @@ public:
                     configuration_(FOTUFILM_CONFIG_MOTTLE_SIGMA_LAYER + 2),
                     mottle_radius_, width_, height_,
                     "develop_mottle_field" + suffix);
-                clump = clump + configuration_(FOTUFILM_CONFIG_MOTTLE + c)
-                    * modulation * mottle_field(x, y, c);
+                mottle = mottle_field(x, y, c);
             }
-
-            Expr grain = clump;
+            Expr clump = clump_grain(configuration_, c, modulation, grain_field(x, y, c), mottle);
+            Expr disc;
             if (use_discs) {
-                Expr disc = disc_grain(configuration_, density, amount * range,
-                                       x, y, c, origin_x_, origin_y_, seed_);
-                grain = Halide::select(grain_mode_ != 0, disc, clump);
+                disc = disc_grain(configuration_, density, position.net,
+                                  x, y, c, origin_x_, origin_y_, seed_);
             }
-            output(x, y, c) = density(x, y, c) + grain;
+            output(x, y, c) = density(x, y, c) + selected_grain(grain_mode_ != 0, clump, disc);
         } else {
             output(x, y, c) = density(x, y, c);
         }
@@ -845,23 +529,15 @@ public:
             // makes the two agree to second order, but the negative's dense highlights are not a
             // small excursion, and it is exactly there that this softens most.
             Func transmittance("develop_print_mtf_transmittance" + suffix);
-            transmittance(x, y, c) = Halide::pow(10.0f, -output(x, y, c));
+            transmittance(x, y, c) = transmittance_of(output(x, y, c));
             cpu_pointwise(transmittance, x, y, c);
             Expr sigma = configuration_(FOTUFILM_CONFIG_PRINT_MTF_SIGMA);
             Func spread = gaussian(transmittance, sigma, sigma, sigma,
                                    print_mtf_radius_, width_, height_,
                                    "develop_print_mtf" + suffix);
-            // A scan finish returns a share of the detail under the blur — the minilab's own
-            // unsharp mask, taken in the same transmittance the aperture averaged. The papers
-            // keep 0, and the select returns the spread itself so their output does not move.
-            Expr keep = configuration_(FOTUFILM_CONFIG_PRINT_SHARPEN);
-            Expr read = Halide::select(
-                keep > 0.0f,
-                spread(x, y, c) + keep * (transmittance(x, y, c) - spread(x, y, c)),
-                spread(x, y, c));
             Func printed("develop_printed" + suffix);
-            printed(x, y, c) = -Halide::log(Halide::max(read, 1.0e-6f))
-                / Halide::log(10.0f);
+            printed(x, y, c) = density_of(print_mtf_read(
+                configuration_, transmittance(x, y, c), spread(x, y, c)));
             cpu_pointwise(printed, x, y, c);
             output = printed;
             if (texture) {
@@ -870,10 +546,7 @@ public:
                 // the enlarger's spread rather than the spread plus a round trip one side took
                 // and the other did not.
                 Func flat_printed("develop_flat_printed" + suffix);
-                Expr flat_transmittance =
-                    Halide::pow(10.0f, -flat_density(x, y, c));
-                flat_printed(x, y, c) = -Halide::log(
-                    Halide::max(flat_transmittance, 1.0e-6f)) / Halide::log(10.0f);
+                flat_printed(x, y, c) = density_of(transmittance_of(flat_density(x, y, c)));
                 cpu_pointwise(flat_printed, x, y, c);
                 flat_density = flat_printed;
             }
@@ -889,13 +562,10 @@ public:
             // curve — and this mode has none, so the character arrives at the negative's own
             // amplitude rather than the amplified one a print would show.
             Func textured("develop_texture" + suffix);
-            Expr difference = output(x, y, c) - flat_density(x, y, c);
-            Expr signed_difference =
-                Halide::select(reversal_ != 0, -difference, difference);
             Expr source = Halide::mux(
                 c, {input_r_(x, y), input_g_(x, y), input_b_(x, y)});
-            textured(x, y, c) = source
-                * Halide::exp(signed_difference * 2.3025851f);
+            textured(x, y, c) = texture_carry(
+                source, output(x, y, c), flat_density(x, y, c), reversal_);
             cpu_pointwise(textured, x, y, c);
             output = textured;
         }
@@ -1013,9 +683,7 @@ public:
         paper_lut_.dim(0).set_bounds(0, kLutValueCount);
 
         Func activation("print_activation" + suffix);
-        Expr base = FOTUFILM_CONFIG_CURVES + c * 6;
-        activation(x, y, c) = (input_(x, y, c) - configuration_(base))
-            / film_curve_range(configuration_, c);
+        activation(x, y, c) = film_activation(configuration_, c, input_(x, y, c));
         cpu_pointwise(activation, x, y, c);
 
         Func display("print_display" + suffix);
@@ -1029,18 +697,11 @@ public:
             Expr relative = lut_sample(
                 film_lut_, activation(x, y, 0), activation(x, y, 1),
                 activation(x, y, 2), c);
-            Expr exposure = paper_exposure(configuration_, c, relative);
-            Expr paper_base = paper_curve_base(c);
-            Expr paper_min = configuration_(paper_base);
-            Expr paper_range = curve_range(configuration_, paper_base);
-            Func paper_activation("print_paper_activation" + suffix);
-            paper_activation(x, y, c) =
-                (sample_curve(paper_curve, exposure, c) - paper_min)
-                / paper_range;
-            cpu_pointwise(paper_activation, x, y, c);
+            Func activated("print_paper_activation" + suffix);
+            activated(x, y, c) = paper_activation(configuration_, paper_curve, c, relative);
+            cpu_pointwise(activated, x, y, c);
             display(x, y, c) = lut_sample(
-                paper_lut_, paper_activation(x, y, 0), paper_activation(x, y, 1),
-                paper_activation(x, y, 2), c);
+                paper_lut_, activated(x, y, 0), activated(x, y, 1), activated(x, y, 2), c);
         }
 
         Func graded("print_graded" + suffix);

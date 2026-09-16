@@ -9,9 +9,11 @@
 #include "Stages/Transfer.h"
 #include "Stages/Curves.h"
 #include "Stages/Couplers.h"
+#include "Stages/Development.h"
 #include "Stages/Exposure.h"
 #include "Stages/Halation.h"
 #include "Stages/Random.h"
 #include "Stages/Grain.h"
+#include "Stages/Print.h"
 
 #endif
