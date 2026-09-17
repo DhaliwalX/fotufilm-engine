@@ -288,7 +288,12 @@ public enum EngineBinding: Equatable, Sendable {
         case .grainMottleShare:
             options.grainMottleShare = value.number.map(Float.init)
         case .discGrain:
-            if let flag = value.flag { options.grainModel = flag ? .discs : .clumpField }
+            // A host menu carries all three models; the app's toggle only the first two.
+            if case .choice(let index) = value {
+                options.grainModel = index >= 2 ? .crystals : index == 1 ? .discs : .clumpField
+            } else if let flag = value.flag {
+                options.grainModel = flag ? .discs : .clumpField
+            }
         case .halationStops:
             if let number = value.number {
                 options.halationScale = Float(HalationAmount.scale(fromStops: number))

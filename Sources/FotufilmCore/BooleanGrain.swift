@@ -12,6 +12,13 @@ public enum GrainModel: Sendable {
     /// emulsion's correlation length, not a model of its crystals. Available only in the
     /// reference schedule; realtime schedules use `clumpField`.
     case discs
+    /// The crystals that form the image, rendered as what they form: Poisson counts of
+    /// developed crystals per size bin at the mean the developed density gives each, laid as
+    /// dye clouds — or silver grains — at each bin's own radius, drawn from each sublayer's
+    /// coupler pool, with the population read off the record's characteristic curve
+    /// (`CrystalGrainModel`). Available only in the reference schedule, like `discs`, whose
+    /// variant family carries it; realtime schedules use `clumpField`.
+    case crystals
 }
 
 /// Boolean grain model using equal-radius discs from a Poisson process.

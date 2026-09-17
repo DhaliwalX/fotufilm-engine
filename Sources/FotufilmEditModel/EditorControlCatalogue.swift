@@ -388,19 +388,30 @@ public enum EditorControlCatalogue {
                 label: "Grain Model",
                 hint: "Disc grain is available on silver-image stocks and requires Reference rendering, "
                     + "selected automatically. Subpixel grain uses the clump field; coarse mottle is "
-                    + "suppressed where discs render.",
+                    + "suppressed where discs render. Crystals develops the film's own crystal "
+                    + "population — sparse coarse clouds where little developed, a fine dense haze "
+                    + "where most did — on any stock, in Reference rendering.",
                 kind: .choice(.fixed([EditorMenuChoice(0, "Clump Field", id: "clump"),
-                                      EditorMenuChoice(1, "Discs", id: "discs")]), value: 0),
+                                      EditorMenuChoice(1, "Discs", id: "discs"),
+                                      EditorMenuChoice(2, "Crystals", id: "crystals")]),
+                              value: 0),
                 order: 10),
             commandLine: CommandLineFlag("--grain-model", placeholder: "<m>",
-                                         help: "clump (default) or discs. `discs` lays Boolean discs at "
-                                             + "the film's clump radius, scaled onto its published "
+                                         help: "clump (default), discs or crystals. `discs` lays Boolean "
+                                             + "discs at the film's clump radius, scaled onto its published "
                                              + "granularity, instead of a blurred clump field: the texture "
                                              + "survives enlargement, saturates where discs overlap, and "
-                                             + "only differs once a disc covers a pixel. Costs about 5x "
-                                             + "the pixels and a one-off minute of pipeline build",
+                                             + "only differs once a disc covers a pixel. `crystals` "
+                                             + "develops the crystal population read off the film's own "
+                                             + "curve: Poisson counts of developed crystals per size class "
+                                             + "at every pixel, each laying its dye cloud from its "
+                                             + "sublayer's coupler pool, so the grain is sparse and coarse "
+                                             + "where little developed and a fine dense haze where most "
+                                             + "did, with the sheet's granularity at its read density. "
+                                             + "Both cost about 5x the pixels and a one-off minute of "
+                                             + "pipeline build",
                                          generic: false),
-            documentation: "Enables discrete tabular grain disc rendering where emulsion grain clumps resolve at output pixels."),
+            documentation: "Enables discrete tabular grain disc rendering where emulsion grain clumps resolve at output pixels. The command line and host plugins can also choose Crystals, which develops the film's crystal population read off its own curve."),
         EditorControl(
             .seed, title: "Grain Seed",
             detail: "Choose a grain pattern. The same seed and frame produce the same pattern.",

@@ -312,6 +312,7 @@ the approximate conversion’s limits.
 ## More information
 
 - [User guide](docs/documentation.html)
+- [Crystal grain](docs/crystal-grain.md)
 - [Build support](docs/support.html)
 - [Licensing](LICENSING.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)

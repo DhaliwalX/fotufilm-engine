@@ -25,6 +25,17 @@ inline Halide::Expr pixel_hash(Halide::Expr x, Halide::Expr y,
                                * Halide::Expr(uint32_t{0x9E3779B9u})))));
 }
 
+/// The same hash with the seed carried as an expression — a configuration slot — for a
+/// pipeline whose ahead-of-time signature has no seed parameter, such as the print.
+inline Halide::Expr pixel_hash(Halide::Expr x, Halide::Expr y,
+                               Halide::Expr seed, Halide::Expr layer) {
+    return pcg(Halide::cast<uint32_t>(x) ^
+               pcg(Halide::cast<uint32_t>(y) ^
+                   pcg(Halide::cast<uint32_t>(seed)
+                       ^ (Halide::cast<uint32_t>(layer)
+                          * Halide::Expr(uint32_t{0x9E3779B9u})))));
+}
+
 inline Halide::Expr gaussian_from_hash(Halide::Expr hash,
                                        bool approximate = false) {
     Halide::Expr hash2 = pcg(hash);
@@ -69,6 +80,64 @@ inline Halide::Expr poisson_sample(Halide::Expr x, Halide::Expr y,
         / Halide::sqrt(Halide::max(lambda, 1.0e-4f));
     return Halide::select(lambda >= 16.0f,
                           gaussian_from_hash(initial_hash, approximate), poisson);
+}
+
+/// A Poisson count with a per-pixel mean, as a float.
+///
+/// Knuth's product method up to 31 draws, which holds the whole distribution below a mean of
+/// twelve to one part in a million; past that the count is a normal draw about the mean, where
+/// the crystal counts the crystal grain model asks for are already dozens deep in a pixel and
+/// the two are indistinguishable. Unlike `poisson_sample` this returns the count itself rather
+/// than a centred unit-variance draw, because the count is what forms dye.
+inline Halide::Expr poisson_count(Halide::Expr hash, Halide::Expr lambda,
+                                  bool approximate = false) {
+    using Halide::Expr;
+    Expr mean = Halide::max(lambda, 0.0f);
+    Expr initial_hash = hash;
+    Expr product = 1.0f;
+    Expr trials = 0;
+    Expr limit = Halide::exp(-Halide::min(mean, 12.0f));
+    for (int i = 0; i < 32; ++i) {
+        Expr active = product > limit;
+        hash = pcg(hash);
+        Expr uniform = Halide::cast<float>(hash >> 8) * (1.0f / 16777216.0f);
+        product = Halide::select(active, product * uniform, product);
+        trials += Halide::select(active, 1, 0);
+    }
+    Expr exact = Halide::cast<float>(Halide::max(trials - 1, 0));
+    Expr normal = Halide::max(
+        mean + Halide::sqrt(mean) * gaussian_from_hash(initial_hash, approximate), 0.0f);
+    return Halide::select(mean >= 12.0f, normal, exact);
+}
+
+/// A Poisson count whose every event carries a mark of `1 + dispersion` or `1 - dispersion`,
+/// each with probability one half, summed: the developed crystals of a pixel weighted by how
+/// much each one formed. The marks ride the same product method — an event is a draw that
+/// left the product above the limit, and its mark is a bit of that draw the uniform does not
+/// use — so a compound Poisson field costs what the plain count does. Past a mean of twelve
+/// the sum is a normal draw about the mean with the compound variance, `mean (1 + d²)`.
+inline Halide::Expr poisson_marked_count(Halide::Expr hash, Halide::Expr lambda,
+                                         float dispersion, bool approximate = false) {
+    using Halide::Expr;
+    Expr mean = Halide::max(lambda, 0.0f);
+    Expr initial_hash = hash;
+    Expr product = 1.0f;
+    Expr total = 0.0f;
+    Expr limit = Halide::exp(-Halide::min(mean, 12.0f));
+    for (int i = 0; i < 32; ++i) {
+        Expr active = product > limit;
+        hash = pcg(hash);
+        Expr uniform = Halide::cast<float>(hash >> 8) * (1.0f / 16777216.0f);
+        product = Halide::select(active, product * uniform, product);
+        Expr event = active && (product > limit);
+        Expr heavy = (hash & Halide::Expr(uint32_t{128})) != Halide::Expr(uint32_t{0});
+        Expr mark = Halide::select(heavy, 1.0f + dispersion, 1.0f - dispersion);
+        total += Halide::select(event, mark, 0.0f);
+    }
+    Expr normal = Halide::max(
+        mean + Halide::sqrt(mean * (1.0f + dispersion * dispersion))
+            * gaussian_from_hash(initial_hash, approximate), 0.0f);
+    return Halide::select(mean >= 12.0f, normal, total);
 }
 
 /// Centers a 1024-entry quantile table on zero and scales it to unit variance.

@@ -424,6 +424,16 @@ public struct FilmEngineInvocation {
     public static let chromaticFringeRadiusOffset = Int(FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS)
     /// Reversal grain exponent and shoulder density; appended to preserve existing offsets.
     public static let grainReversalProfileOffset = Int(FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE)
+    /// The crystal grain model's per-bin fields and developed-count tables; mirror
+    /// FOTUFILM_CONFIG_CRYSTAL_GRAIN_BIN and FOTUFILM_CONFIG_CRYSTAL_GRAIN_LAMBDA.
+    public static let crystalGrainBinOffset = Int(FOTUFILM_CONFIG_CRYSTAL_GRAIN_BIN)
+    public static let crystalGrainBinCount = Int(FOTUFILM_CONFIG_CRYSTAL_GRAIN_BIN_COUNT)
+    public static let crystalGrainLambdaOffset = Int(FOTUFILM_CONFIG_CRYSTAL_GRAIN_LAMBDA)
+    public static let crystalGrainLambdaCount = Int(FOTUFILM_CONFIG_CRYSTAL_GRAIN_LAMBDA_COUNT)
+    /// The crystal grain model's print stage: per record the print material's crystals per
+    /// output pixel at full development, then the frame's hash seed.
+    public static let crystalPrintGrainOffset = Int(FOTUFILM_CONFIG_CRYSTAL_PRINT_GRAIN)
+    public static let crystalPrintGrainCount = Int(FOTUFILM_CONFIG_CRYSTAL_PRINT_GRAIN_COUNT)
     /// Index of the three aperture-calibrated grain strengths; mirrors FOTUFILM_CONFIG_GRAIN.
     public static let grainOffset = Int(FOTUFILM_CONFIG_GRAIN)
 
@@ -869,9 +879,16 @@ public struct FilmEngineInvocation {
                 noFilm: Bool = false) throws {
         // A measured condition supplies the fresh roll's curves before age and reciprocity.
         let developed = try stock.pushed(stops: options.developmentEV)
+        // The same roll at the pack's reference process, aged and reciprocity-shifted alike:
+        // the coating the crystal grain model reads its population from, so that a pushed or
+        // pulled condition is that population developed differently rather than another one.
+        let referenceRoll = options.developmentEV == 0 ? nil
+            : stock.expired(years: max(options.expiredYears, 0))
+                .reciprocity(shutterSeconds: options.shutterSeconds ?? 0)
         // Every table key below sees the final developed roll.
         let stock = developed.expired(years: max(options.expiredYears, 0))
             .reciprocity(shutterSeconds: options.shutterSeconds ?? 0)
+        let animatedSeed = options.seed &+ frameIndex &* 0x9E3779B97F4A7C15
         // Resolved once, against the developed roll: every stage below reads the medium the
         // picture actually lands on rather than the request, which may name one this stock
         // cannot reach or may name none at all.
@@ -1035,7 +1052,28 @@ public struct FilmEngineInvocation {
                                     foldSigmaPixels: enlargerFoldPixels,
                                     foldKeep: enlargerFoldKeep)
         }
-        let grainSigma = grainSigmaLayer.max() ?? Self.grainSigmaFloorPixels
+        // The crystal population, derived from the developed roll's own curves and laid on this
+        // lattice: one blur per size bin per record, all within the one radius the kernel takes,
+        // sized here for the coarsest cloud of any of them.
+        let crystalActive = options.grainModel == .crystals
+            && grainScale > 0 && stock.grainStrength > 0
+        let crystalModels: [CrystalGrainModel] = crystalActive
+            ? (0..<3).map {
+                CrystalGrainModel(stock: stock, reference: referenceRoll, layer: $0,
+                                  grainScale: grainScale)
+            }
+            : []
+        let crystalSigmaLayer: [[Float]] = crystalModels.map { model in
+            (0..<CrystalGrainModel.binCount).map { bin -> Float in
+                let cloud = model.cloudSigmaMM(bin: bin)
+                guard cloud > 0 else { return Self.grainSigmaFloorPixels }
+                return Self.discreteGrainSigma(clumpSigmaPixels: cloud * pxPerMM,
+                                               foldSigmaPixels: enlargerFoldPixels,
+                                               foldKeep: enlargerFoldKeep)
+            }
+        }
+        let grainSigma = max(grainSigmaLayer.max() ?? Self.grainSigmaFloorPixels,
+                             crystalSigmaLayer.flatMap { $0 }.max() ?? Self.grainSigmaFloorPixels)
         let grainRadius = Self.gaussianRadius(grainSigma)
 
         // Published granularity is standard deviation through a 48 µm aperture. Correct amplitude
@@ -1059,7 +1097,7 @@ public struct FilmEngineInvocation {
         let discWillRender = options.grainModel == .discs
             && stock.grainDensityLaw == .silver
             && stock.grainSizeMM * pxPerMM >= 1
-        let mottleShare = options.stage != .full || discWillRender ? 0 : min(max(
+        let mottleShare = options.stage != .full || discWillRender || crystalActive ? 0 : min(max(
             options.grainMottleShare ?? stock.grainMottleShare, 0), 0.9)
         // The override clamps to the pack's own validated range, so a look can
         // never ask for a population the shipped AOT variants were not built for.
@@ -1327,8 +1365,11 @@ public struct FilmEngineInvocation {
         let discActive = options.grainModel == .discs && discRadiusPixels >= 1
             && stock.grainDensityLaw == .silver
             && featureMask & FilmEngineFeature.grain != 0
-        if discActive { featureMask |= FilmEngineFeature.discGrain }
-        configuration += [discActive ? 1 : 0, discRadiusPixels]
+        // The crystal population rides the disc family, whose variants compile both arms, and
+        // is offered to every material: dye clouds and silver grains alike are what its
+        // crystals form.
+        if discActive || crystalActive { featureMask |= FilmEngineFeature.discGrain }
+        configuration += [crystalActive ? 2 : (discActive ? 1 : 0), discRadiusPixels]
         configuration += Self.discAmplitudes(
             stock: stock, grainScale: grainScale, pxPerMM: pxPerMM,
             active: discActive)
@@ -1419,6 +1460,44 @@ public struct FilmEngineInvocation {
         configuration += [fringeActive ? fringeAmount : 0, fringeSigma, Float(fringeRadius)]
         configuration += [0] // typed record-exposure seam
         configuration += stock.grainReversalProfile
+        // The crystal grain model's tables, derived only when it renders: per record and size
+        // bin the lattice blur, the density one cloud adds to its pixel and the sublayer's pool,
+        // then the mean developed count per pixel against the record's developed density.
+        if crystalActive {
+            for (layer, model) in crystalModels.enumerated() {
+                for bin in 0..<CrystalGrainModel.binCount {
+                    let perCloud = model.densityPerCloud(bin: bin, pxPerMM: pxPerMM)
+                    configuration += [crystalSigmaLayer[layer][bin], perCloud,
+                                      model.bins[bin].pool,
+                                      CrystalGrainModel.meanDyeFactor(
+                                          sigmaPixels: crystalSigmaLayer[layer][bin],
+                                          radius: grainRadius, densityPerCloud: perCloud,
+                                          pool: model.bins[bin].pool)]
+                }
+            }
+            for model in crystalModels {
+                for table in model.countTable(pxPerMM: pxPerMM) {
+                    precondition(table.count == CrystalGrainModel.samples)
+                    configuration += table
+                }
+            }
+        } else {
+            configuration += [Float](repeating: 0, count: Self.crystalGrainBinCount
+                                                        + Self.crystalGrainLambdaCount)
+        }
+        // The print stage: the paper's own crystals, only where a paper is exposed — not the
+        // negative on its own, a viewed transparency, a scan or the screen — at the count one
+        // output pixel of the print holds. The seed rides along for the print pipeline, whose
+        // arguments carry none; the low 24 bits, which a float holds exactly.
+        let paperExposed = crystalActive && !noFilm && options.stage.writesPrint
+            && !showingNegative
+            && CrystalGrainModel.Print.exposesCrystals(stock: stock, paper: printMedium)
+        let paperCrystals = paperExposed
+            ? CrystalGrainModel.Print.crystalsPerPixel(
+                paper: printMedium, shortEdgePixels: min(width, height), pxPerMM: pxPerMM)
+            : 0
+        configuration += [paperCrystals, paperCrystals, paperCrystals,
+                          Float(UInt32(truncatingIfNeeded: animatedSeed) & 0xFFFFFF)]
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0
@@ -1472,7 +1551,6 @@ public struct FilmEngineInvocation {
         self.halationSupport = halationReach
         self.halationPixelRadii = halationRadii.map(Int32.init)
 
-        let animatedSeed = options.seed &+ frameIndex &* 0x9E3779B97F4A7C15
         // A regional tone base is a measurement of the scene, and `PipelineStage.print` is handed
         // a developed negative instead. The scene-referred stages it keys are not in this span at
         // all, so there is nothing for it to key and nothing to measure.

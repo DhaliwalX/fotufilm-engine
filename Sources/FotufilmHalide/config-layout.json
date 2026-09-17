@@ -21,6 +21,14 @@
     },
     "SAMPLED_CURVE_STRIDE": {
       "value": "1 + 3 * SAMPLED_CURVE_MAX_SAMPLES"
+    },
+    "CRYSTAL_GRAIN_BINS": {
+      "value": 4,
+      "doc": "Crystal size bins per record in the crystal grain model: coated sublayers from the fastest, coarsest crystals down to the slowest, finest."
+    },
+    "CRYSTAL_GRAIN_SAMPLES": {
+      "value": 64,
+      "doc": "Samples per bin of the crystal grain model's developed-count table, against the record's developed density as a fraction of its range, 0...1."
     }
   },
   "fields": [
@@ -215,7 +223,7 @@
     {
       "name": "MOTTLE_SIGMA",
       "count": 1,
-      "doc": "The grain-size mixture's second clump field — the soft mottle the coarse crystal population lays under the sharp grain. Blur sigma and radius in pixels, the coarse population's own clumps-per-pixel, and per-layer density amplitudes[3] carrying that component's share of the published granularity. Appended last so that adding them renumbered nothing."
+      "doc": "The grain-size mixture's second clump field \u2014 the soft mottle the coarse crystal population lays under the sharp grain. Blur sigma and radius in pixels, the coarse population's own clumps-per-pixel, and per-layer density amplitudes[3] carrying that component's share of the published granularity. Appended last so that adding them renumbered nothing."
     },
     {
       "name": "MOTTLE_RADIUS",
@@ -249,7 +257,7 @@
     {
       "name": "GRAIN_LAW",
       "count": 1,
-      "doc": "Which granularity-against-density law the emulsion obeys. 0 is a chromogenic negative, whose measured curve peaks just above D-min and falls (the shape's coefficients are in FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE); 1 is opaque silver, whose Boolean aperture variance goes as `D * 10^(0.21004 D + 0.06114 D^2)`; 2 explicitly retains Selwyn's `sigma ∝ sqrt(D)`; 3 is dye reversal's saturating power law. Mirrors `GrainDensityLaw`."
+      "doc": "Which granularity-against-density law the emulsion obeys. 0 is a chromogenic negative, whose measured curve peaks just above D-min and falls (the shape's coefficients are in FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE); 1 is opaque silver, whose Boolean aperture variance goes as `D * 10^(0.21004 D + 0.06114 D^2)`; 2 explicitly retains Selwyn's `sigma \u221d sqrt(D)`; 3 is dye reversal's saturating power law. Mirrors `GrainDensityLaw`."
     },
     {
       "name": "GRAIN_ANCHOR",
@@ -281,7 +289,7 @@
     {
       "name": "OUTPUT_MATRIX",
       "count": 9,
-      "doc": "Optional final row-major matrix, transfer, and premultiplication used by FOTUFILM_FRAME_ENCODE_OUT. Other variants return display-linear light.  0  identity — the host's space is already linear. 1  power law, sign-preserving: |v| <= c4 ? |v| * c0 : c1 * pow(|v|, c2) + c3, carried back across zero by the sign. Rec.709 gamma 2.4 and sRGB. 2  logarithmic, signed: v <= c4 ? v * c0 + c3 : c1 * log2(v + c5) + c2. DaVinci Intermediate and ACEScct.  `fotufilm::outputTransformFor` defines the coefficients."
+      "doc": "Optional final row-major matrix, transfer, and premultiplication used by FOTUFILM_FRAME_ENCODE_OUT. Other variants return display-linear light.  0  identity \u2014 the host's space is already linear. 1  power law, sign-preserving: |v| <= c4 ? |v| * c0 : c1 * pow(|v|, c2) + c3, carried back across zero by the sign. Rec.709 gamma 2.4 and sRGB. 2  logarithmic, signed: v <= c4 ? v * c0 + c3 : c1 * log2(v + c5) + c2. DaVinci Intermediate and ACEScct.  `fotufilm::outputTransformFor` defines the coefficients."
     },
     {
       "name": "OUTPUT_TRANSFER",
@@ -303,7 +311,7 @@
     {
       "name": "DIFFUSION_DIRECT",
       "count": 1,
-      "doc": "The lens diffusion filter — mist, fog, black mist — which is the only stage that runs ahead of the emulsion, because the filter it models is screwed onto the front of the lens. Appended last so that adding it renumbered nothing.  The share of the beam that reached the film without meeting a particle. Perfectly sharp, and what keeps a diffused picture from looking defocused."
+      "doc": "The lens diffusion filter \u2014 mist, fog, black mist \u2014 which is the only stage that runs ahead of the emulsion, because the filter it models is screwed onto the front of the lens. Appended last so that adding it renumbered nothing.  The share of the beam that reached the film without meeting a particle. Perfectly sharp, and what keeps a diffused picture from looking defocused."
     },
     {
       "name": "DIFFUSION_KERNEL",
@@ -318,7 +326,7 @@
     {
       "name": "DONOR_CURVE",
       "count": 6,
-      "doc": "The donor capture layer — a coated layer that develops and releases inhibitor but forms no image dye of its own (REALA's 4th Color Layer). Six H&D parameters for its own development curve, then one release weight per dye-forming receiver, in the engine's R, G, B record order. Read only when FOTUFILM_FRAME_DONOR_LAYER is set; appended last so that adding them renumbered nothing."
+      "doc": "The donor capture layer \u2014 a coated layer that develops and releases inhibitor but forms no image dye of its own (REALA's 4th Color Layer). Six H&D parameters for its own development curve, then one release weight per dye-forming receiver, in the engine's R, G, B record order. Read only when FOTUFILM_FRAME_DONOR_LAYER is set; appended last so that adding them renumbered nothing."
     },
     {
       "name": "DONOR_RELEASE",
@@ -379,7 +387,7 @@
     {
       "name": "OUTPUT_SHOULDER",
       "count": 1,
-      "doc": "The knee of the SDR shoulder the host's delivery asks for, applied between the output matrix and the output transfer — the step `FilmOutputConversion` takes on the host, moved into the kernel so the encode variants can carry a shouldered delivery rather than only a bare one. Negative means no shoulder, which is the identity a linear or unshouldered space wants; 0.9 is the standard print knee and 0.7 the reversal one. Read only under FOTUFILM_FRAME_ENCODE_OUT; appended without renumbering earlier fields."
+      "doc": "The knee of the SDR shoulder the host's delivery asks for, applied between the output matrix and the output transfer \u2014 the step `FilmOutputConversion` takes on the host, moved into the kernel so the encode variants can carry a shouldered delivery rather than only a bare one. Negative means no shoulder, which is the identity a linear or unshouldered space wants; 0.9 is the standard print knee and 0.7 the reversal one. Read only under FOTUFILM_FRAME_ENCODE_OUT; appended without renumbering earlier fields."
     },
     {
       "name": "OUTPUT_GAMUT",
@@ -426,6 +434,21 @@
       "name": "GRAIN_REVERSAL_PROFILE",
       "count": 2,
       "doc": "Dye reversal's [exponent p, shoulder density Ds], read under grain law 3."
+    },
+    {
+      "name": "CRYSTAL_GRAIN_BIN",
+      "count": "3 * CRYSTAL_GRAIN_BINS * 4",
+      "doc": "Crystal grain model, read under grain mode 2: per record and size bin, [lattice blur sigma of the bin's dye cloud in pixels, density one cloud adds to the pixel it lands in, the sublayer's coupler pool in density (0: silver, no pool), the mean-dye factor: the sum over the cloud's lattice taps of 1 - exp(-(density per cloud x tap) / pool), which by Campbell's theorem gives the expected dye of the Poisson field as pool (1 - exp(-count x factor)); for silver the density per cloud itself]."
+    },
+    {
+      "name": "CRYSTAL_GRAIN_LAMBDA",
+      "count": "3 * CRYSTAL_GRAIN_BINS * CRYSTAL_GRAIN_SAMPLES",
+      "doc": "Crystal grain model, exposure stage: per record and size bin, the mean count of latent (developable) crystals per pixel against the record's developed density as a fraction of its range, CRYSTAL_GRAIN_SAMPLES values from 0 to 1. Indexed by density rather than exposure so the split renderer's density-in tail can lay it; the curve is monotone, so the two say the same thing."
+    },
+    {
+      "name": "CRYSTAL_PRINT_GRAIN",
+      "count": 4,
+      "doc": "Crystal grain model, print stage: per record, how many of the print material's own crystals one output pixel holds at full development (0 when nothing exposes a paper: a viewed transparency, a scan, a screen, the negative itself), then the frame's hash seed as a float, for the print pipeline whose arguments carry none. The paper's developed count is a Poisson draw at the paper's developed fraction of that, and its departure from the mean is what the paper's own grain adds."
     }
   ]
 }

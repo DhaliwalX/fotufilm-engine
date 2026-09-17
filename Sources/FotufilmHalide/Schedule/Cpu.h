@@ -55,36 +55,39 @@ inline Func gaussian(Func source, Expr sigma0, Expr sigma1, Expr sigma2,
     Func kernel(name + "_kernel");
     kernel(k, c) = Halide::exp(-Halide::cast<float>(k * k) / (2.0f * sigma * sigma));
     kernel.compute_root();
-    RDom normalization_taps(-radius, radius * 2 + 1, name + "_norm_taps");
-    Func normalization(name + "_normalization");
-    normalization(c) = Halide::sum(kernel(normalization_taps.x, c),
-                                   name + "_norm_sum");
-    normalization.compute_root();
 
     Func bounded = constant_exterior(source, typed_zero(source),
                                      {{0, width}, {0, height}, {0, channels}});
     RDom horizontal_taps(-radius, radius * 2 + 1, name + "_horizontal_taps");
-    Func horizontal(name + "_horizontal");
-    Expr horizontal_weight = Halide::sum(
+    Func horizontal_weight(name + "_horizontal_weight");
+    horizontal_weight(x, c) = Halide::sum(
         Halide::select(x + horizontal_taps.x >= 0
                            && x + horizontal_taps.x < width,
                        kernel(horizontal_taps.x, c), 0.0f),
-        name + "_horizontal_weight");
+        name + "_horizontal_weight_sum");
+    horizontal_weight.compute_root().bound(c, 0, channels).reorder(c, x).unroll(c)
+        .vectorize(x, kVectorWidth, Halide::TailStrategy::GuardWithIf);
+
+    Func horizontal(name + "_horizontal");
     horizontal(x, y, c) = Halide::sum(
         bounded(x + horizontal_taps.x, y, c) * kernel(horizontal_taps.x, c),
-        name + "_horizontal_sum") / Halide::max(horizontal_weight, 1.0e-12f);
+        name + "_horizontal_sum") / Halide::max(horizontal_weight(x, c), 1.0e-12f);
     cpu_separable(horizontal, x, y, c, channels);
 
     RDom vertical_taps(-radius, radius * 2 + 1, name + "_vertical_taps");
-    Func vertical(name);
-    Expr vertical_weight = Halide::sum(
+    Func vertical_weight(name + "_vertical_weight");
+    vertical_weight(y, c) = Halide::sum(
         Halide::select(y + vertical_taps.x >= 0
                            && y + vertical_taps.x < height,
                        kernel(vertical_taps.x, c), 0.0f),
-        name + "_vertical_weight");
+        name + "_vertical_weight_sum");
+    vertical_weight.compute_root().bound(c, 0, channels).reorder(c, y).unroll(c)
+        .vectorize(y, kVectorWidth, Halide::TailStrategy::GuardWithIf);
+
+    Func vertical(name);
     vertical(x, y, c) = Halide::sum(
         horizontal(x, y + vertical_taps.x, c) * kernel(vertical_taps.x, c),
-        name + "_vertical_sum") / Halide::max(vertical_weight, 1.0e-12f);
+        name + "_vertical_sum") / Halide::max(vertical_weight(y, c), 1.0e-12f);
     cpu_separable(vertical, x, y, c, channels);
     return vertical;
 }

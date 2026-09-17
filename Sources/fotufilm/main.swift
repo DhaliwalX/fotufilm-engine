@@ -1130,9 +1130,10 @@ if let model = flags["--grain-model"] {
     switch model {
     case "clump": options.grainModel = .clumpField
     case "discs": options.grainModel = .discs
+    case "crystals": options.grainModel = .crystals
     default:
         FileHandle.standardError.write(Data(
-            "unknown grain model '\(model)'; expected clump or discs\n".utf8))
+            "unknown grain model '\(model)'; expected clump, discs or crystals\n".utf8))
         exit(2)
     }
 }

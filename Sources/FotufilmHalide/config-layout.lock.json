@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "count": 18036,
+  "count": 18856,
   "fields": {
     "CURVES": {
       "offset": 0,
@@ -373,6 +373,18 @@
     "GRAIN_REVERSAL_PROFILE": {
       "offset": 18034,
       "count": 2
+    },
+    "CRYSTAL_GRAIN_BIN": {
+      "offset": 18036,
+      "count": 48
+    },
+    "CRYSTAL_GRAIN_LAMBDA": {
+      "offset": 18084,
+      "count": 768
+    },
+    "CRYSTAL_PRINT_GRAIN": {
+      "offset": 18852,
+      "count": 4
     }
   }
 }

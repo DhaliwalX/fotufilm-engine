@@ -510,12 +510,34 @@ public:
                 mottle = mottle_field(x, y, c);
             }
             Expr clump = clump_grain(configuration_, c, modulation, grain_field(x, y, c), mottle);
-            Expr disc;
+            Expr disc, crystal;
             if (use_discs) {
                 disc = disc_grain(configuration_, density, position.net,
                                   x, y, c, origin_x_, origin_y_, seed_);
+                // The crystal population rides the disc family. Exposure: one Poisson field
+                // of latent crystals per size bin at the mean the light gives it. Development:
+                // each blurred to its own cloud, all within the one radius the host sized for
+                // the coarsest, then drawn from its sublayer's pool in `crystal_grain`. The
+                // print stage is the paper's, in `PrintPipeline`.
+                std::vector<Func> fields;
+                for (int bin = 0; bin < FOTUFILM_CRYSTAL_GRAIN_BINS; ++bin) {
+                    const std::string tag = std::to_string(bin) + suffix;
+                    Func counts("develop_crystal_counts_" + tag);
+                    counts(x, y, c) = crystal_latent_count(
+                        configuration_, x + origin_x_, y + origin_y_, seed_, c, bin,
+                        crystal_lambda(configuration_, c, bin, position.amount));
+                    cpu_pointwise(counts, x, y, c);
+                    fields.push_back(gaussian(
+                        counts,
+                        crystal_bin_field(configuration_, 0, bin, 0),
+                        crystal_bin_field(configuration_, 1, bin, 0),
+                        crystal_bin_field(configuration_, 2, bin, 0),
+                        grain_radius_, width_, height_, "develop_crystal_field_" + tag));
+                }
+                crystal = crystal_grain(configuration_, c, fields, x, y);
             }
-            output(x, y, c) = density(x, y, c) + selected_grain(grain_mode_ != 0, clump, disc);
+            output(x, y, c) = selected_developed_density(
+                grain_mode_, density(x, y, c), clump, disc, crystal);
         } else {
             output(x, y, c) = density(x, y, c);
         }
@@ -672,8 +694,14 @@ public:
     /// a delivery pays for its own transcendental and not for the two it did not ask for; -1
     /// leaves the shape to be read from the configuration, which is what a caller that has not
     /// asked for a shaped variant gets.
+    ///
+    /// `paper_grain` compiles the print stage of the crystal grain model — the paper's own
+    /// developed crystals, a Poisson field at the paper's activation — into the paper branch.
+    /// Only the JIT road asks for it, on the same variant family the disc and crystal arms of
+    /// develop ride; the ahead-of-time generators keep their variants and print a paper with no
+    /// crystals of its own, exactly as they render the clump field for the crystal mode.
     PrintPipeline(bool reversal, bool monochrome, const std::string &suffix,
-                  bool encode = false, int transfer_shape = -1)
+                  bool encode = false, int transfer_shape = -1, bool paper_grain = false)
         : input_(Float(32), 3, "print_input" + suffix),
           configuration_(Float(32), 1, "print_configuration" + suffix),
           film_lut_(Float(32), 1, "print_film_lut" + suffix),
@@ -698,7 +726,16 @@ public:
                 film_lut_, activation(x, y, 0), activation(x, y, 1),
                 activation(x, y, 2), c);
             Func activated("print_paper_activation" + suffix);
-            activated(x, y, c) = paper_activation(configuration_, paper_curve, c, relative);
+            Expr on_paper = paper_activation(configuration_, paper_curve, c, relative);
+            if (paper_grain) {
+                // The print stage: the paper's crystals, developed where the negative's light
+                // fell on them. This road prints the whole frame in one realization, so `x`
+                // and `y` are the frame's own and the field is the same whatever the strip.
+                on_paper = on_paper + paper_grain_expr(
+                    configuration_, c, paper_grain_hash(configuration_, x, y, c, monochrome),
+                    on_paper);
+            }
+            activated(x, y, c) = on_paper;
             cpu_pointwise(activated, x, y, c);
             display(x, y, c) = lut_sample(
                 paper_lut_, activated(x, y, 0), activated(x, y, 1), activated(x, y, 2), c);
@@ -745,7 +782,8 @@ public:
         cpu_pointwise(output, x, y, c);
         pipeline_ = Pipeline(output);
         cached_.prepare(pipeline_, "print:" + std::to_string(reversal) + ":" + std::to_string(monochrome)
-                + ":" + std::to_string(encode) + ":" + std::to_string(transfer_shape),
+                + ":" + std::to_string(encode) + ":" + std::to_string(transfer_shape)
+                + ":" + std::to_string(paper_grain),
             {input_, configuration_, film_lut_, paper_lut_}, reference_target());
     }
 
@@ -1032,15 +1070,19 @@ PrintPipeline *print_pipeline_for(int32_t feature_mask) {
     // be compiled in; without one the shape is read per pixel, exactly as the fused GPU pipeline
     // reads it when the caller asked for no shaped variant.
     const int shape = output_transfer_shape_for(feature_mask);
-    static std::unique_ptr<PrintPipeline> pipelines[32];
+    // The crystal grain model's print stage rides the disc family here as it does in develop:
+    // the frame that asked for crystals carries the bit, and the paper it lands on grows its
+    // own. A disc frame carries it too and reads a zero count, which adds nothing.
+    const bool paper_grain = (feature_mask & FOTUFILM_FRAME_DISC_GRAIN) != 0;
+    static std::unique_ptr<PrintPipeline> pipelines[64];
     static std::mutex pipelines_mutex;
     std::lock_guard<std::mutex> lock(pipelines_mutex);
     const int variant = (reversal ? 1 : 0) | (monochrome ? 2 : 0)
-        | (encode ? 4 : 0) | ((shape + 1) << 3);
+        | (encode ? 4 : 0) | ((shape + 1) << 3) | (paper_grain ? 32 : 0);
     if (!pipelines[variant]) {
         pipelines[variant] = std::make_unique<PrintPipeline>(
             reversal, monochrome, "_print_variant_" + std::to_string(variant),
-            encode, shape);
+            encode, shape, paper_grain);
     }
     return pipelines[variant].get();
 }
