@@ -592,8 +592,9 @@ public struct ControlsExport {
             lines.append("    \(upperSnake(unit.rawValue)),")
         }
         lines += ["}", "", "enum class ControlAvailability {"]
-        for availability in [EditorControlAvailability.always, .film, .colourNegative, .printStage,
-                             .statedReciprocity, .couplerGeometry, .interlayerInhibition, .measuredDevelopment] {
+        for availability in [EditorControlAvailability.always, .film, .colourNegative, .transparentFilm,
+                             .printStage, .statedReciprocity, .couplerGeometry, .interlayerInhibition,
+                             .measuredDevelopment] {
             lines.append("    \(upperSnake(availability.rawValue)),")
         }
         lines += ["}", "", "enum class StoredEncoding {"]
@@ -697,6 +698,7 @@ public struct ControlsExport {
             "        ControlAvailability.ALWAYS -> true",
             "        ControlAvailability.FILM -> stock != null",
             "        ControlAvailability.COLOUR_NEGATIVE -> stock != null && !stock.isMonochrome && !stock.isReversal",
+            "        ControlAvailability.TRANSPARENT_FILM -> stock != null && !stock.isReflectionPrint",
             "        ControlAvailability.PRINT_STAGE -> stock != null",
             "        ControlAvailability.STATED_RECIPROCITY -> false",
             "        ControlAvailability.COUPLER_GEOMETRY -> stock != null && !stock.isMonochrome",

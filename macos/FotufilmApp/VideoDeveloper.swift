@@ -66,8 +66,7 @@ enum VideoDeveloper {
         isCancelled: @escaping @Sendable () -> Bool = { false }
     ) async throws {
         let requestedHDR = hdr ?? (AppSettings.storedVideoDynamicRange == .hdr)
-        let isHDR = requestedHDR
-            && PrintPaper.screen.supportsHDRDelivery(for: stock)
+        let isHDR = requestedHDR && options.supportsHDRDelivery(for: stock)
         try await VideoPipeline.export(
             from: asset, to: outputURL, stock: stock, options: options,
             longEdge: longEdge,

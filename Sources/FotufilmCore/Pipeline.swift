@@ -194,15 +194,27 @@ public struct FotufilmEngine {
         /// This also selects the appearance of the `.negative` output medium; when that medium is
         /// chosen and this value is nil, the engine uses `.lightBox`.
         public var negativeViewing: NegativeViewing? = nil
-        /// How a colour negative's tone is placed on Digital Reference: a fixed calibrated
-        /// exposure, a graded paper curve at that exposure, or per-frame levels on that curve.
-        /// Other media, monochrome and reversal stocks ignore it.
+        /// How developed film's tone is placed on Digital Reference: a fixed calibrated exposure,
+        /// a graded paper curve at that exposure, or per-frame levels on that curve. A positive
+        /// has no curve to grade, so the graded styles normalise it to SDR instead — its clear
+        /// base or its brightest content to white. Other media and integral prints ignore it.
         public var digitalReference: DigitalReferenceStyle = .default
         /// The frame's brightest content, metered by the host as scene stops over mid-grey after
         /// `exposureEV`, for `.autoLevels` to place near white. Nil requests the shared renderer's
         /// whole-frame meter. An invocation without scene pixels falls back to the fixed graded
         /// print. Video hosts can supply a temporally smoothed measurement.
         public var sceneHighlightStops: Float? = nil
+        /// The contrast of the graded paper curve Digital Reference's graded styles print a
+        /// negative through, as a variable-contrast paper grade 0…5. Grade 2 is the calibrated
+        /// curve; softer grades roll highlights off earlier, harder grades later, each holding
+        /// mid-grey at 18% and the film base at display black. Reference Exposure, positives and
+        /// other media ignore it.
+        public var screenGrade: Float = 2
+        /// The exposure of the screen conversion, in stops on top of the chosen style: positive
+        /// lightens, the way a scanner's exposure does. On a negative it is the printer's exposure
+        /// with the sign a screen expects; on a positive it is the scanner's gain. Other media
+        /// ignore it.
+        public var screenExposureEV: Float = 0
         /// Which span of the pipeline this render performs. `.full` — the default — is scene
         /// light in and a finished image out, and is what every render did before the seam had a
         /// name. The other three cut the pipeline at the density boundary the engine has always
@@ -315,10 +327,20 @@ public struct FotufilmEngine {
             paper?.resolved(for: stock) ?? PrintPaper.default(for: stock)
         }
 
+        /// Whether this render may deliver light above display white: a directly viewed
+        /// positive on a medium that shows it. A positive levelled by a Digital Reference style
+        /// has been normalised to SDR — its base or its brightest content is white — so it is
+        /// delivered like a print.
+        public func supportsHDRDelivery(for stock: FilmStock) -> Bool {
+            let medium = paper(for: stock)
+            return medium.supportsHDRDelivery(for: stock)
+                && !medium.levelsPositive(for: stock, digitalReference: digitalReference)
+        }
+
         /// Physical prints use the standard SDR shoulder; only a directly viewed reversal
         /// needs the earlier roll-off for its extended highlight range.
         public func sdrShoulderKnee(for stock: FilmStock) -> Float {
-            FilmSDRDelivery.shoulderKnee(isReversal: paper(for: stock).supportsHDRDelivery(for: stock))
+            FilmSDRDelivery.shoulderKnee(isReversal: supportsHDRDelivery(for: stock))
         }
     }
 

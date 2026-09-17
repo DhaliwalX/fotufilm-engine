@@ -11,25 +11,32 @@ final class DigitalReferenceReceiverTests: XCTestCase {
     /// these interventions test whether the output preserves the negative's information.
     private func positive(_ stock: FilmStock, exposure: SIMD3<Float>,
                           style: DigitalReferenceStyle = .default,
-                          sceneHighlightStops: Float? = nil) -> SIMD3<Float> {
-        let tables = SpectralRuntime.tables(for: stock, paper: .screen, digitalReference: style)
+                          sceneHighlightStops: Float? = nil,
+                          grade: Float = 2, screenExposure: Float = 0) -> SIMD3<Float> {
+        let tables = SpectralRuntime.tables(for: stock, paper: .screen, digitalReference: style,
+                                            screenGrade: grade, screenExposureEV: screenExposure)
         let activation = SIMD3<Float>((0..<3).map { c in
             let curve = stock.curves[c]
             let density = stock.developedDensity(layer: c, logExposure: exposure[c])
             return (density - curve.dMin) / (curve.dMax - curve.dMin)
         })
         let relative = tables.filmOutput.sample(activation)
+        // A positive's reference exposure is the direct view: no paper stage at all.
+        guard let paperOutput = tables.paperOutput else { return relative }
         let curves = PrintPaper.screen.printCurves(for: stock, digitalReference: style)
         let midpoints = PrintPaper.screen.printExposureMidpoints(for: stock,
                                                                  digitalReference: style)
         let levels = DigitalReferenceReceiver.levels(for: stock, style: style,
                                                      sceneHighlightStops: sceneHighlightStops)
+        let shift = levels.shift + SpectralRuntime.screenExposureShift(
+            screenExposure, stock: stock, paper: .screen, digitalReference: style,
+            screenGrade: grade)
         let printed = SIMD3<Float>((0..<3).map { c in
             let curve = curves[c]
-            let x = midpoints[c] + levels.shift + levels.scale * relative[c]
+            let x = midpoints[c] + shift + levels.scale * relative[c]
             return (curve.density(logExposure: x) - curve.dMin) / (curve.dMax - curve.dMin)
         })
-        return tables.paperOutput!.sample(printed)
+        return paperOutput.sample(printed)
     }
 
     private static let styles = DigitalReferenceStyle.allCases
@@ -219,12 +226,165 @@ final class DigitalReferenceReceiverTests: XCTestCase {
                        positive(film, exposure: mid, style: .referenceExposure).y, accuracy: 0.02)
     }
 
+    func testMonochromeTakesEveryStyle() throws {
+        // A monochrome negative is read on its own neutral curve, and the styles place that read
+        // exactly as they place the colour receiver's: mid-grey on the anchor, the film base at
+        // display black, the graded shoulder over the reference curve's highlights, and the
+        // metered highlight near white.
+        let oneCode: Float = 1 / (255 * 12.92)
+        for id in ["acros100", "hp5plus400", "trix400"] {
+            let film = try XCTUnwrap(FilmStock.named(id), id)
+            for style in Self.styles {
+                let base = positive(film, exposure: SIMD3(repeating: -8), style: style)
+                XCTAssertLessThan(base.y, 1.5 * oneCode, "\(id) \(style)")
+                let grey = positive(film, exposure: .zero, style: style)
+                XCTAssertEqual(grey.y, 0.18, accuracy: 0.005, "\(id) \(style)")
+                XCTAssertEqual(grey.x, grey.y, accuracy: 1e-4, "\(id) \(style): neutral")
+            }
+            // The graded shoulder rolls into paper white; the reference curve runs on to it.
+            let high = SIMD3<Float>(repeating: 6 * log10(2))
+            XCTAssertLessThan(positive(film, exposure: high, style: .gradedPrint).y, 1, id)
+            XCTAssertLessThan(positive(film, exposure: high, style: .gradedPrint).y,
+                              positive(film, exposure: high, style: .referenceExposure).y + 0.05, id)
+            XCTAssertGreaterThan(positive(film, exposure: SIMD3(repeating: 8 * log10(2)),
+                                          style: .autoLevels, sceneHighlightStops: 8).y, 0.85, id)
+            XCTAssertLessThan(positive(film, exposure: .zero, style: .autoLevels,
+                                       sceneHighlightStops: 8).y, 0.12, id)
+        }
+    }
+
+    func testPositiveStylesNormaliseTheSlideToSDR() throws {
+        // A slide's reference exposure is the direct view: 18% at mid-grey, its clear base above
+        // display white. Graded Print brings that base to white and nothing brighter survives;
+        // Auto Levels brings the frame's brightest content there instead, never darker than the
+        // base-white print, and the slide's own maximum density stays black throughout.
+        let weights = ColorScience.displayP3LuminanceWeights
+        func luminance(_ rgb: SIMD3<Float>) -> Float {
+            weights.0 * rgb.x + weights.1 * rgb.y + weights.2 * rgb.z
+        }
+        for id in ["velvia50", "provia100f", "ektachromee100"] {
+            let film = try XCTUnwrap(FilmStock.named(id), id)
+            let base = SIMD3<Float>(repeating: 12 * log10(2))
+            let reference = direct(film, exposure: base)
+            XCTAssertGreaterThan(max(reference.x, reference.y, reference.z), 1, id)
+            XCTAssertEqual(luminance(direct(film, exposure: .zero)), 0.18, accuracy: 0.01, id)
+            let gradedBase = positive(film, exposure: base, style: .gradedPrint)
+            XCTAssertEqual(max(gradedBase.x, gradedBase.y, gradedBase.z), 1, accuracy: 0.05, id)
+            XCTAssertLessThan(luminance(positive(film, exposure: .zero, style: .gradedPrint)),
+                              0.18, id)
+            // Without a meter the frame renders as the graded print.
+            XCTAssertLessThan(distance(positive(film, exposure: .zero, style: .autoLevels),
+                                       positive(film, exposure: .zero, style: .gradedPrint)), 1e-5)
+            // A dull frame whose brightest content is two stops up is lifted so that content is
+            // white; one that reaches the base is the graded print again.
+            let two = SIMD3<Float>(repeating: 2 * log10(2))
+            XCTAssertGreaterThan(luminance(positive(film, exposure: two, style: .autoLevels,
+                                                    sceneHighlightStops: 2)), 0.9, id)
+            XCTAssertGreaterThan(luminance(positive(film, exposure: .zero, style: .autoLevels,
+                                                    sceneHighlightStops: 2)), 0.18, id)
+            XCTAssertLessThan(distance(positive(film, exposure: .zero, style: .autoLevels,
+                                                sceneHighlightStops: 12),
+                                       positive(film, exposure: .zero, style: .gradedPrint)), 0.03)
+            // The slide's maximum density stays black in the base-white print, and a two-stop
+            // scanner lift raises it by no more than that lift.
+            let black = SIMD3<Float>(repeating: -6)
+            XCTAssertLessThan(luminance(positive(film, exposure: black, style: .gradedPrint)),
+                              2 / (255 * 12.92), id)
+            XCTAssertLessThan(luminance(positive(film, exposure: black, style: .autoLevels,
+                                                 sceneHighlightStops: 2)),
+                              8 / (255 * 12.92), id)
+        }
+    }
+
+    func testPaperGradeChangesHighlightContrastOnly() throws {
+        // A softer grade rolls highlights off earlier and a harder one later, while mid-grey and
+        // the film-base black hold at every grade. Reference Exposure and positives ignore it.
+        let weights = ColorScience.displayP3LuminanceWeights
+        func luminance(_ rgb: SIMD3<Float>) -> Float {
+            weights.0 * rgb.x + weights.1 * rgb.y + weights.2 * rgb.z
+        }
+        let high = SIMD3<Float>(repeating: 2 * log10(2))
+        for id in ["gold200", "acros100"] {
+            let film = try XCTUnwrap(FilmStock.named(id), id)
+            for style in [DigitalReferenceStyle.gradedPrint, .autoLevels] {
+                var previous: Float = 0
+                for grade: Float in [0, 1, 2, 3, 5] {
+                    let grey = positive(film, exposure: .zero, style: style, grade: grade)
+                    XCTAssertEqual(grey.y, 0.18, accuracy: 0.006, "\(id) \(style) grade \(grade)")
+                    XCTAssertLessThan(positive(film, exposure: SIMD3(repeating: -8), style: style,
+                                               grade: grade).y, 1.5 / (255 * 12.92),
+                                      "\(id) \(style) grade \(grade)")
+                    let bright = luminance(positive(film, exposure: high, style: style, grade: grade))
+                    XCTAssertGreaterThan(bright, previous, "\(id) \(style) grade \(grade)")
+                    previous = bright
+                }
+            }
+            XCTAssertEqual(positive(film, exposure: high, style: .referenceExposure, grade: 5).y,
+                           positive(film, exposure: high, style: .referenceExposure).y, accuracy: 1e-6)
+        }
+        let slide = try XCTUnwrap(FilmStock.named("velvia50"))
+        XCTAssertEqual(positive(slide, exposure: .zero, style: .gradedPrint, grade: 5).y,
+                       positive(slide, exposure: .zero, style: .gradedPrint).y, accuracy: 1e-6)
+    }
+
+    func testScreenExposureMovesMidGreyByTheStatedStops() throws {
+        // A stop of screen exposure is a stop at mid-grey on every path: a negative's read moves
+        // by a stop over its curve's gain, a levelled positive's density by a stop, and a
+        // positive's direct view carries the doubling in its own table.
+        let weights = ColorScience.displayP3LuminanceWeights
+        func luminance(_ rgb: SIMD3<Float>) -> Float {
+            weights.0 * rgb.x + weights.1 * rgb.y + weights.2 * rgb.z
+        }
+        for id in ["gold200", "acros100", "velvia50"] {
+            let film = try XCTUnwrap(FilmStock.named(id), id)
+            for style in Self.styles {
+                for stops: Float in [-1, 1] {
+                    let moved = luminance(positive(film, exposure: .zero, style: style,
+                                                   screenExposure: stops))
+                    let rest = luminance(positive(film, exposure: .zero, style: style))
+                    XCTAssertEqual(log2(moved / rest), stops, accuracy: 0.2,
+                                   "\(id) \(style) \(stops) stops")
+                }
+            }
+        }
+        // The direct view's table changes identity only away from rest.
+        let slide = try XCTUnwrap(FilmStock.named("velvia50"))
+        let rest = SpectralRuntime.cacheIdentifier(for: slide, paper: .screen,
+                                                   digitalReference: .referenceExposure)
+        XCTAssertEqual(rest, SpectralRuntime.cacheIdentifier(
+            for: slide, paper: .screen, digitalReference: .referenceExposure, screenExposureEV: 0))
+        XCTAssertNotEqual(rest, SpectralRuntime.cacheIdentifier(
+            for: slide, paper: .screen, digitalReference: .referenceExposure, screenExposureEV: 1))
+        // A negative's tables do not carry the exposure at all: it rides the paper slots.
+        let negative = try XCTUnwrap(FilmStock.named("gold200"))
+        XCTAssertEqual(
+            SpectralRuntime.cacheIdentifier(for: negative, paper: .screen, screenExposureEV: 1),
+            SpectralRuntime.cacheIdentifier(for: negative, paper: .screen))
+    }
+
+    /// The direct view a positive's reference exposure is.
+    private func direct(_ stock: FilmStock, exposure: SIMD3<Float>) -> SIMD3<Float> {
+        let tables = SpectralRuntime.tables(for: stock, paper: .screen,
+                                            digitalReference: .referenceExposure)
+        XCTAssertNil(tables.paperOutput)
+        let activation = SIMD3<Float>((0..<3).map { c in
+            let curve = stock.curves[c]
+            let density = stock.developedDensity(layer: c, logExposure: exposure[c])
+            return (density - curve.dMin) / (curve.dMax - curve.dMin)
+        })
+        return tables.filmOutput.sample(activation)
+    }
+
     func testScreenNeutralRampIsFiniteMonotonicAndMatchesToneAnalysis() {
         let stops = stride(from: Float(-6), through: 4, by: 0.125).map { $0 }
         let weights = ColorScience.displayP3LuminanceWeights
         for (film, style) in [(stock, DigitalReferenceStyle.referenceExposure),
                               (stock, .gradedPrint), (stock, .autoLevels),
-                              (TestStocks.monochrome, .default)] {
+                              (TestStocks.monochrome, .referenceExposure),
+                              (TestStocks.monochrome, .gradedPrint),
+                              (TestStocks.reversal, .referenceExposure),
+                              (TestStocks.reversal, .gradedPrint),
+                              (TestStocks.reversal, .autoLevels)] {
             let analytic = SpectralRuntime.neutralToneScale(stops: stops, stock: film,
                                                            paper: .screen, printCorrection: 0,
                                                            digitalReference: style)
@@ -235,7 +395,9 @@ final class DigitalReferenceReceiverTests: XCTestCase {
                 XCTAssertTrue((0..<3).allSatisfy { rgb[$0].isFinite && rgb[$0] >= 0 })
                 let y = weights.0 * rgb.x + weights.1 * rgb.y + weights.2 * rgb.z
                 XCTAssertGreaterThanOrEqual(y + 2e-4, previous)
-                XCTAssertEqual(y, analytic[index], accuracy: 0.006,
+                // A positive's reference exposure runs above display white, where the direct
+                // view's table interpolates its spectral integral to within a percent.
+                XCTAssertEqual(y, analytic[index], accuracy: 0.006 + 0.01 * max(y - 0.5, 0),
                                "\(style): auto exposure must use the same tone scale as the receiver")
                 previous = y
             }
@@ -289,7 +451,7 @@ final class DigitalReferenceReceiverTests: XCTestCase {
         options.localTone = false
         for style in Self.styles {
             options.digitalReference = style
-            for id in ["portra400", "gold200", "superia400", "vision500t"] {
+            for id in ["portra400", "gold200", "superia400", "vision500t", "acros100", "velvia50"] {
             let film = try XCTUnwrap(FilmStock.named(id), id)
             let cpu = try FotufilmEngine(stock: film, options: options).processChecked(linearRGB: scene)
             let metal = try XCTUnwrap(gpu.processLinearFloat(rgba, width: width, height: height,

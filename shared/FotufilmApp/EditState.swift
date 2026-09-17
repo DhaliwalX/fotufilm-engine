@@ -390,6 +390,8 @@ struct EditState: Equatable {
     /// diffuse read and changes nothing; `.condenser` prints a silver negative harder through
     /// the Callier effect. Read only where `Enlarger.illuminates` the medium.
     var digitalReference = DigitalReferenceStyle.default
+    var screenGrade = Double(FotufilmEngine.Options().screenGrade)
+    var screenExposure = Double(FotufilmEngine.Options().screenExposureEV)
     var enlarger = Enlarger.default
     /// Retain lamp settings when switched off; older edits keep the original print model.
     var printerEnabled = false
@@ -565,7 +567,11 @@ struct EditState: Equatable {
     /// decides the initial request when an editor opens; it does not remain a live dependency of
     /// the edit. Negative film is always delivered as SDR.
     var supportsHDROutput: Bool {
-        filmFrameNegative == nil && resolvedPaper.showsHDR && StockPreset.supportsHDRDelivery(for: stockID)
+        guard filmFrameNegative == nil, resolvedPaper.showsHDR,
+              StockPreset.supportsHDRDelivery(for: stockID) else { return false }
+        // A positive levelled by the screen conversion is normalised to SDR.
+        guard let stock else { return true }
+        return !resolvedPaper.levelsPositive(for: stock, digitalReference: digitalReference)
     }
 
     var whiteBalance: WhiteBalance {

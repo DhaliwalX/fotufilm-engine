@@ -947,7 +947,7 @@ enum VideoPipeline {
         pause: PauseFlag? = nil,
         isCancelled: @escaping @Sendable () -> Bool = { false }
     ) async throws {
-        let hdr = hdr && options.paper(for: stock).supportsHDRDelivery(for: stock)
+        let hdr = hdr && options.supportsHDRDelivery(for: stock)
         guard let engine = HalideMetalFilmRenderer.shared else {
             throw Failure.engineUnavailable
         }

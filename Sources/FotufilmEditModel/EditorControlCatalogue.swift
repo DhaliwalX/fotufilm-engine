@@ -130,7 +130,7 @@ public enum EditorControlCatalogue {
 
     public static let retiredFxplugIDs: [Int] = [33]
     public static let fxplugTextureStageIDs: ClosedRange<Int> = 40...71
-    public static let bridgeSlotCount = 54
+    public static let bridgeSlotCount = 56
 
     static let hostOnly: [EditorSurface: String] = [
         .app: "a plugin host's own setting, with no meaning on a photograph",
@@ -1356,27 +1356,70 @@ public enum EditorControlCatalogue {
                                          generic: false)),
         EditorControl(
             .digitalReference, title: "Screen Conversion",
-            detail: "Choose how a colour negative is converted on Digital Reference.",
+            detail: "Choose how developed film is converted on Digital Reference.",
             section: .printPaper,
             kind: .menu(.fixed(DigitalReferenceStyle.allCases.enumerated().map {
                 EditorMenuChoice(Double($0.offset), $0.element.name,
                                  detail: $0.element.detail, id: $0.element.rawValue)
             })),
-            availability: .colourNegative, persistence: .bespoke,
+            availability: .transparentFilm, persistence: .bespoke,
             binding: .digitalReferenceIndex,
             surfaces: [.app, .desktop, .android, .resolve, .finalcut, .web, .cli],
             host: HostParameter(
                 slot: 53, slotSymbol: "DIGITAL_REFERENCE", ofxName: "digitalReference",
                 fxplugID: 95, group: .output, label: "Screen Conversion",
                 hint: "Reference Exposure holds calibrated exposure; Graded Print softens highlights; "
-                    + "Auto Levels meters frame highlights. Colour negatives on Digital Reference only.",
+                    + "Auto Levels meters frame highlights. A positive is normalised to SDR instead: "
+                    + "its base or its brightest content to white. Digital Reference only.",
                 kind: .choice(.fixed(DigitalReferenceStyle.allCases.enumerated().map {
                     EditorMenuChoice(Double($0.offset), $0.element.name, id: $0.element.rawValue)
                 }), value: 2), order: 26),
             commandLine: CommandLineFlag("--digital-reference", placeholder: "<style>",
                 help: "Screen conversion: reference-exposure, graded-print, or auto-levels (default)."),
-            documentation: "Colour negatives on Digital Reference: fixed Reference Exposure, "
-                + "Graded Print, or per-frame Auto Levels (default)."),
+            documentation: "Film on Digital Reference: fixed Reference Exposure, Graded Print, or "
+                + "per-frame Auto Levels (default). On a positive the graded styles set white from the "
+                + "clear base or the frame's brightest content."),
+        EditorControl(
+            .screenGrade, title: "Paper Grade",
+            detail: "Contrast of the graded curve Graded Print and Auto Levels print through, as a "
+                + "variable-contrast paper grade.",
+            section: .printPaper,
+            kind: .slider(EditorControlScale(0...5, neutral: 2, unit: .none)),
+            availability: .transparentFilm,
+            binding: .screenGrade,
+            surfaces: [.app, .desktop, .resolve, .finalcut, .cli],
+            omitted: [.android: screenCurveOmission, .web: webBaked],
+            host: HostParameter(
+                slot: 54, slotSymbol: "SCREEN_GRADE", ofxName: "screenGrade",
+                fxplugID: 96, group: .output, label: "Paper Grade",
+                hint: "Variable-contrast paper grade 0–5 for Graded Print and Auto Levels on Digital "
+                    + "Reference: grade 2 is the calibrated curve, softer grades roll highlights off "
+                    + "earlier, harder grades later. Mid-grey and film-base black hold. Negatives only.",
+                kind: .double(min: 0, max: 5, value: 2), clamp: 0...5, order: 27),
+            commandLine: CommandLineFlag("--screen-grade", placeholder: "<g>",
+                help: "Paper grade 0...5 for the graded screen conversions (default: 2)."),
+            documentation: "Variable-contrast paper grade, 0–5, for Graded Print and Auto Levels on "
+                + "Digital Reference; grade 2 is the calibrated curve. Negatives only."),
+        EditorControl(
+            .screenExposure, title: "Screen Exposure",
+            detail: "Lighten or darken the screen conversion on top of the chosen style.",
+            section: .printPaper,
+            kind: .slider(EditorControlScale(-3...3, neutral: 0, unit: .stops)),
+            availability: .transparentFilm,
+            binding: .screenExposureStops,
+            surfaces: [.app, .desktop, .resolve, .finalcut, .cli],
+            omitted: [.android: screenCurveOmission, .web: webBaked],
+            host: HostParameter(
+                slot: 55, slotSymbol: "SCREEN_EXPOSURE", ofxName: "screenExposure",
+                fxplugID: 97, group: .output, label: "Screen Exposure",
+                hint: "Exposure of the Digital Reference conversion in stops on top of the chosen "
+                    + "style; positive lightens. A negative's print exposure, a slide's scanner gain.",
+                kind: .double(min: -3, max: 3, value: 0), clamp: -6...6, order: 28),
+            commandLine: CommandLineFlag("--screen-exposure", placeholder: "<ev>",
+                help: "Screen conversion exposure, -3...3 stops (default: 0); positive lightens."),
+            documentation: "Exposure of the Digital Reference conversion in stops, on top of the "
+                + "chosen style; positive lightens. On a negative it is the print exposure, on a "
+                + "positive the scanner's gain."),
         EditorControl(
             .enlarger, title: "Enlarger",
             detail: "Choose the enlarger lighting used to make the print.",
@@ -1466,6 +1509,8 @@ public enum EditorControlCatalogue {
             documentation: "Synthetic yellow filtration in optical density, not manufacturer dial units."),
     ]
 
+    private static let screenCurveOmission =
+        "The Android photo editor does not yet carry the screen conversion's grade and exposure."
     private static let printerOmissions: [EditorSurface: String] = [
         .android: "The simulated printer is currently exposed in the Apple apps and CLI.",
         .web: "The browser does not build a printer lamp's spectral tables.",

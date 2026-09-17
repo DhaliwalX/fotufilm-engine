@@ -23,4 +23,4 @@ export const VIDEO_LABELS = {
   'veryHigh': 'Very high',
   'webm': 'WebM · VP9',
 }
-export const SCREEN_CONVERSION = {"choices":[{"detail":"Fixed calibrated exposure; mid-grey and contrast never depend on the frame.","id":"reference-exposure","name":"Reference Exposure"},{"detail":"Fixed exposure through a graded paper curve with a soft highlight shoulder.","id":"graded-print","name":"Graded Print"},{"detail":"The frame's brightest content sets white and the film base sets black.","id":"auto-levels","name":"Auto Levels"}],"default":"auto-levels","title":"Screen Conversion"}
+export const SCREEN_CONVERSION = {"choices":[{"detail":"Fixed calibrated exposure; mid-grey and contrast never depend on the frame.","id":"reference-exposure","name":"Reference Exposure"},{"detail":"Fixed exposure through a graded paper curve with a soft highlight shoulder; a positive's clear base sets white.","id":"graded-print","name":"Graded Print"},{"detail":"The frame's brightest content sets white and a negative's film base sets black.","id":"auto-levels","name":"Auto Levels"}],"default":"auto-levels","title":"Screen Conversion"}

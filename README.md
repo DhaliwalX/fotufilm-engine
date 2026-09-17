@@ -64,9 +64,21 @@ them near white, retaining highlight separation by darkening the rest of a brigh
 All three use one green-record scale to preserve colour differences between layers;
 they do not balance each colour channel independently. The film base anchors display
 black. These are idealized conversion models, not measured scanner profiles.
-Monochrome and reversal films retain their existing conversion.
+Monochrome negatives take the same three choices on their own neutral curve. A
+transparent positive has no print curve to choose: Reference Exposure is the slide
+itself, mid-grey at 18% with the clear base above display white, while Graded Print
+brings the base to white and Auto Levels brings the frame's brightest content to
+white, the way a slide scanner normalises each frame.
 
-Choose a mode with `--paper screen --digital-reference reference-exposure|graded-print|auto-levels`.
+Two controls sit on top of the chosen style. **Paper Grade** (0–5, default 2) sets the
+contrast of the graded curve Graded Print and Auto Levels print a negative through, like a
+variable-contrast paper: softer grades roll highlights off earlier, harder grades later,
+while mid-grey and film-base black hold. **Screen Exposure** (±3 stops) lightens or
+darkens the conversion by the stated stops at mid-grey on any style — a negative's print
+exposure, a slide's scanner gain.
+
+Choose a mode with `--paper screen --digital-reference reference-exposure|graded-print|auto-levels`,
+and add `--screen-grade 3` or `--screen-exposure -0.5` to it.
 The Mac editor saves the choice with each photograph. Auto Levels measures each frame;
 for consistent exposure across a video or a batch, use one of the fixed modes. Engine
 hosts can supply a temporally smoothed `sceneHighlightStops` measurement for video.

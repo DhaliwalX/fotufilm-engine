@@ -154,8 +154,12 @@ final class PipelineTests: XCTestCase {
     }
 
     func testMidGrayPrintsToMidGray() {
+        // At a reference exposure. Auto Levels would, by design, lift a uniform mid-grey frame
+        // toward white the way a scanner's auto-exposure does.
+        var options = cleanOptions
+        options.digitalReference = .referenceExposure
         for stock in TestStocks.all {
-            let sim = FotufilmEngine(stock: stock, options: cleanOptions)
+            let sim = FotufilmEngine(stock: stock, options: options)
             let out = sim.process(linearRGB: uniform(0.18, 0.18, 0.18))
             let (r, g, b) = centerPixel(out)
             for v in [r, g, b] {
@@ -182,16 +186,23 @@ final class PipelineTests: XCTestCase {
         altered.paperCurve = CharacteristicCurve(
             dMin: 0.3, gamma: 1.1, toe: -2, toeWidth: 0.4,
             shoulder: 2, shoulderWidth: 0.4)
-        let original = FotufilmEngine(stock: TestStocks.reversal, options: cleanOptions)
-            .process(linearRGB: input)
-        let changed = FotufilmEngine(stock: altered, options: cleanOptions)
-            .process(linearRGB: input)
-        XCTAssertEqual(original.planes[0], changed.planes[0],
-                       "reversal transparency must bypass print paper")
-        let (r, g, b) = centerPixel(original)
-        XCTAssertEqual(r, 0.18, accuracy: 0.01)
-        XCTAssertEqual(g, 0.18, accuracy: 0.01)
-        XCTAssertEqual(b, 0.18, accuracy: 0.01)
+        // The legacy paper curve is not consulted on any screen style: the reference exposure is
+        // the direct view, and the levelled styles print through the receiver's own straight line.
+        for style in DigitalReferenceStyle.allCases {
+            var options = cleanOptions
+            options.digitalReference = style
+            let original = FotufilmEngine(stock: TestStocks.reversal, options: options)
+                .process(linearRGB: input)
+            let changed = FotufilmEngine(stock: altered, options: options)
+                .process(linearRGB: input)
+            XCTAssertEqual(original.planes[0], changed.planes[0],
+                           "reversal transparency must bypass print paper (\(style))")
+            guard style == .referenceExposure else { continue }
+            let (r, g, b) = centerPixel(original)
+            XCTAssertEqual(r, 0.18, accuracy: 0.01)
+            XCTAssertEqual(g, 0.18, accuracy: 0.01)
+            XCTAssertEqual(b, 0.18, accuracy: 0.01)
+        }
     }
 
     func testGrayRampStaysNeutral() {

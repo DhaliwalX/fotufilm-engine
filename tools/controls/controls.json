@@ -228,7 +228,7 @@
       "text" : "Not yet examined"
     }
   ],
-  "bridgeSlotCount" : 54,
+  "bridgeSlotCount" : 56,
   "bridgeSlots" : [
     "EXPOSURE_EV",
     "TEMPERATURE",
@@ -283,7 +283,9 @@
     "FRINGE_AMOUNT",
     "FRINGE_RADIUS",
     "ENLARGER",
-    "DIGITAL_REFERENCE"
+    "DIGITAL_REFERENCE",
+    "SCREEN_GRADE",
+    "SCREEN_EXPOSURE"
   ],
   "controls" : [
     {
@@ -4101,7 +4103,7 @@
       "title" : "Negative Viewing"
     },
     {
-      "availability" : "colourNegative",
+      "availability" : "transparentFilm",
       "binding" : "digitalReferenceIndex",
       "choices" : [
         {
@@ -4111,13 +4113,13 @@
           "value" : 0
         },
         {
-          "detail" : "Fixed exposure through a graded paper curve with a soft highlight shoulder.",
+          "detail" : "Fixed exposure through a graded paper curve with a soft highlight shoulder; a positive's clear base sets white.",
           "id" : "graded-print",
           "label" : "Graded Print",
           "value" : 1
         },
         {
-          "detail" : "The frame's brightest content sets white and the film base sets black.",
+          "detail" : "The frame's brightest content sets white and a negative's film base sets black.",
           "id" : "auto-levels",
           "label" : "Auto Levels",
           "value" : 2
@@ -4127,8 +4129,8 @@
       "commandLineGeneric" : true,
       "commandLineHelp" : "Screen conversion: reference-exposure, graded-print, or auto-levels (default).",
       "commandLinePlaceholder" : "<style>",
-      "detail" : "Choose how a colour negative is converted on Digital Reference.",
-      "documentation" : "Colour negatives on Digital Reference: fixed Reference Exposure, Graded Print, or per-frame Auto Levels (default).",
+      "detail" : "Choose how developed film is converted on Digital Reference.",
+      "documentation" : "Film on Digital Reference: fixed Reference Exposure, Graded Print, or per-frame Auto Levels (default). On a positive the graded styles set white from the clear base or the frame's brightest content.",
       "drives" : [
 
       ],
@@ -4160,7 +4162,7 @@
         "composed" : false,
         "fxplugID" : 95,
         "group" : "output",
-        "hint" : "Reference Exposure holds calibrated exposure; Graded Print softens highlights; Auto Levels meters frame highlights. Colour negatives on Digital Reference only.",
+        "hint" : "Reference Exposure holds calibrated exposure; Graded Print softens highlights; Auto Levels meters frame highlights. A positive is normalised to SDR instead: its base or its brightest content to white. Digital Reference only.",
         "kind" : "choice",
         "label" : "Screen Conversion",
         "ofxName" : "digitalReference",
@@ -4189,6 +4191,142 @@
         "cli"
       ],
       "title" : "Screen Conversion"
+    },
+    {
+      "availability" : "transparentFilm",
+      "binding" : "screenGrade",
+      "commandLineFlag" : "--screen-grade",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Paper grade 0...5 for the graded screen conversions (default: 2).",
+      "commandLinePlaceholder" : "<g>",
+      "detail" : "Contrast of the graded curve Graded Print and Auto Levels print through, as a variable-contrast paper grade.",
+      "documentation" : "Variable-contrast paper grade, 0–5, for Graded Print and Auto Levels on Digital Reference; grade 2 is the calibrated curve. Negatives only.",
+      "drives" : [
+
+      ],
+      "field" : "screenGrade",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 5,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 96,
+        "group" : "output",
+        "hint" : "Variable-contrast paper grade 0–5 for Graded Print and Auto Levels on Digital Reference: grade 2 is the calibrated curve, softer grades roll highlights off earlier, harder grades later. Mid-grey and film-base black hold. Negatives only.",
+        "kind" : "double",
+        "label" : "Paper Grade",
+        "max" : 5,
+        "min" : 0,
+        "ofxName" : "screenGrade",
+        "order" : 27,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 54,
+        "slotSymbol" : "SCREEN_GRADE",
+        "value" : 2,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "The Android photo editor does not yet carry the screen conversion's grade and exposure.",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "persistedKey" : "screenGrade",
+      "scale" : {
+        "admittedMax" : 5,
+        "admittedMin" : 0,
+        "max" : 5,
+        "min" : 0,
+        "neutral" : 2,
+        "stops" : [
+
+        ],
+        "unit" : "none"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 2,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Paper Grade"
+    },
+    {
+      "availability" : "transparentFilm",
+      "binding" : "screenExposureStops",
+      "commandLineFlag" : "--screen-exposure",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Screen conversion exposure, -3...3 stops (default: 0); positive lightens.",
+      "commandLinePlaceholder" : "<ev>",
+      "detail" : "Lighten or darken the screen conversion on top of the chosen style.",
+      "documentation" : "Exposure of the Digital Reference conversion in stops, on top of the chosen style; positive lightens. On a negative it is the print exposure, on a positive the scanner's gain.",
+      "drives" : [
+
+      ],
+      "field" : "screenExposure",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 6,
+        "clampMin" : -6,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 97,
+        "group" : "output",
+        "hint" : "Exposure of the Digital Reference conversion in stops on top of the chosen style; positive lightens. A negative's print exposure, a slide's scanner gain.",
+        "kind" : "double",
+        "label" : "Screen Exposure",
+        "max" : 3,
+        "min" : -3,
+        "ofxName" : "screenExposure",
+        "order" : 28,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 55,
+        "slotSymbol" : "SCREEN_EXPOSURE",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "The Android photo editor does not yet carry the screen conversion's grade and exposure.",
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "persistedKey" : "screenExposure",
+      "scale" : {
+        "admittedMax" : 3,
+        "admittedMin" : -3,
+        "max" : 3,
+        "min" : -3,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "stops"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Screen Exposure"
     },
     {
       "availability" : "printStage",

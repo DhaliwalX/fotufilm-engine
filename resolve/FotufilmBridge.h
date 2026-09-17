@@ -91,6 +91,7 @@ enum {
     FOTUFILM_CONTROL_ENLARGER = 128,
     FOTUFILM_CONTROL_INTERLAYER_INHIBITION = 256,
     FOTUFILM_CONTROL_SCREEN_CONVERSION = 512,
+    FOTUFILM_CONTROL_SCREEN_GRADE = 1024,
 };
 int32_t fotufilm_bridge_control_capabilities(int32_t stock, int32_t paper);
 

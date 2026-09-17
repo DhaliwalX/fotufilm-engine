@@ -71,7 +71,8 @@ final class StatusADyeUnmixTests: XCTestCase {
                 toe: -1.4 + Float(c)*0.017, toeWidth: 0.18,
                 shoulder: 0.53 + Float(c)*0.025, shoulderWidth: 0.22)
         }
-        let table = SpectralRuntime.tables(for: stock, paper: .screen).filmOutput
+        let table = SpectralRuntime.tables(for: stock, paper: .screen,
+                                           digitalReference: .referenceExposure).filmOutput
         let p = SIMD3<Float>((0..<3).map {
             (stock.developedDensity(layer: $0, logExposure: 0)-stock.curves[$0].dMin)
                 / (stock.curves[$0].dMax-stock.curves[$0].dMin)

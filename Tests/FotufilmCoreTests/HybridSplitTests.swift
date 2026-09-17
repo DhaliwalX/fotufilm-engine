@@ -50,6 +50,10 @@ final class HybridSplitTests: XCTestCase {
         guard let gpu = HalideMetalFilmRenderer.shared else {
             throw XCTSkip("Halide Metal unavailable")
         }
+        // The tail is handed densities, never the scene, so Auto Levels' measurement comes from
+        // the host on a split pipeline — as it does here.
+        var options = options
+        options.sceneHighlightStops = 3
         let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
         let width = 320, height = 192
         let input = patternedSRGB(width: width, height: height)

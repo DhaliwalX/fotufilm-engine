@@ -25,6 +25,9 @@ final class PipelineStageTests: XCTestCase {
         options.stage = stage
         options.format = .super35
         options.seed = 0x5EED
+        // Auto Levels meters the scene, which the print span is never handed: a host that splits
+        // the pipeline supplies the measurement, as the contract says, and so does this test.
+        options.sceneHighlightStops = 3
         return options
     }
 
@@ -279,8 +282,11 @@ final class PipelineStageTests: XCTestCase {
                 let mask = FilmEngineInvocation(
                     stock: stock, options: options(stage: stage),
                     width: image.width, height: image.height).featureMask
+                // Not a stage: the routing flag a positive levelled on Digital Reference clears in
+                // the full render (it prints through the paper stage) but the texture span still
+                // carries, for the polarity of the character it hands back.
                 let seams = FilmEngineFeature.densityIn | FilmEngineFeature.densityOut
-                    | FilmEngineFeature.texture
+                    | FilmEngineFeature.texture | FilmEngineFeature.reversal
                 XCTAssertEqual(mask & ~seams & ~full, 0,
                                "\(stock.name) \(stage.name) added a stage")
             }
