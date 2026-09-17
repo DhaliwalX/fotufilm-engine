@@ -69,6 +69,7 @@ starts closed. Start with these settings:
   <tr><td>Highlights</td><td>Light &amp; Colour</td><td>Scene-referred highlight recovery, applied before the film model.</td></tr>
   <tr><td>Shadows</td><td>Light &amp; Colour</td><td>The same shift, fading in below mid-grey.</td></tr>
   <tr><td>Regional Tone Mask</td><td>Light &amp; Colour</td><td>Off, the highlight and shadow shifts key to each pixel's own luminance instead of to the region it sits in.</td></tr>
+  <tr><td>Camera Preflash</td><td>Light &amp; Colour</td><td>Pre-exposure of the taking film in linear scene radiance units, lifting shadows without shifting highlights.</td></tr>
   <tr><td>Saturation</td><td>Light &amp; Colour</td><td>Chroma multiplier applied to the scene before the film responds.</td></tr>
   <tr><td>Vibrance</td><td>Light &amp; Colour</td><td>Chroma boost weighted toward the least colourful pixels; already-vivid colours are left alone.</td></tr>
   <tr><td>Source Illuminant</td><td>Light &amp; Colour</td><td>Light presented to the film; Stock Native follows the selected film's reference.</td></tr>
@@ -111,6 +112,7 @@ starts closed. Start with these settings:
   <tr><td>Paper Grade</td><td>Output</td><td>Variable-contrast paper grade 0–5 for Graded Print and Auto Levels on Digital Reference: grade 2 is the calibrated curve, softer grades roll highlights off earlier, harder grades later.</td></tr>
   <tr><td>Screen Exposure</td><td>Output</td><td>Exposure of the Digital Reference conversion in stops on top of the chosen style; positive lightens.</td></tr>
   <tr><td>Channel Contrast Match</td><td>Output</td><td>Digital correction of channel-contrast mismatch, not physical printer timing.</td></tr>
+  <tr><td>Printer Preflash</td><td>Output</td><td>Pre-exposure of the print paper in relative log exposure units, softening highlights without lifting maximum density.</td></tr>
   <tr><td>Negative Viewing</td><td>Output</td><td>How the developed negative is read when Output Medium is Negative.</td></tr>
   <tr><td>Stage</td><td>Pipeline</td><td>Which span of the pipeline this node performs.</td></tr>
   <tr><td>Texture Stages</td><td>Pipeline</td><td>Whether Texture Only carries this stage.</td></tr>

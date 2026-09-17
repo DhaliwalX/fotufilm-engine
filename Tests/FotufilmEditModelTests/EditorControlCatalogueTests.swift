@@ -339,10 +339,10 @@ final class EditorControlCatalogueTests: XCTestCase {
                         .screenGrade, .screenExposure])
         XCTAssertEqual(EditorControlCatalogue.controls(in: .printLamp, for: negative).map(\.field),
                        [.enlarger, .printerEnabled, .printerLamp, .printerExposure,
-                        .printerMagenta, .printerYellow])
+                        .printerMagenta, .printerYellow, .printerPreflash])
         XCTAssertEqual(EditorControlCatalogue.controls(in: .printLamp, for: reversal).map(\.field),
                        [.enlarger, .printerEnabled, .printerLamp, .printerExposure,
-                        .printerMagenta, .printerYellow])
+                        .printerMagenta, .printerYellow, .printerPreflash])
     }
 
     /// The grade is available in Light & Color for every develop, film or not, so it survives a

@@ -25,6 +25,7 @@ extension EditorControlField {
         case .highlights: return .number(\.highlights)
         case .shadows: return .number(\.shadows)
         case .localTone: return .flag(\.localTone)
+        case .cameraPreflash: return .number(\.cameraPreflash)
         case .saturation: return .number(\.saturation)
         case .vibrance: return .number(\.vibrance)
         case .sceneLight: return .bespoke { $0.sourceLightIndex != 0 }
@@ -124,6 +125,7 @@ extension EditorControlField {
             return .derived(read: { Double($0.printerProfile.yellow) },
                             write: { $0.printerProfile.yellow = Float($1) })
         case .printCorrection: return .number(\.printCorrection)
+        case .printerPreflash: return .number(\.printerPreflash)
         case .negativeViewing:
             return .unstored("Settings chooses the lightbox or scanner reading")
         case .gradeSpace: return .flag(\.encodedGrade)

@@ -130,7 +130,7 @@ public enum EditorControlCatalogue {
 
     public static let retiredFxplugIDs: [Int] = [33]
     public static let fxplugTextureStageIDs: ClosedRange<Int> = 40...71
-    public static let bridgeSlotCount = 56
+    public static let bridgeSlotCount = 58
 
     static let hostOnly: [EditorSurface: String] = [
         .app: "a plugin host's own setting, with no meaning on a photograph",
@@ -1136,6 +1136,24 @@ public enum EditorControlCatalogue {
             documentation: "Applies spatially aware contrast compression across adjacent luminance zones."),
 
         EditorControl(
+            .cameraPreflash, title: "Camera Preflash",
+            detail: "Pre-expose the camera frame to lift shadow contrast.",
+            section: .lightExposure,
+            kind: .slider(EditorControlScale(0...0.25, neutral: 0, unit: .percent)),
+            availability: .film,
+            binding: .cameraPreflash,
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
+            omitted: [.web: webBaked],
+            host: HostParameter(
+                slot: 56, slotSymbol: "CAMERA_PREFLASH", ofxName: "cameraPreflash",
+                fxplugID: 98, group: .exposure, label: "Camera Preflash",
+                hint: "Pre-exposure of the taking film in linear scene radiance units, lifting shadows without shifting highlights.",
+                kind: .double(min: 0, max: 0.25, value: 0, delta: 0.005), clamp: 0...0.25, order: 65),
+            commandLine: CommandLineFlag("--camera-preflash", placeholder: "<f>",
+                                         help: "Pre-expose the camera frame (0...0.25, default: 0)"),
+            documentation: "Pre-exposes the camera frame with uniform illumination to lift shadows."),
+
+        EditorControl(
             .warmth, title: "Warmth",
             detail: "Adjust warmth relative to the selected Source Illuminant.",
             section: .lightBalance, kind: .slider(signed),
@@ -1516,6 +1534,23 @@ public enum EditorControlCatalogue {
                 help: "Synthetic yellow filter density, 0...1.2 (default: 0.50); requires --printer simulated-tungsten",
                 generic: false),
             documentation: "Synthetic yellow filtration in optical density, not manufacturer dial units."),
+        EditorControl(
+            .printerPreflash, title: "Printer Preflash",
+            detail: "Pre-expose the print paper to soften highlight contrast.",
+            section: .printLamp,
+            kind: .slider(EditorControlScale(0...0.1, neutral: 0, unit: .percent)),
+            availability: .printStage,
+            binding: .printerPreflash,
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
+            omitted: [.web: webBaked],
+            host: HostParameter(
+                slot: 57, slotSymbol: "PRINTER_PREFLASH", ofxName: "printerPreflash",
+                fxplugID: 99, group: .output, label: "Printer Preflash",
+                hint: "Pre-exposure of the print paper in relative log exposure units, softening highlights without lifting maximum density.",
+                kind: .double(min: 0, max: 0.1, value: 0, delta: 0.005), clamp: 0...0.1, order: 35),
+            commandLine: CommandLineFlag("--printer-preflash", placeholder: "<f>",
+                                         help: "Pre-expose the print paper (0...0.10, default: 0)"),
+            documentation: "Pre-exposes the print paper with uniform illumination to soften highlights without affecting maximum black."),
     ]
 
     private static let screenCurveOmission =

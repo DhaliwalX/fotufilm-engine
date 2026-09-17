@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "count": 18856,
+  "count": 18858,
   "fields": {
     "CURVES": {
       "offset": 0,
@@ -385,6 +385,14 @@
     "CRYSTAL_PRINT_GRAIN": {
       "offset": 18852,
       "count": 4
+    },
+    "CAMERA_PREFLASH": {
+      "offset": 18856,
+      "count": 1
+    },
+    "PRINTER_PREFLASH": {
+      "offset": 18857,
+      "count": 1
     }
   }
 }

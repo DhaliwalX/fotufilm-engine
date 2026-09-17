@@ -434,6 +434,8 @@ public struct FilmEngineInvocation {
     /// output pixel at full development, then the frame's hash seed.
     public static let crystalPrintGrainOffset = Int(FOTUFILM_CONFIG_CRYSTAL_PRINT_GRAIN)
     public static let crystalPrintGrainCount = Int(FOTUFILM_CONFIG_CRYSTAL_PRINT_GRAIN_COUNT)
+    public static let cameraPreflashOffset = Int(FOTUFILM_CONFIG_CAMERA_PREFLASH)
+    public static let printerPreflashOffset = Int(FOTUFILM_CONFIG_PRINTER_PREFLASH)
     /// Index of the three aperture-calibrated grain strengths; mirrors FOTUFILM_CONFIG_GRAIN.
     public static let grainOffset = Int(FOTUFILM_CONFIG_GRAIN)
 
@@ -1498,6 +1500,10 @@ public struct FilmEngineInvocation {
             : 0
         configuration += [paperCrystals, paperCrystals, paperCrystals,
                           Float(UInt32(truncatingIfNeeded: animatedSeed) & 0xFFFFFF)]
+        let cameraPreflash = !noFilm ? max(0, options.cameraPreflash) : 0
+        let printerPreflash = (!noFilm && options.stage.writesPrint && options.negativeViewing == nil
+            && Enlarger.illuminates(stock: stock, paper: printMedium)) ? max(0, options.printerPreflash) : 0
+        configuration += [cameraPreflash, printerPreflash]
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0

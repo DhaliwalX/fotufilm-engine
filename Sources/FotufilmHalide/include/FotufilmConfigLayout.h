@@ -228,6 +228,10 @@ enum {
     /// draw at the paper's developed fraction of that, and its departure from the mean is what the
     /// paper's own grain adds.
     FOTUFILM_CONFIG_CRYSTAL_PRINT_GRAIN = 18852,
+    /// Uniform additive camera film preflash relative to metered mid-grey; 0 is off.
+    FOTUFILM_CONFIG_CAMERA_PREFLASH = 18856,
+    /// Uniform additive paper preflash relative to paper mid-exposure; 0 is off.
+    FOTUFILM_CONFIG_PRINTER_PREFLASH = 18857,
 };
 
 enum {
@@ -327,8 +331,10 @@ enum {
     FOTUFILM_CONFIG_CRYSTAL_GRAIN_BIN_COUNT = 48,
     FOTUFILM_CONFIG_CRYSTAL_GRAIN_LAMBDA_COUNT = 768,
     FOTUFILM_CONFIG_CRYSTAL_PRINT_GRAIN_COUNT = 4,
+    FOTUFILM_CONFIG_CAMERA_PREFLASH_COUNT = 1,
+    FOTUFILM_CONFIG_PRINTER_PREFLASH_COUNT = 1,
 };
 
-enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18856 };
+enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18858 };
 
 #endif

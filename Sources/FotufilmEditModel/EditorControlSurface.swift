@@ -212,6 +212,8 @@ public enum EngineBinding: Equatable, Sendable {
     case whiteBalanceKelvin
     case whiteBalanceDuv
     case halationScale
+    case cameraPreflash
+    case printerPreflash
 
     public var optionNames: [String] {
         switch self {
@@ -258,6 +260,8 @@ public enum EngineBinding: Equatable, Sendable {
         case .enlargerIndex: return ["enlarger"]
         case .whiteBalanceKelvin, .whiteBalanceDuv: return ["whiteBalance"]
         case .halationScale: return ["halationScale"]
+        case .cameraPreflash: return ["cameraPreflash"]
+        case .printerPreflash: return ["printerPreflash"]
         }
     }
 
@@ -386,6 +390,10 @@ public enum EngineBinding: Equatable, Sendable {
             if let number = value.number { options.whiteBalance.tint = Float(number) }
         case .halationScale:
             if let number = value.number { options.halationScale = Float(number) }
+        case .cameraPreflash:
+            if let number = value.number { options.cameraPreflash = Float(number) }
+        case .printerPreflash:
+            if let number = value.number { options.printerPreflash = Float(number) }
         }
     }
 }

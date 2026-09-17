@@ -25,9 +25,10 @@ inline Halide::Expr print_mtf_read(Halide::ImageParam &configuration,
 
 inline Halide::Expr paper_activation(Halide::ImageParam &configuration,
                                      Halide::Func paper_curve, Halide::Expr channel,
-                                     Halide::Expr relative) {
+                                     Halide::Expr relative,
+                                     bool approximate = false) {
     Halide::Expr base = paper_curve_base(channel);
-    Halide::Expr exposure = paper_exposure(configuration, channel, relative);
+    Halide::Expr exposure = paper_exposure(configuration, channel, relative, approximate);
     return (sample_curve(paper_curve, exposure, channel) - configuration(base))
         / curve_range(configuration, base);
 }

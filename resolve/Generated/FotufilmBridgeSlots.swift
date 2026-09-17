@@ -55,5 +55,7 @@ enum BridgeSlot {
     static let digitalReference = 53
     static let screenGrade = 54
     static let screenExposure = 55
-    static let count = 56
+    static let cameraPreflash = 56
+    static let printerPreflash = 57
+    static let count = 58
 }

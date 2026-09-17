@@ -228,7 +228,7 @@
       "text" : "Not yet examined"
     }
   ],
-  "bridgeSlotCount" : 56,
+  "bridgeSlotCount" : 58,
   "bridgeSlots" : [
     "EXPOSURE_EV",
     "TEMPERATURE",
@@ -285,7 +285,9 @@
     "ENLARGER",
     "DIGITAL_REFERENCE",
     "SCREEN_GRADE",
-    "SCREEN_EXPOSURE"
+    "SCREEN_EXPOSURE",
+    "CAMERA_PREFLASH",
+    "PRINTER_PREFLASH"
   ],
   "controls" : [
     {
@@ -3021,6 +3023,74 @@
       "title" : "Regional"
     },
     {
+      "availability" : "film",
+      "binding" : "cameraPreflash",
+      "commandLineFlag" : "--camera-preflash",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Pre-expose the camera frame (0...0.25, default: 0)",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Pre-expose the camera frame to lift shadow contrast.",
+      "documentation" : "Pre-exposes the camera frame with uniform illumination to lift shadows.",
+      "drives" : [
+
+      ],
+      "field" : "cameraPreflash",
+      "group" : "light",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 0.25,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.005,
+        "fxplugID" : 98,
+        "group" : "exposure",
+        "hint" : "Pre-exposure of the taking film in linear scene radiance units, lifting shadows without shifting highlights.",
+        "kind" : "double",
+        "label" : "Camera Preflash",
+        "max" : 0.25,
+        "min" : 0,
+        "ofxName" : "cameraPreflash",
+        "order" : 65,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 56,
+        "slotSymbol" : "CAMERA_PREFLASH",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "persistedKey" : "cameraPreflash",
+      "scale" : {
+        "admittedMax" : 0.25,
+        "admittedMin" : 0,
+        "max" : 0.25,
+        "min" : 0,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "lightExposure",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Camera Preflash"
+    },
+    {
       "availability" : "always",
       "binding" : "warmth",
       "commandLineFlag" : "--wb",
@@ -4619,6 +4689,74 @@
         "cli"
       ],
       "title" : "Yellow Filter"
+    },
+    {
+      "availability" : "printStage",
+      "binding" : "printerPreflash",
+      "commandLineFlag" : "--printer-preflash",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Pre-expose the print paper (0...0.10, default: 0)",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Pre-expose the print paper to soften highlight contrast.",
+      "documentation" : "Pre-exposes the print paper with uniform illumination to soften highlights without affecting maximum black.",
+      "drives" : [
+
+      ],
+      "field" : "printerPreflash",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 0.1,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.005,
+        "fxplugID" : 99,
+        "group" : "output",
+        "hint" : "Pre-exposure of the print paper in relative log exposure units, softening highlights without lifting maximum density.",
+        "kind" : "double",
+        "label" : "Printer Preflash",
+        "max" : 0.1,
+        "min" : 0,
+        "ofxName" : "printerPreflash",
+        "order" : 35,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 57,
+        "slotSymbol" : "PRINTER_PREFLASH",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "web" : "reshapes the sealed pack rather than a configuration slot"
+      },
+      "persistedKey" : "printerPreflash",
+      "scale" : {
+        "admittedMax" : 0.1,
+        "admittedMin" : 0,
+        "max" : 0.1,
+        "min" : 0,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "printLamp",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "cli"
+      ],
+      "title" : "Printer Preflash"
     },
     {
       "availability" : "always",

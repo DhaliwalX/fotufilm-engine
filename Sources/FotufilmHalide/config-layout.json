@@ -449,6 +449,16 @@
       "name": "CRYSTAL_PRINT_GRAIN",
       "count": 4,
       "doc": "Crystal grain model, print stage: per record, how many of the print material's own crystals one output pixel holds at full development (0 when nothing exposes a paper: a viewed transparency, a scan, a screen, the negative itself), then the frame's hash seed as a float, for the print pipeline whose arguments carry none. The paper's developed count is a Poisson draw at the paper's developed fraction of that, and its departure from the mean is what the paper's own grain adds."
+    },
+    {
+      "name": "CAMERA_PREFLASH",
+      "count": 1,
+      "doc": "Uniform additive camera film preflash relative to metered mid-grey; 0 is off."
+    },
+    {
+      "name": "PRINTER_PREFLASH",
+      "count": 1,
+      "doc": "Uniform additive paper preflash relative to paper mid-exposure; 0 is off."
     }
   ]
 }

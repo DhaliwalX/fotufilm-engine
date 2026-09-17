@@ -305,6 +305,7 @@ struct EditState: Equatable {
     /// Whether the tone controls key to each pixel's *regional* brightness (recovering a sky moves
     /// the sky as one piece) rather than to the pixel itself.
     var localTone = true
+    var cameraPreflash = 0.0
     /// Chroma controls: saturation multiplies (1 = untouched), vibrance is a
     /// signed boost weighted toward the least colourful pixels (0 =
     /// untouched).
@@ -401,6 +402,7 @@ struct EditState: Equatable {
     /// Retain lamp settings when switched off; older edits keep the original print model.
     var printerEnabled = false
     var printerProfile = PrinterProfile.simulatedTungsten
+    var printerPreflash = 0.0
 
     var rotation = 0  // clockwise quarter turns, 0...3
     var flipH = false
