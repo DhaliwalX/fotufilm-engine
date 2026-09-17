@@ -118,6 +118,15 @@ struct InspectorRowFactory {
                 options: choices.map { (title: $0.label, value: $0.value) },
                 get: { [model] in model.edit.grainMottleShare },
                 set: { [model] in model.edit.grainMottleShare = $0 })
+        case .grainModel:
+            return PopUpRow<GrainModel>(
+                control.title,
+                options: GrainModel.allCases.map { (title: $0.title, value: $0) },
+                get: { [model] in model.edit.grainModel },
+                set: { [model] in
+                    model.edit.grainModel = $0
+                    AppSettings.shared.grainModel = $0
+                })
         case .rotation:
             return PopUpRow<Int>(
                 control.title,

@@ -286,11 +286,12 @@ final class SettingsSheetController: SessionViewController {
         let halation = makeSection("Halation")
         let separation = makeSection("Color Separation")
         #endif
-        grain.add(ToggleRow(
-            "Disc Grain",
-            get: { AppSettings.shared.discGrainEnabled },
-            set: { AppSettings.shared.discGrainEnabled = $0 }))
-        grain.add(NoteRow("Disc Grain draws individual grains when they are large enough to be visible."))
+        grain.add(PopUpRow<GrainModel>(
+            "Grain Model",
+            options: GrainModel.allCases.map { (title: $0.title, value: $0) },
+            get: { AppSettings.shared.grainModel },
+            set: { AppSettings.shared.grainModel = $0 }))
+        grain.add(NoteRow("Standard uses fast calibrated RMS noise, Particle renders discrete Boolean discs under magnification, and Organic Crystals simulates physical dye clouds and photographic paper crystals."))
         halation.add(PopUpRow<HalationModel>(
             "Halation Model",
             options: HalationModel.allCases.map { (title: $0.name, value: $0) },
@@ -322,7 +323,7 @@ final class SettingsSheetController: SessionViewController {
             enabled: { AppSettings.isFilmModelAdjusted }) {
                 let settings = AppSettings.shared
                 settings.resetCouplerGeometry()
-                settings.discGrainEnabled = false
+                settings.grainModel = .clumpField
                 settings.halationModel = .legacy
                 settings.estimatedHalationEnabled =
                     AppSettings.defaultEstimatedHalationEnabled

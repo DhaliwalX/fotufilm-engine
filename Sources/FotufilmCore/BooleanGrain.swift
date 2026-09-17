@@ -1,24 +1,58 @@
 import Foundation
 
 /// Which model develops grain.
-public enum GrainModel: Sendable {
+public enum GrainModel: String, Sendable, CaseIterable, Codable, Identifiable {
     /// A unit-variance field blurred to the clump's correlation length: Poisson counts for dye
     /// clouds and a continuous normal field for silver, whose clump size is a correlation length
     /// rather than one countable particle. Granularity is calibrated and cost is flat, but the
     /// texture is tied to the output lattice.
-    case clumpField
+    case clumpField = "clump"
     /// Lattice-free Boolean discs with overlap saturation, laid at the clump radius and scaled
     /// onto the published granularity (`FilmEngineInvocation.discAmplitudes`): a texture at the
     /// emulsion's correlation length, not a model of its crystals. Available only in the
     /// reference schedule; realtime schedules use `clumpField`.
-    case discs
+    case discs = "discs"
     /// The crystals that form the image, rendered as what they form: Poisson counts of
     /// developed crystals per size bin at the mean the developed density gives each, laid as
     /// dye clouds — or silver grains — at each bin's own radius, drawn from each sublayer's
     /// coupler pool, with the population read off the record's characteristic curve
     /// (`CrystalGrainModel`). Available only in the reference schedule, like `discs`, whose
     /// variant family carries it; realtime schedules use `clumpField`.
-    case crystals
+    case crystals = "crystals"
+
+    public var id: String { rawValue }
+
+    /// User-facing display title.
+    public var title: String {
+        switch self {
+        case .clumpField: return "Standard"
+        case .discs: return "Particle"
+        case .crystals: return "Organic Crystals"
+        }
+    }
+
+    /// User-facing detail explanation.
+    public var detail: String {
+        switch self {
+        case .clumpField: return "Fast calibrated RMS grain"
+        case .discs: return "Discrete silver grains under magnification"
+        case .crystals: return "Physical dye clouds and paper crystals"
+        }
+    }
+
+    /// Resolves an identifier or alias (e.g. "standard", "clump", "particle", "discs", "organic", "crystals").
+    public static func named(_ name: String) -> GrainModel? {
+        switch name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "clump", "clumpfield", "clump-field", "standard", "fast":
+            return .clumpField
+        case "discs", "disc", "particle", "particles", "boolean-discs":
+            return .discs
+        case "crystals", "crystal", "organic", "organic-crystals", "physical":
+            return .crystals
+        default:
+            return nil
+        }
+    }
 }
 
 /// Boolean grain model using equal-radius discs from a Poisson process.

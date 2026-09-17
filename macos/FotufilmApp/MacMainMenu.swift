@@ -149,8 +149,14 @@ enum MainMenu {
         add(menu, "New Grain Pattern",
             #selector(DesktopEditorViewController.rerollGrain(_:)),
             key: "g", modifiers: [.command, .shift])
-        add(menu, "Disc Grain (Advanced)",
-            #selector(DesktopEditorViewController.toggleDiscGrain(_:)))
+        let (grainModelItem, grainModelSubmenu) = submenu("Grain Model")
+        add(grainModelSubmenu, "Standard",
+            #selector(DesktopEditorViewController.setGrainModelStandard(_:)))
+        add(grainModelSubmenu, "Particle (Discs)",
+            #selector(DesktopEditorViewController.setGrainModelParticle(_:)))
+        add(grainModelSubmenu, "Organic Crystals",
+            #selector(DesktopEditorViewController.setGrainModelOrganic(_:)))
+        menu.addItem(grainModelItem)
         add(menu, "Estimated Halation Shape (Advanced)",
             #selector(DesktopEditorViewController.toggleEstimatedHalation(_:)))
         if FilmWorkshopController.isAvailable {
@@ -336,7 +342,7 @@ private final class EditHistoryMenuDelegate: NSObject, NSMenuDelegate {
             return "Color"
         }
         if new.grain != old.grain || new.grainMottleShare != old.grainMottleShare
-            || new.discGrain != old.discGrain {
+            || new.grainModel != old.grainModel {
             return "Grain"
         }
         if new.halation != old.halation

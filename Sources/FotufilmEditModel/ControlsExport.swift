@@ -475,6 +475,8 @@ public struct ControlsExport {
         KotlinField(name: "stockID", type: "String", defaultValue: "StockLibrary.defaultID", control: nil),
         KotlinField(name: "chosenFormatID", type: "String?", defaultValue: "null", control: nil),
         KotlinField(name: "grainMottleShare", type: "Double?", defaultValue: "null", control: nil),
+        KotlinField(name: "grainModel", type: "String", defaultValue: "\"clump\"", control: nil),
+        KotlinField(name: "discGrain", type: "Boolean", defaultValue: "false", control: nil),
         KotlinField(name: "couplerGapReach", type: "List<Double>", defaultValue: "listOf(1.0, 1.0)", control: nil),
         KotlinField(name: "shutterSeconds", type: "Double?", defaultValue: "null", control: nil),
         KotlinField(name: "printLightKelvin", type: "Double?", defaultValue: "null", control: nil),

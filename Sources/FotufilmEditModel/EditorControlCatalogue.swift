@@ -375,43 +375,41 @@ public enum EditorControlCatalogue {
                                       EditorMenuChoice(1, "Frozen", id: "frozen")]), value: 0),
                 order: 40)),
         EditorControl(
-            .grainModel, title: "Disc Grain",
-            detail: "Draw individual grains when they are large enough to be visible.",
-            section: .filmGrain, kind: .toggle(restingOn: false), availability: .film,
-            persistence: .key("discGrain", .same),
+            .grainModel, title: "Grain Model",
+            detail: "Choose how film grain is formed across the emulsion.",
+            section: .filmGrain,
+            kind: .menu(.fixed([
+                EditorMenuChoice(0, "Standard", detail: "Fast calibrated RMS grain", id: "clump"),
+                EditorMenuChoice(1, "Particle", detail: "Discrete silver grains under magnification", id: "discs"),
+                EditorMenuChoice(2, "Organic Crystals", detail: "Physical dye clouds and paper crystals", id: "crystals"),
+            ])),
+            availability: .film,
+            persistence: .bespoke,
             binding: .discGrain,
             surfaces: [.app, .desktop, .android, .resolve, .cli],
-            omitted: [.finalcut: "not yet offered; discs need Reference rendering",
+            omitted: [.finalcut: "not yet offered; discs and crystals need Reference rendering",
                       .web: webBaked],
             host: HostParameter(
                 slot: 43, slotSymbol: "GRAIN_MODEL", ofxName: "grainModel", group: .grainAdvanced,
                 label: "Grain Model",
-                hint: "Disc grain is available on silver-image stocks and requires Reference rendering, "
-                    + "selected automatically. Subpixel grain uses the clump field; coarse mottle is "
-                    + "suppressed where discs render. Crystals develops the film's own crystal "
-                    + "population — sparse coarse clouds where little developed, a fine dense haze "
-                    + "where most did — on any stock, in Reference rendering.",
-                kind: .choice(.fixed([EditorMenuChoice(0, "Clump Field", id: "clump"),
-                                      EditorMenuChoice(1, "Discs", id: "discs"),
-                                      EditorMenuChoice(2, "Crystals", id: "crystals")]),
+                hint: "Standard uses the calibrated clump field. Particle renders discrete Boolean discs under magnification. Organic Crystals develops the film's own crystal population — sparse coarse dye clouds where little developed, a fine dense haze where most did — with photographic paper crystals.",
+                kind: .choice(.fixed([EditorMenuChoice(0, "Standard", id: "clump"),
+                                      EditorMenuChoice(1, "Particle", id: "discs"),
+                                      EditorMenuChoice(2, "Organic Crystals", id: "crystals")]),
                               value: 0),
                 order: 10),
             commandLine: CommandLineFlag("--grain-model", placeholder: "<m>",
-                                         help: "clump (default), discs or crystals. `discs` lays Boolean "
+                                         help: "standard/clump (default), particle/discs, or organic/crystals. `particle` lays Boolean "
                                              + "discs at the film's clump radius, scaled onto its published "
                                              + "granularity, instead of a blurred clump field: the texture "
                                              + "survives enlargement, saturates where discs overlap, and "
-                                             + "only differs once a disc covers a pixel. `crystals` "
+                                             + "only differs once a disc covers a pixel. `organic`/`crystals` "
                                              + "develops the crystal population read off the film's own "
                                              + "curve: Poisson counts of developed crystals per size class "
                                              + "at every pixel, each laying its dye cloud from its "
-                                             + "sublayer's coupler pool, so the grain is sparse and coarse "
-                                             + "where little developed and a fine dense haze where most "
-                                             + "did, with the sheet's granularity at its read density. "
-                                             + "Both cost about 5x the pixels and a one-off minute of "
-                                             + "pipeline build",
+                                             + "sublayer's coupler pool, with paper grain in the print stage.",
                                          generic: false),
-            documentation: "Enables discrete tabular grain disc rendering where emulsion grain clumps resolve at output pixels. The command line and host plugins can also choose Crystals, which develops the film's crystal population read off its own curve."),
+            documentation: "Selects the film grain simulation method: Standard (fast calibrated RMS noise), Particle (discrete Boolean discs resolving under magnification on silver stocks), or Organic Crystals (physically simulated dye clouds and paper crystals formed from the exposure)."),
         EditorControl(
             .seed, title: "Grain Seed",
             detail: "Choose a grain pattern. The same seed and frame produce the same pattern.",

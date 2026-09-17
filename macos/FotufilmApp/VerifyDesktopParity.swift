@@ -309,7 +309,7 @@ enum VerifyDesktopParity {
                                         "Return Spectrum"])
             if case .fail = film { return film }
             let develop = rows(of: .development, model: model,
-                               expecting: ["Disc Grain", "Separation", "Edge Contrast"])
+                               expecting: ["Grain Model", "Separation", "Edge Contrast"])
             if case .fail = develop { return develop }
             let expose = rows(of: .adjustments, model: model,
                               expecting: ["Exposure", "Regional", "Grade", "Encoded Grade"])
@@ -779,7 +779,7 @@ enum VerifyDesktopParity {
             let expected = [
                 ["New Photos", "Starting Film", "Reset All Settings"],
                 ["Photos", "Video", "Photo Quality", "Video Quality", "Negative"],
-                ["Grain", "Halation", "Color Separation", "Disc Grain", "Red–Green", "Edge Contrast"],
+                ["Grain", "Halation", "Color Separation", "Grain Model", "Red–Green", "Edge Contrast"],
             ]
             for (index, labels) in expected.enumerated() {
                 settings.tabs.selectedTabViewItemIndex = index

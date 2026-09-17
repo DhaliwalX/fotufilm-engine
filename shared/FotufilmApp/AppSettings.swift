@@ -22,6 +22,7 @@ final class AppSettings: ObservableObject {
         static let couplerRange = "fotufilm.coupler-range"
         static let couplerSelf = "fotufilm.coupler-self"
         static let discGrain = "fotufilm.disc-grain"
+        static let grainModel = "fotufilm.grain-model"
         static let halationModel = "fotufilm.halation-model"
         static let estimatedHalation = "fotufilm.estimated-halation"
         static let couplerBarrierRedGreen = "fotufilm.coupler-barrier-red-green"
@@ -557,6 +558,23 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// Which grain model develops grain across the emulsion.
+    nonisolated static var storedGrainModel: GrainModel {
+        if let raw = UserDefaults.standard.string(forKey: Key.grainModel),
+           let model = GrainModel(rawValue: raw) {
+            return model
+        }
+        return storedDiscGrainEnabled ? .discs : .clumpField
+    }
+
+    @Published var grainModel: GrainModel {
+        didSet {
+            UserDefaults.standard.set(grainModel.rawValue, forKey: Key.grainModel)
+            UserDefaults.standard.set(grainModel == .discs, forKey: Key.discGrain)
+            NotificationCenter.default.post(name: Self.filmModelChanged, object: nil)
+        }
+    }
+
     /// Uses the resolved-grain Boolean model when a stock's grains cover at least one output
     /// pixel. Below that scale the two models converge, so the engine keeps the calibrated clump
     /// field rather than paying for indistinguishable discs.
@@ -564,11 +582,9 @@ final class AppSettings: ObservableObject {
         UserDefaults.standard.bool(forKey: Key.discGrain)
     }
 
-    @Published var discGrainEnabled: Bool {
-        didSet {
-            UserDefaults.standard.set(discGrainEnabled, forKey: Key.discGrain)
-            NotificationCenter.default.post(name: Self.filmModelChanged, object: nil)
-        }
+    var discGrainEnabled: Bool {
+        get { grainModel == .discs }
+        set { grainModel = newValue ? .discs : .clumpField }
     }
 
     /// Default estimated-halation setting derived from the stored 1080p30 capability measurement.
@@ -673,7 +689,7 @@ final class AppSettings: ObservableObject {
     }
 
     nonisolated static var isFilmModelAdjusted: Bool {
-        isCouplerGeometryAdjusted || storedDiscGrainEnabled || storedHalationModel != .legacy
+        isCouplerGeometryAdjusted || storedGrainModel != .clumpField || storedHalationModel != .legacy
             || storedEstimatedHalationEnabled != defaultEstimatedHalationEnabled
     }
 
@@ -727,7 +743,7 @@ final class AppSettings: ObservableObject {
         negativeViewing = Self.storedNegativeViewing
         couplerRange = Self.storedCouplerRange
         couplerSelf = Self.storedCouplerSelf
-        discGrainEnabled = Self.storedDiscGrainEnabled
+        grainModel = Self.storedGrainModel
         halationModel = Self.storedHalationModel
         estimatedHalationEnabled = Self.storedEstimatedHalationEnabled
         couplerBarrierRedGreen = Self.storedCouplerBarrierRedGreen
@@ -750,7 +766,7 @@ final class AppSettings: ObservableObject {
         videoExportBitrate = .automatic
         negativeViewing = .lightBox
         resetCouplerGeometry()
-        discGrainEnabled = false
+        grainModel = .clumpField
         halationModel = .legacy
         estimatedHalationEnabled = Self.defaultEstimatedHalationEnabled
         shareCrashReports = false
