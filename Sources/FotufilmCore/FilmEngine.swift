@@ -1259,10 +1259,12 @@ public struct FilmEngineInvocation {
             && SpectralRuntime.hasReconstructionModel
             // A 4th Color Layer is an inter-image device between colour records that modulates
             // how much *dye* each one forms, so it belongs to a chromogenic colour emulsion and
-            // to nothing else: the monochrome schedule develops one record, and the disc model
-            // is for materials whose image is opaque silver rather than a dye cloud. Both are
-            // gated here rather than left to the stocks, so the AOT set needs no monochrome and
-            // no disc donor twin to serve a mask no real material forms.
+            // to nothing else: the monochrome schedule develops one record, and the Boolean disc
+            // model is for materials whose image is opaque silver rather than a dye cloud. Both
+            // are gated here rather than left to the stocks, so the AOT set needs no monochrome
+            // donor twin. The crystal population is different: it rides the disc family on every
+            // material, so a donor stock developed with crystals asks for both bits at once, and
+            // the `_donor_disc` twins in aot-variants.json exist to serve exactly that frame.
             && !stock.isMonochrome && stock.grainDensityLaw != .silver
         if donorActive { featureMask |= FilmEngineFeature.donorLayer }
         if (couplersActive || donorActive) && max(couplerRadius, fringeRadius) > 0 {

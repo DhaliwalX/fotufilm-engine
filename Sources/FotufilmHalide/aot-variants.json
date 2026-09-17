@@ -738,64 +738,129 @@
       "doc": "The `_donor` twins; see FOTUFILM_AOT_DONOR."
     },
     {
+      "name": "color_donor_disc",
+      "mask": "DISC(DONOR(ALL_STAGES))",
+      "doc": "The `_donor_disc` twins. The crystal grain model rides the disc family and is offered to every material, so a donor stock developed with crystals asks for both tight bits in one frame; without these the request finds no variant and the frame is refused. The head, the grainless spans and the flat texture span never carry the disc bit, so they have no twin."
+    },
+    {
       "name": "color_float_donor",
       "mask": "DONOR(ALL_STAGES | FLOAT_IO)"
+    },
+    {
+      "name": "color_float_donor_disc",
+      "mask": "DISC(DONOR(ALL_STAGES | FLOAT_IO))"
     },
     {
       "name": "color_float_exact_donor",
       "mask": "DONOR(ALL_STAGES | FLOAT_IO | EXACT_MATH)"
     },
     {
+      "name": "color_float_exact_donor_disc",
+      "mask": "DISC(DONOR(ALL_STAGES | FLOAT_IO | EXACT_MATH))"
+    },
+    {
       "name": "color_float_realtime_donor",
       "mask": "DONOR(ALL_STAGES | FLOAT_IO | REALTIME)"
+    },
+    {
+      "name": "color_float_realtime_donor_disc",
+      "mask": "DISC(DONOR(ALL_STAGES | FLOAT_IO | REALTIME))"
     },
     {
       "name": "color_float_realtime_encode_linear_donor",
       "mask": "DONOR(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR)"
     },
     {
+      "name": "color_float_realtime_encode_linear_donor_disc",
+      "mask": "DISC(DONOR(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR))"
+    },
+    {
       "name": "color_float_realtime_encode_power_donor",
       "mask": "DONOR(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER)"
+    },
+    {
+      "name": "color_float_realtime_encode_power_donor_disc",
+      "mask": "DISC(DONOR(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER))"
     },
     {
       "name": "color_float_realtime_encode_log_donor",
       "mask": "DONOR(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG)"
     },
     {
+      "name": "color_float_realtime_encode_log_donor_disc",
+      "mask": "DISC(DONOR(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG))"
+    },
+    {
       "name": "color_float_realtime_measure_encode_log_donor",
       "mask": "DONOR(ALL_STAGES | FLOAT_IO | REALTIME | FLARE_MEASURE | FLARE | ENCODE_OUT | OUTPUT_LOG)"
+    },
+    {
+      "name": "color_float_realtime_measure_encode_log_donor_disc",
+      "mask": "DISC(DONOR(ALL_STAGES | FLOAT_IO | REALTIME | FLARE_MEASURE | FLARE | ENCODE_OUT | OUTPUT_LOG))"
     },
     {
       "name": "color_flare_donor",
       "mask": "DONOR(FLARE(ALL_STAGES))"
     },
     {
+      "name": "color_flare_donor_disc",
+      "mask": "DISC(DONOR(FLARE(ALL_STAGES)))"
+    },
+    {
       "name": "color_float_flare_donor",
       "mask": "DONOR(FLARE(ALL_STAGES | FLOAT_IO))"
+    },
+    {
+      "name": "color_float_flare_donor_disc",
+      "mask": "DISC(DONOR(FLARE(ALL_STAGES | FLOAT_IO)))"
     },
     {
       "name": "color_float_exact_flare_donor",
       "mask": "DONOR(FLARE(ALL_STAGES | FLOAT_IO | EXACT_MATH))"
     },
     {
+      "name": "color_float_exact_flare_donor_disc",
+      "mask": "DISC(DONOR(FLARE(ALL_STAGES | FLOAT_IO | EXACT_MATH)))"
+    },
+    {
       "name": "color_float_realtime_flare_donor",
       "mask": "DONOR(FLARE(ALL_STAGES | FLOAT_IO | REALTIME))"
+    },
+    {
+      "name": "color_float_realtime_flare_donor_disc",
+      "mask": "DISC(DONOR(FLARE(ALL_STAGES | FLOAT_IO | REALTIME)))"
     },
     {
       "name": "color_float_realtime_encode_linear_flare_donor",
       "mask": "DONOR(FLARE(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR))"
     },
     {
+      "name": "color_float_realtime_encode_linear_flare_donor_disc",
+      "mask": "DISC(DONOR(FLARE(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LINEAR)))"
+    },
+    {
       "name": "color_float_realtime_encode_power_flare_donor",
       "mask": "DONOR(FLARE(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER))"
+    },
+    {
+      "name": "color_float_realtime_encode_power_flare_donor_disc",
+      "mask": "DISC(DONOR(FLARE(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_POWER)))"
     },
     {
       "name": "color_float_realtime_encode_log_flare_donor",
       "mask": "DONOR(FLARE(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG))"
     },
     {
+      "name": "color_float_realtime_encode_log_flare_donor_disc",
+      "mask": "DISC(DONOR(FLARE(ALL_STAGES | FLOAT_IO | REALTIME | ENCODE_OUT | OUTPUT_LOG)))"
+    },
+    {
       "name": "negative_donor",
       "mask": "DONOR(ENLARGED(NEGATIVE))"
+    },
+    {
+      "name": "negative_donor_disc",
+      "mask": "DISC(DONOR(ENLARGED(NEGATIVE)))"
     },
     {
       "name": "negative_grainless_donor",
@@ -806,8 +871,16 @@
       "mask": "DONOR(ENLARGED( EXTENDED_MTF(NEGATIVE)))"
     },
     {
+      "name": "negative_extended_mtf_donor_disc",
+      "mask": "DISC(DONOR(ENLARGED( EXTENDED_MTF(NEGATIVE))))"
+    },
+    {
       "name": "negative_no_adjacency_extended_mtf_donor",
       "mask": "DONOR(ENLARGED( EXTENDED_MTF(NEGATIVE & ~ADJACENCY)))"
+    },
+    {
+      "name": "negative_no_adjacency_extended_mtf_donor_disc",
+      "mask": "DISC(DONOR(ENLARGED( EXTENDED_MTF(NEGATIVE & ~ADJACENCY))))"
     },
     {
       "name": "negative_grainless_extended_mtf_donor",
@@ -822,16 +895,32 @@
       "mask": "DONOR(ALL_STAGES | FLOAT_IO | FLARE_MEASURE | FLARE)"
     },
     {
+      "name": "color_float_measure_donor_disc",
+      "mask": "DISC(DONOR(ALL_STAGES | FLOAT_IO | FLARE_MEASURE | FLARE))"
+    },
+    {
       "name": "color_float_encode_donor",
       "mask": "DONOR(ALL_STAGES | FLOAT_IO | ENCODE_OUT)"
+    },
+    {
+      "name": "color_float_encode_donor_disc",
+      "mask": "DISC(DONOR(ALL_STAGES | FLOAT_IO | ENCODE_OUT))"
     },
     {
       "name": "color_float_measure_encode_donor",
       "mask": "DONOR(ALL_STAGES | FLOAT_IO | FLARE_MEASURE | FLARE | ENCODE_OUT)"
     },
     {
+      "name": "color_float_measure_encode_donor_disc",
+      "mask": "DISC(DONOR(ALL_STAGES | FLOAT_IO | FLARE_MEASURE | FLARE | ENCODE_OUT))"
+    },
+    {
       "name": "color_float_fields_donor",
       "mask": "DONOR(ALL_STAGES | FLOAT_IO | FIELDS_IN)"
+    },
+    {
+      "name": "color_float_fields_donor_disc",
+      "mask": "DISC(DONOR(ALL_STAGES | FLOAT_IO | FIELDS_IN))"
     },
     {
       "name": "color_head_donor",
@@ -842,16 +931,32 @@
       "mask": "DONOR(NEGATIVE_SPAN | FLOAT_IO | REALTIME)"
     },
     {
+      "name": "color_float_realtime_negative_donor_disc",
+      "mask": "DISC(DONOR(NEGATIVE_SPAN | FLOAT_IO | REALTIME))"
+    },
+    {
       "name": "color_float_realtime_texture_donor",
       "mask": "DONOR(TEXTURE_SPAN | FLOAT_IO | REALTIME)"
+    },
+    {
+      "name": "color_float_realtime_texture_donor_disc",
+      "mask": "DISC(DONOR(TEXTURE_SPAN | FLOAT_IO | REALTIME))"
     },
     {
       "name": "color_float_negative_donor",
       "mask": "DONOR(NEGATIVE_SPAN | FLOAT_IO)"
     },
     {
+      "name": "color_float_negative_donor_disc",
+      "mask": "DISC(DONOR(NEGATIVE_SPAN | FLOAT_IO))"
+    },
+    {
       "name": "color_float_texture_donor",
       "mask": "DONOR(TEXTURE_SPAN | FLOAT_IO)"
+    },
+    {
+      "name": "color_float_texture_donor_disc",
+      "mask": "DISC(DONOR(TEXTURE_SPAN | FLOAT_IO))"
     },
     {
       "name": "color_float_realtime_texture_flat_donor",
