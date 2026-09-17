@@ -512,7 +512,7 @@ public struct FilmStock: Sendable {
     }
 
     /// Granularity variance of a chromogenic negative at diffuse density `density`, in
-    /// arbitrary units. Mirrors `dye_cloud_granularity_variance` in FotufilmHalideShared.h,
+    /// arbitrary units. Mirrors `dye_cloud_granularity_variance` in FotufilmHalide/Stages/Grain.h,
     /// where the shape and its provenance are stated.
     func dyeCloudGranularityVariance(_ density: Float) -> Float {
         let amplitude = grainDensityProfile[0]
@@ -522,7 +522,7 @@ public struct FilmStock: Sendable {
     }
 
     /// Granularity variance of a silver emulsion at diffuse density `density`, in arbitrary
-    /// units. Mirrors `silver_granularity_variance` in FotufilmHalideShared.h.
+    /// units. Mirrors `silver_granularity_variance` in FotufilmHalide/Stages/Grain.h.
     func silverGranularityVariance(_ density: Float) -> Float {
         density * pow(10, 0.21004 * density + 0.06114 * density * density)
     }

@@ -58,7 +58,7 @@ public enum ColorScience {
     /// of its own for every real light, and the recovery's boundary moves out to where physical
     /// light actually ends. Rows sum to exactly 1: the neutral axis is the same line in both
     /// bases, so a walk toward it means the same thing on either side of the seam. The kernels
-    /// apply this per pixel; it must match `kRec2020ToExposureDomain` in FotufilmHalideShared.h
+    /// apply this per pixel; it must match `kRec2020ToExposureDomain` in FotufilmHalide/Stages/Exposure.h
     /// and the handwritten Metal shaders digit for digit.
     public static func linearRec2020ToExposureDomain(_ rgb: SIMD3<Float>) -> SIMD3<Float> {
         SIMD3(
@@ -141,7 +141,7 @@ public enum ColorScience {
 
     /// CIE Y weights for one linear working-space RGB triple — row two of the BT.2020 RGB to
     /// XYZ matrix, because linear Rec.2020 is the scene basis the renderer works in. Must match
-    /// `kLuma{R,G,B}` in FotufilmHalideShared.h (and FotufilmMetalGrain.mm) digit for digit — the
+    /// `kLuma{R,G,B}` in FotufilmHalide/Stages/Exposure.h (and FotufilmMetalGrain.mm) digit for digit — the
     /// Swift reference path mirrors those kernels value for value.
     public static let luminanceWeights: (Float, Float, Float) = (0.2627002, 0.6779981, 0.0593017)
 

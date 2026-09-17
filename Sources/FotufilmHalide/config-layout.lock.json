@@ -1,0 +1,378 @@
+{
+  "schema": 1,
+  "count": 18036,
+  "fields": {
+    "CURVES": {
+      "offset": 0,
+      "count": 18
+    },
+    "HALATION": {
+      "offset": 18,
+      "count": 3
+    },
+    "COUPLER": {
+      "offset": 21,
+      "count": 9
+    },
+    "GRAIN": {
+      "offset": 30,
+      "count": 3
+    },
+    "PAPER": {
+      "offset": 33,
+      "count": 6
+    },
+    "MASKING": {
+      "offset": 39,
+      "count": 3
+    },
+    "MTF_SIGMA": {
+      "offset": 42,
+      "count": 3
+    },
+    "MTF_RADIUS": {
+      "offset": 45,
+      "count": 3
+    },
+    "HALATION_RADIUS": {
+      "offset": 48,
+      "count": 3
+    },
+    "COUPLER_SIGMA": {
+      "offset": 51,
+      "count": 1
+    },
+    "COUPLER_RADIUS": {
+      "offset": 52,
+      "count": 1
+    },
+    "ADJACENCY_SIGMA": {
+      "offset": 53,
+      "count": 1
+    },
+    "ADJACENCY_RADIUS": {
+      "offset": 54,
+      "count": 1
+    },
+    "GRAIN_SIGMA": {
+      "offset": 55,
+      "count": 1
+    },
+    "GRAIN_RADIUS": {
+      "offset": 56,
+      "count": 1
+    },
+    "FLARE": {
+      "offset": 57,
+      "count": 1
+    },
+    "COUPLER_SCALE": {
+      "offset": 58,
+      "count": 1
+    },
+    "ADJACENCY_STRENGTH": {
+      "offset": 59,
+      "count": 1
+    },
+    "GRAIN_LAMBDA": {
+      "offset": 60,
+      "count": 1
+    },
+    "EXPOSURE_GAIN": {
+      "offset": 61,
+      "count": 1
+    },
+    "PAPER_MIDPOINT": {
+      "offset": 62,
+      "count": 1
+    },
+    "FLARE_MEAN": {
+      "offset": 63,
+      "count": 3
+    },
+    "COUPLER_WARP": {
+      "offset": 66,
+      "count": 384
+    },
+    "WHITE_BALANCE": {
+      "offset": 450,
+      "count": 3
+    },
+    "HIGHLIGHTS": {
+      "offset": 453,
+      "count": 1
+    },
+    "SHADOWS": {
+      "offset": 454,
+      "count": 1
+    },
+    "SATURATION": {
+      "offset": 455,
+      "count": 1
+    },
+    "VIBRANCE": {
+      "offset": 456,
+      "count": 1
+    },
+    "HALATION_KERNEL": {
+      "offset": 457,
+      "count": 9
+    },
+    "GRAIN_CORRELATION": {
+      "offset": 466,
+      "count": 1
+    },
+    "MTF_LUMA_SHARE": {
+      "offset": 467,
+      "count": 1
+    },
+    "MTF_LUMA_SIGMA": {
+      "offset": 468,
+      "count": 1
+    },
+    "MTF_LUMA_RADIUS": {
+      "offset": 469,
+      "count": 1
+    },
+    "GRADE_LIFT": {
+      "offset": 470,
+      "count": 3
+    },
+    "GRADE_GAIN": {
+      "offset": 473,
+      "count": 3
+    },
+    "GRADE_INV_GAMMA": {
+      "offset": 476,
+      "count": 3
+    },
+    "FRAME_WIDTH": {
+      "offset": 479,
+      "count": 1
+    },
+    "FRAME_HEIGHT": {
+      "offset": 480,
+      "count": 1
+    },
+    "TONE_GRID_WIDTH": {
+      "offset": 481,
+      "count": 1
+    },
+    "TONE_GRID_HEIGHT": {
+      "offset": 482,
+      "count": 1
+    },
+    "TONE_GRID_A": {
+      "offset": 483,
+      "count": 4096
+    },
+    "TONE_GRID_B": {
+      "offset": 4579,
+      "count": 4096
+    },
+    "GRAIN_MODE": {
+      "offset": 8675,
+      "count": 1
+    },
+    "GRAIN_DISC_RADIUS": {
+      "offset": 8676,
+      "count": 1
+    },
+    "GRAIN_DISC": {
+      "offset": 8677,
+      "count": 3
+    },
+    "GRADE_SPACE": {
+      "offset": 8680,
+      "count": 1
+    },
+    "MOTTLE_SIGMA": {
+      "offset": 8681,
+      "count": 1
+    },
+    "MOTTLE_RADIUS": {
+      "offset": 8682,
+      "count": 1
+    },
+    "MOTTLE_LAMBDA": {
+      "offset": 8683,
+      "count": 1
+    },
+    "MOTTLE": {
+      "offset": 8684,
+      "count": 3
+    },
+    "PAPER_RED": {
+      "offset": 8687,
+      "count": 6
+    },
+    "PAPER_BLUE": {
+      "offset": 8693,
+      "count": 6
+    },
+    "PAPER_MIDPOINT_RED": {
+      "offset": 8699,
+      "count": 1
+    },
+    "PAPER_MIDPOINT_BLUE": {
+      "offset": 8700,
+      "count": 1
+    },
+    "GRAIN_LAW": {
+      "offset": 8701,
+      "count": 1
+    },
+    "GRAIN_ANCHOR": {
+      "offset": 8702,
+      "count": 3
+    },
+    "GRAIN_FOG": {
+      "offset": 8705,
+      "count": 3
+    },
+    "GRAIN_SIGMA_LAYER": {
+      "offset": 8708,
+      "count": 3
+    },
+    "MOTTLE_SIGMA_LAYER": {
+      "offset": 8711,
+      "count": 3
+    },
+    "PRINT_MTF_SIGMA": {
+      "offset": 8714,
+      "count": 1
+    },
+    "PRINT_MTF_RADIUS": {
+      "offset": 8715,
+      "count": 1
+    },
+    "OUTPUT_MATRIX": {
+      "offset": 8716,
+      "count": 9
+    },
+    "OUTPUT_TRANSFER": {
+      "offset": 8725,
+      "count": 1
+    },
+    "OUTPUT_COEFFICIENTS": {
+      "offset": 8726,
+      "count": 6
+    },
+    "OUTPUT_PREMULTIPLIED": {
+      "offset": 8732,
+      "count": 1
+    },
+    "PRINT_SHARPEN": {
+      "offset": 8733,
+      "count": 1
+    },
+    "DIFFUSION_DIRECT": {
+      "offset": 8734,
+      "count": 1
+    },
+    "DIFFUSION_KERNEL": {
+      "offset": 8735,
+      "count": 9
+    },
+    "DIFFUSION_RADIUS": {
+      "offset": 8744,
+      "count": 3
+    },
+    "DONOR_CURVE": {
+      "offset": 8747,
+      "count": 6
+    },
+    "DONOR_RELEASE": {
+      "offset": 8753,
+      "count": 3
+    },
+    "HALATION_RING_RADIUS": {
+      "offset": 8756,
+      "count": 3
+    },
+    "HALATION_MATRIX": {
+      "offset": 8759,
+      "count": 9
+    },
+    "CURVE_SECONDARY": {
+      "offset": 8768,
+      "count": 15
+    },
+    "MTF_SECONDARY_SIGMA": {
+      "offset": 8783,
+      "count": 3
+    },
+    "MTF_SECONDARY_RADIUS": {
+      "offset": 8786,
+      "count": 3
+    },
+    "MTF_PRIMARY_SHARE": {
+      "offset": 8789,
+      "count": 3
+    },
+    "COUPLER_RELEASE_GAMMA": {
+      "offset": 8792,
+      "count": 3
+    },
+    "DONOR_RELEASE_GAMMA": {
+      "offset": 8795,
+      "count": 1
+    },
+    "DONOR_DIFFUSION_KERNEL": {
+      "offset": 8796,
+      "count": 3
+    },
+    "DEVELOP_COMPLEMENT": {
+      "offset": 8799,
+      "count": 1
+    },
+    "GRAIN_DENSITY_PROFILE": {
+      "offset": 8800,
+      "count": 3
+    },
+    "OUTPUT_SHOULDER": {
+      "offset": 8803,
+      "count": 1
+    },
+    "OUTPUT_GAMUT": {
+      "offset": 8804,
+      "count": 4
+    },
+    "SAMPLED_CURVES": {
+      "offset": 8808,
+      "count": 9219
+    },
+    "ADJACENCY_MODEL": {
+      "offset": 18027,
+      "count": 1
+    },
+    "ADJACENCY_SECONDARY_SIGMA": {
+      "offset": 18028,
+      "count": 1
+    },
+    "ADJACENCY_SECONDARY_RADIUS": {
+      "offset": 18029,
+      "count": 1
+    },
+    "CHROMATIC_FRINGE_AMOUNT": {
+      "offset": 18030,
+      "count": 1
+    },
+    "CHROMATIC_FRINGE_SIGMA": {
+      "offset": 18031,
+      "count": 1
+    },
+    "CHROMATIC_FRINGE_RADIUS": {
+      "offset": 18032,
+      "count": 1
+    },
+    "RECORD_INPUT": {
+      "offset": 18033,
+      "count": 1
+    },
+    "GRAIN_REVERSAL_PROFILE": {
+      "offset": 18034,
+      "count": 2
+    }
+  }
+}

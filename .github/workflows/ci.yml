@@ -21,8 +21,12 @@ jobs:
       # Package.swift detects Halide while resolving targets, before any SwiftPM build.
       - run: brew install halide
       - run: python3 tools/check-source-boundary.py
+      - run: python3 tools/generate-config-layout.py --check
+      - run: python3 tools/generate-aot-variants.py --check
       - run: swift run fotufilm-controls --check
       - run: python3 tools/test-source-boundary.py
+      - run: python3 tools/test-config-layout.py
+      - run: python3 tools/test-aot-variants.py
       - run: python3 tools/test-film-profiles.py
       - run: python3 tools/test-compile-if-needed.py
       - run: python3 tools/test-aot-release.py
@@ -30,6 +34,7 @@ jobs:
       - run: python3 tools/test-compiled-cache.py
       - run: python3 tools/test-test-engine.py
       - run: bash tools/test-grain-coverage.sh
+      - run: bash tools/test-stages.sh
       # The runner isolates the largest Metal grain test, then audits the complete suite.
       - name: Complete release tests
         run: python3 tools/test-engine.py --workers 2

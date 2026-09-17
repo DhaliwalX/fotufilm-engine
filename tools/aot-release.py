@@ -49,9 +49,8 @@ def halide_revision() -> str:
 
 
 def flags() -> dict[str, str]:
-    # Keep eligibility and the local cache in sync with every generator override.
-    source = (ROOT / "tools/generate_halide_ios.cpp").read_text()
-    source += (ROOT / "Sources/FotufilmHalide/FotufilmHalideMetal.cpp").read_text()
+    source = "".join((ROOT / name).read_text() for name in sorted(generator_inputs())
+                     if not name.endswith("FotufilmCompiledCache.h"))
     names = re.findall(r'"(FOTUFILM_[A-Z_0-9]+)"', source)
     return {name: os.environ[name] for name in sorted(set(names)) if os.environ.get(name)}
 

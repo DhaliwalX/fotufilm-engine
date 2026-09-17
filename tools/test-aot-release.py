@@ -22,8 +22,8 @@ class ReleaseTests(unittest.TestCase):
     def test_host_shim_includes_every_registered_variant(self):
         # Swift tests use JIT kernels; only Apple AOT builds compile this shim.
         # Catch missing declarations on the lightweight pull-request job too.
-        header = (aot.ROOT / "Sources/FotufilmHalide/include/FotufilmHalide.h").read_text()
-        shim = (aot.ROOT / "Sources/FotufilmHalide/FotufilmHalideIOS.cpp").read_text()
+        header = (aot.ROOT / "Sources/FotufilmHalide/include/FotufilmAotVariants.h").read_text()
+        shim = (aot.ROOT / "Sources/FotufilmHalide/FotufilmHalideIOSVariants.h").read_text()
         variants = set(re.findall(r"^\s+X\((\w+),", header, re.MULTILINE))
         includes = set(re.findall(r'^#include "fotufilm_halide_ios_(\w+)\.h"',
                                   shim, re.MULTILINE))

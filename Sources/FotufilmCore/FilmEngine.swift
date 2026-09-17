@@ -480,7 +480,7 @@ public struct FilmEngineInvocation {
     public let halationPixelRadii: [Int32]
 
     /// Sample points the Boolean grain path averages per pixel; mirrors `kBooleanSamplesPerAxis`
-    /// squared in `FotufilmHalideShared.h`.
+    /// squared in `FotufilmHalide/Stages/Grain.h`.
     static let discSamplesPerPixel: Float = 9
 
     /// Per-layer density amplitudes for the Boolean grain path.

@@ -99,7 +99,7 @@ final class ExposureDomainTests: XCTestCase {
             "0.025777047", "0.974222953",
         ]
         for file in [
-            "Sources/FotufilmHalide/FotufilmHalideShared.h",
+            "Sources/FotufilmHalide/Stages/Exposure.h",
             "Sources/FotufilmCore/ColorScience.swift",
         ] {
             let source = try String(
