@@ -128,7 +128,7 @@ final class CrystalGrainTests: XCTestCase {
         XCTAssertEqual(binOffset, Int(FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE) + 2)
         XCTAssertEqual(lambdaOffset, binOffset + 3 * CrystalGrainModel.binCount * 4)
         XCTAssertEqual(printOffset, lambdaOffset + 3 * CrystalGrainModel.binCount * CrystalGrainModel.samples)
-        XCTAssertEqual(FilmEngineInvocation.configurationCount, printOffset + 4)
+        XCTAssertEqual(FilmEngineInvocation.configurationCount, printOffset + 6)
         for slot in binOffset..<printOffset {
             XCTAssertEqual(plain.configuration[slot], 0)
         }
