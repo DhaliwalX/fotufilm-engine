@@ -65,7 +65,7 @@ class LayoutTests(unittest.TestCase):
         self.assertTrue(any("moved" in problem for problem in problems), problems)
 
         resized = copy.deepcopy(SCHEMA)
-        resized["fields"][-1]["count"] = 1
+        resized["fields"][-1]["count"] = 99
         problems = layout.check_lock(layout.lock_record(*layout.resolve(resized)[1:]), previous)
         self.assertTrue(any("moved" in problem or "shrank" in problem for problem in problems),
                         problems)
