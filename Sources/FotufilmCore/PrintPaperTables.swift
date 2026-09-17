@@ -232,7 +232,7 @@ extension PrintPaper {
         toe: -1.541, toeWidth: 0.16, shoulder: -1.182, shoulderWidth: 0.12)
 
     /// Fixed lab-scan profile solved from Portra 400. Regenerate with
-    /// `FOTUFILM_STOCKS=stocks-private fotufilm --dump-labscan-reference portra400` after changing
+    /// `FOTUFILM_STOCKS=<calibrated stock directory> fotufilm --dump-labscan-reference portra400` after changing
     /// the reference stock, scan sensitivities, or balance solve. `labScanReferenceMidRatio` is
     /// log10(red/green, blue/green) at mid-grey; `labScanReferenceBalance` is the printing balance.
     static let labScanReferenceMidRatio = SIMD2<Float>(0.5609019, -0.444564)

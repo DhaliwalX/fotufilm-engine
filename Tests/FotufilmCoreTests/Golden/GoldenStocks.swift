@@ -21,13 +21,19 @@ enum GoldenStocks {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
 
+    /// The published catalogue always takes part; a calibrated stock directory joins it when
+    /// `FOTUFILM_STOCKS` names one, the same variable the engine's own loader honours.
     static var directories: [(GoldenStore.Visibility, URL)] {
-        [(.published,
-          repositoryRoot.appendingPathComponent("Sources/FotufilmCore/Stocks",
-                                                isDirectory: true)),
-         (.calibrated,
-          repositoryRoot.appendingPathComponent("stocks-private",
-                                                isDirectory: true))]
+        let published = repositoryRoot.appendingPathComponent("Sources/FotufilmCore/Stocks",
+                                                              isDirectory: true)
+        var list: [(GoldenStore.Visibility, URL)] = [(.published, published)]
+        if let configured = ProcessInfo.processInfo.environment["FOTUFILM_STOCKS"] {
+            let calibrated = URL(fileURLWithPath: configured, isDirectory: true)
+            if calibrated.standardizedFileURL != published.standardizedFileURL {
+                list.append((.calibrated, calibrated))
+            }
+        }
+        return list
     }
 
     static var all: [Entry] {

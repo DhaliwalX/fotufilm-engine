@@ -48,8 +48,7 @@ call-site inspection, format checks, builds, and rendering regression tests.
   OFX C++ syntax checks, and shell syntax checks passed.
 - Installer-copy checks covered nested paths, apostrophes, replacement, failed
   source copying, and staging cleanup. The authorization AppleScript compiled.
-- Source-boundary and Starter-pack regression checks passed. Changed public-page
-  links resolve locally.
+- Starter-pack regression checks passed. Changed public-page links resolve locally.
 
 The packaged plugin harness was not completed: its AOT build requires generating
 189 kernel variants. A JIT-linked substitute cannot exercise the plugin's AOT
