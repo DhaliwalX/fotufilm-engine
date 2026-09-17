@@ -58,6 +58,17 @@ class VariantTableTests(unittest.TestCase):
                     best = (extra, other)
             self.assertEqual(best[0], 0, f"{name} is never the narrowest match; {best[1]} is")
 
+    def test_every_grain_laying_donor_variant_has_a_disc_twin(self):
+        self.assertEqual(self.table.missing_donor_disc_twins(), [])
+        schema = copy.deepcopy(SCHEMA)
+        schema["variants"] = [v for v in schema["variants"] if v["name"] != "color_float_donor_disc"]
+        with self.assertRaisesRegex(ValueError, "color_float_donor"):
+            aot.Table(schema)
+        # Spans that never lay grain need no twin.
+        names = [name for name, _, _ in self.table.variants]
+        self.assertNotIn("color_head_donor_disc", names)
+        self.assertNotIn("negative_grainless_donor_disc", names)
+
     def test_checked_in_outputs_are_current(self):
         self.assertEqual(aot.HEADER.read_text(), aot.render_header(self.table))
         self.assertEqual(aot.SHIM_INCLUDES.read_text(), aot.render_shim_includes(self.table))

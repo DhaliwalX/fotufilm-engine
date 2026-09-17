@@ -46,6 +46,23 @@ class Table:
         self.exact_bits = sum(self.resolve(t) for t in schema["axes"]["exact"])
         if self.stage_bits & self.exact_bits:
             raise ValueError("A bit cannot be both coverable and exact")
+        missing = self.missing_donor_disc_twins()
+        if missing:
+            raise ValueError("Donor variants that lay grain need a _disc twin, because the crystal "
+                             "grain model rides the disc family on every material: "
+                             + ", ".join(missing))
+
+    def missing_donor_disc_twins(self):
+        """Names of grain-laying donor variants with no variant serving the same mask plus DISC_GRAIN.
+
+        The mottle twins are exempt: the crystal population suppresses the grain-size mixture, so a
+        frame never asks for the disc and mottle bits together."""
+        donor, grain, disc = self.bits["DONOR_LAYER"], self.bits["GRAIN"], self.bits["DISC_GRAIN"]
+        mottle = self.bits["GRAIN_MOTTLE"]
+        masks = {mask for _, mask, _ in self.variants}
+        return [name for name, mask, _ in self.variants
+                if mask & donor and mask & grain and not mask & (disc | mottle)
+                and (mask | disc) not in masks]
 
     def resolve(self, token):
         if token in self.spans:
