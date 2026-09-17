@@ -121,7 +121,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// Reference's graded styles normalise a slide to SDR the way a scanner does, and the gain
     /// rides the paper slots so no table is rebuilt per frame. Nothing images the film — there is
     /// still no enlarger and no print MTF — and an integral print is already a print.
-    func levelsPositive(for stock: FilmStock, digitalReference: DigitalReferenceStyle) -> Bool {
+    public func levelsPositive(for stock: FilmStock, digitalReference: DigitalReferenceStyle) -> Bool {
         self == .screen && stock.isReversal && !stock.isReflectionPrint
             && digitalReference.usesGradedCurve
     }

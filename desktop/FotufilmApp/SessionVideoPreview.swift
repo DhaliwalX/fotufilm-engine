@@ -472,7 +472,7 @@ final class VideoPreviewViewController: SessionViewController {
             vibrance = options.vibrance
             grain = options.grainScale
             switch options.grainModel {
-            case .clumpField: discGrain = false
+            case .clumpField, .crystals: discGrain = false
             case .discs: discGrain = true
             }
             halation = options.halationScale
