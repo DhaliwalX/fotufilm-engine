@@ -1474,13 +1474,34 @@ public:
             Expr clump = clump_grain(
                 configuration_, channel, modulation, grain_field(x, y, layer),
                 use_mottle ? mottle_field(x, y, layer) : Expr());
-            Expr disc;
+            Expr disc, crystal;
             if (use_discs) {
                 disc = disc_grain(configuration_, density, position.net,
                                   x, y, channel, origin_x_, origin_y_, seed_);
+                // The crystal population, as in the CPU schedule: one stored count field per
+                // size bin, blurred to its cloud within the radius sized for the coarsest.
+                // Counts are stored in full precision — a pixel can hold hundreds.
+                std::vector<Func> fields;
+                for (int bin = 0; bin < FOTUFILM_CRYSTAL_GRAIN_BINS; ++bin) {
+                    const std::string tag = std::to_string(bin) + suffix;
+                    Func counts("frame_crystal_counts_" + tag);
+                    counts(x, y, channel) = crystal_latent_count(
+                        configuration_, x + origin_x_, y + origin_y_, seed_, channel, bin,
+                        crystal_lambda(configuration_, channel, bin, position.amount), approximate_);
+                    Func counts_view = store_frame(counts, half_store, 3);
+                    fields.push_back(gpu_gaussian(
+                        counts_view,
+                        crystal_bin_field(configuration_, 0, bin, 0),
+                        crystal_bin_field(configuration_, 1, bin, 0),
+                        crystal_bin_field(configuration_, 2, bin, 0),
+                        grain_radius_, width_, height_, half_store,
+                        "frame_crystal_field_" + tag, 3));
+                }
+                crystal = crystal_grain(configuration_, channel, fields, x, y);
             }
-            grained(x, y, channel) = density(x, y, channel) + selected_grain(
-                configuration_(FOTUFILM_CONFIG_GRAIN_MODE) != 0.0f, clump, disc);
+            grained(x, y, channel) = selected_developed_density(
+                Halide::cast<int32_t>(configuration_(FOTUFILM_CONFIG_GRAIN_MODE) + 0.5f),
+                density(x, y, channel), clump, disc, crystal);
             developed = grained;
         }
 
@@ -1560,9 +1581,24 @@ public:
 
         Func paper_curve = paper_curve_table(
             configuration_, "frame_paper_curve" + suffix, gpu_device_api(), approximate_);
-        Expr paper_x = paper_activation(configuration_, paper_curve, 0, relative(0));
-        Expr paper_y = paper_activation(configuration_, paper_curve, 1, relative(1));
-        Expr paper_z = paper_activation(configuration_, paper_curve, 2, relative(2));
+        auto on_paper = [&](int record) {
+            Expr activation = paper_activation(configuration_, paper_curve, record,
+                                               relative(record));
+            if (feature_mask & FOTUFILM_FRAME_DISC_GRAIN) {
+                // The crystal grain model's print stage, as `PrintPipeline` lays it: the
+                // paper's own crystals developed where the negative's light fell, on the
+                // frame's seed and this tile's origin.
+                activation = activation + paper_grain_expr(
+                    configuration_, record,
+                    pixel_hash(x + origin_x_, y + origin_y_, seed_,
+                               kCrystalPaperStreamBase + (monochrome ? 0 : record)),
+                    activation, approximate_);
+            }
+            return activation;
+        };
+        Expr paper_x = on_paper(0);
+        Expr paper_y = on_paper(1);
+        Expr paper_z = on_paper(2);
 
         auto printed = [&](Expr channel_index) {
             Expr through_paper = packed_luts_

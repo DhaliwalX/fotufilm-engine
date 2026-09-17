@@ -10,6 +10,12 @@ enum {
     FOTUFILM_TONE_GRID_CELLS = FOTUFILM_TONE_GRID_EDGE * FOTUFILM_TONE_GRID_EDGE,
     FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES = 1024,
     FOTUFILM_SAMPLED_CURVE_STRIDE = 1 + 3 * FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES,
+    /// Crystal size bins per record in the crystal grain model: coated sublayers from the fastest,
+    /// coarsest crystals down to the slowest, finest.
+    FOTUFILM_CRYSTAL_GRAIN_BINS = 4,
+    /// Samples per bin of the crystal grain model's developed-count table, against the record's
+    /// developed density as a fraction of its range, 0...1.
+    FOTUFILM_CRYSTAL_GRAIN_SAMPLES = 64,
 };
 
 enum {
@@ -202,6 +208,26 @@ enum {
     FOTUFILM_CONFIG_RECORD_INPUT = 18033,
     /// Dye reversal's [exponent p, shoulder density Ds], read under grain law 3.
     FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE = 18034,
+    /// Crystal grain model, read under grain mode 2: per record and size bin, [lattice blur sigma
+    /// of the bin's dye cloud in pixels, density one cloud adds to the pixel it lands in, the
+    /// sublayer's coupler pool in density (0: silver, no pool), the mean-dye factor: the sum over
+    /// the cloud's lattice taps of 1 - exp(-(density per cloud x tap) / pool), which by Campbell's
+    /// theorem gives the expected dye of the Poisson field as pool (1 - exp(-count x factor)); for
+    /// silver the density per cloud itself].
+    FOTUFILM_CONFIG_CRYSTAL_GRAIN_BIN = 18036,
+    /// Crystal grain model, exposure stage: per record and size bin, the mean count of latent
+    /// (developable) crystals per pixel against the record's developed density as a fraction of its
+    /// range, CRYSTAL_GRAIN_SAMPLES values from 0 to 1. Indexed by density rather than exposure so
+    /// the split renderer's density-in tail can lay it; the curve is monotone, so the two say the
+    /// same thing.
+    FOTUFILM_CONFIG_CRYSTAL_GRAIN_LAMBDA = 18084,
+    /// Crystal grain model, print stage: per record, how many of the print material's own crystals
+    /// one output pixel holds at full development (0 when nothing exposes a paper: a viewed
+    /// transparency, a scan, a screen, the negative itself), then the frame's hash seed as a float,
+    /// for the print pipeline whose arguments carry none. The paper's developed count is a Poisson
+    /// draw at the paper's developed fraction of that, and its departure from the mean is what the
+    /// paper's own grain adds.
+    FOTUFILM_CONFIG_CRYSTAL_PRINT_GRAIN = 18852,
 };
 
 enum {
@@ -298,8 +324,11 @@ enum {
     FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS_COUNT = 1,
     FOTUFILM_CONFIG_RECORD_INPUT_COUNT = 1,
     FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE_COUNT = 2,
+    FOTUFILM_CONFIG_CRYSTAL_GRAIN_BIN_COUNT = 48,
+    FOTUFILM_CONFIG_CRYSTAL_GRAIN_LAMBDA_COUNT = 768,
+    FOTUFILM_CONFIG_CRYSTAL_PRINT_GRAIN_COUNT = 4,
 };
 
-enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18036 };
+enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18856 };
 
 #endif
