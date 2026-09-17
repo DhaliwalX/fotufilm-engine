@@ -41,7 +41,8 @@ extension EditorControlField {
             return .bespoke { $0.grainMottleShare != nil }
         case .mottleOverride, .mottleShare:
             return .unstored("the Mottle menu carries the share")
-        case .grainModel: return .flag(\.discGrain)
+        case .grainModel:
+            return .bespoke { $0.grainModel != .clumpField }
         case .grainAnimation:
             return .unstored("a still has no timeline")
         case .seed:
@@ -228,6 +229,13 @@ extension EditState {
         case .curve:
             return curve(of: control.field).map { .curve($0) }
         case .menu, .takeover:
+            if control.field == .grainModel {
+                switch grainModel {
+                case .clumpField: return .choice(0)
+                case .discs: return .choice(1)
+                case .crystals: return .choice(2)
+                }
+            }
             return nil
         }
     }
@@ -256,6 +264,7 @@ extension EditState {
         if field == .digitalReference { digitalReference = .default; return }
         if field == .printFrame { printFrame = .none; return }
         if field == .halationReturn { halationReturnRatio = nil; return }
+        if field == .grainModel { grainModel = .clumpField; return }
         guard let control = EditorControlCatalogue.control(field) else { return }
         switch field.access {
         case .number, .derived, .optionalNumber:

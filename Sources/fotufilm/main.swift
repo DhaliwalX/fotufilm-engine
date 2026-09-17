@@ -1127,13 +1127,11 @@ if let formatID = flags["--format"] {
     }
 }
 if let model = flags["--grain-model"] {
-    switch model {
-    case "clump": options.grainModel = .clumpField
-    case "discs": options.grainModel = .discs
-    case "crystals": options.grainModel = .crystals
-    default:
+    if let resolved = GrainModel.named(model) {
+        options.grainModel = resolved
+    } else {
         FileHandle.standardError.write(Data(
-            "unknown grain model '\(model)'; expected clump, discs or crystals\n".utf8))
+            "unknown grain model '\(model)'; expected standard/clump, particle/discs or organic/crystals\n".utf8))
         exit(2)
     }
 }

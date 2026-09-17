@@ -783,12 +783,32 @@
     {
       "availability" : "film",
       "binding" : "discGrain",
+      "choices" : [
+        {
+          "detail" : "Fast calibrated RMS grain",
+          "id" : "clump",
+          "label" : "Standard",
+          "value" : 0
+        },
+        {
+          "detail" : "Discrete silver grains under magnification",
+          "id" : "discs",
+          "label" : "Particle",
+          "value" : 1
+        },
+        {
+          "detail" : "Physical dye clouds and paper crystals",
+          "id" : "crystals",
+          "label" : "Organic Crystals",
+          "value" : 2
+        }
+      ],
       "commandLineFlag" : "--grain-model",
       "commandLineGeneric" : false,
-      "commandLineHelp" : "clump (default), discs or crystals. `discs` lays Boolean discs at the film's clump radius, scaled onto its published granularity, instead of a blurred clump field: the texture survives enlargement, saturates where discs overlap, and only differs once a disc covers a pixel. `crystals` develops the crystal population read off the film's own curve: Poisson counts of developed crystals per size class at every pixel, each laying its dye cloud from its sublayer's coupler pool, so the grain is sparse and coarse where little developed and a fine dense haze where most did, with the sheet's granularity at its read density. Both cost about 5x the pixels and a one-off minute of pipeline build",
+      "commandLineHelp" : "standard/clump (default), particle/discs, or organic/crystals. `particle` lays Boolean discs at the film's clump radius, scaled onto its published granularity, instead of a blurred clump field: the texture survives enlargement, saturates where discs overlap, and only differs once a disc covers a pixel. `organic`/`crystals` develops the crystal population read off the film's own curve: Poisson counts of developed crystals per size class at every pixel, each laying its dye cloud from its sublayer's coupler pool, with paper grain in the print stage.",
       "commandLinePlaceholder" : "<m>",
-      "detail" : "Draw individual grains when they are large enough to be visible.",
-      "documentation" : "Enables discrete tabular grain disc rendering where emulsion grain clumps resolve at output pixels. The command line and host plugins can also choose Crystals, which develops the film's crystal population read off its own curve.",
+      "detail" : "Choose how film grain is formed across the emulsion.",
+      "documentation" : "Selects the film grain simulation method: Standard (fast calibrated RMS noise), Particle (discrete Boolean discs resolving under magnification on silver stocks), or Organic Crystals (physically simulated dye clouds and paper crystals formed from the exposure).",
       "drives" : [
 
       ],
@@ -801,25 +821,25 @@
           {
             "detail" : "",
             "id" : "clump",
-            "label" : "Clump Field",
+            "label" : "Standard",
             "value" : 0
           },
           {
             "detail" : "",
             "id" : "discs",
-            "label" : "Discs",
+            "label" : "Particle",
             "value" : 1
           },
           {
             "detail" : "",
             "id" : "crystals",
-            "label" : "Crystals",
+            "label" : "Organic Crystals",
             "value" : 2
           }
         ],
         "composed" : false,
         "group" : "grainAdvanced",
-        "hint" : "Disc grain is available on silver-image stocks and requires Reference rendering, selected automatically. Subpixel grain uses the clump field; coarse mottle is suppressed where discs render. Crystals develops the film's own crystal population — sparse coarse clouds where little developed, a fine dense haze where most did — on any stock, in Reference rendering.",
+        "hint" : "Standard uses the calibrated clump field. Particle renders discrete Boolean discs under magnification. Organic Crystals develops the film's own crystal population — sparse coarse dye clouds where little developed, a fine dense haze where most did — with photographic paper crystals.",
         "kind" : "choice",
         "label" : "Grain Model",
         "ofxName" : "grainModel",
@@ -832,16 +852,13 @@
         "value" : 0,
         "zeroLeavesEngineDefault" : false
       },
-      "kind" : "toggle",
+      "kind" : "menu",
       "omitted" : {
-        "finalcut" : "not yet offered; discs need Reference rendering",
+        "finalcut" : "not yet offered; discs and crystals need Reference rendering",
         "web" : "reshapes the sealed pack rather than a configuration slot"
       },
-      "persistedKey" : "discGrain",
-      "restingOn" : false,
       "scope" : "edit",
       "section" : "filmGrain",
-      "storedEncoding" : "same",
       "surfaces" : [
         "app",
         "desktop",
@@ -849,7 +866,7 @@
         "resolve",
         "cli"
       ],
-      "title" : "Disc Grain"
+      "title" : "Grain Model"
     },
     {
       "availability" : "film",

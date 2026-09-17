@@ -454,7 +454,7 @@ final class VideoPreviewViewController: SessionViewController {
         let printer: PrinterProfile?
         let exposure, kelvin, tint, highlights, shadows: Float
         let saturation, vibrance, grain, halation, couplers, print: Float
-        let discGrain: Bool
+        let grainModel: GrainModel
         let halationModel: HalationModel
         let halationReturnRatio: Float?
         let estimatedHalation: Bool
@@ -471,10 +471,7 @@ final class VideoPreviewViewController: SessionViewController {
             saturation = options.saturation
             vibrance = options.vibrance
             grain = options.grainScale
-            switch options.grainModel {
-            case .clumpField, .crystals: discGrain = false
-            case .discs: discGrain = true
-            }
+            grainModel = options.grainModel
             halation = options.halationScale
             halationReturnRatio = options.halationReturnRatio
             halationModel = options.halationModel

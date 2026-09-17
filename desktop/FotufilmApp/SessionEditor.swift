@@ -1057,8 +1057,23 @@ final class DesktopEditorViewController: SessionViewController {
 
     @objc func rerollGrain(_ sender: Any?) { model.edit.rerollGrain() }
 
-    @objc func toggleDiscGrain(_ sender: Any?) {
-        AppSettings.shared.discGrainEnabled.toggle()
+    @objc func setGrainModelStandard(_ sender: Any?) {
+        setGrainModel(.clumpField)
+    }
+
+    @objc func setGrainModelParticle(_ sender: Any?) {
+        setGrainModel(.discs)
+    }
+
+    @objc func setGrainModelOrganic(_ sender: Any?) {
+        setGrainModel(.crystals)
+    }
+
+    private func setGrainModel(_ grainModel: GrainModel) {
+        if model.isOpen {
+            model.edit.grainModel = grainModel
+        }
+        AppSettings.shared.grainModel = grainModel
     }
 
     /// The annular halation shapes, app-wide like disc grain: shape is a property of the film
@@ -1386,9 +1401,18 @@ extension DesktopEditorViewController: NSMenuItemValidation {
             return model.canReset && !model.isExporting
         case #selector(rerollGrain(_:)):
             return model.isOpen
-        case #selector(toggleDiscGrain(_:)):
-            item.state = AppSettings.shared.discGrainEnabled ? .on : .off
-            return true
+        case #selector(setGrainModelStandard(_:)):
+            let current = model.isOpen ? model.edit.grainModel : AppSettings.shared.grainModel
+            item.state = current == .clumpField ? .on : .off
+            return !model.isExporting
+        case #selector(setGrainModelParticle(_:)):
+            let current = model.isOpen ? model.edit.grainModel : AppSettings.shared.grainModel
+            item.state = current == .discs ? .on : .off
+            return !model.isExporting
+        case #selector(setGrainModelOrganic(_:)):
+            let current = model.isOpen ? model.edit.grainModel : AppSettings.shared.grainModel
+            item.state = current == .crystals ? .on : .off
+            return !model.isExporting
         case #selector(toggleEstimatedHalation(_:)):
             item.state = AppSettings.shared.estimatedHalationEnabled ? .on : .off
             return true

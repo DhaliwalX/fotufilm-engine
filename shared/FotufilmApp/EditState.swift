@@ -321,12 +321,17 @@ struct EditState: Equatable {
     /// The share of the published granularity's *variance* carried by the coarse mottle field
     /// under the sharp grain, 0...0.9, or nil for whatever the stock's own sheet states.
     var grainMottleShare: Double? = nil
-    /// Whether grain develops as resolved discs rather than as the clump field.
+    /// Which grain model develops grain across the emulsion.
     ///
     /// Seeded from the app-wide setting, as the gauge is: an edit begun after Settings › Advanced ›
     /// Film Model was changed starts where that setting stands, and then travels with the
     /// photograph instead of following the device.
-    var discGrain = AppSettings.storedDiscGrainEnabled
+    var grainModel: GrainModel = AppSettings.storedGrainModel
+    /// Backwards compatibility forwarder for legacy discGrain toggle.
+    var discGrain: Bool {
+        get { grainModel == .discs }
+        set { grainModel = newValue ? .discs : .clumpField }
+    }
     var halation = 1.0
     /// Nil follows the loaded film's returned/direct ratio.
     var halationReturnRatio: Double? = nil
