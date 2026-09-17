@@ -3918,20 +3918,80 @@
           "value" : 1
         },
         {
+          "detail" : "The developed transparency in a card slide mount.",
+          "id" : "slideMount",
+          "label" : "Slide Mount",
+          "value" : 2
+        },
+        {
           "detail" : "The selected photographic paper, in a 4 × 6 inch print.",
           "id" : "paper",
-          "label" : "Paper Border",
-          "value" : 2
+          "label" : "Paper Border 4 × 6",
+          "value" : 3
+        },
+        {
+          "detail" : "The selected photographic paper, in a 5 × 7 inch print.",
+          "id" : "paper5x7",
+          "label" : "Paper Border 5 × 7",
+          "value" : 4
+        },
+        {
+          "detail" : "The selected photographic paper, in an 8 × 10 inch print.",
+          "id" : "paper8x10",
+          "label" : "Paper Border 8 × 10",
+          "value" : 5
+        },
+        {
+          "detail" : "The selected photographic paper, in a 5 × 5 inch print.",
+          "id" : "paper5x5",
+          "label" : "Paper Border 5 × 5",
+          "value" : 6
+        },
+        {
+          "detail" : "The film rebate printed through a filed-out negative carrier: a black line inside the paper margin.",
+          "id" : "carrier",
+          "label" : "Carrier Border",
+          "value" : 7
         },
         {
           "detail" : "A dark, uneven edge with soft wear and a white paper margin.",
           "id" : "emulsion",
           "label" : "Emulsion Border",
-          "value" : 3
+          "value" : 8
+        },
+        {
+          "detail" : "A clean white margin around the photograph.",
+          "id" : "mount",
+          "label" : "White Mount",
+          "value" : 9
+        },
+        {
+          "detail" : "A clean black margin around the photograph.",
+          "id" : "darkMount",
+          "label" : "Black Mount",
+          "value" : 10
+        },
+        {
+          "detail" : "A square 1 : 1 canvas for posting, the photograph inside a white margin.",
+          "id" : "socialSquare",
+          "label" : "Square Post",
+          "value" : 11
+        },
+        {
+          "detail" : "A 4 : 5 portrait canvas for posting, the photograph inside a white margin.",
+          "id" : "socialPortrait",
+          "label" : "Portrait Post",
+          "value" : 12
+        },
+        {
+          "detail" : "A 9 : 16 story canvas, the photograph inside a white margin.",
+          "id" : "socialStory",
+          "label" : "Story",
+          "value" : 13
         }
       ],
-      "detail" : "Choose a film, paper, or worn emulsion border.",
-      "documentation" : "Choose Film Border for the selected film gauge, Paper Border for a 4 × 6 inch print, or Emulsion Border for a dark, uneven edge on a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports.",
+      "detail" : "Choose a film, slide mount, paper, carrier, emulsion, plain mount, or posting canvas.",
+      "documentation" : "Choose Film Border for the selected film gauge, Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for a dark, uneven edge on a white margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports.",
       "drives" : [
 
       ],

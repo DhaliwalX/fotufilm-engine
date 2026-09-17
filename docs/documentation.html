@@ -99,33 +99,53 @@
 </table>
 <h3>Print</h3>
 <p>In the iPhone photo editor, open <strong>Print → Output → Frame</strong> and choose
-              <strong>None</strong>, <strong>Film Border</strong>, <strong>Paper Border</strong>, or <strong>Emulsion Border</strong>.
+              <strong>None</strong>, <strong>Film Border</strong>, <strong>Slide Mount</strong>, a <strong>Paper Border</strong>
+              at 4 × 6, 5 × 7, 8 × 10, or 5 × 5 inches, <strong>Carrier Border</strong>, <strong>Emulsion Border</strong>,
+              <strong>White Mount</strong>, <strong>Black Mount</strong>, or a <strong>Square Post</strong>,
+              <strong>Portrait Post</strong>, or <strong>Story</strong> canvas. The frames stand on a
+              horizontally scrolled strip of framed previews, like the film strip.
               Film Border follows the stock’s native format, or an explicit Film Gauge choice, with
               physical aperture proportions, perforations, and the stock’s own base color. Negative stocks
               show their developed negative on a standard light box, including the color mask; reversal
-              and instant film stay positive. None, Paper Border, and Emulsion Border restore the selected output medium.
+              and instant film stay positive. Every choice other than Film Border and Slide Mount restores the selected output medium.
               Documented film-edge names and identification codes follow the stock and gauge, with
               dark lettering on negatives and light lettering on reversal film. The typeface and edge
               exposure are approximations; frame numbers represent a sample position, not capture metadata.
               Unknown markings and production serials are omitted. Paper fronts remain unlettered.
               Sheet film uses the stock’s documented
               notch pattern where available; unknown codes are omitted. Paper Border uses the selected
-              Ektacolor Edge, ENDURA Premier, or Crystal Archive paper as a 4 × 6 inch lustre print.
+              Ektacolor Edge, ENDURA Premier, or Crystal Archive paper as a 4 × 6, 5 × 7, 8 × 10, or
+              square 5 × 5 inch lustre print; the crop is centred on the sheet, never stretched to it.
               Its base follows the paper model and Viewing Light. It is inactive for screen, scans,
               negatives, and cinema print film. Crops are fitted inside the physical aperture without
               stretching or resampling the developed image. Negative film is delivered in SDR. Frames are saved
               with the edit, included in Undo, Redo, and photo exports, and add to export dimensions.
               Frames are offered in the iPhone photo editor, not video.</p>
+<p><strong>Slide Mount</strong> shows a reversal transparency in a plain 2 × 2 inch card mount
+              (a 70 mm square mount for 120), with the typical mounted aperture for the gauge. The crop is
+              fitted inside the aperture without cropping; any rebate showing beside it is the stock’s own
+              maximum density. It is offered for slide film in 35mm and 120 and views the transparency on
+              the light box like Film Border. <strong>Carrier Border</strong> is the darkroom look of a negative
+              enlarged through a filed-out carrier: the clear rebate prints as a dark line at the paper’s
+              maximum density, inside the white margin of an 8 × 10 inch print. It needs a negative stock
+              on Ektacolor Edge, ENDURA Premier, or Crystal Archive. <strong>White Mount</strong> and
+              <strong>Black Mount</strong> are plain margins that follow the crop on any film and output.
+              <strong>Square Post</strong>, <strong>Portrait Post</strong>, and <strong>Story</strong> fit the
+              photograph, uncropped and centred, inside a display-white 1 : 1, 4 : 5, or 9 : 16 canvas with a 5%
+              margin, ready to post from any output including the Digital Reference.</p>
 <p><strong>Emulsion Border</strong> adds a dark, uneven band with a softly worn outer edge,
               subtle brown traces, and a white paper margin. It follows the photo’s crop and keeps
               the chosen output medium. Reflection outputs use the selected paper’s base and Viewing Light;
               other outputs use a neutral white mount. This is a styled border, with no specific film
               gauge, notch code, or manufacturer lettering. Its texture stays consistent between
-              previews and exports, and the photograph’s pixels remain unchanged.</p>
+              previews and exports. The band’s inner edge fades softly and unevenly into the
+              photograph, as a lifted emulsion’s picture dissolves into its dark rim rather than
+              ending at a cut line; the reach is at most 4.5% of the short side and the photograph
+              beyond it is unchanged.</p>
 <table>
 <thead><tr><th>Control</th><th>Description</th><th>Default</th></tr></thead>
 <tbody data-controls="print">
-  <tr><td>Frame</td><td>Choose Film Border for the selected film gauge, Paper Border for a 4 × 6 inch print, or Emulsion Border for a dark, uneven edge on a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports.</td><td>None</td></tr>
+  <tr><td>Frame</td><td>Choose Film Border for the selected film gauge, Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for a dark, uneven edge on a white margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports.</td><td>None</td></tr>
   <tr><td>Output Medium</td><td>Selects the print paper, projection print, scan, display reference or the negative itself.</td><td>Digital Reference</td></tr>
   <tr><td>Viewing Illuminant</td><td>Changes the viewing lamp without re-timing the developed print; digital media ignore it.</td><td>Medium reference</td></tr>
   <tr><td>Channel Contrast Match</td><td>Optional digital channel-contrast correction. Off by default to preserve measured slopes; this is not a physical printer-light control.</td><td>0%</td></tr>

@@ -1272,7 +1272,7 @@ public enum EditorControlCatalogue {
     private static let print: [EditorControl] = [
         EditorControl(
             .printFrame, title: "Frame",
-            detail: "Choose a film, paper, or worn emulsion border.",
+            detail: "Choose a film, slide mount, paper, carrier, emulsion, plain mount, or posting canvas.",
             section: .printPaper,
             kind: .menu(.fixed(PrintFrame.allCases.enumerated().map {
                 EditorMenuChoice(Double($0.offset), $0.element.name,
@@ -1285,7 +1285,7 @@ public enum EditorControlCatalogue {
                       .finalcut: "The host owns output framing.",
                       .web: "Frame finishing is offered in the iPhone photo editor.",
                       .cli: "Frame finishing is offered in the iPhone photo editor."],
-            documentation: "Choose Film Border for the selected film gauge, Paper Border for a 4 × 6 inch print, or Emulsion Border for a dark, uneven edge on a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports."),
+            documentation: "Choose Film Border for the selected film gauge, Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for a dark, uneven edge on a white margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports."),
         EditorControl(
             .paper, title: "Output Medium",
             detail: "Choose how the film is printed, scanned, or viewed.",

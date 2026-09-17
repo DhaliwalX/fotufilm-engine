@@ -546,7 +546,7 @@ struct EditState: Equatable {
     var frameConfiguration: PrintFrameConfiguration {
         PrintFrameConfiguration(frame: printFrame, formatID: formatID,
                                 stockID: stockID, paper: resolvedPaper,
-                                viewingKelvin: printFrame == .film ? nil : printLightKelvin.map(Float.init),
+                                viewingKelvin: printFrame.viewsTransparency ? nil : printLightKelvin.map(Float.init),
                                 negativeViewing: .lightBox)
     }
 
@@ -562,7 +562,7 @@ struct EditState: Equatable {
     /// Use this derived state for photo previews, detail measurements and exports together.
     var frameRenderState: EditState {
         let slideInFilmFrame = stock?.isReversal == true && resolvedPaper.isPositivePaper
-            && frameConfiguration.frame == .film
+            && frameConfiguration.frame.viewsTransparency
         guard filmFrameNegative != nil || slideInFilmFrame else { return self }
         var rendered = self
         rendered.paper = slideInFilmFrame ? .screen : .negative
