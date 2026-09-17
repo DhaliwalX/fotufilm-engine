@@ -1583,7 +1583,7 @@ public:
             configuration_, "frame_paper_curve" + suffix, gpu_device_api(), approximate_);
         auto on_paper = [&](int record) {
             Expr activation = paper_activation(configuration_, paper_curve, record,
-                                               relative(record));
+                                               relative(record), approximate_);
             if (feature_mask & FOTUFILM_FRAME_DISC_GRAIN) {
                 // The crystal grain model's print stage, as `PrintPipeline` lays it: the
                 // paper's own crystals developed where the negative's light fell, on the

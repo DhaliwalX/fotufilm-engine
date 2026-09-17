@@ -88,6 +88,9 @@ public struct FotufilmEngine {
         /// already include lens glare. Enable it for synthetic light or to model additional glare
         /// relative to the capture lens.
         public var flareScale: Float = 0
+        /// Uniform additive camera film preflash relative to metered mid-grey, 0...0.25 (0 = off).
+        /// Lifts shadow detail out of the emulsion toe and reduces shadow contrast without burning highlights.
+        public var cameraPreflash: Float = 0
         /// Strength of DIR coupler inhibition (0 disables inter-image effects, 1 is the calibrated
         /// stock). Creative overdrive above 1 is compressed so the 2 endpoint applies 1.5 physical
         /// doses rather than letting spatial inhibition grow without bound.
@@ -155,6 +158,10 @@ public struct FotufilmEngine {
         /// Optional simulated optical printer. Nil preserves the existing printing model.
         /// Applies only to enlarged reflection prints; exposure is separate from film exposure.
         public var printer: PrinterProfile? = nil
+        /// Uniform additive paper preflash relative to paper mid-exposure, 0...0.10 (0 = off).
+        /// Softens print highlight contrast and brings delicate highlights onto the paper curve
+        /// without fogging maximum black (D-max). Applies only to optical prints.
+        public var printerPreflash: Float = 0
         /// Where the developed image is finished. `nil` — the default — takes the medium the
         /// loaded stock was designed for, so a motion-picture camera negative reaches its release
         /// print stock and a still negative reaches the measured sheet, without the caller naming

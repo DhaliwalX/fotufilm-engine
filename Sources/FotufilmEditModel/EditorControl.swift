@@ -7,7 +7,7 @@ import FotufilmCore
 public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case exposure, warmth, tint, highlights, shadows, localTone
     case saturation, vibrance
-    case sceneLight, sceneLightKelvin
+    case sceneLight, sceneLightKelvin, cameraPreflash
 
     case stock, gauge, frameCoverage
     case grain, grainMottle, mottleOverride, mottleShare, grainModel, grainAnimation, seed
@@ -23,7 +23,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
 
     case paper, digitalReference, screenGrade, screenExposure, printFrame, printLight, enlarger, printCorrection,
          negativeViewing, gradeSpace
-    case printerEnabled, printerLamp, printerExposure, printerMagenta, printerYellow
+    case printerEnabled, printerLamp, printerExposure, printerMagenta, printerYellow, printerPreflash
     case gradeShadowsWarmth, gradeShadowsTint, gradeShadowsLevel
     case gradeMidtonesWarmth, gradeMidtonesTint, gradeMidtonesLevel
     case gradeHighlightsWarmth, gradeHighlightsTint, gradeHighlightsLevel

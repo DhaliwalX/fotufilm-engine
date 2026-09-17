@@ -176,9 +176,15 @@ inline Halide::Expr paper_midpoint(Halide::ImageParam &configuration,
 /// Midpoint slots include any uniform printer exposure shift; the calibration and film
 /// densities remain fixed. Shared by CPU and GPU, including packed-LUT AOT variants.
 inline Halide::Expr paper_exposure(Halide::ImageParam &configuration,
-                                   Halide::Expr channel, Halide::Expr relative) {
+                                   Halide::Expr channel, Halide::Expr relative,
+                                   bool approximate = false) {
+    Halide::Expr flash = configuration(FOTUFILM_CONFIG_PRINTER_PREFLASH);
+    Halide::Expr flashed_rel = fs_log10(
+        Halide::max(fs_pow10(relative, approximate) + flash, 1.0e-12f),
+        approximate);
+    Halide::Expr effective_rel = Halide::select(flash > 0.0f, flashed_rel, relative);
     return paper_midpoint(configuration, channel)
-        + configuration(FOTUFILM_CONFIG_MASKING + channel) * relative;
+        + configuration(FOTUFILM_CONFIG_MASKING + channel) * effective_rel;
 }
 
 /// The paper's three records, indexed (sample, channel). The bases are not
