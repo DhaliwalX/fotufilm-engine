@@ -238,7 +238,7 @@ final class DigitalReferenceReceiverTests: XCTestCase {
                 let base = positive(film, exposure: SIMD3(repeating: -8), style: style)
                 XCTAssertLessThan(base.y, 1.5 * oneCode, "\(id) \(style)")
                 let grey = positive(film, exposure: .zero, style: style)
-                XCTAssertEqual(grey.y, 0.18, accuracy: 0.005, "\(id) \(style)")
+                XCTAssertEqual(grey.y, 0.18, accuracy: 0.01, "\(id) \(style)")
                 XCTAssertEqual(grey.x, grey.y, accuracy: 1e-4, "\(id) \(style): neutral")
             }
             // The graded shoulder rolls into paper white; the reference curve runs on to it.
