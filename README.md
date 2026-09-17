@@ -301,8 +301,8 @@ and dye sum remain inconsistent with a non-negative additive base, so its neutra
 spectral calibration remains uncertain.
 
 
-`SOURCE_ASSETS.json` records where assets came from and their file hashes. Before
-adding data or images, run `python3 tools/check-source-boundary.py`.
+`SOURCE_ASSETS.json` records where assets came from and their file hashes. Record the
+source and hash of new data and images there.
 
 To convert a scan, choose **File → Import Scanned Negative…**, sample its clear film
 border and preview the positive. Import it to adjust all four crop corners independently.
