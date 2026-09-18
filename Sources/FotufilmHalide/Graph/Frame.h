@@ -100,9 +100,6 @@ struct Backend {
     virtual Func frame_mean(Func light, int channels, Expr width, Expr height,
                             const std::string &name) = 0;
 
-    virtual Func fused_mtf(Func light, Func flare_mean, Expr on_flare,
-                           const std::string &name) { return Func(); }
-
     virtual Expr film_curve(Halide::ImageParam &configuration, Func table, Expr channel,
                             Expr log_exposure) {
         return sample_film_curve(configuration, table, log_exposure, channel);
@@ -310,54 +307,49 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
         Func pre_mtf = materialised
             ? light : store_light(widened(light, "light_luma"), Store::Light, light_channels);
         materialised = true;
-        Func fused = b.fused_mtf(pre_mtf, flare_mean, on_flare, name("mtf_field_ext"));
-        if (fused.defined()) {
-            light = select_stage(on_mtf, fused, pre_mtf, x, y, c, name("mtf_selected"));
-        } else {
-            Expr mtf_radius = Halide::max(
-                p.mtf_radius_0_, Halide::max(p.mtf_radius_1_, p.mtf_radius_2_));
-            Func per_layer = b.gaussian(
-                pre_mtf, p.mtf_sigma_0_, p.mtf_sigma_1_, p.mtf_sigma_2_, mtf_radius,
-                p.width_, p.height_, name("mtf"), light_channels,
-                merged_luma ? Expr(p.mtf_luma_sigma_) : Expr(),
-                merged_luma ? Expr(p.mtf_luma_radius_) : Expr());
-            Func combined = per_layer;
-            if (use_mtf_luma) {
-                Func secondary = b.gaussian(
-                    pre_mtf,
-                    Halide::max(configuration(FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA), 0.151f),
-                    Halide::max(configuration(FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA + 1), 0.151f),
-                    Halide::max(configuration(FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA + 2), 0.151f),
-                    p.mtf_luma_radius_, p.width_, p.height_, name("mtf_secondary"), 3);
-                Func mixed(name("mtf_mixed"));
-                Expr primary_share = configuration(FOTUFILM_CONFIG_MTF_PRIMARY_SHARE + c);
-                mixed(x, y, c) = primary_share * per_layer(x, y, c)
-                    + (1.0f - primary_share) * secondary(x, y, c);
-                Func mixed_view = b.store(mixed, Store::MtfMixed, 3);
-                Expr luma_blurred;
-                if (merged_luma) {
-                    luma_blurred = per_layer(x, y, 3);
-                } else {
-                    Func luma_direct(name("mtf_luma_direct"));
-                    luma_direct(x, y, c) = record_neutral(pre_mtf, x, y);
-                    Func luma_view = b.store(luma_direct, Store::MtfLumaDirect, 1);
-                    Func blurred = b.gaussian(
-                        luma_view, p.mtf_luma_sigma_, p.mtf_luma_sigma_, p.mtf_luma_sigma_,
-                        p.mtf_luma_radius_, p.width_, p.height_, name("mtf_luma"), 1);
-                    luma_blurred = blurred(x, y, 0);
-                }
-                Func separated(name("mtf_separated"));
-                separated(x, y, c) = mtf_luma_mix(
-                    configuration, mixed_view(x, y, c), record_neutral(mixed_view, x, y),
-                    luma_blurred);
-                Func separated_view = b.store(separated, Store::MtfSeparated, 3);
-                combined = select_stage(on_mtf_luma, separated_view, per_layer, x, y, c,
-                                        name("mtf_luma_selected"));
+        Expr mtf_radius = Halide::max(
+            p.mtf_radius_0_, Halide::max(p.mtf_radius_1_, p.mtf_radius_2_));
+        Func per_layer = b.gaussian(
+            pre_mtf, p.mtf_sigma_0_, p.mtf_sigma_1_, p.mtf_sigma_2_, mtf_radius,
+            p.width_, p.height_, name("mtf"), light_channels,
+            merged_luma ? Expr(p.mtf_luma_sigma_) : Expr(),
+            merged_luma ? Expr(p.mtf_luma_radius_) : Expr());
+        Func combined = per_layer;
+        if (use_mtf_luma) {
+            Func secondary = b.gaussian(
+                pre_mtf,
+                Halide::max(configuration(FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA), 0.151f),
+                Halide::max(configuration(FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA + 1), 0.151f),
+                Halide::max(configuration(FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA + 2), 0.151f),
+                p.mtf_luma_radius_, p.width_, p.height_, name("mtf_secondary"), 3);
+            Func mixed(name("mtf_mixed"));
+            Expr primary_share = configuration(FOTUFILM_CONFIG_MTF_PRIMARY_SHARE + c);
+            mixed(x, y, c) = primary_share * per_layer(x, y, c)
+                + (1.0f - primary_share) * secondary(x, y, c);
+            Func mixed_view = b.store(mixed, Store::MtfMixed, 3);
+            Expr luma_blurred;
+            if (merged_luma) {
+                luma_blurred = per_layer(x, y, 3);
+            } else {
+                Func luma_direct(name("mtf_luma_direct"));
+                luma_direct(x, y, c) = record_neutral(pre_mtf, x, y);
+                Func luma_view = b.store(luma_direct, Store::MtfLumaDirect, 1);
+                Func blurred = b.gaussian(
+                    luma_view, p.mtf_luma_sigma_, p.mtf_luma_sigma_, p.mtf_luma_sigma_,
+                    p.mtf_luma_radius_, p.width_, p.height_, name("mtf_luma"), 1);
+                luma_blurred = blurred(x, y, 0);
             }
-            Func selected = select_stage(on_mtf, combined, pre_mtf, x, y, c,
-                                         name("mtf_selected"));
-            light = b.store(selected, Store::MtfSelected, 3);
+            Func separated(name("mtf_separated"));
+            separated(x, y, c) = mtf_luma_mix(
+                configuration, mixed_view(x, y, c), record_neutral(mixed_view, x, y),
+                luma_blurred);
+            Func separated_view = b.store(separated, Store::MtfSeparated, 3);
+            combined = select_stage(on_mtf_luma, separated_view, per_layer, x, y, c,
+                                    name("mtf_luma_selected"));
         }
+        Func selected = select_stage(on_mtf, combined, pre_mtf, x, y, c,
+                                     name("mtf_selected"));
+        light = b.store(selected, Store::MtfSelected, 3);
     }
 
     if (in.light_out) {

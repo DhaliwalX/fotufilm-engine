@@ -69,9 +69,6 @@ final class WideGamutSceneTests: XCTestCase {
         let luma = ["0.2627002", "0.6779981", "0.0593017"]
         try assertContains("Sources/FotufilmHalide/Stages/Exposure.h", ingest + luma)
         try assertContains("Sources/FotufilmCore/ColorScience.swift", ingest + luma)
-        try assertContains(
-            "Sources/FotufilmHalide/FotufilmMetalGrain.mm",
-            ["kRecordNeutralWeight = 1.0f / 3.0f"])
     }
 
     // MARK: - Colour beyond P3 exposes the emulsion

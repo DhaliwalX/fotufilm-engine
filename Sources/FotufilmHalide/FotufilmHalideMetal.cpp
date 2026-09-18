@@ -428,7 +428,7 @@ private:
 };
 
 /// The GPU schedule's placement and precision: which frames are stored in half, the decimated
-/// pyramids, the extern Metal kernels, and the analytic curves and draws the realtime path takes.
+/// pyramids, and the analytic curves and draws the realtime path takes.
 struct GpuPolicy {
     bool half_store = false;
     bool approximate = false;
@@ -436,8 +436,6 @@ struct GpuPolicy {
     bool windowed = false;
     bool tabulated_curves = false;
     bool table_grain = false;
-    bool extern_mtf = false;
-    bool extern_grain = false;
     bool measure_flare = false;
     bool fields_in = false;
     bool monochrome = false;
@@ -471,11 +469,6 @@ public:
         const bool half = policy_.half_store;
         switch (point) {
         case Store::Light:
-            if (policy_.extern_mtf && !light_packed_.defined()) {
-                StoredFrame stored = store_frame_packed(values, channels, branch);
-                light_packed_ = stored.packed;
-                return remember(values, stored.view);
-            }
             return remember(values, store_frame(values, half, channels, branch));
         case Store::DonorLog:
         case Store::DonorActivation:
@@ -697,72 +690,6 @@ public:
         return mean;
     }
 
-    Func fused_mtf(Func, Func flare_mean, Expr on_flare, const std::string &name) override {
-        if (!policy_.extern_mtf) return Func();
-        Var channel("channel");
-        if (!flare_mean.defined()) {
-            Func zero_mean(name + "_zero_mean");
-            zero_mean(channel) = 0.0f;
-            zero_mean.compute_root().bound(channel, 0, 4).unroll(channel)
-                .gpu_single_thread(gpu_device_api());
-            flare_mean = zero_mean;
-        }
-        Expr mtf_radius = Halide::max(
-            p_.mtf_radius_0_, Halide::max(p_.mtf_radius_1_, p_.mtf_radius_2_));
-        Expr secondary_radius = p_.mtf_luma_radius_;
-        Expr extent = Halide::max(mtf_radius, p_.mtf_luma_radius_);
-        Var k(name + "_k");
-        Expr sigma = Halide::select(
-            channel == 0, p_.mtf_sigma_0_,
-            channel == 1, p_.mtf_sigma_1_,
-            channel == 2, p_.mtf_sigma_2_,
-            channel == 3, p_.mtf_luma_sigma_,
-            channel == 4,
-                Halide::max(configuration_(FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA), 0.151f),
-            channel == 5,
-                Halide::max(configuration_(FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA + 1), 0.151f),
-            Halide::max(configuration_(FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA + 2), 0.151f));
-        Expr denominator = 2.0f * sigma * sigma;
-        RDom normalization_taps(-extent, extent * 2 + 1, name + "_norm_taps");
-        Expr window = Halide::select(channel < 3, mtf_radius,
-                                     channel == 3, p_.mtf_luma_radius_,
-                                     secondary_radius);
-        Expr total = Halide::sum(
-            Halide::select(
-                Halide::abs(normalization_taps.x) <= window,
-                Halide::exp(-Halide::cast<float>(normalization_taps.x * normalization_taps.x)
-                            / denominator),
-                0.0f),
-            name + "_norm_sum");
-        Func weights(name + "_weights");
-        weights(k, channel) = Halide::cast(
-            Float(16),
-            Halide::select(
-                Halide::abs(k) <= window,
-                Halide::exp(-Halide::cast<float>(k * k) / denominator) / total,
-                0.0f));
-        gpu_table(weights, k, channel, 7, name + "_weights");
-        Expr flare_amount = Halide::select(
-            on_flare, configuration_(FOTUFILM_CONFIG_FLARE), 0.0f);
-        Func field(name);
-        std::vector<Halide::ExternFuncArgument> extern_args = {
-            light_packed_, flare_mean, weights,
-            Expr(p_.width_), Expr(p_.height_), flare_amount,
-            Expr(configuration_(FOTUFILM_CONFIG_MTF_LUMA_SHARE)),
-            Expr(configuration_(FOTUFILM_CONFIG_MTF_PRIMARY_SHARE)),
-            Expr(configuration_(FOTUFILM_CONFIG_MTF_PRIMARY_SHARE + 1)),
-            Expr(configuration_(FOTUFILM_CONFIG_MTF_PRIMARY_SHARE + 2)),
-            extent};
-        field.define_extern("fotufilm_metal_mtf_field", extern_args, Float(16), 3,
-                            Halide::NameMangling::C, gpu_device_api());
-        field.compute_root();
-        Var x("x"), y("y");
-        Func widened(name + "_widened");
-        widened(x, y, channel) = Halide::cast<float>(field(x, y, channel));
-        stored_.insert(widened.name());
-        return widened;
-    }
-
     Expr film_curve(ImageParam &configuration, Func table, Expr channel,
                     Expr log_exposure) override {
         return policy_.tabulated_curves
@@ -787,7 +714,6 @@ public:
         const int noise_channels = monochrome ? 1 : 3;
         const bool half = policy_.half_store;
         Func noise(prefix + "poisson_noise" + suffix);
-        Func extern_field;
         if (!policy_.table_grain) {
             Expr shared_draw = monochrome
                 ? normal_sample(x + p.origin_x_, y + p.origin_y_, p.seed_, kGrainSharedLayer,
@@ -805,64 +731,28 @@ public:
                 p.grain_lambda_, prefix + "poisson_cdf" + suffix, gpu_device_api());
             Func normal_table = normal_inverse_cdf(prefix + "normal_cdf" + suffix,
                                                    gpu_device_api());
-            if (policy_.extern_grain) {
-                Var k(prefix + "grain_ext_k" + suffix);
-                Expr sigma = Halide::select(
-                    channel == 0, configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER),
-                    channel == 1, configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 1),
-                    configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 2));
-                Expr denominator = 2.0f * sigma * sigma;
-                RDom normalization_taps(-p.grain_radius_, p.grain_radius_ * 2 + 1,
-                                        prefix + "grain_ext_norm_taps" + suffix);
-                Func weights(prefix + "grain_ext_weights" + suffix);
-                Expr total = Halide::sum(
-                    Halide::exp(-Halide::cast<float>(normalization_taps.x
-                                                     * normalization_taps.x) / denominator),
-                    prefix + "grain_ext_norm_sum" + suffix);
-                weights(k, channel) = Halide::cast(
-                    Float(16), Halide::exp(-Halide::cast<float>(k * k) / denominator) / total);
-                gpu_table(weights, k, channel, noise_channels,
-                          prefix + "grain_ext_weights" + suffix);
-                Func field(prefix + "grain_field_ext" + suffix);
-                std::vector<Halide::ExternFuncArgument> extern_args = {
-                    poisson_table, normal_table, weights,
-                    Expr(p.width_), Expr(p.height_), Expr(p.seed_), Expr(p.grain_lambda_),
-                    Halide::clamp(configuration(FOTUFILM_CONFIG_GRAIN_CORRELATION), 0.0f, 1.0f),
-                    Expr(p.grain_radius_), Expr(p.origin_x_), Expr(p.origin_y_)};
-                field.define_extern("fotufilm_metal_grain_field", extern_args, Float(16), 3,
-                                    Halide::NameMangling::C, gpu_device_api());
-                field.compute_root();
-                Func widened(prefix + "grain_field" + suffix + "_widened");
-                widened(x, y, channel) = Halide::cast<float>(field(x, y, channel));
-                extern_field = widened;
-            } else {
-                Expr shared_draw = monochrome
-                    ? normal_sample_lut(normal_table, x + p.origin_x_, y + p.origin_y_,
-                                        p.seed_, kGrainSharedLayer)
-                    : poisson_sample_lut(poisson_table, normal_table, x + p.origin_x_,
-                                         y + p.origin_y_, p.seed_, p.grain_lambda_,
-                                         kGrainSharedLayer);
-                noise(x, y, channel) = monochrome
-                    ? shared_draw
-                    : grain_mix(configuration,
-                                poisson_sample_lut(poisson_table, normal_table,
-                                                   x + p.origin_x_, y + p.origin_y_,
-                                                   p.seed_, p.grain_lambda_, channel),
-                                shared_draw);
-            }
+            Expr shared_draw = monochrome
+                ? normal_sample_lut(normal_table, x + p.origin_x_, y + p.origin_y_,
+                                    p.seed_, kGrainSharedLayer)
+                : poisson_sample_lut(poisson_table, normal_table, x + p.origin_x_,
+                                     y + p.origin_y_, p.seed_, p.grain_lambda_,
+                                     kGrainSharedLayer);
+            noise(x, y, channel) = monochrome
+                ? shared_draw
+                : grain_mix(configuration,
+                            poisson_sample_lut(poisson_table, normal_table,
+                                               x + p.origin_x_, y + p.origin_y_,
+                                               p.seed_, p.grain_lambda_, channel),
+                            shared_draw);
         }
-        if (extern_field.defined()) {
-            fields.grain = extern_field;
-        } else {
-            Func noise_view = store_frame(noise, half, noise_channels);
-            fields.grain = gpu_gaussian(
-                noise_view,
-                configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER),
-                configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 1),
-                configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 2),
-                p.grain_radius_, width, height, half, prefix + "grain_field" + suffix,
-                noise_channels);
-        }
+        Func noise_view = store_frame(noise, half, noise_channels);
+        fields.grain = gpu_gaussian(
+            noise_view,
+            configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER),
+            configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 1),
+            configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 2),
+            p.grain_radius_, width, height, half, prefix + "grain_field" + suffix,
+            noise_channels);
         if (use_mottle) {
             Func mottle_noise(prefix + "mottle_noise" + suffix);
             if (!policy_.table_grain) {
@@ -942,7 +832,6 @@ private:
     ImageParam &configuration_;
     ImageParam &film_lut_;
     ImageParam &paper_lut_;
-    Func light_packed_;
     std::set<std::string> stored_;
 };
 
@@ -1047,16 +936,6 @@ public:
             });
         }
 
-        // The hand-written tile kernels stay realtime-only: their threadgroup design caps the
-        // radius (kMaxRadius/kMaxMtfRadius in FotufilmMetalGrain.mm) at what a video frame's
-        // px-per-mm can ask for, and a 48-100 MP still's enlargement factor sails past it. The
-        // still path takes the radius-unbounded Halide blurs instead.
-        //
-        // FOTUFILM_FRAME_TEXTURE is held out for a different reason: the extern folds the veiling
-        // glare into the MTF and takes both in half precision, where the flat development the
-        // mode differences against applies the glare in Halide. The two would then disagree by
-        // half's own rounding on every pixel — several parts in ten thousand of a mode whose
-        // whole claim is that everything but the spatial stages cancels.
         GpuPolicy policy;
         policy.half_store = fast(kStillFastHalfStore);
         policy.approximate = approximate_;
@@ -1070,14 +949,6 @@ public:
         // use the same seeded samples, rather than a different analytic approximation.
         policy.table_grain = gpu_device_api() == DeviceAPI::WebGPU
             || fast(kStillFastGrainTable);
-        policy.extern_mtf = realtime_ && !float_io_ && use_mtf && use_mtf_luma && !texture_
-            && metal_mtf_compute() && f16_blur_compute()
-            && gpu_device_api() == Halide::DeviceAPI::Metal;
-        // The extern kernel draws and blurs one field in a single Metal dispatch, which is
-        // what makes the realtime path fast. It has no second population, so the mixture asks
-        // for the Halide-scheduled blur instead.
-        policy.extern_grain = realtime_ && !float_io_ && metal_grain_compute()
-            && f16_blur_compute() && gpu_device_api() == DeviceAPI::Metal && !use_mottle;
         policy.measure_flare = measure_flare_;
         policy.fields_in = fields_in_;
         policy.monochrome = monochrome;
