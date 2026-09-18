@@ -958,12 +958,7 @@ public:
           density_out_((feature_mask & FOTUFILM_FRAME_DENSITY_OUT) != 0),
           density_in_((feature_mask & FOTUFILM_FRAME_DENSITY_IN) != 0),
           measure_flare_((feature_mask & FOTUFILM_FRAME_FLARE_MEASURE) != 0),
-          encode_out_((feature_mask & FOTUFILM_FRAME_ENCODE_OUT) != 0),
           no_film_((feature_mask & FOTUFILM_FRAME_NO_FILM) != 0),
-          output_transfer_shape_(
-              (feature_mask & FOTUFILM_FRAME_OUTPUT_LINEAR) ? 0
-              : (feature_mask & FOTUFILM_FRAME_OUTPUT_POWER) ? 1
-              : (feature_mask & FOTUFILM_FRAME_OUTPUT_LOG) ? 2 : -1),
           light_out_((feature_mask & FOTUFILM_FRAME_LIGHT_OUT) != 0),
           fields_in_((feature_mask & FOTUFILM_FRAME_FIELDS_IN) != 0),
           still_boost_(float_io_ && !realtime_ && approximate_),
@@ -1178,12 +1173,26 @@ public:
             display_linear(x, y, channel) = printed(x, y, channel);
         }
 
+        // Whether the host's delivery encode runs, and which transfer it takes, are the
+        // request's to say: the same pipeline delivers linear light or an encoded frame, and
+        // below the output is compiled once per answer so each is the graph it always was.
+        Expr on_encode = (runtime_features_ & FOTUFILM_FRAME_ENCODE_OUT) != 0;
+        Expr shape_linear = (runtime_features_ & FOTUFILM_FRAME_OUTPUT_LINEAR) != 0;
+        Expr shape_power = (runtime_features_ & FOTUFILM_FRAME_OUTPUT_POWER) != 0;
+        Expr shape_log = (runtime_features_ & FOTUFILM_FRAME_OUTPUT_LOG) != 0;
+        const bool encodes = float_io_ && !density_out_ && !light_out_;
         // Host delivery mixes all three channels. Materialize the float film result once so
         // the matrix and gamut fit do not inline the film/print calculation into every channel.
         // This is a float32 storage boundary, with no quantization or change to the film model.
-        if (float_io_ && encode_out_ && !light_out_) {
-            gpu_pointwise(final_linear, x, y, channel, 3);
+        // A linear delivery reads the film result directly and the pass is skipped — except in
+        // a windowed graph, whose output cannot be specialized (see below) and so reads the
+        // stored result on both arms rather than develop the frame twice.
+        Func delivered("frame_delivered" + suffix);
+        if (encodes) {
+            delivered(x, y, channel) = final_linear(x, y, channel);
+            gpu_pointwise(delivered, x, y, channel, 3);
         }
+        Func linear_delivery = windowed ? delivered : final_linear;
 
         Func output("frame_output" + suffix);
         Expr safe_channel = Halide::min(channel, 2);
@@ -1201,17 +1210,17 @@ public:
                 Float(32),
                 Halide::select(channel == 3, 1.0f,
                                light(x, y, safe_channel)));
-        } else if (float_io_ && encode_out_) {
-            // Apply the host output basis, shoulder, transfer, and premultiplication in the
+        } else if (float_io_) {
+            // Encoded: the host output basis, shoulder, transfer, and premultiplication in the
             // kernel. The mux lets `gpu_pointwise` unroll three channel transfers instead of
-            // evaluating twelve.
-            // Clamp print output before the matrix, matching the host path. Texture output remains
-            // scene light and preserves negative wide-gamut components.
-            auto delivered = [&](int index) {
-                return texture_ ? final_linear(x, y, index)
-                                : Halide::max(final_linear(x, y, index), 0.0f);
+            // evaluating twelve. Print output is clamped before the matrix, matching the host
+            // path; texture output remains scene light and preserves negative wide-gamut
+            // components.
+            auto stored = [&](int index) {
+                return texture_ ? delivered(x, y, index)
+                                : Halide::max(delivered(x, y, index), 0.0f);
             };
-            Expr r = delivered(0), g = delivered(1), b = delivered(2);
+            Expr r = stored(0), g = stored(1), b = stored(2);
             Expr alpha = input_(x, y, 3);
             // The host re-premultiplies whenever alpha is not one — including at zero, where the
             // pixel it returns is black rather than left alone.
@@ -1221,20 +1230,20 @@ public:
             auto encoded = [&](int row) {
                 Expr value = host_output_encode(
                     configuration_, r, g, b, row, realtime_,
-                    output_transfer_shape_);
+                    shape_linear, shape_power, shape_log);
                 return Halide::select(premultiply, value * alpha, value);
             };
-            output(x, y, channel) = Halide::mux(
-                channel, {encoded(0), encoded(1), encoded(2), alpha});
-        } else if (float_io_) {
-            // The browser receives the same unencoded linear float result as PrintPipeline.
-            // Preserve negative working-space components until its display conversion. Native
-            // print delivery keeps its existing floor; texture always preserves scene light.
-            Expr delivered = texture_ || gpu_device_api() == DeviceAPI::WebGPU
-                ? final_linear(x, y, safe_channel)
-                : Halide::max(final_linear(x, y, safe_channel), 0.0f);
-            output(x, y, channel) = Halide::select(
-                channel == 3, input_(x, y, 3), delivered);
+            // Linear: the browser receives the same unencoded linear float result as
+            // PrintPipeline. Preserve negative working-space components until its display
+            // conversion. Native print delivery keeps its existing floor; texture always
+            // preserves scene light.
+            Expr linear = texture_ || gpu_device_api() == DeviceAPI::WebGPU
+                ? linear_delivery(x, y, safe_channel)
+                : Halide::max(linear_delivery(x, y, safe_channel), 0.0f);
+            output(x, y, channel) = graph::gated(
+                on_encode,
+                Halide::mux(channel, {encoded(0), encoded(1), encoded(2), alpha}),
+                Halide::select(channel == 3, input_(x, y, 3), linear));
         } else {
             Func srgb("frame_srgb" + suffix);
             Expr shoulder_knee = Halide::select(
@@ -1285,8 +1294,12 @@ public:
         // the gamut-enabled branch can address rows past the circular allocation.
         // Keep one consumer loop for windowed graphs; host_output_encode's uniform
         // configuration select still skips fitting when it is disabled.
-        if (float_io_ && encode_out_ && !windowed) {
-            output.specialize(configuration_(FOTUFILM_CONFIG_OUTPUT_GAMUT) == 0.0f);
+        if (encodes && !windowed) {
+            for (Expr shape : {on_encode && shape_linear, on_encode && shape_power,
+                               on_encode && shape_log, on_encode}) {
+                output.specialize(shape)
+                    .specialize(configuration_(FOTUFILM_CONFIG_OUTPUT_GAMUT) == 0.0f);
+            }
         }
         pipeline_ = Pipeline(output);
 #if !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
@@ -1582,13 +1595,9 @@ private:
     /// Whether this variant works the veiling-glare mean out from the frame it is given rather
     /// than reading the host's. Only whole-frame callers may set it — see FOTUFILM_FRAME_FLARE_MEASURE.
     const bool measure_flare_;
-    const bool encode_out_;
     /// No film in the gate: the creative controls, the delivery basis and the grade, and nothing
     /// the emulsion would have done. See FOTUFILM_FRAME_NO_FILM.
     const bool no_film_;
-    /// Compile-time transfer arm for realtime host output, or -1 for the reference kernel's
-    /// coefficient-driven runtime choice.
-    const int output_transfer_shape_;
     /// The two halves of the two-pass striped render: return the post-MTF light as float, and
     /// develop from provided whole-frame halation grids. See FOTUFILM_FRAME_LIGHT_OUT/FIELDS_IN.
     const bool light_out_;

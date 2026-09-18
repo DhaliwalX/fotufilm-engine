@@ -38,12 +38,13 @@ inline Halide::Expr srgb_decode(Halide::Expr coded, bool approximate = false) {
         curve);
 }
 
-/// Host transfer for FOTUFILM_FRAME_ENCODE_OUT. Coefficient-driven transfer shapes avoid evaluating
-/// one GPU branch per colour space. Logarithmic coefficients include the change of base.
-inline Halide::Expr host_transfer_encode(Halide::ImageParam &configuration,
-                                         Halide::Expr value,
-                                         bool approximate = false,
-                                         int transfer_shape = -1) {
+/// Host transfer for FOTUFILM_FRAME_ENCODE_OUT, the shape given as an index: 0 linear, 1 power,
+/// 2 logarithmic. Logarithmic coefficients include the change of base. A constant index folds
+/// to its one arm; a runtime one evaluates every shape and selects, which is what the
+/// coefficient-driven reference kernel does.
+inline Halide::Expr host_transfer_encode_shaped(Halide::ImageParam &configuration,
+                                                Halide::Expr value, bool approximate,
+                                                Halide::Expr shape_index) {
     auto coefficient = [&](int index) {
         return configuration(FOTUFILM_CONFIG_OUTPUT_COEFFICIENTS + index);
     };
@@ -57,11 +58,37 @@ inline Halide::Expr host_transfer_encode(Halide::ImageParam &configuration,
         value <= coefficient(4),
         value * coefficient(0) + coefficient(3),
         coefficient(1) * fs_log(value + coefficient(5), approximate) + coefficient(2));
-    if (transfer_shape == 0) return value;
-    if (transfer_shape == 1) return power;
-    if (transfer_shape == 2) return logarithmic;
+    return Halide::select(shape_index == 0, value, shape_index == 1, power, logarithmic);
+}
+
+/// The coefficient-driven shape: the configuration names it.
+inline Halide::Expr host_transfer_shape(Halide::ImageParam &configuration) {
     Halide::Expr shape = configuration(FOTUFILM_CONFIG_OUTPUT_TRANSFER);
-    return Halide::select(shape < 0.5f, value, shape < 1.5f, power, logarithmic);
+    return Halide::select(shape < 0.5f, 0, shape < 1.5f, 1, 2);
+}
+
+/// Host transfer for FOTUFILM_FRAME_ENCODE_OUT. Coefficient-driven transfer shapes avoid evaluating
+/// one GPU branch per colour space; a compile-time `transfer_shape` keeps only that arm.
+inline Halide::Expr host_transfer_encode(Halide::ImageParam &configuration,
+                                         Halide::Expr value,
+                                         bool approximate = false,
+                                         int transfer_shape = -1) {
+    return host_transfer_encode_shaped(
+        configuration, std::move(value), approximate,
+        transfer_shape >= 0 ? Halide::Expr(transfer_shape)
+                            : host_transfer_shape(configuration));
+}
+
+/// `host_transfer_encode` with the shape named at run time: a pipeline compiled once per shape
+/// folds each of these to the one arm, and with none named takes the coefficient-driven choice.
+inline Halide::Expr host_transfer_encode(Halide::ImageParam &configuration,
+                                         Halide::Expr value, bool approximate,
+                                         Halide::Expr linear, Halide::Expr power,
+                                         Halide::Expr logarithmic) {
+    return host_transfer_encode_shaped(
+        configuration, std::move(value), approximate,
+        Halide::select(linear, 0, power, 1, logarithmic, 2,
+                       host_transfer_shape(configuration)));
 }
 
 /// The host's own transfer undone, applied to an arriving channel on its way into the engine —
@@ -108,11 +135,9 @@ inline Halide::Expr host_transfer_decode(Halide::ImageParam &parameters,
 ///
 /// The single definition of the step, shared by the fused GPU pipeline and the staged CPU one, so
 /// that a delivery cannot mean two things depending on which road developed it.
-inline Halide::Expr host_output_encode(Halide::ImageParam &configuration,
-                                       Halide::Expr r, Halide::Expr g,
-                                       Halide::Expr b, int row,
-                                       bool approximate = false,
-                                       int transfer_shape = -1) {
+inline Halide::Expr host_output_shouldered(Halide::ImageParam &configuration,
+                                           Halide::Expr r, Halide::Expr g,
+                                           Halide::Expr b, int row) {
     Halide::Expr host[3];
     for (int c = 0; c < 3; ++c) {
         host[c] = configuration(FOTUFILM_CONFIG_OUTPUT_MATRIX + 3 * c) * r
@@ -140,12 +165,31 @@ inline Halide::Expr host_output_encode(Halide::ImageParam &configuration,
         configuration(FOTUFILM_CONFIG_OUTPUT_GAMUT) == 0.0f || inside,
         host[row], fitted);
     Halide::Expr knee = configuration(FOTUFILM_CONFIG_OUTPUT_SHOULDER);
-    Halide::Expr shouldered = Halide::select(
+    return Halide::select(
         knee < 0.0f, in_host_primaries,
         display_shoulder(in_host_primaries,
                          Halide::clamp(knee, 0.0f, 1.0f)));
-    return host_transfer_encode(configuration, shouldered, approximate,
-                                transfer_shape);
+}
+
+inline Halide::Expr host_output_encode(Halide::ImageParam &configuration,
+                                       Halide::Expr r, Halide::Expr g,
+                                       Halide::Expr b, int row,
+                                       bool approximate = false,
+                                       int transfer_shape = -1) {
+    return host_transfer_encode(configuration,
+                                host_output_shouldered(configuration, r, g, b, row),
+                                approximate, transfer_shape);
+}
+
+inline Halide::Expr host_output_encode(Halide::ImageParam &configuration,
+                                       Halide::Expr r, Halide::Expr g,
+                                       Halide::Expr b, int row, bool approximate,
+                                       Halide::Expr linear, Halide::Expr power,
+                                       Halide::Expr logarithmic) {
+    return host_transfer_encode(configuration,
+                                host_output_shouldered(configuration, r, g, b, row),
+                                approximate, std::move(linear), std::move(power),
+                                std::move(logarithmic));
 }
 
 /// The print grade: lift, gamma and gain applied per channel.
