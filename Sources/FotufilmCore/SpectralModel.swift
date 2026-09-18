@@ -739,7 +739,6 @@ public enum SpectralRuntime {
                                activation.y * paperRanges[1],
                                activation.z * paperRanges[2]]
                 return transmissionRGB(density: density, dyes: paper.dyes,
-                                       flare: paper.viewingFlare,
                                        illuminant: viewingLight)
             }
         }
@@ -913,7 +912,7 @@ public enum SpectralRuntime {
             range = scanRange
             deliversRec709 = paper.deliversRec709
             let midpoint = curve.logExposure(
-                density: curve.dMin + paper.anchorDensity)
+                density: curve.dMin + paper.midDensity)
             let masking = stock.printingContrastScale(
                 correction: FotufilmEngine.Options().printCorrection, paper: paper)
             let filmRanges = stock.curves.map { $0.dMax - $0.dMin }
@@ -1845,19 +1844,17 @@ public enum SpectralRuntime {
     /// fourth capture layer would have to break, by putting an N-by-dye forming matrix in
     /// front of this sum rather than indexing straight through.
     static func transmissionRGB(density: [Float], dyes: [[Float]],
-                                flare: Float = 0,
                                 neutralDensity: Float = 0,
                                 illuminant: [Float]? = nil,
                                 densityOffset: [Float]? = nil) -> SIMD3<Float> {
         assert(density.count == dyes.count,
                "density must be dye-aligned: \(density.count) records, \(dyes.count) dyes")
         var spectrum = [Float](repeating: 0, count: SpectralGrid.count)
-        let scale = 1 / (1 + flare)
         for i in 0..<SpectralGrid.count {
             var d = neutralDensity
             for dye in 0..<dyes.count { d += density[dye] * dyes[dye][i] }
             if let densityOffset { d += densityOffset[i] }
-            spectrum[i] = (pow(10, -d) + flare) * scale
+            spectrum[i] = pow(10, -d)
         }
         guard let illuminant else {
             return SpectralGrid.toLinearDisplayP3(reflectance: spectrum)
@@ -2015,7 +2012,6 @@ public enum SpectralRuntime {
     /// analytic mirror cannot state different prints.
     struct PrintReceiver: Sendable {
         let dyes: [[Float]]
-        let flare: Float
         let viewingLight: [Float]?
         let unmix: PrintDyeUnmix?
 
@@ -2023,12 +2019,12 @@ public enum SpectralRuntime {
             guard let unmix else {
                 return SpectralRuntime.transmissionRGB(
                     density: [density.x, density.y, density.z], dyes: dyes,
-                    flare: flare, illuminant: viewingLight)
+                    illuminant: viewingLight)
             }
             let amounts = unmix.amounts(forStatusA: density)
             return SpectralRuntime.transmissionRGB(
                 density: [amounts.x, amounts.y, amounts.z], dyes: dyes,
-                flare: flare, illuminant: viewingLight)
+                illuminant: viewingLight)
         }
     }
 
@@ -2039,11 +2035,11 @@ public enum SpectralRuntime {
         let unmixes = !stock.isMonochrome && !paper.isScan
             && paper != .screen && !paper.isNegative
         guard unmixes else {
-            return PrintReceiver(dyes: paper.dyes, flare: paper.viewingFlare,
+            return PrintReceiver(dyes: paper.dyes,
                                  viewingLight: viewingLight, unmix: nil)
         }
         let unmix = PrintDyeUnmix(dyes: paper.analyticalDyes)
-        return PrintReceiver(dyes: paper.analyticalDyes, flare: paper.viewingFlare,
+        return PrintReceiver(dyes: paper.analyticalDyes,
                              viewingLight: viewingLight, unmix: unmix)
     }
 
@@ -2053,12 +2049,11 @@ public enum SpectralRuntime {
     private static let reflectionPrintDensityTrims: [PrintPaper: SIMD3<Float>] = {
         Dictionary(uniqueKeysWithValues:
             [PrintPaper.ektacolorEdge, .enduraPremier, .crystalArchive, .ilfochromeCPS1K, .ilfochromeCLM1K].map { paper in
-                let anchor = paper.anchorDensity
                 let light = referenceViewingLight(for: paper)
                 return (paper, solveReflectionPrintSetup(
-                    unmix: PrintDyeUnmix(dyes: paper.analyticalDyes), anchor: anchor,
+                    unmix: PrintDyeUnmix(dyes: paper.analyticalDyes), anchor: paper.midDensity,
                     target: SIMD3(repeating: pow(10, -paper.midDensity)),
-                    flare: paper.viewingFlare, illuminant: light))
+                    illuminant: light))
             })
     }()
 
@@ -2070,13 +2065,13 @@ public enum SpectralRuntime {
     /// to `printExposureMidpoints`; a real light adjustment translates log exposure and fades
     /// naturally in both toe and shoulder. Hunt, sections 14.16 and 16.2.
     private static func solveReflectionPrintSetup(unmix: PrintDyeUnmix, anchor: Float,
-                                 target: SIMD3<Float>, flare: Float,
+                                 target: SIMD3<Float>,
                                  illuminant: [Float]?) -> SIMD3<Float> {
         func printed(_ offset: SIMD3<Float>) -> SIMD3<Float> {
             let amounts = unmix.amounts(
                 forStatusA: SIMD3(repeating: anchor) + offset)
             return transmissionRGB(density: [amounts.x, amounts.y, amounts.z],
-                                   dyes: unmix.dyes, flare: flare,
+                                   dyes: unmix.dyes,
                                    illuminant: illuminant)
         }
         var offset = SIMD3<Float>(repeating: 0)
