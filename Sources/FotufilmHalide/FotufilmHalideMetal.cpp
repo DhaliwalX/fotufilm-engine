@@ -14,6 +14,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#if defined(__APPLE__) && !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
+#include <dlfcn.h>
+#include <objc/message.h>
+#include <objc/runtime.h>
+#endif
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -545,43 +551,66 @@ public:
                                   int channels) override {
         std::array<Expr, 3> scattered_at;
         const bool halation = ring_config_base >= 0;
+        const bool separate_weights = !halation || gpu_device_api() == DeviceAPI::WebGPU;
+        // A scale's spread read back at the pixel. The grid is addressed in *frame* cells and
+        // the sample position formed from the frame coordinate, whatever part of the frame this
+        // graph is developing: a ring tap's position is `frame + radius * direction`, and the
+        // rounding of that sum depends on the magnitude it is formed at, so a strip that formed
+        // it from its own local coordinate would land its taps a bit away from where the whole
+        // frame lands them. `grid_at` and `grid_valid` take frame cells; a grid built over a
+        // strip translates them by where its own cell lattice starts.
+        auto read_scale = [&](int scale_index, Expr stride,
+                              const std::function<Expr(Expr, Expr)> &grid_at,
+                              const std::function<Expr(Expr, Expr)> &grid_valid) {
+            Expr sample_x = (Halide::cast<float>(x + origin_x) + 0.5f)
+                / Halide::cast<float>(stride) - 0.5f;
+            Expr sample_y = (Halide::cast<float>(y + origin_y) + 0.5f)
+                / Halide::cast<float>(stride) - 0.5f;
+            auto at = [&](Expr sx, Expr sy) { return grid_at(sx, sy); };
+            auto valid_sample = [&](Expr sx, Expr sy) { return grid_valid(sx, sy); };
+            Expr center = bilinear_sample(at, sample_x, sample_y, separate_weights)
+                / Halide::max(bilinear_sample(valid_sample, sample_x, sample_y,
+                                              separate_weights), 1.0e-12f);
+            if (halation && annular) {
+                Expr ring_radius = configuration_(ring_config_base + scale_index)
+                    / Halide::cast<float>(stride);
+                return annular_sample(at, sample_x, sample_y, ring_radius)
+                    / Halide::max(annular_sample(valid_sample, sample_x, sample_y,
+                                                 ring_radius), 1.0e-12f);
+            }
+            return center;
+        };
         if (halation && policy_.fields_in) {
+            // The grids arrive whole-frame behind the configuration: frame cells are their own
+            // cells, and a cell off the grid reads zero and weighs nothing, as a cell off a
+            // strip's grid does below.
             const int header_base = FOTUFILM_FRAME_CONFIGURATION_COUNT;
             const int data_base = header_base + 11;
             Expr config_last = configuration_.dim(0).extent() - 1;
             Expr grid_channel = Halide::min(channel, 2);
             for (int scale_index = 0; scale_index < 3; ++scale_index) {
-                Expr stride = strides[scale_index];
                 Expr grid_width = Halide::cast<int32_t>(
                     configuration_(header_base + 2 + scale_index * 3));
                 Expr grid_height = Halide::cast<int32_t>(
                     configuration_(header_base + 3 + scale_index * 3));
                 Expr grid_offset = Halide::cast<int32_t>(
                     configuration_(header_base + 4 + scale_index * 3));
-                auto at = [&](Expr cx, Expr cy) {
-                    Expr clamped_x = Halide::clamp(cx, 0, grid_width - 1);
-                    Expr clamped_y = Halide::clamp(cy, 0, grid_height - 1);
-                    Expr index = data_base + grid_offset
-                        + (clamped_y * grid_width + clamped_x) * 3 + grid_channel;
-                    return configuration_(Halide::clamp(index, 0, config_last));
+                auto inside = [&](Expr cx, Expr cy) {
+                    return cx >= 0 && cx < grid_width && cy >= 0 && cy < grid_height;
                 };
-                Expr sample_x = (Halide::cast<float>(x + origin_x) + 0.5f)
-                    / Halide::cast<float>(stride) - 0.5f;
-                Expr sample_y = (Halide::cast<float>(y + origin_y) + 0.5f)
-                    / Halide::cast<float>(stride) - 0.5f;
-                Expr x0 = Halide::cast<int32_t>(Halide::floor(sample_x));
-                Expr y0 = Halide::cast<int32_t>(Halide::floor(sample_y));
-                Expr fx = sample_x - Halide::floor(sample_x);
-                Expr fy = sample_y - Halide::floor(sample_y);
-                Expr center =
-                    (1.0f - fx) * ((1.0f - fy) * at(x0, y0) + fy * at(x0, y0 + 1))
-                    + fx * ((1.0f - fy) * at(x0 + 1, y0) + fy * at(x0 + 1, y0 + 1));
-                scattered_at[scale_index] = annular
-                    ? annular_sample(
-                        at, sample_x, sample_y,
-                        configuration_(ring_config_base + scale_index)
-                            / Halide::cast<float>(stride))
-                    : center;
+                auto grid_at = [&](Expr cx, Expr cy) {
+                    Expr index = data_base + grid_offset
+                        + (Halide::clamp(cy, 0, grid_height - 1) * grid_width
+                           + Halide::clamp(cx, 0, grid_width - 1)) * 3 + grid_channel;
+                    return Halide::select(
+                        inside(cx, cy), configuration_(Halide::clamp(index, 0, config_last)),
+                        0.0f);
+                };
+                auto grid_valid = [&](Expr cx, Expr cy) {
+                    return Halide::select(inside(cx, cy), 1.0f, 0.0f);
+                };
+                scattered_at[scale_index] = read_scale(scale_index, strides[scale_index],
+                                                       grid_at, grid_valid);
             }
             return scattered_at;
         }
@@ -600,21 +629,9 @@ public:
             Expr factor = stride / previous_stride;
             Expr offset_x = (phase_x - previous_phase_x) / previous_stride;
             Expr offset_y = (phase_y - previous_phase_y) / previous_stride;
-            Func bounded_source = constant_exterior(
-                previous, typed_zero(previous),
-                {{0, previous_width}, {0, previous_height}, {0, channels}});
-            RDom cell(0, factor, 0, factor, scale_name + "_cell");
-            Func down(scale_name + "_down");
-            Expr source_x = x * factor - offset_x + cell.x;
-            Expr source_y = y * factor - offset_y + cell.y;
-            Expr valid = Halide::select(source_x >= 0 && source_x < previous_width
-                                            && source_y >= 0 && source_y < previous_height,
-                                        1.0f, 0.0f);
-            Expr cell_count = Halide::sum(valid, scale_name + "_down_weight");
-            down(x, y, channel) = Halide::sum(
-                bounded_source(x * factor - offset_x + cell.x,
-                               y * factor - offset_y + cell.y, channel),
-                scale_name + "_down_sum") / Halide::max(cell_count, 1.0f);
+            Func down = gpu_decimate_level(previous, factor, offset_x, offset_y,
+                                           previous_width, previous_height, channels,
+                                           scale_name);
             Func down_view = store_frame(down, half, channels);
             if (gpu_device_api() != DeviceAPI::WebGPU) {
                 previous = down_view;
@@ -630,28 +647,19 @@ public:
             Func bounded_blur = constant_exterior(
                 blurred, typed_zero(blurred),
                 {{0, down_width}, {0, down_height}, {0, channels}});
-            Expr sample_x = (Halide::cast<float>(x + phase_x) + 0.5f)
-                / Halide::cast<float>(stride) - 0.5f;
-            Expr sample_y = (Halide::cast<float>(y + phase_y) + 0.5f)
-                / Halide::cast<float>(stride) - 0.5f;
-            auto valid_sample = [&](Expr sx, Expr sy) {
-                return Halide::select(sx >= 0 && sx < down_width
-                                          && sy >= 0 && sy < down_height, 1.0f, 0.0f);
+            // Where this strip's cell lattice starts, in frame cells: its first cell holds the
+            // frame rows from `origin - phase`, which is a whole number of cells in.
+            Expr grid_origin_x = (origin_x - phase_x) / stride;
+            Expr grid_origin_y = (origin_y - phase_y) / stride;
+            auto grid_at = [&](Expr cx, Expr cy) {
+                return bounded_blur(cx - grid_origin_x, cy - grid_origin_y, channel);
             };
-            auto at = [&](Expr sx, Expr sy) { return bounded_blur(sx, sy, channel); };
-            const bool separate_weights = !halation || gpu_device_api() == DeviceAPI::WebGPU;
-            Expr center = bilinear_sample(at, sample_x, sample_y, separate_weights)
-                / Halide::max(bilinear_sample(valid_sample, sample_x, sample_y,
-                                              separate_weights), 1.0e-12f);
-            if (halation && annular) {
-                Expr ring_radius = configuration_(ring_config_base + scale_index)
-                    / Halide::cast<float>(stride);
-                scattered_at[scale_index] = annular_sample(at, sample_x, sample_y, ring_radius)
-                    / Halide::max(annular_sample(valid_sample, sample_x, sample_y,
-                                                 ring_radius), 1.0e-12f);
-            } else {
-                scattered_at[scale_index] = center;
-            }
+            auto grid_valid = [&](Expr cx, Expr cy) {
+                Expr lx = cx - grid_origin_x, ly = cy - grid_origin_y;
+                return Halide::select(lx >= 0 && lx < down_width && ly >= 0 && ly < down_height,
+                                      1.0f, 0.0f);
+            };
+            scattered_at[scale_index] = read_scale(scale_index, stride, grid_at, grid_valid);
         }
         return scattered_at;
     }
@@ -1107,13 +1115,20 @@ public:
                                Halide::cast<float>(input_(x, y, 3)),
                                developed(x, y, safe_channel)));
         } else if (float_io_ && light_out_) {
-            // The post-MTF light, in the float preservation format the schedule itself uses, for
-            // the fields pipeline to build the halation pyramid from. The
-            // variant compiles no stage past this point, so everything below prices at nothing.
-            output(x, y, channel) = Halide::cast(
-                Float(32),
-                Halide::select(channel == 3, 1.0f,
-                               light(x, y, safe_channel)));
+            // The finest halation grid of this strip's post-MTF light: the light decimated by
+            // the first scale's stride on the frame's own cell lattice, exactly as the halation
+            // stage decimates it in a whole-frame develop, so the grid rows a light strip
+            // delivers are the rows of that develop's grid. The fields pipeline blurs them into
+            // the three scales; a strip that then develops from those fields reads the very
+            // numbers a staged develop reads from its own pyramid. The variant compiles no
+            // stage past the light, so everything below prices at nothing, and the light
+            // itself never leaves the device at full resolution.
+            Expr stride = halation_stride_0_;
+            Expr phase_x = origin_x_ % stride;
+            Expr phase_y = origin_y_ % stride;
+            Func grid = gpu_decimate_level(light, stride, phase_x, phase_y, width_, height_,
+                                           3, "frame_light_grid" + suffix);
+            output(x, y, channel) = grid(x, y, channel);
         } else if (float_io_) {
             // Encoded: the host output basis, shoulder, transfer, and premultiplication in the
             // kernel. The mux lets `gpu_pointwise` unroll three channel transfers instead of
@@ -1189,9 +1204,10 @@ public:
                 0.0f, coverage));
             output(x, y, channel) = Halide::select(channel == 3, alpha, color);
         }
-        output.output_buffer().dim(0).set_stride(4);
+        const int output_channels = light_out_ ? 3 : 4;
+        output.output_buffer().dim(0).set_stride(output_channels);
         output.output_buffer().dim(2).set_stride(1);
-        output.output_buffer().dim(2).set_bounds(0, 4);
+        output.output_buffer().dim(2).set_bounds(0, output_channels);
         if (windowed) {
             // The AOT shim checks the complete spatial reach before selecting this
             // graph. Global coordinates and the original boundary rules remain in
@@ -1207,7 +1223,7 @@ public:
                 stage.store_root().compute_at(output, window).fold_storage(y, kWindowStorageRows);
             }
         } else {
-            gpu_pointwise(output, x, y, channel, 4);
+            gpu_pointwise(output, x, y, channel, output_channels);
         }
         // Specialize only full-frame graphs. Halide's folding pass does not rewrite
         // the folded-buffer reads consistently across both consumer specializations:
@@ -1336,10 +1352,110 @@ public:
     }
 #endif
 
+    void release_fields() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!extended_configuration_.defined()) return;
+        configuration_.reset();
+        extended_configuration_ = Buffer<float>();
+        extended_configuration_floats_ = 0;
+        extended_configuration_id_ = 0;
+    }
+
     void prepare_luts(const float *exposure, const float *film, const float *paper,
                       int32_t dimension, uint64_t cache_id) {
         std::lock_guard<std::mutex> lock(mutex_);
         ensure_luts(exposure, film, paper, dimension, cache_id);
+    }
+
+    /// Where one run's pixels come from and go to. Either side is a host pointer, which Halide
+    /// copies across the bus, or a device handle — an MTLBuffer on Metal, a CUdeviceptr on CUDA
+    /// — the pipeline reads and writes in place. The input is `width` x `height` dense rows; the
+    /// output holds only the delivered window [out_x, out_x + out_columns) x [out_y, out_y +
+    /// out_rows) of it, dense, its buffer's mins placing it inside the input so bounds inference
+    /// computes each apron pixel through exactly the stages a delivered pixel reads it from. On a
+    /// LIGHT_OUT pipeline the window is in grid cells, and the output has three channels.
+    struct Tile {
+        const void *input_host = nullptr;
+        uint64_t input_handle = 0;
+        void *output_host = nullptr;
+        uint64_t output_handle = 0;
+        int32_t width = 0, height = 0;
+        /// The input's size when it is not the frame the origin and window describe — the
+        /// hybrid tail reads the head's density at the head's own size and lifts it in-kernel.
+        int32_t input_width = 0, input_height = 0;
+        int32_t out_x = 0, out_columns = 0, out_y = 0, out_rows = 0;
+        int32_t origin_x = 0, origin_y = 0;
+        const float *configuration = nullptr;
+        /// Floats behind the configuration proper — a FIELDS_IN frame's halation grids — and
+        /// the id the caller gives that frame's grids, so the tiles of one frame upload them
+        /// once.
+        int32_t configuration_floats = FOTUFILM_FRAME_CONFIGURATION_COUNT;
+        uint64_t configuration_id = 0;
+        /// Whether the extended configuration stays where it is, unchanged, until
+        /// `release_fields` — in which case the pipeline reads it in place rather than keeping a
+        /// copy the size of the frame's grids.
+        bool configuration_stable = false;
+        const float *exposure = nullptr, *film = nullptr, *paper = nullptr;
+        int32_t dimension = 0;
+        uint64_t cache_id = 0;
+        uint32_t seed = 0;
+        int32_t requested = 0;
+    };
+
+    template<typename PixelIn, typename PixelOut = PixelIn>
+    void run_tile(const Tile &tile) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        ensure_luts(tile.exposure, tile.film, tile.paper, tile.dimension, tile.cache_id);
+        const int32_t in_width = tile.input_width > 0 ? tile.input_width : tile.width;
+        const int32_t in_height = tile.input_height > 0 ? tile.input_height : tile.height;
+        const int32_t columns = tile.out_columns > 0 ? tile.out_columns : tile.width;
+        const int32_t rows = tile.out_rows > 0 ? tile.out_rows : tile.height;
+        const int output_channels = light_out_ ? 3 : 4;
+        Buffer<PixelIn> input_buffer = Buffer<PixelIn>::make_interleaved(
+            const_cast<PixelIn *>(static_cast<const PixelIn *>(tile.input_host)),
+            in_width, in_height, 4);
+        Buffer<PixelOut> output_buffer = Buffer<PixelOut>::make_interleaved(
+            static_cast<PixelOut *>(tile.output_host), columns, rows, output_channels);
+        if (tile.out_x != 0) output_buffer.translate(0, tile.out_x);
+        if (tile.out_y != 0) output_buffer.translate(1, tile.out_y);
+        const Target target = gpu_target();
+        const DeviceAPI api = gpu_device_api();
+        auto wrap = [&](auto &buffer, uint64_t handle) {
+            return (cached_
+                ? buffer.get()->device_wrap_native(cached_.device_interface(), handle)
+                : buffer.device_wrap_native(api, handle, target)) == 0;
+        };
+        auto detach = [&](auto &buffer) {
+            if (buffer.has_device_allocation()) buffer.device_detach_native();
+        };
+        if (tile.input_handle) {
+            if (!wrap(input_buffer, tile.input_handle)) {
+                throw Halide::RuntimeError("Unable to wrap caller device buffer");
+            }
+            input_buffer.set_device_dirty();
+        } else {
+            input_buffer.set_host_dirty();
+        }
+        if (tile.output_handle && !wrap(output_buffer, tile.output_handle)) {
+            detach(input_buffer);
+            throw Halide::RuntimeError("Unable to wrap caller device buffer");
+        }
+        try {
+            run(input_buffer, output_buffer, tile.width, tile.height, tile.configuration,
+                tile.seed, tile.requested, tile.origin_x, tile.origin_y,
+                tile.configuration_floats, tile.configuration_id, tile.configuration_stable);
+            if (tile.output_handle) output_buffer.device_sync();
+            else output_buffer.copy_to_host();
+        } catch (...) {
+            input_.reset();
+            if (tile.input_handle) detach(input_buffer);
+            if (tile.output_handle) detach(output_buffer);
+            throw;
+        }
+        // The parameter would otherwise keep the input's device copy alive until the next run.
+        input_.reset();
+        if (tile.input_handle) detach(input_buffer);
+        if (tile.output_handle) detach(output_buffer);
     }
 
     template<typename Pixel>
@@ -1349,54 +1465,33 @@ public:
                   int32_t dimension, uint64_t cache_id, uint32_t seed,
                   int32_t requested, int32_t origin_x = 0, int32_t origin_y = 0,
                   int32_t out_y = 0, int32_t out_rows = 0,
-                  int32_t configuration_floats = FOTUFILM_FRAME_CONFIGURATION_COUNT) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        ensure_luts(exposure, film, paper, dimension, cache_id);
-        Buffer<Pixel> input_buffer = Buffer<Pixel>::make_interleaved(
-            const_cast<Pixel *>(input), width, height, 4);
-        // A cropped output (`out_rows` > 0) holds only the delivered rows; its y-min places them
-        // inside the strip, so bounds inference computes each apron row through exactly the
-        // stages a delivered pixel reads it from. Same expressions over the same coordinates —
-        // the delivered pixels do not move. See the AOT shim's twin in FotufilmHalideIOS.cpp.
-        const int32_t rows = out_rows > 0 ? out_rows : height;
-        Buffer<Pixel> output_buffer = Buffer<Pixel>::make_interleaved(
-            output, width, rows, 4);
-        if (out_y != 0) output_buffer.translate(1, out_y);
-        input_buffer.set_host_dirty();
-        run(input_buffer, output_buffer, width, height, configuration, seed,
-            requested, origin_x, origin_y, configuration_floats);
-        output_buffer.copy_to_host();
-    }
-
-    /// `run_host` for a LIGHT_OUT pipeline: float scene rows in, float light rows out.
-    void run_host_light(const float *input, float *light_out,
-                        int32_t width, int32_t height, const float *configuration,
-                        const float *exposure, const float *film, const float *paper,
-                        int32_t dimension, uint64_t cache_id, uint32_t seed,
-                        int32_t requested, int32_t origin_x, int32_t origin_y,
-                        int32_t out_y, int32_t out_rows) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        ensure_luts(exposure, film, paper, dimension, cache_id);
-        Buffer<float> input_buffer = Buffer<float>::make_interleaved(
-            const_cast<float *>(input), width, height, 4);
-        const int32_t rows = out_rows > 0 ? out_rows : height;
-        Buffer<float> output_buffer = Buffer<float>::make_interleaved(
-            light_out, width, rows, 4);
-        if (out_y != 0) output_buffer.translate(1, out_y);
-        input_buffer.set_host_dirty();
-        run(input_buffer, output_buffer, width, height, configuration, seed,
-            requested, origin_x, origin_y);
-        output_buffer.copy_to_host();
+                  int32_t configuration_floats = FOTUFILM_FRAME_CONFIGURATION_COUNT,
+                  uint64_t configuration_id = 0) {
+        Tile tile;
+        tile.input_host = input;
+        tile.output_host = output;
+        tile.width = width;
+        tile.height = height;
+        tile.out_y = out_y;
+        tile.out_rows = out_rows;
+        tile.origin_x = origin_x;
+        tile.origin_y = origin_y;
+        tile.configuration = configuration;
+        tile.configuration_floats = configuration_floats;
+        tile.configuration_id = configuration_id;
+        tile.exposure = exposure;
+        tile.film = film;
+        tile.paper = paper;
+        tile.dimension = dimension;
+        tile.cache_id = cache_id;
+        tile.seed = seed;
+        tile.requested = requested;
+        run_tile<Pixel, Pixel>(tile);
     }
 
     template<typename PixelIn, typename PixelOut = PixelIn>
     /// Develops a frame the caller already holds on the device, in place of the host round trip
-    /// `run_host` pays. The handles are whatever the backend's native buffer is — an MTLBuffer on
-    /// Metal, a CUdeviceptr on CUDA — and the pipeline reads and writes them where they already
-    /// are, so nothing crosses the bus.
-    ///
-    /// `input_width`/`input_height` size the input buffer when it differs from the frame — the
-    /// hybrid tail reads the head's density at the head's own size and lifts it in-kernel.
+    /// `run_host` pays: nothing crosses the bus.
     void run_wrapped(uint64_t input_handle, uint64_t output_handle,
                      int32_t width, int32_t height, const float *configuration,
                      const float *exposure, const float *film, const float *paper,
@@ -1404,38 +1499,24 @@ public:
                      int32_t requested, int32_t origin_x = 0,
                      int32_t origin_y = 0, int32_t input_width = 0,
                      int32_t input_height = 0) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        ensure_luts(exposure, film, paper, dimension, cache_id);
-        const int32_t in_width = input_width > 0 ? input_width : width;
-        const int32_t in_height = input_height > 0 ? input_height : height;
-        Buffer<PixelIn> input_buffer = Buffer<PixelIn>::make_interleaved(
-            static_cast<PixelIn *>(nullptr), in_width, in_height, 4);
-        Buffer<PixelOut> output_buffer = Buffer<PixelOut>::make_interleaved(
-            static_cast<PixelOut *>(nullptr), width, height, 4);
-        const Target target = gpu_target();
-        const DeviceAPI api = gpu_device_api();
-        if ((cached_
-                ? input_buffer.get()->device_wrap_native(cached_.device_interface(), input_handle)
-                : input_buffer.device_wrap_native(api, input_handle, target)) != 0 ||
-            (cached_
-                ? output_buffer.get()->device_wrap_native(cached_.device_interface(), output_handle)
-                : output_buffer.device_wrap_native(api, output_handle, target)) != 0) {
-            if (input_buffer.has_device_allocation()) input_buffer.device_detach_native();
-            if (output_buffer.has_device_allocation()) output_buffer.device_detach_native();
-            throw Halide::RuntimeError("Unable to wrap caller device buffer");
-        }
-        input_buffer.set_device_dirty();
-        try {
-            run(input_buffer, output_buffer, width, height, configuration, seed,
-                requested, origin_x, origin_y);
-            output_buffer.device_sync();
-        } catch (...) {
-            input_buffer.device_detach_native();
-            output_buffer.device_detach_native();
-            throw;
-        }
-        input_buffer.device_detach_native();
-        output_buffer.device_detach_native();
+        Tile tile;
+        tile.input_handle = input_handle;
+        tile.output_handle = output_handle;
+        tile.width = width;
+        tile.height = height;
+        tile.input_width = input_width;
+        tile.input_height = input_height;
+        tile.origin_x = origin_x;
+        tile.origin_y = origin_y;
+        tile.configuration = configuration;
+        tile.exposure = exposure;
+        tile.film = film;
+        tile.paper = paper;
+        tile.dimension = dimension;
+        tile.cache_id = cache_id;
+        tile.seed = seed;
+        tile.requested = requested;
+        run_tile<PixelIn, PixelOut>(tile);
     }
 
 private:
@@ -1481,13 +1562,38 @@ private:
     void run(Buffer<PixelIn> &input_buffer, Buffer<PixelOut> &output_buffer,
              int32_t width, int32_t height, const float *configuration,
              uint32_t seed, int32_t requested, int32_t origin_x, int32_t origin_y,
-             int32_t configuration_floats = FOTUFILM_FRAME_CONFIGURATION_COUNT) {
+             int32_t configuration_floats = FOTUFILM_FRAME_CONFIGURATION_COUNT,
+             uint64_t configuration_id = 0, bool configuration_stable = false) {
         const int32_t reversal = (requested & FOTUFILM_FRAME_REVERSAL) != 0 ? 1 : 0;
-        Buffer<float> configuration_buffer(const_cast<float *>(configuration),
-                                           configuration_floats);
-        configuration_buffer.set_host_dirty();
+        if (configuration_floats > FOTUFILM_FRAME_CONFIGURATION_COUNT) {
+            // A FIELDS_IN frame rides its halation grids behind the configuration, so its
+            // buffer is frame-sized rather than slider-sized; it is kept by the caller's id so
+            // the tiles of one frame upload it once — and read in place when the caller keeps
+            // it, since a copy would be a second frame of grids.
+            if (!extended_configuration_.defined()
+                || extended_configuration_floats_ != configuration_floats
+                || extended_configuration_id_ != configuration_id
+                || configuration_id == 0) {
+                if (configuration_stable) {
+                    extended_configuration_ = Buffer<float>(
+                        const_cast<float *>(configuration), configuration_floats);
+                } else {
+                    extended_configuration_ = Buffer<float>(configuration_floats);
+                    std::memcpy(extended_configuration_.data(), configuration,
+                                size_t(configuration_floats) * sizeof(float));
+                }
+                extended_configuration_.set_host_dirty();
+                extended_configuration_floats_ = configuration_floats;
+                extended_configuration_id_ = configuration_id;
+            }
+            configuration_.set(extended_configuration_);
+        } else {
+            Buffer<float> configuration_buffer(const_cast<float *>(configuration),
+                                               configuration_floats);
+            configuration_buffer.set_host_dirty();
+            configuration_.set(configuration_buffer);
+        }
         input_.set(input_buffer);
-        configuration_.set(configuration_buffer);
         exposure_lut_.set(exposure_buffer_);
         film_lut_.set(film_buffer_);
         paper_lut_.set(paper_buffer_);
@@ -1547,18 +1653,21 @@ private:
     Buffer<> exposure_buffer_;
     Buffer<float> film_buffer_, paper_buffer_;
     uint64_t lut_cache_id_ = 0;
+    Buffer<float> extended_configuration_;
+    int32_t extended_configuration_floats_ = 0;
+    uint64_t extended_configuration_id_ = 0;
     std::mutex mutex_;
 };
 
-/// Builds the halation pyramid's three blurred grids from a whole frame of stored light — the
-/// float numbers a LIGHT_OUT pass wrote — with the same decimation chain and triple-box arithmetic
-/// the frame schedule runs over a staged frame at origin zero. A strip that then samples these
-/// grids reads the very values a whole-frame develop reads from its own store, which is what
-/// lets the FIELDS_IN path promise the staged path's pixels.
+/// Builds the halation pyramid's three blurred grids from the finest grid of a whole frame's
+/// light — the cells the LIGHT_OUT strips delivered — with the same decimation chain and
+/// triple-box arithmetic the frame schedule runs over a staged frame at origin zero. A strip that
+/// then samples these grids reads the very values a whole-frame develop reads from its own
+/// pyramid, which is what lets the FIELDS_IN path promise the staged path's pixels.
 class MetalHalationFieldsPipeline {
 public:
     explicit MetalHalationFieldsPipeline(const std::string &suffix)
-        : input_(Float(32), 3, "fields_light" + suffix),
+        : input_(Float(32), 3, "fields_grid" + suffix),
           width_("fields_width" + suffix), height_("fields_height" + suffix),
           stride_0_("fields_stride_0" + suffix),
           stride_1_("fields_stride_1" + suffix),
@@ -1567,17 +1676,18 @@ public:
           radius_1_("fields_radius_1" + suffix),
           radius_2_("fields_radius_2" + suffix) {
         Var x("x"), y("y"), channel("channel");
-        input_.dim(0).set_stride(4);
+        input_.dim(0).set_stride(3);
         input_.dim(2).set_stride(1);
-        input_.dim(2).set_bounds(0, 4);
+        input_.dim(2).set_bounds(0, 3);
         // The still path's own storage precision: the grids must hold exactly what the staged
         // schedule's stores hold.
         const bool half = (still_fast_bits() & kStillFastHalfStore) != 0;
         Func source("fields_source" + suffix);
         source(x, y, channel) = Halide::cast<float>(input_(x, y, channel));
         Func previous = source;
-        Expr previous_stride = 1;
-        Expr previous_width = width_, previous_height = height_;
+        Expr previous_stride = stride_0_;
+        Expr previous_width = (width_ + stride_0_ - 1) / stride_0_;
+        Expr previous_height = (height_ + stride_0_ - 1) / stride_0_;
         Param<int32_t> *strides[3] = {&stride_0_, &stride_1_, &stride_2_};
         Param<int32_t> *radii[3] = {&radius_0_, &radius_1_, &radius_2_};
         std::vector<Func> outputs;
@@ -1587,24 +1697,17 @@ public:
             Expr stride = *strides[scale_index];
             Expr down_width = (width_ + stride - 1) / stride;
             Expr down_height = (height_ + stride - 1) / stride;
-            Expr factor = stride / previous_stride;
-            Func bounded_source = constant_exterior(
-                previous, typed_zero(previous),
-                {{0, previous_width}, {0, previous_height}, {0, 3}});
-            RDom cell(0, factor, 0, factor, name + "_cell");
-            Func down(name + "_down");
-            Expr source_x = x * factor + cell.x;
-            Expr source_y = y * factor + cell.y;
-            Expr valid = Halide::select(source_x >= 0 && source_x < previous_width
-                                            && source_y >= 0
-                                            && source_y < previous_height,
-                                        1.0f, 0.0f);
-            Expr cell_count = Halide::sum(valid, name + "_down_weight");
-            down(x, y, channel) = Halide::sum(
-                bounded_source(x * factor + cell.x, y * factor + cell.y,
-                               channel), name + "_down_sum")
-                / Halide::max(cell_count, 1.0f);
-            Func down_view = store_frame(down, half);
+            Func down_view;
+            if (scale_index == 0) {
+                // The finest grid arrives built; the frame schedule stores it, so this reads it
+                // the way that store is read.
+                down_view = source;
+            } else {
+                Expr factor = stride / previous_stride;
+                Func down = gpu_decimate_level(previous, factor, 0, 0, previous_width,
+                                               previous_height, 3, name);
+                down_view = store_frame(down, half);
+            }
             previous = down_view;
             previous_stride = stride;
             previous_width = down_width;
@@ -1638,14 +1741,17 @@ public:
     }
 #endif
 
-    /// Runs the build over host light rows into three host grids sized
-    /// ceil(width/stride) x ceil(height/stride) x 3, interleaved.
-    void run_host(const float *light, int32_t width, int32_t height,
+    /// Runs the build over the host finest grid (ceil(width/strides[0]) x ceil(height/strides[0])
+    /// x 3, interleaved) into three host grids sized ceil(width/stride) x ceil(height/stride) x 3,
+    /// interleaved.
+    void run_host(const float *grid, int32_t width, int32_t height,
                   const int32_t strides[3], const int32_t radii[3],
                   float *grid_0, float *grid_1, float *grid_2) {
         std::lock_guard<std::mutex> lock(mutex_);
         Buffer<float> input_buffer = Buffer<float>::make_interleaved(
-            const_cast<float *>(light), width, height, 4);
+            const_cast<float *>(grid),
+            (width + strides[0] - 1) / strides[0],
+            (height + strides[0] - 1) / strides[0], 3);
         input_buffer.set_host_dirty();
         float *grids[3] = {grid_0, grid_1, grid_2};
         std::vector<Buffer<float>> outputs;
@@ -1668,6 +1774,9 @@ public:
             Buffer<>(outputs[0]), Buffer<>(outputs[1]), Buffer<>(outputs[2])});
         pipeline_.realize(realization, gpu_target());
         for (auto &output : outputs) output.copy_to_host();
+        // The parameter would otherwise keep the grid's device copy alive until the next
+        // build.
+        input_.reset();
     }
 
 private:
@@ -1720,6 +1829,16 @@ MetalDecodePipeline *decode_pipeline(bool approximate) {
     return pipelines[index].get();
 }
 
+std::unordered_map<int32_t, std::unique_ptr<MetalFramePipeline>> &pipelines_registry() {
+    static std::unordered_map<int32_t, std::unique_ptr<MetalFramePipeline>> pipelines;
+    return pipelines;
+}
+
+std::mutex &pipelines_mutex() {
+    static std::mutex mutex;
+    return mutex;
+}
+
 MetalFramePipeline *pipeline_for(int32_t feature_mask) {
     // The enlarger's blur joins the key: it is a stage the pipeline either has or has not, and a
     // GPU frame that skipped it would not match the reference the consistency tests hold it to.
@@ -1746,15 +1865,20 @@ MetalFramePipeline *pipeline_for(int32_t feature_mask) {
     // data segment land further from its text than Swift's 32-bit *relative* metadata pointers
     // can reach, and every protocol-conformance scan in the host process is one SIGBUS away.
     // The lock was already here; the map adds one hash to a per-frame lookup.
-    static std::unordered_map<int32_t, std::unique_ptr<MetalFramePipeline>> pipelines;
-    static std::mutex pipelines_mutex;
-    std::lock_guard<std::mutex> lock(pipelines_mutex);
-    std::unique_ptr<MetalFramePipeline> &slot = pipelines[variant];
+    std::lock_guard<std::mutex> lock(pipelines_mutex());
+    std::unique_ptr<MetalFramePipeline> &slot = pipelines_registry()[variant];
     if (!slot) {
         slot = std::make_unique<MetalFramePipeline>(
             variant, "_metal_variant_" + std::to_string(variant));
     }
     return slot.get();
+}
+
+/// Drops the halation grids every class keeps behind its configuration — tens of megabytes a
+/// frame at a hundred megapixels, worth nothing once its develop is over.
+void release_frame_fields() {
+    std::lock_guard<std::mutex> lock(pipelines_mutex());
+    for (auto &entry : pipelines_registry()) entry.second->release_fields();
 }
 
 template<typename Function>
@@ -1786,8 +1910,71 @@ bool valid_flare_mean(const float *configuration, int32_t feature_mask) {
 
 }
 
+// The generator never runs a pipeline, and is linked without the Objective-C runtime.
+#if defined(__APPLE__) && !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
+namespace {
+
+/// How many command buffers the runtime's queue may have in flight, and why it is bounded.
+///
+/// Halide commits one command buffer per kernel and never waits, and frees an intermediate the
+/// moment the host passes its last consumer — but Metal keeps a buffer alive until the command
+/// buffers that read it complete. The host runs through a forty-stage tile in a few
+/// milliseconds while the device takes hundreds, so without a bound every intermediate of the
+/// tile is allocated before the first is released, and a tile's footprint is the sum of its
+/// stages rather than the largest few. A queue that blocks the host at this many outstanding
+/// command buffers keeps it that close behind the device, so the early frees land. Four is
+/// enough to keep the device fed across a launch gap; the AOT shim bounds its queue the same
+/// way (see halide_metal_acquire_context there).
+constexpr unsigned long kMetalQueueDepth = 4;
+
+id bounded_new_command_queue(id device, SEL) {
+    return ((id (*)(id, SEL, unsigned long))objc_msgSend)(
+        device, sel_getUid("newCommandQueueWithMaxCommandBufferCount:"), kMetalQueueDepth);
+}
+
+/// Has the JIT runtime create its queue bounded. The runtime asks the default device for
+/// `newCommandQueue` the first time a pipeline runs, and offers no way to hand it a queue, so
+/// that method answers with a bounded queue for the one call that creates it, and is put back.
+void bound_metal_queue() {
+    static std::once_flag once;
+    std::call_once(once, [] {
+        void *metal = dlopen("/System/Library/Frameworks/Metal.framework/Metal", RTLD_LAZY);
+        auto create = reinterpret_cast<id (*)(void)>(
+            metal ? dlsym(metal, "MTLCreateSystemDefaultDevice") : nullptr);
+        if (!create) return;
+        id system = create();
+        if (!system) return;
+        Method method = class_getInstanceMethod(object_getClass(system),
+                                                sel_getUid("newCommandQueue"));
+        if (!method) return;
+        const IMP original = method_setImplementation(
+            method, reinterpret_cast<IMP>(bounded_new_command_queue));
+        // A trivial realization, so the runtime makes its context now.
+        try {
+            Func probe("fotufilm_metal_probe");
+            Var x("x");
+            probe(x) = x;
+            Var block, thread;
+            probe.gpu_tile(x, block, thread, 8, Halide::TailStrategy::GuardWithIf,
+                           gpu_device_api());
+            Buffer<int32_t> out = probe.realize({8}, gpu_target());
+            out.copy_to_host();
+        } catch (...) {
+        }
+        method_setImplementation(method, original);
+        ((void (*)(id, SEL))objc_msgSend)(system, sel_getUid("release"));
+    });
+}
+
+}
+#endif
+
 extern "C" int32_t fotufilm_halide_metal_available(void) {
-    return Halide::host_supports_target_device(gpu_target()) ? 1 : 0;
+    const bool available = Halide::host_supports_target_device(gpu_target());
+#if defined(__APPLE__) && !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
+    if (available) bound_metal_queue();
+#endif
+    return available ? 1 : 0;
 }
 
 extern "C" int32_t fotufilm_halide_metal_variant_exists(int32_t) {
@@ -1869,27 +2056,124 @@ extern "C" int32_t fotufilm_halide_metal_process_linear_float(
         lut_dimension, spectral_cache_id, feature_mask, seed);
 }
 
-extern "C" int32_t fotufilm_halide_metal_process_light_rows(
-    const float *input, float *light_out, int32_t width, int32_t height,
+namespace {
+
+/// The common body of the tile entry points: validates the window, appends the halation grids
+/// behind the configuration for a FIELDS_IN develop, and runs the class the mask names.
+int32_t process_tile(MetalFramePipeline::Tile tile, const float *fields, int32_t fields_floats,
+                     uint64_t fields_id, int32_t feature_mask) {
+    if (!fotufilm_halide_metal_available() || (!tile.input_host && !tile.input_handle)
+        || (!tile.output_host && !tile.output_handle) || !tile.configuration
+        || !tile.exposure || !tile.film || !tile.paper
+        || tile.width <= 0 || tile.height <= 0
+        || tile.out_x < 0 || tile.out_columns <= 0
+        || tile.out_x + tile.out_columns > tile.width
+        || tile.out_y < 0 || tile.out_rows <= 0 || tile.out_y + tile.out_rows > tile.height
+        || (fields && fields_floats <= 11)
+        || !valid_flare_mean(tile.configuration, feature_mask)) return -1;
+    int32_t mask = feature_mask | FOTUFILM_FRAME_FLOAT_IO;
+    if (fields) mask |= FOTUFILM_FRAME_FIELDS_IN;
+    tile.requested = mask;
+    return translate_metal_exceptions([&] {
+        std::vector<float> combined;
+        if (fields) {
+            tile.configuration_floats = FOTUFILM_FRAME_CONFIGURATION_COUNT + fields_floats;
+            tile.configuration_id = fields_id;
+            if (fields == tile.configuration + FOTUFILM_FRAME_CONFIGURATION_COUNT) {
+                // One blob, the caller's, read in place for as long as its id stands.
+                tile.configuration_stable = true;
+            } else {
+                combined.resize(size_t(tile.configuration_floats));
+                std::memcpy(combined.data(), tile.configuration,
+                            FOTUFILM_FRAME_CONFIGURATION_COUNT * sizeof(float));
+                std::memcpy(combined.data() + FOTUFILM_FRAME_CONFIGURATION_COUNT, fields,
+                            size_t(fields_floats) * sizeof(float));
+                tile.configuration = combined.data();
+            }
+        }
+        pipeline_for(mask)->run_tile<float, float>(tile);
+    });
+}
+
+MetalFramePipeline::Tile frame_tile(
+    int32_t width, int32_t height, int32_t out_x, int32_t out_columns, int32_t out_y,
+    int32_t out_rows, int32_t origin_x, int32_t origin_y, const float *configuration,
+    const float *exposure_lut, const float *film_output_lut, const float *paper_output_lut,
+    int32_t lut_dimension, uint64_t spectral_cache_id, uint32_t seed) {
+    MetalFramePipeline::Tile tile;
+    tile.width = width;
+    tile.height = height;
+    tile.out_x = out_x;
+    tile.out_columns = out_columns;
+    tile.out_y = out_y;
+    tile.out_rows = out_rows;
+    tile.origin_x = origin_x;
+    tile.origin_y = origin_y;
+    tile.configuration = configuration;
+    tile.exposure = exposure_lut;
+    tile.film = film_output_lut;
+    tile.paper = paper_output_lut;
+    tile.dimension = lut_dimension;
+    tile.cache_id = spectral_cache_id;
+    tile.seed = seed;
+    return tile;
+}
+
+/// The light-grid entry points' body: the window is in cells of the strip's own grid.
+int32_t process_light_grid(MetalFramePipeline::Tile tile, int32_t feature_mask) {
+    const int32_t stride = fotufilm_halation_stride(
+        std::max(0, int32_t(tile.configuration[FOTUFILM_CONFIG_HALATION_RADIUS])));
+    const int32_t grid_height = (tile.height + tile.origin_y % stride + stride - 1) / stride;
+    if (!fotufilm_halide_metal_available() || (!tile.input_host && !tile.input_handle)
+        || !tile.output_host || !tile.configuration
+        || !tile.exposure || !tile.film || !tile.paper
+        || tile.width <= 0 || tile.height <= 0
+        || tile.out_y < 0 || tile.out_rows <= 0 || tile.out_y + tile.out_rows > grid_height
+        || !valid_flare_mean(tile.configuration, feature_mask)) return -1;
+    const int32_t mask = (feature_mask | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT)
+        & ~FOTUFILM_FRAME_FIELDS_IN;
+    tile.requested = mask;
+    tile.out_x = 0;
+    tile.out_columns = (tile.width + stride - 1) / stride;
+    return translate_metal_exceptions([&] {
+        pipeline_for(mask)->run_tile<float, float>(tile);
+    });
+}
+
+}
+
+extern "C" int32_t fotufilm_halide_metal_process_linear_float_tile(
+    const float *input, float *output, int32_t width, int32_t height,
+    int32_t out_x, int32_t out_columns, int32_t out_y, int32_t out_rows,
+    int32_t origin_x, int32_t origin_y, const float *configuration,
+    const float *fields, int32_t fields_floats, uint64_t fields_id,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
+    MetalFramePipeline::Tile tile = frame_tile(
+        width, height, out_x, out_columns, out_y, out_rows, origin_x, origin_y,
+        configuration, exposure_lut, film_output_lut, paper_output_lut, lut_dimension,
+        spectral_cache_id, seed);
+    tile.input_host = input;
+    tile.output_host = output;
+    return process_tile(tile, fields, fields_floats, fields_id, feature_mask);
+}
+
+extern "C" int32_t fotufilm_halide_metal_process_light_grid(
+    const float *input, float *grid_out, int32_t width, int32_t height,
     int32_t out_y, int32_t out_rows, int32_t origin_x, int32_t origin_y,
     const float *configuration,
     const float *exposure_lut, const float *film_output_lut,
     const float *paper_output_lut, int32_t lut_dimension,
     uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
-    if (!fotufilm_halide_metal_available() || !input || !light_out ||
-        !configuration || !exposure_lut || !film_output_lut ||
-        !paper_output_lut || width <= 0 || height <= 0 ||
-        out_y < 0 || out_rows <= 0 || out_y + out_rows > height ||
-        !valid_flare_mean(configuration, feature_mask)) return -1;
-    return translate_metal_exceptions([&] {
-        pipeline_for(feature_mask | FOTUFILM_FRAME_FLOAT_IO
-                     | FOTUFILM_FRAME_LIGHT_OUT)->run_host_light(
-            input, light_out, width, height, configuration,
-            exposure_lut, film_output_lut, paper_output_lut,
-            lut_dimension, spectral_cache_id, seed,
-            (feature_mask | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT),
-            origin_x, origin_y, out_y, out_rows);
-    });
+    if (!configuration) return -1;
+    MetalFramePipeline::Tile tile = frame_tile(
+        width, height, 0, 0, out_y, out_rows, origin_x, origin_y,
+        configuration, exposure_lut, film_output_lut, paper_output_lut, lut_dimension,
+        spectral_cache_id, seed);
+    tile.input_host = input;
+    tile.output_host = grid_out;
+    return process_light_grid(tile, feature_mask);
 }
 
 extern "C" int32_t fotufilm_halide_metal_halation_fields_floats(
@@ -1906,9 +2190,9 @@ extern "C" int32_t fotufilm_halide_metal_halation_fields_floats(
 }
 
 extern "C" int32_t fotufilm_halide_metal_halation_fields(
-    const float *light, int32_t width, int32_t height,
+    const float *grid, int32_t width, int32_t height,
     const int32_t *halation_radii, float *fields, int32_t fields_floats) {
-    if (!fotufilm_halide_metal_available() || !light || !halation_radii ||
+    if (!fotufilm_halide_metal_available() || !grid || !halation_radii ||
         !fields || width <= 0 || height <= 0 ||
         fields_floats != fotufilm_halide_metal_halation_fields_floats(
             width, height, halation_radii)) return -1;
@@ -1936,44 +2220,15 @@ extern "C" int32_t fotufilm_halide_metal_halation_fields(
             offset += grid_floats[scale];
         }
         halation_fields_pipeline()->run_host(
-            light, width, height, strides, strided,
+            grid, width, height, strides, strided,
             fields + 11,
             fields + 11 + grid_floats[0],
             fields + 11 + grid_floats[0] + grid_floats[1]);
     });
 }
 
-extern "C" int32_t fotufilm_halide_metal_process_linear_float_fields_rows(
-    const float *input, float *output, int32_t width, int32_t height,
-    int32_t out_y, int32_t out_rows, int32_t origin_x, int32_t origin_y,
-    const float *configuration,
-    const float *fields, int32_t fields_floats, uint64_t fields_id,
-    const float *exposure_lut, const float *film_output_lut,
-    const float *paper_output_lut, int32_t lut_dimension,
-    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
-    (void)fields_id;
-    if (!fotufilm_halide_metal_available() || !input || !output ||
-        !configuration || !fields || fields_floats <= 11 ||
-        !exposure_lut || !film_output_lut || !paper_output_lut ||
-        width <= 0 || height <= 0 ||
-        out_y < 0 || out_rows <= 0 || out_y + out_rows > height ||
-        !valid_flare_mean(configuration, feature_mask)) return -1;
-    return translate_metal_exceptions([&] {
-        std::vector<float> combined(
-            FOTUFILM_FRAME_CONFIGURATION_COUNT + fields_floats);
-        std::memcpy(combined.data(), configuration,
-                    FOTUFILM_FRAME_CONFIGURATION_COUNT * sizeof(float));
-        std::memcpy(combined.data() + FOTUFILM_FRAME_CONFIGURATION_COUNT,
-                    fields, fields_floats * sizeof(float));
-        pipeline_for(feature_mask | FOTUFILM_FRAME_FLOAT_IO
-                     | FOTUFILM_FRAME_FIELDS_IN)->run_host(
-            input, output, width, height, combined.data(),
-            exposure_lut, film_output_lut, paper_output_lut,
-            lut_dimension, spectral_cache_id, seed,
-            (feature_mask | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_FIELDS_IN),
-            origin_x, origin_y, out_y, out_rows,
-            int32_t(combined.size()));
-    });
+extern "C" void fotufilm_halide_metal_release_fields(void) {
+    release_frame_fields();
 }
 
 // Wrapping a caller's texture is Metal-only: the CUDA host talks to the pipeline through the
@@ -2020,6 +2275,41 @@ extern "C" int32_t fotufilm_halide_metal_process_buffers_float(
             (feature_mask | FOTUFILM_FRAME_FLOAT_IO),
             origin_x, origin_y);
     });
+}
+
+extern "C" int32_t fotufilm_halide_metal_process_buffers_float_tile(
+    uint64_t input_mtl_buffer, uint64_t output_mtl_buffer,
+    int32_t width, int32_t height,
+    int32_t out_x, int32_t out_columns, int32_t out_y, int32_t out_rows,
+    int32_t origin_x, int32_t origin_y, const float *configuration,
+    const float *fields, int32_t fields_floats, uint64_t fields_id,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
+    MetalFramePipeline::Tile tile = frame_tile(
+        width, height, out_x, out_columns, out_y, out_rows, origin_x, origin_y,
+        configuration, exposure_lut, film_output_lut, paper_output_lut, lut_dimension,
+        spectral_cache_id, seed);
+    tile.input_handle = input_mtl_buffer;
+    tile.output_handle = output_mtl_buffer;
+    return process_tile(tile, fields, fields_floats, fields_id, feature_mask);
+}
+
+extern "C" int32_t fotufilm_halide_metal_process_buffers_light_grid(
+    uint64_t input_mtl_buffer, float *grid_out, int32_t width, int32_t height,
+    int32_t out_y, int32_t out_rows, int32_t origin_x, int32_t origin_y,
+    const float *configuration,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
+    if (!configuration) return -1;
+    MetalFramePipeline::Tile tile = frame_tile(
+        width, height, 0, 0, out_y, out_rows, origin_x, origin_y,
+        configuration, exposure_lut, film_output_lut, paper_output_lut, lut_dimension,
+        spectral_cache_id, seed);
+    tile.input_handle = input_mtl_buffer;
+    tile.output_host = grid_out;
+    return process_light_grid(tile, feature_mask);
 }
 
 extern "C" int32_t fotufilm_halide_metal_process_buffers_head(
@@ -2284,7 +2574,12 @@ extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_process_linear_float_
     const float *, float *, int32_t, int32_t, int32_t, int32_t, int32_t,
     int32_t, const float *, const float *, const float *, const float *,
     int32_t, uint64_t, int32_t, uint32_t) { return -1; }
-extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_process_light_rows(
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_process_linear_float_tile(
+    const float *, float *, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
+    int32_t, int32_t, const float *, const float *, int32_t, uint64_t,
+    const float *, const float *, const float *, int32_t, uint64_t, int32_t,
+    uint32_t) { return -1; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_process_light_grid(
     const float *, float *, int32_t, int32_t, int32_t, int32_t, int32_t,
     int32_t, const float *, const float *, const float *, const float *,
     int32_t, uint64_t, int32_t, uint32_t) { return -1; }
@@ -2293,11 +2588,7 @@ extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_halation_fields_float
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_halation_fields(
     const float *, int32_t, int32_t, const int32_t *, float *,
     int32_t) { return -1; }
-extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_process_linear_float_fields_rows(
-    const float *, float *, int32_t, int32_t, int32_t, int32_t, int32_t,
-    int32_t, const float *, const float *, int32_t, uint64_t, const float *,
-    const float *, const float *, int32_t, uint64_t, int32_t,
-    uint32_t) { return -1; }
+extern "C" FOTUFILM_FALLBACK void fotufilm_halide_metal_release_fields(void) {}
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_process_buffers(
     uint64_t, uint64_t, int32_t, int32_t, int32_t, int32_t,
     const float *, const float *,
@@ -2319,6 +2610,15 @@ extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_process_buffers_float
     uint64_t, uint64_t, int32_t, int32_t, int32_t, int32_t, const float *,
     const float *, const float *, const float *, int32_t, uint64_t, int32_t,
     uint32_t) { return -1; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_process_buffers_float_tile(
+    uint64_t, uint64_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
+    int32_t, int32_t, const float *, const float *, int32_t, uint64_t,
+    const float *, const float *, const float *, int32_t, uint64_t, int32_t,
+    uint32_t) { return -1; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_process_buffers_light_grid(
+    uint64_t, float *, int32_t, int32_t, int32_t, int32_t, int32_t,
+    int32_t, const float *, const float *, const float *, const float *,
+    int32_t, uint64_t, int32_t, uint32_t) { return -1; }
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_process_buffers_head(
     uint64_t, uint64_t, int32_t, int32_t, int32_t, int32_t, const float *,
     const float *, const float *, const float *, int32_t, uint64_t, int32_t,

@@ -154,6 +154,20 @@ static inline int32_t fotufilm_halation_stride(int32_t radius) {
     return stride;
 }
 
+/// How far a decimated Gaussian of `sigma` (`radius` taps at full resolution) really reads: the
+/// GPU schedules blur the coupler, fringe and adjacency fields on a grid decimated by a power of
+/// two chosen from the sigma, and the blur's grid radius, the box cell it lands in and the
+/// bilinear neighbour it reads back through all stand outside the nominal radius. A strip that
+/// prices its apron by the nominal radius alone is a few rows short at every seam. Mirrors
+/// gaussian_grid_reach in FotufilmHalideGeometry.h.
+static inline int32_t fotufilm_gaussian_grid_reach(float sigma, int32_t radius) {
+    if (radius <= 0) return 0;
+    const int32_t stride = sigma >= 8.0f ? 8 : sigma >= 4.0f ? 4 : sigma >= 2.0f ? 2 : 1;
+    int32_t grid_radius = (radius + stride - 1) / stride;
+    if (grid_radius < 1) grid_radius = 1;
+    return stride == 1 ? radius + 1 : stride * (grid_radius + 2);
+}
+
 /// Diffusion decimation with a stride ceiling of 64. Keeping decimated sigma near 2.5 samples
 /// prevents large mist radii from creating oversized aprons; halation retains its ceiling of 8.
 static inline int32_t fotufilm_diffusion_stride(int32_t radius) {
@@ -381,13 +395,41 @@ int32_t fotufilm_halide_metal_process_linear_float_rows(
     const float *paper_output_lut, int32_t lut_dimension,
     uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed);
 
-/// The first pass of the two-pass striped still path: develops rows [out_y, out_y + out_rows)
-/// of the strip only as far as veiling glare and the emulsion MTF, delivering that light as
-/// tightly packed interleaved float RGBA — a strip of light needs only the MTF's apron. The
-/// caller's mask should carry the stages up to the light (flare, MTF) and the frame's identity
-/// bits; FLOAT_IO and LIGHT_OUT are implied.
-int32_t fotufilm_halide_metal_process_light_rows(
-    const float *input, float *light_out, int32_t width, int32_t height,
+/// `process_linear_float_rows` in both axes: `input` is a `width` x `height` tile of the frame
+/// whose top-left pixel is (`origin_x`, `origin_y`), and `output` holds only the tile's window
+/// [out_x, out_x + out_columns) x [out_y, out_y + out_rows), tightly packed; the apron around
+/// the window is computed only through the stages a delivered pixel reads it from. Delivered
+/// pixels match a whole-frame develop's exactly.
+///
+/// With `fields`, the halation samples those whole-frame grids (built by
+/// `fotufilm_halide_metal_halation_fields`) instead of a pyramid over the tile, so the tile's
+/// apron need not reach as far as halation does. `fields_id` names the blob so the tiles of
+/// one frame upload it once; it must change when the blob does. A caller that lays the blob
+/// out directly behind its configuration — `fields == configuration + COUNT` — has it read in
+/// place rather than copied, and must then keep it where it is until
+/// `fotufilm_halide_metal_release_fields`. Null fields develop with the pyramid over the
+/// tile.
+int32_t fotufilm_halide_metal_process_linear_float_tile(
+    const float *input, float *output, int32_t width, int32_t height,
+    int32_t out_x, int32_t out_columns, int32_t out_y, int32_t out_rows,
+    int32_t origin_x, int32_t origin_y,
+    const float *configuration,
+    const float *fields, int32_t fields_floats, uint64_t fields_id,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed);
+
+/// The first pass of the two-pass still road: develops the strip only as far as veiling glare
+/// and the emulsion MTF — a strip of light needs only that reach — and delivers the finest
+/// halation grid of that light: the light box-averaged over the first scale's stride on the
+/// frame's own cell lattice (the lattice a whole-frame develop decimates on), three floats a
+/// cell, interleaved, `ceil(width / stride)` cells wide. `out_y` and `out_rows` are in cells of
+/// the strip's own grid, whose first cell holds the strip rows from `origin_y - origin_y %
+/// stride`; a caller that keeps its strips on cell boundaries delivers the frame's grid rows
+/// whole. The caller's mask should carry the stages up to the light (flare, diffusion, MTF)
+/// and the frame's identity bits; FLOAT_IO and LIGHT_OUT are implied.
+int32_t fotufilm_halide_metal_process_light_grid(
+    const float *input, float *grid_out, int32_t width, int32_t height,
     int32_t out_y, int32_t out_rows,
     int32_t origin_x, int32_t origin_y,
     const float *configuration,
@@ -401,26 +443,16 @@ int32_t fotufilm_halide_metal_process_light_rows(
 int32_t fotufilm_halide_metal_halation_fields_floats(
     int32_t width, int32_t height, const int32_t *halation_radii);
 
-/// Builds the halation pyramid's three blurred grids from the whole frame of light a
-/// LIGHT_OUT pass wrote, into `fields` (sized by the floats call above), with the same
-/// arithmetic a staged develop runs internally.
+/// Builds the halation pyramid's three blurred grids from the frame's finest grid — the cells
+/// the light-grid passes delivered, `ceil(width / stride0)` x `ceil(height / stride0)` x 3,
+/// interleaved — into `fields` (sized by the floats call above), with the same arithmetic a
+/// staged develop runs internally.
 int32_t fotufilm_halide_metal_halation_fields(
-    const float *light, int32_t width, int32_t height,
+    const float *grid, int32_t width, int32_t height,
     const int32_t *halation_radii, float *fields, int32_t fields_floats);
 
-/// The second pass: `process_linear_float_rows`, except halation samples the provided
-/// whole-frame fields instead of building a pyramid from the strip, so the strip needs no
-/// halation apron. `fields_id` names the blob so the strips of one frame upload it once; it
-/// must change when the blob does.
-int32_t fotufilm_halide_metal_process_linear_float_fields_rows(
-    const float *input, float *output, int32_t width, int32_t height,
-    int32_t out_y, int32_t out_rows,
-    int32_t origin_x, int32_t origin_y,
-    const float *configuration,
-    const float *fields, int32_t fields_floats, uint64_t fields_id,
-    const float *exposure_lut, const float *film_output_lut,
-    const float *paper_output_lut, int32_t lut_dimension,
-    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed);
+/// Drops the halation grids the pipelines keep uploaded between the tiles of a frame.
+void fotufilm_halide_metal_release_fields(void);
 
 /// The kStillFast* bits this build's approximate-math float still schedule was generated with
 /// (0 where the still path is the untouched reference), for hosts whose memory model follows
@@ -441,6 +473,30 @@ int32_t fotufilm_halide_metal_process_buffers(
 int32_t fotufilm_halide_metal_process_buffers_float(
     uint64_t input_mtl_buffer, uint64_t output_mtl_buffer,
     int32_t width, int32_t height, int32_t origin_x, int32_t origin_y,
+    const float *configuration,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed);
+
+/// The zero-copy form of `process_linear_float_tile`: the tile in a caller-owned MTLBuffer of
+/// width * height * 16 bytes, the window delivered into one of out_columns * out_rows * 16.
+int32_t fotufilm_halide_metal_process_buffers_float_tile(
+    uint64_t input_mtl_buffer, uint64_t output_mtl_buffer,
+    int32_t width, int32_t height,
+    int32_t out_x, int32_t out_columns, int32_t out_y, int32_t out_rows,
+    int32_t origin_x, int32_t origin_y,
+    const float *configuration,
+    const float *fields, int32_t fields_floats, uint64_t fields_id,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed);
+
+/// `process_light_grid` reading the strip from a caller-owned MTLBuffer; the grid cells still
+/// land in host memory, there being few of them.
+int32_t fotufilm_halide_metal_process_buffers_light_grid(
+    uint64_t input_mtl_buffer, float *grid_out, int32_t width, int32_t height,
+    int32_t out_y, int32_t out_rows,
+    int32_t origin_x, int32_t origin_y,
     const float *configuration,
     const float *exposure_lut, const float *film_output_lut,
     const float *paper_output_lut, int32_t lut_dimension,

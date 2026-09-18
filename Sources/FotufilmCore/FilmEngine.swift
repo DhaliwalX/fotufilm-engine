@@ -1544,12 +1544,20 @@ public struct FilmEngineInvocation {
             }.max() ?? 0
             optical += halationReach
         }
+        // The coupler, fringe and adjacency fields blur on decimated grids, and a decimated blur
+        // reads past its nominal radius: the reach is what the schedule really touches.
         var diffusion = 0
         if featureMask & FilmEngineFeature.couplers != 0 {
-            diffusion = max(diffusion, couplerRadius, fringeRadius)
+            diffusion = max(diffusion,
+                            Int(fotufilm_gaussian_grid_reach(couplerSigma, Int32(couplerRadius))),
+                            Int(fotufilm_gaussian_grid_reach(fringeSigma, Int32(fringeRadius))))
         }
         if featureMask & FilmEngineFeature.adjacency != 0 {
-            diffusion = max(diffusion, adjacencyRadius, adjacencySecondaryRadius)
+            diffusion = max(diffusion,
+                            Int(fotufilm_gaussian_grid_reach(adjacencySigma,
+                                                             Int32(adjacencyRadius))),
+                            Int(fotufilm_gaussian_grid_reach(adjacencySecondarySigma,
+                                                             Int32(adjacencySecondaryRadius))))
         }
         optical += diffusion
         let grainSupport = featureMask & FilmEngineFeature.grain != 0 ? grainRadius : 0

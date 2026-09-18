@@ -605,6 +605,11 @@ enum FilmRender {
                                 usesSourceFrame: usesSourceFrame,
                                 streaming: !serialScene,
                                 report: report) else { return nil }
+        #if os(iOS)
+        // The phone has a few hundred megabytes for the whole export; the tile staging the
+        // develop keeps for the next frame is worth more to the encode that follows it.
+        defer { HalideMetalFilmRenderer.releaseIdleBuffers() }
+        #endif
         guard var rendered = develop(
             scene, state: state, hdr: hdr, dynamicRange: dynamicRange,
             exact: exact, negative: negative, report: report
@@ -786,49 +791,91 @@ enum FilmRender {
             plainTransform = .displayP3()
         }
         let deliveredByKernel = outputTransform != nil || plainTransform != nil
-        // Writes one band of completed output.
-        func writeRows(_ rows: Range<Int>, _ from: UnsafeBufferPointer<Float>) {
+        // Writes one block of completed output: `from` is a dense `columns.count` x
+        // `rows.count` block. A block the frame's width is encoded in one pass; a narrower one
+        // — a tile of a frame too large to band — a row at a time into its span of the print.
+        func writeTile(_ rows: Range<Int>, _ columns: Range<Int>,
+                       _ from: UnsafeBufferPointer<Float>) {
+            let full = columns == 0..<width
+            func encode(into destination: UnsafeMutableBufferPointer<UInt16>,
+                        _ body: (UnsafeBufferPointer<Float>, Range<Int>, Int,
+                                 UnsafeMutableBufferPointer<UInt16>) -> Void) {
+                if full { return body(from, rows, width, destination) }
+                let span = columns.count * 4
+                // Rows of a block are independent, so they go across the cores in runs, as
+                // the frame-wide encoders spread theirs.
+                let run = 64
+                DispatchQueue.concurrentPerform(iterations: (rows.count + run - 1) / run) {
+                    let first = rows.lowerBound + $0 * run
+                    for row in first..<min(rows.upperBound, first + run) {
+                        let source = (row - rows.lowerBound) * span
+                        let target = (row * width + columns.lowerBound) * 4
+                        body(UnsafeBufferPointer(rebasing: from[source..<(source + span)]),
+                             0..<1, columns.count,
+                             UnsafeMutableBufferPointer(
+                                rebasing: destination[target..<(target + span)]))
+                    }
+                }
+            }
+            // Writeback starts once a band of rows is complete — with the block that closes
+            // it — since a flush covers whole rows: block by block it would start the same
+            // rows over as many times as there are blocks across.
+            let closesBand = columns.upperBound == width
             let encodeStart = stillTimings ? Date() : Date.distantPast
             if deliveredByKernel {
-                PrintEncoding.packRows(from, rows: rows, width: width,
-                                       into: printed)
+                encode(into: printed) { from, rows, width, into in
+                    PrintEncoding.packRows(from, rows: rows, width: width, into: into)
+                }
             } else {
-                PrintEncoding.encodeRows(from, rows: rows, width: width,
-                                         into: printed,
-                                         converter: sdrConversion)
+                encode(into: printed) { from, rows, width, into in
+                    PrintEncoding.encodeRows(from, rows: rows, width: width, into: into,
+                                             converter: sdrConversion)
+                }
             }
             if stillTimings {
                 handoverClock.encode += Date().timeIntervalSince(encodeStart)
             }
             if let hdrPrinted, let hdrOutput {
-                PrintEncoding.encodeRows(from, rows: rows, width: width,
-                                         into: hdrPrinted,
-                                         converter: FilmOutputConversion.rec2020HLG)
-                hdrOutput.flush(byteOffset: rows.lowerBound * width * 8,
-                                byteCount: rows.count * width * 8)
+                encode(into: hdrPrinted) { from, rows, width, into in
+                    PrintEncoding.encodeRows(from, rows: rows, width: width, into: into,
+                                             converter: FilmOutputConversion.rec2020HLG)
+                }
+                if closesBand {
+                    hdrOutput.flush(byteOffset: rows.lowerBound * width * 8,
+                                    byteCount: rows.count * width * 8)
+                }
             }
-            output.flush(byteOffset: rows.lowerBound * width * 8,
-                         byteCount: rows.count * width * 8)
-            // The finished print, keyed by the row the band starts at, so the proof does not
-            // depend on the order the engine happens to hand its strips back in.
+            if closesBand {
+                output.flush(byteOffset: rows.lowerBound * width * 8,
+                             byteCount: rows.count * width * 8)
+            }
+            // The finished print, keyed by the pixel the block starts at, so the proof does
+            // not depend on the order the engine happens to hand its blocks back in.
             if ExportProof.isEnabled, let base = printed.baseAddress {
-                ExportProof.add(key: rows.lowerBound,
-                                UnsafeRawPointer(base + rows.lowerBound * width * 4),
-                                count: rows.count * width * 8)
+                ExportProof.addRows(
+                    key: rows.lowerBound * width + columns.lowerBound,
+                    UnsafeRawPointer(base + (rows.lowerBound * width + columns.lowerBound) * 4),
+                    rowBytes: width * 8, usedBytesPerRow: columns.count * 8,
+                    rows: rows.count)
             }
             guard collectHistogram else { return }
-            let base = rows.lowerBound * width * 4
-            for index in stride(from: 0, to: rows.count * width * 4, by: 4) {
-                for channel in 0..<3 {
-                    bins[channel][Int(printed[base + index + channel]) >> 10] += 1
+            for row in rows {
+                let base = (row * width + columns.lowerBound) * 4
+                for index in stride(from: 0, to: columns.count * 4, by: 4) {
+                    for channel in 0..<3 {
+                        bins[channel][Int(printed[base + index + channel]) >> 10] += 1
+                    }
+                }
+                guard let hdrPrinted else { continue }
+                for index in stride(from: 0, to: columns.count * 4, by: 4) {
+                    for channel in 0..<3 {
+                        hdrBins[channel][Int(hdrPrinted[base + index + channel]) >> 10] += 1
+                    }
                 }
             }
-            guard let hdrPrinted else { return }
-            for index in stride(from: 0, to: rows.count * width * 4, by: 4) {
-                for channel in 0..<3 {
-                    hdrBins[channel][Int(hdrPrinted[base + index + channel]) >> 10] += 1
-                }
-            }
+        }
+        func writeRows(_ rows: Range<Int>, _ from: UnsafeBufferPointer<Float>) {
+            writeTile(rows, 0..<width, from)
         }
 
         /// One band's worth of progress, said the way the engine says it.
@@ -910,20 +957,20 @@ enum FilmRender {
                     }
                 },
                 shouldContinue: shouldContinue,
-                readRows: { rows, into in
+                readTile: { rows, columns, into in
                     let t0 = Date()
-                    // Only the rows this strip is about to expand, and only when the rasterise
+                    // Only the rows this tile is about to expand, and only when the rasterise
                     // is still behind them.
                     sceneReady?.wait(through: rows.upperBound)
                     handoverClock.wait += Date().timeIntervalSince(t0)
                     let t1 = Date()
-                    expand(scenePixels, rows: rows, width: width, into: into,
-                           inputConversion: inputConversion)
+                    expand(scenePixels, rows: rows, columns: columns, width: width,
+                           into: into, inputConversion: inputConversion)
                     handoverClock.read += Date().timeIntervalSince(t1)
                 },
-                writeRows: { rows, from in
+                writeTile: { rows, columns, from in
                     let t0 = Date()
-                    writeRows(rows, from)
+                    writeTile(rows, columns, from)
                     handoverClock.write += Date().timeIntervalSince(t0)
                 })
         }
@@ -1185,6 +1232,26 @@ enum FilmRender {
         SceneLinearInput.prepare(scene, from: start, count: count,
                                  into: destination,
                                  using: inputConversion)
+    }
+
+    /// The same for a block of the frame, packed `columns.count` wide in `destination`.
+    static func expand(_ scene: UnsafeBufferPointer<Float>,
+                       rows: Range<Int>, columns: Range<Int>, width: Int,
+                       into destination: UnsafeMutableBufferPointer<Float>,
+                       inputConversion: FilmInputConversion = .preserveHDR) {
+        guard columns != 0..<width else {
+            return expand(scene, rows: rows, width: width, into: destination,
+                          inputConversion: inputConversion)
+        }
+        let span = columns.count * 4
+        for row in rows {
+            let target = (row - rows.lowerBound) * span
+            SceneLinearInput.prepare(
+                scene, from: (row * width + columns.lowerBound) * 4, count: span,
+                into: UnsafeMutableBufferPointer(
+                    rebasing: destination[target..<(target + span)]),
+                using: inputConversion)
+        }
     }
 
     /// Regional log-luminance statistics of a decoded scene, metered

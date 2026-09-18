@@ -395,6 +395,34 @@ inline Func gpu_gaussian(Func source, Expr sigma0, Expr sigma1, Expr sigma2,
     return store_result ? store_frame(vertical, half, channels) : vertical;
 }
 
+/// One level of a box-averaged pyramid: `previous` (a frame or a coarser grid, `previous_width`
+/// by `previous_height`) averaged over `factor` x `factor` cells whose lattice starts `offset`
+/// cells before the source's origin, cells cut by the source's edge averaged over what they hold.
+/// The halation pyramid in the frame, the light pass that feeds the fields road and the fields
+/// build all decimate through this one definition, so the grids they produce hold the same bits
+/// wherever the cells came from.
+inline Func gpu_decimate_level(Func previous, Expr factor, Expr offset_x, Expr offset_y,
+                               Expr previous_width, Expr previous_height, int channels,
+                               const std::string &name) {
+    Var x("x"), y("y"), channel("channel");
+    Func bounded_source = constant_exterior(
+        previous, typed_zero(previous),
+        {{0, previous_width}, {0, previous_height}, {0, channels}});
+    RDom cell(0, factor, 0, factor, name + "_cell");
+    Func down(name + "_down");
+    Expr source_x = x * factor - offset_x + cell.x;
+    Expr source_y = y * factor - offset_y + cell.y;
+    Expr valid = Halide::select(source_x >= 0 && source_x < previous_width
+                                    && source_y >= 0 && source_y < previous_height,
+                                1.0f, 0.0f);
+    Expr cell_count = Halide::sum(valid, name + "_down_weight");
+    down(x, y, channel) = Halide::sum(
+        bounded_source(x * factor - offset_x + cell.x,
+                       y * factor - offset_y + cell.y, channel),
+        name + "_down_sum") / Halide::max(cell_count, 1.0f);
+    return down;
+}
+
 /// Three chained box blurs collapsed into one convolution per direction.
 inline Func gpu_triple_box_blur(Func source, Expr radius, Expr width, Expr height,
                          bool half, const std::string &name, int channels = 3) {

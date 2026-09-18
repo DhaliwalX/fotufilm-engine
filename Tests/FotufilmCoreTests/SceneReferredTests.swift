@@ -66,8 +66,8 @@ final class SceneReferredTests: XCTestCase {
                     if case .developing(_, let count) = phase { strips = count }
                 }))
             XCTAssertGreaterThan(strips, 1, "\(stock.name) did not actually tile")
-            XCTAssertLessThan(maxDifference(whole, tiled), 1.0 / 512,
-                              "\(stock.name) seams between strips")
+            XCTAssertEqual(maxDifference(whole, tiled), 0,
+                           "\(stock.name) strips stray from the whole frame's pixels")
         }
     }
 
@@ -86,8 +86,61 @@ final class SceneReferredTests: XCTestCase {
                 options: options, memoryBudget: 40 << 20,
                 progress: { if case .developing(_, let c) = $0 { strips = c } }))
             XCTAssertGreaterThan(strips, 1, "\(stock.name) did not actually tile")
-            XCTAssertLessThan(maxDifference(whole, tiled), 1.0 / 512,
-                              "\(stock.name) seams between strips")
+            XCTAssertEqual(maxDifference(whole, tiled), 0,
+                           "\(stock.name) strips stray from the whole frame's pixels")
+        }
+    }
+
+    /// A frame too wide to band is cut both ways; the tiles are the whole frame's pixels
+    /// exactly, whatever the cut, on both roads.
+    func testTilesDeliverTheWholeFramesPixels() throws {
+        guard let gpu = HalideMetalFilmRenderer.shared else { throw XCTSkip("no Metal") }
+        let width = 1536, height = 1024
+        let pixels = scene(width: width, height: height, peak: 9)
+        let options = FotufilmEngine.Options()
+        for stock in TestStocks.all {
+            let whole = try XCTUnwrap(gpu.processLinearFloat(
+                pixels, width: width, height: height, stock: stock,
+                options: options, memoryBudget: 1 << 30))
+            for road in ["FOTUFILM_NO_FIELDS", "FOTUFILM_FORCE_FIELDS"] {
+                setenv(road, "1", 1)
+                defer { unsetenv(road) }
+                var tiled = [Float](repeating: 0, count: width * height * 4)
+                var tiles = 0, columns = Set<Int>()
+                var none: FilmOutputTransform? = nil
+                let ok = pixels.withUnsafeBufferPointer { source in
+                    tiled.withUnsafeMutableBufferPointer { destination in
+                        gpu.developStreaming(
+                            width: width, height: height, stock: stock, options: options,
+                            outputTransform: &none, memoryBudget: 48 << 20,
+                            progress: { if case .developing(_, let c) = $0 { tiles = c } },
+                            readTile: { rows, cols, into in
+                                for (index, row) in rows.enumerated() {
+                                    into.baseAddress!.advanced(by: index * cols.count * 4)
+                                        .update(from: source.baseAddress!
+                                                    + (row * width + cols.lowerBound) * 4,
+                                                count: cols.count * 4)
+                                }
+                            },
+                            writeTile: { rows, cols, from in
+                                columns.insert(cols.lowerBound)
+                                for (index, row) in rows.enumerated() {
+                                    destination.baseAddress!
+                                        .advanced(by: (row * width + cols.lowerBound) * 4)
+                                        .update(from: from.baseAddress!
+                                                    + index * cols.count * 4,
+                                                count: cols.count * 4)
+                                }
+                            })
+                    }
+                }
+                XCTAssertTrue(ok, "\(stock.name) refused the tiles on \(road)")
+                XCTAssertGreaterThan(tiles, 1, "\(stock.name) did not tile on \(road)")
+                XCTAssertGreaterThan(columns.count, 1,
+                                     "\(stock.name) banded rather than tiled on \(road)")
+                XCTAssertEqual(maxDifference(whole, tiled), 0,
+                               "\(stock.name) tiles stray from the whole frame on \(road)")
+            }
         }
     }
 
@@ -110,30 +163,36 @@ final class SceneReferredTests: XCTestCase {
             let whole = try XCTUnwrap(gpu.processLinearFloat(
                 pixels, width: width, height: height, stock: stock,
                 options: options, memoryBudget: 1 << 30))
-            var classicStrips = 0
-            _ = try XCTUnwrap(gpu.processLinearFloat(
-                pixels, width: width, height: height, stock: stock,
-                options: options, memoryBudget: 40 << 20,
-                progress: { if case .developing(_, let c) = $0 { classicStrips = c } }))
+            var invocation = FilmEngineInvocation(
+                stock: stock, options: options, width: width, height: height)
+            invocation.featureMask |= FilmEngineFeature.floatIO
+            XCTAssertEqual(
+                HalideMetalFilmRenderer.planTiles(
+                    invocation: invocation, width: width, height: height,
+                    budget: 40 << 20, fullWidth: true)?.fields,
+                false, "\(stock.name) took the fields road when told not to")
             unsetenv("FOTUFILM_NO_FIELDS")
             setenv("FOTUFILM_FORCE_FIELDS", "1", 1)
-            var fieldsStrips = 0
+            // The whole-frame grids ride along for the develop and are priced in the budget:
+            // at this height the finest grid alone is tens of megabytes, so the road needs
+            // more room than the classic strips do to be worth taking at all.
+            let plan = HalideMetalFilmRenderer.planTiles(
+                invocation: invocation, width: width, height: height,
+                budget: 256 << 20, fullWidth: true)
+            if invocation.halationSupport > 0 {
+                XCTAssertEqual(plan?.fields, true,
+                               "\(stock.name) never took the fields road")
+            }
+            var strips = 0
             let fielded = try XCTUnwrap(gpu.processLinearFloat(
                 pixels, width: width, height: height, stock: stock,
-                options: options, memoryBudget: 40 << 20,
-                progress: { if case .developing(_, let c) = $0 { fieldsStrips = c } }))
+                options: options, memoryBudget: 256 << 20,
+                progress: { if case .developing(_, let c) = $0 { strips = c } }))
             unsetenv("FOTUFILM_FORCE_FIELDS")
             setenv("FOTUFILM_NO_FIELDS", "1", 1)
-            let invocation = FilmEngineInvocation(
-                stock: stock, options: options, width: width, height: height)
-            if invocation.halationSupport > 0 {
-                XCTAssertGreaterThan(
-                    fieldsStrips, classicStrips,
-                    "\(stock.name) never took the fields road — its develop "
-                    + "should add light strips to the classic count")
-            }
-            XCTAssertLessThan(maxDifference(whole, fielded), 1.0 / 512,
-                              "\(stock.name) fields road strays from the whole frame")
+            XCTAssertGreaterThan(strips, 1, "\(stock.name) did not actually tile")
+            XCTAssertEqual(maxDifference(whole, fielded), 0,
+                           "\(stock.name) fields road strays from the whole frame")
         }
     }
 
@@ -185,18 +244,31 @@ final class SceneReferredTests: XCTestCase {
         XCTAssertGreaterThan(apron, 150, "halation should span hundreds of pixels here")
 
         let pixels = width * height
-        let strip = min(height, 2 * apron + 1)
         let frames = 2 * MappedBuffer.residentBytes(pixels * 8)
         XCTAssertEqual(frames, 0, "a 33 MP frame buffer belongs on disk")
+        // The least any road can hold: the smallest tile worth cutting, its input with the
+        // emulsion's own apron walked by the light chain, and the develop's working set over
+        // its delivered pixels.
+        let tile = HalideMetalFilmRenderer.minimumTile
+        let fine = invocation.spatialSupportSansHalation
         let expected = frames
-            + strip * width * (16 * 2 + HalideMetalFilmRenderer.developBytesPerPixel)
+            + (tile + 2 * fine) * (tile + 2 * fine)
+                * (16 + HalideMetalFilmRenderer.lightBytesPerPixel)
+            + tile * tile * (16 + HalideMetalFilmRenderer.developBytesPerPixel)
         let estimate = try XCTUnwrap(HalideMetalFilmRenderer.minimumPeakBytes(
             width: width, height: height, stock: stock, options: options))
         XCTAssertGreaterThanOrEqual(estimate, expected,
                                     "estimate misses buffers the export holds")
 
-        XCTAssertLessThan(estimate, pixels * 16 + strip * width * 200,
-                          "estimate implies a full float frame is still held")
+        // And no more than the classic road's smallest tile, halation apron and all.
+        XCTAssertLessThanOrEqual(
+            estimate,
+            frames + (tile + 2 * apron) * (tile + 2 * apron)
+                * (16 + HalideMetalFilmRenderer.lightBytesPerPixel)
+            + tile * tile * (16 + HalideMetalFilmRenderer.developBytesPerPixel),
+            "estimate prices more than the smallest classic tile")
+        XCTAssertLessThan(estimate, 128 << 20,
+                          "a 33 MP export should fit a phone's allowance")
 
         let small = 64
         XCTAssertEqual(MappedBuffer.residentBytes(small * small * 8),
@@ -217,44 +289,58 @@ final class SceneReferredTests: XCTestCase {
             "the gate would approve a render with no headroom left")
     }
 
-    func testStripNeverOutgrowsItsBudget() {
+    func testTilesNeverOutgrowTheirBudget() {
         let width = 8064, height = 6048
-        let perRow = HalideMetalFilmRenderer.stripBytesPerRow(width: width)
-        for budgetRows in stride(from: 64, through: 4096, by: 64) {
-            let budget = budgetRows * perRow
-            for apron in stride(from: 1, through: budgetRows, by: 7) {
-                let rows = HalideMetalFilmRenderer.stripRows(
-                    width: width, height: height, apron: apron, budget: budget)
-                let strip = min(height, rows + 2 * apron)
-                XCTAssertGreaterThan(rows, 0, "a strip has to make progress")
-                guard 2 * apron + 1 <= budgetRows else { continue }
-                XCTAssertLessThanOrEqual(
-                    strip * perRow, budget,
-                    "a \(rows)-row strip with a \(apron)-row apron overruns a "
-                    + "\(budgetRows)-row budget")
+        let least = HalideMetalFilmRenderer.minimumTile
+        for budget in stride(from: 32 << 20, through: 2 << 30, by: 96 << 20) {
+            for apron in stride(from: 1, through: 1200, by: 37) {
+                guard let shape = HalideMetalFilmRenderer.tileShape(
+                    width: width, height: height, apron: apron, fineApron: apron,
+                    budget: budget, overlap: true, fullWidth: false)
+                else {
+                    // Only ever for want of room for the smallest tile.
+                    XCTAssertGreaterThan(
+                        HalideMetalFilmRenderer.tileBytes(
+                            width: width, height: height, tileWidth: least,
+                            tileRows: least, apron: apron, overlap: true),
+                        budget, "no tile planned though the smallest one fits")
+                    continue
+                }
+                XCTAssertGreaterThanOrEqual(min(shape.tileWidth, shape.tileRows), least,
+                                            "a tile smaller than the smallest worth cutting")
+                XCTAssertLessThanOrEqual(shape.bytes, budget,
+                                         "a \(shape.tileWidth)x\(shape.tileRows) tile with a "
+                                         + "\(apron)-pixel apron overruns \(budget >> 20) MB")
+                XCTAssertEqual(
+                    shape.bytes,
+                    HalideMetalFilmRenderer.tileBytes(
+                        width: width, height: height, tileWidth: shape.tileWidth,
+                        tileRows: shape.tileRows, apron: apron, overlap: true))
             }
         }
     }
 
-    func testEveryStripPricesFullPrecisionApron() {
-        let width = 7008
-        XCTAssertEqual(
-            HalideMetalFilmRenderer.apronBytesPerRow(
-                width: width, exactMath: true),
-            HalideMetalFilmRenderer.stripBytesPerRow(width: width),
-            "float stills must not use a half-float apron estimate")
-
-        let height = 4672
+    /// The apron is what the light chain walks: every tile prices its whole input, apron
+    /// included, at the light's working set, and only its delivered pixels at the develop's.
+    func testEveryTilePricesItsApron() {
+        let width = 7008, height = 4672
         let apron = 591
-        let budget = 1 << 30
-        let rows = HalideMetalFilmRenderer.stripRows(
-            width: width, height: height, apron: apron,
-            budget: budget, exactMath: true)
-        let stripHeight = min(height, rows + 2 * apron)
-        XCTAssertLessThanOrEqual(
-            stripHeight * HalideMetalFilmRenderer.stripBytesPerRow(width: width),
-            budget,
-            "an accurate strip must fit the budget with its full-float apron")
+        let tile = 1000
+        let priced = HalideMetalFilmRenderer.tileBytes(
+            width: width, height: height, tileWidth: tile, tileRows: tile, apron: apron,
+            overlap: false)
+        XCTAssertEqual(
+            priced,
+            (tile + 2 * apron) * (tile + 2 * apron)
+                * (16 + HalideMetalFilmRenderer.lightBytesPerPixel)
+            + tile * tile * (16 + HalideMetalFilmRenderer.developBytesPerPixel))
+        // A frame too wide to band under a gigabyte with that apron is cut both ways rather
+        // than refused.
+        let plan = HalideMetalFilmRenderer.tileShape(
+            width: width, height: height, apron: apron, fineApron: apron, budget: 1 << 30,
+            overlap: true, fullWidth: false)
+        XCTAssertNotNil(plan)
+        XCTAssertLessThan(plan?.tileWidth ?? width, width)
     }
 
     func testAccurateTwoHundredMegapixelGateUsesExactApron() throws {
@@ -280,15 +366,15 @@ final class SceneReferredTests: XCTestCase {
             budget: accurate - 1, exactMath: true))
     }
 
-    func testStripIsTheWholeFrameWhenTheWholeFrameFits() {
+    func testTileIsTheWholeFrameWhenTheWholeFrameFits() {
         let width = 512, height = 512
         let perRow = HalideMetalFilmRenderer.stripBytesPerRow(width: width)
-        XCTAssertEqual(
-            HalideMetalFilmRenderer.stripRows(
-                width: width, height: height, apron: 200,
-                budget: height * perRow),
-            height,
-            "a frame that fits should not be cut up on account of its apron")
+        let shape = HalideMetalFilmRenderer.tileShape(
+            width: width, height: height, apron: 200, fineApron: 200,
+            budget: height * perRow, overlap: false, fullWidth: false)
+        XCTAssertEqual(shape?.tileWidth, width)
+        XCTAssertEqual(shape?.tileRows, height,
+                       "a frame that fits should not be cut up on account of its apron")
     }
 
     func testMappedFramesDevelopIdenticallyToPlainMemory() throws {
