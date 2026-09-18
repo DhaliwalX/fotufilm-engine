@@ -15,48 +15,85 @@ public final class MappedBuffer: @unchecked Sendable {
     /// False when this fell back to — or never left — anonymous memory.
     public let isMapped: Bool
     public let baseAddress: UnsafeMutableRawPointer
+    /// The backing file, kept open for `write`; -1 when not mapped.
+    private let descriptor: Int32
 
     /// Allocates `byteCount` bytes, mapped or not according to size.
     public init?(byteCount: Int) {
         guard byteCount > 0 else { return nil }
         self.byteCount = byteCount
         if byteCount >= Self.mappingThreshold,
-           let mapped = Self.map(byteCount: byteCount) {
+           let (mapped, descriptor) = Self.map(byteCount: byteCount) {
             baseAddress = mapped
+            self.descriptor = descriptor
             isMapped = true
             return
         }
         guard let memory = malloc(byteCount) else { return nil }
         memory.initializeMemory(as: UInt8.self, repeating: 0, count: byteCount)
         baseAddress = memory
+        descriptor = -1
         isMapped = false
     }
 
     deinit {
         if isMapped {
             munmap(baseAddress, byteCount)
+            close(descriptor)
         } else {
             free(baseAddress)
         }
     }
 
     /// Maps a temporary file, or nil if any step of it fails.
-    private static func map(byteCount: Int) -> UnsafeMutableRawPointer? {
+    private static func map(byteCount: Int) -> (UnsafeMutableRawPointer, Int32)? {
         let path = (NSTemporaryDirectory() as NSString)
             .appendingPathComponent("fotufilm-\(UUID().uuidString)")
         let descriptor = open(path, O_RDWR | O_CREAT | O_EXCL, 0o600)
         guard descriptor >= 0 else { return nil }
         unlink(path)
-        defer { close(descriptor) }
-        guard ftruncate(descriptor, off_t(byteCount)) == 0 else { return nil }
+        guard ftruncate(descriptor, off_t(byteCount)) == 0 else {
+            close(descriptor)
+            return nil
+        }
         let mapped = mmap(nil, byteCount, PROT_READ | PROT_WRITE,
                           MAP_SHARED, descriptor, 0)
         // `MAP_FAILED` is `((void *)-1)`, a cast Swift does not import as a constant on every
         // platform, and `mmap` comes back optional on some of them and not on others. The failure
         // it reports is the same one either way.
         guard let mapped = mapped as UnsafeMutableRawPointer?,
-              Int(bitPattern: mapped) != -1 else { return nil }
-        return mapped
+              Int(bitPattern: mapped) != -1 else {
+            close(descriptor)
+            return nil
+        }
+        return (mapped, descriptor)
+    }
+
+    /// Stores `count` bytes at `byteOffset` through the file rather than the mapping. Writing a
+    /// large mapping dirties its pages faster than the kernel will write them back, and it
+    /// answers by stalling the writer — an iPhone spent thirty seconds of a forty-second
+    /// rasterise stopped that way — where the file's own write path streams them out. The
+    /// mapping sees the bytes the same: it is the same page cache.
+    public func write(from source: UnsafeRawPointer, byteOffset: Int, byteCount count: Int) {
+        guard count > 0, byteOffset >= 0, byteOffset + count <= byteCount else { return }
+        guard isMapped else {
+            baseAddress.advanced(by: byteOffset).copyMemory(from: source, byteCount: count)
+            return
+        }
+        var written = 0
+        while written < count {
+            let result = pwrite(descriptor, source.advanced(by: written), count - written,
+                                off_t(byteOffset + written))
+            if result <= 0 {
+                if result < 0 && errno == EINTR { continue }
+                // The mapping is still the truth of the buffer; what the file would not take
+                // goes in through it.
+                baseAddress.advanced(by: byteOffset + written).copyMemory(
+                    from: source.advanced(by: written), byteCount: count - written)
+                return
+            }
+            written += result
+        }
     }
 
     /// Asks the kernel to begin writing this range back.

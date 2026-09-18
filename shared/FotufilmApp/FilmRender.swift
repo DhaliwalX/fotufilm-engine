@@ -413,18 +413,18 @@ enum FilmRender {
         guard let buffer = MappedBuffer(byteCount: rowBytes * height) else {
             return nil
         }
-        /// One band of scene, finished: rendered, colour-corrected and flushed, in that order,
-        /// exactly as the whole-frame version did it.
-        func rasterizeBand(_ rows: Range<Int>, into destination: UnsafeMutableRawPointer) {
+        /// One band of scene, finished: rendered into scratch, colour-corrected there, and
+        /// written to the buffer through its file — see `MappedBuffer.write` for why not
+        /// through the mapping — in that order, exactly as the whole-frame version did it.
+        func rasterizeBand(_ band: UnsafeMutableRawPointer, byteOffset: Int, byteCount: Int) {
             if let profileDelta {
-                let base = destination.assumingMemoryBound(to: Float.self)
+                let base = band.assumingMemoryBound(to: Float.self)
                 CameraProfileCorrection.apply(
                     profileDelta.matrix,
                     toRGBA: UnsafeMutableBufferPointer(
-                        start: base, count: rows.count * width * 4))
+                        start: base, count: byteCount / MemoryLayout<Float>.size))
             }
-            buffer.flush(byteOffset: rows.lowerBound * rowBytes,
-                         byteCount: rows.count * rowBytes)
+            buffer.write(from: band, byteOffset: byteOffset, byteCount: byteCount)
         }
         if let profileDelta { CameraProfileCorrection.trace(profileDelta) }
 
@@ -442,13 +442,9 @@ enum FilmRender {
                     placed, into: pixels.baseAddress,
                     width: width, height: height,
                     context: context, colorSpace: linearSpace,
-                    flush: { byteOffset, byteCount in
-                        let first = byteOffset / rowBytes
-                        let count = byteCount / rowBytes
-                        rasterizeBand(
-                            first..<(first + count),
-                            into: pixels.baseAddress.advanced(by: byteOffset))
-                        ready.publish(through: first + count)
+                    sink: { band, byteOffset, byteCount in
+                        rasterizeBand(band, byteOffset: byteOffset, byteCount: byteCount)
+                        ready.publish(through: (byteOffset + byteCount) / rowBytes)
                     })
                 ready.publish(through: height)
                 ready.finish()
@@ -462,12 +458,8 @@ enum FilmRender {
                     placed, into: pixels.baseAddress,
                     width: width, height: height,
                     context: context, colorSpace: linearSpace,
-                    flush: { byteOffset, byteCount in
-                        let first = byteOffset / rowBytes
-                        let count = byteCount / rowBytes
-                        rasterizeBand(
-                            first..<(first + count),
-                            into: pixels.baseAddress.advanced(by: byteOffset))
+                    sink: { band, byteOffset, byteCount in
+                        rasterizeBand(band, byteOffset: byteOffset, byteCount: byteCount)
                     })
             }
         }
