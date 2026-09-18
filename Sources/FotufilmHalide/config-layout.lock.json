@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "count": 18860,
+  "count": 18878,
   "fields": {
     "CURVES": {
       "offset": 0,
@@ -397,6 +397,10 @@
     "BYTE_BASIS": {
       "offset": 18858,
       "count": 2
+    },
+    "GRAIN_DENSITY_RECORDS": {
+      "offset": 18860,
+      "count": 18
     }
   }
 }

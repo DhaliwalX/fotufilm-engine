@@ -409,6 +409,9 @@ public struct FilmEngineInvocation {
     /// The chromogenic negative's granularity-against-density coefficients; mirrors
     /// FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE.
     public static let grainDensityProfileOffset = Int(FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE)
+    /// Per-record `[amplitude, toe, decay, hump, humpDensity, humpWidth]` rows at
+    /// FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS, red, green, blue in turn.
+    public static let grainDensityRecordsOffset = Int(FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS)
     /// Index of the SDR shoulder knee the host output transform carries, a negative value
     /// meaning none; mirrors FOTUFILM_CONFIG_OUTPUT_SHOULDER. Appended without
     /// renumbering earlier fields.
@@ -1442,7 +1445,9 @@ public struct FilmEngineInvocation {
         // light box or scanner shares the reversal feature bit — the output routing is the same —
         // but its emulsion still forms a negative, and the grain rides that density.
         configuration += [stock.isReversal ? 1 : 0]
-        configuration += stock.grainDensityProfile
+        // The superseded shared slot keeps the green record's first three coefficients for
+        // kernels built against the earlier layout; the per-record rows are appended below.
+        configuration += Array(stock.grainDensityProfile.records[1].prefix(3))
         // No shoulder until a delivery asks for one, matching the identity the rest of the
         // output transform is initialized to.
         configuration += [-1]
@@ -1508,6 +1513,7 @@ public struct FilmEngineInvocation {
         configuration += [cameraPreflash, printerPreflash]
         // The byte frames' primaries, input then output: Display P3 until a road says sRGB.
         configuration += [0, 0]
+        configuration += stock.grainDensityProfile.records.flatMap { $0 }
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0

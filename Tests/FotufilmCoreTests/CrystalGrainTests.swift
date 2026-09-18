@@ -91,8 +91,10 @@ final class CrystalGrainTests: XCTestCase {
     }
 
     /// Against the two sheets that publish a curve — Kodak's granularity against density for
-    /// Vision3 250D and 500T, which the packs carry as `grainDensityProfile` — the population's
-    /// own curve stays within the plots' reading accuracy between 0.1 and 2.0 above base.
+    /// Vision3 250D and 500T, which the packs carry per record as `grainDensityProfile` — the
+    /// population's own curve stays within the plots' reading accuracy between 0.1 and 2.0
+    /// above base. The blue record's second rise near net 1.3 is the one feature a
+    /// two-population model cannot make, which is where the bound is set.
     func testKodakSheetCurves() throws {
         for id in ["vision250d", "vision500t"] {
             guard let stock = FilmStock.named(id) else {
@@ -109,7 +111,7 @@ final class CrystalGrainTests: XCTestCase {
                         / stock.grainDensityModulation(layer: layer, netDensity: anchor)
                     worst = max(worst, abs(log(modelled / sheet)))
                 }
-                XCTAssertLessThan(worst, 0.38, "\(id) layer \(layer): \(model.report)")
+                XCTAssertLessThan(worst, 0.42, "\(id) layer \(layer): \(model.report)")
             }
         }
     }
@@ -128,8 +130,10 @@ final class CrystalGrainTests: XCTestCase {
         XCTAssertEqual(binOffset, Int(FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE) + 2)
         XCTAssertEqual(lambdaOffset, binOffset + 3 * CrystalGrainModel.binCount * 4)
         XCTAssertEqual(printOffset, lambdaOffset + 3 * CrystalGrainModel.binCount * CrystalGrainModel.samples)
-        // The print stage's four, the two preflashes, and the byte frames' two primaries.
-        XCTAssertEqual(FilmEngineInvocation.configurationCount, printOffset + 8)
+        // The print stage's four, the two preflashes, the byte frames' two primaries, and
+        // the per-record grain rows, all appended past the print grain.
+        XCTAssertEqual(FilmEngineInvocation.configurationCount,
+                       printOffset + 8 + Int(FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS_COUNT))
         for slot in binOffset..<printOffset {
             XCTAssertEqual(plain.configuration[slot], 0)
         }

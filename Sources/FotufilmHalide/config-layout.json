@@ -382,7 +382,7 @@
     {
       "name": "GRAIN_DENSITY_PROFILE",
       "count": 3,
-      "doc": "The chromogenic negative's granularity-against-density shape, read only under FOTUFILM_CONFIG_GRAIN_LAW 0: the coarse sub-layer's variance amplitude, the toe density over which anything develops at all, and the density over which that coarse population decays onto the fine one. Mirrors `FilmStock.grainDensityProfile`."
+      "doc": "Superseded by FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS, which carries the shape per record with its second rise; still written with the green record's first three coefficients so a kernel built against the earlier layout renders the earlier law. Read only under FOTUFILM_CONFIG_GRAIN_LAW 0: the coarse sub-layer's variance amplitude, the toe density over which anything develops at all, and the density over which that coarse population decays onto the fine one."
     },
     {
       "name": "OUTPUT_SHOULDER",
@@ -464,6 +464,11 @@
       "name": "BYTE_BASIS",
       "count": 2,
       "doc": "The primaries of the byte frames on the encoded-byte road, [input, output]: 0 Display P3, 1 sRGB, both under the sRGB transfer. The decode steps the input basis into the working space; the delivery leaves the print's Display P3 for the output basis after the shoulder and before the clip. Read only on byte I/O; a float frame is the working space itself."
+    },
+    {
+      "name": "GRAIN_DENSITY_RECORDS",
+      "count": 18,
+      "doc": "The chromogenic negative's granularity-against-density shape per record, read only under FOTUFILM_CONFIG_GRAIN_LAW 0: for red, green and blue in turn, the coarse sub-layer's variance amplitude, the toe density over which anything develops at all, the density over which that coarse population decays onto the fine one, then the amplitude, centre density and width of the second rise where the slow sub-layer's coarse population comes in. Mirrors `FilmStock.grainDensityProfile`; appended without renumbering earlier fields."
     }
   ]
 }

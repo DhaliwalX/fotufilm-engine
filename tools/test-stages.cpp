@@ -50,6 +50,15 @@ Buffer<float> configuration() {
     values(FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE) = 1.0f;
     values(FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE + 1) = 0.2f;
     values(FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE + 2) = 0.5f;
+    for (int record = 0; record < 3; ++record) {
+        const int row = FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS + record * 6;
+        values(row) = 1.0f;
+        values(row + 1) = 0.2f;
+        values(row + 2) = 0.5f;
+        values(row + 3) = 0.0f;
+        values(row + 4) = 1.0f;
+        values(row + 5) = 0.3f;
+    }
     values(FOTUFILM_CONFIG_FLARE) = 0.25f;
     values(FOTUFILM_CONFIG_PRINT_SHARPEN) = 0.5f;
     return values;

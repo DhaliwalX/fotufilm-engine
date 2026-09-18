@@ -179,10 +179,12 @@ enum {
     /// negative shown on a light box or scanner past the paper; that negative is still developed as
     /// a negative, so its density law and its grain are evaluated in its own density.
     FOTUFILM_CONFIG_DEVELOP_COMPLEMENT = 8799,
-    /// The chromogenic negative's granularity-against-density shape, read only under
+    /// Superseded by FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS, which carries the shape per record with
+    /// its second rise; still written with the green record's first three coefficients so a kernel
+    /// built against the earlier layout renders the earlier law. Read only under
     /// FOTUFILM_CONFIG_GRAIN_LAW 0: the coarse sub-layer's variance amplitude, the toe density over
     /// which anything develops at all, and the density over which that coarse population decays
-    /// onto the fine one. Mirrors `FilmStock.grainDensityProfile`.
+    /// onto the fine one.
     FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE = 8800,
     /// The knee of the SDR shoulder the host's delivery asks for, applied between the output matrix
     /// and the output transfer — the step `FilmOutputConversion` takes on the host, moved into the
@@ -237,6 +239,13 @@ enum {
     /// the delivery leaves the print's Display P3 for the output basis after the shoulder and
     /// before the clip. Read only on byte I/O; a float frame is the working space itself.
     FOTUFILM_CONFIG_BYTE_BASIS = 18858,
+    /// The chromogenic negative's granularity-against-density shape per record, read only under
+    /// FOTUFILM_CONFIG_GRAIN_LAW 0: for red, green and blue in turn, the coarse sub-layer's
+    /// variance amplitude, the toe density over which anything develops at all, the density over
+    /// which that coarse population decays onto the fine one, then the amplitude, centre density
+    /// and width of the second rise where the slow sub-layer's coarse population comes in. Mirrors
+    /// `FilmStock.grainDensityProfile`; appended without renumbering earlier fields.
+    FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS = 18860,
 };
 
 enum {
@@ -339,8 +348,9 @@ enum {
     FOTUFILM_CONFIG_CAMERA_PREFLASH_COUNT = 1,
     FOTUFILM_CONFIG_PRINTER_PREFLASH_COUNT = 1,
     FOTUFILM_CONFIG_BYTE_BASIS_COUNT = 2,
+    FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS_COUNT = 18,
 };
 
-enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18860 };
+enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18878 };
 
 #endif

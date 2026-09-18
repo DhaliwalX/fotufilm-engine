@@ -88,10 +88,17 @@ final class ECN2ProcessTests: XCTestCase {
             let stock = try XCTUnwrap(FilmStock.named(id), "Stock \(id) must load")
             XCTAssertEqual(stock.grainDensityLaw, .dyeCloud,
                            "\(id): ECN-2 chromogenic negative must obey dye-cloud granularity law")
-            XCTAssertEqual(stock.grainDensityProfile.count, 3,
-                           "\(id): grain density profile must carry [amplitude, toeDensity, decayDensity]")
-            XCTAssertTrue(stock.grainDensityProfile.allSatisfy { $0 > 0 },
-                          "\(id): grain density profile entries must be positive")
+            // Kodak plots all three records, and they differ: the sheet's own fit is per
+            // record and carries the second rise every Vision3 curve shows.
+            XCTAssertFalse(stock.grainDensityProfile.isShared,
+                           "\(id): grain density profile must be stated per record")
+            XCTAssertTrue(stock.grainDensityProfile.hasHump,
+                          "\(id): grain density profile must carry the second rise")
+            for row in stock.grainDensityProfile.records {
+                XCTAssertEqual(row.count, GrainDensityProfile.coefficientCount, id)
+                XCTAssertTrue(row.allSatisfy { $0 > 0 },
+                              "\(id): grain density profile entries must be positive")
+            }
         }
     }
 

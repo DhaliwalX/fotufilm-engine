@@ -160,18 +160,39 @@
   },
   "flare": 0.008,
   "grainDensityProfile": [
-    5.398857,
-    0.076625,
-    0.922958
+    [
+      20.0,
+      0.273,
+      0.2563,
+      0.4657,
+      1.1119,
+      0.3526
+    ],
+    [
+      20.0,
+      0.2966,
+      0.2826,
+      1.5313,
+      1.4936,
+      0.3543
+    ],
+    [
+      18.7592,
+      0.0756,
+      0.4232,
+      6.0,
+      1.2753,
+      0.4227
+    ]
   ],
   "grainLayerWeights": [
-    0.67,
-    1,
-    1.33
+    0.85,
+    1.0,
+    2.15
   ],
   "grainLumaCorrelation": 0.6,
   "grainSizeMM": 0.004,
-  "grainStrength": 0.0075,
+  "grainStrength": 0.0063,
   "halationLookScale": 1,
   "halationReturnMatrix": [
     [

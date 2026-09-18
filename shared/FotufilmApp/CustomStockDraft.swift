@@ -129,7 +129,7 @@ struct CustomStockDraft: Codable, Equatable {
     /// Fitted chromogenic-negative density response. The Workshop does not expose these
     /// calibration coefficients, but it must retain them when an installed stock is copied.
     /// `nil` keeps older saved drafts decodable and selects the shared family fit.
-    var grainDensityProfile: [Float]? = nil
+    var grainDensityProfile: GrainDensityProfile? = nil
     /// Preserve a reversal pack's fitted response when it is opened in the Workshop.
     var grainReversalProfile: [Float]? = nil
 

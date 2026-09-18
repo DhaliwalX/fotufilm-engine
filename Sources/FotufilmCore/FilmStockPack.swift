@@ -69,10 +69,11 @@ public struct FilmStockDefinition: Codable, Sendable {
     /// colour negative, saturating power law for a dye reversal. Stated where the material and the law
     /// cross, as they do for a chromogenic black-and-white stock.
     public var grainDensityLaw: GrainDensityLaw?
-    /// `[amplitude, toeDensity, decayDensity]` of the chromogenic negative's
-    /// granularity-against-density shape. Absent uses the embedding's shared default;
-    /// this source repository supplies an illustrative analytic profile.
-    public var grainDensityProfile: [Float]?
+    /// The chromogenic negative's granularity-against-density shape: one row of
+    /// `[amplitude, toeDensity, decayDensity, humpAmplitude, humpDensity, humpWidth]` for all
+    /// three records, or one such row per record; a row of three is the earlier form without
+    /// the hump. Absent uses the Vision3 family shape; see `GrainDensityProfile`.
+    public var grainDensityProfile: GrainDensityProfile?
     /// `[exponent p, shoulder density Ds]` of the dye reversal's saturating power law.
     /// Absent uses the provisional family profile [1.1, 3].
     public var grainReversalProfile: [Float]? = nil
