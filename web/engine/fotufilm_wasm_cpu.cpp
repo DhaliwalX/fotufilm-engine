@@ -156,7 +156,7 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
         grain_mode, mottle_sigma, mottle_radius, mottle_lambda,                     \
         diffusion_stride[0], diffusion_stride[1], diffusion_stride[2],              \
         diffusion_strided_radius[0], diffusion_strided_radius[1],                   \
-        diffusion_strided_radius[2], &density_buf
+        diffusion_strided_radius[2], feature_mask, &density_buf
 
     int status;
     switch (fotufilm_develop_variant(feature_mask)) {

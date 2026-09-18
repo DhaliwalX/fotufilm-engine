@@ -306,7 +306,11 @@ struct WindowedFrameSchedule {
     ~WindowedFrameSchedule() { windowed_frame_schedule = previous; }
 };
 
-inline void gpu_pointwise(Func function, Var x, Var y, Var channel, int channels) {
+/// `branch`, when given, is a stage gate the pass reads through a select: the pass is compiled
+/// once per side so each side is the exact graph — the bypass side never loads the skipped
+/// stage's field and the staged side never recomputes the bypass.
+inline void gpu_pointwise(Func function, Var x, Var y, Var channel, int channels,
+                          Expr branch = Expr()) {
     Var block_x, block_y, thread_x, thread_y;
     if (windowed_frame_schedule) windowed_frame_schedule->stores.push_back(function);
     function.compute_root()
@@ -319,18 +323,19 @@ inline void gpu_pointwise(Func function, Var x, Var y, Var channel, int channels
     // Keep the boundary guards in the kernel. Splitting this dynamic geometry into
     // edge/interior loops costs seconds per JIT variant without improving Metal throughput.
     if (gpu_device_api() == DeviceAPI::Metal) function.never_partition_all();
+    if (branch.defined()) function.specialize(branch);
 }
 
 /// Materializes `values` as one full-frame GPU pass and returns the view its consumers read.
-inline Func store_frame(Func values, bool half, int channels = 3) {
+inline Func store_frame(Func values, bool half, int channels = 3, Expr branch = Expr()) {
     Var x("x"), y("y"), channel("channel");
     if (!half) {
-        gpu_pointwise(values, x, y, channel, channels);
+        gpu_pointwise(values, x, y, channel, channels, branch);
         return values;
     }
     Func packed(values.name() + "_packed");
     packed(x, y, channel) = Halide::cast(Float(16), values(x, y, channel));
-    gpu_pointwise(packed, x, y, channel, channels);
+    gpu_pointwise(packed, x, y, channel, channels, branch);
     Func stored(values.name() + "_stored");
     stored(x, y, channel) = Halide::cast<float>(packed(x, y, channel));
     return stored;
@@ -343,11 +348,11 @@ struct StoredFrame {
     Func packed;
 };
 
-inline StoredFrame store_frame_packed(Func values, int channels) {
+inline StoredFrame store_frame_packed(Func values, int channels, Expr branch = Expr()) {
     Var x("x"), y("y"), channel("channel");
     Func packed(values.name() + "_packed");
     packed(x, y, channel) = Halide::cast(Float(16), values(x, y, channel));
-    gpu_pointwise(packed, x, y, channel, channels);
+    gpu_pointwise(packed, x, y, channel, channels, branch);
     Func stored(values.name() + "_stored");
     stored(x, y, channel) = Halide::cast<float>(packed(x, y, channel));
     return {stored, packed};

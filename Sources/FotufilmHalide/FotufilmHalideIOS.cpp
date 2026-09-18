@@ -136,7 +136,7 @@ using FrameFunction = int (*)(
     float, int32_t, float, int32_t, float, int32_t, float, int32_t, float, float, int32_t, int32_t, uint32_t,
     int32_t, int32_t,
     int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
-    int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
+    int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
     halide_buffer_t *);
 
 struct AotVariant {
@@ -356,7 +356,7 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     strided_radius[0], strided_radius[1], strided_radius[2],                \
     diffusion_stride[0], diffusion_stride[1], diffusion_stride[2],          \
     diffusion_strided_radius[0], diffusion_strided_radius[1],               \
-    diffusion_strided_radius[2]
+    diffusion_strided_radius[2], feature_mask
     FrameFunction pipeline = select_variant(feature_mask);
     if (!pipeline) return -3;
 #if FOTUFILM_AOT_WINDOWED_HOST
