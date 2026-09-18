@@ -872,7 +872,8 @@ public:
           halation_radius_0_("frame_halation_radius_0" + suffix),
           halation_radius_1_("frame_halation_radius_1" + suffix),
           halation_radius_2_("frame_halation_radius_2" + suffix),
-          runtime_features_("frame_features" + suffix) {
+          runtime_features_("frame_features" + suffix),
+          byte_basis_("frame_byte_basis" + suffix) {
         WindowedFrameSchedule window_schedule(windowed);
         feature_mask &= ~ablated_features();
         features_ = feature_mask;
@@ -916,24 +917,28 @@ public:
             // The float contract is the working space itself, linear Rec.2020.
             decoded(x, y, channel) = input_(x, y, channel);
         } else {
-            // Encoded bytes are transfer-encoded Display P3; decoding the transfer leaves
-            // linear P3, and the matrix steps it into the Rec.2020 working space. The matrix
-            // needs all three channels, so the per-channel transfer decode is spelled as a
-            // lambda over the channel index.
+            // Encoded bytes are transfer-encoded Display P3, or sRGB when the configuration
+            // says so; decoding the transfer leaves linear light in that basis, and the matrix
+            // steps it into the Rec.2020 working space. The matrix needs all three channels,
+            // so the per-channel transfer decode is spelled as a lambda over the channel index.
             Expr alpha = Halide::cast<float>(input_(x, y, 3));
             Expr denominator = Halide::select(alpha > 0.0f && alpha < 255.0f, alpha, 255.0f);
-            auto linear_p3 = [&](int channel_index) {
+            auto linear_in = [&](int channel_index) {
                 Expr encoded = Halide::clamp(
                     Halide::cast<float>(input_(x, y, channel_index))
                     / denominator, 0.0f, 1.0f);
                 return sample_transfer(srgb_decode_, encoded);
             };
-            Expr p3_r = linear_p3(0), p3_g = linear_p3(1), p3_b = linear_p3(2);
-            decoded(x, y, channel) = Halide::mux(channel, {
-                kP3ToRec2020[0] * p3_r + kP3ToRec2020[1] * p3_g + kP3ToRec2020[2] * p3_b,
-                kP3ToRec2020[3] * p3_r + kP3ToRec2020[4] * p3_g + kP3ToRec2020[5] * p3_b,
-                kP3ToRec2020[6] * p3_r + kP3ToRec2020[7] * p3_g + kP3ToRec2020[8] * p3_b,
-            });
+            Expr in_r = linear_in(0), in_g = linear_in(1), in_b = linear_in(2);
+            Expr srgb_in = (byte_basis_ & 1) != 0;
+            auto working = [&](int row) {
+                auto weight = [&](int column) {
+                    return Halide::select(srgb_in, kSRGBToRec2020[3 * row + column],
+                                          kP3ToRec2020[3 * row + column]);
+                };
+                return weight(0) * in_r + weight(1) * in_g + weight(2) * in_b;
+            };
+            decoded(x, y, channel) = Halide::mux(channel, {working(0), working(1), working(2)});
         }
 
         GpuPolicy policy;
@@ -1119,8 +1124,24 @@ public:
             Func srgb("frame_srgb" + suffix);
             Expr shoulder_knee = Halide::select(
                 reversal_ != 0, 0.7f, 0.9f);
+            // The print is Display P3. A frame delivered in sRGB leaves it here, after the
+            // shoulder and before the clip, the way the reference path does. The matrix reads
+            // all three shouldered channels, so that arm stores the print once rather than
+            // develop it again per channel; the output is compiled per basis below, and the P3
+            // arm neither reads the store nor runs it.
+            Expr srgb_out = (byte_basis_ & 2) != 0;
+            Func shouldered("frame_shouldered" + suffix);
+            shouldered(x, y, channel) = display_shoulder(final_linear(x, y, channel),
+                                                         shoulder_knee);
+            Func shouldered_view = store_frame(shouldered, policy.half_store, 3);
+            auto in_srgb = [&](int row) {
+                return kP3ToSRGB[3 * row] * graph::gated(srgb_out, shouldered_view(x, y, 0), 0.0f)
+                    + kP3ToSRGB[3 * row + 1] * graph::gated(srgb_out, shouldered_view(x, y, 1), 0.0f)
+                    + kP3ToSRGB[3 * row + 2] * graph::gated(srgb_out, shouldered_view(x, y, 2), 0.0f);
+            };
             Expr linear = Halide::clamp(
-                display_shoulder(final_linear(x, y, channel), shoulder_knee),
+                graph::gated(srgb_out, Halide::mux(channel, {in_srgb(0), in_srgb(1), in_srgb(2)}),
+                             display_shoulder(final_linear(x, y, channel), shoulder_knee)),
                 0.0f, 1.0f);
             srgb(x, y, channel) = sample_transfer(srgb_encode_, Halide::sqrt(linear));
             Expr dither = triangular_dither(
@@ -1171,6 +1192,8 @@ public:
                 output.specialize(shape)
                     .specialize(configuration_(FOTUFILM_CONFIG_OUTPUT_GAMUT) == 0.0f);
             }
+        } else if (!float_io_ && !density_out_ && !windowed) {
+            output.specialize((byte_basis_ & 2) != 0);
         }
         pipeline_ = Pipeline(output);
 #if !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
@@ -1280,6 +1303,7 @@ public:
             arguments.push_back(scalar);
         }
         arguments.push_back(runtime_features_);
+        arguments.push_back(byte_basis_);
         pipeline_.compile_to_static_library(prefix, arguments, function_name, target);
     }
 #endif
@@ -1444,6 +1468,7 @@ private:
         halation_radius_1_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_HALATION_RADIUS + 1])));
         halation_radius_2_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_HALATION_RADIUS + 2])));
         runtime_features_.set(requested);
+        byte_basis_.set(fotufilm_byte_basis(configuration));
         if (cached_) cached_.realize(output_buffer);
         else pipeline_.realize(output_buffer, gpu_target());
     }
@@ -1487,6 +1512,10 @@ private:
     ImageParam input_, configuration_, exposure_lut_, film_lut_, paper_lut_;
     Param<int32_t> halation_radius_0_, halation_radius_1_, halation_radius_2_;
     Param<int32_t> runtime_features_;
+    /// The byte frames' primaries as FOTUFILM_CONFIG_BYTE_BASIS packs them: bit 0 the input is
+    /// sRGB, bit 1 the delivery is. A uniform parameter rather than the configuration's own
+    /// read so the delivery's stored print is skipped, not just unread, on the P3 arm.
+    Param<int32_t> byte_basis_;
     int32_t features_ = 0;
     Pipeline pipeline_;
     compiled_cache::Pipeline cached_;

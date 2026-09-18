@@ -174,6 +174,14 @@ static inline int32_t fotufilm_halation_strided_radius(int32_t radius,
     return scaled < 1 ? 1 : scaled;
 }
 
+/// The byte frames' primaries, packed for the kernels' scalar: FOTUFILM_CONFIG_BYTE_BASIS names
+/// the input's in its first slot and the delivery's in its second, 1 for sRGB; bit 0 and bit 1
+/// here. Every road derives the scalar from the configuration this way.
+static inline int32_t fotufilm_byte_basis(const float *configuration) {
+    return (configuration[FOTUFILM_CONFIG_BYTE_BASIS] != 0.0f ? 1 : 0)
+        | (configuration[FOTUFILM_CONFIG_BYTE_BASIS + 1] != 0.0f ? 2 : 0);
+}
+
 /// IEEE half from a float, round-to-nearest-even.
 static inline uint16_t fotufilm_float_to_half(float value) {
     union { float f; uint32_t u; } bits;
@@ -339,7 +347,8 @@ int32_t fotufilm_halide_metal_prepare(
     const float *paper_output_lut, int32_t lut_dimension,
     uint64_t spectral_cache_id);
 
-/// Fused RGBA8 frame processing: sRGB decode, the eight-stage spectral film model, and sRGB encode.
+/// Fused RGBA8 frame processing: the transfer decode in the basis FOTUFILM_CONFIG_BYTE_BASIS names,
+/// the spectral film model, and the encode back into the basis it names for the output.
 int32_t fotufilm_halide_metal_process_srgb8(
     const uint8_t *input, uint8_t *output, int32_t width, int32_t height,
     const float *configuration,

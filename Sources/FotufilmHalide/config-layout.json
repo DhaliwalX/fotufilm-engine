@@ -459,6 +459,11 @@
       "name": "PRINTER_PREFLASH",
       "count": 1,
       "doc": "Uniform additive paper preflash relative to paper mid-exposure; 0 is off."
+    },
+    {
+      "name": "BYTE_BASIS",
+      "count": 2,
+      "doc": "The primaries of the byte frames on the encoded-byte road, [input, output]: 0 Display P3, 1 sRGB, both under the sRGB transfer. The decode steps the input basis into the working space; the delivery leaves the print's Display P3 for the output basis after the shoulder and before the clip. Read only on byte I/O; a float frame is the working space itself."
     }
   ]
 }

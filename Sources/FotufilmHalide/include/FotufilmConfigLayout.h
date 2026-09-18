@@ -232,6 +232,11 @@ enum {
     FOTUFILM_CONFIG_CAMERA_PREFLASH = 18856,
     /// Uniform additive paper preflash relative to paper mid-exposure; 0 is off.
     FOTUFILM_CONFIG_PRINTER_PREFLASH = 18857,
+    /// The primaries of the byte frames on the encoded-byte road, [input, output]: 0 Display P3, 1
+    /// sRGB, both under the sRGB transfer. The decode steps the input basis into the working space;
+    /// the delivery leaves the print's Display P3 for the output basis after the shoulder and
+    /// before the clip. Read only on byte I/O; a float frame is the working space itself.
+    FOTUFILM_CONFIG_BYTE_BASIS = 18858,
 };
 
 enum {
@@ -333,8 +338,9 @@ enum {
     FOTUFILM_CONFIG_CRYSTAL_PRINT_GRAIN_COUNT = 4,
     FOTUFILM_CONFIG_CAMERA_PREFLASH_COUNT = 1,
     FOTUFILM_CONFIG_PRINTER_PREFLASH_COUNT = 1,
+    FOTUFILM_CONFIG_BYTE_BASIS_COUNT = 2,
 };
 
-enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18858 };
+enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18860 };
 
 #endif

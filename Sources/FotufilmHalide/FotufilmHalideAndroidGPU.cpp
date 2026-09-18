@@ -262,7 +262,7 @@ extern "C" int32_t fotufilm_halide_android_gpu_process_rgba8(
     strided_radius[0], strided_radius[1], strided_radius[2],                 \
     diffusion_stride[0], diffusion_stride[1], diffusion_stride[2],           \
     diffusion_strided_radius[0], diffusion_strided_radius[1],                \
-    diffusion_strided_radius[2], feature_mask, out
+    diffusion_strided_radius[2], feature_mask, fotufilm_byte_basis(configuration), out
 
     // Every pass the kernel launches shares one command buffer and one sync.
     halide_vulkan_batch_set(nullptr, 1);

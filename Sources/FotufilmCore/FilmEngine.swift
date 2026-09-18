@@ -434,6 +434,9 @@ public struct FilmEngineInvocation {
     public static let crystalPrintGrainCount = Int(FOTUFILM_CONFIG_CRYSTAL_PRINT_GRAIN_COUNT)
     public static let cameraPreflashOffset = Int(FOTUFILM_CONFIG_CAMERA_PREFLASH)
     public static let printerPreflashOffset = Int(FOTUFILM_CONFIG_PRINTER_PREFLASH)
+    /// The primaries of the byte frames on the encoded-byte road, input then output: 0 is
+    /// Display P3, 1 is sRGB; mirrors FOTUFILM_CONFIG_BYTE_BASIS.
+    public static let byteBasisOffset = Int(FOTUFILM_CONFIG_BYTE_BASIS)
     /// Index of the three aperture-calibrated grain strengths; mirrors FOTUFILM_CONFIG_GRAIN.
     public static let grainOffset = Int(FOTUFILM_CONFIG_GRAIN)
 
@@ -1503,6 +1506,8 @@ public struct FilmEngineInvocation {
         let printerPreflash = (!noFilm && options.stage.writesPrint && options.negativeViewing == nil
             && Enlarger.illuminates(stock: stock, paper: printMedium)) ? max(0, options.printerPreflash) : 0
         configuration += [cameraPreflash, printerPreflash]
+        // The byte frames' primaries, input then output: Display P3 until a road says sRGB.
+        configuration += [0, 0]
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0

@@ -419,11 +419,12 @@ public final class HalideMetalFilmRenderer {
                     srgbRGBA: input.baseAddress!, width: width, height: height)
             }
         }
-        var workingInput = [UInt8](repeating: 0, count: byteCount)
-        var workingOutput = [UInt8](repeating: 0, count: byteCount)
-        Self.convertSRGBToEncodedDisplayP3(pixels, into: &workingInput)
-        let rendered = workingInput.withUnsafeBufferPointer { input in
-            workingOutput.withUnsafeMutableBufferPointer { output in
+        // The kernel takes the bytes in sRGB and delivers them in sRGB; the basis is the
+        // configuration's to say, so this is the Display P3 road with a different answer.
+        invocation.configuration[FilmEngineInvocation.byteBasisOffset] = 1
+        invocation.configuration[FilmEngineInvocation.byteBasisOffset + 1] = 1
+        return pixels.withUnsafeBufferPointer { input in
+            output.withUnsafeMutableBufferPointer { output in
                 invocation.configuration.withUnsafeBufferPointer { configuration in
                     invocation.withSpectralPointers { exposure, film, paper in
                         fotufilm_halide_metal_process_srgb8(
@@ -437,9 +438,6 @@ public final class HalideMetalFilmRenderer {
                 }
             }
         }
-        guard rendered else { return false }
-        Self.convertEncodedDisplayP3ToSRGB(workingOutput, into: &output)
-        return true
     }
 
     @discardableResult
@@ -1876,103 +1874,5 @@ public final class HalideMetalFilmRenderer {
             return bytes
         } catch { print(error.localizedDescription); return nil }
     }
-
-    static func convertSRGBToEncodedDisplayP3(
-        _ input: [UInt8], into output: inout [UInt8]
-    ) {
-        let decode = byteDecodeTable
-        convertBytes(input, into: &output) { input, output, first, end in
-            for offset in stride(from: first, to: end, by: 4) {
-                let alpha = input[offset + 3]
-                let denominator = alpha > 0 && alpha < 255 ? Float(alpha) : 255
-                let srgb = SIMD3<Float>(
-                    alpha == 0 || alpha == 255
-                        ? decode[Int(input[offset])]
-                        : ColorScience.srgbToLinear(min(Float(input[offset]) / denominator, 1)),
-                    alpha == 0 || alpha == 255
-                        ? decode[Int(input[offset + 1])]
-                        : ColorScience.srgbToLinear(min(Float(input[offset + 1]) / denominator, 1)),
-                    alpha == 0 || alpha == 255
-                        ? decode[Int(input[offset + 2])]
-                        : ColorScience.srgbToLinear(min(Float(input[offset + 2]) / denominator, 1)))
-                let displayP3 = ColorScience.linearSRGBToDisplayP3(srgb)
-                let scale = alpha > 0 && alpha < 255 ? Float(alpha) : 255
-                for channel in 0..<3 {
-                    let encoded = encodeTransfer(displayP3[channel])
-                    output[offset + channel] = UInt8(
-                        min(max((encoded * scale).rounded(), 0), 255))
-                }
-                output[offset + 3] = alpha
-            }
-        }
-    }
-
-    static func convertEncodedDisplayP3ToSRGB(
-        _ input: [UInt8], into output: inout [UInt8]
-    ) {
-        let decode = byteDecodeTable
-        convertBytes(input, into: &output) { input, output, first, end in
-            for offset in stride(from: first, to: end, by: 4) {
-                let alpha = Float(input[offset + 3])
-                let denominator = alpha > 0 ? alpha : 255
-                func decoded(_ channel: Int) -> Float {
-                    alpha == 255 ? decode[Int(input[offset + channel])]
-                        : ColorScience.srgbToLinear(min(Float(input[offset + channel]) / denominator, 1))
-                }
-                let displayP3 = SIMD3<Float>(
-                    decoded(0), decoded(1), decoded(2))
-                let srgb = ColorScience.linearDisplayP3ToSRGB(displayP3)
-                for channel in 0..<3 {
-                    let encoded = encodeTransfer(srgb[channel])
-                    output[offset + channel] = UInt8(
-                        min(max((encoded * alpha).rounded(), 0), alpha))
-                }
-                output[offset + 3] = input[offset + 3]
-            }
-        }
-    }
-
-    /// Each span reads the source and writes disjoint whole RGBA pixels. Keep small
-    /// images on the caller's thread; borrow pointers once so stores cannot repeat
-    /// Array copy-on-write checks in the pixel loop.
-    private static func convertBytes(
-        _ input: [UInt8], into output: inout [UInt8],
-        _ body: (UnsafePointer<UInt8>, UnsafeMutablePointer<UInt8>, Int, Int) -> Void
-    ) {
-        precondition(input.count == output.count && input.count.isMultiple(of: 4))
-        guard !input.isEmpty else { return }
-        input.withUnsafeBufferPointer { source in
-            output.withUnsafeMutableBufferPointer { destination in
-                let chunk = 1 << 18
-                let chunks = (source.count + chunk - 1) / chunk
-                let input = source.baseAddress!
-                let output = destination.baseAddress!
-                if chunks > 1 {
-                    DispatchQueue.concurrentPerform(iterations: chunks) { part in
-                        body(input, output, part * chunk,
-                             min(source.count, (part + 1) * chunk))
-                    }
-                } else {
-                    body(input, output, 0, source.count)
-                }
-            }
-        }
-    }
-
-    private static let byteDecodeTable: [Float] = (0..<256).map {
-        ColorScience.srgbToLinear(Float($0) / 255)
-    }
-
-    private static let encodeTable: [Float] = (0...4096).map {
-        ColorScience.linearToSrgb(Float($0) / 4096)
-    }
-
-    private static func encodeTransfer(_ linear: Float) -> Float {
-        let scaled = min(max(linear, 0), 1) * 4096
-        let lower = min(Int(scaled), 4095)
-        let fraction = scaled - Float(lower)
-        return encodeTable[lower] + fraction * (encodeTable[lower + 1] - encodeTable[lower])
-    }
-
 }
 #endif

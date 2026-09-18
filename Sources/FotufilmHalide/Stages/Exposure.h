@@ -38,6 +38,24 @@ constexpr float kP3ToRec2020[9] = {
     -0.001210340f, 0.017601717f, 0.983608623f,
 };
 
+/// Linear sRGB to linear Rec.2020, for a byte frame that arrives tagged sRGB rather than
+/// Display P3. Rows sum to exactly 1. Must match ColorScience.linearSRGBToRec2020 digit for
+/// digit — the Swift reference path converts the same buffers with it.
+constexpr float kSRGBToRec2020[9] = {
+     0.627403896f, 0.329283038f, 0.043313066f,
+     0.069097289f, 0.919540395f, 0.011362316f,
+     0.016391439f, 0.088013308f, 0.895595253f,
+};
+
+/// Linear Display P3 to linear sRGB, for a byte frame delivered in sRGB: the print is Display
+/// P3 and steps out here after the shoulder, before the clip. Must match
+/// ColorScience.linearDisplayP3ToSRGB digit for digit.
+constexpr float kP3ToSRGB[9] = {
+     1.22494018f,  -0.224940176f, 0.0f,
+    -0.042056955f,  1.04205695f,  0.0f,
+    -0.019637555f, -0.078636046f, 1.09827360f,
+};
+
 /// Linear Rec.2020 to linear Display P3, D65 to D65 — `kP3ToRec2020` the other way. The film
 /// path never needs it: the paper integrates its dyes straight to Display P3, so the step out of
 /// the working space is something the emulsion does. With no film in the gate there is no paper
