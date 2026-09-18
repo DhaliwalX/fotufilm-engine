@@ -217,7 +217,7 @@ final class InspectorViewController: SessionViewController {
             String(model.edit.lensCorrectionEnabled),
             String(model.hasLensMeasurement),
             String(model.matchedLensProfile != nil),
-            String(ProAccess.isPro),
+            String(true),
             // With no film loaded there is no emulsion to give character to and no lab to send
             // it to, so those sections are not dimmed — they are not there.
             String(model.edit.hasFilm),
@@ -875,11 +875,7 @@ final class InspectorViewController: SessionViewController {
     }
 
     private func allows(_ feature: ProUnlock.Feature) -> Bool {
-        #if canImport(UIKit)
-        return ProAccess.allows(feature)
-        #else
-        return true
-        #endif
+        true
     }
 
     private func proSection(title: String, button: String,

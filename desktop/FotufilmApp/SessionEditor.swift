@@ -66,7 +66,6 @@ final class DesktopEditorViewController: SessionViewController {
     private var renderingSettingsObserver: AnyCancellable?
     private var filmModelObserver: NSObjectProtocol?
     private var packsObserver: NSObjectProtocol?
-    private var proAccessObserver: NSObjectProtocol?
     private var sheetUp = false
     private var histogramPanel: SessionHistogramPanelView?
     var isHistogramShown: Bool { histogramPanel != nil }
@@ -269,19 +268,6 @@ final class DesktopEditorViewController: SessionViewController {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.reloadFilmLibrary() }
         }
-        proAccessObserver = NotificationCenter.default.addObserver(
-            forName: .proAccessChanged, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                if !ProAccess.allowsStock(self.model.edit.stockID) {
-                    self.model.edit.stockID = StockPreset.defaultID
-                    self.model.rerender(debounce: false)
-                }
-                self.reloadFilmLibrary()
-                self.inspector.refresh()
-            }
-        }
 
         StockTableWarmup.begin()
         model.handleLaunchArguments()
@@ -301,9 +287,6 @@ final class DesktopEditorViewController: SessionViewController {
         }
         if let packsObserver {
             NotificationCenter.default.removeObserver(packsObserver)
-        }
-        if let proAccessObserver {
-            NotificationCenter.default.removeObserver(proAccessObserver)
         }
     }
 

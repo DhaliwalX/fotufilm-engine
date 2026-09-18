@@ -41,7 +41,7 @@ final class NegativeImportController: NSWindowController {
         let note = NSTextField(wrappingLabelWithString:
             "Keep the film border visible. Avoid lettering, sprocket holes and the holder. Colour conversion is approximate; choose the closest film below. Pixels outside the conversion range appear black.")
         note.textColor = .secondaryLabelColor
-        stocks = StockPreset.all.filter { !$0.stock.isReversal && ProAccess.allowsStock($0.id) }
+        stocks = StockPreset.all.filter { !$0.stock.isReversal }
         mode.addItems(withTitles: stocks.map(\.name))
         if let index = stocks.firstIndex(where: { $0.id == model.edit.stockID }) {
             mode.selectItem(at: index)
