@@ -82,8 +82,10 @@ enum {
     /// AOT shims mask unknown bits off, so a mobile render prints without it until the realtime
     /// variants are regenerated.
     FOTUFILM_FRAME_PRINT_MTF = 1 << 17,
-    /// Measures global veiling glare on-device for a whole staged frame. The float32 GPU reduction
-    /// is not bit-identical to the host's ordered double reduction.
+    /// Measures global veiling glare on-device: the frame averages its own first stage rather than
+    /// reading FOTUFILM_CONFIG_FLARE_MEAN, so only a whole-frame caller may set it. Chosen at run
+    /// time within a class; a folded row-window graph cannot see the frame and never serves it.
+    /// The float32 GPU reduction is not bit-identical to the host's ordered double reduction.
     FOTUFILM_FRAME_FLARE_MEASURE = 1 << 18,
     /// Applies the configured output matrix, transfer, and premultiplication in-kernel.
     /// GPU transcendentals may differ from host libm, so callers must use one encode path per
@@ -172,6 +174,14 @@ static inline int32_t fotufilm_halation_strided_radius(int32_t radius,
     const float width = sqrtf(4.0f * variance + 1.0f);
     const int32_t scaled = (int32_t)((width - 1.0f) * 0.5f + 0.5f);
     return scaled < 1 ? 1 : scaled;
+}
+
+/// The byte frames' primaries, packed for the kernels' scalar: FOTUFILM_CONFIG_BYTE_BASIS names
+/// the input's in its first slot and the delivery's in its second, 1 for sRGB; bit 0 and bit 1
+/// here. Every road derives the scalar from the configuration this way.
+static inline int32_t fotufilm_byte_basis(const float *configuration) {
+    return (configuration[FOTUFILM_CONFIG_BYTE_BASIS] != 0.0f ? 1 : 0)
+        | (configuration[FOTUFILM_CONFIG_BYTE_BASIS + 1] != 0.0f ? 2 : 0);
 }
 
 /// IEEE half from a float, round-to-nearest-even.
@@ -339,7 +349,8 @@ int32_t fotufilm_halide_metal_prepare(
     const float *paper_output_lut, int32_t lut_dimension,
     uint64_t spectral_cache_id);
 
-/// Fused RGBA8 frame processing: sRGB decode, the eight-stage spectral film model, and sRGB encode.
+/// Fused RGBA8 frame processing: the transfer decode in the basis FOTUFILM_CONFIG_BYTE_BASIS names,
+/// the spectral film model, and the encode back into the basis it names for the output.
 int32_t fotufilm_halide_metal_process_srgb8(
     const uint8_t *input, uint8_t *output, int32_t width, int32_t height,
     const float *configuration,

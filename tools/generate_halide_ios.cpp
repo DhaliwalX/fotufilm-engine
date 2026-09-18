@@ -134,8 +134,6 @@ int main(int argc, char **argv) {
     if (!macos) {
         f16_blur_default() = true;
         f16_lut_default() = true;
-        metal_grain_default() = true;
-        metal_mtf_default() = true;
         // Float still variants retain float stores, LUTs, and tetrahedral arithmetic. Keeping
         // this mask at zero makes the generated AOT set match the preservation contract in the
         // JIT path; byte-input realtime variants can still use their dedicated half techniques.

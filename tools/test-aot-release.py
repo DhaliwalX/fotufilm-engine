@@ -130,9 +130,8 @@ class ReleaseTests(unittest.TestCase):
             aot.output_path(str(link))
 
     def test_all_generator_overrides_disable_release_substitution(self):
-        names = ("FOTUFILM_F16_BLUR", "FOTUFILM_METAL_MTF", "FOTUFILM_GPU_STRIDE",
-                 "FOTUFILM_GPU_TILE", "FOTUFILM_GPU_TILE_X", "FOTUFILM_GPU_TILE_Y",
-                 "FOTUFILM_STILL_FAST", "FOTUFILM_METAL_PRECOMPILE", "FOTUFILM_METAL_MATH_MODE")
+        names = ("FOTUFILM_F16_BLUR", "FOTUFILM_GPU_STRIDE", "FOTUFILM_GPU_TILE",
+                 "FOTUFILM_GPU_TILE_X", "FOTUFILM_GPU_TILE_Y", "FOTUFILM_STILL_FAST", "FOTUFILM_METAL_PRECOMPILE", "FOTUFILM_METAL_MATH_MODE")
         with patch.dict(os.environ, {name: "0" for name in names}, clear=True):
             self.assertEqual(set(aot.flags()), set(names))
 
@@ -182,7 +181,7 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual(aot.identity("device")["key"], initial)
             # CPU-only code and the AOT host shim do not enter the Metal generator.
             # Editing either must not regenerate hundreds of identical archives.
-            for name in ("FotufilmHalide.cpp", "FotufilmHalideIOS.cpp", "FotufilmMetalGrain.mm"):
+            for name in ("FotufilmHalide.cpp", "FotufilmHalideIOS.cpp"):
                 (fixture / "Sources/FotufilmHalide" / name).write_text("unrelated implementation\n")
                 self.assertEqual(aot.identity("device")["key"], initial)
             shared = fixture / "Sources/FotufilmHalide/FotufilmHalideShared.h"

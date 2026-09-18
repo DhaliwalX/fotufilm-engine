@@ -428,7 +428,7 @@ private:
 };
 
 /// The GPU schedule's placement and precision: which frames are stored in half, the decimated
-/// pyramids, the extern Metal kernels, and the analytic curves and draws the realtime path takes.
+/// pyramids, and the analytic curves and draws the realtime path takes.
 struct GpuPolicy {
     bool half_store = false;
     bool approximate = false;
@@ -436,9 +436,9 @@ struct GpuPolicy {
     bool windowed = false;
     bool tabulated_curves = false;
     bool table_grain = false;
-    bool extern_mtf = false;
-    bool extern_grain = false;
-    bool measure_flare = false;
+    /// Whether the frame averages its own first stage for the veiling glare rather than reading the
+    /// host's mean: the request's runtime bit, or false where a folded graph cannot see the frame.
+    Expr measure_flare;
     bool fields_in = false;
     bool monochrome = false;
     bool discs = false;
@@ -471,11 +471,6 @@ public:
         const bool half = policy_.half_store;
         switch (point) {
         case Store::Light:
-            if (policy_.extern_mtf && !light_packed_.defined()) {
-                StoredFrame stored = store_frame_packed(values, channels, branch);
-                light_packed_ = stored.packed;
-                return remember(values, stored.view);
-            }
             return remember(values, store_frame(values, half, channels, branch));
         case Store::DonorLog:
         case Store::DonorActivation:
@@ -674,12 +669,34 @@ public:
                        + configuration_(FOTUFILM_CONFIG_FLARE_MEAN + 2)) / 3.0f,
                   configuration_(FOTUFILM_CONFIG_FLARE_MEAN + Halide::min(channel, 2)))
             : configuration_(FOTUFILM_CONFIG_FLARE_MEAN + channel);
-        if (policy_.measure_flare) {
+        if (Halide::Internal::is_const_zero(policy_.measure_flare)) {
+            mean(channel) = provided;
+        } else {
+            // The whole-frame reduction, run only when the request asks for it: the total is
+            // read under the gate alone, so the rows behind it are skipped, not just unread.
+            // Summed in spans of 64 pixels first so the frame's rows spread over enough threads
+            // to keep the device busy: a thread per row was a thirtieth of that.
+            constexpr int kSpan = 64;
+            Var span(name + "_span"), block_x, block_y, thread_x, thread_y;
+            RDom within(0, kSpan, name + "_within");
+            Expr column = span * kSpan + within;
+            Func spans(name + "_spans");
+            spans(channel, span, y) = Halide::sum(
+                Halide::select(column < width, light(Halide::min(column, width - 1), y, channel),
+                               0.0f),
+                name + "_span_sum");
+            Expr span_count = (width + kSpan - 1) / kSpan;
+            spans.compute_root()
+                .bound(channel, 0, channels)
+                .reorder(channel, span, y)
+                .unroll(channel)
+                .gpu_tile(span, y, block_x, block_y, thread_x, thread_y, 4, 16,
+                          Halide::TailStrategy::GuardWithIf, gpu_device_api());
             Var row_block(name + "_row_block");
             Var row_thread(name + "_row_thread");
-            RDom across(0, width, name + "_across");
+            RDom across(0, span_count, name + "_across");
             Func rows(name + "_rows");
-            rows(channel, y) = Halide::sum(light(across, y, channel), name + "_row_sum");
+            rows(channel, y) = Halide::sum(spans(channel, across, y), name + "_row_sum");
             rows.compute_root()
                 .bound(channel, 0, channels)
                 .reorder(channel, y)
@@ -687,80 +704,16 @@ public:
                 .gpu_tile(y, row_block, row_thread, 32,
                           Halide::TailStrategy::GuardWithIf, gpu_device_api());
             RDom down(0, height, name + "_down");
-            mean(channel) = Halide::sum(rows(channel, down), name + "_total")
+            Func total(name + "_total");
+            total(channel) = Halide::sum(rows(channel, down), name + "_total_sum")
                 / (Halide::cast<float>(width) * Halide::cast<float>(height));
-        } else {
-            mean(channel) = provided;
+            total.compute_root().bound(channel, 0, channels).unroll(channel)
+                .gpu_single_thread(gpu_device_api());
+            mean(channel) = graph::gated(policy_.measure_flare, total(channel), provided);
         }
         mean.compute_root().bound(channel, 0, channels).unroll(channel)
             .gpu_single_thread(gpu_device_api());
         return mean;
-    }
-
-    Func fused_mtf(Func, Func flare_mean, Expr on_flare, const std::string &name) override {
-        if (!policy_.extern_mtf) return Func();
-        Var channel("channel");
-        if (!flare_mean.defined()) {
-            Func zero_mean(name + "_zero_mean");
-            zero_mean(channel) = 0.0f;
-            zero_mean.compute_root().bound(channel, 0, 4).unroll(channel)
-                .gpu_single_thread(gpu_device_api());
-            flare_mean = zero_mean;
-        }
-        Expr mtf_radius = Halide::max(
-            p_.mtf_radius_0_, Halide::max(p_.mtf_radius_1_, p_.mtf_radius_2_));
-        Expr secondary_radius = p_.mtf_luma_radius_;
-        Expr extent = Halide::max(mtf_radius, p_.mtf_luma_radius_);
-        Var k(name + "_k");
-        Expr sigma = Halide::select(
-            channel == 0, p_.mtf_sigma_0_,
-            channel == 1, p_.mtf_sigma_1_,
-            channel == 2, p_.mtf_sigma_2_,
-            channel == 3, p_.mtf_luma_sigma_,
-            channel == 4,
-                Halide::max(configuration_(FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA), 0.151f),
-            channel == 5,
-                Halide::max(configuration_(FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA + 1), 0.151f),
-            Halide::max(configuration_(FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA + 2), 0.151f));
-        Expr denominator = 2.0f * sigma * sigma;
-        RDom normalization_taps(-extent, extent * 2 + 1, name + "_norm_taps");
-        Expr window = Halide::select(channel < 3, mtf_radius,
-                                     channel == 3, p_.mtf_luma_radius_,
-                                     secondary_radius);
-        Expr total = Halide::sum(
-            Halide::select(
-                Halide::abs(normalization_taps.x) <= window,
-                Halide::exp(-Halide::cast<float>(normalization_taps.x * normalization_taps.x)
-                            / denominator),
-                0.0f),
-            name + "_norm_sum");
-        Func weights(name + "_weights");
-        weights(k, channel) = Halide::cast(
-            Float(16),
-            Halide::select(
-                Halide::abs(k) <= window,
-                Halide::exp(-Halide::cast<float>(k * k) / denominator) / total,
-                0.0f));
-        gpu_table(weights, k, channel, 7, name + "_weights");
-        Expr flare_amount = Halide::select(
-            on_flare, configuration_(FOTUFILM_CONFIG_FLARE), 0.0f);
-        Func field(name);
-        std::vector<Halide::ExternFuncArgument> extern_args = {
-            light_packed_, flare_mean, weights,
-            Expr(p_.width_), Expr(p_.height_), flare_amount,
-            Expr(configuration_(FOTUFILM_CONFIG_MTF_LUMA_SHARE)),
-            Expr(configuration_(FOTUFILM_CONFIG_MTF_PRIMARY_SHARE)),
-            Expr(configuration_(FOTUFILM_CONFIG_MTF_PRIMARY_SHARE + 1)),
-            Expr(configuration_(FOTUFILM_CONFIG_MTF_PRIMARY_SHARE + 2)),
-            extent};
-        field.define_extern("fotufilm_metal_mtf_field", extern_args, Float(16), 3,
-                            Halide::NameMangling::C, gpu_device_api());
-        field.compute_root();
-        Var x("x"), y("y");
-        Func widened(name + "_widened");
-        widened(x, y, channel) = Halide::cast<float>(field(x, y, channel));
-        stored_.insert(widened.name());
-        return widened;
     }
 
     Expr film_curve(ImageParam &configuration, Func table, Expr channel,
@@ -787,7 +740,6 @@ public:
         const int noise_channels = monochrome ? 1 : 3;
         const bool half = policy_.half_store;
         Func noise(prefix + "poisson_noise" + suffix);
-        Func extern_field;
         if (!policy_.table_grain) {
             Expr shared_draw = monochrome
                 ? normal_sample(x + p.origin_x_, y + p.origin_y_, p.seed_, kGrainSharedLayer,
@@ -805,64 +757,28 @@ public:
                 p.grain_lambda_, prefix + "poisson_cdf" + suffix, gpu_device_api());
             Func normal_table = normal_inverse_cdf(prefix + "normal_cdf" + suffix,
                                                    gpu_device_api());
-            if (policy_.extern_grain) {
-                Var k(prefix + "grain_ext_k" + suffix);
-                Expr sigma = Halide::select(
-                    channel == 0, configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER),
-                    channel == 1, configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 1),
-                    configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 2));
-                Expr denominator = 2.0f * sigma * sigma;
-                RDom normalization_taps(-p.grain_radius_, p.grain_radius_ * 2 + 1,
-                                        prefix + "grain_ext_norm_taps" + suffix);
-                Func weights(prefix + "grain_ext_weights" + suffix);
-                Expr total = Halide::sum(
-                    Halide::exp(-Halide::cast<float>(normalization_taps.x
-                                                     * normalization_taps.x) / denominator),
-                    prefix + "grain_ext_norm_sum" + suffix);
-                weights(k, channel) = Halide::cast(
-                    Float(16), Halide::exp(-Halide::cast<float>(k * k) / denominator) / total);
-                gpu_table(weights, k, channel, noise_channels,
-                          prefix + "grain_ext_weights" + suffix);
-                Func field(prefix + "grain_field_ext" + suffix);
-                std::vector<Halide::ExternFuncArgument> extern_args = {
-                    poisson_table, normal_table, weights,
-                    Expr(p.width_), Expr(p.height_), Expr(p.seed_), Expr(p.grain_lambda_),
-                    Halide::clamp(configuration(FOTUFILM_CONFIG_GRAIN_CORRELATION), 0.0f, 1.0f),
-                    Expr(p.grain_radius_), Expr(p.origin_x_), Expr(p.origin_y_)};
-                field.define_extern("fotufilm_metal_grain_field", extern_args, Float(16), 3,
-                                    Halide::NameMangling::C, gpu_device_api());
-                field.compute_root();
-                Func widened(prefix + "grain_field" + suffix + "_widened");
-                widened(x, y, channel) = Halide::cast<float>(field(x, y, channel));
-                extern_field = widened;
-            } else {
-                Expr shared_draw = monochrome
-                    ? normal_sample_lut(normal_table, x + p.origin_x_, y + p.origin_y_,
-                                        p.seed_, kGrainSharedLayer)
-                    : poisson_sample_lut(poisson_table, normal_table, x + p.origin_x_,
-                                         y + p.origin_y_, p.seed_, p.grain_lambda_,
-                                         kGrainSharedLayer);
-                noise(x, y, channel) = monochrome
-                    ? shared_draw
-                    : grain_mix(configuration,
-                                poisson_sample_lut(poisson_table, normal_table,
-                                                   x + p.origin_x_, y + p.origin_y_,
-                                                   p.seed_, p.grain_lambda_, channel),
-                                shared_draw);
-            }
+            Expr shared_draw = monochrome
+                ? normal_sample_lut(normal_table, x + p.origin_x_, y + p.origin_y_,
+                                    p.seed_, kGrainSharedLayer)
+                : poisson_sample_lut(poisson_table, normal_table, x + p.origin_x_,
+                                     y + p.origin_y_, p.seed_, p.grain_lambda_,
+                                     kGrainSharedLayer);
+            noise(x, y, channel) = monochrome
+                ? shared_draw
+                : grain_mix(configuration,
+                            poisson_sample_lut(poisson_table, normal_table,
+                                               x + p.origin_x_, y + p.origin_y_,
+                                               p.seed_, p.grain_lambda_, channel),
+                            shared_draw);
         }
-        if (extern_field.defined()) {
-            fields.grain = extern_field;
-        } else {
-            Func noise_view = store_frame(noise, half, noise_channels);
-            fields.grain = gpu_gaussian(
-                noise_view,
-                configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER),
-                configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 1),
-                configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 2),
-                p.grain_radius_, width, height, half, prefix + "grain_field" + suffix,
-                noise_channels);
-        }
+        Func noise_view = store_frame(noise, half, noise_channels);
+        fields.grain = gpu_gaussian(
+            noise_view,
+            configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER),
+            configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 1),
+            configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 2),
+            p.grain_radius_, width, height, half, prefix + "grain_field" + suffix,
+            noise_channels);
         if (use_mottle) {
             Func mottle_noise(prefix + "mottle_noise" + suffix);
             if (!policy_.table_grain) {
@@ -942,7 +858,6 @@ private:
     ImageParam &configuration_;
     ImageParam &film_lut_;
     ImageParam &paper_lut_;
-    Func light_packed_;
     std::set<std::string> stored_;
 };
 
@@ -957,7 +872,6 @@ public:
           approximate_((feature_mask & FOTUFILM_FRAME_EXACT_MATH) == 0),
           density_out_((feature_mask & FOTUFILM_FRAME_DENSITY_OUT) != 0),
           density_in_((feature_mask & FOTUFILM_FRAME_DENSITY_IN) != 0),
-          measure_flare_((feature_mask & FOTUFILM_FRAME_FLARE_MEASURE) != 0),
           no_film_((feature_mask & FOTUFILM_FRAME_NO_FILM) != 0),
           light_out_((feature_mask & FOTUFILM_FRAME_LIGHT_OUT) != 0),
           fields_in_((feature_mask & FOTUFILM_FRAME_FIELDS_IN) != 0),
@@ -983,7 +897,8 @@ public:
           halation_radius_0_("frame_halation_radius_0" + suffix),
           halation_radius_1_("frame_halation_radius_1" + suffix),
           halation_radius_2_("frame_halation_radius_2" + suffix),
-          runtime_features_("frame_features" + suffix) {
+          runtime_features_("frame_features" + suffix),
+          byte_basis_("frame_byte_basis" + suffix) {
         WindowedFrameSchedule window_schedule(windowed);
         feature_mask &= ~ablated_features();
         features_ = feature_mask;
@@ -1027,36 +942,30 @@ public:
             // The float contract is the working space itself, linear Rec.2020.
             decoded(x, y, channel) = input_(x, y, channel);
         } else {
-            // Encoded bytes are transfer-encoded Display P3; decoding the transfer leaves
-            // linear P3, and the matrix steps it into the Rec.2020 working space. The matrix
-            // needs all three channels, so the per-channel transfer decode is spelled as a
-            // lambda over the channel index.
+            // Encoded bytes are transfer-encoded Display P3, or sRGB when the configuration
+            // says so; decoding the transfer leaves linear light in that basis, and the matrix
+            // steps it into the Rec.2020 working space. The matrix needs all three channels,
+            // so the per-channel transfer decode is spelled as a lambda over the channel index.
             Expr alpha = Halide::cast<float>(input_(x, y, 3));
             Expr denominator = Halide::select(alpha > 0.0f && alpha < 255.0f, alpha, 255.0f);
-            auto linear_p3 = [&](int channel_index) {
+            auto linear_in = [&](int channel_index) {
                 Expr encoded = Halide::clamp(
                     Halide::cast<float>(input_(x, y, channel_index))
                     / denominator, 0.0f, 1.0f);
                 return sample_transfer(srgb_decode_, encoded);
             };
-            Expr p3_r = linear_p3(0), p3_g = linear_p3(1), p3_b = linear_p3(2);
-            decoded(x, y, channel) = Halide::mux(channel, {
-                kP3ToRec2020[0] * p3_r + kP3ToRec2020[1] * p3_g + kP3ToRec2020[2] * p3_b,
-                kP3ToRec2020[3] * p3_r + kP3ToRec2020[4] * p3_g + kP3ToRec2020[5] * p3_b,
-                kP3ToRec2020[6] * p3_r + kP3ToRec2020[7] * p3_g + kP3ToRec2020[8] * p3_b,
-            });
+            Expr in_r = linear_in(0), in_g = linear_in(1), in_b = linear_in(2);
+            Expr srgb_in = (byte_basis_ & 1) != 0;
+            auto working = [&](int row) {
+                auto weight = [&](int column) {
+                    return Halide::select(srgb_in, kSRGBToRec2020[3 * row + column],
+                                          kP3ToRec2020[3 * row + column]);
+                };
+                return weight(0) * in_r + weight(1) * in_g + weight(2) * in_b;
+            };
+            decoded(x, y, channel) = Halide::mux(channel, {working(0), working(1), working(2)});
         }
 
-        // The hand-written tile kernels stay realtime-only: their threadgroup design caps the
-        // radius (kMaxRadius/kMaxMtfRadius in FotufilmMetalGrain.mm) at what a video frame's
-        // px-per-mm can ask for, and a 48-100 MP still's enlargement factor sails past it. The
-        // still path takes the radius-unbounded Halide blurs instead.
-        //
-        // FOTUFILM_FRAME_TEXTURE is held out for a different reason: the extern folds the veiling
-        // glare into the MTF and takes both in half precision, where the flat development the
-        // mode differences against applies the glare in Halide. The two would then disagree by
-        // half's own rounding on every pixel — several parts in ten thousand of a mode whose
-        // whole claim is that everything but the spatial stages cancels.
         GpuPolicy policy;
         policy.half_store = fast(kStillFastHalfStore);
         policy.approximate = approximate_;
@@ -1070,15 +979,10 @@ public:
         // use the same seeded samples, rather than a different analytic approximation.
         policy.table_grain = gpu_device_api() == DeviceAPI::WebGPU
             || fast(kStillFastGrainTable);
-        policy.extern_mtf = realtime_ && !float_io_ && use_mtf && use_mtf_luma && !texture_
-            && metal_mtf_compute() && f16_blur_compute()
-            && gpu_device_api() == Halide::DeviceAPI::Metal;
-        // The extern kernel draws and blurs one field in a single Metal dispatch, which is
-        // what makes the realtime path fast. It has no second population, so the mixture asks
-        // for the Halide-scheduled blur instead.
-        policy.extern_grain = realtime_ && !float_io_ && metal_grain_compute()
-            && f16_blur_compute() && gpu_device_api() == DeviceAPI::Metal && !use_mottle;
-        policy.measure_flare = measure_flare_;
+        // A folded graph never sees the whole frame, so it can only read the host's mean.
+        policy.measure_flare = windowed
+            ? Expr(Halide::Internal::const_false())
+            : Expr((runtime_features_ & FOTUFILM_FRAME_FLARE_MEASURE) != 0);
         policy.fields_in = fields_in_;
         policy.monochrome = monochrome;
         policy.discs = use_discs;
@@ -1248,8 +1152,24 @@ public:
             Func srgb("frame_srgb" + suffix);
             Expr shoulder_knee = Halide::select(
                 reversal_ != 0, 0.7f, 0.9f);
+            // The print is Display P3. A frame delivered in sRGB leaves it here, after the
+            // shoulder and before the clip, the way the reference path does. The matrix reads
+            // all three shouldered channels, so that arm stores the print once rather than
+            // develop it again per channel; the output is compiled per basis below, and the P3
+            // arm neither reads the store nor runs it.
+            Expr srgb_out = (byte_basis_ & 2) != 0;
+            Func shouldered("frame_shouldered" + suffix);
+            shouldered(x, y, channel) = display_shoulder(final_linear(x, y, channel),
+                                                         shoulder_knee);
+            Func shouldered_view = store_frame(shouldered, policy.half_store, 3);
+            auto in_srgb = [&](int row) {
+                return kP3ToSRGB[3 * row] * graph::gated(srgb_out, shouldered_view(x, y, 0), 0.0f)
+                    + kP3ToSRGB[3 * row + 1] * graph::gated(srgb_out, shouldered_view(x, y, 1), 0.0f)
+                    + kP3ToSRGB[3 * row + 2] * graph::gated(srgb_out, shouldered_view(x, y, 2), 0.0f);
+            };
             Expr linear = Halide::clamp(
-                display_shoulder(final_linear(x, y, channel), shoulder_knee),
+                graph::gated(srgb_out, Halide::mux(channel, {in_srgb(0), in_srgb(1), in_srgb(2)}),
+                             display_shoulder(final_linear(x, y, channel), shoulder_knee)),
                 0.0f, 1.0f);
             srgb(x, y, channel) = sample_transfer(srgb_encode_, Halide::sqrt(linear));
             Expr dither = triangular_dither(
@@ -1300,6 +1220,8 @@ public:
                 output.specialize(shape)
                     .specialize(configuration_(FOTUFILM_CONFIG_OUTPUT_GAMUT) == 0.0f);
             }
+        } else if (!float_io_ && !density_out_ && !windowed) {
+            output.specialize((byte_basis_ & 2) != 0);
         }
         pipeline_ = Pipeline(output);
 #if !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
@@ -1409,6 +1331,7 @@ public:
             arguments.push_back(scalar);
         }
         arguments.push_back(runtime_features_);
+        arguments.push_back(byte_basis_);
         pipeline_.compile_to_static_library(prefix, arguments, function_name, target);
     }
 #endif
@@ -1573,6 +1496,7 @@ private:
         halation_radius_1_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_HALATION_RADIUS + 1])));
         halation_radius_2_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_HALATION_RADIUS + 2])));
         runtime_features_.set(requested);
+        byte_basis_.set(fotufilm_byte_basis(configuration));
         if (cached_) cached_.realize(output_buffer);
         else pipeline_.realize(output_buffer, gpu_target());
     }
@@ -1582,9 +1506,6 @@ private:
     const bool approximate_;
     const bool density_out_;
     const bool density_in_;
-    /// Whether this variant works the veiling-glare mean out from the frame it is given rather
-    /// than reading the host's. Only whole-frame callers may set it — see FOTUFILM_FRAME_FLARE_MEASURE.
-    const bool measure_flare_;
     /// No film in the gate: the creative controls, the delivery basis and the grade, and nothing
     /// the emulsion would have done. See FOTUFILM_FRAME_NO_FILM.
     const bool no_film_;
@@ -1616,6 +1537,10 @@ private:
     ImageParam input_, configuration_, exposure_lut_, film_lut_, paper_lut_;
     Param<int32_t> halation_radius_0_, halation_radius_1_, halation_radius_2_;
     Param<int32_t> runtime_features_;
+    /// The byte frames' primaries as FOTUFILM_CONFIG_BYTE_BASIS packs them: bit 0 the input is
+    /// sRGB, bit 1 the delivery is. A uniform parameter rather than the configuration's own
+    /// read so the delivery's stored print is skipped, not just unread, on the P3 arm.
+    Param<int32_t> byte_basis_;
     int32_t features_ = 0;
     Pipeline pipeline_;
     compiled_cache::Pipeline cached_;

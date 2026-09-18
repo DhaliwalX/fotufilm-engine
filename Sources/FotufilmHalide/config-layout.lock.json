@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "count": 18858,
+  "count": 18860,
   "fields": {
     "CURVES": {
       "offset": 0,
@@ -393,6 +393,10 @@
     "PRINTER_PREFLASH": {
       "offset": 18857,
       "count": 1
+    },
+    "BYTE_BASIS": {
+      "offset": 18858,
+      "count": 2
     }
   }
 }

@@ -25,20 +25,17 @@ KERNELS_ONLY=false
   # filesystem's mood. Follow the consumer's engine links: changing a pinned header or kernel
   # must invalidate the cache just as changing a regular file does.
   if $KERNELS_ONLY; then
-    # Neither excluded file is included by the generator — the archives are emitted from
-    # `FotufilmHalideMetal.cpp` alone — so neither can change what generation produces.
+    # The shim is not included by the generator — the archives are emitted from
+    # `FotufilmHalideMetal.cpp` alone — so it cannot change what generation produces.
     find -L Sources/FotufilmHalide -type f \
-      \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) \
-      ! -name 'FotufilmHalideIOS.cpp' ! -name 'FotufilmMetalGrain.mm' -print0
+      \( -name '*.cpp' -o -name '*.h' \) ! -name 'FotufilmHalideIOS.cpp' -print0
   else
-    find -L Sources/FotufilmHalide -type f \
-      \( -name '*.cpp' -o -name '*.h' -o -name '*.mm' \) -print0
+    find -L Sources/FotufilmHalide -type f \( -name '*.cpp' -o -name '*.h' \) -print0
   fi | sort -z | xargs -0 shasum -a 256
   shasum -a 256 tools/generate_halide_ios.cpp
   # The shim and the benchmark are compiled into the directory but no archive is a function of
   # them, so they are inputs to the objects' stamp only.
-  $KERNELS_ONLY || shasum -a 256 Sources/FotufilmHalide/FotufilmHalideIOS.cpp \
-    Sources/FotufilmHalide/FotufilmMetalGrain.mm
+  $KERNELS_ONLY || shasum -a 256 Sources/FotufilmHalide/FotufilmHalideIOS.cpp
   if ! $KERNELS_ONLY && [[ -f ios/FotufilmApp/MatrixBenchmark.cpp ]]; then
     shasum -a 256 ios/FotufilmApp/MatrixBenchmark.cpp
   fi

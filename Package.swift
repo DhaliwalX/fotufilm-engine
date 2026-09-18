@@ -48,7 +48,6 @@ let benchmarkTargets: [Target] = halideRoot != nil ? [
 let benchmarkProducts: [Product] = halideRoot != nil ? [
     .executable(name: "fotufilmbench", targets: ["fotufilmbench"]),
 ] : []
-let halideExcludedSources = ["FotufilmMetalGrain.mm"]
 let halideGPUCXXSettings: [CXXSetting] = halideRoot != nil
     ? [.define("FOTUFILM_HALIDE_CUDA", .when(platforms: [.linux]))]
     : []
@@ -75,7 +74,6 @@ let appleOnlyTests = [
 #else
 let benchmarkTargets: [Target] = []
 let benchmarkProducts: [Product] = []
-let halideExcludedSources: [String] = []
 let halideGPUCXXSettings: [CXXSetting] = []
 let appleOnlyTests: [String] = []
 #endif
@@ -98,7 +96,6 @@ let package = Package(
         .target(
             name: "FotufilmHalide",
             path: "Sources/FotufilmHalide",
-            exclude: halideExcludedSources,
             publicHeadersPath: "include",
             cxxSettings: halideCXXSettings + halideGPUCXXSettings,
             linkerSettings: halideLinkerSettings

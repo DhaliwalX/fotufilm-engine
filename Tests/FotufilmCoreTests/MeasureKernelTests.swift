@@ -21,6 +21,15 @@ private func measure_flare_rows(
     _ dimension: Int32, _ cacheID: UInt64, _ featureMask: Int32
 ) -> Int32
 
+@_silgen_name("fotufilm_halide_metal_process_linear_float")
+private func process_linear_float(
+    _ input: UnsafePointer<Float>?, _ output: UnsafeMutablePointer<Float>?,
+    _ width: Int32, _ height: Int32, _ originX: Int32, _ originY: Int32,
+    _ configuration: UnsafePointer<Float>?, _ exposure: UnsafePointer<Float>?,
+    _ film: UnsafePointer<Float>?, _ paper: UnsafePointer<Float>?,
+    _ dimension: Int32, _ cacheID: UInt64, _ featureMask: Int32, _ seed: UInt32
+) -> Int32
+
 final class MeasureKernelTests: XCTestCase {
     private let width = 331
     private let height = 47
@@ -264,6 +273,56 @@ final class MeasureKernelTests: XCTestCase {
                                "row \(row) lane \(lane) measured differently in a band")
             }
         }
+    }
+
+    /// The frame that averages its own first stage (FOTUFILM_FRAME_FLARE_MEASURE, a runtime
+    /// choice within the class) develops the same picture as one handed the host's mean.
+    func testTheFrameMeasuresItsOwnGlareLikeTheHost() throws {
+        var invocation = try invocation()
+        let pixels = frame()
+        let (host, _) = try toneMeasurements(invocation, pixels)
+        invocation.setToneBase(host)
+        invocation.featureMask |= FilmEngineFeature.floatIO | FilmEngineFeature.exactMath
+        var measured = invocation
+        measured.featureMask |= FilmEngineFeature.flareMeasure
+        // No mean to fall back on: the frame has to have measured it.
+        measured.flareMean = nil
+        pixels.withUnsafeBufferPointer {
+            invocation.flareMean = invocation.measuredFlareMean(
+                linearRGBA: $0.baseAddress!, width: width, rows: height)
+        }
+        func develop(_ invocation: FilmEngineInvocation) throws -> [Float] {
+            var output = [Float](repeating: 0, count: pixels.count)
+            let status = pixels.withUnsafeBufferPointer { source in
+                output.withUnsafeMutableBufferPointer { destination in
+                    invocation.configuration.withUnsafeBufferPointer { configuration in
+                        invocation.withSpectralPointers { exposure, film, paper in
+                            process_linear_float(
+                                source.baseAddress, destination.baseAddress,
+                                Int32(width), Int32(height), 0, 0, configuration.baseAddress,
+                                exposure, film, paper,
+                                Int32(invocation.spectral.exposure.dimension),
+                                invocation.spectralCacheID, invocation.featureMask,
+                                invocation.seed)
+                        }
+                    }
+                }
+            }
+            try XCTSkipUnless(status == 0, "no Metal device for the frame")
+            return output
+        }
+        let fromHost = try develop(invocation)
+        let fromFrame = try develop(measured)
+        // The means differ by float32 accumulation against the host's double — under 1e-5
+        // relative — and the glare is a fraction of a percent of the light, so what reaches
+        // the print is far below one 16-bit code. Held to 1e-4 of the pixel.
+        var worst: Float = 0
+        for index in 0..<(width * height * 4) where index % 4 != 3 {
+            let scale = max(1e-3, abs(fromHost[index]))
+            worst = max(worst, abs(fromFrame[index] - fromHost[index]) / scale)
+        }
+        XCTAssertLessThan(worst, 1e-4)
+        XCTAssertNotEqual(fromHost, [Float](repeating: 0, count: pixels.count))
     }
 }
 #endif

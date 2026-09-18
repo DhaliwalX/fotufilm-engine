@@ -141,7 +141,7 @@ public enum ColorScience {
 
     /// CIE Y weights for one linear working-space RGB triple — row two of the BT.2020 RGB to
     /// XYZ matrix, because linear Rec.2020 is the scene basis the renderer works in. Must match
-    /// `kLuma{R,G,B}` in FotufilmHalide/Stages/Exposure.h (and FotufilmMetalGrain.mm) digit for digit — the
+    /// `kLuma{R,G,B}` in FotufilmHalide/Stages/Exposure.h digit for digit — the
     /// Swift reference path mirrors those kernels value for value.
     public static let luminanceWeights: (Float, Float, Float) = (0.2627002, 0.6779981, 0.0593017)
 

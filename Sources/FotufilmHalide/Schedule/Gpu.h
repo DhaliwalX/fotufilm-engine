@@ -140,37 +140,6 @@ inline bool f16_tetra_compute() {
     return value;
 }
 
-/// Hand-written Metal grain field (FotufilmMetalGrain.mm) as a Halide extern stage: one tile
-/// dispatch draws, mixes, and blurs the clump field through threadgroup memory, retiring the noise
-/// store and the horizontal pass's full-resolution round trip.
-inline bool &metal_grain_default() {
-    static bool value = false;
-    return value;
-}
-
-inline bool metal_grain_compute() {
-    static const bool value = [] {
-        if (const char *env = getenv("FOTUFILM_METAL_GRAIN")) return atoi(env) != 0;
-        return metal_grain_default();
-    }();
-    return value;
-}
-
-/// Hand-written fused MTF (FotufilmMetalGrain.mm): flare, the merged
-/// four-channel blur, and the luminance recombination in one extern dispatch.
-inline bool &metal_mtf_default() {
-    static bool value = false;
-    return value;
-}
-
-inline bool metal_mtf_compute() {
-    static const bool value = [] {
-        if (const char *env = getenv("FOTUFILM_METAL_MTF")) return atoi(env) != 0;
-        return metal_mtf_default();
-    }();
-    return value;
-}
-
 /// Two-pass box downsample in `decimated_grid` (rows, then columns) instead
 /// of the flat stride-squared cell walk.
 inline bool &split_down_default() {
@@ -339,23 +308,6 @@ inline Func store_frame(Func values, bool half, int channels = 3, Expr branch = 
     Func stored(values.name() + "_stored");
     stored(x, y, channel) = Halide::cast<float>(packed(x, y, channel));
     return stored;
-}
-
-/// `store_frame` with the packed f16 Func exposed alongside the float view — an extern stage
-/// consumes the buffer itself, not the widening wrapper.
-struct StoredFrame {
-    Func view;
-    Func packed;
-};
-
-inline StoredFrame store_frame_packed(Func values, int channels, Expr branch = Expr()) {
-    Var x("x"), y("y"), channel("channel");
-    Func packed(values.name() + "_packed");
-    packed(x, y, channel) = Halide::cast(Float(16), values(x, y, channel));
-    gpu_pointwise(packed, x, y, channel, channels, branch);
-    Func stored(values.name() + "_stored");
-    stored(x, y, channel) = Halide::cast<float>(packed(x, y, channel));
-    return {stored, packed};
 }
 
 /// Separable Gaussian with a per-channel sigma, each direction a single dispatch: the taps run as
