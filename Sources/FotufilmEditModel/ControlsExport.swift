@@ -370,7 +370,7 @@ public struct ControlsExport {
 
     static func documentedDefault(_ control: EditorControl) -> String {
         if control.field == .digitalReference { return DigitalReferenceStyle.default.name }
-        if control.field == .halationReturn { return "Selected film (CineStill: 12%)" }
+        if control.field == .halationReturn { return "Selected film (CineStill: 3%)" }
         switch control.kind {
         case .slider(let scale), .chips(let scale, _):
             return scale.unit.format(scale.neutral).isEmpty ? String(scale.neutral) : scale.unit.format(scale.neutral)

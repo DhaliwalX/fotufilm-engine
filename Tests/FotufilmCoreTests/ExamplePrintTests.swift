@@ -26,8 +26,10 @@ final class ExamplePrintTests: XCTestCase {
             try definition.validate()
             XCTAssertNotEqual(definition.isExample, true)
             let stock = definition.stock
-            XCTAssertEqual(stock.grainDensityProfile, [5.1682, 0.117436, 0.421188])
-            XCTAssertTrue(stock.curves.allSatisfy { $0.secondary != nil })
+            XCTAssertEqual(stock.grainDensityProfile, FilmStock.defaultGrainDensityProfile)
+            // A sampled record drives the render where one is stated; the analytic segments
+            // are metadata behind it.
+            XCTAssertTrue(stock.curves.allSatisfy { $0.sampled != nil || $0.secondary != nil })
             XCTAssertEqual(stock.spectralProfile.layerSensitivity.count, 3)
             for record in stock.spectralProfile.layerSensitivity {
                 XCTAssertEqual(record.count, SpectralGrid.count)

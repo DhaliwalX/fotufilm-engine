@@ -1119,12 +1119,12 @@
       "binding" : "halationReturnRatio",
       "commandLineFlag" : "--halation-return",
       "commandLineGeneric" : false,
-      "commandLineHelp" : "Red returned/direct exposure percentage, 0-100 (default: film; CineStill 12)",
+      "commandLineHelp" : "Red returned/direct exposure percentage, 0-100 (default: film; CineStill 3)",
       "commandLineMax" : 100,
       "commandLineMin" : 0,
       "commandLinePlaceholder" : "<percent>",
       "detail" : "Red returned/direct exposure percentage; follows the selected film until adjusted.",
-      "documentation" : "Sets the red returned/direct exposure percentage and preserves the film’s return colour balance. CineStill 800T and 400D default to 12%. Use Film Return restores the selected film’s value.",
+      "documentation" : "Sets the red returned/direct exposure percentage and preserves the film’s return colour balance. CineStill 800T and 400D start at their measured 3%; raise it toward 10–15% for the heavier glow of web scans. Use Film Return restores the selected film’s value.",
       "drives" : [
 
       ],

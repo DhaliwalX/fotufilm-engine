@@ -133,7 +133,7 @@ final class EditorControlEngineReachTests: XCTestCase {
             let control = try XCTUnwrap(EditorControlCatalogue.controls(for: stock).first { $0.field == .halationReturn })
             let scale = try XCTUnwrap(control.kind.scale)
             XCTAssertEqual(scale.neutral, Double(stock.halationStrength[0]))
-            if id.hasPrefix("cinestill") { XCTAssertEqual(scale.unit.format(scale.neutral), "12%") }
+            if id.hasPrefix("cinestill") { XCTAssertEqual(scale.unit.format(scale.neutral), "3%") }
         }
         XCTAssertFalse(EditorControlCatalogue.controls(for: nil).contains { $0.field == .halationReturn })
         XCTAssertFalse(EditorControlCatalogue.controls(for: FilmStock.noFilm).contains { $0.field == .halationReturn })

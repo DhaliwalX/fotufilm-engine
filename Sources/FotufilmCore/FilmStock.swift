@@ -9,8 +9,9 @@ import Foundation
 public enum GrainDensityLaw: Int32, Sendable, Codable {
     /// Chromogenic negative: the silver is bleached away and the image is a dye cloud per
     /// developed centre, but the coating is several sub-layers of different speed and crystal
-    /// size. Kodak publishes the resulting curve for Vision3 250D and 500T; it rises to a peak
-    /// 0.15–0.2 above D-min and falls thereafter, which `grainDensityProfile` states.
+    /// size. Kodak publishes the resulting curve for the four Vision3 stocks; it rises to a
+    /// peak 0.15–0.2 above D-min, falls, and rises again near net 1.1–1.5 where the slow
+    /// sub-layer comes in, which `grainDensityProfile` states per record.
     case dyeCloud = 0
     /// Silver film: the developed grain is opaque, so what adds is *covered area*, not density.
     /// The Boolean (Siedentopf) variance read through an aperture much wider than the grain is
@@ -37,6 +38,81 @@ public enum GranularityReadDensity: String, Sendable, Codable {
     case net
     /// Gross diffuse density 1.0, D-min included: Kodak's reversal sheets.
     case gross
+}
+
+/// A chromogenic negative's granularity-against-density shape, one row of six coefficients
+/// per record (red, green, blue): `[amplitude, toeDensity, decayDensity, humpAmplitude,
+/// humpDensity, humpWidth]` of
+///
+///     sigma²(D) ∝ (1 - e^(-D/toe)) * (1 + amplitude * e^(-D/decay)
+///                                     + humpAmplitude * e^(-((D - humpDensity) / humpWidth)² / 2))
+///
+/// The first factor is how much of the emulsion has developed at all; the bracket is the
+/// variance each unit of density carries: high while the fast coarse sub-layer is developing,
+/// decaying over `decayDensity` onto the fine one's floor of 1, with a second rise where the
+/// slow sub-layer's own coarse population comes in — every published Vision3 curve shows it,
+/// centred near net 1.1–1.5 and strongest in the blue record. A row of three is the earlier
+/// form, the hump absent. A pack may state one row for all three records or one per record.
+public struct GrainDensityProfile: Equatable, Sendable, Codable {
+    public static let coefficientCount = 6
+    /// Coefficients per record, red, green, blue — always three rows of six.
+    public private(set) var records: [[Float]]
+
+    /// One row of three or six coefficients shared by every record.
+    public init(shared: [Float]) {
+        self.init(records: [shared, shared, shared])
+    }
+
+    /// Three rows of three or six coefficients, one per record. Anything else is the family
+    /// default, the way an ill-formed row was before.
+    public init(records: [[Float]]) {
+        let padded = records.map(Self.pad)
+        self.records = padded.count == 3 && padded.allSatisfy { $0 != nil }
+            ? padded.map { $0! } : FilmStockDefaults.grainDensityRecords
+    }
+
+    private static func pad(_ row: [Float]) -> [Float]? {
+        guard row.allSatisfy(\.isFinite) else { return nil }
+        switch row.count {
+        case 3: return row + [0, 1, 0.3]
+        case 6: return row
+        default: return nil
+        }
+    }
+
+    /// Whether the three records share one row.
+    public var isShared: Bool { records.allSatisfy { $0 == records[0] } }
+    /// Whether any record carries the second rise.
+    public var hasHump: Bool { records.contains { $0[3] != 0 } }
+
+    /// The variance at diffuse density `density` (fog included), in arbitrary units.
+    public func variance(record: Int, density: Float) -> Float {
+        let row = records[record]
+        let toe = max(row[1], 1e-4), decay = max(row[2], 1e-4), width = max(row[5], 1e-4)
+        let offset = (density - row[4]) / width
+        return (1 - exp(-density / toe))
+            * (1 + row[0] * exp(-density / decay) + row[3] * exp(-0.5 * offset * offset))
+    }
+
+    // The pack form: a flat row when shared, three rows otherwise; a shared row without the
+    // hump is written as the earlier three coefficients.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let flat = try? container.decode([Float].self) {
+            self.init(shared: flat)
+        } else {
+            self.init(records: try container.decode([[Float]].self))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        if isShared {
+            try container.encode(hasHump ? records[0] : Array(records[0].prefix(3)))
+        } else {
+            try container.encode(records)
+        }
+    }
 }
 
 /// A capture layer that develops and inhibits, but forms no image dye of its own.
@@ -218,15 +294,11 @@ public struct FilmStock: Sendable {
     /// Stated explicitly because the material and the law cross — a chromogenic
     /// black-and-white stock is a dye cloud.
     public var grainDensityLaw: GrainDensityLaw
-    /// The chromogenic negative's granularity-against-density shape, read only under
-    /// `GrainDensityLaw.dyeCloud`: `[amplitude, toeDensity, decayDensity]` of
-    ///
-    ///     sigma²(D) ∝ (1 - e^(-D/toe)) * (1 + amplitude * e^(-D/decay))
-    ///
-    /// at `D = net density + grainFogDensity`, normalised at the density the published figure
-    /// is read at. The default is an illustrative analytic shape; measured packs
-    /// provide their own coefficients.
-    public var grainDensityProfile: [Float]
+    /// The chromogenic negative's granularity-against-density shape per record, read only
+    /// under `GrainDensityLaw.dyeCloud`; see `GrainDensityProfile`. Evaluated at
+    /// `D = net density + grainFogDensity` and normalised at the density the published figure
+    /// is read at. The default is the Vision3 family shape; measured packs provide their own.
+    public var grainDensityProfile: GrainDensityProfile
     /// `[exponent p, shoulder density Ds]` for `dyeCloudReversal`, in developed density
     /// above base plus fog, like the other grain laws. The generic profile is a provisional
     /// family shape; packs can supply their own measured coefficients.
@@ -333,7 +405,7 @@ public struct FilmStock: Sendable {
         grainMottleSizeRatio: Float = 3,
         grainLayerSizeRatio: [Float] = [1, 1, 1],
         grainDensityLaw: GrainDensityLaw? = nil,
-        grainDensityProfile: [Float]? = nil,
+        grainDensityProfile: GrainDensityProfile? = nil,
         grainReversalProfile: [Float] = FilmStock.defaultGrainReversalProfile,
         grainFogDensity: Float = FilmStock.defaultGrainFogDensity,
         granularityReadDensity: GranularityReadDensity? = nil,
@@ -399,8 +471,7 @@ public struct FilmStock: Sendable {
             ? grainLayerSizeRatio.map { max($0, 0.05) } : [1, 1, 1]
         self.grainDensityLaw = grainDensityLaw
             ?? (isMonochrome ? .silver : (isReversal ? .dyeCloudReversal : .dyeCloud))
-        self.grainDensityProfile = grainDensityProfile?.count == 3
-            ? grainDensityProfile! : FilmStock.defaultGrainDensityProfile
+        self.grainDensityProfile = grainDensityProfile ?? FilmStock.defaultGrainDensityProfile
         precondition(grainReversalProfile.count == 2
             && grainReversalProfile[0].isFinite && (0.1...2).contains(grainReversalProfile[0])
             && grainReversalProfile[1].isFinite && (0.1...10).contains(grainReversalProfile[1]),
@@ -446,8 +517,8 @@ public struct FilmStock: Sendable {
     /// aged film grainy in its shadows.
     public static let defaultGrainFogDensity: Float = 0.03
 
-    /// Illustrative density response for synthetic examples. Measured packs supply their own.
-    public static let defaultGrainDensityProfile: [Float] = FilmStockDefaults.grainDensityProfile
+    /// The Vision3 family shape. Measured packs supply their own.
+    public static let defaultGrainDensityProfile: GrainDensityProfile = FilmStockDefaults.grainDensityProfile
     public static let defaultGrainReversalProfile: [Float] = [1.1, 3]
 
     /// Expected dye-cloud clumps per square millimetre. The Poisson field derives intensity as
@@ -511,14 +582,11 @@ public struct FilmStock: Sendable {
         return granularityAnchorDensity(layer: layer) / range
     }
 
-    /// Granularity variance of a chromogenic negative at diffuse density `density`, in
-    /// arbitrary units. Mirrors `dye_cloud_granularity_variance` in FotufilmHalide/Stages/Grain.h,
-    /// where the shape and its provenance are stated.
-    func dyeCloudGranularityVariance(_ density: Float) -> Float {
-        let amplitude = grainDensityProfile[0]
-        let toe = max(grainDensityProfile[1], 1e-4)
-        let decay = max(grainDensityProfile[2], 1e-4)
-        return (1 - exp(-density / toe)) * (1 + amplitude * exp(-density / decay))
+    /// Granularity variance of a chromogenic negative's record at diffuse density `density`,
+    /// in arbitrary units. Mirrors `dye_cloud_granularity_variance` in
+    /// FotufilmHalide/Stages/Grain.h, where the shape and its provenance are stated.
+    func dyeCloudGranularityVariance(layer: Int, _ density: Float) -> Float {
+        grainDensityProfile.variance(record: layer, density: density)
     }
 
     /// Granularity variance of a silver emulsion at diffuse density `density`, in arbitrary
@@ -543,8 +611,8 @@ public struct FilmStock: Sendable {
         let ratio: Float
         switch grainDensityLaw {
         case .dyeCloud:
-            ratio = dyeCloudGranularityVariance(here)
-                / max(dyeCloudGranularityVariance(anchor), 1e-6)
+            ratio = dyeCloudGranularityVariance(layer: layer, here)
+                / max(dyeCloudGranularityVariance(layer: layer, anchor), 1e-6)
         case .silver:
             ratio = silverGranularityVariance(here)
                 / max(silverGranularityVariance(anchor), 1e-6)

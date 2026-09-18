@@ -52,11 +52,15 @@ final class ECN2ProcessTests: XCTestCase {
             XCTAssertLessThanOrEqual(stock.halationStrength[2], 0.001)
         }
 
-        // CineStill: rem-jet stripped prior to camera exposure
+        // CineStill: rem-jet stripped prior to camera exposure. The measured red return band
+        // is 0.013-0.049; the packs carry 0.03, an order of magnitude over the rem-jet stocks.
+        let remjet = try XCTUnwrap(FilmStock.named("vision500t")).halationStrength[0]
         for id in ["cinestill800t", "cinestill400d"] {
             let stock = try XCTUnwrap(FilmStock.named(id), "Stock \(id) must load")
-            XCTAssertGreaterThanOrEqual(stock.halationStrength[0], 0.10,
-                                        "\(id): rem-jet stripped cine stock must exhibit heavy red halation")
+            XCTAssertGreaterThanOrEqual(stock.halationStrength[0], 0.013,
+                                        "\(id): rem-jet stripped cine stock must exhibit red halation")
+            XCTAssertGreaterThanOrEqual(stock.halationStrength[0], 10 * remjet,
+                                        "\(id): well above the rem-jet backed base it was stripped from")
         }
     }
 
@@ -84,10 +88,17 @@ final class ECN2ProcessTests: XCTestCase {
             let stock = try XCTUnwrap(FilmStock.named(id), "Stock \(id) must load")
             XCTAssertEqual(stock.grainDensityLaw, .dyeCloud,
                            "\(id): ECN-2 chromogenic negative must obey dye-cloud granularity law")
-            XCTAssertEqual(stock.grainDensityProfile.count, 3,
-                           "\(id): grain density profile must carry [amplitude, toeDensity, decayDensity]")
-            XCTAssertTrue(stock.grainDensityProfile.allSatisfy { $0 > 0 },
-                          "\(id): grain density profile entries must be positive")
+            // Kodak plots all three records, and they differ: the sheet's own fit is per
+            // record and carries the second rise every Vision3 curve shows.
+            XCTAssertFalse(stock.grainDensityProfile.isShared,
+                           "\(id): grain density profile must be stated per record")
+            XCTAssertTrue(stock.grainDensityProfile.hasHump,
+                          "\(id): grain density profile must carry the second rise")
+            for row in stock.grainDensityProfile.records {
+                XCTAssertEqual(row.count, GrainDensityProfile.coefficientCount, id)
+                XCTAssertTrue(row.allSatisfy { $0 > 0 },
+                              "\(id): grain density profile entries must be positive")
+            }
         }
     }
 

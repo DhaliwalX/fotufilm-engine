@@ -263,12 +263,17 @@ public extension FilmStockDefinition {
         // the whole curve would move the peak off the end of it, and a decay that long would
         // leave the coarse population never handing over to the fine one, which is the
         // measurement's one unambiguous feature.
-        try check("grainDensityProfile",
-                  grainDensityProfile ?? FilmStock.defaultGrainDensityProfile,
-                  count: 3, 0...100)
-        if let profile = grainDensityProfile, profile.count == 3 {
-            try check("grainDensityProfile.toeDensity", profile[1], 0.001...1)
-            try check("grainDensityProfile.decayDensity", profile[2], 0.01...4)
+        // The hump is likewise held inside the scale, and no narrower than the printed curves
+        // can resolve.
+        for (record, row) in (grainDensityProfile ?? FilmStock.defaultGrainDensityProfile)
+            .records.enumerated() {
+            let name = "grainDensityProfile[\(record)]"
+            try check(name, row, count: GrainDensityProfile.coefficientCount, 0...100)
+            try check("\(name).toeDensity", row[1], 0.001...1)
+            try check("\(name).decayDensity", row[2], 0.01...4)
+            try check("\(name).humpAmplitude", row[3], 0...20)
+            try check("\(name).humpDensity", row[4], 0...4)
+            try check("\(name).humpWidth", row[5], 0.05...2)
         }
         if let profile = grainReversalProfile {
             try check("grainReversalProfile", profile, count: 2, 0.1...10)

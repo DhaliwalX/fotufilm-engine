@@ -11,25 +11,35 @@
 
 namespace fotufilm {
 
-/// Granularity variance of a chromogenic negative at diffuse density `density`, in arbitrary
-/// units — the shape fitted to Kodak's published diffuse RMS granularity against density for
-/// Vision3 250D (5207) and 500T (5219), 48 µm aperture, both sheets read off their own plots:
+/// Granularity variance of a chromogenic negative's record at diffuse density `density`, in
+/// arbitrary units — the shape fitted per record to Kodak's published diffuse RMS granularity
+/// against density for Vision3 50D (5203), 250D (5207), 200T (5213) and 500T (5219), 48 µm
+/// aperture, each sheet read off its own plot:
 ///
-///     s²(D) = (1 - e^(-D/toe)) * (1 + amplitude * e^(-D/decay))
+///     s²(D) = (1 - e^(-D/toe)) * (1 + amplitude * e^(-D/decay)
+///                                 + hump * e^(-((D - hump_density) / hump_width)² / 2))
 ///
 /// The first factor is how much of the emulsion has developed at all, so granularity vanishes
 /// where no image formed; the bracket is the variance each unit of density carries, high while
 /// the fast coarse sub-layer is developing and decaying over `decay` onto the fine slow one's
-/// floor of 1. Both sheets peak 0.15–0.2 above D-min at about 1.5× the read density's figure
-/// and fall thereafter — Selwyn's √D rises there instead, 3× too quiet at the peak and 2× too
-/// loud at net 2. The bracket's floor is what keeps the extrapolation past the sheets' last
+/// floor of 1. Every sheet peaks 0.15–0.2 above D-min at about 1.5× the read density's figure
+/// and falls — Selwyn's √D rises there instead, 3× too quiet at the peak and 2× too loud at
+/// net 2 — then rises again near net 1.1–1.5, most in the blue record, where the slow
+/// sub-layer's own coarse population comes in; that second rise is the Gaussian term, which
+/// the earlier two-term form could not make and so ran 20–30 % quiet through the upper
+/// mid-scale. Past it the bracket's floor keeps the extrapolation beyond the sheets' last
 /// reading (net 2.1, where the data stops) flat rather than turning back up.
 inline Halide::Expr dye_cloud_granularity_variance(Halide::Expr density,
                                                    Halide::Expr amplitude,
                                                    Halide::Expr toe,
-                                                   Halide::Expr decay) {
+                                                   Halide::Expr decay,
+                                                   Halide::Expr hump,
+                                                   Halide::Expr hump_density,
+                                                   Halide::Expr hump_width) {
+    Halide::Expr offset = (density - hump_density) / Halide::max(hump_width, 1.0e-4f);
     return (1.0f - Halide::exp(-density / Halide::max(toe, 1.0e-4f)))
-        * (1.0f + amplitude * Halide::exp(-density / Halide::max(decay, 1.0e-4f)));
+        * (1.0f + amplitude * Halide::exp(-density / Halide::max(decay, 1.0e-4f))
+           + hump * Halide::exp(-0.5f * offset * offset));
 }
 
 /// Granularity variance of a silver emulsion at diffuse density `density`, in arbitrary units.
@@ -62,13 +72,19 @@ inline Halide::Expr grain_density_modulation(Halide::ImageParam &configuration,
     Expr anchor = Halide::max(
         configuration(FOTUFILM_CONFIG_GRAIN_ANCHOR + layer) + fog, 1.0e-4f);
     Expr here = Halide::max(net_density, 0.0f) + fog;
-    Expr amplitude = configuration(FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE);
-    Expr toe = configuration(FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE + 1);
-    Expr decay = configuration(FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE + 2);
+    Expr record = FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS + layer * 6;
+    Expr amplitude = configuration(record);
+    Expr toe = configuration(record + 1);
+    Expr decay = configuration(record + 2);
+    Expr hump = configuration(record + 3);
+    Expr hump_density = configuration(record + 4);
+    Expr hump_width = configuration(record + 5);
     Expr dye_cloud =
-        dye_cloud_granularity_variance(here, amplitude, toe, decay)
+        dye_cloud_granularity_variance(here, amplitude, toe, decay,
+                                       hump, hump_density, hump_width)
         / Halide::max(
-            dye_cloud_granularity_variance(anchor, amplitude, toe, decay),
+            dye_cloud_granularity_variance(anchor, amplitude, toe, decay,
+                                           hump, hump_density, hump_width),
             1.0e-6f);
     Expr silver = silver_granularity_variance(here)
         / Halide::max(silver_granularity_variance(anchor), 1.0e-6f);

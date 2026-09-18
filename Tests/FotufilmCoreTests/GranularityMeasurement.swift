@@ -136,9 +136,11 @@ enum GranularityMeter {
             let shape: Float
             switch model {
             case .clumpField:
-                let profile = stock.grainDensityProfile
+                let row = stock.grainDensityProfile.records[plane]
                 func dyeCloudVariance(_ d: Float) -> Float {
-                    (1 - exp(-d / profile[1])) * (1 + profile[0] * exp(-d / profile[2]))
+                    let hump = (d - row[4]) / row[5]
+                    return (1 - exp(-d / row[1]))
+                        * (1 + row[0] * exp(-d / row[2]) + row[3] * exp(-0.5 * hump * hump))
                 }
                 func silverVariance(_ d: Float) -> Float {
                     d * pow(10, 0.21004 * d + 0.06114 * d * d)
