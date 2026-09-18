@@ -76,46 +76,59 @@ public final class FilmFrameStaging {
     }
 }
 
-/// The strip buffers one streaming render works in: the strip's input, and the schedule's result.
-/// Borrowed for the length of a render and returned, because sizing them per call meant
-/// allocating and zero-filling 265 MB on every UHD frame — storage whose every byte is overwritten
-/// before it is read.
+/// The buffers one tiled render works in: the tile's input, and the schedule's results. Shared
+/// MTLBuffers, so the host writes the tile where the kernel reads it and reads the result where
+/// the kernel wrote it, and nothing is copied across the bus — a copy each way was a third of a
+/// strip's bytes. Borrowed for the length of a render and returned, because sizing them per
+/// call meant allocating and zero-filling hundreds of megabytes on every frame.
 ///
-/// The two are sized apart: the input spans the strip and both aprons, while the result holds
-/// only the delivered rows — the cropped kernel never writes an apron row, so allocating for one
-/// would buy 2 x apron rows of nothing.
-private final class StripBuffers {
-    let input: UnsafeMutablePointer<Float>
-    /// Two results in flight: the kernel writes one strip while the host is still encoding the
-    /// last one out of the other. A single scratch made the two stages take turns, and on a 33 MP
-    /// still the encode is a third of the time the kernel takes — a third of the device's work
-    /// spent watching a core convert floats. The second buffer is one strip of float RGBA, an
-    /// eighth of what a strip already costs the budget.
-    private let scratches: [UnsafeMutablePointer<Float>]
-    let capacity: Int
-    let scratchCapacity: Int
+/// The input spans the tile and its apron on every side; a result holds only the delivered
+/// pixels — the cropped kernel never writes an apron pixel, so allocating for one would buy
+/// nothing. Two results in flight: the kernel writes one tile while the host is still encoding
+/// the last one out of the other. A single result made the two stages take turns, and on a
+/// still the encode is a third of the time the kernel takes.
+private final class TileStaging {
+    let input: MTLBuffer
+    private let outputs: [MTLBuffer]
+    let inputPixels: Int
+    let outputPixels: Int
 
-    var scratchCount: Int { scratches.count }
+    var outputCount: Int { outputs.count }
 
-    func scratch(at index: Int) -> UnsafeMutablePointer<Float> {
-        scratches[index % scratches.count]
-    }
-
-    /// The single-scratch spelling, for the paths that hand a strip back before starting another.
-    var scratch: UnsafeMutablePointer<Float> { scratches[0] }
-
-    init(capacity: Int, scratchCapacity: Int, scratchCount: Int = 1) {
-        self.capacity = capacity
-        self.scratchCapacity = scratchCapacity
-        input = .allocate(capacity: capacity)
-        scratches = (0..<max(1, scratchCount)).map { _ in
-            UnsafeMutablePointer<Float>.allocate(capacity: scratchCapacity)
+    init?(device: MTLDevice, inputPixels: Int, outputPixels: Int, outputCount: Int) {
+        guard inputPixels > 0, outputPixels > 0,
+              let input = device.makeBuffer(length: inputPixels * 16,
+                                            options: .storageModeShared)
+        else { return nil }
+        var outputs: [MTLBuffer] = []
+        for _ in 0..<max(1, outputCount) {
+            guard let output = device.makeBuffer(length: outputPixels * 16,
+                                                 options: .storageModeShared)
+            else { return nil }
+            outputs.append(output)
         }
+        self.input = input
+        self.outputs = outputs
+        self.inputPixels = inputPixels
+        self.outputPixels = outputPixels
     }
 
-    deinit {
-        input.deallocate()
-        for scratch in scratches { scratch.deallocate() }
+    var inputPointer: UnsafeMutablePointer<Float> {
+        input.contents().assumingMemoryBound(to: Float.self)
+    }
+
+    var inputHandle: UInt64 {
+        UInt64(UInt(bitPattern: Unmanaged.passUnretained(input as AnyObject).toOpaque()))
+    }
+
+    func output(at index: Int) -> MTLBuffer { outputs[index % outputs.count] }
+
+    func outputPointer(at index: Int) -> UnsafeMutablePointer<Float> {
+        output(at: index).contents().assumingMemoryBound(to: Float.self)
+    }
+
+    func outputHandle(at index: Int) -> UInt64 {
+        UInt64(UInt(bitPattern: Unmanaged.passUnretained(output(at: index) as AnyObject).toOpaque()))
     }
 }
 
@@ -503,7 +516,11 @@ public final class HalideMetalFilmRenderer {
 
     /// Applies `outputTransform` in the producing kernel so `writeRows` receives host-encoded
     /// pixels. Unsupported variants clear it to nil. The pointwise transform is identical for
-    /// staged and striped paths, preventing memory-dependent output differences.
+    /// staged and tiled paths, preventing memory-dependent output differences.
+    ///
+    /// The row form: every tile spans the frame's width, so a caller that can only hand rows
+    /// over is served, at the price that a frame too wide to band within the budget is refused
+    /// where the tile form below would cut it into tiles.
     @discardableResult
     public func developStreaming(
         width: Int, height: Int,
@@ -527,30 +544,76 @@ public final class HalideMetalFilmRenderer {
         readRows: (_ rows: Range<Int>, _ into: UnsafeMutableBufferPointer<Float>) -> Void,
         writeRows: (_ rows: Range<Int>, _ from: UnsafeBufferPointer<Float>) -> Void
     ) -> Bool {
+        developStreaming(
+            width: width, height: height, stock: stock, options: options,
+            outputTransform: &outputTransform, frameIndex: frameIndex,
+            memoryBudget: memoryBudget, apronScale: apronScale, realtime: realtime,
+            exactMath: exactMath, noFilm: noFilm, overlapsWriteback: overlapsWriteback,
+            fullWidthTiles: true, progress: progress, shouldContinue: shouldContinue,
+            readTile: { rows, columns, into in
+                precondition(columns == 0..<width)
+                readRows(rows, into)
+            },
+            writeTile: { rows, columns, from in
+                precondition(columns == 0..<width)
+                writeRows(rows, from)
+            })
+    }
+
+    /// Develops the frame in tiles: `readTile` fills a dense `columns.count` x `rows.count`
+    /// block of interleaved scene-linear float RGBA, `writeTile` takes the same block of the
+    /// result. A frame small enough is developed whole, on the device; otherwise it is cut into
+    /// tiles sized to the memory budget, each read with the apron the film's reach needs, and
+    /// the delivered pixels are the whole frame's exactly — the same expressions over the same
+    /// coordinates, whatever the cut. A frame whose halation reaches further than the budget
+    /// can afford to repeat is developed in two passes instead: the light once, into the
+    /// whole-frame halation grids, and then the tiles with only the emulsion's own apron, which
+    /// again delivers the whole frame's pixels.
+    @discardableResult
+    public func developStreaming(
+        width: Int, height: Int,
+        stock: FilmStock, options: FotufilmEngine.Options,
+        outputTransform: inout FilmOutputTransform?,
+        frameIndex: UInt64 = 0,
+        memoryBudget: Int? = nil,
+        apronScale: Double = 1,
+        realtime: Bool = false,
+        exactMath: Bool = false,
+        noFilm: Bool = false,
+        overlapsWriteback: Bool = false,
+        /// Keeps every tile as wide as the frame, for callers that hand rows over.
+        fullWidthTiles: Bool = false,
+        progress: ((FilmRenderPhase) -> Void)? = nil,
+        shouldContinue: (() -> Bool)? = nil,
+        readTile: (_ rows: Range<Int>, _ columns: Range<Int>,
+                   _ into: UnsafeMutableBufferPointer<Float>) -> Void,
+        writeTile: (_ rows: Range<Int>, _ columns: Range<Int>,
+                    _ from: UnsafeBufferPointer<Float>) -> Void
+    ) -> Bool {
         if !noFilm, options.transportConstruction(for: stock) != nil {
             guard shouldContinue?() != false else { return false }
             var source = [Float](repeating: 0, count: width*height*4)
-            source.withUnsafeMutableBufferPointer { readRows(0..<height, $0) }
+            source.withUnsafeMutableBufferPointer { readTile(0..<height, 0..<width, $0) }
             do {
                 let result = try LayeredMetalTransport.process(source, width: width, height: height,
                     stock: stock, options: options, frameIndex: frameIndex)
                 guard shouldContinue?() != false else { return false }
                 outputTransform = nil // caller applies its requested delivery to the linear result
-                result.withUnsafeBufferPointer { writeRows(0..<height, $0) }
+                result.withUnsafeBufferPointer { writeTile(0..<height, 0..<width, $0) }
                 return true
             } catch { print(error.localizedDescription); return false }
         }
         precondition(width > 0 && height > 0)
         // Use staged development when both the default and caller-provided budgets permit it.
         // Staging uses the same schedule without repeated aprons or host-device frame copies.
-        // Respecting both budgets lets tests force striped rendering and prevents dispatch to a
+        // Respecting both budgets lets tests force tiled rendering and prevents dispatch to a
         // staged call that will reject the frame.
         let onePassBudget = memoryBudget ?? Self.defaultMemoryBudget()
         if Self.developsInOnePass(width: width, height: height),
            height <= onePassBudget / Self.stripBytesPerRow(width: width),
            let staging = borrowStaging(pixels: width * height) {
             defer { Self.returnStaging(staging) }
-            readRows(0..<height, UnsafeMutableBufferPointer(
+            readTile(0..<height, 0..<width, UnsafeMutableBufferPointer(
                 start: staging.scenePixels, count: width * height * 4))
             guard developStaged(
                 staging, width: width, height: height, stock: stock, options: options,
@@ -559,11 +622,11 @@ public final class HalideMetalFilmRenderer {
                 noFilm: noFilm,
                 progress: progress, shouldContinue: shouldContinue)
             else { return false }
-            writeRows(0..<height, UnsafeBufferPointer(
+            writeTile(0..<height, 0..<width, UnsafeBufferPointer(
                 start: staging.developedPixels, count: width * height * 4))
             return true
         }
-        // Poll between bands and strips so cancellation never interrupts a dispatch. Return false
+        // Poll between bands and tiles so cancellation never interrupts a dispatch. Return false
         // when cancelled.
         let cancelled = { shouldContinue.map { !$0() } ?? false }
         let invocationStart = Date()
@@ -571,7 +634,8 @@ public final class HalideMetalFilmRenderer {
             validating: stock, options: options, width: width,
             height: height, frameIndex: frameIndex, noFilm: noFilm)
         else { return false }
-        if getenv("FOTUFILM_STILL_TIMINGS") != nil {
+        let timings = getenv("FOTUFILM_STILL_TIMINGS") != nil
+        if timings {
             print(String(format: "  %-10@ %8.1f ms", "invoke" as NSString,
                          Date().timeIntervalSince(invocationStart) * 1000))
         }
@@ -592,96 +656,393 @@ public final class HalideMetalFilmRenderer {
             outputTransform = nil
         }
 
-        let timings = getenv("FOTUFILM_STILL_TIMINGS") != nil
-        let apron = max(1, Int(Double(invocation.spatialSupport) * apronScale))
         let budget = memoryBudget ?? Self.defaultMemoryBudget()
-        let fieldsStart = Date()
-        let fieldsDeveloped = developStreamingFields(
-            invocation: &invocation, width: width, height: height,
-            budget: budget, apronScale: apronScale, timings: timings,
-            cancelled: cancelled, progress: progress,
-            readRows: readRows, writeRows: writeRows)
-        if timings, fieldsDeveloped == nil {
-            print(String(format: "  %-10@ %8.1f ms (road refused)",
-                         "fields" as NSString,
-                         Date().timeIntervalSince(fieldsStart) * 1000))
-        }
-        if let fieldsDeveloped { return fieldsDeveloped }
-        let floor = min(height, 2 * apron) * Self.apronBytesPerRow(
-            width: width, exactMath: exactMath)
-            + min(max(height - 2 * apron, 0), 1) * Self.stripBytesPerRow(width: width)
-        guard floor <= budget else {
+        guard let plan = Self.planTiles(
+            invocation: invocation, width: width, height: height, budget: budget,
+            apronScale: apronScale, overlap: overlapsWriteback,
+            fullWidth: fullWidthTiles)
+        else {
             if timings {
-                print("  striped \(width)x\(height): refused, apron \(apron) "
-                      + "needs \(floor >> 20) MB against a \(budget >> 20) MB "
-                      + "budget")
+                print("  tiled \(width)x\(height): refused, no tile of \(Self.minimumTile) "
+                      + "pixels fits a \(budget >> 20) MB budget")
             }
             return false
         }
-        let rows = Self.stripRows(width: width, height: height, apron: apron,
-                                  budget: budget, exactMath: exactMath)
-        let strips = (height + rows - 1) / rows
-        // The strip loop hands `writeRows` to a work item so it can run beside the next kernel.
+        // The tile loop hands `writeTile` to a work item so it can run beside the next kernel.
         // It is joined before the loop returns — every path out of it, the early ones included —
         // so nothing outlives the call; the escape is only lexical.
-        return withoutActuallyEscaping(writeRows) { writeRows in
-            developStripped(
-                invocation: &invocation, width: width, height: height,
-                rows: rows, strips: strips, apron: apron, timings: timings,
-                overlapsWriteback: overlapsWriteback,
-                cancelled: cancelled, progress: progress,
-                readRows: readRows, writeRows: writeRows)
+        return withoutActuallyEscaping(writeTile) { writeTile in
+            developTiled(
+                invocation: &invocation, width: width, height: height, plan: plan,
+                timings: timings, cancelled: cancelled, progress: progress,
+                readTile: readTile, writeTile: writeTile)
         }
     }
 
-    /// The classic single-pass striped path, once its geometry is settled.
-    private func developStripped(
+    /// How a frame too large for one pass is cut: the tiles, their apron, and whether halation
+    /// is taken in a pass of its own first.
+    struct TilePlan: Equatable {
+        /// Delivered pixels per tile, in each axis. The input read for a tile spans `apron`
+        /// more on every side, clipped to the frame.
+        var tileWidth: Int
+        var tileRows: Int
+        var apron: Int
+        /// Whether the halation grids are built whole-frame first (the fields road): the
+        /// light pass reads the frame in bands of `lightRows` rows plus `lightApron`, kept on
+        /// the finest grid's cell boundaries so every band delivers whole grid rows.
+        var fields: Bool
+        var lightRows: Int
+        var lightApron: Int
+        /// Whether a second result buffer lets the host encode one tile while the kernel
+        /// develops the next.
+        var overlap: Bool
+        /// The peak this plan is priced at, in bytes.
+        var bytes: Int
+        /// Pixels developed per pixel delivered, the light pass included, as the road choice
+        /// weighed it.
+        var work: Double
+
+        var tileColumns: Int { 0 }
+    }
+
+    /// The tile plan for a frame under `budget`, or nil when no tile of `minimumTile` pixels
+    /// fits. Between the classic road — halation's pyramid built over every tile, so the apron
+    /// is the whole reach of the film — and the fields road — the light developed once into
+    /// whole-frame halation grids, then tiles with only the emulsion's own apron — the cheaper
+    /// in pixels developed is taken. `FOTUFILM_FORCE_FIELDS` takes the fields road whenever it
+    /// can be taken (the parity tests' seam); `FOTUFILM_NO_FIELDS` never takes it.
+    static func planTiles(
+        invocation: FilmEngineInvocation, width: Int, height: Int, budget: Int,
+        apronScale: Double = 1, overlap: Bool = false, fullWidth: Bool = false
+    ) -> TilePlan? {
+        let mask = invocation.featureMask
+        let classicApron = max(1, Int(Double(invocation.spatialSupport) * apronScale))
+        let fineApron = max(1, Int(Double(invocation.spatialSupportSansHalation) * apronScale))
+        var classic = tileShape(width: width, height: height, apron: classicApron,
+                                fineApron: fineApron, budget: budget, overlap: overlap,
+                                fullWidth: fullWidth)
+            .map { shape in
+                TilePlan(tileWidth: shape.tileWidth, tileRows: shape.tileRows,
+                         apron: classicApron, fields: false, lightRows: 0, lightApron: 0,
+                         overlap: overlap, bytes: shape.bytes, work: shape.work)
+            }
+        let forced = getenv("FOTUFILM_FORCE_FIELDS") != nil
+        var fields: TilePlan? = nil
+        if getenv("FOTUFILM_NO_FIELDS") == nil,
+           mask & FilmEngineFeature.halation != 0,
+           mask & FilmEngineFeature.exactMath == 0,
+           mask & FilmEngineFeature.realtime == 0,
+           mask & FilmEngineFeature.flareMeasure == 0,
+           mask & FilmEngineFeature.texture == 0,
+           invocation.halationSupport > 0,
+           fotufilm_halide_metal_variant_exists(
+               lightMask(mask) | FilmEngineFeature.lightOut) == 1,
+           fotufilm_halide_metal_variant_exists(mask | FilmEngineFeature.fieldsIn) == 1 {
+            let lightApron = max(1, Int(Double(invocation.lightSupport) * apronScale))
+            let stride = Int(fotufilm_halation_stride(invocation.halationPixelRadii[0]))
+            let gridFloats = invocation.halationPixelRadii.withUnsafeBufferPointer {
+                Int(fotufilm_halide_metal_halation_fields_floats(
+                    Int32(width), Int32(height), $0.baseAddress))
+            }
+            // The grids ride along for the whole develop, in the caller's blob and on the
+            // device; the light pass runs before it and holds its own band, so the budget the
+            // tiles have is what the grids leave.
+            let gridBytes = 2 * gridFloats * 4
+            let lightRowBytes = width * (16 + lightBytesPerPixel)
+            // A band is a tile the frame wide, and pays the same page-fault toll past the
+            // tile ceiling; its apron is a few rows, so it may be twice as tall as a tile.
+            var lightRows = min((budget - gridBytes) / lightRowBytes - 2 * lightApron,
+                                2 * maximumTilePixels / width)
+            lightRows = min(height, max(stride, lightRows / stride * stride))
+            if gridBytes > 0, lightRows >= stride,
+               let shape = tileShape(width: width, height: height, apron: fineApron,
+                                     fineApron: fineApron, budget: budget - gridBytes,
+                                     overlap: overlap, fullWidth: fullWidth) {
+                let lightWork = lightPassShare
+                    * Double(min(height, lightRows + 2 * lightApron)) / Double(lightRows)
+                    + Double((height + lightRows - 1) / lightRows) * tileOverhead
+                fields = TilePlan(
+                    tileWidth: shape.tileWidth, tileRows: shape.tileRows, apron: fineApron,
+                    fields: true, lightRows: lightRows, lightApron: lightApron,
+                    overlap: overlap, bytes: shape.bytes + gridBytes,
+                    work: shape.work + lightWork)
+            }
+        }
+        if forced, fields != nil { classic = nil }
+        switch (classic, fields) {
+        case (let classic?, let fields?): return fields.work < classic.work ? fields : classic
+        case (let classic?, nil): return classic
+        case (nil, let fields?): return fields
+        case (nil, nil): return nil
+        }
+    }
+
+    /// The largest tile of `apron` reach that fits `budget`, shaped to repeat the fewest pixels:
+    /// as wide as the frame when that leaves rows enough, narrower when the frame is too wide
+    /// to band, since a tile's apron costs its perimeter and a band's costs its whole width.
+    /// `fineApron` is how far the stages past the light reach; the apron beyond it is walked
+    /// by the light chain alone, which is what it is priced at.
+    static func tileShape(
+        width: Int, height: Int, apron: Int, fineApron: Int, budget: Int, overlap: Bool,
+        fullWidth: Bool
+    ) -> (tileWidth: Int, tileRows: Int, bytes: Int, work: Double)? {
+        var best: (tileWidth: Int, tileRows: Int, bytes: Int, work: Double)? = nil
+        var candidates = [width]
+        if !fullWidth {
+            var parts = 2
+            while (width + parts - 1) / parts >= min(minimumTile, width) {
+                candidates.append((width + parts - 1) / parts)
+                parts += 1
+            }
+        }
+        for tileWidth in candidates {
+            guard let tileRows = tileRows(width: width, height: height, tileWidth: tileWidth,
+                                          apron: apron, budget: budget, overlap: overlap)
+            else { continue }
+            let bytes = tileBytes(width: width, height: height, tileWidth: tileWidth,
+                                  tileRows: tileRows, apron: apron, overlap: overlap)
+            let across = (width + tileWidth - 1) / tileWidth
+            let down = (height + tileRows - 1) / tileRows
+            // What the tiles develop, in frame-develops: every tile's input walks the light
+            // chain, apron and all; the rest of the film only reaches `fineApron` past the
+            // delivered pixels. A tile costs the host a callback and the device a launch per
+            // stage besides.
+            var light = 0, film = 0
+            for row in 0..<down {
+                let top = row * tileRows
+                let rows = min(height, top + tileRows + apron) - max(0, top - apron)
+                let fineRows = min(height, top + tileRows + fineApron)
+                    - max(0, top - fineApron)
+                for column in 0..<across {
+                    let left = column * tileWidth
+                    let columns = min(width, left + tileWidth + apron) - max(0, left - apron)
+                    let fineColumns = min(width, left + tileWidth + fineApron)
+                        - max(0, left - fineApron)
+                    light += rows * columns
+                    film += fineRows * fineColumns
+                }
+            }
+            let work = (Double(light) * lightPassShare
+                        + Double(film) * (1 - lightPassShare)) / Double(width * height)
+                + Double(across * down) * tileOverhead
+            if let current = best, work >= current.work { continue }
+            best = (tileWidth, tileRows, bytes, work)
+        }
+        return best
+    }
+
+    /// The most rows a tile `tileWidth` wide can deliver under `budget` and `maximumTilePixels`,
+    /// or nil when not even `minimumTile` rows fit.
+    static func tileRows(width: Int, height: Int, tileWidth: Int, apron: Int, budget: Int,
+                         overlap: Bool) -> Int? {
+        let floor = min(height, minimumTile)
+        guard tileBytes(width: width, height: height, tileWidth: tileWidth, tileRows: floor,
+                        apron: apron, overlap: overlap) <= budget else { return nil }
+        var low = floor, high = max(floor, min(height, maximumTilePixels / min(width, tileWidth)))
+        while low < high {
+            let middle = (low + high + 1) / 2
+            if tileBytes(width: width, height: height, tileWidth: tileWidth, tileRows: middle,
+                         apron: apron, overlap: overlap) <= budget {
+                low = middle
+            } else {
+                high = middle - 1
+            }
+        }
+        return low
+    }
+
+    /// What one tile costs while it is in flight: its input with the apron on every side, in
+    /// shared memory, and the light chain's working set over that; its results, and the
+    /// emulsion and print's working set over the delivered pixels.
+    static func tileBytes(width: Int, height: Int, tileWidth: Int, tileRows: Int, apron: Int,
+                          overlap: Bool) -> Int {
+        let inputArea = min(width, tileWidth + 2 * apron) * min(height, tileRows + 2 * apron)
+        let outputArea = min(width, tileWidth) * min(height, tileRows)
+        return inputArea * (16 + lightBytesPerPixel)
+            + outputArea * (developBytesPerPixel + 16 * (overlap ? 2 : 1))
+    }
+
+    /// The stages a light pass runs: everything up to the light halation reads.
+    static func lightMask(_ mask: Int32) -> Int32 {
+        (mask & (FilmEngineFeature.flare | FilmEngineFeature.mtf | FilmEngineFeature.mtfLuma
+                 | FilmEngineFeature.diffusion | FilmEngineFeature.monochrome
+                 | FilmEngineFeature.reversal)) | FilmEngineFeature.floatIO
+    }
+
+    /// The smallest tile worth cutting, in delivered pixels on a side. Below this the apron
+    /// outweighs the tile and the launches outweigh the work.
+    public static let minimumTile = 256
+
+    /// The largest tile worth cutting, in delivered pixels, whatever the budget allows. Every
+    /// stage of a tile writes a fresh allocation, and past a point a tile spends more faulting
+    /// those pages in than it saves in apron. On the Mac that point is a couple of megapixels:
+    /// at 100 MP, 0.8 MP tiles developed the frame in 1.9 s where 23 MP tiles took 2.7 s. The
+    /// phone faults far dearer: an iPhone 16 Pro developed 24 MP in 5.1 s as twelve 2 MP tiles
+    /// and in 0.95 s as sixty of 0.4 MP.
+    #if os(iOS)
+    public static let maximumTilePixels = 512_000
+    #else
+    public static let maximumTilePixels = 2_000_000
+    #endif
+
+    /// The light chain's share of a develop's time per pixel — the exposure, the glare and the
+    /// MTF against everything — as measured at 100 MP (a light pass of 0.66 s against a
+    /// develop of 1.5 s): it is what a halation apron pixel costs, and what the fields road's
+    /// first pass costs.
+    static let lightPassShare = 0.4
+
+    /// What one tile or band costs in launches and callbacks, in frame-develops: about a
+    /// millisecond against a 24 MP frame's four hundred.
+    static let tileOverhead = 0.003
+
+    /// The tiled develop, once its geometry is settled: a light pass into the halation grids
+    /// when the plan takes the fields road, then the tiles.
+    private func developTiled(
         invocation: inout FilmEngineInvocation,
-        width: Int, height: Int, rows: Int, strips: Int, apron: Int,
-        timings: Bool, overlapsWriteback: Bool,
+        width: Int, height: Int, plan: TilePlan,
+        timings: Bool,
         cancelled: () -> Bool,
         progress: ((FilmRenderPhase) -> Void)?,
-        readRows: (_ rows: Range<Int>, _ into: UnsafeMutableBufferPointer<Float>) -> Void,
-        writeRows: @escaping (_ rows: Range<Int>, _ from: UnsafeBufferPointer<Float>) -> Void
+        readTile: (_ rows: Range<Int>, _ columns: Range<Int>,
+                   _ into: UnsafeMutableBufferPointer<Float>) -> Void,
+        writeTile: @escaping (_ rows: Range<Int>, _ columns: Range<Int>,
+                              _ from: UnsafeBufferPointer<Float>) -> Void
     ) -> Bool {
-        let maxStripHeight = min(height, rows + 2 * apron)
-        let scratchBytes = width * min(rows, height) * 16
-        // Allocate a second scratch outside the geometry budget so overlap does not change strip
-        // height or apron boundaries. Require additional available memory before enabling it.
-        let wantsOverlap = overlapsWriteback && strips > 1
-            && scratchBytes * 4 < Self.availableBytes()
-            && getenv("FOTUFILM_EXPORT_SERIAL") == nil
-        let buffers = Self.borrowStripBuffers(
-            capacity: width * maxStripHeight * 4,
-            scratchCapacity: width * min(rows, height) * 4,
-            scratchCount: wantsOverlap ? 2 : 1)
-        defer { Self.returnStripBuffers(buffers) }
-        // The pool may return extra capacity. Enable overlap only when this render requested it.
-        let overlapping = wantsOverlap && buffers.scratchCount >= 2
-        let input = buffers.input
-        let measureStart = Date()
-        guard measureWholeFrame(
-            &invocation, width: width, height: height, bandRows: maxStripHeight,
-            cancelled: cancelled, progress: progress,
-            band: { rows in
-                readRows(rows, UnsafeMutableBufferPointer(
-                    start: input, count: rows.count * width * 4))
-                return UnsafePointer(input)
-            })
+        let inputWidth = min(width, plan.tileWidth + 2 * plan.apron)
+        let inputRows = min(height, plan.tileRows + 2 * plan.apron)
+        let lightBand = plan.fields ? min(height, plan.lightRows + 2 * plan.lightApron) : 0
+        // One input for every pass: a tile with its apron, or a light band — whichever is the
+        // larger — and the whole-frame measurements' bands walk the frame through it too.
+        let inputPixels = max(inputWidth * inputRows, width * lightBand)
+        guard let staging = Self.borrowTileStaging(
+            inputPixels: inputPixels,
+            outputPixels: min(width, plan.tileWidth) * min(height, plan.tileRows),
+            outputCount: plan.overlap ? 2 : 1)
         else { return false }
+        defer { Self.returnTileStaging(staging) }
+        let input = staging.inputPointer
+        let inputHandle = staging.inputHandle
+
+        let measureStart = Date()
+        let bandRows = max(1, min(height, staging.inputPixels / width))
+        // The bands fill the tile input and are measured where they land, on the device; the
+        // host pointer is the fallback for a build with no Metal to measure on.
+        let measured = withoutActuallyEscaping(readTile) { readTile in
+            measureWholeFrame(
+                &invocation, width: width, height: height, bandRows: bandRows,
+                cancelled: cancelled, progress: progress,
+                band: { rows in
+                    readTile(rows, 0..<width, UnsafeMutableBufferPointer(
+                        start: input, count: rows.count * width * 4))
+                    return UnsafePointer(input)
+                },
+                deviceBand: { rows in
+                    readTile(rows, 0..<width, UnsafeMutableBufferPointer(
+                        start: input, count: rows.count * width * 4))
+                    return inputHandle
+                })
+        }
+        guard measured else { return false }
         let measureSeconds = Date().timeIntervalSince(measureStart)
 
-        var readSeconds = 0.0
+        let across = (width + plan.tileWidth - 1) / plan.tileWidth
+        let down = (height + plan.tileRows - 1) / plan.tileRows
+        let tiles = across * down
+        let lightBands = plan.fields ? (height + plan.lightRows - 1) / plan.lightRows : 0
+        let steps = lightBands + tiles
+
+        // The fields road's first pass: the light of every band, decimated on the device into
+        // the frame's finest halation grid, and that grid blurred into the three scales.
+        // The grids ride behind the configuration in one blob, so the engine can read them in
+        // place rather than keep a copy of its own; `release_fields` below is what lets the blob
+        // go.
+        let head = FilmEngineInvocation.configurationCount
+        var extended: [Float] = []
+        var fieldsID: UInt64 = 0
+        var lightSeconds = 0.0, gridSeconds = 0.0, readSeconds = 0.0
+        if plan.fields {
+            let radii = invocation.halationPixelRadii
+            let stride = Int(fotufilm_halation_stride(radii[0]))
+            let gridWidth = (width + stride - 1) / stride
+            let gridHeight = (height + stride - 1) / stride
+            var grid = [Float](repeating: 0, count: gridWidth * gridHeight * 3)
+            let lightMask = Self.lightMask(invocation.featureMask)
+            for band in 0..<lightBands {
+                if cancelled() { return false }
+                progress?(.developing(index: band, count: steps))
+                let top = band * plan.lightRows
+                let bottom = min(height, top + plan.lightRows)
+                let from = max(0, top - plan.lightApron)
+                let to = min(height, bottom + plan.lightApron)
+                let readStart = Date()
+                readTile(from..<to, 0..<width, UnsafeMutableBufferPointer(
+                    start: input, count: (to - from) * width * 4))
+                readSeconds += Date().timeIntervalSince(readStart)
+                // The band's grid starts at the cell holding row `from - from % stride`; the
+                // rows it delivers start at `top`, a whole number of cells further in.
+                let phase = from % stride
+                let firstCell = (top - (from - phase)) / stride
+                let cells = (bottom - top + stride - 1) / stride
+                let lightStart = Date()
+                let ok = invocation.configuration.withUnsafeBufferPointer { configuration in
+                    invocation.withSpectralPointers { exposure, film, paper in
+                        grid.withUnsafeMutableBufferPointer { grid in
+                            fotufilm_halide_metal_process_buffers_light_grid(
+                                inputHandle,
+                                grid.baseAddress! + (top / stride) * gridWidth * 3,
+                                Int32(width), Int32(to - from),
+                                Int32(firstCell), Int32(cells), 0, Int32(from),
+                                configuration.baseAddress, exposure, film, paper,
+                                Int32(invocation.spectral.exposure.dimension),
+                                invocation.spectralCacheID, lightMask,
+                                invocation.seed) == 0
+                        }
+                    }
+                }
+                lightSeconds += Date().timeIntervalSince(lightStart)
+                guard ok else { return false }
+            }
+            if cancelled() { return false }
+            let gridStart = Date()
+            let fieldsFloats = radii.withUnsafeBufferPointer {
+                fotufilm_halide_metal_halation_fields_floats(
+                    Int32(width), Int32(height), $0.baseAddress)
+            }
+            guard fieldsFloats > 11 else { return false }
+            extended = invocation.configuration
+            extended.append(contentsOf: repeatElement(0, count: Int(fieldsFloats)))
+            let built = radii.withUnsafeBufferPointer { radii in
+                grid.withUnsafeBufferPointer { grid in
+                    extended.withUnsafeMutableBufferPointer { extended in
+                        fotufilm_halide_metal_halation_fields(
+                            grid.baseAddress, Int32(width), Int32(height),
+                            radii.baseAddress, extended.baseAddress! + head,
+                            fieldsFloats) == 0
+                    }
+                }
+            }
+            guard built else { return false }
+            grid = []
+            gridSeconds = Date().timeIntervalSince(gridStart)
+            fieldsID = mach_absolute_time()
+        }
+        defer { if plan.fields { fotufilm_halide_metal_release_fields() } }
+
         var engineSeconds = 0.0
         var writeSeconds = 0.0
         var writeWaitSeconds = 0.0
-        // The host's half of the previous strip, still running. `writeRows` is the caller's
-        // encode — on a still, a full pass over the strip in float and out in sixteen-bit — and
-        // nothing the kernel does next reads what it is reading, so it rides the next strip's
-        // kernel rather than delaying it. The strips are still handed over in order: this is one
+        var developed = 0
+        // Where the footprint stands as the tiles go by, against what the plan was priced at,
+        // for the timing line: the process's own reading, so it counts what the host holds —
+        // the print's unwritten pages, the staging — as well as the schedule's.
+        let footprintBefore = timings ? Self.footprintBytes() : 0
+        var footprintPeak = 0
+        // The host's half of the previous tile, still running. `writeTile` is the caller's
+        // encode — on a still, a full pass over the tile in float and out in sixteen-bit — and
+        // nothing the kernel does next reads what it is reading, so it rides the next tile's
+        // kernel rather than delaying it. The tiles are still handed over in order: this is one
         // outstanding write, joined before the buffer it holds is reused.
-        let writeQueue = DispatchQueue(label: "fotufilm.strip.write",
-                                       qos: .userInitiated)
+        let writeQueue = DispatchQueue(label: "fotufilm.tile.write", qos: .userInitiated)
         var outstandingWrite: DispatchWorkItem?
         func joinWrite() {
             guard let item = outstandingWrite else { return }
@@ -691,242 +1052,38 @@ public final class HalideMetalFilmRenderer {
             outstandingWrite = nil
         }
         defer { joinWrite() }
-        for strip in 0..<strips {
+        for index in 0..<tiles {
             if cancelled() { return false }
-            progress?(.developing(index: strip, count: strips))
-            let top = strip * rows
-            let bottom = min(height, top + rows)
-            let from = max(0, top - apron)
-            let to = min(height, bottom + apron)
-            let stripHeight = to - from
-            let scratch = buffers.scratch(at: overlapping ? strip : 0)
+            progress?(.developing(index: lightBands + index, count: steps))
+            let top = (index / across) * plan.tileRows
+            let left = (index % across) * plan.tileWidth
+            let bottom = min(height, top + plan.tileRows)
+            let right = min(width, left + plan.tileWidth)
+            let from = max(0, top - plan.apron), to = min(height, bottom + plan.apron)
+            let first = max(0, left - plan.apron), last = min(width, right + plan.apron)
+            let tileWidth = last - first, tileHeight = to - from
+            developed += tileWidth * tileHeight
 
             let readStart = Date()
-            readRows(from..<to, UnsafeMutableBufferPointer(
-                start: input, count: stripHeight * width * 4))
+            readTile(from..<to, first..<last, UnsafeMutableBufferPointer(
+                start: input, count: tileHeight * tileWidth * 4))
             readSeconds += Date().timeIntervalSince(readStart)
-            // Two scratch buffers allow the previous host write to overlap this kernel dispatch.
-            // A single scratch must be joined before reuse.
-            if !overlapping { joinWrite() }
+            // Two results let the previous host write overlap this kernel dispatch. A single
+            // one must be joined before reuse.
+            if !plan.overlap { joinWrite() }
             let engineStart = Date()
-            let ok = invocation.configuration.withUnsafeBufferPointer { configuration in
+            let ok = invocation.configuration.withUnsafeBufferPointer { plain in
                 invocation.withSpectralPointers { exposure, film, paper in
-                    fotufilm_halide_metal_process_linear_float_rows(
-                        input, scratch,
-                        Int32(width), Int32(stripHeight),
-                        Int32(top - from), Int32(bottom - top), 0, Int32(from),
-                        configuration.baseAddress, exposure, film, paper,
-                        Int32(invocation.spectral.exposure.dimension),
-                        invocation.spectralCacheID, invocation.featureMask,
-                        invocation.seed) == 0
-                }
-            }
-            engineSeconds += Date().timeIntervalSince(engineStart)
-            guard ok else { return false }
-            // Complete the previous write before submitting the next to preserve strip order.
-            joinWrite()
-            let writeStart = Date()
-            let item = DispatchWorkItem {
-                writeRows(top..<bottom, UnsafeBufferPointer(
-                    start: scratch, count: (bottom - top) * width * 4))
-            }
-            if strip == strips - 1 {
-                item.perform()
-                writeSeconds += Date().timeIntervalSince(writeStart)
-            } else {
-                outstandingWrite = item
-                writeQueue.async(execute: item)
-            }
-        }
-        joinWrite()
-        if timings {
-            let developed = height + (strips - 1) * 2 * apron
-            print(String(
-                format: "  striped %dx%d: %d strip(s) of %d rows, apron %d "
-                    + "(%.2fx rows), measure %.1f ms, read %.1f ms, "
-                    + "engine %.1f ms, write %.1f ms (last strip), "
-                    + "write wait %.1f ms",
-                width, height, strips, rows, apron,
-                Double(developed) / Double(height),
-                measureSeconds * 1000, readSeconds * 1000,
-                engineSeconds * 1000, writeSeconds * 1000,
-                writeWaitSeconds * 1000))
-        }
-        return true
-    }
-
-    /// Two-pass striped rendering for frames dominated by halation support. The first pass writes
-    /// post-MTF light to a file-backed float frame, the full-frame halation pyramid is built
-    /// from it, and the second pass applies remaining fine-support stages. Stored field values match
-    /// the staged renderer.
-    ///
-    /// Returns nil when the path is not taken — halation absent or small against the fine apron,
-    /// a mask the generated variants cannot serve, or no memory for the light — and the caller
-    /// falls through to the classic single-pass striping. `FOTUFILM_FORCE_FIELDS` takes it
-    /// whenever it can be taken (the parity tests' seam); `FOTUFILM_NO_FIELDS` never takes it.
-    private func developStreamingFields(
-        invocation: inout FilmEngineInvocation,
-        width: Int, height: Int, budget: Int, apronScale: Double,
-        timings: Bool,
-        cancelled: () -> Bool,
-        progress: ((FilmRenderPhase) -> Void)?,
-        readRows: (_ rows: Range<Int>, _ into: UnsafeMutableBufferPointer<Float>) -> Void,
-        writeRows: (_ rows: Range<Int>, _ from: UnsafeBufferPointer<Float>) -> Void
-    ) -> Bool? {
-        guard getenv("FOTUFILM_NO_FIELDS") == nil else { return nil }
-        let mask = invocation.featureMask
-        guard mask & FilmEngineFeature.halation != 0,
-              mask & FilmEngineFeature.exactMath == 0,
-              mask & FilmEngineFeature.realtime == 0,
-              mask & FilmEngineFeature.encodeOut == 0,
-              mask & FilmEngineFeature.flareMeasure == 0 else { return nil }
-        let fine = max(1, Int(Double(invocation.spatialSupportSansHalation)
-                              * apronScale))
-        let forced = getenv("FOTUFILM_FORCE_FIELDS") != nil
-        guard invocation.halationSupport > 0 else { return nil }
-        // Worth a second sweep only when the classic path's strips have collapsed against their
-        // halation-sized apron: the cropped kernel already prices apron rows at the light chain,
-        // so moderate redundancy is cheaper developed once than developed as light and again as
-        // film. Measured on device at 48 MP (3x redundancy, classic wins by 2 s) and 100 MP
-        // (9.4x, fields wins by 5 s); the boundary sits near four rows of apron per row kept.
-        let classicApron = max(1, Int(Double(invocation.spatialSupport) * apronScale))
-        let classicRows = Self.stripRows(width: width, height: height,
-                                         apron: classicApron, budget: budget)
-        guard forced || (classicRows < height
-                         && 2 * classicApron > 3 * classicRows) else { return nil }
-        let lightMask = (mask & (FilmEngineFeature.flare | FilmEngineFeature.mtf
-            | FilmEngineFeature.mtfLuma | FilmEngineFeature.monochrome
-            | FilmEngineFeature.reversal)) | FilmEngineFeature.floatIO
-        guard fotufilm_halide_metal_variant_exists(
-                lightMask | FilmEngineFeature.lightOut) == 1,
-              fotufilm_halide_metal_variant_exists(
-                mask | FilmEngineFeature.floatIO
-                    | FilmEngineFeature.fieldsIn) == 1 else { return nil }
-        let radii = invocation.halationPixelRadii
-        let fieldsFloats = radii.withUnsafeBufferPointer {
-            fotufilm_halide_metal_halation_fields_floats(
-                Int32(width), Int32(height), $0.baseAddress)
-        }
-        guard fieldsFloats > 11 else { return nil }
-
-        // Both sweeps' strip shapes, priced by the same model as the classic path: a light strip
-        // carries float rows in and out plus the light chain; a develop strip carries
-        // the full stack over its delivered rows and the fine apron above and below.
-        let lightApron = max(1, invocation.lightSupport)
-        let lightBytesPerRow = max(1, width * (32 + Self.apronBytesPerPixel))
-        let lightRows = max(1, min(height,
-                                   budget / lightBytesPerRow - 2 * lightApron))
-        let lightStrips = (height + lightRows - 1) / lightRows
-        let maxLightStrip = min(height, lightRows + 2 * lightApron)
-        let fineFloor = min(height, 2 * fine) * Self.apronBytesPerRow(width: width)
-            + min(max(height - 2 * fine, 0), 1) * Self.stripBytesPerRow(width: width)
-        guard fineFloor <= budget else { return nil }
-        let rows = Self.stripRows(width: width, height: height, apron: fine,
-                                  budget: budget)
-        let strips = (height + rows - 1) / rows
-        let maxStripHeight = min(height, rows + 2 * fine)
-
-        // The light frame: floats, file-backed above the mapping threshold, flushed as it
-        // fills so the pages stay clean.
-        let lightRowBytes = width * MemoryLayout<Float>.size * 4
-        guard let light = MappedBuffer(byteCount: lightRowBytes * height) else {
-            return nil
-        }
-        let lightPixels = light.bound(to: Float.self)
-        guard let lightBase = lightPixels.baseAddress else { return nil }
-
-        let bandRows = max(maxLightStrip, maxStripHeight)
-        let buffers = Self.borrowStripBuffers(
-            capacity: width * bandRows * 4,
-            scratchCapacity: width * min(rows, height) * 4)
-        defer { Self.returnStripBuffers(buffers) }
-        let input = buffers.input
-        let scratch = buffers.scratch
-
-        let measureStart = Date()
-        guard measureWholeFrame(
-            &invocation, width: width, height: height, bandRows: bandRows,
-            cancelled: cancelled, progress: progress,
-            band: { rows in
-                readRows(rows, UnsafeMutableBufferPointer(
-                    start: input, count: rows.count * width * 4))
-                return UnsafePointer(input)
-            })
-        else { return false }
-        let measureSeconds = Date().timeIntervalSince(measureStart)
-
-        var readSeconds = 0.0
-        var lightSeconds = 0.0
-        let totalStrips = lightStrips + strips
-        for strip in 0..<lightStrips {
-            if cancelled() { return false }
-            progress?(.developing(index: strip, count: totalStrips))
-            let top = strip * lightRows
-            let bottom = min(height, top + lightRows)
-            let from = max(0, top - lightApron)
-            let to = min(height, bottom + lightApron)
-            let readStart = Date()
-            readRows(from..<to, UnsafeMutableBufferPointer(
-                start: input, count: (to - from) * width * 4))
-            readSeconds += Date().timeIntervalSince(readStart)
-            let lightStart = Date()
-            let ok = invocation.configuration.withUnsafeBufferPointer { configuration in
-                invocation.withSpectralPointers { exposure, film, paper in
-                    fotufilm_halide_metal_process_light_rows(
-                        input, lightBase + top * width * 4,
-                        Int32(width), Int32(to - from),
-                        Int32(top - from), Int32(bottom - top), 0, Int32(from),
-                        configuration.baseAddress, exposure, film, paper,
-                        Int32(invocation.spectral.exposure.dimension),
-                        invocation.spectralCacheID, lightMask,
-                        invocation.seed) == 0
-                }
-            }
-            lightSeconds += Date().timeIntervalSince(lightStart)
-            guard ok else { return nil }
-            light.flush(byteOffset: top * lightRowBytes,
-                        byteCount: (bottom - top) * lightRowBytes)
-        }
-
-        if cancelled() { return false }
-        let fieldsStart = Date()
-        var fields = [Float](repeating: 0, count: Int(fieldsFloats))
-        let built = radii.withUnsafeBufferPointer { radii in
-            fields.withUnsafeMutableBufferPointer { fields in
-                fotufilm_halide_metal_halation_fields(
-                    lightBase, Int32(width), Int32(height),
-                    radii.baseAddress, fields.baseAddress,
-                    fieldsFloats) == 0
-            }
-        }
-        guard built else { return nil }
-        let fieldsSeconds = Date().timeIntervalSince(fieldsStart)
-        let fieldsID = mach_absolute_time()
-
-        var engineSeconds = 0.0
-        var writeSeconds = 0.0
-        for strip in 0..<strips {
-            if cancelled() { return false }
-            progress?(.developing(index: lightStrips + strip, count: totalStrips))
-            let top = strip * rows
-            let bottom = min(height, top + rows)
-            let from = max(0, top - fine)
-            let to = min(height, bottom + fine)
-            let readStart = Date()
-            readRows(from..<to, UnsafeMutableBufferPointer(
-                start: input, count: (to - from) * width * 4))
-            readSeconds += Date().timeIntervalSince(readStart)
-            let engineStart = Date()
-            let ok = invocation.configuration.withUnsafeBufferPointer { configuration in
-                invocation.withSpectralPointers { exposure, film, paper in
-                    fields.withUnsafeBufferPointer { fields in
-                        fotufilm_halide_metal_process_linear_float_fields_rows(
-                            input, scratch,
-                            Int32(width), Int32(to - from),
+                    extended.withUnsafeBufferPointer { extended in
+                        fotufilm_halide_metal_process_buffers_float_tile(
+                            inputHandle, staging.outputHandle(at: index),
+                            Int32(tileWidth), Int32(tileHeight),
+                            Int32(left - first), Int32(right - left),
                             Int32(top - from), Int32(bottom - top),
-                            0, Int32(from),
-                            configuration.baseAddress,
-                            fields.baseAddress, fieldsFloats, fieldsID,
+                            Int32(first), Int32(from),
+                            plan.fields ? extended.baseAddress : plain.baseAddress,
+                            plan.fields ? extended.baseAddress! + head : nil,
+                            Int32(extended.count - head), fieldsID,
                             exposure, film, paper,
                             Int32(invocation.spectral.exposure.dimension),
                             invocation.spectralCacheID, invocation.featureMask,
@@ -936,24 +1093,59 @@ public final class HalideMetalFilmRenderer {
             }
             engineSeconds += Date().timeIntervalSince(engineStart)
             guard ok else { return false }
+            if timings { footprintPeak = max(footprintPeak, Self.footprintBytes()) }
+            // Complete the previous write before submitting the next to preserve tile order.
+            joinWrite()
             let writeStart = Date()
-            writeRows(top..<bottom, UnsafeBufferPointer(
-                start: scratch, count: (bottom - top) * width * 4))
-            writeSeconds += Date().timeIntervalSince(writeStart)
+            let result = staging.outputPointer(at: index)
+            let item = DispatchWorkItem {
+                writeTile(top..<bottom, left..<right, UnsafeBufferPointer(
+                    start: result, count: (bottom - top) * (right - left) * 4))
+            }
+            if index == tiles - 1 {
+                item.perform()
+                writeSeconds += Date().timeIntervalSince(writeStart)
+            } else {
+                outstandingWrite = item
+                writeQueue.async(execute: item)
+            }
         }
+        joinWrite()
         if timings {
             print(String(
-                format: "  fielded %dx%d: %d light strip(s) of %d rows "
-                    + "(apron %d), %d develop strip(s) of %d rows (apron %d), "
-                    + "measure %.1f ms, light %.1f ms, fields %.1f ms, "
-                    + "read %.1f ms, engine %.1f ms, write %.1f ms",
-                width, height, lightStrips, lightRows, lightApron,
-                strips, rows, fine,
-                measureSeconds * 1000, lightSeconds * 1000,
-                fieldsSeconds * 1000, readSeconds * 1000,
-                engineSeconds * 1000, writeSeconds * 1000))
+                format: "  tiled %dx%d: %d tile(s) of %dx%d, apron %d (%.2fx pixels)%@, "
+                    + "measure %.1f ms, read %.1f ms, light %.1f ms, grids %.1f ms, "
+                    + "engine %.1f ms, write %.1f ms (last tile), write wait %.1f ms",
+                width, height, tiles, plan.tileWidth, plan.tileRows, plan.apron,
+                Double(developed) / Double(width * height),
+                (plan.fields
+                    ? String(format: ", %d light band(s) of %d rows (apron %d)",
+                             lightBands, plan.lightRows, plan.lightApron)
+                    : "") as NSString,
+                measureSeconds * 1000, readSeconds * 1000, lightSeconds * 1000,
+                gridSeconds * 1000, engineSeconds * 1000, writeSeconds * 1000,
+                writeWaitSeconds * 1000))
+            print(String(
+                format: "  tiled: priced %d MB (grids %d MB), footprint %d MB before, "
+                    + "+%d MB at most after a tile",
+                plan.bytes >> 20, (plan.bytes - Self.tileBytes(
+                    width: width, height: height, tileWidth: plan.tileWidth,
+                    tileRows: plan.tileRows, apron: plan.apron, overlap: plan.overlap)) >> 20,
+                footprintBefore >> 20, max(0, footprintPeak - footprintBefore) >> 20))
         }
         return true
+    }
+
+    /// The process's physical footprint — what the system holds it to.
+    static func footprintBytes() -> Int {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size) / 4
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        return result == KERN_SUCCESS ? Int(info.phys_footprint) : 0
     }
 
     /// Develops `staging.scenePixels` into `staging.developedPixels` without host-device copies.
@@ -1282,34 +1474,46 @@ public final class HalideMetalFilmRenderer {
         return true
     }
 
-    /// Takes the idle pair when it is large enough and allocates otherwise, so two renders in
-    /// flight at once each get their own and never share.
-    private static func borrowStripBuffers(capacity: Int,
-                                           scratchCapacity: Int,
-                                           scratchCount: Int = 1) -> StripBuffers {
-        stripBufferLock.lock()
-        if let idle = idleStripBuffers, idle.capacity >= capacity,
-           idle.scratchCapacity >= scratchCapacity,
-           idle.scratchCount >= scratchCount {
-            idleStripBuffers = nil
-            stripBufferLock.unlock()
+    /// Takes the idle staging when it is large enough and allocates otherwise, so two renders
+    /// in flight at once each get their own and never share.
+    private static func borrowTileStaging(inputPixels: Int, outputPixels: Int,
+                                          outputCount: Int) -> TileStaging? {
+        _ = stagingPressure
+        tileStagingLock.lock()
+        if let idle = idleTileStaging, idle.inputPixels >= inputPixels,
+           idle.outputPixels >= outputPixels, idle.outputCount >= outputCount {
+            idleTileStaging = nil
+            tileStagingLock.unlock()
             return idle
         }
-        stripBufferLock.unlock()
-        return StripBuffers(capacity: capacity, scratchCapacity: scratchCapacity,
-                            scratchCount: scratchCount)
+        tileStagingLock.unlock()
+        guard let device = MTLCreateSystemDefaultDevice() else { return nil }
+        return TileStaging(device: device, inputPixels: inputPixels,
+                           outputPixels: outputPixels, outputCount: outputCount)
     }
 
-    private static func returnStripBuffers(_ buffers: StripBuffers) {
-        stripBufferLock.lock()
-        if (idleStripBuffers?.capacity ?? 0) <= buffers.capacity {
-            idleStripBuffers = buffers
+    private static func returnTileStaging(_ staging: TileStaging) {
+        tileStagingLock.lock()
+        if (idleTileStaging?.inputPixels ?? 0) <= staging.inputPixels {
+            idleTileStaging = staging
         }
-        stripBufferLock.unlock()
+        tileStagingLock.unlock()
     }
 
-    private static let stripBufferLock = NSLock()
-    nonisolated(unsafe) private static var idleStripBuffers: StripBuffers?
+    private static let tileStagingLock = NSLock()
+    nonisolated(unsafe) private static var idleTileStaging: TileStaging?
+
+    /// Drops every idle buffer the renderer keeps between renders: a frame's staging, and the
+    /// tile staging. For a host that wants its footprint back the moment an export ends —
+    /// nothing a later render needs is lost, only the time to allocate it again.
+    public static func releaseIdleBuffers() {
+        stagingLock.lock()
+        idleStaging = nil
+        stagingLock.unlock()
+        tileStagingLock.lock()
+        idleTileStaging = nil
+        tileStagingLock.unlock()
+    }
 
     /// Borrows a per-render staging pair. A 33 MP staged frame uses about 1 GB, so pooling avoids
     /// repeated allocation without sharing buffers between concurrent renders.
@@ -1340,11 +1544,7 @@ public final class HalideMetalFilmRenderer {
     private static let stagingPressure: DispatchSourceMemoryPressure = {
         let source = DispatchSource.makeMemoryPressureSource(
             eventMask: [.warning, .critical], queue: .global(qos: .utility))
-        source.setEventHandler {
-            stagingLock.lock()
-            idleStaging = nil
-            stagingLock.unlock()
-        }
+        source.setEventHandler { releaseIdleBuffers() }
         source.resume()
         return source
     }()
@@ -1368,55 +1568,60 @@ public final class HalideMetalFilmRenderer {
             apronScale: apronScale, progress: progress) ? output : nil
     }
 
-    /// Peak footprint per pixel of frame area, measured across the whole
-    /// pipeline at several resolutions.
-    public static let developBytesPerPixel = 96
+    /// Peak footprint per delivered pixel of the emulsion and print stages — everything past
+    /// the light — measured over tiles from a quarter to five megapixels with the runtime's
+    /// queue bounded (see `kMetalQueueDepth`), and rounded up: the footprint the process shows
+    /// includes what the driver has not yet given back.
+    public static let developBytesPerPixel = 144
 
-    /// What one row of a strip costs while that strip is in flight: the strip's input and its
-    /// result in float, plus the schedule's own working set.
+    /// Peak footprint per input pixel of the light chain — the exposure, the glare, the lens
+    /// diffusion and the MTF — which every apron pixel goes through.
+    public static let lightBytesPerPixel = 48
+
+    /// What one row of a frame-wide band costs while that band is in flight: the band's input
+    /// and its result in shared memory, plus the schedule's own working set.
     static func stripBytesPerRow(width: Int) -> Int {
-        max(1, width * (16 * 2 + developBytesPerPixel))
+        max(1, width * (16 * 2 + lightBytesPerPixel + developBytesPerPixel))
     }
 
-    /// What one *apron* row costs. The cropped kernel walks an apron row through the stages a
-    /// delivered pixel reads it from — the light chain feeding halation's reach — not the whole
-    /// pipeline. Float scene paths retain full precision in that chain, so price an apron row as
-    /// a delivered row rather than relying on the former half-store discount.
-    static func apronBytesPerRow(width: Int,
-                                 exactMath: Bool = false) -> Int {
-        stripBytesPerRow(width: width)
-    }
-
-    /// Conservative per-pixel working allowance for the two-pass light sweep, excluding its
-    /// 16-byte input and 16-byte output rows. The single-pass apron uses the full row estimate.
-    static let apronBytesPerPixel = 28
-
-    static func stripRows(width: Int, height: Int, apron: Int, budget: Int,
-                          exactMath: Bool = false) -> Int {
-        if height <= budget / stripBytesPerRow(width: width) { return height }
-        let apronCost = 2 * apron * apronBytesPerRow(
-            width: width, exactMath: exactMath)
-        let affordable = (budget - apronCost) / stripBytesPerRow(width: width)
-        return max(1, min(height, affordable))
-    }
-
-    /// Smallest peak an end-to-end export of this frame can be made to run in.
-    /// Returns `nil` when the requested development condition is unsupported.
+    /// Smallest peak an end-to-end export of this frame can be made to run in: the smallest
+    /// tile worth cutting, with the apron of the cheaper road, and the halation grids that road
+    /// keeps. Returns `nil` when the requested development condition is unsupported.
     public static func minimumPeakBytes(width: Int, height: Int,
                                         stock: FilmStock,
                                         options: FotufilmEngine.Options,
                                         exactMath: Bool = false) -> Int? {
-        guard let invocation = try? FilmEngineInvocation(
+        guard var invocation = try? FilmEngineInvocation(
             validating: stock, options: options, width: width, height: height)
         else { return nil }
-        let apron = invocation.spatialSupport
+        invocation.featureMask |= FilmEngineFeature.floatIO
+        if exactMath { invocation.featureMask |= FilmEngineFeature.exactMath }
         let pixels = width * height
         let frames = MappedBuffer.residentBytes(pixels * 16)
             + MappedBuffer.residentBytes(pixels * 8)
-        let apronRows = min(height, 2 * apron)
-        let strip = min(height - apronRows, 1) * stripBytesPerRow(width: width)
-            + apronRows * apronBytesPerRow(width: width, exactMath: exactMath)
-        return frames + strip
+        let tile = min(minimumTile, width, height)
+        var least = tileBytes(width: width, height: height, tileWidth: tile, tileRows: tile,
+                              apron: invocation.spatialSupport, overlap: false)
+        let mask = invocation.featureMask
+        if getenv("FOTUFILM_NO_FIELDS") == nil,
+           mask & FilmEngineFeature.halation != 0, !exactMath,
+           invocation.halationSupport > 0,
+           fotufilm_halide_metal_variant_exists(
+               lightMask(mask) | FilmEngineFeature.lightOut) == 1,
+           fotufilm_halide_metal_variant_exists(mask | FilmEngineFeature.fieldsIn) == 1 {
+            let gridBytes = 2 * invocation.halationPixelRadii.withUnsafeBufferPointer {
+                Int(fotufilm_halide_metal_halation_fields_floats(
+                    Int32(width), Int32(height), $0.baseAddress)) * 4
+            }
+            let stride = Int(fotufilm_halation_stride(invocation.halationPixelRadii[0]))
+            let lightBand = min(height, stride + 2 * max(1, invocation.lightSupport))
+            let fields = gridBytes + max(
+                tileBytes(width: width, height: height, tileWidth: tile, tileRows: tile,
+                          apron: invocation.spatialSupportSansHalation, overlap: false),
+                width * lightBand * (16 + lightBytesPerPixel))
+            if gridBytes > 0 { least = min(least, fields) }
+        }
+        return frames + least
     }
 
     /// Bytes this process may still allocate before the system kills it.
@@ -1455,18 +1660,13 @@ public final class HalideMetalFilmRenderer {
             return override
         }
         #if os(iOS)
-        // Half of what the process may still allocate, rounded *down to a power of two*. The
-        // strip working set *is* the budget, so giving it half leaves the other half for the
-        // decode's bands, the print encode, and slack under pressure — and the peak this admits
-        // was walked on a device at 100 MP without a jetsam. The quarter this replaces stranded
-        // large frames: an apron's rows alone outgrew it, and the export refused before the
-        // first strip.
-        //
-        // Strip boundaries can affect finite-apron results. Quantize the memory budget to a power
-        // of two so ordinary available-memory jitter does not change strip count between exports.
-        // Genuine memory pressure can still select a lower budget.
-        let half = max(128 << 20, availableBytes() / 2)
-        return 1 << (Int.bitWidth - 1 - half.leadingZeroBitCount)
+        // Half of what the process may still allocate. The tile working set *is* the budget,
+        // so giving it half leaves the other half for the decode's bands, the print encode, and
+        // slack under pressure. It need not be quantized: a tile delivers the whole frame's
+        // pixels whatever the cut, so available-memory jitter changes the tile count and
+        // nothing else. Sixty-four megabytes is the floor a quarter-megapixel tile with a
+        // hundred-pixel apron still fits.
+        return max(64 << 20, availableBytes() / 2)
         #else
         // A quarter of the machine, between 2 and 8 GiB. The fixed 2 GiB this replaced decided
         // that no stills frame above about 16 MP developed in one pass, which on a machine with

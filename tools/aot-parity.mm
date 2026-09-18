@@ -15,6 +15,7 @@
 
 #include "FotufilmHalide.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -286,12 +287,18 @@ int32_t run_variant(const Variant &variant, const Pack &pack,
                                                   kLutDimension, cache_id);
     if (status != 0) return status;
 
+    // The light classes deliver the finest halation grid of the strip's light, cells rather
+    // than pixels.
+    const int32_t stride = fotufilm_halation_stride(
+        std::max(0, int32_t(configuration[FOTUFILM_CONFIG_HALATION_RADIUS])));
+    const int32_t grid_width = (width + stride - 1) / stride;
+    const int32_t grid_height = (height + stride - 1) / stride;
     if ((mask & FOTUFILM_FRAME_LIGHT_OUT) != 0) {
-        std::vector<float> light(pixels * 4);
-        status = fotufilm_halide_metal_process_light_rows(
-            scene.data(), light.data(), width, height, 0, height, 0, 0,
+        std::vector<float> grid(size_t(grid_width) * size_t(grid_height) * 3);
+        status = fotufilm_halide_metal_process_light_grid(
+            scene.data(), grid.data(), width, height, 0, grid_height, 0, 0,
             configuration, exposure, film, paper, kLutDimension, cache_id, mask, seed);
-        out = light;
+        out = grid;
         return status;
     }
 
@@ -302,12 +309,12 @@ int32_t run_variant(const Variant &variant, const Pack &pack,
         const int32_t light_mask = FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_MTF
             | FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT
             | (mask & FOTUFILM_FRAME_MONOCHROME);
-        std::vector<float> light(pixels * 4);
+        std::vector<float> grid(size_t(grid_width) * size_t(grid_height) * 3);
         status = fotufilm_halide_metal_prepare(light_mask, exposure, film, paper,
                                               kLutDimension, cache_id);
         if (status != 0) return status;
-        status = fotufilm_halide_metal_process_light_rows(
-            scene.data(), light.data(), width, height, 0, height, 0, 0,
+        status = fotufilm_halide_metal_process_light_grid(
+            scene.data(), grid.data(), width, height, 0, grid_height, 0, 0,
             configuration, exposure, film, paper, kLutDimension, cache_id, light_mask, seed);
         if (status != 0) return status;
 
@@ -319,18 +326,48 @@ int32_t run_variant(const Variant &variant, const Pack &pack,
             fotufilm_halide_metal_halation_fields_floats(width, height, radii);
         if (fields_floats < 0) return fields_floats;
         std::vector<float> fields(static_cast<size_t>(fields_floats), 0.0f);
-        status = fotufilm_halide_metal_halation_fields(light.data(), width, height, radii,
+        status = fotufilm_halide_metal_halation_fields(grid.data(), width, height, radii,
                                                       fields.data(), fields_floats);
         if (status != 0) return status;
 
         status = fotufilm_halide_metal_prepare(mask, exposure, film, paper,
                                               kLutDimension, cache_id);
         if (status != 0) return status;
+        // Developed as two tiles cut off centre, so the window crop and the tile origin are
+        // exercised as the still export uses them; the join is where a disagreement between
+        // the two tables would land.
         out.assign(pixels * 4, 0.0f);
-        status = fotufilm_halide_metal_process_linear_float_fields_rows(
-            scene.data(), out.data(), width, height, 0, height, 0, 0,
+        const int32_t split = width * 2 / 5;
+        const int32_t apron = std::min(width - split, 48);
+        std::vector<float> window(size_t(width) * size_t(height) * 4);
+        status = fotufilm_halide_metal_process_linear_float_tile(
+            scene.data(), window.data(), width, height, 0, split, 0, height, 0, 0,
             configuration, fields.data(), fields_floats, cache_id + 1,
             exposure, film, paper, kLutDimension, cache_id, mask, seed);
+        if (status != 0) return status;
+        for (int32_t y = 0; y < height; ++y) {
+            std::memcpy(&out[size_t(y) * size_t(width) * 4], &window[size_t(y) * size_t(split) * 4],
+                        size_t(split) * 4 * sizeof(float));
+        }
+        std::vector<float> right;
+        const int32_t left = split - apron;
+        const int32_t tile_width = width - left;
+        right.resize(size_t(tile_width) * size_t(height) * 4);
+        for (int32_t y = 0; y < height; ++y) {
+            std::memcpy(&right[size_t(y) * size_t(tile_width) * 4],
+                        &scene[(size_t(y) * size_t(width) + size_t(left)) * 4],
+                        size_t(tile_width) * 4 * sizeof(float));
+        }
+        status = fotufilm_halide_metal_process_linear_float_tile(
+            right.data(), window.data(), tile_width, height, apron, width - split, 0, height,
+            left, 0, configuration, fields.data(), fields_floats, cache_id + 1,
+            exposure, film, paper, kLutDimension, cache_id, mask, seed);
+        for (int32_t y = 0; y < height; ++y) {
+            std::memcpy(&out[(size_t(y) * size_t(width) + size_t(split)) * 4],
+                        &window[size_t(y) * size_t(width - split) * 4],
+                        size_t(width - split) * 4 * sizeof(float));
+        }
+        fotufilm_halide_metal_release_fields();
         // The pyramid is half of what this variant develops, so it travels with the frame.
         out.insert(out.end(), fields.begin(), fields.end());
         return status;

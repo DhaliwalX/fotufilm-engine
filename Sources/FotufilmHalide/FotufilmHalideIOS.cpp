@@ -12,6 +12,9 @@
 #include "FotufilmHalideGeometry.h"
 
 #include <TargetConditionals.h>
+#include <objc/message.h>
+#include <objc/runtime.h>
+#include <pthread.h>
 
 #include <algorithm>
 #include <cmath>
@@ -223,19 +226,25 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
             int32_t feature_mask, uint32_t seed,
             int32_t origin_x = 0, int32_t origin_y = 0,
             int32_t configuration_floats = FOTUFILM_FRAME_CONFIGURATION_COUNT,
-            uint64_t configuration_id = 0) {
+            uint64_t configuration_id = 0, bool configuration_stable = false) {
     // A FIELDS_IN frame rides its halation grids behind the configuration, so its buffer is
-    // frame-sized rather than slider-sized; it is cached by the caller's id so the strips of one
-    // frame upload it once.
+    // frame-sized rather than slider-sized; it is cached by the caller's id so the tiles of one
+    // frame upload it once — and read in place when the caller keeps it (`configuration_stable`),
+    // since a copy would be a second frame of grids.
     const bool wants_extended =
         configuration_floats > FOTUFILM_FRAME_CONFIGURATION_COUNT;
     if (wants_extended) {
         if (state.extended_configuration.data() == nullptr
             || state.extended_configuration_floats != configuration_floats
             || state.extended_configuration_id != configuration_id) {
-            state.extended_configuration = Buffer<float>(configuration_floats);
-            std::memcpy(state.extended_configuration.data(), configuration,
-                        size_t(configuration_floats) * sizeof(float));
+            if (configuration_stable) {
+                state.extended_configuration = Buffer<float>(
+                    const_cast<float *>(configuration), configuration_floats);
+            } else {
+                state.extended_configuration = Buffer<float>(configuration_floats);
+                std::memcpy(state.extended_configuration.data(), configuration,
+                            size_t(configuration_floats) * sizeof(float));
+            }
             state.extended_configuration.set_host_dirty();
             state.extended_configuration_id = configuration_id;
             state.extended_configuration_floats = configuration_floats;
@@ -464,6 +473,63 @@ bool valid_exposure_lut_contracts() {
 
 }
 
+extern "C" void *MTLCreateSystemDefaultDevice(void);
+
+namespace {
+
+/// How many command buffers the runtime's queue may have in flight. Twin of `kMetalQueueDepth`
+/// in FotufilmHalideMetal.cpp, where the reason is written up: the runtime commits one command
+/// buffer per kernel and never waits, so on an unbounded queue every intermediate of a tile is
+/// allocated before the first is freed, and the tile's footprint is the sum of its stages.
+/// Blocking the host this close behind the device lets the early frees land.
+constexpr unsigned long kMetalQueueDepth = 4;
+
+// The runtime's own context is a system default device and an unbounded queue; the override
+// below is the documented seam (HalideRuntimeMetal.h) for handing it another. Held from an
+// acquire to its release on the same thread, as the runtime's own lock is. A pthread mutex
+// rather than a std::mutex because it has no destructor to run: a device free from a static
+// or thread-local buffer's destructor still acquires the context after `exit` has begun.
+pthread_mutex_t context_mutex = PTHREAD_MUTEX_INITIALIZER;
+halide_metal_device *context_device = nullptr;
+halide_metal_command_queue *context_queue = nullptr;
+
+}
+
+extern "C" int halide_metal_acquire_context(void *, halide_metal_device **device_ret,
+                                            halide_metal_command_queue **queue_ret,
+                                            bool create) {
+    pthread_mutex_lock(&context_mutex);
+    if (!context_device && create) {
+        auto *device = static_cast<halide_metal_device *>(MTLCreateSystemDefaultDevice());
+        halide_metal_command_queue *queue = nullptr;
+        if (device) {
+            queue = ((halide_metal_command_queue *(*)(id, SEL, unsigned long))objc_msgSend)(
+                reinterpret_cast<id>(device),
+                sel_getUid("newCommandQueueWithMaxCommandBufferCount:"), kMetalQueueDepth);
+            if (!queue) {
+                ((void (*)(id, SEL))objc_msgSend)(reinterpret_cast<id>(device),
+                                                  sel_getUid("release"));
+                device = nullptr;
+            }
+        }
+        if (!device) {
+            pthread_mutex_unlock(&context_mutex);
+            std::fprintf(stderr, "Fotufilm Halide iOS error: no Metal device or queue\n");
+            return halide_error_code_generic_error;
+        }
+        context_device = device;
+        context_queue = queue;
+    }
+    *device_ret = context_device;
+    *queue_ret = context_queue;
+    return halide_error_code_success;
+}
+
+extern "C" int halide_metal_release_context(void *) {
+    pthread_mutex_unlock(&context_mutex);
+    return halide_error_code_success;
+}
+
 extern "C" void *fotufilm_halide_metal_context_create(void) {
     return new (std::nothrow) ExecutionState();
 }
@@ -586,36 +652,156 @@ extern "C" int32_t fotufilm_halide_metal_process_linear_float(
         lut_dimension, spectral_cache_id, feature_mask, seed);
 }
 
-extern "C" int32_t fotufilm_halide_metal_process_light_rows(
-    const float *input, float *light_out, int32_t width, int32_t height,
-    int32_t out_y, int32_t out_rows, int32_t origin_x, int32_t origin_y,
-    const float *configuration,
+namespace {
+
+/// One tile through the compiled table, however the tile was handed across: `input_wrap` and
+/// `output_wrap` are caller-owned MTLBuffers or 0, `input`/`output` host memory or null. The
+/// window [out_x, out_x + out_columns) x [out_y, out_y + out_rows) is what the output holds,
+/// packed; a null `fields` develops with the pyramid over the tile, otherwise the grids ride
+/// behind the configuration and the mask asks for the FIELDS_IN class.
+int32_t run_tile(
+    ExecutionState &state, const float *input, uint64_t input_wrap,
+    float *output, uint64_t output_wrap, int32_t output_channels,
+    int32_t width, int32_t height,
+    int32_t out_x, int32_t out_columns, int32_t out_y, int32_t out_rows,
+    int32_t origin_x, int32_t origin_y, const float *configuration,
+    const float *fields, int32_t fields_floats, uint64_t fields_id,
     const float *exposure_lut, const float *film_output_lut,
     const float *paper_output_lut, int32_t lut_dimension,
     uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
-    if (!input || !light_out || !configuration || width <= 0 || height <= 0 ||
-        out_y < 0 || out_rows <= 0 || out_y + out_rows > height ||
-        !valid_flare_mean(configuration, feature_mask)) return -1;
-    ExecutionState &state = execution_state();
     return translate_exceptions([&] {
         int error = state.spectral_cache.ensure(
             exposure_lut, film_output_lut, paper_output_lut,
             lut_dimension, spectral_cache_id);
         if (error) return error;
+        int32_t configuration_floats = FOTUFILM_FRAME_CONFIGURATION_COUNT;
+        bool stable = false;
+        std::vector<float> combined;
+        if (fields) {
+            configuration_floats += fields_floats;
+            feature_mask |= FOTUFILM_FRAME_FIELDS_IN;
+            if (fields == configuration + FOTUFILM_FRAME_CONFIGURATION_COUNT) {
+                // One blob, the caller's, read in place for as long as its id stands.
+                stable = true;
+            } else {
+                combined.resize(static_cast<size_t>(configuration_floats));
+                std::memcpy(combined.data(), configuration,
+                            FOTUFILM_FRAME_CONFIGURATION_COUNT * sizeof(float));
+                std::memcpy(combined.data() + FOTUFILM_FRAME_CONFIGURATION_COUNT,
+                            fields, size_t(fields_floats) * sizeof(float));
+                configuration = combined.data();
+            }
+        }
         Buffer<float> input_buffer = Buffer<float>::make_interleaved(
-            const_cast<float *>(input), width, height, 4);
+            input_wrap ? static_cast<float *>(nullptr) : const_cast<float *>(input),
+            width, height, 4);
+        // The output holds only the delivered window, placed inside the tile by the buffer's
+        // mins. Bounds inference then walks each apron pixel through exactly the stages a
+        // delivered pixel reads it from — the light chain for a halation neighbour, nothing
+        // at all for a pixel only the blur normalisation touched — instead of developing the
+        // whole tile edge to edge. The delivered pixels are the same expressions over the
+        // same coordinates as an uncropped frame's, so their values do not move.
         Buffer<float> output_buffer = Buffer<float>::make_interleaved(
-            light_out, width, out_rows, 4);
-        output_buffer.translate(1, out_y);
-        input_buffer.set_host_dirty();
+            output_wrap ? static_cast<float *>(nullptr) : output,
+            out_columns, out_rows, output_channels);
+        if (out_x != 0) output_buffer.translate(0, out_x);
+        if (out_y != 0) output_buffer.translate(1, out_y);
+        if (input_wrap) {
+            error = halide_metal_wrap_buffer(nullptr, input_buffer.raw_buffer(), input_wrap);
+            if (error) return error;
+            input_buffer.set_device_dirty();
+        } else {
+            input_buffer.set_host_dirty();
+        }
+        if (output_wrap) {
+            error = halide_metal_wrap_buffer(nullptr, output_buffer.raw_buffer(), output_wrap);
+            if (error) {
+                halide_metal_detach_buffer(nullptr, input_buffer.raw_buffer());
+                return error;
+            }
+        }
         error = run_aot(state, input_buffer.raw_buffer(), output_buffer.raw_buffer(),
                         width, height, configuration,
-                        feature_mask | FOTUFILM_FRAME_FLOAT_IO
-                            | FOTUFILM_FRAME_LIGHT_OUT,
-                        seed, origin_x, origin_y);
-        if (!error) error = output_buffer.copy_to_host();
-        return error;
+                        feature_mask | FOTUFILM_FRAME_FLOAT_IO, seed,
+                        origin_x, origin_y, configuration_floats, fields_id, stable);
+        if (!error) {
+            error = output_wrap ? output_buffer.device_sync()
+                                : output_buffer.copy_to_host();
+        }
+        int detach_error = 0;
+        if (input_wrap) {
+            detach_error = halide_metal_detach_buffer(nullptr, input_buffer.raw_buffer());
+        }
+        if (output_wrap) {
+            const int detached = halide_metal_detach_buffer(
+                nullptr, output_buffer.raw_buffer());
+            if (!detach_error) detach_error = detached;
+        }
+        return error ? error : detach_error;
     });
+}
+
+bool valid_tile(const float *configuration, int32_t width, int32_t height,
+                int32_t out_x, int32_t out_columns, int32_t out_y, int32_t out_rows,
+                const float *fields, int32_t fields_floats, int32_t feature_mask) {
+    return configuration && width > 0 && height > 0
+        && out_x >= 0 && out_columns > 0 && out_x + out_columns <= width
+        && out_y >= 0 && out_rows > 0 && out_y + out_rows <= height
+        && (!fields || fields_floats > 11)
+        && valid_flare_mean(configuration, feature_mask);
+}
+
+/// The light-grid entries' window is in cells of the strip's own grid, whose first cell holds
+/// the strip rows from `origin_y - origin_y % stride`.
+bool valid_light_grid(const float *configuration, int32_t width, int32_t height,
+                      int32_t out_y, int32_t out_rows, int32_t origin_y,
+                      int32_t feature_mask, int32_t *stride) {
+    if (!configuration || width <= 0 || height <= 0) return false;
+    *stride = fotufilm_halation_stride(
+        std::max(0, int32_t(configuration[kHalationRadiusOffset])));
+    const int32_t grid_height = (height + origin_y % *stride + *stride - 1) / *stride;
+    return out_y >= 0 && out_rows > 0 && out_y + out_rows <= grid_height
+        && valid_flare_mean(configuration, feature_mask);
+}
+
+}
+
+extern "C" int32_t fotufilm_halide_metal_process_linear_float_tile(
+    const float *input, float *output, int32_t width, int32_t height,
+    int32_t out_x, int32_t out_columns, int32_t out_y, int32_t out_rows,
+    int32_t origin_x, int32_t origin_y, const float *configuration,
+    const float *fields, int32_t fields_floats, uint64_t fields_id,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
+    if (!input || !output
+        || !valid_tile(configuration, width, height, out_x, out_columns, out_y, out_rows,
+                       fields, fields_floats, feature_mask)) return -1;
+    return run_tile(execution_state(), input, 0, output, 0, 4, width, height,
+                    out_x, out_columns, out_y, out_rows, origin_x, origin_y,
+                    configuration, fields, fields_floats, fields_id,
+                    exposure_lut, film_output_lut, paper_output_lut, lut_dimension,
+                    spectral_cache_id, feature_mask, seed);
+}
+
+extern "C" int32_t fotufilm_halide_metal_process_light_grid(
+    const float *input, float *grid_out, int32_t width, int32_t height,
+    int32_t out_y, int32_t out_rows, int32_t origin_x, int32_t origin_y,
+    const float *configuration,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
+    int32_t stride = 1;
+    if (!input || !grid_out
+        || !valid_light_grid(configuration, width, height, out_y, out_rows, origin_y,
+                             feature_mask, &stride)) return -1;
+    return run_tile(execution_state(), input, 0, grid_out, 0, 3, width, height,
+                    0, (width + stride - 1) / stride, out_y, out_rows, origin_x, origin_y,
+                    configuration, nullptr, 0, 0,
+                    exposure_lut, film_output_lut, paper_output_lut, lut_dimension,
+                    spectral_cache_id,
+                    (feature_mask | FOTUFILM_FRAME_LIGHT_OUT) & ~FOTUFILM_FRAME_FIELDS_IN,
+                    seed);
 }
 
 extern "C" int32_t fotufilm_halide_metal_halation_fields_floats(
@@ -632,9 +818,9 @@ extern "C" int32_t fotufilm_halide_metal_halation_fields_floats(
 }
 
 extern "C" int32_t fotufilm_halide_metal_halation_fields(
-    const float *light, int32_t width, int32_t height,
+    const float *grid, int32_t width, int32_t height,
     const int32_t *halation_radii, float *fields, int32_t fields_floats) {
-    if (!light || !halation_radii || !fields || width <= 0 || height <= 0 ||
+    if (!grid || !halation_radii || !fields || width <= 0 || height <= 0 ||
         fields_floats != fotufilm_halide_metal_halation_fields_floats(
             width, height, halation_radii)) return -1;
     return translate_exceptions([&] {
@@ -659,9 +845,10 @@ extern "C" int32_t fotufilm_halide_metal_halation_fields(
             fields[4 + scale * 3] = float(offset);
             offset += grid_floats[scale];
         }
-        Buffer<float> light_buffer = Buffer<float>::make_interleaved(
-            const_cast<float *>(light), width, height, 4);
-        light_buffer.set_host_dirty();
+        Buffer<float> grid_buffer = Buffer<float>::make_interleaved(
+            const_cast<float *>(grid), (width + strides[0] - 1) / strides[0],
+            (height + strides[0] - 1) / strides[0], 3);
+        grid_buffer.set_host_dirty();
         float *grid_bases[3] = {
             fields + 11,
             fields + 11 + grid_floats[0],
@@ -677,58 +864,25 @@ extern "C" int32_t fotufilm_halide_metal_halation_fields(
                 grid_bases[2], (width + strides[2] - 1) / strides[2],
                 (height + strides[2] - 1) / strides[2], 3)};
         int error = fotufilm_halide_ios_halation_fields(
-            light_buffer.raw_buffer(), width, height,
+            grid_buffer.raw_buffer(), width, height,
             strides[0], strides[1], strides[2],
             strided[0], strided[1], strided[2],
             grids[0].raw_buffer(), grids[1].raw_buffer(),
             grids[2].raw_buffer());
-        for (auto &grid : grids) {
-            if (!error) error = grid.copy_to_host();
+        for (auto &grid_out : grids) {
+            if (!error) error = grid_out.copy_to_host();
         }
         return error;
     });
 }
 
-extern "C" int32_t fotufilm_halide_metal_process_linear_float_fields_rows(
-    const float *input, float *output, int32_t width, int32_t height,
-    int32_t out_y, int32_t out_rows, int32_t origin_x, int32_t origin_y,
-    const float *configuration,
-    const float *fields, int32_t fields_floats, uint64_t fields_id,
-    const float *exposure_lut, const float *film_output_lut,
-    const float *paper_output_lut, int32_t lut_dimension,
-    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
-    if (!input || !output || !configuration || !fields || fields_floats <= 11 ||
-        width <= 0 || height <= 0 ||
-        out_y < 0 || out_rows <= 0 || out_y + out_rows > height ||
-        !valid_flare_mean(configuration, feature_mask)) return -1;
+extern "C" void fotufilm_halide_metal_release_fields(void) {
     ExecutionState &state = execution_state();
-    return translate_exceptions([&] {
-        int error = state.spectral_cache.ensure(
-            exposure_lut, film_output_lut, paper_output_lut,
-            lut_dimension, spectral_cache_id);
-        if (error) return error;
-        const int32_t combined_floats =
-            FOTUFILM_FRAME_CONFIGURATION_COUNT + fields_floats;
-        std::vector<float> combined(static_cast<size_t>(combined_floats));
-        std::memcpy(combined.data(), configuration,
-                    FOTUFILM_FRAME_CONFIGURATION_COUNT * sizeof(float));
-        std::memcpy(combined.data() + FOTUFILM_FRAME_CONFIGURATION_COUNT,
-                    fields, size_t(fields_floats) * sizeof(float));
-        Buffer<float> input_buffer = Buffer<float>::make_interleaved(
-            const_cast<float *>(input), width, height, 4);
-        Buffer<float> output_buffer = Buffer<float>::make_interleaved(
-            output, width, out_rows, 4);
-        output_buffer.translate(1, out_y);
-        input_buffer.set_host_dirty();
-        error = run_aot(state, input_buffer.raw_buffer(), output_buffer.raw_buffer(),
-                        width, height, combined.data(),
-                        feature_mask | FOTUFILM_FRAME_FLOAT_IO
-                            | FOTUFILM_FRAME_FIELDS_IN,
-                        seed, origin_x, origin_y, combined_floats, fields_id);
-        if (!error) error = output_buffer.copy_to_host();
-        return error;
-    });
+    state.extended_configuration = Buffer<float>();
+    state.extended_configuration_id = 0;
+    state.extended_configuration_floats = 0;
 }
+
 
 extern "C" int32_t fotufilm_halide_metal_process_buffers(
     uint64_t input_mtl_buffer, uint64_t output_mtl_buffer,
@@ -805,6 +959,45 @@ extern "C" int32_t fotufilm_halide_metal_process_buffers_float(
             nullptr, output_buffer.raw_buffer());
         return error ? error : detach_error;
     });
+}
+
+extern "C" int32_t fotufilm_halide_metal_process_buffers_float_tile(
+    uint64_t input_mtl_buffer, uint64_t output_mtl_buffer,
+    int32_t width, int32_t height,
+    int32_t out_x, int32_t out_columns, int32_t out_y, int32_t out_rows,
+    int32_t origin_x, int32_t origin_y, const float *configuration,
+    const float *fields, int32_t fields_floats, uint64_t fields_id,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
+    if (!input_mtl_buffer || !output_mtl_buffer
+        || !valid_tile(configuration, width, height, out_x, out_columns, out_y, out_rows,
+                       fields, fields_floats, feature_mask)) return -1;
+    return run_tile(execution_state(), nullptr, input_mtl_buffer, nullptr, output_mtl_buffer,
+                    4, width, height, out_x, out_columns, out_y, out_rows, origin_x, origin_y,
+                    configuration, fields, fields_floats, fields_id,
+                    exposure_lut, film_output_lut, paper_output_lut, lut_dimension,
+                    spectral_cache_id, feature_mask, seed);
+}
+
+extern "C" int32_t fotufilm_halide_metal_process_buffers_light_grid(
+    uint64_t input_mtl_buffer, float *grid_out, int32_t width, int32_t height,
+    int32_t out_y, int32_t out_rows, int32_t origin_x, int32_t origin_y,
+    const float *configuration,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
+    int32_t stride = 1;
+    if (!input_mtl_buffer || !grid_out
+        || !valid_light_grid(configuration, width, height, out_y, out_rows, origin_y,
+                             feature_mask, &stride)) return -1;
+    return run_tile(execution_state(), nullptr, input_mtl_buffer, grid_out, 0, 3,
+                    width, height, 0, (width + stride - 1) / stride, out_y, out_rows,
+                    origin_x, origin_y, configuration, nullptr, 0, 0,
+                    exposure_lut, film_output_lut, paper_output_lut, lut_dimension,
+                    spectral_cache_id,
+                    (feature_mask | FOTUFILM_FRAME_LIGHT_OUT) & ~FOTUFILM_FRAME_FIELDS_IN,
+                    seed);
 }
 
 namespace {

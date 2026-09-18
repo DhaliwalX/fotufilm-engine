@@ -75,16 +75,27 @@ public extension ImageResampling {
 
     /// The caller-owned form. Raw and 16-bit inputs keep their distinguishable scene-linear
     /// values until develop.
+    ///
+    /// With `sink`, each band is rendered into scratch memory and handed over instead of being
+    /// written into `destination` — for a destination whose pages are dearer to dirty than to
+    /// copy, a mapped file's.
     static func rasterizeLinearFloat(
         _ image: CIImage, into destination: UnsafeMutableRawPointer,
         width: Int, height: Int,
         context: CIContext, colorSpace: CGColorSpace,
         pixelsPerBand: Int = defaultPixelsPerBand,
+        sink: ((_ band: UnsafeMutableRawPointer, _ byteOffset: Int, _ byteCount: Int) -> Void)?
+            = nil,
         flush: ((_ byteOffset: Int, _ byteCount: Int) -> Void)? = nil
     ) {
         guard width > 0, height > 0 else { return }
+        let traced = ProcessInfo.processInfo.environment["FOTUFILM_STILL_TIMINGS"] != nil
         let rowBytes = width * MemoryLayout<Float>.size * 4
         let bandRows = max(1, min(height, pixelsPerBand / width))
+        let scratch = sink != nil
+            ? UnsafeMutableRawPointer.allocate(byteCount: bandRows * rowBytes, alignment: 16)
+            : nil
+        defer { scratch?.deallocate() }
         var top = 0
         while top < height {
             let rows = min(bandRows, height - top)
@@ -94,10 +105,22 @@ public extension ImageResampling {
                 width: CGFloat(width), height: CGFloat(rows))
             let byteOffset = top * rowBytes
             let byteCount = rows * rowBytes
-            context.render(image, toBitmap: destination.advanced(by: byteOffset),
+            let renderStart = Date()
+            let target = scratch ?? destination.advanced(by: byteOffset)
+            context.render(image, toBitmap: target,
                            rowBytes: rowBytes, bounds: bounds,
                            format: .RGBAf, colorSpace: colorSpace)
-            flush?(byteOffset, byteCount)
+            let deliverStart = Date()
+            if let sink, let scratch {
+                sink(scratch, byteOffset, byteCount)
+            } else {
+                flush?(byteOffset, byteCount)
+            }
+            if traced {
+                print(String(format: "  raster band %d rows at %d: render %.1f ms, deliver %.1f ms",
+                             rows, top, deliverStart.timeIntervalSince(renderStart) * 1000,
+                             Date().timeIntervalSince(deliverStart) * 1000))
+            }
             top += rows
         }
     }
