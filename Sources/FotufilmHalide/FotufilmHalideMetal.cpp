@@ -1313,9 +1313,6 @@ public:
             coupler_sigma_, coupler_radius_, adjacency_sigma_, adjacency_radius_,
             adjacency_secondary_sigma_, adjacency_secondary_radius_,
             fringe_sigma_, fringe_radius_,
-            // The mottle pair is read by the `_mottle` twins alone; everywhere else they are
-            // the same harmless unused parameters the diffusion strides already are, kept in
-            // every signature so the shim's single FrameFunction shape holds.
             grain_sigma_, grain_radius_, grain_lambda_,
             mottle_lambda_, mottle_radius_, print_mtf_radius_,
             seed_, reversal_,
@@ -1323,11 +1320,9 @@ public:
             halation_stride_0_, halation_stride_1_, halation_stride_2_,
             halation_strided_radius_0_, halation_strided_radius_1_,
             halation_strided_radius_2_,
-            // Unconditionally, though only the variants whose mask carries
-            // FOTUFILM_FRAME_DIFFUSION reference them: a scalar the pipeline never reads is a
-            // harmless unused function parameter (the texture-flat variants already carry the
-            // halation strides this way), and one shared argument list is what keeps every
-            // variant callable through the shim's single FrameFunction shape.
+            // A scalar a variant never reads is a harmless unused function parameter, and one
+            // shared argument list is what keeps every variant callable through the shim's
+            // single FrameFunction shape.
             diffusion_stride_0_, diffusion_stride_1_, diffusion_stride_2_,
             diffusion_strided_radius_0_, diffusion_strided_radius_1_,
             diffusion_strided_radius_2_, runtime_features_,}, gpu_target())) {
@@ -1397,9 +1392,6 @@ public:
             coupler_sigma_, coupler_radius_, adjacency_sigma_, adjacency_radius_,
             adjacency_secondary_sigma_, adjacency_secondary_radius_,
             fringe_sigma_, fringe_radius_,
-            // The mottle pair is read by the `_mottle` twins alone; everywhere else they are
-            // the same harmless unused parameters the diffusion strides already are, kept in
-            // every signature so the shim's single FrameFunction shape holds.
             grain_sigma_, grain_radius_, grain_lambda_,
             mottle_lambda_, mottle_radius_, print_mtf_radius_,
             seed_, reversal_,
@@ -1407,11 +1399,9 @@ public:
             halation_stride_0_, halation_stride_1_, halation_stride_2_,
             halation_strided_radius_0_, halation_strided_radius_1_,
             halation_strided_radius_2_,
-            // Unconditionally, though only the variants whose mask carries
-            // FOTUFILM_FRAME_DIFFUSION reference them: a scalar the pipeline never reads is a
-            // harmless unused function parameter (the texture-flat variants already carry the
-            // halation strides this way), and one shared argument list is what keeps every
-            // variant callable through the shim's single FrameFunction shape.
+            // A scalar a variant never reads is a harmless unused function parameter, and one
+            // shared argument list is what keeps every variant callable through the shim's
+            // single FrameFunction shape.
             diffusion_stride_0_, diffusion_stride_1_, diffusion_stride_2_,
             diffusion_strided_radius_0_, diffusion_strided_radius_1_,
             diffusion_strided_radius_2_,
@@ -2152,8 +2142,7 @@ extern "C" int32_t fotufilm_halide_metal_process_buffers_tail(
     return translate_metal_exceptions([&] {
         // The grain mixture rides the tail with the grain it belongs to: the host has
         // already split the published granularity's variance between the two fields, so a
-        // tail that dropped the bit would render the quiet half of the mixture. Served by
-        // the `_tail_mottle` twins.
+        // tail that dropped the bit would render the quiet half of the mixture.
         // Exactly FOTUFILM_AOT_TAIL: grain and the enlarger that images it, in that
         // order. Both the grain model and the mixture ride through, so the tail
         // lays the field the frame actually asked for.

@@ -58,7 +58,7 @@ int main(int argc, char **argv) {
     {"fotufilm_halide_ios_" #variant_name "_windowed", (variant_mask), false, true},
     Variant variants[] = {
         FOTUFILM_AOT_VARIANTS(FOTUFILM_AOT_GENERATOR_ENTRY)
-        FOTUFILM_AOT_BASIC_VARIANTS(FOTUFILM_AOT_WINDOWED_ENTRY)
+        FOTUFILM_AOT_WINDOWED_VARIANTS(FOTUFILM_AOT_WINDOWED_ENTRY)
     };
 #undef FOTUFILM_AOT_WINDOWED_ENTRY
 #undef FOTUFILM_AOT_GENERATOR_ENTRY

@@ -37,11 +37,16 @@ class Table:
         for span in schema["spans"]:
             self.spans[span["name"]] = self.evaluate(span["mask"])
         self.variants = [(v["name"], self.evaluate(v["mask"]), v["mask"])
-                         for v in schema["variants"] + schema["basic"]["variants"]]
+                         for v in schema["variants"]]
+        self.windowed = [(v["name"], self.evaluate(v["mask"]), v["mask"])
+                         for v in schema["windowed"]["variants"]]
         names = [name for name, _, _ in self.variants]
         if len(set(names)) != len(names):
             raise ValueError("Duplicate variant names: "
                              + ", ".join(sorted(n for n in names if names.count(n) > 1)))
+        for name, _, _ in self.windowed:
+            if name not in names:
+                raise ValueError(f"Windowed twin {name} has no full-frame variant")
         self.stage_bits = sum(self.resolve(t) for t in schema["axes"]["stage"])
         self.exact_bits = sum(self.resolve(t) for t in schema["axes"]["exact"])
         if self.stage_bits & self.exact_bits:
@@ -55,13 +60,12 @@ class Table:
     def missing_donor_disc_twins(self):
         """Names of grain-laying donor variants with no variant serving the same mask plus DISC_GRAIN.
 
-        The mottle twins are exempt: the crystal population suppresses the grain-size mixture, so a
-        frame never asks for the disc and mottle bits together."""
+        The crystal population rides the disc family on every material, so a donor stock developed
+        with crystals asks for both bits at once."""
         donor, grain, disc = self.bits["DONOR_LAYER"], self.bits["GRAIN"], self.bits["DISC_GRAIN"]
-        mottle = self.bits["GRAIN_MOTTLE"]
         masks = {mask for _, mask, _ in self.variants}
         return [name for name, mask, _ in self.variants
-                if mask & donor and mask & grain and not mask & (disc | mottle)
+                if mask & donor and mask & grain and not mask & disc
                 and (mask | disc) not in masks]
 
     def resolve(self, token):
@@ -96,8 +100,7 @@ class Table:
     def archives(self, windowed=True):
         names = [name for name, _, _ in self.variants]
         if windowed:
-            names += [name + "_windowed" for name in
-                      (v["name"] for v in self.schema["basic"]["variants"])]
+            names += [name + "_windowed" for name, _, _ in self.windowed]
         names += self.schema["extras"]["names"]
         return [PREFIX + name for name in names]
 
@@ -152,13 +155,13 @@ def render_header(table):
         return lines
 
     out.append("#define FOTUFILM_AOT_VARIANTS(X) \\")
-    out += macro_lines(entries(schema["variants"]))
-    out.append("    FOTUFILM_AOT_BASIC_VARIANTS(X)")
+    variants = entries(schema["variants"])
+    out += macro_lines(variants[:-1]) + [variants[-1]]
     out.append("")
-    out += doc_comment(schema["basic"].get("doc", ""))
-    out.append("#define FOTUFILM_AOT_BASIC_VARIANTS(X) \\")
-    basic = entries(schema["basic"]["variants"])
-    out += macro_lines(basic[:-1]) + [basic[-1]]
+    out += doc_comment(schema["windowed"].get("doc", ""))
+    out.append("#define FOTUFILM_AOT_WINDOWED_VARIANTS(X) \\")
+    windowed = entries(schema["windowed"]["variants"])
+    out += macro_lines(windowed[:-1]) + [windowed[-1]]
     out.append("")
     out += doc_comment(schema["axes"].get("doc", ""))
     out.append("#define FOTUFILM_VARIANT_STAGE_BITS \\")
@@ -190,8 +193,8 @@ def render_shim_includes(table):
         out.append(f'#include "{PREFIX}{name}.h"')
     out.append("")
     out.append("#if FOTUFILM_AOT_WINDOWED_HOST")
-    for variant in schema["basic"]["variants"]:
-        out.append(f'#include "{PREFIX}{variant["name"]}_windowed.h"')
+    for name, _, _ in table.windowed:
+        out.append(f'#include "{PREFIX}{name}_windowed.h"')
     out += ["#endif", "", "#endif", ""]
     return "\n".join(out)
 
