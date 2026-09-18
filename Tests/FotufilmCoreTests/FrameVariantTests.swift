@@ -24,7 +24,7 @@ final class FrameVariantTests: XCTestCase {
     private static let stageBits = fullStages | FilmEngineFeature.discGrain
     private static let exactBits = FilmEngineFeature.monochrome | FilmEngineFeature.floatIO
         | FilmEngineFeature.realtime | FilmEngineFeature.exactMath
-        | densityOut | densityIn | flareMeasure | lightOut | fieldsIn
+        | densityOut | densityIn | lightOut | fieldsIn
         | FilmEngineFeature.texture | noFilm
     private static let variantBits = stageBits | exactBits
 
@@ -33,13 +33,13 @@ final class FrameVariantTests: XCTestCase {
         densityOut, FilmEngineFeature.monochrome | densityOut,
         densityIn, FilmEngineFeature.monochrome | densityIn,
     ] + [Int32(0), FilmEngineFeature.monochrome].flatMap { mono in
-        [Int32(0), flareMeasure, FilmEngineFeature.texture, densityOut, densityIn].map {
+        [Int32(0), FilmEngineFeature.texture, densityOut, densityIn].map {
             mono | FilmEngineFeature.floatIO | FilmEngineFeature.realtime | $0
         }
     }
     private static let stillClasses: [Int32] =
         [Int32(0), FilmEngineFeature.monochrome].flatMap { mono in
-            [Int32(0), FilmEngineFeature.exactMath, flareMeasure, FilmEngineFeature.texture,
+            [Int32(0), FilmEngineFeature.exactMath, FilmEngineFeature.texture,
              densityOut, densityIn, fieldsIn].map { mono | FilmEngineFeature.floatIO | $0 }
         }
 
@@ -146,14 +146,17 @@ final class FrameVariantTests: XCTestCase {
         }
     }
 
-    func testTheDeliveryEncodeIsNotPartOfTheClass() {
+    func testTheDeliveryEncodeAndTheGlareMeasureAreNotPartOfTheClass() {
         let encode: Int32 = (1 << 19) | (1 << 22) | (1 << 23) | (1 << 24)
-        XCTAssertEqual(encode & Self.variantBits, 0)
+        XCTAssertEqual((encode | Self.flareMeasure) & Self.variantBits, 0)
         for (stock, mask) in masks(width: 1920, height: 1080) {
             let plain = selected(for: mask | FilmEngineFeature.floatIO)
             let encoded = selected(for: (mask | FilmEngineFeature.floatIO | encode)
                                    & Self.variantBits)
             XCTAssertEqual(plain, encoded, "\(stock.name) changes class to encode its delivery")
+            let measured = selected(for: (mask | FilmEngineFeature.floatIO | Self.flareMeasure)
+                                    & Self.variantBits)
+            XCTAssertEqual(plain, measured, "\(stock.name) changes class to measure its glare")
         }
     }
 

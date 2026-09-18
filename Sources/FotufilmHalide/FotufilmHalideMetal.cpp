@@ -436,7 +436,9 @@ struct GpuPolicy {
     bool windowed = false;
     bool tabulated_curves = false;
     bool table_grain = false;
-    bool measure_flare = false;
+    /// Whether the frame averages its own first stage for the veiling glare rather than reading the
+    /// host's mean: the request's runtime bit, or false where a folded graph cannot see the frame.
+    Expr measure_flare;
     bool fields_in = false;
     bool monochrome = false;
     bool discs = false;
@@ -667,12 +669,34 @@ public:
                        + configuration_(FOTUFILM_CONFIG_FLARE_MEAN + 2)) / 3.0f,
                   configuration_(FOTUFILM_CONFIG_FLARE_MEAN + Halide::min(channel, 2)))
             : configuration_(FOTUFILM_CONFIG_FLARE_MEAN + channel);
-        if (policy_.measure_flare) {
+        if (Halide::Internal::is_const_zero(policy_.measure_flare)) {
+            mean(channel) = provided;
+        } else {
+            // The whole-frame reduction, run only when the request asks for it: the total is
+            // read under the gate alone, so the rows behind it are skipped, not just unread.
+            // Summed in spans of 64 pixels first so the frame's rows spread over enough threads
+            // to keep the device busy: a thread per row was a thirtieth of that.
+            constexpr int kSpan = 64;
+            Var span(name + "_span"), block_x, block_y, thread_x, thread_y;
+            RDom within(0, kSpan, name + "_within");
+            Expr column = span * kSpan + within;
+            Func spans(name + "_spans");
+            spans(channel, span, y) = Halide::sum(
+                Halide::select(column < width, light(Halide::min(column, width - 1), y, channel),
+                               0.0f),
+                name + "_span_sum");
+            Expr span_count = (width + kSpan - 1) / kSpan;
+            spans.compute_root()
+                .bound(channel, 0, channels)
+                .reorder(channel, span, y)
+                .unroll(channel)
+                .gpu_tile(span, y, block_x, block_y, thread_x, thread_y, 4, 16,
+                          Halide::TailStrategy::GuardWithIf, gpu_device_api());
             Var row_block(name + "_row_block");
             Var row_thread(name + "_row_thread");
-            RDom across(0, width, name + "_across");
+            RDom across(0, span_count, name + "_across");
             Func rows(name + "_rows");
-            rows(channel, y) = Halide::sum(light(across, y, channel), name + "_row_sum");
+            rows(channel, y) = Halide::sum(spans(channel, across, y), name + "_row_sum");
             rows.compute_root()
                 .bound(channel, 0, channels)
                 .reorder(channel, y)
@@ -680,10 +704,12 @@ public:
                 .gpu_tile(y, row_block, row_thread, 32,
                           Halide::TailStrategy::GuardWithIf, gpu_device_api());
             RDom down(0, height, name + "_down");
-            mean(channel) = Halide::sum(rows(channel, down), name + "_total")
+            Func total(name + "_total");
+            total(channel) = Halide::sum(rows(channel, down), name + "_total_sum")
                 / (Halide::cast<float>(width) * Halide::cast<float>(height));
-        } else {
-            mean(channel) = provided;
+            total.compute_root().bound(channel, 0, channels).unroll(channel)
+                .gpu_single_thread(gpu_device_api());
+            mean(channel) = graph::gated(policy_.measure_flare, total(channel), provided);
         }
         mean.compute_root().bound(channel, 0, channels).unroll(channel)
             .gpu_single_thread(gpu_device_api());
@@ -846,7 +872,6 @@ public:
           approximate_((feature_mask & FOTUFILM_FRAME_EXACT_MATH) == 0),
           density_out_((feature_mask & FOTUFILM_FRAME_DENSITY_OUT) != 0),
           density_in_((feature_mask & FOTUFILM_FRAME_DENSITY_IN) != 0),
-          measure_flare_((feature_mask & FOTUFILM_FRAME_FLARE_MEASURE) != 0),
           no_film_((feature_mask & FOTUFILM_FRAME_NO_FILM) != 0),
           light_out_((feature_mask & FOTUFILM_FRAME_LIGHT_OUT) != 0),
           fields_in_((feature_mask & FOTUFILM_FRAME_FIELDS_IN) != 0),
@@ -954,7 +979,10 @@ public:
         // use the same seeded samples, rather than a different analytic approximation.
         policy.table_grain = gpu_device_api() == DeviceAPI::WebGPU
             || fast(kStillFastGrainTable);
-        policy.measure_flare = measure_flare_;
+        // A folded graph never sees the whole frame, so it can only read the host's mean.
+        policy.measure_flare = windowed
+            ? Expr(Halide::Internal::const_false())
+            : Expr((runtime_features_ & FOTUFILM_FRAME_FLARE_MEASURE) != 0);
         policy.fields_in = fields_in_;
         policy.monochrome = monochrome;
         policy.discs = use_discs;
@@ -1478,9 +1506,6 @@ private:
     const bool approximate_;
     const bool density_out_;
     const bool density_in_;
-    /// Whether this variant works the veiling-glare mean out from the frame it is given rather
-    /// than reading the host's. Only whole-frame callers may set it — see FOTUFILM_FRAME_FLARE_MEASURE.
-    const bool measure_flare_;
     /// No film in the gate: the creative controls, the delivery basis and the grade, and nothing
     /// the emulsion would have done. See FOTUFILM_FRAME_NO_FILM.
     const bool no_film_;

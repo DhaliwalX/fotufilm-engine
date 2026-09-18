@@ -409,15 +409,15 @@ public final class HalideMetalFilmRenderer {
             validating: stock, options: options, width: width,
             height: height, frameIndex: frameIndex)
         else { return false }
-        pixels.withUnsafeBufferPointer { input in
-            if invocation.sceneMeteringActive {
+        if invocation.sceneMeteringActive {
+            pixels.withUnsafeBufferPointer { input in
                 invocation.measureToneBase(srgbRGBA: input.baseAddress!,
                                            width: width, height: height)
             }
-            if invocation.featureMask & FilmEngineFeature.flare != 0 {
-                invocation.flareMean = invocation.measuredAreaWeightedFlareMean(
-                    srgbRGBA: input.baseAddress!, width: width, height: height)
-            }
+        }
+        // The frame is whole, so the kernel averages its own first stage for the glare.
+        if invocation.featureMask & FilmEngineFeature.flare != 0 {
+            invocation.featureMask |= FilmEngineFeature.flareMeasure
         }
         // The kernel takes the bytes in sRGB and delivers them in sRGB; the basis is the
         // configuration's to say, so this is the Display P3 road with a different answer.
@@ -999,19 +999,10 @@ public final class HalideMetalFilmRenderer {
         if exactMath { invocation.featureMask |= FilmEngineFeature.exactMath }
         // A staged frame is whole and already on the device, so the kernel can average its own
         // first stage rather than have the host run that stage a second time over every pixel.
-        // Asked rather than assumed: the measuring variants are generated for the float schedules,
-        // and a build without the one this frame needs still has to be measured here.
         // Only when there is glare to measure: the stage is opt-in, and a frame without it
-        // has no mean to average and no variant worth asking for.
+        // has no mean to average.
         if measuresGlareOnDevice, invocation.featureMask & FilmEngineFeature.flare != 0 {
-            var measureMask = invocation.featureMask | FilmEngineFeature.flareMeasure
-            if let wanted = outputTransform {
-                measureMask |= FilmEngineFeature.encodeOut
-                    | outputTransferFeature(wanted.transfer, realtime: realtime)
-            }
-            if fotufilm_halide_metal_variant_exists(measureMask) == 1 {
-                invocation.featureMask |= FilmEngineFeature.flareMeasure
-            }
+            invocation.featureMask |= FilmEngineFeature.flareMeasure
         }
         // Asked for on the same terms as the measurement above, but answered back rather than
         // silently dropped: a build without the encoding variant this frame needs returns
@@ -1146,8 +1137,8 @@ public final class HalideMetalFilmRenderer {
     /// reading. The develop calls still nil the transform out when they cannot carry it, so a
     /// caller that skipped this and got it wrong is told; this is how not to have to be told.
     ///
-    /// Costs one invocation's setup and touches no pixel. `measuresGlareOnDevice` and `exactMath`
-    /// have to be what the render will be given: both change which kernel the frame asks for.
+    /// Costs one invocation's setup and touches no pixel. `exactMath` has to be what the render
+    /// will be given: it changes which kernel the frame asks for.
     public func carriesOutputTransform(
         stock: FilmStock, options: FotufilmEngine.Options, width: Int, height: Int,
         frameIndex: UInt64 = 0, realtime: Bool = false, exactMath: Bool = false,
@@ -1165,10 +1156,7 @@ public final class HalideMetalFilmRenderer {
         guard Self.encodesOutput(mask) else { return false }
         let encodeMask = FilmEngineFeature.encodeOut
             | (realtime ? FilmEngineFeature.outputLinear : 0)
-        if measuresGlareOnDevice, fotufilm_halide_metal_variant_exists(
-            mask | FilmEngineFeature.flareMeasure | encodeMask) == 1 {
-            mask |= FilmEngineFeature.flareMeasure
-        }
+        if measuresGlareOnDevice { mask |= FilmEngineFeature.flareMeasure }
         return fotufilm_halide_metal_variant_exists(mask | encodeMask) == 1
     }
 
@@ -1535,10 +1523,22 @@ public final class HalideMetalFilmRenderer {
             return true
         }
         let measureStart = FrameClock.isEnabled ? Date() : Date.distantPast
-        guard let context = makeRGBA8FrameContext(
-            input: input, width: width, height: height,
-            stock: stock, options: options, frameIndex: frameIndex)
+        guard var invocation = try? FilmEngineInvocation(
+            validating: stock, options: options, width: width,
+            height: height, frameIndex: frameIndex)
         else { return false }
+        if invocation.sceneMeteringActive {
+            guard input.storageMode == .shared else { return false }
+            invocation.measureToneBase(
+                encodedDisplayP3RGBA: input.contents().assumingMemoryBound(to: UInt8.self),
+                width: width, height: height)
+        }
+        // The frame is whole, so the kernel averages its own first stage for the glare rather
+        // than have the host walk the bytes; a crop rendered as part of a frame goes through
+        // `makeRGBA8FrameContext`, which measures the whole frame it belongs to.
+        if invocation.featureMask & FilmEngineFeature.flare != 0 {
+            invocation.featureMask |= FilmEngineFeature.flareMeasure
+        }
         let measured = FrameClock.isEnabled
             ? Date().timeIntervalSince(measureStart) : 0
         defer { FrameClock.charge(measure: measured, kernel: 0) }
@@ -1549,7 +1549,6 @@ public final class HalideMetalFilmRenderer {
                 kernel: FrameClock.isEnabled
                     ? Date().timeIntervalSince(kernelStart) : 0)
         }
-        let invocation = context.invocation
         let inputHandle = UInt64(UInt(bitPattern:
             Unmanaged.passUnretained(input as AnyObject).toOpaque()))
         let outputHandle = UInt64(UInt(bitPattern:

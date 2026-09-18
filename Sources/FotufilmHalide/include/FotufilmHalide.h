@@ -82,8 +82,10 @@ enum {
     /// AOT shims mask unknown bits off, so a mobile render prints without it until the realtime
     /// variants are regenerated.
     FOTUFILM_FRAME_PRINT_MTF = 1 << 17,
-    /// Measures global veiling glare on-device for a whole staged frame. The float32 GPU reduction
-    /// is not bit-identical to the host's ordered double reduction.
+    /// Measures global veiling glare on-device: the frame averages its own first stage rather than
+    /// reading FOTUFILM_CONFIG_FLARE_MEAN, so only a whole-frame caller may set it. Chosen at run
+    /// time within a class; a folded row-window graph cannot see the frame and never serves it.
+    /// The float32 GPU reduction is not bit-identical to the host's ordered double reduction.
     FOTUFILM_FRAME_FLARE_MEASURE = 1 << 18,
     /// Applies the configured output matrix, transfer, and premultiplication in-kernel.
     /// GPU transcendentals may differ from host libm, so callers must use one encode path per

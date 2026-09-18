@@ -75,7 +75,7 @@
     }
   ],
   "axes": {
-    "doc": "A stage bit is covered by any variant that carries it; an exact bit must match. The delivery encode and its transfer (ENCODE_OUT, OUTPUT_*) are neither: the pipeline chooses them at run time.",
+    "doc": "A stage bit is covered by any variant that carries it; an exact bit must match. The delivery encode and its transfer (ENCODE_OUT, OUTPUT_*) and the whole-frame glare measurement (FLARE_MEASURE) are neither: the pipeline chooses them at run time.",
     "stage": [
       "ALL_STAGES",
       "GRAIN_MOTTLE",
@@ -90,7 +90,6 @@
       "EXACT_MATH",
       "DENSITY_OUT",
       "DENSITY_IN",
-      "FLARE_MEASURE",
       "LIGHT_OUT",
       "FIELDS_IN",
       "TEXTURE",
@@ -101,7 +100,7 @@
     {
       "name": "color",
       "mask": "FULL_STAGES | DISC_GRAIN",
-      "doc": "The byte-input classes are realtime by construction: half-precision stores, the extern Metal blurs, and no disc model."
+      "doc": "The byte-input classes are realtime by construction: half-precision stores and no disc model."
     },
     {
       "name": "monochrome",
@@ -132,14 +131,6 @@
     {
       "name": "monochrome_float_realtime",
       "mask": "FULL_STAGES | DISC_GRAIN | MONOCHROME | FLOAT_IO | REALTIME"
-    },
-    {
-      "name": "color_float_realtime_measure",
-      "mask": "FULL_STAGES | DISC_GRAIN | FLOAT_IO | REALTIME | FLARE_MEASURE"
-    },
-    {
-      "name": "monochrome_float_realtime_measure",
-      "mask": "FULL_STAGES | DISC_GRAIN | MONOCHROME | FLOAT_IO | REALTIME | FLARE_MEASURE"
     },
     {
       "name": "color_float_realtime_texture",
@@ -197,22 +188,6 @@
     {
       "name": "monochrome_float_exact_disc",
       "mask": "DISC(FULL_STAGES | MONOCHROME | FLOAT_IO | EXACT_MATH)"
-    },
-    {
-      "name": "color_float_measure",
-      "mask": "FULL_STAGES | FLOAT_IO | FLARE_MEASURE"
-    },
-    {
-      "name": "color_float_measure_disc",
-      "mask": "DISC(FULL_STAGES | FLOAT_IO | FLARE_MEASURE)"
-    },
-    {
-      "name": "monochrome_float_measure",
-      "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | FLARE_MEASURE"
-    },
-    {
-      "name": "monochrome_float_measure_disc",
-      "mask": "DISC(FULL_STAGES | MONOCHROME | FLOAT_IO | FLARE_MEASURE)"
     },
     {
       "name": "color_float_texture",

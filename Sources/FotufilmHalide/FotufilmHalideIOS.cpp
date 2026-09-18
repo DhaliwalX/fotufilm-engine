@@ -378,7 +378,10 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     // a stage outside it — one whose reach this shim does not know — stays on the full-frame
     // variant.
     const int32_t wanted_stages = feature_mask & FOTUFILM_VARIANT_STAGE_BITS;
-    if (windowed_enabled && supports_windowed_transport
+    // A folded graph never sees the whole frame, so a request that asks the kernel to measure
+    // its own glare stays on the full-frame variant.
+    const bool measures = (feature_mask & FOTUFILM_FRAME_FLARE_MEASURE) != 0;
+    if (windowed_enabled && supports_windowed_transport && !measures
         && width >= 32 && height >= fotufilm::kWindowStorageRows
         && origin_x == 0 && origin_y == 0 && !wants_extended
         && in->dim[0].min == 0 && in->dim[1].min == 0
