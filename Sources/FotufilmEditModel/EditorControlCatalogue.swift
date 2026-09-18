@@ -512,9 +512,9 @@ public enum EditorControlCatalogue {
                       .resolve: "Return overrides are not yet offered in plugin hosts",
                       .finalcut: "Return overrides are not yet offered in plugin hosts", .web: webBaked],
             commandLine: CommandLineFlag("--halation-return", placeholder: "<percent>",
-                help: "Red returned/direct exposure percentage, 0-100 (default: film; CineStill 12)",
+                help: "Red returned/direct exposure percentage, 0-100 (default: film; CineStill 3)",
                 generic: false, range: 0...100),
-            documentation: "Sets the red returned/direct exposure percentage and preserves the film’s return colour balance. CineStill 800T and 400D default to 12%. Use Film Return restores the selected film’s value."),
+            documentation: "Sets the red returned/direct exposure percentage and preserves the film’s return colour balance. CineStill 800T and 400D start at their measured 3%; raise it toward 10–15% for the heavier glow of web scans. Use Film Return restores the selected film’s value."),
         EditorControl(
             .halationColour, title: "Halo Colour",
             detail: "Control how much the halo keeps the color of the light source.",

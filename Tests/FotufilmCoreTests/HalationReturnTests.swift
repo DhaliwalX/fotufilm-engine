@@ -3,20 +3,22 @@ import XCTest
 
 final class HalationReturnTests: XCTestCase {
     func testCineStillDefaultsAndRecordBalance() throws {
+        // The red return is the measured 0.03; green and blue follow the derived spectral
+        // return ratios, and the layered construction reads the same triple.
         for (id, green, blue): (String, Float, Float) in [
-            ("cinestill800t", 0.00404992, 0.00000376),
-            ("cinestill400d", 0.0068812, 0.00004288),
+            ("cinestill800t", 0.00101248, 0.00000094),
+            ("cinestill400d", 0.001719215, 0.0000014675),
         ] {
             let stock = try XCTUnwrap(FilmStock.named(id))
-            XCTAssertEqual(stock.halationStrength[0], 0.12, accuracy: 1e-7)
+            XCTAssertEqual(stock.halationStrength[0], 0.03, accuracy: 1e-7)
             XCTAssertEqual(stock.halationStrength[1], green, accuracy: 1e-9)
             XCTAssertEqual(stock.halationStrength[2], blue, accuracy: 1e-10)
             let construction = try XCTUnwrap(stock.layeredTransport)
             for c in 0..<3 {
                 XCTAssertEqual(construction.returnedToDirect[c][0], Double(stock.halationStrength[c]), accuracy: 1e-8)
             }
-            let lower = try HalationReturn.ratios(for: stock, overriding: 0.03)
-            for c in 0..<3 { XCTAssertEqual(lower[c], stock.halationStrength[c] / 4, accuracy: 1e-8) }
+            let raised = try HalationReturn.ratios(for: stock, overriding: 0.12)
+            for c in 0..<3 { XCTAssertEqual(raised[c], stock.halationStrength[c] * 4, accuracy: 1e-8) }
         }
     }
 

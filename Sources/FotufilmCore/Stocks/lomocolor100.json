@@ -50,21 +50,48 @@
     0.003,
     0.0024
   ],
+  "estimatedHalationProfile": {
+    "angularExponent": [
+      2.66,
+      2.66,
+      2.66
+    ],
+    "bounceRetention": [
+      0.2848,
+      0.2832,
+      0.6135
+    ],
+    "diffuseShare": [
+      0,
+      0,
+      0
+    ],
+    "diffuseSigmaMM": [
+      0,
+      0,
+      0
+    ],
+    "roundTripOpticalDepth": [
+      3.8336,
+      6.8862,
+      11.4142
+    ]
+  },
   "flare": 0.009,
+  "grainDensityProfile": [
+    5.1682,
+    0.117436,
+    0.421188
+  ],
   "grainLayerWeights": [
     0.68,
     1,
     1.28
   ],
+  "grainLumaCorrelation": 0.58,
   "grainSizeMM": 0.0042,
   "grainStrength": 0.0065,
-  "grainLumaCorrelation": 0.58,
   "halationLookScale": 1,
-  "halationStrength": [
-    0.0038,
-    6.446e-05,
-    0
-  ],
   "halationReturnMatrix": [
     [
       0.001236,
@@ -82,33 +109,11 @@
       0
     ]
   ],
-  "estimatedHalationProfile": {
-    "roundTripOpticalDepth": [
-      3.8336,
-      6.8862,
-      11.4142
-    ],
-    "angularExponent": [
-      2.66,
-      2.66,
-      2.66
-    ],
-    "diffuseShare": [
-      0,
-      0,
-      0
-    ],
-    "diffuseSigmaMM": [
-      0,
-      0,
-      0
-    ],
-    "bounceRetention": [
-      0.2848,
-      0.2832,
-      0.6135
-    ]
-  },
+  "halationStrength": [
+    0.0038,
+    6.446e-05,
+    0
+  ],
   "id": "lomocolor100",
   "isMonochrome": false,
   "isReversal": false,
@@ -646,10 +651,5 @@
       ]
     ]
   },
-  "subtitle": "Lomography \u00b7 scan-referenced color negative",
-  "grainDensityProfile": [
-    5.1682,
-    0.117436,
-    0.421188
-  ]
+  "subtitle": "Lomography · scan-referenced color negative"
 }
