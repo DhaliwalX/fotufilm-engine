@@ -1,10 +1,14 @@
 # Print borders
 
-The iPhone photo editor offers None, Film Border, Paper Border and Emulsion Border. Film Border shows a negative
-stock's developed negative on its film, using the existing density-to-transmission renderer.
-Reversal and integral instant film retain their developed positive image. The paper selection
-is retained: None, Paper Border and Emulsion Border return to the chosen output medium. Menu previews, the canvas,
-zoomed detail, saved thumbnails and exports use the same material-dependent image.
+The iPhone photo editor offers None, Film Border, Slide Mount, Paper Border at 4 × 6, 5 × 7,
+8 × 10 and 5 × 5 inches, Carrier Border, Emulsion Border, White Mount, Black Mount and three posting
+canvases — Square Post, Portrait Post and Story — on a horizontally scrolled strip of framed
+previews in the print deck. Film Border
+shows a negative stock's developed negative on its film, using the existing density-to-transmission
+renderer. Reversal and integral instant film retain their developed positive image; Slide Mount
+views a reversal transparency the same way. The paper selection is retained: every other choice
+returns to the chosen output medium. Menu previews, the canvas, zoomed detail, saved thumbnails
+and exports use the same material-dependent image.
 
 Border metadata lives with film stock definitions. The finishing compositor runs after image
 formation, with no photograph resampling or changes to its colour profile. Negative delivery is SDR.
@@ -133,8 +137,12 @@ grain and exposure; its density is viewed through the film instead of printed to
 
 Paper Border is offered for Ektacolor Edge, ENDURA Premier and Crystal Archive Type CA.
 All use a real supported lustre surface on resin-coated photographic paper, with clean cut edges.
-It represents a 4 × 6 inch (101.6 × 152.4 mm) print cut from a roll, with a chosen 3 mm easel
-margin. Paper roll width and trim are print choices, not intrinsic dimensions of the emulsion.
+It represents a print cut from a roll at one of four common lab sizes, with a chosen 3 mm easel
+margin: 4 × 6 inch (152.4 × 101.6 mm), 5 × 7 inch (177.8 × 127 mm), 8 × 10 inch (254 × 203.2 mm)
+and a square 5 × 5 inch (127 × 127 mm) cut. Each size is a separate menu choice; the crop is
+centred inside the easel opening and never stretched to the sheet, so a 3 : 2 photograph on an
+8 × 10 or 5 × 5 sheet leaves paper above and below it. Paper roll width and trim are print
+choices, not intrinsic dimensions of the emulsion.
 
 - [Kodak Ektacolor Edge product sheet](https://business.kodakmoments.com/sites/default/files/files/products/EKTACOLOREDGE_LTR_EN_LR.pdf), surfaces E and F.
 - Kodak ENDURA Premier technical publication E-4070, page 1: resin-coated paper, including E lustre.
@@ -148,6 +156,60 @@ measured microtopography. Cotton fibres, baryta bases, deckled edges and artific
 not appropriate to these stocks and are not offered. Screen, scans, negatives and motion-picture
 print films do not become paper sheets; Paper Border is inactive on those outputs.
 
+
+## Carrier Border
+
+Carrier Border is the darkroom practice of enlarging a negative through a carrier filed wider
+than the camera aperture, so the clear rebate around the frame prints as a dark line inside the
+easel's white margin. It is offered for negative stocks on the negative reflection papers above;
+a transparency's rebate develops dark and would print no differently from the unexposed margin
+of positive paper, so reversal film and Ilfochrome do not offer it. The sheet is an 8 × 10 inch
+(254 × 203.2 mm) darkroom print with a ½ inch (12.7 mm) easel margin and a 2.5 mm printed rebate
+on every side. These three sizes are presentation conventions: easel blades, carrier filing and
+enlargement all vary from print to print.
+
+The line's colour is the paper's own maximum-density records through the same receiver model,
+dye spectra and Viewing Light as the paper base, not a painted black. Its inner edge is the camera
+gate and stays straight against the photograph; its outer edge carries a small deterministic
+unevenness (bounded to a quarter of the rebate width) standing in for a hand-filed carrier. The
+lustre stipple is drawn on the margin only. No frame numbers, inscriptions or perforations are
+printed: those lie outside a still camera's filed carrier.
+
+## Slide Mount
+
+Slide Mount shows a developed reversal transparency in a plain card mount. The outer size is the
+2 × 2 inch (50.8 mm square) format used by every 35 mm projector; the aperture is the typical
+mounted image area that Hunt tabulates for 35 mm still film, 34.5 × 23 mm, and 56 × 56 mm for
+6 × 6 on 120 in a 70 mm square mount (R. W. G. Hunt, *The Reproduction of Colour*, 6th ed.,
+Appendix 4 "Photographic parameters", printed p. 668, "Typical area used"). A crop that differs from the aperture is fitted inside it
+without cropping, so any rebate that shows beside it is the stock's maximum-density colour, as in
+Film Border. The mount is offered for reversal stocks in 35mm and 120 only; negatives, motion
+gauges, sheet film and instant film are not mounted as slides.
+
+The card is a neutral white at 0.86 display-linear P3, with a 1 mm aperture corner radius and a
+faint shadow along the upper and left aperture edges standing for the card's thickness. Those
+are presentation choices; no manufacturer's mount, embossing or printing is reproduced. As with
+Film Border, the transparency is viewed by transmission on the reference light box and the paper
+selection is retained for other frames.
+
+## Plain mounts
+
+White Mount and Black Mount are crop-following presentation margins with no material behind
+them: 8% of the photograph's short side on every side, rounded up to whole pixels. White Mount
+uses the selected reflection paper's modelled base and Viewing Light where there is one and the
+same neutral 0.91 display-linear P3 mount as Emulsion Border elsewhere. Black Mount is a neutral
+0.02 display-linear P3 board on every output; it is not a paper's maximum density. Both are
+available with every film and output medium, including scans and Negative.
+
+## Posting canvases
+
+Square Post (1 : 1), Portrait Post (4 : 5) and Story (9 : 16) place the photograph inside a
+fixed-aspect canvas for social posting, with a margin of 5% of the canvas's short side on every
+side. The photograph is fitted whole and centred — never cropped, resampled or rotated — so a
+landscape picture on a story canvas stands between white bands, as posts do. The canvas is
+display white (1.0 display-linear) on every output, including reflection papers, so the margin
+merges with a white feed; it is not the paper's modelled base. The aspects are the platforms'
+own; the margin is a presentation choice. These are offered with every film and output medium.
 
 ## Emulsion Border
 
@@ -166,9 +228,14 @@ The chosen output medium is preserved, including an explicitly selected Negative
 
 The procedural edge is deterministic in coordinates normalised to the photo's short side.
 Its separate sRGB texture is bounded to 2048 pixels on its long side, then colour-managed into
-the output profile. The original photograph is copied last at full resolution, with no cropping,
-resampling or texture painted over it. The mounted output retains 16-bit precision and the
-photograph's colour profile, including P3 and HLG. No scanned borders or reference photos ship.
+the output profile. The photograph is copied first at full resolution, with no cropping or
+resampling, and the band is laid over it: a lifted emulsion's picture fades into its dark rim
+rather than stopping at a cut line, so the band's inner edge bleeds a soft, uneven way into the
+photograph — dense against the edge, gone within 4.5% of the short side, with the same coarse
+and toothed noise breaking the line up. The renderer clips the band at that rim, so every pixel
+deeper than it is exactly the developed photograph; this is the one frame that alters any
+photograph pixel. The mounted output retains 16-bit precision and the photograph's colour
+profile, including P3 and HLG. No scanned borders or reference photos ship.
 
 ## Positive paper
 

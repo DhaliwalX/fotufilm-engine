@@ -17,6 +17,10 @@ public enum PrintFrameRenderer {
         public let rotated: Bool
     }
 
+    /// How far Emulsion Border's band may bleed into the photograph, as a fraction of its short
+    /// side. Every other frame leaves the whole photograph untouched.
+    public static let emulsionRim: CGFloat = EmulsionBorderRenderer.rim
+
     public static func layout(width: Int, height: Int,
                               configuration: PrintFrameConfiguration) -> Layout {
         guard configuration.frame != .none else {
@@ -24,13 +28,28 @@ public enum PrintFrameRenderer {
                           imageRect: CGRect(x: 0, y: 0, width: width, height: height),
                           pixelsPerMM: 1, rotated: false)
         }
-        if configuration.frame == .emulsion {
+        if configuration.frame == .emulsion || configuration.frame.isPlainMount {
             // A crop-following mount, not a claim of physical film or paper dimensions.
             let short = CGFloat(min(width, height))
-            let horizontal = ceil(short * 0.095), vertical = ceil(short * 0.135)
+            let horizontal = ceil(short * (configuration.frame == .emulsion ? 0.095 : 0.08))
+            let vertical = ceil(short * (configuration.frame == .emulsion ? 0.135 : 0.08))
             return Layout(size: CGSize(width: CGFloat(width) + 2 * horizontal,
                                        height: CGFloat(height) + 2 * vertical),
                           imageRect: CGRect(x: horizontal, y: vertical,
+                                            width: CGFloat(width), height: CGFloat(height)),
+                          pixelsPerMM: 1, rotated: false)
+        }
+        if let canvas = configuration.canvas {
+            // The photograph fitted inside a fixed-aspect canvas, touching the margin on the
+            // side that binds. Never rotated: a landscape picture on a portrait canvas is the
+            // post people make.
+            let aspect = CGFloat(canvas.aspectWidth / canvas.aspectHeight)
+            let margin = CGFloat(canvas.margin) * min(1, aspect)  // in units of the canvas height
+            let canvasHeight = max(CGFloat(width) / (aspect - 2 * margin), CGFloat(height) / (1 - 2 * margin))
+            let size = CGSize(width: ceil(canvasHeight * aspect), height: ceil(canvasHeight))
+            return Layout(size: size,
+                          imageRect: CGRect(x: ((size.width - CGFloat(width)) / 2).rounded(),
+                                            y: ((size.height - CGFloat(height)) / 2).rounded(),
                                             width: CGFloat(width), height: CGFloat(height)),
                           pixelsPerMM: 1, rotated: false)
         }
@@ -64,7 +83,9 @@ public enum PrintFrameRenderer {
                                         | CGBitmapInfo.byteOrder16Little.rawValue)
         else { return nil }
         let material = materialGeometry(configuration)
-        context.setFillColor(baseColor(configuration.baseRGB))
+        // The card of a slide mount covers the whole canvas, including any sub-pixel sliver
+        // outside the rotated millimetre rectangle; its aperture is cut to the base below.
+        context.setFillColor(configuration.slideMount == nil ? baseColor(configuration.baseRGB) : cardColor)
         context.fill(CGRect(origin: .zero, size: placement.size))
         context.saveGState()
         context.scaleBy(x: placement.pixelsPerMM, y: placement.pixelsPerMM)
@@ -72,17 +93,36 @@ public enum PrintFrameRenderer {
             context.translateBy(x: material.size.height, y: 0)
             context.rotate(by: .pi / 2)
         }
+        // Copy at integer pixel coordinates. The original profile, 16-bit depth and every
+        // photograph pixel survive, including P3 and HLG delivery. Every frame but the emulsion
+        // border is drawn first and never touches the picture; the emulsion band is laid over
+        // it afterwards so its inner edge can bleed a soft rim into the photograph.
+        func copyPhotograph() {
+            context.saveGState()
+            context.interpolationQuality = .none
+            context.setBlendMode(.copy)
+            context.draw(image, in: placement.imageRect)
+            context.restoreGState()
+        }
         if configuration.frame == .emulsion {
+            context.restoreGState()
+            copyPhotograph()
+            context.saveGState()
+            context.scaleBy(x: placement.pixelsPerMM, y: placement.pixelsPerMM)
             guard EmulsionBorderRenderer.draw(in: context, around: placement.imageRect) else { return nil }
-        } else if configuration.frame == .paper {
-            let scale = placement.pixelsPerMM
-            let photo = placement.rotated
-                ? CGRect(x: placement.imageRect.minY / scale,
-                         y: material.size.height - placement.imageRect.maxX / scale,
-                         width: placement.imageRect.height / scale, height: placement.imageRect.width / scale)
-                : placement.imageRect.applying(CGAffineTransform(scaleX: 1 / scale, y: 1 / scale))
+        } else if configuration.frame.isPlainMount || configuration.canvas != nil {
+            // The base fill is the whole mount or canvas.
+        } else if let mount = configuration.slideMount {
+            drawSlideMount(in: context, mount: mount, base: baseColor(configuration.baseRGB))
+        } else if let sheet = configuration.sheet {
+            let photo = photoRect(placement, material: material)
+            if sheet.rebateMM > 0 {
+                drawCarrierRebate(in: context, around: photo, width: CGFloat(sheet.rebateMM),
+                                  color: baseColor(configuration.rebateRGB))
+            }
             if configuration.hasLustre {
-                drawLustre(in: context, size: material.size, excluding: photo)
+                drawLustre(in: context, size: material.size,
+                           excluding: photo.insetBy(dx: -CGFloat(sheet.rebateMM), dy: -CGFloat(sheet.rebateMM)))
             }
         } else if let geometry = configuration.geometry {
             if let printing = configuration.edgePrinting {
@@ -95,11 +135,7 @@ public enum PrintFrameRenderer {
             }
         }
         context.restoreGState()
-        // Copy at integer pixel coordinates after the border is drawn. The original profile,
-        // 16-bit depth and every photograph pixel survive, including P3 and HLG delivery.
-        context.interpolationQuality = .none
-        context.setBlendMode(.copy)
-        context.draw(image, in: placement.imageRect)
+        if configuration.frame != .emulsion { copyPhotograph() }
         return context.makeImage()
     }
 
@@ -110,10 +146,27 @@ public enum PrintFrameRenderer {
                     CGRect(x: g.apertureX, y: g.apertureY,
                            width: g.apertureWidth, height: g.apertureHeight))
         }
-        // A real 4 × 6 inch sheet cut from a paper roll, with a chosen 3 mm easel margin.
-        // Sheet/crop size is a presentation choice; it is not an intrinsic size of the emulsion.
-        return (CGSize(width: 152.4, height: 101.6),
-                CGRect(x: 3, y: 3, width: 146.4, height: 95.6))
+        if let m = configuration.slideMount {
+            return (CGSize(width: m.mountMM, height: m.mountMM),
+                    CGRect(x: (m.mountMM - m.apertureWidth) / 2, y: (m.mountMM - m.apertureHeight) / 2,
+                           width: m.apertureWidth, height: m.apertureHeight))
+        }
+        // A real sheet cut from a paper roll, with a chosen easel margin. A filed carrier's
+        // rebate prints inside the easel opening, so the photograph sits inside it too.
+        let sheet = configuration.sheet ?? PaperSheetGeometry.preset(for: .paper)!
+        let inset = sheet.marginMM + sheet.rebateMM
+        return (CGSize(width: sheet.widthMM, height: sheet.heightMM),
+                CGRect(x: inset, y: inset, width: sheet.widthMM - 2 * inset, height: sheet.heightMM - 2 * inset))
+    }
+
+    /// The photograph in unrotated material millimetres.
+    private static func photoRect(_ placement: Layout, material: (size: CGSize, aperture: CGRect)) -> CGRect {
+        let scale = placement.pixelsPerMM
+        return placement.rotated
+            ? CGRect(x: placement.imageRect.minY / scale,
+                     y: material.size.height - placement.imageRect.maxX / scale,
+                     width: placement.imageRect.height / scale, height: placement.imageRect.width / scale)
+            : placement.imageRect.applying(CGAffineTransform(scaleX: 1 / scale, y: 1 / scale))
     }
 
     private static func baseColor(_ rgb: SIMD3<Float>) -> CGColor {
@@ -232,6 +285,71 @@ public enum PrintFrameRenderer {
             context.fillEllipse(in: rect)
         }
     }
+
+    /// The clear rebate of the negative, exposed through a carrier filed wider than its
+    /// aperture. Hand filing leaves a slightly uneven outer edge; the inner edge is the
+    /// camera gate and stays straight. The line prints at the paper's maximum density.
+    private static func drawCarrierRebate(in context: CGContext, around photo: CGRect,
+                                          width: CGFloat, color: CGColor) {
+        let outer = photo.insetBy(dx: -width, dy: -width)
+        let path = CGMutablePath()
+        let corners = [CGPoint(x: outer.minX, y: outer.minY), CGPoint(x: outer.maxX, y: outer.minY),
+                       CGPoint(x: outer.maxX, y: outer.maxY), CGPoint(x: outer.minX, y: outer.maxY)]
+        let step: CGFloat = 0.5
+        for side in 0..<4 {
+            let from = corners[side], to = corners[(side + 1) % 4]
+            let length = hypot(to.x - from.x, to.y - from.y)
+            let count = max(2, Int(ceil(length / step)))
+            for i in 0...count {
+                let t = CGFloat(i) / CGFloat(count)
+                let point = CGPoint(x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t)
+                // Displacement is normal to the side, in millimetres, bounded to a quarter
+                // of the rebate so the line never closes over the photograph.
+                let along = Float(length * t)
+                let wobble = CGFloat(EmulsionBorderRenderer.noise(along * 0.35, Float(side) * 7.3, seed: 409)
+                                     + 0.4 * EmulsionBorderRenderer.noise(along * 1.6, Float(side) * 3.1, seed: 613))
+                let amount = min(max(wobble * 0.22, -width * 0.25), width * 0.25)
+                let normal: CGPoint
+                switch side {
+                case 0: normal = CGPoint(x: 0, y: -1)
+                case 1: normal = CGPoint(x: 1, y: 0)
+                case 2: normal = CGPoint(x: 0, y: 1)
+                default: normal = CGPoint(x: -1, y: 0)
+                }
+                let displaced = CGPoint(x: point.x + normal.x * amount, y: point.y + normal.y * amount)
+                if side == 0 && i == 0 { path.move(to: displaced) } else { path.addLine(to: displaced) }
+            }
+        }
+        path.closeSubpath()
+        context.saveGState()
+        context.setFillColor(color)
+        context.addPath(path)
+        context.fillPath()
+        context.restoreGState()
+    }
+
+    /// The rounded aperture cut through a plain white card mount. The transparency's rebate
+    /// shows through it around a nonmatching crop.
+    private static func drawSlideMount(in context: CGContext, mount: SlideMountGeometry, base: CGColor) {
+        let aperture = CGRect(x: (mount.mountMM - mount.apertureWidth) / 2,
+                              y: (mount.mountMM - mount.apertureHeight) / 2,
+                              width: mount.apertureWidth, height: mount.apertureHeight)
+        context.saveGState()
+        context.addPath(CGPath(roundedRect: aperture, cornerWidth: mount.cornerRadiusMM,
+                               cornerHeight: mount.cornerRadiusMM, transform: nil))
+        context.clip()
+        context.setFillColor(base)
+        context.fill(aperture)
+        // The aperture is die-cut through card of finite thickness: a faint shadow on the
+        // film along the upper and left edges. A presentation choice, not a measured mount.
+        context.setFillColor(CGColor(gray: 0, alpha: 0.18))
+        context.fill(CGRect(x: aperture.minX, y: aperture.maxY - 0.35, width: aperture.width, height: 0.35))
+        context.fill(CGRect(x: aperture.minX, y: aperture.minY, width: 0.35, height: aperture.height))
+        context.restoreGState()
+    }
+
+    /// A neutral white card, the common colour of cardboard and plastic mounts.
+    private static var cardColor: CGColor { baseColor(SIMD3(repeating: 0.86)) }
 
     private static func drawLustre(in context: CGContext, size: CGSize, excluding photo: CGRect) {
         // Fine resin-coated stipple, never cotton fibres or deckled paper. The visible finish

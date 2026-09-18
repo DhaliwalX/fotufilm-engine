@@ -1,25 +1,68 @@
 import Foundation
 
-/// Physical film/paper finishing and an explicitly styled emulsion border.
+/// Physical film/paper finishing, mounts, and an explicitly styled emulsion border.
 public enum PrintFrame: String, CaseIterable, Codable, Sendable, Identifiable {
-    case none, film, paper, emulsion
+    case none, film, slideMount, paper, paper5x7, paper8x10, paper5x5, carrier, emulsion, mount, darkMount,
+         socialSquare, socialPortrait, socialStory
     public var id: String { rawValue }
     public var name: String {
         switch self {
         case .none: return "None"
         case .film: return "Film Border"
-        case .paper: return "Paper Border"
+        case .slideMount: return "Slide Mount"
+        case .paper: return "Paper Border 4 × 6"
+        case .paper5x7: return "Paper Border 5 × 7"
+        case .paper8x10: return "Paper Border 8 × 10"
+        case .paper5x5: return "Paper Border 5 × 5"
+        case .carrier: return "Carrier Border"
         case .emulsion: return "Emulsion Border"
+        case .mount: return "White Mount"
+        case .darkMount: return "Black Mount"
+        case .socialSquare: return "Square Post"
+        case .socialPortrait: return "Portrait Post"
+        case .socialStory: return "Story"
         }
     }
     public var detail: String {
         switch self {
         case .none: return "The photograph without a border."
         case .film: return "The selected film gauge, with its physical edges and perforations."
+        case .slideMount: return "The developed transparency in a card slide mount."
         case .paper: return "The selected photographic paper, in a 4 × 6 inch print."
+        case .paper5x7: return "The selected photographic paper, in a 5 × 7 inch print."
+        case .paper8x10: return "The selected photographic paper, in an 8 × 10 inch print."
+        case .paper5x5: return "The selected photographic paper, in a 5 × 5 inch print."
+        case .carrier: return "The film rebate printed through a filed-out negative carrier: a black line inside the paper margin."
         case .emulsion: return "A dark, uneven edge with soft wear and a white paper margin."
+        case .mount: return "A clean white margin around the photograph."
+        case .darkMount: return "A clean black margin around the photograph."
+        case .socialSquare: return "A square 1 : 1 canvas for posting, the photograph inside a white margin."
+        case .socialPortrait: return "A 4 : 5 portrait canvas for posting, the photograph inside a white margin."
+        case .socialStory: return "A 9 : 16 story canvas, the photograph inside a white margin."
         }
     }
+
+    /// A display-white canvas at a fixed posting aspect, with no manufactured material behind it.
+    public var isSocialCanvas: Bool {
+        switch self {
+        case .socialSquare, .socialPortrait, .socialStory: return true
+        default: return false
+        }
+    }
+
+    /// A cut sheet of the selected photographic paper, with or without a printed rebate.
+    public var isPaperSheet: Bool {
+        switch self {
+        case .paper, .paper5x7, .paper8x10, .paper5x5, .carrier: return true
+        default: return false
+        }
+    }
+
+    /// A crop-following presentation mount with no manufactured material behind it.
+    public var isPlainMount: Bool { self == .mount || self == .darkMount }
+
+    /// The developed film is seen by transmission, not printed to the chosen paper.
+    public var viewsTransparency: Bool { self == .film || self == .slideMount }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -31,7 +74,71 @@ public enum PrintFrame: String, CaseIterable, Codable, Sendable, Identifiable {
         case "paper", "contact", "baryta", "cotton": self = .paper
         case "emulsion": self = .emulsion
         default:
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unknown print frame")
+            guard let frame = PrintFrame(rawValue: value) else {
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unknown print frame")
+            }
+            self = frame
+        }
+    }
+}
+
+/// A cut sheet of photographic paper on an easel. Sheet sizes are lab print choices, not
+/// intrinsic dimensions of the emulsion; the easel margin and the filed carrier's rebate are
+/// representative darkroom conventions documented in docs/print-frame-model.md.
+public struct PaperSheetGeometry: Equatable, Sendable {
+    public let widthMM: Double
+    public let heightMM: Double
+    /// The white margin held by the easel blades on every side.
+    public let marginMM: Double
+    /// The printed film rebate inside the easel opening; zero for a plain print.
+    public let rebateMM: Double
+
+    public static func preset(for frame: PrintFrame) -> Self? {
+        switch frame {
+        case .paper: return Self(widthMM: 152.4, heightMM: 101.6, marginMM: 3, rebateMM: 0)
+        case .paper5x7: return Self(widthMM: 177.8, heightMM: 127, marginMM: 3, rebateMM: 0)
+        case .paper8x10: return Self(widthMM: 254, heightMM: 203.2, marginMM: 3, rebateMM: 0)
+        case .paper5x5: return Self(widthMM: 127, heightMM: 127, marginMM: 3, rebateMM: 0)
+        case .carrier: return Self(widthMM: 254, heightMM: 203.2, marginMM: 12.7, rebateMM: 2.5)
+        default: return nil
+        }
+    }
+}
+
+/// A fixed-aspect canvas for a social post. The aspects are the platforms' own; the margin is a
+/// presentation choice. The photograph is fitted inside without cropping, so a landscape picture
+/// on a story canvas stands between white bands, as posts do.
+public struct SocialCanvasGeometry: Equatable, Sendable {
+    public let aspectWidth: Double
+    public let aspectHeight: Double
+    /// The white margin on every side, as a fraction of the canvas's short side.
+    public let margin: Double
+
+    public static func preset(for frame: PrintFrame) -> Self? {
+        switch frame {
+        case .socialSquare: return Self(aspectWidth: 1, aspectHeight: 1, margin: 0.05)
+        case .socialPortrait: return Self(aspectWidth: 4, aspectHeight: 5, margin: 0.05)
+        case .socialStory: return Self(aspectWidth: 9, aspectHeight: 16, margin: 0.05)
+        default: return nil
+        }
+    }
+}
+
+/// A card mount for a developed transparency. The outer size is the universal 2 × 2 inch
+/// projector format; the aperture is the typical mounted image area for the gauge.
+public struct SlideMountGeometry: Equatable, Sendable {
+    public let mountMM: Double
+    public let apertureWidth: Double
+    public let apertureHeight: Double
+    public let cornerRadiusMM: Double
+
+    public static func preset(_ formatID: String) -> Self? {
+        switch formatID {
+        case "35mm":
+            return Self(mountMM: 50.8, apertureWidth: 34.5, apertureHeight: 23, cornerRadiusMM: 1)
+        case "120":
+            return Self(mountMM: 70, apertureWidth: 56, apertureHeight: 56, cornerRadiusMM: 1)
+        default: return nil
         }
     }
 }
@@ -140,12 +247,17 @@ public struct FilmBorderGeometry: Equatable, Sendable {
 public struct PrintFrameConfiguration: Equatable, Sendable {
     public let frame: PrintFrame
     public let geometry: FilmBorderGeometry?
+    public let sheet: PaperSheetGeometry?
+    public let slideMount: SlideMountGeometry?
+    public let canvas: SocialCanvasGeometry?
     public let sheetNotches: SheetFilmNotchCode?
     public let edgePrinting: FilmEdgePrinting?
     /// The edge exposure viewed through the same stock and lamp as its rebate.
     public let edgeRGB: SIMD3<Float>
     /// Display-linear P3, converted into the photograph's output profile by the compositor.
     public let baseRGB: SIMD3<Float>
+    /// The clear film rebate printed to the paper's maximum density through a filed carrier.
+    public let rebateRGB: SIMD3<Float>
     public let detail: String
     /// Positive polyester media are smooth; the existing RC papers use a lustre approximation.
     public let hasLustre: Bool
@@ -163,8 +275,25 @@ public struct PrintFrameConfiguration: Equatable, Sendable {
         hasLustre = !paper.isPositivePaper
         let filmAvailable = definition != nil && film != nil
             && ((film?.isInstant != true && !nativeInstant) || nativeID == formatID)
-        self.frame = frame == .film && !filmAvailable || frame == .paper && !reflective ? .none : frame
+        let mount = formatID.flatMap(SlideMountGeometry.preset)
+        let slideAvailable = definition?.stock.isReversal == true && mount != nil && !nativeInstant
+        // A filed carrier prints the clear rebate of a negative; on positive paper the dark
+        // rebate of a transparency prints the same as the unexposed margin and shows nothing.
+        let carrierAvailable = reflective && !paper.isPositivePaper
+            && definition?.stock.isReversal == false && !nativeInstant
+        let available: Bool
+        switch frame {
+        case .none, .emulsion, .mount, .darkMount, .socialSquare, .socialPortrait, .socialStory: available = true
+        case .film: available = filmAvailable
+        case .slideMount: available = slideAvailable
+        case .carrier: available = carrierAvailable
+        case .paper, .paper5x7, .paper8x10, .paper5x5: available = reflective
+        }
+        self.frame = available ? frame : .none
         geometry = self.frame == .film ? film : nil
+        sheet = PaperSheetGeometry.preset(for: self.frame)
+        slideMount = self.frame == .slideMount ? mount : nil
+        canvas = SocialCanvasGeometry.preset(for: self.frame)
         sheetNotches = geometry?.isSheet == true ? definition?.sheetNotches : nil
         edgePrinting = self.frame == .film
             ? definition?.edgePrinting?.first { $0.formatID == formatID } : nil
@@ -191,6 +320,7 @@ public struct PrintFrameConfiguration: Equatable, Sendable {
         } else {
             edgeRGB = .zero
         }
+        rebateRGB = self.frame == .carrier ? paper.frameDenseRGB(viewingKelvin: viewingKelvin) ?? .zero : .zero
         switch frame {
         case .none:
             baseRGB = .zero
@@ -226,14 +356,41 @@ public struct PrintFrameConfiguration: Equatable, Sendable {
             } else {
                 detail = "\(name) · \(definition?.name ?? "Film")"
             }
-        case .paper:
+        case .slideMount:
+            // The rebate seen through the aperture around a nonmatching crop is the
+            // transparency's own maximum density, as in Film Border. The card is drawn on top.
+            if slideAvailable, let stock = definition?.stock {
+                baseRGB = SpectralRuntime.transmissionRGB(
+                    density: stock.curves.map(\.dMax), stock: stock,
+                    illuminant: viewingKelvin.map(SpectralRuntime.printLightSPD))
+                let size = mount.map { $0.mountMM == 50.8 ? "2 × 2 in" : "70 × 70 mm" } ?? ""
+                detail = "\(size) mount · \(definition?.name ?? "Film")"
+            } else {
+                baseRGB = .zero
+                detail = "Choose a slide film in 35mm or 120."
+            }
+        case .paper, .paper5x7, .paper8x10, .paper5x5:
             baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? .zero
-            detail = reflective ? "\(paper.name) · \(hasLustre ? "lustre" : "high gloss") · 4 × 6 in"
+            let size = sheet.map { "\(Int(($0.widthMM / 25.4).rounded())) × \(Int(($0.heightMM / 25.4).rounded())) in" } ?? ""
+            detail = reflective ? "\(paper.name) · \(hasLustre ? "lustre" : "high gloss") · \(size)"
                 : "Choose a reflection paper such as Ektacolor Edge or Ilfochrome."
-        case .emulsion:
+        case .carrier:
+            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? .zero
+            detail = carrierAvailable
+                ? "\(paper.name) · filed carrier · 8 × 10 in"
+                : "Choose a negative film and a reflection paper such as Ektacolor Edge."
+        case .emulsion, .mount:
             // Reflection outputs retain their modelled paper white. Other outputs use a
-            // neutral presentation mount; this style does not identify a manufactured stock.
+            // neutral presentation mount; these styles do not identify a manufactured stock.
             baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? SIMD3(repeating: 0.91)
+            detail = frame.detail
+        case .darkMount:
+            // A neutral presentation board, not the paper's own maximum density.
+            baseRGB = SIMD3(repeating: 0.02)
+            detail = frame.detail
+        case .socialSquare, .socialPortrait, .socialStory:
+            // Display white, so the post's margin merges with the feed it is shown in.
+            baseRGB = SIMD3(repeating: 1)
             detail = frame.detail
         }
     }
@@ -245,14 +402,25 @@ extension PrintPaper {
     /// lamp. Crystal Archive shares the engine's explicitly documented RA-4 curve proxy.
     /// This is the model's paper base, not a new measured substrate-reflectance claim.
     func frameBaseRGB(viewingKelvin: Float?) -> SIMD3<Float>? {
+        frameRGB(viewingKelvin: viewingKelvin, dense: false)
+    }
+
+    /// A fully exposed negative-paper border, as the clear rebate of a negative prints through
+    /// a filed carrier. Positive paper has no dark rebate exposure to print.
+    func frameDenseRGB(viewingKelvin: Float?) -> SIMD3<Float>? {
+        isPositivePaper ? nil : frameRGB(viewingKelvin: viewingKelvin, dense: true)
+    }
+
+    private func frameRGB(viewingKelvin: Float?, dense: Bool) -> SIMD3<Float>? {
         let density: SIMD3<Float>
+        func pick(_ curve: CharacteristicCurve) -> Float { dense ? curve.dMax : curve.dMin }
         switch self {
         case .ektacolorEdge:
-            density = SIMD3(Self.ra4PrintCurveRed.dMin, Self.ra4PrintCurve.dMin, Self.ra4PrintCurveBlue.dMin)
+            density = SIMD3(pick(Self.ra4PrintCurveRed), pick(Self.ra4PrintCurve), pick(Self.ra4PrintCurveBlue))
         case .enduraPremier:
-            density = SIMD3(EnduraPremierPaperSpectra.redCurve.dMin,
-                            EnduraPremierPaperSpectra.greenCurve.dMin, EnduraPremierPaperSpectra.blueCurve.dMin)
-        case .crystalArchive: density = SIMD3(repeating: Self.ra4PrintCurve.dMin)
+            density = SIMD3(pick(EnduraPremierPaperSpectra.redCurve),
+                            pick(EnduraPremierPaperSpectra.greenCurve), pick(EnduraPremierPaperSpectra.blueCurve))
+        case .crystalArchive: density = SIMD3(repeating: pick(Self.ra4PrintCurve))
         case .ilfochromeCPS1K: density = SIMD3(repeating: Self.ilfochromeNormalCurve.dMax)
         case .ilfochromeCLM1K: density = SIMD3(repeating: Self.ilfochromeMediumCurve.dMax)
         default: return nil

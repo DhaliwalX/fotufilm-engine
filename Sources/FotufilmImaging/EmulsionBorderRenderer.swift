@@ -4,13 +4,19 @@ import CoreGraphics
 
 /// A reference-inspired presentation style, not a measured emulsion or transfer process.
 /// The edge field is fixed in units of 1/1000 of the photograph's short side so menu previews
-/// and full exports share the same wear. Only the border is rasterised; the photo is copied
-/// at its original resolution by PrintFrameRenderer afterwards.
+/// and full exports share the same wear. The photograph is copied at its original resolution
+/// by PrintFrameRenderer first; the band is then laid over it, and its inner edge bleeds a
+/// soft, uneven way into the picture, as a lifted emulsion's image fades into its dark rim
+/// rather than stopping at a cut line. Beyond `rim` the photograph is untouched.
 enum EmulsionBorderRenderer {
+    /// How far into the photograph the band can reach, as a fraction of its short side.
+    static let rim: CGFloat = 0.045
+
     static func draw(in context: CGContext, around photo: CGRect) -> Bool {
         let unit = min(photo.width, photo.height) / 1000
         let w = Float(photo.width / unit), h = Float(photo.height / unit)
         let fringe: CGFloat = 58
+        let reach = Float(rim * 1000)
         // Bound the texture allocation, including extreme panoramas, independently of export
         // resolution. Sampling still uses the same normalised coordinates at every size.
         let step = max(1, (max(CGFloat(w), CGFloat(h)) + 2 * fringe) / 2048)
@@ -21,8 +27,9 @@ enum EmulsionBorderRenderer {
             let y = h / 2 + Float(fringe) - (Float(row) + 0.5) * Float(step)
             for column in 0..<width {
                 let x = (Float(column) + 0.5) * Float(step) - Float(fringe) - w / 2
-                // The middle is covered by the original photo. Avoid evaluating the field there.
-                if abs(x) < w / 2 && abs(y) < h / 2 { continue }
+                // The band reaches at most `rim` into the photograph; the rest of the picture is
+                // left exactly as copied, so the field is not evaluated there.
+                if abs(x) < w / 2 - reach && abs(y) < h / 2 - reach { continue }
                 let qx = abs(x) - w / 2 - 32 + 23
                 let qy = abs(y) - h / 2 - 32 + 23
                 let ox = max(qx, 0), oy = max(qy, 0)
@@ -39,7 +46,14 @@ enum EmulsionBorderRenderer {
                 let residue = (1 - smooth(-3, 15, d))
                     * smooth(-0.75, 0.8, tooth * 0.7 + fine * 0.75)
                 let wear = smooth(-9, 2, d) * max(0, fine + tooth * 0.45) * 0.53
-                let alpha = min(1, max(solid * (1 - wear), residue * 0.8))
+                // Inside the photograph the band thins out over the rim: dense against the edge,
+                // gone `reach` units in, with the same coarse and toothed noise breaking the
+                // line up so the picture's edge is never straight. Zero effect outside.
+                // `distance` is zero at the band's outer edge, 32 units beyond the photograph.
+                let inside = distance + 32
+                let bite = 15 * coarse + 5 * tooth + 1.5 * fine
+                let fade = smooth(-reach - bite * 0.5, -5 - bite, inside)
+                let alpha = min(1, max(solid * (1 - wear), residue * 0.8)) * fade
                 if alpha < 0.004 { continue }
 
                 // A few subdued brown traces collect on the left edge; no light leak or stain
@@ -68,6 +82,14 @@ enum EmulsionBorderRenderer {
                                   provider: provider, decode: nil, shouldInterpolate: true,
                                   intent: .defaultIntent) else { return false }
         context.saveGState()
+        // The texture is resampled onto the canvas, so hold the contract exactly: nothing lands
+        // deeper than `rim` into the photograph, whatever the filter's footprint.
+        let keep = ceil(min(photo.width, photo.height) * rim)
+        let clip = CGMutablePath()
+        clip.addRect(CGRect(x: 0, y: 0, width: CGFloat(context.width), height: CGFloat(context.height)))
+        clip.addRect(photo.insetBy(dx: keep, dy: keep))
+        context.addPath(clip)
+        context.clip(using: .evenOdd)
         context.interpolationQuality = .high
         context.draw(image, in: CGRect(x: photo.minX - fringe * unit,
                                       y: photo.maxY + fringe * unit - CGFloat(height) * unit * step,
@@ -85,7 +107,7 @@ enum EmulsionBorderRenderer {
         1 - smooth(0, radius, abs(value - centre))
     }
 
-    private static func noise(_ x: Float, _ y: Float, seed: UInt32) -> Float {
+    static func noise(_ x: Float, _ y: Float, seed: UInt32) -> Float {
         let ix = Int32(floor(x)), iy = Int32(floor(y))
         let fx = x - Float(ix), fy = y - Float(iy)
         let u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy)
