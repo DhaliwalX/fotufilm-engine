@@ -109,7 +109,7 @@ final class SettingsSheetController: SessionViewController {
     }
 
     private var structureSignature: String {
-        "\(AppSettings.isFilmModelAdjusted)-\(ProAccess.isPro)-\(ProAccess.purchased)"
+        "\(AppSettings.isFilmModelAdjusted)"
     }
 
     private func refresh() {
@@ -144,29 +144,11 @@ final class SettingsSheetController: SessionViewController {
         }
         #else
         var result: [FormSectionView] = []
-        #if os(iOS)
-        if !ProAccess.purchased { result.append(proPurchase()) }
-        #endif
         result += [newPhotos()] + output() + [negativePreview()] + filmModel()
         result.append(reset())
         return result
         #endif
     }
-
-    #if os(iOS)
-    private func proPurchase() -> FormSectionView {
-        let section = makeSection("Fotufilm Pro")
-        section.add(ButtonRow("Unlock Fotufilm Pro…") {
-            ProGate.present()
-        })
-        section.add(NoteRow(
-            "One purchase opens \(ProCatalogue.unlockedFilmClaim) more films, "
-                + "video development, the Lab, custom films, and lens filters."
-        ))
-        return section
-    }
-    #endif
-
 
     // MARK: - New photos
 
@@ -177,8 +159,7 @@ final class SettingsSheetController: SessionViewController {
         // what every new photograph opens on, and one that will not load is a setting that
         // silently does nothing.
         let films = [(title: StockPreset.noFilmName, value: StockPreset.noFilmID)]
-            + StockPreset.all.filter { ProAccess.allowsStock($0.id) }
-                .map { (title: $0.name, value: $0.id) }
+            + StockPreset.all.map { (title: $0.name, value: $0.id) }
         section.add(PopUpRow<String>(
             "Starting Film", options: films,
             get: { AppSettings.shared.stockID },

@@ -85,10 +85,10 @@ struct StockPreset: Identifiable {
     static let houseStockID = "gold200"
 
     static var houseDefaultID: String {
-        if all.contains(where: { $0.id == houseStockID }), ProAccess.allowsStock(houseStockID) {
+        if all.contains(where: { $0.id == houseStockID }) {
             return houseStockID
         }
-        return (all.first { ProAccess.allowsStock($0.id) } ?? all.first)?.id ?? ""
+        return all.first?.id ?? ""
     }
 
     /// What a new photograph starts on: the user's choice in settings, or the house default when
@@ -96,8 +96,7 @@ struct StockPreset: Identifiable {
     /// refunded purchase leaves behind.
     static var defaultID: String {
         if let stored = AppSettings.storedStockID,
-           all.contains(where: { $0.id == stored }),
-           ProAccess.allowsStock(stored) {
+           all.contains(where: { $0.id == stored }) {
             return stored
         }
         return houseDefaultID
@@ -140,9 +139,7 @@ struct StockPreset: Identifiable {
     /// What the camera opens on.
     static var cameraDefaultID: String {
         if let loaded = AppSettings.storedCameraStockID,
-           isNoFilm(loaded)
-            || (all.contains { $0.id == loaded }
-                && ProAccess.allowsStock(loaded)) {
+           isNoFilm(loaded) || all.contains(where: { $0.id == loaded }) {
             return loaded
         }
         let id = defaultID
@@ -159,12 +156,7 @@ struct FilmChoice: Identifiable, Hashable {
 
     /// Every stock the pack carries, in the pack's own order.
     static var stocks: [FilmChoice] {
-        #if os(macOS)
-        let available = StockPreset.all.filter { ProAccess.allowsStock($0.id) }
-        #else
-        let available = StockPreset.all
-        #endif
-        return available.map {
+        StockPreset.all.map {
             FilmChoice(id: $0.id, name: $0.name, subtitle: $0.subtitle)
         }
     }
@@ -271,10 +263,7 @@ struct EditState: Equatable {
     /// Returns an openable copy, substituting the default stock when current purchase access does
     /// not allow the stored stock. The persisted record remains unchanged.
     func openableByPurchase() -> EditState {
-        guard !ProAccess.allowsStock(stockID) else { return self }
-        var opened = self
-        opened.stockID = StockPreset.defaultID
-        return opened
+        self
     }
 
     var stockID = StockPreset.defaultID

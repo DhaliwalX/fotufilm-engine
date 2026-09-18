@@ -606,9 +606,7 @@ final class DesktopEditorModel {
         autoStockRanking = nil
         guard AppSettings.storedAutoStock else { return }
         let state = edit
-        let candidates = StockPreset.all.filter {
-            ProAccess.allowsStock($0.id)
-        }
+        let candidates = StockPreset.all
         StockPreferenceStore.shared.load()
         let weights = StockPreferenceStore.shared.weights
         autoStockTask = Task { [weak self] in

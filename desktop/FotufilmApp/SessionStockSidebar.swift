@@ -221,7 +221,7 @@ final class StockSidebarViewController: SessionViewController {
 
         for preset in matches {
             let id = preset.id
-            let locked = !ProAccess.allowsStock(id)
+            let locked = false
             let row = StockRowView(choice: preset, locked: locked) {
                 [weak self] in
                 self?.choose(id)
@@ -260,7 +260,7 @@ final class StockSidebarViewController: SessionViewController {
                 [weak self] in
                 self?.choose(id)
             }
-            tile.setLocked(!ProAccess.allowsStock(id))
+            tile.setLocked(false)
             strip.column.addArrangedSubview(tile)
             NSLayoutConstraint.activate([
                 tile.widthAnchor.constraint(
@@ -317,11 +317,6 @@ final class StockSidebarViewController: SessionViewController {
     }
 
     func refresh() {
-        #if canImport(UIKit)
-        // TestFlight and Xcode builds remain complimentary but still expose the purchase sheet for
-        // App Review. Only an owned transaction removes the entry point.
-        upgrade.isHidden = ProAccess.purchased
-        #endif
         let selectedID = model.edit.stockID
         // The chosen film shows the canvas's own print until its small copy has been developed, so
         // the column is never blank about the one thing the user just clicked.

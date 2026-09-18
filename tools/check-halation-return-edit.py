@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory(prefix='fotufilm-halation-edit-') as directory:
     executable = temporary / 'check'
     files = ['macos/Tests/HalationReturnEdit.swift', 'shared/FotufilmApp/EditState.swift',
              'shared/FotufilmApp/EditControlAccess.swift', 'shared/FotufilmApp/EditStateCodable.swift', 'shared/FotufilmApp/FilterChoice.swift',
-             'shared/FotufilmApp/ProAccess.swift', 'shared/FotufilmApp/SelectiveState.swift', 'shared/FotufilmApp/UndertoneAxis.swift']
+             'shared/FotufilmApp/SelectiveState.swift', 'shared/FotufilmApp/UndertoneAxis.swift']
     subprocess.run(['xcrun', 'swiftc', '-O', '-parse-as-library', '-sdk', sdk,
                     '-I', str(build / 'Modules'), '-I', str(root / 'Sources/FotufilmHalide/include'),
                     '-L', str(halide / 'lib'), '-lHalide', '-lc++',

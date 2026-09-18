@@ -14,6 +14,7 @@ enum AppSettings {
     static let storedCouplerBarrierGreenBlue = 1.0
     static let storedCouplerSelf = 1.0
     static let storedHalationModel = HalationModel.legacy
+    static let storedGrainModel = GrainModel.clumpField
     static let storedEstimatedHalationEnabled = false
     static let storedNegativeViewing = NegativeViewing.scanner
 }
