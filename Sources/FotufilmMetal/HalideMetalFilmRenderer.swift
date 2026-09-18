@@ -923,6 +923,7 @@ public final class HalideMetalFilmRenderer {
         let input = staging.inputPointer
         let inputHandle = staging.inputHandle
 
+        let metersOnLightBands = Self.metersOnLightBands(invocation, fields: plan.fields)
         let measureStart = Date()
         let bandRows = max(1, min(height, staging.inputPixels / width))
         // The bands fill the tile input and are measured where they land, on the device; the
@@ -930,6 +931,7 @@ public final class HalideMetalFilmRenderer {
         let measured = withoutActuallyEscaping(readTile) { readTile in
             measureWholeFrame(
                 &invocation, width: width, height: height, bandRows: bandRows,
+                toneBase: !metersOnLightBands,
                 cancelled: cancelled, progress: progress,
                 band: { rows in
                     readTile(rows, 0..<width, UnsafeMutableBufferPointer(
@@ -943,7 +945,7 @@ public final class HalideMetalFilmRenderer {
                 })
         }
         guard measured else { return false }
-        let measureSeconds = Date().timeIntervalSince(measureStart)
+        var measureSeconds = Date().timeIntervalSince(measureStart)
 
         let across = (width + plan.tileWidth - 1) / plan.tileWidth
         let down = (height + plan.tileRows - 1) / plan.tileRows
@@ -967,6 +969,8 @@ public final class HalideMetalFilmRenderer {
             let gridHeight = (height + stride - 1) / stride
             var grid = [Float](repeating: 0, count: gridWidth * gridHeight * 3)
             let lightMask = Self.lightMask(invocation.featureMask)
+            var toneBase = metersOnLightBands
+                ? ToneBaseWalk(invocation, bandRows: lightBand) : nil
             for band in 0..<lightBands {
                 if cancelled() { return false }
                 progress?(.developing(index: band, count: steps))
@@ -978,6 +982,14 @@ public final class HalideMetalFilmRenderer {
                 readTile(from..<to, 0..<width, UnsafeMutableBufferPointer(
                     start: input, count: (to - from) * width * 4))
                 readSeconds += Date().timeIntervalSince(readStart)
+                if toneBase != nil {
+                    // The band's own rows, not its apron: each frame row is metered once.
+                    let toneStart = Date()
+                    toneBase!.add(invocation, rows: top..<bottom, bufferRow: from,
+                                  width: width, handle: inputHandle,
+                                  host: UnsafePointer(input))
+                    measureSeconds += Date().timeIntervalSince(toneStart)
+                }
                 // The band's grid starts at the cell holding row `from - from % stride`; the
                 // rows it delivers start at `top`, a whole number of cells further in.
                 let phase = from % stride
@@ -1003,6 +1015,8 @@ public final class HalideMetalFilmRenderer {
                 guard ok else { return false }
             }
             if cancelled() { return false }
+            // Before the extended configuration is taken: the tiles read the metered base.
+            if let toneBase { invocation.setToneBase(toneBase.measurement) }
             let gridStart = Date()
             let fieldsFloats = radii.withUnsafeBufferPointer {
                 fotufilm_halide_metal_halation_fields_floats(
@@ -1119,8 +1133,9 @@ public final class HalideMetalFilmRenderer {
                 width, height, tiles, plan.tileWidth, plan.tileRows, plan.apron,
                 Double(developed) / Double(width * height),
                 (plan.fields
-                    ? String(format: ", %d light band(s) of %d rows (apron %d)",
-                             lightBands, plan.lightRows, plan.lightApron)
+                    ? String(format: ", %d light band(s) of %d rows (apron %d)%@",
+                             lightBands, plan.lightRows, plan.lightApron,
+                             metersOnLightBands ? ", metered on the bands" : "")
                     : "") as NSString,
                 measureSeconds * 1000, readSeconds * 1000, lightSeconds * 1000,
                 gridSeconds * 1000, engineSeconds * 1000, writeSeconds * 1000,
@@ -1363,6 +1378,71 @@ public final class HalideMetalFilmRenderer {
             && height <= defaultMemoryBudget() / stripBytesPerRow(width: width)
     }
 
+    /// Whether a tiled develop meters the tone base on the fields road's light bands rather than
+    /// in a walk of its own. The road walks the whole frame for its light anyway, and the base
+    /// can ride those bands when the light cannot read what the metering writes: the tone grid
+    /// keys the highlight and shadow masks, which are at rest, and the screen levels land in the
+    /// print stage. The glare mean is scene light and has to be in hand before the light is
+    /// formed, so a host-measured flare keeps the separate walk — and meters on it, since the
+    /// rows are going by regardless.
+    static func metersOnLightBands(_ invocation: FilmEngineInvocation, fields: Bool) -> Bool {
+        fields && invocation.sceneMeteringActive
+            && !invocation.toneControlsActive
+            && (invocation.featureMask & FilmEngineFeature.flare == 0
+                || invocation.featureMask & FilmEngineFeature.flareMeasure != 0)
+    }
+
+    /// The regional tone base measured a band at a time: the kernel's per-row cell sums where
+    /// there is a device to run it on, the host's own walk where there is not. A row's sums are
+    /// complete before they leave the kernel and every row is added once, in order, so what the
+    /// bands were — a measure walk's, or the fields road's light bands with their aprons — is
+    /// invisible to the result.
+    private struct ToneBaseWalk {
+        private(set) var measurement: ToneBaseMeasurement
+        private var cellSums: [Float]
+
+        /// `bandRows` is the most rows one call will measure.
+        init(_ invocation: FilmEngineInvocation, bandRows: Int) {
+            measurement = invocation.toneBaseMeasurement()
+            cellSums = [Float](repeating: 0, count: max(1, bandRows) * measurement.gridWidth)
+        }
+
+        /// Adds frame rows `rows` from a buffer whose first row is frame row `bufferRow`
+        /// (`bufferRow <= rows.lowerBound`): a band with rows above it — a light band's apron —
+        /// is measured from its top and the sums of the rows before `rows` are dropped. The
+        /// kernel reads the device buffer `handle`, or takes the host rows at `host` across when
+        /// there is none; the host rows are also the walk's own fallback when the kernel fails.
+        /// Returns false when nothing could be measured.
+        @discardableResult
+        mutating func add(_ invocation: FilmEngineInvocation, rows: Range<Int>,
+                          bufferRow: Int, width: Int,
+                          handle: UInt64, host: UnsafePointer<Float>?) -> Bool {
+            guard !rows.isEmpty else { return true }
+            let gridWidth = measurement.gridWidth
+            let skipped = rows.lowerBound - bufferRow
+            let measuredRows = rows.upperBound - bufferRow
+            precondition(skipped >= 0 && measuredRows * gridWidth <= cellSums.count)
+            let onDevice = cellSums.withUnsafeMutableBufferPointer { out in
+                invocation.configuration.withUnsafeBufferPointer { configuration in
+                    fotufilm_halide_metal_measure_tone_rows(
+                        handle, handle == 0 ? host : nil, out.baseAddress,
+                        Int32(gridWidth), Int32(width),
+                        Int32(measuredRows), configuration.baseAddress) == 0
+                }
+            }
+            if onDevice {
+                cellSums.withUnsafeBufferPointer {
+                    measurement.add(cellRowSums: $0.baseAddress! + skipped * gridWidth,
+                                    rows: rows)
+                }
+                return true
+            }
+            guard let host else { return false }
+            measurement.add(linearRGBA: host + skipped * width * 4, rows: rows)
+            return true
+        }
+    }
+
     /// The whole-frame measurements a scene-referred render makes before its first strip: the
     /// regional tone base, then the exact veiling-glare mean. Both walk the frame in bands of at
     /// most `bandRows` rows, each lent by `band` — a streaming render fills a strip buffer and
@@ -1372,6 +1452,7 @@ public final class HalideMetalFilmRenderer {
     private func measureWholeFrame(
         _ invocation: inout FilmEngineInvocation,
         width: Int, height: Int, bandRows: Int,
+        toneBase: Bool = true,
         cancelled: () -> Bool,
         progress: ((FilmRenderPhase) -> Void)?,
         band: (Range<Int>) -> UnsafePointer<Float>,
@@ -1386,34 +1467,23 @@ public final class HalideMetalFilmRenderer {
             return run(0, band(rows)) == 0
         }
 
-        if invocation.sceneMeteringActive {
-            var measurement = invocation.toneBaseMeasurement()
-            let gridWidth = measurement.gridWidth
-            var cellSums = [Float](repeating: 0, count: bandRows * gridWidth)
+        if toneBase, invocation.sceneMeteringActive {
+            var walk = ToneBaseWalk(invocation, bandRows: bandRows)
             var row = 0
             while row < height {
                 if cancelled() { return false }
                 let upper = min(height, row + bandRows)
-                let onDevice = cellSums.withUnsafeMutableBufferPointer { out in
-                    measured(row..<upper) { handle, host in
-                        invocation.configuration.withUnsafeBufferPointer { configuration in
-                            fotufilm_halide_metal_measure_tone_rows(
-                                handle, host, out.baseAddress,
-                                Int32(gridWidth), Int32(width),
-                                Int32(upper - row), configuration.baseAddress)
-                        }
-                    }
-                }
-                if onDevice {
-                    cellSums.withUnsafeBufferPointer {
-                        measurement.add(cellRowSums: $0.baseAddress!, rows: row..<upper)
-                    }
+                if let deviceBand, walk.add(invocation, rows: row..<upper, bufferRow: row,
+                                            width: width, handle: deviceBand(row..<upper),
+                                            host: nil) {
+                    // Measured where the band landed, on the device.
                 } else {
-                    measurement.add(linearRGBA: band(row..<upper), rows: row..<upper)
+                    walk.add(invocation, rows: row..<upper, bufferRow: row,
+                             width: width, handle: 0, host: band(row..<upper))
                 }
                 row = upper
             }
-            invocation.setToneBase(measurement)
+            invocation.setToneBase(walk.measurement)
         }
 
         // Nothing to do when the kernel is going to measure the frame itself, and it must not be

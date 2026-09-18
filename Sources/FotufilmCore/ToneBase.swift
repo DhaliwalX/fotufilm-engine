@@ -246,12 +246,16 @@ public struct ToneBaseMeasurement {
 }
 
 extension FilmEngineInvocation {
-    /// Whether the tone controls are doing anything *and* asked to be keyed locally.
-    public var localToneActive: Bool {
-        localToneEnabled
-            && (configuration[Self.sceneAdjustOffset] != 0
-                || configuration[Self.sceneAdjustOffset + 1] != 0)
+    /// Whether the highlight and shadow controls are moving anything. The tone grid keys
+    /// those two masks and nothing else, so this is also whether the light a scene forms reads
+    /// the metered base: at rest, the masks lift nothing whatever the grid holds.
+    public var toneControlsActive: Bool {
+        configuration[Self.sceneAdjustOffset] != 0
+            || configuration[Self.sceneAdjustOffset + 1] != 0
     }
+
+    /// Whether the tone controls are doing anything *and* asked to be keyed locally.
+    public var localToneActive: Bool { localToneEnabled && toneControlsActive }
 
     /// Auto Levels and local tone share one whole-frame measurement on CPU and Metal.
     public var sceneMeteringActive: Bool { localToneActive || screenMeterStock != nil }
