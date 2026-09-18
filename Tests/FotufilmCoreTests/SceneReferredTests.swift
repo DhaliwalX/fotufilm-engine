@@ -196,6 +196,49 @@ final class SceneReferredTests: XCTestCase {
         }
     }
 
+    /// The fields road meters the tone base on its light bands when the light cannot read the
+    /// result, and in a walk of its own when it can. Either way the frame it develops is the
+    /// staged develop's frame, bit for bit.
+    func testMeteredFramesMatchWholeFrameOnTheFieldsRoad() throws {
+        guard let gpu = HalideMetalFilmRenderer.shared else { throw XCTSkip("no Metal") }
+        let width = 640, height = 3000
+        let pixels = scene(width: width, height: height, peak: 9)
+        let stock = TestStocks.negative
+        var levelled = FotufilmEngine.Options()
+        levelled.paper = .screen
+        levelled.digitalReference = .autoLevels
+        var keyed = levelled
+        keyed.highlights = -0.5
+        keyed.shadows = 0.4
+        var global = keyed
+        global.localTone = false
+        setenv("FOTUFILM_FORCE_FIELDS", "1", 1)
+        defer { unsetenv("FOTUFILM_FORCE_FIELDS") }
+        for (name, options, onTheBands) in [
+            ("auto levels", levelled, true),
+            ("local tone", keyed, false),
+            ("global tone", global, false),
+        ] {
+            let invocation = FilmEngineInvocation(
+                stock: stock, options: options, width: width, height: height)
+            XCTAssertTrue(invocation.sceneMeteringActive, "\(name) does not meter")
+            XCTAssertEqual(
+                HalideMetalFilmRenderer.metersOnLightBands(invocation, fields: true),
+                onTheBands, "\(name) meters in the wrong walk")
+            let whole = try XCTUnwrap(gpu.processLinearFloat(
+                pixels, width: width, height: height, stock: stock,
+                options: options, memoryBudget: 1 << 30))
+            var strips = 0
+            let fielded = try XCTUnwrap(gpu.processLinearFloat(
+                pixels, width: width, height: height, stock: stock,
+                options: options, memoryBudget: 256 << 20,
+                progress: { if case .developing(_, let c) = $0 { strips = c } }))
+            XCTAssertGreaterThan(strips, 1, "\(name) did not actually tile")
+            XCTAssertEqual(maxDifference(whole, fielded), 0,
+                           "\(name) strays from the whole frame")
+        }
+    }
+
     func testStillRendererRespondsToHDRExposure() throws {
         guard let gpu = HalideMetalFilmRenderer.shared else { throw XCTSkip("no Metal") }
         let side = 64
