@@ -237,9 +237,15 @@ public final class HalideMetalFilmRenderer {
             guard input.storageMode == .shared else { return nil }
             let pixels = input.contents().assumingMemoryBound(to: Float.self)
             if invocation.sceneMeteringActive {
-                var measurement = invocation.toneBaseMeasurement()
-                measurement.add(linearRGBA: pixels, rows: 0..<height)
-                invocation.setToneBase(measurement)
+                // The frame is already on the device, so the measure kernel reads it there —
+                // the same kernel, and so the same base, a still's tiles and strips meter with.
+                // The host walk stays as the fallback for a build with no kernel to run.
+                var walk = ToneBaseWalk(invocation, bandRows: height)
+                walk.add(invocation, rows: 0..<height, bufferRow: 0, width: width,
+                         handle: UInt64(UInt(bitPattern:
+                            Unmanaged.passUnretained(input as AnyObject).toOpaque())),
+                         host: UnsafePointer(pixels))
+                invocation.setToneBase(walk.measurement)
             }
             if invocation.featureMask & FilmEngineFeature.flare != 0 {
                 if let flareFrame {
