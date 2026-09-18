@@ -32,16 +32,16 @@ linkmap_for_arch() {
 REQUIRED_SYMBOLS=(
   fotufilm_halide_metal_available
   fotufilm_halide_ios_color
+  fotufilm_halide_ios_color_float
   fotufilm_halide_ios_color_float_exact
+  fotufilm_halide_ios_color_float_realtime
   fotufilm_halide_ios_monochrome
   fotufilm_halide_ios_monochrome_float_exact
-  fotufilm_halide_ios_negative
-  fotufilm_halide_ios_slide
-  fotufilm_halide_ios_slide_mono
-  # The donor family's representative. It is the variant a stock that coats a 4th Color Layer
-  # selects for a still, and it is the newest family, so it is the one a half-updated link list
-  # drops first — which would not fail the link visibly, it would develop those stocks red.
-  fotufilm_halide_ios_negative_donor
+  fotufilm_halide_ios_color_head
+  fotufilm_halide_ios_color_tail
+  # The newest class is the one a half-updated link list drops first — which would not fail the
+  # link visibly, it would refuse those frames.
+  fotufilm_halide_ios_color_float_fields_disc
 )
 
 # Half the kernel set is linked into FotufilmKernels.framework rather than into the app: App Store

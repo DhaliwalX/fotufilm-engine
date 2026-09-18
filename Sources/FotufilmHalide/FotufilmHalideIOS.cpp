@@ -136,7 +136,7 @@ using FrameFunction = int (*)(
     float, int32_t, float, int32_t, float, int32_t, float, int32_t, float, float, int32_t, int32_t, uint32_t,
     int32_t, int32_t,
     int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
-    int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
+    int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
     halide_buffer_t *);
 
 struct AotVariant {
@@ -201,21 +201,9 @@ FrameFunction select_variant(int32_t feature_mask) {
             if (extra == 0) break;
         }
     }
-    // A mottle request no twin serves degrades to its sharp-only variant rather than refusing
-    // the frame. This is a *lossy* rescue — the host has already moved a share of the grain's
-    // variance to the coarse field, and the serving variant lays only the sharp one, so the
-    // frame comes back with quieter grain than asked for. The engine keeps every shipping path
-    // inside the twin family (full-span realtime, no disc model), so this fires only for a
-    // combination nothing forms today; a dead render would hide behind the same rarity and cost
-    // a user their frame when it surfaced.
-    if (!best && (wanted & FOTUFILM_FRAME_GRAIN_MOTTLE)) {
-        return select_variant(feature_mask & ~FOTUFILM_FRAME_GRAIN_MOTTLE);
-    }
-    // `FOTUFILM_TRACE_VARIANT=1` names what a render actually ran, and how far the served variant
-    // overshot what it asked for. Every extra bit is a stage the frame walks through with
-    // nothing to do — the generated pipelines carry each stage unconditionally and collapse it
-    // to an identity at radius zero, and an identity over a 4K frame is still a pass over a 4K
-    // frame. It is printed once per distinct request, not once per frame.
+    // `FOTUFILM_TRACE_VARIANT=1` names what a render actually ran and how far the served variant
+    // overshot what it asked for. The extra bits are stages compiled in and bypassed at run
+    // time. It is printed once per distinct request, not once per frame.
     static std::set<int32_t> traced;
     static const bool tracing = [] {
         const char *env = getenv("FOTUFILM_TRACE_VARIANT");
@@ -291,8 +279,6 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     const float grain_sigma = std::max(configuration[kGrainSigmaOffset], 0.151f);
     const int32_t grain_radius = std::max(0, int32_t(configuration[kGrainRadiusOffset]));
     const float grain_lambda = configuration[kGrainLambdaOffset];
-    // Read by the `_mottle` twins alone; every other variant takes them as the harmless unused
-    // parameters the shared signature is built from.
     const float mottle_lambda = configuration[FOTUFILM_CONFIG_MOTTLE_LAMBDA];
     const int32_t mottle_radius = std::max(
         0, int32_t(configuration[FOTUFILM_CONFIG_MOTTLE_RADIUS]));
@@ -356,7 +342,7 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     strided_radius[0], strided_radius[1], strided_radius[2],                \
     diffusion_stride[0], diffusion_stride[1], diffusion_stride[2],          \
     diffusion_strided_radius[0], diffusion_strided_radius[1],               \
-    diffusion_strided_radius[2]
+    diffusion_strided_radius[2], feature_mask
     FrameFunction pipeline = select_variant(feature_mask);
     if (!pipeline) return -3;
 #if FOTUFILM_AOT_WINDOWED_HOST
@@ -388,6 +374,10 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     // Screened adjacency and broad inter-layer transport use the general spatial graph.
     const bool supports_windowed_transport = configuration[FOTUFILM_CONFIG_ADJACENCY_MODEL] < 0.5f
         && configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT] == 0;
+    // A twin is compiled from the stage set the reach above bounds, so a request that asks for
+    // a stage outside it — one whose reach this shim does not know — stays on the full-frame
+    // variant.
+    const int32_t wanted_stages = feature_mask & FOTUFILM_VARIANT_STAGE_BITS;
     if (windowed_enabled && supports_windowed_transport
         && width >= 32 && height >= fotufilm::kWindowStorageRows
         && origin_x == 0 && origin_y == 0 && !wants_extended
@@ -397,9 +387,10 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
         && out->dim[0].extent == width && out->dim[1].extent == height
         && std::max(image_reach, grain_reach) <= fotufilm::kWindowMaximumReach) {
 #define FOTUFILM_PICK_WINDOWED(variant_name, variant_mask) \
-        if (pipeline == fotufilm_halide_ios_##variant_name) \
+        if (pipeline == fotufilm_halide_ios_##variant_name \
+            && (wanted_stages & ~(variant_mask)) == 0) \
             pipeline = fotufilm_halide_ios_##variant_name##_windowed;
-        FOTUFILM_AOT_BASIC_VARIANTS(FOTUFILM_PICK_WINDOWED)
+        FOTUFILM_AOT_WINDOWED_VARIANTS(FOTUFILM_PICK_WINDOWED)
 #undef FOTUFILM_PICK_WINDOWED
     }
     if (pipeline != general_pipeline && state.last_windowed_trace_mask != feature_mask) {
@@ -441,8 +432,8 @@ bool valid_flare_mean(const float *configuration, int32_t feature_mask) {
 }
 
 /// Refuse the backend before a generated-kernel ABI mismatch can reach Halide's aborting default
-/// error handler. The negative variant represents every byte-input realtime kernel's exposure LUT
-/// contract; generated argument order is not stable, so identify the buffer by name.
+/// error handler. The byte-input colour variant represents every byte-input realtime kernel's
+/// exposure LUT contract; generated argument order is not stable, so identify the buffer by name.
 bool exposure_lut_contract_matches(const halide_filter_metadata_t *metadata,
                                    uint8_t expected_bits) {
     if (!metadata || metadata->version != halide_filter_metadata_t::VERSION
@@ -463,7 +454,7 @@ bool exposure_lut_contract_matches(const halide_filter_metadata_t *metadata,
 bool valid_exposure_lut_contracts() {
     const uint8_t byte_bits = FOTUFILM_AOT_HALF_EXPOSURE_LUT ? 16 : 32;
     return exposure_lut_contract_matches(
-               fotufilm_halide_ios_negative_metadata(), byte_bits)
+               fotufilm_halide_ios_color_metadata(), byte_bits)
         && exposure_lut_contract_matches(
                fotufilm_halide_ios_color_float_realtime_metadata(), 32);
 }
@@ -1057,8 +1048,7 @@ extern "C" int32_t fotufilm_halide_metal_process_buffers_tail(
         density_buffer.set_device_dirty();
         // The grain mixture rides the tail with the grain it belongs to: the host has
         // already split the published granularity's variance between the two fields, so a
-        // tail that dropped the bit would render the quiet half of the mixture. Served by
-        // the `_tail_mottle` twins.
+        // tail that dropped the bit would render the quiet half of the mixture.
         // Exactly FOTUFILM_AOT_TAIL: grain and the enlarger that images it, in that
         // order. Both the grain model and the mixture ride through, so the tail
         // lays the field the frame actually asked for.

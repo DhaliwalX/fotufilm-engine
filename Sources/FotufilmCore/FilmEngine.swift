@@ -28,10 +28,8 @@ public enum FilmEngineFeature {
     /// pipeline costs every render its compile time even when nothing selects it.
     public static let discGrain: Int32 = Int32(FOTUFILM_FRAME_DISC_GRAIN)
     /// The grain-size mixture's coarse second clump field; mirrors
-    /// FOTUFILM_FRAME_GRAIN_MOTTLE. Served ahead-of-time by the `_mottle`
-    /// twins in FotufilmHalide.h, on device as well as under the JIT. The host
-    /// suppresses the stage wherever the twins' family does not reach — the
-    /// disc model, and any span but the full one — so a request outside it
+    /// FOTUFILM_FRAME_GRAIN_MOTTLE. The host suppresses the stage under the
+    /// disc model and in any span but the full one, so a request there
     /// renders the single-radius field at full strength rather than a
     /// quieter half of the mixture.
     public static let grainMottle: Int32 = Int32(FOTUFILM_FRAME_GRAIN_MOTTLE)
@@ -1091,11 +1089,11 @@ public struct FilmEngineInvocation {
         // coarse mottle, each corrected through the 48 µm aperture at its own
         // size — so the sum reads back the published figure whatever the split.
         // Suppressed — share and split together, so the sharp field keeps its whole
-        // amplitude — wherever the path cannot lay the coarse field: the Boolean disc
-        // model carries the emulsion's texture itself, and only the full span's AOT
-        // family compiles the stage (the `_mottle` twins in FotufilmHalide.h). A span
-        // or disc render with a mottle look therefore renders the single-radius field
-        // at full strength rather than a quieter half of the mixture.
+        // amplitude — where the coarse field is not laid: the Boolean disc model
+        // carries the emulsion's texture itself, and the spans keep to the single
+        // field. A span or disc render with a mottle look therefore renders the
+        // single-radius field at full strength rather than a quieter half of the
+        // mixture.
         let discWillRender = options.grainModel == .discs
             && stock.grainDensityLaw == .silver
             && stock.grainSizeMM * pxPerMM >= 1
@@ -1261,10 +1259,9 @@ public struct FilmEngineInvocation {
             // how much *dye* each one forms, so it belongs to a chromogenic colour emulsion and
             // to nothing else: the monochrome schedule develops one record, and the Boolean disc
             // model is for materials whose image is opaque silver rather than a dye cloud. Both
-            // are gated here rather than left to the stocks, so the AOT set needs no monochrome
-            // donor twin. The crystal population is different: it rides the disc family on every
-            // material, so a donor stock developed with crystals asks for both bits at once, and
-            // the `_donor_disc` twins in aot-variants.json exist to serve exactly that frame.
+            // are gated here rather than left to the stocks. The crystal population is different:
+            // it rides the disc family on every material, so a donor stock developed with
+            // crystals asks for both bits at once, which every still class's `_disc` twin serves.
             && !stock.isMonochrome && stock.grainDensityLaw != .silver
         if donorActive { featureMask |= FilmEngineFeature.donorLayer }
         if (couplersActive || donorActive) && max(couplerRadius, fringeRadius) > 0 {

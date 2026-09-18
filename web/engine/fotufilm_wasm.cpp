@@ -138,8 +138,6 @@ int fotufilm_wasm_render(float *input, float *output, int32_t width, int32_t hei
     const float grain_sigma = max_f(c[FOTUFILM_CONFIG_GRAIN_SIGMA], kSigmaFloor);
     const int32_t grain_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_GRAIN_RADIUS]);
     const float grain_lambda = c[FOTUFILM_CONFIG_GRAIN_LAMBDA];
-    // Read by the `_mottle` twins alone; this kernel takes them as the unused parameters the
-    // shared signature is built from.
     const float mottle_lambda = c[FOTUFILM_CONFIG_MOTTLE_LAMBDA];
     const int32_t mottle_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_MOTTLE_RADIUS]);
     // Zero when the paper has no blur to give; the stage then collapses to a unit tap.

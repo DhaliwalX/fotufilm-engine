@@ -90,7 +90,7 @@ int run_develop(const float *input_r, const float *input_g, const float *input_b
         adjacency_secondary_sigma, adjacency_secondary_radius,
         fringe_sigma, fringe_radius,
         grain_sigma, grain_radius, grain_lambda, print_mtf_radius,
-        seed, reversal, monochrome, origin_x, origin_y, density);
+        seed, reversal, monochrome, origin_x, origin_y, feature_mask, density);
 }
 
 int run_print(Buffer<float> &density, Buffer<float> &result,
