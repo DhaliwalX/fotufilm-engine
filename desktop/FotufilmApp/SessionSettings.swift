@@ -23,7 +23,6 @@ final class SettingsSheetController: SessionViewController {
     private let column = ScrollColumn(inset: 0, pad: 4, bottom: 8)
     private var rows: [FormRowView] = []
     private var sink: AnyCancellable?
-    private var proSink: AnyCancellable?
     private var structure = ""
 
     private var settings: AppSettings { .shared }
@@ -103,9 +102,6 @@ final class SettingsSheetController: SessionViewController {
         sink = settings.objectWillChange.sink { [weak self] _ in
             DispatchQueue.main.async { self?.refresh() }
         }
-        proSink = NotificationCenter.default.publisher(for: .proAccessChanged)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.refresh() }
     }
 
     private var structureSignature: String {
