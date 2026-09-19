@@ -22,11 +22,7 @@
 
 extern "C" {
 
-/// Halide's blurs are undefined below the sigma the schedule was built around.
-static const float kSigmaFloor = 0.151f;
 
-static float max_f(float a, float b) { return a > b ? a : b; }
-static int32_t max_i(int32_t a, int32_t b) { return a > b ? a : b; }
 
 /// Marks a buffer's host side as the fresh copy. Every buffer the kernel reads needs this: the
 /// runtime allocates device memory lazily and only uploads what it is told has changed, so a

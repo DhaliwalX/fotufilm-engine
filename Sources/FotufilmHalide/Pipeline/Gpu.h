@@ -791,14 +791,14 @@ public:
 
 #if defined(FOTUFILM_HALIDE_AOT_GENERATOR)
     /// The iOS device/simulator target this generator was originally written for.
-    static Target ios_aot_target(bool simulator) {
+    static Target ios_aot_target(bool simulator, bool profile = false) {
         Target target;
         target.os = Target::IOS;
         target.arch = Target::ARM;
         target.bits = 64;
         target.set_feature(Target::Metal);
         if (simulator) target.set_feature(Target::Simulator);
-        if (getenv("FOTUFILM_HALIDE_PROFILE")) target.set_feature(Target::Profile);
+        if (profile) target.set_feature(Target::Profile);
         return target;
     }
 

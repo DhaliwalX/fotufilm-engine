@@ -13,6 +13,7 @@
 #include <mutex>
 #include <set>
 #include <string>
+#include <unordered_map>
 
 using Halide::BoundaryConditions::constant_exterior;
 using Halide::Buffer;
@@ -57,14 +58,15 @@ namespace {
 DevelopPipeline *develop_pipeline_for(int32_t feature_mask) {
     const int32_t features = fotufilm_develop_features(feature_mask);
     const int variant = fotufilm_develop_variant(features);
-    static std::unique_ptr<DevelopPipeline> pipelines[262144];
+    static std::unordered_map<int, std::unique_ptr<DevelopPipeline>> pipelines;
     static std::mutex pipelines_mutex;
     std::lock_guard<std::mutex> lock(pipelines_mutex);
-    if (!pipelines[variant]) {
-        pipelines[variant] = std::make_unique<DevelopPipeline>(
+    auto &pipeline = pipelines[variant];
+    if (!pipeline) {
+        pipeline = std::make_unique<DevelopPipeline>(
             features, "_variant_" + std::to_string(variant));
     }
-    return pipelines[variant].get();
+    return pipeline.get();
 }
 
 /// The shape the host's space takes, or -1 to read it from the configuration per pixel.

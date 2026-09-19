@@ -10,7 +10,7 @@
 
 `FotufilmResolvedFrameParams.h` resolves packed configuration values into host scalars without
 requiring the Halide compiler. JIT hosts bind those values through `FrameParams`; AOT adapters
-pass them in the generated functions' existing argument order. Adapter-specific contracts, such
+pass them in the generated functions' argument order. Adapter-specific contracts, such
 as standalone development ending before the enlarger, remain explicit at the call site.
 
 GPU hosts resolve `GpuConfiguration` once, including diagnostic environment overrides, and each
@@ -22,3 +22,8 @@ For changes here, run `bash tools/test-stages.sh`, relevant release Swift tests,
 Changes to AOT bindings or construction also need generator compilation and
 `tools/verify-aot-parity.sh`. The packed configuration and variant manifests remain authoritative;
 regenerate their headers with the scripts named in the repository's `AGENTS.md`.
+
+Regenerate CPU WebAssembly kernels together with their adapter after changing the extended
+argument list. The unused legacy mottle-sigma argument has been removed; current grain fields
+read their per-layer sigmas from the packed configuration. Public C entry points and the packed
+configuration layout are unchanged.

@@ -14,7 +14,7 @@ constexpr int32_t kStillFastHalfStore = 1 << 0;
 constexpr int32_t kStillFastCurves = 1 << 1;
 constexpr int32_t kStillFastHalfLut = 1 << 2;
 constexpr int32_t kStillFastHalfTetra = 1 << 3;
-constexpr int32_t kStillFastExternMtf = 1 << 4;
+// Bit 4 is reserved for the removed extern-MTF implementation.
 constexpr int32_t kStillFastGrainTable = 1 << 5;
 
 /// Resolve once at the host boundary, then pass by value to each pipeline. Environment changes

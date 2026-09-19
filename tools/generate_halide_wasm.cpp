@@ -3,10 +3,8 @@
 // whose kernels dispatch through WGSL compute shaders, and a plain `wasm-32-wasmrt` fallback
 // for machines without a WebGPU adapter.
 //
-// The GPU schedule reads `gpu_device_api()` everywhere it tiles, so pointing that at
-// DeviceAPI::WebGPU retargets the whole file. The two Metal-only arms — the hand-written grain
-// and MTF externs — are already guarded on `== DeviceAPI::Metal` in the schedule and fall away
-// on their own.
+// The generator supplies WebGPU scheduling explicitly; the pipeline shares its graph with
+// native GPU hosts and keeps browser-specific storage and precision choices in its policy.
 
 #define FOTUFILM_HALIDE_ENABLED 1
 #define FOTUFILM_HALIDE_AOT_GENERATOR 1

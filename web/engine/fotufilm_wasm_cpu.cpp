@@ -35,10 +35,8 @@ int fotufilm_wasm_transport(float *input, float *output, int w, int h,
     return fotufilm_transport_filter(input, output, w, h, kernel, radius, stride);
 }
 
-static const float kSigmaFloor = 0.151f;
 static const int32_t kLutCount = 33 * 33 * 33 * 4;
 
-static float max_f(float a, float b) { return a > b ? a : b; }
 static int32_t max_i(int32_t a, int32_t b) { return a > b ? a : b; }
 
 static void init_planar(halide_buffer_t *buffer, halide_dimension_t *dims,
@@ -111,7 +109,6 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
     // Preserve the CPU Wasm ABI's existing luma-only bound.
     const int32_t mtf_luma_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_MTF_LUMA_RADIUS]);
     const int32_t grain_mode = (int32_t)c[FOTUFILM_CONFIG_GRAIN_MODE];
-    const float mottle_sigma = max_f(c[FOTUFILM_CONFIG_MOTTLE_SIGMA], kSigmaFloor);
     const int32_t monochrome = (feature_mask & FOTUFILM_FRAME_MONOCHROME) != 0;
 
 #define FOTUFILM_DEVELOP_ARGUMENTS \
@@ -124,7 +121,7 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
     resolved.adjacency_secondary_sigma, resolved.adjacency_secondary_radius, resolved.fringe_sigma, \
     resolved.fringe_radius, resolved.grain_sigma, resolved.grain_radius, resolved.grain_lambda, \
     resolved.print_mtf_radius, seed, resolved.reversal, monochrome, origin_x, origin_y, grain_mode, \
-    mottle_sigma, resolved.mottle_radius, resolved.mottle_lambda, resolved.diffusion_stride_0, \
+    resolved.mottle_radius, resolved.mottle_lambda, resolved.diffusion_stride_0, \
     resolved.diffusion_stride_1, resolved.diffusion_stride_2, resolved.diffusion_strided_radius_0, \
     resolved.diffusion_strided_radius_1, resolved.diffusion_strided_radius_2, feature_mask, \
     &density_buf

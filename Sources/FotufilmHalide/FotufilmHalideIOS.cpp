@@ -145,16 +145,12 @@ const AotVariant kVariants[] = {
 #undef FOTUFILM_AOT_SHIM_ENTRY
 };
 
-/// The cheapest generated variant that can develop `feature_mask`.
+/// Select a compatible generated variant with the fewest extra compiled stages.
 FrameFunction select_variant(int32_t feature_mask) {
     const int32_t wanted = feature_mask & FOTUFILM_AOT_VARIANT_BITS;
     const int32_t exact_bits = FOTUFILM_VARIANT_EXACT_BITS;
-    // `FOTUFILM_VARIANT_RANK=n` serves the n-th *acceptable* variant by extra-bit count instead
-    // of the narrowest, for measuring whether the narrowest is also the quickest. A superset is
-    // supposed to deliver the same frame — that is the whole basis on which the shim already
-    // serves requests from wider variants, extra stages collapsing to identity at zero radius —
-    // so this is a scheduling question, not a correctness one. Diagnostic; unset in every build
-    // that is not being measured.
+    // Diagnostic: choose another compatible variant to compare schedules. Extra compiled
+    // stages are bypassed by the request's runtime gates, preserving its requested image.
     static const int wanted_rank = [] {
         const char *env = getenv("FOTUFILM_VARIANT_RANK");
         return env ? atoi(env) : -1;

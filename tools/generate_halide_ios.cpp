@@ -77,9 +77,13 @@ int main(int argc, char **argv) {
                   << variant_count - 1 << ")\n";
         return 2;
     }
+    GpuConfiguration defaults;
+    defaults.half_blur = !macos;
+    defaults.half_lut = !macos;
+    const auto configuration = resolve_gpu_configuration(defaults);
     const Halide::Target target =
         macos ? GpuFramePipeline::macos_aot_target(intel)
-              : GpuFramePipeline::ios_aot_target(simulator);
+              : GpuFramePipeline::ios_aot_target(simulator, configuration.profile);
 
     // Compiled metallib embedding: the default on Halide 22+, FOTUFILM_METAL_PRECOMPILE=0 opts
     // out for local debugging. It cuts macOS archives from 517 MB to 137 MB and takes the
@@ -135,10 +139,6 @@ int main(int argc, char **argv) {
             std::string("xcrun -sdk ") + metal_sdk + " metallib");
     }
 #endif
-    GpuConfiguration defaults;
-    defaults.half_blur = !macos;
-    defaults.half_lut = !macos;
-    const auto configuration = resolve_gpu_configuration(defaults);
     // Use short unique suffixes because Halide embeds internal names in Metal source. Full variant
     // names added 83 MB to a 366 MB, 128-object set. Public AOT symbols use `function_name` and are
     // unaffected.

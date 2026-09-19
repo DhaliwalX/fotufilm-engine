@@ -226,7 +226,6 @@ public:
           configuration_(Float(32), 1, "develop_configuration" + suffix),
           exposure_lut_(Float(32), 1, "develop_exposure_lut" + suffix),
           grain_mode_("develop_grain_mode" + suffix),
-          mottle_sigma_("develop_mottle_sigma" + suffix),
           monochrome_("develop_monochrome" + suffix),
           features_("develop_features" + suffix) {
         const bool texture = features & FOTUFILM_FRAME_TEXTURE;
@@ -283,7 +282,7 @@ public:
             fringe_sigma_, fringe_radius_,
             grain_sigma_, grain_radius_, grain_lambda_, print_mtf_radius_,
             seed_, reversal_, monochrome_, origin_x_, origin_y_,
-                grain_mode_, mottle_sigma_, mottle_radius_, mottle_lambda_,
+                grain_mode_, mottle_radius_, mottle_lambda_,
                 diffusion_stride_0_, diffusion_stride_1_, diffusion_stride_2_,
                 diffusion_strided_radius_0_, diffusion_strided_radius_1_,
                 diffusion_strided_radius_2_, features_,}, reference_target());
@@ -310,7 +309,6 @@ public:
         set_frame(configuration, width, height, seed,
                   (feature_mask & FOTUFILM_FRAME_REVERSAL) != 0 ? 1 : 0, origin_x, origin_y);
         grain_mode_.set(int32_t(configuration[FOTUFILM_CONFIG_GRAIN_MODE]));
-        mottle_sigma_.set(std::max(configuration[FOTUFILM_CONFIG_MOTTLE_SIGMA], 0.151f));
         monochrome_.set((feature_mask & FOTUFILM_FRAME_MONOCHROME) != 0 ? 1 : 0);
         features_.set(feature_mask);
         if (cached_) cached_.realize(result);
@@ -336,7 +334,7 @@ public:
         };
         if (extended) {
             args.insert(args.end(), {
-                grain_mode_, mottle_sigma_, mottle_radius_, mottle_lambda_,
+                grain_mode_, mottle_radius_, mottle_lambda_,
                 diffusion_stride_0_, diffusion_stride_1_, diffusion_stride_2_,
                 diffusion_strided_radius_0_, diffusion_strided_radius_1_,
                 diffusion_strided_radius_2_,
@@ -358,7 +356,6 @@ public:
 private:
     ImageParam input_r_, input_g_, input_b_, configuration_, exposure_lut_;
     Param<int32_t> grain_mode_;
-    Param<float> mottle_sigma_;
     Param<int32_t> monochrome_;
     Param<int32_t> features_;
     Pipeline pipeline_;
