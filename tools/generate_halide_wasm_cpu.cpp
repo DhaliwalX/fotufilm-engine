@@ -10,7 +10,10 @@
 
 #define FOTUFILM_HALIDE_ENABLED 1
 #define FOTUFILM_HALIDE_AOT_GENERATOR 1
-#include "../Sources/FotufilmHalide/FotufilmHalide.cpp"
+#include "../Sources/FotufilmHalide/Pipeline/Cpu.h"
+
+using namespace fotufilm;
+using namespace fotufilm::pipelines;
 
 #include <filesystem>
 #include <iostream>

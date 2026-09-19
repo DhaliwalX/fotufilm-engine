@@ -10,7 +10,11 @@
 
 #define FOTUFILM_HALIDE_ENABLED 1
 #define FOTUFILM_HALIDE_AOT_GENERATOR 1
-#include "../Sources/FotufilmHalide/FotufilmHalideMetal.cpp"
+#include "../Sources/FotufilmHalide/Pipeline/Gpu.h"
+
+using namespace fotufilm;
+using namespace fotufilm::pipelines;
+using namespace fotufilm::gpu;
 
 #include <filesystem>
 #include <iostream>
@@ -99,7 +103,7 @@ int main(int argc, char **argv) {
     for (const Variant &variant : variants) {
         std::cout << "  " << variant.name << std::flush;
         try {
-            MetalFramePipeline pipeline(variant.features, std::string("_") + variant.name, false, configuration);
+            GpuFramePipeline pipeline(variant.features, std::string("_") + variant.name, false, configuration);
             pipeline.compile_aot((output / variant.name).string(), variant.name,
                                  variant.runtime, target);
             std::cout << " ok\n";

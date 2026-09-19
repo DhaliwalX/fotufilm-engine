@@ -26,7 +26,7 @@ KERNELS_ONLY=false
   # must invalidate the cache just as changing a regular file does.
   if $KERNELS_ONLY; then
     # The shim is not included by the generator — the archives are emitted from
-    # `FotufilmHalideMetal.cpp` alone — so it cannot change what generation produces.
+    # the `Pipeline/` headers — so it cannot change what generation produces.
     find -L Sources/FotufilmHalide -type f \
       \( -name '*.cpp' -o -name '*.h' \) ! -name 'FotufilmHalideIOS.cpp' -print0
   else

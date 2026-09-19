@@ -1,6 +1,10 @@
 #define FOTUFILM_HALIDE_ENABLED 1
 #define FOTUFILM_HALIDE_AOT_GENERATOR 1
-#include "../Sources/FotufilmHalide/FotufilmHalideMetal.cpp"
+#include "../Sources/FotufilmHalide/Pipeline/Gpu.h"
+
+using namespace fotufilm;
+using namespace fotufilm::pipelines;
+using namespace fotufilm::gpu;
 
 #include <filesystem>
 #include <iostream>
@@ -16,7 +20,7 @@ int main(int argc, char **argv) {
     GpuConfiguration defaults;
     defaults.device = Halide::DeviceAPI::Vulkan;
     const auto configuration = resolve_gpu_configuration(defaults);
-    Halide::Target target = MetalFramePipeline::android_vulkan_aot_target();
+    Halide::Target target = GpuFramePipeline::android_vulkan_aot_target();
     // FOTUFILM_VK_DEBUG builds the talking runtime: every allocation, binding and dispatch is
     // narrated to logcat. It is far too loud and far too slow to ship, and it is the only way to
     // see which of forty-seven dispatches is the one going wrong.
@@ -40,7 +44,7 @@ int main(int argc, char **argv) {
     };
     for (const Variant &variant : variants) {
         try {
-            MetalFramePipeline pipeline(variant.features,
+            GpuFramePipeline pipeline(variant.features,
                                         std::string("_") + variant.name, false, configuration);
             pipeline.compile_aot((output / variant.name).string(), variant.name,
                                  variant.runtime, target);
