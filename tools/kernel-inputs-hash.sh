@@ -44,6 +44,11 @@ KERNELS_ONLY=false
   # Schedule overrides the generator reads from its own environment. They change the emitted
   # Metal without changing a byte of source, so a stamp that ignored them would call a sweep's
   # kernels current and hand back the previous tiling's archives.
+  echo "gpu-stride=${FOTUFILM_GPU_STRIDE:-}"
+  echo "half=${FOTUFILM_F16_BLUR:-}/${FOTUFILM_F16_LUT:-}/${FOTUFILM_F16_TETRA:-}"
+  echo "split-down=${FOTUFILM_SPLIT_DOWN:-}"
+  echo "ablate=${FOTUFILM_ABLATE:-}"
+  echo "profile=${FOTUFILM_HALIDE_PROFILE+x}"
   echo "gpu-tile=${FOTUFILM_GPU_TILE:-}/${FOTUFILM_GPU_TILE_X:-}/${FOTUFILM_GPU_TILE_Y:-}"
   echo "halide=$(basename "$(ls "$1"/lib/libHalide.*.dylib 2>/dev/null | head -1)")"
   echo "platform=$2"

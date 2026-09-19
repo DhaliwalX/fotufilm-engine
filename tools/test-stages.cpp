@@ -1,6 +1,7 @@
 #define FOTUFILM_HALIDE_ENABLED 1
 #include "FotufilmHalideShared.h"
 #include "FotufilmHalideFrameParams.h"
+#include "Schedule/Gpu.h"
 
 #include <cmath>
 #include <cstdio>
@@ -92,6 +93,33 @@ void frame_parameters() {
           && bound.adjacency_secondary_sigma_.get() == 8
           && bound.adjacency_secondary_radius_.get() == 24,
           "frame: JIT binding preserves AOT spatial support");
+}
+
+void gpu_configuration() {
+    gpu::GpuConfiguration metal;
+    metal.device = Halide::DeviceAPI::Metal;
+    gpu::GpuConfiguration vulkan = metal;
+    vulkan.device = Halide::DeviceAPI::Vulkan;
+    vulkan.tile_x = 8;
+    vulkan.tile_y = 8;
+    vulkan.fixed_stride = 4;
+    gpu::GpuSchedule first(metal, true), second(vulkan);
+    check(first.gpu_device_api() == Halide::DeviceAPI::Metal
+          && second.gpu_device_api() == Halide::DeviceAPI::Vulkan
+          && first.gpu_tile_x() == 32 && second.gpu_tile_x() == 8,
+          "schedule: constructing another backend preserves the first configuration");
+    check(metal.cache_key() != vulkan.cache_key(), "schedule: device and geometry enter cache identity");
+    auto half = metal;
+    half.half_blur = true;
+    check(metal.cache_key() != half.cache_key(), "schedule: precision enters cache identity");
+    Func a("window_a"), b("window_b");
+    Var x("x"), y("y"), c("c");
+    a(x, y, c) = 0.0f;
+    b(x, y, c) = 1.0f;
+    first.gpu_pointwise(a, x, y, c, 3);
+    second.gpu_pointwise(b, x, y, c, 3);
+    check(first.window_stores().size() == 1 && second.window_stores().empty(),
+          "schedule: interleaved graph builds isolate folded stores");
 }
 
 struct Stage {
@@ -272,6 +300,7 @@ int run(int argc, char **argv) {
     else if (mode != "cpu") { std::fprintf(stderr, "usage: test-stages cpu|metal\n"); return 2; }
 
     frame_parameters();
+    gpu_configuration();
     int compared = 0;
     for (auto &[name, build] : stages()) {
         const int before = failures;

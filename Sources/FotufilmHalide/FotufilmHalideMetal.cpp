@@ -53,13 +53,14 @@ namespace {
 /// Per-row tone and veiling-glare measurements for linear Rec.2020 float frames.
 /// Row reductions make staged and striped totals independent of banding. Tone is measured and
 /// solved before glare because glare uses the regional tone grid.
-class MetalMeasurePipeline {
+class MetalMeasurePipeline : public GpuSchedule {
 public:
     enum class Quantity { Tone, Flare };
 
     MetalMeasurePipeline(Quantity quantity, bool approximate,
-                         const std::string &suffix)
-        : quantity_(quantity), approximate_(approximate),
+                         const std::string &suffix,
+                         GpuConfiguration configuration = default_gpu_configuration())
+        : GpuSchedule(configuration), quantity_(quantity), approximate_(approximate),
           input_(Float(32), 3, "measure_input" + suffix),
           configuration_(Float(32), 1, "measure_configuration" + suffix),
           exposure_lut_(Float(32), 1, "measure_exposure_lut" + suffix),
@@ -230,10 +231,11 @@ private:
 /// Device host-to-engine decode: non-finite repair, un-premultiplication, transfer, and scene-space
 /// matrix. Per-row reports store the pre-repair RGB peak in lane 0 and a repair flag in lane 1.
 /// Keeping decode separate avoids doubling the AOT develop variants.
-class MetalDecodePipeline {
+class MetalDecodePipeline : public GpuSchedule {
 public:
-    MetalDecodePipeline(bool approximate, const std::string &suffix)
-        : approximate_(approximate),
+    MetalDecodePipeline(bool approximate, const std::string &suffix,
+                        GpuConfiguration configuration = default_gpu_configuration())
+        : GpuSchedule(configuration), approximate_(approximate),
           input_(Float(32), 3, "decode_input" + suffix),
           parameters_(Float(32), 1, "decode_parameters" + suffix),
           width_("decode_width" + suffix) {
@@ -456,9 +458,9 @@ struct GpuPolicy {
 
 class GpuBackend : public graph::Backend {
 public:
-    GpuBackend(GpuPolicy policy, FrameParams &p, ImageParam &configuration,
+    GpuBackend(GpuSchedule &schedule, GpuPolicy policy, FrameParams &p, ImageParam &configuration,
                ImageParam &film_lut, ImageParam &paper_lut)
-        : policy_(policy), p_(p), configuration_(configuration), film_lut_(film_lut),
+        : schedule_(schedule), policy_(policy), p_(p), configuration_(configuration), film_lut_(film_lut),
           paper_lut_(paper_lut) {}
 
     bool approximate() const override { return policy_.approximate; }
@@ -468,7 +470,7 @@ public:
     bool windowed() const override { return policy_.windowed; }
     bool merged_luma() const override { return true; }
     bool grain_on_density_input() const override { return true; }
-    DeviceAPI device() const override { return gpu_device_api(); }
+    DeviceAPI device() const override { return schedule_.gpu_device_api(); }
 
     using graph::Backend::store;
     Func store(Func values, graph::Store point, int channels, Expr branch) override {
@@ -477,30 +479,30 @@ public:
         const bool half = policy_.half_store;
         switch (point) {
         case Store::Light:
-            return remember(values, store_frame(values, half, channels, branch));
+            return remember(values, schedule_.store_frame(values, half, channels, branch));
         case Store::DonorLog:
         case Store::DonorActivation:
         case Store::DonorReleased:
             if (point != Store::DonorActivation || !policy_.tabulated_curves) {
-                return remember(values, store_frame(values, half, 3));
+                return remember(values, schedule_.store_frame(values, half, 3));
             }
             return values;
         case Store::Activation:
             return policy_.tabulated_curves
-                ? values : remember(values, store_frame(values, half, channels));
+                ? values : remember(values, schedule_.store_frame(values, half, channels));
         case Store::FlatActivation:
             return policy_.realtime
-                ? values : remember(values, store_frame(values, half, channels));
+                ? values : remember(values, schedule_.store_frame(values, half, channels));
         case Store::Density:
-            return policy_.discs ? remember(values, store_frame(values, false, 3)) : values;
+            return policy_.discs ? remember(values, schedule_.store_frame(values, false, 3)) : values;
         case Store::MtfSelected:
         case Store::PrintMtfInput:
-            return gpu_device_api() == DeviceAPI::WebGPU
-                ? remember(values, store_frame(values, false, channels)) : values;
+            return schedule_.gpu_device_api() == DeviceAPI::WebGPU
+                ? remember(values, schedule_.store_frame(values, false, channels)) : values;
         case Store::Exposure:
         case Store::Diffused:
         case Store::TextureLight:
-            return remember(values, store_frame(values, half, channels, branch));
+            return remember(values, schedule_.store_frame(values, half, channels, branch));
         case Store::MtfMixed:
         case Store::MtfSeparated:
         case Store::HalationReturned:
@@ -513,7 +515,7 @@ public:
         case Store::CrystalCounts:
         case Store::Transmittance:
         case Store::FlatTransmittance:
-            return remember(values, store_frame(values, half, channels));
+            return remember(values, schedule_.store_frame(values, half, channels));
         case Store::MtfLumaDirect:
         case Store::FlatDensity:
         case Store::Printed:
@@ -530,7 +532,7 @@ public:
     Func gaussian(Func source, Expr sigma0, Expr sigma1, Expr sigma2, Expr radius,
                   Expr width, Expr height, const std::string &name, int channels,
                   Expr luma_sigma, Expr luma_radius) override {
-        Func blurred = gpu_gaussian(source, sigma0, sigma1, sigma2, radius, width, height,
+        Func blurred = schedule_.gpu_gaussian(source, sigma0, sigma1, sigma2, radius, width, height,
                                     policy_.half_store, name, channels, true, luma_sigma,
                                     luma_radius);
         stored_.insert(blurred.name());
@@ -540,7 +542,7 @@ public:
     Func gaussian_decimated(Func source, Expr sigma, Expr radius, Expr origin_x,
                             Expr origin_y, Expr width, Expr height,
                             const std::string &name, int) override {
-        return gpu_gaussian_decimated(source, sigma, radius, origin_x, origin_y, width,
+        return schedule_.gpu_gaussian_decimated(source, sigma, radius, origin_x, origin_y, width,
                                       height, policy_.half_store, name);
     }
 
@@ -551,7 +553,7 @@ public:
                                   int channels) override {
         std::array<Expr, 3> scattered_at;
         const bool halation = ring_config_base >= 0;
-        const bool separate_weights = !halation || gpu_device_api() == DeviceAPI::WebGPU;
+        const bool separate_weights = !halation || schedule_.gpu_device_api() == DeviceAPI::WebGPU;
         // A scale's spread read back at the pixel. The grid is addressed in *frame* cells and
         // the sample position formed from the frame coordinate, whatever part of the frame this
         // graph is developing: a ring tap's position is `frame + radius * direction`, and the
@@ -629,11 +631,11 @@ public:
             Expr factor = stride / previous_stride;
             Expr offset_x = (phase_x - previous_phase_x) / previous_stride;
             Expr offset_y = (phase_y - previous_phase_y) / previous_stride;
-            Func down = gpu_decimate_level(previous, factor, offset_x, offset_y,
+            Func down = schedule_.gpu_decimate_level(previous, factor, offset_x, offset_y,
                                            previous_width, previous_height, channels,
                                            scale_name);
-            Func down_view = store_frame(down, half, channels);
-            if (gpu_device_api() != DeviceAPI::WebGPU) {
+            Func down_view = schedule_.store_frame(down, half, channels);
+            if (schedule_.gpu_device_api() != DeviceAPI::WebGPU) {
                 previous = down_view;
                 previous_stride = stride;
                 previous_phase_x = phase_x;
@@ -641,7 +643,7 @@ public:
                 previous_width = down_width;
                 previous_height = down_height;
             }
-            Func blurred = gpu_triple_box_blur(
+            Func blurred = schedule_.gpu_triple_box_blur(
                 down_view, strided_radii[scale_index], down_width, down_height, half,
                 scale_name + "_spread", channels);
             Func bounded_blur = constant_exterior(
@@ -699,7 +701,7 @@ public:
                 .reorder(channel, span, y)
                 .unroll(channel)
                 .gpu_tile(span, y, block_x, block_y, thread_x, thread_y, 4, 16,
-                          Halide::TailStrategy::GuardWithIf, gpu_device_api());
+                          Halide::TailStrategy::GuardWithIf, schedule_.gpu_device_api());
             Var row_block(name + "_row_block");
             Var row_thread(name + "_row_thread");
             RDom across(0, span_count, name + "_across");
@@ -710,17 +712,17 @@ public:
                 .reorder(channel, y)
                 .unroll(channel)
                 .gpu_tile(y, row_block, row_thread, 32,
-                          Halide::TailStrategy::GuardWithIf, gpu_device_api());
+                          Halide::TailStrategy::GuardWithIf, schedule_.gpu_device_api());
             RDom down(0, height, name + "_down");
             Func total(name + "_total");
             total(channel) = Halide::sum(rows(channel, down), name + "_total_sum")
                 / (Halide::cast<float>(width) * Halide::cast<float>(height));
             total.compute_root().bound(channel, 0, channels).unroll(channel)
-                .gpu_single_thread(gpu_device_api());
+                .gpu_single_thread(schedule_.gpu_device_api());
             mean(channel) = graph::gated(policy_.measure_flare, total(channel), provided);
         }
         mean.compute_root().bound(channel, 0, channels).unroll(channel)
-            .gpu_single_thread(gpu_device_api());
+            .gpu_single_thread(schedule_.gpu_device_api());
         return mean;
     }
 
@@ -762,9 +764,9 @@ public:
                             shared_draw);
         } else {
             Func poisson_table = poisson_inverse_cdf(
-                p.grain_lambda_, prefix + "poisson_cdf" + suffix, gpu_device_api());
+                p.grain_lambda_, prefix + "poisson_cdf" + suffix, schedule_.gpu_device_api());
             Func normal_table = normal_inverse_cdf(prefix + "normal_cdf" + suffix,
-                                                   gpu_device_api());
+                                                   schedule_.gpu_device_api());
             Expr shared_draw = monochrome
                 ? normal_sample_lut(normal_table, x + p.origin_x_, y + p.origin_y_,
                                     p.seed_, kGrainSharedLayer)
@@ -779,8 +781,8 @@ public:
                                                p.seed_, p.grain_lambda_, channel),
                             shared_draw);
         }
-        Func noise_view = store_frame(noise, half, noise_channels);
-        fields.grain = gpu_gaussian(
+        Func noise_view = schedule_.store_frame(noise, half, noise_channels);
+        fields.grain = schedule_.gpu_gaussian(
             noise_view,
             configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER),
             configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 1),
@@ -804,9 +806,9 @@ public:
                                 shared_draw);
             } else {
                 Func mottle_table = poisson_inverse_cdf(
-                    p.mottle_lambda_, prefix + "mottle_cdf" + suffix, gpu_device_api());
+                    p.mottle_lambda_, prefix + "mottle_cdf" + suffix, schedule_.gpu_device_api());
                 Func mottle_normal = normal_inverse_cdf(prefix + "mottle_normal_cdf" + suffix,
-                                                        gpu_device_api());
+                                                        schedule_.gpu_device_api());
                 Expr shared_draw = monochrome
                     ? normal_sample_lut(mottle_normal, x + p.origin_x_, y + p.origin_y_,
                                         p.seed_, kGrainMottleSharedLayer)
@@ -822,8 +824,8 @@ public:
                                                    channel + kGrainMottleLayerBase),
                                 shared_draw);
             }
-            fields.mottle = gpu_gaussian(
-                store_frame(mottle_noise, half, noise_channels),
+            fields.mottle = schedule_.gpu_gaussian(
+                schedule_.store_frame(mottle_noise, half, noise_channels),
                 configuration(FOTUFILM_CONFIG_MOTTLE_SIGMA_LAYER),
                 configuration(FOTUFILM_CONFIG_MOTTLE_SIGMA_LAYER + 1),
                 configuration(FOTUFILM_CONFIG_MOTTLE_SIGMA_LAYER + 2),
@@ -861,6 +863,7 @@ private:
         return view;
     }
 
+    GpuSchedule &schedule_;
     GpuPolicy policy_;
     FrameParams &p_;
     ImageParam &configuration_;
@@ -869,11 +872,12 @@ private:
     std::set<std::string> stored_;
 };
 
-class MetalFramePipeline : FrameParams {
+class MetalFramePipeline : public GpuSchedule, FrameParams {
 public:
     MetalFramePipeline(int32_t feature_mask, const std::string &suffix,
-                       bool windowed = false)
-        : FrameParams("frame_", suffix),
+                       bool windowed = false,
+                       GpuConfiguration configuration = default_gpu_configuration())
+        : GpuSchedule(configuration, windowed), FrameParams("frame_", suffix),
           float_io_((feature_mask & FOTUFILM_FRAME_FLOAT_IO) != 0),
           realtime_(!float_io_
                     || (feature_mask & FOTUFILM_FRAME_REALTIME) != 0),
@@ -907,7 +911,6 @@ public:
           halation_radius_2_("frame_halation_radius_2" + suffix),
           runtime_features_("frame_features" + suffix),
           byte_basis_("frame_byte_basis" + suffix) {
-        WindowedFrameSchedule window_schedule(windowed);
         feature_mask &= ~ablated_features();
         features_ = feature_mask;
         const bool use_mtf = feature_mask & FOTUFILM_FRAME_MTF;
@@ -1000,7 +1003,7 @@ public:
         policy.half_tetra = fast(kStillFastHalfTetra) && f16_tetra_compute();
         policy.film_lut_base = film_lut_base;
         policy.paper_lut_base = paper_lut_base;
-        GpuBackend backend(policy, *this, configuration_, film_lut_, paper_lut_);
+        GpuBackend backend(*this, policy, *this, configuration_, film_lut_, paper_lut_);
 
         auto density_source = [&](Expr plane_index) {
             Expr in_w = input_.dim(0).extent();
@@ -1219,7 +1222,7 @@ public:
                 .gpu_tile(x, row, block_x, block_y, thread_x, thread_y,
                           gpu_tile_x(), gpu_tile_y(),
                           Halide::TailStrategy::GuardWithIf, gpu_device_api());
-            for (Func stage : window_schedule.stores) {
+            for (Func stage : window_stores()) {
                 stage.store_root().compute_at(output, window).fold_storage(y, kWindowStorageRows);
             }
         } else {
@@ -1242,7 +1245,7 @@ public:
         pipeline_ = Pipeline(output);
 #if !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
         if (!cached_.prepare(pipeline_,
-            "frame:" + std::to_string(feature_mask) + ":" + std::to_string(windowed),
+            "frame:" + std::to_string(feature_mask) + ":" + std::to_string(windowed) + ":" + this->configuration().cache_key(),
             {input_, configuration_, exposure_lut_, film_lut_, paper_lut_,
             width_, height_,
             mtf_sigma_0_, mtf_sigma_1_, mtf_sigma_2_, mtf_luma_sigma_,
@@ -1666,10 +1669,11 @@ private:
 /// triple-box arithmetic the frame schedule runs over a staged frame at origin zero. A strip that
 /// then samples these grids reads the very values a whole-frame develop reads from its own
 /// pyramid, which is what lets the FIELDS_IN path promise the staged path's pixels.
-class MetalHalationFieldsPipeline {
+class MetalHalationFieldsPipeline : public GpuSchedule {
 public:
-    explicit MetalHalationFieldsPipeline(const std::string &suffix)
-        : input_(Float(32), 3, "fields_grid" + suffix),
+    explicit MetalHalationFieldsPipeline(const std::string &suffix,
+                                         GpuConfiguration configuration = default_gpu_configuration())
+        : GpuSchedule(configuration), input_(Float(32), 3, "fields_grid" + suffix),
           width_("fields_width" + suffix), height_("fields_height" + suffix),
           stride_0_("fields_stride_0" + suffix),
           stride_1_("fields_stride_1" + suffix),
@@ -1958,8 +1962,8 @@ void bound_metal_queue() {
             probe(x) = x;
             Var block, thread;
             probe.gpu_tile(x, block, thread, 8, Halide::TailStrategy::GuardWithIf,
-                           gpu_device_api());
-            Buffer<int32_t> out = probe.realize({8}, gpu_target());
+                           default_gpu_configuration().device);
+            Buffer<int32_t> out = probe.realize({8}, default_gpu_configuration().target());
             out.copy_to_host();
         } catch (...) {
         }
@@ -1972,7 +1976,7 @@ void bound_metal_queue() {
 #endif
 
 extern "C" int32_t fotufilm_halide_metal_available(void) {
-    const bool available = Halide::host_supports_target_device(gpu_target());
+    const bool available = Halide::host_supports_target_device(default_gpu_configuration().target());
 #if defined(__APPLE__) && !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
     if (available) bound_metal_queue();
 #endif
@@ -1988,7 +1992,7 @@ extern "C" int32_t fotufilm_halide_metal_variant_exists(int32_t) {
 extern "C" void fotufilm_halide_metal_report_profile(void) {}
 
 extern "C" int32_t fotufilm_halide_metal_still_fast_bits(void) {
-    return still_fast_bits();
+    return default_gpu_configuration().still_fast;
 }
 
 extern "C" int32_t fotufilm_halide_metal_prepare(
@@ -2450,7 +2454,7 @@ extern "C" int32_t fotufilm_halide_metal_decode_rows_realtime(
 // The CUDA surface is deliberately the host-buffer subset: a frame in, a frame out, with the
 // spectral cubes cached on the device between calls exactly as they are on Metal.
 extern "C" int32_t fotufilm_halide_cuda_available(void) {
-    return Halide::host_supports_target_device(gpu_target()) ? 1 : 0;
+    return Halide::host_supports_target_device(default_gpu_configuration().target()) ? 1 : 0;
 }
 
 extern "C" int32_t fotufilm_halide_cuda_prepare(

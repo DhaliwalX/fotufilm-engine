@@ -65,7 +65,9 @@ int main(int argc, char **argv) {
     const std::filesystem::path output(argv[1]);
     std::filesystem::create_directories(output);
 
-    if (webgpu) gpu_device_api() = Halide::DeviceAPI::WebGPU;
+    GpuConfiguration defaults;
+    if (webgpu) defaults.device = Halide::DeviceAPI::WebGPU;
+    const auto configuration = resolve_gpu_configuration(defaults);
 
     // Float IO only. The uint8 variants the phones use cannot cross to WGSL: it has no 8-bit
     // numeric storage, so Halide emulates a uint8 buffer with atomics — it warns as much — and
@@ -97,7 +99,7 @@ int main(int argc, char **argv) {
     for (const Variant &variant : variants) {
         std::cout << "  " << variant.name << std::flush;
         try {
-            MetalFramePipeline pipeline(variant.features, std::string("_") + variant.name);
+            MetalFramePipeline pipeline(variant.features, std::string("_") + variant.name, false, configuration);
             pipeline.compile_aot((output / variant.name).string(), variant.name,
                                  variant.runtime, target);
             std::cout << " ok\n";

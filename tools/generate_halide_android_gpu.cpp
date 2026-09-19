@@ -13,7 +13,9 @@ int main(int argc, char **argv) {
     const std::filesystem::path output(argv[1]);
     std::filesystem::create_directories(output);
 
-    gpu_device_api() = Halide::DeviceAPI::Vulkan;
+    GpuConfiguration defaults;
+    defaults.device = Halide::DeviceAPI::Vulkan;
+    const auto configuration = resolve_gpu_configuration(defaults);
     Halide::Target target = MetalFramePipeline::android_vulkan_aot_target();
     // FOTUFILM_VK_DEBUG builds the talking runtime: every allocation, binding and dispatch is
     // narrated to logcat. It is far too loud and far too slow to ship, and it is the only way to
@@ -39,7 +41,7 @@ int main(int argc, char **argv) {
     for (const Variant &variant : variants) {
         try {
             MetalFramePipeline pipeline(variant.features,
-                                        std::string("_") + variant.name);
+                                        std::string("_") + variant.name, false, configuration);
             pipeline.compile_aot((output / variant.name).string(), variant.name,
                                  variant.runtime, target);
             std::cout << "wrote " << variant.name << "\n";
