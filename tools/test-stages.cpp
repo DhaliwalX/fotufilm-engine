@@ -1,5 +1,6 @@
 #define FOTUFILM_HALIDE_ENABLED 1
 #include "FotufilmHalideShared.h"
+#include "FotufilmHalideFrameParams.h"
 
 #include <cmath>
 #include <cstdio>
@@ -62,6 +63,35 @@ Buffer<float> configuration() {
     values(FOTUFILM_CONFIG_FLARE) = 0.25f;
     values(FOTUFILM_CONFIG_PRINT_SHARPEN) = 0.5f;
     return values;
+}
+
+void frame_parameters() {
+    auto values = configuration();
+    values(FOTUFILM_CONFIG_MTF_SIGMA) = -1;
+    values(FOTUFILM_CONFIG_MTF_RADIUS) = -4;
+    values(FOTUFILM_CONFIG_MTF_LUMA_RADIUS) = 2;
+    values(FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS + 1) = 17;
+    values(FOTUFILM_CONFIG_HALATION_RADIUS) = 1000;
+    values(FOTUFILM_CONFIG_DIFFUSION_RADIUS) = 1000;
+    values(FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA) = 8;
+    values(FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS) = 24;
+    ResolvedFrameParams frame(values.data(), 4096, 2160, 0xfedcba98u, 1, 103, 257);
+    check(frame.mtf_sigma_0 == 0.151f && frame.mtf_radius_0 == 0,
+          "frame: invalid spatial controls clamp to safe limits");
+    check(frame.mtf_luma_radius == 17, "frame: secondary MTF sets shared blur reach");
+    check(frame.halation_stride_0 == 8 && frame.diffusion_stride_0 == 64,
+          "frame: halation and diffusion keep different decimation ceilings");
+    FrameParams bound("test_frame_", "");
+    bound.set_frame(frame);
+    check(bound.width_.get() == 4096 && bound.height_.get() == 2160
+          && bound.origin_x_.get() == 103 && bound.origin_y_.get() == 257
+          && bound.seed_.get() == 0xfedcba98u && bound.reversal_.get() == 1,
+          "frame: binding preserves whole-frame coordinates and unsigned seed");
+    check(bound.mtf_luma_radius_.get() == 17
+          && bound.diffusion_stride_0_.get() == 64
+          && bound.adjacency_secondary_sigma_.get() == 8
+          && bound.adjacency_secondary_radius_.get() == 24,
+          "frame: JIT binding preserves AOT spatial support");
 }
 
 struct Stage {
@@ -241,6 +271,7 @@ int run(int argc, char **argv) {
     if (mode == "metal") gpu = Halide::get_host_target().with_feature(Halide::Target::Metal);
     else if (mode != "cpu") { std::fprintf(stderr, "usage: test-stages cpu|metal\n"); return 2; }
 
+    frame_parameters();
     int compared = 0;
     for (auto &[name, build] : stages()) {
         const int before = failures;

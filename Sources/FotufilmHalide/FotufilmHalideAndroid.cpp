@@ -8,6 +8,7 @@
 #include <HalideBuffer.h>
 
 #include "FotufilmHalide.h"
+#include "FotufilmResolvedFrameParams.h"
 
 #include <algorithm>
 #include <cstring>
@@ -32,65 +33,23 @@ int run_develop(const float *input_r, const float *input_g, const float *input_b
                          FOTUFILM_FRAME_CONFIGURATION_COUNT);
     Buffer<float> exposure(const_cast<float *>(exposure_lut), kLutValueCount);
 
-    const float sigma0 = std::max(configuration[FOTUFILM_CONFIG_MTF_SIGMA], 0.151f);
-    const float sigma1 = std::max(configuration[FOTUFILM_CONFIG_MTF_SIGMA + 1], 0.151f);
-    const float sigma2 = std::max(configuration[FOTUFILM_CONFIG_MTF_SIGMA + 2], 0.151f);
-    const int32_t radius0 = std::max(0, int32_t(configuration[FOTUFILM_CONFIG_MTF_RADIUS]));
-    const int32_t radius1 = std::max(0, int32_t(configuration[FOTUFILM_CONFIG_MTF_RADIUS + 1]));
-    const int32_t radius2 = std::max(0, int32_t(configuration[FOTUFILM_CONFIG_MTF_RADIUS + 2]));
-    const float luma_sigma = std::max(configuration[FOTUFILM_CONFIG_MTF_LUMA_SIGMA], 0.151f);
-    const int32_t luma_radius = std::max({
-        int32_t(0),
-        int32_t(configuration[FOTUFILM_CONFIG_MTF_LUMA_RADIUS]),
-        int32_t(configuration[FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS]),
-        int32_t(configuration[FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS + 1]),
-        int32_t(configuration[FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS + 2]),
-    });
-    const float coupler_sigma = std::max(configuration[FOTUFILM_CONFIG_COUPLER_SIGMA], 0.151f);
-    const int32_t coupler_radius =
-        std::max(0, int32_t(configuration[FOTUFILM_CONFIG_COUPLER_RADIUS]));
-    const float adjacency_sigma =
-        std::max(configuration[FOTUFILM_CONFIG_ADJACENCY_SIGMA], 0.151f);
-    const int32_t adjacency_radius =
-        std::max(0, int32_t(configuration[FOTUFILM_CONFIG_ADJACENCY_RADIUS]));
-    const float adjacency_secondary_sigma =
-        std::max(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA], 0.151f);
-    const int32_t adjacency_secondary_radius =
-        std::max(0, int32_t(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS]));
-    const float fringe_sigma =
-        std::max(configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA], 0.151f);
-    const int32_t fringe_radius =
-        std::max(0, int32_t(configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS]));
-    const float grain_sigma = std::max(configuration[FOTUFILM_CONFIG_GRAIN_SIGMA], 0.151f);
-    const int32_t grain_radius =
-        std::max(0, int32_t(configuration[FOTUFILM_CONFIG_GRAIN_RADIUS]));
-    const float grain_lambda = configuration[FOTUFILM_CONFIG_GRAIN_LAMBDA];
-    // The standalone develop stage returns the negative itself, which no enlarger has imaged
-    // yet, so the radius is zero here whatever the paper asks for. `fotufilm_halide_develop` clears
-    // the feature bit for the same reason.
-    const int32_t print_mtf_radius = 0;
-    const int32_t reversal = (feature_mask & FOTUFILM_FRAME_REVERSAL) != 0 ? 1 : 0;
-    const int32_t monochrome = (feature_mask & FOTUFILM_FRAME_MONOCHROME) != 0 ? 1 : 0;
-
-    int32_t stride[3], strided_radius[3];
-    for (int scale = 0; scale < 3; ++scale) {
-        const int32_t radius =
-            std::max(0, int32_t(configuration[FOTUFILM_CONFIG_HALATION_RADIUS + scale]));
-        stride[scale] = fotufilm_halation_stride(radius);
-        strided_radius[scale] = fotufilm_halation_strided_radius(radius, stride[scale]);
-    }
+    fotufilm::ResolvedFrameParams resolved(configuration, width, height, seed,
+        (feature_mask & FOTUFILM_FRAME_REVERSAL) != 0, origin_x, origin_y);
+    // Standalone development returns a negative before the enlarger.
+    resolved.print_mtf_radius = 0;
+    const int32_t monochrome = (feature_mask & FOTUFILM_FRAME_MONOCHROME) != 0;
 
     return fotufilm_halide_android_develop(
         red, green, blue, config, exposure, width, height,
-        sigma0, sigma1, sigma2, luma_sigma,
-        radius0, radius1, radius2, luma_radius,
-        stride[0], stride[1], stride[2],
-        strided_radius[0], strided_radius[1], strided_radius[2],
-        coupler_sigma, coupler_radius, adjacency_sigma, adjacency_radius,
-        adjacency_secondary_sigma, adjacency_secondary_radius,
-        fringe_sigma, fringe_radius,
-        grain_sigma, grain_radius, grain_lambda, print_mtf_radius,
-        seed, reversal, monochrome, origin_x, origin_y, feature_mask, density);
+        resolved.mtf_sigma_0, resolved.mtf_sigma_1, resolved.mtf_sigma_2, resolved.mtf_luma_sigma,
+        resolved.mtf_radius_0, resolved.mtf_radius_1, resolved.mtf_radius_2, resolved.mtf_luma_radius,
+        resolved.halation_stride_0, resolved.halation_stride_1, resolved.halation_stride_2,
+        resolved.halation_strided_radius_0, resolved.halation_strided_radius_1, resolved.halation_strided_radius_2,
+        resolved.coupler_sigma, resolved.coupler_radius, resolved.adjacency_sigma, resolved.adjacency_radius,
+        resolved.adjacency_secondary_sigma, resolved.adjacency_secondary_radius,
+        resolved.fringe_sigma, resolved.fringe_radius,
+        resolved.grain_sigma, resolved.grain_radius, resolved.grain_lambda, resolved.print_mtf_radius,
+        seed, resolved.reversal, monochrome, origin_x, origin_y, feature_mask, density);
 }
 
 int run_print(Buffer<float> &density, Buffer<float> &result,

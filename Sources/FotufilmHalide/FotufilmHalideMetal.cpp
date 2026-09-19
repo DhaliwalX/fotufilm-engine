@@ -1597,10 +1597,12 @@ private:
         exposure_lut_.set(exposure_buffer_);
         film_lut_.set(film_buffer_);
         paper_lut_.set(paper_buffer_);
-        set_frame(configuration, width, height, seed, reversal, origin_x, origin_y);
-        halation_radius_0_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_HALATION_RADIUS])));
-        halation_radius_1_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_HALATION_RADIUS + 1])));
-        halation_radius_2_.set(std::max(0, int(configuration[FOTUFILM_CONFIG_HALATION_RADIUS + 2])));
+        const ResolvedFrameParams frame(configuration, width, height, seed, reversal,
+                                        origin_x, origin_y);
+        set_frame(frame);
+        halation_radius_0_.set(frame.halation_radius_0);
+        halation_radius_1_.set(frame.halation_radius_1);
+        halation_radius_2_.set(frame.halation_radius_2);
         runtime_features_.set(requested);
         byte_basis_.set(fotufilm_byte_basis(configuration));
         if (cached_) cached_.realize(output_buffer);

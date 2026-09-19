@@ -14,6 +14,7 @@
 #include <string.h>
 
 #include "FotufilmHalide.h"
+#include "../../Sources/FotufilmHalide/FotufilmResolvedFrameParams.h"
 #include "color_float.h"
 #include "monochrome_float.h"
 
@@ -102,73 +103,24 @@ int fotufilm_wasm_render(float *input, float *output, int32_t width, int32_t hei
     mark_host_dirty(&exposure_buf);
 
     const float *c = configuration;
+    const fotufilm::ResolvedFrameParams resolved(configuration, width, height, seed,
+        (feature_mask & FOTUFILM_FRAME_REVERSAL) != 0, origin_x, origin_y);
 
-    // Mirrors MetalFramePipeline::run.
-    const float mtf_sigma_0 = max_f(c[FOTUFILM_CONFIG_MTF_SIGMA], kSigmaFloor);
-    const float mtf_sigma_1 = max_f(c[FOTUFILM_CONFIG_MTF_SIGMA + 1], kSigmaFloor);
-    const float mtf_sigma_2 = max_f(c[FOTUFILM_CONFIG_MTF_SIGMA + 2], kSigmaFloor);
-    const float mtf_luma_sigma = max_f(c[FOTUFILM_CONFIG_MTF_LUMA_SIGMA], kSigmaFloor);
-    const int32_t mtf_radius_0 = max_i(0, (int32_t)c[FOTUFILM_CONFIG_MTF_RADIUS]);
-    const int32_t mtf_radius_1 = max_i(0, (int32_t)c[FOTUFILM_CONFIG_MTF_RADIUS + 1]);
-    const int32_t mtf_radius_2 = max_i(0, (int32_t)c[FOTUFILM_CONFIG_MTF_RADIUS + 2]);
-    // The luma blur is also the widest of the secondary MTF taps, as in the native runner.
-    int32_t mtf_luma_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_MTF_LUMA_RADIUS]);
-    for (int scale = 0; scale < 3; ++scale) {
-        mtf_luma_radius = max_i(
-            mtf_luma_radius, (int32_t)c[FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS + scale]);
-    }
-
-    int32_t halation_radius[3], halation_stride[3], halation_strided_radius[3];
-    for (int scale = 0; scale < 3; ++scale) {
-        halation_radius[scale] =
-            max_i(0, (int32_t)c[FOTUFILM_CONFIG_HALATION_RADIUS + scale]);
-        halation_stride[scale] = fotufilm_halation_stride(halation_radius[scale]);
-        halation_strided_radius[scale] = fotufilm_halation_strided_radius(
-            halation_radius[scale], halation_stride[scale]);
-    }
-
-    const float coupler_sigma = max_f(c[FOTUFILM_CONFIG_COUPLER_SIGMA], kSigmaFloor);
-    const int32_t coupler_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_COUPLER_RADIUS]);
-    const float adjacency_sigma = max_f(c[FOTUFILM_CONFIG_ADJACENCY_SIGMA], kSigmaFloor);
-    const int32_t adjacency_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_ADJACENCY_RADIUS]);
-    const float adjacency_secondary_sigma = max_f(c[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA], kSigmaFloor);
-    const int32_t adjacency_secondary_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS]);
-    const float fringe_sigma = max_f(c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA], kSigmaFloor);
-    const int32_t fringe_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS]);
-    const float grain_sigma = max_f(c[FOTUFILM_CONFIG_GRAIN_SIGMA], kSigmaFloor);
-    const int32_t grain_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_GRAIN_RADIUS]);
-    const float grain_lambda = c[FOTUFILM_CONFIG_GRAIN_LAMBDA];
-    const float mottle_lambda = c[FOTUFILM_CONFIG_MOTTLE_LAMBDA];
-    const int32_t mottle_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_MOTTLE_RADIUS]);
-    // Zero when the paper has no blur to give; the stage then collapses to a unit tap.
-    const int32_t print_mtf_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_PRINT_MTF_RADIUS]);
-    const int32_t reversal = (feature_mask & FOTUFILM_FRAME_REVERSAL) ? 1 : 0;
-
-    // The diffusion filter's pyramid, decimated by the same rule the native paths use. The slots
-    // hold zero radii whenever no mist is fitted, which collapses the stage to a copy.
-    int32_t diffusion_stride[3], diffusion_strided_radius[3];
-    for (int scale = 0; scale < 3; ++scale) {
-        const int32_t radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_DIFFUSION_RADIUS + scale]);
-        diffusion_stride[scale] = fotufilm_diffusion_stride(radius);
-        diffusion_strided_radius[scale] =
-            fotufilm_halation_strided_radius(radius, diffusion_stride[scale]);
-    }
-
-    // Call kernels directly so Asyncify can instrument the WebGPU adapter and buffer-map waits.
-    // Its call-graph analysis cannot trace indirect function-pointer dispatch.
-#define FOTUFILM_KERNEL_ARGUMENTS                                                     \
-    &in_buf, &config_buf, &exposure_buf, width, height,                              \
-        mtf_sigma_0, mtf_sigma_1, mtf_sigma_2, mtf_luma_sigma, mtf_radius_0,         \
-        mtf_radius_1, mtf_radius_2, mtf_luma_radius, halation_radius[0],             \
-        halation_radius[1], halation_radius[2], coupler_sigma, coupler_radius,       \
-        adjacency_sigma, adjacency_radius, adjacency_secondary_sigma, adjacency_secondary_radius, fringe_sigma, fringe_radius, grain_sigma, grain_radius, grain_lambda,  \
-        mottle_lambda, mottle_radius, print_mtf_radius, seed, reversal,              \
-        origin_x, origin_y, halation_stride[0], halation_stride[1],                  \
-        halation_stride[2], halation_strided_radius[0], halation_strided_radius[1],  \
-        halation_strided_radius[2], diffusion_stride[0], diffusion_stride[1],        \
-        diffusion_stride[2], diffusion_strided_radius[0],                            \
-        diffusion_strided_radius[1], diffusion_strided_radius[2], feature_mask,           \
-        fotufilm_byte_basis(c), &out_buf
+#define FOTUFILM_KERNEL_ARGUMENTS \
+    &in_buf, &config_buf, &exposure_buf, width, height, resolved.mtf_sigma_0, resolved.mtf_sigma_1, \
+    resolved.mtf_sigma_2, resolved.mtf_luma_sigma, resolved.mtf_radius_0, resolved.mtf_radius_1, \
+    resolved.mtf_radius_2, resolved.mtf_luma_radius, resolved.halation_radius_0, \
+    resolved.halation_radius_1, resolved.halation_radius_2, resolved.coupler_sigma, \
+    resolved.coupler_radius, resolved.adjacency_sigma, resolved.adjacency_radius, \
+    resolved.adjacency_secondary_sigma, resolved.adjacency_secondary_radius, resolved.fringe_sigma, \
+    resolved.fringe_radius, resolved.grain_sigma, resolved.grain_radius, resolved.grain_lambda, \
+    resolved.mottle_lambda, resolved.mottle_radius, resolved.print_mtf_radius, seed, \
+    resolved.reversal, origin_x, origin_y, resolved.halation_stride_0, resolved.halation_stride_1, \
+    resolved.halation_stride_2, resolved.halation_strided_radius_0, \
+    resolved.halation_strided_radius_1, resolved.halation_strided_radius_2, \
+    resolved.diffusion_stride_0, resolved.diffusion_stride_1, resolved.diffusion_stride_2, \
+    resolved.diffusion_strided_radius_0, resolved.diffusion_strided_radius_1, \
+    resolved.diffusion_strided_radius_2, feature_mask, fotufilm_byte_basis(c), &out_buf
 
     int status;
     if (feature_mask & FOTUFILM_FRAME_MONOCHROME) {

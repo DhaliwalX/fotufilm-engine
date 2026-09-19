@@ -9,6 +9,7 @@
 extern "C" int32_t halide_vulkan_batch_set(void *user_context, int32_t enabled);
 
 #include "FotufilmHalide.h"
+#include "FotufilmResolvedFrameParams.h"
 
 #include <algorithm>
 #include <cstring>
@@ -200,69 +201,25 @@ extern "C" int32_t fotufilm_halide_android_gpu_process_rgba8(
     if (int failed = upload(spectral.film)) return failed;
     if (int failed = upload(spectral.paper)) return failed;
 
-    auto radius = [&](int index) {
-        return std::max(0, int32_t(configuration[index]));
-    };
-    auto sigma = [&](int index) {
-        return std::max(configuration[index], 0.151f);
-    };
-    const int32_t halation[3] = {radius(FOTUFILM_CONFIG_HALATION_RADIUS),
-                                 radius(FOTUFILM_CONFIG_HALATION_RADIUS + 1),
-                                 radius(FOTUFILM_CONFIG_HALATION_RADIUS + 2)};
-    int32_t stride[3], strided_radius[3];
-    for (int scale = 0; scale < 3; ++scale) {
-        stride[scale] = fotufilm_halation_stride(halation[scale]);
-        strided_radius[scale] =
-            fotufilm_halation_strided_radius(halation[scale], stride[scale]);
-    }
-    // The diffusion filter's pyramid, decimated by the same rule the JIT path uses. The slots
-    // hold zero radii whenever no mist is fitted, which collapses the stage to a copy.
-    int32_t diffusion_stride[3], diffusion_strided_radius[3];
-    for (int scale = 0; scale < 3; ++scale) {
-        const int32_t filter_radius = std::max(
-            0, int32_t(configuration[FOTUFILM_CONFIG_DIFFUSION_RADIUS + scale]));
-        diffusion_stride[scale] = fotufilm_diffusion_stride(filter_radius);
-        diffusion_strided_radius[scale] =
-            fotufilm_halation_strided_radius(filter_radius, diffusion_stride[scale]);
-    }
-    const float mottle_lambda = configuration[FOTUFILM_CONFIG_MOTTLE_LAMBDA];
-    const int32_t mottle_radius = std::max(
-        0, int32_t(configuration[FOTUFILM_CONFIG_MOTTLE_RADIUS]));
-    const int32_t reversal = (feature_mask & FOTUFILM_FRAME_REVERSAL) != 0 ? 1 : 0;
-    const int32_t extended_mtf_radius = std::max({
-        radius(FOTUFILM_CONFIG_MTF_LUMA_RADIUS),
-        radius(FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS),
-        radius(FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS + 1),
-        radius(FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS + 2),
-    });
+    const fotufilm::ResolvedFrameParams resolved(configuration, width, height, seed,
+        (feature_mask & FOTUFILM_FRAME_REVERSAL) != 0, origin_x, origin_y);
 
-#define FOTUFILM_GPU_ARGUMENTS                                                \
-    in, config, spectral_cache().exposure, spectral_cache().film,            \
-    spectral_cache().paper, width, height,                                     \
-    sigma(FOTUFILM_CONFIG_MTF_SIGMA), sigma(FOTUFILM_CONFIG_MTF_SIGMA + 1),    \
-    sigma(FOTUFILM_CONFIG_MTF_SIGMA + 2),                                     \
-    sigma(FOTUFILM_CONFIG_MTF_LUMA_SIGMA),                                    \
-    radius(FOTUFILM_CONFIG_MTF_RADIUS), radius(FOTUFILM_CONFIG_MTF_RADIUS + 1),\
-    radius(FOTUFILM_CONFIG_MTF_RADIUS + 2),                                   \
-    extended_mtf_radius,                                                     \
-    halation[0], halation[1], halation[2],                                   \
-    sigma(FOTUFILM_CONFIG_COUPLER_SIGMA), radius(FOTUFILM_CONFIG_COUPLER_RADIUS), \
-    sigma(FOTUFILM_CONFIG_ADJACENCY_SIGMA),                                   \
-    radius(FOTUFILM_CONFIG_ADJACENCY_RADIUS),                                 \
-    sigma(FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA),                          \
-    radius(FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS),                        \
-    sigma(FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA),                            \
-    radius(FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS),                          \
-    sigma(FOTUFILM_CONFIG_GRAIN_SIGMA), radius(FOTUFILM_CONFIG_GRAIN_RADIUS),  \
-    configuration[FOTUFILM_CONFIG_GRAIN_LAMBDA],                              \
-    mottle_lambda, mottle_radius,                                            \
-    radius(FOTUFILM_CONFIG_PRINT_MTF_RADIUS), seed, reversal,                 \
-    origin_x, origin_y,                                                      \
-    stride[0], stride[1], stride[2],                                         \
-    strided_radius[0], strided_radius[1], strided_radius[2],                 \
-    diffusion_stride[0], diffusion_stride[1], diffusion_stride[2],           \
-    diffusion_strided_radius[0], diffusion_strided_radius[1],                \
-    diffusion_strided_radius[2], feature_mask, fotufilm_byte_basis(configuration), out
+#define FOTUFILM_GPU_ARGUMENTS \
+    in, config, spectral_cache().exposure, spectral_cache().film, spectral_cache().paper, width, \
+    height, resolved.mtf_sigma_0, resolved.mtf_sigma_1, resolved.mtf_sigma_2, \
+    resolved.mtf_luma_sigma, resolved.mtf_radius_0, resolved.mtf_radius_1, resolved.mtf_radius_2, \
+    resolved.mtf_luma_radius, resolved.halation_radius_0, resolved.halation_radius_1, \
+    resolved.halation_radius_2, resolved.coupler_sigma, resolved.coupler_radius, \
+    resolved.adjacency_sigma, resolved.adjacency_radius, resolved.adjacency_secondary_sigma, \
+    resolved.adjacency_secondary_radius, resolved.fringe_sigma, resolved.fringe_radius, \
+    resolved.grain_sigma, resolved.grain_radius, resolved.grain_lambda, resolved.mottle_lambda, \
+    resolved.mottle_radius, resolved.print_mtf_radius, seed, resolved.reversal, origin_x, origin_y, \
+    resolved.halation_stride_0, resolved.halation_stride_1, resolved.halation_stride_2, \
+    resolved.halation_strided_radius_0, resolved.halation_strided_radius_1, \
+    resolved.halation_strided_radius_2, resolved.diffusion_stride_0, resolved.diffusion_stride_1, \
+    resolved.diffusion_stride_2, resolved.diffusion_strided_radius_0, \
+    resolved.diffusion_strided_radius_1, resolved.diffusion_strided_radius_2, feature_mask, \
+    fotufilm_byte_basis(configuration), out
 
     // Every pass the kernel launches shares one command buffer and one sync.
     halide_vulkan_batch_set(nullptr, 1);
