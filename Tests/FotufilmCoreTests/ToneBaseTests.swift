@@ -43,6 +43,33 @@ final class ToneBaseTests: XCTestCase {
         XCTAssertEqual(invocation.configuration[FilmEngineInvocation.toneGridBOffset], 0)
     }
 
+    func testAutoLevelsLeavesDisabledLocalToneKeyUnchanged() {
+        let width = 80, height = 48
+        var options = FotufilmEngine.Options()
+        options.paper = .screen
+        options.digitalReference = .autoLevels
+        options.localTone = false
+        options.sceneHeadroom = 4
+        var invocation = FilmEngineInvocation(stock: TestStocks.negative, options: options,
+                                              width: width, height: height)
+        XCTAssertTrue(invocation.sceneMeteringActive)
+        XCTAssertTrue(invocation.toneControlsActive)
+        XCTAssertFalse(invocation.localToneActive)
+        let original = invocation.configuration
+        let pixels = frame(width: width, height: height) { x, y in
+            y < height / 2 ? (x % 2 == 0 ? 6 : 4) : -2
+        }
+        var measured = invocation.toneBaseMeasurement()
+        pixels.withUnsafeBufferPointer { measured.add(linearRGBA: $0.baseAddress!, rows: 0..<height) }
+        invocation.setToneBase(measured)
+        let grid = FilmEngineInvocation.toneGridSizeOffset..<(FilmEngineInvocation.toneGridBOffset
+            + FilmEngineInvocation.toneGridCells)
+        XCTAssertEqual(Array(invocation.configuration[grid]), Array(original[grid]))
+        XCTAssertNotEqual(invocation.configuration[FilmEngineInvocation.paperMidpointRedOffset],
+                          original[FilmEngineInvocation.paperMidpointRedOffset],
+                          "Auto Levels must still adapt the receiver")
+    }
+
     func testGridFollowsAspect() {
         let square = ToneBaseMeasurement(frameWidth: 256, frameHeight: 256,
                                          balance: SIMD3(1, 1, 1), exposureGain: 1)

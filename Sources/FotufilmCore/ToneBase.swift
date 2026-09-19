@@ -295,6 +295,10 @@ extension FilmEngineInvocation {
             applyScreenLevels(DigitalReferenceReceiver.levels(
                 for: stock, style: .autoLevels, sceneHighlightStops: scene.bright))
         }
+        // Auto Levels meters the same regions even when local tone is disabled. Keep the
+        // identity key in that case: automatic headroom adjustment can still supply a
+        // nonzero highlight control, which must remain keyed by each pixel's own brightness.
+        guard localToneActive else { return }
         let (a, b) = measurement.solvedCoefficients()
         configuration[Self.toneGridSizeOffset] = Float(measurement.gridWidth)
         configuration[Self.toneGridSizeOffset + 1] = Float(measurement.gridHeight)
