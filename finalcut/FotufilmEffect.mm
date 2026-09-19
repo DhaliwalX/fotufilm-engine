@@ -1476,7 +1476,7 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
                    toParameter:kFotufilmParam_DigitalReference];
     [setting setParameterFlags:screen ? kFxParameterFlag_DEFAULT : kFxParameterFlag_DISABLED
                    toParameter:kFotufilmParam_ScreenExposure];
-    NSInteger screenStyle = 0;
+    int screenStyle = 0;
     [retrieval getIntValue:&screenStyle fromParameter:kFotufilmParam_DigitalReference atTime:time];
     [setting setParameterFlags:(screen && (capabilities & FOTUFILM_CONTROL_SCREEN_GRADE) && screenStyle != 0)
                                    ? kFxParameterFlag_DEFAULT : kFxParameterFlag_DISABLED
