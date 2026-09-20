@@ -30,6 +30,8 @@ enum TestStocks {
         grainStrength: 0.010,
         grainSizeMM: 0.005,
         grainLayerWeights: [0.7, 1.0, 1.35],
+        crystalGrainPopulation: CrystalGrainPopulation(
+            radiusSpan: 6, sublayerShares: [0.25, 0.25, 0.25, 0.25], coatingDensityScale: 1),
         halationStrength: [0.050, 0.020, 0.008],
         paperCurve: CharacteristicCurve(dMin: 0.07, gamma: 2.60, toe: -0.52, toeWidth: 0.16, shoulder: 0.42, shoulderWidth: 0.14))
 
@@ -55,6 +57,8 @@ enum TestStocks {
         grainStrength: 0.010,
         grainSizeMM: 0.004,
         grainLayerWeights: [0.8, 1.0, 1.20],
+        crystalGrainPopulation: CrystalGrainPopulation(
+            radiusSpan: 6, sublayerShares: [0.25, 0.25, 0.25, 0.25], coatingDensityScale: 1),
         halationStrength: [0.030, 0.014, 0.006],
         paperCurve: CharacteristicCurve(dMin: 0.07, gamma: 2.60, toe: -0.52, toeWidth: 0.16, shoulder: 0.42, shoulderWidth: 0.14),
         isReversal: true)
@@ -81,6 +85,8 @@ enum TestStocks {
         grainStrength: 0.014,
         grainSizeMM: 0.006,
         grainLayerWeights: [1, 1, 1],
+        crystalGrainPopulation: CrystalGrainPopulation(
+            radiusSpan: 6, sublayerShares: [0.25, 0.25, 0.25, 0.25], coatingDensityScale: 1),
         halationStrength: [0.025, 0.025, 0.025],
         paperCurve: CharacteristicCurve(dMin: 0.05, gamma: 2.90, toe: -0.48, toeWidth: 0.15, shoulder: 0.40, shoulderWidth: 0.13),
         isMonochrome: true)

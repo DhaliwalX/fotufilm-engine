@@ -3065,6 +3065,16 @@
   ],
   "grainLumaCorrelation": 0.6,
   "grainSizeMM": 0.005,
+  "crystalGrainPopulation": {
+    "radiusSpan": 6,
+    "sublayerShares": [
+      0.25,
+      0.25,
+      0.25,
+      0.25
+    ],
+    "coatingDensityScale": 1
+  },
   "grainStrength": 0.01,
   "halationLookScale": 1,
   "halationReturnMatrix": [

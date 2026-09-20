@@ -12,6 +12,136 @@ final class CrystalGrainTests: XCTestCase {
         ("monochrome", TestStocks.monochrome),
     ]
 
+    private static let candidate = CrystalGrainPopulation(
+        radiusSpan: 3, sublayerShares: [0.20, 0.25, 0.25, 0.30], coatingDensityScale: 1)
+
+    func testAuthoredPopulationChangesGeometryAndPreservesRMSAnchor() {
+        for (name, original) in Self.stocks {
+            var stock = original
+            stock.crystalGrainPopulation = original.isReversal
+                ? CrystalGrainPopulation(radiusSpan: 3,
+                                         sublayerShares: original.crystalGrainPopulation.sublayerShares,
+                                         coatingDensityScale: 1) : Self.candidate
+            for layer in 0..<3 {
+                let baseline = CrystalGrainModel(stock: original, layer: layer)
+                let model = CrystalGrainModel(stock: stock, layer: layer)
+                XCTAssertNotEqual(model.bins.map(\.cloudRadiusMM),
+                                  baseline.bins.map(\.cloudRadiusMM), name)
+                XCTAssertEqual(model.sigma(netDensity: model.readNetDensity),
+                               baseline.readSigma, accuracy: baseline.readSigma * 1e-3, name)
+                XCTAssertLessThan(model.fitError, 0.1, "\(name): \(model.report)")
+                let radii = model.bins.map(\.cloudRadiusMM).filter { $0 > 0 }
+                XCTAssertLessThanOrEqual(radii.max()! / radii.min()!, 3.0001)
+            }
+        }
+    }
+
+    func testDenserCoatingPreservesMeanAndReducesVariance() {
+        for (_, original) in Self.stocks {
+            var stock = original
+            stock.crystalGrainPopulation = CrystalGrainPopulation(
+                radiusSpan: original.crystalGrainPopulation.radiusSpan,
+                sublayerShares: original.crystalGrainPopulation.sublayerShares, coatingDensityScale: 2)
+            for layer in 0..<3 {
+                let a = CrystalGrainModel(stock: original, layer: layer)
+                let b = CrystalGrainModel(stock: stock, layer: layer)
+                for (before, after) in zip(a.bins, b.bins) {
+                    XCTAssertEqual(after.cloudRadiusMM, before.cloudRadiusMM)
+                    XCTAssertEqual(after.crystalsPerMM2, before.crystalsPerMM2 * 2)
+                    XCTAssertEqual(after.dyePerCloud, before.dyePerCloud / 2)
+                    XCTAssertEqual(after.pool, before.pool)
+                }
+                for exposure: Float in [-2, -1, 0, 1, 2] {
+                    XCTAssertEqual(a.meanDensity(logExposure: exposure),
+                                   b.meanDensity(logExposure: exposure), accuracy: 1e-6)
+                }
+                for density: Float in [0.2, 0.5, 1] {
+                    XCTAssertEqual(b.sigma(netDensity: density),
+                                   a.sigma(netDensity: density) / sqrt(2), accuracy: 1e-6)
+                }
+            }
+        }
+    }
+
+    func testProcessUsesReferencePopulationAndKeepsCoatingScale() {
+        var reference = TestStocks.negative
+        reference.crystalGrainPopulation = Self.candidate
+        var developed = reference
+        for layer in 0..<3 { developed.curves[layer].gamma *= 1.1 }
+        // A process condition cannot replace the reference coating's geometry.
+        developed.crystalGrainPopulation = TestStocks.negative.crystalGrainPopulation
+        for layer in 0..<3 {
+            let a = CrystalGrainModel(stock: developed, reference: reference, layer: layer)
+            var denser = reference
+            denser.crystalGrainPopulation = CrystalGrainPopulation(
+                radiusSpan: Self.candidate.radiusSpan, sublayerShares: Self.candidate.sublayerShares,
+                coatingDensityScale: 2)
+            let b = CrystalGrainModel(stock: developed, reference: denser, layer: layer)
+            let ref = CrystalGrainModel(stock: reference, layer: layer)
+            XCTAssertEqual(a.bins.map(\.cloudRadiusMM), ref.bins.map(\.cloudRadiusMM))
+            XCTAssertEqual(a.bins.map(\.crystalsPerMM2), ref.bins.map(\.crystalsPerMM2))
+            XCTAssertEqual(b.bins.map(\.cloudRadiusMM), a.bins.map(\.cloudRadiusMM))
+            XCTAssertEqual(b.bins.map(\.crystalsPerMM2), a.bins.map { $0.crystalsPerMM2 * 2 })
+            XCTAssertEqual(b.sigma(netDensity: 1), a.sigma(netDensity: 1) / sqrt(2), accuracy: 1e-6)
+        }
+    }
+
+    func testPopulationPackRoundTrip() throws {
+        for population in [TestStocks.negative.crystalGrainPopulation, Self.candidate] {
+            var stock = TestStocks.negative
+            stock.crystalGrainPopulation = population
+            let data = try JSONEncoder().encode(FilmStockDefinition(id: "test", stock: stock))
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let authored = try XCTUnwrap(json["crystalGrainPopulation"] as? [String: Any])
+            XCTAssertEqual(Set(authored.keys), ["radiusSpan", "sublayerShares", "coatingDensityScale"])
+            let decoded = try JSONDecoder().decode(FilmStockDefinition.self, from: data).validated()
+            XCTAssertEqual(decoded.stock.crystalGrainPopulation, population)
+        }
+    }
+
+    func testMissingPopulationFieldsAreRejected() throws {
+        let data = try JSONEncoder().encode(FilmStockDefinition(id: "test", stock: TestStocks.negative))
+        let complete = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        for field in ["crystalGrainPopulation", "radiusSpan", "sublayerShares", "coatingDensityScale"] {
+            var json = complete
+            if field == "crystalGrainPopulation" {
+                json.removeValue(forKey: field)
+            } else {
+                var population = try XCTUnwrap(json["crystalGrainPopulation"] as? [String: Any])
+                population.removeValue(forKey: field)
+                json["crystalGrainPopulation"] = population
+            }
+            let incomplete = try JSONSerialization.data(withJSONObject: json)
+            XCTAssertThrowsError(try JSONDecoder().decode(FilmStockDefinition.self, from: incomplete)) { error in
+                guard case DecodingError.keyNotFound(let key, _) = error else {
+                    return XCTFail("expected missing-field failure, got \(error)")
+                }
+                XCTAssertEqual(key.stringValue, field)
+            }
+        }
+    }
+
+    func testMalformedPopulationIsRejectedDuringPackDecode() throws {
+        let baseline = try JSONEncoder().encode(FilmStockDefinition(id: "test", stock: TestStocks.negative))
+        for override: [String: Any] in [
+            ["radiusSpan": 0], ["radiusSpan": 21], ["sublayerShares": [0.2, 0.8]],
+            ["sublayerShares": [0.2, 0.2, 0.2, 0.2]],
+            ["sublayerShares": [0, 0.3, 0.3, 0.4]],
+            ["coatingDensityScale": 0], ["coatingDensityScale": 5]
+        ] {
+            var json = try XCTUnwrap(JSONSerialization.jsonObject(with: baseline) as? [String: Any])
+            var population = try XCTUnwrap(json["crystalGrainPopulation"] as? [String: Any])
+            population.merge(override) { _, authored in authored }
+            json["crystalGrainPopulation"] = population
+            let data = try JSONSerialization.data(withJSONObject: json)
+            XCTAssertThrowsError(try JSONDecoder().decode(FilmStockDefinition.self, from: data)) { error in
+                guard case DecodingError.dataCorrupted = error else {
+                    return XCTFail("expected invalid-population failure, got \(error)")
+                }
+            }
+        }
+    }
+
     /// The sublayers the kernel renders — each drawing on one pool — form the record's curve
     /// to within a tenth of a density over six decades, and the model's own mean is that fit.
     /// Fog is set aside: the model develops it, the curve's D-min already holds it.
@@ -312,9 +442,19 @@ final class CrystalGrainTests: XCTestCase {
     /// Both schedules develop the same population to the same granularity and tone; they draw
     /// their own hashes, so the fields agree in their statistics rather than pixel for pixel.
     func testCPUAndMetalAgree() throws {
+        try checkCPUAndMetal(stock: TestStocks.negative)
+    }
+
+    func testAuthoredPopulationCPUAndMetalAgree() throws {
+        var stock = TestStocks.negative
+        stock.crystalGrainPopulation = CrystalGrainPopulation(
+            radiusSpan: 3, sublayerShares: Self.candidate.sublayerShares, coatingDensityScale: 2)
+        try checkCPUAndMetal(stock: stock)
+    }
+
+    private func checkCPUAndMetal(stock: FilmStock) throws {
         try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable, "Halide required")
         let gpu = try XCTUnwrap(HalideMetalFilmRenderer.shared)
-        let stock = TestStocks.negative
         var options = FotufilmEngine.Options()
         options.sceneIlluminantKelvin = stock.referenceIlluminantKelvin
         options.format = FilmFormat(name: "crystal bench", frameHeightMM: 1.2)

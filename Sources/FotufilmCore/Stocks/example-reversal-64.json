@@ -91,6 +91,16 @@
   "couplerDiffusionMM": 0,
   "adjacencyStrength": 0.12,
   "adjacencyRadiusMM": 0.03,
+  "crystalGrainPopulation": {
+    "radiusSpan": 6,
+    "sublayerShares": [
+      0.25,
+      0.25,
+      0.25,
+      0.25
+    ],
+    "coatingDensityScale": 1
+  },
   "grainStrength": 0.01,
   "grainSizeMM": 0.005,
   "grainLayerWeights": [

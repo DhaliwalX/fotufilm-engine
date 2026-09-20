@@ -1,6 +1,53 @@
 import Foundation
 import FotufilmHalide
 
+/// Stock-authoring parameters for the organic crystal model. These are effective model
+/// populations, not a measurement of silver mass or a unique reconstruction of the emulsion.
+public struct CrystalGrainPopulation: Codable, Equatable, Sendable {
+    /// Maximum radius ratio on the class ladder; 1 gives equal radii.
+    public let radiusSpan: Float
+    /// Target fractions of fitted density weight, fastest to slowest. Whole speed classes
+    /// are assigned at cumulative boundaries, then weights are refitted to the tone curve;
+    /// these are not guaranteed final crystal-count or silver-mass fractions.
+    public let sublayerShares: [Float]
+    /// Effective crystal count relative to the RMS-anchored population. Each crystal forms
+    /// inversely as much dye, preserving mean demand and pool capacity. The model's RMS
+    /// becomes the sheet anchor / sqrt(scale). Keep 1 when matching a measured RMS anchor.
+    public let coatingDensityScale: Float
+
+    public init(radiusSpan: Float, sublayerShares: [Float], coatingDensityScale: Float) {
+        precondition(Self.valid(radiusSpan, sublayerShares, coatingDensityScale),
+                     "invalid crystal grain population")
+        self.radiusSpan = radiusSpan
+        self.sublayerShares = sublayerShares
+        self.coatingDensityScale = coatingDensityScale
+    }
+
+    private static func valid(_ span: Float, _ shares: [Float], _ scale: Float) -> Bool {
+        span.isFinite && (1...20).contains(span)
+            && shares.count == CrystalGrainModel.binCount
+            && shares.allSatisfy { $0.isFinite && $0 > 0 && $0 < 1 }
+            && abs(shares.reduce(0, +) - 1) <= 1e-5
+            && scale.isFinite && (0.25...4).contains(scale)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case radiusSpan, sublayerShares, coatingDensityScale
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let span = try c.decode(Float.self, forKey: .radiusSpan)
+        let shares = try c.decode([Float].self, forKey: .sublayerShares)
+        let scale = try c.decode(Float.self, forKey: .coatingDensityScale)
+        guard Self.valid(span, shares, scale) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
+                debugDescription: "crystalGrainPopulation requires radiusSpan in 1...20, four positive sublayerShares summing to 1, and coatingDensityScale in 0.25...4"))
+        }
+        self.init(radiusSpan: span, sublayerShares: shares, coatingDensityScale: scale)
+    }
+}
+
 /// Grain formed by the crystals that form the image, for `GrainModel.crystals`, in the three
 /// stages a real emulsion's grain passes through.
 ///
@@ -11,7 +58,7 @@ import FotufilmHalide
 /// forms, so the population is read off the curve: non-negative weights on a ladder of speed
 /// classes whose threshold-hit responses add up to the curve above base. Speed goes with volume
 /// (Mees & James), so the same ladder places each class on a size ladder, `r ∝ 10^(-E0 / 3)`,
-/// clipped to the sixfold span a coated record actually holds. Nothing here depends on the
+/// clipped to the stock-authored span. Nothing here depends on the
 /// developer; `Exposure` is the coating and the light.
 ///
 /// **Development** turns latent crystals into what is seen. A developed crystal forms dye, or
@@ -20,8 +67,8 @@ import FotufilmHalide
 /// mass distribution. The developer's diffusion spreads each crystal's dye to a cloud — the
 /// fastest sublayer's cloud is `FilmStock.grainSizeMM`, the coarsest structure a scan resolves,
 /// and the rest follow the size ladder down from it. The classes are coated as sublayers from
-/// the fastest down, a quarter of the record's weight in the fast one and the rest in equal
-/// parts, each with its own finite coupler pool: with `demand` the dye its developed crystals
+/// the fastest down, using the stock's target density-weight shares, each
+/// with its own finite coupler pool: with `demand` the dye its developed crystals
 /// ask for, the dye that forms is `C (1 - exp(-demand / C))`, sized so that once the whole
 /// sublayer has developed a further crystal forms a tenth of what an unstarved one would. That
 /// starvation is what makes granularity fall past its peak; silver has no pool. Reversal dye
@@ -38,10 +85,9 @@ import FotufilmHalide
 ///
 /// Two measurements anchor the scale: the sheet's RMS granularity at its read density fixes the
 /// dye one crystal of the reference size forms at the reference process, and with it how many
-/// crystals the record coats per square millimetre; `grainSizeMM` fixes the cloud. The three
-/// constants — the pool gain, the fast sublayer's share and the size span — were set against the
-/// granularity-against-density curves Kodak publishes for Vision3 250D and 500T and are applied
-/// to every stock unchanged.
+/// crystals the record coats per square millimetre; `grainSizeMM` fixes the cloud. Each stock
+/// authors its population width and allocation; an explicit coating-density scale also
+/// changes RMS and must not be mistaken for a measured stock calibration.
 public struct CrystalGrainModel: Sendable {
     /// Size bins per record, matching FOTUFILM_CRYSTAL_GRAIN_BINS.
     public static let binCount = Int(FOTUFILM_CRYSTAL_GRAIN_BINS)
@@ -64,8 +110,6 @@ public struct CrystalGrainModel: Sendable {
         public static let hitThreshold = 3
         /// Speed goes with volume: log10 radius per decade of speed.
         public static let sizeExponent: Float = 1.0 / 3.0
-        /// Ratio of the largest to the smallest crystal radius a record coats.
-        public static let radiusSpan: Float = 6
 
         /// Coating weight per speed class: the density the class forms at full, unstarved
         /// development in the reference process. Zero for classes the record does not coat.
@@ -127,8 +171,6 @@ public struct CrystalGrainModel: Sendable {
         /// Fraction of an unstarved crystal's dye a further crystal forms once its sublayer has
         /// fully developed.
         public static let poolGain: Float = 0.1
-        /// Share of a record's weight coated in its fast sublayer.
-        public static let fastShare: Float = 0.25
         /// What a developed crystal forms goes with its projected area.
         public static let dyeExponent: Float = 2
         /// Each developed crystal forms `1 ± markDispersion` of its sublayer's mean: the
@@ -334,6 +376,7 @@ public struct CrystalGrainModel: Sendable {
     /// dye, `1/s²` as many of them.
     public init(stock: FilmStock, reference: FilmStock? = nil, layer: Int, grainScale: Float = 1) {
         let referenceStock = reference ?? stock
+        let population = referenceStock.crystalGrainPopulation
         let referenceCurve = referenceStock.curves[layer]
         let developedCurve = stock.curves[layer]
         curve = developedCurve
@@ -374,21 +417,21 @@ public struct CrystalGrainModel: Sendable {
         if !active.isEmpty {
             let mean = active.reduce(Float(0)) { $0 + weights[$1] * logRadius[$1] }
                 / active.reduce(Float(0)) { $0 + weights[$1] }
-            let half = log10(Exposure.radiusSpan) / 2
+            let half = log10(population.radiusSpan) / 2
             logRadius = logRadius.map { min(max($0, mean - half), mean + half) }
         }
 
-        // Development: sublayers along speed, fastest first: the fast sublayer takes
-        // `fastShare` of the weight, the remaining bins share the rest equally.
+        // Development: sublayers along speed, fastest first, at authored cumulative
+        // density-weight boundaries.
         var bins: [Development.Bin] = []
         if !active.isEmpty {
             let ordered = active  // class index ascending is speed descending
             let activeWeight = ordered.reduce(Float(0)) { $0 + weights[$1] }
-            var cuts: [Float] = [Development.fastShare]
-            let rest: Float = 1 - Development.fastShare
-            for i in 0..<(Self.binCount - 2) {
-                let step: Float = Float(i + 1) / Float(Self.binCount - 1)
-                cuts.append(Development.fastShare + rest * step)
+            var cuts: [Float] = []
+            var boundary: Float = 0
+            for share in population.sublayerShares.dropLast() {
+                boundary += share
+                cuts.append(boundary)
             }
             var members = [[Int]](repeating: [], count: Self.binCount)
             var cumulative: Float = 0
@@ -500,6 +543,15 @@ public struct CrystalGrainModel: Sendable {
                 readNetDensity = at
                 readSigma = measured
             }
+        }
+        // Applied after reference/process RMS anchoring so the same relative coating
+        // change survives push/pull. Demand, radii, pools, and the mean tone fit stay fixed.
+        if population.coatingDensityScale != 1 {
+            for i in development.bins.indices {
+                development.bins[i].crystalsPerMM2 *= population.coatingDensityScale
+                development.bins[i].dyePerCloud /= population.coatingDensityScale
+            }
+            readSigma /= sqrt(population.coatingDensityScale)
         }
     }
 

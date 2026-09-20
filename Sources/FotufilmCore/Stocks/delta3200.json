@@ -23484,6 +23484,16 @@
     1
   ],
   "grainSizeMM": 0.008,
+  "crystalGrainPopulation": {
+    "radiusSpan": 6,
+    "sublayerShares": [
+      0.25,
+      0.25,
+      0.25,
+      0.25
+    ],
+    "coatingDensityScale": 1
+  },
   "grainStrength": 0.019,
   "halationLookScale": 1,
   "halationReturnMatrix": [

@@ -74,6 +74,8 @@ public struct FilmStockDefinition: Codable, Sendable {
     /// three records, or one such row per record; a row of three is the earlier form without
     /// the hump. Absent uses the Vision3 family shape; see `GrainDensityProfile`.
     public var grainDensityProfile: GrainDensityProfile?
+    /// Required population parameters for Organic Crystals.
+    public var crystalGrainPopulation: CrystalGrainPopulation
     /// `[exponent p, shoulder density Ds]` of the dye reversal's saturating power law.
     /// Absent uses the provisional family profile [1.1, 3].
     public var grainReversalProfile: [Float]? = nil
@@ -424,6 +426,7 @@ public extension FilmStockDefinition {
             grainLayerSizeRatio: grainLayerSizeRatio ?? [1, 1, 1],
             grainDensityLaw: grainDensityLaw,
             grainDensityProfile: grainDensityProfile,
+            crystalGrainPopulation: crystalGrainPopulation,
             grainReversalProfile: grainReversalProfile ?? FilmStock.defaultGrainReversalProfile,
             grainFogDensity: grainFogDensity ?? FilmStock.defaultGrainFogDensity,
             granularityReadDensity: granularityReadDensity,
@@ -492,6 +495,7 @@ public extension FilmStockDefinition {
         self.grainLayerSizeRatio = stock.grainLayerSizeRatio
         self.grainDensityLaw = stock.grainDensityLaw
         self.grainDensityProfile = stock.grainDensityProfile
+        self.crystalGrainPopulation = stock.crystalGrainPopulation
         self.grainReversalProfile = stock.grainReversalProfile
         self.grainFogDensity = stock.grainFogDensity
         self.granularityReadDensity = stock.granularityReadDensity

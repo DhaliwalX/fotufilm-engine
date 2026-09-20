@@ -113,6 +113,8 @@ struct CustomStockDraft: Codable, Equatable {
 
     var grainStrength: Float = 0.012
     var grainSizeMM: Float = 0.005
+    var crystalGrainPopulation = CrystalGrainPopulation(
+        radiusSpan: 6, sublayerShares: [0.25, 0.25, 0.25, 0.25], coatingDensityScale: 1)
     var grainLumaCorrelation: Float = 0
     /// Per-layer, R/G/B.
     var grainLayerWeights: [Float] = [0.7, 1.0, 1.35]
@@ -314,6 +316,7 @@ struct CustomStockDraft: Codable, Equatable {
 
         draft.grainStrength = definition.grainStrength
         draft.grainSizeMM = definition.grainSizeMM
+        draft.crystalGrainPopulation = definition.crystalGrainPopulation
         draft.grainLayerWeights = definition.grainLayerWeights
         draft.grainLumaCorrelation = definition.grainLumaCorrelation ?? 0
         draft.grainLayerSizeRatio = definition.grainLayerSizeRatio ?? draft.grainLayerSizeRatio
@@ -430,6 +433,7 @@ struct CustomStockDraft: Codable, Equatable {
                 grainLayerSizeRatio: padded(grainLayerSizeRatio, 1),
                 grainDensityLaw: grainDensityLaw.law,
                 grainDensityProfile: grainDensityProfile,
+                crystalGrainPopulation: crystalGrainPopulation,
                 grainReversalProfile: grainReversalProfile ?? FilmStock.defaultGrainReversalProfile,
                 grainFogDensity: grainFogDensity,
                 halationStrength: glow,
