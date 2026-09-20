@@ -299,7 +299,7 @@ public struct FilmStock: Sendable {
     /// `D = net density + grainFogDensity` and normalised at the density the published figure
     /// is read at. The default is the Vision3 family shape; measured packs provide their own.
     public var grainDensityProfile: GrainDensityProfile
-    /// Optional population authoring affects only Organic Crystals.
+    /// Authored population parameters for Organic Crystals.
     public var crystalGrainPopulation: CrystalGrainPopulation
     /// `[exponent p, shoulder density Ds]` for `dyeCloudReversal`, in developed density
     /// above base plus fog, like the other grain laws. The generic profile is a provisional
@@ -408,7 +408,7 @@ public struct FilmStock: Sendable {
         grainLayerSizeRatio: [Float] = [1, 1, 1],
         grainDensityLaw: GrainDensityLaw? = nil,
         grainDensityProfile: GrainDensityProfile? = nil,
-        crystalGrainPopulation: CrystalGrainPopulation = .legacy,
+        crystalGrainPopulation: CrystalGrainPopulation,
         grainReversalProfile: [Float] = FilmStock.defaultGrainReversalProfile,
         grainFogDensity: Float = FilmStock.defaultGrainFogDensity,
         granularityReadDensity: GranularityReadDensity? = nil,
@@ -680,6 +680,8 @@ extension FilmStock {
         grainStrength: 0,
         grainSizeMM: 0,
         grainLayerWeights: [1, 1, 1],
+        crystalGrainPopulation: CrystalGrainPopulation(
+            radiusSpan: 6, sublayerShares: [0.25, 0.25, 0.25, 0.25], coatingDensityScale: 1),
         halationStrength: [0, 0, 0],
         paperCurve: CharacteristicCurve(dMin: 0, gamma: 1, toe: -2,
                                         toeWidth: 0.2, shoulder: 2,

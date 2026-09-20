@@ -13,13 +13,15 @@ final class CrystalGrainTests: XCTestCase {
     ]
 
     private static let candidate = CrystalGrainPopulation(
-        radiusSpan: 3, sublayerShares: [0.20, 0.25, 0.25, 0.30])
+        radiusSpan: 3, sublayerShares: [0.20, 0.25, 0.25, 0.30], coatingDensityScale: 1)
 
     func testAuthoredPopulationChangesGeometryAndPreservesRMSAnchor() {
         for (name, original) in Self.stocks {
             var stock = original
             stock.crystalGrainPopulation = original.isReversal
-                ? CrystalGrainPopulation(radiusSpan: 3) : Self.candidate
+                ? CrystalGrainPopulation(radiusSpan: 3,
+                                         sublayerShares: original.crystalGrainPopulation.sublayerShares,
+                                         coatingDensityScale: 1) : Self.candidate
             for layer in 0..<3 {
                 let baseline = CrystalGrainModel(stock: original, layer: layer)
                 let model = CrystalGrainModel(stock: stock, layer: layer)
@@ -37,7 +39,9 @@ final class CrystalGrainTests: XCTestCase {
     func testDenserCoatingPreservesMeanAndReducesVariance() {
         for (_, original) in Self.stocks {
             var stock = original
-            stock.crystalGrainPopulation = CrystalGrainPopulation(coatingDensityScale: 2)
+            stock.crystalGrainPopulation = CrystalGrainPopulation(
+                radiusSpan: original.crystalGrainPopulation.radiusSpan,
+                sublayerShares: original.crystalGrainPopulation.sublayerShares, coatingDensityScale: 2)
             for layer in 0..<3 {
                 let a = CrystalGrainModel(stock: original, layer: layer)
                 let b = CrystalGrainModel(stock: stock, layer: layer)
@@ -65,7 +69,7 @@ final class CrystalGrainTests: XCTestCase {
         var developed = reference
         for layer in 0..<3 { developed.curves[layer].gamma *= 1.1 }
         // A process condition cannot replace the reference coating's geometry.
-        developed.crystalGrainPopulation = .legacy
+        developed.crystalGrainPopulation = TestStocks.negative.crystalGrainPopulation
         for layer in 0..<3 {
             let a = CrystalGrainModel(stock: developed, reference: reference, layer: layer)
             var denser = reference
@@ -82,33 +86,59 @@ final class CrystalGrainTests: XCTestCase {
         }
     }
 
-    func testPopulationPackRoundTripAndLegacyOmission() throws {
-        let original = FilmStockDefinition(id: "test", stock: TestStocks.negative)
-        let legacy = try JSONEncoder().encode(original)
-        XCTAssertFalse(String(decoding: legacy, as: UTF8.self).contains("crystalGrainPopulation"))
-        XCTAssertEqual(try JSONDecoder().decode(FilmStockDefinition.self, from: legacy)
-            .stock.crystalGrainPopulation, .legacy)
-        var stock = original.stock
-        stock.crystalGrainPopulation = Self.candidate
-        let data = try JSONEncoder().encode(FilmStockDefinition(id: "test", stock: stock))
-        let decoded = try JSONDecoder().decode(FilmStockDefinition.self, from: data).validated()
-        XCTAssertEqual(decoded.stock.crystalGrainPopulation, Self.candidate)
-        XCTAssertEqual(try JSONDecoder().decode(CrystalGrainPopulation.self,
-                                               from: Data("{}".utf8)), .legacy)
+    func testPopulationPackRoundTrip() throws {
+        for population in [TestStocks.negative.crystalGrainPopulation, Self.candidate] {
+            var stock = TestStocks.negative
+            stock.crystalGrainPopulation = population
+            let data = try JSONEncoder().encode(FilmStockDefinition(id: "test", stock: stock))
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let authored = try XCTUnwrap(json["crystalGrainPopulation"] as? [String: Any])
+            XCTAssertEqual(Set(authored.keys), ["radiusSpan", "sublayerShares", "coatingDensityScale"])
+            let decoded = try JSONDecoder().decode(FilmStockDefinition.self, from: data).validated()
+            XCTAssertEqual(decoded.stock.crystalGrainPopulation, population)
+        }
+    }
+
+    func testMissingPopulationFieldsAreRejected() throws {
+        let data = try JSONEncoder().encode(FilmStockDefinition(id: "test", stock: TestStocks.negative))
+        let complete = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        for field in ["crystalGrainPopulation", "radiusSpan", "sublayerShares", "coatingDensityScale"] {
+            var json = complete
+            if field == "crystalGrainPopulation" {
+                json.removeValue(forKey: field)
+            } else {
+                var population = try XCTUnwrap(json["crystalGrainPopulation"] as? [String: Any])
+                population.removeValue(forKey: field)
+                json["crystalGrainPopulation"] = population
+            }
+            let incomplete = try JSONSerialization.data(withJSONObject: json)
+            XCTAssertThrowsError(try JSONDecoder().decode(FilmStockDefinition.self, from: incomplete)) { error in
+                guard case DecodingError.keyNotFound(let key, _) = error else {
+                    return XCTFail("expected missing-field failure, got \(error)")
+                }
+                XCTAssertEqual(key.stringValue, field)
+            }
+        }
     }
 
     func testMalformedPopulationIsRejectedDuringPackDecode() throws {
         let baseline = try JSONEncoder().encode(FilmStockDefinition(id: "test", stock: TestStocks.negative))
-        for object: [String: Any] in [
+        for override: [String: Any] in [
             ["radiusSpan": 0], ["radiusSpan": 21], ["sublayerShares": [0.2, 0.8]],
             ["sublayerShares": [0.2, 0.2, 0.2, 0.2]],
             ["sublayerShares": [0, 0.3, 0.3, 0.4]],
             ["coatingDensityScale": 0], ["coatingDensityScale": 5]
         ] {
             var json = try XCTUnwrap(JSONSerialization.jsonObject(with: baseline) as? [String: Any])
-            json["crystalGrainPopulation"] = object
+            var population = try XCTUnwrap(json["crystalGrainPopulation"] as? [String: Any])
+            population.merge(override) { _, authored in authored }
+            json["crystalGrainPopulation"] = population
             let data = try JSONSerialization.data(withJSONObject: json)
-            XCTAssertThrowsError(try JSONDecoder().decode(FilmStockDefinition.self, from: data))
+            XCTAssertThrowsError(try JSONDecoder().decode(FilmStockDefinition.self, from: data)) { error in
+                guard case DecodingError.dataCorrupted = error else {
+                    return XCTFail("expected invalid-population failure, got \(error)")
+                }
+            }
         }
     }
 

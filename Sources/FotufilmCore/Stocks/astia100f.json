@@ -5526,6 +5526,16 @@
     1.2
   ],
   "grainSizeMM": 0.004,
+  "crystalGrainPopulation": {
+    "radiusSpan": 6,
+    "sublayerShares": [
+      0.25,
+      0.25,
+      0.25,
+      0.25
+    ],
+    "coatingDensityScale": 1
+  },
   "grainStrength": 0.007,
   "granularityReadDensity": "gross",
   "halationLookScale": 1,

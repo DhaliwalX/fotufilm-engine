@@ -47,15 +47,16 @@ final class GrainABTool: XCTestCase {
         try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable, "Halide required")
         let directory = URL(fileURLWithPath: out)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let candidates: [(String, CrystalGrainPopulation)] = [
-            ("A", .legacy),
-            ("B", CrystalGrainPopulation(radiusSpan: 3, sublayerShares: [0.20, 0.25, 0.25, 0.30])),
-            ("C", CrystalGrainPopulation(radiusSpan: 3, sublayerShares: [0.20, 0.25, 0.25, 0.30],
-                                         coatingDensityScale: 2)),
-        ]
         var reports: [[String: Any]] = []
         for id in names.split(separator: ",").map(String.init) {
             let original = try XCTUnwrap(FilmStock.named(id), "stock not installed: \(id)")
+            let candidates: [(String, CrystalGrainPopulation)] = [
+                ("A", original.crystalGrainPopulation),
+                ("B", CrystalGrainPopulation(radiusSpan: 3,
+                    sublayerShares: [0.20, 0.25, 0.25, 0.30], coatingDensityScale: 1)),
+                ("C", CrystalGrainPopulation(radiusSpan: 3,
+                    sublayerShares: [0.20, 0.25, 0.25, 0.30], coatingDensityScale: 2)),
+            ]
             for (label, profile) in candidates {
                 var stock = original
                 stock.crystalGrainPopulation = profile

@@ -98,6 +98,8 @@ final class PackContainerTests: XCTestCase {
                 grainStrength: 0.012,
                 grainSizeMM: 0.005,
                 grainLayerWeights: [0.7, 1, 1.35],
+                crystalGrainPopulation: CrystalGrainPopulation(
+                    radiusSpan: 6, sublayerShares: [0.25, 0.25, 0.25, 0.25], coatingDensityScale: 1),
                 halationStrength: [0.05, 0.02, 0.008],
                 halationReturnMatrix: [[0.0012, 0, 0.00003],
                                        [0.000002, 0.00002, 0],

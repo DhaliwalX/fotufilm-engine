@@ -131,6 +131,8 @@ final class SpectralControlPointTests: XCTestCase {
                 grainStrength: 0.012,
                 grainSizeMM: 0.005,
                 grainLayerWeights: [0.7, 1, 1.35],
+                crystalGrainPopulation: CrystalGrainPopulation(
+                    radiusSpan: 6, sublayerShares: [0.25, 0.25, 0.25, 0.25], coatingDensityScale: 1),
                 halationStrength: [0.05, 0.02, 0.008],
                 paperCurve: CharacteristicCurve(dMin: 0.07, gamma: 2.6, toe: -0.52,
                                                 toeWidth: 0.16, shoulder: 0.42,

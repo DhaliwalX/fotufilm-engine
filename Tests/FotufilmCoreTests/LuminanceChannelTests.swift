@@ -114,6 +114,8 @@ final class LuminanceChannelTests: XCTestCase {
             grainSizeMM: TestStocks.negative.grainSizeMM,
             grainLayerWeights: TestStocks.negative.grainLayerWeights,
             grainLumaCorrelation: 4,
+            crystalGrainPopulation: CrystalGrainPopulation(
+                radiusSpan: 6, sublayerShares: [0.25, 0.25, 0.25, 0.25], coatingDensityScale: 1),
             halationStrength: TestStocks.negative.halationStrength,
             paperCurve: TestStocks.negative.paperCurve)
         XCTAssertEqual(outOfRange.grainLumaCorrelation, 1)

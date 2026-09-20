@@ -4,8 +4,6 @@ import FotufilmHalide
 /// Stock-authoring parameters for the organic crystal model. These are effective model
 /// populations, not a measurement of silver mass or a unique reconstruction of the emulsion.
 public struct CrystalGrainPopulation: Codable, Equatable, Sendable {
-    public static let legacy = CrystalGrainPopulation()
-
     /// Maximum radius ratio on the class ladder; 1 gives equal radii.
     public let radiusSpan: Float
     /// Target fractions of fitted density weight, fastest to slowest. Whole speed classes
@@ -17,8 +15,7 @@ public struct CrystalGrainPopulation: Codable, Equatable, Sendable {
     /// becomes the sheet anchor / sqrt(scale). Keep 1 when matching a measured RMS anchor.
     public let coatingDensityScale: Float
 
-    public init(radiusSpan: Float = 6, sublayerShares: [Float] = [0.25, 0.25, 0.25, 0.25],
-                coatingDensityScale: Float = 1) {
+    public init(radiusSpan: Float, sublayerShares: [Float], coatingDensityScale: Float) {
         precondition(Self.valid(radiusSpan, sublayerShares, coatingDensityScale),
                      "invalid crystal grain population")
         self.radiusSpan = radiusSpan
@@ -40,10 +37,9 @@ public struct CrystalGrainPopulation: Codable, Equatable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        let span = try c.decodeIfPresent(Float.self, forKey: .radiusSpan) ?? 6
-        let shares = try c.decodeIfPresent([Float].self, forKey: .sublayerShares)
-            ?? [0.25, 0.25, 0.25, 0.25]
-        let scale = try c.decodeIfPresent(Float.self, forKey: .coatingDensityScale) ?? 1
+        let span = try c.decode(Float.self, forKey: .radiusSpan)
+        let shares = try c.decode([Float].self, forKey: .sublayerShares)
+        let scale = try c.decode(Float.self, forKey: .coatingDensityScale)
         guard Self.valid(span, shares, scale) else {
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
                 debugDescription: "crystalGrainPopulation requires radiusSpan in 1...20, four positive sublayerShares summing to 1, and coatingDensityScale in 0.25...4"))
@@ -62,7 +58,7 @@ public struct CrystalGrainPopulation: Codable, Equatable, Sendable {
 /// forms, so the population is read off the curve: non-negative weights on a ladder of speed
 /// classes whose threshold-hit responses add up to the curve above base. Speed goes with volume
 /// (Mees & James), so the same ladder places each class on a size ladder, `r ∝ 10^(-E0 / 3)`,
-/// clipped to the stock-authored span (sixfold by default). Nothing here depends on the
+/// clipped to the stock-authored span. Nothing here depends on the
 /// developer; `Exposure` is the coating and the light.
 ///
 /// **Development** turns latent crystals into what is seen. A developed crystal forms dye, or
@@ -71,7 +67,7 @@ public struct CrystalGrainPopulation: Codable, Equatable, Sendable {
 /// mass distribution. The developer's diffusion spreads each crystal's dye to a cloud — the
 /// fastest sublayer's cloud is `FilmStock.grainSizeMM`, the coarsest structure a scan resolves,
 /// and the rest follow the size ladder down from it. The classes are coated as sublayers from
-/// the fastest down, using the stock's target density-weight shares (equal by default), each
+/// the fastest down, using the stock's target density-weight shares, each
 /// with its own finite coupler pool: with `demand` the dye its developed crystals
 /// ask for, the dye that forms is `C (1 - exp(-demand / C))`, sized so that once the whole
 /// sublayer has developed a further crystal forms a tenth of what an unstarved one would. That
@@ -89,9 +85,8 @@ public struct CrystalGrainPopulation: Codable, Equatable, Sendable {
 ///
 /// Two measurements anchor the scale: the sheet's RMS granularity at its read density fixes the
 /// dye one crystal of the reference size forms at the reference process, and with it how many
-/// crystals the record coats per square millimetre; `grainSizeMM` fixes the cloud. The
-/// legacy defaults were set against published Vision3 granularity curves. A stock may author
-/// its population width and allocation independently; an explicit coating-density scale also
+/// crystals the record coats per square millimetre; `grainSizeMM` fixes the cloud. Each stock
+/// authors its population width and allocation; an explicit coating-density scale also
 /// changes RMS and must not be mistaken for a measured stock calibration.
 public struct CrystalGrainModel: Sendable {
     /// Size bins per record, matching FOTUFILM_CRYSTAL_GRAIN_BINS.
@@ -115,8 +110,6 @@ public struct CrystalGrainModel: Sendable {
         public static let hitThreshold = 3
         /// Speed goes with volume: log10 radius per decade of speed.
         public static let sizeExponent: Float = 1.0 / 3.0
-        /// Legacy radius-span default. Rendering uses the stock's `crystalGrainPopulation`.
-        public static let radiusSpan: Float = 6
 
         /// Coating weight per speed class: the density the class forms at full, unstarved
         /// development in the reference process. Zero for classes the record does not coat.
@@ -178,8 +171,6 @@ public struct CrystalGrainModel: Sendable {
         /// Fraction of an unstarved crystal's dye a further crystal forms once its sublayer has
         /// fully developed.
         public static let poolGain: Float = 0.1
-        /// Share of a record's weight coated in its fast sublayer.
-        public static let fastShare: Float = 0.25
         /// What a developed crystal forms goes with its projected area.
         public static let dyeExponent: Float = 2
         /// Each developed crystal forms `1 ± markDispersion` of its sublayer's mean: the
@@ -431,7 +422,7 @@ public struct CrystalGrainModel: Sendable {
         }
 
         // Development: sublayers along speed, fastest first, at authored cumulative
-        // density-weight boundaries. The legacy shares reproduce the original cuts exactly.
+        // density-weight boundaries.
         var bins: [Development.Bin] = []
         if !active.isEmpty {
             let ordered = active  // class index ascending is speed descending
