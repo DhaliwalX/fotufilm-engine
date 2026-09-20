@@ -10,6 +10,7 @@
 
 #include "FotufilmHalide.h"
 #include "FotufilmHalideGeometry.h"
+#include "FotufilmResolvedFrameParams.h"
 
 #include <TargetConditionals.h>
 #include <objc/message.h>
@@ -46,18 +47,7 @@ namespace {
 
 constexpr int kLutDimension = 33;
 constexpr int kLutValueCount = kLutDimension * kLutDimension * kLutDimension * 4;
-constexpr int kMtfSigmaOffset = FOTUFILM_CONFIG_MTF_SIGMA;
-constexpr int kMtfRadiusOffset = FOTUFILM_CONFIG_MTF_RADIUS;
-constexpr int kMtfLumaSigmaOffset = FOTUFILM_CONFIG_MTF_LUMA_SIGMA;
-constexpr int kMtfLumaRadiusOffset = FOTUFILM_CONFIG_MTF_LUMA_RADIUS;
 constexpr int kHalationRadiusOffset = FOTUFILM_CONFIG_HALATION_RADIUS;
-constexpr int kCouplerSigmaOffset = FOTUFILM_CONFIG_COUPLER_SIGMA;
-constexpr int kCouplerRadiusOffset = FOTUFILM_CONFIG_COUPLER_RADIUS;
-constexpr int kAdjacencySigmaOffset = FOTUFILM_CONFIG_ADJACENCY_SIGMA;
-constexpr int kAdjacencyRadiusOffset = FOTUFILM_CONFIG_ADJACENCY_RADIUS;
-constexpr int kGrainSigmaOffset = FOTUFILM_CONFIG_GRAIN_SIGMA;
-constexpr int kGrainRadiusOffset = FOTUFILM_CONFIG_GRAIN_RADIUS;
-constexpr int kGrainLambdaOffset = FOTUFILM_CONFIG_GRAIN_LAMBDA;
 
 struct SpectralCache {
     Buffer<float> exposure;
@@ -155,16 +145,12 @@ const AotVariant kVariants[] = {
 #undef FOTUFILM_AOT_SHIM_ENTRY
 };
 
-/// The cheapest generated variant that can develop `feature_mask`.
+/// Select a compatible generated variant with the fewest extra compiled stages.
 FrameFunction select_variant(int32_t feature_mask) {
     const int32_t wanted = feature_mask & FOTUFILM_AOT_VARIANT_BITS;
     const int32_t exact_bits = FOTUFILM_VARIANT_EXACT_BITS;
-    // `FOTUFILM_VARIANT_RANK=n` serves the n-th *acceptable* variant by extra-bit count instead
-    // of the narrowest, for measuring whether the narrowest is also the quickest. A superset is
-    // supposed to deliver the same frame — that is the whole basis on which the shim already
-    // serves requests from wider variants, extra stages collapsing to identity at zero radius —
-    // so this is a scheduling question, not a correctness one. Diagnostic; unset in every build
-    // that is not being measured.
+    // Diagnostic: choose another compatible variant to compare schedules. Extra compiled
+    // stages are bypassed by the request's runtime gates, preserving its requested image.
     static const int wanted_rank = [] {
         const char *env = getenv("FOTUFILM_VARIANT_RANK");
         return env ? atoi(env) : -1;
@@ -256,66 +242,8 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
         std::memcpy(state.configuration.data(), configuration, configuration_bytes);
         state.configuration.set_host_dirty();
     }
-    const float sigma0 = std::max(configuration[kMtfSigmaOffset], 0.151f);
-    const float sigma1 = std::max(configuration[kMtfSigmaOffset + 1], 0.151f);
-    const float sigma2 = std::max(configuration[kMtfSigmaOffset + 2], 0.151f);
-    const int32_t radius0 = std::max(0, int32_t(configuration[kMtfRadiusOffset]));
-    const int32_t radius1 = std::max(0, int32_t(configuration[kMtfRadiusOffset + 1]));
-    const int32_t radius2 = std::max(0, int32_t(configuration[kMtfRadiusOffset + 2]));
-    const float luma_sigma = std::max(configuration[kMtfLumaSigmaOffset], 0.151f);
-    const int32_t luma_radius = std::max({
-        int32_t(0),
-        int32_t(configuration[kMtfLumaRadiusOffset]),
-        int32_t(configuration[FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS]),
-        int32_t(configuration[FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS + 1]),
-        int32_t(configuration[FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS + 2]),
-    });
-    const int32_t halation0 = std::max(0, int32_t(configuration[kHalationRadiusOffset]));
-    const int32_t halation1 = std::max(0, int32_t(configuration[kHalationRadiusOffset + 1]));
-    const int32_t halation2 = std::max(0, int32_t(configuration[kHalationRadiusOffset + 2]));
-    const float coupler_sigma = std::max(configuration[kCouplerSigmaOffset], 0.151f);
-    const int32_t coupler_radius = std::max(0, int32_t(configuration[kCouplerRadiusOffset]));
-    const float adjacency_sigma = std::max(configuration[kAdjacencySigmaOffset], 0.151f);
-    const int32_t adjacency_radius = std::max(0, int32_t(configuration[kAdjacencyRadiusOffset]));
-    const float adjacency_secondary_sigma =
-        std::max(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA], 0.151f);
-    const int32_t adjacency_secondary_radius =
-        std::max(0, int32_t(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS]));
-    const float fringe_sigma =
-        std::max(configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA], 0.151f);
-    const int32_t fringe_radius =
-        std::max(0, int32_t(configuration[FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS]));
-    const float grain_sigma = std::max(configuration[kGrainSigmaOffset], 0.151f);
-    const int32_t grain_radius = std::max(0, int32_t(configuration[kGrainRadiusOffset]));
-    const float grain_lambda = configuration[kGrainLambdaOffset];
-    const float mottle_lambda = configuration[FOTUFILM_CONFIG_MOTTLE_LAMBDA];
-    const int32_t mottle_radius = std::max(
-        0, int32_t(configuration[FOTUFILM_CONFIG_MOTTLE_RADIUS]));
-    // Zero when the paper has no blur to give, or when nothing is being printed at all. The
-    // compiled variant carries the stage either way; at radius zero its Gaussian is a single unit
-    // tap, which is why one variant serves both. See FOTUFILM_AOT_ALL_STAGES.
-    const int32_t print_mtf_radius = std::max(
-        0, int32_t(configuration[FOTUFILM_CONFIG_PRINT_MTF_RADIUS]));
-    const int32_t reversal = (feature_mask & FOTUFILM_FRAME_REVERSAL) != 0 ? 1 : 0;
-
-    int32_t stride[3], strided_radius[3];
-    const int32_t halation_radii[3] = {halation0, halation1, halation2};
-    for (int scale = 0; scale < 3; ++scale) {
-        stride[scale] = fotufilm_halation_stride(halation_radii[scale]);
-        strided_radius[scale] = fotufilm_halation_strided_radius(
-            halation_radii[scale], stride[scale]);
-    }
-    // The diffusion filter's pyramid, decimated by the same rule the JIT path uses. The slots
-    // hold zero radii whenever no mist is fitted, which collapses the stage to a copy in the
-    // variants that carry it.
-    int32_t diffusion_stride[3], diffusion_strided_radius[3];
-    for (int scale = 0; scale < 3; ++scale) {
-        const int32_t radius = std::max(
-            0, int32_t(configuration[FOTUFILM_CONFIG_DIFFUSION_RADIUS + scale]));
-        diffusion_stride[scale] = fotufilm_diffusion_stride(radius);
-        diffusion_strided_radius[scale] =
-            fotufilm_halation_strided_radius(radius, diffusion_stride[scale]);
-    }
+    const fotufilm::ResolvedFrameParams frame(configuration, width, height, seed,
+        (feature_mask & FOTUFILM_FRAME_REVERSAL) != 0, origin_x, origin_y);
 
     auto *cfg = wants_extended ? state.extended_configuration.raw_buffer()
                                : state.configuration.raw_buffer();
@@ -335,23 +263,19 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
 #endif
     auto *film = state.spectral_cache.film.raw_buffer();
     auto *paper = state.spectral_cache.paper.raw_buffer();
-#define FOTUFILM_ARGUMENTS                                                   \
-    in, cfg, exposure, film, paper, width, height,                          \
-    sigma0, sigma1, sigma2, luma_sigma,                                     \
-    radius0, radius1, radius2, luma_radius,                                 \
-    halation0, halation1, halation2,                                        \
-    coupler_sigma, coupler_radius, adjacency_sigma, adjacency_radius,       \
-    adjacency_secondary_sigma, adjacency_secondary_radius,                 \
-    fringe_sigma, fringe_radius,                                          \
-    grain_sigma, grain_radius, grain_lambda,                                \
-    mottle_lambda, mottle_radius, print_mtf_radius,                         \
-    seed, reversal,                                                         \
-    origin_x, origin_y,                                                     \
-    stride[0], stride[1], stride[2],                                        \
-    strided_radius[0], strided_radius[1], strided_radius[2],                \
-    diffusion_stride[0], diffusion_stride[1], diffusion_stride[2],          \
-    diffusion_strided_radius[0], diffusion_strided_radius[1],               \
-    diffusion_strided_radius[2], feature_mask, fotufilm_byte_basis(configuration)
+#define FOTUFILM_ARGUMENTS \
+    in, cfg, exposure, film, paper, width, height, frame.mtf_sigma_0, frame.mtf_sigma_1, \
+    frame.mtf_sigma_2, frame.mtf_luma_sigma, frame.mtf_radius_0, frame.mtf_radius_1, \
+    frame.mtf_radius_2, frame.mtf_luma_radius, frame.halation_radius_0, frame.halation_radius_1, \
+    frame.halation_radius_2, frame.coupler_sigma, frame.coupler_radius, frame.adjacency_sigma, \
+    frame.adjacency_radius, frame.adjacency_secondary_sigma, frame.adjacency_secondary_radius, \
+    frame.fringe_sigma, frame.fringe_radius, frame.grain_sigma, frame.grain_radius, \
+    frame.grain_lambda, frame.mottle_lambda, frame.mottle_radius, frame.print_mtf_radius, seed, \
+    frame.reversal, origin_x, origin_y, frame.halation_stride_0, frame.halation_stride_1, \
+    frame.halation_stride_2, frame.halation_strided_radius_0, frame.halation_strided_radius_1, \
+    frame.halation_strided_radius_2, frame.diffusion_stride_0, frame.diffusion_stride_1, \
+    frame.diffusion_stride_2, frame.diffusion_strided_radius_0, frame.diffusion_strided_radius_1, \
+    frame.diffusion_strided_radius_2, feature_mask, fotufilm_byte_basis(configuration)
     FrameFunction pipeline = select_variant(feature_mask);
     if (!pipeline) return -3;
 #if FOTUFILM_AOT_WINDOWED_HOST
@@ -359,22 +283,24 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     // Each full-resolution field needs 256 output rows plus its spatial apron.
     // Decimated fields need fewer rows. Two grid samples cover box alignment and
     // bilinear interpolation; the three-box halation kernel spans 3*r samples.
+    const int32_t stride[] = {frame.halation_stride_0, frame.halation_stride_1, frame.halation_stride_2};
+    const int32_t strided_radius[] = {frame.halation_strided_radius_0, frame.halation_strided_radius_1, frame.halation_strided_radius_2};
     int64_t halo_reach = 0;
     for (int scale = 0; scale < 3; ++scale) {
         halo_reach = std::max(halo_reach,
             fotufilm::resampled_grid_reach(
                 fotufilm::kTripleBoxPasses * int64_t(strided_radius[scale]), stride[scale]));
     }
-    const int64_t image_reach = std::max({radius0, radius1, radius2})
+    const int64_t image_reach = std::max({frame.mtf_radius_0, frame.mtf_radius_1, frame.mtf_radius_2})
         + halo_reach
-        + std::max({fotufilm::gaussian_grid_reach(coupler_sigma, coupler_radius),
-                    fotufilm::gaussian_grid_reach(adjacency_sigma, adjacency_radius),
+        + std::max({fotufilm::gaussian_grid_reach(frame.coupler_sigma, frame.coupler_radius),
+                    fotufilm::gaussian_grid_reach(frame.adjacency_sigma, frame.adjacency_radius),
                     fotufilm::gaussian_grid_reach(
                         std::max(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA], 0.151f),
                         std::max(0, int32_t(configuration[FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS]))),
-                    fotufilm::gaussian_grid_reach(fringe_sigma, fringe_radius)})
-        + int64_t(print_mtf_radius);
-    const int64_t grain_reach = int64_t(grain_radius) + print_mtf_radius;
+                    fotufilm::gaussian_grid_reach(frame.fringe_sigma, frame.fringe_radius)})
+        + int64_t(frame.print_mtf_radius);
+    const int64_t grain_reach = int64_t(frame.grain_radius) + frame.print_mtf_radius;
     static const bool windowed_enabled = [] {
         const char *setting = std::getenv("FOTUFILM_AOT_WINDOWED");
         return !setting || std::strcmp(setting, "0") != 0;

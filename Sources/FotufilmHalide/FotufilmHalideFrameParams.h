@@ -2,7 +2,7 @@
 #define FOTUFILM_HALIDE_FRAME_PARAMS_H
 
 #include "FotufilmHalide.h"
-#include "FotufilmHalideGeometry.h"
+#include "FotufilmResolvedFrameParams.h"
 
 #include <Halide.h>
 #include <algorithm>
@@ -54,66 +54,51 @@ struct FrameParams {
 
     void set_frame(const float *configuration, int32_t width, int32_t height,
                    uint32_t seed, int32_t reversal, int32_t origin_x, int32_t origin_y) {
-        auto sigma = [&](int offset) { return std::max(configuration[offset], 0.151f); };
-        auto radius = [&](int offset) { return std::max(0, int(configuration[offset])); };
-        width_.set(width);
-        height_.set(height);
-        mtf_sigma_0_.set(sigma(FOTUFILM_CONFIG_MTF_SIGMA));
-        mtf_sigma_1_.set(sigma(FOTUFILM_CONFIG_MTF_SIGMA + 1));
-        mtf_sigma_2_.set(sigma(FOTUFILM_CONFIG_MTF_SIGMA + 2));
-        mtf_radius_0_.set(radius(FOTUFILM_CONFIG_MTF_RADIUS));
-        mtf_radius_1_.set(radius(FOTUFILM_CONFIG_MTF_RADIUS + 1));
-        mtf_radius_2_.set(radius(FOTUFILM_CONFIG_MTF_RADIUS + 2));
-        mtf_luma_sigma_.set(sigma(FOTUFILM_CONFIG_MTF_LUMA_SIGMA));
-        mtf_luma_radius_.set(std::max({
-            0,
-            int(configuration[FOTUFILM_CONFIG_MTF_LUMA_RADIUS]),
-            int(configuration[FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS]),
-            int(configuration[FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS + 1]),
-            int(configuration[FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS + 2]),
-        }));
-        Halide::Param<int32_t> *halation_strides[3] = {
-            &halation_stride_0_, &halation_stride_1_, &halation_stride_2_};
-        Halide::Param<int32_t> *halation_strided_radii[3] = {
-            &halation_strided_radius_0_, &halation_strided_radius_1_,
-            &halation_strided_radius_2_};
-        for (int scale = 0; scale < 3; ++scale) {
-            const int32_t pixels = radius(FOTUFILM_CONFIG_HALATION_RADIUS + scale);
-            const int32_t stride = fotufilm_halation_stride(pixels);
-            halation_strides[scale]->set(stride);
-            halation_strided_radii[scale]->set(
-                fotufilm_halation_strided_radius(pixels, stride));
-        }
-        Halide::Param<int32_t> *diffusion_strides[3] = {
-            &diffusion_stride_0_, &diffusion_stride_1_, &diffusion_stride_2_};
-        Halide::Param<int32_t> *diffusion_strided_radii[3] = {
-            &diffusion_strided_radius_0_, &diffusion_strided_radius_1_,
-            &diffusion_strided_radius_2_};
-        for (int scale = 0; scale < 3; ++scale) {
-            const int32_t pixels = radius(FOTUFILM_CONFIG_DIFFUSION_RADIUS + scale);
-            const int32_t stride = fotufilm_diffusion_stride(pixels);
-            diffusion_strides[scale]->set(stride);
-            diffusion_strided_radii[scale]->set(
-                fotufilm_halation_strided_radius(pixels, stride));
-        }
-        coupler_sigma_.set(sigma(FOTUFILM_CONFIG_COUPLER_SIGMA));
-        coupler_radius_.set(radius(FOTUFILM_CONFIG_COUPLER_RADIUS));
-        adjacency_sigma_.set(sigma(FOTUFILM_CONFIG_ADJACENCY_SIGMA));
-        adjacency_radius_.set(radius(FOTUFILM_CONFIG_ADJACENCY_RADIUS));
-        adjacency_secondary_sigma_.set(sigma(FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA));
-        adjacency_secondary_radius_.set(radius(FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS));
-        fringe_sigma_.set(sigma(FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA));
-        fringe_radius_.set(radius(FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS));
-        grain_sigma_.set(sigma(FOTUFILM_CONFIG_GRAIN_SIGMA));
-        grain_radius_.set(radius(FOTUFILM_CONFIG_GRAIN_RADIUS));
-        grain_lambda_.set(configuration[FOTUFILM_CONFIG_GRAIN_LAMBDA]);
-        mottle_radius_.set(radius(FOTUFILM_CONFIG_MOTTLE_RADIUS));
-        mottle_lambda_.set(configuration[FOTUFILM_CONFIG_MOTTLE_LAMBDA]);
-        print_mtf_radius_.set(radius(FOTUFILM_CONFIG_PRINT_MTF_RADIUS));
-        seed_.set(seed);
-        reversal_.set(reversal);
-        origin_x_.set(origin_x);
-        origin_y_.set(origin_y);
+        set_frame(ResolvedFrameParams(configuration, width, height, seed, reversal,
+                                      origin_x, origin_y));
+    }
+
+    void set_frame(const ResolvedFrameParams &frame) {
+        width_.set(frame.width);
+        height_.set(frame.height);
+        mtf_sigma_0_.set(frame.mtf_sigma_0);
+        mtf_sigma_1_.set(frame.mtf_sigma_1);
+        mtf_sigma_2_.set(frame.mtf_sigma_2);
+        mtf_radius_0_.set(frame.mtf_radius_0);
+        mtf_radius_1_.set(frame.mtf_radius_1);
+        mtf_radius_2_.set(frame.mtf_radius_2);
+        mtf_luma_sigma_.set(frame.mtf_luma_sigma);
+        mtf_luma_radius_.set(frame.mtf_luma_radius);
+        halation_stride_0_.set(frame.halation_stride_0);
+        halation_stride_1_.set(frame.halation_stride_1);
+        halation_stride_2_.set(frame.halation_stride_2);
+        halation_strided_radius_0_.set(frame.halation_strided_radius_0);
+        halation_strided_radius_1_.set(frame.halation_strided_radius_1);
+        halation_strided_radius_2_.set(frame.halation_strided_radius_2);
+        diffusion_stride_0_.set(frame.diffusion_stride_0);
+        diffusion_stride_1_.set(frame.diffusion_stride_1);
+        diffusion_stride_2_.set(frame.diffusion_stride_2);
+        diffusion_strided_radius_0_.set(frame.diffusion_strided_radius_0);
+        diffusion_strided_radius_1_.set(frame.diffusion_strided_radius_1);
+        diffusion_strided_radius_2_.set(frame.diffusion_strided_radius_2);
+        coupler_sigma_.set(frame.coupler_sigma);
+        coupler_radius_.set(frame.coupler_radius);
+        adjacency_sigma_.set(frame.adjacency_sigma);
+        adjacency_radius_.set(frame.adjacency_radius);
+        adjacency_secondary_sigma_.set(frame.adjacency_secondary_sigma);
+        adjacency_secondary_radius_.set(frame.adjacency_secondary_radius);
+        fringe_sigma_.set(frame.fringe_sigma);
+        fringe_radius_.set(frame.fringe_radius);
+        grain_sigma_.set(frame.grain_sigma);
+        grain_radius_.set(frame.grain_radius);
+        grain_lambda_.set(frame.grain_lambda);
+        mottle_radius_.set(frame.mottle_radius);
+        mottle_lambda_.set(frame.mottle_lambda);
+        print_mtf_radius_.set(frame.print_mtf_radius);
+        seed_.set(frame.seed);
+        reversal_.set(frame.reversal);
+        origin_x_.set(frame.origin_x);
+        origin_y_.set(frame.origin_y);
     }
 
     Halide::Param<int32_t> width_, height_;

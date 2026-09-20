@@ -1,6 +1,10 @@
 #define FOTUFILM_HALIDE_ENABLED 1
 #define FOTUFILM_HALIDE_AOT_GENERATOR 1
-#include "../Sources/FotufilmHalide/FotufilmHalideMetal.cpp"
+#include "../Sources/FotufilmHalide/Pipeline/Gpu.h"
+
+using namespace fotufilm;
+using namespace fotufilm::pipelines;
+using namespace fotufilm::gpu;
 
 #include <cstdlib>
 #include <filesystem>
@@ -73,9 +77,13 @@ int main(int argc, char **argv) {
                   << variant_count - 1 << ")\n";
         return 2;
     }
+    GpuConfiguration defaults;
+    defaults.half_blur = !macos;
+    defaults.half_lut = !macos;
+    const auto configuration = resolve_gpu_configuration(defaults);
     const Halide::Target target =
-        macos ? MetalFramePipeline::macos_aot_target(intel)
-              : MetalFramePipeline::ios_aot_target(simulator);
+        macos ? GpuFramePipeline::macos_aot_target(intel)
+              : GpuFramePipeline::ios_aot_target(simulator, configuration.profile);
 
     // Compiled metallib embedding: the default on Halide 22+, FOTUFILM_METAL_PRECOMPILE=0 opts
     // out for local debugging. It cuts macOS archives from 517 MB to 137 MB and takes the
@@ -131,14 +139,6 @@ int main(int argc, char **argv) {
             std::string("xcrun -sdk ") + metal_sdk + " metallib");
     }
 #endif
-    if (!macos) {
-        f16_blur_default() = true;
-        f16_lut_default() = true;
-        // Float still variants retain float stores, LUTs, and tetrahedral arithmetic. Keeping
-        // this mask at zero makes the generated AOT set match the preservation contract in the
-        // JIT path; byte-input realtime variants can still use their dedicated half techniques.
-        still_fast_default() = 0;
-    }
     // Use short unique suffixes because Halide embeds internal names in Metal source. Full variant
     // names added 83 MB to a 366 MB, 128-object set. Public AOT symbols use `function_name` and are
     // unaffected.
@@ -151,8 +151,8 @@ int main(int argc, char **argv) {
             continue;
         }
         try {
-            MetalFramePipeline pipeline(variant.features,
-                                        "_v" + std::to_string(index), variant.windowed);
+            GpuFramePipeline pipeline(variant.features,
+                                        "_v" + std::to_string(index), variant.windowed, configuration);
             pipeline.compile_aot((output / variant.name).string(), variant.name,
                                  variant.runtime, target);
         } catch (const Halide::CompileError &error) {
@@ -175,20 +175,20 @@ int main(int argc, char **argv) {
     // reach a measurement by the same rule it reaches a develop variant.
     struct Measurement {
         const char *name;
-        MetalMeasurePipeline::Quantity quantity;
+        GpuMeasurePipeline::Quantity quantity;
         bool approximate;
     };
     const Measurement measurements[] = {
-        {"fotufilm_halide_ios_measure_tone", MetalMeasurePipeline::Quantity::Tone, false},
-        {"fotufilm_halide_ios_measure_flare", MetalMeasurePipeline::Quantity::Flare, false},
-        {"fotufilm_halide_ios_measure_flare_fast", MetalMeasurePipeline::Quantity::Flare, true},
+        {"fotufilm_halide_ios_measure_tone", GpuMeasurePipeline::Quantity::Tone, false},
+        {"fotufilm_halide_ios_measure_flare", GpuMeasurePipeline::Quantity::Flare, false},
+        {"fotufilm_halide_ios_measure_flare_fast", GpuMeasurePipeline::Quantity::Flare, true},
     };
     int measurement_tag = 0;
     for (const Measurement &measurement : measurements) {
         // A distinct letter from the frame variants' tags, so the two sequences cannot collide.
-        MetalMeasurePipeline pipeline(measurement.quantity,
+        GpuMeasurePipeline pipeline(measurement.quantity,
                                       measurement.approximate,
-                                      "_m" + std::to_string(measurement_tag++));
+                                      "_m" + std::to_string(measurement_tag++), configuration);
         pipeline.compile_aot((output / measurement.name).string(),
                              measurement.name, target);
     }
@@ -198,14 +198,14 @@ int main(int argc, char **argv) {
     for (const bool approximate : {false, true}) {
         const std::string name = approximate
             ? "fotufilm_halide_ios_decode_realtime" : "fotufilm_halide_ios_decode";
-        MetalDecodePipeline pipeline(approximate, approximate ? "_d1" : "_d0");
+        GpuDecodePipeline pipeline(approximate, approximate ? "_d1" : "_d0", configuration);
         pipeline.compile_aot((output / name).string(), name, target);
     }
 
     // The whole-frame halation fields build, for the two-pass striped still path: the same
     // decimation chain and triple-box blurs the frame schedule runs over a staged frame.
     {
-        MetalHalationFieldsPipeline pipeline("_h0");
+        GpuHalationFieldsPipeline pipeline("_h0", configuration);
         pipeline.compile_aot(
             (output / "fotufilm_halide_ios_halation_fields").string(),
             "fotufilm_halide_ios_halation_fields", target);

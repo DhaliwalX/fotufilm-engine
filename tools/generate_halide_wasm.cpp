@@ -3,14 +3,16 @@
 // whose kernels dispatch through WGSL compute shaders, and a plain `wasm-32-wasmrt` fallback
 // for machines without a WebGPU adapter.
 //
-// The GPU schedule reads `gpu_device_api()` everywhere it tiles, so pointing that at
-// DeviceAPI::WebGPU retargets the whole file. The two Metal-only arms — the hand-written grain
-// and MTF externs — are already guarded on `== DeviceAPI::Metal` in the schedule and fall away
-// on their own.
+// The generator supplies WebGPU scheduling explicitly; the pipeline shares its graph with
+// native GPU hosts and keeps browser-specific storage and precision choices in its policy.
 
 #define FOTUFILM_HALIDE_ENABLED 1
 #define FOTUFILM_HALIDE_AOT_GENERATOR 1
-#include "../Sources/FotufilmHalide/FotufilmHalideMetal.cpp"
+#include "../Sources/FotufilmHalide/Pipeline/Gpu.h"
+
+using namespace fotufilm;
+using namespace fotufilm::pipelines;
+using namespace fotufilm::gpu;
 
 #include <filesystem>
 #include <iostream>
@@ -65,7 +67,9 @@ int main(int argc, char **argv) {
     const std::filesystem::path output(argv[1]);
     std::filesystem::create_directories(output);
 
-    if (webgpu) gpu_device_api() = Halide::DeviceAPI::WebGPU;
+    GpuConfiguration defaults;
+    if (webgpu) defaults.device = Halide::DeviceAPI::WebGPU;
+    const auto configuration = resolve_gpu_configuration(defaults);
 
     // Float IO only. The uint8 variants the phones use cannot cross to WGSL: it has no 8-bit
     // numeric storage, so Halide emulates a uint8 buffer with atomics — it warns as much — and
@@ -97,7 +101,7 @@ int main(int argc, char **argv) {
     for (const Variant &variant : variants) {
         std::cout << "  " << variant.name << std::flush;
         try {
-            MetalFramePipeline pipeline(variant.features, std::string("_") + variant.name);
+            GpuFramePipeline pipeline(variant.features, std::string("_") + variant.name, false, configuration);
             pipeline.compile_aot((output / variant.name).string(), variant.name,
                                  variant.runtime, target);
             std::cout << " ok\n";
