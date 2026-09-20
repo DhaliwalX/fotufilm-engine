@@ -36,6 +36,66 @@ final class GrainABTool: XCTestCase {
         }
     }
 
+    /// Opt-in review artifacts for authored populations. Input stocks and all generated
+    /// evidence remain outside the source tree; this tool carries no stock calibration.
+    func testExportPopulationComparison() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let out = env["FOTUFILM_POPULATION_AB_OUT"],
+              let names = env["FOTUFILM_POPULATION_AB_STOCKS"] else {
+            throw XCTSkip("set FOTUFILM_POPULATION_AB_OUT and _STOCKS for population evidence")
+        }
+        try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable, "Halide required")
+        let directory = URL(fileURLWithPath: out)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let candidates: [(String, CrystalGrainPopulation)] = [
+            ("A", .legacy),
+            ("B", CrystalGrainPopulation(radiusSpan: 3, sublayerShares: [0.20, 0.25, 0.25, 0.30])),
+            ("C", CrystalGrainPopulation(radiusSpan: 3, sublayerShares: [0.20, 0.25, 0.25, 0.30],
+                                         coatingDensityScale: 2)),
+        ]
+        var reports: [[String: Any]] = []
+        for id in names.split(separator: ",").map(String.init) {
+            let original = try XCTUnwrap(FilmStock.named(id), "stock not installed: \(id)")
+            for (label, profile) in candidates {
+                var stock = original
+                stock.crystalGrainPopulation = profile
+                let models = (0..<3).map { CrystalGrainModel(stock: stock, layer: $0) }
+                let rows: [[String: Any]] = models.map { model in
+                    ["fitError": model.fitError, "readNetDensity": model.readNetDensity,
+                     "readSigma": model.readSigma,
+                     "sigmaAtAnchor": model.sigma(netDensity: model.readNetDensity),
+                     "bins": model.bins.map { bin -> [String: Any] in
+                         ["radiusMM": bin.cloudRadiusMM, "crystalsPerMM2": bin.crystalsPerMM2,
+                          "dyePerCloud": bin.dyePerCloud, "pool": bin.pool]
+                     }, "report": model.report]
+                }
+                reports.append(["stock": id, "variant": label, "records": rows])
+                XCTAssertLessThan(models.map(\.fitError).max()!, 0.1,
+                                  "candidate tone fit requires review: \(id) \(label)")
+                var options = FotufilmEngine.Options()
+                options.format = FilmFormat(name: "population detail", frameHeightMM: 2.4)
+                options.grainModel = .crystals
+                options.seed = 42
+                options.halationScale = 0
+                options.couplerScale = 0
+                options.paper = .screen
+                options.digitalReference = .referenceExposure
+                let width = 1200, height = 400
+                var patch = ImageBuffer(width: width, height: height)
+                for y in 0..<height {
+                    for x in 0..<width {
+                        let tone: Float = [0.045, 0.18, 0.55][min(2, x * 3 / width)]
+                        for c in 0..<3 { patch.planes[c][y * width + x] = tone }
+                    }
+                }
+                try write(FotufilmEngine(stock: stock, options: options).process(linearRGB: patch),
+                          to: directory.appendingPathComponent("\(id)-\(label)-patches.png"))
+            }
+        }
+        let data = try JSONSerialization.data(withJSONObject: reports, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: directory.appendingPathComponent("population-report.json"))
+    }
+
     private static let patchMM: Float = 6
 
     private static let ladder: [(pxPerMM: Float, paper: PrintPaper?)] = [
