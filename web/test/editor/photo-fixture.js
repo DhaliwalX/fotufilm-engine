@@ -1,4 +1,4 @@
-// A deterministic input keeps UI assertions independent of the bundled EXR demo.
+// Generate a deterministic photo for editor interactions.
 export async function openChart(page, width = 1600, height = 1000) {
   const bytes = await page.evaluate(
     async ({ width, height }) => {

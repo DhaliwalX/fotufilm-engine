@@ -1,3 +1,4 @@
+import { openChart } from "./photo-fixture.js";
 import { test, expect } from "@playwright/test";
 
 test.use({ ignoreHTTPSErrors: true });
@@ -7,6 +8,7 @@ test("automatic negative preview, cancellation and full-resolution import", asyn
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(process.env.FOTUFILM_TEST_URL || "/");
+  await openChart(page, 320, 192);
   const status = page.locator(".viewer-status > [role=status]");
   await expect(status).toContainText(/\d+ × \d+/);
   const previous = await status.textContent();
@@ -100,7 +102,6 @@ test("RAW negative import recovers after malformed input and applies orientation
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(process.env.FOTUFILM_TEST_URL || "/");
   const status = page.locator(".viewer-status > [role=status]");
-  await expect(status).toContainText(/\d+ × \d+/);
   await page.getByRole("button", { name: "More options", exact: true }).click();
   await page
     .getByRole("button", { name: "Import Scanned Negative…", exact: true })

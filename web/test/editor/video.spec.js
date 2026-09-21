@@ -355,9 +355,6 @@ test('video UI imports, seeks, changes log encoding, undoes, trims and exports',
     'Build the browser runtime or set FOTUFILM_TEST_RUNTIME_DIR.',
   )
   await routeRuntime(page)
-  await page.route('**/demo-scene.exr*', (route) =>
-    route.fulfill({ status: 404, body: '' }),
-  )
   await page.goto('/')
   await page
     .locator('input[type=file][multiple]')

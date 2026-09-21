@@ -43,7 +43,6 @@ import { Selector } from "@astryxdesign/core/Selector";
 import { PreviewQueue, previewLabel } from "./preview-queue.js";
 import { IMAGE_ACCEPT, isRawFile, importRaw } from "./raw-import.js";
 import { isEXRFile, importEXR } from "./exr-import.js";
-import { assetUrl } from "./engine.js";
 import {
   useCallback,
   useEffect,
@@ -633,26 +632,6 @@ export default function App() {
     }
     setError(errors.length ? errors.join(" ") : null);
   }
-  async function openSample() {
-    const generation = ++loadGeneration.current;
-    try {
-      const response = await fetch(assetUrl("demo-scene.exr"));
-      if (!response.ok)
-        throw new Error("The linear EXR sample could not be loaded.");
-      const bytes = await response.arrayBuffer();
-      if (generation !== loadGeneration.current) return;
-      await acceptFiles([
-        new File([bytes], "Scene response.exr", {
-          type: "image/x-exr",
-        }),
-      ]);
-    } catch (e) {
-      if (generation === loadGeneration.current) setError(e.message);
-    }
-  }
-  useEffect(() => {
-    openSample();
-  }, []);
   function selectFile(file) {
     if (file.id === activeId || exporting) return;
     histories.current.set(activeId, history);
@@ -1220,13 +1199,6 @@ export default function App() {
               size="sm"
               className="primary"
               onClick={() => input.current?.click()}
-            />
-            <Button
-              label="Open linear EXR sample"
-              variant="ghost"
-              size="sm"
-              className="text-button"
-              onClick={openSample}
             />
             <small>
               EXR, RAW, photos, MP4, MOV, WebM · processed on this device

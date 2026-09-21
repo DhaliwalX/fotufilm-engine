@@ -9,9 +9,6 @@ test("histogram opens, draws, drags and reopens while zooming and cropping", asy
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(process.env.FOTUFILM_TEST_URL || "/");
-  await expect(page.locator(".viewer-status > [role=status]")).toContainText(
-    /\d+ × \d+/,
-  );
   await openChart(page);
   await expect(page.locator(".viewer-status > [role=status]")).toContainText(
     "1600 × 1000",

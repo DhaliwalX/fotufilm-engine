@@ -6,9 +6,6 @@ test("GPU and CPU visible film tiles agree with full-frame grain and spatial eff
 }) => {
   test.setTimeout(180000);
   await page.goto("/");
-  await expect(page.locator(".viewer-status > [role=status]")).toContainText(
-    /\d+ × \d+/,
-  );
   const report = await page.evaluate(async () => {
     const { loadPack, assetUrl, pixelSource } = await import("/src/engine.js");
     const { createBackgroundDeveloper } = await import(
@@ -321,7 +318,6 @@ test("Layered Transport keeps its spatial support and global grain when developi
 
 test('a viewport split to honor the halo memory budget has no film seams', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('.viewer-status > [role=status]')).toContainText(/\d+ × \d+/);
   const report = await page.evaluate(async () => {
     const { loadPack, assetUrl, pixelSource, createCpuDeveloper } = await import('/src/engine.js');
     const { defaultEdit } = await import('/src/editor-state.js');

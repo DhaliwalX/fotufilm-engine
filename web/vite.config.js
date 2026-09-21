@@ -6,10 +6,11 @@ import { resolve } from 'node:path'
 
 // Include every exported runtime asset, including packs: an HTML refresh must
 // not pair new JavaScript with an old WASM binary or old spectral tables.
+const developmentAssets = ['parity', 'test', 'demo-scene.exr']
 const runtimeHash = createHash('sha256')
 function hashAssets(directory, prefix = '') {
   for (const name of readdirSync(directory).sort()) {
-    if (prefix === '' && ['parity', 'test'].includes(name)) continue
+    if (prefix === '' && developmentAssets.includes(name)) continue
     const url = new URL(name, directory), path = prefix + name
     if (statSync(url).isDirectory()) hashAssets(new URL(name + '/', directory), path + '/')
     else { runtimeHash.update(path + '\0'); runtimeHash.update(readFileSync(url)) }
@@ -17,17 +18,17 @@ function hashAssets(directory, prefix = '') {
 }
 if (existsSync(new URL('./public/', import.meta.url))) hashAssets(new URL('./public/', import.meta.url))
 const runtimeRevision = runtimeHash.digest('hex').slice(0, 20)
-let probeOutputs
+let developmentOutputs
 
 export default defineConfig({
   // Worker-only imports must not trigger a page reload on the first correction.
   optimizeDeps: { include: ['@bjorn3/browser_wasi_shim'] },
   define: { __FOTUFILM_RUNTIME_REVISION__: JSON.stringify(runtimeRevision) },
   plugins: [react(), {
-    name: 'omit-parity-probes',
+    name: 'omit-development-assets',
     apply: 'build',
-    configResolved(config) { probeOutputs = ['parity', 'test'].map(name => resolve(config.root, config.build.outDir, name)) },
-    closeBundle() { for (const path of probeOutputs) rmSync(path, { recursive: true, force: true }) },
+    configResolved(config) { developmentOutputs = developmentAssets.map(name => resolve(config.root, config.build.outDir, name)) },
+    closeBundle() { for (const path of developmentOutputs) rmSync(path, { recursive: true, force: true }) },
   }, {
     name: 'browser-third-party-licenses',
     generateBundle() {

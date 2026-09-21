@@ -1,3 +1,4 @@
+import { openChart } from './photo-fixture.js'
 import { test, expect } from '@playwright/test'
 
 test('compiled films clear unsupported settings and remain renderable without authoring assets', async ({ page }) => {
@@ -12,6 +13,7 @@ test('compiled films clear unsupported settings and remain renderable without au
     await route.fulfill({ response, json: catalogue })
   })
   await page.goto('/')
+  await openChart(page, 320, 192)
   await expect(page.locator('.viewer-status > [role=status]')).toContainText(/\d+ × \d+/)
   await page.getByRole('searchbox').fill('Portra 400')
   await page.getByTitle('Portra 400', { exact: true }).click()
