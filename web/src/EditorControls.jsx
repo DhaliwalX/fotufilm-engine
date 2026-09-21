@@ -193,7 +193,7 @@ export function Histogram({ canvas, onClose }) {
     <div
       className="histogram"
       style={{
-        transform: `translate(${cropMode ? 0 : offset[0]}px, ${cropMode ? 0 : offset[1]}px)`,
+        transform: `translate(${offset[0]}px, ${offset[1]}px)`,
       }}
     >
       <div
@@ -402,7 +402,7 @@ export function ImageCanvas({
           style={{
             width: displayWidth,
             height: displayHeight,
-            transform: `translate(${offset[0]}px, ${offset[1]}px) scale(${cropMode ? 1 : zoom})`,
+            transform: `translate(${cropMode ? 0 : offset[0]}px, ${cropMode ? 0 : offset[1]}px) scale(${cropMode ? 1 : zoom})`,
           }}
         >
           <img
