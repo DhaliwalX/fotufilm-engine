@@ -599,7 +599,7 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
                     p.width_, p.height_, in.prefix + "crystal_field_" + tag, 3));
             }
             Func crystal_field(name("crystal_grain"));
-            crystal_field(x, y, c) = crystal_grain(configuration, c, bins, x, y);
+            crystal_field(x, y, c) = crystal_grain(configuration, c, bins, x, y, position.amount);
             crystal = b.store(crystal_field, Store::CrystalGrain, 3)(x, y, c);
             Expr with_discs = selected_developed_density(
                 in.grain_mode, density_view(x, y, c), clump, disc, crystal);
