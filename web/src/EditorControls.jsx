@@ -1,3 +1,5 @@
+import ViewportDetail from "./ViewportDetail.jsx";
+import { visiblePhotoViewport } from "./viewport.js";
 import CropOverlay from "./CropOverlay.jsx";
 import { Button } from "@astryxdesign/core/Button";
 import { Slider } from "@astryxdesign/core/Slider";
@@ -190,7 +192,9 @@ export function Histogram({ canvas, onClose }) {
   return (
     <div
       className="histogram"
-      style={{ transform: `translate(${offset[0]}px, ${offset[1]}px)` }}
+      style={{
+        transform: `translate(${cropMode ? 0 : offset[0]}px, ${cropMode ? 0 : offset[1]}px)`,
+      }}
     >
       <div
         className="histogram-header"
@@ -246,6 +250,11 @@ export function Histogram({ canvas, onClose }) {
 
 export function ImageCanvas({
   result,
+  detailSession,
+  detailRequest,
+  detailEnabled,
+  onDetailError,
+  onDetailBackend,
   original,
   sourceKey,
   zoom,
@@ -269,7 +278,20 @@ export function ImageCanvas({
   const container = useRef(null),
     drag = useRef(null);
   const [offset, setOffset] = useState([0, 0]),
-    [room, setRoom] = useState([1, 1]);
+    [room, setRoom] = useState([1, 1]),
+    [pixelRatio, setPixelRatio] = useState(() => window.devicePixelRatio || 1);
+  useEffect(() => {
+    let query;
+    const update = () => {
+      const ratio = window.devicePixelRatio || 1;
+      setPixelRatio(ratio);
+      query?.removeEventListener("change", update);
+      query = window.matchMedia(`(resolution: ${ratio}dppx)`);
+      query.addEventListener("change", update);
+    };
+    update();
+    return () => query?.removeEventListener("change", update);
+  }, []);
   useEffect(() => {
     const observer = new ResizeObserver(([entry]) =>
       setRoom([entry.contentRect.width, entry.contentRect.height]),
@@ -293,6 +315,15 @@ export function ImageCanvas({
   );
   const displayWidth = Math.max(1, width * fit),
     displayHeight = Math.max(1, height * fit);
+  const viewport = visiblePhotoViewport({
+    room,
+    displayWidth,
+    displayHeight,
+    zoom: cropMode ? 1 : zoom,
+    offset: cropMode ? [0, 0] : offset,
+    framePlan: cropMode ? null : result?.framePlan,
+    pixelRatio,
+  });
   const displayUrl = compare
     ? result?.originalUrl || original?.src
     : result?.url || original?.src;
@@ -378,6 +409,15 @@ export function ImageCanvas({
             src={displayUrl}
             alt={compare ? "Original photo" : "Developed photo"}
             draggable="false"
+          />
+          <ViewportDetail
+            session={detailSession}
+            request={detailRequest}
+            viewport={viewport}
+            enabled={detailEnabled}
+            compare={compare}
+            onError={onDetailError}
+            onBackend={onDetailBackend}
           />
           {cropMode && (
             <CropOverlay

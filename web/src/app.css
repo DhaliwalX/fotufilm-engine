@@ -1203,3 +1203,20 @@ dialog .adjustment {
 .spectrum-control circle { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; cursor: ns-resize; }
 .spectrum-control circle:focus { outline: none; stroke: currentColor; stroke-width: 2.5; }
 .spectrum-control text { font-size: 8px; fill: var(--muted); }
+
+.viewport-detail-surface {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.photo-plane .viewport-detail {
+  display: block;
+  position: absolute;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .viewport-detail { animation: viewport-detail-appear 120ms ease-out; }
+}
+@keyframes viewport-detail-appear { from { opacity: 0; } to { opacity: 1; } }

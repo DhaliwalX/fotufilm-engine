@@ -3,8 +3,8 @@ import { decodeRGBA, imageSource } from "./engine.js";
 // A bounded, scene-linear source for geometry. Ordinary photos are decoded in
 // small tiles; full-resolution export never needs a second full-size float image.
 export function linearSampler(image) {
-  const width = image.naturalWidth,
-    height = image.naturalHeight;
+  const width = image.naturalWidth || image.width,
+    height = image.naturalHeight || image.height;
   const floating = image.linear || image.raw;
   let pixel;
   if (floating) {

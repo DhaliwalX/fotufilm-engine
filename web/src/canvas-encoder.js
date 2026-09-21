@@ -1,3 +1,4 @@
+import { canvasColorSpace } from "./canvas-color.js";
 export async function encodeCanvas(canvas, type = "image/png", quality = 0.95) {
   if (
     typeof OffscreenCanvas === "undefined" ||
@@ -39,7 +40,10 @@ export async function encodeCanvas(canvas, type = "image/png", quality = 0.95) {
       worker.onmessage = ({ data }) => finish(data.error, data.blob);
       worker.onerror = (event) =>
         finish(event.message || "Image encoding failed.");
-      worker.postMessage({ bitmap, type, quality }, [bitmap]);
+      worker.postMessage(
+        { bitmap, type, quality, colorSpace: canvasColorSpace(canvas) },
+        [bitmap],
+      );
     } catch (error) {
       finish(error.message);
     }

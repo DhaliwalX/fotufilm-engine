@@ -130,7 +130,7 @@ self.onmessage = async ({ data }) => {
           data.controls,
           progress,
           () => cancelled,
-          data.bitDepth,
+          data.output,
         );
       } catch (error) {
         if (developer !== gpu || cancelled) throw error;
@@ -144,7 +144,7 @@ self.onmessage = async ({ data }) => {
           data.controls,
           progress,
           () => cancelled,
-          data.bitDepth,
+          data.output,
         );
       }
       self.postMessage(

@@ -31,3 +31,6 @@ web/public/fallback/
 web/public/raw/
 web/public/profile/
 web/public/hdr/
+
+# Deep PNG decoder and third-party notices.
+web/public/png/

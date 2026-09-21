@@ -1,9 +1,9 @@
-import { srgbProfile } from "./srgb-profile.js";
+import { iccProfile } from "./color-profiles.js";
 
 // TIFF 6.0, chunky unsigned RGB, unassociated alpha, lossless uncompressed strips.
 // https://www.itu.int/itudoc/itu-t/com16/tiff-fx/docs/tiff6.pdf
 // No Canvas conversion: samples retain the renderer's full 16-bit precision.
-export function encodeTiff16({ pixels, width, height }) {
+export function encodeTiff16({ pixels, width, height, colorSpace = "srgb" }) {
   if (
     !Number.isSafeInteger(width) ||
     !Number.isSafeInteger(height) ||
@@ -36,7 +36,7 @@ export function encodeTiff16({ pixels, width, height }) {
     [284, 3, [1]],
     [338, 3, [2]],
     [339, 3, [1, 1, 1, 1]],
-    [34675, 7, srgbProfile],
+    [34675, 7, iccProfile(colorSpace)],
   ];
   const sizeOf = (type) => (type === 3 ? 2 : type === 4 ? 4 : 1);
   let size = 8 + 2 + tags.length * 12 + 4;

@@ -1,17 +1,27 @@
+import {
+  sourceContext,
+  sourcePixels,
+  canvasColorSpace,
+} from './canvas-color.js'
 import { yieldToBrowser } from './yield.js'
 import { clamp } from './color-controls.js'
 import { validCrop } from './editor-state.js'
 
 export function outputSize(points, width, height) {
-  const distance = (a, b) => Math.hypot((a[0] - b[0]) * width, (a[1] - b[1]) * height)
+  const distance = (a, b) =>
+    Math.hypot((a[0] - b[0]) * width, (a[1] - b[1]) * height)
   return {
     width: Math.max(
       1,
-      Math.round((distance(points[0], points[1]) + distance(points[3], points[2])) / 2),
+      Math.round(
+        (distance(points[0], points[1]) + distance(points[3], points[2])) / 2,
+      ),
     ),
     height: Math.max(
       1,
-      Math.round((distance(points[0], points[3]) + distance(points[1], points[2])) / 2),
+      Math.round(
+        (distance(points[0], points[3]) + distance(points[1], points[2])) / 2,
+      ),
     ),
   }
 }
@@ -28,7 +38,16 @@ export function homography(points) {
   const determinant = dx1 * dy2 - dx2 * dy1
   const g = (sx * dy2 - dx2 * sy) / determinant
   const h = (dx1 * sy - sx * dy1) / determinant
-  return [x1 - x0 + g * x1, x3 - x0 + h * x3, x0, y1 - y0 + g * y1, y3 - y0 + h * y3, y0, g, h]
+  return [
+    x1 - x0 + g * x1,
+    x3 - x0 + h * x3,
+    x0,
+    y1 - y0 + g * y1,
+    y3 - y0 + h * y3,
+    y0,
+    g,
+    h,
+  ]
 }
 export function mapPoint(matrix, u, v) {
   const denominator = matrix[6] * u + matrix[7] * v + 1
@@ -45,7 +64,7 @@ export function orientImage(image, edit, maxEdge = Infinity) {
   const canvas = document.createElement('canvas')
   canvas.width = Math.max(1, Math.round((swapped ? h : w) * scale))
   canvas.height = Math.max(1, Math.round((swapped ? w : h) * scale))
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  const ctx = sourceContext(canvas)
   ctx.translate(canvas.width / 2, canvas.height / 2)
   ctx.scale(edit.flip ? -1 : 1, 1)
   ctx.rotate((-edit.rotation * Math.PI) / 2)
@@ -54,20 +73,36 @@ export function orientImage(image, edit, maxEdge = Infinity) {
 }
 export async function cropImage(canvas, edit) {
   let result = canvas
-  if (edit.crop.some((p, i) => p[0] !== [0, 1, 1, 0][i] || p[1] !== [0, 0, 1, 1][i])) {
+  if (
+    edit.crop.some(
+      (p, i) => p[0] !== [0, 1, 1, 0][i] || p[1] !== [0, 0, 1, 1][i],
+    )
+  ) {
     const size = outputSize(edit.crop, canvas.width, canvas.height)
     const mapped = homography(edit.crop)
-    const source = canvas
-      .getContext('2d', { willReadFrequently: true })
-      .getImageData(0, 0, canvas.width, canvas.height).data
+    const original = sourcePixels(
+      canvas.getContext('2d'),
+      0,
+      0,
+      canvas.width,
+      canvas.height,
+    )
+    const source = original.data
     result = document.createElement('canvas')
     result.width = size.width
     result.height = size.height
-    const ctx = result.getContext('2d'),
-      output = ctx.createImageData(size.width, size.height)
+    const ctx = sourceContext(result, canvasColorSpace(canvas)),
+      output = ctx.createImageData(size.width, size.height, {
+        colorSpace: original.colorSpace,
+        pixelFormat: original.pixelFormat,
+      })
     for (let y = 0; y < size.height; y++) {
       for (let x = 0; x < size.width; x++) {
-        const [u, v] = mapPoint(mapped, (x + 0.5) / size.width, (y + 0.5) / size.height)
+        const [u, v] = mapPoint(
+          mapped,
+          (x + 0.5) / size.width,
+          (y + 0.5) / size.height,
+        )
         const sx = clamp(u * canvas.width - 0.5, 0, canvas.width - 1),
           sy = clamp(v * canvas.height - 0.5, 0, canvas.height - 1)
         const ix = Math.floor(sx),
@@ -94,11 +129,15 @@ export async function cropImage(canvas, edit) {
     const rotated = document.createElement('canvas')
     rotated.width = result.width
     rotated.height = result.height
-    const ctx = rotated.getContext('2d')
+    const ctx = sourceContext(rotated, canvasColorSpace(result))
     // Cover the frame after rotation so straightening never adds transparent corners.
     const scale = Math.max(
-      (result.width * Math.cos(angle) + result.height * Math.abs(Math.sin(angle))) / result.width,
-      (result.height * Math.cos(angle) + result.width * Math.abs(Math.sin(angle))) / result.height,
+      (result.width * Math.cos(angle) +
+        result.height * Math.abs(Math.sin(angle))) /
+        result.width,
+      (result.height * Math.cos(angle) +
+        result.width * Math.abs(Math.sin(angle))) /
+        result.height,
     )
     ctx.translate(result.width / 2, result.height / 2)
     ctx.rotate(angle)

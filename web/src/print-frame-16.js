@@ -9,10 +9,15 @@ export async function renderPrintFrame16(
   height,
   plan,
   stale = () => false,
+  colorSpace = "srgb",
 ) {
   if (!plan || plan.configuration.frame === "none")
-    return { pixels, width, height };
-  const layer = await renderPrintFrame(null, plan, stale, true);
+    return { pixels, width, height, colorSpace };
+  const layer = await renderPrintFrame(null, plan, stale, {
+    omitPhoto: true,
+    colorSpace,
+    rawColors: true,
+  });
   if (!layer || stale()) return null;
   const context = layer.getContext("2d");
   const output = new Uint16Array(layer.width * layer.height * 4);
@@ -45,5 +50,10 @@ export async function renderPrintFrame16(
     }
     await yieldToBrowser();
   }
-  return { pixels: output, width: layer.width, height: layer.height };
+  return {
+    pixels: output,
+    width: layer.width,
+    height: layer.height,
+    colorSpace,
+  };
 }

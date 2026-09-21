@@ -4,6 +4,9 @@ test("large background development stays responsive and discards superseded deta
   page,
 }) => {
   await page.goto("/");
+  await expect(page.locator(".viewer-status > [role=status]")).toContainText(
+    /\d+ × \d+/,
+  );
   const report = await page.evaluate(async () => {
     const { createBackgroundDeveloper } = await import(
       "/src/background-developer.js"
@@ -91,6 +94,7 @@ test("zoom waits for movement to settle before requesting high resolution", asyn
           window.developmentRequests.push({
             width: message.width,
             height: message.height,
+            region: message.output?.region,
             time: performance.now(),
           });
         return super.postMessage(message, ...args);
@@ -101,6 +105,7 @@ test("zoom waits for movement to settle before requesting high resolution", asyn
   await openChart(page, 3200, 2000);
   const status = page.locator(".viewer-status > [role=status]");
   await expect(status).toContainText("1600 × 1000");
+  await expect(page.locator(".viewport-detail")).toBeVisible();
   await page.evaluate(() => {
     window.developmentRequests = [];
   });
@@ -110,9 +115,10 @@ test("zoom waits for movement to settle before requesting high resolution", asyn
     await page.waitForTimeout(30);
   }
   const during = await page.evaluate(() => window.developmentRequests);
-  expect(during.length).toBeGreaterThan(0);
-  expect(
-    during.every((request) => Math.max(request.width, request.height) <= 800),
-  ).toBe(true);
-  await expect(status).toContainText("3200 × 2000");
+  expect(during.every(request => !request.region)).toBe(true);
+  await expect(page.locator(".viewport-detail")).toBeVisible();
+  const after = await page.evaluate(() => window.developmentRequests);
+  expect(after.some(request => request.region)).toBe(true);
+  expect(after.every(request => request.region || Math.max(request.width, request.height) <= 1600)).toBe(true);
+  await expect(status).toContainText("1600 × 1000");
 });

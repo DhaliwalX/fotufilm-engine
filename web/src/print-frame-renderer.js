@@ -1,6 +1,23 @@
+import { colorContext, canvasColorSpace } from "./canvas-color.js";
 import { frameNoise, emulsionTexture, emulsionRim } from "./frame-texture.js";
 import { yieldToBrowser } from "./yield.js";
-const color = (rgb) => `rgb(${rgb.map((v) => v * 255).join(" ")})`;
+const encode = (v) =>
+  v <= 0.0031308
+    ? Math.max(0, v) * 12.92
+    : 1.055 * Math.min(1, v) ** (1 / 2.4) - 0.055;
+export function framePalette(plan, colorSpace) {
+  if (colorSpace !== "display-p3") return plan.palette;
+  const c = plan.configuration;
+  return Object.fromEntries(
+    Object.entries({
+      base: c.baseRGB,
+      edge: c.edgeRGB,
+      rebate: c.rebateRGB,
+      card: [0.86, 0.86, 0.86],
+      cutout: [0.96, 0.96, 0.96],
+    }).map(([key, rgb]) => [key, rgb.map(encode)]),
+  );
+}
 const fill = (ctx, rect) =>
   ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
 const inset = (r, d) => ({
@@ -160,16 +177,29 @@ async function lustre(ctx, size, photo, stale) {
 
 /** One finishing path for previews, comparisons and exports. Photograph pixels are copied
  * at integer coordinates; only the intentional emulsion rim may cover their edges. */
-export async function renderPrintFrame(image, plan, stale = () => false, omitPhoto = false) {
+export async function renderPrintFrame(
+  image,
+  plan,
+  stale = () => false,
+  {
+    omitPhoto = false,
+    colorSpace = canvasColorSpace(image),
+    rawColors = false,
+  } = {},
+) {
   if (!plan || plan.configuration.frame === "none") return image;
   const c = plan.configuration,
     p = plan.placement,
     m = plan.materialSize,
-    palette = plan.palette;
+    palette = framePalette(plan, colorSpace);
+  const color = (rgb) =>
+    colorSpace === "display-p3" && !rawColors
+      ? `color(display-p3 ${rgb.join(" ")})`
+      : `rgb(${rgb.map((v) => v * 255).join(" ")})`;
   const canvas = document.createElement("canvas");
   canvas.width = p.size.width;
   canvas.height = p.size.height;
-  const ctx = canvas.getContext("2d");
+  const ctx = colorContext(canvas, rawColors ? "srgb" : colorSpace);
   if (!ctx)
     throw new Error(
       "The framed image is too large. Choose a smaller export size.",
@@ -240,7 +270,9 @@ export async function renderPrintFrame(image, plan, stale = () => false, omitPho
   if (omitPhoto) ctx.clearRect(r.x, top, r.width, r.height);
   else {
     // Integer placement preserves the delivered photograph without resampling.
-    const pixels = image.getContext("2d").getImageData(0, 0, image.width, image.height);
+    const pixels = image
+      .getContext("2d")
+      .getImageData(0, 0, image.width, image.height);
     ctx.putImageData(pixels, r.x, top);
   }
   if (c.frame === "emulsion") {

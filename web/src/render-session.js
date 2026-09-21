@@ -1,3 +1,9 @@
+import {
+  preferredCanvasColorSpace,
+  pixelsCanvas,
+  colorContext,
+  validateColorSpace,
+} from './canvas-color.js'
 import { createBackgroundDeveloper } from './background-developer.js'
 import { loadPerspective } from './perspective.js'
 import { loadPrintFrame, frameRenderEdit } from './print-frame.js'
@@ -24,6 +30,8 @@ import {
   prepareLinearSource,
   developNormal,
   imageSource,
+  frameRegion,
+  measuredTone,
   loadPack,
   parsePack,
   loadStages,
@@ -197,6 +205,7 @@ export class RenderSession {
     cacheSource = true,
     onProgress = () => {},
     stale = () => false,
+    displaySize = null,
   ) {
     if (image.video) {
       const frame = await image.video.frame(
@@ -212,6 +221,7 @@ export class RenderSession {
         false,
         onProgress,
         stale,
+        displaySize,
       )
     }
     const catalogue = lensIsActive(edit.lens) ? await loadLensCatalogue() : null
@@ -219,6 +229,7 @@ export class RenderSession {
       catalogue?.revision,
       edit.sourceInterpretation,
       maxEdge,
+      displaySize,
       cropMode,
       edit.rotation,
       edit.flip,
@@ -239,6 +250,7 @@ export class RenderSession {
     const input = interpretedImage(image, edit.sourceInterpretation)
     const perspective = await loadPerspective(input, edit, onProgress)
     const floating =
+      displaySize ||
       input.raw ||
       input.linear ||
       lensTable ||
@@ -250,9 +262,18 @@ export class RenderSession {
       : cropMode
         ? oriented
         : await cropImage(oriented, edit)
-    const source = await prepareLinearSource(
+    const prepare = displaySize ? async (source) => source : prepareLinearSource
+    const source = await prepare(
       floating
-        ? rawSource(input, edit, maxEdge, cropMode, lensTable, perspective)
+        ? rawSource(
+            input,
+            edit,
+            maxEdge,
+            cropMode,
+            lensTable,
+            perspective,
+            displaySize,
+          )
         : imageSource(canvas),
       stale,
     )
@@ -288,11 +309,18 @@ export class RenderSession {
     videoTime = null,
     encode = true,
     bitDepth = 8,
+    colorSpace = bitDepth === 16 ? 'display-p3' : preferredCanvasColorSpace(),
     cacheSource = true,
     showMask = false,
+    viewport = null,
     stale = () => false,
     onProgress = () => {},
   }) {
+    validateColorSpace(colorSpace)
+    const region = viewport
+      ? frameRegion(viewport.width, viewport.height, viewport.region)
+      : null
+    const output = { bitDepth, colorSpace, region }
     if (this.closed || stale()) return null
     const requestedEdit = edit
     const framed =
@@ -387,9 +415,20 @@ export class RenderSession {
           cacheSource,
           report,
           stale,
+          viewport ? { width: viewport.width, height: viewport.height } : null,
         )
         if (!prepared || stale()) return null
         const { source, canvas: sourceCanvas } = prepared
+        const outputWidth = region?.width || source.width
+        const outputHeight = region?.height || source.height
+        const selectionSource = region
+          ? {
+              width: outputWidth,
+              height: outputHeight,
+              read: (x, y, w, h) =>
+                source.read(x + region.x, y + region.y, w, h),
+            }
+          : source
         const rendering = (text) =>
           report(`${text} · ${source.width}×${source.height} ${purpose}`)
         const controls = {
@@ -398,6 +437,26 @@ export class RenderSession {
           seed: edit.seed,
           localTone: edit.localTone,
         }
+        const needsMeter =
+          dynamic ||
+          entry?.pack.screenMeter ||
+          (controls.localTone && (controls.highlights || controls.shadows)) ||
+          (edit.selective?.localTone &&
+            (edit.selective.params.highlights || edit.selective.params.shadows))
+        const meter =
+          viewport && needsMeter
+            ? await this.source(
+                image,
+                edit,
+                640,
+                cropMode,
+                videoTime,
+                cacheSource,
+                report,
+                stale,
+              )
+            : prepared
+        if (!meter || stale()) return null
         const selected = edit.stock === null ? null : stage
         const pack = dynamic
           ? parsePack(
@@ -412,7 +471,7 @@ export class RenderSession {
                   filters: edit.filters,
                   filterMetering: edit.filterMetering,
                   sceneHighlightStops: await sceneHighlightStops(
-                    source,
+                    meter.source,
                     controls,
                   ),
                   controls: {
@@ -435,16 +494,16 @@ export class RenderSession {
             )
         if (entry && !pack)
           throw new Error('This pipeline stage is unavailable.')
+        if (
+          viewport &&
+          (pack?.screenMeter ||
+            (controls.localTone && (controls.highlights || controls.shadows)))
+        )
+          output.toneGrid = await measuredTone(meter.source, controls)
         developer?.usePack(pack)
         const developed = developer
-          ? await developer.develop(
-              source,
-              controls,
-              rendering,
-              stale,
-              bitDepth,
-            )
-          : await developNormal(source, controls, rendering)
+          ? await developer.develop(source, controls, rendering, stale, output)
+          : await developNormal(source, controls, rendering, stale, output)
         if (!developed || stale()) return null
         let { pixels, elapsed } = developed
         if (edit.selective?.sample && !cropMode && stage === null) {
@@ -456,6 +515,17 @@ export class RenderSession {
             localTone: local.localTone,
             gradeSpace: local.gradeSpace,
           }
+          const localOutput = viewport
+            ? {
+                ...output,
+                toneGrid:
+                  pack?.screenMeter ||
+                  (localControls.localTone &&
+                    (localControls.highlights || localControls.shadows))
+                    ? await measuredTone(meter.source, localControls)
+                    : null,
+              }
+            : output
           const selected = showMask
             ? null
             : developer
@@ -464,12 +534,18 @@ export class RenderSession {
                   localControls,
                   rendering,
                   stale,
-                  bitDepth,
+                  localOutput,
                 )
-              : await developNormal(source, localControls, rendering)
+              : await developNormal(
+                  source,
+                  localControls,
+                  rendering,
+                  stale,
+                  localOutput,
+                )
           if (stale()) return null
           pixels = await compositeSelection(
-            source,
+            selectionSource,
             pixels,
             selected?.pixels,
             local,
@@ -489,7 +565,13 @@ export class RenderSession {
               report,
             ),
           )
-          const before = await developer.develop(source, controls)
+          const before = await developer.develop(
+            source,
+            controls,
+            rendering,
+            stale,
+            { ...output, bitDepth: 8 },
+          )
           let peak = 0
           for (let i = 0; i < pixels.length; i++)
             if (i % 4 !== 3)
@@ -503,20 +585,22 @@ export class RenderSession {
         if (stale()) return null
         const backend = developer?.backend || 'reference'
         if (bitDepth === 16) {
-          const framePlan = framed
-            ? await loadPrintFrame(
-                requestedEdit,
-                source.width,
-                source.height,
-                report,
-              )
-            : null
+          const framePlan =
+            framed && !viewport
+              ? await loadPrintFrame(
+                  requestedEdit,
+                  source.width,
+                  source.height,
+                  report,
+                )
+              : null
           const output = await renderPrintFrame16(
             pixels,
-            source.width,
-            source.height,
+            outputWidth,
+            outputHeight,
             framePlan,
             () => this.closed || stale(),
+            colorSpace,
           )
           if (!output || stale()) return null
           return {
@@ -528,24 +612,16 @@ export class RenderSession {
           }
         }
         report(`Encoding ${purpose} image`)
-        let canvas = document.createElement('canvas')
-        canvas.width = source.width
-        canvas.height = source.height
-        canvas
-          .getContext('2d')
-          .putImageData(
-            new ImageData(pixels, source.width, source.height),
-            0,
-            0,
-          )
-        const framePlan = framed
-          ? await loadPrintFrame(
-              requestedEdit,
-              source.width,
-              source.height,
-              report,
-            )
-          : null
+        let canvas = pixelsCanvas(pixels, outputWidth, outputHeight, colorSpace)
+        const framePlan =
+          framed && !viewport
+            ? await loadPrintFrame(
+                requestedEdit,
+                source.width,
+                source.height,
+                report,
+              )
+            : null
         if (framePlan) {
           report('Finishing print frame')
           canvas = await renderPrintFrame(
@@ -556,7 +632,7 @@ export class RenderSession {
           if (!canvas || stale()) return null
         }
         const blob = encode ? await canvasBlob(canvas) : null
-        let original = prepared.original
+        let original = viewport ? null : prepared.original
         if (comparison && !original) report('Preparing original for comparison')
         if (comparison && !original && sourceCanvas)
           original = await canvasBlob(sourceCanvas)
@@ -568,21 +644,18 @@ export class RenderSession {
             defaultEdit().params,
             rendering,
             stale,
+            { colorSpace, region },
           )
           if (!baseline || stale()) return null
-          const comparison = document.createElement('canvas')
-          comparison.width = source.width
-          comparison.height = source.height
-          comparison
-            .getContext('2d')
-            .putImageData(
-              new ImageData(baseline.pixels, source.width, source.height),
-              0,
-              0,
-            )
+          const comparison = pixelsCanvas(
+            baseline.pixels,
+            outputWidth,
+            outputHeight,
+            colorSpace,
+          )
           original = await canvasBlob(comparison)
         }
-        prepared.original = original
+        if (!viewport) prepared.original = original
         if (
           comparison &&
           original &&
@@ -593,7 +666,7 @@ export class RenderSession {
           const baseline = document.createElement('canvas')
           baseline.width = bitmap.width
           baseline.height = bitmap.height
-          baseline.getContext('2d').drawImage(bitmap, 0, 0)
+          colorContext(baseline, colorSpace).drawImage(bitmap, 0, 0)
           bitmap.close()
           const framedOriginal = await renderPrintFrame(
             baseline,
@@ -604,7 +677,9 @@ export class RenderSession {
           original = await canvasBlob(framedOriginal)
         }
         return {
+          viewport,
           framePlan,
+          colorSpace,
           sceneSource: source,
           canvas,
           blob,

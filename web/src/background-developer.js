@@ -32,7 +32,13 @@ export async function createBackgroundDeveloper(
     get isAborted() {
       return closed;
     },
-    develop(source, controls, report = () => {}, stale = () => false, bitDepth = 8) {
+    develop(
+      source,
+      controls,
+      report = () => {},
+      stale = () => false,
+      output = {},
+    ) {
       if (closed)
         return Promise.reject(
           new Error("The background image engine is closed."),
@@ -48,7 +54,7 @@ export async function createBackgroundDeveloper(
           width: source.width,
           height: source.height,
           controls,
-          bitDepth,
+          output,
           packChanged: currentPack !== uploadedPack,
           pack: currentPack !== uploadedPack ? currentPack : null,
         });

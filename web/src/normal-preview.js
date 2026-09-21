@@ -1,3 +1,4 @@
+import { preferredCanvasColorSpace } from "./canvas-color.js";
 import { createBackgroundDeveloper } from "./background-developer.js";
 
 // The small import placeholder uses a short-lived CPU worker. The editing session
@@ -18,15 +19,17 @@ export async function developImportPreview(
   const cancel = () => developer.dispose();
   signal?.addEventListener("abort", cancel, { once: true });
   try {
+    const colorSpace = preferredCanvasColorSpace();
     const result = await developer.develop(
       source,
       controls,
       onProgress,
       () => !!signal?.aborted,
+      { colorSpace },
     );
     if (!result || signal?.aborted)
       throw new DOMException("Import cancelled.", "AbortError");
-    return result;
+    return { ...result, colorSpace };
   } finally {
     signal?.removeEventListener("abort", cancel);
     developer.dispose();

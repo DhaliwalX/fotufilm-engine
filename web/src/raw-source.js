@@ -14,9 +14,10 @@ export function rawSource(
   cropMode = false,
   lensTable = null,
   perspective = null,
+  displaySize = null,
 ) {
-  const originalWidth = image.naturalWidth,
-    originalHeight = image.naturalHeight;
+  const originalWidth = image.naturalWidth || image.width,
+    originalHeight = image.naturalHeight || image.height;
   const swapped = edit.rotation % 2 !== 0;
   const orientedWidth = swapped ? originalHeight : originalWidth;
   const orientedHeight = swapped ? originalWidth : originalHeight;
@@ -24,7 +25,8 @@ export function rawSource(
   const frameWidth = Math.max(1, Math.round(orientedWidth * scale));
   const frameHeight = Math.max(1, Math.round(orientedHeight * scale));
   const crop = cropMode ? fullCrop() : edit.crop;
-  const { width, height } = outputSize(crop, frameWidth, frameHeight);
+  const { width, height } =
+    displaySize || outputSize(crop, frameWidth, frameHeight);
   const matrix = homography(crop);
   const angle =
     Math.abs(edit.straighten) > 0.001 ? (edit.straighten * Math.PI) / 180 : 0;

@@ -1,9 +1,6 @@
+import { attachLinearPreview } from './linear-preview.js'
 import { readPhotoMetadata } from './photo-metadata.js'
 import { assetUrl } from './engine.js'
-import { developImportPreview } from './normal-preview.js'
-import { defaultEdit } from './editor-state.js'
-import { canvasBlob } from './geometry.js'
-import { rawSource } from './raw-source.js'
 
 export const RAW_EXTENSIONS = [
   'dng',
@@ -152,15 +149,5 @@ export async function importRaw(file, options) {
   const metadata = await readPhotoMetadata(file, options)
   image.lensMetadata = { ...metadata, shot: image.lensMetadata.shot || metadata.shot }
   options?.onProgress?.('Preparing RAW preview')
-  const source = rawSource(image, defaultEdit(), 1600)
-  const { pixels } = await developImportPreview(source, defaultEdit().params, options)
-  if (options?.signal?.aborted) throw new DOMException('Import cancelled.', 'AbortError')
-  const canvas = document.createElement('canvas')
-  canvas.width = source.width
-  canvas.height = source.height
-  canvas.getContext('2d').putImageData(new ImageData(pixels, source.width, source.height), 0, 0)
-  options?.onProgress?.('Encoding RAW preview')
-  const url = URL.createObjectURL(await canvasBlob(canvas))
-  image.src = url
-  return { image, url }
+  return attachLinearPreview(image, options)
 }

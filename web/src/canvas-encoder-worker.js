@@ -1,7 +1,8 @@
-self.onmessage = async ({ data: { bitmap, type, quality } }) => {
+import { colorContext } from "./canvas-color.js";
+self.onmessage = async ({ data: { bitmap, type, quality, colorSpace } }) => {
   try {
     const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-    canvas.getContext("2d").drawImage(bitmap, 0, 0);
+    colorContext(canvas, colorSpace).drawImage(bitmap, 0, 0);
     bitmap.close();
     const blob = await canvas.convertToBlob({ type, quality });
     if (blob.type !== type)

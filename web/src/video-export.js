@@ -193,6 +193,7 @@ export async function exportVideo({
           encode: false,
           cacheSource: false,
           purpose: 'video export',
+          colorSpace: 'srgb',
           stale: () => !!signal?.aborted,
         })
         checkAbort(signal)

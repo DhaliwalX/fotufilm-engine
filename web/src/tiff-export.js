@@ -1,6 +1,6 @@
 // Ownership of export pixels moves to this short-lived encoder, keeping large
 // strip packing and Blob construction off the UI thread.
-export function exportTiff({ pixels, width, height }) {
+export function exportTiff({ pixels, width, height, colorSpace }) {
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./tiff-worker.js", import.meta.url), {
       type: "module",
@@ -14,7 +14,7 @@ export function exportTiff({ pixels, width, height }) {
     worker.onerror = (event) =>
       finish(event.message || "TIFF encoding failed.");
     try {
-      worker.postMessage({ pixels, width, height }, [pixels.buffer]);
+      worker.postMessage({ pixels, width, height, colorSpace }, [pixels.buffer]);
     } catch (error) {
       finish(error.message);
     }

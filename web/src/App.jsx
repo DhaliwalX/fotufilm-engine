@@ -1,3 +1,4 @@
+import { preferredCanvasColorSpace, colorSpaceLabel } from "./canvas-color.js";
 import { usePreviewQuality } from "./usePreviewQuality.js";
 import CropControls from "./CropControls.jsx";
 import PrintFrameControls from "./PrintFrameControls.jsx";
@@ -219,19 +220,24 @@ export default function App() {
     cropMode ? { ...edit, crop: fullCrop(), ratio: "free" } : edit,
   );
   const [viewerMoving, setViewerMoving] = useState(false);
-  const interactionKey = JSON.stringify([
+  const [detailBackend, setDetailBackend] = useState(null);
+  const editInteractionKey = JSON.stringify([
     activeId,
     previewEditJSON,
-    zoom,
     stage,
     difference,
     cropMode,
     showMask,
     videoTime,
   ]);
+  const interactionKey = JSON.stringify([editInteractionKey, zoom]);
   const interacting = usePreviewQuality(
     interactionKey,
     !!history.group || viewerMoving,
+  );
+  const previewInteracting = usePreviewQuality(
+    editInteractionKey,
+    !!history.group,
   );
   const [interactiveEdge, setInteractiveEdge] = useState(512);
   const previewEdge = Math.min(
@@ -239,7 +245,7 @@ export default function App() {
       active?.image.naturalWidth || 1600,
       active?.image.naturalHeight || 1600,
     ),
-    interacting ? interactiveEdge : cropMode ? 1600 : Math.round(1600 * zoom),
+    previewInteracting ? interactiveEdge : 1600,
   );
   const lensCatalogue = useLensCatalogue();
   const previewKey = JSON.stringify([
@@ -256,6 +262,32 @@ export default function App() {
   const previewEdit = useMemo(
     () => JSON.parse(previewEditJSON),
     [previewEditJSON],
+  );
+  const detailRequest = useMemo(
+    () =>
+      active
+        ? {
+            image: active.image,
+            videoTime,
+            edit: previewEdit,
+            stock: previewEdit.stock || stocks[0]?.id || "normal",
+            stage,
+            difference,
+            cropMode,
+            showMask,
+          }
+        : null,
+    [
+      active,
+      videoTime,
+      previewEdit,
+      stocks,
+      stage,
+      difference,
+      cropMode,
+      showMask,
+      retry,
+    ],
   );
   const selectedStock = stocks.find((stock) => stock.id === edit.stock);
   const stockId = edit.stock || stocks[0]?.id || "normal";
@@ -324,6 +356,7 @@ export default function App() {
     exporting,
     cropMode,
     interacting,
+    previewInteracting,
     interactionKey,
   };
   useEffect(() => {
@@ -403,8 +436,8 @@ export default function App() {
         !currentFile() ||
         currentPreview.current.exporting ||
         currentPreview.current.cropMode !== cropMode ||
-        (!interacting &&
-          (currentPreview.current.interacting ||
+        (!previewInteracting &&
+          (currentPreview.current.previewInteracting ||
             currentPreview.current.key !== previewKey)),
     };
     const frame = requestAnimationFrame(() => {
@@ -438,7 +471,7 @@ export default function App() {
             request.stale()
           )
             return;
-          if (interacting) {
+          if (previewInteracting) {
             if (next.renderMilliseconds > 65)
               setInteractiveEdge((edge) =>
                 Math.max(256, Math.round(edge * 0.8)),
@@ -477,7 +510,7 @@ export default function App() {
     videoTime,
     previewEdit,
     previewEdge,
-    interacting,
+    previewInteracting,
     previewKey,
     stockId,
     session,
@@ -770,8 +803,8 @@ export default function App() {
         exportType === "image/tiff"
           ? await exportTiff(next)
           : exportType === "image/png"
-          ? next.blob
-          : await canvasBlob(next.canvas, exportType, quality / 100);
+            ? next.blob
+            : await canvasBlob(next.canvas, exportType, quality / 100);
       const extension =
         exportType === "image/jpeg" ? "jpg" : exportType.split("/")[1];
       download(
@@ -961,11 +994,13 @@ export default function App() {
               ? "Video · "
               : active?.image.hdr
                 ? "HDR · "
-                : active?.image.linear
-                  ? "EXR · linear · "
-                  : active?.image.raw
-                    ? "RAW · "
-                    : ""}
+                : active?.image.deep
+                  ? `${active.image.deep.format} · ${active.image.deep.bitDepth}-bit · `
+                  : active?.image.linear
+                    ? "EXR · linear · "
+                    : active?.image.raw
+                      ? "RAW · "
+                      : ""}
             {active
               ? `${((rawWidth * rawHeight) / 1000000).toFixed(1)} MP`
               : ""}
@@ -1114,6 +1149,13 @@ export default function App() {
                 });
                 setSampling(false);
               }}
+              onDetailError={setError}
+              onDetailBackend={setDetailBackend}
+              detailSession={session}
+              detailRequest={detailRequest}
+              detailEnabled={
+                !interacting && !exporting && shownResult?.key === previewKey
+              }
               result={shownResult}
               original={active.image}
               sourceKey={active.id}
@@ -1265,7 +1307,7 @@ export default function App() {
             />
           )}
           <span className="backend-label">
-            {shownResult?.backend === "webgpu"
+            {(detailBackend || shownResult?.backend) === "webgpu"
               ? "WebGPU"
               : shownResult
                 ? "CPU"
@@ -1599,7 +1641,7 @@ export default function App() {
                 {selectedStock && (
                   <p className="medium-detail">
                     {(edit.medium || selectedStock.defaultMedium) === "screen"
-                      ? "Direct display rendering without paper or scanning. Export is 8-bit sRGB."
+                      ? "Direct display rendering without paper or scanning."
                       : selectedStock.media.find(
                           (m) =>
                             m.id ===
@@ -1609,7 +1651,7 @@ export default function App() {
                 )}
                 <div className="info-row">
                   <span>Color space</span>
-                  <span>sRGB</span>
+                  <span>{colorSpaceLabel(preferredCanvasColorSpace())}</span>
                 </div>
               </Section>
 
@@ -1923,22 +1965,23 @@ export default function App() {
                 <option value="1600">1600 px long edge</option>
               </select>
             </label>
-            {!active?.image.video && ["image/jpeg", "image/webp"].includes(exportType) && (
-              <Adjustment
-                slider={{
-                  key: "quality",
-                  label: "Quality",
-                  min: 1,
-                  max: 100,
-                  step: 1,
-                  def: 95,
-                  unit: "%",
-                }}
-                disabled={exporting}
-                value={quality}
-                onChange={setQuality}
-              />
-            )}
+            {!active?.image.video &&
+              ["image/jpeg", "image/webp"].includes(exportType) && (
+                <Adjustment
+                  slider={{
+                    key: "quality",
+                    label: "Quality",
+                    min: 1,
+                    max: 100,
+                    step: 1,
+                    def: 95,
+                    unit: "%",
+                  }}
+                  disabled={exporting}
+                  value={quality}
+                  onChange={setQuality}
+                />
+              )}
             {active?.image.video && (
               <label className="select-row">
                 Quality
@@ -1971,7 +2014,18 @@ export default function App() {
                   ).height
                 : (framedSize.plan?.placement.size.height ??
                   Math.max(1, Math.round(cropSize.height * exportScale)))}{" "}
-              pixels · sRGB · {exportType === "image/tiff" && !active?.image.video ? "16-bit" : "8-bit"}
+              pixels ·{" "}
+              {colorSpaceLabel(
+                active?.image.video
+                  ? "srgb"
+                  : exportType === "image/tiff"
+                    ? "display-p3"
+                    : preferredCanvasColorSpace(),
+              )}{" "}
+              ·{" "}
+              {exportType === "image/tiff" && !active?.image.video
+                ? "16-bit"
+                : "8-bit"}
             </p>
             <p className="export-detail">
               {active?.image.video
@@ -2130,9 +2184,9 @@ export default function App() {
               when available, with WebAssembly CPU fallback.
             </p>
             <p>
-              Fit preview uses up to 1600 pixels on the long edge; zooming
-              requests more detail. Export develops the original at the selected
-              size.
+              A smaller overview keeps movement smooth. Once movement settles,
+              the visible image is developed at the display’s pixel resolution.
+              Export develops the entire image at the selected size.
             </p>
             <p>
               The browser supports film selection and format, ageing, halation,
@@ -2147,7 +2201,9 @@ export default function App() {
             </p>
             <p>
               Scanned-negative conversion, automatic subject selections, custom
-              packs, and HDR / 16-bit export are available in the Mac app.
+              packs, and HDR export are available in the Mac app. Still previews
+              and exports use Display P3 where supported; TIFF preserves 16-bit
+              Display P3 precision. Other browsers use sRGB for canvas output.
             </p>
           </div>
         </Modal>

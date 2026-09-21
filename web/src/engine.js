@@ -1,3 +1,9 @@
+import {
+  sourceContext,
+  sourcePixels,
+  decodeCanvasPixels,
+  validateColorSpace,
+} from './canvas-color.js'
 import { loadMediumBytes } from './output-media.js'
 import { yieldToBrowser } from './yield.js'
 import { measureTone, toneKey } from './tone-base.js'
@@ -20,8 +26,8 @@ import { CONTROLS } from './generated/controls.js'
 // The WebAssembly module holds the same Halide kernels the phones run, but none of the physics
 // that builds their inputs. Those arrive as a pack exported by `fotufilm --dump-wasm-pack`: the
 // packed configuration and the three spectral cubes, already solved. This file loads a pack,
-// hands the numbers to the kernel, and converts at the two ends the kernel does not — sRGB in,
-// sRGB out, because the kernels work scene-referred throughout.
+// hands the numbers to the kernel, and converts source colors to linear Rec.2020 and
+// developed Display P3 to the selected delivery space.
 
 const PACK_MAGIC = 'FSWP'
 const STAGES_MAGIC = 'FSSQ'
@@ -50,7 +56,11 @@ export const assetUrl = (name) =>
 const runtime = createRuntimeLoader((kind) => assetUrl(ENGINES[kind]))
 const toneMeasurements = new WeakMap()
 const preparedSources = new WeakSet()
-async function measuredTone(source, controls, balance) {
+export async function measuredTone(
+  source,
+  controls,
+  balance = whiteBalanceGains(controls.temperature, controls.tint),
+) {
   const key = JSON.stringify([controls.ev || 0, ...balance])
   const cached = preparedSources.has(source)
     ? toneMeasurements.get(source)
@@ -386,9 +396,9 @@ function linearToSrgb(v) {
 
 // The engine's scene side works in linear Rec.2020 — the CLI loads into
 // extendedLinearITUR_2020 — while its print comes out in Display P3, the delivery basis the
-// CLI writes tagged displayP3. A canvas hands over and takes back sRGB, so ingest is
-// sRGB→2020 and the encode is P3→sRGB. All three spaces are D65, so each change of primaries
-// is a plain 3×3 with no chromatic adaptation. Digits match ColorScience.linearSRGBToRec2020.
+// CLI writes tagged displayP3. Sources carry linear Rec.2020 or legacy sRGB bytes;
+// delivery keeps Display P3 or converts to sRGB. All three spaces are D65, so each change
+// of primaries is a plain 3×3 with no chromatic adaptation.
 const SRGB_TO_2020 = [
   0.6274039, 0.329283, 0.0433131, 0.0690973, 0.9195404, 0.0113623, 0.0163914,
   0.0880133, 0.8955953,
@@ -578,6 +588,45 @@ export function planTiles(width, height, apron, budget) {
   return tiles
 }
 
+// The delivered rectangle has local storage, while physics and dither retain
+// full-frame coordinates. Neighboring pixels are read only for spatial support.
+export function frameRegion(width, height, region = null) {
+  const r = region || { x: 0, y: 0, width, height }
+  if (
+    ![r.x, r.y, r.width, r.height].every(Number.isSafeInteger) ||
+    r.x < 0 ||
+    r.y < 0 ||
+    r.width < 1 ||
+    r.height < 1 ||
+    r.x + r.width > width ||
+    r.y + r.height > height
+  )
+    throw new Error('Invalid visible image region.')
+  return r
+}
+
+export function planRegionTiles(width, height, apron, budget, region) {
+  const r = frameRegion(width, height, region)
+  const a = Math.max(0, Math.ceil(apron))
+  return planTiles(r.width, r.height, a, budget).map((tile) => {
+    const x = tile.x + r.x,
+      y = tile.y + r.y
+    const left = Math.max(0, x - a),
+      top = Math.max(0, y - a)
+    return {
+      ...tile,
+      x,
+      y,
+      region: {
+        x: left,
+        y: top,
+        width: Math.min(width, x + tile.width + a) - left,
+        height: Math.min(height, y + tile.height + a) - top,
+      },
+    }
+  })
+}
+
 /// Rectangle input: Uint8 RGBA is encoded sRGB; Float32 RGBA is linear Rec.2020.
 /// Reading by rectangle is what lets a hundred-megapixel frame develop without its float form
 /// ever existing whole: only a tile's worth is decoded at once.
@@ -616,11 +665,12 @@ export function imageSource(image) {
                 width: w,
                 height: h,
               })
-        context = canvas.getContext('2d', { willReadFrequently: true })
+        context = sourceContext(canvas)
       }
       context.clearRect(0, 0, w, h)
       context.drawImage(image, x, y, w, h, 0, 0, w, h)
-      return context.getImageData(0, 0, w, h).data
+      const data = sourcePixels(context, 0, 0, w, h)
+      return decodeCanvasPixels(data.data, data.colorSpace)
     },
   }
 }
@@ -637,9 +687,13 @@ export function encodeTileInto(
   seed,
   stride,
   offsets,
+  colorSpace = 'srgb',
+  destination = { x: 0, y: 0, width: frameWidth },
 ) {
+  validateColorSpace(colorSpace)
   const sixteen = pixels instanceof Uint16Array
-  const n = P3_TO_SRGB
+  const n =
+    colorSpace === 'display-p3' ? [1, 0, 0, 0, 1, 0, 0, 0, 1] : P3_TO_SRGB
   const [o0, o1, o2] = offsets
   const { region } = tile
   for (let y = tile.y; y < tile.y + tile.height; ++y) {
@@ -649,7 +703,8 @@ export function encodeTileInto(
       const g = clamp01(displayShoulder(output[at + o1]))
       const b = clamp01(displayShoulder(output[at + o2]))
       const p = y * frameWidth + x
-      const i = p * 4
+      const i =
+        ((y - destination.y) * destination.width + x - destination.x) * 4
       if (sixteen) {
         for (let c = 0; c < 3; c++) {
           const value = linearToSrgb(
@@ -710,12 +765,19 @@ class Developer {
 
   /// The frame every develop from here on is the size of. Picks the rung of the size ladder,
   /// lays out the configuration, cuts the tiles, and grows the buffers to the largest of them.
-  setFrame(width, height) {
-    if (width === this.width && height === this.height) return
+  setFrame(width, height, region = null) {
+    frameRegion(width, height, region)
+    if (
+      width === this.width &&
+      height === this.height &&
+      JSON.stringify(region) === JSON.stringify(this.region || null)
+    )
+      return
     if (!(width > 0 && height > 0))
       throw new Error(`cannot develop a ${width}×${height} frame`)
     this.width = width
     this.height = height
+    this.region = region
     this.plan()
   }
 
@@ -758,6 +820,28 @@ class Developer {
       this.pack.transport || rung.spatialSupport == null
         ? planTiles(this.width, this.height, 0, Infinity)
         : planTiles(this.width, this.height, this.apron, this.tileBudget)
+    if (this.region) {
+      let apron = this.apron
+      if (this.pack.transport) {
+        const root = this.pack.transport
+        const plan =
+          root.sizes.find((size) => size.shortEdge === this.rung.shortEdge) ??
+          root
+        apron += Math.max(
+          0,
+          ...plan.components.flatMap((c) =>
+            c.bands.map((b) => b.radius * b.stride),
+          ),
+        )
+      }
+      this.tiles = planRegionTiles(
+        this.width,
+        this.height,
+        apron,
+        this.tileBudget,
+        this.region,
+      )
+    }
     let needed = 0
     for (const tile of this.tiles)
       needed = Math.max(needed, tile.region.width * tile.region.height)
@@ -815,18 +899,23 @@ class Developer {
   }
 
   /// Develops one frame. `source` is a `pixelSource` or `imageSource` at the frame's size; the
-  /// result is sRGB RGBA8 or RGBA16 of the same size. `elapsed` is the kernels' own time, summed over the
+  /// result is encoded RGBA8 or RGBA16 in the requested delivery color space. `elapsed` is the kernels' own time, summed over the
   /// tiles; the conversions at either end are not in it.
   async develop(
     source,
     controls,
     onProgress = () => {},
     stale = () => false,
-    bitDepth = 8,
+    { bitDepth = 8, colorSpace = 'srgb', region = null, toneGrid = null } = {},
   ) {
-    if (source.width !== this.width || source.height !== this.height) {
-      this.setFrame(source.width, source.height)
+    if (
+      source.width !== this.width ||
+      source.height !== this.height ||
+      JSON.stringify(region) !== JSON.stringify(this.region || null)
+    ) {
+      this.setFrame(source.width, source.height, region)
     }
+    const destination = frameRegion(this.width, this.height, region)
     this.controls = controls
     this.applyControls(controls)
     if (
@@ -834,11 +923,13 @@ class Developer {
       (controls.localTone && (controls.highlights || controls.shadows))
     ) {
       onProgress('Measuring local highlights and shadows')
-      const grid = await measuredTone(
-        source,
-        controls,
-        whiteBalanceGains(controls.temperature, controls.tint),
-      )
+      const grid =
+        toneGrid ||
+        (await measuredTone(
+          source,
+          controls,
+          whiteBalanceGains(controls.temperature, controls.tint),
+        ))
       const offset = this.configPtr / 4
       applyScreenLevels(
         this.module.HEAPF32.subarray(
@@ -854,7 +945,7 @@ class Developer {
       this.module.HEAPF32.set(grid.b, offset + CONFIG.TONE_GRID_B)
     }
     const pixels = new (bitDepth === 16 ? Uint16Array : Uint8ClampedArray)(
-      this.width * this.height * 4,
+      destination.width * destination.height * 4,
     )
     let elapsed = 0
     for (let t = 0; t < this.tiles.length; ++t) {
@@ -889,6 +980,8 @@ class Developer {
         this.seed,
         this.outputStride,
         this.outputOffsets(region),
+        colorSpace,
+        destination,
       )
       if (t + 1 < this.tiles.length) await yieldToBrowser()
     }
@@ -1170,8 +1263,8 @@ export class SimdDeveloper extends Developer {
         this.outputPtr,
         region.width,
         region.height,
-        0,
-        0,
+        region.x,
+        region.y,
         this.configPtr,
         this.exposurePtr,
         this.filmPtr,
@@ -1291,10 +1384,11 @@ export async function developNormalReference(
   controls,
   onProgress = () => {},
   stale = () => false,
-  bitDepth = 8,
+  { bitDepth = 8, colorSpace = 'srgb', region = null, toneGrid = null } = {},
 ) {
   const { width, height } = source,
     started = performance.now()
+  const destination = frameRegion(width, height, region)
   const balance = whiteBalanceGains(controls.temperature, controls.tint),
     grade = packedGrade(controls)
   const exposure = 2 ** (controls.ev || 0),
@@ -1305,10 +1399,10 @@ export async function developNormalReference(
   ]
   const grid =
     controls.localTone && (controls.highlights || controls.shadows)
-      ? await measuredTone(source, controls, balance)
+      ? toneGrid || (await measuredTone(source, controls, balance))
       : null
   const pixels = new (bitDepth === 16 ? Uint16Array : Uint8ClampedArray)(
-    width * height * 4,
+    destination.width * destination.height * 4,
   )
   const encode = (v) =>
     v <= 0.0031308
@@ -1322,22 +1416,28 @@ export async function developNormalReference(
       : v >= 1
         ? 1 + (v - 1) / (1.055 / 2.4)
         : ((v + 0.055) / 1.055) ** 2.4
-  for (let top = 0; top < height; top += 32) {
+  for (
+    let top = destination.y;
+    top < destination.y + destination.height;
+    top += 32
+  ) {
     if (stale()) return null
     onProgress(
       `Applying light and color · rows ${top + 1}–${Math.min(top + 32, height)} of ${height}`,
     )
-    const rows = Math.min(32, height - top),
-      linear = decodeRGBA(await source.read(0, top, width, rows))
+    const rows = Math.min(32, destination.y + destination.height - top),
+      linear = decodeRGBA(
+        await source.read(destination.x, top, destination.width, rows),
+      )
     for (let y = 0; y < rows; y++)
-      for (let x = 0; x < width; x++) {
-        const i = (y * width + x) * 4
+      for (let x = 0; x < destination.width; x++) {
+        const i = (y * destination.width + x) * 4
         const rgb = [0, 1, 2].map((c) => linear[i + c] * balance[c])
         const luma = rgb.reduce((sum, v, c) => sum + v * weights[c], 0)
         const stops = toneKey(
           grid,
           Math.log2(Math.max((luma * exposure) / 0.18, 1e-6)),
-          x,
+          x + destination.x,
           top + y,
           width,
           height,
@@ -1369,13 +1469,28 @@ export async function developNormalReference(
         }
       }
     const tile = {
-      x: 0,
+      x: destination.x,
       y: top,
-      width,
+      width: destination.width,
       height: rows,
-      region: { x: 0, y: top, width, height: rows },
+      region: {
+        x: destination.x,
+        y: top,
+        width: destination.width,
+        height: rows,
+      },
     }
-    encodeTileInto(pixels, width, linear, tile, 0, 4, [0, 1, 2])
+    encodeTileInto(
+      pixels,
+      width,
+      linear,
+      tile,
+      0,
+      4,
+      [0, 1, 2],
+      colorSpace,
+      destination,
+    )
     await yieldToBrowser()
   }
   return { pixels, elapsed: performance.now() - started }
@@ -1422,14 +1537,21 @@ export async function createNormalDeveloper(options) {
   })
 }
 // Import previews get their own buffers; live sessions keep a persistent developer.
-export async function developNormal(source, controls, onProgress = () => {}) {
+export async function developNormal(
+  source,
+  controls,
+  onProgress = () => {},
+  stale = () => false,
+  output = {},
+) {
   if (typeof window === 'undefined')
-    return developNormalReference(source, controls, onProgress)
+    return developNormalReference(source, controls, onProgress, stale, output)
   onProgress('Preparing light and color engine')
   const developer = await createNormalDeveloper()
-  if (!developer) return developNormalReference(source, controls, onProgress)
+  if (!developer)
+    return developNormalReference(source, controls, onProgress, stale, output)
   try {
-    return await developer.develop(source, controls, onProgress)
+    return await developer.develop(source, controls, onProgress, stale, output)
   } finally {
     developer.dispose()
   }

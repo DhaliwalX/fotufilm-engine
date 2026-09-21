@@ -5,6 +5,7 @@ test("JPEG gain maps preserve scene highlights through orientation, lens correct
   page,
 }) => {
   await page.goto("/");
+  await expect(page.locator(".viewer-status > [role=status]")).toContainText(/\d+ × \d+/);
   for (const name of ["gainmap", "rotated", "rec2020"]) {
     const bytes = [
       ...(await readFile(
