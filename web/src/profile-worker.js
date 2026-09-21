@@ -35,15 +35,26 @@ async function loadAssets(base) {
 
 self.onmessage = async ({ data: { id, request, base } }) => {
   try {
-    if (request.kind !== "lens" && !/^[a-z0-9_-]+$/i.test(request.stock))
+    const lensRequest = [
+      "lens",
+      "lens-plan",
+      "lens-catalogue",
+      "lens-match",
+    ].includes(request.kind);
+    if (!lensRequest && !/^[a-z0-9_-]+$/i.test(request.stock))
       throw new Error("Invalid film identifier.");
-    self.postMessage({ id, status: request.kind === "lens" ? "Loading on-device lens correction" : "Loading on-device film profile builder" });
+    self.postMessage({
+      id,
+      status: lensRequest
+        ? "Loading on-device lens correction"
+        : "Loading on-device film profile builder",
+    });
     assets ??= loadAssets(base).catch((error) => {
       assets = null;
       throw error;
     });
     const { runtime, read, stocks } = await assets;
-    if (request.kind === "lens") {
+    if (lensRequest) {
       const profile = runtime.prepare(request);
       self.postMessage({ id, profile }, [profile]);
       return;

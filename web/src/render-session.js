@@ -1,4 +1,6 @@
-import { lensIsActive, lensRequest, readLensTable } from './lens-correction.js'
+import { lensIsActive } from './lens-correction.js'
+import { resolveLensPlan } from './lens-plan.js'
+import { loadLensCatalogue } from './lens-catalogue.js'
 import { loadFilmProfile } from './film-profile.js'
 import { hasProfileSettings, profileRequestControls } from './profile-settings.js'
 import { loadMediumBytes } from './output-media.js'
@@ -203,7 +205,9 @@ export class RenderSession {
       )
       return this.source(frame, edit, maxEdge, cropMode, null, false, onProgress)
     }
+    const catalogue = lensIsActive(edit.lens) ? await loadLensCatalogue() : null
     const key = JSON.stringify([
+      catalogue?.revision,
       maxEdge,
       cropMode,
       edit.rotation,
@@ -216,9 +220,10 @@ export class RenderSession {
       (item) => item.image === image && item.key === key,
     )
     if (cached) return cached
-    const lensTable = lensIsActive(edit.lens)
-      ? readLensTable(await loadFilmProfile(lensRequest(edit.lens), onProgress))
+    const lensPlan = lensIsActive(edit.lens)
+      ? await resolveLensPlan(image, edit.lens, onProgress)
       : null
+    const lensTable = lensPlan && !lensPlan.identity ? lensPlan.table : null
     const floating = image.raw || image.linear || lensTable
     const oriented = floating ? null : orientImage(image, edit, maxEdge)
     const canvas = floating

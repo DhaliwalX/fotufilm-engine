@@ -118,6 +118,10 @@ unsigned raw_height() { return image ? image->height : 0; }
 unsigned raw_colors() { return image ? image->colors : 0; }
 const char *raw_make() { return decoder ? decoder->imgdata.idata.make : ""; }
 const char *raw_model() { return decoder ? decoder->imgdata.idata.model : ""; }
+const char *raw_lens_model() { return decoder ? decoder->imgdata.lens.Lens : ""; }
+const char *raw_lens_make() { return decoder ? decoder->imgdata.lens.LensMake : ""; }
+float raw_focal_length() { return decoder ? decoder->imgdata.other.focal_len : 0; }
+float raw_aperture() { return decoder ? decoder->imgdata.other.aperture : 0; }
 unsigned raw_camera_channels() { return decoder ? decoder->imgdata.idata.colors : 0; }
 float raw_camera_wb(unsigned channel) {
     return decoder && channel < 3 ? decoder->imgdata.color.cam_mul[channel] : 0;

@@ -27,6 +27,10 @@ self.onmessage = async ({ data: { bytes, decoderURL } }) => {
         '_raw_make',
         '_raw_model',
         '_raw_camera_channels',
+        '_raw_lens_model',
+        '_raw_lens_make',
+        '_raw_focal_length',
+        '_raw_aperture',
         '_raw_camera_wb',
         '_raw_camera_to_xyz',
       ].some((name) => typeof module[name] !== 'function')
@@ -46,6 +50,13 @@ self.onmessage = async ({ data: { bytes, decoderURL } }) => {
       whiteBalance: [0, 1, 2].map((c) => module._raw_camera_wb(c)),
       cameraToXYZ: Array.from({ length: 9 }, (_, i) => module._raw_camera_to_xyz(i)),
     }
+    const lensModel = module.UTF8ToString(module._raw_lens_model())
+    const positive = (value) => Number.isFinite(value) && value > 0 ? value : null
+    const lensShot = lensModel ? {
+      lensModel, lensMaker: module.UTF8ToString(module._raw_lens_make()) || null,
+      cameraModel: camera.model, focalLength: positive(module._raw_focal_length()),
+      aperture: positive(module._raw_aperture()),
+    } : null
     self.postMessage({ status: 'Loading camera spectral profiles' })
     const catalog = await loadCameraProfiles(relatedAssetUrl('camera-profiles.json', decoderURL))
     const profile = resolveCameraProfile(camera, catalog)
@@ -66,7 +77,7 @@ self.onmessage = async ({ data: { bytes, decoderURL } }) => {
     self.postMessage({ status: 'Copying decoded RAW pixels' })
     const start = module._raw_pixels() / 2
     const pixels = module.HEAPU16.slice(start, start + width * height * colors)
-    self.postMessage({ width, height, colors, sceneScale, profile, sceneKelvin, pixels }, [
+    self.postMessage({ width, height, colors, sceneScale, profile, sceneKelvin, lensShot, pixels }, [
       pixels.buffer,
     ])
   } catch (error) {

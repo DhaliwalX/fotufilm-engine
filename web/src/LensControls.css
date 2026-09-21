@@ -4,3 +4,17 @@
   gap: 16px;
   min-width: 0;
 }
+.lens-profile-library > summary {
+  font-size: 11px;
+  cursor: pointer;
+}
+.lens-profile-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.inspector-section .lens-profile-library:not([open]) > summary::after {
+  transform: rotate(0deg);
+}

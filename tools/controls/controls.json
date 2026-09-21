@@ -2620,16 +2620,17 @@
         "android" : "no lens correction on Android yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "scope" : "edit",
       "section" : "lensCorrection",
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Lens"
+      "title" : "Lens",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -2645,8 +2646,7 @@
         "android" : "no lens correction on Android yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "persistedKey" : "lensProfileAmount",
       "scale" : {
@@ -2666,9 +2666,11 @@
       "storedNeutral" : 1,
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Amount"
+      "title" : "Amount",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",

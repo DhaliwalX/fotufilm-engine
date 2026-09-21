@@ -20,6 +20,8 @@ const runtimeRevision = runtimeHash.digest('hex').slice(0, 20)
 let probeOutputs
 
 export default defineConfig({
+  // Worker-only imports must not trigger a page reload on the first correction.
+  optimizeDeps: { include: ['@bjorn3/browser_wasi_shim'] },
   define: { __FOTUFILM_RUNTIME_REVISION__: JSON.stringify(runtimeRevision) },
   plugins: [react(), {
     name: 'omit-parity-probes',

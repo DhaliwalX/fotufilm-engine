@@ -6,20 +6,31 @@ export const lensFields = {
 };
 export const defaultLens = () => ({
   enabled: false,
+  amount: 1,
+  profileID: null,
   distortion: 0,
   vignetting: 0,
   redCyan: 0,
   blueYellow: 0,
 });
 export const hasLensAdjustments = (lens) =>
+  (lens?.amount ?? 1) !== 1 ||
+  lens?.profileID != null ||
   Object.values(lensFields).some((key) => (lens?.[key] ?? 0) !== 0);
-export const lensIsActive = (lens) =>
-  !!lens?.enabled && hasLensAdjustments(lens);
+export const lensIsActive = (lens) => !!lens?.enabled;
 
 export function parseLensCorrection(value) {
   if (value == null) return defaultLens();
   if (
     typeof value.enabled !== "boolean" ||
+    (value.amount != null &&
+      (!Number.isFinite(value.amount) ||
+        value.amount < 0 ||
+        value.amount > 1)) ||
+    (value.profileID != null &&
+      (typeof value.profileID !== "string" ||
+        !value.profileID.length ||
+        value.profileID.length > 1024)) ||
     Object.values(lensFields).some(
       (key) => !Number.isFinite(value[key]) || Math.abs(value[key]) > 1,
     )
@@ -28,6 +39,8 @@ export function parseLensCorrection(value) {
   }
   return {
     enabled: value.enabled,
+    amount: value.amount ?? 1,
+    profileID: value.profileID ?? null,
     ...Object.fromEntries(
       Object.values(lensFields).map((key) => [key, value[key]]),
     ),

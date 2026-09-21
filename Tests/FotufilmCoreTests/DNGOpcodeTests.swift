@@ -223,6 +223,19 @@ final class DNGOpcodeTests: XCTestCase {
         }
     }
 
+    func testDecoderExtentOverridesTheSuggestedDefaultCrop() throws {
+        let file = DNGBuilder(activeArea: (4000, 3000),
+                              crop: (origin: (1000, 750), size: (2000, 1500)))
+            .with(opcodeList3: [.warp(planes: [(kr: [1, 0.4, 0.2, 0.1], kt: [0, 0])]),
+                               .vignette(k: [0.4, 0.3, 0.2, 0.1, 0.05])])
+            .data()
+        for dimensions in [SIMD2<Float>(4000, 3000), SIMD2<Float>(3000, 4000)] {
+            let correction = try XCTUnwrap(DNGOpcodes.read(file, deliveredSize: dimensions)?.correction)
+            XCTAssertEqual(try XCTUnwrap(correction.planeWarp).green.k1, 0.4, accuracy: 1e-7)
+            XCTAssertEqual(correction.vignetting.gain(1), 2.05, accuracy: 1e-6)
+        }
+    }
+
     func testTheFalloffIsRestatedAgainstTheSameFrame() throws {
         let file = DNGBuilder(activeArea: (4000, 3000),
                               crop: (origin: (1000, 750), size: (2000, 1500)))

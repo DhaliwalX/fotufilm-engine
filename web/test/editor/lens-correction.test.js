@@ -131,3 +131,27 @@ test("camera RGB is transformed before chromatic channels sample different posit
   ).read(0, 0, 8, 6);
   actual.forEach((v, i) => assert.ok(Math.abs(v - expected[i]) < 1e-6));
 });
+
+test("profile selection and Amount survive saved edits and validate on load", () => {
+  const edit = {
+    ...defaultEdit(),
+    lens: {
+      ...defaultLens(),
+      enabled: true,
+      profileID: "synthetic",
+      amount: 0.42,
+    },
+  };
+  const parse = (value) =>
+    parseEdit(
+      JSON.stringify({ version: 1, edit: { ...edit, lens: value } }),
+      [],
+    );
+  assert.deepEqual(parse(edit.lens).lens, edit.lens);
+  for (const value of [
+    { ...edit.lens, amount: -0.1 },
+    { ...edit.lens, amount: 1.1 },
+    { ...edit.lens, profileID: 3 },
+  ])
+    assert.throws(() => parse(value), /Invalid lens/);
+});

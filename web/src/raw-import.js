@@ -1,3 +1,4 @@
+import { readPhotoMetadata } from './photo-metadata.js'
 import { assetUrl, developNormal } from './engine.js'
 import { defaultEdit } from './editor-state.js'
 import { canvasBlob } from './geometry.js'
@@ -43,7 +44,8 @@ export const isRawFile = (file) =>
 // React/devtools state inspection, which can otherwise enumerate millions of samples.
 class RawImage {
   #pixels
-  constructor(width, height, data, colors, sceneScale, profile, sceneKelvin) {
+  constructor(width, height, data, colors, sceneScale, profile, sceneKelvin, lensShot) {
+    this.lensMetadata = { shot: lensShot }
     this.naturalWidth = width
     this.naturalHeight = height
     this.#pixels = { data, colors, sceneScale, profile, sceneKelvin }
@@ -129,6 +131,7 @@ export function decodeRaw(file, { signal, onProgress = () => {} } = {}) {
           data.sceneScale,
           data.profile,
           data.sceneKelvin,
+          data.lensShot,
         ),
       )
     }
@@ -145,6 +148,8 @@ export function decodeRaw(file, { signal, onProgress = () => {} } = {}) {
 
 export async function importRaw(file, options) {
   const image = await decodeRaw(file, options)
+  const metadata = await readPhotoMetadata(file, options)
+  image.lensMetadata = { ...metadata, shot: image.lensMetadata.shot || metadata.shot }
   options?.onProgress?.('Preparing RAW preview')
   const source = rawSource(image, defaultEdit(), 1600)
   const { pixels } = await developNormal(source, defaultEdit().params, options?.onProgress)

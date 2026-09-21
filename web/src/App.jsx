@@ -1,3 +1,5 @@
+import { useLensCatalogue } from './useLensCatalogue.js';
+import { readPhotoMetadata } from './photo-metadata.js';
 import LensControls from "./LensControls.jsx";
 import InspectorPanel from "./InspectorPanel.jsx";
 import LensFilters from "./LensFilters.jsx";
@@ -238,7 +240,9 @@ export default function App() {
     ),
     cropMode ? 1600 : interacting ? interactiveEdge : Math.round(1600 * zoom),
   );
+  const lensCatalogue = useLensCatalogue();
   const previewKey = JSON.stringify([
+    lensCatalogue.revision,
     activeId,
     active?.image.video ? videoTime : null,
     previewEditJSON,
@@ -529,6 +533,7 @@ export default function App() {
         await image.decode();
         if (image.naturalWidth * image.naturalHeight > 120000000)
           throw new Error("Images above 120 megapixels are not supported.");
+        image.lensMetadata = await readPhotoMetadata(file, { signal: controller.signal });
         loaded.push({ id: crypto.randomUUID(), name: file.name, image, url });
       } catch (e) {
         URL.revokeObjectURL(url);
@@ -1641,6 +1646,7 @@ export default function App() {
           )}
           {panel === "light" && (
             <LensControls
+              image={active?.image}
               lens={edit.lens}
               disabled={exporting || !active}
               onEnd={endEdit}

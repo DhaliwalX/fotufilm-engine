@@ -1053,8 +1053,9 @@ public enum EditorControlCatalogue {
             .lensProfile, title: "Lens",
             detail: "Choose a lens profile or use the match from the photo’s metadata.",
             section: .lensCorrection, kind: .menu(.dynamic(.lensProfiles)),
-            surfaces: [.app, .desktop],
-            omitted: hostsOwnIt.merging([.android: "no lens correction on Android yet"]) { $1 },
+            surfaces: [.app, .desktop, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web }.merging([.android: "no lens correction on Android yet"]) { $1 },
+            web: .runtime,
             documentation: "Identifies the matched lens model."),
         EditorControl(
             .lensAmount, title: "Amount",
@@ -1062,8 +1063,9 @@ public enum EditorControlCatalogue {
             section: .lensCorrection,
             kind: .slider(EditorControlScale(0...1, neutral: 1, unit: .percent)),
             persistence: .key("lensProfileAmount", .same),
-            surfaces: [.app, .desktop],
-            omitted: hostsOwnIt.merging([.android: "no lens correction on Android yet"]) { $1 },
+            surfaces: [.app, .desktop, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web }.merging([.android: "no lens correction on Android yet"]) { $1 },
+            web: .runtime,
             documentation: "Sets overall correction intensity."),
         EditorControl(
             .lensDistortion, title: "Distortion",

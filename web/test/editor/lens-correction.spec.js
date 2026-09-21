@@ -124,6 +124,8 @@ test("Lens controls retain edits on bypass, undo, save/load and export without c
   const saved = await readFile(await (await download).path());
   expect(JSON.parse(saved).edit.lens).toEqual({
     enabled: true,
+    amount: 1,
+    profileID: null,
     distortion: 0.8,
     vignetting: 0,
     redCyan: 0,
