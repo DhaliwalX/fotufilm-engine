@@ -407,6 +407,55 @@ final class CrystalGrainTests: XCTestCase {
         }
     }
 
+    /// The finite stochastic pool and the population fit must have the same ensemble mean.
+    /// Test the fitted expectation, not just the much looser characteristic-curve fit error.
+    func testRenderedMeanMatchesPopulationAcrossSampling() throws {
+        try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable, "Halide required")
+        for stock in [TestStocks.negative, TestStocks.reversal] {
+            for pxPerMM: Float in [250, 1500] {
+                let side = 768
+                var options = FotufilmEngine.Options()
+                options.format = FilmFormat(name: "population mean", frameHeightMM: Float(side) / pxPerMM)
+                options.sceneIlluminantKelvin = stock.referenceIlluminantKelvin
+                options.halationScale = 0
+                options.couplerScale = 0
+                options.seed = 11
+                options.grainScale = 0
+                var input = ImageBuffer(width: side, height: side)
+                for c in 0..<3 { input.planes[c] = [Float](repeating: 0.18, count: side * side) }
+                let flat = FotufilmEngine(stock: stock, options: options).developNegative(linearRGB: input)
+                options.grainScale = 1
+                options.grainModel = .crystals
+                let image = FotufilmEngine(stock: stock, options: options).developNegative(linearRGB: input)
+                for c in 0..<3 {
+                    let model = CrystalGrainModel(stock: stock, layer: c)
+                    let curve = stock.curves[c]
+                    let net = flat.planes[c][side * side / 2] - curve.dMin
+                    let amount = min(max(net / (curve.dMax - curve.dMin), 0), 1)
+                    let index = amount * Float(CrystalGrainModel.samples - 1)
+                    let lo = min(Int(index), CrystalGrainModel.samples - 2)
+                    let fraction = index - Float(lo)
+                    let tables = model.countTable(pxPerMM: pxPerMM)
+                    var expected = curve.dMin
+                    for bin in 0..<CrystalGrainModel.binCount {
+                        let lambda = tables[bin][lo] * (1 - fraction) + tables[bin][lo + 1] * fraction
+                        let demand = lambda * model.densityPerCloud(bin: bin, pxPerMM: pxPerMM)
+                        let pool = model.bins[bin].pool
+                        expected += pool > 0 ? pool * (1 - exp(-demand / pool)) : demand
+                    }
+                    // Exclude the clamped image boundary and accumulate in Double.
+                    var sum = 0.0
+                    for y in 48..<(side - 48) {
+                        for x in 48..<(side - 48) { sum += Double(image.planes[c][y * side + x]) }
+                    }
+                    let mean = Float(sum / Double((side - 96) * (side - 96)))
+                    XCTAssertEqual(mean, expected, accuracy: 0.006,
+                                   "\(stock.name) record \(c), \(pxPerMM) px/mm")
+                }
+            }
+        }
+    }
+
     /// Where little developed the grain is the fast sublayer's few coarse clouds; where most
     /// did, a haze of fine ones — so the field's correlation length shortens with density.
     func testTextureCoarsensWhereLittleDeveloped() throws {
