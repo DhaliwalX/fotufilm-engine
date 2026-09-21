@@ -7,7 +7,14 @@ PROBE="${CPU%/cpu}/flexible-test"
 EMSDK="${EMSDK_ROOT:-build/emsdk}"
 mkdir -p "$PROBE" web/public/test
 [[ -f "$CPU/develop_flexible.a" ]] || { echo 'Run tools/build-wasm.sh first.' >&2; exit 1; }
-: > "$PROBE/fotufilm_wasm_variants.h"
+# The first preset header owns the generated Halide ABI declarations. Keep
+# those headers even though the empty dispatch table forces every fallback.
+if [[ -f "$CPU/fotufilm_wasm_variants.h" ]]; then
+  cp "$CPU/fotufilm_wasm_variants.h" "$PROBE/fotufilm_wasm_variants.h"
+else
+  # A flexible-only generation embeds its ABI in develop_flexible.h instead.
+  : > "$PROBE/fotufilm_wasm_variants.h"
+fi
 : > "$PROBE/fotufilm_wasm_variants.inc"
 source "$EMSDK/emsdk_env.sh" >/dev/null 2>&1
 em++ -std=c++17 -O1 web/engine/fotufilm_wasm_cpu.cpp \
