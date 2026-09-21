@@ -87,11 +87,18 @@ int main(int argc, char **argv) {
         // keeps the warp's add-back and develops the donor stocks red. Monochrome coats no
         // 4th Color Layer, so its kernel stays as it was.
         {"color_float",
-         FOTUFILM_AOT_ALL_STAGES | FOTUFILM_FRAME_FLOAT_IO
+         FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_DISC_GRAIN | FOTUFILM_FRAME_FLOAT_IO
              | FOTUFILM_FRAME_DONOR_LAYER | FOTUFILM_FRAME_EXACT_MATH, true},
         {"monochrome_float",
-         FOTUFILM_AOT_ALL_STAGES | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO
+         FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_DISC_GRAIN | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO
              | FOTUFILM_FRAME_EXACT_MATH, false},
+        {"plain_float", FOTUFILM_FRAME_NO_FILM | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_EXACT_MATH, false},
+        // Scans already contain developed film density. Their print stage must not
+        // expose or develop those samples again, or add a second layer of grain.
+        {"print_color_float", FOTUFILM_FRAME_DENSITY_IN | FOTUFILM_FRAME_FLOAT_IO
+             | FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_EXACT_MATH, false},
+        {"print_monochrome_float", FOTUFILM_FRAME_DENSITY_IN | FOTUFILM_FRAME_MONOCHROME
+             | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_EXACT_MATH, false},
     };
 
     const Halide::Target target = wasm_target(webgpu);

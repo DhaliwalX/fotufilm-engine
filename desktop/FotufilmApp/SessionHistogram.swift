@@ -50,8 +50,8 @@ final class SessionHistogramPanelView: SessionView {
         pan.addTarget(self, action: #selector(dragged(_:)))
         addGestureRecognizer(pan)
         #endif
-        setAXLabel("RGB histogram")
-        setHelp("RGB histogram. Drag to move it over the canvas.")
+        setAXLabel("RGB histogram, logarithmic pixel counts")
+        setHelp("RGB histogram. Logarithmic pixel count; linear tone values. Drag to move it over the canvas.")
     }
 
     func setImage(_ image: PlatformImage?) {
@@ -160,8 +160,8 @@ final class SessionHistogramPanelView: SessionView {
     #endif
 }
 
-/// Three filled channel curves blended additively. The 98th percentile of populated bins sets the
-/// height, keeping a single clipped spike from flattening the useful part of the reading.
+/// Three filled channel curves blended additively with logarithmic pixel counts.
+/// One shared peak preserves relative RGB populations; log1p keeps empty bins at zero.
 private final class HistogramPlotView: SessionView {
     var bins: [[Int]] = [] { didSet { redraw() } }
 
@@ -180,9 +180,7 @@ private final class HistogramPlotView: SessionView {
             return
         }
 
-        let populated = bins.flatMap { $0 }.filter { $0 > 0 }.sorted()
-        let bulkIndex = Int(Double(populated.count - 1) * 0.98)
-        let scale = CGFloat(max(populated[bulkIndex], 1))
+        let scale = log1p(Double(max(bins.flatMap { $0 }.max() ?? 0, 1)))
         let colors = [
             PlatformColor(red: 1, green: 0.25, blue: 0.25, alpha: 0.75),
             PlatformColor(red: 0.3, green: 1, blue: 0.4, alpha: 0.75),
@@ -195,7 +193,7 @@ private final class HistogramPlotView: SessionView {
             for (index, value) in channelBins.enumerated() {
                 let x = bounds.minX + bounds.width * CGFloat(index)
                     / CGFloat(channelBins.count - 1)
-                let height = min(CGFloat(value) / scale, 1) * bounds.height
+                let height = CGFloat(log1p(Double(max(value, 0))) / scale) * bounds.height
                 context.addLine(to: CGPoint(x: x, y: bounds.maxY - height))
             }
             context.addLine(to: CGPoint(x: bounds.maxX, y: bounds.maxY))

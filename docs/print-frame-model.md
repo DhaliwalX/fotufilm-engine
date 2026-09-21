@@ -13,6 +13,13 @@ and exports use the same material-dependent image.
 Border metadata lives with film stock definitions. The finishing compositor runs after image
 formation, with no photograph resampling or changes to its colour profile. Negative delivery is SDR.
 
+The web editor offers the same finishing choices in the Mac-style Print inspector. Its isolated
+native worker supplies `PrintFrameConfiguration`, `PrintFramePlacement`, perforation dimensions,
+availability and the derived delivery medium. A separate Canvas compositor adds the material to
+8-bit sRGB preview and export. Crop and pipeline inspection remain unframed; photo frames do not
+apply to video. Native and browser rasterizers may differ slightly in lettering and procedural
+texture, while geometry and spectral material colours share the native model.
+
 ## Film geometry
 
 An automatic border uses the stock's native format. An explicit Film Gauge overrides it. Camera

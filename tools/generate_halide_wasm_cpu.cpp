@@ -11,6 +11,7 @@
 #define FOTUFILM_HALIDE_ENABLED 1
 #define FOTUFILM_HALIDE_AOT_GENERATOR 1
 #include "../Sources/FotufilmHalide/Pipeline/Cpu.h"
+#include "../Sources/FotufilmHalide/include/FotufilmAotVariants.h"
 
 using namespace fotufilm;
 using namespace fotufilm::pipelines;
@@ -37,7 +38,7 @@ Halide::Target wasm_target() {
 
 int main(int argc, char **argv) {
     if (argc < 3) {
-        std::cerr << "usage: generate_halide_wasm_cpu OUTPUT_DIRECTORY MASK [MASK...] | --plain-only\n"
+        std::cerr << "usage: generate_halide_wasm_cpu OUTPUT_DIRECTORY MASK [MASK...] | --plain-only | --flexible-only\n"
                      "  MASK is a stock's feature mask, as printed by --dump-wasm-pack\n";
         return 2;
     }
@@ -46,7 +47,8 @@ int main(int argc, char **argv) {
 
     std::vector<int> variants;
     const bool plain_only = std::string(argv[2]) == "--plain-only";
-    for (int i = 2; !plain_only && i < argc; ++i) {
+    const bool flexible_only = std::string(argv[2]) == "--flexible-only";
+    for (int i = 2; !plain_only && !flexible_only && i < argc; ++i) {
         const int32_t features = fotufilm_develop_features(int32_t(strtol(argv[i], nullptr, 0)));
         const int variant = fotufilm_develop_variant(features);
         if (std::find(variants.begin(), variants.end(), variant) != variants.end()) continue;
@@ -57,6 +59,20 @@ int main(int argc, char **argv) {
         DevelopPipeline pipeline(features, "_variant_" + std::to_string(variant));
         // The first module carries the Halide runtime; the rest link against it.
         pipeline.compile_aot((output / name).string(), name, variants.size() == 1,
+                             wasm_target(), true);
+        std::cout << " ok\n";
+    }
+
+    // Settings prepared in the browser can request a stage combination absent from the stock
+    // presets. The same runtime gates used by native AOT classes bypass unrequested stages.
+    // Annular halation is an exact schedule choice and therefore has its own fallback.
+    for (int annular = 0; !plain_only && annular < 2; ++annular) {
+        const int32_t features = FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_DISC_GRAIN
+            | (annular ? FOTUFILM_FRAME_HALATION_ANNULAR : 0);
+        const std::string name = annular ? "develop_flexible_annular" : "develop_flexible";
+        std::cout << "  " << name << std::flush;
+        DevelopPipeline pipeline(features, "_" + name);
+        pipeline.compile_aot((output / name).string(), name, variants.empty() && !annular,
                              wasm_target(), true);
         std::cout << " ok\n";
     }

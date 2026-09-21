@@ -68,6 +68,17 @@ public enum EditorControlCatalogue {
         "mp4": "MP4 · H.264", "webm": "WebM · VP9", "dismiss": "Dismiss",
     ]
 
+    public static let webSelection: [String: Any] = [
+        "title": "Selective", "section": "Selection", "kind": "Select By",
+        "sample": "Sample a Point", "sampling": "Click the Photo…",
+        "mask": "Show Mask", "clear": "Clear Selection", "match": "Match the Photograph",
+        "choices": [["value": "color", "label": "Color"], ["value": "light", "label": "Light"]],
+        "sliders": [
+            ["key": "range", "label": "Range", "min": 0.05, "max": 0.6, "def": 0.25, "step": 0.01],
+            ["key": "softness", "label": "Softness", "min": 0.05, "max": 1.0, "def": 0.5, "step": 0.01],
+        ],
+    ]
+
     public static let auxiliaries: [HostAuxiliary] = [
         HostAuxiliary(ofxName: "status", fxplugID: 37, group: nil, label: "Status",
                       kind: .label(text: "", hint: nil), surfaces: [.finalcut], order: 0),
@@ -250,8 +261,7 @@ public enum EditorControlCatalogue {
             detail: "Set the film frame size, which affects visible grain and halation.",
             section: .filmStock, kind: .menu(.dynamic(.gauges)),
             drives: ["format"],
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: "a pack is sealed for one gauge"],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: nil, ofxName: "format", fxplugID: 3, group: .film, label: "Film Format",
                 hint: "The gauge the frame is exposed on. The image height maps onto the gauge's frame "
@@ -259,6 +269,7 @@ public enum EditorControlCatalogue {
                     + "halation and stronger adjacency — the same emulsion at a different "
                     + "magnification. Match Film takes the gauge the chosen stock is known on.",
                 kind: .choice(.dynamic(.gauges), value: -1), order: 20),
+            web: .runtime,
             commandLine: CommandLineFlag("--format", placeholder: "<name>",
                                          help: "Film gauge (default: the gauge the stock is known on). "
                                              + "\"sensor\" cuts the film to the frame the input file says "
@@ -312,12 +323,12 @@ public enum EditorControlCatalogue {
             section: .filmGrain, kind: .menu(.fixed(mottleShares)), availability: .film,
             persistence: .bespoke,
             binding: .grainMottleShare,
-            surfaces: [.app, .desktop, .android, .cli],
+            surfaces: [.app, .desktop, .android, .cli, .web],
             omitted: [
                 .resolve: "offered as Mottle and Mottle Amount",
                 .finalcut: "not yet offered; the share is a Full-stage control",
-                .web: webBaked,
             ],
+            web: .profile,
             commandLine: CommandLineFlag("--mottle", placeholder: "<share>",
                                          help: "Grain-size mixture override, 0-0.9 (default: the stock's "
                                              + "own, usually 0): the variance share of the published "
@@ -386,9 +397,8 @@ public enum EditorControlCatalogue {
             availability: .film,
             persistence: .bespoke,
             binding: .discGrain,
-            surfaces: [.app, .desktop, .android, .resolve, .cli],
-            omitted: [.finalcut: "not yet offered; discs and crystals need Reference rendering",
-                      .web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .cli, .web],
+            omitted: [.finalcut: "not yet offered; discs and crystals need Reference rendering"],
             host: HostParameter(
                 slot: 43, slotSymbol: "GRAIN_MODEL", ofxName: "grainModel", group: .grainAdvanced,
                 label: "Grain Model",
@@ -398,6 +408,7 @@ public enum EditorControlCatalogue {
                                       EditorMenuChoice(2, "Organic Crystals", id: "crystals")]),
                               value: 0),
                 order: 10),
+            web: .profile,
             commandLine: CommandLineFlag("--grain-model", placeholder: "<m>",
                                          help: "standard/clump (default), particle/discs, or organic/crystals. `particle` lays Boolean "
                                              + "discs at the film's clump radius, scaled onto its published "
@@ -462,8 +473,7 @@ public enum EditorControlCatalogue {
             availability: .film,
             persistence: .key("halation", .scaleFromStops),
             binding: .halationStops,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 8, slotSymbol: "HALATION_SCALE", ofxName: "halation", fxplugID: 15, group: .halation,
                 label: "Halation",
@@ -477,6 +487,7 @@ public enum EditorControlCatalogue {
                     + "1 over the look scale (0.025 on a rem-jet stock). Typing past the slider reaches 100.",
                 kind: .double(min: 0, max: 10, value: 1, hardMax: 100), bridge: .multipleFromStops,
                 binding: .halationScale, clamp: 0...Double.greatestFiniteMagnitude, order: 20),
+            web: .profile,
             commandLine: CommandLineFlag("--halation", placeholder: "<scale>",
                                          help: "Halation multiplier, 0 disables (default: 1)"),
             documentation: "Controls back-surface reflection and scatter around high-contrast exposure boundaries."),
@@ -486,9 +497,8 @@ public enum EditorControlCatalogue {
             section: .filmEmulsion, kind: .toggle(restingOn: false),
             scope: .global(settingKey: "fotufilm.estimated-halation"),
             binding: .estimatedHalationProfile,
-            surfaces: [.resolve, .finalcut, .cli],
-            omitted: [.app: filmModelSetting, .desktop: filmModelSetting, .android: filmModelSetting,
-                      .web: webBaked],
+            surfaces: [.resolve, .finalcut, .cli, .web],
+            omitted: [.app: filmModelSetting, .desktop: filmModelSetting, .android: filmModelSetting],
             host: HostParameter(
                 slot: 19, slotSymbol: "ESTIMATED_HALATION", ofxName: "estimatedHalation", fxplugID: 16,
                 group: .halation, label: "Estimated Halation Shape",
@@ -497,6 +507,7 @@ public enum EditorControlCatalogue {
                     + "exists. Off is the legacy Gaussian model and the render every existing project "
                     + "made; the annular road costs roughly half again as much frame time.",
                 kind: .boolean(value: false), order: 30),
+            web: .profile,
             commandLine: CommandLineFlag("--estimated-halation", placeholder: "",
                                          help: "Use provisional spatial profiles where a stock has no "
                                              + "independently calibrated profile (default: off)")),
@@ -507,10 +518,11 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
             availability: .film,
             persistence: .bespoke, binding: .halationReturnRatio,
-            surfaces: [.app, .desktop, .cli],
+            surfaces: [.app, .desktop, .cli, .web],
             omitted: [.android: "Return overrides are not yet offered in the Android editor",
                       .resolve: "Return overrides are not yet offered in plugin hosts",
-                      .finalcut: "Return overrides are not yet offered in plugin hosts", .web: webBaked],
+                      .finalcut: "Return overrides are not yet offered in plugin hosts"],
+            web: .profile,
             commandLine: CommandLineFlag("--halation-return", placeholder: "<percent>",
                 help: "Red returned/direct exposure percentage, 0-100 (default: film; CineStill 3)",
                 generic: false, range: 0...100),
@@ -522,8 +534,7 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
             availability: .colourNegative,
             binding: .halationSourceColour,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 20, slotSymbol: "HALATION_COLOUR", ofxName: "halationColour", fxplugID: 17,
                 group: .halation, label: "Halo Colour",
@@ -532,6 +543,7 @@ public enum EditorControlCatalogue {
                     + "ring is red whatever the light was; raising this lifts the dimmer records to the "
                     + "strongest record's return, and the ring brightens toward the light's colour. 0 is the film.",
                 kind: .double(min: 0, max: 1, value: 0), clamp: 0...1, order: 40),
+            web: .profile,
             commandLine: CommandLineFlag("--halation-colour", placeholder: "<f>",
                                          help: "How much the halo keeps the source's own colour instead "
                                              + "of the stock's layered red, 0-1 (default: 0). The dimmer "
@@ -552,11 +564,10 @@ public enum EditorControlCatalogue {
             availability: .film,
             foldsUnder: .halation,
             binding: .halationReturnGain,
-            surfaces: [.app, .desktop, .resolve],
+            surfaces: [.app, .desktop, .resolve, .web],
             omitted: [
                 .android: "the Android panel draws no curve rows yet",
                 .finalcut: "not yet offered; seven sliders would need seven ids",
-                .web: webBaked,
                 .cli: noCurveFlag,
             ],
             host: HostParameter(
@@ -565,6 +576,7 @@ public enum EditorControlCatalogue {
                 hint: "Gain over the stock's halation return spectrum. 0 preserves the stock; positive "
                     + "values strengthen this band. Does not create return in an absent band.",
                 kind: .double(min: -6, max: 6, value: 0), order: 10),
+            web: .profile,
             documentation: "Selects base reflectance spectral weighting."),
         EditorControl(
             .couplers, title: "Couplers",
@@ -573,14 +585,14 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(0...2, neutral: 1, unit: .multiplier)),
             availability: .film,
             binding: .couplerScale,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 9, slotSymbol: "COUPLER_SCALE", ofxName: "couplers", fxplugID: 19, group: .coupler,
                 label: "DIR Couplers",
                 hint: "Multiplier on inter-image inhibition, the mechanism behind the stock's colour "
                     + "separation and its Mackie lines. 0 disables it.",
                 kind: .double(min: 0, max: 2, value: 1), clamp: 0...Double.greatestFiniteMagnitude, order: 10),
+            web: .profile,
             commandLine: CommandLineFlag("--couplers", placeholder: "<scale>",
                                          help: "DIR + adjacency strength; 1 calibrated, overdrive compressed (default: 1)"),
             documentation: "Controls development inhibitor release chemistry for interlayer color separation and edge contrast."),
@@ -592,15 +604,15 @@ public enum EditorControlCatalogue {
             availability: .couplerGeometry,
             persistence: .bespoke,
             binding: .couplerGapReach,
-            surfaces: [.app, .desktop, .android, .resolve, .cli],
-            omitted: [.finalcut: "not yet offered; needs the coupler-geometry gate",
-                      .web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .cli, .web],
+            omitted: [.finalcut: "not yet offered; needs the coupler-geometry gate"],
             host: HostParameter(
                 slot: 31, slotSymbol: "COUPLER_REACH", ofxName: "couplerReach", group: .coupler,
                 label: "Separation",
                 hint: "Interlayer inhibitor reach. 1 preserves the stock; 0 seals the layers off.",
                 kind: .double(min: 0, max: 3, value: 1), paramOffset: -1, bridge: .minusOne,
                 clamp: 0...3, order: 20),
+            web: .profile,
             commandLine: CommandLineFlag("--coupler-reach", placeholder: "<scale>",
                                          help: "Interlayer inhibitor reach as a multiple of the stock's "
                                              + "own geometry, 0-3 (default: 1)"),
@@ -612,15 +624,15 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(0...3, neutral: 1, unit: .multiplier)),
             availability: .couplerGeometry,
             binding: .couplerSelf,
-            surfaces: [.app, .desktop, .android, .resolve, .cli],
-            omitted: [.finalcut: "not yet offered; needs the coupler-geometry gate",
-                      .web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .cli, .web],
+            omitted: [.finalcut: "not yet offered; needs the coupler-geometry gate"],
             host: HostParameter(
                 slot: 32, slotSymbol: "COUPLER_SELF", ofxName: "couplerSelf", group: .coupler,
                 label: "Edge Contrast",
                 hint: "Within-layer inhibition. 1 preserves the stock's retained self-inhibition.",
                 kind: .double(min: 0, max: 3, value: 1), paramOffset: -1, bridge: .minusOne,
                 clamp: 0...3, order: 30),
+            web: .profile,
             commandLine: CommandLineFlag("--coupler-self", placeholder: "<scale>",
                                          help: "Within-layer inhibition as a multiple of the stock's "
                                              + "own, 0-3 (default: 1)"),
@@ -662,13 +674,13 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
             availability: .interlayerInhibition,
             binding: .chromaticFringeAmount,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 50, slotSymbol: "FRINGE_AMOUNT", ofxName: "fringeAmount", fxplugID: 89,
                 group: .coupler, label: "Fringe Amount",
                 hint: "Broad inter-layer transport fraction, 0-1. 0 keeps the stock's own transport.",
                 kind: .double(min: 0, max: 1, value: 0), zeroLeavesEngineDefault: true, order: 40),
+            web: .profile,
             commandLine: CommandLineFlag("--fringe-amount", placeholder: "<f>",
                                          help: "Broad inter-layer transport fraction, 0-1 (default: stock, normally 0)",
                                          range: 0...1),
@@ -681,8 +693,7 @@ public enum EditorControlCatalogue {
             availability: .interlayerInhibition,
             foldsUnder: .chromaticFringeAmount,
             binding: .chromaticFringeRadiusMicrometers,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 51, slotSymbol: "FRINGE_RADIUS", ofxName: "fringeRadius", fxplugID: 90,
                 group: .coupler, label: "Fringe Radius (µm)",
@@ -690,6 +701,7 @@ public enum EditorControlCatalogue {
                     + "while Fringe Amount is above zero; 0 keeps the stock's own radius.",
                 kind: .double(min: 0, max: 300, value: 0, delta: 1), zeroLeavesEngineDefault: true,
                 order: 50),
+            web: .profile,
             commandLine: CommandLineFlag("--fringe-radius", placeholder: "<um>",
                                          help: "Broad transport Gaussian sigma on the film, 0-2000 micrometers "
                                              + "(default: stock, normally 100; must exceed the stock's core radius)",
@@ -704,8 +716,7 @@ public enum EditorControlCatalogue {
                                              stops: [-2, 0, 1, 2])),
             availability: .measuredDevelopment,
             binding: .developmentEV,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 12, slotSymbol: "PUSH_PULL", ofxName: "push", fxplugID: 22, group: .lab,
                 label: "Push / Pull",
@@ -713,6 +724,7 @@ public enum EditorControlCatalogue {
                     + "temperature and agitation. The control is disabled when the stock pack has no "
                     + "measured response.",
                 kind: .double(min: -2, max: 2, value: 0), animates: false, secret: true, order: 10),
+            web: .profile,
             commandLine: CommandLineFlag("--push", placeholder: "<stops>",
                                          help: "Push (positive) or pull (negative) development, in stops "
                                              + "(default: 0). Must name an exact condition measured for "
@@ -731,8 +743,7 @@ public enum EditorControlCatalogue {
                                    EditorControlChoice(1, "Full")]),
             availability: .colourNegative,
             binding: .bleachBypass,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 13, slotSymbol: "BLEACH_BYPASS", ofxName: "bleachBypass", fxplugID: 23, group: .lab,
                 label: "Bleach Bypass",
@@ -740,6 +751,7 @@ public enum EditorControlCatalogue {
                     + "retained silver is a black-and-white image over the colour one: contrast up, "
                     + "chroma down, together.",
                 kind: .double(min: 0, max: 1, value: 0), clamp: 0...1, order: 20),
+            web: .profile,
             commandLine: CommandLineFlag("--bleach-bypass", placeholder: "<f>",
                                          help: "Fraction of the developed silver the bleach leaves in the "
                                              + "negative, 0-1 (default: 0). The print re-times on the "
@@ -755,8 +767,7 @@ public enum EditorControlCatalogue {
             availability: .film,
             persistence: .key("expiredYears", .same),
             binding: .expiredYears,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 14, slotSymbol: "EXPIRED_YEARS", ofxName: "expired", fxplugID: 24, group: .lab,
                 label: "Film Age (years)",
@@ -764,6 +775,7 @@ public enum EditorControlCatalogue {
                     + "the blue-sensitive layer going first, base fog rises, and grain rises with the "
                     + "fog — the muddy, crossed toe of an old roll.",
                 kind: .double(min: 0, max: 30, value: 0, delta: 0.1), clamp: 0...Double.greatestFiniteMagnitude, order: 30),
+            web: .profile,
             commandLine: CommandLineFlag("--expired", placeholder: "<years>",
                                          help: "Years past the process-by date at room temperature "
                                              + "(default: 0). One stop per decade slower, blue layer "
@@ -777,8 +789,8 @@ public enum EditorControlCatalogue {
             availability: .statedReciprocity,
             persistence: .bespoke,
             binding: .shutterSeconds,
-            surfaces: [.app, .desktop, .android, .resolve, .cli],
-            omitted: [.finalcut: "not yet offered; needs the reciprocity gate", .web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .cli, .web],
+            omitted: [.finalcut: "not yet offered; needs the reciprocity gate"],
             host: HostParameter(
                 slot: 44, slotSymbol: "SHUTTER_SECONDS", ofxName: "shutterSeconds", group: .lab,
                 label: "Long Exposure (s)",
@@ -786,6 +798,7 @@ public enum EditorControlCatalogue {
                     + "the override. Corrections stop at the last measured duration; no motion blur "
                     + "is added. Use the same value in paired Negative Only and Print Only nodes.",
                 kind: .double(min: 0, max: 3600, value: 0, delta: 1), order: 40),
+            web: .profile,
             commandLine: CommandLineFlag("--shutter", placeholder: "<secs>",
                                          help: "Exposure time in seconds (default: instantaneous). When "
                                              + "the stock's datasheet publishes a long-exposure table the "
@@ -797,6 +810,17 @@ public enum EditorControlCatalogue {
     ]
 
     private static let light: [EditorControl] = [
+        EditorControl(
+            .lensFilterStack, title: "Filters",
+            detail: "Fit, reorder or remove absorbing and diffusion filters in front of the lens.",
+            section: .lensGlass, kind: .takeover, persistence: .bespoke,
+            drives: ["lensFilters", "diffusionFilter"], surfaces: [.app, .desktop, .web],
+            omitted: [.android: "no lens filters on Android yet",
+                      .resolve: "the host uses three filter slots and a diffusion choice",
+                      .finalcut: "the host uses three filter slots and a diffusion choice",
+                      .cli: "--filter takes the absorbing stack; --diffusion chooses diffusion"],
+            web: .runtime,
+            documentation: "An ordered stack of absorbing and diffusion filters before film exposure."),
         EditorControl(
             .lensFilter1, title: "Filter 1",
             detail: "Add a lens filter that changes the amount or color of incoming light.",
@@ -866,11 +890,10 @@ public enum EditorControlCatalogue {
             section: .lensGlass, kind: .menu(.dynamic(.meterings)),
             persistence: .bespoke,
             drives: ["lensFilters"],
-            surfaces: [.resolve, .finalcut, .cli],
+            surfaces: [.resolve, .finalcut, .cli, .web],
             omitted: [.app: "chosen on the Lens deck's filter page",
                       .desktop: "chosen on the Lens panel's filter list",
-                      .android: "no lens filters on Android yet",
-                      .web: webBaked],
+                      .android: "no lens filters on Android yet"],
             host: HostParameter(
                 slot: 24, slotSymbol: "LENS_METERING", ofxName: "metering", fxplugID: 76, group: .lens,
                 label: "Metering",
@@ -884,6 +907,7 @@ public enum EditorControlCatalogue {
                     + "fitted, and live only on the Full stage, which is the only span a filter is live in.",
                 kind: .choice(.dynamic(.meterings), value: 1), paramOffset: 1, bridge: .indexPlusOne,
                 order: 40),
+            web: .runtime,
             commandLine: CommandLineFlag("--metering", placeholder: "<m>",
                                          help: "How the exposure was set behind the filter: ttl (default, "
                                              + "the camera's own photopic cell), factor (the published "
@@ -1021,15 +1045,17 @@ public enum EditorControlCatalogue {
             detail: "Correct lens distortion, dark corners, and color fringing.",
             section: .lensCorrection, kind: .toggle(restingOn: false),
             persistence: .key("lensCorrectionEnabled", .same),
-            surfaces: [.app, .desktop],
-            omitted: hostsOwnIt.merging([.android: "no lens correction on Android yet"]) { $1 },
+            surfaces: [.app, .desktop, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web }.merging([.android: "no lens correction on Android yet"]) { $1 },
+            web: .runtime,
             documentation: "Enables the matched lens profile or the calibrated camera profile."),
         EditorControl(
             .lensProfile, title: "Lens",
             detail: "Choose a lens profile or use the match from the photo’s metadata.",
             section: .lensCorrection, kind: .menu(.dynamic(.lensProfiles)),
-            surfaces: [.app, .desktop],
-            omitted: hostsOwnIt.merging([.android: "no lens correction on Android yet"]) { $1 },
+            surfaces: [.app, .desktop, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web }.merging([.android: "no lens correction on Android yet"]) { $1 },
+            web: .runtime,
             documentation: "Identifies the matched lens model."),
         EditorControl(
             .lensAmount, title: "Amount",
@@ -1037,40 +1063,45 @@ public enum EditorControlCatalogue {
             section: .lensCorrection,
             kind: .slider(EditorControlScale(0...1, neutral: 1, unit: .percent)),
             persistence: .key("lensProfileAmount", .same),
-            surfaces: [.app, .desktop],
-            omitted: hostsOwnIt.merging([.android: "no lens correction on Android yet"]) { $1 },
+            surfaces: [.app, .desktop, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web }.merging([.android: "no lens correction on Android yet"]) { $1 },
+            web: .runtime,
             documentation: "Sets overall correction intensity."),
         EditorControl(
             .lensDistortion, title: "Distortion",
             detail: "Adjust curved edges: negative values add barrel distortion; positive values add pincushion distortion.",
             section: .lensCorrection, kind: .slider(signed),
             persistence: .bespoke,
-            surfaces: [.app, .desktop],
-            omitted: hostsOwnIt.merging([.android: "no lens correction on Android yet"]) { $1 },
+            surfaces: [.app, .desktop, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web }.merging([.android: "no lens correction on Android yet"]) { $1 },
+            web: .runtime,
             documentation: "Corrects or introduces radial barrel and pincushion distortion."),
         EditorControl(
             .lensVignetting, title: "Vignetting",
             detail: "Darken the corners with negative values or brighten them with positive values.",
             section: .lensCorrection, kind: .slider(signed),
             persistence: .bespoke,
-            surfaces: [.app, .desktop],
-            omitted: hostsOwnIt.merging([.android: "no lens correction on Android yet"]) { $1 },
+            surfaces: [.app, .desktop, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web }.merging([.android: "no lens correction on Android yet"]) { $1 },
+            web: .runtime,
             documentation: "Compensates for peripheral illumination falloff."),
         EditorControl(
             .lensRedCyan, title: "Red / Cyan",
             detail: "Correct red and cyan fringes around edges.",
             section: .lensCorrection, kind: .slider(signed),
             persistence: .bespoke,
-            surfaces: [.app, .desktop],
-            omitted: hostsOwnIt.merging([.android: "no lens correction on Android yet"]) { $1 },
+            surfaces: [.app, .desktop, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web }.merging([.android: "no lens correction on Android yet"]) { $1 },
+            web: .runtime,
             documentation: "Corrects lateral chromatic aberration by scaling the red channel radially."),
         EditorControl(
             .lensBlueYellow, title: "Blue / Yellow",
             detail: "Correct blue and yellow fringes around edges.",
             section: .lensCorrection, kind: .slider(signed),
             persistence: .bespoke,
-            surfaces: [.app, .desktop],
-            omitted: hostsOwnIt.merging([.android: "no lens correction on Android yet"]) { $1 },
+            surfaces: [.app, .desktop, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web }.merging([.android: "no lens correction on Android yet"]) { $1 },
+            web: .runtime,
             documentation: "Corrects lateral chromatic aberration by scaling the blue channel radially."),
 
         EditorControl(
@@ -1088,6 +1119,17 @@ public enum EditorControlCatalogue {
             commandLine: CommandLineFlag("--ev", placeholder: "<stops>",
                                          help: "Exposure compensation in stops (default: 0)"),
             documentation: "Adjusts exposure in stops (EV) before film simulation."),
+        EditorControl(
+            .autoAdjustment, title: "Auto Adjust",
+            detail: "Set exposure, highlights and shadows to fit the photograph inside the selected film’s latitude.",
+            section: .lightExposure, kind: .takeover,
+            surfaces: [.app, .desktop, .web],
+            omitted: [.android: "Automatic exposure is not yet offered on Android.",
+                      .resolve: "The host owns automatic adjustment.",
+                      .finalcut: "The host owns automatic adjustment.",
+                      .cli: "Set exposure, highlights and shadows explicitly."],
+            web: .runtime,
+            documentation: "Solves exposure and tone recovery using the native film latitude. Choosing another film recalculates while Auto is active. Disabling Auto retains the solved values; manual exposure or tone edits disengage it."),
         EditorControl(
             .highlights, title: "Highlights",
             detail: "Adjust bright areas before the film response is applied.",
@@ -1123,8 +1165,7 @@ public enum EditorControlCatalogue {
             detail: "Make highlight and shadow adjustments respond to nearby brightness.",
             section: .lightExposure, kind: .toggle(restingOn: true),
             binding: .localTone,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: "the regional base is measured from the image, which the pack cannot carry"],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 11, slotSymbol: "LOCAL_TONE", ofxName: "localTone", fxplugID: 11, group: .exposure,
                 label: "Regional Tone Mask",
@@ -1142,13 +1183,13 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(0...0.25, neutral: 0, unit: .percent)),
             availability: .film,
             binding: .cameraPreflash,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 56, slotSymbol: "CAMERA_PREFLASH", ofxName: "cameraPreflash",
                 fxplugID: 98, group: .exposure, label: "Camera Preflash",
                 hint: "Pre-exposure of the taking film in linear scene radiance units, lifting shadows without shifting highlights.",
                 kind: .double(min: 0, max: 0.25, value: 0, delta: 0.005), clamp: 0...0.25, order: 65),
+            web: .runtime,
             commandLine: CommandLineFlag("--camera-preflash", placeholder: "<f>",
                                          help: "Pre-expose the camera frame (0...0.25, default: 0)"),
             documentation: "Pre-exposes the camera frame with uniform illumination to lift shadows."),
@@ -1197,9 +1238,8 @@ public enum EditorControlCatalogue {
             section: .lightBalance,
             kind: .menu(.fixed(sourceLights)),
             drives: ["sceneIlluminantKelvin"],
-            surfaces: [.app, .desktop, .resolve, .finalcut],
-            omitted: [.android: "the source spectrum is baked into the stock pack",
-                      .web: webBaked, .cli: "--scene-kelvin selects an explicit source; omission uses Stock Native"],
+            surfaces: [.app, .desktop, .resolve, .finalcut, .web],
+            omitted: [.android: "the source spectrum is baked into the stock pack", .cli: "--scene-kelvin selects an explicit source; omission uses Stock Native"],
             host: HostParameter(
                 slot: 33, slotSymbol: "SCENE_ILLUMINANT", ofxName: "sceneLight", fxplugID: 93, group: .sceneLight,
                 label: "Source Illuminant",
@@ -1215,12 +1255,13 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(1000...25000, neutral: 6504, unit: .kelvin)),
             persistence: .key("sourceLightKelvin", .same),
             drives: ["sceneIlluminantKelvin"],
-            surfaces: [.app, .desktop, .resolve, .finalcut, .cli],
-            omitted: [.android: "the source spectrum is baked into the stock pack", .web: webBaked],
+            surfaces: [.app, .desktop, .resolve, .finalcut, .cli, .web],
+            omitted: [.android: "the source spectrum is baked into the stock pack"],
             host: HostParameter(
                 slot: nil, ofxName: "sceneLightKelvin", fxplugID: 94, group: .sceneLight, label: "Source Illuminant (K)",
                 hint: "Custom source light before Temperature and Tint; used only when Source Illuminant is Custom.",
                 kind: .double(min: 1000, max: 25000, value: 6504, delta: 10), composed: true, order: 20),
+            web: .runtime,
             commandLine: CommandLineFlag("--scene-kelvin", placeholder: "<K>",
                 help: "Source illuminant, 1000-25000 K. Default: stock-native light, including RAW inputs",
                 generic: false),
@@ -1267,7 +1308,23 @@ public enum EditorControlCatalogue {
             surfaces: [.app, .desktop, .android],
             omitted: hostsOwnIt,
             documentation: "Grades the sRGB-encoded signal, where a grading suite's corrector works, instead of display-linear light."),
-    ] + gradeBands
+    ] + gradeBands + [
+        EditorControl(
+            .sourceInterpretation, title: "Highlights",
+            detail: "Choose how the decoded highlight range enters film exposure.",
+            section: .sourceInterpretation,
+            kind: .menu(.fixed([
+                EditorMenuChoice(0, "Automatic", detail: "Preserve the file’s decoded highlight range", id: "automatic"),
+                EditorMenuChoice(1, "Full Range", detail: "Preserve all decoded highlight range", id: "fullRange"),
+                EditorMenuChoice(2, "Standard Range", detail: "Tone-map HDR before film exposure", id: "standardRange"),
+            ])),
+            surfaces: [.app, .desktop, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web }.merging([
+                .android: "processed HDR interpretation is not offered on Android yet",
+            ]) { $1 },
+            web: .runtime,
+            documentation: "Automatic and Full Range preserve decoded HDR highlights. Standard Range uses the platform SDR rendition before film exposure. RAW always remains scene-linear."),
+    ]
 
     private static let print: [EditorControl] = [
         EditorControl(
@@ -1278,13 +1335,13 @@ public enum EditorControlCatalogue {
                 EditorMenuChoice(Double($0.offset), $0.element.name,
                                  detail: $0.element.detail, id: $0.element.id)
             })),
-            surfaces: [.app],
+            surfaces: [.app, .web],
             omitted: [.desktop: "Frame finishing is offered in the iPhone photo editor.",
                       .android: "Frame finishing is offered in the iPhone photo editor.",
                       .resolve: "The host owns output framing.",
                       .finalcut: "The host owns output framing.",
-                      .web: "Frame finishing is offered in the iPhone photo editor.",
                       .cli: "Frame finishing is offered in the iPhone photo editor."],
+            web: .runtime,
             documentation: "Choose Film Border for the selected film gauge, Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for a dark, uneven edge on a white margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports."),
         EditorControl(
             .paper, title: "Output Medium",
@@ -1316,8 +1373,7 @@ public enum EditorControlCatalogue {
             section: .printPaper, kind: .menu(.dynamic(.viewingLights)), availability: .printStage,
             persistence: .bespoke,
             binding: .printViewingKelvin,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 15, slotSymbol: "PRINT_LIGHT", ofxName: "printLight", fxplugID: 25, group: .output,
                 label: "Viewing Illuminant",
@@ -1326,6 +1382,7 @@ public enum EditorControlCatalogue {
                     + "Only the viewing light changes; the developed print is not re-timed. "
                     + "Digital Reference, Lab Scan, Telecine and Negative ignore this control.",
                 kind: .choice(.fixed(printLights), value: 0), order: 20),
+            web: .profile,
             commandLine: CommandLineFlag("--print-light", placeholder: "<k>",
                                          help: "Colour temperature the finished print is viewed under, in "
                                              + "kelvin: daylight series from 4000 K up (5003 = D50 proof "
@@ -1343,14 +1400,14 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
             availability: .printStage,
             binding: .printCorrection,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 10, slotSymbol: "PRINT_CORRECTION", ofxName: "printCorrection", fxplugID: 20,
                 group: .output, label: "Channel Contrast Match",
                 hint: "Digital correction of channel-contrast mismatch, not physical printer timing. "
                     + "Off preserves the measured record slopes; raise for a more neutral crossover.",
                 kind: .double(min: 0, max: 1, value: 0), clamp: 0...Double.greatestFiniteMagnitude, order: 30),
+            web: .profile,
             commandLine: CommandLineFlag("--print-correction", placeholder: "<f>",
                                          help: "Optional digital channel-contrast correction, "
                                              + "0-1 (default: 0; not a printer-light control)"),
@@ -1361,11 +1418,10 @@ public enum EditorControlCatalogue {
             section: .printPaper, kind: .menu(.dynamic(.negativeViewings)),
             scope: .global(settingKey: "fotufilm.negative-viewing"),
             binding: .negativeViewingIndex,
-            surfaces: [.resolve, .finalcut, .cli],
+            surfaces: [.resolve, .finalcut, .cli, .web],
             omitted: [.app: "Settings chooses the lightbox or scanner reading",
                       .desktop: "Settings chooses the lightbox or scanner reading",
-                      .android: "Settings chooses the lightbox or scanner reading",
-                      .web: webBaked],
+                      .android: "Settings chooses the lightbox or scanner reading"],
             host: HostParameter(
                 slot: 28, slotSymbol: "NEGATIVE_VIEWING", ofxName: "negativeViewing", fxplugID: 80,
                 group: .output, label: "Negative Viewing",
@@ -1375,6 +1431,7 @@ public enum EditorControlCatalogue {
                     + "output media ignore this control.",
                 kind: .choice(.dynamic(.negativeViewings), value: 0), paramOffset: 1,
                 bridge: .indexPlusOne, order: 40),
+            web: .profile,
             commandLine: CommandLineFlag("--negative", placeholder: "<how>",
                                          help: "Show the developed negative instead of the print it would "
                                              + "make: 'lightbox' keeps the base its own orange, 'scanner' "
@@ -1414,8 +1471,8 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(0...5, neutral: 2, unit: .none)),
             availability: .transparentFilm,
             binding: .screenGrade,
-            surfaces: [.app, .desktop, .resolve, .finalcut, .cli],
-            omitted: [.android: screenCurveOmission, .web: webBaked],
+            surfaces: [.app, .desktop, .resolve, .finalcut, .cli, .web],
+            omitted: [.android: screenCurveOmission],
             host: HostParameter(
                 slot: 54, slotSymbol: "SCREEN_GRADE", ofxName: "screenGrade",
                 fxplugID: 96, group: .output, label: "Paper Grade",
@@ -1423,6 +1480,7 @@ public enum EditorControlCatalogue {
                     + "Reference: grade 2 is the calibrated curve, softer grades roll highlights off "
                     + "earlier, harder grades later. Mid-grey and film-base black hold. Negatives only.",
                 kind: .double(min: 0, max: 5, value: 2), clamp: 0...5, order: 27),
+            web: .profile,
             commandLine: CommandLineFlag("--screen-grade", placeholder: "<g>",
                 help: "Paper grade 0...5 for the graded screen conversions (default: 2)."),
             documentation: "Variable-contrast paper grade, 0–5, for Graded Print and Auto Levels on "
@@ -1434,14 +1492,15 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(-3...3, neutral: 0, unit: .stops)),
             availability: .transparentFilm,
             binding: .screenExposureStops,
-            surfaces: [.app, .desktop, .resolve, .finalcut, .cli],
-            omitted: [.android: screenCurveOmission, .web: webBaked],
+            surfaces: [.app, .desktop, .resolve, .finalcut, .cli, .web],
+            omitted: [.android: screenCurveOmission],
             host: HostParameter(
                 slot: 55, slotSymbol: "SCREEN_EXPOSURE", ofxName: "screenExposure",
                 fxplugID: 97, group: .output, label: "Screen Exposure",
                 hint: "Exposure of the Digital Reference conversion in stops on top of the chosen "
                     + "style; positive lightens. A negative's print exposure, a slide's scanner gain.",
                 kind: .double(min: -3, max: 3, value: 0), clamp: -6...6, order: 28),
+            web: .profile,
             commandLine: CommandLineFlag("--screen-exposure", placeholder: "<ev>",
                 help: "Screen conversion exposure, -3...3 stops (default: 0); positive lightens."),
             documentation: "Exposure of the Digital Reference conversion in stops, on top of the "
@@ -1460,8 +1519,7 @@ public enum EditorControlCatalogue {
             availability: .printStage,
             persistence: .bespoke,
             binding: .enlargerIndex,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 52, slotSymbol: "ENLARGER", ofxName: "enlarger", fxplugID: 91, group: .output,
                 label: "Enlarger",
@@ -1471,6 +1529,7 @@ public enum EditorControlCatalogue {
                 kind: .choice(.fixed([EditorMenuChoice(0, "Diffuser", id: "diffuser"),
                                       EditorMenuChoice(1, "Condenser", id: "condenser")]), value: 0),
                 order: 25),
+            web: .profile,
             commandLine: CommandLineFlag("--enlarger", placeholder: "<head>",
                                          help: "Lamp house over the negative: diffuser (default, the "
                                              + "diffuse density the sheets are measured in) or condenser "
@@ -1485,7 +1544,8 @@ public enum EditorControlCatalogue {
             .printerEnabled, title: "Simulated Printer",
             detail: "Print through a tungsten lamp and colour filters",
             section: .printLamp, kind: .toggle(restingOn: false), availability: .printStage,
-            drives: ["printer"], surfaces: [.app, .desktop, .cli], omitted: printerOmissions,
+            drives: ["printer"], surfaces: [.app, .desktop, .cli, .web], omitted: printerOmissions,
+            web: .profile,
             commandLine: CommandLineFlag("--printer", placeholder: "<id>",
                 help: "Opt-in optical printer: simulated-tungsten (synthetic, not measured hardware). Reflection paper only",
                 generic: false),
@@ -1496,7 +1556,8 @@ public enum EditorControlCatalogue {
             section: .printLamp,
             kind: .slider(EditorControlScale(2800...3600, neutral: 3200, unit: .kelvin)),
             availability: .printStage, persistence: .bespoke, drives: ["printer"],
-            surfaces: [.app, .desktop, .cli], omitted: printerOmissions,
+            surfaces: [.app, .desktop, .cli, .web], omitted: printerOmissions,
+            web: .profile,
             commandLine: CommandLineFlag("--printer-lamp", placeholder: "<k>",
                 help: "Printer lamp spectrum, 2800...3600 K (default: 3200); requires --printer simulated-tungsten",
                 generic: false),
@@ -1507,7 +1568,8 @@ public enum EditorControlCatalogue {
             section: .printLamp,
             kind: .slider(EditorControlScale(-6...6, neutral: 0, unit: .stops)),
             availability: .printStage, persistence: .bespoke, drives: ["printer"],
-            surfaces: [.app, .desktop, .cli], omitted: printerOmissions,
+            surfaces: [.app, .desktop, .cli, .web], omitted: printerOmissions,
+            web: .profile,
             commandLine: CommandLineFlag("--printer-ev", placeholder: "<ev>",
                 help: "Paper exposure, -6...6 stops (default: 0); +1 doubles light. Requires --printer simulated-tungsten",
                 generic: false),
@@ -1518,7 +1580,8 @@ public enum EditorControlCatalogue {
             section: .printLamp,
             kind: .slider(EditorControlScale(0...1.2, neutral: 0.4, unit: .opticalDensity)),
             availability: .printStage, persistence: .bespoke, drives: ["printer"],
-            surfaces: [.app, .desktop, .cli], omitted: printerOmissions,
+            surfaces: [.app, .desktop, .cli, .web], omitted: printerOmissions,
+            web: .profile,
             commandLine: CommandLineFlag("--printer-m", placeholder: "<d>",
                 help: "Synthetic magenta filter density, 0...1.2 (default: 0.40); requires --printer simulated-tungsten",
                 generic: false),
@@ -1529,7 +1592,8 @@ public enum EditorControlCatalogue {
             section: .printLamp,
             kind: .slider(EditorControlScale(0...1.2, neutral: 0.5, unit: .opticalDensity)),
             availability: .printStage, persistence: .bespoke, drives: ["printer"],
-            surfaces: [.app, .desktop, .cli], omitted: printerOmissions,
+            surfaces: [.app, .desktop, .cli, .web], omitted: printerOmissions,
+            web: .profile,
             commandLine: CommandLineFlag("--printer-y", placeholder: "<d>",
                 help: "Synthetic yellow filter density, 0...1.2 (default: 0.50); requires --printer simulated-tungsten",
                 generic: false),
@@ -1541,13 +1605,13 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(0...0.1, neutral: 0, unit: .percent)),
             availability: .printStage,
             binding: .printerPreflash,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 57, slotSymbol: "PRINTER_PREFLASH", ofxName: "printerPreflash",
                 fxplugID: 99, group: .output, label: "Printer Preflash",
                 hint: "Pre-exposure of the print paper in relative log exposure units, softening highlights without lifting maximum density.",
                 kind: .double(min: 0, max: 0.1, value: 0, delta: 0.005), clamp: 0...0.1, order: 35),
+            web: .profile,
             commandLine: CommandLineFlag("--printer-preflash", placeholder: "<f>",
                                          help: "Pre-expose the print paper (0...0.10, default: 0)"),
             documentation: "Pre-exposes the print paper with uniform illumination to soften highlights without affecting maximum black."),
@@ -1557,7 +1621,6 @@ public enum EditorControlCatalogue {
         "The Android photo editor does not yet carry the screen conversion's grade and exposure."
     private static let printerOmissions: [EditorSurface: String] = [
         .android: "The simulated printer is currently exposed in the Apple apps and CLI.",
-        .web: "The browser does not build a printer lamp's spectral tables.",
         .resolve: "The plugin bridge does not yet expose simulated printer profiles.",
         .finalcut: "The plugin bridge does not yet expose simulated printer profiles.",
     ]
@@ -1594,14 +1657,18 @@ public enum EditorControlCatalogue {
             .crop, title: "Crop",
             detail: "Choose the area of the photo to keep.",
             section: .frameGeometry, kind: .takeover,
-            omitted: hostsOwnIt,
+            surfaces: [.app, .desktop, .android, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web },
+            web: .runtime,
             documentation: "Chooses the part of the frame the print is made from."),
         EditorControl(
             .straighten, title: "Straighten",
             detail: "Rotate the photo to level the horizon, in degrees.",
             section: .frameGeometry,
             kind: .slider(EditorControlScale(-15...15, neutral: 0, unit: .degrees)),
-            omitted: hostsOwnIt,
+            surfaces: [.app, .desktop, .android, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web },
+            web: .runtime,
             documentation: "Rotates the frame off level by up to fifteen degrees."),
         EditorControl(
             .perspectiveVertical, title: "Vertical",
@@ -1609,8 +1676,9 @@ public enum EditorControlCatalogue {
             section: .frameGeometry,
             kind: .slider(EditorControlScale(-15...15, neutral: 0, unit: .degrees)),
             persistence: .key("perspectiveV", .same),
-            surfaces: [.app, .desktop],
-            omitted: hostsOwnIt.merging([.android: "the Android crop has no keystone yet"]) { $1 },
+            surfaces: [.app, .desktop, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web }.merging([.android: "the Android crop has no keystone yet"]) { $1 },
+            web: .runtime,
             documentation: "Tilts the picture plane about the horizontal axis."),
         EditorControl(
             .perspectiveHorizontal, title: "Horizontal",
@@ -1618,21 +1686,26 @@ public enum EditorControlCatalogue {
             section: .frameGeometry,
             kind: .slider(EditorControlScale(-15...15, neutral: 0, unit: .degrees)),
             persistence: .key("perspectiveH", .same),
-            surfaces: [.app, .desktop],
-            omitted: hostsOwnIt.merging([.android: "the Android crop has no keystone yet"]) { $1 },
+            surfaces: [.app, .desktop, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web }.merging([.android: "the Android crop has no keystone yet"]) { $1 },
+            web: .runtime,
             documentation: "Tilts the picture plane about the vertical axis."),
         EditorControl(
             .rotation, title: "Rotate",
             detail: "Rotate the photo 90 degrees clockwise.",
             section: .frameGeometry, kind: .menu(.fixed(rotations)),
-            omitted: hostsOwnIt,
+            surfaces: [.app, .desktop, .android, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web },
+            web: .runtime,
             documentation: "Turns the frame in quarter turns."),
         EditorControl(
             .flip, title: "Flip",
             detail: "Flip the photo horizontally.",
             section: .frameGeometry, kind: .toggle(restingOn: false),
             persistence: .key("flipH", .same),
-            omitted: hostsOwnIt,
+            surfaces: [.app, .desktop, .android, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web },
+            web: .runtime,
             documentation: "Mirrors the frame left to right."),
         EditorControl(
             .selective, title: "Selective",

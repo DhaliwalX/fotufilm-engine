@@ -157,13 +157,24 @@ test('foreground renders run before pending thumbnails, without overlapping heap
   assert.equal(await session.render({}), null)
 })
 
-test('RAW capture light cannot silently use transport components for a different illuminant', async () => {
+test('explicit source light cannot silently use transport components for a different illuminant', async () => {
   const { RenderSession } = await import('../../src/render-session.js')
   const session = new RenderSession()
   await assert.rejects(session.render({
     image: { raw: { sceneKelvin: 2856 } },
-    edit: { ...defaultEdit('gold200'), halationModel: 'layered' },
+    edit: { ...defaultEdit('gold200'), halationModel: 'layered', sceneLight: 'incandescent' },
     stock: 'gold200',
   }), /Choose Legacy/)
   await session.dispose()
+})
+
+test('film settings survive edits and validate stock-independent values', () => {
+  const edit = { ...defaultEdit('gold200'), format: '16mm', profile: { expired: 10, grainModel: 'crystals', grainMottle: 'heavy' } }
+  const save = edit => JSON.stringify({ version: 1, edit })
+  assert.deepEqual(parseEdit(save(edit), ['gold200']), edit)
+  for (const profile of [{ expired: -1 }, { grainModel: 'unknown' }, { grainMottle: 1 }, { madeUp: 1 }, []])
+    assert.throws(() => parseEdit(save({ ...edit, profile }), ['gold200']))
+  assert.throws(() => parseEdit(save({ ...edit, format: 'unknown' }), ['gold200']))
+  const older = defaultEdit('gold200'); delete older.profile; delete older.format
+  assert.deepEqual(parseEdit(save(older), ['gold200']), defaultEdit('gold200'))
 })

@@ -1,15 +1,37 @@
+import {
+  preferredCanvasColorSpace,
+  pixelsCanvas,
+  colorContext,
+  validateColorSpace,
+} from './canvas-color.js'
+import { createBackgroundDeveloper } from './background-developer.js'
+import { loadPerspective } from './perspective.js'
+import { loadPrintFrame, frameRenderEdit } from './print-frame.js'
+import { renderPrintFrame16 } from './print-frame-16.js'
+import { renderPrintFrame } from './print-frame-renderer.js'
+import { lensIsActive } from './lens-correction.js'
+import { interpretedImage } from './source-interpretation.js'
+import { resolveLensPlan } from './lens-plan.js'
+import { loadLensCatalogue } from './lens-catalogue.js'
+import { loadFilmProfile } from './film-profile.js'
+import {
+  hasProfileSettings,
+  profileRequestControls,
+} from './profile-settings.js'
 import { loadMediumBytes } from './output-media.js'
 import { loadSceneExposure } from './scene-light.js'
 import { rawSource } from './raw-source.js'
 import { defaultEdit } from './editor-state.js'
+import { sourceIlluminant } from './editor-catalogue.js'
+import { compositeSelection } from './selective.js'
 import {
   assetUrl,
-  createDeveloper,
-  createCpuDeveloper,
-  createNormalDeveloper,
-  linearSource,
+  sceneHighlightStops,
+  prepareLinearSource,
   developNormal,
   imageSource,
+  frameRegion,
+  measuredTone,
   loadPack,
   parsePack,
   loadStages,
@@ -37,11 +59,24 @@ export async function loadStockIndex() {
       'Output media could not be loaded. Rebuild the browser packs.',
     )
   const media = await mediaResponse.json()
+  const catalogueResponse = await fetch(assetUrl('profile/catalogue.json'))
+  if (!catalogueResponse.ok)
+    throw new Error('The film settings catalogue could not be loaded.')
+  const catalogue = await catalogueResponse.json()
   return index.map((stock) => {
+    if (!Array.isArray(catalogue[stock.id]?.available))
+      throw new Error('Invalid film settings catalogue.')
     const entry = media.find((item) => item.id === stock.id)
     if (!entry || !Array.isArray(entry.choices) || !entry.choices.length)
       throw new Error('Invalid output-medium catalog.')
-    return { ...stock, media: entry.choices, defaultMedium: entry.default }
+    return {
+      ...stock,
+      profile: catalogue[stock.id],
+      available: catalogue[stock.id]?.available || [],
+      nativeFormat: catalogue[stock.id]?.nativeFormat,
+      media: entry.choices,
+      defaultMedium: entry.default,
+    }
   })
 }
 
@@ -53,8 +88,6 @@ export class RenderSession {
     this.activeWork = null
     this.packs = new Map()
     this.developer = null
-    this.normal = null
-    this.thumbnail = null
     this.sources = []
     this.scenePacks = new WeakMap()
     this.closed = false
@@ -89,7 +122,12 @@ export class RenderSession {
     this.activeWork = null
     this.running = false
   }
-  async pack(id, medium = null, halationModel = 'legacy', digitalReference = 'auto-levels') {
+  async pack(
+    id,
+    medium = null,
+    halationModel = 'legacy',
+    digitalReference = 'auto-levels',
+  ) {
     const key = `${id}:${medium || 'default'}:${halationModel}:${digitalReference}`
     if (this.packs.has(key)) {
       const value = this.packs.get(key)
@@ -98,6 +136,7 @@ export class RenderSession {
       return value
     }
     let pack,
+      stockMetadata,
       stagesUrl = null
     if (halationModel === 'layered') {
       if (medium)
@@ -111,9 +150,14 @@ export class RenderSession {
         throw error
       })
       const stock = (await this.catalog).find((item) => item.id === id)
-      const mediumChoice = stock?.media.find((item) => item.id === (medium || stock.defaultMedium))
+      stockMetadata = stock
+      const mediumChoice = stock?.media.find(
+        (item) => item.id === (medium || stock.defaultMedium),
+      )
       const choice = mediumChoice?.screenConversions
-        ? mediumChoice.screenConversions.find(item => item.id === digitalReference)
+        ? mediumChoice.screenConversions.find(
+            (item) => item.id === digitalReference,
+          )
         : mediumChoice
       if (!choice)
         throw new Error(
@@ -122,93 +166,118 @@ export class RenderSession {
       const base = await loadPack(assetUrl(`packs/${id}.pack`))
       pack = choice.pack
         ? parsePack(
-            await loadMediumBytes(
-              base.bytes,
-              assetUrl(`packs/${choice.pack}`),
-            ),
+            await loadMediumBytes(base.bytes, assetUrl(`packs/${choice.pack}`)),
           )
         : base
       stagesUrl = choice.stages ? assetUrl(`packs/${choice.stages}`) : null
       if (choice.meter) pack = { ...pack, screenMeter: choice.meter }
     }
-    const entry = { pack, stages: null, stagesUrl }
+    const entry = { pack, stages: null, stagesUrl, stock: stockMetadata }
     this.packs.set(key, entry)
     if (this.packs.size > 4) this.packs.delete(this.packs.keys().next().value)
     return entry
   }
   async renderer(pack, background = false, onProgress = () => {}) {
-    const name = background
-      ? 'thumbnailReady'
-      : pack?.transport
-        ? 'transportReady'
-        : pack
-          ? 'filmReady'
-          : 'normalReady'
-    const cached = background
-      ? this.thumbnail
-      : pack?.transport
-        ? this.transport
-        : pack
-          ? this.developer
-          : this.normal
-    if (cached?.isAborted) this[name] = null
-    // A thumbnail must not hold foreground work behind GPU shader compilation.
-    this[name] ??= (
-      background
-        ? createCpuDeveloper(pack)
-        : pack
-          ? createDeveloper(pack, onProgress)
-          : createNormalDeveloper()
+    if (this.developer?.isAborted) this.developerReady = null
+    this.developerReady ??= createBackgroundDeveloper(pack, onProgress, () =>
+      this.onRendererReady?.(),
     )
       .then((developer) => {
         if (this.closed) {
           developer?.dispose()
           return null
         }
-        if (background) this.thumbnail = developer
-        else if (pack?.transport) this.transport = developer
-        else if (pack) this.developer = developer
-        else this.normal = developer
+        this.developer = developer
         return developer
       })
       .catch((error) => {
-        this[name] = null
+        this.developerReady = null
         throw error
       })
-    return this[name]
+    return this.developerReady
   }
-  async source(image, edit, maxEdge, cropMode, videoTime, cacheSource = true) {
+  async source(
+    image,
+    edit,
+    maxEdge,
+    cropMode,
+    videoTime,
+    cacheSource = true,
+    onProgress = () => {},
+    stale = () => false,
+    displaySize = null,
+  ) {
     if (image.video) {
       const frame = await image.video.frame(
         videoTime ?? image.video.start,
         edit.video.encoding,
       )
-      return this.source(frame, edit, maxEdge, cropMode, null, false)
+      return this.source(
+        frame,
+        edit,
+        maxEdge,
+        cropMode,
+        null,
+        false,
+        onProgress,
+        stale,
+        displaySize,
+      )
     }
+    const catalogue = lensIsActive(edit.lens) ? await loadLensCatalogue() : null
     const key = JSON.stringify([
+      catalogue?.revision,
+      edit.sourceInterpretation,
       maxEdge,
+      displaySize,
       cropMode,
       edit.rotation,
       edit.flip,
+      lensIsActive(edit.lens) ? edit.lens : null,
       cropMode ? null : edit.crop,
-      cropMode ? 0 : edit.straighten,
+      edit.straighten,
+      edit.perspectiveV || 0,
+      edit.perspectiveH || 0,
     ])
     const cached = this.sources.find(
       (item) => item.image === image && item.key === key,
     )
     if (cached) return cached
-    const floating = image.raw || image.linear
-    const oriented = floating ? null : orientImage(image, edit, maxEdge)
+    const lensPlan = lensIsActive(edit.lens)
+      ? await resolveLensPlan(image, edit.lens, onProgress)
+      : null
+    const lensTable = lensPlan && !lensPlan.identity ? lensPlan.table : null
+    const input = interpretedImage(image, edit.sourceInterpretation)
+    const perspective = await loadPerspective(input, edit, onProgress)
+    const floating =
+      displaySize ||
+      input.raw ||
+      input.linear ||
+      lensTable ||
+      perspective ||
+      Math.abs(edit.straighten) > 0.001
+    const oriented = floating ? null : orientImage(input, edit, maxEdge)
     const canvas = floating
       ? null
       : cropMode
         ? oriented
         : await cropImage(oriented, edit)
-    const source = linearSource(
+    const prepare = displaySize ? async (source) => source : prepareLinearSource
+    const source = await prepare(
       floating
-        ? rawSource(image, edit, maxEdge, cropMode)
+        ? rawSource(
+            input,
+            edit,
+            maxEdge,
+            cropMode,
+            lensTable,
+            perspective,
+            displaySize,
+          )
         : imageSource(canvas),
+      stale,
     )
+    if (!source) return null
     const entry = { image, key, canvas, source, original: null }
     if (cacheSource && maxEdge <= 2400) {
       this.sources.unshift(entry)
@@ -239,14 +308,46 @@ export class RenderSession {
     purpose = 'preview',
     videoTime = null,
     encode = true,
+    bitDepth = 8,
+    colorSpace = bitDepth === 16 ? 'display-p3' : preferredCanvasColorSpace(),
     cacheSource = true,
+    showMask = false,
+    viewport = null,
     stale = () => false,
     onProgress = () => {},
   }) {
+    validateColorSpace(colorSpace)
+    const region = viewport
+      ? frameRegion(viewport.width, viewport.height, viewport.region)
+      : null
+    const output = { bitDepth, colorSpace, region }
     if (this.closed || stale()) return null
-    if (edit.halationModel === 'layered' && image.raw?.sceneKelvin)
+    const requestedEdit = edit
+    const framed =
+      !image.video &&
+      !cropMode &&
+      stage === null &&
+      !background &&
+      edit.printFrame &&
+      edit.printFrame !== 'none'
+    const frameConfiguration = framed
+      ? await loadPrintFrame(edit, 1, 1, onProgress)
+      : null
+    if (this.closed || stale()) return null
+    edit = frameRenderEdit(edit, frameConfiguration)
+    const dynamic = edit.stock !== null && hasProfileSettings(edit)
+    if (dynamic && edit.halationModel === 'layered')
       throw new Error(
-        'Layered Transport is unavailable for RAW photos with a detected capture light. Choose Legacy.',
+        'Choose Legacy halation to adjust film, print or filter settings.',
+      )
+    if (dynamic && stage !== null)
+      throw new Error(
+        'Pipeline inspection requires default film, print and filter settings.',
+      )
+    const sceneKelvin = sourceIlluminant(edit)
+    if (edit.halationModel === 'layered' && sceneKelvin)
+      throw new Error(
+        'Layered Transport requires Stock Native source illumination. Choose Legacy for another illuminant.',
       )
     const work = { label: background ? 'film thumbnail' : purpose }
     const report = (text) => {
@@ -270,13 +371,19 @@ export class RenderSession {
     const entry =
       edit.stock === null
         ? null
-        : await this.pack(stock, edit.medium, edit.halationModel, edit.digitalReference)
+        : await this.pack(
+            stock,
+            edit.medium,
+            edit.halationModel,
+            edit.digitalReference,
+          )
     if (this.closed || stale()) return null
-    if (!entry && !this.normalReady) report('Loading light and color engine')
+    if (!entry && !this.developerReady) report('Loading light and color engine')
     const developer = await this.renderer(
       entry?.pack,
       background && !!entry,
       report,
+      dynamic,
     )
     work.onWait = report
     return this.enqueue(
@@ -306,8 +413,22 @@ export class RenderSession {
           cropMode,
           videoTime,
           cacheSource,
+          report,
+          stale,
+          viewport ? { width: viewport.width, height: viewport.height } : null,
         )
+        if (!prepared || stale()) return null
         const { source, canvas: sourceCanvas } = prepared
+        const outputWidth = region?.width || source.width
+        const outputHeight = region?.height || source.height
+        const selectionSource = region
+          ? {
+              width: outputWidth,
+              height: outputHeight,
+              read: (x, y, w, h) =>
+                source.read(x + region.x, y + region.y, w, h),
+            }
+          : source
         const rendering = (text) =>
           report(`${text} · ${source.width}×${source.height} ${purpose}`)
         const controls = {
@@ -316,23 +437,123 @@ export class RenderSession {
           seed: edit.seed,
           localTone: edit.localTone,
         }
+        const needsMeter =
+          dynamic ||
+          entry?.pack.screenMeter ||
+          (controls.localTone && (controls.highlights || controls.shadows)) ||
+          (edit.selective?.localTone &&
+            (edit.selective.params.highlights || edit.selective.params.shadows))
+        const meter =
+          viewport && needsMeter
+            ? await this.source(
+                image,
+                edit,
+                640,
+                cropMode,
+                videoTime,
+                cacheSource,
+                report,
+                stale,
+              )
+            : prepared
+        if (!meter || stale()) return null
         const selected = edit.stock === null ? null : stage
-        const pack = await this.capturePack(
-          entry
-            ? selected === null
-              ? entry.pack
-              : entry.stages[selected]
-            : null,
-          stock,
-          image.raw?.sceneKelvin,
-          report,
-        )
+        const pack = dynamic
+          ? parsePack(
+              await loadFilmProfile(
+                {
+                  stock,
+                  width: source.width,
+                  height: source.height,
+                  format: edit.format,
+                  medium: edit.medium,
+                  sceneKelvin,
+                  filters: edit.filters,
+                  filterMetering: edit.filterMetering,
+                  sceneHighlightStops: await sceneHighlightStops(
+                    meter.source,
+                    controls,
+                  ),
+                  controls: {
+                    ...profileRequestControls(edit, entry.stock),
+                    digitalReference: edit.digitalReference || 'auto-levels',
+                  },
+                },
+                report,
+              ),
+            )
+          : await this.capturePack(
+              entry
+                ? selected === null
+                  ? entry.pack
+                  : entry.stages[selected]
+                : null,
+              stock,
+              sceneKelvin,
+              report,
+            )
         if (entry && !pack)
           throw new Error('This pipeline stage is unavailable.')
-        if (pack) developer.usePack(pack)
-        let { pixels, elapsed } = developer
-          ? await developer.develop(source, controls, rendering)
-          : await developNormal(source, controls, rendering)
+        if (
+          viewport &&
+          (pack?.screenMeter ||
+            (controls.localTone && (controls.highlights || controls.shadows)))
+        )
+          output.toneGrid = await measuredTone(meter.source, controls)
+        developer?.usePack(pack)
+        const developed = developer
+          ? await developer.develop(source, controls, rendering, stale, output)
+          : await developNormal(source, controls, rendering, stale, output)
+        if (!developed || stale()) return null
+        let { pixels, elapsed } = developed
+        if (edit.selective?.sample && !cropMode && stage === null) {
+          report('Developing selection')
+          const local = edit.selective
+          const localControls = {
+            ...controls,
+            ...local.params,
+            localTone: local.localTone,
+            gradeSpace: local.gradeSpace,
+          }
+          const localOutput = viewport
+            ? {
+                ...output,
+                toneGrid:
+                  pack?.screenMeter ||
+                  (localControls.localTone &&
+                    (localControls.highlights || localControls.shadows))
+                    ? await measuredTone(meter.source, localControls)
+                    : null,
+              }
+            : output
+          const selected = showMask
+            ? null
+            : developer
+              ? await developer.develop(
+                  source,
+                  localControls,
+                  rendering,
+                  stale,
+                  localOutput,
+                )
+              : await developNormal(
+                  source,
+                  localControls,
+                  rendering,
+                  stale,
+                  localOutput,
+                )
+          if (stale()) return null
+          pixels = await compositeSelection(
+            selectionSource,
+            pixels,
+            selected?.pixels,
+            local,
+            showMask,
+            stale,
+          )
+          elapsed += selected?.elapsed || 0
+        }
         let delta = null
         if (difference && selected > 0) {
           report('Rendering previous stage for comparison')
@@ -340,11 +561,17 @@ export class RenderSession {
             await this.capturePack(
               entry.stages[selected - 1],
               stock,
-              image.raw?.sceneKelvin,
+              sceneKelvin,
               report,
             ),
           )
-          const before = await developer.develop(source, controls)
+          const before = await developer.develop(
+            source,
+            controls,
+            rendering,
+            stale,
+            { ...output, bitDepth: 8 },
+          )
           let peak = 0
           for (let i = 0; i < pixels.length; i++)
             if (i % 4 !== 3)
@@ -356,45 +583,111 @@ export class RenderSession {
           delta = { peak, gain }
         }
         if (stale()) return null
-        report(`Encoding ${purpose} image`)
-        const canvas = document.createElement('canvas')
-        canvas.width = source.width
-        canvas.height = source.height
-        canvas
-          .getContext('2d')
-          .putImageData(
-            new ImageData(pixels, source.width, source.height),
-            0,
-            0,
+        const backend = developer?.backend || 'reference'
+        if (bitDepth === 16) {
+          const framePlan =
+            framed && !viewport
+              ? await loadPrintFrame(
+                  requestedEdit,
+                  source.width,
+                  source.height,
+                  report,
+                )
+              : null
+          const output = await renderPrintFrame16(
+            pixels,
+            outputWidth,
+            outputHeight,
+            framePlan,
+            () => this.closed || stale(),
+            colorSpace,
           )
+          if (!output || stale()) return null
+          return {
+            ...output,
+            backend,
+            elapsed,
+            framePlan,
+            renderMilliseconds: performance.now() - started,
+          }
+        }
+        report(`Encoding ${purpose} image`)
+        let canvas = pixelsCanvas(pixels, outputWidth, outputHeight, colorSpace)
+        const framePlan =
+          framed && !viewport
+            ? await loadPrintFrame(
+                requestedEdit,
+                source.width,
+                source.height,
+                report,
+              )
+            : null
+        if (framePlan) {
+          report('Finishing print frame')
+          canvas = await renderPrintFrame(
+            canvas,
+            framePlan,
+            () => this.closed || stale(),
+          )
+          if (!canvas || stale()) return null
+        }
         const blob = encode ? await canvasBlob(canvas) : null
-        let original = prepared.original
+        let original = viewport ? null : prepared.original
         if (comparison && !original) report('Preparing original for comparison')
         if (comparison && !original && sourceCanvas)
           original = await canvasBlob(sourceCanvas)
         else if (comparison && !original) {
-          const baseline = await developNormal(source, defaultEdit().params)
-          const comparison = document.createElement('canvas')
-          comparison.width = source.width
-          comparison.height = source.height
-          comparison
-            .getContext('2d')
-            .putImageData(
-              new ImageData(baseline.pixels, source.width, source.height),
-              0,
-              0,
-            )
+          const plain = await this.renderer(null)
+          plain.usePack(null)
+          const baseline = await plain.develop(
+            source,
+            defaultEdit().params,
+            rendering,
+            stale,
+            { colorSpace, region },
+          )
+          if (!baseline || stale()) return null
+          const comparison = pixelsCanvas(
+            baseline.pixels,
+            outputWidth,
+            outputHeight,
+            colorSpace,
+          )
           original = await canvasBlob(comparison)
         }
-        prepared.original = original
+        if (!viewport) prepared.original = original
+        if (
+          comparison &&
+          original &&
+          framePlan?.configuration.frame !== 'none' &&
+          framePlan
+        ) {
+          const bitmap = await createImageBitmap(original)
+          const baseline = document.createElement('canvas')
+          baseline.width = bitmap.width
+          baseline.height = bitmap.height
+          colorContext(baseline, colorSpace).drawImage(bitmap, 0, 0)
+          bitmap.close()
+          const framedOriginal = await renderPrintFrame(
+            baseline,
+            framePlan,
+            () => this.closed || stale(),
+          )
+          if (!framedOriginal || stale()) return null
+          original = await canvasBlob(framedOriginal)
+        }
         return {
+          viewport,
+          framePlan,
+          colorSpace,
+          sceneSource: source,
           canvas,
           blob,
           original,
           elapsed,
           renderMilliseconds: performance.now() - started,
           delta,
-          backend: pack ? developer.backend : 'normal',
+          backend,
           width: canvas.width,
           height: canvas.height,
         }
@@ -403,11 +696,21 @@ export class RenderSession {
       work,
     )
   }
-  stages(stock, medium = null, halationModel = 'legacy', digitalReference = 'auto-levels') {
+  stages(
+    stock,
+    medium = null,
+    halationModel = 'legacy',
+    digitalReference = 'auto-levels',
+  ) {
     if (halationModel === 'layered') return Promise.resolve([])
     return this.enqueue(
       async () => {
-        const entry = await this.pack(stock, medium, halationModel, digitalReference)
+        const entry = await this.pack(
+          stock,
+          medium,
+          halationModel,
+          digitalReference,
+        )
         entry.stages ??= await loadStages(
           assetUrl(`packs/${stock}.stages`),
           entry.pack,
@@ -423,14 +726,8 @@ export class RenderSession {
     this.closed = true
     return this.enqueue(() => {
       this.developer?.dispose()
-      this.transport?.dispose()
-      this.normal?.dispose()
-      this.thumbnail?.dispose()
       this.sources = []
-      this.normal = null
-      this.thumbnail = null
       this.developer = null
-      this.transport = null
       this.packs.clear()
     })
   }

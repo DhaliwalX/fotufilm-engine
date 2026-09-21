@@ -1,3 +1,4 @@
+import { openChart } from './photo-fixture.js'
 import { test, expect } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
@@ -93,13 +94,14 @@ test('output selection updates preview, undo, saved edits, export and reversal c
   page,
 }) => {
   await page.goto('/')
-  await page.getByRole('button', { name: 'Open sample chart' }).click()
+  await openChart(page)
   const ready = () =>
     expect(page.locator('.viewer-status > [role=status]')).toContainText(/\d+ × \d+/)
   await ready()
   await page.getByRole('searchbox').fill('Gold 200')
   await page.getByTitle('Gold 200', { exact: true }).click()
   await ready()
+  await page.getByRole('tab', { name: 'Print', exact: true }).click()
   const select = page.getByRole('combobox', { name: 'Output medium', exact: true })
   await expect(select).toContainText('Kodak Ektacolor Edge')
   const before = await page.locator('.photo-plane > img').getAttribute('src')

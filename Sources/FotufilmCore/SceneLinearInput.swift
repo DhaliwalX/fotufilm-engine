@@ -132,7 +132,7 @@ public enum SceneLinearInput {
         let chunk = 1 << 20
         let chunks = (count + chunk - 1) / chunk
         guard chunks > 1 else { return body(0, count) }
-        DispatchQueue.concurrentPerform(iterations: chunks) { index in
+        ParallelWork.forEach(iterations: chunks) { index in
             let first = index * chunk
             body(first, min(count, first + chunk) - first)
         }

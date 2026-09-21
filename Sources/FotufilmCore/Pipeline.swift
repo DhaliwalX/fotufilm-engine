@@ -452,7 +452,7 @@ public struct FotufilmEngine {
                         let bytes = source.baseAddress!
                         let r = red.baseAddress!, g = green.baseAddress!
                         let b = blue.baseAddress!
-                        DispatchQueue.concurrentPerform(iterations: height) { y in
+                        ParallelWork.forEach(iterations: height) { y in
                             let row = y * width
                             for x in 0..<width {
                                 let i = row + x
@@ -501,7 +501,7 @@ public struct FotufilmEngine {
                         let bytes = destination.baseAddress!
                         let planes = [plane0.baseAddress!, plane1.baseAddress!,
                                       plane2.baseAddress!]
-                        DispatchQueue.concurrentPerform(iterations: height) { y in
+                        ParallelWork.forEach(iterations: height) { y in
                             let row = y * width
                             for x in 0..<width {
                                 let i = row + x

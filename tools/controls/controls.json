@@ -373,7 +373,7 @@
       },
       "kind" : "menu",
       "omitted" : {
-        "web" : "a pack is sealed for one gauge"
+
       },
       "scope" : "edit",
       "section" : "filmStock",
@@ -383,9 +383,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Format"
+      "title" : "Format",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -571,8 +573,7 @@
       "kind" : "menu",
       "omitted" : {
         "finalcut" : "not yet offered; the share is a Full-stage control",
-        "resolve" : "offered as Mottle and Mottle Amount",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "resolve" : "offered as Mottle and Mottle Amount"
       },
       "scope" : "edit",
       "section" : "filmGrain",
@@ -580,9 +581,11 @@
         "app",
         "desktop",
         "android",
+        "web",
         "cli"
       ],
-      "title" : "Mottle"
+      "title" : "Mottle",
+      "webTransform" : "profile"
     },
     {
       "availability" : "always",
@@ -856,8 +859,7 @@
       },
       "kind" : "menu",
       "omitted" : {
-        "finalcut" : "not yet offered; discs and crystals need Reference rendering",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "finalcut" : "not yet offered; discs and crystals need Reference rendering"
       },
       "scope" : "edit",
       "section" : "filmGrain",
@@ -866,9 +868,11 @@
         "desktop",
         "android",
         "resolve",
+        "web",
         "cli"
       ],
-      "title" : "Grain Model"
+      "title" : "Grain Model",
+      "webTransform" : "profile"
     },
     {
       "availability" : "film",
@@ -1036,7 +1040,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "halation",
       "scale" : {
@@ -1060,9 +1064,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Halation"
+      "title" : "Halation",
+      "webTransform" : "profile"
     },
     {
       "availability" : "always",
@@ -1100,8 +1106,7 @@
       "omitted" : {
         "android" : "Film Model settings choose it for every photograph",
         "app" : "Film Model settings choose it for every photograph",
-        "desktop" : "Film Model settings choose it for every photograph",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "desktop" : "Film Model settings choose it for every photograph"
       },
       "restingOn" : false,
       "scope" : "global",
@@ -1110,9 +1115,11 @@
       "surfaces" : [
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Estimated Halation Shape"
+      "title" : "Estimated Halation Shape",
+      "webTransform" : "profile"
     },
     {
       "availability" : "film",
@@ -1134,8 +1141,7 @@
       "omitted" : {
         "android" : "Return overrides are not yet offered in the Android editor",
         "finalcut" : "Return overrides are not yet offered in plugin hosts",
-        "resolve" : "Return overrides are not yet offered in plugin hosts",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "resolve" : "Return overrides are not yet offered in plugin hosts"
       },
       "scale" : {
         "admittedMax" : 1,
@@ -1153,9 +1159,11 @@
       "surfaces" : [
         "app",
         "desktop",
+        "web",
         "cli"
       ],
-      "title" : "Halation Return"
+      "title" : "Halation Return",
+      "webTransform" : "profile"
     },
     {
       "availability" : "colourNegative",
@@ -1197,7 +1205,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "halationColour",
       "scale" : {
@@ -1221,9 +1229,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Halo Colour"
+      "title" : "Halo Colour",
+      "webTransform" : "profile"
     },
     {
       "availability" : "film",
@@ -1278,8 +1288,7 @@
       "omitted" : {
         "android" : "the Android panel draws no curve rows yet",
         "cli" : "no flag carries a curve",
-        "finalcut" : "not yet offered; seven sliders would need seven ids",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "finalcut" : "not yet offered; seven sliders would need seven ids"
       },
       "persistedKey" : "halationSpectrum",
       "scope" : "edit",
@@ -1288,9 +1297,11 @@
       "surfaces" : [
         "app",
         "desktop",
-        "resolve"
+        "resolve",
+        "web"
       ],
-      "title" : "Return Spectrum"
+      "title" : "Return Spectrum",
+      "webTransform" : "profile"
     },
     {
       "availability" : "film",
@@ -1332,7 +1343,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "couplers",
       "scale" : {
@@ -1356,9 +1367,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Couplers"
+      "title" : "Couplers",
+      "webTransform" : "profile"
     },
     {
       "availability" : "couplerGeometry",
@@ -1399,8 +1412,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "finalcut" : "not yet offered; needs the coupler-geometry gate",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "finalcut" : "not yet offered; needs the coupler-geometry gate"
       },
       "scale" : {
         "admittedMax" : 3,
@@ -1420,9 +1432,11 @@
         "desktop",
         "android",
         "resolve",
+        "web",
         "cli"
       ],
-      "title" : "Separation"
+      "title" : "Separation",
+      "webTransform" : "profile"
     },
     {
       "availability" : "couplerGeometry",
@@ -1463,8 +1477,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "finalcut" : "not yet offered; needs the coupler-geometry gate",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "finalcut" : "not yet offered; needs the coupler-geometry gate"
       },
       "persistedKey" : "couplerSelf",
       "scale" : {
@@ -1487,9 +1500,11 @@
         "desktop",
         "android",
         "resolve",
+        "web",
         "cli"
       ],
-      "title" : "Edge Contrast"
+      "title" : "Edge Contrast",
+      "webTransform" : "profile"
     },
     {
       "availability" : "couplerGeometry",
@@ -1647,7 +1662,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "chromaticFringeAmount",
       "scale" : {
@@ -1671,9 +1686,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Fringe Amount"
+      "title" : "Fringe Amount",
+      "webTransform" : "profile"
     },
     {
       "availability" : "interlayerInhibition",
@@ -1716,7 +1733,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "chromaticFringeRadius",
       "scale" : {
@@ -1740,9 +1757,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Fringe Radius"
+      "title" : "Fringe Radius",
+      "webTransform" : "profile"
     },
     {
       "availability" : "measuredDevelopment",
@@ -1782,7 +1801,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "push",
       "scale" : {
@@ -1809,9 +1828,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Push"
+      "title" : "Push",
+      "webTransform" : "profile"
     },
     {
       "availability" : "colourNegative",
@@ -1873,7 +1894,7 @@
       },
       "kind" : "chips",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "bleach",
       "scale" : {
@@ -1897,9 +1918,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Bleach Bypass"
+      "title" : "Bleach Bypass",
+      "webTransform" : "profile"
     },
     {
       "availability" : "film",
@@ -1941,7 +1964,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "expiredYears",
       "scale" : {
@@ -1968,9 +1991,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Expired"
+      "title" : "Expired",
+      "webTransform" : "profile"
     },
     {
       "availability" : "statedReciprocity",
@@ -2010,8 +2035,7 @@
       },
       "kind" : "menu",
       "omitted" : {
-        "finalcut" : "not yet offered; needs the reciprocity gate",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "finalcut" : "not yet offered; needs the reciprocity gate"
       },
       "scope" : "edit",
       "section" : "filmLab",
@@ -2020,9 +2044,38 @@
         "desktop",
         "android",
         "resolve",
+        "web",
         "cli"
       ],
-      "title" : "Long Exposure"
+      "title" : "Long Exposure",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "always",
+      "detail" : "Fit, reorder or remove absorbing and diffusion filters in front of the lens.",
+      "documentation" : "An ordered stack of absorbing and diffusion filters before film exposure.",
+      "drives" : [
+        "lensFilters",
+        "diffusionFilter"
+      ],
+      "field" : "lensFilterStack",
+      "group" : "lens",
+      "kind" : "takeover",
+      "omitted" : {
+        "android" : "no lens filters on Android yet",
+        "cli" : "--filter takes the absorbing stack; --diffusion chooses diffusion",
+        "finalcut" : "the host uses three filter slots and a diffusion choice",
+        "resolve" : "the host uses three filter slots and a diffusion choice"
+      },
+      "scope" : "edit",
+      "section" : "lensGlass",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web"
+      ],
+      "title" : "Filters",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -2200,17 +2253,18 @@
       "omitted" : {
         "android" : "no lens filters on Android yet",
         "app" : "chosen on the Lens deck's filter page",
-        "desktop" : "chosen on the Lens panel's filter list",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "desktop" : "chosen on the Lens panel's filter list"
       },
       "scope" : "edit",
       "section" : "lensGlass",
       "surfaces" : [
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Metering"
+      "title" : "Metering",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -2536,8 +2590,7 @@
         "android" : "no lens correction on Android yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "persistedKey" : "lensCorrectionEnabled",
       "restingOn" : false,
@@ -2546,9 +2599,11 @@
       "storedEncoding" : "same",
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Lens Correction"
+      "title" : "Lens Correction",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -2565,16 +2620,17 @@
         "android" : "no lens correction on Android yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "scope" : "edit",
       "section" : "lensCorrection",
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Lens"
+      "title" : "Lens",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -2590,8 +2646,7 @@
         "android" : "no lens correction on Android yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "persistedKey" : "lensProfileAmount",
       "scale" : {
@@ -2611,9 +2666,11 @@
       "storedNeutral" : 1,
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Amount"
+      "title" : "Amount",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -2629,8 +2686,7 @@
         "android" : "no lens correction on Android yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "scale" : {
         "admittedMax" : 1,
@@ -2647,9 +2703,11 @@
       "section" : "lensCorrection",
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Distortion"
+      "title" : "Distortion",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -2665,8 +2723,7 @@
         "android" : "no lens correction on Android yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "scale" : {
         "admittedMax" : 1,
@@ -2683,9 +2740,11 @@
       "section" : "lensCorrection",
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Vignetting"
+      "title" : "Vignetting",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -2701,8 +2760,7 @@
         "android" : "no lens correction on Android yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "scale" : {
         "admittedMax" : 1,
@@ -2719,9 +2777,11 @@
       "section" : "lensCorrection",
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Red / Cyan"
+      "title" : "Red / Cyan",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -2737,8 +2797,7 @@
         "android" : "no lens correction on Android yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "scale" : {
         "admittedMax" : 1,
@@ -2755,9 +2814,11 @@
       "section" : "lensCorrection",
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Blue / Yellow"
+      "title" : "Blue / Yellow",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -2827,6 +2888,32 @@
       "title" : "Exposure",
       "webConfigSlot" : "FOTUFILM_CONFIG_EXPOSURE_GAIN",
       "webTransform" : "exp2"
+    },
+    {
+      "availability" : "always",
+      "detail" : "Set exposure, highlights and shadows to fit the photograph inside the selected film’s latitude.",
+      "documentation" : "Solves exposure and tone recovery using the native film latitude. Choosing another film recalculates while Auto is active. Disabling Auto retains the solved values; manual exposure or tone edits disengage it.",
+      "drives" : [
+
+      ],
+      "field" : "autoAdjustment",
+      "group" : "light",
+      "kind" : "takeover",
+      "omitted" : {
+        "android" : "Automatic exposure is not yet offered on Android.",
+        "cli" : "Set exposure, highlights and shadows explicitly.",
+        "finalcut" : "The host owns automatic adjustment.",
+        "resolve" : "The host owns automatic adjustment."
+      },
+      "scope" : "edit",
+      "section" : "lightExposure",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web"
+      ],
+      "title" : "Auto Adjust",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -3005,7 +3092,7 @@
       },
       "kind" : "toggle",
       "omitted" : {
-        "web" : "the regional base is measured from the image, which the pack cannot carry"
+
       },
       "persistedKey" : "localTone",
       "restingOn" : true,
@@ -3018,6 +3105,7 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
       "title" : "Regional"
@@ -3062,7 +3150,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "cameraPreflash",
       "scale" : {
@@ -3086,9 +3174,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Camera Preflash"
+      "title" : "Camera Preflash",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -3331,8 +3421,7 @@
       "kind" : "menu",
       "omitted" : {
         "android" : "the source spectrum is baked into the stock pack",
-        "cli" : "--scene-kelvin selects an explicit source; omission uses Stock Native",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "cli" : "--scene-kelvin selects an explicit source; omission uses Stock Native"
       },
       "scope" : "edit",
       "section" : "lightBalance",
@@ -3340,7 +3429,8 @@
         "app",
         "desktop",
         "resolve",
-        "finalcut"
+        "finalcut",
+        "web"
       ],
       "title" : "Source Illuminant"
     },
@@ -3379,8 +3469,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "android" : "the source spectrum is baked into the stock pack",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "android" : "the source spectrum is baked into the stock pack"
       },
       "persistedKey" : "sourceLightKelvin",
       "scale" : {
@@ -3403,9 +3492,11 @@
         "desktop",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Source Illuminant (K)"
+      "title" : "Source Illuminant (K)",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -3906,6 +3997,52 @@
       "availability" : "always",
       "choices" : [
         {
+          "detail" : "Preserve the file’s decoded highlight range",
+          "id" : "automatic",
+          "label" : "Automatic",
+          "value" : 0
+        },
+        {
+          "detail" : "Preserve all decoded highlight range",
+          "id" : "fullRange",
+          "label" : "Full Range",
+          "value" : 1
+        },
+        {
+          "detail" : "Tone-map HDR before film exposure",
+          "id" : "standardRange",
+          "label" : "Standard Range",
+          "value" : 2
+        }
+      ],
+      "detail" : "Choose how the decoded highlight range enters film exposure.",
+      "documentation" : "Automatic and Full Range preserve decoded HDR highlights. Standard Range uses the platform SDR rendition before film exposure. RAW always remains scene-linear.",
+      "drives" : [
+
+      ],
+      "field" : "sourceInterpretation",
+      "group" : "light",
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "processed HDR interpretation is not offered on Android yet",
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
+      },
+      "scope" : "edit",
+      "section" : "sourceInterpretation",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web"
+      ],
+      "title" : "Highlights",
+      "webTransform" : "runtime"
+    },
+    {
+      "availability" : "always",
+      "choices" : [
+        {
           "detail" : "The photograph without a border.",
           "id" : "none",
           "label" : "None",
@@ -4003,15 +4140,16 @@
         "cli" : "Frame finishing is offered in the iPhone photo editor.",
         "desktop" : "Frame finishing is offered in the iPhone photo editor.",
         "finalcut" : "The host owns output framing.",
-        "resolve" : "The host owns output framing.",
-        "web" : "Frame finishing is offered in the iPhone photo editor."
+        "resolve" : "The host owns output framing."
       },
       "scope" : "edit",
       "section" : "printPaper",
       "surfaces" : [
-        "app"
+        "app",
+        "web"
       ],
-      "title" : "Frame"
+      "title" : "Frame",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "printStage",
@@ -4122,7 +4260,7 @@
       },
       "kind" : "menu",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "scope" : "edit",
       "section" : "printPaper",
@@ -4132,9 +4270,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Viewing Illuminant"
+      "title" : "Viewing Illuminant",
+      "webTransform" : "profile"
     },
     {
       "availability" : "printStage",
@@ -4176,7 +4316,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "printCorrection",
       "scale" : {
@@ -4200,9 +4340,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Channel Contrast Match"
+      "title" : "Channel Contrast Match",
+      "webTransform" : "profile"
     },
     {
       "availability" : "always",
@@ -4242,8 +4384,7 @@
       "omitted" : {
         "android" : "Settings chooses the lightbox or scanner reading",
         "app" : "Settings chooses the lightbox or scanner reading",
-        "desktop" : "Settings chooses the lightbox or scanner reading",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "desktop" : "Settings chooses the lightbox or scanner reading"
       },
       "scope" : "global",
       "section" : "printPaper",
@@ -4251,9 +4392,11 @@
       "surfaces" : [
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Negative Viewing"
+      "title" : "Negative Viewing",
+      "webTransform" : "profile"
     },
     {
       "availability" : "transparentFilm",
@@ -4385,8 +4528,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "android" : "The Android photo editor does not yet carry the screen conversion's grade and exposure.",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "android" : "The Android photo editor does not yet carry the screen conversion's grade and exposure."
       },
       "persistedKey" : "screenGrade",
       "scale" : {
@@ -4409,9 +4551,11 @@
         "desktop",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Paper Grade"
+      "title" : "Paper Grade",
+      "webTransform" : "profile"
     },
     {
       "availability" : "transparentFilm",
@@ -4453,8 +4597,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "android" : "The Android photo editor does not yet carry the screen conversion's grade and exposure.",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "android" : "The Android photo editor does not yet carry the screen conversion's grade and exposure."
       },
       "persistedKey" : "screenExposure",
       "scale" : {
@@ -4477,9 +4620,11 @@
         "desktop",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Screen Exposure"
+      "title" : "Screen Exposure",
+      "webTransform" : "profile"
     },
     {
       "availability" : "printStage",
@@ -4544,7 +4689,7 @@
       },
       "kind" : "menu",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "scope" : "edit",
       "section" : "printLamp",
@@ -4554,9 +4699,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Enlarger"
+      "title" : "Enlarger",
+      "webTransform" : "profile"
     },
     {
       "availability" : "printStage",
@@ -4575,8 +4722,7 @@
       "omitted" : {
         "android" : "The simulated printer is currently exposed in the Apple apps and CLI.",
         "finalcut" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "resolve" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "web" : "The browser does not build a printer lamp's spectral tables."
+        "resolve" : "The plugin bridge does not yet expose simulated printer profiles."
       },
       "persistedKey" : "printerEnabled",
       "restingOn" : false,
@@ -4586,9 +4732,11 @@
       "surfaces" : [
         "app",
         "desktop",
+        "web",
         "cli"
       ],
-      "title" : "Simulated Printer"
+      "title" : "Simulated Printer",
+      "webTransform" : "profile"
     },
     {
       "availability" : "printStage",
@@ -4607,8 +4755,7 @@
       "omitted" : {
         "android" : "The simulated printer is currently exposed in the Apple apps and CLI.",
         "finalcut" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "resolve" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "web" : "The browser does not build a printer lamp's spectral tables."
+        "resolve" : "The plugin bridge does not yet expose simulated printer profiles."
       },
       "scale" : {
         "admittedMax" : 3600,
@@ -4626,9 +4773,11 @@
       "surfaces" : [
         "app",
         "desktop",
+        "web",
         "cli"
       ],
-      "title" : "Lamp Temperature"
+      "title" : "Lamp Temperature",
+      "webTransform" : "profile"
     },
     {
       "availability" : "printStage",
@@ -4647,8 +4796,7 @@
       "omitted" : {
         "android" : "The simulated printer is currently exposed in the Apple apps and CLI.",
         "finalcut" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "resolve" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "web" : "The browser does not build a printer lamp's spectral tables."
+        "resolve" : "The plugin bridge does not yet expose simulated printer profiles."
       },
       "scale" : {
         "admittedMax" : 6,
@@ -4666,9 +4814,11 @@
       "surfaces" : [
         "app",
         "desktop",
+        "web",
         "cli"
       ],
-      "title" : "Paper Exposure"
+      "title" : "Paper Exposure",
+      "webTransform" : "profile"
     },
     {
       "availability" : "printStage",
@@ -4687,8 +4837,7 @@
       "omitted" : {
         "android" : "The simulated printer is currently exposed in the Apple apps and CLI.",
         "finalcut" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "resolve" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "web" : "The browser does not build a printer lamp's spectral tables."
+        "resolve" : "The plugin bridge does not yet expose simulated printer profiles."
       },
       "scale" : {
         "admittedMax" : 1.2,
@@ -4706,9 +4855,11 @@
       "surfaces" : [
         "app",
         "desktop",
+        "web",
         "cli"
       ],
-      "title" : "Magenta Filter"
+      "title" : "Magenta Filter",
+      "webTransform" : "profile"
     },
     {
       "availability" : "printStage",
@@ -4727,8 +4878,7 @@
       "omitted" : {
         "android" : "The simulated printer is currently exposed in the Apple apps and CLI.",
         "finalcut" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "resolve" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "web" : "The browser does not build a printer lamp's spectral tables."
+        "resolve" : "The plugin bridge does not yet expose simulated printer profiles."
       },
       "scale" : {
         "admittedMax" : 1.2,
@@ -4746,9 +4896,11 @@
       "surfaces" : [
         "app",
         "desktop",
+        "web",
         "cli"
       ],
-      "title" : "Yellow Filter"
+      "title" : "Yellow Filter",
+      "webTransform" : "profile"
     },
     {
       "availability" : "printStage",
@@ -4790,7 +4942,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "printerPreflash",
       "scale" : {
@@ -4814,9 +4966,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Printer Preflash"
+      "title" : "Printer Preflash",
+      "webTransform" : "profile"
     },
     {
       "availability" : "always",
@@ -4831,17 +4985,18 @@
       "omitted" : {
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "scope" : "edit",
       "section" : "frameGeometry",
       "surfaces" : [
         "app",
         "desktop",
-        "android"
+        "android",
+        "web"
       ],
-      "title" : "Crop"
+      "title" : "Crop",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -4856,8 +5011,7 @@
       "omitted" : {
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "persistedKey" : "straighten",
       "scale" : {
@@ -4878,9 +5032,11 @@
       "surfaces" : [
         "app",
         "desktop",
-        "android"
+        "android",
+        "web"
       ],
-      "title" : "Straighten"
+      "title" : "Straighten",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -4896,8 +5052,7 @@
         "android" : "the Android crop has no keystone yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "persistedKey" : "perspectiveV",
       "scale" : {
@@ -4917,9 +5072,11 @@
       "storedNeutral" : 0,
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Vertical"
+      "title" : "Vertical",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -4935,8 +5092,7 @@
         "android" : "the Android crop has no keystone yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "persistedKey" : "perspectiveH",
       "scale" : {
@@ -4956,9 +5112,11 @@
       "storedNeutral" : 0,
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Horizontal"
+      "title" : "Horizontal",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -4999,17 +5157,18 @@
       "omitted" : {
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "scope" : "edit",
       "section" : "frameGeometry",
       "surfaces" : [
         "app",
         "desktop",
-        "android"
+        "android",
+        "web"
       ],
-      "title" : "Rotate"
+      "title" : "Rotate",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -5024,8 +5183,7 @@
       "omitted" : {
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "persistedKey" : "flipH",
       "restingOn" : false,
@@ -5035,9 +5193,11 @@
       "surfaces" : [
         "app",
         "desktop",
-        "android"
+        "android",
+        "web"
       ],
-      "title" : "Flip"
+      "title" : "Flip",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -5930,6 +6090,12 @@
       "groupTitle" : "Light & Color",
       "id" : "lightGrade",
       "title" : "Grade"
+    },
+    {
+      "group" : "light",
+      "groupTitle" : "Light & Color",
+      "id" : "sourceInterpretation",
+      "title" : "Source Interpretation"
     },
     {
       "group" : "print",

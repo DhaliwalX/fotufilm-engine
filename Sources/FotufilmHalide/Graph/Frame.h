@@ -45,6 +45,8 @@ enum class Store {
     Noise,
     MottleNoise,
     CrystalCounts,
+    CrystalGrain,
+    Inhibition,
     Transmittance,
     FlatTransmittance,
     Printed,
@@ -265,6 +267,12 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
     if (use_donor) {
         if (use_diffusion) {
             donor_exposure(x, y, c) = light(x, y, 3);
+            // The donor still reads the fourth diffused record. Give subsequent RGB
+            // materialisations their own function, so scheduling them with three
+            // channels cannot narrow the shared donor exposure to three as well.
+            Func rgb(name("diffusion_rgb"));
+            rgb(x, y, c) = light(x, y, Halide::min(c, 2));
+            light = rgb;
         } else {
             donor_exposure(x, y, c) = scene_exposure(
                 configuration, in.exposure_lut, in.decoded(0), in.decoded(1),
@@ -489,8 +497,11 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
                     on_donor, donor_inhibition(configuration, c, donor_diffused(x, y, 0)),
                     0.0f);
             }
+            Func inhibition_field(name("inhibition"));
+            inhibition_field(x, y, c) = inhibition;
+            Func inhibition_view = b.store(inhibition_field, Store::Inhibition, 3);
             inhibited = inhibited_log_exposure(configuration, c, log_view(x, y, c),
-                                               inhibition);
+                                               inhibition_view(x, y, c));
         }
         Expr shift = 0.0f;
         if (use_adjacency) shift = adjacency_shift(configuration, adjacency_residual);
@@ -587,7 +598,9 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
                     crystal_bin_field(configuration, 2, bin, 0), p.grain_radius_,
                     p.width_, p.height_, in.prefix + "crystal_field_" + tag, 3));
             }
-            crystal = crystal_grain(configuration, c, bins, x, y, position.amount);
+            Func crystal_field(name("crystal_grain"));
+            crystal_field(x, y, c) = crystal_grain(configuration, c, bins, x, y, position.amount);
+            crystal = b.store(crystal_field, Store::CrystalGrain, 3)(x, y, c);
             Expr with_discs = selected_developed_density(
                 in.grain_mode, density_view(x, y, c), clump, disc, crystal);
             Expr without = selected_developed_density(

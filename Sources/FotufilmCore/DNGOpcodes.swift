@@ -1,8 +1,5 @@
 import Foundation
 
-#if canImport(FotufilmCore)
-import FotufilmCore
-#endif
 
 /// Reads DNG `WarpRectilinear` (opcode 1) and `FixVignetteRadial` (opcode 3) into a
 /// `LensCorrection`. Catalogue profiles take precedence. Tangential terms, off-centre optical
@@ -32,13 +29,14 @@ public enum DNGOpcodes {
 
     /// Reads the lens opcodes out of DNG bytes, or nil when there are none to read.
     ///
+    /// `deliveredSize` can override DefaultCropSize when a decoder keeps the full active area.
     /// Cheap enough to ask on every pass — it walks the directory structure and a few dozen bytes of
     /// payload in place, never copying the file and never touching the image data.
-    public static func read(_ data: Data) -> Embedded? {
-        data.withUnsafeBytes { read($0) }
+    public static func read(_ data: Data, deliveredSize: SIMD2<Float>? = nil) -> Embedded? {
+        data.withUnsafeBytes { read($0, deliveredSize: deliveredSize) }
     }
 
-    private static func read(_ bytes: UnsafeRawBufferPointer) -> Embedded? {
+    private static func read(_ bytes: UnsafeRawBufferPointer, deliveredSize: SIMD2<Float>?) -> Embedded? {
         guard let file = TIFFFile(bytes) else { return nil }
         guard let directory = file.lensDirectory() else { return nil }
 
@@ -85,7 +83,7 @@ public enum DNGOpcodes {
         // The opcodes are written against the sensor's active area; what the decoder returns is
         // the default crop inside it. Both radii are normalized to their own half-diagonal, so the
         // polynomials have to be re-expressed against the smaller frame.
-        let scale = file.deliveredRadiusScale(in: directory)
+        let scale = file.deliveredRadiusScale(in: directory, deliveredSize: deliveredSize)
         var correction = LensCorrection(vignetting: vignetting.rescalingRadius(by: scale))
         correction.planeWarp = warp?.rescalingRadius(by: scale)
         guard !correction.isIdentity else { return nil }
@@ -369,7 +367,7 @@ private struct TIFFFile {
 
     /// Returns the diagonal scale from DNG `ActiveArea` opcode coordinates to `DefaultCropSize`.
     /// Returns 1 for missing tags or off-center crops, which require an optical-center translation.
-    func deliveredRadiusScale(in directory: Directory) -> Float {
+    func deliveredRadiusScale(in directory: Directory, deliveredSize: SIMD2<Float>?) -> Float {
         let active = (0..<4).map { unsigned(directory[Tag.activeArea], at: $0) }
         let activeWidth: Double, activeHeight: Double
         if let top = active[0], let left = active[1], let bottom = active[2],
@@ -378,6 +376,13 @@ private struct TIFFFile {
             activeWidth = right - left
         } else {
             return 1
+        }
+        // Some decoders retain the complete active area instead of applying DefaultCropSize.
+        // Radial correction must describe the pixels actually returned, including orientation.
+        if let deliveredSize, deliveredSize.x.isFinite, deliveredSize.y.isFinite,
+           deliveredSize.x > 0, deliveredSize.y > 0 {
+            let w = Double(deliveredSize.x), h = Double(deliveredSize.y)
+            return Float(((w * w + h * h) / (activeWidth * activeWidth + activeHeight * activeHeight)).squareRoot())
         }
         guard let cropWidth = unsigned(directory[Tag.defaultCropSize], at: 0),
               let cropHeight = unsigned(directory[Tag.defaultCropSize], at: 1),

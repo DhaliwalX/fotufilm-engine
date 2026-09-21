@@ -2,7 +2,7 @@ import Foundation
 
 /// What the file says the picture was taken with. Everything needed to find a profile and to ask it
 /// the right question, read off the capture metadata.
-public struct LensShot: Equatable, Sendable {
+public struct LensShot: Equatable, Sendable, Codable {
     public var lensModel: String
     public var lensMaker: String?
     public var cameraModel: String?

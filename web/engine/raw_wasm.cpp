@@ -14,6 +14,7 @@ std::unique_ptr<LibRaw> decoder;
 libraw_processed_image_t *image = nullptr;
 int status = 0;
 float sceneScale = 1;
+bool negativeCapture = false;
 constexpr uint64_t maxPixels = 120000000;
 
 int progress(void *, LibRaw_progress stage, int iteration, int expected) {
@@ -52,9 +53,11 @@ void raw_close() {
     image = nullptr;
     decoder.reset();
     sceneScale = 1;
+    negativeCapture = false;
 }
-int raw_open(void *bytes, unsigned length) {
+static int open_capture(void *bytes, unsigned length, bool negative) {
     raw_close();
+    negativeCapture = negative;
     decoder = std::make_unique<LibRaw>();
     decoder->set_progress_handler(progress, nullptr);
     decoder->imgdata.rawparams.max_raw_memory_mb = 768;
@@ -68,7 +71,14 @@ int raw_open(void *bytes, unsigned length) {
     p.use_camera_matrix = 1;
     // Repair chroma where sensor channels clip at different white-balance gains.
     // Unclip (1) leaves those unequal channels magenta after color conversion.
-    p.highlight = 2;
+    p.highlight = negative ? 1 : 2; // Negative scans must not reconstruct film densities.
+    if (negative) {
+        p.exp_correc = 0;
+        p.threshold = 0;
+        p.med_passes = 0;
+        p.fbdd_noiserd = 0;
+        p.dcb_enhance_fl = 0;
+    }
     p.user_qual = 3;
     p.user_flip = -1; // Apply the file's orientation exactly once.
     status = decoder->open_buffer(bytes, length);
@@ -80,6 +90,8 @@ int raw_open(void *bytes, unsigned length) {
     }
     return status;
 }
+int raw_open(void *bytes, unsigned length) { return open_capture(bytes, length, false); }
+int raw_open_negative(void *bytes, unsigned length) { return open_capture(bytes, length, true); }
 int raw_unpack() {
     return status = decoder ? decoder->unpack() : LIBRAW_OUT_OF_ORDER_CALL;
 }
@@ -106,7 +118,7 @@ int raw_process() {
         const float baseline = color.dng_levels.baseline_exposure;
         // -999 is LibRaw's missing-value sentinel. Vendor RAWs need no guessed
         // baseline; honor the explicit DNG tag when the file supplies one.
-        if (decoder->imgdata.idata.dng_version && baseline != -999.f)
+        if (!negativeCapture && decoder->imgdata.idata.dng_version && baseline != -999.f)
             sceneScale *= std::exp2(baseline);
         if (!std::isfinite(sceneScale) || sceneScale <= 0)
             status = LIBRAW_DATA_ERROR;
@@ -118,6 +130,10 @@ unsigned raw_height() { return image ? image->height : 0; }
 unsigned raw_colors() { return image ? image->colors : 0; }
 const char *raw_make() { return decoder ? decoder->imgdata.idata.make : ""; }
 const char *raw_model() { return decoder ? decoder->imgdata.idata.model : ""; }
+const char *raw_lens_model() { return decoder ? decoder->imgdata.lens.Lens : ""; }
+const char *raw_lens_make() { return decoder ? decoder->imgdata.lens.LensMake : ""; }
+float raw_focal_length() { return decoder ? decoder->imgdata.other.focal_len : 0; }
+float raw_aperture() { return decoder ? decoder->imgdata.other.aperture : 0; }
 unsigned raw_camera_channels() { return decoder ? decoder->imgdata.idata.colors : 0; }
 float raw_camera_wb(unsigned channel) {
     return decoder && channel < 3 ? decoder->imgdata.color.cam_mul[channel] : 0;

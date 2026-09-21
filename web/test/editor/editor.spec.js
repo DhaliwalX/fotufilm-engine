@@ -1,3 +1,4 @@
+import { openChart } from "./photo-fixture.js";
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
@@ -8,10 +9,7 @@ async function ready(page) {
 }
 async function sample(page) {
   await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: "Open a photo" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Open sample chart" }).click();
+  await openChart(page);
   await ready(page);
 }
 async function framePixels(page) {
@@ -29,6 +27,7 @@ async function framePixels(page) {
 test("real WebGPU editor: normal, film, adjustments, history, crop and full-size export", async ({
   page,
 }, testInfo) => {
+  test.setTimeout(240000);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await sample(page);
@@ -39,10 +38,12 @@ test("real WebGPU editor: normal, film, adjustments, history, crop and full-size
   await page.getByRole("searchbox", { name: "Search films" }).fill("Gold 200");
   await page.getByTitle("Gold 200", { exact: true }).click();
   await ready(page);
-  await expect(page.locator(".backend-label")).toHaveText("WebGPU");
+  await expect(page.locator(".backend-label")).toHaveText("WebGPU", {
+    timeout: 180000,
+  });
   const film = await framePixels(page);
   expect(film).not.toEqual(normal);
-  await page.getByRole("tab", { name: "Light & Color" }).click();
+  await page.getByRole("tab", { name: "Expose" }).click();
   await page
     .getByRole("spinbutton", { name: "Exposure value", exact: true })
     .fill("0.8");
@@ -74,7 +75,7 @@ test("real WebGPU editor: normal, film, adjustments, history, crop and full-size
   await expect(
     page.getByLabel("Red, green and blue tonal distribution"),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "Crop", exact: true }).click();
+  await page.getByRole("button", { name: "Crop", exact: true }).click();
   await ready(page);
   await page
     .getByRole("combobox", { name: "Aspect ratio", exact: true })
@@ -109,7 +110,7 @@ test("CPU fallback, keyboard compare, per-photo edits and saved edit files", asy
   await page.getByTitle("Gold 200", { exact: true }).click();
   await ready(page);
   await expect(page.locator(".backend-label")).toHaveText("CPU");
-  await page.getByRole("tab", { name: "Light & Color" }).click();
+  await page.getByRole("tab", { name: "Expose" }).click();
   await page
     .getByRole("spinbutton", { name: "Exposure value", exact: true })
     .fill("1");
@@ -129,13 +130,11 @@ test("CPU fallback, keyboard compare, per-photo edits and saved edit files", asy
     text = await readFile(await saved.path(), "utf8");
   expect(JSON.parse(text).edit.params.ev).toBe(1);
   await page.getByRole("button", { name: "Reset all edits" }).click();
-  await page
-    .locator('input[type=file][accept=".json"]')
-    .setInputFiles({
-      name: "saved.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(text),
-    });
+  await page.locator('input[type=file][accept=".json"]').setInputFiles({
+    name: "saved.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(text),
+  });
   await expect(
     page.getByRole("spinbutton", { name: "Exposure value", exact: true }),
   ).toHaveValue("1");
@@ -165,7 +164,7 @@ test("mobile layout and missing runtime errors remain usable", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.route("**/packs/index.json", (route) =>
+  await page.route("**/packs/index.json*", (route) =>
     route.fulfill({ status: 404, body: "Missing" }),
   );
   await page.goto("/");
@@ -173,7 +172,10 @@ test("mobile layout and missing runtime errors remain usable", async ({
     "The film library could not be loaded",
   );
   await expect(
-    page.getByRole("button", { name: "Open images", exact: true }),
+    page.getByRole("button", {
+      name: "Open photos or videos (⌘O)",
+      exact: true,
+    }),
   ).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
     390,

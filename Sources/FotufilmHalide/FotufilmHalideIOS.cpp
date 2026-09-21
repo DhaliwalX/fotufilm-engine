@@ -5,6 +5,9 @@
 #endif
 
 #include "FotufilmHalideIOSVariants.h"
+#include "FotufilmNegativeScan.h"
+#include "fotufilm_halide_ios_negative_cpu.h"
+#include "fotufilm_halide_ios_negative_metal.h"
 #include <HalideBuffer.h>
 #include <HalideRuntimeMetal.h>
 
@@ -1196,6 +1199,22 @@ extern "C" void fotufilm_halide_metal_report_profile(void) {
 
 extern "C" int32_t fotufilm_halide_metal_still_fast_bits(void) {
     return FOTUFILM_STILL_FAST_BITS;
+}
+
+extern "C" int32_t fotufilm_negative_scan(const float *in, float *out, int32_t w,
+    int32_t h, const float *p, int32_t backend) {
+    if (!in || !out || !p || w < 1 || h < 1 || w > 40000 || h > 40000
+        || int64_t(w)*h > 150000000 || backend < 0 || backend > 1) return -1;
+    for (int c = 0; c < 3; ++c)
+        if (!std::isfinite(p[c]) || !std::isfinite(p[c+3]) || p[c] <= 0 || p[c+3] < p[c]) return -1;
+    if (!std::isfinite(p[6]) || p[6] < 0.1f || p[6] > 2.0f || !std::isfinite(p[7])) return -1;
+    Buffer<float> input(const_cast<float *>(in), w, h, 3), output(out, w, h, 3);
+    Buffer<float> params(const_cast<float *>(p), 8);
+    input.set_host_dirty(); params.set_host_dirty();
+    int status = backend ? fotufilm_halide_ios_negative_metal(input, params, output)
+                         : fotufilm_halide_ios_negative_cpu(input, params, output);
+    if (!status) status = output.copy_to_host();
+    return status;
 }
 
 extern "C" int32_t fotufilm_halide_available(void) { return 0; }

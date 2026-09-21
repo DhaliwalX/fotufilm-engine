@@ -90,6 +90,7 @@ let package = Package(
         .library(name: "FotufilmEditModel", targets: ["FotufilmEditModel"]),
         .executable(name: "fotufilm", targets: ["fotufilm"]),
         .executable(name: "fotufilm-controls", targets: ["fotufilm-controls"]),
+        .executable(name: "fotufilm-web-profile", targets: ["fotufilm-web-profile"]),
     ] + benchmarkProducts,
     targets: [
         .target(name: "FotufilmUpdate"),
@@ -122,6 +123,7 @@ let package = Package(
         .executableTarget(name: "fotufilm",
                           dependencies: ["FotufilmCore", "FotufilmImaging", "FotufilmEditModel"]),
         .executableTarget(name: "fotufilm-controls", dependencies: ["FotufilmEditModel"]),
+        .executableTarget(name: "fotufilm-web-profile", dependencies: ["FotufilmEditModel"]),
         .testTarget(
             name: "FotufilmCoreTests",
             dependencies: ["FotufilmCore", "FotufilmMetal", "FotufilmImaging",

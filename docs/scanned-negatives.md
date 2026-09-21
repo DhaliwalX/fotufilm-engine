@@ -4,7 +4,8 @@
 An explicit `ScanDensityCalibration` maps those measurements into the film-record
 density format consumed by the engine's existing print stage.
 
-The Mac app offers an approximate import workflow described below. The CLI does not
+Mac and web offer [automatic conversion](automatic-negative-conversion.md) without a drawn reference.
+The Mac app also offers the approximate manual workflow described below. The CLI does not
 yet expose scanned-negative conversion.
 No scanner profiles or automatic calibration fitting are bundled. A supplied affine
 profile is an approximation: validate its colour accuracy over the density range you
@@ -85,6 +86,35 @@ the dark reference, mismatched reference kinds, and calibrated densities outside
 to hide measurement errors. Samples brighter than the reference may produce negative
 scanner densities, which is useful with a film-border reference.
 
+## Shared approximate import and browser print boundary
+
+`ApproximateNegativeScan` contains the Mac importer's border normalization, film-base
+restoration, monochrome record mapping and usable-range mask. Its `convert` method
+returns density samples and an invalid-pixel mask; paint masked pixels black after
+printing. It does not alter the source scan or fit a scanner profile.
+
+The browser profile protocol accepts `kind: "negative-scan"`, a stock definition,
+three linear capture-channel border values and the output width/height. It returns
+the same calibration plus a binary screen-print profile. The profile enters the
+WebGPU or SIMD renderer with density input, bypassing exposure and development.
+Color and monochrome print kernels warm independently from positive-photo kernels.
+The browser dialog uses the separate `negative-auto` analysis protocol and shared
+Halide automatic inversion stage. This explicit-border protocol remains available
+for the manual, stock-based conversion.
+
+To compare the shipped browser kernels against native scan printing, generate
+synthetic references, start the web development server, then run the pixel check:
+
+```sh
+FOTUFILM_SCAN_REFERENCE_DIRECTORY="$PWD/build/negative-reference" \
+  swift test -c release --parallel --filter WebNegativeScanRequestTests
+node tools/test-negative-kernels.mjs http://127.0.0.1:5173/
+```
+
+The check requires actual WebGPU, compares linear output before display encoding,
+and checks 16-bit Display P3 delivery through the background worker. References and
+build output stay in the ignored build directory.
+
 ## Mac app import
 
 Choose **File → Import Scanned Negative…** and open an unconverted negative with
@@ -94,7 +124,8 @@ Choose **Linear Samples** only for a scan exported with a linear transfer curve.
 Sixteen-bit storage alone does not establish this. Use unadjusted scans: automatic
 levels, local contrast, clipping and prior inversion cannot be undone by the importer.
 
-Drag a rectangle over clear film, avoiding the holder, sprocket holes, edge numbers
+Automatic conversion is the default; use **Preview Positive** without drawing.
+For manual stock-based calibration, drag a rectangle over clear film, avoiding the holder, sprocket holes, edge numbers
 and image detail. The importer takes a median RGB sample of that patch. Choose the
 closest installed negative film, then **Preview Positive**. Use **Show Negative** to
 sample again. **Import Positive** converts at full resolution and opens the Crop tool.

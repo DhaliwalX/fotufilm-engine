@@ -1,6 +1,7 @@
 #define FOTUFILM_HALIDE_ENABLED 1
 #define FOTUFILM_HALIDE_AOT_GENERATOR 1
 #include "../Sources/FotufilmHalide/Pipeline/Gpu.h"
+#include "../Sources/FotufilmHalide/Pipeline/NegativeScan.h"
 
 using namespace fotufilm;
 using namespace fotufilm::pipelines;
@@ -209,6 +210,14 @@ int main(int argc, char **argv) {
         pipeline.compile_aot(
             (output / "fotufilm_halide_ios_halation_fields").string(),
             "fotufilm_halide_ios_halation_fields", target);
+    }
+    // Scan inversion shares its stage with the browser; compiled into shipping Apple apps.
+    for (const bool metal : {false, true}) {
+        const std::string name = metal ? "fotufilm_halide_ios_negative_metal" : "fotufilm_halide_ios_negative_cpu";
+        NegativeScanPipeline pipeline(metal ? Halide::DeviceAPI::Metal : Halide::DeviceAPI::None);
+        auto scan_target = target.with_feature(Halide::Target::NoRuntime).with_feature(Halide::Target::StrictFloat);
+        pipeline.output.compile_to_static_library((output / name).string(),
+            {pipeline.input, pipeline.parameters}, name, scan_target);
     }
     return 0;
 }

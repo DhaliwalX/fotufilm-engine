@@ -74,7 +74,7 @@ public:
     using graph::Backend::store;
     Func store(Func values, graph::Store point, int channels, Expr branch) override {
         if (!values.defined() || stored_.count(values.name())) return values;
-        if (point == graph::Store::MtfSelected) return values;
+        if (point == graph::Store::MtfSelected || point == graph::Store::CrystalGrain || point == graph::Store::Inhibition) return values;
         Var x("x"), y("y"), c("c");
         cpu_pointwise(values, x, y, c, channels);
         stored_.insert(values.name());

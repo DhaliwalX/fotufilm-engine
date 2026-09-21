@@ -6,8 +6,10 @@ import FotufilmCore
 
 public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case exposure, warmth, tint, highlights, shadows, localTone
+    case autoAdjustment
     case saturation, vibrance
     case sceneLight, sceneLightKelvin, cameraPreflash
+    case sourceInterpretation
 
     case stock, gauge, frameCoverage
     case grain, grainMottle, mottleOverride, mottleShare, grainModel, grainAnimation, seed
@@ -16,7 +18,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case chromaticFringeAmount, chromaticFringeRadius
     case push, bleach, expired, shutter
 
-    case lensFilter1, lensFilter2, lensFilter3, metering, diffusion, diffusionGrade
+    case lensFilterStack, lensFilter1, lensFilter2, lensFilter3, metering, diffusion, diffusionGrade
     case focalLength, flare, filterCoating
     case lensCorrection, lensProfile, lensAmount
     case lensDistortion, lensVignetting, lensRedCyan, lensBlueYellow
@@ -54,6 +56,7 @@ public enum EditorControlSection: String, CaseIterable, Sendable {
     case filmStock, filmGrain, filmEmulsion, filmLab
     case lensGlass, lensCorrection
     case lightExposure, lightBalance, lightColor, lightGrade
+    case sourceInterpretation
     case printPaper, printLamp
     case frameGeometry, frameLocal
     case pipeline
@@ -62,7 +65,7 @@ public enum EditorControlSection: String, CaseIterable, Sendable {
         switch self {
         case .filmStock, .filmGrain, .filmEmulsion, .filmLab: return .film
         case .lensGlass, .lensCorrection: return .lens
-        case .lightExposure, .lightBalance, .lightColor, .lightGrade: return .light
+        case .lightExposure, .lightBalance, .lightColor, .lightGrade, .sourceInterpretation: return .light
         case .printPaper, .printLamp: return .print
         case .frameGeometry, .frameLocal: return .frame
         case .pipeline: return .pipeline
@@ -78,6 +81,7 @@ public enum EditorControlSection: String, CaseIterable, Sendable {
         case .lensGlass: return "Filters"
         case .lensCorrection: return "Correction"
         case .lightExposure: return "Exposure"
+        case .sourceInterpretation: return "Source Interpretation"
         case .lightBalance: return "Balance"
         case .lightColor: return "Color"
         case .lightGrade: return "Grade"

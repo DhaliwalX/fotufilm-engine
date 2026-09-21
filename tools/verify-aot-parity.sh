@@ -74,6 +74,8 @@ mkdir -p "$OUT"
 # Both sides must use the same compiler; a public release may use a different local toolchain.
 FOTUFILM_AOT_NO_FETCH=1 tools/generate-halide-aot.sh macos "$KERNELS"
 
+bash tools/verify-negative-aot.sh "$KERNELS"
+
 echo "--- fixture ---"
 PACK="$OUT/fixture.fswp"
 swift run -c release fotufilm --dump-wasm-pack "$PACK" --stock "$STOCK" --pack-size "$SIZE"

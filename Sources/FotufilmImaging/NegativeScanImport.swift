@@ -80,43 +80,36 @@ public enum NegativeScanImport {
     /// Samples outside the model's usable density range (commonly the film holder) are
     /// excluded and painted black. No artificial density floor enters the measurement API.
     public static func positive(image: CIImage, border: SIMD3<Float>, stock: FilmStock) throws -> CIImage {
-        var scan = try samples(image)
-        let base = SIMD3<Float>(stock.curves[0].dMin, stock.curves[1].dMin, stock.curves[2].dMin)
-        var minimum = SIMD3<Float>(repeating: 0)
-        var maximum = SIMD3<Float>(repeating: .greatestFiniteMagnitude)
-        for record in 0..<3 {
-            let channel = stock.isMonochrome ? 1 : record
-            // A small interior margin avoids rounding a boundary value beyond the strict
-            // interchange range during the subsequent Double-precision log conversion.
-            let low = border[channel] * pow(10, base[record] - NegativeInterchange.range.upperBound + 0.0001)
-            let high = border[channel] * pow(10, base[record] - NegativeInterchange.range.lowerBound - 0.0001)
-            minimum[channel] = max(minimum[channel], low)
-            maximum[channel] = min(maximum[channel], high)
-        }
-        var invalid = [Bool](repeating: false, count: scan.pixelCount)
-        for i in 0..<scan.pixelCount {
-            invalid[i] = (0..<3).contains { !scan.planes[$0][i].isFinite || scan.planes[$0][i] <= minimum[$0]
-                || scan.planes[$0][i] >= maximum[$0] }
-            if invalid[i] { for c in 0..<3 { scan.planes[c][i] = border[c] } }
-        }
-        let converter = try ScannedNegativeConverter(dark: .zero, light: border, reference: .filmBase)
-        let rows: [SIMD3<Float>] = stock.isMonochrome
-            ? Array(repeating: SIMD3<Float>(0, 1, 0), count: 3)
-            : [SIMD3<Float>(1, 0, 0), SIMD3<Float>(0, 1, 0), SIMD3<Float>(0, 0, 1)]
-        let mapping = try ScanDensityCalibration(reference: .filmBase, rows: rows,
-            offset: base)
+        let scan = try samples(image)
+        let converted = try ApproximateNegativeScan(stock: stock, border: border).convert(scan)
         var options = FotufilmEngine.Options()
         options.paper = .screen
         let positive = try FotufilmEngine(stock: stock, options: options)
-            .printScannedNegative(linearScan: scan, converter: converter, calibration: mapping)
+            .printPositiveChecked(negativeDensity: converted.density)
         var rgba = [Float](repeating: 1, count: positive.pixelCount * 4)
         for i in 0..<positive.pixelCount { for c in 0..<3 {
-            rgba[4*i+c] = invalid[i] ? 0 : positive.planes[c][i]
+            rgba[4*i+c] = converted.invalid[i] ? 0 : positive.planes[c][i]
         } }
         let data = rgba.withUnsafeBytes { Data($0) }
         return CIImage(bitmapData: data, bytesPerRow: positive.width * 16,
             size: CGSize(width: positive.width, height: positive.height), format: .RGBAf,
             colorSpace: CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3)!)
+    }
+
+    public static func automaticPlan(image: CIImage, monochrome: Bool) throws -> AutomaticNegativeScan {
+        let scale = min(1, 512 / max(image.extent.width, image.extent.height))
+        let preview = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        return try AutomaticNegativeScan(preview: samples(preview), monochrome: monochrome)
+    }
+
+    public static func positive(image: CIImage, automatic plan: AutomaticNegativeScan) throws -> CIImage {
+        let positive = try plan.convert(samples(image))
+        var rgba = [Float](repeating: 1, count: positive.pixelCount * 4)
+        for i in 0..<positive.pixelCount { for c in 0..<3 { rgba[4*i+c] = positive.planes[c][i] } }
+        let data = rgba.withUnsafeBytes { Data($0) }
+        return CIImage(bitmapData: data, bytesPerRow: positive.width * 16,
+            size: CGSize(width: positive.width, height: positive.height), format: .RGBAf,
+            colorSpace: linearSpace)
     }
 
     private static func atOrigin(_ image: CIImage) -> CIImage {

@@ -1,7 +1,6 @@
-import { assetUrl, developNormal } from './engine.js'
-import { defaultEdit } from './editor-state.js'
-import { canvasBlob } from './geometry.js'
-import { rawSource } from './raw-source.js'
+import { attachLinearPreview } from './linear-preview.js'
+import { readPhotoMetadata } from './photo-metadata.js'
+import { assetUrl } from './engine.js'
 
 export const RAW_EXTENSIONS = [
   'dng',
@@ -43,7 +42,8 @@ export const isRawFile = (file) =>
 // React/devtools state inspection, which can otherwise enumerate millions of samples.
 class RawImage {
   #pixels
-  constructor(width, height, data, colors, sceneScale, profile, sceneKelvin) {
+  constructor(width, height, data, colors, sceneScale, profile, sceneKelvin, lensShot) {
+    this.lensMetadata = { shot: lensShot }
     this.naturalWidth = width
     this.naturalHeight = height
     this.#pixels = { data, colors, sceneScale, profile, sceneKelvin }
@@ -53,7 +53,7 @@ class RawImage {
   }
 }
 
-export function decodeRaw(file, { signal, onProgress = () => {} } = {}) {
+export function decodeRaw(file, { signal, onProgress = () => {}, negative = false } = {}) {
   return new Promise((resolve, reject) => {
     if (file.size > 512 * 1024 * 1024) {
       reject(new Error('RAW files above 512 MB are not supported.'))
@@ -129,6 +129,7 @@ export function decodeRaw(file, { signal, onProgress = () => {} } = {}) {
           data.sceneScale,
           data.profile,
           data.sceneKelvin,
+          data.lensShot,
         ),
       )
     }
@@ -137,7 +138,7 @@ export function decodeRaw(file, { signal, onProgress = () => {} } = {}) {
       .arrayBuffer()
       .then((bytes) => {
         if (!settled && !signal?.aborted)
-          worker.postMessage({ bytes, decoderURL: assetUrl('raw/decoder.mjs') }, [bytes])
+          worker.postMessage({ bytes, negative, decoderURL: assetUrl('raw/decoder.mjs') }, [bytes])
       })
       .catch((error) => finish(error))
   })
@@ -145,16 +146,8 @@ export function decodeRaw(file, { signal, onProgress = () => {} } = {}) {
 
 export async function importRaw(file, options) {
   const image = await decodeRaw(file, options)
+  const metadata = await readPhotoMetadata(file, options)
+  image.lensMetadata = { ...metadata, shot: image.lensMetadata.shot || metadata.shot }
   options?.onProgress?.('Preparing RAW preview')
-  const source = rawSource(image, defaultEdit(), 1600)
-  const { pixels } = await developNormal(source, defaultEdit().params, options?.onProgress)
-  if (options?.signal?.aborted) throw new DOMException('Import cancelled.', 'AbortError')
-  const canvas = document.createElement('canvas')
-  canvas.width = source.width
-  canvas.height = source.height
-  canvas.getContext('2d').putImageData(new ImageData(pixels, source.width, source.height), 0, 0)
-  options?.onProgress?.('Encoding RAW preview')
-  const url = URL.createObjectURL(await canvasBlob(canvas))
-  image.src = url
-  return { image, url }
+  return attachLinearPreview(image, options)
 }

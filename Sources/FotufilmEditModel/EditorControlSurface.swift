@@ -678,6 +678,10 @@ public struct HostAuxiliary: Equatable, Sendable {
 public enum WebBinding: Equatable, Sendable {
     case configSlot(String, transform: WebTransform)
     case grainScale
+    /// Prepared by the browser session rather than the scalar WASM slot bridge.
+    case runtime
+    /// Rebuilt by the native browser profile worker.
+    case profile
 }
 
 public enum WebTransform: String, Sendable, Codable {

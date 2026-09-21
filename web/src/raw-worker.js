@@ -2,7 +2,7 @@ import { loadCameraProfiles, resolveCameraProfile, estimateAsShotKelvin } from '
 import { relatedAssetUrl } from './runtime-assets.js'
 
 // One worker per import releases the decoder's entire WASM heap on completion.
-self.onmessage = async ({ data: { bytes, decoderURL } }) => {
+self.onmessage = async ({ data: { bytes, decoderURL, negative = false } }) => {
   let module, input
   try {
     let lastStage,
@@ -27,6 +27,10 @@ self.onmessage = async ({ data: { bytes, decoderURL } }) => {
         '_raw_make',
         '_raw_model',
         '_raw_camera_channels',
+        '_raw_lens_model',
+        '_raw_lens_make',
+        '_raw_focal_length',
+        '_raw_aperture',
         '_raw_camera_wb',
         '_raw_camera_to_xyz',
       ].some((name) => typeof module[name] !== 'function')
@@ -37,7 +41,10 @@ self.onmessage = async ({ data: { bytes, decoderURL } }) => {
     input = module._malloc(bytes.byteLength)
     if (!input) throw new Error('Not enough memory to open this RAW image.')
     module.HEAPU8.set(new Uint8Array(bytes), input)
-    if (module._raw_open(input, bytes.byteLength))
+    if (negative && typeof module._raw_open_negative !== 'function')
+      throw new Error('The RAW decoder needs updating for negative import. Reload the editor.')
+    const open = negative ? module._raw_open_negative : module._raw_open
+    if (open(input, bytes.byteLength))
       throw new Error(module.UTF8ToString(module._raw_error()))
     const camera = {
       make: module.UTF8ToString(module._raw_make()),
@@ -46,15 +53,29 @@ self.onmessage = async ({ data: { bytes, decoderURL } }) => {
       whiteBalance: [0, 1, 2].map((c) => module._raw_camera_wb(c)),
       cameraToXYZ: Array.from({ length: 9 }, (_, i) => module._raw_camera_to_xyz(i)),
     }
-    self.postMessage({ status: 'Loading camera spectral profiles' })
-    const catalog = await loadCameraProfiles(relatedAssetUrl('camera-profiles.json', decoderURL))
-    const profile = resolveCameraProfile(camera, catalog)
-    const sceneKelvin = estimateAsShotKelvin(camera, catalog.whiteLocus)
-    self.postMessage({
-      status: profile
-        ? `Preparing ${camera.make} ${camera.model} spectral correction · estimated ${Math.round(profile.kelvin)} K`
-        : 'No matching spectral correction · using RAW decoder color',
-    })
+    const lensModel = module.UTF8ToString(module._raw_lens_model())
+    const positive = (value) => Number.isFinite(value) && value > 0 ? value : null
+    const lensShot = lensModel ? {
+      lensModel, lensMaker: module.UTF8ToString(module._raw_lens_make()) || null,
+      cameraModel: camera.model, focalLength: positive(module._raw_focal_length()),
+      aperture: positive(module._raw_aperture()),
+    } : null
+    let profile = null, sceneKelvin = null
+    if (negative) {
+      // Reflectance-based scene corrections and photographic highlight recovery
+      // are inappropriate for transmission through an already-developed negative.
+      self.postMessage({ status: 'Decoding RAW negative without highlight reconstruction' })
+    } else {
+      self.postMessage({ status: 'Loading camera spectral profiles' })
+      const catalog = await loadCameraProfiles(relatedAssetUrl('camera-profiles.json', decoderURL))
+      profile = resolveCameraProfile(camera, catalog)
+      sceneKelvin = estimateAsShotKelvin(camera, catalog.whiteLocus)
+      self.postMessage({
+        status: profile
+          ? `Preparing ${camera.make} ${camera.model} spectral correction · estimated ${Math.round(profile.kelvin)} K`
+          : 'No matching spectral correction · using RAW decoder color',
+      })
+    }
     self.postMessage({ status: 'Unpacking RAW sensor data' })
     if (module._raw_unpack()) throw new Error(module.UTF8ToString(module._raw_error()))
     self.postMessage({ status: 'Preparing sensor pixels' })
@@ -66,7 +87,7 @@ self.onmessage = async ({ data: { bytes, decoderURL } }) => {
     self.postMessage({ status: 'Copying decoded RAW pixels' })
     const start = module._raw_pixels() / 2
     const pixels = module.HEAPU16.slice(start, start + width * height * colors)
-    self.postMessage({ width, height, colors, sceneScale, profile, sceneKelvin, pixels }, [
+    self.postMessage({ width, height, colors, sceneScale, profile, sceneKelvin, lensShot, pixels }, [
       pixels.buffer,
     ])
   } catch (error) {

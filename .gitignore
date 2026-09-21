@@ -29,3 +29,11 @@ web/public/fallback/
 
 # Built local RAW decoder and third-party notices.
 web/public/raw/
+web/public/profile/
+web/public/hdr/
+
+# Deep PNG decoder and third-party notices.
+web/public/png/
+/web/public/tiff/
+
+/web/public/negative/

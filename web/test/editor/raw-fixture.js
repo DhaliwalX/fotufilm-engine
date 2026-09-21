@@ -10,6 +10,8 @@ export function makeDNG({
   make = 'Fotufilm',
   model = 'Synthetic DNG',
   xyzToCamera = null,
+  extraTags = [],
+  littleEndian = true,
 } = {}) {
   const channels = mosaic ? 1 : 3
   const tags = []
@@ -48,8 +50,9 @@ export function makeDNG({
   add(50728, 5, asShotNeutral)
   add(50730, 10, [baselineExposure])
   add(50778, 3, [21])
+  for (const [tag, type, values] of extraTags) add(tag, type, values)
   tags.sort((a, b) => a.tag - b.tag)
-  const sizes = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 10: 8 }
+  const sizes = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 7: 1, 10: 8 }
   let next = 8 + 2 + tags.length * 12 + 4
   for (const entry of tags) {
     entry.count = entry.type === 2 ? entry.values.length + 1 : entry.values.length
@@ -62,27 +65,27 @@ export function makeDNG({
   tags.find((entry) => entry.tag === 273).values = [next]
   const bytes = new Uint8Array(next + width * height * channels * 2)
   const view = new DataView(bytes.buffer)
-  view.setUint16(0, 0x4949, true)
-  view.setUint16(2, 42, true)
-  view.setUint32(4, 8, true)
-  view.setUint16(8, tags.length, true)
+  view.setUint16(0, littleEndian ? 0x4949 : 0x4d4d, littleEndian)
+  view.setUint16(2, 42, littleEndian)
+  view.setUint32(4, 8, littleEndian)
+  view.setUint16(8, tags.length, littleEndian)
   tags.forEach((entry, i) => {
     const at = 10 + i * 12
-    view.setUint16(at, entry.tag, true)
-    view.setUint16(at + 2, entry.type, true)
-    view.setUint32(at + 4, entry.count, true)
+    view.setUint16(at, entry.tag, littleEndian)
+    view.setUint16(at + 2, entry.type, littleEndian)
+    view.setUint32(at + 4, entry.count, littleEndian)
     const dest = entry.offset || at + 8
-    if (entry.offset) view.setUint32(at + 8, entry.offset, true)
+    if (entry.offset) view.setUint32(at + 8, entry.offset, littleEndian)
     if (entry.type === 2) bytes.set(new TextEncoder().encode(entry.values), dest)
     else
       entry.values.forEach((value, j) => {
         const p = dest + j * sizes[entry.type]
-        if (entry.type === 1) view.setUint8(p, value)
-        else if (entry.type === 3) view.setUint16(p, value, true)
-        else if (entry.type === 4) view.setUint32(p, value, true)
+        if (entry.type === 1 || entry.type === 7) view.setUint8(p, value)
+        else if (entry.type === 3) view.setUint16(p, value, littleEndian)
+        else if (entry.type === 4) view.setUint32(p, value, littleEndian)
         else {
-          view.setInt32(p, Math.round(value * 1000000), true)
-          view.setInt32(p + 4, 1000000, true)
+          view.setInt32(p, Math.round(value * 1000000), littleEndian)
+          view.setInt32(p + 4, 1000000, littleEndian)
         }
       })
   })

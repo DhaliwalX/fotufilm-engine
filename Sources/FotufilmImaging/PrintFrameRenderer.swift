@@ -23,53 +23,10 @@ public enum PrintFrameRenderer {
 
     public static func layout(width: Int, height: Int,
                               configuration: PrintFrameConfiguration) -> Layout {
-        guard configuration.frame != .none else {
-            return Layout(size: CGSize(width: width, height: height),
-                          imageRect: CGRect(x: 0, y: 0, width: width, height: height),
-                          pixelsPerMM: 1, rotated: false)
-        }
-        if configuration.frame == .emulsion || configuration.frame.isPlainMount {
-            // A crop-following mount, not a claim of physical film or paper dimensions.
-            let short = CGFloat(min(width, height))
-            let horizontal = ceil(short * (configuration.frame == .emulsion ? 0.095 : 0.08))
-            let vertical = ceil(short * (configuration.frame == .emulsion ? 0.135 : 0.08))
-            return Layout(size: CGSize(width: CGFloat(width) + 2 * horizontal,
-                                       height: CGFloat(height) + 2 * vertical),
-                          imageRect: CGRect(x: horizontal, y: vertical,
-                                            width: CGFloat(width), height: CGFloat(height)),
-                          pixelsPerMM: 1, rotated: false)
-        }
-        if let canvas = configuration.canvas {
-            // The photograph fitted inside a fixed-aspect canvas, touching the margin on the
-            // side that binds. Never rotated: a landscape picture on a portrait canvas is the
-            // post people make.
-            let aspect = CGFloat(canvas.aspectWidth / canvas.aspectHeight)
-            let margin = CGFloat(canvas.margin) * min(1, aspect)  // in units of the canvas height
-            let canvasHeight = max(CGFloat(width) / (aspect - 2 * margin), CGFloat(height) / (1 - 2 * margin))
-            let size = CGSize(width: ceil(canvasHeight * aspect), height: ceil(canvasHeight))
-            return Layout(size: size,
-                          imageRect: CGRect(x: ((size.width - CGFloat(width)) / 2).rounded(),
-                                            y: ((size.height - CGFloat(height)) / 2).rounded(),
-                                            width: CGFloat(width), height: CGFloat(height)),
-                          pixelsPerMM: 1, rotated: false)
-        }
-        let material = materialGeometry(configuration)
-        let aperture = material.aperture
-        let rotated = aperture.width != aperture.height
-            && (width > height) != (aperture.width > aperture.height)
-        let scale = max(CGFloat(rotated ? height : width) / aperture.width,
-                        CGFloat(rotated ? width : height) / aperture.height)
-        let rawSize = CGSize(width: material.size.width * scale, height: material.size.height * scale)
-        let size = CGSize(width: ceil(rotated ? rawSize.height : rawSize.width),
-                          height: ceil(rotated ? rawSize.width : rawSize.height))
-        let centre = rotated
-            ? CGPoint(x: rawSize.height - aperture.midY * scale, y: aperture.midX * scale)
-            : CGPoint(x: aperture.midX * scale, y: aperture.midY * scale)
-        return Layout(size: size,
-                      imageRect: CGRect(x: (centre.x - CGFloat(width) / 2).rounded(),
-                                        y: (centre.y - CGFloat(height) / 2).rounded(),
-                                        width: CGFloat(width), height: CGFloat(height)),
-                      pixelsPerMM: scale, rotated: rotated)
+        let p = PrintFramePlacement.layout(width: width, height: height, configuration: configuration)
+        return Layout(size: CGSize(width: p.size.width, height: p.size.height),
+                      imageRect: CGRect(x: p.image.x, y: p.image.y, width: p.image.width, height: p.image.height),
+                      pixelsPerMM: p.scale, rotated: p.rotated)
     }
 
     public static func render(_ image: CGImage, configuration: PrintFrameConfiguration) -> CGImage? {
@@ -141,22 +98,9 @@ public enum PrintFrameRenderer {
 
     private static func materialGeometry(_ configuration: PrintFrameConfiguration)
         -> (size: CGSize, aperture: CGRect) {
-        if let g = configuration.geometry {
-            return (CGSize(width: g.widthMM, height: g.heightMM),
-                    CGRect(x: g.apertureX, y: g.apertureY,
-                           width: g.apertureWidth, height: g.apertureHeight))
-        }
-        if let m = configuration.slideMount {
-            return (CGSize(width: m.mountMM, height: m.mountMM),
-                    CGRect(x: (m.mountMM - m.apertureWidth) / 2, y: (m.mountMM - m.apertureHeight) / 2,
-                           width: m.apertureWidth, height: m.apertureHeight))
-        }
-        // A real sheet cut from a paper roll, with a chosen easel margin. A filed carrier's
-        // rebate prints inside the easel opening, so the photograph sits inside it too.
-        let sheet = configuration.sheet ?? PaperSheetGeometry.preset(for: .paper)!
-        let inset = sheet.marginMM + sheet.rebateMM
-        return (CGSize(width: sheet.widthMM, height: sheet.heightMM),
-                CGRect(x: inset, y: inset, width: sheet.widthMM - 2 * inset, height: sheet.heightMM - 2 * inset))
+        let m = PrintFramePlacement.materialGeometry(configuration)
+        return (CGSize(width: m.size.width, height: m.size.height),
+                CGRect(x: m.aperture.x, y: m.aperture.y, width: m.aperture.width, height: m.aperture.height))
     }
 
     /// The photograph in unrotated material millimetres.
@@ -227,13 +171,9 @@ public enum PrintFrameRenderer {
 
     private static func drawPerforations(in context: CGContext, geometry g: FilmBorderGeometry) {
         guard let type = g.perforation else { return }
-        let width: CGFloat, height: CGFloat, radius: CGFloat, edge: CGFloat
-        switch type {
-        case .kodakStandard: (width, height, radius, edge) = (2.794, 1.981, 0.51, 2.01)
-        case .bellHowell: (width, height, radius, edge) = (2.794, 1.854, 0, 2.01)
-        case .sixteen: (width, height, radius, edge) = (1.829, 1.270, 0.25, 0.914)
-        case .superEight: (width, height, radius, edge) = (0.914, 1.143, 0.13, 0.51)
-        }
+        let hole = type.dimensions
+        let width = CGFloat(hole.width), height = CGFloat(hole.height)
+        let radius = CGFloat(hole.radius), edge = CGFloat(hole.edge)
         context.saveGState()
         // Put both still and motion perforations in coordinates across/along film transport.
         if g.horizontalTransport {

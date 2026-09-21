@@ -297,7 +297,7 @@ public struct FilmFlareFrame: Sendable {
                     }
                 }
                 if parallel {
-                    DispatchQueue.concurrentPerform(iterations: gridHeight, execute: band)
+                    ParallelWork.forEach(iterations: gridHeight, execute: band)
                 } else {
                     for cellY in 0..<gridHeight { band(cellY) }
                 }
@@ -1775,7 +1775,7 @@ public struct FilmEngineInvocation {
         // decomposition and the order within a row are load-bearing — the sums are `Double` and
         // the frame's mean is their total, so regrouping them moves the answer.
         withExposureSampler { sampler in
-            DispatchQueue.concurrentPerform(iterations: rows) { row in
+            ParallelWork.forEach(iterations: rows) { row in
                 var total = SIMD3<Double>.zero
                 let scan = pixels + row * width * 4
                 let y = firstRow + row
@@ -1803,7 +1803,7 @@ public struct FilmEngineInvocation {
         withExposureSampler(red: { red[$0] }, green: { green[$0] },
                             blue: { blue[$0] }, width: width,
                             startingAt: firstRow) { sample in
-            DispatchQueue.concurrentPerform(iterations: rows) { row in
+            ParallelWork.forEach(iterations: rows) { row in
                 var total = SIMD3<Double>.zero
                 let start = row * width
                 for index in start..<(start + width) { total += sample(index) }
