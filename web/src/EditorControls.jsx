@@ -125,7 +125,7 @@ export function Adjustments({
     />
   ));
 }
-export function Modal({ title, children, onClose }) {
+export function Modal({ title, children, onClose, className }) {
   const ref = useRef(null);
   useEffect(() => {
     const dialog = ref.current,
@@ -139,6 +139,7 @@ export function Modal({ title, children, onClose }) {
   return (
     <dialog
       ref={ref}
+      className={className}
       aria-label={title}
       onCancel={(e) => {
         e.preventDefault();

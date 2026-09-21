@@ -34,3 +34,6 @@ web/public/hdr/
 
 # Deep PNG decoder and third-party notices.
 web/public/png/
+/web/public/tiff/
+
+/web/public/negative/

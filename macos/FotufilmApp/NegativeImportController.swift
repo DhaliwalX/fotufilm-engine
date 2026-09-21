@@ -36,10 +36,10 @@ final class NegativeImportController: NSWindowController {
         window.minSize = NSSize(width: 660, height: 520)
         let root = NSView()
         window.contentView = root
-        let title = NSTextField(labelWithString: "Drag over clear, unexposed film to sample the border.")
+        let title = NSTextField(labelWithString: "Automatic negative conversion")
         title.font = .systemFont(ofSize: 15, weight: .semibold)
         let note = NSTextField(wrappingLabelWithString:
-            "Keep the film border visible. Avoid lettering, sprocket holes and the holder. Colour conversion is approximate; choose the closest film below. Pixels outside the conversion range appear black.")
+            "Preview and import without selecting a sample. Colour balance is estimated from the image. For manual calibration, show the negative and sample clear film; choose the closest film below.")
         note.textColor = .secondaryLabelColor
         stocks = StockPreset.all.filter { !$0.stock.isReversal }
         mode.addItems(withTitles: stocks.map(\.name))
@@ -57,7 +57,9 @@ final class NegativeImportController: NSWindowController {
         importButton.target = self; importButton.action = #selector(importPositive)
         previewButton.target = self; previewButton.action = #selector(previewPositive)
         let negative = NSButton(title: "Show Negative", target: self, action: #selector(showNegative))
-        let controls = NSStackView(views: [encoding, mode, negative, previewButton])
+        let automatic = NSButton(title: "Auto", target: self, action: #selector(useAutomatic))
+        automatic.setAccessibilityLabel("Use automatic negative conversion")
+        let controls = NSStackView(views: [encoding, mode, automatic, negative, previewButton])
         controls.spacing = 10
         let buttons = NSStackView(views: [cancel, importButton])
         buttons.spacing = 10
@@ -92,7 +94,7 @@ final class NegativeImportController: NSWindowController {
     required init?(coder: NSCoder) { fatalError("not in a nib") }
 
     private func updateButtons() {
-        importButton.isEnabled = !busy && border != nil && !stocks.isEmpty
+        importButton.isEnabled = !busy && decoded != nil && !stocks.isEmpty
         previewButton.isEnabled = importButton.isEnabled
         mode.isEnabled = !busy
         encoding.isEnabled = !busy && !RawDecode.isRaw(data: data, identifierHint: rawHint)
@@ -114,7 +116,7 @@ final class NegativeImportController: NSWindowController {
             case .success(let image):
                 decoded = image
                 showNegative()
-                status.stringValue = "Drag a small rectangle over the clear film border."
+                status.stringValue = "Ready for automatic conversion. Border sampling is optional."
             case .failure(let error): status.stringValue = error.localizedDescription
             }
             updateButtons()
@@ -133,6 +135,12 @@ final class NegativeImportController: NSWindowController {
         updateButtons()
     }
 
+    @objc private func useAutomatic() {
+        guard !busy else { return }
+        border = nil; canvas.selection = nil
+        previewPositive()
+    }
+
     @objc private func settingsChanged() { showNegative() }
 
     @objc private func showNegative() {
@@ -146,9 +154,10 @@ final class NegativeImportController: NSWindowController {
     @objc private func importPositive() { convert(importing: true) }
 
     private func convert(importing: Bool) {
-        guard !busy, let decoded, let border,
+        guard !busy, let decoded,
               stocks.indices.contains(mode.indexOfSelectedItem) else { return }
         let stock = stocks[mode.indexOfSelectedItem].stock
+        let border = border
         let token = revision
         busy = true; updateButtons()
         status.stringValue = importing ? "Converting full-resolution negative…" : "Rendering positive preview…"
@@ -156,7 +165,13 @@ final class NegativeImportController: NSWindowController {
             let result = await Task.detached(priority: .userInitiated) { () -> Result<(CIImage, Data?), Error> in
                 Result {
                     let input = importing ? decoded : Self.reduced(decoded)
-                    let image = try NegativeScanImport.positive(image: input, border: border, stock: stock)
+                    let image: CIImage
+                    if let border {
+                        image = try NegativeScanImport.positive(image: input, border: border, stock: stock)
+                    } else {
+                        let plan = try NegativeScanImport.automaticPlan(image: decoded, monochrome: stock.isMonochrome)
+                        image = try NegativeScanImport.positive(image: input, automatic: plan)
+                    }
                     var data: Data?
                     if importing {
                         let space = CGColorSpace(name: CGColorSpace.displayP3)!

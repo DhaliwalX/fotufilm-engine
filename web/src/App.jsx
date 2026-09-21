@@ -7,6 +7,7 @@ import { frameSamplePoint } from "./print-frame.js";
 import { useAutoAdjustment } from "./useAutoAdjustment.js";
 import AutoAdjustmentAction from "./AutoAdjustmentAction.jsx";
 import { useLensCatalogue } from "./useLensCatalogue.js";
+import NegativeImportDialog from "./NegativeImportDialog.jsx";
 import { importPhoto } from "./photo-import.js";
 import SourceInterpretationControls from "./SourceInterpretationControls.jsx";
 import LensControls from "./LensControls.jsx";
@@ -584,7 +585,7 @@ export default function App() {
       }
       if (
         !file.type.startsWith("image/") &&
-        !/\.(png|jpe?g|webp|avif|gif|bmp)$/i.test(file.name)
+        !/\.(png|jpe?g|webp|avif|gif|bmp|tiff?)$/i.test(file.name)
       ) {
         errors.push(`${file.name}: choose a photo, camera RAW file, or video.`);
         continue;
@@ -1918,6 +1919,24 @@ export default function App() {
           e.target.value = "";
         }}
       />
+      {dialog === "negative" && (
+        <NegativeImportDialog
+          onClose={() => setDialog(null)}
+          onImport={(file) => {
+            urls.current.add(file.url);
+            if (activeId) histories.current.set(activeId, history);
+            setFiles((current) => [...current, file]);
+            setActiveId(file.id);
+            dispatch({ type: "load", edit: defaultEdit(null) });
+            replaceResult(null);
+            setStage(null);
+            setDifference(false);
+            setVideoTime(0);
+            setDialog(null);
+            setInspector("crop");
+          }}
+        />
+      )}
       {dialog === "export" && (
         <Modal
           title={active?.image.video ? VIDEO_LABELS.export : "Export image"}
@@ -2083,6 +2102,13 @@ export default function App() {
       {dialog === "more" && (
         <Modal title="Options" onClose={() => setDialog(null)}>
           <div className="menu-options">
+            <Button
+              label="Import Scanned Negative…"
+              variant="secondary"
+              size="sm"
+              isDisabled={exporting}
+              onClick={() => setDialog("negative")}
+            />
             <AutoAdjustmentAction
               auto={auto}
               onClick={() => {

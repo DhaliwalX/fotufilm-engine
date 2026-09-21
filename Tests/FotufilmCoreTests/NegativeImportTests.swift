@@ -1,10 +1,34 @@
 #if canImport(CoreImage)
 import XCTest
 import CoreImage
+import ImageIO
 import FotufilmCore
 import FotufilmImaging
 
 final class NegativeImportTests: XCTestCase {
+    func testAutomaticPositivePreservesSixteenBitDeliveryWithoutAReference() throws {
+        let width = 1024, height = 8
+        var rgba = [Float](repeating: 1, count: width * height * 4)
+        for y in 0..<height { for x in 0..<width {
+            let t = Float(x) / Float(width - 1)
+            for c in 0..<3 { rgba[(y * width + x) * 4 + c] = (0.03 + 0.65 * t) * [Float(1), 0.6, 0.3][c] }
+        } }
+        let source = CIImage(bitmapData: rgba.withUnsafeBytes { Data($0) }, bytesPerRow: width * 16,
+            size: CGSize(width: width, height: height), format: .RGBAf, colorSpace: NegativeScanImport.linearSpace)
+        let plan = try NegativeScanImport.automaticPlan(image: source, monochrome: true)
+        let positive = try NegativeScanImport.positive(image: source, automatic: plan)
+        let data = try XCTUnwrap(CIContext().tiffRepresentation(of: positive, format: .RGBA16,
+            colorSpace: CGColorSpace(name: CGColorSpace.displayP3)!))
+        let container = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
+        let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(container, 0, nil))
+        XCTAssertEqual(image.bitsPerComponent, 16)
+        XCTAssertEqual(image.width, width); XCTAssertEqual(image.height, height)
+        let roundTrip = try NegativeScanImport.samples(NegativeScanImport.decode(data: data))
+        XCTAssertGreaterThan(Set(roundTrip.planes[0].prefix(width)).count, 512)
+        XCTAssertGreaterThan(roundTrip.planes[0][0], 0.9)
+        XCTAssertLessThan(roundTrip.planes[0][width - 1], 0.01)
+    }
+
     func testCornerRotationAndFlipKeepTheSelectedSubject() throws {
         var crop = QuadrilateralCrop(rect: CGRect(x: 0.125, y: 0.25, width: 0.75, height: 0.5))
         crop = crop.movingCorner(0, to: CGPoint(x: 0.25, y: 0.375))

@@ -4,7 +4,8 @@
 An explicit `ScanDensityCalibration` maps those measurements into the film-record
 density format consumed by the engine's existing print stage.
 
-The Mac app offers an approximate import workflow described below. The CLI does not
+Mac and web offer [automatic conversion](automatic-negative-conversion.md) without a drawn reference.
+The Mac app also offers the approximate manual workflow described below. The CLI does not
 yet expose scanned-negative conversion.
 No scanner profiles or automatic calibration fitting are bundled. A supplied affine
 profile is an approximation: validate its colour accuracy over the density range you
@@ -97,7 +98,9 @@ three linear capture-channel border values and the output width/height. It retur
 the same calibration plus a binary screen-print profile. The profile enters the
 WebGPU or SIMD renderer with density input, bypassing exposure and development.
 Color and monochrome print kernels warm independently from positive-photo kernels.
-This is the rendering foundation; the browser import dialog is not yet enabled.
+The browser dialog uses the separate `negative-auto` analysis protocol and shared
+Halide automatic inversion stage. This explicit-border protocol remains available
+for the manual, stock-based conversion.
 
 To compare the shipped browser kernels against native scan printing, generate
 synthetic references, start the web development server, then run the pixel check:
@@ -121,7 +124,8 @@ Choose **Linear Samples** only for a scan exported with a linear transfer curve.
 Sixteen-bit storage alone does not establish this. Use unadjusted scans: automatic
 levels, local contrast, clipping and prior inversion cannot be undone by the importer.
 
-Drag a rectangle over clear film, avoiding the holder, sprocket holes, edge numbers
+Automatic conversion is the default; use **Preview Positive** without drawing.
+For manual stock-based calibration, drag a rectangle over clear film, avoiding the holder, sprocket holes, edge numbers
 and image detail. The importer takes a median RGB sample of that patch. Choose the
 closest installed negative film, then **Preview Positive**. Use **Show Negative** to
 sample again. **Import Positive** converts at full resolution and opens the Crop tool.

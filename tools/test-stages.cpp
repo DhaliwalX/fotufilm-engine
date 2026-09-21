@@ -156,6 +156,11 @@ float max_abs_difference(const Buffer<float> &a, const Buffer<float> &b) {
 
 std::vector<std::pair<std::string, std::function<Func(Stage &)>>> stages() {
     return {
+        {"automatic_negative", [](Stage &s) {
+            Func f("negative");
+            f(s.x, s.c) = negative_scan_channel(s.ramp(0.025f, 0.9f), 0.1f, 0.7f, 0.6f);
+            return f;
+        }},
         {"inhibited_log_exposure_identity", [](Stage &s) {
             Func f("inhibited");
             f(s.x, s.c) = inhibited_log_exposure(s.config, s.c, s.ramp(-3.0f, 2.0f), 0.0f);
@@ -224,7 +229,13 @@ void verify(const std::string &name, Stage &s, const Buffer<float> &out) {
     auto near = [](float a, float b, float tolerance) { return std::fabs(a - b) <= tolerance; };
     const float *curve = &s.values(FOTUFILM_CONFIG_CURVES);
     const float range = curve[1] * (curve[4] - curve[2]);
-    if (name == "inhibited_log_exposure_identity") {
+    if (name == "automatic_negative") {
+        for (int i = 0; i < kSamples; ++i) {
+            check(std::isfinite(at(i, 0)) && at(i, 0) >= 0 && at(i, 0) <= 1, name + ": finite display range");
+            if (i) check(at(i, 0) <= at(i-1, 0), name + ": monotone inversion including shoulders");
+        }
+        check(at(0, 0) > at(kSamples-1, 0) + .5f, name + ": nonconstant inversion");
+    } else if (name == "inhibited_log_exposure_identity") {
         for (int i = 0; i < kSamples; ++i) {
             const float expected = -3.0f + 5.0f * float(i) / float(kSamples - 1);
             check(near(at(i, 1), expected, 1e-6f), name + ": no inhibition must change nothing");

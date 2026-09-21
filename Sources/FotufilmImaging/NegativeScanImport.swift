@@ -96,6 +96,22 @@ public enum NegativeScanImport {
             colorSpace: CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3)!)
     }
 
+    public static func automaticPlan(image: CIImage, monochrome: Bool) throws -> AutomaticNegativeScan {
+        let scale = min(1, 512 / max(image.extent.width, image.extent.height))
+        let preview = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        return try AutomaticNegativeScan(preview: samples(preview), monochrome: monochrome)
+    }
+
+    public static func positive(image: CIImage, automatic plan: AutomaticNegativeScan) throws -> CIImage {
+        let positive = try plan.convert(samples(image))
+        var rgba = [Float](repeating: 1, count: positive.pixelCount * 4)
+        for i in 0..<positive.pixelCount { for c in 0..<3 { rgba[4*i+c] = positive.planes[c][i] } }
+        let data = rgba.withUnsafeBytes { Data($0) }
+        return CIImage(bitmapData: data, bytesPerRow: positive.width * 16,
+            size: CGSize(width: positive.width, height: positive.height), format: .RGBAf,
+            colorSpace: linearSpace)
+    }
+
     private static func atOrigin(_ image: CIImage) -> CIImage {
         image.transformed(by: CGAffineTransform(translationX: -image.extent.minX, y: -image.extent.minY))
     }

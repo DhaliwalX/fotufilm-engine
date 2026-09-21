@@ -1,4 +1,5 @@
 import { isDeepPNG, importDeepPNG } from "./png-import.js";
+import { isTIFF, importTIFF } from "./tiff-import.js";
 import { assetUrl, decodeRGBA } from "./engine.js";
 import { readPhotoMetadata } from "./photo-metadata.js";
 import { decodeImageWorker } from "./image-worker.js";
@@ -8,8 +9,10 @@ export async function importPhoto(
   file,
   { signal, onProgress = () => {} } = {},
 ) {
-  if (signal?.aborted) throw new DOMException("Import cancelled.", "AbortError");
+  if (signal?.aborted)
+    throw new DOMException("Import cancelled.", "AbortError");
   const header = new Uint8Array(await file.slice(0, 33).arrayBuffer());
+  if (isTIFF(header)) return importTIFF(file, { signal, onProgress });
   if (isDeepPNG(header)) return importDeepPNG(file, { signal, onProgress });
   const url = URL.createObjectURL(file);
   try {
@@ -44,7 +47,10 @@ export async function importPhoto(
       };
       const decoded = await decodeImageWorker(
         file,
-        () => new Worker(new URL("./hdr-worker.js", import.meta.url), { type: "module" }),
+        () =>
+          new Worker(new URL("./hdr-worker.js", import.meta.url), {
+            type: "module",
+          }),
         {
           signal,
           onProgress,
