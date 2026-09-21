@@ -1,3 +1,5 @@
+import { lensSample } from './lens-correction.js'
+import { linearSampler } from './linear-sampler.js'
 import { fullCrop } from './editor-state.js'
 import { homography, mapPoint, outputSize } from './geometry.js'
 
@@ -5,7 +7,7 @@ import { homography, mapPoint, outputSize } from './geometry.js'
 // Geometry returns scene-linear
 // Rec.2020 float tiles, including values above display white;
 // a canvas is used only for display, never as an intermediate for film or export.
-export function rawSource(image, edit, maxEdge = Infinity, cropMode = false) {
+export function rawSource(image, edit, maxEdge = Infinity, cropMode = false, lensTable = null) {
   const originalWidth = image.naturalWidth,
     originalHeight = image.naturalHeight
   const swapped = edit.rotation % 2 !== 0
@@ -24,9 +26,10 @@ export function rawSource(image, edit, maxEdge = Infinity, cropMode = false) {
     (width * cos + height * Math.abs(sin)) / width,
     (height * cos + width * Math.abs(sin)) / height,
   )
-  const { data, colors, sceneScale = 1, profile } = image.linear || image.raw
+  const { data, colors, sceneScale = 1, profile } = image.linear || image.raw || {}
+  const sample = lensTable ? linearSampler(image) : null
   const sampleScale = image.linear ? 1 : sceneScale / 65535
-  const exactCopy = image.linear && !edit.rotation && !edit.flip && !angle
+  const exactCopy = !lensTable && image.linear && !edit.rotation && !edit.flip && !angle
     && width === originalWidth && height === originalHeight
     && crop.every((point, i) => point.every((v, c) => v === fullCrop()[i][c]))
   function point(u, v) {
@@ -64,6 +67,15 @@ export function rawSource(image, edit, maxEdge = Infinity, cropMode = false) {
       for (let y = 0; y < h; y++)
         for (let x = 0; x < w; x++) {
           const [u, v] = point((left + x + 0.5) / width, (top + y + 0.5) / height)
+          if (lensTable) {
+            const i = (y * w + x) * 4
+            for (let c = 0; c < 3; c++) {
+              const [sx, sy, gain] = lensSample(lensTable, u, v, originalWidth, originalHeight, c)
+              output[i + c] = sample(sx, sy, c) * gain
+            }
+            output[i + 3] = 1
+            continue
+          }
           const sx = Math.max(0, Math.min(originalWidth - 1, u * originalWidth - 0.5))
           const sy = Math.max(0, Math.min(originalHeight - 1, v * originalHeight - 0.5))
           const ix = Math.floor(sx),

@@ -34,9 +34,7 @@ func profilePrepare() -> Int32 {
         guard let input, inputCount > 0 else {
             throw WebRequestError.missingInput
         }
-        let request = try JSONDecoder().decode(WebProfileRequest.self,
-            from: Data(bytes: input, count: inputCount))
-        bytes = try request.prepare()
+        bytes = try WebRenderRequest.prepare(Data(bytes: input, count: inputCount))
         status = 0
     } catch {
         bytes = Data(String(describing: error).utf8)
@@ -68,8 +66,7 @@ do {
         let definitions = try JSONDecoder().decode([String: FilmStockDefinition].self, from: input)
         FileHandle.standardOutput.write(try WebProfileCatalogue.data(definitions))
     } else {
-        let request = try JSONDecoder().decode(WebProfileRequest.self, from: input)
-        FileHandle.standardOutput.write(try request.prepare())
+        FileHandle.standardOutput.write(try WebRenderRequest.prepare(input))
     }
 } catch {
     FileHandle.standardError.write(Data("\(error)\n".utf8))

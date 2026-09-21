@@ -1,3 +1,4 @@
+import { lensIsActive, lensRequest, readLensTable } from './lens-correction.js'
 import { loadFilmProfile } from './film-profile.js'
 import { hasProfileSettings, profileRequestControls } from './profile-settings.js'
 import { loadMediumBytes } from './output-media.js'
@@ -194,19 +195,20 @@ export class RenderSession {
       })
     return this[name]
   }
-  async source(image, edit, maxEdge, cropMode, videoTime, cacheSource = true) {
+  async source(image, edit, maxEdge, cropMode, videoTime, cacheSource = true, onProgress = () => {}) {
     if (image.video) {
       const frame = await image.video.frame(
         videoTime ?? image.video.start,
         edit.video.encoding,
       )
-      return this.source(frame, edit, maxEdge, cropMode, null, false)
+      return this.source(frame, edit, maxEdge, cropMode, null, false, onProgress)
     }
     const key = JSON.stringify([
       maxEdge,
       cropMode,
       edit.rotation,
       edit.flip,
+      lensIsActive(edit.lens) ? edit.lens : null,
       cropMode ? null : edit.crop,
       cropMode ? 0 : edit.straighten,
     ])
@@ -214,7 +216,10 @@ export class RenderSession {
       (item) => item.image === image && item.key === key,
     )
     if (cached) return cached
-    const floating = image.raw || image.linear
+    const lensTable = lensIsActive(edit.lens)
+      ? readLensTable(await loadFilmProfile(lensRequest(edit.lens), onProgress))
+      : null
+    const floating = image.raw || image.linear || lensTable
     const oriented = floating ? null : orientImage(image, edit, maxEdge)
     const canvas = floating
       ? null
@@ -223,7 +228,7 @@ export class RenderSession {
         : await cropImage(oriented, edit)
     const source = linearSource(
       floating
-        ? rawSource(image, edit, maxEdge, cropMode)
+        ? rawSource(image, edit, maxEdge, cropMode, lensTable)
         : imageSource(canvas),
     )
     const entry = { image, key, canvas, source, original: null }
@@ -334,6 +339,7 @@ export class RenderSession {
           cropMode,
           videoTime,
           cacheSource,
+          report,
         )
         const { source, canvas: sourceCanvas } = prepared
         const rendering = (text) =>

@@ -2590,8 +2590,7 @@
         "android" : "no lens correction on Android yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "persistedKey" : "lensCorrectionEnabled",
       "restingOn" : false,
@@ -2600,9 +2599,11 @@
       "storedEncoding" : "same",
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Lens Correction"
+      "title" : "Lens Correction",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -2683,8 +2684,7 @@
         "android" : "no lens correction on Android yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "scale" : {
         "admittedMax" : 1,
@@ -2701,9 +2701,11 @@
       "section" : "lensCorrection",
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Distortion"
+      "title" : "Distortion",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -2719,8 +2721,7 @@
         "android" : "no lens correction on Android yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "scale" : {
         "admittedMax" : 1,
@@ -2737,9 +2738,11 @@
       "section" : "lensCorrection",
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Vignetting"
+      "title" : "Vignetting",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -2755,8 +2758,7 @@
         "android" : "no lens correction on Android yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "scale" : {
         "admittedMax" : 1,
@@ -2773,9 +2775,11 @@
       "section" : "lensCorrection",
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Red / Cyan"
+      "title" : "Red / Cyan",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -2791,8 +2795,7 @@
         "android" : "no lens correction on Android yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "scale" : {
         "admittedMax" : 1,
@@ -2809,9 +2812,11 @@
       "section" : "lensCorrection",
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Blue / Yellow"
+      "title" : "Blue / Yellow",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",

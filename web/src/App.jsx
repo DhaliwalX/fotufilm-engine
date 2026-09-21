@@ -1,3 +1,4 @@
+import LensControls from "./LensControls.jsx";
 import InspectorPanel from "./InspectorPanel.jsx";
 import LensFilters from "./LensFilters.jsx";
 import ProfileControls from "./ProfileControls.jsx";
@@ -1638,6 +1639,18 @@ export default function App() {
               }}
             />
           )}
+          {panel === "light" && (
+            <LensControls
+              lens={edit.lens}
+              disabled={exporting || !active}
+              onEnd={endEdit}
+              onChange={(lens, group) => {
+                patch({ lens }, group);
+                setStage(null);
+                setDifference(false);
+              }}
+            />
+          )}
           {panel === "selective" && (
             <SelectiveControls
               disabled={exporting || !active}
@@ -2094,15 +2107,16 @@ export default function App() {
               The browser supports film selection and format, ageing, halation,
               grain models, measured push/pull, bleach bypass, colour
               separation, print viewing, a simulated printer, an ordered
-              lens-filter stack, light and color adjustments, three-way grading,
-              color and light selections, crop, rotation and flip. Camera RAW
-              files decode locally with LibRaw, using as-shot white balance and
-              16-bit linear data. Other images use the browser decoder.
+              lens-filter stack, manual lens correction, light and color
+              adjustments, three-way grading, color and light selections, crop,
+              rotation and flip. Camera RAW files decode locally with LibRaw,
+              using as-shot white balance and 16-bit linear data. Other images
+              use the browser decoder.
             </p>
             <p>
-              Scanned-negative conversion, lens correction, automatic subject
-              selections, custom packs, and HDR / 16-bit export are available in
-              the Mac app.
+              Scanned-negative conversion, automatic lens profiles, automatic
+              subject selections, custom packs, and HDR / 16-bit export are
+              available in the Mac app.
             </p>
           </div>
         </Modal>
