@@ -30,6 +30,7 @@ test("histogram opens, draws, drags and reopens while zooming and cropping", asy
     });
   await toggle.click();
   await expect(histogram).toBeVisible();
+  await expect(histogram.locator("canvas")).toHaveAttribute("aria-label", /logarithmic pixel counts/);
   await expect
     .poll(() =>
       histogram.locator("canvas").evaluate((canvas) => {

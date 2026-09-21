@@ -52,9 +52,11 @@ final class WebAutomaticNegativeRequestTests: XCTestCase {
     }
     func testPackedFloatSamplesMatchJSONAtMaximumPreviewSize() throws {
         let side = 512, count = side * side
-        let planes = (0..<3).map { channel in
-            (0..<count).map { i in Float((i * 7919 + channel * 997) % 65535 + 1) / 65536 }
-        }
+        var planes = [[Float]](repeating: [Float](repeating: 0, count: count), count: 3)
+        for channel in 0..<3 { for i in 0..<count {
+            let code = (i * 7919 + channel * 997) % 65535 + 1
+            planes[channel][i] = Float(code) / 65536
+        } }
         var packed = Data()
         for channel in planes { for value in channel {
             var bits = value.bitPattern.littleEndian
