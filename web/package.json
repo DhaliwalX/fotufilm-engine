@@ -21,7 +21,6 @@
     "mediabunny": "1.56.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "reicon-react": "1.2.5",
     "three": "0.186.0"
   },
   "devDependencies": {

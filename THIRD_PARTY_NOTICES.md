@@ -207,3 +207,12 @@ to WebAssembly. See [the Apache 2.0 license with Runtime Library Exception](lice
 It uses **@bjorn3/browser_wasi_shim 0.4.2**, without modification, under
 [its MIT license](licenses/BROWSER-WASI-SHIM-MIT.txt). Source:
 <https://github.com/bjorn3/browser_wasi_shim>. Both notices are included in browser builds.
+
+## Material Symbols
+
+The browser editor bundles selected Material Symbols Outlined SVG paths by Google,
+under the Apache License 2.0. Source: [google/material-design-icons](https://github.com/google/material-design-icons),
+commit `27e9ef1dbeedc13d682fece4a58e1eda4cb0961a`. Paths are extracted unchanged
+into `web/src/material-symbols.json` by `tools/update-material-symbols.py`.
+The full license is in [licenses/MATERIAL-SYMBOLS-APACHE-2.0.txt](licenses/MATERIAL-SYMBOLS-APACHE-2.0.txt)
+and is included in browser builds. Icons are served locally; no font service is required.

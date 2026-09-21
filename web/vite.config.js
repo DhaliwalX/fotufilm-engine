@@ -41,7 +41,7 @@ export default defineConfig({
         source: readFileSync(new URL('../licenses/BROWSER-EXR-MIT.txt', import.meta.url), 'utf8') })
       this.emitFile({ type: 'asset', fileName: 'licenses/HALIDE-MIT.txt',
         source: readFileSync(new URL('../tools/webgpu-parity/HALIDE-LICENSE.txt', import.meta.url), 'utf8') })
-      for (const name of ['BROWSER-WASI-SHIM-MIT', 'SWIFT-APACHE-2.0-RUNTIME']) {
+      for (const name of ['BROWSER-WASI-SHIM-MIT', 'SWIFT-APACHE-2.0-RUNTIME', 'MATERIAL-SYMBOLS-APACHE-2.0']) {
         this.emitFile({ type: 'asset', fileName: `licenses/${name}.txt`,
           source: readFileSync(new URL(`../licenses/${name}.txt`, import.meta.url), 'utf8') })
       }
