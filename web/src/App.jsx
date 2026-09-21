@@ -1,3 +1,5 @@
+import InspectorPanel from "./InspectorPanel.jsx";
+import LensFilters from "./LensFilters.jsx";
 import ProfileControls from "./ProfileControls.jsx";
 import { hasProfileSettings, profileMedium } from "./profile-settings.js";
 import SelectiveControls from "./SelectiveControls.jsx";
@@ -477,6 +479,7 @@ export default function App() {
     edit.digitalReference,
     edit.format,
     edit.profile,
+    edit.filters,
   ]);
 
   async function acceptFiles(incoming) {
@@ -1270,11 +1273,10 @@ export default function App() {
             />
           ))}
         </TabList>
-        <div
-          id="inspector-content"
-          className="inspector-content"
-          role="tabpanel"
-          aria-label={
+        <InspectorPanel
+          panel={panel}
+          disabled={exporting || !active}
+          label={
             inspectorPanels.find((p) => p.id === panel)?.title ||
             (panel === "crop"
               ? "Crop"
@@ -1283,534 +1285,545 @@ export default function App() {
                 : "Pipeline")
           }
         >
-          <fieldset disabled={exporting || !active}>
-            {panel === "film" && (
-              <>
-                <Section title={edit.stock ? "Loaded Film" : "Normal"}>
-                  {edit.stock ? (
-                    <>
-                      <div className="info-row">
-                        <span>Stock</span><span>{selectedStock?.name}</span>
-                      </div>
-                      <p className="medium-detail">Choose a stock from the film library on the left.</p>
-                    </>
-                  ) : (
-                    <p className="medium-detail">
-                      Film simulation is off. Choose a film from the library.
-                      With Normal selected, use Expose to adjust the source and Print to finish the image.
-                    </p>
-                  )}
-                  <p className="medium-detail">Click and hold the photo to compare with the original.</p>
-                </Section>
-                {edit.stock && (
+          {panel === "film" && (
+            <>
+              <Section title={edit.stock ? "Loaded Film" : "Normal"}>
+                {edit.stock ? (
                   <>
-                    <Section title="Film Format">
-                      <Selector
-                        label="Format"
-                        size="sm"
-                        width="100%"
-                        isDisabled={
-                          exporting ||
-                          !active ||
-                          edit.halationModel === "layered"
-                        }
-                        value={edit.format || "film"}
-                        options={[
-                          { value: "film", label: "Match Film" },
-                          ...FILM_FORMATS.map((f) => ({
-                            value: f.id,
-                            label: f.name,
-                          })),
-                        ]}
-                        onChange={(format) => {
-                          endEdit();
-                          patch({ format: format === "film" ? null : format });
-                          setStage(null);
-                          setDifference(false);
-                        }}
-                      />
-                    </Section>
-                    <Section title="Film Condition">
-                      {profileControls(["expired"])}
-                    </Section>
+                    <div className="info-row">
+                      <span>Stock</span>
+                      <span>{selectedStock?.name}</span>
+                    </div>
+                    <p className="medium-detail">
+                      Choose a stock from the film library on the left.
+                    </p>
                   </>
+                ) : (
+                  <p className="medium-detail">
+                    Film simulation is off. Choose a film from the library. With
+                    Normal selected, use Expose to adjust the source and Print
+                    to finish the image.
+                  </p>
                 )}
-                {edit.stock && (
-                  <Section title="Halation">
+                <p className="medium-detail">
+                  Click and hold the photo to compare with the original.
+                </p>
+              </Section>
+              {edit.stock && (
+                <>
+                  <Section title="Film Format">
                     <Selector
-                      label="Halation Model"
+                      label="Format"
                       size="sm"
                       width="100%"
-                      value={edit.halationModel || "legacy"}
+                      isDisabled={
+                        exporting || !active || edit.halationModel === "layered"
+                      }
+                      value={edit.format || "film"}
                       options={[
-                        { value: "legacy", label: "Legacy" },
-                        ...(selectedStock?.layeredTransport === false ||
-                        sceneKelvin ||
-                        hasProfileSettings(edit)
-                          ? []
-                          : [{ value: "layered", label: "Layered Transport" }]),
+                        { value: "film", label: "Match Film" },
+                        ...FILM_FORMATS.map((f) => ({
+                          value: f.id,
+                          label: f.name,
+                        })),
                       ]}
-                      onChange={(halationModel) => {
+                      onChange={(format) => {
                         endEdit();
-                        patch({ halationModel, medium: null });
+                        patch({ format: format === "film" ? null : format });
                         setStage(null);
                         setDifference(false);
                       }}
                     />
-                    {profileControls([
-                      "halation",
-                      "halationReturn",
-                      "halationColour",
-                      "halationSpectrum",
-                      "estimatedHalation",
-                    ])}
-                    {hasProfileSettings(edit) && (
-                      <p className="medium-detail">
-                        Custom film settings use Legacy halation.
-                      </p>
-                    )}
-                    {sceneKelvin && (
-                      <p className="medium-detail">
-                        Custom source illumination uses Legacy halation.
-                      </p>
-                    )}
-                    {edit.halationModel === "layered" && (
-                      <p className="medium-detail">
-                        Uses the film’s default format, condition, grain model
-                        and output medium. Choose Legacy to adjust these
-                        settings. Pipeline inspection is available with Legacy.
-                      </p>
-                    )}
                   </Section>
-                )}
-
-              </>
-            )}
-            {panel === "develop" &&
-              (edit.stock ? (
-                <>
-                  <Section title="Development">
-                    {profileControls(["push", "bleach"])}
-                    <p className="medium-detail">
-                      Push and pull are available only when the film has
-                      measured settings. Bleach bypass retains silver in the
-                      negative.
-                    </p>
+                  <Section title="Film Condition">
+                    {profileControls(["expired"])}
                   </Section>
-                  <Section title="Grain">
-                    {adjustments("Character")}
-                    {profileControls(["grainMottle", "grainModel"])}
-                    <Button
-                      label="New Grain Pattern"
-                      variant="secondary"
-                      size="sm"
-                      className="secondary full-width"
-                      onClick={() =>
-                        patch({
-                          seed: crypto.getRandomValues(new Uint32Array(1))[0],
-                        })
-                      }
-                    />
-                  </Section>
-                  {selectedStock?.available.some((field) =>
-                    [
-                      "couplers",
-                      "couplerReach",
-                      "couplerSelf",
-                      "chromaticFringeAmount",
-                    ].includes(field),
-                  ) && (
-                    <Section title="Colour Separation">
-                      {profileControls([
-                        "couplers",
-                        "couplerReach",
-                        "couplerSelf",
-                        "chromaticFringeAmount",
-                        "chromaticFringeRadius",
-                      ])}
-                    </Section>
-                  )}
                 </>
-              ) : (
-                <Section title="Normal">
-                  <p>
-                    Choose a film from the library to use development and grain.
-                  </p>
-                </Section>
-              ))}
-            {panel === "print" && (
-              <>
-                <Section title="Output">
+              )}
+              {edit.stock && (
+                <Section title="Halation">
                   <Selector
-                    label="Output medium"
+                    label="Halation Model"
                     size="sm"
                     width="100%"
-                    isDisabled={
-                      exporting ||
-                      !active ||
-                      !edit.stock ||
-                      edit.halationModel === "layered"
-                    }
-                    value={
-                      edit.medium || selectedStock?.defaultMedium || "screen"
-                    }
-                    options={(
-                      selectedStock?.media || [
-                        { id: "screen", name: "Digital Reference" },
-                      ]
-                    ).map((medium) => ({
-                      value: medium.id,
-                      label: medium.name,
-                    }))}
-                    onChange={(medium) => {
+                    value={edit.halationModel || "legacy"}
+                    options={[
+                      { value: "legacy", label: "Legacy" },
+                      ...(selectedStock?.layeredTransport === false ||
+                      sceneKelvin ||
+                      hasProfileSettings(edit)
+                        ? []
+                        : [{ value: "layered", label: "Layered Transport" }]),
+                    ]}
+                    onChange={(halationModel) => {
                       endEdit();
-                      patch({ medium });
+                      patch({ halationModel, medium: null });
                       setStage(null);
                       setDifference(false);
                     }}
                   />
-                  {(edit.medium || selectedStock?.defaultMedium) === "screen" &&
-                    selectedStock?.media.find((m) => m.id === "screen")
-                      ?.screenConversions && (
-                      <Selector
-                        label={SCREEN_CONVERSION.title}
-                        size="sm"
-                        width="100%"
-                        isDisabled={
-                          exporting ||
-                          !active ||
-                          edit.halationModel === "layered"
-                        }
-                        value={
-                          edit.digitalReference || SCREEN_CONVERSION.default
-                        }
-                        options={SCREEN_CONVERSION.choices.map((c) => ({
-                          value: c.id,
-                          label: c.name,
-                        }))}
-                        onChange={(digitalReference) => {
-                          endEdit();
-                          patch({ digitalReference });
-                          setStage(null);
-                          setDifference(false);
-                        }}
-                      />
-                    )}
                   {profileControls([
-                    "printLight",
-                    "printCorrection",
-                    "negativeViewing",
-                    "screenGrade",
-                    "screenExposure",
+                    "halation",
+                    "halationReturn",
+                    "halationColour",
+                    "halationSpectrum",
+                    "estimatedHalation",
                   ])}
-                  {selectedStock && (
+                  {hasProfileSettings(edit) && (
                     <p className="medium-detail">
-                      {(edit.medium || selectedStock.defaultMedium) === "screen"
-                        ? "Direct display rendering without paper or scanning. Export is 8-bit sRGB."
-                        : selectedStock.media.find(
-                            (m) =>
-                              m.id ===
-                              (edit.medium || selectedStock.defaultMedium),
-                          )?.detail}
+                      Custom film settings use Legacy halation.
                     </p>
                   )}
-                  <div className="info-row">
-                    <span>Color space</span>
-                    <span>sRGB</span>
-                  </div>
-                </Section>
-
-                {profileMedium(edit, selectedStock)?.enlarger && (
-                  <Section title="Lamp">
-                    {profileControls([
-                      "enlarger",
-                      "printerEnabled",
-                      "printerLamp",
-                      "printerExposure",
-                      "printerMagenta",
-                      "printerYellow",
-                      "printerPreflash",
-                    ])}
+                  {sceneKelvin && (
                     <p className="medium-detail">
-                      {edit.profile?.printerEnabled
-                        ? "A simulated tungsten lamp and colour filters expose the paper through the film. More exposure darkens negative paper and lightens positive paper."
-                        : "Enable Simulated Printer to adjust lamp temperature, paper exposure and filtration."}
+                      Custom source illumination uses Legacy halation.
                     </p>
-                  </Section>
-                )}
-                <Section title="Export">
-                  <Button
-                    label={
-                      active?.image.video ? "Export Video…" : "Export Photo…"
-                    }
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setDialog("export")}
-                  />
-                </Section>
-              </>
-            )}
-            {panel === "light" && (
-              <>
-                <Section title="Light">
-                  {adjustments("Light")}
-                  <Switch
-                    label="Regional"
-                    value={edit.localTone}
-                    onChange={(value) => patch({ localTone: value })}
-                    isDisabled={exporting || !active}
-                    labelPosition="start"
-                    labelSpacing="spread"
-                    size="sm"
-                  />
-                </Section>
-                <Section title="Source Illuminant">
-                  <Selector
-                    label={editorControl("sceneLight").title}
-                    size="sm"
-                    width="100%"
-                    value={edit.sceneLight}
-                    options={editorControl("sceneLight").choices.map((c) => ({
-                      value: c.id,
-                      label: c.label,
-                    }))}
-                    onChange={(sceneLight) => {
-                      endEdit();
-                      patch({
-                        sceneLight,
-                        ...(sceneLight !== "unspecified"
-                          ? { halationModel: "legacy" }
-                          : {}),
-                      });
-                    }}
-                  />
-                  {edit.sceneLight === "custom" &&
-                    adjustments("Source Illuminant")}
-                  <p className="medium-detail">
-                    {editorControl("sceneLight").detail}
-                  </p>
-                </Section>
-                <Section title="White Balance">
-                  {adjustments("White Balance")}
-                </Section>
-                <Section title="Color">{adjustments("Color")}</Section>
-                <Section title="Grade">
-                  <Switch
-                    label="Encoded Grade"
-                    value={edit.gradeSpace}
-                    onChange={(value) => patch({ gradeSpace: value })}
-                    isDisabled={exporting || !active}
-                    labelPosition="start"
-                    labelSpacing="spread"
-                    size="sm"
-                  />
-                  {["Shadows", "Midtones", "Highlights"].map((band) => (
-                    <div
-                      className="grade-band"
-                      key={band}
-                      role="group"
-                      aria-label={band}
-                    >
-                      <h3>{band}</h3>
-                      {adjustments(band)}
-                    </div>
-                  ))}
-                </Section>
-              </>
-            )}
-            {panel === "light" &&
-              selectedStock?.available.includes("shutter") && (
-                <Section title="Long Exposure">
-                  {profileControls(["shutter"])}
+                  )}
+                  {edit.halationModel === "layered" && (
+                    <p className="medium-detail">
+                      Uses the film’s default format, condition, grain model and
+                      output medium. Choose Legacy to adjust these settings.
+                      Pipeline inspection is available with Legacy.
+                    </p>
+                  )}
                 </Section>
               )}
-            {panel === "selective" && (
-              <SelectiveControls
-                disabled={exporting || !active}
-                edit={edit}
-                patch={patch}
-                endEdit={endEdit}
-                sampling={sampling}
-                setSampling={setSampling}
-                showMask={showMask}
-                setShowMask={setShowMask}
-                canSample={!!shownResult?.sceneSource}
-              />
-            )}
-            {panel === "crop" && (
+            </>
+          )}
+          {panel === "develop" &&
+            (edit.stock ? (
               <>
-                <div className="inspector-title">
-                  <h2>Crop</h2>
-                  <p>Drag the corners to set the frame.</p>
-                </div>
-                <Section title="Frame">
-                  <div className="crop-actions">
-                    <Button
-                      label="Edit corners"
-                      variant="secondary"
-                      size="sm"
-                      className="secondary"
-                      aria-pressed={!cropPreview}
-                      onClick={() => setCropPreview(false)}
-                    />
-                    <Button
-                      label="Preview crop"
-                      variant="secondary"
-                      size="sm"
-                      className="secondary"
-                      aria-pressed={cropPreview}
-                      onClick={() => {
-                        endEdit();
-                        setCropPreview(true);
-                      }}
-                    />
-                  </div>
-                  <Selector
-                    label="Aspect ratio"
-                    size="sm"
-                    width="100%"
-                    isDisabled={exporting || !active}
-                    value={edit.ratio}
-                    options={ratios.map((ratio) => ({
-                      value: ratio,
-                      label:
-                        ratio === "free"
-                          ? "Free"
-                          : ratio === "original"
-                            ? "Original"
-                            : ratio,
-                    }))}
-                    onChange={(ratio) =>
-                      patch({ ratio, crop: cropForRatio(ratio, width, height) })
-                    }
-                  />
-                  <div className="crop-actions">
-                    <Button
-                      label="Rotate Left"
-                      variant="secondary"
-                      size="sm"
-                      className="secondary"
-                      onClick={() =>
-                        patch({
-                          rotation: (edit.rotation + 1) % 4,
-                          crop: rotatedCrop(edit.crop, edit.flip),
-                        })
-                      }
-                      icon={<Icon name="rotate" />}
-                    />
-                    <Button
-                      label="Flip"
-                      variant="secondary"
-                      size="sm"
-                      className="secondary"
-                      onClick={() =>
-                        patch({
-                          flip: !edit.flip,
-                          crop: flippedCrop(edit.crop),
-                        })
-                      }
-                      icon={<Icon name="flip" />}
-                    />
-                  </div>
-                  <Adjustment
-                    slider={{
-                      key: "straighten",
-                      label: "Straighten",
-                      min: -15,
-                      max: 15,
-                      step: 0.1,
-                      def: 0,
-                      unit: "°",
-                    }}
-                    value={edit.straighten}
-                    onChange={(straighten) => {
-                      setCropPreview(true);
-                      patch({ straighten }, "straighten");
-                    }}
-                    onEnd={endEdit}
-                    disabled={exporting || !active}
-                  />
-                  <div className="info-row">
-                    <span>Crop size</span>
-                    <span>
-                      {cropSize.width} × {cropSize.height}
-                    </span>
-                  </div>
+                <Section title="Development">
+                  {profileControls(["push", "bleach"])}
+                  <p className="medium-detail">
+                    Push and pull are available only when the film has measured
+                    settings. Bleach bypass retains silver in the negative.
+                  </p>
+                </Section>
+                <Section title="Grain">
+                  {adjustments("Character")}
+                  {profileControls(["grainMottle", "grainModel"])}
                   <Button
-                    label="Reset Crop"
+                    label="New Grain Pattern"
                     variant="secondary"
                     size="sm"
                     className="secondary full-width"
                     onClick={() =>
-                      patch({ crop: fullCrop(), ratio: "free", straighten: 0 })
+                      patch({
+                        seed: crypto.getRandomValues(new Uint32Array(1))[0],
+                      })
                     }
                   />
+                </Section>
+                {selectedStock?.available.some((field) =>
+                  [
+                    "couplers",
+                    "couplerReach",
+                    "couplerSelf",
+                    "chromaticFringeAmount",
+                  ].includes(field),
+                ) && (
+                  <Section title="Colour Separation">
+                    {profileControls([
+                      "couplers",
+                      "couplerReach",
+                      "couplerSelf",
+                      "chromaticFringeAmount",
+                      "chromaticFringeRadius",
+                    ])}
+                  </Section>
+                )}
+              </>
+            ) : (
+              <Section title="Normal">
+                <p>
+                  Choose a film from the library to use development and grain.
+                </p>
+              </Section>
+            ))}
+          {panel === "print" && (
+            <>
+              <Section title="Output">
+                <Selector
+                  label="Output medium"
+                  size="sm"
+                  width="100%"
+                  isDisabled={
+                    exporting ||
+                    !active ||
+                    !edit.stock ||
+                    edit.halationModel === "layered"
+                  }
+                  value={
+                    edit.medium || selectedStock?.defaultMedium || "screen"
+                  }
+                  options={(
+                    selectedStock?.media || [
+                      { id: "screen", name: "Digital Reference" },
+                    ]
+                  ).map((medium) => ({
+                    value: medium.id,
+                    label: medium.name,
+                  }))}
+                  onChange={(medium) => {
+                    endEdit();
+                    patch({ medium });
+                    setStage(null);
+                    setDifference(false);
+                  }}
+                />
+                {(edit.medium || selectedStock?.defaultMedium) === "screen" &&
+                  selectedStock?.media.find((m) => m.id === "screen")
+                    ?.screenConversions && (
+                    <Selector
+                      label={SCREEN_CONVERSION.title}
+                      size="sm"
+                      width="100%"
+                      isDisabled={
+                        exporting || !active || edit.halationModel === "layered"
+                      }
+                      value={edit.digitalReference || SCREEN_CONVERSION.default}
+                      options={SCREEN_CONVERSION.choices.map((c) => ({
+                        value: c.id,
+                        label: c.name,
+                      }))}
+                      onChange={(digitalReference) => {
+                        endEdit();
+                        patch({ digitalReference });
+                        setStage(null);
+                        setDifference(false);
+                      }}
+                    />
+                  )}
+                {profileControls([
+                  "printLight",
+                  "printCorrection",
+                  "negativeViewing",
+                  "screenGrade",
+                  "screenExposure",
+                ])}
+                {selectedStock && (
+                  <p className="medium-detail">
+                    {(edit.medium || selectedStock.defaultMedium) === "screen"
+                      ? "Direct display rendering without paper or scanning. Export is 8-bit sRGB."
+                      : selectedStock.media.find(
+                          (m) =>
+                            m.id ===
+                            (edit.medium || selectedStock.defaultMedium),
+                        )?.detail}
+                  </p>
+                )}
+                <div className="info-row">
+                  <span>Color space</span>
+                  <span>sRGB</span>
+                </div>
+              </Section>
+
+              {profileMedium(edit, selectedStock)?.enlarger && (
+                <Section title="Lamp">
+                  {profileControls([
+                    "enlarger",
+                    "printerEnabled",
+                    "printerLamp",
+                    "printerExposure",
+                    "printerMagenta",
+                    "printerYellow",
+                    "printerPreflash",
+                  ])}
+                  <p className="medium-detail">
+                    {edit.profile?.printerEnabled
+                      ? "A simulated tungsten lamp and colour filters expose the paper through the film. More exposure darkens negative paper and lightens positive paper."
+                      : "Enable Simulated Printer to adjust lamp temperature, paper exposure and filtration."}
+                  </p>
+                </Section>
+              )}
+              <Section title="Export">
+                <Button
+                  label={
+                    active?.image.video ? "Export Video…" : "Export Photo…"
+                  }
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setDialog("export")}
+                />
+              </Section>
+            </>
+          )}
+          {panel === "light" && (
+            <>
+              <Section title="Light">
+                {adjustments("Light")}
+                <Switch
+                  label="Regional"
+                  value={edit.localTone}
+                  onChange={(value) => patch({ localTone: value })}
+                  isDisabled={exporting || !active}
+                  labelPosition="start"
+                  labelSpacing="spread"
+                  size="sm"
+                />
+              </Section>
+              <Section title="Source Illuminant">
+                <Selector
+                  label={editorControl("sceneLight").title}
+                  size="sm"
+                  width="100%"
+                  value={edit.sceneLight}
+                  options={editorControl("sceneLight").choices.map((c) => ({
+                    value: c.id,
+                    label: c.label,
+                  }))}
+                  onChange={(sceneLight) => {
+                    endEdit();
+                    patch({
+                      sceneLight,
+                      ...(sceneLight !== "unspecified"
+                        ? { halationModel: "legacy" }
+                        : {}),
+                    });
+                  }}
+                />
+                {edit.sceneLight === "custom" &&
+                  adjustments("Source Illuminant")}
+                <p className="medium-detail">
+                  {editorControl("sceneLight").detail}
+                </p>
+              </Section>
+              <Section title="White Balance">
+                {adjustments("White Balance")}
+              </Section>
+              <Section title="Color">{adjustments("Color")}</Section>
+              <Section title="Grade">
+                <Switch
+                  label="Encoded Grade"
+                  value={edit.gradeSpace}
+                  onChange={(value) => patch({ gradeSpace: value })}
+                  isDisabled={exporting || !active}
+                  labelPosition="start"
+                  labelSpacing="spread"
+                  size="sm"
+                />
+                {["Shadows", "Midtones", "Highlights"].map((band) => (
+                  <div
+                    className="grade-band"
+                    key={band}
+                    role="group"
+                    aria-label={band}
+                  >
+                    <h3>{band}</h3>
+                    {adjustments(band)}
+                  </div>
+                ))}
+              </Section>
+            </>
+          )}
+          {panel === "light" &&
+            selectedStock?.available.includes("shutter") && (
+              <Section title="Long Exposure">
+                {profileControls(["shutter"])}
+              </Section>
+            )}
+          {panel === "light" && (
+            <LensFilters
+              edit={edit}
+              stock={selectedStock}
+              disabled={
+                exporting || !active || edit.halationModel === "layered"
+              }
+              onChange={(value) => {
+                endEdit();
+                patch(value);
+                setStage(null);
+                setDifference(false);
+              }}
+            />
+          )}
+          {panel === "selective" && (
+            <SelectiveControls
+              disabled={exporting || !active}
+              edit={edit}
+              patch={patch}
+              endEdit={endEdit}
+              sampling={sampling}
+              setSampling={setSampling}
+              showMask={showMask}
+              setShowMask={setShowMask}
+              canSample={!!shownResult?.sceneSource}
+            />
+          )}
+          {panel === "crop" && (
+            <>
+              <div className="inspector-title">
+                <h2>Crop</h2>
+                <p>Drag the corners to set the frame.</p>
+              </div>
+              <Section title="Frame">
+                <div className="crop-actions">
                   <Button
-                    label="Done"
-                    variant="primary"
+                    label="Edit corners"
+                    variant="secondary"
                     size="sm"
-                    className="primary full-width"
+                    className="secondary"
+                    aria-pressed={!cropPreview}
+                    onClick={() => setCropPreview(false)}
+                  />
+                  <Button
+                    label="Preview crop"
+                    variant="secondary"
+                    size="sm"
+                    className="secondary"
+                    aria-pressed={cropPreview}
                     onClick={() => {
                       endEdit();
-                      setPanel("film");
+                      setCropPreview(true);
                     }}
                   />
-                </Section>
-              </>
-            )}
-            {panel === "pipeline" && (
-              <>
-                <div className="inspector-title">
-                  <h2>Pipeline</h2>
                 </div>
-                {hasProfileSettings(edit) && (
-                  <p className="inspector-hint">
-                    Individual pipeline stages are available with the film’s
-                    default format, condition, halation and grain model.
-                  </p>
-                )}
-                <div className="pipeline-list">
+                <Selector
+                  label="Aspect ratio"
+                  size="sm"
+                  width="100%"
+                  isDisabled={exporting || !active}
+                  value={edit.ratio}
+                  options={ratios.map((ratio) => ({
+                    value: ratio,
+                    label:
+                      ratio === "free"
+                        ? "Free"
+                        : ratio === "original"
+                          ? "Original"
+                          : ratio,
+                  }))}
+                  onChange={(ratio) =>
+                    patch({ ratio, crop: cropForRatio(ratio, width, height) })
+                  }
+                />
+                <div className="crop-actions">
                   <Button
-                    label="Finished print"
-                    variant="ghost"
+                    label="Rotate Left"
+                    variant="secondary"
                     size="sm"
-                    className={stage === null ? "selected" : ""}
-                    onClick={() => {
-                      setStage(null);
-                      setDifference(false);
-                    }}
+                    className="secondary"
+                    onClick={() =>
+                      patch({
+                        rotation: (edit.rotation + 1) % 4,
+                        crop: rotatedCrop(edit.crop, edit.flip),
+                      })
+                    }
+                    icon={<Icon name="rotate" />}
                   />
-                  {stages.map((item, i) => (
-                    <button
-                      key={item.id}
-                      className={stage === i ? "selected" : ""}
-                      onClick={() => setStage(i)}
-                      disabled={!edit.stock}
-                    >
-                      <span>{String(i + 1).padStart(2, "0")}</span>
-                      {stageNames[i] || item.label}
-                    </button>
-                  ))}
+                  <Button
+                    label="Flip"
+                    variant="secondary"
+                    size="sm"
+                    className="secondary"
+                    onClick={() =>
+                      patch({
+                        flip: !edit.flip,
+                        crop: flippedCrop(edit.crop),
+                      })
+                    }
+                    icon={<Icon name="flip" />}
+                  />
                 </div>
-                <label className="toggle-row">
-                  <span>Show stage difference</span>
-                  <input
-                    type="checkbox"
-                    checked={difference}
-                    onChange={(e) => setDifference(e.target.checked)}
-                    disabled={stage === null || stage === 0}
-                  />
-                </label>
-                {result?.delta && (
-                  <p className="inspector-hint">
-                    {result.delta.gain.toFixed(1)}× gain · {result.delta.peak}
-                    /255 peak
-                  </p>
-                )}
-              </>
-            )}
-          </fieldset>
-        </div>
+                <Adjustment
+                  slider={{
+                    key: "straighten",
+                    label: "Straighten",
+                    min: -15,
+                    max: 15,
+                    step: 0.1,
+                    def: 0,
+                    unit: "°",
+                  }}
+                  value={edit.straighten}
+                  onChange={(straighten) => {
+                    setCropPreview(true);
+                    patch({ straighten }, "straighten");
+                  }}
+                  onEnd={endEdit}
+                  disabled={exporting || !active}
+                />
+                <div className="info-row">
+                  <span>Crop size</span>
+                  <span>
+                    {cropSize.width} × {cropSize.height}
+                  </span>
+                </div>
+                <Button
+                  label="Reset Crop"
+                  variant="secondary"
+                  size="sm"
+                  className="secondary full-width"
+                  onClick={() =>
+                    patch({ crop: fullCrop(), ratio: "free", straighten: 0 })
+                  }
+                />
+                <Button
+                  label="Done"
+                  variant="primary"
+                  size="sm"
+                  className="primary full-width"
+                  onClick={() => {
+                    endEdit();
+                    setPanel("film");
+                  }}
+                />
+              </Section>
+            </>
+          )}
+          {panel === "pipeline" && (
+            <>
+              <div className="inspector-title">
+                <h2>Pipeline</h2>
+              </div>
+              {hasProfileSettings(edit) && (
+                <p className="inspector-hint">
+                  Individual pipeline stages are available with the film’s
+                  default film, print and filter settings.
+                </p>
+              )}
+              <div className="pipeline-list">
+                <Button
+                  label="Finished print"
+                  variant="ghost"
+                  size="sm"
+                  className={stage === null ? "selected" : ""}
+                  onClick={() => {
+                    setStage(null);
+                    setDifference(false);
+                  }}
+                />
+                {stages.map((item, i) => (
+                  <button
+                    key={item.id}
+                    className={stage === i ? "selected" : ""}
+                    onClick={() => setStage(i)}
+                    disabled={!edit.stock}
+                  >
+                    <span>{String(i + 1).padStart(2, "0")}</span>
+                    {stageNames[i] || item.label}
+                  </button>
+                ))}
+              </div>
+              <label className="toggle-row">
+                <span>Show stage difference</span>
+                <input
+                  type="checkbox"
+                  checked={difference}
+                  onChange={(e) => setDifference(e.target.checked)}
+                  disabled={stage === null || stage === 0}
+                />
+              </label>
+              {result?.delta && (
+                <p className="inspector-hint">
+                  {result.delta.gain.toFixed(1)}× gain · {result.delta.peak}
+                  /255 peak
+                </p>
+              )}
+            </>
+          )}
+        </InspectorPanel>
       </aside>
       <input
         ref={input}
@@ -2079,15 +2092,17 @@ export default function App() {
             </p>
             <p>
               The browser supports film selection and format, ageing, halation,
-              grain models, measured push/pull, bleach bypass, colour separation,
-              print viewing and a simulated printer, light and color adjustments, three-way grading,
+              grain models, measured push/pull, bleach bypass, colour
+              separation, print viewing, a simulated printer, an ordered
+              lens-filter stack, light and color adjustments, three-way grading,
               color and light selections, crop, rotation and flip. Camera RAW
               files decode locally with LibRaw, using as-shot white balance and
               16-bit linear data. Other images use the browser decoder.
             </p>
             <p>
-              Scanned-negative conversion, lens controls and correction, automatic subject selections, custom packs, and HDR /
-              16-bit export are available in the Mac app.
+              Scanned-negative conversion, lens correction, automatic subject
+              selections, custom packs, and HDR / 16-bit export are available in
+              the Mac app.
             </p>
           </div>
         </Modal>

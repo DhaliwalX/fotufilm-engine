@@ -4,12 +4,14 @@ import FotufilmCore
 
 final class WebProfileRequestTests: XCTestCase {
     private func request(_ controls: [String: Any], stock id: String = "gold200",
-                         medium: String? = nil,
+                         medium: String? = nil, filters: [String]? = nil, metering: String? = nil,
                          definition: FilmStockDefinition? = nil) throws -> WebProfileRequest {
         let stock = try XCTUnwrap(definition ?? FilmStock.presetDefinitions[id])
         let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(stock))
         var input: [String: Any] = ["stock": encoded, "width": 80, "height": 64, "controls": controls]
         if let medium { input["medium"] = medium }
+        if let filters { input["filters"] = filters }
+        if let metering { input["filterMetering"] = metering }
         return try JSONDecoder().decode(WebProfileRequest.self, from: JSONSerialization.data(withJSONObject: input))
     }
 
@@ -64,4 +66,17 @@ final class WebProfileRequestTests: XCTestCase {
         XCTAssertNil(try request(["shutter": "off"], stock: "hp5plus400").configured().1.shutterSeconds)
         XCTAssertThrowsError(try request(["shutter": "123456"], stock: "hp5plus400").configured())
     }
+    func testLensStackMatchesNativeResolutionAndMetering() throws {
+        let ids = ["w85b", "blackpromist-1/2", "w81a", "fog-1"]
+        let options = try request([:], filters: ids, metering: "filmSpeed").configured().1
+        let fitted = EditorLensFilters.resolve(ids)
+        XCTAssertEqual(options.lensFilters, LensFilterStack(fitted.absorbing, compensation: .filmSpeed))
+        XCTAssertEqual(options.diffusionFilter, fitted.diffusion)
+        XCTAssertEqual(fitted.unusedDiffusion, ["fog-1"])
+        XCTAssertEqual(fitted.absorbing.map(\.id), ["w85b", "w81a"])
+        XCTAssertThrowsError(try request([:], filters: ["missing"]).configured())
+        XCTAssertThrowsError(try request([:], metering: "missing").configured())
+        XCTAssertTrue(try request([:], filters: []).configured().1.lensFilters.isEmpty)
+    }
+
 }

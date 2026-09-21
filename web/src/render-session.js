@@ -263,8 +263,8 @@ export class RenderSession {
   }) {
     if (this.closed || stale()) return null
     const dynamic = edit.stock !== null && hasProfileSettings(edit)
-    if (dynamic && edit.halationModel === 'layered') throw new Error('Choose Legacy halation to adjust film format, condition or grain model.')
-    if (dynamic && stage !== null) throw new Error('Pipeline inspection requires the film’s default format, condition and grain model.')
+    if (dynamic && edit.halationModel === 'layered') throw new Error('Choose Legacy halation to adjust film, print or filter settings.')
+    if (dynamic && stage !== null) throw new Error('Pipeline inspection requires default film, print and filter settings.')
     const sceneKelvin = sourceIlluminant(edit)
     if (edit.halationModel === 'layered' && sceneKelvin)
       throw new Error(
@@ -348,6 +348,7 @@ export class RenderSession {
         const pack = dynamic ? parsePack(await loadFilmProfile({
           stock, width: source.width, height: source.height,
           format: edit.format, medium: edit.medium, sceneKelvin,
+          filters: edit.filters, filterMetering: edit.filterMetering,
           sceneHighlightStops: await sceneHighlightStops(source, controls),
           controls: { ...profileRequestControls(edit, entry.stock), digitalReference: edit.digitalReference || 'auto-levels' },
         }, report)) : await this.capturePack(

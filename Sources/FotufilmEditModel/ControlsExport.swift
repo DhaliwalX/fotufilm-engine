@@ -346,6 +346,7 @@ public struct ControlsExport {
                 ControlsManifest.current.controls.filter {
                     $0.surfaces.contains("desktop") || $0.surfaces.contains("app") || $0.surfaces.contains("web")
                 }), as: UTF8.self) + "\n"
+            + "export const LENS_FILTERS = " + String(decoding: try! EditorLensFilters.webData(), as: UTF8.self) + "\n"
             + "export const PROFILE_MENUS = " + String(decoding: try! encoder.encode(WebProfileCatalogue.menus), as: UTF8.self) + "\n"
             + "export const FILM_FORMATS = " + String(decoding: try! JSONSerialization.data(
                 withJSONObject: FilmFormat.presets.map { ["id": $0.id, "name": $0.format.name] },

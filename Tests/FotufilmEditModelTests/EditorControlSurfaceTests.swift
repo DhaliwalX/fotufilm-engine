@@ -220,7 +220,7 @@ final class EditorControlSurfaceTests: XCTestCase {
         XCTAssertFalse(app.contains(.flare))
         XCTAssertTrue(app.contains(.exposure))
         XCTAssertTrue(app.contains(.crop))
-        XCTAssertEqual(EditorControlCatalogue.controls(in: .lensGlass, for: nil).count, 0)
+        XCTAssertEqual(EditorControlCatalogue.controls(in: .lensGlass, for: nil).map(\.field), [.lensFilterStack])
     }
 
     func testFixedMenusHaveUniqueIDs() {

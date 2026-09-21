@@ -2052,6 +2052,33 @@
     },
     {
       "availability" : "always",
+      "detail" : "Fit, reorder or remove absorbing and diffusion filters in front of the lens.",
+      "documentation" : "An ordered stack of absorbing and diffusion filters before film exposure.",
+      "drives" : [
+        "lensFilters",
+        "diffusionFilter"
+      ],
+      "field" : "lensFilterStack",
+      "group" : "lens",
+      "kind" : "takeover",
+      "omitted" : {
+        "android" : "no lens filters on Android yet",
+        "cli" : "--filter takes the absorbing stack; --diffusion chooses diffusion",
+        "finalcut" : "the host uses three filter slots and a diffusion choice",
+        "resolve" : "the host uses three filter slots and a diffusion choice"
+      },
+      "scope" : "edit",
+      "section" : "lensGlass",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web"
+      ],
+      "title" : "Filters",
+      "webTransform" : "runtime"
+    },
+    {
+      "availability" : "always",
       "commandLineFlag" : "--filter",
       "commandLineGeneric" : false,
       "commandLineHelp" : "Absorbing filters on the front of the lens, comma separated and applied in order: w85b, w80a, w25, nd09, cc20m and the rest of the Wratten catalogue. Integrated spectrally against the stock's own layer sensitivities, so the same filter is a different filter on a different film",
@@ -2226,17 +2253,18 @@
       "omitted" : {
         "android" : "no lens filters on Android yet",
         "app" : "chosen on the Lens deck's filter page",
-        "desktop" : "chosen on the Lens panel's filter list",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "desktop" : "chosen on the Lens panel's filter list"
       },
       "scope" : "edit",
       "section" : "lensGlass",
       "surfaces" : [
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Metering"
+      "title" : "Metering",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",

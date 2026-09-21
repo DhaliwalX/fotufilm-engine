@@ -19,6 +19,7 @@ export const profileDefault = (c) =>
       : c.choices?.[0]?.id);
 export const hasProfileSettings = (edit) =>
   !!edit.format ||
+  !!edit.filters?.length ||
   Object.entries(edit.profile || {}).some(([field, value]) => {
     const control = PROFILE_CONTROLS.find((c) => c.field === field);
     return (

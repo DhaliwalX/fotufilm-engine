@@ -77,6 +77,24 @@ test("new grain, gauge and halation combinations render deterministically", asyn
     const source = pixelSource({ data, width, height }),
       results = [];
     for (const settings of [
+      {
+        stock: "gold200",
+        filters: ["w85b", "w81a"],
+        filterMetering: "throughTheLens",
+        controls: {},
+      },
+      {
+        stock: "hp5plus400",
+        filters: ["w25"],
+        filterMetering: "filmSpeed",
+        controls: {},
+      },
+      {
+        stock: "gold200",
+        filters: ["blackpromist-1/2", "w80a"],
+        filterMetering: "none",
+        controls: {},
+      },
       { stock: "gold200", controls: {} },
       {
         stock: "gold200",

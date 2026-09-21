@@ -6,6 +6,25 @@ import { resolve } from "node:path";
 const cases = [
   {
     stock: "gold200",
+    filters: ["w85b", "w81a"],
+    filterMetering: "throughTheLens",
+    controls: {},
+  },
+  {
+    stock: "hp5plus400",
+    filters: ["w25"],
+    filterMetering: "filmSpeed",
+    controls: {},
+  },
+  {
+    stock: "gold200",
+    filters: ["blackpromist-1/2", "w80a"],
+    filterMetering: "none",
+    controls: {},
+  },
+  { stock: "gold200", filters: ["glimmerglass-1/4", "fog-1"], controls: {} },
+  {
+    stock: "gold200",
     controls: {
       halationReturn: 0.12,
       halationSpectrum: [0, 0.2, 0.3, 0, -0.2, 0.5, 1],

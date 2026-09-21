@@ -811,6 +811,17 @@ public enum EditorControlCatalogue {
 
     private static let light: [EditorControl] = [
         EditorControl(
+            .lensFilterStack, title: "Filters",
+            detail: "Fit, reorder or remove absorbing and diffusion filters in front of the lens.",
+            section: .lensGlass, kind: .takeover, persistence: .bespoke,
+            drives: ["lensFilters", "diffusionFilter"], surfaces: [.app, .desktop, .web],
+            omitted: [.android: "no lens filters on Android yet",
+                      .resolve: "the host uses three filter slots and a diffusion choice",
+                      .finalcut: "the host uses three filter slots and a diffusion choice",
+                      .cli: "--filter takes the absorbing stack; --diffusion chooses diffusion"],
+            web: .runtime,
+            documentation: "An ordered stack of absorbing and diffusion filters before film exposure."),
+        EditorControl(
             .lensFilter1, title: "Filter 1",
             detail: "Add a lens filter that changes the amount or color of incoming light.",
             section: .lensGlass, kind: .menu(.dynamic(.lensFilters)),
@@ -879,11 +890,10 @@ public enum EditorControlCatalogue {
             section: .lensGlass, kind: .menu(.dynamic(.meterings)),
             persistence: .bespoke,
             drives: ["lensFilters"],
-            surfaces: [.resolve, .finalcut, .cli],
+            surfaces: [.resolve, .finalcut, .cli, .web],
             omitted: [.app: "chosen on the Lens deck's filter page",
                       .desktop: "chosen on the Lens panel's filter list",
-                      .android: "no lens filters on Android yet",
-                      .web: webBaked],
+                      .android: "no lens filters on Android yet"],
             host: HostParameter(
                 slot: 24, slotSymbol: "LENS_METERING", ofxName: "metering", fxplugID: 76, group: .lens,
                 label: "Metering",
@@ -897,6 +907,7 @@ public enum EditorControlCatalogue {
                     + "fitted, and live only on the Full stage, which is the only span a filter is live in.",
                 kind: .choice(.dynamic(.meterings), value: 1), paramOffset: 1, bridge: .indexPlusOne,
                 order: 40),
+            web: .runtime,
             commandLine: CommandLineFlag("--metering", placeholder: "<m>",
                                          help: "How the exposure was set behind the filter: ttl (default, "
                                              + "the camera's own photopic cell), factor (the published "

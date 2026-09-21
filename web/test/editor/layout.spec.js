@@ -65,3 +65,36 @@ test("small screens keep the canvas and provide the collapsed inspector rail", a
   expect(strip.x).toBeGreaterThanOrEqual(0);
   expect(strip.x + strip.width).toBeLessThanOrEqual(390);
 });
+
+test("inspector revisits preserve reading position and respect reduced motion", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const expose = page.getByRole("tab", { name: "Expose", exact: true });
+  const film = page.getByRole("tab", { name: "Film", exact: true });
+  const content = page.locator("#inspector-content");
+  await expose.click();
+  await content.evaluate((element) => {
+    element.scrollTop = 900;
+  });
+  await expect
+    .poll(() => content.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(400);
+  const position = await content.evaluate((element) => element.scrollTop);
+  await film.click();
+  await expect(film).toBeFocused();
+  await expect
+    .poll(() => content.evaluate((element) => element.scrollTop))
+    .toBe(0);
+  await expose.click();
+  await expect(expose).toBeFocused();
+  await expect
+    .poll(() => content.evaluate((element) => element.scrollTop))
+    .toBe(position);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await film.click();
+  await expect(page.locator(".inspector-panel-enter")).toHaveCSS(
+    "animation-name",
+    "none",
+  );
+});

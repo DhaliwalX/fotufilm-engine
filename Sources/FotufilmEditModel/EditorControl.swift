@@ -16,7 +16,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case chromaticFringeAmount, chromaticFringeRadius
     case push, bleach, expired, shutter
 
-    case lensFilter1, lensFilter2, lensFilter3, metering, diffusion, diffusionGrade
+    case lensFilterStack, lensFilter1, lensFilter2, lensFilter3, metering, diffusion, diffusionGrade
     case focalLength, flare, filterCoating
     case lensCorrection, lensProfile, lensAmount
     case lensDistortion, lensVignetting, lensRedCyan, lensBlueYellow

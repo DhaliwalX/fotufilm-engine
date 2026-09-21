@@ -1,0 +1,31 @@
+/* Short entrances provide continuity without delaying controls or image updates. */
+@keyframes panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes content-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.motion-panel-enter {
+  animation: panel-enter 150ms ease-out;
+}
+.motion-fade-in {
+  animation: content-enter 140ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-panel-enter,
+  .motion-fade-in {
+    animation: none;
+  }
+}

@@ -1,3 +1,4 @@
+import { parseLensFilters } from './lens-filters.js'
 import { parseProfileSettings } from './profile-settings.js'
 import { VIDEO_ENCODINGS } from './video-color.js'
 import { catalogueSlider, editorControl } from './editor-catalogue.js'
@@ -103,6 +104,8 @@ export const defaultEdit = (stock = null) => ({
   stock,
   format: null,
   profile: {},
+  filters: [],
+  filterMetering: 'throughTheLens',
   medium: null,
   digitalReference: 'auto-levels',
   video: { encoding: 'standard', trimStart: 0, trimEnd: null, audio: true },
@@ -317,6 +320,7 @@ export function parseEdit(json, stockIDs) {
     ...base,
     ...Object.fromEntries(Object.keys(base).map((key) => [key, edit[key]])),
     ...parseProfileSettings(edit),
+    ...parseLensFilters(edit),
     medium: edit.medium ?? null,
     digitalReference: edit.digitalReference ?? 'auto-levels',
     video: edit.video ?? base.video,

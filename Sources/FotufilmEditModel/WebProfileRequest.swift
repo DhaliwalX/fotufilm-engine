@@ -1,11 +1,15 @@
 import Foundation
+#if canImport(FotufilmCore)
 import FotufilmCore
+#endif
 
 /// A bounded settings request. It never receives image pixels or asks the host for network access.
 public struct WebProfileRequest: Decodable {
     public let stock: FilmStockDefinition
     public let width: Int
     public let height: Int
+    public let filters: [String]?
+    public let filterMetering: String?
     public let format: String?
     public let medium: String?
     public let sceneKelvin: Float?
@@ -59,6 +63,13 @@ public struct WebProfileRequest: Decodable {
             }
             options.sceneHighlightStops = sceneHighlightStops
         }
+        let fitted = EditorLensFilters.resolve(filters ?? [])
+        guard fitted.unknown.isEmpty else { throw Failure(description: "Unknown lens filter.") }
+        guard let metering = LensFilterCompensation(rawValue: filterMetering ?? "throughTheLens") else {
+            throw Failure(description: "Unknown filter metering choice.")
+        }
+        options.lensFilters = LensFilterStack(fitted.absorbing, compensation: metering)
+        options.diffusionFilter = fitted.diffusion
         let paper = (options.paper ?? .default(for: stock)).resolved(for: stock)
         let stockControls = Dictionary(uniqueKeysWithValues:
             EditorControlCatalogue.controls(for: stock, on: .web).map { ($0.field, $0) })

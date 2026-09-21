@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(FotufilmCore)
 import FotufilmCore
+#endif
 
 /// Stock- and medium-dependent choices for native browser profiles.
 public enum WebProfileCatalogue {
@@ -44,6 +46,7 @@ public enum WebProfileCatalogue {
         let scales: [String: ControlsManifest.Scale]
         let choices: [String: [ControlsManifest.Choice]]
         let media: [String: Medium]
+        let filterHalos: [String: EditorLensFilters.DiffusionPreview]
     }
 
     public static func data(_ definitions: [String: FilmStockDefinition]) throws -> Data {
@@ -68,7 +71,7 @@ public enum WebProfileCatalogue {
                 nativeFormat: definition.nativeFormatID ?? FilmFormat.houseDefaultID,
                 scales: scales,
                 choices: ["shutter": choices(.shutter, stock: stock, paper: .default)!.map(encodedChoice)],
-                media: media)
+                media: media, filterHalos: EditorLensFilters.previews(for: stock))
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]

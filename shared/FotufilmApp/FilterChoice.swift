@@ -33,34 +33,12 @@ struct FilterChoice: Identifiable, Hashable, StripChoice {
     /// invisible; metered as though the exposure were fixed, it only darkens, which is what the
     /// exposure control is for. The engine still carries them for the camera and for edits made
     /// while they were offered.
-    static let absorbing: [FilterChoice] = [none] + [
-        ("w85b", "85B", "Daylight → tungsten film"),
-        ("w85", "85", "Daylight → 3400 K"),
-        ("w80a", "80A", "Tungsten → daylight film"),
-        ("w80b", "80B", "3400 K → daylight film"),
-        ("w81a", "81A", "Warm a little"),
-        ("w81ef", "81EF", "Warm a lot"),
-        ("w82a", "82A", "Cool a little"),
-        ("w82c", "82C", "Cool a lot"),
-        ("w8", "#8 Yellow", "Monochrome contrast"),
-        ("w15", "#15 Deep Yellow", "Monochrome contrast"),
-        ("w21", "#21 Orange", "Monochrome contrast"),
-        ("w25", "#25 Red", "Monochrome contrast"),
-        ("w29", "#29 Deep Red", "Monochrome contrast"),
-        ("w58", "#58 Green", "Monochrome contrast"),
-    ].map { FilterChoice(id: $0.0, name: $0.1, subtitle: $0.2) }
+    static let absorbing: [FilterChoice] = [none] + EditorLensFilters.absorbing.map {
+        FilterChoice(id: $0.id, name: $0.name, subtitle: $0.detail)
+    }
 
-    // MARK: The diffusion wall
-
-    /// Family and grade together, because that is how they are sold and how they are chosen: the
-    /// family decides how tight the glow is and the grade how much of it there is.
-    static let diffusion: [FilterChoice] = [none] + DiffusionFilter.Family.allCases.flatMap {
-        family in
-        [DiffusionFilter.Grade.eighth, .quarter, .half, .one].map { grade in
-            FilterChoice(id: "\(family.rawValue)-\(grade.rawValue)",
-                         name: "\(family.label) \(grade.rawValue)",
-                         subtitle: family.subtitle)
-        }
+    static let diffusion: [FilterChoice] = [none] + EditorLensFilters.diffusion.map {
+        FilterChoice(id: $0.id, name: $0.name, subtitle: $0.detail)
     }
 
     // MARK: The lens strip
@@ -109,12 +87,7 @@ struct FilterChoice: Identifiable, Hashable, StripChoice {
     }
 
     static func diffusionFilter(id: String) -> DiffusionFilter? {
-        guard !isNone(id) else { return nil }
-        let parts = id.split(separator: "-", maxSplits: 1).map(String.init)
-        guard parts.count == 2,
-              let family = DiffusionFilter.Family(rawValue: parts[0]),
-              let grade = DiffusionFilter.Grade(rawValue: parts[1]) else { return nil }
-        return DiffusionFilter.preset(family, grade: grade)
+        EditorLensFilters.diffusionFilter(id)
     }
 
     /// Resolves IDs into ordered absorbing filters and the first diffusion filter.
@@ -123,20 +96,7 @@ struct FilterChoice: Identifiable, Hashable, StripChoice {
     static func resolve(_ ids: [String])
         -> (absorbing: [LensFilter], diffusion: DiffusionFilter?, unusedDiffusion: [String],
             unknown: [String]) {
-        var absorbing: [LensFilter] = []
-        var diffusion: DiffusionFilter?
-        var unused: [String] = []
-        var unknown: [String] = []
-        for id in ids where !isNone(id) {
-            if let filter = lensFilter(id: id) {
-                absorbing.append(filter)
-            } else if let mist = diffusionFilter(id: id) {
-                if diffusion == nil { diffusion = mist } else { unused.append(id) }
-            } else {
-                unknown.append(id)
-            }
-        }
-        return (absorbing, diffusion, unused, unknown)
+        EditorLensFilters.resolve(ids)
     }
 
     /// Whether an id names a scattering filter rather than an absorbing one — what a list needs
@@ -225,18 +185,5 @@ struct FilterChoice: Identifiable, Hashable, StripChoice {
         // A filter no longer offered can still be fitted on an edit made while it was, and the
         // engine still develops it. It names itself from the catalogue rather than reading blank.
         return LensFilter.catalogued(id)?.name ?? ""
-    }
-}
-
-private extension DiffusionFilter.Family {
-    var subtitle: String {
-        switch self {
-        case .proMist: return "Broad bloom, lifted blacks"
-        case .blackProMist: return "Broad bloom, blacks held"
-        case .glimmerglass: return "Tight sparkle"
-        case .blackGlimmerglass: return "Tight sparkle, blacks held"
-        case .fog: return "Widest glow"
-        case .blackFog: return "Widest glow, blacks held"
-        }
     }
 }

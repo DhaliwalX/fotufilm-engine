@@ -78,7 +78,7 @@ extension EditorControlField {
         case .shutter:
             return .bespoke { $0.shutterSeconds != nil }
 
-        case .lensFilter1, .lensFilter2, .lensFilter3:
+        case .lensFilterStack, .lensFilter1, .lensFilter2, .lensFilter3:
             return .bespoke { !$0.lensFilterIDs.isEmpty }
         case .metering:
             return .bespoke { $0.lensFilterMetering != .throughTheLens }
