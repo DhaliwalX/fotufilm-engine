@@ -68,7 +68,8 @@ test('RAW import, film, exposure, crop and export use the full original', async 
   await page.getByRole('searchbox').fill('Gold 200')
   await page.getByTitle('Gold 200', { exact: true }).click()
   await ready(page)
-  await expect(page.locator('.backend-label')).toHaveText('WebGPU')
+  // The first film shader family compiles asynchronously after the CPU preview.
+  await expect(page.locator('.backend-label')).toHaveText('WebGPU', { timeout: 60000 })
   await page.getByRole('tab', { name: 'Expose' }).click()
   await page.getByRole('spinbutton', { name: 'Exposure value', exact: true }).fill('2')
   await page.getByRole('spinbutton', { name: 'Exposure value', exact: true }).press('Tab')
