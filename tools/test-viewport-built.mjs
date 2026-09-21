@@ -21,10 +21,8 @@ try {
   page.on('pageerror', (error) => errors.push(error.message))
   page.on('request', (request) => requests.push(request.url()))
   await page.goto(base.href)
-  await expect(page.locator('.viewer-status > [role=status]')).toContainText(
-    /\d+ × \d+/,
-    { timeout: 60000 },
-  )
+  await expect(page.getByRole('heading', { name: 'Open a photo or video' })).toBeVisible()
+  assert.ok(!requests.some(url => new URL(url).pathname.endsWith('/demo-scene.exr')))
   const width = 2048,
     height = 1024
   const buffer = png16({

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Verify bundled workers and revisioned decoder URLs against a static production
 // build. Accept a subdirectory URL to catch asset-path regressions too.
+import { exrFixture } from '../web/test/editor/exr-fixture.js'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
@@ -13,7 +14,10 @@ try {
   page.on('pageerror', error => errors.push(error.message))
   page.on('request', request => requests.push(request.url()))
   await page.goto(base.href)
-  // The default demo uses the shared EXR import worker.
+  await page.locator('input[type=file][multiple]').setInputFiles({
+    name: 'Float.exr', mimeType: 'image/x-exr',
+    buffer: Buffer.from(exrFixture([0.18, 0.18, 0.18, 4, 2, 1], 2, 1)),
+  })
   await page.waitForFunction(() => /\d+ × \d+/.test(document.querySelector('.viewer-status > [role=status]')?.textContent), null, { timeout: 60000 })
   const file = await readFile(new URL('../build/ultrahdr/fixtures/rotated.jpg', import.meta.url))
   await page.locator('input[type=file][multiple]').setInputFiles({ name: 'HDR.jpg', mimeType: 'image/jpeg', buffer: file })
