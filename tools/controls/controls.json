@@ -3971,6 +3971,52 @@
       "availability" : "always",
       "choices" : [
         {
+          "detail" : "Preserve the file’s decoded highlight range",
+          "id" : "automatic",
+          "label" : "Automatic",
+          "value" : 0
+        },
+        {
+          "detail" : "Preserve all decoded highlight range",
+          "id" : "fullRange",
+          "label" : "Full Range",
+          "value" : 1
+        },
+        {
+          "detail" : "Tone-map HDR before film exposure",
+          "id" : "standardRange",
+          "label" : "Standard Range",
+          "value" : 2
+        }
+      ],
+      "detail" : "Choose how the decoded highlight range enters film exposure.",
+      "documentation" : "Automatic and Full Range preserve decoded HDR highlights. Standard Range uses the platform SDR rendition before film exposure. RAW always remains scene-linear.",
+      "drives" : [
+
+      ],
+      "field" : "sourceInterpretation",
+      "group" : "light",
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "processed HDR interpretation is not offered on Android yet",
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
+      },
+      "scope" : "edit",
+      "section" : "sourceInterpretation",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web"
+      ],
+      "title" : "Highlights",
+      "webTransform" : "runtime"
+    },
+    {
+      "availability" : "always",
+      "choices" : [
+        {
           "detail" : "The photograph without a border.",
           "id" : "none",
           "label" : "None",
@@ -6011,6 +6057,12 @@
       "groupTitle" : "Light & Color",
       "id" : "lightGrade",
       "title" : "Grade"
+    },
+    {
+      "group" : "light",
+      "groupTitle" : "Light & Color",
+      "id" : "sourceInterpretation",
+      "title" : "Source Interpretation"
     },
     {
       "group" : "print",

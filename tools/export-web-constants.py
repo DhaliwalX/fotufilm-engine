@@ -37,6 +37,16 @@ result += 'export const ILLUMINANT = ' + json.dumps({
     'wavelengths': list(range(380, 781, 5)), 'daylight': daylight,
 }) + '\n'
 target = root / 'web/src/engine-constants.js'
+color = (root / 'Sources/FotufilmCore/ColorScience.swift').read_text()
+ingest = {}
+for name in ['linearSRGBToRec2020', 'linearDisplayP3ToRec2020']:
+    body = re.search(r'func ' + name + r'\([^\n]+\{(.*?)\n    }', color, re.S)[1]
+    values = re.findall(r'(-?\d+\.\d+) \* rgb\.[xyz]', body)
+    assert len(values) == 9, f'Unexpected matrix shape: {name}'
+    ingest[name] = [float(value) for value in values]
+ingest['luminanceWeights'] = [float(value.strip()) for value in re.search(
+    r'luminanceWeights:.*?= \(([^)]+)\)', color)[1].split(',')]
+result += 'export const INGEST_COLOR = ' + json.dumps(ingest) + '\n'
 if '--check' in sys.argv:
     if not target.exists() or target.read_text() != result:
         sys.exit('Browser constants are stale. Run python3 tools/export-web-constants.py.')

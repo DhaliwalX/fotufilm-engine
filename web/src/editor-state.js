@@ -1,4 +1,5 @@
 import { defaultLens, parseLensCorrection } from './lens-correction.js'
+import { parseSourceInterpretation } from './source-interpretation.js'
 import { parseLensFilters } from './lens-filters.js'
 import { parseProfileSettings } from './profile-settings.js'
 import { VIDEO_ENCODINGS } from './video-color.js'
@@ -107,6 +108,7 @@ export const defaultEdit = (stock = null) => ({
   profile: {},
   filters: [],
   lens: defaultLens(),
+  sourceInterpretation: 'automatic',
   filterMetering: 'throughTheLens',
   medium: null,
   digitalReference: 'auto-levels',
@@ -324,6 +326,7 @@ export function parseEdit(json, stockIDs) {
     ...parseProfileSettings(edit),
     ...parseLensFilters(edit),
     lens: parseLensCorrection(edit.lens),
+    sourceInterpretation: parseSourceInterpretation(edit.sourceInterpretation),
     medium: edit.medium ?? null,
     digitalReference: edit.digitalReference ?? 'auto-levels',
     video: edit.video ?? base.video,

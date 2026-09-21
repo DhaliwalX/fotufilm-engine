@@ -16,7 +16,7 @@ const sizes = {
 };
 const lensTags = new Set([254, 50719, 50720, 50829, 51009, 51022]);
 const captureTags = new Set([271, 272, 33437, 37386, 42035, 42036]);
-const wanted = new Set([...lensTags, ...captureTags, 330, 34665]);
+const wanted = new Set([...lensTags, ...captureTags, 274, 330, 34665]);
 const limit = 1024 * 1024;
 
 function base64(bytes) {
@@ -234,6 +234,7 @@ export async function readPhotoMetadata(file, { signal } = {}) {
       carrying[0];
     return {
       shot,
+      orientation: numbers(root.get(274))[0] || 1,
       embeddedTIFF: selected ? compactTIFF(selected, little) : null,
     };
   } catch (error) {

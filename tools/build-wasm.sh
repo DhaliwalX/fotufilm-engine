@@ -249,6 +249,7 @@ echo
 echo "Wrote web/public/fotufilm.{mjs,wasm}$([[ -f web/public/fotufilm-webgpu.mjs ]] && echo ', fotufilm-webgpu.{mjs,wasm}') and $(ls web/public/packs/*.pack | wc -l | tr -d ' ') packs."
 
 tools/build-raw-wasm.sh
+bash tools/build-hdr-wasm.sh
 bash tools/build-web-scene.sh
 bash tools/build-web-profile.sh
 bash tools/build-wasm-flexible-test.sh "$OUTPUT/cpu"

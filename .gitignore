@@ -30,3 +30,4 @@ web/public/fallback/
 # Built local RAW decoder and third-party notices.
 web/public/raw/
 web/public/profile/
+web/public/hdr/

@@ -1297,7 +1297,23 @@ public enum EditorControlCatalogue {
             surfaces: [.app, .desktop, .android],
             omitted: hostsOwnIt,
             documentation: "Grades the sRGB-encoded signal, where a grading suite's corrector works, instead of display-linear light."),
-    ] + gradeBands
+    ] + gradeBands + [
+        EditorControl(
+            .sourceInterpretation, title: "Highlights",
+            detail: "Choose how the decoded highlight range enters film exposure.",
+            section: .sourceInterpretation,
+            kind: .menu(.fixed([
+                EditorMenuChoice(0, "Automatic", detail: "Preserve the file’s decoded highlight range", id: "automatic"),
+                EditorMenuChoice(1, "Full Range", detail: "Preserve all decoded highlight range", id: "fullRange"),
+                EditorMenuChoice(2, "Standard Range", detail: "Tone-map HDR before film exposure", id: "standardRange"),
+            ])),
+            surfaces: [.app, .desktop, .web],
+            omitted: hostsOwnIt.filter { $0.key != .web }.merging([
+                .android: "processed HDR interpretation is not offered on Android yet",
+            ]) { $1 },
+            web: .runtime,
+            documentation: "Automatic and Full Range preserve decoded HDR highlights. Standard Range uses the platform SDR rendition before film exposure. RAW always remains scene-linear."),
+    ]
 
     private static let print: [EditorControl] = [
         EditorControl(

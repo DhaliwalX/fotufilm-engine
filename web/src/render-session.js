@@ -1,4 +1,5 @@
 import { lensIsActive } from './lens-correction.js'
+import { interpretedImage } from './source-interpretation.js'
 import { resolveLensPlan } from './lens-plan.js'
 import { loadLensCatalogue } from './lens-catalogue.js'
 import { loadFilmProfile } from './film-profile.js'
@@ -208,6 +209,7 @@ export class RenderSession {
     const catalogue = lensIsActive(edit.lens) ? await loadLensCatalogue() : null
     const key = JSON.stringify([
       catalogue?.revision,
+      edit.sourceInterpretation,
       maxEdge,
       cropMode,
       edit.rotation,
@@ -224,8 +226,9 @@ export class RenderSession {
       ? await resolveLensPlan(image, edit.lens, onProgress)
       : null
     const lensTable = lensPlan && !lensPlan.identity ? lensPlan.table : null
-    const floating = image.raw || image.linear || lensTable
-    const oriented = floating ? null : orientImage(image, edit, maxEdge)
+    const input = interpretedImage(image, edit.sourceInterpretation)
+    const floating = input.raw || input.linear || lensTable
+    const oriented = floating ? null : orientImage(input, edit, maxEdge)
     const canvas = floating
       ? null
       : cropMode
@@ -233,7 +236,7 @@ export class RenderSession {
         : await cropImage(oriented, edit)
     const source = linearSource(
       floating
-        ? rawSource(image, edit, maxEdge, cropMode, lensTable)
+        ? rawSource(input, edit, maxEdge, cropMode, lensTable)
         : imageSource(canvas),
     )
     const entry = { image, key, canvas, source, original: null }

@@ -1,5 +1,6 @@
 import { useLensCatalogue } from './useLensCatalogue.js';
-import { readPhotoMetadata } from './photo-metadata.js';
+import { importPhoto } from './photo-import.js';
+import SourceInterpretationControls from './SourceInterpretationControls.jsx';
 import LensControls from "./LensControls.jsx";
 import InspectorPanel from "./InspectorPanel.jsx";
 import LensFilters from "./LensFilters.jsx";
@@ -526,18 +527,16 @@ export default function App() {
         errors.push(`${file.name}: choose a photo, camera RAW file, or video.`);
         continue;
       }
-      const url = URL.createObjectURL(file);
       try {
-        const image = new Image();
-        image.src = url;
-        await image.decode();
-        if (image.naturalWidth * image.naturalHeight > 120000000)
-          throw new Error("Images above 120 megapixels are not supported.");
-        image.lensMetadata = await readPhotoMetadata(file, { signal: controller.signal });
-        loaded.push({ id: crypto.randomUUID(), name: file.name, image, url });
+        const decoded = await importPhoto(file, {
+          signal: controller.signal,
+          onProgress: text => {
+            if (!controller.signal.aborted) setImportStatus(`${text}: ${file.name}`);
+          },
+        });
+        loaded.push({ id: crypto.randomUUID(), name: file.name, ...decoded });
       } catch (e) {
-        URL.revokeObjectURL(url);
-        errors.push(`${file.name}: ${e.message || "Could not decode image."}`);
+        if (e.name !== "AbortError") errors.push(`${file.name}: ${e.message || "Could not decode image."}`);
       }
     }
     if (generation !== loadGeneration.current) {
@@ -899,11 +898,13 @@ export default function App() {
           >
             {active?.image.video
               ? "Video · "
-              : active?.image.linear
-                ? "EXR · linear · "
-                : active?.image.raw
-                  ? "RAW · "
-                  : ""}
+              : active?.image.hdr
+                ? "HDR · "
+                : active?.image.linear
+                  ? "EXR · linear · "
+                  : active?.image.raw
+                    ? "RAW · "
+                    : ""}
             {active
               ? `${((rawWidth * rawHeight) / 1000000).toFixed(1)} MP`
               : ""}
@@ -1652,6 +1653,19 @@ export default function App() {
               onEnd={endEdit}
               onChange={(lens, group) => {
                 patch({ lens }, group);
+                setStage(null);
+                setDifference(false);
+              }}
+            />
+          )}
+          {panel === "light" && (
+            <SourceInterpretationControls
+              image={active?.image}
+              value={edit.sourceInterpretation}
+              disabled={exporting}
+              onChange={(sourceInterpretation) => {
+                endEdit();
+                patch({ sourceInterpretation });
                 setStage(null);
                 setDifference(false);
               }}
