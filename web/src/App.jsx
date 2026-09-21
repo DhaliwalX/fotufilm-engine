@@ -6,6 +6,7 @@ import { usePrintFrame } from "./usePrintFrame.js";
 import { frameSamplePoint } from "./print-frame.js";
 import { useAutoAdjustment } from "./useAutoAdjustment.js";
 import AutoAdjustmentAction from "./AutoAdjustmentAction.jsx";
+import { fixedStockSettings, selectStockSettings, validateStockSettings } from "./stock-settings.js";
 import { useLensCatalogue } from "./useLensCatalogue.js";
 import NegativeImportDialog from "./NegativeImportDialog.jsx";
 import { importPhoto } from "./photo-import.js";
@@ -291,6 +292,7 @@ export default function App() {
     ],
   );
   const selectedStock = stocks.find((stock) => stock.id === edit.stock);
+  const fixedSettings = fixedStockSettings(selectedStock);
   const stockId = edit.stock || stocks[0]?.id || "normal";
   const visibleError = error || libraryError;
   const auto = useAutoAdjustment({
@@ -298,7 +300,7 @@ export default function App() {
     session,
     history,
     dispatch: historyDispatch,
-    disabled: exporting,
+    disabled: exporting || fixedSettings,
     onError: setError,
     onApplied: () => {
       setStage(null);
@@ -316,7 +318,7 @@ export default function App() {
     setStage(null);
     setDifference(false);
   };
-  const profileControls = (fields) => (
+  const profileControls = (fields) => fixedSettings ? null : (
     <ProfileControls
       fields={fields}
       edit={edit}
@@ -692,6 +694,8 @@ export default function App() {
   }
   function selectStock(id) {
     if (exporting) return;
+    const nextStock = stocks.find((stock) => stock.id === id);
+    if (fixedStockSettings(nextStock) && auto.active) auto.toggle();
     const medium = stocks
       .find((s) => s.id === id)
       ?.media.some((m) => m.id === edit.medium)
@@ -703,6 +707,7 @@ export default function App() {
         : edit.halationModel || "legacy";
     patch({
       stock: id,
+      ...selectStockSettings(nextStock),
       medium: halationModel === "layered" ? null : medium,
       halationModel,
     });
@@ -725,6 +730,7 @@ export default function App() {
         await file.text(),
         stocks.map((s) => s.id),
       );
+      validateStockSettings(restored, stocks.find((stock) => stock.id === restored.stock));
       dispatch({ type: "edit", patch: restored, restoring: true });
       setStage(null);
       setDifference(false);
@@ -907,7 +913,7 @@ export default function App() {
     edit,
     exportSourceSize.width,
     exportSourceSize.height,
-    !!active && !active.image.video && edit.printFrame !== "none",
+    !!active && !active.image.video && !fixedSettings && edit.printFrame !== "none",
   );
   const shownResult = result?.fileId === activeId ? result : null;
   const adjustments = (group) => (
@@ -1425,6 +1431,13 @@ export default function App() {
           {panel === "film" && (
             <>
               <Section title={edit.stock ? "Loaded Film" : "Normal"}>
+                {fixedSettings && (
+                  <p className="medium-detail">
+                    This film uses a fixed profile. Exposure, grading, crop,
+                    output media and export remain available. Film customisation,
+                    optical filters, Auto Adjust and print frames are unavailable.
+                  </p>
+                )}
                 {edit.stock ? (
                   <>
                     <div className="info-row">
@@ -1446,7 +1459,7 @@ export default function App() {
                   Click and hold the photo to compare with the original.
                 </p>
               </Section>
-              {edit.stock && (
+              {edit.stock && !fixedSettings && (
                 <>
                   <Section title="Film Format">
                     <Selector
@@ -1530,13 +1543,13 @@ export default function App() {
           {panel === "develop" &&
             (edit.stock ? (
               <>
-                <Section title="Development">
+                {!fixedSettings && <Section title="Development">
                   {profileControls(["push", "bleach"])}
                   <p className="medium-detail">
                     Push and pull are available only when the film has measured
                     settings. Bleach bypass retains silver in the negative.
                   </p>
-                </Section>
+                </Section>}
                 <Section title="Grain">
                   {adjustments("Character")}
                   {profileControls(["grainMottle", "grainModel"])}
@@ -1674,7 +1687,7 @@ export default function App() {
                   </p>
                 </Section>
               )}
-              <PrintFrameControls
+              {!fixedSettings && <PrintFrameControls
                 edit={edit}
                 image={active?.image}
                 disabled={exporting || !active}
@@ -1689,7 +1702,7 @@ export default function App() {
                   setStage(null);
                   setDifference(false);
                 }}
-              />
+              />}
               <Section title="Export">
                 <Button
                   label={
@@ -1776,7 +1789,7 @@ export default function App() {
                 {profileControls(["shutter"])}
               </Section>
             )}
-          {panel === "light" && (
+          {panel === "light" && !fixedSettings && (
             <LensFilters
               edit={edit}
               stock={selectedStock}

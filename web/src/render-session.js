@@ -22,6 +22,7 @@ import { loadMediumBytes } from './output-media.js'
 import { loadSceneExposure } from './scene-light.js'
 import { rawSource } from './raw-source.js'
 import { defaultEdit } from './editor-state.js'
+import { validateStockSettings } from './stock-settings.js'
 import { sourceIlluminant } from './editor-catalogue.js'
 import { compositeSelection } from './selective.js'
 import {
@@ -323,6 +324,14 @@ export class RenderSession {
     const output = { bitDepth, colorSpace, region }
     if (this.closed || stale()) return null
     const requestedEdit = edit
+    if (edit.stock !== null &&
+        (hasProfileSettings(edit) || (edit.printFrame && edit.printFrame !== 'none'))) {
+      this.catalog ??= loadStockIndex().catch((error) => {
+        this.catalog = null
+        throw error
+      })
+      validateStockSettings(edit, (await this.catalog).find((item) => item.id === stock))
+    }
     const framed =
       !image.video &&
       !cropMode &&
