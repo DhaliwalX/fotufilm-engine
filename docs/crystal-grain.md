@@ -1,8 +1,8 @@
 # Crystal grain
 
 `--grain-model crystals` (Grain Model → Crystals in the host plugins) develops the grain of a
-frame from the physical crystals that form its image instead of laying a noise field on it.
-This page states the emulsion physics the model runs on across its three stages (exposure,
+frame from statistical crystal populations and overlapping development clouds.
+This page describes the physical approximations across its three stages (exposure,
 development, print), how the image forms implicitly from dye clouds, which measurements set its
 numbers, and how it renders.
 
@@ -13,13 +13,22 @@ $D_{\text{curve}}$ first, then overlays an additive noise field $\delta D$ ($D =
 
 In contrast, the crystal grain model forms the developed density implicitly:
 
-$$D = D_{\min} + \sum_{s=1}^{4} \text{dye}_s$$
+$$D = D_{\min} + \sum_{s=1}^{4}
+  \left(\text{dye}_s + \overline{D}_{s,\mathrm{fit}} - \mathbb{E}[\text{dye}_s]\right)$$
 
-(or for silver negatives, developed silver filament mass). The characteristic curve is an
-emergent macroscopic property of the crystal population, not an input to the pixel pipeline.
-The smooth curve is used only to fit the sublayer population weights once at roll load time.
-At render time, the pixels are formed directly by the sum of dye clouds from activated crystals
-plus base/fog density $D_{\min}$.
+(or for silver negatives, developed silver filament mass). The smooth characteristic curve
+fits the sublayer population weights at roll load time. At render time, activated populations
+form the dye-cloud field. A deterministic mean correction keeps that field centered on the
+population fit: passing a fluctuating demand through a finite, concave coupler pool forms less
+dye on average than passing its mean demand through the same pool. Without this correction,
+changing the sampling changes the mean developed density and can introduce a colour shift.
+The correction uses the marked-Poisson expectation of the actual discrete cloud kernel; it
+does not remove the field's variation. For silver's linear response, the correction is zero.
+The population fit itself remains an approximation to the stock curve.
+
+These are simulated population fields, not recovered individual crystals. At high magnification,
+fine cloud populations can overlap larger clouds. Their appearance depends on the output medium,
+pixel aperture and viewing scale; a scan cannot validate structures smaller than it resolves.
 
 ## Stage 1: Exposure
 
@@ -75,12 +84,25 @@ stocks, form dye clouds:
 When printing a negative optically onto photographic paper:
 
 - **Paper crystal population.** Photographic paper (such as Kodak Endura or Ilford Multigrade)
-  uses fine cubic silver chloride crystals ($\approx 0.25\,\mu\text{m}$ edge, $\approx 2.3/\mu\text{m}^2$).
+  uses an approximate population of fine cubic silver chloride crystals
+  ($\approx 0.25\,\mu\text{m}$ edge, $\approx 3.1/\mu\text{m}^2$).
+  The assumed coating weight is expressed as elemental silver. Crystal counts therefore use
+  the AgCl crystal mass multiplied by its silver mass fraction, using
+  [CIAAW atomic weights](https://www.ciaaw.org/atomic-weights.htm), before comparing with that coating.
+  This mass balance is not a measurement of a particular paper's granularity.
 - **Optical transmission.** The negative's dye clouds modulate exposure light across the paper.
   Paper crystals undergo Poisson latent-image activation according to transmittance through the
   negative.
 - **emergent print grain.** The output image contains both the projected negative grain (blurred
   by enlarger MTF) and the paper's intrinsic high-density crystal noise.
+
+Frame coverage retains the corresponding region of the original print. Cropping the frame at
+unchanged film sampling therefore preserves the paper pixel area and crystal counts; it does
+not enlarge the crop to fill a new sheet. Contact-print media use the film pixel pitch directly.
+
+Paper grain and print optics are separate from film grain. Compare a lab scan with a compatible
+scan receiver before using its texture to adjust a film's grain parameters. A shared stock name
+alone does not match exposure, processing, optics or granularity measurement conditions.
 
 ## What sets the numbers
 
@@ -128,4 +150,3 @@ The crystal grain pipeline runs entirely within Halide on CPU and Metal:
 
 The crystal model is available in full reference-quality renders. Realtime preview schedules
 and mobile/AOT targets fall back to the clump model to maintain interactive framerates.
-

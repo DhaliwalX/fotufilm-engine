@@ -379,9 +379,9 @@ inline Halide::Expr crystal_dye(Halide::Expr demand, Halide::Expr pool) {
 /// `E[exp(-demand / C)] = exp(-lambda Σ_taps E_mark[1 - exp(-mark q K / C)])`, the sum running
 /// over the cloud's lattice taps `K` with `q` the density one cloud adds and the expectation
 /// over the two marks. The host packs that sum as the bin's `factor`, so what is taken away
-/// below is the field's exact mean rather than the mean's dye, and the tone lands on the curve
-/// to within sampling noise even where the pool is most drawn down. Silver's factor is `q`
-/// itself and its mean is linear.
+/// below is the field's exact expectation under locally uniform exposure rather than the
+/// mean's dye. This centers flat fields on the population fit; it does not remove spatial
+/// development effects at exposure edges. Silver's factor is `q` itself and its mean is linear.
 inline Halide::Expr crystal_mean_dye(Halide::Expr lambda, Halide::Expr factor,
                                      Halide::Expr pool) {
     return Halide::select(pool > 0.0f,
@@ -392,19 +392,24 @@ inline Halide::Expr crystal_mean_dye(Halide::Expr lambda, Halide::Expr factor,
 /// The development stage for one pixel of `layer`: each size bin's blurred latent count, in
 /// `fields`, is what its crystals' clouds deposit here — the developer's diffusion having
 /// spread each crystal's dye to the bin's cloud; that demand is drawn from the sublayer's pool.
-/// The image itself is formed by the dye clouds: the dye each sublayer forms is added directly
-/// to the emulsion's base density (D-min), so the characteristic curve emerges implicitly as
-/// the mean of the cloud field rather than being added as a continuous background.
+/// The population fit specifies dye at mean demand, whereas a finite Poisson population through
+/// a concave pool yields less dye on average. Calibrate that difference with the exact marked
+/// Poisson expectation for the rendered taps. Otherwise the lattice changes the mean density
+/// as well as its texture. Silver is linear, so its correction is identically zero.
 inline Halide::Expr crystal_grain(Halide::ImageParam &configuration, Halide::Expr layer,
                                   const std::vector<Halide::Func> &fields,
-                                  Halide::Expr x, Halide::Expr y) {
+                                  Halide::Expr x, Halide::Expr y, Halide::Expr amount) {
     using Halide::Expr;
     Expr total = 0.0f;
     for (int bin = 0; bin < FOTUFILM_CRYSTAL_GRAIN_BINS; ++bin) {
         Expr per_cloud = crystal_bin_field(configuration, layer, bin, 1);
         Expr pool = crystal_bin_field(configuration, layer, bin, 2);
         Expr demand = per_cloud * fields[bin](x, y, layer);
-        total = total + crystal_dye(demand, pool);
+        Expr lambda = crystal_lambda(configuration, layer, bin, amount);
+        Expr factor = crystal_bin_field(configuration, layer, bin, 3);
+        Expr target_mean = crystal_dye(per_cloud * lambda, pool);
+        Expr rendered_mean = crystal_mean_dye(lambda, factor, pool);
+        total = total + crystal_dye(demand, pool) + target_mean - rendered_mean;
     }
     Expr base = FOTUFILM_CONFIG_CURVES + layer * 6;
     Expr d_min = configuration(base);

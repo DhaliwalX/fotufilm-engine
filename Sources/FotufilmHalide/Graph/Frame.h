@@ -595,7 +595,7 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
                     crystal_bin_field(configuration, 2, bin, 0), p.grain_radius_,
                     p.width_, p.height_, in.prefix + "crystal_field_" + tag, 3));
             }
-            crystal = crystal_grain(configuration, c, bins, x, y);
+            crystal = crystal_grain(configuration, c, bins, x, y, position.amount);
             Expr with_discs = selected_developed_density(
                 in.grain_mode, density_view(x, y, c), clump, disc, crystal);
             Expr without = selected_developed_density(

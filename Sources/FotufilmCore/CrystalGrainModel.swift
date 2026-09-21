@@ -257,6 +257,9 @@ public struct CrystalGrainModel: Sendable {
         public static let silverGramsPerM2: Float = 0.2
         /// Density of silver chloride, g/cm³.
         public static let silverChlorideDensity: Float = 5.56
+        /// Coating weights are expressed as silver, not AgCl. CIAAW atomic weights give
+        /// Ag / (Ag + Cl); omitting chlorine's mass undercounts the coated crystals.
+        public static let silverMassFraction: Float = 107.8682 / (107.8682 + 35.45)
         /// The sheet a negative is printed on when nothing says otherwise: 8 × 10 in, its short
         /// edge filled by the frame's. A release print is a contact print, magnified by one.
         public static let sheetShortEdgeMM: Float = 203.2
@@ -265,7 +268,9 @@ public struct CrystalGrainModel: Sendable {
         public static var crystalsPerMM2: Float {
             let gramsPerMM2 = silverGramsPerM2 * 1e-6
             let gramsPerMM3 = silverChlorideDensity * 1e-3
-            return gramsPerMM2 / (gramsPerMM3 * crystalEdgeMM * crystalEdgeMM * crystalEdgeMM)
+            let silverPerCrystal = gramsPerMM3 * crystalEdgeMM * crystalEdgeMM * crystalEdgeMM
+                * silverMassFraction
+            return gramsPerMM2 / silverPerCrystal
         }
 
         /// Whether the medium exposes an emulsion of its own. A viewed transparency, a scan,
@@ -276,17 +281,20 @@ public struct CrystalGrainModel: Sendable {
         }
 
         /// The size of one output pixel on the print, mm: the frame's short edge fills the
-        /// sheet's, so a pixel is the sheet's short edge over the frame's pixels; a contact
-        /// print's pixel is the negative's.
-        public static func pixelMM(paper: PrintPaper, shortEdgePixels: Int, pxPerMM: Float) -> Float {
+        /// sheet's. A crop retains the corresponding fraction of the original sheet instead
+        /// of enlarging the crop to fill a new sheet. A contact print's pixel is the negative's.
+        public static func pixelMM(paper: PrintPaper, shortEdgePixels: Int, pxPerMM: Float,
+                                   frameCoverage: Float = 1) -> Float {
             if paper.isProjected { return pxPerMM > 0 ? 1 / pxPerMM : 0 }
-            return shortEdgePixels > 0 ? sheetShortEdgeMM / Float(shortEdgePixels) : 0
+            let coverage = min(max(frameCoverage, 0.05), 1)
+            return shortEdgePixels > 0 ? sheetShortEdgeMM * coverage / Float(shortEdgePixels) : 0
         }
 
         /// Crystals of the print material one output pixel holds at full development.
         public static func crystalsPerPixel(paper: PrintPaper, shortEdgePixels: Int,
-                                            pxPerMM: Float) -> Float {
-            let pixel = pixelMM(paper: paper, shortEdgePixels: shortEdgePixels, pxPerMM: pxPerMM)
+                                            pxPerMM: Float, frameCoverage: Float = 1) -> Float {
+            let pixel = pixelMM(paper: paper, shortEdgePixels: shortEdgePixels, pxPerMM: pxPerMM,
+                                frameCoverage: frameCoverage)
             return crystalsPerMM2 * pixel * pixel
         }
 

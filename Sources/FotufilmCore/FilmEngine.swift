@@ -550,12 +550,17 @@ public struct FilmEngineInvocation {
     /// R(t) = E[(1 - |t - Z|)+], Z ~ N(0, 2 sigma²): the pixel box's triangle read through a
     /// Gaussian field's autocovariance. `sigma` is the field's total continuous Gaussian.
     private static func gaussianLatticeCovariance(_ t: Float, sigma: Float) -> Float {
-        let s = max(2 * sigma * sigma, 1e-8).squareRoot()
-        let phi = { (x: Float) -> Float in 0.3989423 * exp(-0.5 * x * x) }
-        let cdf = { (x: Float) -> Float in 0.5 * (1 + Float(erf(Double(x) * 0.7071068))) }
-        let z = { (x: Float) -> Float in (x - t) / s }
-        return (1 + t) * (cdf(z(0)) - cdf(z(-1))) + (1 - t) * (cdf(z(1)) - cdf(z(0)))
-            + s * (phi(z(-1)) - 2 * phi(z(0)) + phi(z(1)))
+        // At microscope sampling the cloud spans many pixels. These CDF differences
+        // then nearly cancel; Float arithmetic can make a wider cloud look narrower.
+        // Keep the integral in Double until the packed kernel parameter is needed.
+        let position = Double(t)
+        let s = max(2 * Double(sigma) * Double(sigma), 1e-8).squareRoot()
+        let phi = { (x: Double) in exp(-0.5 * x * x) / sqrt(2 * Double.pi) }
+        let cdf = { (x: Double) in 0.5 * (1 + erf(x / sqrt(2))) }
+        let z = { (x: Double) in (x - position) / s }
+        return Float((1 + position) * (cdf(z(0)) - cdf(z(-1)))
+            + (1 - position) * (cdf(z(1)) - cdf(z(0)))
+            + s * (phi(z(-1)) - 2 * phi(z(0)) + phi(z(1))))
     }
 
     /// The lag-1 correlation the blur this lattice will actually run carries.
@@ -568,13 +573,13 @@ public struct FilmEngineInvocation {
         let radius = gaussianRadius(sigma)
         guard radius > 0, sigma > 0 else { return 0 }
         let taps = (-radius...radius).map {
-            exp(-Float($0 * $0) / (2 * sigma * sigma))
+            exp(-Double($0 * $0) / (2 * Double(sigma) * Double(sigma)))
         }
-        var zero: Float = 0
-        var one: Float = 0
+        var zero: Double = 0
+        var one: Double = 0
         for index in taps.indices { zero += taps[index] * taps[index] }
         for index in 0..<(taps.count - 1) { one += taps[index] * taps[index + 1] }
-        return zero > 0 ? one / zero : 0
+        return zero > 0 ? Float(one / zero) : 0
     }
 
     /// Solves a discrete Gaussian sigma for target lag-1 correlation `R(1)/R(0)`.
@@ -1495,7 +1500,8 @@ public struct FilmEngineInvocation {
             && CrystalGrainModel.Print.exposesCrystals(stock: stock, paper: printMedium)
         let paperCrystals = paperExposed
             ? CrystalGrainModel.Print.crystalsPerPixel(
-                paper: printMedium, shortEdgePixels: min(width, height), pxPerMM: pxPerMM)
+                paper: printMedium, shortEdgePixels: min(width, height), pxPerMM: pxPerMM,
+                frameCoverage: coverage)
             : 0
         configuration += [paperCrystals, paperCrystals, paperCrystals,
                           Float(UInt32(truncatingIfNeeded: animatedSeed) & 0xFFFFFF)]
