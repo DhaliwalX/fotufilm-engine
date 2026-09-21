@@ -41,20 +41,24 @@ self.onmessage = async ({ data: { id, request, base } }) => {
       "lens-catalogue",
       "lens-match",
     ].includes(request.kind);
-    if (!lensRequest && !/^[a-z0-9_-]+$/i.test(request.stock))
+    const autoRequest = request.kind === "auto-adjust";
+    const needsStock = !lensRequest && !(autoRequest && request.stock == null);
+    if (needsStock && !/^[a-z0-9_-]+$/i.test(request.stock))
       throw new Error("Invalid film identifier.");
     self.postMessage({
       id,
-      status: lensRequest
-        ? "Loading on-device lens correction"
-        : "Loading on-device film profile builder",
+      status: autoRequest
+        ? "Solving automatic exposure"
+        : lensRequest
+          ? "Loading on-device lens correction"
+          : "Loading on-device film profile builder",
     });
     assets ??= loadAssets(base).catch((error) => {
       assets = null;
       throw error;
     });
     const { runtime, read, stocks } = await assets;
-    if (lensRequest) {
+    if (!needsStock) {
       const profile = runtime.prepare(request);
       self.postMessage({ id, profile }, [profile]);
       return;
@@ -65,7 +69,9 @@ self.onmessage = async ({ data: { id, request, base } }) => {
     }
     self.postMessage({
       id,
-      status: "Preparing film, development and print settings",
+      status: autoRequest
+        ? "Matching exposure to the film’s latitude"
+        : "Preparing film, development and print settings",
     });
     const profile = runtime.prepare({
       ...request,

@@ -2891,6 +2891,32 @@
     },
     {
       "availability" : "always",
+      "detail" : "Set exposure, highlights and shadows to fit the photograph inside the selected film’s latitude.",
+      "documentation" : "Solves exposure and tone recovery using the native film latitude. Choosing another film recalculates while Auto is active. Disabling Auto retains the solved values; manual exposure or tone edits disengage it.",
+      "drives" : [
+
+      ],
+      "field" : "autoAdjustment",
+      "group" : "light",
+      "kind" : "takeover",
+      "omitted" : {
+        "android" : "Automatic exposure is not yet offered on Android.",
+        "cli" : "Set exposure, highlights and shadows explicitly.",
+        "finalcut" : "The host owns automatic adjustment.",
+        "resolve" : "The host owns automatic adjustment."
+      },
+      "scope" : "edit",
+      "section" : "lightExposure",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web"
+      ],
+      "title" : "Auto Adjust",
+      "webTransform" : "runtime"
+    },
+    {
+      "availability" : "always",
       "binding" : "highlights",
       "commandLineFlag" : "--highlights",
       "commandLineGeneric" : true,

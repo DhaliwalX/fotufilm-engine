@@ -20,6 +20,7 @@ extension EditorControlField {
     var access: EditControlAccess {
         switch self {
         case .exposure: return .number(\.exposure)
+        case .autoAdjustment: return .unstored("Auto is a transient action; its solved slider positions are stored.")
         case .warmth: return .number(\.temperatureMired)
         case .tint: return .number(\.tint)
         case .highlights: return .number(\.highlights)

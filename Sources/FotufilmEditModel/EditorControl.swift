@@ -6,6 +6,7 @@ import FotufilmCore
 
 public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case exposure, warmth, tint, highlights, shadows, localTone
+    case autoAdjustment
     case saturation, vibrance
     case sceneLight, sceneLightKelvin, cameraPreflash
     case sourceInterpretation

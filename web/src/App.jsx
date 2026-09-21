@@ -1,3 +1,5 @@
+import { useAutoAdjustment } from './useAutoAdjustment.js';
+import AutoAdjustmentAction from './AutoAdjustmentAction.jsx';
 import { useLensCatalogue } from './useLensCatalogue.js';
 import { importPhoto } from './photo-import.js';
 import SourceInterpretationControls from './SourceInterpretationControls.jsx';
@@ -168,7 +170,7 @@ function StockRow({ stock, active, image, session, onSelect }) {
 }
 
 export default function App() {
-  const [history, dispatch] = useReducer(historyReducer, initialHistory);
+  const [history, historyDispatch] = useReducer(historyReducer, initialHistory);
   const edit = history.present;
   const [stocks, setStocks] = useState([]),
     [files, setFiles] = useState([]),
@@ -260,11 +262,17 @@ export default function App() {
   const selectedStock = stocks.find((stock) => stock.id === edit.stock);
   const stockId = edit.stock || stocks[0]?.id || "normal";
   const visibleError = error || libraryError;
+  const auto = useAutoAdjustment({
+    image: active?.image, session, history, dispatch: historyDispatch,
+    disabled: exporting, onError: setError,
+    onApplied: () => { setStage(null); setDifference(false); },
+  });
+  const dispatch = auto.dispatch;
   const patch = useCallback(
     (value, group) => dispatch({ type: "edit", patch: value, group }),
-    [],
+    [dispatch],
   );
-  const endEdit = useCallback(() => dispatch({ type: "end" }), []);
+  const endEdit = useCallback(() => dispatch({ type: "end" }), [dispatch]);
   const setProfile = (key, value) => {
     patch({ profile: { ...edit.profile, [key]: value } }, `profile-${key}`);
     setStage(null);
@@ -658,7 +666,7 @@ export default function App() {
         await file.text(),
         stocks.map((s) => s.id),
       );
-      patch(restored);
+      dispatch({ type: "edit", patch: restored, restoring: true });
       setStage(null);
       setDifference(false);
       setError(null);
@@ -752,8 +760,15 @@ export default function App() {
   }
   useEffect(() => {
     function keydown(event) {
-      if (isTyping(event.target) || exporting) return;
       const command = event.metaKey || event.ctrlKey;
+      if (command && event.shiftKey && event.key.toLowerCase() === "a") {
+        if (!auto.available) return;
+        event.preventDefault();
+        if (isTyping(event.target)) event.target.blur();
+        auto.toggle();
+        return;
+      }
+      if (isTyping(event.target) || exporting) return;
       if (command && event.key.toLowerCase() === "o") {
         event.preventDefault();
         input.current?.click();
@@ -800,7 +815,7 @@ export default function App() {
       window.removeEventListener("keyup", release);
       window.removeEventListener("blur", blur);
     };
-  }, [active, exporting, cropMode, endEdit]);
+  }, [active, exporting, cropMode, endEdit, auto.available, auto.toggle, dispatch]);
 
   const visibleStocks = stocks.filter((stock) =>
     stock.name.toLowerCase().includes(search.toLowerCase()),
@@ -935,7 +950,7 @@ export default function App() {
             icon="reset"
             label="Reset all edits"
             onClick={() => {
-              patch(defaultEdit(edit.stock));
+              dispatch({ type: "edit", patch: defaultEdit(edit.stock), restoring: true });
               setStage(null);
               setDifference(false);
             }}
@@ -1141,7 +1156,7 @@ export default function App() {
             {active?.name || "No photo open"}
           </span>
           <span role="status">
-            {status ||
+            {auto.status || status ||
               (active && shownResult?.key !== previewKey
                 ? error
                   ? "Preview unavailable"
@@ -2026,6 +2041,10 @@ export default function App() {
       {dialog === "more" && (
         <Modal title="Options" onClose={() => setDialog(null)}>
           <div className="menu-options">
+            <AutoAdjustmentAction auto={auto} onClick={() => {
+              auto.toggle();
+              setDialog(null);
+            }} />
             <Button
               label="Save edits…"
               variant="secondary"
@@ -2095,6 +2114,7 @@ export default function App() {
               ["Export", "⌘ / Ctrl S"],
               ["Undo", "⌘ / Ctrl Z"],
               ["Redo", "⇧ ⌘ / Ctrl Z"],
+              [editorControl("autoAdjustment").title, "⇧ ⌘ / Ctrl A"],
               ["Compare", "Hold Space"],
               ["Histogram", "H"],
               ["Crop", "C"],
@@ -2127,14 +2147,15 @@ export default function App() {
               The browser supports film selection and format, ageing, halation,
               grain models, measured push/pull, bleach bypass, colour
               separation, print viewing, a simulated printer, an ordered
-              lens-filter stack, manual lens correction, light and color
+              lens-filter stack, automatic and manual lens correction, Auto
+              Adjust, light and color
               adjustments, three-way grading, color and light selections, crop,
-              rotation and flip. Camera RAW files decode locally with LibRaw,
-              using as-shot white balance and 16-bit linear data. Other images
-              use the browser decoder.
+              rotation and flip. Camera RAW files use as-shot white balance.
+              RAW, linear EXR and supported HDR JPEG gain maps preserve decoded
+              highlight detail before film exposure.
             </p>
             <p>
-              Scanned-negative conversion, automatic lens profiles, automatic
+              Scanned-negative conversion, automatic
               subject selections, custom packs, and HDR / 16-bit export are
               available in the Mac app.
             </p>

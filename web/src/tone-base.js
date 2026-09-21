@@ -25,7 +25,7 @@ export function boxMean(values, width, height, radius) {
     }
   return output
 }
-export async function measureTone(source, controls, decode, balance) {
+export async function measureTone(source, controls, decode, balance, { signal } = {}) {
   const { width, height } = source,
     long = Math.max(width, height)
   const gw = Math.min(width, Math.max(1, Math.floor((width * 64 + Math.floor(long / 2)) / long)))
@@ -36,6 +36,7 @@ export async function measureTone(source, controls, decode, balance) {
     (v, i) => (v * balance[i] * 2 ** (controls.ev || 0)) / 0.18,
   )
   for (let top = 0; top < height; top += 32) {
+    if (signal?.aborted) throw new DOMException('Tone measurement cancelled.', 'AbortError')
     const rows = Math.min(32, height - top)
     const pixels = decode(source.read(0, top, width, rows))
     for (let y = 0; y < rows; y++)

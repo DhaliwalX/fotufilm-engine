@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 const require = createRequire(new URL('../web/package.json', import.meta.url))
-const { chromium } = require('@playwright/test')
+const { chromium, expect } = require('@playwright/test')
 const base = new URL(process.argv[2] || 'http://127.0.0.1:5757/')
 const browser = await chromium.launch({ channel: 'chrome' })
 try {
@@ -35,6 +35,23 @@ try {
   await page.getByRole('button', { name: 'Export', exact: true }).click()
   const png = await readFile(await (await download).path())
   assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [64, 96])
+  await page.getByRole('combobox', { name: 'Highlights', exact: true }).click()
+  await page.getByRole('option', { name: 'Full Range', exact: true }).click()
+  await page.getByRole('button', { name: 'More options', exact: true }).click()
+  await page.getByRole('button', { name: 'Auto Adjust', exact: true }).click()
+  const exposure = page.getByRole('spinbutton', { name: 'Exposure value', exact: true })
+  await expect(exposure).not.toHaveValue('0', { timeout: 60000 })
+  assert.ok(Number(await exposure.inputValue()) < -0.5, 'Auto must protect the decoded HDR highlights')
+  await expect(page.locator('.viewer-status > [role=status]')).toContainText('64 × 96')
+  await page.getByRole('button', { name: 'More options', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Auto Adjust', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
+  await page.getByRole('button', { name: 'Export (⌘S)', exact: true }).click()
+  const autoDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  const autoPNG = await readFile(await (await autoDownload).path())
+  assert.deepEqual([autoPNG.readUInt32BE(16), autoPNG.readUInt32BE(20)], [64, 96])
+  assert.notDeepEqual(autoPNG, png, 'Auto and Full Range must reach the exported pixels')
   assert.deepEqual(errors, [])
-  console.log('Production EXR/HDR workers, orientation, source interpretation, full-size export and revisioned asset paths passed.')
+  console.log('Production EXR/HDR workers, Auto, orientation, source interpretation, full-size export and revisioned asset paths passed.')
 } finally { await browser.close() }

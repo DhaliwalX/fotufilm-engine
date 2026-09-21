@@ -1120,6 +1120,17 @@ public enum EditorControlCatalogue {
                                          help: "Exposure compensation in stops (default: 0)"),
             documentation: "Adjusts exposure in stops (EV) before film simulation."),
         EditorControl(
+            .autoAdjustment, title: "Auto Adjust",
+            detail: "Set exposure, highlights and shadows to fit the photograph inside the selected film’s latitude.",
+            section: .lightExposure, kind: .takeover,
+            surfaces: [.app, .desktop, .web],
+            omitted: [.android: "Automatic exposure is not yet offered on Android.",
+                      .resolve: "The host owns automatic adjustment.",
+                      .finalcut: "The host owns automatic adjustment.",
+                      .cli: "Set exposure, highlights and shadows explicitly."],
+            web: .runtime,
+            documentation: "Solves exposure and tone recovery using the native film latitude. Choosing another film recalculates while Auto is active. Disabling Auto retains the solved values; manual exposure or tone edits disengage it."),
+        EditorControl(
             .highlights, title: "Highlights",
             detail: "Adjust bright areas before the film response is applied.",
             section: .lightExposure, kind: .slider(signed),
