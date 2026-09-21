@@ -1192,3 +1192,11 @@ dialog .adjustment {
 .canvas-area.sampling .photo-plane {
   cursor: crosshair;
 }
+
+.spectrum-control svg { display: block; width: 100%; touch-action: none; overflow: visible; }
+.spectrum-control .curve-grid { stroke: var(--border); stroke-dasharray: 2 3; }
+.spectrum-control .curve-zero { stroke: var(--muted); opacity: .5; }
+.spectrum-control .curve-line { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+.spectrum-control circle { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; cursor: ns-resize; }
+.spectrum-control circle:focus { outline: none; stroke: currentColor; stroke-width: 2.5; }
+.spectrum-control text { font-size: 8px; fill: var(--muted); }

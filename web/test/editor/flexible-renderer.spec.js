@@ -56,18 +56,56 @@ test("new grain, gauge and halation combinations render deterministically", asyn
     );
     const { loadFilmProfile } = await import("/src/film-profile.js");
     const module = await factory(),
-      width = 160,
-      height = 96;
+      // Resolve the physical halo; a thumbnail can quantize its blur to zero.
+      width = 640,
+      height = 384;
     const data = new Float32Array(width * height * 4);
     for (let y = 0; y < height; y++)
       for (let x = 0; x < width; x++) {
         const at = (y * width + x) * 4;
-        data.set([0.02 + x / width, 0.04 + y / height, 0.18, 1], at);
+        const light = x > width * 0.65 && y < height * 0.4 ? 8 : 1;
+        data.set(
+          [
+            (0.02 + x / width) * light,
+            (0.04 + y / height) * light,
+            0.18 * light,
+            1,
+          ],
+          at,
+        );
       }
     const source = pixelSource({ data, width, height }),
       results = [];
     for (const settings of [
       { stock: "gold200", controls: {} },
+      {
+        stock: "gold200",
+        controls: {
+          estimatedHalation: true,
+          halationReturn: 0.12,
+          halationSpectrum: [0, 0.2, 0.3, 0, -0.2, 0.5, 1],
+        },
+      },
+      {
+        stock: "gold200",
+        controls: {
+          bleach: 0.5,
+          couplers: 1.5,
+          couplerReach: 2,
+          couplerSelf: 0.4,
+          chromaticFringeAmount: 0.3,
+          chromaticFringeRadius: 100,
+        },
+      },
+      {
+        stock: "gold200",
+        controls: {
+          printerEnabled: true,
+          printerExposure: 0.5,
+          printerMagenta: 0.6,
+          printLight: "tungsten",
+        },
+      },
       {
         stock: "gold200",
         format: "16mm",
@@ -109,6 +147,7 @@ test("new grain, gauge and halation combinations render deterministically", asyn
           hash = Math.imul(hash ^ v, 16777619) >>> 0;
         });
         results.push({
+          settings,
           hash,
           min,
           max,

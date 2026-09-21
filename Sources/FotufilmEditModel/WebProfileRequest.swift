@@ -29,6 +29,11 @@ public struct WebProfileRequest: Decodable {
     }
 
     public func prepare() throws -> Data {
+        let (stock, options) = try configured()
+        return try WebFilmProfile.prepare(stock: stock, options: options, width: width, height: height)
+    }
+
+    public func configured() throws -> (FilmStock, FotufilmEngine.Options) {
         let stock = try self.stock.validated().stock
         var options = FotufilmEngine.Options()
         let formatID = format ?? self.stock.nativeFormatID ?? FilmFormat.houseDefaultID
@@ -54,10 +59,16 @@ public struct WebProfileRequest: Decodable {
             }
             options.sceneHighlightStops = sceneHighlightStops
         }
+        let paper = (options.paper ?? .default(for: stock)).resolved(for: stock)
+        let stockControls = Dictionary(uniqueKeysWithValues:
+            EditorControlCatalogue.controls(for: stock, on: .web).map { ($0.field, $0) })
+        var printer = PrinterProfile.simulatedTungsten
+        var printerEnabled = false
         for (name, input) in controls.sorted(by: { $0.key < $1.key }) {
             guard let field = EditorControlField(rawValue: name),
-                  let control = EditorControlCatalogue.control(field),
-                  let binding = control.binding else {
+                  let control = stockControls[field] ?? EditorControlCatalogue.control(field),
+                  control.binding != nil || [.printerEnabled, .printerLamp, .printerExposure,
+                      .printerMagenta, .printerYellow].contains(field) else {
                 throw Failure(description: "Unsupported profile control: \(name)")
             }
             let value: EditorControlValue
@@ -69,12 +80,12 @@ public struct WebProfileRequest: Decodable {
                 }
                 value = .number(number)
             case (.toggle, .flag(let flag)): value = .flag(flag)
-            case (.menu(let menu), .choice(let id)):
-                guard let choices = menu.fixedChoices,
+            case (.menu, .choice(let id)):
+                guard let choices = WebProfileCatalogue.choices(field, stock: stock, paper: paper),
                       let index = choices.firstIndex(where: { $0.id == id }) else {
                     throw Failure(description: "Unknown \(control.title) choice: \(id)")
                 }
-                switch binding {
+                switch control.binding {
                 case .grainMottleShare, .shutterSeconds, .printViewingKelvin:
                     value = .optionalNumber(choices[index].value)
                 default: value = .choice(index)
@@ -87,9 +98,20 @@ public struct WebProfileRequest: Decodable {
                 value = .curve(values)
             default: throw Failure(description: "Invalid value for \(control.title).")
             }
-            binding.apply(value, to: &options)
+            if field == .push, let stops = value.number, !stock.supportsDevelopment(stops: Float(stops)) {
+                throw Failure(description: "This film has no measured development at the selected stop value.")
+            }
+            switch field {
+            case .printerEnabled: printerEnabled = value.flag ?? false
+            case .printerLamp: printer.lampKelvin = Float(value.number!)
+            case .printerExposure: printer.exposureEV = Float(value.number!)
+            case .printerMagenta: printer.magenta = Float(value.number!)
+            case .printerYellow: printer.yellow = Float(value.number!)
+            default: control.binding?.apply(value, to: &options)
+            }
         }
-        return try WebFilmProfile.prepare(stock: stock, options: options,
-                                          width: width, height: height)
+        options.printer = printerEnabled ? printer.normalized : nil
+        if !paper.isNegative { options.negativeViewing = nil }
+        return (stock, options)
     }
 }

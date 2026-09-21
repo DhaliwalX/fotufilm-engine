@@ -66,15 +66,7 @@ do {
     let input = FileHandle.standardInput.readDataToEndOfFile()
     if CommandLine.arguments.contains("--catalogue") {
         let definitions = try JSONDecoder().decode([String: FilmStockDefinition].self, from: input)
-        var catalogue: [String: [String: Any]] = [:]
-        for (id, definition) in definitions {
-            let stock = try definition.validated().stock
-            catalogue[id] = [
-                "available": EditorControlCatalogue.controls(for: stock, on: .web).map { $0.field.rawValue },
-                "nativeFormat": definition.nativeFormatID ?? FilmFormat.houseDefaultID,
-            ]
-        }
-        FileHandle.standardOutput.write(try JSONSerialization.data(withJSONObject: catalogue, options: [.sortedKeys]))
+        FileHandle.standardOutput.write(try WebProfileCatalogue.data(definitions))
     } else {
         let request = try JSONDecoder().decode(WebProfileRequest.self, from: input)
         FileHandle.standardOutput.write(try request.prepare())

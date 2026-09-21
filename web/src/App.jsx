@@ -1,5 +1,5 @@
 import ProfileControls from "./ProfileControls.jsx";
-import { hasProfileSettings } from "./profile-settings.js";
+import { hasProfileSettings, profileMedium } from "./profile-settings.js";
 import SelectiveControls from "./SelectiveControls.jsx";
 import { newSelection, sampleScene } from "./selective.js";
 import {
@@ -268,6 +268,11 @@ export default function App() {
       edit={edit}
       stock={selectedStock}
       onChange={setProfile}
+      onReset={(field) => {
+        const profile = { ...edit.profile };
+        delete profile[field];
+        patch({ profile });
+      }}
       onEnd={endEdit}
       disabled={exporting || !active || edit.halationModel === "layered"}
     />
@@ -1281,10 +1286,22 @@ export default function App() {
           <fieldset disabled={exporting || !active}>
             {panel === "film" && (
               <>
-                <div className="inspector-title">
-                  <h2>{selectedStock?.name || "Normal"}</h2>
-                  <p>{selectedStock ? "Film settings" : "No film selected"}</p>
-                </div>
+                <Section title={edit.stock ? "Loaded Film" : "Normal"}>
+                  {edit.stock ? (
+                    <>
+                      <div className="info-row">
+                        <span>Stock</span><span>{selectedStock?.name}</span>
+                      </div>
+                      <p className="medium-detail">Choose a stock from the film library on the left.</p>
+                    </>
+                  ) : (
+                    <p className="medium-detail">
+                      Film simulation is off. Choose a film from the library.
+                      With Normal selected, use Expose to adjust the source and Print to finish the image.
+                    </p>
+                  )}
+                  <p className="medium-detail">Click and hold the photo to compare with the original.</p>
+                </Section>
                 {edit.stock && (
                   <>
                     <Section title="Film Format">
@@ -1340,7 +1357,13 @@ export default function App() {
                         setDifference(false);
                       }}
                     />
-                    {profileControls(["halation", "halationColour"])}
+                    {profileControls([
+                      "halation",
+                      "halationReturn",
+                      "halationColour",
+                      "halationSpectrum",
+                      "estimatedHalation",
+                    ])}
                     {hasProfileSettings(edit) && (
                       <p className="medium-detail">
                         Custom film settings use Legacy halation.
@@ -1360,28 +1383,54 @@ export default function App() {
                     )}
                   </Section>
                 )}
-                <p className="inspector-hint">
-                  Click and hold the photo to compare with the original.
-                </p>
+
               </>
             )}
             {panel === "develop" &&
               (edit.stock ? (
-                <Section title="Grain">
-                  {adjustments("Character")}
-                  {profileControls(["grainMottle", "grainModel"])}
-                  <Button
-                    label="New Grain Pattern"
-                    variant="secondary"
-                    size="sm"
-                    className="secondary full-width"
-                    onClick={() =>
-                      patch({
-                        seed: crypto.getRandomValues(new Uint32Array(1))[0],
-                      })
-                    }
-                  />
-                </Section>
+                <>
+                  <Section title="Development">
+                    {profileControls(["push", "bleach"])}
+                    <p className="medium-detail">
+                      Push and pull are available only when the film has
+                      measured settings. Bleach bypass retains silver in the
+                      negative.
+                    </p>
+                  </Section>
+                  <Section title="Grain">
+                    {adjustments("Character")}
+                    {profileControls(["grainMottle", "grainModel"])}
+                    <Button
+                      label="New Grain Pattern"
+                      variant="secondary"
+                      size="sm"
+                      className="secondary full-width"
+                      onClick={() =>
+                        patch({
+                          seed: crypto.getRandomValues(new Uint32Array(1))[0],
+                        })
+                      }
+                    />
+                  </Section>
+                  {selectedStock?.available.some((field) =>
+                    [
+                      "couplers",
+                      "couplerReach",
+                      "couplerSelf",
+                      "chromaticFringeAmount",
+                    ].includes(field),
+                  ) && (
+                    <Section title="Colour Separation">
+                      {profileControls([
+                        "couplers",
+                        "couplerReach",
+                        "couplerSelf",
+                        "chromaticFringeAmount",
+                        "chromaticFringeRadius",
+                      ])}
+                    </Section>
+                  )}
+                </>
               ) : (
                 <Section title="Normal">
                   <p>
@@ -1447,6 +1496,13 @@ export default function App() {
                         }}
                       />
                     )}
+                  {profileControls([
+                    "printLight",
+                    "printCorrection",
+                    "negativeViewing",
+                    "screenGrade",
+                    "screenExposure",
+                  ])}
                   {selectedStock && (
                     <p className="medium-detail">
                       {(edit.medium || selectedStock.defaultMedium) === "screen"
@@ -1464,6 +1520,24 @@ export default function App() {
                   </div>
                 </Section>
 
+                {profileMedium(edit, selectedStock)?.enlarger && (
+                  <Section title="Lamp">
+                    {profileControls([
+                      "enlarger",
+                      "printerEnabled",
+                      "printerLamp",
+                      "printerExposure",
+                      "printerMagenta",
+                      "printerYellow",
+                      "printerPreflash",
+                    ])}
+                    <p className="medium-detail">
+                      {edit.profile?.printerEnabled
+                        ? "A simulated tungsten lamp and colour filters expose the paper through the film. More exposure darkens negative paper and lightens positive paper."
+                        : "Enable Simulated Printer to adjust lamp temperature, paper exposure and filtration."}
+                    </p>
+                  </Section>
+                )}
                 <Section title="Export">
                   <Button
                     label={
@@ -1544,6 +1618,12 @@ export default function App() {
                 </Section>
               </>
             )}
+            {panel === "light" &&
+              selectedStock?.available.includes("shutter") && (
+                <Section title="Long Exposure">
+                  {profileControls(["shutter"])}
+                </Section>
+              )}
             {panel === "selective" && (
               <SelectiveControls
                 disabled={exporting || !active}
@@ -1999,14 +2079,14 @@ export default function App() {
             </p>
             <p>
               The browser supports film selection and format, ageing, halation,
-              grain models, light and color adjustments, three-way grading,
-              color and light selections, crop, rotation and flip. Camera
-              RAW files decode locally with LibRaw, using as-shot white balance
-              and 16-bit linear data. Other images use the browser decoder.
+              grain models, measured push/pull, bleach bypass, colour separation,
+              print viewing and a simulated printer, light and color adjustments, three-way grading,
+              color and light selections, crop, rotation and flip. Camera RAW
+              files decode locally with LibRaw, using as-shot white balance and
+              16-bit linear data. Other images use the browser decoder.
             </p>
             <p>
-              Scanned-negative conversion, additional spectral film and lens
-              controls, automatic subject selections, custom packs, and HDR /
+              Scanned-negative conversion, lens controls and correction, automatic subject selections, custom packs, and HDR /
               16-bit export are available in the Mac app.
             </p>
           </div>

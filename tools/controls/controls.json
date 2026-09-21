@@ -585,7 +585,7 @@
         "cli"
       ],
       "title" : "Mottle",
-      "webTransform" : "runtime"
+      "webTransform" : "profile"
     },
     {
       "availability" : "always",
@@ -872,7 +872,7 @@
         "cli"
       ],
       "title" : "Grain Model",
-      "webTransform" : "runtime"
+      "webTransform" : "profile"
     },
     {
       "availability" : "film",
@@ -1068,7 +1068,7 @@
         "cli"
       ],
       "title" : "Halation",
-      "webTransform" : "runtime"
+      "webTransform" : "profile"
     },
     {
       "availability" : "always",
@@ -1106,8 +1106,7 @@
       "omitted" : {
         "android" : "Film Model settings choose it for every photograph",
         "app" : "Film Model settings choose it for every photograph",
-        "desktop" : "Film Model settings choose it for every photograph",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "desktop" : "Film Model settings choose it for every photograph"
       },
       "restingOn" : false,
       "scope" : "global",
@@ -1116,9 +1115,11 @@
       "surfaces" : [
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Estimated Halation Shape"
+      "title" : "Estimated Halation Shape",
+      "webTransform" : "profile"
     },
     {
       "availability" : "film",
@@ -1140,8 +1141,7 @@
       "omitted" : {
         "android" : "Return overrides are not yet offered in the Android editor",
         "finalcut" : "Return overrides are not yet offered in plugin hosts",
-        "resolve" : "Return overrides are not yet offered in plugin hosts",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "resolve" : "Return overrides are not yet offered in plugin hosts"
       },
       "scale" : {
         "admittedMax" : 1,
@@ -1159,9 +1159,11 @@
       "surfaces" : [
         "app",
         "desktop",
+        "web",
         "cli"
       ],
-      "title" : "Halation Return"
+      "title" : "Halation Return",
+      "webTransform" : "profile"
     },
     {
       "availability" : "colourNegative",
@@ -1231,7 +1233,7 @@
         "cli"
       ],
       "title" : "Halo Colour",
-      "webTransform" : "runtime"
+      "webTransform" : "profile"
     },
     {
       "availability" : "film",
@@ -1286,8 +1288,7 @@
       "omitted" : {
         "android" : "the Android panel draws no curve rows yet",
         "cli" : "no flag carries a curve",
-        "finalcut" : "not yet offered; seven sliders would need seven ids",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "finalcut" : "not yet offered; seven sliders would need seven ids"
       },
       "persistedKey" : "halationSpectrum",
       "scope" : "edit",
@@ -1296,9 +1297,11 @@
       "surfaces" : [
         "app",
         "desktop",
-        "resolve"
+        "resolve",
+        "web"
       ],
-      "title" : "Return Spectrum"
+      "title" : "Return Spectrum",
+      "webTransform" : "profile"
     },
     {
       "availability" : "film",
@@ -1340,7 +1343,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "couplers",
       "scale" : {
@@ -1364,9 +1367,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Couplers"
+      "title" : "Couplers",
+      "webTransform" : "profile"
     },
     {
       "availability" : "couplerGeometry",
@@ -1407,8 +1412,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "finalcut" : "not yet offered; needs the coupler-geometry gate",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "finalcut" : "not yet offered; needs the coupler-geometry gate"
       },
       "scale" : {
         "admittedMax" : 3,
@@ -1428,9 +1432,11 @@
         "desktop",
         "android",
         "resolve",
+        "web",
         "cli"
       ],
-      "title" : "Separation"
+      "title" : "Separation",
+      "webTransform" : "profile"
     },
     {
       "availability" : "couplerGeometry",
@@ -1471,8 +1477,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "finalcut" : "not yet offered; needs the coupler-geometry gate",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "finalcut" : "not yet offered; needs the coupler-geometry gate"
       },
       "persistedKey" : "couplerSelf",
       "scale" : {
@@ -1495,9 +1500,11 @@
         "desktop",
         "android",
         "resolve",
+        "web",
         "cli"
       ],
-      "title" : "Edge Contrast"
+      "title" : "Edge Contrast",
+      "webTransform" : "profile"
     },
     {
       "availability" : "couplerGeometry",
@@ -1655,7 +1662,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "chromaticFringeAmount",
       "scale" : {
@@ -1679,9 +1686,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Fringe Amount"
+      "title" : "Fringe Amount",
+      "webTransform" : "profile"
     },
     {
       "availability" : "interlayerInhibition",
@@ -1724,7 +1733,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "chromaticFringeRadius",
       "scale" : {
@@ -1748,9 +1757,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Fringe Radius"
+      "title" : "Fringe Radius",
+      "webTransform" : "profile"
     },
     {
       "availability" : "measuredDevelopment",
@@ -1790,7 +1801,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "push",
       "scale" : {
@@ -1817,9 +1828,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Push"
+      "title" : "Push",
+      "webTransform" : "profile"
     },
     {
       "availability" : "colourNegative",
@@ -1881,7 +1894,7 @@
       },
       "kind" : "chips",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "bleach",
       "scale" : {
@@ -1905,9 +1918,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Bleach Bypass"
+      "title" : "Bleach Bypass",
+      "webTransform" : "profile"
     },
     {
       "availability" : "film",
@@ -1980,7 +1995,7 @@
         "cli"
       ],
       "title" : "Expired",
-      "webTransform" : "runtime"
+      "webTransform" : "profile"
     },
     {
       "availability" : "statedReciprocity",
@@ -2020,8 +2035,7 @@
       },
       "kind" : "menu",
       "omitted" : {
-        "finalcut" : "not yet offered; needs the reciprocity gate",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "finalcut" : "not yet offered; needs the reciprocity gate"
       },
       "scope" : "edit",
       "section" : "filmLab",
@@ -2030,9 +2044,11 @@
         "desktop",
         "android",
         "resolve",
+        "web",
         "cli"
       ],
-      "title" : "Long Exposure"
+      "title" : "Long Exposure",
+      "webTransform" : "profile"
     },
     {
       "availability" : "always",
@@ -4136,7 +4152,7 @@
       },
       "kind" : "menu",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "scope" : "edit",
       "section" : "printPaper",
@@ -4146,9 +4162,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Viewing Illuminant"
+      "title" : "Viewing Illuminant",
+      "webTransform" : "profile"
     },
     {
       "availability" : "printStage",
@@ -4190,7 +4208,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "printCorrection",
       "scale" : {
@@ -4214,9 +4232,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Channel Contrast Match"
+      "title" : "Channel Contrast Match",
+      "webTransform" : "profile"
     },
     {
       "availability" : "always",
@@ -4256,8 +4276,7 @@
       "omitted" : {
         "android" : "Settings chooses the lightbox or scanner reading",
         "app" : "Settings chooses the lightbox or scanner reading",
-        "desktop" : "Settings chooses the lightbox or scanner reading",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "desktop" : "Settings chooses the lightbox or scanner reading"
       },
       "scope" : "global",
       "section" : "printPaper",
@@ -4265,9 +4284,11 @@
       "surfaces" : [
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Negative Viewing"
+      "title" : "Negative Viewing",
+      "webTransform" : "profile"
     },
     {
       "availability" : "transparentFilm",
@@ -4399,8 +4420,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "android" : "The Android photo editor does not yet carry the screen conversion's grade and exposure.",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "android" : "The Android photo editor does not yet carry the screen conversion's grade and exposure."
       },
       "persistedKey" : "screenGrade",
       "scale" : {
@@ -4423,9 +4443,11 @@
         "desktop",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Paper Grade"
+      "title" : "Paper Grade",
+      "webTransform" : "profile"
     },
     {
       "availability" : "transparentFilm",
@@ -4467,8 +4489,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "android" : "The Android photo editor does not yet carry the screen conversion's grade and exposure.",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "android" : "The Android photo editor does not yet carry the screen conversion's grade and exposure."
       },
       "persistedKey" : "screenExposure",
       "scale" : {
@@ -4491,9 +4512,11 @@
         "desktop",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Screen Exposure"
+      "title" : "Screen Exposure",
+      "webTransform" : "profile"
     },
     {
       "availability" : "printStage",
@@ -4558,7 +4581,7 @@
       },
       "kind" : "menu",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "scope" : "edit",
       "section" : "printLamp",
@@ -4568,9 +4591,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Enlarger"
+      "title" : "Enlarger",
+      "webTransform" : "profile"
     },
     {
       "availability" : "printStage",
@@ -4589,8 +4614,7 @@
       "omitted" : {
         "android" : "The simulated printer is currently exposed in the Apple apps and CLI.",
         "finalcut" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "resolve" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "web" : "The browser does not build a printer lamp's spectral tables."
+        "resolve" : "The plugin bridge does not yet expose simulated printer profiles."
       },
       "persistedKey" : "printerEnabled",
       "restingOn" : false,
@@ -4600,9 +4624,11 @@
       "surfaces" : [
         "app",
         "desktop",
+        "web",
         "cli"
       ],
-      "title" : "Simulated Printer"
+      "title" : "Simulated Printer",
+      "webTransform" : "profile"
     },
     {
       "availability" : "printStage",
@@ -4621,8 +4647,7 @@
       "omitted" : {
         "android" : "The simulated printer is currently exposed in the Apple apps and CLI.",
         "finalcut" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "resolve" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "web" : "The browser does not build a printer lamp's spectral tables."
+        "resolve" : "The plugin bridge does not yet expose simulated printer profiles."
       },
       "scale" : {
         "admittedMax" : 3600,
@@ -4640,9 +4665,11 @@
       "surfaces" : [
         "app",
         "desktop",
+        "web",
         "cli"
       ],
-      "title" : "Lamp Temperature"
+      "title" : "Lamp Temperature",
+      "webTransform" : "profile"
     },
     {
       "availability" : "printStage",
@@ -4661,8 +4688,7 @@
       "omitted" : {
         "android" : "The simulated printer is currently exposed in the Apple apps and CLI.",
         "finalcut" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "resolve" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "web" : "The browser does not build a printer lamp's spectral tables."
+        "resolve" : "The plugin bridge does not yet expose simulated printer profiles."
       },
       "scale" : {
         "admittedMax" : 6,
@@ -4680,9 +4706,11 @@
       "surfaces" : [
         "app",
         "desktop",
+        "web",
         "cli"
       ],
-      "title" : "Paper Exposure"
+      "title" : "Paper Exposure",
+      "webTransform" : "profile"
     },
     {
       "availability" : "printStage",
@@ -4701,8 +4729,7 @@
       "omitted" : {
         "android" : "The simulated printer is currently exposed in the Apple apps and CLI.",
         "finalcut" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "resolve" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "web" : "The browser does not build a printer lamp's spectral tables."
+        "resolve" : "The plugin bridge does not yet expose simulated printer profiles."
       },
       "scale" : {
         "admittedMax" : 1.2,
@@ -4720,9 +4747,11 @@
       "surfaces" : [
         "app",
         "desktop",
+        "web",
         "cli"
       ],
-      "title" : "Magenta Filter"
+      "title" : "Magenta Filter",
+      "webTransform" : "profile"
     },
     {
       "availability" : "printStage",
@@ -4741,8 +4770,7 @@
       "omitted" : {
         "android" : "The simulated printer is currently exposed in the Apple apps and CLI.",
         "finalcut" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "resolve" : "The plugin bridge does not yet expose simulated printer profiles.",
-        "web" : "The browser does not build a printer lamp's spectral tables."
+        "resolve" : "The plugin bridge does not yet expose simulated printer profiles."
       },
       "scale" : {
         "admittedMax" : 1.2,
@@ -4760,9 +4788,11 @@
       "surfaces" : [
         "app",
         "desktop",
+        "web",
         "cli"
       ],
-      "title" : "Yellow Filter"
+      "title" : "Yellow Filter",
+      "webTransform" : "profile"
     },
     {
       "availability" : "printStage",
@@ -4804,7 +4834,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "printerPreflash",
       "scale" : {
@@ -4828,9 +4858,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Printer Preflash"
+      "title" : "Printer Preflash",
+      "webTransform" : "profile"
     },
     {
       "availability" : "always",

@@ -1,5 +1,5 @@
 import { loadFilmProfile } from './film-profile.js'
-import { hasProfileSettings } from './profile-settings.js'
+import { hasProfileSettings, profileRequestControls } from './profile-settings.js'
 import { loadMediumBytes } from './output-media.js'
 import { loadSceneExposure } from './scene-light.js'
 import { rawSource } from './raw-source.js'
@@ -50,7 +50,7 @@ export async function loadStockIndex() {
     const entry = media.find((item) => item.id === stock.id)
     if (!entry || !Array.isArray(entry.choices) || !entry.choices.length)
       throw new Error('Invalid output-medium catalog.')
-    return { ...stock, available: catalogue[stock.id]?.available || [], nativeFormat: catalogue[stock.id]?.nativeFormat, media: entry.choices, defaultMedium: entry.default }
+    return { ...stock, profile: catalogue[stock.id], available: catalogue[stock.id]?.available || [], nativeFormat: catalogue[stock.id]?.nativeFormat, media: entry.choices, defaultMedium: entry.default }
   })
 }
 
@@ -111,7 +111,7 @@ export class RenderSession {
       this.packs.set(key, value)
       return value
     }
-    let pack,
+    let pack, stockMetadata,
       stagesUrl = null
     if (halationModel === 'layered') {
       if (medium)
@@ -125,6 +125,7 @@ export class RenderSession {
         throw error
       })
       const stock = (await this.catalog).find((item) => item.id === id)
+      stockMetadata = stock
       const mediumChoice = stock?.media.find(
         (item) => item.id === (medium || stock.defaultMedium),
       )
@@ -146,7 +147,7 @@ export class RenderSession {
       stagesUrl = choice.stages ? assetUrl(`packs/${choice.stages}`) : null
       if (choice.meter) pack = { ...pack, screenMeter: choice.meter }
     }
-    const entry = { pack, stages: null, stagesUrl }
+    const entry = { pack, stages: null, stagesUrl, stock: stockMetadata }
     this.packs.set(key, entry)
     if (this.packs.size > 4) this.packs.delete(this.packs.keys().next().value)
     return entry
@@ -348,7 +349,7 @@ export class RenderSession {
           stock, width: source.width, height: source.height,
           format: edit.format, medium: edit.medium, sceneKelvin,
           sceneHighlightStops: await sceneHighlightStops(source, controls),
-          controls: { ...edit.profile, digitalReference: edit.digitalReference || 'auto-levels' },
+          controls: { ...profileRequestControls(edit, entry.stock), digitalReference: edit.digitalReference || 'auto-levels' },
         }, report)) : await this.capturePack(
           entry
             ? selected === null

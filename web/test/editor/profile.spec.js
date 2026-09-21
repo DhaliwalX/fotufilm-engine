@@ -4,6 +4,45 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const cases = [
+  {
+    stock: "gold200",
+    controls: {
+      halationReturn: 0.12,
+      halationSpectrum: [0, 0.2, 0.3, 0, -0.2, 0.5, 1],
+      estimatedHalation: true,
+    },
+  },
+  {
+    stock: "gold200",
+    controls: {
+      bleach: 0.5,
+      couplers: 1.5,
+      couplerReach: 2,
+      couplerSelf: 0.4,
+      chromaticFringeAmount: 0.3,
+      chromaticFringeRadius: 100,
+    },
+  },
+  {
+    stock: "gold200",
+    medium: "ektacolor-edge",
+    controls: {
+      printerEnabled: true,
+      printerLamp: 3400,
+      printerExposure: 0.5,
+      printerMagenta: 0.6,
+      printerYellow: 0.7,
+      printerPreflash: 0.05,
+      printLight: "tungsten",
+      enlarger: "condenser",
+    },
+  },
+  {
+    stock: "gold200",
+    medium: "negative",
+    controls: { negativeViewing: "scanner" },
+  },
+  { stock: "hp5plus400", controls: { shutter: "30" } },
   { stock: "gold200", controls: {} },
   { stock: "gold200", format: "16mm", controls: { expired: 7, bleach: 0.65 } },
   {

@@ -331,7 +331,7 @@ public struct ControlsExport {
             switch web {
             case .configSlot(_, let transform): kind = transform.rawValue
             case .grainScale: kind = "grain"
-            case .runtime: continue
+            case .runtime, .profile: continue
             }
             entries.append("  { key: '\(control.field.rawValue)', index: \(index), label: '\(control.title)', "
                            + "unit: '\(unit)', min: \(scale.range.lowerBound), max: \(scale.range.upperBound), "
@@ -346,6 +346,7 @@ public struct ControlsExport {
                 ControlsManifest.current.controls.filter {
                     $0.surfaces.contains("desktop") || $0.surfaces.contains("app") || $0.surfaces.contains("web")
                 }), as: UTF8.self) + "\n"
+            + "export const PROFILE_MENUS = " + String(decoding: try! encoder.encode(WebProfileCatalogue.menus), as: UTF8.self) + "\n"
             + "export const FILM_FORMATS = " + String(decoding: try! JSONSerialization.data(
                 withJSONObject: FilmFormat.presets.map { ["id": $0.id, "name": $0.format.name] },
                 options: [.sortedKeys]), as: UTF8.self) + "\n"
@@ -367,7 +368,7 @@ public struct ControlsExport {
             switch web {
             case .configSlot(let slot, _): slots.append("    \(slot),")
             case .grainScale: slots.append("    -1,")
-            case .runtime: continue
+            case .runtime, .profile: continue
             }
         }
         return "static const int32_t kFotufilmWasmControlSlots[] = {\n" + slots.joined(separator: "\n")
