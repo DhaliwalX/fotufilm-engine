@@ -62,3 +62,10 @@ test('visible detail leaves the emulsion frame overlay intact at the photo edge'
       image: { x: 100, y: 100, width: 800, height: 600 } } } });
   assert.deepEqual(v.region, { x: 54, y: 54, width: 1492, height: 1092 });
 });
+
+test('viewport tile budgeting includes the halo beyond a visible rectangle that fits by itself', () => {
+  const tiles = planRegionTiles(4000, 4000, 100, 500000, { x: 1000, y: 1000, width: 700, height: 700 });
+  assert.ok(tiles.length > 1);
+  assert.equal(tiles.reduce((n, tile) => n + tile.width * tile.height, 0), 700 * 700);
+  for (const tile of tiles) assert.ok(tile.region.width * tile.region.height <= 500000);
+});

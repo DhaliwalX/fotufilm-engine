@@ -318,3 +318,26 @@ test("Layered Transport keeps its spatial support and global grain when developi
   expect(report.peak).toBeLessThanOrEqual(1);
   expect(report.size).toBe(report.expected);
 });
+
+test('a viewport split to honor the halo memory budget has no film seams', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.viewer-status > [role=status]')).toContainText(/\d+ × \d+/);
+  const report = await page.evaluate(async () => {
+    const { loadPack, assetUrl, pixelSource, createCpuDeveloper } = await import('/src/engine.js');
+    const { defaultEdit } = await import('/src/editor-state.js');
+    const pack = await loadPack(assetUrl('packs/gold200.pack'));
+    const dev = await createCpuDeveloper(pack), width = 640, height = 480;
+    const data = new Float32Array(width * height * 4);
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) data.set([x / width, x > 300 ? 2 : .2, y / height, 1], (y * width + x) * 4);
+    const source = pixelSource({ width, height, data }), region = { x: 177, y: 103, width: 229, height: 213 };
+    try {
+      const full = await dev.develop(source, defaultEdit().params);
+      dev.tileBudget = 60000;
+      const roi = await dev.develop(source, defaultEdit().params, undefined, undefined, { region });
+      const expected = pixelSource({ width, height, data: full.pixels }).read(region.x, region.y, region.width, region.height);
+      let peak = 0; for (let i = 0; i < expected.length; i++) peak = Math.max(peak, Math.abs(expected[i] - roi.pixels[i]));
+      return { peak, tiles: dev.tiles.length, biggest: Math.max(...dev.tiles.map(t => t.region.width * t.region.height)) };
+    } finally { dev.dispose(); }
+  });
+  expect(report.peak).toBeLessThanOrEqual(1); expect(report.tiles).toBeGreaterThan(1); expect(report.biggest).toBeLessThanOrEqual(60000);
+});

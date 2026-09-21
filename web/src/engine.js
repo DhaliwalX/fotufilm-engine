@@ -608,23 +608,36 @@ export function frameRegion(width, height, region = null) {
 export function planRegionTiles(width, height, apron, budget, region) {
   const r = frameRegion(width, height, region)
   const a = Math.max(0, Math.ceil(apron))
-  return planTiles(r.width, r.height, a, budget).map((tile) => {
-    const x = tile.x + r.x,
-      y = tile.y + r.y
-    const left = Math.max(0, x - a),
-      top = Math.max(0, y - a)
+  const withSupport = (tile) => {
+    const left = Math.max(0, tile.x - a),
+      top = Math.max(0, tile.y - a)
     return {
       ...tile,
-      x,
-      y,
       region: {
         x: left,
         y: top,
-        width: Math.min(width, x + tile.width + a) - left,
-        height: Math.min(height, y + tile.height + a) - top,
+        width: Math.min(width, tile.x + tile.width + a) - left,
+        height: Math.min(height, tile.y + tile.height + a) - top,
       },
     }
-  })
+  }
+  const whole = withSupport(r)
+  if (whole.region.width * whole.region.height <= budget) return [whole]
+  // Unlike a whole-frame tile, a visible rectangle can need an apron on all
+  // four sides. Include that support when deciding whether it fits the budget.
+  const side = Math.max(MIN_TILE_SIDE, Math.floor(Math.sqrt(budget)) - 2 * a)
+  const tiles = []
+  for (let y = r.y; y < r.y + r.height; y += side)
+    for (let x = r.x; x < r.x + r.width; x += side)
+      tiles.push(
+        withSupport({
+          x,
+          y,
+          width: Math.min(side, r.x + r.width - x),
+          height: Math.min(side, r.y + r.height - y),
+        }),
+      )
+  return tiles
 }
 
 /// Rectangle input: Uint8 RGBA is encoded sRGB; Float32 RGBA is linear Rec.2020.
