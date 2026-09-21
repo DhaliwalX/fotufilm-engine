@@ -9,15 +9,24 @@ export async function analyseNegative(image, monochrome = false, onProgress) {
   if (source.width < 2 || source.height < 2)
     throw new Error("The negative is too small to analyse.");
   const pixels = source.read(0, 0, source.width, source.height);
-  const planes = [[], [], []];
-  for (let i = 0; i < source.width * source.height; i++)
-    for (let c = 0; c < 3; c++) planes[c].push(pixels[4 * i + c]);
+  // Packed little-endian float32 keeps a full 512² analysis under the WASI
+  // request limit without rounding transmission values or shrinking the preview.
+  const count = source.width * source.height;
+  const packed = new Uint8Array(count * 3 * 4);
+  const view = new DataView(packed.buffer);
+  for (let c = 0; c < 3; c++)
+    for (let i = 0; i < count; i++)
+      view.setFloat32((c * count + i) * 4, pixels[4 * i + c], true);
+  const chunks = [];
+  for (let i = 0; i < packed.length; i += 16384)
+    chunks.push(String.fromCharCode(...packed.subarray(i, i + 16384)));
+  const samples = btoa(chunks.join(""));
   const bytes = await loadFilmProfile(
     {
       kind: "negative-auto",
       width: source.width,
       height: source.height,
-      planes,
+      samples,
       monochrome,
       rec2020: true,
     },

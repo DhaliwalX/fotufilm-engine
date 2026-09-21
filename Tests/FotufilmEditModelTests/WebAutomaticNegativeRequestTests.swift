@@ -50,6 +50,30 @@ final class WebAutomaticNegativeRequestTests: XCTestCase {
             }
         }
     }
+    func testPackedFloatSamplesMatchJSONAtMaximumPreviewSize() throws {
+        let side = 512, count = side * side
+        let planes = (0..<3).map { channel in
+            (0..<count).map { i in Float((i * 7919 + channel * 997) % 65535 + 1) / 65536 }
+        }
+        var packed = Data()
+        for channel in planes { for value in channel {
+            var bits = value.bitPattern.littleEndian
+            withUnsafeBytes(of: &bits) { packed.append(contentsOf: $0) }
+        } }
+        var request: [String: Any] = ["kind": "negative-auto", "width": side, "height": side,
+            "samples": packed.base64EncodedString(), "monochrome": false, "rec2020": true]
+        let payload = try JSONSerialization.data(withJSONObject: request)
+        XCTAssertLessThan(payload.count, 8 * 1024 * 1024)
+        let response = try WebRenderRequest.prepare(payload)
+        request.removeValue(forKey: "samples")
+        request["planes"] = planes
+        let reference = try WebRenderRequest.prepare(JSONSerialization.data(withJSONObject: request))
+        XCTAssertEqual(try JSONSerialization.jsonObject(with: response) as? NSDictionary,
+                       try JSONSerialization.jsonObject(with: reference) as? NSDictionary)
+        request.removeValue(forKey: "planes")
+        request["samples"] = packed.dropLast().base64EncodedString()
+        XCTAssertThrowsError(try WebRenderRequest.prepare(JSONSerialization.data(withJSONObject: request)))
+    }
     func testMalformedAndEmptyScansFailWithoutTrapping() throws {
         for request: [String: Any] in [
             ["kind":"negative-auto", "width":512, "height":512, "planes":[[1],[1],[1]], "monochrome":false, "rec2020":false],

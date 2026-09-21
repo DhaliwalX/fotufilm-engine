@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Modal } from "./EditorControls.jsx";
 import { importPhoto } from "./photo-import.js";
-import { isRawFile } from "./raw-import.js";
+import { isRawFile, importRaw, RAW_EXTENSIONS } from "./raw-import.js";
 import { analyseNegative, convertNegative } from "./negative-conversion.js";
 import { attachLinearPreview } from "./linear-preview.js";
 import "./negative-import.css";
@@ -16,7 +16,7 @@ export default function NegativeImportDialog({ onClose, onImport }) {
   const [monochrome, setMonochrome] = useState(false),
     [negative, setNegative] = useState(false);
   const [status, setStatus] = useState(
-    "Choose an unadjusted TIFF, PNG or JPEG negative.",
+    "Choose an unadjusted image or camera RAW negative.",
   );
   const [error, setError] = useState(null),
     [busy, setBusy] = useState(false);
@@ -33,13 +33,10 @@ export default function NegativeImportDialog({ onClose, onImport }) {
     setError(null);
     setStatus("Reading negative…");
     const run = async () => {
-      if (isRawFile(file))
-        throw new Error(
-          "For negative conversion, export an unadjusted TIFF from your RAW decoder first.",
-        );
-      const result = await importPhoto(file, {
+      const result = await (isRawFile(file) ? importRaw : importPhoto)(file, {
         signal: controller.signal,
         onProgress: setStatus,
+        negative: true,
       });
       url = result.url;
       if (controller.signal.aborted) {
@@ -172,7 +169,14 @@ export default function NegativeImportDialog({ onClose, onImport }) {
         <input
           ref={picker}
           type="file"
-          accept=".tif,.tiff,.png,.jpg,.jpeg"
+          accept={[
+            ".tif",
+            ".tiff",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ...RAW_EXTENSIONS.map((ext) => `.${ext}`),
+          ].join(",")}
           hidden
           onChange={(e) => {
             setFile(e.target.files[0] || null);

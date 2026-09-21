@@ -3,8 +3,9 @@
 Mac: **File → Import Scanned Negative… → Preview Positive**. Web: **More options →
 Import Scanned Negative…**. No drawn reference is required. Review the preview,
 then import the positive and refine its crop, colour and tone. Cancelling preserves
-the current photograph. Web imports unadjusted TIFF, PNG and JPEG; Mac also accepts
-supported camera RAW. For web RAW negatives, export an unadjusted TIFF first.
+the current photograph. Both accept unadjusted TIFF, PNG, JPEG and supported camera RAW negatives.
+Browser RAW-negative decoding preserves linear values without photographic
+highlight reconstruction, DNG baseline exposure or scene spectral correction.
 
 ## Research and choice
 

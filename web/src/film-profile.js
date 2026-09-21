@@ -6,11 +6,12 @@ const pending = new Map(),
   cache = new Map();
 
 export function loadFilmProfile(request, onProgress = () => {}) {
-  const key = JSON.stringify(request);
+  // Image analyses are one-shot; do not retain multi-megabyte scan data as cache keys.
+  const key = request.kind === "negative-auto" ? null : JSON.stringify(request);
   if (cache.has(key)) {
     const entry = cache.get(key);
     cache.delete(key);
-    cache.set(key, entry);
+    if (key !== null) cache.set(key, entry);
     if (!entry.done) {
       entry.listeners.add(onProgress);
       if (entry.status) onProgress(entry.status);
@@ -59,7 +60,7 @@ export function loadFilmProfile(request, onProgress = () => {}) {
       entry.done = true;
       entry.listeners.clear();
     });
-  cache.set(key, entry);
+  if (key !== null) cache.set(key, entry);
   if (cache.size > 8) cache.delete(cache.keys().next().value);
   return entry.promise;
 }

@@ -182,7 +182,7 @@ export function Histogram({ canvas, onClose }) {
       plot.beginPath();
       plot.moveTo(0, height);
       channel.forEach((n, x) =>
-        plot.lineTo((x * width) / 63, height - (n / peak) * (height - 3)),
+        plot.lineTo((x * width) / 63, height - (Math.log1p(n) / Math.log1p(peak)) * (height - 3)),
       );
       plot.lineTo(width, height);
       plot.closePath();
@@ -230,7 +230,7 @@ export function Histogram({ canvas, onClose }) {
           drag.current = null;
         }}
       >
-        <span>RGB histogram</span>
+        <span title="Logarithmic pixel count; linear tone values">RGB histogram · Log</span>
         <button aria-label="Close histogram" onClick={onClose}>
           ×
         </button>
@@ -239,7 +239,7 @@ export function Histogram({ canvas, onClose }) {
         ref={ref}
         width="192"
         height="72"
-        aria-label="Red, green and blue tonal distribution"
+        aria-label="Red, green and blue tonal distribution, logarithmic pixel counts"
       />
       <div className="histogram-scale">
         <span>0</span>
