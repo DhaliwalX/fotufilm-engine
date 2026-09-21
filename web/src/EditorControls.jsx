@@ -358,7 +358,7 @@ export function ImageCanvas({
     >
       {displayUrl && (
         <div
-          className="photo-plane"
+          className={`photo-plane ${result?.framePlan && !cropMode ? 'framed' : ''}`}
           style={{
             width: displayWidth,
             height: displayHeight,

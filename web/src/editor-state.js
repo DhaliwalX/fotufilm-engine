@@ -1,3 +1,4 @@
+import { parsePrintFrame } from './print-frame.js'
 import { defaultLens, parseLensCorrection } from './lens-correction.js'
 import { parseSourceInterpretation } from './source-interpretation.js'
 import { parseLensFilters } from './lens-filters.js'
@@ -111,6 +112,7 @@ export const defaultEdit = (stock = null) => ({
   sourceInterpretation: 'automatic',
   filterMetering: 'throughTheLens',
   medium: null,
+  printFrame: 'none',
   digitalReference: 'auto-levels',
   video: { encoding: 'standard', trimStart: 0, trimEnd: null, audio: true },
   halationModel: 'legacy',
@@ -328,6 +330,7 @@ export function parseEdit(json, stockIDs) {
     lens: parseLensCorrection(edit.lens),
     sourceInterpretation: parseSourceInterpretation(edit.sourceInterpretation),
     medium: edit.medium ?? null,
+    printFrame: parsePrintFrame(edit.printFrame),
     digitalReference: edit.digitalReference ?? 'auto-levels',
     video: edit.video ?? base.video,
     halationModel: edit.halationModel ?? 'legacy',

@@ -1,8 +1,11 @@
-import { useAutoAdjustment } from './useAutoAdjustment.js';
-import AutoAdjustmentAction from './AutoAdjustmentAction.jsx';
-import { useLensCatalogue } from './useLensCatalogue.js';
-import { importPhoto } from './photo-import.js';
-import SourceInterpretationControls from './SourceInterpretationControls.jsx';
+import PrintFrameControls from "./PrintFrameControls.jsx";
+import { usePrintFrame } from "./usePrintFrame.js";
+import { frameSamplePoint } from "./print-frame.js";
+import { useAutoAdjustment } from "./useAutoAdjustment.js";
+import AutoAdjustmentAction from "./AutoAdjustmentAction.jsx";
+import { useLensCatalogue } from "./useLensCatalogue.js";
+import { importPhoto } from "./photo-import.js";
+import SourceInterpretationControls from "./SourceInterpretationControls.jsx";
 import LensControls from "./LensControls.jsx";
 import InspectorPanel from "./InspectorPanel.jsx";
 import LensFilters from "./LensFilters.jsx";
@@ -815,7 +818,15 @@ export default function App() {
       window.removeEventListener("keyup", release);
       window.removeEventListener("blur", blur);
     };
-  }, [active, exporting, cropMode, endEdit, auto.available, auto.toggle, dispatch]);
+  }, [
+    active,
+    exporting,
+    cropMode,
+    endEdit,
+    auto.available,
+    auto.toggle,
+    dispatch,
+  ]);
 
   const visibleStocks = stocks.filter((stock) =>
     stock.name.toLowerCase().includes(search.toLowerCase()),
@@ -829,6 +840,17 @@ export default function App() {
     exportSize === "full"
       ? 1
       : Math.min(1, Number(exportSize) / Math.max(width, height));
+  const exportSourceSize = outputSize(
+    edit.crop,
+    Math.max(1, Math.round(width * exportScale)),
+    Math.max(1, Math.round(height * exportScale)),
+  );
+  const framedSize = usePrintFrame(
+    edit,
+    exportSourceSize.width,
+    exportSourceSize.height,
+    !!active && !active.image.video && edit.printFrame !== "none",
+  );
   const shownResult = result?.fileId === activeId ? result : null;
   const adjustments = (group) => (
     <Adjustments
@@ -950,7 +972,11 @@ export default function App() {
             icon="reset"
             label="Reset all edits"
             onClick={() => {
-              dispatch({ type: "edit", patch: defaultEdit(edit.stock), restoring: true });
+              dispatch({
+                type: "edit",
+                patch: defaultEdit(edit.stock),
+                restoring: true,
+              });
               setStage(null);
               setDifference(false);
             }}
@@ -1052,6 +1078,8 @@ export default function App() {
               sampling={sampling}
               onSample={(point) => {
                 if (!shownResult?.sceneSource) return;
+                point = frameSamplePoint(point, shownResult.framePlan);
+                if (!point) return;
                 const selective = edit.selective || newSelection(edit);
                 patch({
                   selective: {
@@ -1066,7 +1094,15 @@ export default function App() {
               original={active.image}
               sourceKey={active.id}
               zoom={zoom}
-              outputWidth={cropMode ? width : cropSize.width}
+              outputWidth={
+                cropMode
+                  ? width
+                  : cropSize.width *
+                    (shownResult?.framePlan
+                      ? shownResult.width /
+                        shownResult.framePlan.placement.image.width
+                      : 1)
+              }
               onZoomReadout={setZoomReadout}
               setZoom={setZoom}
               compare={compare}
@@ -1156,7 +1192,8 @@ export default function App() {
             {active?.name || "No photo open"}
           </span>
           <span role="status">
-            {auto.status || status ||
+            {auto.status ||
+              status ||
               (active && shownResult?.key !== previewKey
                 ? error
                   ? "Preview unavailable"
@@ -1559,6 +1596,22 @@ export default function App() {
                   </p>
                 </Section>
               )}
+              <PrintFrameControls
+                edit={edit}
+                image={active?.image}
+                disabled={exporting || !active}
+                onChange={(printFrame) => {
+                  endEdit();
+                  patch({
+                    printFrame,
+                    ...(["film", "slideMount"].includes(printFrame)
+                      ? { halationModel: "legacy" }
+                      : {}),
+                  });
+                  setStage(null);
+                  setDifference(false);
+                }}
+              />
               <Section title="Export">
                 <Button
                   label={
@@ -1977,7 +2030,8 @@ export default function App() {
                     edit,
                     exportSize === "full" ? Infinity : Number(exportSize),
                   ).width
-                : Math.max(1, Math.round(cropSize.width * exportScale))}{" "}
+                : (framedSize.plan?.placement.size.width ??
+                  Math.max(1, Math.round(cropSize.width * exportScale)))}{" "}
               ×{" "}
               {active?.image.video
                 ? videoDimensions(
@@ -1985,7 +2039,8 @@ export default function App() {
                     edit,
                     exportSize === "full" ? Infinity : Number(exportSize),
                   ).height
-                : Math.max(1, Math.round(cropSize.height * exportScale))}{" "}
+                : (framedSize.plan?.placement.size.height ??
+                  Math.max(1, Math.round(cropSize.height * exportScale)))}{" "}
               pixels · sRGB · 8-bit
             </p>
             <p className="export-detail">
@@ -1994,6 +2049,9 @@ export default function App() {
                 : "Exports the finished image with the current crop and adjustments."}
             </p>
           </fieldset>
+          {!active?.image.video && framedSize.error && (
+            <p role="alert">{framedSize.error}</p>
+          )}
           {exporting && <p role="status">{status || "Preparing export"}</p>}
           <div className="dialog-actions">
             <Button
@@ -2148,16 +2206,14 @@ export default function App() {
               grain models, measured push/pull, bleach bypass, colour
               separation, print viewing, a simulated printer, an ordered
               lens-filter stack, automatic and manual lens correction, Auto
-              Adjust, light and color
-              adjustments, three-way grading, color and light selections, crop,
-              rotation and flip. Camera RAW files use as-shot white balance.
-              RAW, linear EXR and supported HDR JPEG gain maps preserve decoded
-              highlight detail before film exposure.
+              Adjust, photo frames, light and color adjustments, three-way grading, color and
+              light selections, crop, rotation and flip. Camera RAW files use
+              as-shot white balance. RAW, linear EXR and supported HDR JPEG gain
+              maps preserve decoded highlight detail before film exposure.
             </p>
             <p>
-              Scanned-negative conversion, automatic
-              subject selections, custom packs, and HDR / 16-bit export are
-              available in the Mac app.
+              Scanned-negative conversion, automatic subject selections, custom
+              packs, and HDR / 16-bit export are available in the Mac app.
             </p>
           </div>
         </Modal>

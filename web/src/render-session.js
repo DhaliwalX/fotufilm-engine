@@ -1,3 +1,5 @@
+import { loadPrintFrame, frameRenderEdit } from './print-frame.js'
+import { renderPrintFrame } from './print-frame-renderer.js'
 import { lensIsActive } from './lens-correction.js'
 import { interpretedImage } from './source-interpretation.js'
 import { resolveLensPlan } from './lens-plan.js'
@@ -275,6 +277,11 @@ export class RenderSession {
     onProgress = () => {},
   }) {
     if (this.closed || stale()) return null
+    const requestedEdit = edit
+    const framed = !image.video && !cropMode && stage === null && !background && edit.printFrame && edit.printFrame !== 'none'
+    const frameConfiguration = framed ? await loadPrintFrame(edit, 1, 1, onProgress) : null
+    if (this.closed || stale()) return null
+    edit = frameRenderEdit(edit, frameConfiguration)
     const dynamic = edit.stock !== null && hasProfileSettings(edit)
     if (dynamic && edit.halationModel === 'layered') throw new Error('Choose Legacy halation to adjust film, print or filter settings.')
     if (dynamic && stage !== null) throw new Error('Pipeline inspection requires default film, print and filter settings.')
@@ -428,7 +435,7 @@ export class RenderSession {
         }
         if (stale()) return null
         report(`Encoding ${purpose} image`)
-        const canvas = document.createElement('canvas')
+        let canvas = document.createElement('canvas')
         canvas.width = source.width
         canvas.height = source.height
         canvas
@@ -438,6 +445,12 @@ export class RenderSession {
             0,
             0,
           )
+        const framePlan = framed ? await loadPrintFrame(requestedEdit, source.width, source.height, report) : null
+        if (framePlan) {
+          report('Finishing print frame')
+          canvas = await renderPrintFrame(canvas, framePlan, () => this.closed || stale())
+          if (!canvas || stale()) return null
+        }
         const blob = encode ? await canvasBlob(canvas) : null
         let original = prepared.original
         if (comparison && !original) report('Preparing original for comparison')
@@ -458,7 +471,18 @@ export class RenderSession {
           original = await canvasBlob(comparison)
         }
         prepared.original = original
+        if (comparison && original && framePlan?.configuration.frame !== 'none' && framePlan) {
+          const bitmap = await createImageBitmap(original)
+          const baseline = document.createElement('canvas')
+          baseline.width = bitmap.width; baseline.height = bitmap.height
+          baseline.getContext('2d').drawImage(bitmap, 0, 0)
+          bitmap.close()
+          const framedOriginal = await renderPrintFrame(baseline, framePlan, () => this.closed || stale())
+          if (!framedOriginal || stale()) return null
+          original = await canvasBlob(framedOriginal)
+        }
         return {
+          framePlan,
           sceneSource: source,
           canvas,
           blob,

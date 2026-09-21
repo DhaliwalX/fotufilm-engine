@@ -85,7 +85,7 @@ public enum PrintFrame: String, CaseIterable, Codable, Sendable, Identifiable {
 /// A cut sheet of photographic paper on an easel. Sheet sizes are lab print choices, not
 /// intrinsic dimensions of the emulsion; the easel margin and the filed carrier's rebate are
 /// representative darkroom conventions documented in docs/print-frame-model.md.
-public struct PaperSheetGeometry: Equatable, Sendable {
+public struct PaperSheetGeometry: Codable, Equatable, Sendable {
     public let widthMM: Double
     public let heightMM: Double
     /// The white margin held by the easel blades on every side.
@@ -108,7 +108,7 @@ public struct PaperSheetGeometry: Equatable, Sendable {
 /// A fixed-aspect canvas for a social post. The aspects are the platforms' own; the margin is a
 /// presentation choice. The photograph is fitted inside without cropping, so a landscape picture
 /// on a story canvas stands between white bands, as posts do.
-public struct SocialCanvasGeometry: Equatable, Sendable {
+public struct SocialCanvasGeometry: Codable, Equatable, Sendable {
     public let aspectWidth: Double
     public let aspectHeight: Double
     /// The white margin on every side, as a fraction of the canvas's short side.
@@ -126,7 +126,7 @@ public struct SocialCanvasGeometry: Equatable, Sendable {
 
 /// A card mount for a developed transparency. The outer size is the universal 2 × 2 inch
 /// projector format; the aperture is the typical mounted image area for the gauge.
-public struct SlideMountGeometry: Equatable, Sendable {
+public struct SlideMountGeometry: Codable, Equatable, Sendable {
     public let mountMM: Double
     public let apertureWidth: Double
     public let apertureHeight: Double
@@ -181,8 +181,24 @@ public struct FilmEdgePrinting: Codable, Equatable, Sendable {
 
 /// Millimetre geometry before the finished photograph is fitted into the camera aperture.
 /// x runs across the film, y along transport, except 135 stills which transport horizontally.
-public struct FilmBorderGeometry: Equatable, Sendable {
-    public enum Perforation: Sendable { case kodakStandard, bellHowell, sixteen, superEight }
+public struct FilmBorderGeometry: Codable, Equatable, Sendable {
+    public struct PerforationDimensions: Codable, Equatable, Sendable {
+        public let width: Double
+        public let height: Double
+        public let radius: Double
+        public let edge: Double
+    }
+    public enum Perforation: String, Codable, Sendable {
+        case kodakStandard, bellHowell, sixteen, superEight
+        public var dimensions: PerforationDimensions {
+            switch self {
+            case .kodakStandard: return .init(width: 2.794, height: 1.981, radius: 0.51, edge: 2.01)
+            case .bellHowell: return .init(width: 2.794, height: 1.854, radius: 0, edge: 2.01)
+            case .sixteen: return .init(width: 1.829, height: 1.270, radius: 0.25, edge: 0.914)
+            case .superEight: return .init(width: 0.914, height: 1.143, radius: 0.13, edge: 0.51)
+            }
+        }
+    }
     public let widthMM: Double
     public let heightMM: Double
     public let apertureX: Double
@@ -244,7 +260,7 @@ public struct FilmBorderGeometry: Equatable, Sendable {
     }
 }
 
-public struct PrintFrameConfiguration: Equatable, Sendable {
+public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
     public let frame: PrintFrame
     public let geometry: FilmBorderGeometry?
     public let sheet: PaperSheetGeometry?
@@ -265,7 +281,14 @@ public struct PrintFrameConfiguration: Equatable, Sendable {
     public init(frame: PrintFrame, formatID: String?, stockID: String,
                 paper: PrintPaper, viewingKelvin: Float? = nil,
                 negativeViewing: NegativeViewing = .lightBox) {
-        let definition = FilmStock.presetDefinitions[stockID]
+        self.init(frame: frame, formatID: formatID, definition: FilmStock.presetDefinitions[stockID],
+                  paper: paper, viewingKelvin: viewingKelvin, negativeViewing: negativeViewing)
+    }
+
+    /// Explicit stock metadata also supports isolated runtimes without a process-wide pack registry.
+    public init(frame: PrintFrame, formatID: String?, definition: FilmStockDefinition?,
+                paper: PrintPaper, viewingKelvin: Float? = nil,
+                negativeViewing: NegativeViewing = .lightBox) {
         let nativeID = definition?.nativeFormatID
         let motionStock = nativeID.flatMap(FilmFormat.preset(id:))?.isMotionPicture == true
         let nativeInstant = nativeID.flatMap { FilmBorderGeometry.preset($0) }?.isInstant == true

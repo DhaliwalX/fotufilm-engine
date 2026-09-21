@@ -4140,15 +4140,16 @@
         "cli" : "Frame finishing is offered in the iPhone photo editor.",
         "desktop" : "Frame finishing is offered in the iPhone photo editor.",
         "finalcut" : "The host owns output framing.",
-        "resolve" : "The host owns output framing.",
-        "web" : "Frame finishing is offered in the iPhone photo editor."
+        "resolve" : "The host owns output framing."
       },
       "scope" : "edit",
       "section" : "printPaper",
       "surfaces" : [
-        "app"
+        "app",
+        "web"
       ],
-      "title" : "Frame"
+      "title" : "Frame",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "printStage",

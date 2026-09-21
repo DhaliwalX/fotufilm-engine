@@ -7,6 +7,7 @@ public enum WebRenderRequest {
         let decoder = JSONDecoder()
         let envelope = try decoder.decode(Envelope.self, from: data)
         switch envelope.kind {
+        case "print-frame": return try decoder.decode(WebPrintFrameRequest.self, from: data).prepare()
         case "auto-adjust": return try decoder.decode(WebAutoAdjustmentRequest.self, from: data).prepare()
         case "lens": return try decoder.decode(WebLensRequest.self, from: data).prepare()
         case "lens-plan":
