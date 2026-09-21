@@ -18,6 +18,8 @@
 #include "color_float.h"
 #include "monochrome_float.h"
 #include "plain_float.h"
+#include "print_color_float.h"
+#include "print_monochrome_float.h"
 
 #include <emscripten/emscripten.h>
 
@@ -123,6 +125,10 @@ int fotufilm_wasm_render(float *input, float *output, int32_t width, int32_t hei
     int status;
     if (feature_mask & FOTUFILM_FRAME_NO_FILM) {
         status = plain_float(FOTUFILM_KERNEL_ARGUMENTS);
+    } else if (feature_mask & FOTUFILM_FRAME_DENSITY_IN) {
+        status = feature_mask & FOTUFILM_FRAME_MONOCHROME
+            ? print_monochrome_float(FOTUFILM_KERNEL_ARGUMENTS)
+            : print_color_float(FOTUFILM_KERNEL_ARGUMENTS);
     } else if (feature_mask & FOTUFILM_FRAME_MONOCHROME) {
         status = monochrome_float(FOTUFILM_KERNEL_ARGUMENTS);
     } else {

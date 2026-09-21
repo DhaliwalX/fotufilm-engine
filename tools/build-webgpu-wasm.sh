@@ -29,6 +29,7 @@ echo "Linking the WebGPU module…"
 # silently skipped, and the first suspend traps.
 em++ -O3 web/engine/fotufilm_wasm.cpp \
   "$OUTPUT"/webgpu/color_float.a "$OUTPUT"/webgpu/monochrome_float.a "$OUTPUT"/webgpu/plain_float.a \
+  "$OUTPUT"/webgpu/print_color_float.a "$OUTPUT"/webgpu/print_monochrome_float.a \
   -I Sources/FotufilmHalide/include -I "$OUTPUT/webgpu" \
   --use-port=emdawnwebgpu -sJSPI -sJSPI_EXPORTS=fotufilm_wasm_render \
   -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,worker \

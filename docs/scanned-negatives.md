@@ -85,6 +85,33 @@ the dark reference, mismatched reference kinds, and calibrated densities outside
 to hide measurement errors. Samples brighter than the reference may produce negative
 scanner densities, which is useful with a film-border reference.
 
+## Shared approximate import and browser print boundary
+
+`ApproximateNegativeScan` contains the Mac importer's border normalization, film-base
+restoration, monochrome record mapping and usable-range mask. Its `convert` method
+returns density samples and an invalid-pixel mask; paint masked pixels black after
+printing. It does not alter the source scan or fit a scanner profile.
+
+The browser profile protocol accepts `kind: "negative-scan"`, a stock definition,
+three linear capture-channel border values and the output width/height. It returns
+the same calibration plus a binary screen-print profile. The profile enters the
+WebGPU or SIMD renderer with density input, bypassing exposure and development.
+Color and monochrome print kernels warm independently from positive-photo kernels.
+This is the rendering foundation; the browser import dialog is not yet enabled.
+
+To compare the shipped browser kernels against native scan printing, generate
+synthetic references, start the web development server, then run the pixel check:
+
+```sh
+FOTUFILM_SCAN_REFERENCE_DIRECTORY="$PWD/build/negative-reference" \
+  swift test -c release --parallel --filter WebNegativeScanRequestTests
+node tools/test-negative-kernels.mjs http://127.0.0.1:5173/
+```
+
+The check requires actual WebGPU, compares linear output before display encoding,
+and checks 16-bit Display P3 delivery through the background worker. References and
+build output stay in the ignored build directory.
+
 ## Mac app import
 
 Choose **File → Import Scanned Negative…** and open an unconverted negative with

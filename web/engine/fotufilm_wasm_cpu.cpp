@@ -131,8 +131,11 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
     resolved.diffusion_strided_radius_1, resolved.diffusion_strided_radius_2, feature_mask, \
     &density_buf
 
-    int status;
-    switch (fotufilm_develop_variant(feature_mask)) {
+    int status = 0;
+    if (feature_mask & FOTUFILM_FRAME_DENSITY_IN) {
+        // Native scan import starts at print with these measured densities.
+        memcpy(density, input, plane * 3 * sizeof(float));
+    } else switch (fotufilm_develop_variant(feature_mask)) {
 #include "fotufilm_wasm_variants.inc"
     default:
 #if FOTUFILM_WASM_FLEXIBLE

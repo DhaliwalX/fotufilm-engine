@@ -17,9 +17,13 @@ const readyFamilies = new Set(),
 const family = (pack) =>
   pack.featureMask === 1 << 29
     ? "normal"
-    : pack.featureMask & (1 << 7)
-      ? "monochrome"
-      : "color";
+    : pack.featureMask & (1 << 14)
+      ? pack.featureMask & (1 << 7)
+        ? "print-monochrome"
+        : "print-color"
+      : pack.featureMask & (1 << 7)
+        ? "monochrome"
+        : "color";
 const gpuCompatible = (pack) =>
   !pack.transport && !(pack.featureMask & (1 << 28));
 
