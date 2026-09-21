@@ -99,6 +99,11 @@ public:
                 ? values : remember(values, schedule_.store_frame(values, half, channels));
         case Store::Density:
             return policy_.discs ? remember(values, schedule_.store_frame(values, false, 3)) : values;
+        // Reduce crystal bins and chemical inhibition before their final combination.
+        // Keeping every field inline exceeds WebGPU's per-stage storage bindings.
+        // Native GPU schedules retain the existing fused expression.
+        case Store::CrystalGrain:
+        case Store::Inhibition:
         case Store::MtfSelected:
         case Store::PrintMtfInput:
             return schedule_.gpu_device_api() == DeviceAPI::WebGPU

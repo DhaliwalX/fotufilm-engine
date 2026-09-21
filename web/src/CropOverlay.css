@@ -1,0 +1,42 @@
+.crop-controls {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+.crop-move-zone {
+  pointer-events: all;
+  cursor: move;
+  outline: none;
+}
+.crop-move-zone:focus-visible {
+  stroke-width: 3;
+}
+.crop-controls.rectangle .crop-handle {
+  border-radius: 2px;
+}
+.crop-controls .crop-edge.top,
+.crop-controls .crop-edge.bottom {
+  width: 26px;
+  height: 6px;
+  cursor: ns-resize;
+}
+.crop-controls .crop-edge.left,
+.crop-controls .crop-edge.right {
+  width: 6px;
+  height: 26px;
+  cursor: ew-resize;
+}
+.crop-thirds {
+  opacity: 0;
+  transition: opacity 160ms ease;
+  pointer-events: none;
+}
+.crop-controls.dragging .crop-thirds,
+.crop-controls:focus-within .crop-thirds {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .crop-thirds {
+    transition: none;
+  }
+}

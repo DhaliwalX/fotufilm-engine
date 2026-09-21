@@ -3,8 +3,16 @@ import { yieldToBrowser } from './yield.js'
 import { measureTone, toneKey } from './tone-base.js'
 import { applyScreenLevels } from './screen-conversion.js'
 import { CONFIG } from './engine-constants.js'
-import { runtimeAssetUrl, createRuntimeLoader, supportsWebgpuRuntime } from './runtime-assets.js'
-import { packedGrade, whiteBalanceGains, applyColorControls } from './color-controls.js'
+import {
+  runtimeAssetUrl,
+  createRuntimeLoader,
+  supportsWebgpuRuntime,
+} from './runtime-assets.js'
+import {
+  packedGrade,
+  whiteBalanceGains,
+  applyColorControls,
+} from './color-controls.js'
 
 import { CONTROLS } from './generated/controls.js'
 // The browser half of the film engine.
@@ -29,15 +37,24 @@ const ENGINES = {
 
 /// Where the site is served from — '/' in development, a sub-path on the published demo. Every
 /// runtime fetch is addressed from here, since none of them go through the bundler.
-export const assetUrl = name => runtimeAssetUrl(name, import.meta.env.BASE_URL,
-  window.location.href, typeof __FOTUFILM_RUNTIME_REVISION__ === 'string' ? __FOTUFILM_RUNTIME_REVISION__ : '')
+export const assetUrl = (name) =>
+  runtimeAssetUrl(
+    name,
+    import.meta.env.BASE_URL,
+    globalThis.location.href,
+    typeof __FOTUFILM_RUNTIME_REVISION__ === 'string'
+      ? __FOTUFILM_RUNTIME_REVISION__
+      : '',
+  )
 
-const runtime = createRuntimeLoader(kind => assetUrl(ENGINES[kind]))
+const runtime = createRuntimeLoader((kind) => assetUrl(ENGINES[kind]))
 const toneMeasurements = new WeakMap()
 const preparedSources = new WeakSet()
 async function measuredTone(source, controls, balance) {
   const key = JSON.stringify([controls.ev || 0, ...balance])
-  const cached = preparedSources.has(source) ? toneMeasurements.get(source) : null
+  const cached = preparedSources.has(source)
+    ? toneMeasurements.get(source)
+    : null
   if (cached?.key === key) return cached.grid
   const grid = await measureTone(source, controls, decodeRGBA, balance)
   if (preparedSources.has(source)) toneMeasurements.set(source, { key, grid })
@@ -45,11 +62,21 @@ async function measuredTone(source, controls, balance) {
 }
 
 export async function sceneHighlightStops(source, controls) {
-  const grid = await measuredTone(source, controls, whiteBalanceGains(controls.temperature, controls.tint))
-  const values = Array.from(grid.regionStops).filter(Number.isFinite).sort((a, b) => a - b)
+  const grid = await measuredTone(
+    source,
+    controls,
+    whiteBalanceGains(controls.temperature, controls.tint),
+  )
+  const values = Array.from(grid.regionStops)
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b)
   if (!values.length) return null
-  const p = .995 * (values.length - 1), i = Math.floor(p)
-  return values[i] + (p - i) * (values[Math.min(i + 1, values.length - 1)] - values[i])
+  const p = 0.995 * (values.length - 1),
+    i = Math.floor(p)
+  return (
+    values[i] +
+    (p - i) * (values[Math.min(i + 1, values.length - 1)] - values[i])
+  )
 }
 
 function loadModule(kind) {
@@ -75,7 +102,8 @@ export function parsePack(bytes) {
   const magic = String.fromCharCode(...new Uint8Array(bytes, 0, 4))
   if (magic !== PACK_MAGIC) throw new Error(`not a film pack: ${magic}`)
   const version = view.getUint32(4, true)
-  if (version !== 1 && version !== 2 && version !== 3) throw new Error(`unsupported pack version ${version}`)
+  if (version !== 1 && version !== 2 && version !== 3)
+    throw new Error(`unsupported pack version ${version}`)
 
   const width = view.getInt32(8, true)
   const height = view.getInt32(12, true)
@@ -86,7 +114,8 @@ export function parsePack(bytes) {
   const lutCount = view.getInt32(32, true)
   const hasPaper = view.getInt32(36, true) !== 0
 
-  if (lutCount !== LUT_COUNT) throw new Error(`pack LUT is ${lutCount}, expected ${LUT_COUNT}`)
+  if (lutCount !== LUT_COUNT)
+    throw new Error(`pack LUT is ${lutCount}, expected ${LUT_COUNT}`)
 
   let offset = 40
   const take = (count) => {
@@ -118,47 +147,101 @@ export function parsePack(bytes) {
         values[c] = view.getFloat32(offset + 4, true)
         offset += 8
       }
-      ladder.push({ shortEdge, featureMask: rungMask, seed: rungSeed, spatialSupport, slots, values })
+      ladder.push({
+        shortEdge,
+        featureMask: rungMask,
+        seed: rungSeed,
+        spatialSupport,
+        slots,
+        values,
+      })
     }
   }
   let transport
   if (version === 3) {
-    const integer = () => { const n = view.getInt32(offset, true); offset += 4; return n }
-    const headMask = integer(), headConfiguration = take(configCount), tailConfiguration = take(configCount)
+    const integer = () => {
+      const n = view.getInt32(offset, true)
+      offset += 4
+      return n
+    }
+    const headMask = integer(),
+      headConfiguration = take(configCount),
+      tailConfiguration = take(configCount)
     const count = integer()
-    if (count < 1 || count > 11) throw new Error('invalid transport component count')
+    if (count < 1 || count > 11)
+      throw new Error('invalid transport component count')
     const readBands = () => {
-      const bands = [], n = integer()
+      const bands = [],
+        n = integer()
       if (n < 1 || n > 64) throw new Error('invalid transport band count')
       for (let b = 0; b < n; ++b) {
-        const weight = take(1)[0], radius = integer(), stride = integer()
-        if (!Number.isFinite(weight) || weight < 0 || radius < 1 || radius > 128 ||
-            stride < 1 || stride > 4096 || (stride & (stride - 1))) throw new Error('invalid transport stencil')
-        bands.push({ weight, radius, stride, weights: take((radius * 2 + 1) ** 2) })
+        const weight = take(1)[0],
+          radius = integer(),
+          stride = integer()
+        if (
+          !Number.isFinite(weight) ||
+          weight < 0 ||
+          radius < 1 ||
+          radius > 128 ||
+          stride < 1 ||
+          stride > 4096 ||
+          stride & (stride - 1)
+        )
+          throw new Error('invalid transport stencil')
+        bands.push({
+          weight,
+          radius,
+          stride,
+          weights: take((radius * 2 + 1) ** 2),
+        })
       }
       return bands
     }
     const delta = (base) => {
-      const result = base.slice(), count = integer()
-      if (count < 0 || count > configCount) throw new Error('invalid transport configuration')
+      const result = base.slice(),
+        count = integer()
+      if (count < 0 || count > configCount)
+        throw new Error('invalid transport configuration')
       for (let i = 0; i < count; ++i) {
         const slot = integer()
-        if (slot < 0 || slot >= configCount) throw new Error('invalid transport slot')
+        if (slot < 0 || slot >= configCount)
+          throw new Error('invalid transport slot')
         result[slot] = take(1)[0]
       }
       return result
     }
-    const components = Array.from({ length: count }, () => ({ exposure: take(lutCount), bands: readBands() }))
-    const sizes = [], sizeCount = integer()
-    if (sizeCount !== ladder.length) throw new Error('transport size ladder mismatch')
+    const components = Array.from({ length: count }, () => ({
+      exposure: take(lutCount),
+      bands: readBands(),
+    }))
+    const sizes = [],
+      sizeCount = integer()
+    if (sizeCount !== ladder.length)
+      throw new Error('transport size ladder mismatch')
     for (let i = 0; i < sizeCount; ++i) {
-      const shortEdge = integer(), headConfigurationAtSize = delta(headConfiguration), tailConfigurationAtSize = delta(tailConfiguration)
-      sizes.push({ shortEdge, headConfiguration: headConfigurationAtSize, tailConfiguration: tailConfigurationAtSize,
-        components: components.map((component) => ({ exposure: component.exposure, bands: readBands() })) })
+      const shortEdge = integer(),
+        headConfigurationAtSize = delta(headConfiguration),
+        tailConfigurationAtSize = delta(tailConfiguration)
+      sizes.push({
+        shortEdge,
+        headConfiguration: headConfigurationAtSize,
+        tailConfiguration: tailConfigurationAtSize,
+        components: components.map((component) => ({
+          exposure: component.exposure,
+          bands: readBands(),
+        })),
+      })
     }
-    transport = { headMask, headConfiguration, tailConfiguration, components, sizes }
+    transport = {
+      headMask,
+      headConfiguration,
+      tailConfiguration,
+      components,
+      sizes,
+    }
   }
-  if (offset !== bytes.byteLength) throw new Error(`pack has ${bytes.byteLength - offset} trailing bytes`)
+  if (offset !== bytes.byteLength)
+    throw new Error(`pack has ${bytes.byteLength - offset} trailing bytes`)
 
   return {
     bytes,
@@ -208,12 +291,17 @@ export async function loadStages(url, base, mediumUrl = null) {
 
   // A sidecar and a pack from different exports would agree slot for slot on nothing.
   if (width !== base.width || height !== base.height) {
-    throw new Error(`sidecar is ${width}×${height}, pack is ${base.width}×${base.height}`)
+    throw new Error(
+      `sidecar is ${width}×${height}, pack is ${base.width}×${base.height}`,
+    )
   }
   if (configCount !== base.configuration.length) {
-    throw new Error(`sidecar carries ${configCount} slots, pack carries ${base.configuration.length}`)
+    throw new Error(
+      `sidecar carries ${configCount} slots, pack carries ${base.configuration.length}`,
+    )
   }
-  if (lutCount !== LUT_COUNT) throw new Error(`sidecar LUT is ${lutCount}, expected ${LUT_COUNT}`)
+  if (lutCount !== LUT_COUNT)
+    throw new Error(`sidecar LUT is ${lutCount}, expected ${LUT_COUNT}`)
 
   let offset = 32
   // Length-prefixed UTF-8, tail-padded to keep what follows four-byte aligned.
@@ -231,14 +319,20 @@ export async function loadStages(url, base, mediumUrl = null) {
     const label = takeString()
     const featureMask = view.getInt32(offset, true)
     const seed = view.getUint32(offset + 4, true)
-    const cubes = [view.getInt32(offset + 8, true), view.getInt32(offset + 12, true),
-                   view.getInt32(offset + 16, true)]
+    const cubes = [
+      view.getInt32(offset + 8, true),
+      view.getInt32(offset + 12, true),
+      view.getInt32(offset + 16, true),
+    ]
     const changedCount = view.getInt32(offset + 20, true)
     offset += 24
 
     const configuration = base.configuration.slice()
     for (let c = 0; c < changedCount; ++c) {
-      configuration[view.getInt32(offset, true)] = view.getFloat32(offset + 4, true)
+      configuration[view.getInt32(offset, true)] = view.getFloat32(
+        offset + 4,
+        true,
+      )
       offset += 8
     }
     stages.push({ id, label, featureMask, seed, cubes, configuration })
@@ -296,14 +390,12 @@ function linearToSrgb(v) {
 // sRGB→2020 and the encode is P3→sRGB. All three spaces are D65, so each change of primaries
 // is a plain 3×3 with no chromatic adaptation. Digits match ColorScience.linearSRGBToRec2020.
 const SRGB_TO_2020 = [
-  0.6274039, 0.3292830, 0.0433131,
-  0.0690973, 0.9195404, 0.0113623,
-  0.0163914, 0.0880133, 0.8955953,
+  0.6274039, 0.329283, 0.0433131, 0.0690973, 0.9195404, 0.0113623, 0.0163914,
+  0.0880133, 0.8955953,
 ]
 const P3_TO_SRGB = [
-  1.2249401, -0.2249404, 0.0000000,
-  -0.0420569, 1.0420571, 0.0000000,
-  -0.0196376, -0.0786361, 1.0982735,
+  1.2249401, -0.2249404, 0.0, -0.0420569, 1.0420571, 0.0, -0.0196376,
+  -0.0786361, 1.0982735,
 ]
 
 /// The soft clip the CLI applies before encoding, so print highlights roll off instead of
@@ -320,13 +412,16 @@ function displayShoulder(x) {
 // a print's gradients do not band on the way to eight bits. The CLI dithers for the same reason,
 // and a print downloaded from here should not be the coarser of the two.
 function pcgHash(v) {
-  const state = Math.imul(v, 747796405) + 2891336453 >>> 0
-  const word = Math.imul((state >>> ((state >>> 28) + 4)) ^ state, 277803737) >>> 0
+  const state = (Math.imul(v, 747796405) + 2891336453) >>> 0
+  const word =
+    Math.imul((state >>> ((state >>> 28) + 4)) ^ state, 277803737) >>> 0
   return (word >>> 22) ^ word
 }
 
 function triangularDither(index, channel, seed) {
-  const h1 = pcgHash((index ^ pcgHash(channel + Math.imul(seed, 0x9e3779b9) >>> 0)) >>> 0)
+  const h1 = pcgHash(
+    (index ^ pcgHash((channel + Math.imul(seed, 0x9e3779b9)) >>> 0)) >>> 0,
+  )
   const h2 = pcgHash(h1)
   return (h1 >>> 8) / 16777216 + (h2 >>> 8) / 16777216 - 1
 }
@@ -364,13 +459,21 @@ function decodeInto(destination, source, plane, stride, offsets) {
 /// length, and every slot after the first mismatch means something else. Caught here rather
 /// than left to develop a frame that is merely wrong.
 function checkConfigurationCount(module, pack) {
-  const expected = module.ccall('fotufilm_wasm_configuration_count', 'number', [], [])
+  const expected = module.ccall(
+    'fotufilm_wasm_configuration_count',
+    'number',
+    [],
+    [],
+  )
   if (expected !== CONFIG.FOTUFILM_FRAME_CONFIGURATION_COUNT) {
-    throw new Error('The browser engine is out of date. Rebuild the runtime and film files together.')
+    throw new Error(
+      'The browser engine is out of date. Rebuild the runtime and film files together.',
+    )
   }
   if (pack.configuration.length !== expected) {
     throw new Error(
-      `pack carries ${pack.configuration.length} configuration slots, engine wants ${expected}`)
+      `pack carries ${pack.configuration.length} configuration slots, engine wants ${expected}`,
+    )
   }
 }
 
@@ -381,7 +484,10 @@ function checkConfigurationCount(module, pack) {
 const GRAIN_OFFSET = 30
 
 function writeBaseGrain(module, configuration, ptr) {
-  module.HEAPF32.set(configuration.slice(GRAIN_OFFSET, GRAIN_OFFSET + 3), ptr / 4)
+  module.HEAPF32.set(
+    configuration.slice(GRAIN_OFFSET, GRAIN_OFFSET + 3),
+    ptr / 4,
+  )
 }
 
 /// The rung of the pack's size ladder nearest to a frame: the one whose short edge is closest to
@@ -421,7 +527,8 @@ export function configurationFor(pack, rung, width, height, frameSizeSlot) {
   const base = pack.baseConfiguration ?? pack.configuration
   for (let i = 0; i < rung.slots.length; ++i) {
     const slot = rung.slots[i]
-    if (pack.configuration[slot] === base[slot]) configuration[slot] = rung.values[i]
+    if (pack.configuration[slot] === base[slot])
+      configuration[slot] = rung.values[i]
   }
   configuration[frameSizeSlot] = width
   configuration[frameSizeSlot + 1] = height
@@ -443,7 +550,13 @@ export function planTiles(width, height, apron, budget) {
   const a = Math.max(0, apron | 0)
   const tiles = []
   if (width * height <= budget) {
-    tiles.push({ x: 0, y: 0, width, height, region: { x: 0, y: 0, width, height } })
+    tiles.push({
+      x: 0,
+      y: 0,
+      width,
+      height,
+      region: { x: 0, y: 0, width, height },
+    })
     return tiles
   }
   const side = Math.max(MIN_TILE_SIDE, Math.floor(Math.sqrt(budget)) - 2 * a)
@@ -496,9 +609,13 @@ export function imageSource(image) {
     height,
     read(x, y, w, h) {
       if (!canvas || canvas.width < w || canvas.height < h) {
-        canvas = typeof OffscreenCanvas !== 'undefined'
-          ? new OffscreenCanvas(w, h)
-          : Object.assign(document.createElement('canvas'), { width: w, height: h })
+        canvas =
+          typeof OffscreenCanvas !== 'undefined'
+            ? new OffscreenCanvas(w, h)
+            : Object.assign(document.createElement('canvas'), {
+                width: w,
+                height: h,
+              })
         context = canvas.getContext('2d', { willReadFrequently: true })
       }
       context.clearRect(0, 0, w, h)
@@ -512,7 +629,16 @@ export function imageSource(image) {
 /// shoulder and the clip belong to the print, so they happen in P3 where the CLI does them; only
 /// then does the result change primaries. The dither is indexed by the pixel's place in the frame,
 /// not in the tile, so how the frame was cut leaves no trace in it.
-function encodeTileInto(pixels, frameWidth, output, tile, seed, stride, offsets) {
+export function encodeTileInto(
+  pixels,
+  frameWidth,
+  output,
+  tile,
+  seed,
+  stride,
+  offsets,
+) {
+  const sixteen = pixels instanceof Uint16Array
   const n = P3_TO_SRGB
   const [o0, o1, o2] = offsets
   const { region } = tile
@@ -524,14 +650,35 @@ function encodeTileInto(pixels, frameWidth, output, tile, seed, stride, offsets)
       const b = clamp01(displayShoulder(output[at + o2]))
       const p = y * frameWidth + x
       const i = p * 4
+      if (sixteen) {
+        for (let c = 0; c < 3; c++) {
+          const value = linearToSrgb(
+            n[c * 3] * r + n[c * 3 + 1] * g + n[c * 3 + 2] * b,
+          )
+          pixels[i + c] = Number.isFinite(value)
+            ? Math.round(clamp01(value) * 65535)
+            : 0
+        }
+        pixels[i + 3] = 65535
+        continue
+      }
       // Native UInt8 conversion truncates after the half-step and dither.
       // Uint8ClampedArray rounds instead, so floor first to avoid a second round.
-      pixels[i] = Math.floor(linearToSrgb(n[0] * r + n[1] * g + n[2] * b) * 255 + 0.5 +
-        triangularDither(p, 0, seed))
-      pixels[i + 1] = Math.floor(linearToSrgb(n[3] * r + n[4] * g + n[5] * b) * 255 + 0.5 +
-        triangularDither(p, 1, seed))
-      pixels[i + 2] = Math.floor(linearToSrgb(n[6] * r + n[7] * g + n[8] * b) * 255 + 0.5 +
-        triangularDither(p, 2, seed))
+      pixels[i] = Math.floor(
+        linearToSrgb(n[0] * r + n[1] * g + n[2] * b) * 255 +
+          0.5 +
+          triangularDither(p, 0, seed),
+      )
+      pixels[i + 1] = Math.floor(
+        linearToSrgb(n[3] * r + n[4] * g + n[5] * b) * 255 +
+          0.5 +
+          triangularDither(p, 1, seed),
+      )
+      pixels[i + 2] = Math.floor(
+        linearToSrgb(n[6] * r + n[7] * g + n[8] * b) * 255 +
+          0.5 +
+          triangularDither(p, 2, seed),
+      )
       pixels[i + 3] = 255
     }
   }
@@ -546,7 +693,12 @@ class Developer {
     this.module = module
     this.pack = pack
     checkConfigurationCount(module, pack)
-    this.frameSizeSlot = module.ccall('fotufilm_wasm_frame_size_slot', 'number', [], [])
+    this.frameSizeSlot = module.ccall(
+      'fotufilm_wasm_frame_size_slot',
+      'number',
+      [],
+      [],
+    )
     this.width = 0
     this.height = 0
     // Region pixels the frame buffers hold; they grow to the largest tile and stay.
@@ -560,7 +712,8 @@ class Developer {
   /// lays out the configuration, cuts the tiles, and grows the buffers to the largest of them.
   setFrame(width, height) {
     if (width === this.width && height === this.height) return
-    if (!(width > 0 && height > 0)) throw new Error(`cannot develop a ${width}×${height} frame`)
+    if (!(width > 0 && height > 0))
+      throw new Error(`cannot develop a ${width}×${height} frame`)
     this.width = width
     this.height = height
     this.plan()
@@ -575,26 +728,39 @@ class Developer {
   usePack(pack) {
     this.pack = pack
     this.uploadTables(pack)
-    this.uploaded = { film: pack.film, paper: pack.paper, exposure: pack.exposure }
+    this.uploaded = {
+      film: pack.film,
+      paper: pack.paper,
+      exposure: pack.exposure,
+    }
     if (this.width) this.plan()
   }
 
   plan() {
     const rung = sizeEntryFor(this.pack, this.width, this.height)
     this.rung = rung
-    this.configuration = configurationFor(this.pack, rung, this.width, this.height, this.frameSizeSlot)
+    this.configuration = configurationFor(
+      this.pack,
+      rung,
+      this.width,
+      this.height,
+      this.frameSizeSlot,
+    )
     // Browser CPU kernels exist only for finished-stock masks, so a stage keeps the rung's stage
     // bits and contributes only its film-type bits; see dispatchMask.
-    this.featureMask = this.pack.ownFeatureMask == null
-      ? rung.featureMask
-      : dispatchMask(rung.featureMask, this.pack.ownFeatureMask)
+    this.featureMask =
+      this.pack.ownFeatureMask == null
+        ? rung.featureMask
+        : dispatchMask(rung.featureMask, this.pack.ownFeatureMask)
     this.seed = this.pack.seed >>> 0
     this.apron = rung.spatialSupport ?? 0
-    this.tiles = this.pack.transport || rung.spatialSupport == null
-      ? planTiles(this.width, this.height, 0, Infinity)
-      : planTiles(this.width, this.height, this.apron, this.tileBudget)
+    this.tiles =
+      this.pack.transport || rung.spatialSupport == null
+        ? planTiles(this.width, this.height, 0, Infinity)
+        : planTiles(this.width, this.height, this.apron, this.tileBudget)
     let needed = 0
-    for (const tile of this.tiles) needed = Math.max(needed, tile.region.width * tile.region.height)
+    for (const tile of this.tiles)
+      needed = Math.max(needed, tile.region.width * tile.region.height)
     if (needed > this.capacity) {
       this.freeFrame()
       this.allocateFrame(needed)
@@ -611,71 +777,127 @@ class Developer {
     for (const control of CONTROLS) {
       const value = values[control.key] ?? control.def
       if (control.kind === 'grain') {
-        module.ccall('fotufilm_wasm_set_grain', null, ['number', 'number', 'number'],
-                     [this.configPtr, this.grainPtr, value])
+        module.ccall(
+          'fotufilm_wasm_set_grain',
+          null,
+          ['number', 'number', 'number'],
+          [this.configPtr, this.grainPtr, value],
+        )
         continue
       }
-      const slot = module.ccall('fotufilm_wasm_control_slot', 'number', ['number'], [control.index])
+      const slot = module.ccall(
+        'fotufilm_wasm_control_slot',
+        'number',
+        ['number'],
+        [control.index],
+      )
       const stored = control.kind === 'exp2' ? Math.pow(2, value) : value
-      module.ccall('fotufilm_wasm_set_slot', null, ['number', 'number', 'number'],
-                   [this.configPtr, slot, stored])
+      module.ccall(
+        'fotufilm_wasm_set_slot',
+        null,
+        ['number', 'number', 'number'],
+        [this.configPtr, slot, stored],
+      )
     }
-    const configuration = module.HEAPF32.subarray(this.configPtr / 4,
-      this.configPtr / 4 + this.configuration.length)
+    const configuration = module.HEAPF32.subarray(
+      this.configPtr / 4,
+      this.configPtr / 4 + this.configuration.length,
+    )
     applyColorControls(configuration, controls)
-    configuration[CONFIG.CAMERA_PREFLASH] = this.featureMask === 1 << 29 ? 0 : (controls.cameraPreflash ?? 0)
+    configuration[CONFIG.CAMERA_PREFLASH] =
+      this.featureMask === 1 << 29 ? 0 : (controls.cameraPreflash ?? 0)
     // Keep coarse and resolved grain at the same strength as the clump field.
     for (const offset of [CONFIG.MOTTLE, CONFIG.GRAIN_DISC]) {
-      for (let c = 0; c < 3; c++) configuration[offset + c] *= controls.grain ?? 1
+      for (let c = 0; c < 3; c++)
+        configuration[offset + c] *= controls.grain ?? 1
     }
     this.seed = ((controls.seed ?? 0) + this.pack.seed) >>> 0
   }
 
   /// Develops one frame. `source` is a `pixelSource` or `imageSource` at the frame's size; the
-  /// result is sRGB RGBA8 of the same size. `elapsed` is the kernels' own time, summed over the
+  /// result is sRGB RGBA8 or RGBA16 of the same size. `elapsed` is the kernels' own time, summed over the
   /// tiles; the conversions at either end are not in it.
-  async develop(source, controls, onProgress = () => {}) {
+  async develop(
+    source,
+    controls,
+    onProgress = () => {},
+    stale = () => false,
+    bitDepth = 8,
+  ) {
     if (source.width !== this.width || source.height !== this.height) {
       this.setFrame(source.width, source.height)
     }
     this.controls = controls
     this.applyControls(controls)
-    if (this.pack?.screenMeter || (controls.localTone && (controls.highlights || controls.shadows))) {
+    if (
+      this.pack?.screenMeter ||
+      (controls.localTone && (controls.highlights || controls.shadows))
+    ) {
       onProgress('Measuring local highlights and shadows')
-      const grid = await measuredTone(source, controls, whiteBalanceGains(controls.temperature, controls.tint))
+      const grid = await measuredTone(
+        source,
+        controls,
+        whiteBalanceGains(controls.temperature, controls.tint),
+      )
       const offset = this.configPtr / 4
-      applyScreenLevels(this.module.HEAPF32.subarray(offset, offset + this.configuration.length),
-                        this.pack?.screenMeter, grid.regionStops)
+      applyScreenLevels(
+        this.module.HEAPF32.subarray(
+          offset,
+          offset + this.configuration.length,
+        ),
+        this.pack?.screenMeter,
+        grid.regionStops,
+      )
       this.module.HEAPF32[offset + CONFIG.TONE_GRID_WIDTH] = grid.width
       this.module.HEAPF32[offset + CONFIG.TONE_GRID_HEIGHT] = grid.height
       this.module.HEAPF32.set(grid.a, offset + CONFIG.TONE_GRID_A)
       this.module.HEAPF32.set(grid.b, offset + CONFIG.TONE_GRID_B)
     }
-    const pixels = new Uint8ClampedArray(this.width * this.height * 4)
+    const pixels = new (bitDepth === 16 ? Uint16Array : Uint8ClampedArray)(
+      this.width * this.height * 4,
+    )
     let elapsed = 0
     for (let t = 0; t < this.tiles.length; ++t) {
+      if (stale()) return null
       const tile = this.tiles[t]
       const { region } = tile
-      const operation = this.featureMask === 1 << 29 ? 'Applying light and color' : 'Rendering film and output medium'
+      const operation =
+        this.featureMask === 1 << 29
+          ? 'Applying light and color'
+          : 'Rendering film and output medium'
       onProgress(`${operation} · tile ${t + 1} of ${this.tiles.length}`)
       // Let a long CPU tile show its current operation before it occupies the main thread.
       if (this.tiles.length > 1) await yieldToBrowser()
-      this.decodeRegion(source.read(region.x, region.y, region.width, region.height), region)
+      this.decodeRegion(
+        await source.read(region.x, region.y, region.width, region.height),
+        region,
+      )
+      if (stale()) return null
       const started = performance.now()
       const status = await this.run(region)
       elapsed += performance.now() - started
-      if (status === -2) throw new Error('no kernel was built for this stock at this size')
+      if (status === -2)
+        throw new Error('no kernel was built for this stock at this size')
       if (status !== 0) throw new Error(`engine returned ${status}`)
       // Read the heap after the call, not before: the module can grow its memory mid-render,
       // which detaches any view taken earlier.
-      encodeTileInto(pixels, this.width, this.regionOutput(region), tile, this.seed,
-                     this.outputStride, this.outputOffsets(region))
+      encodeTileInto(
+        pixels,
+        this.width,
+        this.regionOutput(region),
+        tile,
+        this.seed,
+        this.outputStride,
+        this.outputOffsets(region),
+      )
       if (t + 1 < this.tiles.length) await yieldToBrowser()
     }
     return { pixels, elapsed }
   }
 
-  get isAborted() { return runtime.wasAborted(this.module) }
+  get isAborted() {
+    return runtime.wasAborted(this.module)
+  }
 
   dispose() {
     if (this.isAborted) return
@@ -694,7 +916,9 @@ export class WebgpuDeveloper extends Developer {
     // The film and paper cubes ride behind the configuration in one buffer. A WebGPU compute
     // stage is promised only eight storage buffers and the combine kernel binds nine as it is;
     // with the cubes on their own it bound eleven, which no adapter here would create.
-    this.configPtr = module._malloc((pack.configuration.length + 2 * LUT_COUNT) * 4)
+    this.configPtr = module._malloc(
+      (pack.configuration.length + 2 * LUT_COUNT) * 4,
+    )
     this.exposurePtr = module._malloc(LUT_COUNT * 4)
     this.inputPtr = 0
     this.outputPtr = 0
@@ -703,10 +927,23 @@ export class WebgpuDeveloper extends Developer {
     this.usePack(pack)
 
     // Asynchronous: the kernel suspends through JSPI while the device works.
-    this.renderCall = module.cwrap('fotufilm_wasm_render', 'number',
-                                   ['number', 'number', 'number', 'number', 'number',
-                                    'number', 'number', 'number', 'number', 'number'],
-                                   { async: true })
+    this.renderCall = module.cwrap(
+      'fotufilm_wasm_render',
+      'number',
+      [
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+      ],
+      { async: true },
+    )
   }
 
   uploadTables(pack) {
@@ -742,19 +979,39 @@ export class WebgpuDeveloper extends Developer {
 
   decodeRegion(bytes, region) {
     const n = region.width * region.height
-    decodeInto(this.module.HEAPF32.subarray(this.inputPtr / 4, this.inputPtr / 4 + n * 4),
-               bytes, n, 4, [0, 1, 2])
+    decodeInto(
+      this.module.HEAPF32.subarray(
+        this.inputPtr / 4,
+        this.inputPtr / 4 + n * 4,
+      ),
+      bytes,
+      n,
+      4,
+      [0, 1, 2],
+    )
   }
 
   run(region) {
     return this.renderCall(
-      this.inputPtr, this.outputPtr, region.width, region.height, region.x, region.y,
-      this.configPtr, this.exposurePtr, this.featureMask, this.seed)
+      this.inputPtr,
+      this.outputPtr,
+      region.width,
+      region.height,
+      region.x,
+      region.y,
+      this.configPtr,
+      this.exposurePtr,
+      this.featureMask,
+      this.seed,
+    )
   }
 
   regionOutput(region) {
     const n = region.width * region.height
-    return this.module.HEAPF32.subarray(this.outputPtr / 4, this.outputPtr / 4 + n * 4)
+    return this.module.HEAPF32.subarray(
+      this.outputPtr / 4,
+      this.outputPtr / 4 + n * 4,
+    )
   }
 
   outputOffsets() {
@@ -773,7 +1030,10 @@ export class WebgpuDeveloper extends Developer {
     const side = 16
     const grey = new Uint8ClampedArray(side * side * 4).fill(118)
     for (let i = 3; i < grey.length; i += 4) grey[i] = 255
-    await this.develop(pixelSource({ data: grey, width: side, height: side }), {})
+    await this.develop(
+      pixelSource({ data: grey, width: side, height: side }),
+      {},
+    )
   }
 }
 
@@ -795,29 +1055,54 @@ export class SimdDeveloper extends Developer {
     this.usePack(pack)
 
     this.renderCall = module.cwrap('fotufilm_wasm_cpu_render', 'number', [
-      'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number',
-      'number', 'number', 'number', 'number', 'number',
+      'number',
+      'number',
+      'number',
+      'number',
+      'number',
+      'number',
+      'number',
+      'number',
+      'number',
+      'number',
+      'number',
+      'number',
+      'number',
     ])
   }
 
   uploadTables(pack) {
     const { module } = this
-    for (const [name, ptr] of [['exposure', this.exposurePtr], ['film', this.filmPtr],
-                               ['paper', this.paperPtr]]) {
-      if (this.uploaded[name] !== pack[name]) module.HEAPF32.set(pack[name], ptr / 4)
+    for (const [name, ptr] of [
+      ['exposure', this.exposurePtr],
+      ['film', this.filmPtr],
+      ['paper', this.paperPtr],
+    ]) {
+      if (this.uploaded[name] !== pack[name])
+        module.HEAPF32.set(pack[name], ptr / 4)
     }
   }
 
   allocateFrame(pixels) {
-    this.transportPtrs = this.pack.transport ? [this.module._malloc(pixels * 3 * 4),
-      this.module._malloc(pixels * 3 * 4), this.module._malloc(257 * 257 * 4)] : []
+    this.transportPtrs = this.pack.transport
+      ? [
+          this.module._malloc(pixels * 3 * 4),
+          this.module._malloc(pixels * 3 * 4),
+          this.module._malloc(257 * 257 * 4),
+        ]
+      : []
     this.inputPtr = this.module._malloc(pixels * 3 * 4)
     this.outputPtr = this.module._malloc(pixels * 3 * 4)
     this.densityPtr = this.module._malloc(pixels * 3 * 4)
   }
 
   freeFrame() {
-    for (const ptr of [this.inputPtr, this.outputPtr, this.densityPtr, ...(this.transportPtrs ?? [])]) {
+    for (const ptr of [
+      this.inputPtr,
+      this.outputPtr,
+      this.densityPtr,
+      ...(this.transportPtrs ?? []),
+    ]) {
       if (ptr) this.module._free(ptr)
     }
     this.transportPtrs = []
@@ -827,36 +1112,74 @@ export class SimdDeveloper extends Developer {
   }
 
   disposeTables() {
-    for (const ptr of [this.configPtr, this.exposurePtr, this.filmPtr, this.paperPtr]) {
+    for (const ptr of [
+      this.configPtr,
+      this.exposurePtr,
+      this.filmPtr,
+      this.paperPtr,
+    ]) {
       this.module._free(ptr)
     }
   }
 
   decodeRegion(bytes, region) {
     const n = region.width * region.height
-    decodeInto(this.module.HEAPF32.subarray(this.inputPtr / 4, this.inputPtr / 4 + n * 3),
-               bytes, n, 1, [0, n, 2 * n])
+    decodeInto(
+      this.module.HEAPF32.subarray(
+        this.inputPtr / 4,
+        this.inputPtr / 4 + n * 3,
+      ),
+      bytes,
+      n,
+      1,
+      [0, n, 2 * n],
+    )
   }
 
   /// Synchronous: the kernel runs on this thread and holds it for the length of the tile.
   run(region) {
     if (this.pack.transport) return this.runTransport(region)
     return this.renderCall(
-      this.inputPtr, this.outputPtr, region.width, region.height, region.x, region.y,
-      this.configPtr, this.exposurePtr, this.filmPtr, this.paperPtr, this.densityPtr,
-      this.featureMask, this.seed)
+      this.inputPtr,
+      this.outputPtr,
+      region.width,
+      region.height,
+      region.x,
+      region.y,
+      this.configPtr,
+      this.exposurePtr,
+      this.filmPtr,
+      this.paperPtr,
+      this.densityPtr,
+      this.featureMask,
+      this.seed,
+    )
   }
 
   runTransport(region) {
     const { module, pack } = this
     const root = pack.transport
-    const plan = root.sizes.find((size) => size.shortEdge === this.rung.shortEdge) ?? root
+    const plan =
+      root.sizes.find((size) => size.shortEdge === this.rung.shortEdge) ?? root
     const [sumPtr, filteredPtr, kernelPtr] = this.transportPtrs
     const count = region.width * region.height * 3
     module.HEAPF32.fill(0, sumPtr / 4, sumPtr / 4 + count)
-    const render = (input, mask) => this.renderCall(input, this.outputPtr, region.width,
-      region.height, 0, 0, this.configPtr, this.exposurePtr, this.filmPtr, this.paperPtr,
-      this.densityPtr, mask, this.seed)
+    const render = (input, mask) =>
+      this.renderCall(
+        input,
+        this.outputPtr,
+        region.width,
+        region.height,
+        0,
+        0,
+        this.configPtr,
+        this.exposurePtr,
+        this.filmPtr,
+        this.paperPtr,
+        this.densityPtr,
+        mask,
+        this.seed,
+      )
     const original = this.configuration
     const configure = (values) => {
       this.configuration = values.slice()
@@ -872,22 +1195,40 @@ export class SimdDeveloper extends Developer {
         if (status !== 0) return status
         for (const band of component.bands) {
           module.HEAPF32.set(band.weights, kernelPtr / 4)
-          const status = module.ccall('fotufilm_wasm_transport', 'number', Array(7).fill('number'),
-            [this.outputPtr, filteredPtr, region.width, region.height, kernelPtr, band.radius, band.stride])
+          const status = module.ccall(
+            'fotufilm_wasm_transport',
+            'number',
+            Array(7).fill('number'),
+            [
+              this.outputPtr,
+              filteredPtr,
+              region.width,
+              region.height,
+              kernelPtr,
+              band.radius,
+              band.stride,
+            ],
+          )
           if (status !== 0) return status
           const heap = module.HEAPF32
-          for (let i = 0; i < count; ++i) heap[sumPtr / 4 + i] += band.weight * heap[filteredPtr / 4 + i]
+          for (let i = 0; i < count; ++i)
+            heap[sumPtr / 4 + i] += band.weight * heap[filteredPtr / 4 + i]
         }
       }
       configure(plan.tailConfiguration)
       module.HEAPF32.set(pack.exposure, this.exposurePtr / 4)
       return render(sumPtr, this.featureMask)
-    } finally { this.configuration = original }
+    } finally {
+      this.configuration = original
+    }
   }
 
   regionOutput(region) {
     const n = region.width * region.height
-    return this.module.HEAPF32.subarray(this.outputPtr / 4, this.outputPtr / 4 + n * 3)
+    return this.module.HEAPF32.subarray(
+      this.outputPtr / 4,
+      this.outputPtr / 4 + n * 3,
+    )
   }
 
   outputOffsets(region) {
@@ -898,9 +1239,21 @@ export class SimdDeveloper extends Developer {
 
 /// Builds the fastest developer this browser will actually run: WebGPU when the adapter can
 /// create the kernel's pipelines, and the SIMD path otherwise.
-export async function createDeveloper(pack, onProgress = () => {}) {
-  if (typeof WebAssembly !== 'object') throw new Error('This browser cannot process film profiles. Use a browser with WebAssembly support.')
-  if (supportsWebgpuRuntime(navigator.gpu, WebAssembly) && !pack.transport) {
+export async function createDeveloper(
+  pack,
+  onProgress = () => {},
+  { preferGpu = true } = {},
+) {
+  if (typeof WebAssembly !== 'object')
+    throw new Error(
+      'This browser cannot process film profiles. Use a browser with WebAssembly support.',
+    )
+  if (
+    preferGpu &&
+    supportsWebgpuRuntime(navigator.gpu, WebAssembly) &&
+    !pack.transport &&
+    !(pack.featureMask & (1 << 28))
+  ) {
     let developer
     try {
       onProgress('Loading WebGPU engine')
@@ -911,9 +1264,13 @@ export async function createDeveloper(pack, onProgress = () => {}) {
     } catch (error) {
       // An aborted Emscripten module cannot be called again, so the promise goes with it and the
       // next pack loads a fresh one.
-      if (developer && !runtime.wasAborted(developer.module)) developer.dispose()
+      if (developer && !runtime.wasAborted(developer.module))
+        developer.dispose()
       runtime.forget('webgpu')
-      console.warn('WebGPU engine unavailable, developing on the CPU instead:', error)
+      console.warn(
+        'WebGPU engine unavailable, developing on the CPU instead:',
+        error,
+      )
     }
   }
   onProgress('Loading CPU engine')
@@ -929,38 +1286,95 @@ export function decodeRGBA(bytes) {
 }
 
 // PlainDevelop.swift, for Normal. A pipeline's bypass diagnostic is still a film model.
-export async function developNormalReference(source, controls, onProgress = () => {}) {
-  const { width, height } = source, started = performance.now()
-  const balance = whiteBalanceGains(controls.temperature, controls.tint), grade = packedGrade(controls)
-  const exposure = 2 ** (controls.ev || 0), weights = [0.2627002, 0.6779981, 0.0593017]
-  const matrix = [1.343578253, -0.282179671, -0.061398582, -0.065297453, 1.075787916, -0.010490463, 0.002821787, -0.019598495, 1.016776707]
-  const grid = controls.localTone && (controls.highlights || controls.shadows)
-    ? await measuredTone(source, controls, balance) : null
-  const pixels = new Uint8ClampedArray(width * height * 4)
-  const encode = v => v <= 0.0031308 ? v * 12.92 : v >= 1 ? 1 + (v - 1) * (1.055 / 2.4) : 1.055 * v ** (1 / 2.4) - 0.055
-  const decode = v => v <= 0.04045 ? v / 12.92 : v >= 1 ? 1 + (v - 1) / (1.055 / 2.4) : ((v + 0.055) / 1.055) ** 2.4
+export async function developNormalReference(
+  source,
+  controls,
+  onProgress = () => {},
+  stale = () => false,
+  bitDepth = 8,
+) {
+  const { width, height } = source,
+    started = performance.now()
+  const balance = whiteBalanceGains(controls.temperature, controls.tint),
+    grade = packedGrade(controls)
+  const exposure = 2 ** (controls.ev || 0),
+    weights = [0.2627002, 0.6779981, 0.0593017]
+  const matrix = [
+    1.343578253, -0.282179671, -0.061398582, -0.065297453, 1.075787916,
+    -0.010490463, 0.002821787, -0.019598495, 1.016776707,
+  ]
+  const grid =
+    controls.localTone && (controls.highlights || controls.shadows)
+      ? await measuredTone(source, controls, balance)
+      : null
+  const pixels = new (bitDepth === 16 ? Uint16Array : Uint8ClampedArray)(
+    width * height * 4,
+  )
+  const encode = (v) =>
+    v <= 0.0031308
+      ? v * 12.92
+      : v >= 1
+        ? 1 + (v - 1) * (1.055 / 2.4)
+        : 1.055 * v ** (1 / 2.4) - 0.055
+  const decode = (v) =>
+    v <= 0.04045
+      ? v / 12.92
+      : v >= 1
+        ? 1 + (v - 1) / (1.055 / 2.4)
+        : ((v + 0.055) / 1.055) ** 2.4
   for (let top = 0; top < height; top += 32) {
-    onProgress(`Applying light and color · rows ${top + 1}–${Math.min(top + 32, height)} of ${height}`)
-    const rows = Math.min(32, height - top), linear = decodeRGBA(source.read(0, top, width, rows))
-    for (let y = 0; y < rows; y++) for (let x = 0; x < width; x++) {
-      const i = (y * width + x) * 4
-      const rgb = [0, 1, 2].map(c => linear[i + c] * balance[c])
-      const luma = rgb.reduce((sum, v, c) => sum + v * weights[c], 0)
-      const stops = toneKey(grid, Math.log2(Math.max(luma * exposure / 0.18, 1e-6)), x, top + y, width, height)
-      const high = clamp01(stops / 6), low = clamp01(-stops / 6)
-      const gain = 2 ** (3 * ((controls.highlights || 0) * high * high * (3 - 2 * high) + (controls.shadows || 0) * low * low * (3 - 2 * low)))
-      const peak = Math.max(...rgb), colourfulness = (peak - Math.min(...rgb)) / Math.max(peak, 1e-6)
-      const chroma = (controls.saturation ?? 1) * (1 + (controls.vibrance || 0) * (1 - colourfulness))
-      const lit = rgb.map(v => (luma + chroma * (v - luma)) * gain * exposure)
-      for (let c = 0; c < 3; c++) {
-        let value = matrix[c * 3] * lit[0] + matrix[c * 3 + 1] * lit[1] + matrix[c * 3 + 2] * lit[2]
-        if (controls.gradeSpace) value = encode(value)
-        value = value * (grade[c + 3] - grade[c]) + grade[c]
-        if (grade[c + 6] !== 1) value = Math.max(value, 0) ** grade[c + 6]
-        linear[i + c] = controls.gradeSpace ? decode(value) : value
+    if (stale()) return null
+    onProgress(
+      `Applying light and color · rows ${top + 1}–${Math.min(top + 32, height)} of ${height}`,
+    )
+    const rows = Math.min(32, height - top),
+      linear = decodeRGBA(await source.read(0, top, width, rows))
+    for (let y = 0; y < rows; y++)
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4
+        const rgb = [0, 1, 2].map((c) => linear[i + c] * balance[c])
+        const luma = rgb.reduce((sum, v, c) => sum + v * weights[c], 0)
+        const stops = toneKey(
+          grid,
+          Math.log2(Math.max((luma * exposure) / 0.18, 1e-6)),
+          x,
+          top + y,
+          width,
+          height,
+        )
+        const high = clamp01(stops / 6),
+          low = clamp01(-stops / 6)
+        const gain =
+          2 **
+          (3 *
+            ((controls.highlights || 0) * high * high * (3 - 2 * high) +
+              (controls.shadows || 0) * low * low * (3 - 2 * low)))
+        const peak = Math.max(...rgb),
+          colourfulness = (peak - Math.min(...rgb)) / Math.max(peak, 1e-6)
+        const chroma =
+          (controls.saturation ?? 1) *
+          (1 + (controls.vibrance || 0) * (1 - colourfulness))
+        const lit = rgb.map(
+          (v) => (luma + chroma * (v - luma)) * gain * exposure,
+        )
+        for (let c = 0; c < 3; c++) {
+          let value =
+            matrix[c * 3] * lit[0] +
+            matrix[c * 3 + 1] * lit[1] +
+            matrix[c * 3 + 2] * lit[2]
+          if (controls.gradeSpace) value = encode(value)
+          value = value * (grade[c + 3] - grade[c]) + grade[c]
+          if (grade[c + 6] !== 1) value = Math.max(value, 0) ** grade[c + 6]
+          linear[i + c] = controls.gradeSpace ? decode(value) : value
+        }
       }
+    const tile = {
+      x: 0,
+      y: top,
+      width,
+      height: rows,
+      region: { x: 0, y: top, width, height: rows },
     }
-    const tile = { x: 0, y: top, width, height: rows, region: { x: 0, y: top, width, height: rows } }
     encodeTileInto(pixels, width, linear, tile, 0, 4, [0, 1, 2])
     await yieldToBrowser()
   }
@@ -971,41 +1385,87 @@ export async function createCpuDeveloper(pack) {
   return new SimdDeveloper(await loadModule('simd'), pack)
 }
 
-export async function createNormalDeveloper() {
-  let module
-  try { module = await loadModule('simd') }
-  catch (error) {
-    // Normal has a scene-linear reference implementation and does not need a
-    // working WASM runtime to open an EXR or RAW photo.
-    console.warn('CPU WASM unavailable, using the light and color reference:', error)
-    return null
-  }
-  if (!module._fotufilm_wasm_plain_supported) return null
-  const configuration = new Float32Array(CONFIG.FOTUFILM_FRAME_CONFIGURATION_COUNT)
-  configuration[CONFIG.TONE_GRID_WIDTH] = configuration[CONFIG.TONE_GRID_HEIGHT] = 1
+export function normalPack() {
+  const configuration = new Float32Array(
+    CONFIG.FOTUFILM_FRAME_CONFIGURATION_COUNT,
+  )
+  configuration[CONFIG.TONE_GRID_WIDTH] = configuration[
+    CONFIG.TONE_GRID_HEIGHT
+  ] = 1
   configuration[CONFIG.TONE_GRID_A] = 1
   const cube = new Float32Array(LUT_COUNT)
-  return new SimdDeveloper(module, {
-    configuration, exposure: cube, film: cube, paper: cube, seed: 0,
-    width: 1600, height: 1600, featureMask: 1 << 29,
-    ladder: [{ shortEdge: 1600, featureMask: 1 << 29, seed: 0, spatialSupport: 0,
-      slots: new Int32Array(0), values: new Float32Array(0) }],
+  return {
+    configuration,
+    exposure: cube,
+    film: cube,
+    paper: cube,
+    seed: 0,
+    width: 1600,
+    height: 1600,
+    featureMask: 1 << 29,
+    ladder: [
+      {
+        shortEdge: 1600,
+        featureMask: 1 << 29,
+        seed: 0,
+        spatialSupport: 0,
+        slots: new Int32Array(0),
+        values: new Float32Array(0),
+      },
+    ],
+  }
+}
+export async function createNormalDeveloper(options) {
+  return createDeveloper(normalPack(), undefined, options).catch((error) => {
+    console.warn('Using the light and color reference:', error)
+    return null
   })
 }
 // Import previews get their own buffers; live sessions keep a persistent developer.
 export async function developNormal(source, controls, onProgress = () => {}) {
-  if (typeof window === 'undefined') return developNormalReference(source, controls, onProgress)
+  if (typeof window === 'undefined')
+    return developNormalReference(source, controls, onProgress)
   onProgress('Preparing light and color engine')
   const developer = await createNormalDeveloper()
   if (!developer) return developNormalReference(source, controls, onProgress)
-  try { return await developer.develop(source, controls, onProgress) }
-  finally { developer.dispose() }
+  try {
+    return await developer.develop(source, controls, onProgress)
+  } finally {
+    developer.dispose()
+  }
 }
 
 export function linearSource(source) {
   if (source.width * source.height > 4_000_000) return source
-  const prepared = pixelSource({ width: source.width, height: source.height,
-    data: decodeRGBA(source.read(0, 0, source.width, source.height)) })
+  const prepared = pixelSource({
+    width: source.width,
+    height: source.height,
+    data: decodeRGBA(source.read(0, 0, source.width, source.height)),
+  })
+  preparedSources.add(prepared)
+  return prepared
+}
+
+// Geometry and color conversion must yield while preparing a detailed preview.
+export async function prepareLinearSource(source, stale = () => false) {
+  if (source.width * source.height > 4_000_000) return source
+  const data = new Float32Array(source.width * source.height * 4)
+  const rows = Math.max(1, Math.floor(32768 / source.width))
+  for (let y = 0; y < source.height; y += rows) {
+    if (stale()) return null
+    data.set(
+      decodeRGBA(
+        source.read(0, y, source.width, Math.min(rows, source.height - y)),
+      ),
+      y * source.width * 4,
+    )
+    await yieldToBrowser()
+  }
+  const prepared = pixelSource({
+    width: source.width,
+    height: source.height,
+    data,
+  })
   preparedSources.add(prepared)
   return prepared
 }

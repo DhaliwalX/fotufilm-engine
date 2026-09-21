@@ -1397,55 +1397,9 @@ enum FilmRender {
         of rect: CGRect, tiltV: Double, tiltH: Double
     ) -> (topLeft: CGPoint, topRight: CGPoint,
           bottomRight: CGPoint, bottomLeft: CGPoint) {
-        let cx = Double(rect.midX), cy = Double(rect.midY)
-        let focal = 1.3 * Double(max(rect.width, rect.height))
-        let v = tiltV * .pi / 180, h = tiltH * .pi / 180
-
-        func project(_ px: Double, _ py: Double) -> CGPoint {
-            let dx = px - cx, dy = py - cy
-            let y = dy * cos(v)
-            var z = dy * sin(v)
-            let x = dx * cos(h) - z * sin(h)
-            z = dx * sin(h) + z * cos(h)
-            let s = focal / (focal + z)
-            return CGPoint(x: cx + x * s, y: cy + y * s)
-        }
-
-        var quad = [
-            project(Double(rect.minX), Double(rect.maxY)),
-            project(Double(rect.maxX), Double(rect.maxY)),
-            project(Double(rect.maxX), Double(rect.minY)),
-            project(Double(rect.minX), Double(rect.minY)),
-        ]
-
-        var scale = 1.0
-        let rectCorners = [
-            (Double(rect.minX), Double(rect.maxY)),
-            (Double(rect.maxX), Double(rect.maxY)),
-            (Double(rect.maxX), Double(rect.minY)),
-            (Double(rect.minX), Double(rect.minY)),
-        ]
-        for (rx, ry) in rectCorners {
-            let dx = rx - cx, dy = ry - cy
-            var reach = Double.infinity
-            for i in 0..<4 {
-                let a = quad[i], b = quad[(i + 1) % 4]
-                let ex = Double(b.x - a.x), ey = Double(b.y - a.y)
-                let denominator = dx * ey - dy * ex
-                guard abs(denominator) > 1e-9 else { continue }
-                let ax = Double(a.x) - cx, ay = Double(a.y) - cy
-                let u = (ax * ey - ay * ex) / denominator
-                let w = (ax * dy - ay * dx) / denominator
-                if u > 0, w >= -1e-6, w <= 1 + 1e-6 { reach = min(reach, u) }
-            }
-            if reach.isFinite, reach > 0 { scale = max(scale, 1 / reach) }
-        }
-        if scale > 1 {
-            quad = quad.map {
-                CGPoint(x: cx + (Double($0.x) - cx) * scale,
-                        y: cy + (Double($0.y) - cy) * scale)
-            }
-        }
+        let quad = PerspectiveProjection.corners(width: rect.width, height: rect.height,
+                                                  vertical: tiltV, horizontal: tiltH)
+            .map { CGPoint(x: rect.minX + $0.x * rect.width, y: rect.maxY - $0.y * rect.height) }
         return (quad[0], quad[1], quad[2], quad[3])
     }
 

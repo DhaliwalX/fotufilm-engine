@@ -108,16 +108,4 @@ export async function cropImage(canvas, edit) {
   }
   return result
 }
-export const canvasBlob = (canvas, type = 'image/png', quality = 0.95) =>
-  new Promise((resolve, reject) =>
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) reject(new Error('Could not encode this image. Try a smaller export size.'))
-        else if (blob.type !== type)
-          reject(new Error('This browser cannot export that format. Choose PNG.'))
-        else resolve(blob)
-      },
-      type,
-      quality,
-    ),
-  )
+export { encodeCanvas as canvasBlob } from './canvas-encoder.js'

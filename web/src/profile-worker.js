@@ -41,21 +41,26 @@ self.onmessage = async ({ data: { id, request, base } }) => {
       "lens-catalogue",
       "lens-match",
     ].includes(request.kind);
+    const perspectiveRequest = request.kind === "perspective";
     const autoRequest = request.kind === "auto-adjust";
     const frameRequest = request.kind === "print-frame";
     const needsStock =
-      !lensRequest && !((autoRequest || frameRequest) && request.stock == null);
+      !perspectiveRequest &&
+      !lensRequest &&
+      !((autoRequest || frameRequest) && request.stock == null);
     if (needsStock && !/^[a-z0-9_-]+$/i.test(request.stock))
       throw new Error("Invalid film identifier.");
     self.postMessage({
       id,
-      status: frameRequest
-        ? "Preparing print frame"
-        : autoRequest
-          ? "Solving automatic exposure"
-          : lensRequest
-            ? "Loading on-device lens correction"
-            : "Loading on-device film profile builder",
+      status: perspectiveRequest
+        ? "Preparing perspective correction"
+        : frameRequest
+          ? "Preparing print frame"
+          : autoRequest
+            ? "Solving automatic exposure"
+            : lensRequest
+              ? "Loading on-device lens correction"
+              : "Loading on-device film profile builder",
     });
     assets ??= loadAssets(base).catch((error) => {
       assets = null;
@@ -73,11 +78,13 @@ self.onmessage = async ({ data: { id, request, base } }) => {
     }
     self.postMessage({
       id,
-      status: frameRequest
-        ? "Preparing print frame"
-        : autoRequest
-          ? "Matching exposure to the film’s latitude"
-          : "Preparing film, development and print settings",
+      status: perspectiveRequest
+        ? "Preparing perspective correction"
+        : frameRequest
+          ? "Preparing print frame"
+          : autoRequest
+            ? "Matching exposure to the film’s latitude"
+            : "Preparing film, development and print settings",
     });
     const profile = runtime.prepare({
       ...request,

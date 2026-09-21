@@ -1,11 +1,17 @@
+import { createBackgroundDeveloper } from './background-developer.js'
+import { loadPerspective } from './perspective.js'
 import { loadPrintFrame, frameRenderEdit } from './print-frame.js'
+import { renderPrintFrame16 } from './print-frame-16.js'
 import { renderPrintFrame } from './print-frame-renderer.js'
 import { lensIsActive } from './lens-correction.js'
 import { interpretedImage } from './source-interpretation.js'
 import { resolveLensPlan } from './lens-plan.js'
 import { loadLensCatalogue } from './lens-catalogue.js'
 import { loadFilmProfile } from './film-profile.js'
-import { hasProfileSettings, profileRequestControls } from './profile-settings.js'
+import {
+  hasProfileSettings,
+  profileRequestControls,
+} from './profile-settings.js'
 import { loadMediumBytes } from './output-media.js'
 import { loadSceneExposure } from './scene-light.js'
 import { rawSource } from './raw-source.js'
@@ -15,10 +21,7 @@ import { compositeSelection } from './selective.js'
 import {
   assetUrl,
   sceneHighlightStops,
-  createDeveloper,
-  createCpuDeveloper,
-  createNormalDeveloper,
-  linearSource,
+  prepareLinearSource,
   developNormal,
   imageSource,
   loadPack,
@@ -49,14 +52,23 @@ export async function loadStockIndex() {
     )
   const media = await mediaResponse.json()
   const catalogueResponse = await fetch(assetUrl('profile/catalogue.json'))
-  if (!catalogueResponse.ok) throw new Error('The film settings catalogue could not be loaded.')
+  if (!catalogueResponse.ok)
+    throw new Error('The film settings catalogue could not be loaded.')
   const catalogue = await catalogueResponse.json()
   return index.map((stock) => {
-    if (!Array.isArray(catalogue[stock.id]?.available)) throw new Error('Invalid film settings catalogue.')
+    if (!Array.isArray(catalogue[stock.id]?.available))
+      throw new Error('Invalid film settings catalogue.')
     const entry = media.find((item) => item.id === stock.id)
     if (!entry || !Array.isArray(entry.choices) || !entry.choices.length)
       throw new Error('Invalid output-medium catalog.')
-    return { ...stock, profile: catalogue[stock.id], available: catalogue[stock.id]?.available || [], nativeFormat: catalogue[stock.id]?.nativeFormat, media: entry.choices, defaultMedium: entry.default }
+    return {
+      ...stock,
+      profile: catalogue[stock.id],
+      available: catalogue[stock.id]?.available || [],
+      nativeFormat: catalogue[stock.id]?.nativeFormat,
+      media: entry.choices,
+      defaultMedium: entry.default,
+    }
   })
 }
 
@@ -68,8 +80,6 @@ export class RenderSession {
     this.activeWork = null
     this.packs = new Map()
     this.developer = null
-    this.normal = null
-    this.thumbnail = null
     this.sources = []
     this.scenePacks = new WeakMap()
     this.closed = false
@@ -117,7 +127,8 @@ export class RenderSession {
       this.packs.set(key, value)
       return value
     }
-    let pack, stockMetadata,
+    let pack,
+      stockMetadata,
       stagesUrl = null
     if (halationModel === 'layered') {
       if (medium)
@@ -158,55 +169,50 @@ export class RenderSession {
     if (this.packs.size > 4) this.packs.delete(this.packs.keys().next().value)
     return entry
   }
-  async renderer(pack, background = false, onProgress = () => {}, profile = false) {
-    const name = profile ? 'profileReady' : background
-      ? 'thumbnailReady'
-      : pack?.transport
-        ? 'transportReady'
-        : pack
-          ? 'filmReady'
-          : 'normalReady'
-    const cached = profile ? this.profileDeveloper : background
-      ? this.thumbnail
-      : pack?.transport
-        ? this.transport
-        : pack
-          ? this.developer
-          : this.normal
-    if (cached?.isAborted) this[name] = null
-    // A thumbnail must not hold foreground work behind GPU shader compilation.
-    this[name] ??= (
-      background || profile
-        ? createCpuDeveloper(pack)
-        : pack
-          ? createDeveloper(pack, onProgress)
-          : createNormalDeveloper()
+  async renderer(pack, background = false, onProgress = () => {}) {
+    if (this.developer?.isAborted) this.developerReady = null
+    this.developerReady ??= createBackgroundDeveloper(pack, onProgress, () =>
+      this.onRendererReady?.(),
     )
       .then((developer) => {
         if (this.closed) {
           developer?.dispose()
           return null
         }
-        if (profile) this.profileDeveloper = developer
-        else if (background) this.thumbnail = developer
-        else if (pack?.transport) this.transport = developer
-        else if (pack) this.developer = developer
-        else this.normal = developer
+        this.developer = developer
         return developer
       })
       .catch((error) => {
-        this[name] = null
+        this.developerReady = null
         throw error
       })
-    return this[name]
+    return this.developerReady
   }
-  async source(image, edit, maxEdge, cropMode, videoTime, cacheSource = true, onProgress = () => {}) {
+  async source(
+    image,
+    edit,
+    maxEdge,
+    cropMode,
+    videoTime,
+    cacheSource = true,
+    onProgress = () => {},
+    stale = () => false,
+  ) {
     if (image.video) {
       const frame = await image.video.frame(
         videoTime ?? image.video.start,
         edit.video.encoding,
       )
-      return this.source(frame, edit, maxEdge, cropMode, null, false, onProgress)
+      return this.source(
+        frame,
+        edit,
+        maxEdge,
+        cropMode,
+        null,
+        false,
+        onProgress,
+        stale,
+      )
     }
     const catalogue = lensIsActive(edit.lens) ? await loadLensCatalogue() : null
     const key = JSON.stringify([
@@ -218,7 +224,9 @@ export class RenderSession {
       edit.flip,
       lensIsActive(edit.lens) ? edit.lens : null,
       cropMode ? null : edit.crop,
-      cropMode ? 0 : edit.straighten,
+      edit.straighten,
+      edit.perspectiveV || 0,
+      edit.perspectiveH || 0,
     ])
     const cached = this.sources.find(
       (item) => item.image === image && item.key === key,
@@ -229,18 +237,26 @@ export class RenderSession {
       : null
     const lensTable = lensPlan && !lensPlan.identity ? lensPlan.table : null
     const input = interpretedImage(image, edit.sourceInterpretation)
-    const floating = input.raw || input.linear || lensTable
+    const perspective = await loadPerspective(input, edit, onProgress)
+    const floating =
+      input.raw ||
+      input.linear ||
+      lensTable ||
+      perspective ||
+      Math.abs(edit.straighten) > 0.001
     const oriented = floating ? null : orientImage(input, edit, maxEdge)
     const canvas = floating
       ? null
       : cropMode
         ? oriented
         : await cropImage(oriented, edit)
-    const source = linearSource(
+    const source = await prepareLinearSource(
       floating
-        ? rawSource(input, edit, maxEdge, cropMode, lensTable)
+        ? rawSource(input, edit, maxEdge, cropMode, lensTable, perspective)
         : imageSource(canvas),
+      stale,
     )
+    if (!source) return null
     const entry = { image, key, canvas, source, original: null }
     if (cacheSource && maxEdge <= 2400) {
       this.sources.unshift(entry)
@@ -271,6 +287,7 @@ export class RenderSession {
     purpose = 'preview',
     videoTime = null,
     encode = true,
+    bitDepth = 8,
     cacheSource = true,
     showMask = false,
     stale = () => false,
@@ -278,13 +295,27 @@ export class RenderSession {
   }) {
     if (this.closed || stale()) return null
     const requestedEdit = edit
-    const framed = !image.video && !cropMode && stage === null && !background && edit.printFrame && edit.printFrame !== 'none'
-    const frameConfiguration = framed ? await loadPrintFrame(edit, 1, 1, onProgress) : null
+    const framed =
+      !image.video &&
+      !cropMode &&
+      stage === null &&
+      !background &&
+      edit.printFrame &&
+      edit.printFrame !== 'none'
+    const frameConfiguration = framed
+      ? await loadPrintFrame(edit, 1, 1, onProgress)
+      : null
     if (this.closed || stale()) return null
     edit = frameRenderEdit(edit, frameConfiguration)
     const dynamic = edit.stock !== null && hasProfileSettings(edit)
-    if (dynamic && edit.halationModel === 'layered') throw new Error('Choose Legacy halation to adjust film, print or filter settings.')
-    if (dynamic && stage !== null) throw new Error('Pipeline inspection requires default film, print and filter settings.')
+    if (dynamic && edit.halationModel === 'layered')
+      throw new Error(
+        'Choose Legacy halation to adjust film, print or filter settings.',
+      )
+    if (dynamic && stage !== null)
+      throw new Error(
+        'Pipeline inspection requires default film, print and filter settings.',
+      )
     const sceneKelvin = sourceIlluminant(edit)
     if (edit.halationModel === 'layered' && sceneKelvin)
       throw new Error(
@@ -319,7 +350,7 @@ export class RenderSession {
             edit.digitalReference,
           )
     if (this.closed || stale()) return null
-    if (!entry && !this.normalReady) report('Loading light and color engine')
+    if (!entry && !this.developerReady) report('Loading light and color engine')
     const developer = await this.renderer(
       entry?.pack,
       background && !!entry,
@@ -355,7 +386,9 @@ export class RenderSession {
           videoTime,
           cacheSource,
           report,
+          stale,
         )
+        if (!prepared || stale()) return null
         const { source, canvas: sourceCanvas } = prepared
         const rendering = (text) =>
           report(`${text} · ${source.width}×${source.height} ${purpose}`)
@@ -366,28 +399,54 @@ export class RenderSession {
           localTone: edit.localTone,
         }
         const selected = edit.stock === null ? null : stage
-        const pack = dynamic ? parsePack(await loadFilmProfile({
-          stock, width: source.width, height: source.height,
-          format: edit.format, medium: edit.medium, sceneKelvin,
-          filters: edit.filters, filterMetering: edit.filterMetering,
-          sceneHighlightStops: await sceneHighlightStops(source, controls),
-          controls: { ...profileRequestControls(edit, entry.stock), digitalReference: edit.digitalReference || 'auto-levels' },
-        }, report)) : await this.capturePack(
-          entry
-            ? selected === null
-              ? entry.pack
-              : entry.stages[selected]
-            : null,
-          stock,
-          sceneKelvin,
-          report,
-        )
+        const pack = dynamic
+          ? parsePack(
+              await loadFilmProfile(
+                {
+                  stock,
+                  width: source.width,
+                  height: source.height,
+                  format: edit.format,
+                  medium: edit.medium,
+                  sceneKelvin,
+                  filters: edit.filters,
+                  filterMetering: edit.filterMetering,
+                  sceneHighlightStops: await sceneHighlightStops(
+                    source,
+                    controls,
+                  ),
+                  controls: {
+                    ...profileRequestControls(edit, entry.stock),
+                    digitalReference: edit.digitalReference || 'auto-levels',
+                  },
+                },
+                report,
+              ),
+            )
+          : await this.capturePack(
+              entry
+                ? selected === null
+                  ? entry.pack
+                  : entry.stages[selected]
+                : null,
+              stock,
+              sceneKelvin,
+              report,
+            )
         if (entry && !pack)
           throw new Error('This pipeline stage is unavailable.')
-        if (pack) developer.usePack(pack)
-        let { pixels, elapsed } = developer
-          ? await developer.develop(source, controls, rendering)
+        developer?.usePack(pack)
+        const developed = developer
+          ? await developer.develop(
+              source,
+              controls,
+              rendering,
+              stale,
+              bitDepth,
+            )
           : await developNormal(source, controls, rendering)
+        if (!developed || stale()) return null
+        let { pixels, elapsed } = developed
         if (edit.selective?.sample && !cropMode && stage === null) {
           report('Developing selection')
           const local = edit.selective
@@ -400,14 +459,22 @@ export class RenderSession {
           const selected = showMask
             ? null
             : developer
-              ? await developer.develop(source, localControls, rendering)
+              ? await developer.develop(
+                  source,
+                  localControls,
+                  rendering,
+                  stale,
+                  bitDepth,
+                )
               : await developNormal(source, localControls, rendering)
-          pixels = compositeSelection(
+          if (stale()) return null
+          pixels = await compositeSelection(
             source,
             pixels,
             selected?.pixels,
             local,
             showMask,
+            stale,
           )
           elapsed += selected?.elapsed || 0
         }
@@ -434,6 +501,32 @@ export class RenderSession {
           delta = { peak, gain }
         }
         if (stale()) return null
+        const backend = developer?.backend || 'reference'
+        if (bitDepth === 16) {
+          const framePlan = framed
+            ? await loadPrintFrame(
+                requestedEdit,
+                source.width,
+                source.height,
+                report,
+              )
+            : null
+          const output = await renderPrintFrame16(
+            pixels,
+            source.width,
+            source.height,
+            framePlan,
+            () => this.closed || stale(),
+          )
+          if (!output || stale()) return null
+          return {
+            ...output,
+            backend,
+            elapsed,
+            framePlan,
+            renderMilliseconds: performance.now() - started,
+          }
+        }
         report(`Encoding ${purpose} image`)
         let canvas = document.createElement('canvas')
         canvas.width = source.width
@@ -445,10 +538,21 @@ export class RenderSession {
             0,
             0,
           )
-        const framePlan = framed ? await loadPrintFrame(requestedEdit, source.width, source.height, report) : null
+        const framePlan = framed
+          ? await loadPrintFrame(
+              requestedEdit,
+              source.width,
+              source.height,
+              report,
+            )
+          : null
         if (framePlan) {
           report('Finishing print frame')
-          canvas = await renderPrintFrame(canvas, framePlan, () => this.closed || stale())
+          canvas = await renderPrintFrame(
+            canvas,
+            framePlan,
+            () => this.closed || stale(),
+          )
           if (!canvas || stale()) return null
         }
         const blob = encode ? await canvasBlob(canvas) : null
@@ -457,7 +561,15 @@ export class RenderSession {
         if (comparison && !original && sourceCanvas)
           original = await canvasBlob(sourceCanvas)
         else if (comparison && !original) {
-          const baseline = await developNormal(source, defaultEdit().params)
+          const plain = await this.renderer(null)
+          plain.usePack(null)
+          const baseline = await plain.develop(
+            source,
+            defaultEdit().params,
+            rendering,
+            stale,
+          )
+          if (!baseline || stale()) return null
           const comparison = document.createElement('canvas')
           comparison.width = source.width
           comparison.height = source.height
@@ -471,13 +583,23 @@ export class RenderSession {
           original = await canvasBlob(comparison)
         }
         prepared.original = original
-        if (comparison && original && framePlan?.configuration.frame !== 'none' && framePlan) {
+        if (
+          comparison &&
+          original &&
+          framePlan?.configuration.frame !== 'none' &&
+          framePlan
+        ) {
           const bitmap = await createImageBitmap(original)
           const baseline = document.createElement('canvas')
-          baseline.width = bitmap.width; baseline.height = bitmap.height
+          baseline.width = bitmap.width
+          baseline.height = bitmap.height
           baseline.getContext('2d').drawImage(bitmap, 0, 0)
           bitmap.close()
-          const framedOriginal = await renderPrintFrame(baseline, framePlan, () => this.closed || stale())
+          const framedOriginal = await renderPrintFrame(
+            baseline,
+            framePlan,
+            () => this.closed || stale(),
+          )
           if (!framedOriginal || stale()) return null
           original = await canvasBlob(framedOriginal)
         }
@@ -490,7 +612,7 @@ export class RenderSession {
           elapsed,
           renderMilliseconds: performance.now() - started,
           delta,
-          backend: pack ? developer.backend : 'normal',
+          backend,
           width: canvas.width,
           height: canvas.height,
         }
@@ -528,17 +650,9 @@ export class RenderSession {
   dispose() {
     this.closed = true
     return this.enqueue(() => {
-      this.profileDeveloper?.dispose()
-      this.profileDeveloper = null
       this.developer?.dispose()
-      this.transport?.dispose()
-      this.normal?.dispose()
-      this.thumbnail?.dispose()
       this.sources = []
-      this.normal = null
-      this.thumbnail = null
       this.developer = null
-      this.transport = null
       this.packs.clear()
     })
   }

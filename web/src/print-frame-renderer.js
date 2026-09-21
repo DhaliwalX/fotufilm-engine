@@ -160,7 +160,7 @@ async function lustre(ctx, size, photo, stale) {
 
 /** One finishing path for previews, comparisons and exports. Photograph pixels are copied
  * at integer coordinates; only the intentional emulsion rim may cover their edges. */
-export async function renderPrintFrame(image, plan, stale = () => false) {
+export async function renderPrintFrame(image, plan, stale = () => false, omitPhoto = false) {
   if (!plan || plan.configuration.frame === "none") return image;
   const c = plan.configuration,
     p = plan.placement,
@@ -236,12 +236,13 @@ export async function renderPrintFrame(image, plan, stale = () => false) {
   ctx.restore();
   if (stale()) return null;
   ctx.imageSmoothingEnabled = false;
-  // putImageData avoids colour/alpha reinterpolation for the browser's existing 8-bit delivery.
-  const pixels = image
-    .getContext("2d")
-    .getImageData(0, 0, image.width, image.height);
   const top = canvas.height - r.y - r.height;
-  ctx.putImageData(pixels, r.x, top);
+  if (omitPhoto) ctx.clearRect(r.x, top, r.width, r.height);
+  else {
+    // Integer placement preserves the delivered photograph without resampling.
+    const pixels = image.getContext("2d").getImageData(0, 0, image.width, image.height);
+    ctx.putImageData(pixels, r.x, top);
+  }
   if (c.frame === "emulsion") {
     const texture = await emulsionTexture(r.width, r.height, stale);
     if (!texture) return null;

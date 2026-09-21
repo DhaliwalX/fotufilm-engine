@@ -1,3 +1,5 @@
+import { usePreviewQuality } from "./usePreviewQuality.js";
+import CropControls from "./CropControls.jsx";
 import PrintFrameControls from "./PrintFrameControls.jsx";
 import { usePrintFrame } from "./usePrintFrame.js";
 import { frameSamplePoint } from "./print-frame.js";
@@ -53,11 +55,9 @@ import {
   fullCrop,
   historyReducer,
   initialHistory,
-  cropForRatio,
-  rotatedCrop,
-  flippedCrop,
   parseEdit,
 } from "./editor-state.js";
+import { exportTiff } from "./tiff-export.js";
 import { canvasBlob, outputSize } from "./geometry.js";
 import {
   Adjustment,
@@ -80,17 +80,6 @@ const stageNames = [
   "Grain",
   "Negative",
   "Output",
-];
-const ratios = [
-  "free",
-  "original",
-  "1:1",
-  "3:2",
-  "2:3",
-  "4:3",
-  "3:4",
-  "16:9",
-  "9:16",
 ];
 const isTyping = (target) =>
   target instanceof HTMLElement &&
@@ -224,27 +213,33 @@ export default function App() {
     setSampling(false);
     setShowMask(false);
   }, [activeId]);
-  const [cropPreview, setCropPreview] = useState(false);
-  const cropMode = panel === "crop" && inspectorOpen && !cropPreview;
+  const cropMode = panel === "crop" && inspectorOpen;
   const [zoomReadout, setZoomReadout] = useState(100);
   const previewEditJSON = JSON.stringify(
-    cropMode
-      ? { ...edit, crop: fullCrop(), ratio: "free", straighten: 0 }
-      : edit,
+    cropMode ? { ...edit, crop: fullCrop(), ratio: "free" } : edit,
   );
-  const [settledEdit, setSettledEdit] = useState(previewEditJSON);
-  useEffect(() => {
-    const timer = setTimeout(() => setSettledEdit(previewEditJSON), 250);
-    return () => clearTimeout(timer);
-  }, [previewEditJSON]);
-  const interacting = !!history.group || settledEdit !== previewEditJSON;
+  const [viewerMoving, setViewerMoving] = useState(false);
+  const interactionKey = JSON.stringify([
+    activeId,
+    previewEditJSON,
+    zoom,
+    stage,
+    difference,
+    cropMode,
+    showMask,
+    videoTime,
+  ]);
+  const interacting = usePreviewQuality(
+    interactionKey,
+    !!history.group || viewerMoving,
+  );
   const [interactiveEdge, setInteractiveEdge] = useState(512);
   const previewEdge = Math.min(
     Math.max(
       active?.image.naturalWidth || 1600,
       active?.image.naturalHeight || 1600,
     ),
-    cropMode ? 1600 : interacting ? interactiveEdge : Math.round(1600 * zoom),
+    interacting ? interactiveEdge : cropMode ? 1600 : Math.round(1600 * zoom),
   );
   const lensCatalogue = useLensCatalogue();
   const previewKey = JSON.stringify([
@@ -266,9 +261,16 @@ export default function App() {
   const stockId = edit.stock || stocks[0]?.id || "normal";
   const visibleError = error || libraryError;
   const auto = useAutoAdjustment({
-    image: active?.image, session, history, dispatch: historyDispatch,
-    disabled: exporting, onError: setError,
-    onApplied: () => { setStage(null); setDifference(false); },
+    image: active?.image,
+    session,
+    history,
+    dispatch: historyDispatch,
+    disabled: exporting,
+    onError: setError,
+    onApplied: () => {
+      setStage(null);
+      setDifference(false);
+    },
   });
   const dispatch = auto.dispatch;
   const patch = useCallback(
@@ -303,7 +305,6 @@ export default function App() {
     setPanel(value);
     setSampling(false);
     setShowMask(false);
-    if (value === "crop") setCropPreview(false);
     if (value === "selective") {
       setStage(null);
       setDifference(false);
@@ -317,9 +318,19 @@ export default function App() {
   const previewQueue = useRef(null);
   const lastRenderedPreview = useRef(null);
   const currentPreview = useRef(null);
-  currentPreview.current = { activeId, key: previewKey, exporting, cropMode };
+  currentPreview.current = {
+    activeId,
+    key: previewKey,
+    exporting,
+    cropMode,
+    interacting,
+    interactionKey,
+  };
   useEffect(() => {
     const renderer = new RenderSession();
+    renderer.onRendererReady = () => {
+      if (alive.current) setRetry((value) => value + 1);
+    };
     alive.current = true;
     previewQueue.current = new PreviewQueue((text) => {
       if (alive.current && !currentPreview.current?.exporting) setStatus(text);
@@ -388,7 +399,13 @@ export default function App() {
       stage,
       difference,
       cropMode,
-      stale: () => !currentFile() || currentPreview.current.exporting,
+      stale: () =>
+        !currentFile() ||
+        currentPreview.current.exporting ||
+        currentPreview.current.cropMode !== cropMode ||
+        (!interacting &&
+          (currentPreview.current.interacting ||
+            currentPreview.current.key !== previewKey)),
     };
     const frame = requestAnimationFrame(() => {
       const stock = stocks.find((item) => item.id === previewEdit.stock);
@@ -417,7 +434,8 @@ export default function App() {
             !next ||
             !currentFile() ||
             currentPreview.current.exporting ||
-            currentPreview.current.cropMode !== cropMode
+            currentPreview.current.cropMode !== cropMode ||
+            request.stale()
           )
             return;
           if (interacting) {
@@ -541,13 +559,17 @@ export default function App() {
       try {
         const decoded = await importPhoto(file, {
           signal: controller.signal,
-          onProgress: text => {
-            if (!controller.signal.aborted) setImportStatus(`${text}: ${file.name}`);
+          onProgress: (text) => {
+            if (!controller.signal.aborted)
+              setImportStatus(`${text}: ${file.name}`);
           },
         });
         loaded.push({ id: crypto.randomUUID(), name: file.name, ...decoded });
       } catch (e) {
-        if (e.name !== "AbortError") errors.push(`${file.name}: ${e.message || "Could not decode image."}`);
+        if (e.name !== "AbortError")
+          errors.push(
+            `${file.name}: ${e.message || "Could not decode image."}`,
+          );
       }
     }
     if (generation !== loadGeneration.current) {
@@ -739,12 +761,15 @@ export default function App() {
         maxEdge: exportSize === "full" ? Infinity : Number(exportSize),
         comparison: false,
         purpose: "export",
+        bitDepth: exportType === "image/tiff" ? 16 : 8,
         onProgress: setStatus,
       });
       if (!next) throw new Error("Export was cancelled.");
       setStatus(`Encoding ${exportType.split("/")[1].toUpperCase()} export`);
       const blob =
-        exportType === "image/png"
+        exportType === "image/tiff"
+          ? await exportTiff(next)
+          : exportType === "image/png"
           ? next.blob
           : await canvasBlob(next.canvas, exportType, quality / 100);
       const extension =
@@ -795,7 +820,6 @@ export default function App() {
         setHistogram((v) => !v);
       else if (!command && event.key.toLowerCase() === "c") {
         setPanel("crop");
-        setCropPreview(false);
         setInspectorOpen(true);
       } else if (event.key === "0") setZoom(1);
       else if (event.key === "+" || event.key === "=")
@@ -1093,6 +1117,7 @@ export default function App() {
               result={shownResult}
               original={active.image}
               sourceKey={active.id}
+              onInteraction={setViewerMoving}
               zoom={zoom}
               outputWidth={
                 cropMode
@@ -1109,7 +1134,17 @@ export default function App() {
               setCompare={setCompare}
               cropMode={cropMode}
               crop={edit.crop}
-              onCrop={(crop) => patch({ crop, ratio: "free" }, "crop")}
+              cropShape={edit.cropShape}
+              cropRatio={edit.ratio}
+              cropIdentity={JSON.stringify([
+                activeId,
+                edit.rotation,
+                edit.flip,
+                edit.straighten,
+                edit.perspectiveV,
+                edit.perspectiveH,
+              ])}
+              onCrop={(crop) => patch({ crop }, "crop")}
               onEnd={endEdit}
               showHistogram={histogram ? () => setHistogram(false) : null}
             />
@@ -1753,125 +1788,19 @@ export default function App() {
             />
           )}
           {panel === "crop" && (
-            <>
-              <div className="inspector-title">
-                <h2>Crop</h2>
-                <p>Drag the corners to set the frame.</p>
-              </div>
-              <Section title="Frame">
-                <div className="crop-actions">
-                  <Button
-                    label="Edit corners"
-                    variant="secondary"
-                    size="sm"
-                    className="secondary"
-                    aria-pressed={!cropPreview}
-                    onClick={() => setCropPreview(false)}
-                  />
-                  <Button
-                    label="Preview crop"
-                    variant="secondary"
-                    size="sm"
-                    className="secondary"
-                    aria-pressed={cropPreview}
-                    onClick={() => {
-                      endEdit();
-                      setCropPreview(true);
-                    }}
-                  />
-                </div>
-                <Selector
-                  label="Aspect ratio"
-                  size="sm"
-                  width="100%"
-                  isDisabled={exporting || !active}
-                  value={edit.ratio}
-                  options={ratios.map((ratio) => ({
-                    value: ratio,
-                    label:
-                      ratio === "free"
-                        ? "Free"
-                        : ratio === "original"
-                          ? "Original"
-                          : ratio,
-                  }))}
-                  onChange={(ratio) =>
-                    patch({ ratio, crop: cropForRatio(ratio, width, height) })
-                  }
-                />
-                <div className="crop-actions">
-                  <Button
-                    label="Rotate Left"
-                    variant="secondary"
-                    size="sm"
-                    className="secondary"
-                    onClick={() =>
-                      patch({
-                        rotation: (edit.rotation + 1) % 4,
-                        crop: rotatedCrop(edit.crop, edit.flip),
-                      })
-                    }
-                    icon={<Icon name="rotate" />}
-                  />
-                  <Button
-                    label="Flip"
-                    variant="secondary"
-                    size="sm"
-                    className="secondary"
-                    onClick={() =>
-                      patch({
-                        flip: !edit.flip,
-                        crop: flippedCrop(edit.crop),
-                      })
-                    }
-                    icon={<Icon name="flip" />}
-                  />
-                </div>
-                <Adjustment
-                  slider={{
-                    key: "straighten",
-                    label: "Straighten",
-                    min: -15,
-                    max: 15,
-                    step: 0.1,
-                    def: 0,
-                    unit: "°",
-                  }}
-                  value={edit.straighten}
-                  onChange={(straighten) => {
-                    setCropPreview(true);
-                    patch({ straighten }, "straighten");
-                  }}
-                  onEnd={endEdit}
-                  disabled={exporting || !active}
-                />
-                <div className="info-row">
-                  <span>Crop size</span>
-                  <span>
-                    {cropSize.width} × {cropSize.height}
-                  </span>
-                </div>
-                <Button
-                  label="Reset Crop"
-                  variant="secondary"
-                  size="sm"
-                  className="secondary full-width"
-                  onClick={() =>
-                    patch({ crop: fullCrop(), ratio: "free", straighten: 0 })
-                  }
-                />
-                <Button
-                  label="Done"
-                  variant="primary"
-                  size="sm"
-                  className="primary full-width"
-                  onClick={() => {
-                    endEdit();
-                    setPanel("film");
-                  }}
-                />
-              </Section>
-            </>
+            <CropControls
+              edit={edit}
+              width={width}
+              height={height}
+              size={cropSize}
+              disabled={exporting || !active}
+              patch={patch}
+              onEnd={endEdit}
+              onDone={() => {
+                endEdit();
+                setPanel("film");
+              }}
+            />
           )}
           {panel === "pipeline" && (
             <>
@@ -1974,6 +1903,7 @@ export default function App() {
                 ) : (
                   <>
                     <option value="image/png">PNG</option>
+                    <option value="image/tiff">TIFF · 16-bit</option>
                     <option value="image/jpeg">JPEG</option>
                     <option value="image/webp">WebP</option>
                   </>
@@ -1993,7 +1923,7 @@ export default function App() {
                 <option value="1600">1600 px long edge</option>
               </select>
             </label>
-            {!active?.image.video && exportType !== "image/png" && (
+            {!active?.image.video && ["image/jpeg", "image/webp"].includes(exportType) && (
               <Adjustment
                 slider={{
                   key: "quality",
@@ -2041,7 +1971,7 @@ export default function App() {
                   ).height
                 : (framedSize.plan?.placement.size.height ??
                   Math.max(1, Math.round(cropSize.height * exportScale)))}{" "}
-              pixels · sRGB · 8-bit
+              pixels · sRGB · {exportType === "image/tiff" && !active?.image.video ? "16-bit" : "8-bit"}
             </p>
             <p className="export-detail">
               {active?.image.video
@@ -2099,10 +2029,13 @@ export default function App() {
       {dialog === "more" && (
         <Modal title="Options" onClose={() => setDialog(null)}>
           <div className="menu-options">
-            <AutoAdjustmentAction auto={auto} onClick={() => {
-              auto.toggle();
-              setDialog(null);
-            }} />
+            <AutoAdjustmentAction
+              auto={auto}
+              onClick={() => {
+                auto.toggle();
+                setDialog(null);
+              }}
+            />
             <Button
               label="Save edits…"
               variant="secondary"
@@ -2206,10 +2139,11 @@ export default function App() {
               grain models, measured push/pull, bleach bypass, colour
               separation, print viewing, a simulated printer, an ordered
               lens-filter stack, automatic and manual lens correction, Auto
-              Adjust, photo frames, light and color adjustments, three-way grading, color and
-              light selections, crop, rotation and flip. Camera RAW files use
-              as-shot white balance. RAW, linear EXR and supported HDR JPEG gain
-              maps preserve decoded highlight detail before film exposure.
+              Adjust, photo frames, light and color adjustments, three-way
+              grading, color and light selections, crop, rotation and flip.
+              Camera RAW files use as-shot white balance. RAW, linear EXR and
+              supported HDR JPEG gain maps preserve decoded highlight detail
+              before film exposure.
             </p>
             <p>
               Scanned-negative conversion, automatic subject selections, custom

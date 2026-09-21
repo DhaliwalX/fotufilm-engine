@@ -83,7 +83,7 @@ test('selective development changes only selected pixels and mask preview never 
   }
   const base = await developNormalReference(source, edit.params)
   const local = await developNormalReference(source, { ...edit.params, ev: 1 })
-  const output = compositeSelection(
+  const output = await compositeSelection(
     source,
     base.pixels,
     local.pixels,
@@ -91,7 +91,7 @@ test('selective development changes only selected pixels and mask preview never 
   )
   assert.deepEqual(output.slice(0, 4), local.pixels.slice(0, 4))
   assert.deepEqual(output.slice(4), base.pixels.slice(4))
-  const mask = compositeSelection(source, base.pixels, null, selective, true)
+  const mask = await compositeSelection(source, base.pixels, null, selective, true)
   assert.deepEqual(Array.from(mask.slice(0, 3)), [255, 255, 255])
   assert.equal(mask[7], base.pixels[7])
 })

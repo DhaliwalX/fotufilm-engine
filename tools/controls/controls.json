@@ -4985,17 +4985,18 @@
       "omitted" : {
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "scope" : "edit",
       "section" : "frameGeometry",
       "surfaces" : [
         "app",
         "desktop",
-        "android"
+        "android",
+        "web"
       ],
-      "title" : "Crop"
+      "title" : "Crop",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -5010,8 +5011,7 @@
       "omitted" : {
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "persistedKey" : "straighten",
       "scale" : {
@@ -5032,9 +5032,11 @@
       "surfaces" : [
         "app",
         "desktop",
-        "android"
+        "android",
+        "web"
       ],
-      "title" : "Straighten"
+      "title" : "Straighten",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -5050,8 +5052,7 @@
         "android" : "the Android crop has no keystone yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "persistedKey" : "perspectiveV",
       "scale" : {
@@ -5071,9 +5072,11 @@
       "storedNeutral" : 0,
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Vertical"
+      "title" : "Vertical",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -5089,8 +5092,7 @@
         "android" : "the Android crop has no keystone yet",
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "persistedKey" : "perspectiveH",
       "scale" : {
@@ -5110,9 +5112,11 @@
       "storedNeutral" : 0,
       "surfaces" : [
         "app",
-        "desktop"
+        "desktop",
+        "web"
       ],
-      "title" : "Horizontal"
+      "title" : "Horizontal",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -5153,17 +5157,18 @@
       "omitted" : {
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "scope" : "edit",
       "section" : "frameGeometry",
       "surfaces" : [
         "app",
         "desktop",
-        "android"
+        "android",
+        "web"
       ],
-      "title" : "Rotate"
+      "title" : "Rotate",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -5178,8 +5183,7 @@
       "omitted" : {
         "cli" : "the command line renders the whole frame as given",
         "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector",
-        "web" : "the demo shows one still without a frame tool"
+        "resolve" : "the host owns the frame's geometry and its colour corrector"
       },
       "persistedKey" : "flipH",
       "restingOn" : false,
@@ -5189,9 +5193,11 @@
       "surfaces" : [
         "app",
         "desktop",
-        "android"
+        "android",
+        "web"
       ],
-      "title" : "Flip"
+      "title" : "Flip",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",

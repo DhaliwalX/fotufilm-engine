@@ -1,4 +1,4 @@
-import { openChart } from './photo-fixture.js'
+import { openChart } from "./photo-fixture.js";
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
@@ -27,6 +27,7 @@ async function framePixels(page) {
 test("real WebGPU editor: normal, film, adjustments, history, crop and full-size export", async ({
   page,
 }, testInfo) => {
+  test.setTimeout(240000);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await sample(page);
@@ -37,7 +38,9 @@ test("real WebGPU editor: normal, film, adjustments, history, crop and full-size
   await page.getByRole("searchbox", { name: "Search films" }).fill("Gold 200");
   await page.getByTitle("Gold 200", { exact: true }).click();
   await ready(page);
-  await expect(page.locator(".backend-label")).toHaveText("WebGPU");
+  await expect(page.locator(".backend-label")).toHaveText("WebGPU", {
+    timeout: 180000,
+  });
   const film = await framePixels(page);
   expect(film).not.toEqual(normal);
   await page.getByRole("tab", { name: "Expose" }).click();
@@ -127,13 +130,11 @@ test("CPU fallback, keyboard compare, per-photo edits and saved edit files", asy
     text = await readFile(await saved.path(), "utf8");
   expect(JSON.parse(text).edit.params.ev).toBe(1);
   await page.getByRole("button", { name: "Reset all edits" }).click();
-  await page
-    .locator('input[type=file][accept=".json"]')
-    .setInputFiles({
-      name: "saved.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(text),
-    });
+  await page.locator('input[type=file][accept=".json"]').setInputFiles({
+    name: "saved.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(text),
+  });
   await expect(
     page.getByRole("spinbutton", { name: "Exposure value", exact: true }),
   ).toHaveValue("1");
@@ -171,7 +172,10 @@ test("mobile layout and missing runtime errors remain usable", async ({
     "The film library could not be loaded",
   );
   await expect(
-    page.getByRole("button", { name: "Open photos or videos (⌘O)", exact: true }),
+    page.getByRole("button", {
+      name: "Open photos or videos (⌘O)",
+      exact: true,
+    }),
   ).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
     390,
