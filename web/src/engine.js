@@ -44,6 +44,14 @@ async function measuredTone(source, controls, balance) {
   return grid
 }
 
+export async function sceneHighlightStops(source, controls) {
+  const grid = await measuredTone(source, controls, whiteBalanceGains(controls.temperature, controls.tint))
+  const values = Array.from(grid.regionStops).filter(Number.isFinite).sort((a, b) => a - b)
+  if (!values.length) return null
+  const p = .995 * (values.length - 1), i = Math.floor(p)
+  return values[i] + (p - i) * (values[Math.min(i + 1, values.length - 1)] - values[i])
+}
+
 function loadModule(kind) {
   return runtime.load(kind)
 }
@@ -615,6 +623,7 @@ class Developer {
     const configuration = module.HEAPF32.subarray(this.configPtr / 4,
       this.configPtr / 4 + this.configuration.length)
     applyColorControls(configuration, controls)
+    configuration[CONFIG.CAMERA_PREFLASH] = this.featureMask === 1 << 29 ? 0 : (controls.cameraPreflash ?? 0)
     // Keep coarse and resolved grain at the same strength as the clump field.
     for (const offset of [CONFIG.MOTTLE, CONFIG.GRAIN_DISC]) {
       for (let c = 0; c < 3; c++) configuration[offset + c] *= controls.grain ?? 1
@@ -911,10 +920,11 @@ export async function createDeveloper(pack, onProgress = () => {}) {
   return new SimdDeveloper(await loadModule('simd'), pack)
 }
 
-function decodeRGBA(bytes) {
+export function decodeRGBA(bytes) {
   if (bytes instanceof Float32Array) return bytes.slice()
   const linear = new Float32Array(bytes.length)
   decodeInto(linear, bytes, bytes.length / 4, 4, [0, 1, 2])
+  for (let i = 3; i < bytes.length; i += 4) linear[i] = bytes[i] / 255
   return linear
 }
 

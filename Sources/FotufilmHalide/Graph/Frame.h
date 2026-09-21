@@ -265,6 +265,12 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
     if (use_donor) {
         if (use_diffusion) {
             donor_exposure(x, y, c) = light(x, y, 3);
+            // The donor still reads the fourth diffused record. Give subsequent RGB
+            // materialisations their own function, so scheduling them with three
+            // channels cannot narrow the shared donor exposure to three as well.
+            Func rgb(name("diffusion_rgb"));
+            rgb(x, y, c) = light(x, y, Halide::min(c, 2));
+            light = rgb;
         } else {
             donor_exposure(x, y, c) = scene_exposure(
                 configuration, in.exposure_lut, in.decoded(0), in.decoded(1),

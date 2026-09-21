@@ -1,3 +1,6 @@
+import { Flask } from 'reicon-react/icons/Flask'
+import { Sun2 } from 'reicon-react/icons/Sun2'
+import { Gallery2 } from 'reicon-react/icons/Gallery2'
 import { Film } from 'reicon-react/icons/Film'
 import { GalleryAdd } from 'reicon-react/icons/GalleryAdd'
 import { Minus } from 'reicon-react/icons/Minus'
@@ -26,9 +29,14 @@ import { CheckCircle } from 'reicon-react/icons/CheckCircle'
 import { CloseCircle } from 'reicon-react/icons/CloseCircle'
 import { Danger } from 'reicon-react/icons/Danger'
 import { InfoCircle } from 'reicon-react/icons/InfoCircle'
+import { HelpCircle } from 'reicon-react/icons/HelpCircle'
 
 const icons = {
   film: Film,
+  develop: Flask,
+  print: Gallery2,
+  selective: Mask3,
+  expose: Sun2,
   open: GalleryAdd,
   minus: Minus,
   plus: Add,
@@ -56,6 +64,7 @@ const icons = {
   error: CloseCircle,
   warning: Danger,
   info: InfoCircle,
+  help: HelpCircle,
 }
 
 export function Icon({ name, size = 18, ...props }) {

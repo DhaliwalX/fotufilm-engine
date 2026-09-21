@@ -68,6 +68,17 @@ public enum EditorControlCatalogue {
         "mp4": "MP4 · H.264", "webm": "WebM · VP9", "dismiss": "Dismiss",
     ]
 
+    public static let webSelection: [String: Any] = [
+        "title": "Selective", "section": "Selection", "kind": "Select By",
+        "sample": "Sample a Point", "sampling": "Click the Photo…",
+        "mask": "Show Mask", "clear": "Clear Selection", "match": "Match the Photograph",
+        "choices": [["value": "color", "label": "Color"], ["value": "light", "label": "Light"]],
+        "sliders": [
+            ["key": "range", "label": "Range", "min": 0.05, "max": 0.6, "def": 0.25, "step": 0.01],
+            ["key": "softness", "label": "Softness", "min": 0.05, "max": 1.0, "def": 0.5, "step": 0.01],
+        ],
+    ]
+
     public static let auxiliaries: [HostAuxiliary] = [
         HostAuxiliary(ofxName: "status", fxplugID: 37, group: nil, label: "Status",
                       kind: .label(text: "", hint: nil), surfaces: [.finalcut], order: 0),
@@ -250,8 +261,7 @@ public enum EditorControlCatalogue {
             detail: "Set the film frame size, which affects visible grain and halation.",
             section: .filmStock, kind: .menu(.dynamic(.gauges)),
             drives: ["format"],
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: "a pack is sealed for one gauge"],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: nil, ofxName: "format", fxplugID: 3, group: .film, label: "Film Format",
                 hint: "The gauge the frame is exposed on. The image height maps onto the gauge's frame "
@@ -259,6 +269,7 @@ public enum EditorControlCatalogue {
                     + "halation and stronger adjacency — the same emulsion at a different "
                     + "magnification. Match Film takes the gauge the chosen stock is known on.",
                 kind: .choice(.dynamic(.gauges), value: -1), order: 20),
+            web: .runtime,
             commandLine: CommandLineFlag("--format", placeholder: "<name>",
                                          help: "Film gauge (default: the gauge the stock is known on). "
                                              + "\"sensor\" cuts the film to the frame the input file says "
@@ -312,12 +323,12 @@ public enum EditorControlCatalogue {
             section: .filmGrain, kind: .menu(.fixed(mottleShares)), availability: .film,
             persistence: .bespoke,
             binding: .grainMottleShare,
-            surfaces: [.app, .desktop, .android, .cli],
+            surfaces: [.app, .desktop, .android, .cli, .web],
             omitted: [
                 .resolve: "offered as Mottle and Mottle Amount",
                 .finalcut: "not yet offered; the share is a Full-stage control",
-                .web: webBaked,
             ],
+            web: .runtime,
             commandLine: CommandLineFlag("--mottle", placeholder: "<share>",
                                          help: "Grain-size mixture override, 0-0.9 (default: the stock's "
                                              + "own, usually 0): the variance share of the published "
@@ -386,9 +397,9 @@ public enum EditorControlCatalogue {
             availability: .film,
             persistence: .bespoke,
             binding: .discGrain,
-            surfaces: [.app, .desktop, .android, .resolve, .cli],
+            surfaces: [.app, .desktop, .android, .resolve, .cli, .web],
             omitted: [.finalcut: "not yet offered; discs and crystals need Reference rendering",
-                      .web: webBaked],
+                      ],
             host: HostParameter(
                 slot: 43, slotSymbol: "GRAIN_MODEL", ofxName: "grainModel", group: .grainAdvanced,
                 label: "Grain Model",
@@ -398,6 +409,7 @@ public enum EditorControlCatalogue {
                                       EditorMenuChoice(2, "Organic Crystals", id: "crystals")]),
                               value: 0),
                 order: 10),
+            web: .runtime,
             commandLine: CommandLineFlag("--grain-model", placeholder: "<m>",
                                          help: "standard/clump (default), particle/discs, or organic/crystals. `particle` lays Boolean "
                                              + "discs at the film's clump radius, scaled onto its published "
@@ -462,8 +474,7 @@ public enum EditorControlCatalogue {
             availability: .film,
             persistence: .key("halation", .scaleFromStops),
             binding: .halationStops,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 8, slotSymbol: "HALATION_SCALE", ofxName: "halation", fxplugID: 15, group: .halation,
                 label: "Halation",
@@ -477,6 +488,7 @@ public enum EditorControlCatalogue {
                     + "1 over the look scale (0.025 on a rem-jet stock). Typing past the slider reaches 100.",
                 kind: .double(min: 0, max: 10, value: 1, hardMax: 100), bridge: .multipleFromStops,
                 binding: .halationScale, clamp: 0...Double.greatestFiniteMagnitude, order: 20),
+            web: .runtime,
             commandLine: CommandLineFlag("--halation", placeholder: "<scale>",
                                          help: "Halation multiplier, 0 disables (default: 1)"),
             documentation: "Controls back-surface reflection and scatter around high-contrast exposure boundaries."),
@@ -522,8 +534,7 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
             availability: .colourNegative,
             binding: .halationSourceColour,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 20, slotSymbol: "HALATION_COLOUR", ofxName: "halationColour", fxplugID: 17,
                 group: .halation, label: "Halo Colour",
@@ -532,6 +543,7 @@ public enum EditorControlCatalogue {
                     + "ring is red whatever the light was; raising this lifts the dimmer records to the "
                     + "strongest record's return, and the ring brightens toward the light's colour. 0 is the film.",
                 kind: .double(min: 0, max: 1, value: 0), clamp: 0...1, order: 40),
+            web: .runtime,
             commandLine: CommandLineFlag("--halation-colour", placeholder: "<f>",
                                          help: "How much the halo keeps the source's own colour instead "
                                              + "of the stock's layered red, 0-1 (default: 0). The dimmer "
@@ -755,8 +767,7 @@ public enum EditorControlCatalogue {
             availability: .film,
             persistence: .key("expiredYears", .same),
             binding: .expiredYears,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 14, slotSymbol: "EXPIRED_YEARS", ofxName: "expired", fxplugID: 24, group: .lab,
                 label: "Film Age (years)",
@@ -764,6 +775,7 @@ public enum EditorControlCatalogue {
                     + "the blue-sensitive layer going first, base fog rises, and grain rises with the "
                     + "fog — the muddy, crossed toe of an old roll.",
                 kind: .double(min: 0, max: 30, value: 0, delta: 0.1), clamp: 0...Double.greatestFiniteMagnitude, order: 30),
+            web: .runtime,
             commandLine: CommandLineFlag("--expired", placeholder: "<years>",
                                          help: "Years past the process-by date at room temperature "
                                              + "(default: 0). One stop per decade slower, blue layer "
@@ -1123,8 +1135,7 @@ public enum EditorControlCatalogue {
             detail: "Make highlight and shadow adjustments respond to nearby brightness.",
             section: .lightExposure, kind: .toggle(restingOn: true),
             binding: .localTone,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: "the regional base is measured from the image, which the pack cannot carry"],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 11, slotSymbol: "LOCAL_TONE", ofxName: "localTone", fxplugID: 11, group: .exposure,
                 label: "Regional Tone Mask",
@@ -1142,13 +1153,13 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(0...0.25, neutral: 0, unit: .percent)),
             availability: .film,
             binding: .cameraPreflash,
-            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli],
-            omitted: [.web: webBaked],
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 56, slotSymbol: "CAMERA_PREFLASH", ofxName: "cameraPreflash",
                 fxplugID: 98, group: .exposure, label: "Camera Preflash",
                 hint: "Pre-exposure of the taking film in linear scene radiance units, lifting shadows without shifting highlights.",
                 kind: .double(min: 0, max: 0.25, value: 0, delta: 0.005), clamp: 0...0.25, order: 65),
+            web: .runtime,
             commandLine: CommandLineFlag("--camera-preflash", placeholder: "<f>",
                                          help: "Pre-expose the camera frame (0...0.25, default: 0)"),
             documentation: "Pre-exposes the camera frame with uniform illumination to lift shadows."),
@@ -1197,9 +1208,8 @@ public enum EditorControlCatalogue {
             section: .lightBalance,
             kind: .menu(.fixed(sourceLights)),
             drives: ["sceneIlluminantKelvin"],
-            surfaces: [.app, .desktop, .resolve, .finalcut],
-            omitted: [.android: "the source spectrum is baked into the stock pack",
-                      .web: webBaked, .cli: "--scene-kelvin selects an explicit source; omission uses Stock Native"],
+            surfaces: [.app, .desktop, .resolve, .finalcut, .web],
+            omitted: [.android: "the source spectrum is baked into the stock pack", .cli: "--scene-kelvin selects an explicit source; omission uses Stock Native"],
             host: HostParameter(
                 slot: 33, slotSymbol: "SCENE_ILLUMINANT", ofxName: "sceneLight", fxplugID: 93, group: .sceneLight,
                 label: "Source Illuminant",
@@ -1215,12 +1225,13 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(1000...25000, neutral: 6504, unit: .kelvin)),
             persistence: .key("sourceLightKelvin", .same),
             drives: ["sceneIlluminantKelvin"],
-            surfaces: [.app, .desktop, .resolve, .finalcut, .cli],
-            omitted: [.android: "the source spectrum is baked into the stock pack", .web: webBaked],
+            surfaces: [.app, .desktop, .resolve, .finalcut, .cli, .web],
+            omitted: [.android: "the source spectrum is baked into the stock pack"],
             host: HostParameter(
                 slot: nil, ofxName: "sceneLightKelvin", fxplugID: 94, group: .sceneLight, label: "Source Illuminant (K)",
                 hint: "Custom source light before Temperature and Tint; used only when Source Illuminant is Custom.",
                 kind: .double(min: 1000, max: 25000, value: 6504, delta: 10), composed: true, order: 20),
+            web: .runtime,
             commandLine: CommandLineFlag("--scene-kelvin", placeholder: "<K>",
                 help: "Source illuminant, 1000-25000 K. Default: stock-native light, including RAW inputs",
                 generic: false),

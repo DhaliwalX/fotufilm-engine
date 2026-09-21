@@ -244,6 +244,7 @@ extension ControlsManifest.Control {
         switch control.web {
         case .configSlot(let slot, let transform): webSlot = slot; webTransform = transform.rawValue
         case .grainScale: webSlot = "FOTUFILM_CONFIG_GRAIN"; webTransform = "grain"
+        case .runtime: webTransform = "runtime"
         case nil: break
         }
         self.init(field: control.field.rawValue, title: control.title, detail: control.detail,

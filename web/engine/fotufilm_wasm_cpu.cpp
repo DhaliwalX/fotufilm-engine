@@ -18,6 +18,11 @@
 #include "FotufilmTransportPortable.h"
 
 #include "fotufilm_wasm_variants.h"
+#if __has_include("develop_flexible.h")
+#include "develop_flexible.h"
+#include "develop_flexible_annular.h"
+#define FOTUFILM_WASM_FLEXIBLE 1
+#endif
 #include "print_0.h"
 #include "print_1.h"
 #include "print_2.h"
@@ -129,7 +134,17 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
     int status;
     switch (fotufilm_develop_variant(feature_mask)) {
 #include "fotufilm_wasm_variants.inc"
-    default: return -2;
+    default:
+#if FOTUFILM_WASM_FLEXIBLE
+        if (feature_mask & (FOTUFILM_FRAME_DENSITY_IN | FOTUFILM_FRAME_TEXTURE
+                            | FOTUFILM_FRAME_RECORD_EXPOSURE_IN | FOTUFILM_FRAME_LIGHT_OUT)) return -2;
+        status = feature_mask & FOTUFILM_FRAME_HALATION_ANNULAR
+            ? develop_flexible_annular(FOTUFILM_DEVELOP_ARGUMENTS)
+            : develop_flexible(FOTUFILM_DEVELOP_ARGUMENTS);
+        break;
+#else
+        return -2;
+#endif
     }
 #undef FOTUFILM_DEVELOP_ARGUMENTS
     if (status != 0) return status;

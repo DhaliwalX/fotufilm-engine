@@ -13,7 +13,7 @@ public struct StageTiming {
     public static let isEnabled =
         ProcessInfo.processInfo.environment["FOTUFILM_STAGE_TIMING"] == "1"
 
-    private var start = DispatchTime.now()
+    private var start = ContinuousClock.now
     private var marks: [(String, Double)] = []
 
     public init() {}
@@ -21,8 +21,9 @@ public struct StageTiming {
     /// Closes the stage that ended here and opens the next.
     public mutating func mark(_ name: String) {
         guard Self.isEnabled else { return }
-        let now = DispatchTime.now()
-        let ms = Double(now.uptimeNanoseconds - start.uptimeNanoseconds) / 1e6
+        let now = ContinuousClock.now
+        let elapsed = start.duration(to: now).components
+        let ms = Double(elapsed.seconds) * 1000 + Double(elapsed.attoseconds) / 1e15
         marks.append((name, ms))
         start = now
     }

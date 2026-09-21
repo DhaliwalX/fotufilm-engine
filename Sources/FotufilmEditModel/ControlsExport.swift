@@ -312,6 +312,8 @@ public struct ControlsExport {
 
 
     static func webControls() -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         var entries: [String] = []
         var index = 0
         for control in controls where control.offered(on: .web) {
@@ -329,6 +331,7 @@ public struct ControlsExport {
             switch web {
             case .configSlot(_, let transform): kind = transform.rawValue
             case .grainScale: kind = "grain"
+            case .runtime: continue
             }
             entries.append("  { key: '\(control.field.rawValue)', index: \(index), label: '\(control.title)', "
                            + "unit: '\(unit)', min: \(scale.range.lowerBound), max: \(scale.range.upperBound), "
@@ -339,7 +342,16 @@ public struct ControlsExport {
             "  '\(key)': '\(EditorControlCatalogue.webVideoLabels[key]!)',"
         }
         return "export const CONTROLS = [\n" + entries.joined(separator: "\n") + "\n]\n"
+            + "export const EDITOR_CONTROLS = " + String(decoding: try! encoder.encode(
+                ControlsManifest.current.controls.filter {
+                    $0.surfaces.contains("desktop") || $0.surfaces.contains("app") || $0.surfaces.contains("web")
+                }), as: UTF8.self) + "\n"
+            + "export const FILM_FORMATS = " + String(decoding: try! JSONSerialization.data(
+                withJSONObject: FilmFormat.presets.map { ["id": $0.id, "name": $0.format.name] },
+                options: [.sortedKeys]), as: UTF8.self) + "\n"
             + "export const VIDEO_LABELS = {\n" + labels.joined(separator: "\n") + "\n}\n"
+            + "export const SELECTION = " + String(decoding: try! JSONSerialization.data(
+                withJSONObject: EditorControlCatalogue.webSelection, options: [.sortedKeys]), as: UTF8.self) + "\n"
             + "export const SCREEN_CONVERSION = " + String(decoding: try! JSONSerialization.data(
                 withJSONObject: ["title": EditorControlCatalogue.control(.digitalReference)!.title,
                                  "default": DigitalReferenceStyle.default.id,
@@ -355,6 +367,7 @@ public struct ControlsExport {
             switch web {
             case .configSlot(let slot, _): slots.append("    \(slot),")
             case .grainScale: slots.append("    -1,")
+            case .runtime: continue
             }
         }
         return "static const int32_t kFotufilmWasmControlSlots[] = {\n" + slots.joined(separator: "\n")

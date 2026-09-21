@@ -9,7 +9,7 @@ import { resolve } from 'node:path'
 const runtimeHash = createHash('sha256')
 function hashAssets(directory, prefix = '') {
   for (const name of readdirSync(directory).sort()) {
-    if (prefix === '' && name === 'parity') continue
+    if (prefix === '' && ['parity', 'test'].includes(name)) continue
     const url = new URL(name, directory), path = prefix + name
     if (statSync(url).isDirectory()) hashAssets(new URL(name + '/', directory), path + '/')
     else { runtimeHash.update(path + '\0'); runtimeHash.update(readFileSync(url)) }
@@ -17,15 +17,15 @@ function hashAssets(directory, prefix = '') {
 }
 if (existsSync(new URL('./public/', import.meta.url))) hashAssets(new URL('./public/', import.meta.url))
 const runtimeRevision = runtimeHash.digest('hex').slice(0, 20)
-let parityOutput
+let probeOutputs
 
 export default defineConfig({
   define: { __FOTUFILM_RUNTIME_REVISION__: JSON.stringify(runtimeRevision) },
   plugins: [react(), {
     name: 'omit-parity-probes',
     apply: 'build',
-    configResolved(config) { parityOutput = resolve(config.root, config.build.outDir, 'parity') },
-    closeBundle() { rmSync(parityOutput, { recursive: true, force: true }) },
+    configResolved(config) { probeOutputs = ['parity', 'test'].map(name => resolve(config.root, config.build.outDir, name)) },
+    closeBundle() { for (const path of probeOutputs) rmSync(path, { recursive: true, force: true }) },
   }, {
     name: 'browser-third-party-licenses',
     generateBundle() {
@@ -39,6 +39,10 @@ export default defineConfig({
         source: readFileSync(new URL('../licenses/BROWSER-EXR-MIT.txt', import.meta.url), 'utf8') })
       this.emitFile({ type: 'asset', fileName: 'licenses/HALIDE-MIT.txt',
         source: readFileSync(new URL('../tools/webgpu-parity/HALIDE-LICENSE.txt', import.meta.url), 'utf8') })
+      for (const name of ['BROWSER-WASI-SHIM-MIT', 'SWIFT-APACHE-2.0-RUNTIME']) {
+        this.emitFile({ type: 'asset', fileName: `licenses/${name}.txt`,
+          source: readFileSync(new URL(`../licenses/${name}.txt`, import.meta.url), 'utf8') })
+      }
     },
   }],
   // The published site serves the demo under a sub-path, and everything the app fetches at

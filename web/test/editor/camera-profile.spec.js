@@ -134,7 +134,7 @@ test('known-camera RAW resolves its as-shot spectral correction and applies it o
 test('missing camera assets fail explicitly instead of silently omitting correction', async ({
   page,
 }) => {
-  await page.route('**/raw/camera-profiles.json', (route) =>
+  await page.route('**/raw/camera-profiles.json*', (route) =>
     route.fulfill({ status: 404, body: '' }),
   )
   await page.goto('/')

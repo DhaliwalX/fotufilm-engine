@@ -1,3 +1,4 @@
+import { openChart } from './photo-fixture.js'
 import { test, expect } from '@playwright/test'
 
 test('WebGPU and CPU agree with white balance, regional masks and grading', async ({ page }) => {
@@ -76,9 +77,9 @@ test('WebGPU and CPU agree with white balance, regional masks and grading', asyn
 
 test('four crop corners move independently; rotate and flip undo cleanly', async ({ page }) => {
   await page.goto('/')
-  await page.getByRole('button', { name: 'Open sample chart' }).click()
+  await openChart(page)
   await expect(page.locator('.viewer-status > [role=status]')).toContainText('1600 × 1000')
-  await page.getByRole('tab', { name: 'Crop', exact: true }).click()
+  await page.getByRole('button', { name: 'Crop', exact: true }).click()
   const corner = page.getByRole('button', { name: 'Top left crop corner', exact: true })
   const original = await page.locator('.crop-overlay polygon').getAttribute('points')
   await corner.focus()

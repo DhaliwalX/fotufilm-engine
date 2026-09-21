@@ -8,7 +8,14 @@ import { Icon } from './icons.jsx'
 
 export { Icon } from './icons.jsx'
 
-export function ToolButton({ icon, label, active, children, disabled, ...props }) {
+export function ToolButton({
+  icon,
+  label,
+  active,
+  children,
+  disabled,
+  ...props
+}) {
   return (
     <Button
       label={label}
@@ -34,7 +41,13 @@ export function Section({ title, children, open = true }) {
     </details>
   )
 }
-export function Adjustment({ slider, value, onChange, onEnd, disabled = false }) {
+export function Adjustment({
+  slider,
+  value,
+  onChange,
+  onEnd,
+  disabled = false,
+}) {
   const accessibleLabel = slider.key.startsWith('grade')
     ? `${slider.group} ${slider.label}`
     : slider.label
@@ -72,8 +85,12 @@ export function Adjustment({ slider, value, onChange, onEnd, disabled = false })
         max={temperature ? 1e6 / slider.min : slider.max}
         step={temperature ? 0.1 : slider.step}
         value={rangeValue}
-        formatValue={temperature ? (v) => `${Math.round(1e6 / v)} K` : undefined}
-        onChange={(next) => onChange(temperature ? Math.round(1e6 / next) : next)}
+        formatValue={
+          temperature ? (v) => `${Math.round(1e6 / v)} K` : undefined
+        }
+        onChange={(next) =>
+          onChange(temperature ? Math.round(1e6 / next) : next)
+        }
         onChangeEnd={onEnd}
         onBlur={onEnd}
         onDoubleClick={() => {
@@ -84,8 +101,17 @@ export function Adjustment({ slider, value, onChange, onEnd, disabled = false })
     </div>
   )
 }
-export function Adjustments({ group, params, onChange, onEnd, disabled }) {
-  return SLIDERS.filter((s) => s.group === group).map((slider) => (
+export function Adjustments({
+  group,
+  params,
+  onChange,
+  onEnd,
+  disabled,
+  hasFilm = true,
+}) {
+  return SLIDERS.filter(
+    (s) => s.group === group && (hasFilm || s.availability !== 'film'),
+  ).map((slider) => (
     <Adjustment
       key={slider.key}
       slider={slider}
@@ -151,7 +177,9 @@ export function Histogram({ canvas, onClose }) {
     bins.forEach((channel, c) => {
       plot.beginPath()
       plot.moveTo(0, height)
-      channel.forEach((n, x) => plot.lineTo((x * width) / 63, height - (n / peak) * (height - 3)))
+      channel.forEach((n, x) =>
+        plot.lineTo((x * width) / 63, height - (n / peak) * (height - 3)),
+      )
       plot.lineTo(width, height)
       plot.closePath()
       plot.fillStyle = ['#f1787890', '#78c99b90', '#79a7ed90'][c]
@@ -159,7 +187,10 @@ export function Histogram({ canvas, onClose }) {
     })
   }, [canvas])
   return (
-    <div className="histogram" style={{ transform: `translate(${offset[0]}px, ${offset[1]}px)` }}>
+    <div
+      className="histogram"
+      style={{ transform: `translate(${offset[0]}px, ${offset[1]}px)` }}
+    >
       <div
         className="histogram-header"
         onPointerDown={(e) => {
@@ -169,7 +200,9 @@ export function Histogram({ canvas, onClose }) {
         }}
         onPointerMove={(e) => {
           if (drag.current) {
-            const room = e.currentTarget.closest('.canvas-area').getBoundingClientRect()
+            const room = e.currentTarget
+              .closest('.canvas-area')
+              .getBoundingClientRect()
             setOffset([
               clamp(
                 drag.current[2] + e.clientX - drag.current[0],
@@ -225,6 +258,8 @@ export function ImageCanvas({
   showHistogram,
   outputWidth,
   onZoomReadout,
+  sampling = false,
+  onSample,
 }) {
   const container = useRef(null),
     drag = useRef(null)
@@ -253,7 +288,9 @@ export function ImageCanvas({
   )
   const displayWidth = Math.max(1, width * fit),
     displayHeight = Math.max(1, height * fit)
-  const displayUrl = compare ? result?.originalUrl || original?.src : result?.url || original?.src
+  const displayUrl = compare
+    ? result?.originalUrl || original?.src
+    : result?.url || original?.src
   const nativeScale = displayWidth / Math.max(1, outputWidth || width)
   useEffect(() => {
     onZoomReadout?.(Math.round(nativeScale * (cropMode ? 1 : zoom) * 100))
@@ -270,6 +307,17 @@ export function ImageCanvas({
   }, [cropMode, setZoom])
   function begin(e) {
     if (e.button !== 0 || cropMode || e.target.closest('.histogram')) return
+    if (sampling) {
+      const plane = e.target.closest('.photo-plane')
+      if (plane) {
+        const bounds = plane.getBoundingClientRect()
+        onSample?.([
+          (e.clientX - bounds.left) / bounds.width,
+          (e.clientY - bounds.top) / bounds.height,
+        ])
+      }
+      return
+    }
     e.currentTarget.setPointerCapture(e.pointerId)
     if (zoom === 1) setCompare(true)
     else drag.current = [e.clientX, e.clientY, ...offset]
@@ -281,7 +329,7 @@ export function ImageCanvas({
   return (
     <div
       ref={container}
-      className={`canvas-area ${cropMode ? 'cropping' : ''}`}
+      className={`canvas-area ${cropMode ? 'cropping' : ''} ${sampling ? 'sampling' : ''}`}
       tabIndex={0}
       aria-label="Photo preview"
       onDoubleClick={(event) => {
@@ -335,7 +383,9 @@ export function ImageCanvas({
                 fill="#0008"
               />
               <polygon
-                points={crop.map((p) => p.map((v) => v * 1000).join(',')).join(' ')}
+                points={crop
+                  .map((p) => p.map((v) => v * 1000).join(','))
+                  .join(' ')}
                 fill="none"
                 stroke="white"
                 strokeWidth="1.5"
@@ -363,7 +413,8 @@ export function ImageCanvas({
                 }}
                 onPointerMove={(e) => {
                   if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
-                  const rect = e.currentTarget.parentElement.getBoundingClientRect()
+                  const rect =
+                    e.currentTarget.parentElement.getBoundingClientRect()
                   const next = crop.map((p) => [...p])
                   next[i] = [
                     clamp((e.clientX - rect.left) / rect.width, 0, 1),
@@ -383,7 +434,10 @@ export function ImageCanvas({
                   if (!delta) return
                   e.preventDefault()
                   const next = crop.map((p) => [...p])
-                  next[i] = [clamp(x + delta[0], 0, 1), clamp(y + delta[1], 0, 1)]
+                  next[i] = [
+                    clamp(x + delta[0], 0, 1),
+                    clamp(y + delta[1], 0, 1),
+                  ]
                   if (validCrop(next)) onCrop(next)
                 }}
                 onKeyUp={onEnd}
@@ -392,7 +446,9 @@ export function ImageCanvas({
         </div>
       )}
       {compare && <span className="original-badge">Original</span>}
-      {showHistogram && result && <Histogram canvas={result.canvas} onClose={showHistogram} />}
+      {showHistogram && result && (
+        <Histogram canvas={result.canvas} onClose={showHistogram} />
+      )}
     </div>
   )
 }

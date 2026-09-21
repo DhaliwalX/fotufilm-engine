@@ -1,3 +1,4 @@
+import { openChart } from './photo-fixture.js'
 import { test, expect } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import { makeDNG } from './raw-fixture.js'
@@ -68,11 +69,11 @@ test('RAW import, film, exposure, crop and export use the full original', async 
   await page.getByTitle('Gold 200', { exact: true }).click()
   await ready(page)
   await expect(page.locator('.backend-label')).toHaveText('WebGPU')
-  await page.getByRole('tab', { name: 'Light & Color' }).click()
+  await page.getByRole('tab', { name: 'Expose' }).click()
   await page.getByRole('spinbutton', { name: 'Exposure value', exact: true }).fill('2')
   await page.getByRole('spinbutton', { name: 'Exposure value', exact: true }).press('Tab')
   await ready(page)
-  await page.getByRole('tab', { name: 'Crop', exact: true }).click()
+  await page.getByRole('button', { name: 'Crop', exact: true }).click()
   await ready(page)
   await page.getByRole('combobox', { name: 'Aspect ratio', exact: true }).click()
   await page.getByRole('option', { name: '1:1', exact: true }).click()
@@ -118,7 +119,7 @@ test('RAW cancellation releases the worker without changing the open photo', asy
   await expect(page.locator('.import-status')).toBeVisible()
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(page.locator('.import-status')).toBeHidden()
-  await page.getByRole('button', { name: 'Open sample chart' }).click()
+  await openChart(page)
   await ready(page)
   await expect(page.locator('.document-name')).toContainText('Color chart.png')
 })

@@ -198,3 +198,12 @@ decoder and loader are bundled from the pinned npm dependency and run in a
 worker when native decoding cannot expose camera code values. Source:
 https://github.com/lid-labs/hevc.js and https://www.npmjs.com/package/@hevcjs/core/v/1.4.5.
 The license is included in browser builds at `licenses/HEVCJS-MIT.txt`.
+
+
+## Browser Swift profile builder
+
+The browser profile worker runs the Swift 6.3.3 runtime and Foundation compiled
+to WebAssembly. See [the Apache 2.0 license with Runtime Library Exception](licenses/SWIFT-APACHE-2.0-RUNTIME.txt).
+It uses **@bjorn3/browser_wasi_shim 0.4.2**, without modification, under
+[its MIT license](licenses/BROWSER-WASI-SHIM-MIT.txt). Source:
+<https://github.com/bjorn3/browser_wasi_shim>. Both notices are included in browser builds.

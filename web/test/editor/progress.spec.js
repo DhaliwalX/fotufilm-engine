@@ -1,14 +1,19 @@
+import { openChart } from './photo-fixture.js'
 import { test, expect } from '@playwright/test'
 
 test('queued edits keep the active operation visible and replace the pending edit', async ({ page }) => {
   await page.goto('/')
   const status = page.locator('.viewer-status > [role=status]')
-  await page.getByRole('button', { name: 'Open sample chart' }).click()
+  await openChart(page)
   await expect(status).toContainText(/1600 × 1000 · \d+ ms/)
-  await page.getByRole('tab', { name: 'Light & Color', exact: true }).click()
+  await page.getByRole('tab', { name: 'Expose', exact: true }).click()
   // Hold one real render before it starts to make the queue deterministic.
   await page.evaluate(async () => {
-    const { RenderSession } = await import('/src/render-session.js')
+    // Use the module URL actually imported by the app, including Vite's HMR revision.
+    const url = performance.getEntriesByType('resource').findLast(
+      (entry) => new URL(entry.name).pathname === '/src/render-session.js',
+    ).name
+    const { RenderSession } = await import(url)
     const render = RenderSession.prototype.render
     let held = false
     RenderSession.prototype.render = async function (request) {

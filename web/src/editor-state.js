@@ -1,5 +1,10 @@
+import { parseProfileSettings } from './profile-settings.js'
 import { VIDEO_ENCODINGS } from './video-color.js'
+import { catalogueSlider, editorControl } from './editor-catalogue.js'
+import { selectionKeys } from './selective.js'
 export const SLIDERS = [
+  catalogueSlider('cameraPreflash', 'Light', 0.005),
+  catalogueSlider('sceneLightKelvin', 'Source Illuminant', 1),
   {
     key: 'ev',
     label: 'Exposure',
@@ -96,10 +101,14 @@ export const fullCrop = () => [
 ]
 export const defaultEdit = (stock = null) => ({
   stock,
+  format: null,
+  profile: {},
   medium: null,
   digitalReference: 'auto-levels',
   video: { encoding: 'standard', trimStart: 0, trimEnd: null, audio: true },
   halationModel: 'legacy',
+  sceneLight: 'unspecified',
+  selective: null,
   params: Object.fromEntries(SLIDERS.map((s) => [s.key, s.def])),
   gradeSpace: false,
   localTone: true,
@@ -204,12 +213,54 @@ export function parseEdit(json, stockIDs) {
     !edit.params ||
     !SLIDERS.every(
       (s) =>
-        Number.isFinite(edit.params[s.key]) &&
-        edit.params[s.key] >= s.min &&
-        edit.params[s.key] <= s.max,
+        Number.isFinite(
+          edit.params[s.key] ??
+            (['cameraPreflash', 'sceneLightKelvin'].includes(s.key)
+              ? s.def
+              : NaN),
+        ) &&
+        (edit.params[s.key] ?? s.def) >= s.min &&
+        (edit.params[s.key] ?? s.def) <= s.max,
     )
   )
     throw new Error('Invalid adjustment values.')
+  if (
+    edit.sceneLight != null &&
+    !editorControl('sceneLight').choices.some((c) => c.id === edit.sceneLight)
+  )
+    throw new Error('Invalid source illuminant.')
+  if (edit.selective != null) {
+    const local = edit.selective
+    if (
+      !['color', 'light'].includes(local.kind) ||
+      typeof local.localTone !== 'boolean' ||
+      typeof local.gradeSpace !== 'boolean' ||
+      !Number.isFinite(local.range) ||
+      local.range < 0.05 ||
+      local.range > 0.6 ||
+      !Number.isFinite(local.softness) ||
+      local.softness < 0.05 ||
+      local.softness > 1 ||
+      (local.point !== null &&
+        (!Array.isArray(local.point) ||
+          local.point.length !== 2 ||
+          !local.point.every((v) => Number.isFinite(v) && v >= 0 && v <= 1))) ||
+      (local.sample !== null &&
+        (!Array.isArray(local.sample) ||
+          local.sample.length !== 3 ||
+          !local.sample.every(Number.isFinite))) ||
+      (local.point === null) !== (local.sample === null) ||
+      !local.params ||
+      !selectionKeys.every((key) => {
+        const slider = SLIDERS.find((s) => s.key === key),
+          value = local.params[key]
+        return (
+          Number.isFinite(value) && value >= slider.min && value <= slider.max
+        )
+      })
+    )
+      throw new Error('Invalid selective adjustments.')
+  }
   if (
     edit.video != null &&
     (!VIDEO_ENCODINGS.some((item) => item.id === edit.video.encoding) ||
@@ -221,7 +272,12 @@ export function parseEdit(json, stockIDs) {
       typeof edit.video.audio !== 'boolean')
   )
     throw new Error('Invalid video settings.')
-  if (edit.digitalReference != null && !['reference-exposure', 'graded-print', 'auto-levels'].includes(edit.digitalReference))
+  if (
+    edit.digitalReference != null &&
+    !['reference-exposure', 'graded-print', 'auto-levels'].includes(
+      edit.digitalReference,
+    )
+  )
     throw new Error('Invalid screen conversion.')
   if (
     edit.medium != null &&
@@ -260,10 +316,22 @@ export function parseEdit(json, stockIDs) {
   return {
     ...base,
     ...Object.fromEntries(Object.keys(base).map((key) => [key, edit[key]])),
+    ...parseProfileSettings(edit),
     medium: edit.medium ?? null,
     digitalReference: edit.digitalReference ?? 'auto-levels',
     video: edit.video ?? base.video,
     halationModel: edit.halationModel ?? 'legacy',
-    params: Object.fromEntries(SLIDERS.map((s) => [s.key, edit.params[s.key]])),
+    sceneLight: edit.sceneLight ?? 'unspecified',
+    selective: edit.selective
+      ? {
+          ...edit.selective,
+          params: Object.fromEntries(
+            selectionKeys.map((key) => [key, edit.selective.params[key]]),
+          ),
+        }
+      : null,
+    params: Object.fromEntries(
+      SLIDERS.map((s) => [s.key, edit.params[s.key] ?? s.def]),
+    ),
   }
 }

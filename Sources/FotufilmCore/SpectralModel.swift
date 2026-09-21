@@ -1246,7 +1246,7 @@ public enum SpectralRuntime {
         var values = [Float](repeating: 0, count: d * d * d * 4)
         values.withUnsafeMutableBufferPointer { buffer in
             withoutActuallyEscaping(evaluate) { evaluate in
-                DispatchQueue.concurrentPerform(iterations: d) { z in
+                ParallelWork.forEach(iterations: d) { z in
                     for y in 0..<d {
                         for x in 0..<d {
                             let p = SIMD3<Float>(Float(x) / Float(d - 1),

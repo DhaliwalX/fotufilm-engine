@@ -113,7 +113,7 @@ public struct PlainDevelop {
         }
 
         if isNeutral {
-            DispatchQueue.concurrentPerform(iterations: rows.count) { row in
+            ParallelWork.forEach(iterations: rows.count) { row in
                 let start = row * width * 4
                 for index in stride(from: start, to: start + width * 4, by: 4) {
                     // Out-of-gamut components stay: the grade is a bijection over the
@@ -135,7 +135,7 @@ public struct PlainDevelop {
         let saturation = self.saturation, vibrance = self.vibrance
         let key = toneKey()
 
-        DispatchQueue.concurrentPerform(iterations: rows.count) { row in
+        ParallelWork.forEach(iterations: rows.count) { row in
             let y = rows.lowerBound + row
             let start = row * width * 4
             for x in 0..<width {

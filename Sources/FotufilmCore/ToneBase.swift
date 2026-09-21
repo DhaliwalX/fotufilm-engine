@@ -154,7 +154,7 @@ public struct ToneBaseMeasurement {
         let lastCell = (rows.upperBound - 1) * gh / fh
         logSum.withUnsafeMutableBufferPointer { sums in
             counts.withUnsafeMutableBufferPointer { counts in
-                DispatchQueue.concurrentPerform(
+                ParallelWork.forEach(
                     iterations: lastCell - firstCell + 1
                 ) { task in
                     let cy = firstCell + task

@@ -250,6 +250,8 @@ echo "Wrote web/public/fotufilm.{mjs,wasm}$([[ -f web/public/fotufilm-webgpu.mjs
 
 tools/build-raw-wasm.sh
 bash tools/build-web-scene.sh
+bash tools/build-web-profile.sh
+bash tools/build-wasm-flexible-test.sh "$OUTPUT/cpu"
 
 node tools/test-web-scene.mjs
 node tools/test-wasm-transport-colour.mjs

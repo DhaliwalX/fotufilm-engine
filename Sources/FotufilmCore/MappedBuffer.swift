@@ -38,8 +38,10 @@ public final class MappedBuffer: @unchecked Sendable {
 
     deinit {
         if isMapped {
+            #if !os(WASI)
             munmap(baseAddress, byteCount)
             close(descriptor)
+            #endif
         } else {
             free(baseAddress)
         }
@@ -47,6 +49,10 @@ public final class MappedBuffer: @unchecked Sendable {
 
     /// Maps a temporary file, or nil if any step of it fails.
     private static func map(byteCount: Int) -> (UnsafeMutableRawPointer, Int32)? {
+        #if os(WASI)
+        // WebAssembly linear memory cannot map files. Use the allocator fallback above.
+        return nil
+        #else
         let path = (NSTemporaryDirectory() as NSString)
             .appendingPathComponent("fotufilm-\(UUID().uuidString)")
         let descriptor = open(path, O_RDWR | O_CREAT | O_EXCL, 0o600)
@@ -67,6 +73,7 @@ public final class MappedBuffer: @unchecked Sendable {
             return nil
         }
         return (mapped, descriptor)
+        #endif
     }
 
     /// Stores `count` bytes at `byteOffset` through the file rather than the mapping. Writing a
@@ -98,12 +105,14 @@ public final class MappedBuffer: @unchecked Sendable {
 
     /// Asks the kernel to begin writing this range back.
     public func flush(byteOffset: Int, byteCount count: Int) {
+        #if !os(WASI)
         guard isMapped, count > 0, byteOffset >= 0,
               byteOffset + count <= byteCount else { return }
         let page = Int(getpagesize())
         let start = byteOffset - byteOffset % page
         msync(baseAddress.advanced(by: start), byteOffset - start + count,
               MS_ASYNC)
+        #endif
     }
 
     /// The buffer as the one element type it holds.
@@ -116,6 +125,10 @@ public final class MappedBuffer: @unchecked Sendable {
 
     /// What a buffer of this size really costs the process's allowance.
     public static func residentBytes(_ byteCount: Int) -> Int {
+        #if os(WASI)
+        return byteCount
+        #else
         byteCount >= mappingThreshold ? 0 : byteCount
+        #endif
     }
 }

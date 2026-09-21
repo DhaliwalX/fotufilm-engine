@@ -1,9 +1,14 @@
+import { loadFilmProfile } from './film-profile.js'
+import { hasProfileSettings } from './profile-settings.js'
 import { loadMediumBytes } from './output-media.js'
 import { loadSceneExposure } from './scene-light.js'
 import { rawSource } from './raw-source.js'
 import { defaultEdit } from './editor-state.js'
+import { sourceIlluminant } from './editor-catalogue.js'
+import { compositeSelection } from './selective.js'
 import {
   assetUrl,
+  sceneHighlightStops,
   createDeveloper,
   createCpuDeveloper,
   createNormalDeveloper,
@@ -37,11 +42,15 @@ export async function loadStockIndex() {
       'Output media could not be loaded. Rebuild the browser packs.',
     )
   const media = await mediaResponse.json()
+  const catalogueResponse = await fetch(assetUrl('profile/catalogue.json'))
+  if (!catalogueResponse.ok) throw new Error('The film settings catalogue could not be loaded.')
+  const catalogue = await catalogueResponse.json()
   return index.map((stock) => {
+    if (!Array.isArray(catalogue[stock.id]?.available)) throw new Error('Invalid film settings catalogue.')
     const entry = media.find((item) => item.id === stock.id)
     if (!entry || !Array.isArray(entry.choices) || !entry.choices.length)
       throw new Error('Invalid output-medium catalog.')
-    return { ...stock, media: entry.choices, defaultMedium: entry.default }
+    return { ...stock, available: catalogue[stock.id]?.available || [], nativeFormat: catalogue[stock.id]?.nativeFormat, media: entry.choices, defaultMedium: entry.default }
   })
 }
 
@@ -89,7 +98,12 @@ export class RenderSession {
     this.activeWork = null
     this.running = false
   }
-  async pack(id, medium = null, halationModel = 'legacy', digitalReference = 'auto-levels') {
+  async pack(
+    id,
+    medium = null,
+    halationModel = 'legacy',
+    digitalReference = 'auto-levels',
+  ) {
     const key = `${id}:${medium || 'default'}:${halationModel}:${digitalReference}`
     if (this.packs.has(key)) {
       const value = this.packs.get(key)
@@ -111,9 +125,13 @@ export class RenderSession {
         throw error
       })
       const stock = (await this.catalog).find((item) => item.id === id)
-      const mediumChoice = stock?.media.find((item) => item.id === (medium || stock.defaultMedium))
+      const mediumChoice = stock?.media.find(
+        (item) => item.id === (medium || stock.defaultMedium),
+      )
       const choice = mediumChoice?.screenConversions
-        ? mediumChoice.screenConversions.find(item => item.id === digitalReference)
+        ? mediumChoice.screenConversions.find(
+            (item) => item.id === digitalReference,
+          )
         : mediumChoice
       if (!choice)
         throw new Error(
@@ -122,10 +140,7 @@ export class RenderSession {
       const base = await loadPack(assetUrl(`packs/${id}.pack`))
       pack = choice.pack
         ? parsePack(
-            await loadMediumBytes(
-              base.bytes,
-              assetUrl(`packs/${choice.pack}`),
-            ),
+            await loadMediumBytes(base.bytes, assetUrl(`packs/${choice.pack}`)),
           )
         : base
       stagesUrl = choice.stages ? assetUrl(`packs/${choice.stages}`) : null
@@ -136,15 +151,15 @@ export class RenderSession {
     if (this.packs.size > 4) this.packs.delete(this.packs.keys().next().value)
     return entry
   }
-  async renderer(pack, background = false, onProgress = () => {}) {
-    const name = background
+  async renderer(pack, background = false, onProgress = () => {}, profile = false) {
+    const name = profile ? 'profileReady' : background
       ? 'thumbnailReady'
       : pack?.transport
         ? 'transportReady'
         : pack
           ? 'filmReady'
           : 'normalReady'
-    const cached = background
+    const cached = profile ? this.profileDeveloper : background
       ? this.thumbnail
       : pack?.transport
         ? this.transport
@@ -154,7 +169,7 @@ export class RenderSession {
     if (cached?.isAborted) this[name] = null
     // A thumbnail must not hold foreground work behind GPU shader compilation.
     this[name] ??= (
-      background
+      background || profile
         ? createCpuDeveloper(pack)
         : pack
           ? createDeveloper(pack, onProgress)
@@ -165,7 +180,8 @@ export class RenderSession {
           developer?.dispose()
           return null
         }
-        if (background) this.thumbnail = developer
+        if (profile) this.profileDeveloper = developer
+        else if (background) this.thumbnail = developer
         else if (pack?.transport) this.transport = developer
         else if (pack) this.developer = developer
         else this.normal = developer
@@ -240,13 +256,18 @@ export class RenderSession {
     videoTime = null,
     encode = true,
     cacheSource = true,
+    showMask = false,
     stale = () => false,
     onProgress = () => {},
   }) {
     if (this.closed || stale()) return null
-    if (edit.halationModel === 'layered' && image.raw?.sceneKelvin)
+    const dynamic = edit.stock !== null && hasProfileSettings(edit)
+    if (dynamic && edit.halationModel === 'layered') throw new Error('Choose Legacy halation to adjust film format, condition or grain model.')
+    if (dynamic && stage !== null) throw new Error('Pipeline inspection requires the film’s default format, condition and grain model.')
+    const sceneKelvin = sourceIlluminant(edit)
+    if (edit.halationModel === 'layered' && sceneKelvin)
       throw new Error(
-        'Layered Transport is unavailable for RAW photos with a detected capture light. Choose Legacy.',
+        'Layered Transport requires Stock Native source illumination. Choose Legacy for another illuminant.',
       )
     const work = { label: background ? 'film thumbnail' : purpose }
     const report = (text) => {
@@ -270,13 +291,19 @@ export class RenderSession {
     const entry =
       edit.stock === null
         ? null
-        : await this.pack(stock, edit.medium, edit.halationModel, edit.digitalReference)
+        : await this.pack(
+            stock,
+            edit.medium,
+            edit.halationModel,
+            edit.digitalReference,
+          )
     if (this.closed || stale()) return null
     if (!entry && !this.normalReady) report('Loading light and color engine')
     const developer = await this.renderer(
       entry?.pack,
       background && !!entry,
       report,
+      dynamic,
     )
     work.onWait = report
     return this.enqueue(
@@ -317,14 +344,19 @@ export class RenderSession {
           localTone: edit.localTone,
         }
         const selected = edit.stock === null ? null : stage
-        const pack = await this.capturePack(
+        const pack = dynamic ? parsePack(await loadFilmProfile({
+          stock, width: source.width, height: source.height,
+          format: edit.format, medium: edit.medium, sceneKelvin,
+          sceneHighlightStops: await sceneHighlightStops(source, controls),
+          controls: { ...edit.profile, digitalReference: edit.digitalReference || 'auto-levels' },
+        }, report)) : await this.capturePack(
           entry
             ? selected === null
               ? entry.pack
               : entry.stages[selected]
             : null,
           stock,
-          image.raw?.sceneKelvin,
+          sceneKelvin,
           report,
         )
         if (entry && !pack)
@@ -333,6 +365,29 @@ export class RenderSession {
         let { pixels, elapsed } = developer
           ? await developer.develop(source, controls, rendering)
           : await developNormal(source, controls, rendering)
+        if (edit.selective?.sample && !cropMode && stage === null) {
+          report('Developing selection')
+          const local = edit.selective
+          const localControls = {
+            ...controls,
+            ...local.params,
+            localTone: local.localTone,
+            gradeSpace: local.gradeSpace,
+          }
+          const selected = showMask
+            ? null
+            : developer
+              ? await developer.develop(source, localControls, rendering)
+              : await developNormal(source, localControls, rendering)
+          pixels = compositeSelection(
+            source,
+            pixels,
+            selected?.pixels,
+            local,
+            showMask,
+          )
+          elapsed += selected?.elapsed || 0
+        }
         let delta = null
         if (difference && selected > 0) {
           report('Rendering previous stage for comparison')
@@ -340,7 +395,7 @@ export class RenderSession {
             await this.capturePack(
               entry.stages[selected - 1],
               stock,
-              image.raw?.sceneKelvin,
+              sceneKelvin,
               report,
             ),
           )
@@ -388,6 +443,7 @@ export class RenderSession {
         }
         prepared.original = original
         return {
+          sceneSource: source,
           canvas,
           blob,
           original,
@@ -403,11 +459,21 @@ export class RenderSession {
       work,
     )
   }
-  stages(stock, medium = null, halationModel = 'legacy', digitalReference = 'auto-levels') {
+  stages(
+    stock,
+    medium = null,
+    halationModel = 'legacy',
+    digitalReference = 'auto-levels',
+  ) {
     if (halationModel === 'layered') return Promise.resolve([])
     return this.enqueue(
       async () => {
-        const entry = await this.pack(stock, medium, halationModel, digitalReference)
+        const entry = await this.pack(
+          stock,
+          medium,
+          halationModel,
+          digitalReference,
+        )
         entry.stages ??= await loadStages(
           assetUrl(`packs/${stock}.stages`),
           entry.pack,
@@ -422,6 +488,8 @@ export class RenderSession {
   dispose() {
     this.closed = true
     return this.enqueue(() => {
+      this.profileDeveloper?.dispose()
+      this.profileDeveloper = null
       this.developer?.dispose()
       this.transport?.dispose()
       this.normal?.dispose()

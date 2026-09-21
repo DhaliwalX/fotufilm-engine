@@ -1,3 +1,4 @@
+import { openChart } from './photo-fixture.js'
 import { test, expect } from '@playwright/test'
 
 test('Halide Normal agrees with the reference across all light and grade controls', async ({
@@ -58,7 +59,7 @@ test('Halide Normal agrees with the reference across all light and grade control
 for (const stock of [null, 'Gold 200'])
   test(`continuous edits publish frames before release: ${stock || 'Normal'}`, async ({ page }) => {
     await page.goto('/')
-    await page.getByRole('button', { name: 'Open sample chart' }).click()
+    await openChart(page)
     await expect(page.locator('.viewer-status > [role=status]')).toContainText('1600 × 1000')
     if (stock) {
       await page.getByRole('searchbox').fill(stock)
@@ -66,7 +67,7 @@ for (const stock of [null, 'Gold 200'])
       await expect(page.locator('.backend-label')).toHaveText('WebGPU')
       await expect(page.locator('.viewer-status > [role=status]')).toContainText('1600 × 1000')
     }
-    await page.getByRole('tab', { name: 'Light & Color' }).click()
+    await page.getByRole('tab', { name: 'Expose' }).click()
     await page.evaluate(() => {
       window.previewFrames = []
       new MutationObserver(() => window.previewFrames.push(performance.now())).observe(
@@ -98,10 +99,10 @@ for (const stock of [null, 'Gold 200'])
     }
     for (const name of ['Exposure', 'Shadows', 'Temperature']) await drag(name)
     if (stock) {
-      await page.getByRole('tab', { name: 'Film', exact: true }).click()
+      await page.getByRole('tab', { name: 'Develop', exact: true }).click()
       await drag('Grain')
     }
-    await page.getByRole('tab', { name: 'Crop', exact: true }).click()
+    await page.getByRole('button', { name: 'Crop', exact: true }).click()
     await expect(page.locator('.viewer-status > [role=status]')).toContainText('1600 × 1000')
     await drag('Straighten')
     await expect(page.getByRole('button', { name: 'Preview crop', exact: true })).toHaveAttribute(

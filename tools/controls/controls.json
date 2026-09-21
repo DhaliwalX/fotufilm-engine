@@ -373,7 +373,7 @@
       },
       "kind" : "menu",
       "omitted" : {
-        "web" : "a pack is sealed for one gauge"
+
       },
       "scope" : "edit",
       "section" : "filmStock",
@@ -383,9 +383,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Format"
+      "title" : "Format",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -571,8 +573,7 @@
       "kind" : "menu",
       "omitted" : {
         "finalcut" : "not yet offered; the share is a Full-stage control",
-        "resolve" : "offered as Mottle and Mottle Amount",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "resolve" : "offered as Mottle and Mottle Amount"
       },
       "scope" : "edit",
       "section" : "filmGrain",
@@ -580,9 +581,11 @@
         "app",
         "desktop",
         "android",
+        "web",
         "cli"
       ],
-      "title" : "Mottle"
+      "title" : "Mottle",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -856,8 +859,7 @@
       },
       "kind" : "menu",
       "omitted" : {
-        "finalcut" : "not yet offered; discs and crystals need Reference rendering",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "finalcut" : "not yet offered; discs and crystals need Reference rendering"
       },
       "scope" : "edit",
       "section" : "filmGrain",
@@ -866,9 +868,11 @@
         "desktop",
         "android",
         "resolve",
+        "web",
         "cli"
       ],
-      "title" : "Grain Model"
+      "title" : "Grain Model",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "film",
@@ -1036,7 +1040,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "halation",
       "scale" : {
@@ -1060,9 +1064,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Halation"
+      "title" : "Halation",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -1197,7 +1203,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "halationColour",
       "scale" : {
@@ -1221,9 +1227,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Halo Colour"
+      "title" : "Halo Colour",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "film",
@@ -1941,7 +1949,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "expiredYears",
       "scale" : {
@@ -1968,9 +1976,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Expired"
+      "title" : "Expired",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "statedReciprocity",
@@ -3005,7 +3015,7 @@
       },
       "kind" : "toggle",
       "omitted" : {
-        "web" : "the regional base is measured from the image, which the pack cannot carry"
+
       },
       "persistedKey" : "localTone",
       "restingOn" : true,
@@ -3018,6 +3028,7 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
       "title" : "Regional"
@@ -3062,7 +3073,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+
       },
       "persistedKey" : "cameraPreflash",
       "scale" : {
@@ -3086,9 +3097,11 @@
         "android",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Camera Preflash"
+      "title" : "Camera Preflash",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
@@ -3331,8 +3344,7 @@
       "kind" : "menu",
       "omitted" : {
         "android" : "the source spectrum is baked into the stock pack",
-        "cli" : "--scene-kelvin selects an explicit source; omission uses Stock Native",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "cli" : "--scene-kelvin selects an explicit source; omission uses Stock Native"
       },
       "scope" : "edit",
       "section" : "lightBalance",
@@ -3340,7 +3352,8 @@
         "app",
         "desktop",
         "resolve",
-        "finalcut"
+        "finalcut",
+        "web"
       ],
       "title" : "Source Illuminant"
     },
@@ -3379,8 +3392,7 @@
       },
       "kind" : "slider",
       "omitted" : {
-        "android" : "the source spectrum is baked into the stock pack",
-        "web" : "reshapes the sealed pack rather than a configuration slot"
+        "android" : "the source spectrum is baked into the stock pack"
       },
       "persistedKey" : "sourceLightKelvin",
       "scale" : {
@@ -3403,9 +3415,11 @@
         "desktop",
         "resolve",
         "finalcut",
+        "web",
         "cli"
       ],
-      "title" : "Source Illuminant (K)"
+      "title" : "Source Illuminant (K)",
+      "webTransform" : "runtime"
     },
     {
       "availability" : "always",
