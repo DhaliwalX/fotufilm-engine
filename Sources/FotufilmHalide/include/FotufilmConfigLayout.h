@@ -16,6 +16,13 @@ enum {
     /// Samples per bin of the crystal grain model's developed-count table, against the record's
     /// developed density as a fraction of its range, 0...1.
     FOTUFILM_CRYSTAL_GRAIN_SAMPLES = 64,
+    /// Texels per side of the film grain model's seamless tile; a texel is a micron of film.
+    FOTUFILM_FILM_TILE_SIDE = 256,
+    /// Gross densities, D-min to D-max, the film grain model renders each record's tile at.
+    FOTUFILM_FILM_TILE_LEVELS = 17,
+    /// Side, in texels, of the film blocks that each take the tile at their own hashed offset and
+    /// orientation.
+    FOTUFILM_FILM_TILE_BLOCK = 64,
 };
 
 enum {
@@ -246,6 +253,13 @@ enum {
     /// and width of the second rise where the slow sub-layer's coarse population comes in. Mirrors
     /// `FilmStock.grainDensityProfile`; appended without renumbering earlier fields.
     FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS = 18860,
+    /// The film grain model (grain mode 3), sampled from its tiles: the pixel pitch in tile texels,
+    /// the grain amount the tiles' grain is scaled by, the id the host registered the tiles under,
+    /// each record's D-min then D-max (the range the levels span), then per record FILM_TILE_LEVELS
+    /// each of the level's mean light, the mean density a pixel of this pitch reads there, and the
+    /// correlation of its grain with the next level's at this pitch. Read only in grain mode 3;
+    /// appended without renumbering earlier fields.
+    FOTUFILM_CONFIG_FILM_TILE = 18878,
 };
 
 enum {
@@ -349,8 +363,9 @@ enum {
     FOTUFILM_CONFIG_PRINTER_PREFLASH_COUNT = 1,
     FOTUFILM_CONFIG_BYTE_BASIS_COUNT = 2,
     FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS_COUNT = 18,
+    FOTUFILM_CONFIG_FILM_TILE_COUNT = 162,
 };
 
-enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18878 };
+enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 19040 };
 
 #endif

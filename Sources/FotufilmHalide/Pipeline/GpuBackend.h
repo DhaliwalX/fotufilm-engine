@@ -5,6 +5,7 @@
 #include "../Schedule/Gpu.h"
 #include "../Graph/Frame.h"
 #include "../FotufilmCompiledCache.h"
+#include "FilmTileStore.h"
 
 #include <algorithm>
 #include <cmath>
@@ -119,6 +120,11 @@ public:
         case Store::Released:
         case Store::FlatLog:
         case Store::FlatReleased:
+            return remember(values, schedule_.store_frame(values, half, channels, branch));
+        case Store::FilmDensity:
+        case Store::FilmGrain:
+            // Density to the grain's thousandths: never half.
+            return remember(values, schedule_.store_frame(values, false, channels, branch));
         case Store::Noise:
         case Store::MottleNoise:
         case Store::CrystalCounts:

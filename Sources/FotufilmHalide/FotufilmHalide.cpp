@@ -125,6 +125,11 @@ PrintPipeline *print_pipeline_for(int32_t feature_mask) {
 
 }
 
+extern "C" int32_t fotufilm_halide_set_film_tiles(int32_t id, const float *tiles,
+                                                  int64_t count) {
+    return FilmTileStore::shared().set(id, tiles, count) ? 0 : -1;
+}
+
 extern "C" int32_t fotufilm_halide_develop(
     const float *input_r, const float *input_g, const float *input_b,
     float *output_r, float *output_g, float *output_b,
@@ -296,6 +301,8 @@ extern "C" int32_t fotufilm_halide_approximate_gaussian(
 
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_available(void) { return 0; }
 
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_set_film_tiles(
+    int32_t, const float *, int64_t) { return -1; }
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_develop(
     const float *, const float *, const float *, float *, float *, float *,
     int32_t, int32_t, const float *, const float *, int32_t, int32_t,

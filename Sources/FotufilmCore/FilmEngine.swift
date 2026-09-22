@@ -1105,10 +1105,15 @@ public struct FilmEngineInvocation {
         // field. A span or disc render with a mottle look therefore renders the
         // single-radius field at full strength rather than a quieter half of the
         // mixture.
+        // The film grain model (mode 3) lays the film's own crystals from its tiles in place of
+        // every field below, so the mixture that shapes them is not laid either.
+        let filmActive = options.grainModel == .film
+            && grainScale > 0 && stock.grainStrength > 0
         let discWillRender = options.grainModel == .discs
             && stock.grainDensityLaw == .silver
             && stock.grainSizeMM * pxPerMM >= 1
-        let mottleShare = options.stage != .full || discWillRender || crystalActive ? 0 : min(max(
+        let mottleShare = options.stage != .full || discWillRender || crystalActive || filmActive
+            ? 0 : min(max(
             options.grainMottleShare ?? stock.grainMottleShare, 0), 0.9)
         // The override clamps to the pack's own validated range, so a look can
         // never ask for a population the shipped AOT variants were not built for.
@@ -1381,7 +1386,8 @@ public struct FilmEngineInvocation {
         // is offered to every material: dye clouds and silver grains alike are what its
         // crystals form.
         if discActive || crystalActive { featureMask |= FilmEngineFeature.discGrain }
-        configuration += [crystalActive ? 2 : (discActive ? 1 : 0), discRadiusPixels]
+        configuration += [filmActive ? 3 : (crystalActive ? 2 : (discActive ? 1 : 0)),
+                          discRadiusPixels]
         configuration += Self.discAmplitudes(
             stock: stock, grainScale: grainScale, pxPerMM: pxPerMM,
             active: discActive)
@@ -1520,6 +1526,13 @@ public struct FilmEngineInvocation {
         // The byte frames' primaries, input then output: Display P3 until a road says sRGB.
         configuration += [0, 0]
         configuration += stock.grainDensityProfile.records.flatMap { $0 }
+        if filmActive {
+            let film = FilmGrain.registered(stock: stock, reference: referenceRoll)
+            configuration += film.grain.configurationBlock(pxPerMM: pxPerMM, amount: grainScale,
+                                                           id: film.id)
+        } else {
+            configuration += [Float](repeating: 0, count: Int(FOTUFILM_CONFIG_FILM_TILE_COUNT))
+        }
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0

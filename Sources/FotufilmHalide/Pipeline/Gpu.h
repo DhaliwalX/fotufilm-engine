@@ -423,6 +423,8 @@ public:
                         1, "frame_exposure_lut" + suffix),
           film_lut_(Float(32), 1, "frame_film_lut" + suffix),
           paper_lut_(Float(32), 1, "frame_paper_lut" + suffix),
+          film_tiles_(Float(32), 3, "frame_film_tiles" + suffix),
+          film_grain_("frame_film_on" + suffix),
           halation_radius_0_("frame_halation_radius_0" + suffix),
           halation_radius_1_("frame_halation_radius_1" + suffix),
           halation_radius_2_("frame_halation_radius_2" + suffix),
@@ -554,6 +556,14 @@ public:
             Expr(monochrome ? 1 : 0),
             Halide::cast<int32_t>(configuration_(FOTUFILM_CONFIG_GRAIN_MODE) + 0.5f),
             texture_, density_in_, false, light_out_, true, "frame_", suffix};
+#if !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
+        // The film grain model's tiles are a buffer of their own, which WebGPU has no binding
+        // left for; there a mode-3 frame renders the standard grain.
+        if (!packed_luts_) {
+            inputs.film_tiles = &film_tiles_;
+            inputs.film_on = film_grain_ != 0;
+        }
+#endif
         graph::Developed developed_frame = graph::build_develop(backend, inputs, x, y, channel);
         Func light = developed_frame.light;
         Func developed = developed_frame.developed;
@@ -783,7 +793,8 @@ public:
             // single FrameFunction shape.
             diffusion_stride_0_, diffusion_stride_1_, diffusion_stride_2_,
             diffusion_strided_radius_0_, diffusion_strided_radius_1_,
-            diffusion_strided_radius_2_, runtime_features_,}, gpu_target())) {
+            diffusion_strided_radius_2_, runtime_features_, film_tiles_, film_grain_,},
+            gpu_target())) {
             pipeline_.compile_jit(gpu_target());
         }
 #endif
@@ -1117,6 +1128,18 @@ private:
         exposure_lut_.set(exposure_buffer_);
         film_lut_.set(film_buffer_);
         paper_lut_.set(paper_buffer_);
+        bool film_on = false;
+        Buffer<float> tiles = FilmTileStore::shared().tiles_for(configuration, film_on);
+        if (!film_tiles_buffer_.defined() || tiles.data() != film_tiles_host_.data()) {
+            // The store's tiles are shared by every pipeline; the device copy is this one's, so
+            // it wraps the same host floats in a buffer of its own.
+            film_tiles_host_ = tiles;
+            film_tiles_buffer_ = Buffer<float>(tiles.data(), tiles.dim(0).extent(),
+                                               tiles.dim(1).extent(), tiles.dim(2).extent());
+            film_tiles_buffer_.set_host_dirty();
+        }
+        film_tiles_.set(film_tiles_buffer_);
+        film_grain_.set(film_on ? 1 : 0);
         const ResolvedFrameParams frame(configuration, width, height, seed, reversal,
                                         origin_x, origin_y);
         set_frame(frame);
@@ -1163,6 +1186,9 @@ private:
     Buffer<float> srgb_decode_ = srgb_decode_values();
     Buffer<float> srgb_encode_ = srgb_encode_values();
     ImageParam input_, configuration_, exposure_lut_, film_lut_, paper_lut_;
+    /// The film grain model's tiles (FilmTileStore), and whether this frame samples them.
+    ImageParam film_tiles_;
+    Param<int32_t> film_grain_;
     Param<int32_t> halation_radius_0_, halation_radius_1_, halation_radius_2_;
     Param<int32_t> runtime_features_;
     /// The byte frames' primaries as FOTUFILM_CONFIG_BYTE_BASIS packs them: bit 0 the input is
@@ -1174,6 +1200,9 @@ private:
     compiled_cache::Pipeline cached_;
     Buffer<> exposure_buffer_;
     Buffer<float> film_buffer_, paper_buffer_;
+    /// The film grain tiles this pipeline last read: the store's buffer, kept alive, and this
+    /// pipeline's own view of its floats, which carries the device copy.
+    Buffer<float> film_tiles_host_, film_tiles_buffer_;
     uint64_t lut_cache_id_ = 0;
     Buffer<float> extended_configuration_;
     int32_t extended_configuration_floats_ = 0;

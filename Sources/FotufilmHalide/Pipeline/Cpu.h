@@ -7,6 +7,7 @@
 #include "../Schedule/Cpu.h"
 #include "../Graph/Frame.h"
 #include "../FotufilmCompiledCache.h"
+#include "FilmTileStore.h"
 
 #include <algorithm>
 #include <cmath>
@@ -225,7 +226,9 @@ public:
           input_b_(Float(32), 2, "develop_input_b" + suffix),
           configuration_(Float(32), 1, "develop_configuration" + suffix),
           exposure_lut_(Float(32), 1, "develop_exposure_lut" + suffix),
+          film_tiles_(Float(32), 3, "develop_film_tiles" + suffix),
           grain_mode_("develop_grain_mode" + suffix),
+          film_grain_("develop_film_on" + suffix),
           monochrome_("develop_monochrome" + suffix),
           features_("develop_features" + suffix) {
         const bool texture = features & FOTUFILM_FRAME_TEXTURE;
@@ -254,6 +257,10 @@ public:
             false,
 #endif
             "develop_", suffix};
+#if !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
+        inputs.film_tiles = &film_tiles_;
+        inputs.film_on = film_grain_ != 0;
+#endif
         graph::Developed developed = graph::build_develop(backend, inputs, x, y, c);
 
         Func output = developed.developed;
@@ -285,7 +292,8 @@ public:
                 grain_mode_, mottle_radius_, mottle_lambda_,
                 diffusion_stride_0_, diffusion_stride_1_, diffusion_stride_2_,
                 diffusion_strided_radius_0_, diffusion_strided_radius_1_,
-                diffusion_strided_radius_2_, features_,}, reference_target());
+                diffusion_strided_radius_2_, features_, film_tiles_, film_grain_,},
+            reference_target());
     }
 
     /// Develops into `result`, which the caller owns.
@@ -309,6 +317,9 @@ public:
         set_frame(configuration, width, height, seed,
                   (feature_mask & FOTUFILM_FRAME_REVERSAL) != 0 ? 1 : 0, origin_x, origin_y);
         grain_mode_.set(int32_t(configuration[FOTUFILM_CONFIG_GRAIN_MODE]));
+        bool film_on = false;
+        film_tiles_.set(FilmTileStore::shared().tiles_for(configuration, film_on));
+        film_grain_.set(film_on ? 1 : 0);
         monochrome_.set((feature_mask & FOTUFILM_FRAME_MONOCHROME) != 0 ? 1 : 0);
         features_.set(feature_mask);
         if (cached_) cached_.realize(result);
@@ -355,7 +366,10 @@ public:
 
 private:
     ImageParam input_r_, input_g_, input_b_, configuration_, exposure_lut_;
+    /// The film grain model's tiles (FilmTileStore), and whether this frame samples them.
+    ImageParam film_tiles_;
     Param<int32_t> grain_mode_;
+    Param<int32_t> film_grain_;
     Param<int32_t> monochrome_;
     Param<int32_t> features_;
     Pipeline pipeline_;
