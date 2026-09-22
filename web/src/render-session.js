@@ -92,6 +92,7 @@ export class RenderSession {
     this.sources = []
     this.scenePacks = new WeakMap()
     this.closed = false
+    this.lifecycle = new AbortController()
   }
   notifyWaiting() {
     if (!this.activeWork) return
@@ -182,6 +183,10 @@ export class RenderSession {
     if (this.developer?.isAborted) this.developerReady = null
     this.developerReady ??= createBackgroundDeveloper(pack, onProgress, () =>
       this.onRendererReady?.(),
+      {
+        signal: this.lifecycle.signal,
+        onWarmupProgress: (state) => this.onWarmupProgress?.(state),
+      },
     )
       .then((developer) => {
         if (this.closed) {
@@ -196,6 +201,11 @@ export class RenderSession {
         throw error
       })
     return this.developerReady
+  }
+  async prepare(onProgress) {
+    this.onWarmupProgress = onProgress
+    const developer = await this.renderer(null)
+    return developer ? developer.gpuReady : false
   }
   async source(
     image,
@@ -733,6 +743,7 @@ export class RenderSession {
   }
   dispose() {
     this.closed = true
+    this.lifecycle.abort()
     return this.enqueue(() => {
       this.developer?.dispose()
       this.sources = []

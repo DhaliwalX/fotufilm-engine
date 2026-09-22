@@ -1,9 +1,14 @@
 import {
-  createDeveloper,
   createCpuDeveloper,
   developNormalReference,
   normalPack,
 } from "./engine.js";
+
+import {
+  prepareFilmGpu,
+  gpuFamily as family,
+  gpuCompatible,
+} from "./gpu-warmup.js";
 
 let cpu,
   gpu,
@@ -14,50 +19,19 @@ let cpu,
   nextRead = 0;
 const readyFamilies = new Set(),
   reads = new Map();
-const family = (pack) =>
-  pack.featureMask === 1 << 29
-    ? "normal"
-    : pack.featureMask & (1 << 14)
-      ? pack.featureMask & (1 << 7)
-        ? "print-monochrome"
-        : "print-color"
-      : pack.featureMask & (1 << 7)
-        ? "monochrome"
-        : "color";
-const gpuCompatible = (pack) =>
-  !pack.transport && !(pack.featureMask & (1 << 28));
-
-// Compile once per kernel family, using separate CPU/GPU heaps. CPU frames keep
-// flowing while JSPI awaits GPU compilation; never change a GPU pack mid-dispatch.
-async function warm(next) {
-  if (
-    !preferGpu ||
-    warming ||
-    !gpuCompatible(next) ||
-    readyFamilies.has(family(next))
-  )
-    return;
+// Startup owns the GPU until every family has compiled. CPU work has a separate
+// WASM heap and can continue while the GPU awaits asynchronous compilation.
+async function warm() {
   warming = true;
   try {
-    if (!gpu) gpu = await createDeveloper(next);
-    else {
-      gpu.usePack(next);
-      await gpu.probe();
-    }
-    if (gpu.backend !== "webgpu") {
-      gpu.dispose();
-      gpu = null;
-      preferGpu = false;
-    } else readyFamilies.add(family(next));
-  } catch (error) {
-    console.warn(
-      "GPU warm-up failed; continuing background CPU development:",
-      error,
+    gpu = await prepareFilmGpu(
+      (state) => self.postMessage({ kind: "warmup-progress", ...state }),
+      readyFamilies,
     );
-    gpu?.dispose();
-    gpu = null;
-    preferGpu = false;
+  } catch (error) {
+    console.warn("GPU warm-up failed; continuing on the CPU:", error);
   } finally {
+    preferGpu = !!gpu;
     warming = false;
     self.postMessage({ kind: "gpu-ready", available: !!gpu });
   }
@@ -98,7 +72,7 @@ self.onmessage = async ({ data }) => {
       preferGpu = data.preferGpu;
       await cpuFor(pack);
       self.postMessage({ kind: "ready", backend: cpu.backend });
-      if (preferGpu) void warm(pack);
+      if (preferGpu) void warm();
       else self.postMessage({ kind: "gpu-ready", available: false });
     } else if (data.kind === "develop") {
       cancelled = false;
@@ -125,7 +99,6 @@ self.onmessage = async ({ data }) => {
         developer.usePack(pack);
       } else {
         developer = await cpuFor(pack);
-        void warm(pack);
       }
       let result;
       try {

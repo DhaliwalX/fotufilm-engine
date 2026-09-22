@@ -1,0 +1,36 @@
+@layer editor {
+  .fotufilm-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .fotufilm-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+  .fotufilm-wordmark {
+    width: 100px;
+    height: 20px;
+    filter: brightness(0);
+    opacity: 0.85;
+  }
+  .fotufilm-brand-compact {
+    gap: 8px;
+  }
+  .fotufilm-brand-compact .fotufilm-logo {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+  }
+  .fotufilm-brand-compact .fotufilm-wordmark {
+    width: 80px;
+    height: 16px;
+  }
+  @media (prefers-color-scheme: dark) {
+    .fotufilm-wordmark {
+      filter: brightness(0) invert(1);
+    }
+  }
+}

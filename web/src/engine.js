@@ -1,3 +1,5 @@
+import { encodeTileInto, copyEncodedTile } from './output-encoding.js'
+export { encodeTileInto } from './output-encoding.js'
 import {
   sourceContext,
   sourcePixels,
@@ -389,11 +391,6 @@ function clamp01(v) {
   return Math.min(Math.max(v, 0), 1)
 }
 
-function linearToSrgb(v) {
-  const c = clamp01(v)
-  return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055
-}
-
 // The engine's scene side works in linear Rec.2020 — the CLI loads into
 // extendedLinearITUR_2020 — while its print comes out in Display P3, the delivery basis the
 // CLI writes tagged displayP3. Sources carry linear Rec.2020 or legacy sRGB bytes;
@@ -403,39 +400,6 @@ const SRGB_TO_2020 = [
   0.6274039, 0.329283, 0.0433131, 0.0690973, 0.9195404, 0.0113623, 0.0163914,
   0.0880133, 0.8955953,
 ]
-const P3_TO_SRGB = [
-  1.2249401, -0.2249404, 0.0, -0.0420569, 1.0420571, 0.0, -0.0196376,
-  -0.0786361, 1.0982735,
-]
-
-/// The soft clip the CLI applies before encoding, so print highlights roll off instead of
-/// clipping flat at display white.
-function displayShoulder(x) {
-  const knee = 0.9
-  if (x <= knee) return x
-  const over = x - knee
-  const room = 1 - knee
-  return knee + (room * over) / (over + room)
-}
-
-// The quantiser's own dither, ported from Math.swift: one triangular sample spanning ±1 step, so
-// a print's gradients do not band on the way to eight bits. The CLI dithers for the same reason,
-// and a print downloaded from here should not be the coarser of the two.
-function pcgHash(v) {
-  const state = (Math.imul(v, 747796405) + 2891336453) >>> 0
-  const word =
-    Math.imul((state >>> ((state >>> 28) + 4)) ^ state, 277803737) >>> 0
-  return (word >>> 22) ^ word
-}
-
-function triangularDither(index, channel, seed) {
-  const h1 = pcgHash(
-    (index ^ pcgHash((channel + Math.imul(seed, 0x9e3779b9)) >>> 0)) >>> 0,
-  )
-  const h2 = pcgHash(h1)
-  return (h1 >>> 8) / 16777216 + (h2 >>> 8) / 16777216 - 1
-}
-
 const srgbToLinearTable = new Float32Array(256)
 for (let i = 0; i < 256; ++i) srgbToLinearTable[i] = srgbToLinear(i / 255)
 
@@ -446,6 +410,10 @@ function decodeInto(destination, source, plane, stride, offsets) {
   const [o0, o1, o2] = offsets
   if (source instanceof Float32Array) {
     // RAW and EXR geometry already supply scene-linear Rec.2020; preserve that light directly.
+    if (stride === 4 && o0 === 0 && o1 === 1 && o2 === 2) {
+      destination.set(source.subarray(0, plane * 4))
+      return
+    }
     for (let p = 0; p < plane; p++) {
       destination[p * stride + o0] = source[p * 4]
       destination[p * stride + o1] = source[p * 4 + 1]
@@ -688,70 +656,6 @@ export function imageSource(image) {
   }
 }
 
-/// The print's interior of one tile, encoded for a canvas into its place in the frame. The
-/// shoulder and the clip belong to the print, so they happen in P3 where the CLI does them; only
-/// then does the result change primaries. The dither is indexed by the pixel's place in the frame,
-/// not in the tile, so how the frame was cut leaves no trace in it.
-export function encodeTileInto(
-  pixels,
-  frameWidth,
-  output,
-  tile,
-  seed,
-  stride,
-  offsets,
-  colorSpace = 'srgb',
-  destination = { x: 0, y: 0, width: frameWidth },
-) {
-  validateColorSpace(colorSpace)
-  const sixteen = pixels instanceof Uint16Array
-  const n =
-    colorSpace === 'display-p3' ? [1, 0, 0, 0, 1, 0, 0, 0, 1] : P3_TO_SRGB
-  const [o0, o1, o2] = offsets
-  const { region } = tile
-  for (let y = tile.y; y < tile.y + tile.height; ++y) {
-    for (let x = tile.x; x < tile.x + tile.width; ++x) {
-      const at = ((y - region.y) * region.width + (x - region.x)) * stride
-      const r = clamp01(displayShoulder(output[at + o0]))
-      const g = clamp01(displayShoulder(output[at + o1]))
-      const b = clamp01(displayShoulder(output[at + o2]))
-      const p = y * frameWidth + x
-      const i =
-        ((y - destination.y) * destination.width + x - destination.x) * 4
-      if (sixteen) {
-        for (let c = 0; c < 3; c++) {
-          const value = linearToSrgb(
-            n[c * 3] * r + n[c * 3 + 1] * g + n[c * 3 + 2] * b,
-          )
-          pixels[i + c] = Number.isFinite(value)
-            ? Math.round(clamp01(value) * 65535)
-            : 0
-        }
-        pixels[i + 3] = 65535
-        continue
-      }
-      // Native UInt8 conversion truncates after the half-step and dither.
-      // Uint8ClampedArray rounds instead, so floor first to avoid a second round.
-      pixels[i] = Math.floor(
-        linearToSrgb(n[0] * r + n[1] * g + n[2] * b) * 255 +
-          0.5 +
-          triangularDither(p, 0, seed),
-      )
-      pixels[i + 1] = Math.floor(
-        linearToSrgb(n[3] * r + n[4] * g + n[5] * b) * 255 +
-          0.5 +
-          triangularDither(p, 1, seed),
-      )
-      pixels[i + 2] = Math.floor(
-        linearToSrgb(n[6] * r + n[7] * g + n[8] * b) * 255 +
-          0.5 +
-          triangularDither(p, 2, seed),
-      )
-      pixels[i + 3] = 255
-    }
-  }
-}
-
 /// What the two paths share: a pack, a frame size, and the way a frame is cut into tiles and
 /// developed one at a time. A subclass owns the wasm-side buffers in its kernel's own layout and
 /// runs the kernel over one region.
@@ -912,8 +816,8 @@ class Developer {
   }
 
   /// Develops one frame. `source` is a `pixelSource` or `imageSource` at the frame's size; the
-  /// result is encoded RGBA8 or RGBA16 in the requested delivery color space. `elapsed` is the kernels' own time, summed over the
-  /// tiles; the conversions at either end are not in it.
+  /// Result is RGBA8 or RGBA16 in the delivery color space. `elapsed` sums backend
+  /// calls: GPU film, display encoding and readback, or CPU film processing.
   async develop(
     source,
     controls,
@@ -921,6 +825,7 @@ class Developer {
     stale = () => false,
     { bitDepth = 8, colorSpace = 'srgb', region = null, toneGrid = null } = {},
   ) {
+    validateColorSpace(colorSpace)
     if (
       source.width !== this.width ||
       source.height !== this.height ||
@@ -978,24 +883,33 @@ class Developer {
       )
       if (stale()) return null
       const started = performance.now()
-      const status = await this.run(region)
+      const status = await this.run(region, { bitDepth, colorSpace })
       elapsed += performance.now() - started
       if (status === -2)
         throw new Error('no kernel was built for this stock at this size')
       if (status !== 0) throw new Error(`engine returned ${status}`)
       // Read the heap after the call, not before: the module can grow its memory mid-render,
       // which detaches any view taken earlier.
-      encodeTileInto(
-        pixels,
-        this.width,
-        this.regionOutput(region),
-        tile,
-        this.seed,
-        this.outputStride,
-        this.outputOffsets(region),
-        colorSpace,
-        destination,
-      )
+      if (this.encodedRegion) {
+        copyEncodedTile(
+          pixels,
+          this.encodedRegion(region, bitDepth),
+          tile,
+          destination,
+        )
+      } else {
+        encodeTileInto(
+          pixels,
+          this.width,
+          this.regionOutput(region),
+          tile,
+          this.seed,
+          this.outputStride,
+          this.outputOffsets(region),
+          colorSpace,
+          destination,
+        )
+      }
       if (t + 1 < this.tiles.length) await yieldToBrowser()
     }
     return { pixels, elapsed }
@@ -1050,6 +964,12 @@ export class WebgpuDeveloper extends Developer {
       ],
       { async: true },
     )
+    this.renderDisplayCall = module.cwrap(
+      'fotufilm_wasm_render_display',
+      'number',
+      Array(14).fill('number'),
+      { async: true },
+    )
   }
 
   uploadTables(pack) {
@@ -1069,13 +989,16 @@ export class WebgpuDeveloper extends Developer {
   allocateFrame(pixels) {
     this.inputPtr = this.module._malloc(pixels * 4 * 4)
     this.outputPtr = this.module._malloc(pixels * 4 * 4)
+    this.displayPtr = this.module._malloc(pixels * 4 * 2)
   }
 
   freeFrame() {
     if (this.inputPtr) this.module._free(this.inputPtr)
     if (this.outputPtr) this.module._free(this.outputPtr)
+    if (this.displayPtr) this.module._free(this.displayPtr)
     this.inputPtr = 0
     this.outputPtr = 0
+    this.displayPtr = 0
   }
 
   disposeTables() {
@@ -1097,8 +1020,8 @@ export class WebgpuDeveloper extends Developer {
     )
   }
 
-  run(region) {
-    return this.renderCall(
+  run(region, delivery) {
+    const args = [
       this.inputPtr,
       this.outputPtr,
       region.width,
@@ -1109,6 +1032,23 @@ export class WebgpuDeveloper extends Developer {
       this.exposurePtr,
       this.featureMask,
       this.seed,
+    ]
+    if (!delivery) return this.renderCall(...args)
+    return this.renderDisplayCall(
+      ...args,
+      this.displayPtr,
+      delivery.bitDepth,
+      delivery.colorSpace === 'display-p3' ? 1 : 0,
+      this.width,
+    )
+  }
+
+  encodedRegion(region, bitDepth) {
+    const ArrayType = bitDepth === 16 ? Uint16Array : Uint8Array
+    return new ArrayType(
+      this.module.HEAPF32.buffer,
+      this.displayPtr,
+      region.width * region.height * 4,
     )
   }
 
@@ -1124,21 +1064,16 @@ export class WebgpuDeveloper extends Developer {
     return [0, 1, 2]
   }
 
-  /// Develops a small frame to find out whether this adapter can actually run the kernel.
-  ///
-  /// Feature detection cannot answer that. `navigator.gpu` only says the API exists; whether the
-  /// combine kernel fits inside the adapter's per-stage storage-buffer budget is not known until
-  /// a compute pipeline is created, and the runtime aborts the module when it is not. So the
-  /// caller confirms the path by walking a few metres of it, and discards the module if it ends.
-  /// It is also where the kernels are compiled, once per page: the first frame after this is
-  /// as quick as every frame after it.
-  async probe() {
-    const side = 16
-    const grey = new Uint8ClampedArray(side * side * 4).fill(118)
+  // Exercise real dispatches: loading WASM alone does not compile GPU pipelines.
+  async probe({ width = 16, height = 16, bitDepth = 8 } = {}) {
+    const grey = new Uint8ClampedArray(width * height * 4).fill(118)
     for (let i = 3; i < grey.length; i += 4) grey[i] = 255
     await this.develop(
-      pixelSource({ data: grey, width: side, height: side }),
-      {},
+      pixelSource({ data: grey, width, height }),
+      { grain: 1 },
+      undefined,
+      undefined,
+      { bitDepth },
     )
   }
 }

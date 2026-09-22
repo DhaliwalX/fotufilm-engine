@@ -17,6 +17,7 @@ using namespace fotufilm::gpu;
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include "generate_webgpu_display.h"
 
 namespace {
 
@@ -28,7 +29,9 @@ Halide::Target wasm_target(bool webgpu) {
     target.os = Halide::Target::WebAssemblyRuntime;
     target.arch = Halide::Target::WebAssembly;
     target.bits = 32;
-    target.set_feature(Halide::Target::StrictFloat);
+    // The browser GPU uses native float32, as Metal does. Keep the CPU
+    // reference strict and verify GPU output with the image-quality harness.
+    if (!webgpu) target.set_feature(Halide::Target::StrictFloat);
     if (webgpu) {
         target.set_feature(Halide::Target::WebGPU);
         // No WasmMvpOnly here. It used to be needed because Halide's WebGPU runtime wanted the
@@ -117,5 +120,6 @@ int main(int argc, char **argv) {
             ++failures;
         }
     }
+    if (webgpu && failures == 0) generate_webgpu_display(output, target);
     return failures == 0 ? 0 : 1;
 }

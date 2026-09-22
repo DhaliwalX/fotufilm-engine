@@ -1,0 +1,23 @@
+Start both error-scope futures before waiting, preserving error checks and callback lifetimes.
+
+--- a/src/runtime/webgpu.cpp
++++ b/src/runtime/webgpu.cpp
+@@ -201,15 +201,14 @@
+         callbackInfo.callback = error_callback;
+         callbackInfo.userdata1 = this;
+ 
+-        // Pop and wait for each error scope separately (LIFO order).
+-        // First pop the OOM scope (pushed second).
++        // Start both callbacks before waiting. Their LIFO order is preserved,
++        // but the browser can resolve validation and OOM in the same turn.
+         WGPUFuture future1 = wgpuDevicePopErrorScope(device, callbackInfo);
++        WGPUFuture future2 = wgpuDevicePopErrorScope(device, callbackInfo);
+         WGPUFutureWaitInfo wait_info1 = WGPU_FUTURE_WAIT_INFO_INIT;
+         wait_info1.future = future1;
+         wgpuInstanceWaitAny(instance, 1, &wait_info1, UINT64_MAX);
+ 
+-        // Then pop the validation scope (pushed first).
+-        WGPUFuture future2 = wgpuDevicePopErrorScope(device, callbackInfo);
+         WGPUFutureWaitInfo wait_info2 = WGPU_FUTURE_WAIT_INFO_INIT;
+         wait_info2.future = future2;
+         wgpuInstanceWaitAny(instance, 1, &wait_info2, UINT64_MAX);

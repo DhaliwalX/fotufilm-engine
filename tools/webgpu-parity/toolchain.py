@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject WebGPU compilers built without the current strict-float implementation."""
+"""Reject WebGPU compilers built without the current compiler and runtime patches."""
 
 import argparse
 import hashlib
@@ -13,8 +13,8 @@ def main():
     parser.add_argument("prefix", type=Path)
     args = parser.parse_args()
     tools = Path(__file__).resolve().parent.parent
-    sources = [tools / "halide-webgpu-strict-float.patch",
-               tools / "webgpu-parity/reference-math.wgsl"]
+    sources = sorted(tools.glob("halide-webgpu-*.patch"))
+    sources.append(tools / "webgpu-parity/reference-math.wgsl")
     expected = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}
     stamp = args.prefix / "share/fotufilm/strict-float.json"
     if args.mode == "write":
@@ -26,7 +26,7 @@ def main():
     except (OSError, ValueError):
         matches = False
     if not matches:
-        parser.exit(1, "WebGPU Halide lacks the current strict-float implementation. "
+        parser.exit(1, "WebGPU Halide has missing or stale compiler/runtime patches. "
                     "Rebuild it with tools/build-halide.sh --webgpu.\n")
 
 

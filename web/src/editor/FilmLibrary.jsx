@@ -1,3 +1,4 @@
+import PanelDismissButton from "./PanelDismissButton.jsx";
 import { ToggleButton } from "@react-spectrum/s2/ToggleButton";
 import { SearchField } from "@react-spectrum/s2/SearchField";
 import { Icon } from "../icons.jsx";
@@ -5,6 +6,8 @@ import { StockRow } from "./StockRow.jsx";
 import { useEditor } from "./EditorContext.jsx";
 export default function FilmLibrary() {
   const {
+    compactLayout,
+    filmOpen,
     exporting,
     stocks,
     search,
@@ -16,15 +19,21 @@ export default function FilmLibrary() {
     session,
   } = useEditor();
   return (
-    <aside className="film-sidebar" aria-label="Film library" inert={exporting}>
+    <aside
+      className="film-sidebar"
+      aria-label="Film library"
+      inert={exporting || (compactLayout && !filmOpen)}
+      aria-hidden={compactLayout && !filmOpen}
+    >
       <div className="sidebar-heading">
         <span>Film</span>
         <small>{stocks.length}</small>
+        <PanelDismissButton panel="film" />
       </div>
       <div className="search-field">
         <SearchField
           aria-label="Search films"
-          size="S"
+          size={compactLayout ? "L" : "S"}
           placeholder="Search films"
           value={search}
           onChange={setSearch}

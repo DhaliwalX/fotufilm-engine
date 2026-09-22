@@ -1,4 +1,5 @@
-import { useRef, useEffect, useCallback } from "react";
+import { prepareEditor } from "./prepare-editor.js";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { RenderSession, loadStockIndex } from "../render-session.js";
 import { PreviewQueue } from "../preview-queue.js";
 export default function useRendererLifecycle({
@@ -25,6 +26,11 @@ export default function useRendererLifecycle({
   history,
   setResult,
 }) {
+  const [startupProgress, setStartupProgress] = useState({
+    value: 0,
+    label: "Loading image engine",
+    done: false,
+  });
   const alive = useRef(false);
   const previewQueue = useRef(null);
   const lastRenderedPreview = useRef(null);
@@ -48,7 +54,16 @@ export default function useRendererLifecycle({
       if (alive.current && !currentPreview.current?.exporting) setStatus(text);
     });
     setSession(renderer);
+    let cancelled = false;
+    // Defer one task so React's development remount does not start two engines.
+    const startup = setTimeout(() => {
+      void prepareEditor(renderer, (state) => {
+        if (!cancelled) setStartupProgress(state);
+      });
+    }, 0);
     return () => {
+      cancelled = true;
+      clearTimeout(startup);
       alive.current = false;
       previewQueue.current.close();
       renderer.dispose();
@@ -97,6 +112,7 @@ export default function useRendererLifecycle({
     });
   }, []);
   return {
+    startupProgress,
     alive,
     previewQueue,
     lastRenderedPreview,

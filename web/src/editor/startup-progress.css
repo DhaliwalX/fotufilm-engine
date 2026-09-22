@@ -1,0 +1,29 @@
+@layer editor {
+  .startup-progress {
+    position: absolute;
+    bottom: 84px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    width: min(280px, calc(100% - 48px));
+    padding: 14px 18px;
+    border-radius: 12px;
+    background: var(--panel);
+    box-shadow: 0 4px 24px #0000000c;
+    pointer-events: none;
+  }
+  .startup-progress .fotufilm-brand {
+    margin-bottom: 14px;
+  }
+  .startup-progress [role="progressbar"] {
+    width: 100%;
+  }
+  .startup-progress [role="progressbar"] > div:last-child > div {
+    transition: width 240ms ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .startup-progress [role="progressbar"] > div:last-child > div {
+      transition: none;
+    }
+  }
+}

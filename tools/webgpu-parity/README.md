@@ -1,6 +1,6 @@
 # CPU / WebGPU parity diagnostics
 
-These probes compare output bits in the same float32 format. They require an actual
+The arithmetic probes compare output bits in the same float32 format. They require an actual
 WebGPU device and do not count a CPU fallback as GPU coverage. Generated modules,
 compiler output and reports belong in ignored build directories.
 
@@ -36,9 +36,29 @@ The polynomial translation includes its upstream Halide license. A toolchain sta
 records the shader and compiler patch hashes; the build rejects a missing or stale
 stamp instead of silently using ordinary WGSL arithmetic.
 
-After building the actual engine and packs with `tools/build-wasm.sh`, open
-`/test/parity.html?revision=build-name&grain=0` to compare a synthetic linear RGB
-scene at every stage, before display transforms. `stocks=all`, `grain=1`,
+See [performance measurements and reproduction](../webgpu-performance.md) for the
+production renderer and its native comparison.
+
+The production WebGPU engine uses hardware float32 arithmetic, matching the native GPU
+precision model. It is not bit-identical to the strict CPU reference. Run its image
+quality checks with a development server:
+
+```sh
+node tools/test-webgpu-quality.mjs \
+  "http://127.0.0.1:5173/test/quality.html?stocks=all" build/webgpu-quality.json
+```
+
+This checks scene-linear output plus 8-bit and 16-bit delivery, including grain,
+three exposures, sRGB and Display P3. Limits are in `web/test/quality/metrics.js`.
+The test requires a real GPU and reports failure without using a CPU fallback.
+Use `width` and `height` to exercise other dimensions. Generated reports stay in
+`build/`; the test pages are excluded from the published app.
+
+For bit-level diagnostics after building the actual engine and packs, open
+`/test/parity.html?revision=build-name&grain=0` to inspect differences in a synthetic linear RGB
+scene at every stage, before display transforms. A production hardware-float GPU
+build is expected to differ in bits; use the image-quality check for its pass/fail
+criteria. `stocks=all`, `grain=1`,
 `width`, `height`, and `exposure` vary the coverage. `medium=all` compares every
 available output medium for the selected stocks; a medium ID selects just that
 output. `scene=exr` uses the bundled scene-linear EXR at its original dimensions
