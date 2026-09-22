@@ -32,6 +32,24 @@ HEADERS = {"HalideBuffer.h", "HalideRuntime.h", "HalideRuntimeMetal.h"}
 NOTICES = {"LICENSE.txt", "HALIDE-LICENSE.txt"}
 MANIFEST = "aot-manifest.json"
 GENERATED = re.compile(r"fotufilm_halide_ios_[a-z0-9_]+\.(?:a|h)\Z")
+# Supplemental pipelines compiled by --extras, beyond the registered frame variants.
+# Name them explicitly so a missing helper cannot be hidden by an unrelated archive.
+EXTRA_ARCHIVES = {f"fotufilm_halide_ios_{name}.a" for name in (
+    "measure_tone", "measure_flare", "measure_flare_fast", "decode", "decode_realtime",
+    "halation_fields", "negative_cpu", "negative_metal",
+)}
+
+
+def validate_generated_archives(contents: dict, frame_count: int) -> int:
+    archives = {name for name in contents if name.endswith(".a")}
+    missing = EXTRA_ARCHIVES - archives
+    count = frame_count + len(EXTRA_ARCHIVES)
+    if missing or len(archives) != count:
+        raise ValueError(f"Generated AOT set is incomplete: expected {count} archives, "
+                         f"found {len(archives)}; missing helpers: {sorted(missing)}")
+    return count
+
+
 PRIVATE_PATH = re.compile(rb"/(?:Users|home|Volumes)/[^/\s\x00]+/|/private/var/folders/")
 
 
@@ -236,9 +254,8 @@ def package(record: dict, source: Path, directory: Path) -> None:
                 if p.is_file() and (GENERATED.fullmatch(p.name) or p.name in HEADERS)}
     contents["LICENSE.txt"] = (ROOT / "LICENSE").read_bytes()
     contents["HALIDE-LICENSE.txt"] = (ROOT / "third_party/Halide/LICENSE.txt").read_bytes()
-    count = int(run(str(source.resolve() / "generate-halide-aot"), str(source), "--count")) + 6
-    if sum(name.endswith(".a") for name in contents) != count:
-        raise ValueError("Generated AOT set is incomplete")
+    count = validate_generated_archives(contents, int(run(
+        str(source.resolve() / "generate-halide-aot"), str(source), "--count")))
     for name, data in contents.items():
         if PRIVATE_PATH.search(data):
             raise ValueError(f"AOT privacy audit found a local build path in {name}")
