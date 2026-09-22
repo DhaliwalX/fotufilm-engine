@@ -1423,7 +1423,11 @@ enum VideoPipeline {
                         }
                         let job = DevelopJob()
                         let index = frameIndex
-                        job.item = DispatchWorkItem { [job] in
+                        // Pending owns the job until its work is drained, including failure
+                        // and cancellation. A strong capture would retain the renderer and
+                        // frame buffers through a job → work item → job cycle.
+                        job.item = DispatchWorkItem { [weak job] in
+                            guard let job else { return }
                             if let pause,
                                !pause.waitUntilResumed(isCancelled: isCancelled) {
                                 job.cancelled = true
