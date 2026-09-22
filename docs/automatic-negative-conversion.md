@@ -26,7 +26,7 @@ film-stock curves are not a substitute for that calibration. The existing explic
 
 `AutomaticNegativeScan` analyses a preview no larger than 512 pixels per side. The
 central 80% excludes ordinary edge holders; this is a fixed region, not automatic
-frame detection. It excludes nonfinite/nonpositive RGB triplets and uses each
+frame detection. It excludes nonfinite, unbounded or wholly nonpositive RGB triplets and uses each
 channel's fifth and ninety-fifth percentiles. Those values describe the **scene's
 usable transmission range**, not a recovered physical film base.
 
@@ -40,8 +40,13 @@ film development is applied.
 
 Flat channels (less than 2% relative transmission range) receive a neutral midtone
 instead of amplifying noise. The analysis reports limited range for review.
-Nonpositive or nonfinite pixel triplets render black. Monochrome uses the green
-capture channel. Full-resolution processing reuses one analysis across all tiles;
+Colour-managed wide-gamut inputs can have a zero or negative channel in extended
+sRGB. These channels are clamped individually to zero for this approximate inversion;
+the other channels remain usable. Analysis uses the same clamping, so crossing a
+gamut boundary does not create black speckles. This does not recover colour detail
+clipped in the scan. Only wholly nonpositive, nonfinite or unbounded triplets render
+black. The calibrated density API retains its stricter measurement validation.
+Monochrome uses the green capture channel. Full-resolution processing reuses one analysis across all tiles;
 zoom and preview resolution do not recompute the balance.
 
 The same stage compiles to native CPU/Metal, Apple AOT CPU/Metal, and browser

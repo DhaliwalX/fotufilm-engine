@@ -3,6 +3,14 @@
 #include "Transfer.h"
 
 namespace fotufilm {
+// Extended colour-managed RGB can contain negative or clipped channels. Those
+// are not an invalid pixel: the automatic heuristic clamps each channel at zero.
+// Only nonfinite/unbounded samples and wholly unlit triplets are discarded.
+inline Halide::Expr negative_scan_valid(Halide::Expr r, Halide::Expr g, Halide::Expr b) {
+    using namespace Halide;
+    return r > -1e20f && r < 1e20f && g > -1e20f && g < 1e20f &&
+           b > -1e20f && b < 1e20f && max(r, max(g, b)) > 0.0f;
+}
 // Independent adaptation of Lin & Tretter, PICS 1998, pp. 399–404.
 // Robust endpoints come from one whole-frame preview, never from each render tile.
 // See docs/automatic-negative-conversion.md for equations, defaults and limitations.

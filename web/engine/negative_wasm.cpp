@@ -8,7 +8,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE int negative_convert(float *input, float *output
         || width > 2048 || height > 2048) return -1;
     for (int c = 0; c < 3; ++c)
         if (!std::isfinite(parameters[c]) || !std::isfinite(parameters[c+3])
-            || parameters[c] <= 0 || parameters[c+3] < parameters[c]) return -1;
+            || parameters[c] < 0 || parameters[c+3] < parameters[c]) return -1;
     if (!std::isfinite(parameters[6]) || parameters[6] < .1f || parameters[6] > 2
         || !std::isfinite(parameters[7])) return -1;
     halide_dimension_t dims[] = {{0,width,1,0}, {0,height,width,0}, {0,3,width*height,0}};

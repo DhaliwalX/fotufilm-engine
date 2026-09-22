@@ -9,7 +9,7 @@ try {
   const page = await browser.newPage()
   const errors = []; page.on('pageerror', e => errors.push(e.message))
   await page.goto(process.argv[2] || 'http://127.0.0.1:5173/')
-  await expect(page.locator('.viewer-status > [role=status]')).toContainText(/\d+ × \d+/)
+  await expect(page.getByRole('button',{name:'More options',exact:true})).toBeVisible()
   for (const kind of ['color','mono']) {
     const fixture = JSON.parse(await readFile(new URL(`../build/negative-reference/automatic-${kind}.json`,import.meta.url),'utf8'))
     const report = await page.evaluate(async fixture => {
