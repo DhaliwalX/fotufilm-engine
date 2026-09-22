@@ -928,11 +928,24 @@ enum VideoPipeline {
         }
     }
 
+    /// A prepared full-resolution renderer. Input is scene-linear Rec.2020 RGBA Float32;
+    /// output is linear Display P3 print RGBA Float32, before SDR/HDR delivery. Calls may
+    /// overlap up to the factory's slot count and must finish GPU writes before returning.
+    protocol FrameRenderer: AnyObject, Sendable {
+        func process(input: MTLBuffer, output: MTLBuffer, frameIndex: UInt64) -> Bool
+    }
+
+    typealias FrameRendererFactory = @Sendable (
+        _ device: MTLDevice, _ stock: FilmStock, _ options: FotufilmEngine.Options,
+        _ width: Int, _ height: Int, _ slots: Int
+    ) throws -> any FrameRenderer
+
     static func export(
         from asset: AVAsset, to outputURL: URL,
         stock: FilmStock, options: FotufilmEngine.Options,
         longEdge: Int? = nil,
         developLongEdge: Int? = nil,
+        frameRendererFactory: FrameRendererFactory? = nil,
         frameRate: Int? = nil,
         fileType: AVFileType = .mov,
         codec: ExportCodec? = nil,
@@ -992,7 +1005,8 @@ enum VideoPipeline {
             ? VideoSourceColor.colorManagedSDR
             : VideoSourceColor.tagged(in: sourceFormats)
         let road = VideoDecodeDepth.road(
-            hdr: hdr || outputCodec.isProRes || outputCodec.usesTenBit420,
+            hdr: hdr || outputCodec.isProRes || outputCodec.usesTenBit420
+                || frameRendererFactory != nil,
             log: sourceEncoding.requiresExplicitDecode,
             sourceHDR: sourceColor.isHDR, sourceFormats: sourceFormats)
         let deepInput = road.deepInput
@@ -1042,8 +1056,10 @@ enum VideoPipeline {
             }
         }
 
-        engine.prepare(stock: stock, options: options,
-                       frameWidth: developWidth, frameHeight: developHeight)
+        if frameRendererFactory == nil {
+            engine.prepare(stock: stock, options: options,
+                           frameWidth: developWidth, frameHeight: developHeight)
+        }
 
         guard let metal = MTLCreateSystemDefaultDevice() else {
             throw Failure.engineUnavailable
@@ -1096,6 +1112,8 @@ enum VideoPipeline {
             ? max(2, min(wantedSlots, affordableSlots))
             : min(wantedSlots, affordableSlots)
         #endif
+        let frameRenderer = try frameRendererFactory?(
+            metal, stock, options, developWidth, developHeight, pipelineSlots)
         var gpuInputs: [MTLBuffer] = []
         var gpuOutputs: [MTLBuffer] = []
         let frameBytes = frameBytesForSlot
@@ -1405,10 +1423,20 @@ enum VideoPipeline {
                         }
                         let job = DevelopJob()
                         let index = frameIndex
-                        job.item = DispatchWorkItem { [job] in
+                        // Pending owns the job until its work is drained, including failure
+                        // and cancellation. A strong capture would retain the renderer and
+                        // frame buffers through a job → work item → job cycle.
+                        job.item = DispatchWorkItem { [weak job] in
+                            guard let job else { return }
                             if let pause,
                                !pause.waitUntilResumed(isCancelled: isCancelled) {
                                 job.cancelled = true
+                                return
+                            }
+                            if let frameRenderer {
+                                job.ok = frameRenderer.process(
+                                    input: gpuInputs[slot], output: gpuOutputs[slot],
+                                    frameIndex: index)
                                 return
                             }
                             if let densitySmall {
