@@ -270,7 +270,7 @@ final class AppSettings: ObservableObject {
         #endif
     }
 
-    /// Whether a clip develops at its own resolution or at the fast path's internal 1080p.
+    /// Selects the platform's full-detail or accelerated video renderer.
     enum VideoDevelopQuality: String, CaseIterable, Identifiable, Sendable {
         case full, fast
 
@@ -293,7 +293,15 @@ final class AppSettings: ObservableObject {
 
     nonisolated static var storedVideoDevelopQuality: VideoDevelopQuality {
         UserDefaults.standard.string(forKey: Key.videoDevelopQuality)
-            .flatMap(VideoDevelopQuality.init(rawValue:)) ?? .full
+            .flatMap(VideoDevelopQuality.init(rawValue:)) ?? defaultVideoDevelopQuality
+    }
+
+    nonisolated static var defaultVideoDevelopQuality: VideoDevelopQuality {
+        #if os(iOS)
+        return .fast
+        #else
+        return .full
+        #endif
     }
 
     /// What a developed clip is allowed to spend per pixel.
