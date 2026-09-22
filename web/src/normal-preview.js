@@ -1,8 +1,9 @@
 import { preferredCanvasColorSpace } from "./canvas-color.js";
 import { createBackgroundDeveloper } from "./background-developer.js";
+import { developNormalReference } from "./engine.js";
 
-// The small import placeholder uses a short-lived CPU worker. The editing session
-// owns GPU warm-up and the final preview, so importing never compiles duplicate shaders.
+// Import placeholders use the bounded scene-linear reference, without another
+// WASM heap. The editing session owns GPU preparation and the final preview.
 export async function developImportPreview(
   source,
   controls,
@@ -10,28 +11,35 @@ export async function developImportPreview(
 ) {
   if (signal?.aborted)
     throw new DOMException("Import cancelled.", "AbortError");
-  const developer = await createBackgroundDeveloper(
-    null,
-    onProgress,
-    () => {},
-    { preferGpu: false },
-  );
-  const cancel = () => developer.dispose();
-  signal?.addEventListener("abort", cancel, { once: true });
+  let developer, result;
+  const colorSpace = preferredCanvasColorSpace();
+  const stale = () => !!signal?.aborted;
   try {
-    const colorSpace = preferredCanvasColorSpace();
-    const result = await developer.develop(
-      source,
-      controls,
-      onProgress,
-      () => !!signal?.aborted,
-      { colorSpace },
-    );
-    if (!result || signal?.aborted)
+    developer = await createBackgroundDeveloper(null, onProgress, () => {}, {
+      previewOnly: true,
+      signal,
+    });
+    if (!developer || stale())
       throw new DOMException("Import cancelled.", "AbortError");
-    return { ...result, colorSpace };
+    result = await developer.develop(source, controls, onProgress, stale, {
+      colorSpace,
+    });
+  } catch (error) {
+    developer?.dispose();
+    if (stale() || error.name === "AbortError") throw error;
+    // A worker failure must not discard pixels already decoded successfully.
+    // The same transform yields between bounded strips when run on the UI thread.
+    console.warn(
+      "Import preview worker unavailable; preparing in strips:",
+      error,
+    );
+    result = await developNormalReference(source, controls, onProgress, stale, {
+      colorSpace,
+    });
   } finally {
-    signal?.removeEventListener("abort", cancel);
-    developer.dispose();
+    developer?.dispose();
   }
+  if (!result || stale())
+    throw new DOMException("Import cancelled.", "AbortError");
+  return { ...result, colorSpace };
 }

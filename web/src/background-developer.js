@@ -154,7 +154,9 @@ export async function createBackgroundDeveloper(
   worker.start({
     kind: "initialize",
     pack,
+    previewOnly: options.previewOnly === true,
     preferGpu:
+      !options.previewOnly &&
       options.preferGpu !== false &&
       supportsWebgpuRuntime(navigator.gpu, WebAssembly),
   });
