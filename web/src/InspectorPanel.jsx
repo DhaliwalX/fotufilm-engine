@@ -1,9 +1,13 @@
-import "./motion.css";
+import { AnimatePresence, motion } from "motion/react";
 import { useLayoutEffect, useRef } from "react";
 
-// A panel owns its scroll position; changing tools never moves keyboard focus.
-// The keyed content animates only when changing panels, not while editing a value.
-export default function InspectorPanel({ panel, label, disabled, children }) {
+export default function InspectorPanel({
+  panel,
+  contentKey = panel,
+  label,
+  disabled,
+  children,
+}) {
   const container = useRef(null);
   const positions = useRef(new Map());
   useLayoutEffect(() => {
@@ -13,20 +17,25 @@ export default function InspectorPanel({ panel, label, disabled, children }) {
     <div
       id="inspector-content"
       className="inspector-content"
-      role="tabpanel"
+      role="region"
       aria-label={label}
       ref={container}
       onScroll={(event) =>
         positions.current.set(panel, event.currentTarget.scrollTop)
       }
     >
-      <fieldset
-        key={panel}
-        className="inspector-panel-enter motion-panel-enter"
-        disabled={disabled}
-      >
-        {children}
-      </fieldset>
+      <AnimatePresence initial={false} mode="wait">
+        <motion.fieldset
+          key={contentKey}
+          disabled={disabled}
+          initial={{ opacity: 0, y: 3 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -3 }}
+          transition={{ duration: 0.12 }}
+        >
+          {children}
+        </motion.fieldset>
+      </AnimatePresence>
     </div>
   );
 }

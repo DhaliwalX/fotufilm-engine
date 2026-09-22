@@ -1,0 +1,47 @@
+@layer editor {
+  .toolbar {
+    grid-column: 1/-1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 10px;
+
+    background: var(--panel);
+    z-index: 4;
+  }
+  .toolbar-leading,
+  .toolbar-zoom,
+  .toolbar-trailing {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .toolbar-leading {
+    min-width: 224px;
+    flex-shrink: 0;
+  }
+  .app-name {
+    font-weight: 600;
+    font-size: 13px;
+    margin: 0 auto 0 7px;
+  }
+  .toolbar-divider {
+    height: 19px;
+    width: 1px;
+    background: var(--border);
+    margin: 0 5px;
+  }
+  .zoom-readout {
+    font-variant-numeric: tabular-nums;
+    width: 42px;
+    text-align: center;
+  }
+  .pixel-readout {
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    min-width: 46px;
+    margin-left: 6px;
+    font-size: 11px;
+  }
+}

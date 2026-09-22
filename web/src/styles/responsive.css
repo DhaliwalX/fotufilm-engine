@@ -1,0 +1,133 @@
+@layer editor {
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color: #e2e3e6;
+      background: #202124;
+      --panel: #292a2d;
+      --border: #3d3f43;
+      --muted: #a0a3aa;
+      --accent: #8aaefa;
+      --selected: #364761;
+      --field: #3d3f44;
+      --canvas: #202124;
+    }
+    .stock-thumb {
+      background: #ffffff08;
+    }
+    .error-banner {
+      background: #402d2a;
+      border-color: #765045;
+      color: #f0c6b9;
+    }
+    .drop-label {
+      background: #253754ed;
+    }
+  }
+  @media (min-width: 834px) and (max-width: 1009px) {
+    .editor {
+      grid-template-columns: 60px minmax(0, 1fr) 330px;
+    }
+    .editor.inspector-collapsed {
+      grid-template-columns: 60px minmax(0, 1fr) 46px;
+    }
+    .sidebar-heading,
+    .search-field,
+    .stock-copy,
+    .stock-row > svg {
+      display: none;
+    }
+    .stock-list {
+      padding: 9px 5px;
+    }
+    .stock-row {
+      padding: 3px;
+    }
+    .stock-thumb {
+      width: 44px;
+      height: 44px;
+    }
+    .toolbar-leading {
+      min-width: 0;
+    }
+    .pixel-readout {
+      display: none;
+    }
+  }
+  @media (max-width: 833px) {
+    .editor,
+    .editor.film-collapsed,
+    .editor.inspector-collapsed,
+    .editor.film-collapsed.inspector-collapsed {
+      grid-template-columns: minmax(0, 1fr) 46px;
+      grid-template-rows: 52px minmax(0, 1fr);
+    }
+    .toolbar {
+      gap: 4px;
+      padding: 0 5px;
+    }
+    .toolbar-leading {
+      min-width: 0;
+    }
+    .app-name,
+    .pixel-readout {
+      display: none;
+    }
+    .viewer {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+    .inspector,
+    .film-sidebar {
+      position: absolute;
+      top: 52px;
+      bottom: 0;
+      z-index: 6;
+      max-width: calc(100vw - 46px);
+      box-shadow: 0 0 20px #0002;
+    }
+    .inspector {
+      right: 0;
+      width: 330px;
+    }
+    .film-sidebar {
+      left: 0;
+      width: 236px;
+    }
+    .inspector-rail {
+      grid-column: 2;
+      z-index: 3;
+    }
+    .inspector-collapsed .viewer {
+      grid-column: 1;
+    }
+    .viewer-status .document-name,
+    .backend-label {
+      display: none;
+    }
+  }
+  @media (max-width: 620px) {
+    .toolbar-zoom {
+      display: none;
+    }
+    .toolbar-divider {
+      margin: 0 2px;
+    }
+    .empty-canvas {
+      padding: 18px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      scroll-behavior: auto !important;
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .viewport-detail {
+      animation: viewport-detail-appear 120ms ease-out;
+    }
+  }
+}

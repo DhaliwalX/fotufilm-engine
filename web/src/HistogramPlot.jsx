@@ -127,7 +127,7 @@ export default function HistogramPlot({
         bottom = height - 3 - 3 * visibility;
       const x = (i) => left + (i / 255) * (right - left),
         y = (v) => bottom - v * (bottom - top);
-      ctx.font = "10px -apple-system, sans-serif";
+      ctx.font = `10px ${getComputedStyle(canvas).fontFamily}`;
       ctx.textAlign = "right";
       ctx.textBaseline = "middle";
       ctx.globalAlpha = visibility;

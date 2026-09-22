@@ -1,39 +1,30 @@
-.fitted-filter {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.fitted-filter-choice {
-  flex: 1;
-  min-width: 0;
-}
-.filter-kind {
-  color: var(--muted);
-  font-size: 10px;
-}
-.filter-actions {
-  display: flex;
-  gap: 2px;
-  flex-shrink: 0;
-}
-.filter-actions button {
-  min-width: 18px;
-  width: 18px;
-  height: 22px;
-  padding: 0;
-  transition:
-    background-color 120ms ease,
-    color 120ms ease;
-}
-.filter-up svg {
-  transform: rotate(180deg);
-}
-.filter-note {
-  white-space: pre-line;
-}
-@media (prefers-reduced-motion: reduce) {
-  .filter-actions button {
-    transition: none;
+@layer editor {
+  .fitted-filter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .fitted-filter-choice {
+    flex: 1;
+    min-width: 0;
+  }
+  .filter-kind {
+    color: var(--muted);
+    font-size: 10px;
+  }
+  .filter-actions {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+
+  .filter-up svg {
+    transform: rotate(180deg);
+  }
+  .filter-note {
+    white-space: pre-line;
+  }
+  @media (prefers-reduced-motion: reduce) {
   }
 }

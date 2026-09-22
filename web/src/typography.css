@@ -1,0 +1,10 @@
+@import url("https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap");
+
+:root {
+  --editor-font: "Satoshi", sans-serif;
+}
+/* Cover Spectrum's portalled menus and dialogs as well as the editor shell. */
+body,
+body * {
+  font-family: var(--editor-font);
+}

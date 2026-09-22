@@ -1,0 +1,203 @@
+@layer editor {
+  .inspector {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    background: var(--panel);
+  }
+  .inspector-content {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+    padding: 0 15px 20px;
+    scrollbar-width: thin;
+  }
+  .inspector-title {
+    padding: 16px 0 10px;
+  }
+  .inspector-title h2 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .inspector-title p {
+    margin: 6px 0 0;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .inspector-section {
+    padding: 12px 0;
+  }
+  .adjustment {
+    min-width: 0;
+  }
+  .adjustment-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    margin-bottom: 7px;
+  }
+  .number-field {
+    display: flex;
+    align-items: center;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    gap: 3px;
+  }
+  .info-row,
+  .toggle-row,
+  .select-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 11px;
+  }
+  .info-row > :last-child {
+    color: var(--muted);
+  }
+  .inspector-hint {
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.6;
+    margin-top: 20px;
+  }
+  .grade-band {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+    padding-top: 9px;
+  }
+  .grade-band h3 {
+    font-weight: 500;
+    color: var(--muted);
+    font-size: 11px;
+    margin: 0 0 1px;
+  }
+  .crop-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .crop-actions button {
+    flex: 1;
+    padding: 6px;
+    font-size: 11px;
+  }
+  .pipeline-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 6px 0 24px;
+  }
+  .pipeline-list button {
+    display: flex;
+    padding: 9px;
+    border-radius: 5px;
+    text-align: left;
+    gap: 14px;
+  }
+  .pipeline-list button.selected {
+    background: var(--selected);
+    color: var(--accent);
+  }
+  .pipeline-list button span {
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .inspector-collapsed {
+    grid-template-columns: 236px minmax(0, 1fr) 46px;
+  }
+  .film-collapsed.inspector-collapsed {
+    grid-template-columns: 60px minmax(0, 1fr) 46px;
+  }
+  [role="dialog"] .select-row {
+    margin: 15px 0;
+    font-size: 12px;
+  }
+  [role="dialog"] .adjustment {
+    margin-top: 20px;
+  }
+  .inspector-rail {
+    grid-column: 3;
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding-top: 8px;
+    background: var(--panel);
+  }
+  .medium-detail {
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+    margin: 6px 0 0;
+  }
+  .darkroom-heading {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 12px 12px 0;
+  }
+  .darkroom-heading h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .darkroom-heading > span {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .spectrum-control svg {
+    display: block;
+    width: 100%;
+    touch-action: none;
+    overflow: visible;
+  }
+  .spectrum-control .curve-grid {
+    stroke: var(--border);
+    stroke-dasharray: 2 3;
+  }
+  .spectrum-control .curve-zero {
+    stroke: var(--muted);
+    opacity: 0.5;
+  }
+  .spectrum-control .curve-line {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 1.5;
+  }
+  .spectrum-control circle {
+    fill: var(--accent);
+    stroke: var(--panel);
+    stroke-width: 1.5;
+    cursor: ns-resize;
+  }
+  .spectrum-control circle:focus {
+    outline: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+  }
+  .spectrum-control text {
+    font-size: 8px;
+    fill: var(--muted);
+  }
+}
+@layer editor {
+  .control-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-block: 12px 4px;
+    min-width: 0;
+  }
+  .inspector-section {
+    padding: 10px 0;
+  }
+  .darkroom-heading {
+    align-items: center;
+  }
+}

@@ -1,0 +1,13 @@
+/* Keep app geometry separate from Spectrum's component styles. */
+@layer editor, _;
+.spectrum-editor {
+  height: 100%;
+  min-width: 0;
+}
+/* The editable NumberField provides the value alongside this paired slider. */
+.adjustment-slider output {
+  display: none;
+}
+.adjustment-slider {
+  grid-template-rows: auto;
+}

@@ -12,7 +12,7 @@ SYMBOLS = {
     'film': 'camera_roll', 'develop': 'science', 'print': 'print',
     'selective': 'select_all', 'expose': 'exposure', 'open': 'add_photo_alternate',
     'minus': 'remove', 'plus': 'add', 'fit': 'fit_screen', 'undo': 'undo',
-    'redo': 'redo', 'reset': 'restart_alt', 'export': 'file_export',
+    'redo': 'redo', 'reset': 'restart_alt', 'export': 'download',
     'histogram': 'bar_chart', 'adjustments': 'tune', 'crop': 'crop',
     'compare': 'compare', 'sidebar': 'left_panel_open', 'inspector': 'right_panel_open',
     'more': 'more_horiz', 'close': 'close', 'search': 'search',
@@ -20,6 +20,9 @@ SYMBOLS = {
     'chevronDown': 'expand_more', 'chevronLeft': 'chevron_left',
     'chevronRight': 'chevron_right', 'success': 'check_circle',
     'error': 'error', 'warning': 'warning', 'info': 'info', 'help': 'help',
+    'negative': 'invert_colors', 'autoAdjust': 'auto_fix_high',
+    'saveEdits': 'save', 'loadEdits': 'folder_open',
+    'pipeline': 'account_tree', 'shortcuts': 'keyboard',
 }
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -29,15 +32,18 @@ def read(path):
 
 def symbol(item):
     key, name = item
-    root = ET.fromstring(read(f'symbols/web/{name}/materialsymbolsoutlined/{name}_24px.svg'))
+    root = ET.fromstring(read(f'symbols/web/{name}/materialsymbolsrounded/{name}_40px.svg'))
     paths = []
     for element in root:
         if element.tag != '{http://www.w3.org/2000/svg}path' or set(element.attrib) != {'d'}:
             raise ValueError(f'Unexpected SVG element in {name}')
         paths.append(element.attrib['d'])
-    if not paths or not root.get('viewBox'):
+    view_box = root.get('viewBox')
+    if not view_box and root.get('width', '').isdigit() and root.get('height', '').isdigit():
+        view_box = f"0 0 {root.get('width')} {root.get('height')}"
+    if not paths or not view_box:
         raise ValueError(f'Empty symbol: {name}')
-    return key, {'name': name, 'viewBox': root.get('viewBox'), 'paths': paths}
+    return key, {'name': name, 'viewBox': view_box, 'paths': paths}
 
 with ThreadPoolExecutor(max_workers=6) as pool:
     icons = dict(pool.map(symbol, SYMBOLS.items()))

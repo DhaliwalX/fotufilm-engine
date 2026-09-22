@@ -1,31 +1,100 @@
-/* Short entrances provide continuity without delaying controls or image updates. */
-@keyframes panel-enter {
-  from {
-    opacity: 0;
-    transform: translateY(3px);
+@layer editor {
+  /* Short entrances provide continuity without delaying controls or image updates. */
+  @keyframes panel-enter {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  @keyframes content-enter {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
-}
-@keyframes content-enter {
-  from {
-    opacity: 0;
+  .motion-panel-enter {
+    animation: panel-enter 150ms ease-out;
   }
-  to {
-    opacity: 1;
-  }
-}
-.motion-panel-enter {
-  animation: panel-enter 150ms ease-out;
-}
-.motion-fade-in {
-  animation: content-enter 140ms ease-out;
-}
-@media (prefers-reduced-motion: reduce) {
-  .motion-panel-enter,
   .motion-fade-in {
-    animation: none;
+    animation: content-enter 140ms ease-out;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .motion-panel-enter,
+    .motion-fade-in {
+      animation: none;
+    }
+  }
+}
+@layer editor {
+  .editor {
+    transition: grid-template-columns 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .inspector,
+  .film-sidebar {
+    transition:
+      opacity 180ms ease,
+      transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      visibility 0s;
+  }
+  .inspector {
+    grid-column: 3;
+    grid-row: 2;
+  }
+  .inspector-collapsed .inspector {
+    visibility: hidden;
+    opacity: 0;
+    transform: translateX(12px);
+    pointer-events: none;
+    transition-delay: 0s, 0s, 220ms;
+  }
+  .inspector-rail {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity 160ms ease,
+      visibility 0s 160ms;
+  }
+  .inspector-collapsed .inspector-rail {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 100ms, 0s;
+  }
+  .stock-copy,
+  .sidebar-heading,
+  .search-field {
+    transition: opacity 140ms ease;
+  }
+  .film-collapsed .sidebar-heading,
+  .film-collapsed .search-field {
+    opacity: 0;
+    height: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+  .film-collapsed .stock-copy,
+  .film-collapsed .stock-row > svg {
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+  }
+  @media (max-width: 833px) {
+    .film-collapsed .film-sidebar {
+      visibility: hidden;
+      opacity: 0;
+      transform: translateX(-100%);
+      pointer-events: none;
+      transition-delay: 0s, 0s, 220ms;
+    }
+    .inspector-collapsed .inspector {
+      transform: translateX(100%);
+    }
   }
 }

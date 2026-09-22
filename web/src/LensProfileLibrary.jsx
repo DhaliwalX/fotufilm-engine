@@ -1,8 +1,12 @@
+import {
+  Disclosure,
+  DisclosureTitle,
+  DisclosurePanel,
+} from "@react-spectrum/s2/Disclosure";
+import { ActionButton } from "@react-spectrum/s2/ActionButton";
 import { useRef, useState } from "react";
-import { Button } from "@astryxdesign/core/Button";
 import { importLensCatalogue, removeLensCatalogue } from "./lens-catalogue.js";
 import { useLensCatalogue } from "./useLensCatalogue.js";
-
 export default function LensProfileLibrary({ disabled }) {
   const catalogue = useLensCatalogue(),
     input = useRef(null);
@@ -27,63 +31,67 @@ export default function LensProfileLibrary({ disabled }) {
     }
   }
   return (
-    <details className="lens-profile-library">
-      <summary>
+    <Disclosure size="S" isQuiet UNSAFE_className="lens-profile-library">
+      <DisclosureTitle>
         Lens Profiles
         {catalogue.profiles.length ? ` · ${catalogue.profiles.length}` : ""}
-      </summary>
-      <div className="lens-profile-actions motion-fade-in">
-        <p className="medium-detail">
-          Import measured profiles in Fotufilm’s JSON format. Matching profiles
-          are selected from each photo’s lens metadata and saved in this
-          browser.
-        </p>
-        <input
-          ref={input}
-          type="file"
-          accept="application/json,.json"
-          aria-label="Import lens profiles"
-          hidden
-          onChange={(event) => importProfiles(event.target.files[0])}
-        />
-        <Button
-          label="Import Lens Profiles…"
-          size="sm"
-          variant="ghost"
-          isDisabled={disabled || busy}
-          onClick={() => input.current.click()}
-        />
-        {!!catalogue.profiles.length && (
-          <Button
-            label="Remove Imported Profiles"
-            size="sm"
-            variant="ghost"
-            isDisabled={disabled || busy}
-            onClick={async () => {
-              setBusy(true);
-              setError(null);
-              try {
-                await removeLensCatalogue();
-                setProgress("Imported lens profiles removed.");
-              } catch (error) {
-                setError(error.message);
-              } finally {
-                setBusy(false);
-              }
-            }}
+      </DisclosureTitle>
+      <DisclosurePanel>
+        <div className="lens-profile-actions motion-fade-in">
+          <p className="medium-detail">
+            Import measured profiles in Fotufilm’s JSON format. Matching
+            profiles are selected from each photo’s lens metadata and saved in
+            this browser.
+          </p>
+          <input
+            ref={input}
+            type="file"
+            accept="application/json,.json"
+            aria-label="Import lens profiles"
+            hidden
+            onChange={(event) => importProfiles(event.target.files[0])}
           />
-        )}
-        {progress && (
-          <p className="medium-detail" role="status">
-            {progress}
-          </p>
-        )}
-        {(error || catalogue.error) && (
-          <p className="medium-detail" role="alert">
-            {error || catalogue.error}
-          </p>
-        )}
-      </div>
-    </details>
+          <ActionButton
+            size="S"
+            isDisabled={disabled || busy}
+            onPress={() => input.current.click()}
+            isQuiet
+          >
+            {"Import Lens Profiles…"}
+          </ActionButton>
+          {!!catalogue.profiles.length && (
+            <ActionButton
+              size="S"
+              isDisabled={disabled || busy}
+              onPress={async () => {
+                setBusy(true);
+                setError(null);
+                try {
+                  await removeLensCatalogue();
+                  setProgress("Imported lens profiles removed.");
+                } catch (error) {
+                  setError(error.message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              isQuiet
+            >
+              {"Remove Imported Profiles"}
+            </ActionButton>
+          )}
+          {progress && (
+            <p className="medium-detail" role="status">
+              {progress}
+            </p>
+          )}
+          {(error || catalogue.error) && (
+            <p className="medium-detail" role="alert">
+              {error || catalogue.error}
+            </p>
+          )}
+        </div>
+      </DisclosurePanel>
+    </Disclosure>
   );
 }

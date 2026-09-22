@@ -1,0 +1,32 @@
+@layer editor {
+  .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 24px;
+  }
+  .export-detail {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin: 16px 0 0;
+  }
+  .shortcuts {
+    margin: 0;
+  }
+  .shortcuts > div {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    gap: 12px;
+  }
+  .shortcuts dd {
+    color: var(--muted);
+    margin: 0;
+  }
+  .support-copy p {
+    line-height: 1.7;
+    color: var(--muted);
+    font-size: 12px;
+  }
+}

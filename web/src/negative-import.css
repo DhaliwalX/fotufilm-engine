@@ -1,87 +1,65 @@
-dialog.negative-import-dialog {
-  width: min(840px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
-}
-.negative-import {
-  display: grid;
-  gap: 12px;
-  width: 100%;
-  min-width: 0;
-}
-.negative-import p {
-  margin: 0;
-  line-height: 1.5;
-}
-.negative-import-controls,
-.negative-import-actions {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-.negative-import-controls label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.negative-import-actions {
-  justify-content: flex-end;
-}
-.negative-import button {
-  padding: 7px 12px;
-  border: 1px solid var(--line, #8886);
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  transition:
-    opacity 150ms,
-    background 150ms;
-}
-.negative-import button:hover {
-  background: #8882;
-}
-.negative-import button:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.negative-import-preview {
-  display: grid;
-  place-items: center;
-  height: min(48vh, 460px);
-  min-height: 160px;
-  background: #151515;
-  color: #aaa;
-  overflow: hidden;
-  border-radius: 8px;
-}
-.negative-import-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  min-height: 0;
-  animation: negative-preview-in 180ms ease-out;
-}
-.negative-import-status {
-  font-size: 12px;
-  opacity: 0.75;
-}
-.negative-import-error {
-  color: #d95050;
-}
-@keyframes negative-preview-in {
-  from {
-    opacity: 0.3;
+@layer editor {
+  .negative-import {
+    display: grid;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
   }
-  to {
-    opacity: 1;
+  .negative-import p {
+    margin: 0;
+    line-height: 1.5;
   }
-}
-@media (prefers-reduced-motion: reduce) {
+  .negative-import-controls,
+  .negative-import-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .negative-import-controls label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .negative-import-actions {
+    justify-content: flex-end;
+  }
+
+  .negative-import-preview {
+    display: grid;
+    place-items: center;
+    height: min(48vh, 460px);
+    min-height: 160px;
+    background: #151515;
+    color: #aaa;
+    overflow: hidden;
+    border-radius: 8px;
+  }
   .negative-import-preview img {
-    animation: none;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    min-height: 0;
+    animation: negative-preview-in 180ms ease-out;
   }
-  .negative-import button {
-    transition: none;
+  .negative-import-status {
+    font-size: 12px;
+    opacity: 0.75;
+  }
+  .negative-import-error {
+    color: #d95050;
+  }
+  @keyframes negative-preview-in {
+    from {
+      opacity: 0.3;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .negative-import-preview img {
+      animation: none;
+    }
   }
 }

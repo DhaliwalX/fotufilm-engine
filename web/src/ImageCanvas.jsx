@@ -1,164 +1,9 @@
+import { useEffect, useRef, useState } from "react";
 import HistogramPanel from "./HistogramPanel.jsx";
 import ViewportDetail from "./ViewportDetail.jsx";
 import { visiblePhotoViewport } from "./viewport.js";
 import CropOverlay from "./CropOverlay.jsx";
-import { Button } from "@astryxdesign/core/Button";
-import { Slider } from "@astryxdesign/core/Slider";
-import { NumberInput } from "@astryxdesign/core/NumberInput";
-import { useEffect, useRef, useState } from "react";
-import { SLIDERS } from "./editor-state.js";
 import { clamp } from "./color-controls.js";
-import { Icon } from "./icons.jsx";
-
-export { Icon } from "./icons.jsx";
-
-export function ToolButton({
-  icon,
-  label,
-  active,
-  children,
-  disabled,
-  ...props
-}) {
-  return (
-    <Button
-      label={label}
-      variant="ghost"
-      size="sm"
-      icon={<Icon name={icon} />}
-      isIconOnly={!children}
-      isDisabled={disabled}
-      className={`tool-button ${active ? "active" : ""}`}
-      title={label}
-      aria-pressed={active}
-      {...props}
-    >
-      {children}
-    </Button>
-  );
-}
-export function Section({ title, children, open = true }) {
-  return (
-    <details className="inspector-section" open={open}>
-      <summary>{title}</summary>
-      <div className="section-content">{children}</div>
-    </details>
-  );
-}
-export function Adjustment({
-  slider,
-  value,
-  onChange,
-  onEnd,
-  disabled = false,
-}) {
-  const accessibleLabel = slider.key.startsWith("grade")
-    ? `${slider.group} ${slider.label}`
-    : slider.label;
-  const temperature = slider.key === "temperature";
-  const rangeValue = temperature ? 1e6 / value : value;
-  return (
-    <div className="adjustment">
-      <div className="adjustment-label">
-        <span>{slider.label}</span>
-        <div className="number-field">
-          <NumberInput
-            label={`${accessibleLabel} value`}
-            isLabelHidden
-            isDisabled={disabled}
-            size="sm"
-            width={88}
-            hasNumberSteppers={false}
-            isWheelEnabled={false}
-            units={slider.unit}
-            value={Number(value.toFixed(3))}
-            min={slider.min}
-            max={slider.max}
-            step={slider.step}
-            onChange={(next) => onChange(clamp(next, slider.min, slider.max))}
-            onBlur={onEnd}
-          />
-        </div>
-      </div>
-      <Slider
-        label={accessibleLabel}
-        isLabelHidden
-        isDisabled={disabled}
-        valueDisplay="none"
-        min={temperature ? 1e6 / slider.max : slider.min}
-        max={temperature ? 1e6 / slider.min : slider.max}
-        step={temperature ? 0.1 : slider.step}
-        value={rangeValue}
-        formatValue={
-          temperature ? (v) => `${Math.round(1e6 / v)} K` : undefined
-        }
-        onChange={(next) =>
-          onChange(temperature ? Math.round(1e6 / next) : next)
-        }
-        onChangeEnd={onEnd}
-        onBlur={onEnd}
-        onDoubleClick={() => {
-          onChange(slider.def);
-          onEnd?.();
-        }}
-      />
-    </div>
-  );
-}
-export function Adjustments({
-  group,
-  params,
-  onChange,
-  onEnd,
-  disabled,
-  hasFilm = true,
-}) {
-  return SLIDERS.filter(
-    (s) => s.group === group && (hasFilm || s.availability !== "film"),
-  ).map((slider) => (
-    <Adjustment
-      key={slider.key}
-      slider={slider}
-      disabled={disabled}
-      value={params[slider.key]}
-      onChange={(value) => onChange(slider.key, value)}
-      onEnd={onEnd}
-    />
-  ));
-}
-export function Modal({ title, children, onClose, className }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    const dialog = ref.current,
-      before = document.activeElement;
-    dialog.showModal();
-    return () => {
-      dialog.close();
-      before?.focus();
-    };
-  }, []);
-  return (
-    <dialog
-      ref={ref}
-      className={className}
-      aria-label={title}
-      onCancel={(e) => {
-        e.preventDefault();
-        onClose();
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="dialog-header">
-        <h2>{title}</h2>
-        <ToolButton icon="close" label="Close" onClick={onClose} />
-      </div>
-      {children}
-    </dialog>
-  );
-}
-
 export function ImageCanvas({
   result,
   detailSession,
@@ -249,7 +94,9 @@ export function ImageCanvas({
       event.preventDefault();
       setZoom((z) => clamp(z * (event.deltaY > 0 ? 0.9 : 1.1), 1, 8));
     };
-    surface.addEventListener("wheel", wheel, { passive: false });
+    surface.addEventListener("wheel", wheel, {
+      passive: false,
+    });
     return () => surface.removeEventListener("wheel", wheel);
   }, [cropMode, setZoom]);
   function begin(e) {
@@ -343,7 +190,12 @@ export function ImageCanvas({
         </div>
       )}
       {compare && <span className="original-badge">Original</span>}
-      <HistogramPanel result={result} open={!!showHistogram && !!result} onClose={showHistogram} container={container} />
+      <HistogramPanel
+        result={result}
+        open={!!showHistogram && !!result}
+        onClose={showHistogram}
+        container={container}
+      />
     </div>
   );
 }

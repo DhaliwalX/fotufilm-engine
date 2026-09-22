@@ -1,0 +1,69 @@
+@layer editor {
+  :root {
+    font:
+      16px -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      sans-serif;
+    color: #242628;
+    background: #e8e9eb;
+    --panel: #f4f4f5;
+    --border: #d6d7da;
+    --muted: #73767b;
+    --accent: #326cd5;
+    --selected: #dde7f8;
+    --field: #fff;
+    --canvas: #e1e2e5;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+  }
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+  a {
+    color: var(--accent);
+  }
+  svg {
+    flex-shrink: 0;
+  }
+  .editor {
+    position: relative;
+    font-size: 12px;
+    height: 100dvh;
+    display: grid;
+    grid-template-columns: 236px minmax(0, 1fr) 330px;
+    grid-template-rows: 52px minmax(0, 1fr);
+    overflow: hidden;
+  }
+  .full-width {
+    width: 100%;
+  }
+  fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+  }
+  .film-collapsed {
+    grid-template-columns: 60px minmax(0, 1fr) 330px;
+  }
+  /* SessionEditor dimensions: list 236, strip 60, inspector 330, rail 46.
+   Preserve a 420px picture; tight windows use floating columns. */
+  @keyframes viewport-detail-appear {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}

@@ -1,8 +1,8 @@
-import { useRef } from "react";
-import { Selector } from "@astryxdesign/core/Selector";
-import { Switch } from "@astryxdesign/core/Switch";
-import { Button } from "@astryxdesign/core/Button";
-import { Adjustment } from "./EditorControls.jsx";
+import SpectrumCurve from "./SpectrumCurve.jsx";
+import { Picker, PickerItem } from "@react-spectrum/s2/Picker";
+import { Switch } from "@react-spectrum/s2/Switch";
+import { ActionButton } from "@react-spectrum/s2/ActionButton";
+import { Adjustment } from "./Adjustment.jsx";
 import { catalogueSlider } from "./editor-catalogue.js";
 import {
   PROFILE_CONTROLS,
@@ -10,137 +10,6 @@ import {
   profileControl,
   profileControlAvailable,
 } from "./profile-settings.js";
-
-function SpectrumCurve({ control, values, onChange, onEnd, disabled }) {
-  const drag = useRef(null),
-    curve = control.curve;
-  const x = (nm) =>
-    12 + ((nm - curve.domainMin) / (curve.domainMax - curve.domainMin)) * 256;
-  const y = (value) => 8 + ((curve.max - value) / (curve.max - curve.min)) * 76;
-  const update = (index, value) =>
-    onChange(
-      values.map((v, i) =>
-        i === index
-          ? Math.min(
-              curve.max,
-              Math.max(curve.min, Math.round(value * 10) / 10),
-            )
-          : v,
-      ),
-    );
-  const move = (event) => {
-    if (drag.current === null || disabled) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const position = ((event.clientY - rect.top) / rect.height) * 108;
-    update(
-      drag.current,
-      curve.max - ((position - 8) / 76) * (curve.max - curve.min),
-    );
-  };
-  return (
-    <div className="spectrum-control" title={control.detail}>
-      <div className="adjustment-label">
-        <span>{control.title}</span>
-        <Button
-          label={`Reset ${control.title}`}
-          size="sm"
-          variant="ghost"
-          isDisabled={disabled}
-          onClick={() => {
-            onChange(profileDefault(control));
-            onEnd();
-          }}
-        >
-          Reset
-        </Button>
-      </div>
-      <svg
-        viewBox="0 0 280 108"
-        role="group"
-        aria-label={control.title}
-        onPointerDown={(event) => {
-          if (disabled) return;
-          event.preventDefault();
-          const rect = event.currentTarget.getBoundingClientRect();
-          const px = ((event.clientX - rect.left) / rect.width) * 280;
-          drag.current = curve.handles.reduce(
-            (best, nm, i) =>
-              Math.abs(x(nm) - px) < Math.abs(x(curve.handles[best]) - px)
-                ? i
-                : best,
-            0,
-          );
-          event.currentTarget.setPointerCapture(event.pointerId);
-          move(event);
-        }}
-        onPointerMove={move}
-        onPointerUp={() => {
-          drag.current = null;
-          onEnd();
-        }}
-        onPointerCancel={() => {
-          drag.current = null;
-          onEnd();
-        }}
-      >
-        {[curve.min, 0, curve.max].map((v) => (
-          <line
-            key={v}
-            x1="12"
-            x2="268"
-            y1={y(v)}
-            y2={y(v)}
-            className={v === 0 ? "curve-zero" : "curve-grid"}
-          />
-        ))}
-        <polyline
-          points={curve.handles
-            .map((nm, i) => `${x(nm)},${y(values[i])}`)
-            .join(" ")}
-          className="curve-line"
-        />
-        {curve.handles.map((nm, i) => (
-          <g key={nm}>
-            <circle
-              cx={x(nm)}
-              cy={y(values[i])}
-              r="4"
-              role="slider"
-              tabIndex={disabled ? -1 : 0}
-              aria-label={`${control.title} ${nm} nm`}
-              aria-valuemin={curve.min}
-              aria-valuemax={curve.max}
-              aria-valuenow={values[i]}
-              aria-valuetext={`${values[i]} EV`}
-              aria-disabled={disabled}
-              onKeyDown={(event) => {
-                if (
-                  disabled ||
-                  !["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)
-                )
-                  return;
-                event.preventDefault();
-                update(
-                  i,
-                  event.key === "Home"
-                    ? curve.min
-                    : event.key === "End"
-                      ? curve.max
-                      : values[i] + (event.key === "ArrowUp" ? 0.1 : -0.1),
-                );
-                onEnd();
-              }}
-            />
-            <text x={x(nm)} y="103" textAnchor="middle">
-              {nm}
-            </text>
-          </g>
-        ))}
-      </svg>
-    </div>
-  );
-}
-
 export default function ProfileControls({
   fields,
   edit,
@@ -181,35 +50,49 @@ export default function ProfileControls({
       return (
         <Switch
           key={c.field}
-          label={c.title}
-          value={value}
+          isSelected={value}
           isDisabled={inactive}
           onChange={(next) => {
             onEnd();
             change(next);
             onEnd();
           }}
-        />
+        >
+          {c.title}
+        </Switch>
       );
     if (c.kind === "chips")
       return (
-        <Selector
+        <Picker
           key={c.field}
           label={c.title}
-          size="sm"
-          width="100%"
+          size="S"
           isDisabled={inactive}
           value={String(value)}
-          options={c.chips.map((choice) => ({
-            value: String(choice.value),
-            label: choice.label,
-          }))}
           onChange={(next) => {
             onEnd();
             change(Number(next));
             onEnd();
           }}
-        />
+          UNSAFE_style={{
+            width: "100%",
+          }}
+        >
+          {c.chips
+            .map((choice) => ({
+              value: String(choice.value),
+              label: choice.label,
+            }))
+            .map((option) => (
+              <PickerItem
+                id={option.value}
+                key={option.value}
+                isDisabled={option.disabled}
+              >
+                {option.label}
+              </PickerItem>
+            ))}
+        </Picker>
       );
     if (c.scale) {
       const factor = c.scale.unit === "percent" ? 100 : 1;
@@ -242,21 +125,20 @@ export default function ProfileControls({
             }}
           />
           {c.field === "halationReturn" && (
-            <Button
-              label="Use Film Return"
-              size="sm"
-              variant="ghost"
+            <ActionButton
+              size="S"
               isDisabled={
                 inactive || !Object.hasOwn(edit.profile || {}, c.field)
               }
-              onClick={() => {
+              onPress={() => {
                 onEnd();
                 onReset(c.field);
                 onEnd();
               }}
+              isQuiet
             >
-              Use Film Return
-            </Button>
+              {"Use Film Return"}
+            </ActionButton>
           )}
         </div>
       );
@@ -264,23 +146,36 @@ export default function ProfileControls({
     if (!c.choices.some((choice) => choice.id === value))
       value = profileDefault(c);
     return (
-      <Selector
+      <Picker
         key={c.field}
         label={c.title}
-        size="sm"
-        width="100%"
+        size="S"
         isDisabled={inactive}
         value={value}
-        options={c.choices.map((choice) => ({
-          value: choice.id,
-          label: choice.label,
-        }))}
         onChange={(next) => {
           onEnd();
           change(next);
           onEnd();
         }}
-      />
+        UNSAFE_style={{
+          width: "100%",
+        }}
+      >
+        {c.choices
+          .map((choice) => ({
+            value: choice.id,
+            label: choice.label,
+          }))
+          .map((option) => (
+            <PickerItem
+              id={option.value}
+              key={option.value}
+              isDisabled={option.disabled}
+            >
+              {option.label}
+            </PickerItem>
+          ))}
+      </Picker>
     );
   });
 }

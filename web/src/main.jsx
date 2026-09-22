@@ -1,24 +1,23 @@
-import React from 'react'
-import { createRoot } from 'react-dom/client'
-import { Theme } from '@astryxdesign/core/theme'
-import { neutralTheme } from '@astryxdesign/theme-neutral/built'
-import '@astryxdesign/core/reset.css'
-import '@astryxdesign/core/astryx.css'
-import '@astryxdesign/theme-neutral/theme.css'
-import App from './App.jsx'
-import { controlIcons } from './icons.jsx'
-import './app.css'
-
-// Keep Neutral's prebuilt CSS and replace its control glyphs with Reicons.
-const editorTheme = {
-  ...neutralTheme,
-  icons: { ...neutralTheme.icons, ...controlIcons },
-}
-
-createRoot(document.getElementById('root')).render(
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { Provider } from "@react-spectrum/s2/Provider";
+import { MotionConfig } from "motion/react";
+import "./spectrum.css";
+import "./typography.css";
+import App from "./App.jsx";
+import "./app.css";
+createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <Theme theme={editorTheme}>
-      <App />
-    </Theme>
+    <Provider locale="en-US" UNSAFE_className="spectrum-editor">
+      <MotionConfig
+        reducedMotion="user"
+        transition={{
+          duration: 0.18,
+          ease: [0.2, 0.8, 0.2, 1],
+        }}
+      >
+        <App />
+      </MotionConfig>
+    </Provider>
   </React.StrictMode>,
-)
+);

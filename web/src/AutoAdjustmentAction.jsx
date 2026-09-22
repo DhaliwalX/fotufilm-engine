@@ -1,19 +1,20 @@
-import { Button } from "@astryxdesign/core/Button";
+import { Text } from "@react-spectrum/s2/Text";
+import { ToggleButton } from "@react-spectrum/s2/ToggleButton";
 import { Icon } from "./icons.jsx";
 import { editorControl } from "./editor-catalogue.js";
-
 export default function AutoAdjustmentAction({ auto, onClick }) {
   const control = editorControl("autoAdjustment");
   return (
-    <Button
-      label={auto.busy ? "Cancel Auto Adjust" : control.title}
+    <ToggleButton
       title={`${control.detail} (⌘⇧A)`}
-      aria-pressed={auto.active}
-      variant={auto.active ? "secondary" : "ghost"}
-      size="sm"
-      icon={auto.active && !auto.busy ? <Icon name="check" /> : undefined}
+      size="S"
       isDisabled={!auto.available}
-      onClick={onClick}
-    />
+      onPress={onClick}
+      isSelected={auto.active}
+      isQuiet
+    >
+      {auto.active && !auto.busy ? <Icon name="check" /> : undefined}
+      <Text>{auto.busy ? "Cancel Auto Adjust" : control.title}</Text>
+    </ToggleButton>
   );
 }
