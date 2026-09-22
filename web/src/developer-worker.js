@@ -70,6 +70,10 @@ self.onmessage = async ({ data }) => {
     if (data.kind === "initialize") {
       pack = data.pack || normalPack();
       preferGpu = data.preferGpu;
+      // The import placeholder needs only the scene-linear Normal transform.
+      // Avoid another WASM heap alongside the RAW decoder and editing session.
+      if (data.previewOnly)
+        cpu = { backend: "reference", develop: developNormalReference };
       await cpuFor(pack);
       self.postMessage({ kind: "ready", backend: cpu.backend });
       if (preferGpu) void warm();
