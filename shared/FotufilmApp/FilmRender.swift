@@ -928,7 +928,7 @@ enum FilmRender {
                     viewport: viewport, film: film,
                     options: options,
                     inputConversion: inputConversion,
-                    writeRows: writeRows)
+                    shouldContinue: shouldContinue, writeTile: writeTile)
             }
             return film.engine.developStreaming(
                 width: width, height: height, stock: film.stock, options: options,
@@ -1175,8 +1175,32 @@ enum FilmRender {
         film: (stock: FilmStock, engine: HalideMetalFilmRenderer),
         options: FotufilmEngine.Options,
         inputConversion: FilmInputConversion,
-        writeRows: (Range<Int>, UnsafeBufferPointer<Float>) -> Void
+        shouldContinue: (() -> Bool)?,
+        writeTile: (Range<Int>, Range<Int>, UnsafeBufferPointer<Float>) -> Void
     ) -> Bool {
+        let density = viewport.densityReferencePixelSize
+        guard let context = film.engine.makeLinearFloatVirtualFrameContext(
+            measurements: measurements.context,
+            densityWidth: max(1, Int(density.width)),
+            densityHeight: max(1, Int(density.height)),
+            frameWidth: Int(viewport.virtualFrameSize.width),
+            frameHeight: Int(viewport.virtualFrameSize.height),
+            stock: film.stock, options: options) else { return false }
+
+        if options.transportConstruction(for: film.stock) == nil {
+            // A zoom tile includes an apron that can be larger than the visible image at small
+            // gauges. Reuse export staging instead of allocating full-region Float32 buffers.
+            defer { HalideMetalFilmRenderer.releaseIdleBuffers() }
+            return film.engine.developRegionStreaming(
+                width: width, height: height,
+                originX: Int(viewport.origin.x), originY: Int(viewport.origin.y),
+                context: context, shouldContinue: shouldContinue,
+                readTile: { rows, columns, into in
+                    expand(scene, rows: rows, columns: columns, width: width,
+                           into: into, inputConversion: inputConversion)
+                }, writeTile: writeTile)
+        }
+        // Layered transport solves a complete virtual frame and owns its own resource schedule.
         guard let device = MTLCreateSystemDefaultDevice() else { return false }
         let regionCount = width * height * 4
         guard let regionInput = device.makeBuffer(
@@ -1193,22 +1217,14 @@ enum FilmRender {
         expand(scene, rows: 0..<height, width: width,
                into: regionDestination, inputConversion: inputConversion)
 
-        let density = viewport.densityReferencePixelSize
-        guard let context = film.engine.makeLinearFloatVirtualFrameContext(
-            measurements: measurements.context,
-            densityWidth: max(1, Int(density.width)),
-            densityHeight: max(1, Int(density.height)),
-            frameWidth: Int(viewport.virtualFrameSize.width),
-            frameHeight: Int(viewport.virtualFrameSize.height),
-            stock: film.stock, options: options),
-              film.engine.processLinearFloatRegion(
+        guard film.engine.processLinearFloatRegion(
                 input: regionInput, output: regionOutput,
                 regionWidth: width, regionHeight: height,
                 originX: Int(viewport.origin.x),
                 originY: Int(viewport.origin.y), context: context)
         else { return false }
 
-        writeRows(0..<height, UnsafeBufferPointer(
+        writeTile(0..<height, 0..<width, UnsafeBufferPointer(
             start: regionOutput.contents().assumingMemoryBound(to: Float.self),
             count: regionCount))
         return true

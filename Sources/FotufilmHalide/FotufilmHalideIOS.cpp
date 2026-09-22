@@ -116,9 +116,19 @@ struct ExecutionState {
     }
 };
 
+// Generated kernels return an error code after reporting a failure. Keep that recoverable:
+// Halide's default handler aborts the app before Swift can retain the standing preview.
+void configure_error_handler() {
+    static const auto previous = halide_set_error_handler([](void *, const char *message) {
+        std::fprintf(stderr, "Fotufilm Halide iOS runtime error: %s\n", message);
+    });
+    (void)previous;
+}
+
 thread_local ExecutionState *bound_execution_state = nullptr;
 
 ExecutionState &execution_state() {
+    configure_error_handler();
     static thread_local ExecutionState fallback;
     return bound_execution_state ? *bound_execution_state : fallback;
 }
@@ -478,6 +488,7 @@ extern "C" void fotufilm_halide_metal_context_restore(void *opaque) {
 }
 
 extern "C" int32_t fotufilm_halide_metal_available(void) {
+    configure_error_handler();
     static const bool valid = [] {
         const bool matches = valid_exposure_lut_contracts();
         if (!matches) {

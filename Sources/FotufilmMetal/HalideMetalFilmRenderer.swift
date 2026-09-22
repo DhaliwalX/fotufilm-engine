@@ -685,6 +685,48 @@ public final class HalideMetalFilmRenderer {
         }
     }
 
+    /// Develops an already-metered region in bounded tiles. Coordinates passed to the callbacks
+    /// are local to the region; kernel origins remain in the context's whole-frame lattice.
+    /// The source must include the spatial apron needed by the pixels the caller will display.
+    /// Layered transport owns a complete-frame solve and uses `processLinearFloatRegion` instead.
+    @discardableResult
+    public func developRegionStreaming(
+        width: Int, height: Int, originX: Int, originY: Int,
+        context: FilmFrameContext, memoryBudget: Int? = nil,
+        shouldContinue: (() -> Bool)? = nil,
+        readTile: (_ rows: Range<Int>, _ columns: Range<Int>,
+                   _ into: UnsafeMutableBufferPointer<Float>) -> Void,
+        writeTile: (_ rows: Range<Int>, _ columns: Range<Int>,
+                    _ from: UnsafeBufferPointer<Float>) -> Void
+    ) -> Bool {
+        guard width > 0, height > 0, originX >= 0, originY >= 0,
+              context.encoding == .linearRec2020, context.layered == nil,
+              width <= context.width, height <= context.height,
+              originX <= context.width - width, originY <= context.height - height,
+              shouldContinue?() != false else { return false }
+        let availableBudget = Self.defaultMemoryBudget()
+        let budget = min(memoryBudget ?? availableBudget, availableBudget)
+        var invocation = context.invocation
+        invocation.featureMask |= FilmEngineFeature.floatIO
+        let apron = invocation.spatialSupport
+        guard let shape = Self.tileShape(
+            width: width, height: height, apron: apron,
+            fineApron: invocation.spatialSupportSansHalation,
+            budget: budget, overlap: false, fullWidth: false) else { return false }
+        // Regional previews reuse the whole-frame tone and flare readings. Building halation
+        // fields from this crop would replace whole-frame coordinates with crop coordinates.
+        let plan = TilePlan(tileWidth: shape.tileWidth, tileRows: shape.tileRows,
+                            apron: apron, fields: false, lightRows: 0, lightApron: 0,
+                            overlap: false, bytes: shape.bytes, work: shape.work)
+        return withoutActuallyEscaping(writeTile) { writeTile in
+            developTiled(invocation: &invocation, width: width, height: height, plan: plan,
+                timings: getenv("FOTUFILM_STILL_TIMINGS") != nil,
+                regionOrigin: SIMD2(originX, originY),
+                cancelled: { shouldContinue?() == false }, progress: nil,
+                readTile: readTile, writeTile: writeTile)
+        }
+    }
+
     /// How a frame too large for one pass is cut: the tiles, their apron, and whether halation
     /// is taken in a pass of its own first.
     struct TilePlan: Equatable {
@@ -907,6 +949,7 @@ public final class HalideMetalFilmRenderer {
         invocation: inout FilmEngineInvocation,
         width: Int, height: Int, plan: TilePlan,
         timings: Bool,
+        regionOrigin: SIMD2<Int>? = nil,
         cancelled: () -> Bool,
         progress: ((FilmRenderPhase) -> Void)?,
         readTile: (_ rows: Range<Int>, _ columns: Range<Int>,
@@ -934,24 +977,26 @@ public final class HalideMetalFilmRenderer {
         let bandRows = max(1, min(height, staging.inputPixels / width))
         // The bands fill the tile input and are measured where they land, on the device; the
         // host pointer is the fallback for a build with no Metal to measure on.
-        let measured = withoutActuallyEscaping(readTile) { readTile in
-            measureWholeFrame(
-                &invocation, width: width, height: height, bandRows: bandRows,
-                toneBase: !metersOnLightBands,
-                cancelled: cancelled, progress: progress,
-                band: { rows in
-                    readTile(rows, 0..<width, UnsafeMutableBufferPointer(
-                        start: input, count: rows.count * width * 4))
-                    return UnsafePointer(input)
-                },
-                deviceBand: { rows in
-                    readTile(rows, 0..<width, UnsafeMutableBufferPointer(
-                        start: input, count: rows.count * width * 4))
-                    return inputHandle
-                })
+        if regionOrigin == nil {
+            let measured = withoutActuallyEscaping(readTile) { readTile in
+                measureWholeFrame(
+                    &invocation, width: width, height: height, bandRows: bandRows,
+                    toneBase: !metersOnLightBands,
+                    cancelled: cancelled, progress: progress,
+                    band: { rows in
+                        readTile(rows, 0..<width, UnsafeMutableBufferPointer(
+                            start: input, count: rows.count * width * 4))
+                        return UnsafePointer(input)
+                    },
+                    deviceBand: { rows in
+                        readTile(rows, 0..<width, UnsafeMutableBufferPointer(
+                            start: input, count: rows.count * width * 4))
+                        return inputHandle
+                    })
+            }
+            guard measured else { return false }
         }
-        guard measured else { return false }
-        var measureSeconds = Date().timeIntervalSince(measureStart)
+        var measureSeconds = regionOrigin == nil ? Date().timeIntervalSince(measureStart) : 0
 
         let across = (width + plan.tileWidth - 1) / plan.tileWidth
         let down = (height + plan.tileRows - 1) / plan.tileRows
@@ -1100,7 +1145,8 @@ public final class HalideMetalFilmRenderer {
                             Int32(tileWidth), Int32(tileHeight),
                             Int32(left - first), Int32(right - left),
                             Int32(top - from), Int32(bottom - top),
-                            Int32(first), Int32(from),
+                            Int32(first + (regionOrigin?.x ?? 0)),
+                            Int32(from + (regionOrigin?.y ?? 0)),
                             plan.fields ? extended.baseAddress : plain.baseAddress,
                             plan.fields ? extended.baseAddress! + head : nil,
                             Int32(extended.count - head), fieldsID,
