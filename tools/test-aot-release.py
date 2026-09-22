@@ -19,6 +19,26 @@ spec.loader.exec_module(aot)
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_complete_generated_set_includes_negative_scan_helpers(self):
+        source = (aot.ROOT / "tools/generate_halide_ios.cpp").read_text()
+        # Names are emitted literally by the generator, including its CPU/Metal scan pair.
+        generated_names = set(re.findall(r'"(fotufilm_halide_ios_[a-z0-9_]+)"', source))
+        self.assertEqual(aot.EXTRA_ARCHIVES, {name + ".a" for name in generated_names})
+        contents = {name: b"archive" for name in aot.EXTRA_ARCHIVES}
+        contents["fotufilm_halide_ios_color.a"] = b"frame variant"
+        self.assertEqual(aot.validate_generated_archives(contents, 1), 9)
+        for missing in aot.EXTRA_ARCHIVES:
+            with self.subTest(missing=missing):
+                incomplete = {k: v for k, v in contents.items() if k != missing}
+                with self.assertRaisesRegex(ValueError, "incomplete"):
+                    aot.validate_generated_archives(incomplete, 1)
+                # Even a matching total cannot stand in for a required helper.
+                incomplete["fotufilm_halide_ios_unexpected.a"] = b"unrelated"
+                with self.assertRaisesRegex(ValueError, "missing helpers"):
+                    aot.validate_generated_archives(incomplete, 1)
+        with self.assertRaisesRegex(ValueError, "incomplete"):
+            aot.validate_generated_archives(contents, 2)
+
     def test_host_shim_includes_every_registered_variant(self):
         # Swift tests use JIT kernels; only Apple AOT builds compile this shim.
         # Catch missing declarations on the lightweight pull-request job too.

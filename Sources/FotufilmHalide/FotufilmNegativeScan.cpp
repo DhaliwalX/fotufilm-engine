@@ -1,4 +1,5 @@
 #include "FotufilmNegativeScan.h"
+#include "FotufilmHalide.h"
 #if defined(FOTUFILM_HALIDE_ENABLED)
 #include "Pipeline/NegativeScan.h"
 #include <mutex>
@@ -42,6 +43,7 @@ extern "C" int32_t fotufilm_negative_scan(const float *in, float *out, int32_t w
     }
 }
 #elif !defined(FOTUFILM_HALIDE_IOS_AOT)
-extern "C" int32_t fotufilm_negative_scan(const float *, float *, int32_t, int32_t,
-    const float *, int32_t) { return -3; }
+// SwiftPM can supply the unavailable stub beside the app's AOT implementation.
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_negative_scan(
+    const float *, float *, int32_t, int32_t, const float *, int32_t) { return -3; }
 #endif
