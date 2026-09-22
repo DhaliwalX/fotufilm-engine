@@ -14,14 +14,17 @@ async function sample(blob, colorSpace) {
       colorSpace,
       willReadFrequently: true,
     });
-    if (!context || context.getContextAttributes().colorSpace !== colorSpace)
+    if (!context)
       throw new Error("Histogram color space is unavailable.");
     context.drawImage(bitmap, 0, 0, width, height);
+    // Safari's worker context may omit getContextAttributes. The readback
+    // describes the actual sample space, including any browser conversion.
+    const pixels = context.getImageData(0, 0, width, height, { colorSpace });
     return {
-      data: context.getImageData(0, 0, width, height, { colorSpace }).data,
+      data: pixels.data,
       width,
       height,
-      colorSpace,
+      colorSpace: pixels.colorSpace || "srgb",
     };
   } finally {
     bitmap.close();
