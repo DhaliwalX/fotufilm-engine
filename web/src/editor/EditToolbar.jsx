@@ -7,6 +7,7 @@ import { useEditor } from "./EditorContext.jsx";
 import OptionsMenu from "./OptionsMenu.jsx";
 export default function EditToolbar() {
   const {
+    compactLayout,
     setFilmOpen,
     setInspectorOpen,
     exporting,
@@ -107,8 +108,10 @@ export default function EditToolbar() {
         <ToggleButton
           onPress={() => {
             setInspectorOpen((v) => !v);
-            if (window.innerWidth < 834) setFilmOpen(false);
+            if (compactLayout) setFilmOpen(false);
           }}
+          data-panel-toggle="inspector"
+          aria-expanded={inspectorOpen}
           aria-label={"Toggle adjustments"}
           size={"S"}
           isQuiet

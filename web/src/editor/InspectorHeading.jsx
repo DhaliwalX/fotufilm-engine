@@ -1,3 +1,4 @@
+import PanelDismissButton from "./PanelDismissButton.jsx";
 import { ActionButton } from "@react-spectrum/s2/ActionButton";
 import { Tooltip, TooltipTrigger } from "@react-spectrum/s2/Tooltip";
 import { inspectorPanels } from "../editor-catalogue.js";
@@ -34,6 +35,7 @@ export default function InspectorHeading() {
         <Tooltip>{help[panel]}</Tooltip>
       </TooltipTrigger>
       {["crop", "selective"].includes(panel) && <span>Canvas tool</span>}
+      <PanelDismissButton panel="inspector" />
     </div>
   );
 }

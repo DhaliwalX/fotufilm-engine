@@ -1,0 +1,129 @@
+Reuse storage buffers under the context lock, bounded to 64 entries and 128 MiB.
+Release cached buffers with their device. Preserve validation for new allocations.
+
+--- a/src/runtime/webgpu.cpp
++++ b/src/runtime/webgpu.cpp
+@@ -264,6 +264,64 @@
+     WGPUBuffer buffer;
+ };
+ 
++// Storage buffers are reused only after their last command has been submitted.
++// Queue ordering protects prior readers when a later frame writes the buffer.
++// All access is protected by WgpuContext's context lock.
++struct CachedStorageBuffer {
++    WGPUDevice device;
++    WGPUBuffer buffer;
++    uint64_t size;
++};
++WEAK CachedStorageBuffer cached_storage[64] = {};
++WEAK uint64_t cached_storage_bytes = 0;
++WEAK uint32_t next_storage_slot = 0;
++constexpr uint64_t storage_cache_limit = 128 * 1024 * 1024;
++
++void discard_storage_slot(uint32_t slot) {
++    CachedStorageBuffer &entry = cached_storage[slot];
++    if (!entry.buffer) return;
++    cached_storage_bytes -= entry.size;
++    wgpuBufferDestroy(entry.buffer);
++    wgpuBufferRelease(entry.buffer);
++    entry = {};
++}
++
++WGPUBuffer take_cached_storage(WGPUDevice device, uint64_t size) {
++    for (auto &entry : cached_storage) {
++        if (entry.buffer && entry.device == device && entry.size == size) {
++            WGPUBuffer buffer = entry.buffer;
++            cached_storage_bytes -= entry.size;
++            entry = {};
++            return buffer;
++        }
++    }
++    return nullptr;
++}
++
++void retain_storage(WGPUDevice device, WGPUBuffer buffer) {
++    const uint64_t size = wgpuBufferGetSize(buffer);
++    if (size > storage_cache_limit) {
++        wgpuBufferDestroy(buffer);
++        wgpuBufferRelease(buffer);
++        return;
++    }
++    // Evict oldest entries until both the fixed entry count and byte budget fit.
++    discard_storage_slot(next_storage_slot);
++    while (cached_storage_bytes + size > storage_cache_limit) {
++        next_storage_slot = (next_storage_slot + 1) % 64;
++        discard_storage_slot(next_storage_slot);
++    }
++    cached_storage[next_storage_slot] = {device, buffer, size};
++    cached_storage_bytes += size;
++    next_storage_slot = (next_storage_slot + 1) % 64;
++}
++
++void release_cached_storage(WGPUDevice device) {
++    for (uint32_t slot = 0; slot < 64; ++slot) {
++        if (cached_storage[slot].device == device) discard_storage_slot(slot);
++    }
++}
++
+ // A cache for compiled WGSL shader modules.
+ WEAK Halide::Internal::GPUCompilationCache<WGPUDevice, WGPUShaderModule>
+     shader_cache;
+@@ -582,22 +640,24 @@
+         return context.error_code;
+     }
+ 
+-    ErrorScope error_scope(user_context, context.instance, context.device);
+-
+-    WGPUBufferDescriptor desc = WGPU_BUFFER_DESCRIPTOR_INIT;
+-    desc.usage = WGPUBufferUsage_Storage |
+-                 WGPUBufferUsage_CopyDst |
+-                 WGPUBufferUsage_CopySrc;
+-    desc.size = round_up_to_multiple_of_4(buf->size_in_bytes());
+-
++    const uint64_t size = round_up_to_multiple_of_4(buf->size_in_bytes());
+     WgpuBufferHandle *device_handle =
+         (WgpuBufferHandle *)malloc(sizeof(WgpuBufferHandle));
+-    device_handle->buffer = wgpuDeviceCreateBuffer(context.device, &desc);
++    if (!device_handle) return halide_error_code_out_of_memory;
++    device_handle->buffer = take_cached_storage(context.device, size);
+     device_handle->offset = 0;
+-
+-    int error_code = error_scope.wait();
+-    if (error_code != halide_error_code_success) {
+-        return error_code;
++    if (!device_handle->buffer) {
++        ErrorScope error_scope(user_context, context.instance, context.device);
++        WGPUBufferDescriptor desc = WGPU_BUFFER_DESCRIPTOR_INIT;
++        desc.usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc;
++        desc.size = size;
++        device_handle->buffer = wgpuDeviceCreateBuffer(context.device, &desc);
++        const int error_code = error_scope.wait();
++        if (error_code != halide_error_code_success) {
++            if (device_handle->buffer) wgpuBufferRelease(device_handle->buffer);
++            free(device_handle);
++            return error_code;
++        }
+     }
+ 
+     buf->device = (uint64_t)device_handle;
+@@ -626,11 +686,7 @@
+         return context.error_code;
+     }
+ 
+-    // Destroy before releasing: destruction is deferred past any work already
+-    // submitted against the buffer, and does not wait for a reference held
+-    // elsewhere to go away.
+-    wgpuBufferDestroy(handle->buffer);
+-    wgpuBufferRelease(handle->buffer);
++    retain_storage(context.device, handle->buffer);
+     free(handle);
+     buf->device = 0;
+     buf->device_interface->impl->release_module();
+@@ -702,6 +758,7 @@
+     }
+ 
+     if (device) {
++        release_cached_storage(device);
+         release_cached_pipelines(user_context, device);
+         shader_cache.delete_context(user_context, device,
+                                     wgpuShaderModuleRelease);

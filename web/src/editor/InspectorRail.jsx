@@ -4,12 +4,13 @@ import { ToggleButton } from "@react-spectrum/s2/ToggleButton";
 import { inspectorPanels } from "../editor-catalogue.js";
 import { useEditor } from "./EditorContext.jsx";
 export default function InspectorRail() {
-  const { panel, setInspector, inspectorOpen } = useEditor();
+  const { panel, setInspector, inspectorOpen, compactLayout, filmOpen } =
+    useEditor();
   return (
     <nav
       className="inspector-rail"
-      inert={inspectorOpen}
-      aria-hidden={inspectorOpen}
+      inert={inspectorOpen || (compactLayout && filmOpen)}
+      aria-hidden={inspectorOpen || (compactLayout && filmOpen)}
       aria-label="Adjustment panels"
     >
       {inspectorPanels.map((p) => (
@@ -23,6 +24,7 @@ export default function InspectorRail() {
             isSelected={panel === p.id}
           >
             <Icon name={p.icon} />
+            <span className="compact-panel-label">{p.title}</span>
           </ToggleButton>
           <Tooltip>{p.title}</Tooltip>
         </TooltipTrigger>

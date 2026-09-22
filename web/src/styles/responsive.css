@@ -53,69 +53,6 @@
       display: none;
     }
   }
-  @media (max-width: 833px) {
-    .editor,
-    .editor.film-collapsed,
-    .editor.inspector-collapsed,
-    .editor.film-collapsed.inspector-collapsed {
-      grid-template-columns: minmax(0, 1fr) 46px;
-      grid-template-rows: 52px minmax(0, 1fr);
-    }
-    .toolbar {
-      gap: 4px;
-      padding: 0 5px;
-    }
-    .toolbar-leading {
-      min-width: 0;
-    }
-    .app-name,
-    .pixel-readout {
-      display: none;
-    }
-    .viewer {
-      grid-column: 1 / -1;
-      grid-row: 2;
-    }
-    .inspector,
-    .film-sidebar {
-      position: absolute;
-      top: 52px;
-      bottom: 0;
-      z-index: 6;
-      max-width: calc(100vw - 46px);
-      box-shadow: 0 0 20px #0002;
-    }
-    .inspector {
-      right: 0;
-      width: 330px;
-    }
-    .film-sidebar {
-      left: 0;
-      width: 236px;
-    }
-    .inspector-rail {
-      grid-column: 2;
-      z-index: 3;
-    }
-    .inspector-collapsed .viewer {
-      grid-column: 1;
-    }
-    .viewer-status .document-name,
-    .backend-label {
-      display: none;
-    }
-  }
-  @media (max-width: 620px) {
-    .toolbar-zoom {
-      display: none;
-    }
-    .toolbar-divider {
-      margin: 0 2px;
-    }
-    .empty-canvas {
-      padding: 18px;
-    }
-  }
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

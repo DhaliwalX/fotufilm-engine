@@ -1,3 +1,4 @@
+import useCompactLayout from "./useCompactLayout.js";
 import { Slider } from "@react-spectrum/s2/Slider";
 import { NumberField } from "@react-spectrum/s2/NumberField";
 import { SLIDERS } from "./editor-state.js";
@@ -9,6 +10,7 @@ export function Adjustment({
   onEnd,
   disabled = false,
 }) {
+  const compactLayout = useCompactLayout();
   const accessibleLabel = slider.key.startsWith("grade")
     ? `${slider.group} ${slider.label}`
     : slider.label;
@@ -22,7 +24,7 @@ export function Adjustment({
           <NumberField
             aria-label={`${accessibleLabel} value`}
             isDisabled={disabled}
-            size="S"
+            size={compactLayout ? "L" : "S"}
             value={Number(value.toFixed(3))}
             minValue={slider.min}
             maxValue={slider.max}

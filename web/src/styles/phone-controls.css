@@ -1,0 +1,36 @@
+/* Touch sizes override Spectrum's desktop S sizing only in the compact layout. */
+@media (max-width: 833px) {
+  .toolbar button,
+  .compact-panel-dismiss button {
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 10px;
+    flex-shrink: 0;
+  }
+  .inspector-rail button {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    min-width: 64px;
+    min-height: 52px;
+    padding: 4px 10px;
+    flex: 1;
+  }
+  .inspector [role="radiogroup"] {
+    flex-shrink: 0;
+  }
+  .inspector [role="radio"],
+  .inspector-content button,
+  .compare-button,
+  .empty-canvas button {
+    min-height: 44px;
+  }
+  .inspector-content input,
+  .search-field input {
+    font-size: 16px;
+  }
+  .stock-row {
+    min-height: 64px;
+  }
+}

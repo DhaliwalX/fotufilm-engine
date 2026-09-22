@@ -22,6 +22,7 @@
 #include "print_monochrome_float.h"
 
 #include <emscripten/emscripten.h>
+#include "fotufilm_wasm_display.h"
 
 extern "C" {
 EMSCRIPTEN_KEEPALIVE int fotufilm_wasm_plain_supported() { return 1; }
@@ -79,11 +80,10 @@ static void init_flat(halide_buffer_t *buffer, halide_dimension_t *dim,
 /// read by a different, roomier kernel and keeps its own buffer.
 ///
 /// Returns the Halide error code: 0 on success.
-EMSCRIPTEN_KEEPALIVE
-int fotufilm_wasm_render(float *input, float *output, int32_t width, int32_t height,
+static int render_frame(float *input, float *output, int32_t width, int32_t height,
                         int32_t origin_x, int32_t origin_y,
                         float *configuration, float *exposure_lut,
-                        int32_t feature_mask, uint32_t seed) {
+                        int32_t feature_mask, uint32_t seed, const DisplayOutput *display) {
     halide_buffer_t in_buf, out_buf, config_buf, exposure_buf;
     halide_dimension_t in_dims[3], out_dims[3];
     halide_dimension_t config_dim[1], exposure_dim[1];
@@ -139,16 +139,37 @@ int fotufilm_wasm_render(float *input, float *output, int32_t width, int32_t hei
     // A GPU pipeline leaves its result in device memory and marks the buffer device-dirty. The
     // native runner calls copy_to_host for exactly this reason; without it the host side reads
     // back the zeros it allocated.
-    if (status == 0) status = halide_copy_to_host(nullptr, &out_buf);
+    if (status == 0) {
+        status = display ? encode_display(&out_buf, *display, width, height, origin_x, origin_y, seed)
+                         : halide_copy_to_host(nullptr, &out_buf);
+    }
 
-    // The device allocations are per-call, since the frame buffers are reallocated whenever the
-    // frame size changes. Releasing them here keeps a long editing session from growing a new
-    // GPU buffer for every slider tick.
+    // Release frame ownership. The runtime retains reusable storage within its
+    // fixed cache budget, including when the next frame changes dimensions.
     halide_device_free(nullptr, &in_buf);
     halide_device_free(nullptr, &out_buf);
     halide_device_free(nullptr, &config_buf);
     halide_device_free(nullptr, &exposure_buf);
     return status;
+}
+
+EMSCRIPTEN_KEEPALIVE
+int fotufilm_wasm_render(float *input, float *output, int32_t width, int32_t height,
+                        int32_t origin_x, int32_t origin_y, float *configuration,
+                        float *exposure_lut, int32_t feature_mask, uint32_t seed) {
+    return render_frame(input, output, width, height, origin_x, origin_y,
+                        configuration, exposure_lut, feature_mask, seed, nullptr);
+}
+
+EMSCRIPTEN_KEEPALIVE
+int fotufilm_wasm_render_display(float *input, float *output, int32_t width, int32_t height,
+                        int32_t origin_x, int32_t origin_y, float *configuration,
+                        float *exposure_lut, int32_t feature_mask, uint32_t seed,
+                        uint32_t *pixels, int32_t depth, int32_t p3, int32_t frame_width) {
+    if (depth != 8 && depth != 16) return halide_error_code_bad_type;
+    const DisplayOutput display{pixels, depth, p3, frame_width};
+    return render_frame(input, output, width, height, origin_x, origin_y,
+                        configuration, exposure_lut, feature_mask, seed, &display);
 }
 
 /// The configuration is rebuilt in Swift, but the handful of slots that are a pure function of a

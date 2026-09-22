@@ -1,6 +1,7 @@
 import { useAutoAdjustment } from "../useAutoAdjustment.js";
 import { useCallback } from "react";
 export default function useEditingActions({
+  compactLayout,
   active,
   session,
   history,
@@ -81,7 +82,7 @@ export default function useEditingActions({
       setDifference(false);
     }
     setInspectorOpen(true);
-    if (window.innerWidth < 834) setFilmOpen(false);
+    if (compactLayout) setFilmOpen(false);
     setCompare(false);
   };
   return {

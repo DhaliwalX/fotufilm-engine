@@ -1,0 +1,26 @@
+Preserve Halide pow semantics at zero without invoking WGSL pow outside its positive-base domain.
+
+--- a/src/CodeGen_WebGPU_Dev.cpp
++++ b/src/CodeGen_WebGPU_Dev.cpp
+@@ -573,7 +573,10 @@
+         // Otherwise, we need to emulate the behavior.
+         Expr ox = op->args[0];
+         Expr oy = op->args[1];
+-        Expr equiv = Call::make(op->type, "pow", {abs(ox), oy}, Call::PureExtern);
++        // WGSL pow requires a positive base, even when select discards the result.
++        // Halide defines zero to a nonzero power as zero, and 0^0 as one.
++        Expr safe_base = select(ox == 0.0f, make_const(ox.type(), 1.0f), abs(ox));
++        Expr equiv = Call::make(op->type, "pow", {safe_base, oy}, Call::PureExtern);
+         Type int_type = Type(Type::Int, 32, oy.type().lanes());
+ 
+         // This is ill-defined. WGSL spec says that nan cannot occur.
+@@ -591,6 +594,9 @@
+                                             equiv,
+                                             -equiv),
+                                      nan)));
++        equiv = select(ox == 0.0f,
++                       select(oy == 0.0f, make_const(op->type, 1.0f), make_const(op->type, 0.0f)),
++                       equiv);
+         equiv.accept(this);
+ 
+     } else {

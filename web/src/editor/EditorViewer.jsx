@@ -1,3 +1,4 @@
+import StartupProgress from "./StartupProgress.jsx";
 import { AnimatePresence, motion } from "motion/react";
 import Presence from "../Presence.jsx";
 import { Icon } from "../icons.jsx";
@@ -12,6 +13,7 @@ import PhotoStrip from "./PhotoStrip.jsx";
 import { useEditor } from "./EditorContext.jsx";
 export default function EditorViewer() {
   const {
+    startupProgress,
     dragOver,
     setDragOver,
     acceptFiles,
@@ -25,7 +27,7 @@ export default function EditorViewer() {
     setDetailBackend,
     session,
     detailRequest,
-    interacting,
+    previewInteracting,
     exporting,
     previewKey,
     setViewerMoving,
@@ -69,6 +71,7 @@ export default function EditorViewer() {
         acceptFiles(e.dataTransfer.files);
       }}
     >
+      <StartupProgress progress={startupProgress} />
       <AnimatePresence mode="wait" initial={false}>
         {active ? (
           <motion.div
@@ -106,7 +109,9 @@ export default function EditorViewer() {
                 detailSession={session}
                 detailRequest={detailRequest}
                 detailEnabled={
-                  !interacting && !exporting && shownResult?.key === previewKey
+                  !previewInteracting &&
+                  !exporting &&
+                  shownResult?.key === previewKey
                 }
                 result={shownResult}
                 original={active.image}

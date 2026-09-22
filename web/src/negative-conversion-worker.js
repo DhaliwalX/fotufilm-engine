@@ -1,6 +1,12 @@
 import { relatedAssetUrl, supportsWebgpuRuntime } from "./runtime-assets.js";
 
-let serial = 0;
+let serial = 0,
+  runtime,
+  input,
+  output,
+  parameters,
+  runtimeGpu,
+  gpuFailed = false;
 const waiting = new Map();
 self.onmessage = async ({ data }) => {
   if (data.kind === "pixels") {
@@ -10,8 +16,14 @@ self.onmessage = async ({ data }) => {
     else pending?.resolve(data.pixels);
     return;
   }
-  if (data.kind !== "convert") return;
-  let runtime, input, output, parameters;
+  if (data.kind !== "convert" && data.kind !== "warmup") return;
+  const warmup = data.kind === "warmup";
+  if (warmup)
+    Object.assign(data, {
+      width: 512,
+      height: 512,
+      parameters: [0, 0, 0, 1, 1, 1, 1, 0],
+    });
   function release() {
     if (!runtime) return;
     runtime._free(input);
@@ -21,11 +33,17 @@ self.onmessage = async ({ data }) => {
     input = output = parameters = 0;
   }
   async function initialize(gpu) {
+    if (runtime && runtimeGpu === gpu) {
+      runtime.HEAPF32.set(data.parameters, parameters / 4);
+      return;
+    }
+    release();
     const url = relatedAssetUrl(`${gpu ? "gpu" : "cpu"}.mjs`, data.base);
     const { default: create } = await import(/* @vite-ignore */ url);
     runtime = await create({
       locateFile: (name) => relatedAssetUrl(name, data.base),
     });
+    runtimeGpu = gpu;
     input = runtime._malloc(512 * 512 * 3 * 4);
     output = runtime._malloc(512 * 512 * 3 * 4);
     parameters = runtime._malloc(8 * 4);
@@ -35,6 +53,7 @@ self.onmessage = async ({ data }) => {
   }
   try {
     let gpu =
+      !gpuFailed &&
       data.preferGpu !== false &&
       supportsWebgpuRuntime(navigator.gpu, WebAssembly);
     try {
@@ -43,6 +62,7 @@ self.onmessage = async ({ data }) => {
       if (!gpu) throw error;
       release();
       gpu = false;
+      gpuFailed = true;
       await initialize(false);
     }
     const result = new Float32Array(data.width * data.height * 4);
@@ -51,11 +71,13 @@ self.onmessage = async ({ data }) => {
       for (let x = 0; x < data.width; x += 512) {
         const w = Math.min(512, data.width - x),
           count = w * h;
-        const pixels = await new Promise((resolve, reject) => {
-          const id = ++serial;
-          waiting.set(id, { resolve, reject });
-          self.postMessage({ kind: "read", id, x, y, width: w, height: h });
-        });
+        const pixels = warmup
+          ? new Float32Array(count * 4).fill(0.5)
+          : await new Promise((resolve, reject) => {
+              const id = ++serial;
+              waiting.set(id, { resolve, reject });
+              self.postMessage({ kind: "read", id, x, y, width: w, height: h });
+            });
         const upload = () => {
           for (let c = 0; c < 3; c++)
             for (let i = 0; i < count; i++)
@@ -78,6 +100,7 @@ self.onmessage = async ({ data }) => {
         if (code && gpu) {
           release();
           gpu = false;
+          gpuFailed = true;
           await initialize(false);
           upload();
           code = await runtime._negative_convert(
@@ -111,7 +134,6 @@ self.onmessage = async ({ data }) => {
     );
   } catch (error) {
     self.postMessage({ kind: "error", error: error.message });
-  } finally {
     release();
   }
 };

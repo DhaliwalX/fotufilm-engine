@@ -85,16 +85,4 @@
     width: 0;
     overflow: hidden;
   }
-  @media (max-width: 833px) {
-    .film-collapsed .film-sidebar {
-      visibility: hidden;
-      opacity: 0;
-      transform: translateX(-100%);
-      pointer-events: none;
-      transition-delay: 0s, 0s, 220ms;
-    }
-    .inspector-collapsed .inspector {
-      transform: translateX(100%);
-    }
-  }
 }

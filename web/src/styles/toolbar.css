@@ -21,9 +21,7 @@
     min-width: 224px;
     flex-shrink: 0;
   }
-  .app-name {
-    font-weight: 600;
-    font-size: 13px;
+  .toolbar-brand {
     margin: 0 auto 0 7px;
   }
   .toolbar-divider {

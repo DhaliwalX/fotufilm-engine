@@ -50,7 +50,7 @@ echo "Halide: $HALIDE_PREFIX"
 # pipeline for every dispatch and throws it away, which on the colour kernel's 64 dispatches came
 # to eight seconds a frame; and it never releases the command buffers it submits, so a page slows
 # down frame by frame. See the tools/halide-webgpu-*.patch files; tools/build-halide.sh --webgpu
-# applies these and strict float32 arithmetic for CPU/WebGPU agreement.
+# applies these and retains strict float32 support for diagnostic probes.
 WEBGPU_HALIDE="${FOTUFILM_WEBGPU_HALIDE:-}"
 if [[ -z "$WEBGPU_HALIDE" && -f build/halide-pr-install/include/Halide.h ]]; then
   WEBGPU_HALIDE=build/halide-pr-install

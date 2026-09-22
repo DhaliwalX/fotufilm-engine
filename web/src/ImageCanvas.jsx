@@ -1,3 +1,4 @@
+import { usePhotoNavigation } from "./usePhotoNavigation.js";
 import { useEffect, useRef, useState } from "react";
 import HistogramPanel from "./HistogramPanel.jsx";
 import ViewportDetail from "./ViewportDetail.jsx";
@@ -31,8 +32,7 @@ export function ImageCanvas({
   sampling = false,
   onSample,
 }) {
-  const container = useRef(null),
-    drag = useRef(null);
+  const container = useRef(null);
   const [offset, setOffset] = useState([0, 0]),
     [room, setRoom] = useState([1, 1]),
     [pixelRatio, setPixelRatio] = useState(() => window.devicePixelRatio || 1);
@@ -87,43 +87,21 @@ export function ImageCanvas({
   useEffect(() => {
     onZoomReadout?.(Math.round(nativeScale * (cropMode ? 1 : zoom) * 100));
   }, [nativeScale, cropMode, zoom, onZoomReadout]);
-  useEffect(() => {
-    const surface = container.current;
-    const wheel = (event) => {
-      if (cropMode || event.target.closest(".histogram")) return;
-      event.preventDefault();
-      setZoom((z) => clamp(z * (event.deltaY > 0 ? 0.9 : 1.1), 1, 8));
-    };
-    surface.addEventListener("wheel", wheel, {
-      passive: false,
-    });
-    return () => surface.removeEventListener("wheel", wheel);
-  }, [cropMode, setZoom]);
-  function begin(e) {
-    if (e.button !== 0 || cropMode || e.target.closest(".histogram")) return;
-    if (sampling) {
-      const plane = e.target.closest(".photo-plane");
-      if (plane) {
-        const bounds = plane.getBoundingClientRect();
-        onSample?.([
-          (e.clientX - bounds.left) / bounds.width,
-          (e.clientY - bounds.top) / bounds.height,
-        ]);
-      }
-      return;
-    }
-    e.currentTarget.setPointerCapture(e.pointerId);
-    if (zoom === 1) setCompare(true);
-    else {
-      drag.current = [e.clientX, e.clientY, ...offset];
-      onInteraction?.(true);
-    }
-  }
-  function end() {
-    drag.current = null;
-    onInteraction?.(false);
-    setCompare(false);
-  }
+  const navigation = usePhotoNavigation({
+    container,
+    sourceKey,
+    cropMode,
+    sampling,
+    onSample,
+    zoom,
+    setZoom,
+    offset,
+    setOffset,
+    display: [displayWidth, displayHeight],
+    room,
+    setCompare,
+    onInteraction,
+  });
   return (
     <div
       ref={container}
@@ -134,25 +112,7 @@ export function ImageCanvas({
         if (!cropMode && !event.target.closest(".histogram"))
           setZoom((z) => (z === 1 ? clamp(1 / nativeScale, 1, 8) : 1));
       }}
-      onPointerDown={begin}
-      onPointerMove={(e) => {
-        if (drag.current)
-          setOffset([
-            clamp(
-              drag.current[2] + e.clientX - drag.current[0],
-              (-displayWidth * (zoom - 1)) / 2,
-              (displayWidth * (zoom - 1)) / 2,
-            ),
-            clamp(
-              drag.current[3] + e.clientY - drag.current[1],
-              (-displayHeight * (zoom - 1)) / 2,
-              (displayHeight * (zoom - 1)) / 2,
-            ),
-          ]);
-      }}
-      onPointerUp={end}
-      onPointerCancel={end}
-      onLostPointerCapture={end}
+      {...navigation}
     >
       {displayUrl && (
         <div

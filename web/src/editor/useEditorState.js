@@ -1,7 +1,9 @@
+import useCompactLayout from "../useCompactLayout.js";
 import { useReducer, useState, useRef, useEffect } from "react";
 import { historyReducer, initialHistory } from "../editor-state.js";
 import { sourceIlluminant } from "../editor-catalogue.js";
 export default function useEditorState({}) {
+  const compactLayout = useCompactLayout();
   const [history, historyDispatch] = useReducer(historyReducer, initialHistory);
   const edit = history.present;
   const [stocks, setStocks] = useState([]),
@@ -10,10 +12,14 @@ export default function useEditorState({}) {
   const active = files.find((file) => file.id === activeId);
   const sceneKelvin = sourceIlluminant(edit);
   const [panel, setPanel] = useState("film"),
-    [filmOpen, setFilmOpen] = useState(() => window.innerWidth >= 834),
-    [inspectorOpen, setInspectorOpen] = useState(
-      () => window.innerWidth >= 834,
-    );
+    [filmOpen, setFilmOpen] = useState(() => !compactLayout),
+    [inspectorOpen, setInspectorOpen] = useState(() => !compactLayout);
+  useEffect(() => {
+    if (compactLayout) {
+      setFilmOpen(false);
+      setInspectorOpen(false);
+    }
+  }, [compactLayout]);
   const [search, setSearch] = useState(""),
     [zoom, setZoom] = useState(1),
     [compare, setCompare] = useState(false);
@@ -54,6 +60,7 @@ export default function useEditorState({}) {
     setShowMask(false);
   }, [activeId]);
   return {
+    compactLayout,
     history,
     historyDispatch,
     edit,

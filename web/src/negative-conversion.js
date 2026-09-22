@@ -1,3 +1,7 @@
+import {
+  takeNegativeWorker,
+  returnNegativeWorker,
+} from "./negative-worker-pool.js";
 import { assetUrl } from "./engine.js";
 import { loadFilmProfile } from "./film-profile.js";
 import { defaultEdit } from "./editor-state.js";
@@ -54,19 +58,20 @@ export function convertNegative(
       return reject(
         new Error("Images above 120 megapixels are not supported."),
       );
-    const worker = new Worker(
-      new URL("./negative-conversion-worker.js", import.meta.url),
-      { type: "module" },
-    );
+    const worker = takeNegativeWorker();
     let settled = false;
     const finish = (error, value) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       signal?.removeEventListener("abort", abort);
-      worker.terminate();
-      if (error) reject(error);
-      else resolve(value);
+      if (error) {
+        worker.terminate();
+        reject(error);
+      } else {
+        returnNegativeWorker(worker);
+        resolve(value);
+      }
     };
     const abort = () =>
       finish(new DOMException("Conversion cancelled.", "AbortError"));

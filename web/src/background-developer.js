@@ -63,12 +63,19 @@ export async function createBackgroundDeveloper(
     },
     dispose() {
       closed = true;
+      options.signal?.removeEventListener("abort", abort);
       gpuReadyResolve(false);
       worker.terminate();
       active?.resolve(null);
       active = null;
     },
   };
+  const abort = () => developer.dispose();
+  options.signal?.addEventListener("abort", abort, { once: true });
+  if (options.signal?.aborted) {
+    developer.dispose();
+    return ready;
+  }
   worker.onerror = (event) => {
     const pending = active;
     active = null;
@@ -78,6 +85,11 @@ export async function createBackgroundDeveloper(
     );
   };
   worker.onmessage = async ({ data }) => {
+    if (closed) return;
+    if (data.kind === "warmup-progress") {
+      options.onWarmupProgress?.(data);
+      return;
+    }
     if (data.kind === "gpu-ready") {
       gpuReadyResolve(data.available);
       if (!closed && data.available) onRendererReady();
