@@ -24,6 +24,7 @@
   @media (prefers-reduced-motion: reduce) {
     .startup-progress [role="progressbar"] > div:last-child > div {
       transition: none;
+      animation: none;
     }
   }
 }

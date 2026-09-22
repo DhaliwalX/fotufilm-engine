@@ -58,7 +58,7 @@ test("startup compiles GPU families before import and reuses the prepared worker
     prepared
       .filter((e) => e.kind === "warmup-progress")
       .map((e) => e.completed),
-  ).toEqual([0, 0, 1, 2, 3, 4, 5, 6]);
+  ).toEqual([0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
   await expect(progress).toBeHidden({ timeout: 30000 });
   await openChart(page, 320, 192);
   await page.waitForFunction(() =>

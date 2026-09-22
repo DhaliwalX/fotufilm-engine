@@ -1,6 +1,6 @@
 import { assetUrl, loadPack, normalPack, createDeveloper } from "./engine.js";
 
-export const GPU_WARMUP_GROUPS = 6;
+export const GPU_WARMUP_GROUPS = 11;
 
 export const gpuFamily = (pack) =>
   pack.featureMask & (1 << 29)
@@ -51,15 +51,16 @@ export async function prepareFilmGpu(report, readyFamilies) {
       ["Preparing colour printing", printPack(color)],
       ["Preparing black & white printing", printPack(mono)],
     ]) {
-      progress(label);
       gpu.usePack(pack);
       for (const [width, height] of [
         [960, 540],
         [1920, 1080],
-      ])
+      ]) {
+        progress(label);
         await gpu.probe({ width, height });
+        completed++;
+      }
       readyFamilies.add(gpuFamily(pack));
-      completed++;
     }
     progress("Preparing 16-bit export");
     gpu.usePack(normalPack());
