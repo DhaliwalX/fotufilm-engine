@@ -73,8 +73,9 @@ stocks, form dye clouds:
   mass ($d \propto r^2$). To reproduce natural crystal morphology and development variance,
   crystals form two-point marks dispersing $1 \pm 0.5$ times the sublayer mean mark weight.
 - **Reversal and fog.** Reversal dye forms in the unexposed crystals remaining after first
-  development ($1 - p_k$). Fog crystals develop uniformly across all classes at the rate
-  set by `grainFogDensity`.
+  development ($1 - p_k$). Fog forms at sensitivity specks on a crystal's surface, so each
+  class fogs in proportion to $r_k^2$, scaled so the record's fog forms `grainFogDensity`: the
+  large, fast crystals carry most of it and the smallest hardly fog at all.
 - **Push/pull refit.** When pushed or pulled (e.g. Delta 3200 pushed 1–2 stops or pulled 2 stops),
   the crystal population is held fixed while developability and per-sublayer gains are refitted
   to the measured process curve using coordinate descent.
