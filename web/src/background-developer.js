@@ -1,5 +1,6 @@
 import { supportsWebgpuRuntime } from "./runtime-assets.js";
 import { yieldToBrowser } from "./yield.js";
+import { createDeveloperConnection } from "./developer-connection.js";
 
 // Kernels, shader compilation, metering and output encoding run off the UI thread.
 // Pull bounded source strips on demand; never clone the full-resolution photograph.
@@ -9,9 +10,7 @@ export async function createBackgroundDeveloper(
   onRendererReady = () => {},
   options = {},
 ) {
-  const worker = new Worker(new URL("./developer-worker.js", import.meta.url), {
-    type: "module",
-  });
+  const worker = createDeveloperConnection(options);
   let gpuReadyResolve;
   const gpuReady = new Promise((resolve) => {
     gpuReadyResolve = resolve;
@@ -84,7 +83,7 @@ export async function createBackgroundDeveloper(
       new Error(event.message || "The background image engine stopped."),
     );
   };
-  worker.onmessage = async ({ data }) => {
+  worker.onmessage = async ({ data, reply }) => {
     if (closed) return;
     if (data.kind === "warmup-progress") {
       options.onWarmupProgress?.(data);
@@ -112,8 +111,8 @@ export async function createBackgroundDeveloper(
         for (let row = 0; row < height; row += strip) {
           if (closed) return;
           if (job.stale()) {
-            worker.postMessage({ kind: "cancel" });
-            worker.postMessage({
+            reply({ kind: "cancel" });
+            reply({
               kind: "pixels",
               id: data.id,
               error: "Preview superseded.",
@@ -131,12 +130,10 @@ export async function createBackgroundDeveloper(
           await yieldToBrowser();
         }
         if (!closed)
-          worker.postMessage({ kind: "pixels", id: data.id, pixels }, [
-            pixels.buffer,
-          ]);
+          reply({ kind: "pixels", id: data.id, pixels }, [pixels.buffer]);
       } catch (error) {
         if (!closed)
-          worker.postMessage({
+          reply({
             kind: "pixels",
             id: data.id,
             error: error.message,
@@ -154,7 +151,7 @@ export async function createBackgroundDeveloper(
       }
     }
   };
-  worker.postMessage({
+  worker.start({
     kind: "initialize",
     pack,
     preferGpu:

@@ -29,6 +29,7 @@ export default function StartupProgress({ progress }) {
           <FotufilmBrand />
           <ProgressBar
             aria-label="Preparing editor"
+            isIndeterminate={!progress.done}
             label={
               <AnimatePresence mode="wait" initial={false}>
                 <motion.span
