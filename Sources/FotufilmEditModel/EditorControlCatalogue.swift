@@ -79,6 +79,17 @@ public enum EditorControlCatalogue {
         ],
     ]
 
+    // Browser inspection controls affect the viewer, not film-engine parameters.
+    public static let webHistogram: [String: Any] = [
+        "title": "Histogram", "move": "Move histogram", "resize": "Resize histogram",
+        "close": "Close histogram", "mode": "Histogram count mode",
+        "view": "Histogram channels",
+        "views": [["id": "rgb", "label": "RGB"], ["id": "luma", "label": "Luma"],
+                  ["id": "chroma", "label": "Chroma"], ["id": "oklab-l", "label": "OKLab L"],
+                  ["id": "oklab-ab", "label": "OKLab a/b"]],
+        "modes": [["id": "log", "label": "Log"], ["id": "linear", "label": "Linear"]],
+    ]
+
     public static let auxiliaries: [HostAuxiliary] = [
         HostAuxiliary(ofxName: "status", fxplugID: 37, group: nil, label: "Status",
                       kind: .label(text: "", hint: nil), surfaces: [.finalcut], order: 0),

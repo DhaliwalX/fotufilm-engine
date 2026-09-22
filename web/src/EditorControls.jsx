@@ -1,3 +1,4 @@
+import HistogramPanel from "./HistogramPanel.jsx";
 import ViewportDetail from "./ViewportDetail.jsx";
 import { visiblePhotoViewport } from "./viewport.js";
 import CropOverlay from "./CropOverlay.jsx";
@@ -155,97 +156,6 @@ export function Modal({ title, children, onClose, className }) {
       </div>
       {children}
     </dialog>
-  );
-}
-
-export function Histogram({ canvas, onClose }) {
-  const ref = useRef(null);
-  const [offset, setOffset] = useState([0, 0]);
-  const drag = useRef(null);
-  useEffect(() => {
-    if (!canvas) return;
-    const reduced = document.createElement("canvas");
-    reduced.width = 128;
-    reduced.height = 128;
-    const ctx = reduced.getContext("2d", { willReadFrequently: true });
-    ctx.drawImage(canvas, 0, 0, 128, 128);
-    const pixels = ctx.getImageData(0, 0, 128, 128).data;
-    const bins = Array.from({ length: 3 }, () => Array(64).fill(0));
-    for (let i = 0; i < pixels.length; i += 4)
-      for (let c = 0; c < 3; c++) bins[c][pixels[i + c] >> 2]++;
-    const plot = ref.current.getContext("2d"),
-      width = 192,
-      height = 72;
-    plot.clearRect(0, 0, width, height);
-    const peak = Math.max(1, ...bins.flat());
-    bins.forEach((channel, c) => {
-      plot.beginPath();
-      plot.moveTo(0, height);
-      channel.forEach((n, x) =>
-        plot.lineTo((x * width) / 63, height - (Math.log1p(n) / Math.log1p(peak)) * (height - 3)),
-      );
-      plot.lineTo(width, height);
-      plot.closePath();
-      plot.fillStyle = ["#f1787890", "#78c99b90", "#79a7ed90"][c];
-      plot.fill();
-    });
-  }, [canvas]);
-  return (
-    <div
-      className="histogram"
-      style={{
-        transform: `translate(${offset[0]}px, ${offset[1]}px)`,
-      }}
-    >
-      <div
-        className="histogram-header"
-        onPointerDown={(e) => {
-          if (e.target.closest("button")) return;
-          e.currentTarget.setPointerCapture(e.pointerId);
-          drag.current = [e.clientX, e.clientY, ...offset];
-        }}
-        onPointerMove={(e) => {
-          if (drag.current) {
-            const room = e.currentTarget
-              .closest(".canvas-area")
-              .getBoundingClientRect();
-            setOffset([
-              clamp(
-                drag.current[2] + e.clientX - drag.current[0],
-                0,
-                Math.max(0, room.width - 224),
-              ),
-              clamp(
-                drag.current[3] + e.clientY - drag.current[1],
-                0,
-                Math.max(0, room.height - 150),
-              ),
-            ]);
-          }
-        }}
-        onPointerUp={() => {
-          drag.current = null;
-        }}
-        onPointerCancel={() => {
-          drag.current = null;
-        }}
-      >
-        <span title="Logarithmic pixel count; linear tone values">RGB histogram · Log</span>
-        <button aria-label="Close histogram" onClick={onClose}>
-          ×
-        </button>
-      </div>
-      <canvas
-        ref={ref}
-        width="192"
-        height="72"
-        aria-label="Red, green and blue tonal distribution, logarithmic pixel counts"
-      />
-      <div className="histogram-scale">
-        <span>0</span>
-        <span>255</span>
-      </div>
-    </div>
   );
 }
 
@@ -433,9 +343,7 @@ export function ImageCanvas({
         </div>
       )}
       {compare && <span className="original-badge">Original</span>}
-      {showHistogram && result && (
-        <Histogram canvas={result.canvas} onClose={showHistogram} />
-      )}
+      <HistogramPanel result={result} open={!!showHistogram && !!result} onClose={showHistogram} container={container} />
     </div>
   );
 }

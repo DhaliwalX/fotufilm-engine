@@ -354,6 +354,8 @@ public struct ControlsExport {
             + "export const VIDEO_LABELS = {\n" + labels.joined(separator: "\n") + "\n}\n"
             + "export const SELECTION = " + String(decoding: try! JSONSerialization.data(
                 withJSONObject: EditorControlCatalogue.webSelection, options: [.sortedKeys]), as: UTF8.self) + "\n"
+            + "export const HISTOGRAM = " + String(decoding: try! JSONSerialization.data(
+                withJSONObject: EditorControlCatalogue.webHistogram, options: [.sortedKeys]), as: UTF8.self) + "\n"
             + "export const SCREEN_CONVERSION = " + String(decoding: try! JSONSerialization.data(
                 withJSONObject: ["title": EditorControlCatalogue.control(.digitalReference)!.title,
                                  "default": DigitalReferenceStyle.default.id,

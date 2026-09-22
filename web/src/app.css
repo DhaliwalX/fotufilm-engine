@@ -640,44 +640,6 @@ select {
   pointer-events: none;
   z-index: 5;
 }
-.histogram {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  width: 214px;
-  background: #f5f5f5e8;
-  border: 1px solid #ffffff80;
-  border-radius: 10px;
-  box-shadow: 0 3px 12px #0001;
-  padding: 10px;
-  backdrop-filter: blur(12px);
-  touch-action: none;
-}
-.histogram-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 10px;
-  color: #575b64;
-  cursor: move;
-  margin-bottom: 6px;
-}
-.histogram-header button {
-  font-size: 16px;
-  line-height: 12px;
-}
-.histogram canvas {
-  display: block;
-  width: 192px;
-  height: 72px;
-}
-.histogram-scale {
-  display: flex;
-  justify-content: space-between;
-  color: #7c8088;
-  font-size: 9px;
-  padding-top: 4px;
-}
 .filmstrip {
   display: flex;
   align-items: center;
@@ -854,16 +816,6 @@ dialog .adjustment {
   }
   .stock-thumb {
     background: #ffffff08;
-  }
-  .histogram {
-    background: #292b30ed;
-    border-color: #ffffff14;
-  }
-  .histogram-header {
-    color: #b4b8c1;
-  }
-  .histogram-scale {
-    color: #9b9fa8;
   }
   .error-banner {
     background: #402d2a;
