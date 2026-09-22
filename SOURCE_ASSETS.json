@@ -215,66 +215,6 @@
     "provenance": "Derived from open reflectance datasets; sources and terms listed in THIRD_PARTY_NOTICES.md. Content reviewed at merged source commit 5df7b09.",
     "sha256": "41019cd9471dd032e95ce999c61d526cfb4dae957c5f157102ec488e77aa2e0f"
   },
-  "Sources/FotufilmCore/Stocks/acros100.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0258E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "2012acd9513be584e84e6ceb4a1287b23996207223cd070ed3429fde6e2d9d63"
-  },
-  "Sources/FotufilmCore/Stocks/aerocolor2460.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak AS-2652 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "a89d7a042132b9edbc20889ac6925ccb1e4ba3afacd46e749bce13ec048b8b8f"
-  },
-  "Sources/FotufilmCore/Stocks/agfachrome100.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Agfa F-PF-E4 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "dc2ed8e5687056fdf96a4f74f725cdc88c3ea245c988662b64357e0c40409e9d"
-  },
-  "Sources/FotufilmCore/Stocks/agfachrome200.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Agfa F-PF-E4 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "21f2c3b5c310426fd34745e8c35f1aafdaf8d0a1200fc397ac810f5953d88921"
-  },
-  "Sources/FotufilmCore/Stocks/agfachrome50.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Agfa F-PF-E4 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "d0f852ae75eea5ada41d59d8c0eb33b48c979c2aa44e05a10cc93f111b4ceebd"
-  },
-  "Sources/FotufilmCore/Stocks/astia100f.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-149E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "186c62452df2934368126ef9f5d9df0f62b844319e4a1a7cd18f2e7a38d5cc28"
-  },
-  "Sources/FotufilmCore/Stocks/c200.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0249E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "2d69950350028ac689d115abee3e29a18ed01a8c4ba822bcdf16299b9e0926f3"
-  },
-  "Sources/FotufilmCore/Stocks/cinestill400d.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "d2767df570fe6a04a17d5b96af467a4bd0d2cd17f7f8b79d9b28386286c2a2b3"
-  },
-  "Sources/FotufilmCore/Stocks/cinestill800t.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "dbd48022a365437d05aef4454748d84aba578ad932b236ab338663604d5fa5e2"
-  },
-  "Sources/FotufilmCore/Stocks/delta3200.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Ilford Delta 3200 TI (2002), DD-X 9-minute vector trace density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "1dad80c82eaf0375e0bca80070be943584845fe9c0038faf17a58a6be74688e2"
-  },
-  "Sources/FotufilmCore/Stocks/doublex5222.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak H-1-5222 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "7b6bd944d045ab25f893ea34b50ea8013e7b4d519394cee91cc1e006de02f122"
-  },
-  "Sources/FotufilmCore/Stocks/ektachromee100.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-4000 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "10f6aa302f1405655b767ee3319ad98fc7f9c6c972accf211e2124d3df852a7b"
-  },
-  "Sources/FotufilmCore/Stocks/ektar100.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-4046 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "cd9174f7de2a2e59cbbca0d6dc4d0c57150fdb42443718985e626b856d8b233f"
-  },
-  "Sources/FotufilmCore/Stocks/eterna500.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm KB-501E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "06369c7f1a91c008d26586b2fb49d2343c36e3b845ee26a7b19918946f4ca1c5"
-  },
-  "Sources/FotufilmCore/Stocks/eternavivid500.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm KB-0901E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "f91ec239886da0cdaecd7e5ca1c231fd46d2b80cfa095f6bc7a827906a87e45b"
-  },
   "Sources/FotufilmCore/Stocks/example-monochrome-100.json": {
     "provenance": "Synthetic test curves and analytic sensitivity models. Example geometry uses explicitly chosen transmissions and releases; no fitted halation or receiver measurements.",
     "sha256": "91b85bcc3ac32a471e0775dc1db6a2179c9bf0495529ed7b66aa472129f563d4"
@@ -287,165 +227,17 @@
     "provenance": "Synthetic test curves and analytic sensitivity models. Example geometry uses explicitly chosen transmissions and releases; no fitted halation or receiver measurements.",
     "sha256": "19e59deb3bb00fa660273a83f58a5015a315d396ee909c72b691072d5da2d5e7"
   },
-  "Sources/FotufilmCore/Stocks/f64d.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm KB-912ER density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "6e1666ea04daf8410a13a20f6614b0696d5e0d6e396aee9978bf69b64b7ed61f"
-  },
-  "Sources/FotufilmCore/Stocks/fp4plus125.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Sheet-notch metadata follows Ilford Notch Codes Guide; see sheetNotches.source.",
-    "sha256": "5d62e21024522b07c4c449e6b1248dbb416eec535da4dd3a0a61bf504a53e3be"
-  },
   "Sources/FotufilmCore/Stocks/gold200.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-7022 (2016) density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
     "sha256": "fe8700184cb29b9680eb12a25a12b22d02d6a8ed7884a8239a6efab4b823c1a3"
-  },
-  "Sources/FotufilmCore/Stocks/hp5plus400.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Ilford HP5 Plus TI (Nov 2018) density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md. Sheet-notch metadata follows Ilford Notch Codes Guide; see sheetNotches.source.",
-    "sha256": "461a2c021f412d71b7fbe84db422ee08563c74ad1d59a9a1c57877971fd61c97"
-  },
-  "Sources/FotufilmCore/Stocks/instaxmini.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-076E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "a4e63bbf80f51962ce82a39fa714fffff04a178b6ea579b9b8e99fd51c37902c"
-  },
-  "Sources/FotufilmCore/Stocks/instaxwide.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-076E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "226cb36a1039179ff50e7ef127979300f07cc565ba2390b1b67a67f60ba40585"
-  },
-  "Sources/FotufilmCore/Stocks/kodachrome200.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-55 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "149f00b85f78ac5c137af8c67e2d234ddb201f3a55d7d76da437ced78fbefc02"
-  },
-  "Sources/FotufilmCore/Stocks/kodachrome25.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-55 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "ceb947c1d43fa0e51835609fe3d5d10114b9cba48ed0bf0f474c3ee807322f86"
-  },
-  "Sources/FotufilmCore/Stocks/kodachrome64.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-55 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "939ec3cb8fafbf5565c66c1051a204595a3783b62132dfea473a13599edb280a"
-  },
-  "Sources/FotufilmCore/Stocks/kodacolor100.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-7022 (2016), shared Gold 200 curve retained by Kodacolor 100 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "3b929e9cea72bebb640701ff24e30fe88889425182f321cc2337a642ca48b08a"
-  },
-  "Sources/FotufilmCore/Stocks/lomocolor100.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "b930e72289cdfe90fd5a5ff1327d8638d7f036349b6df686d2a8d361546f4023"
-  },
-  "Sources/FotufilmCore/Stocks/portra400.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-4050 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "3488f4153abdeb50dd66ef6ae03c6d9e64c92e7cd0aebcb08bd07c3597905759"
-  },
-  "Sources/FotufilmCore/Stocks/pro160ns.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0232E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "6250710b67a2fb942ba7638187975f64d666e184c07416663e1f3d0db0886c98"
-  },
-  "Sources/FotufilmCore/Stocks/pro400h.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-176E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "9b4a216830c9581acb0a971b52779e0e8159aef45affd252f269d69120f2915e"
   },
   "Sources/FotufilmCore/Stocks/provia100f.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-036E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
     "sha256": "ba6cf87a518f774c9e1d87c8398fd4d10d6cd2213c0fdd28c3529ffc518ae389"
   },
-  "Sources/FotufilmCore/Stocks/reala500d.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm KB-111E3 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "f088b1464e10f620ac65373467ca4c9bd661ed364ce6c6fc357a260065a1ec8c"
-  },
-  "Sources/FotufilmCore/Stocks/superia200.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-026E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "dc86b1affd3b60b930e03929819f940f77fab18e9c941b8321d2b9c64fb1e85c"
-  },
-  "Sources/FotufilmCore/Stocks/superia400.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0217E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "0f76230502476ebcee7aad8b00d87bdf1f2a4c04818b29a4c949fff030ecb3d8"
-  },
-  "Sources/FotufilmCore/Stocks/tmax100.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "e6336181c021c7686b24242b912cece534e1f2601e65a6b83d8b6ebaf2871cd1"
-  },
   "Sources/FotufilmCore/Stocks/trix400.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak F-4017 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
     "sha256": "bc875255633ea960e23d1e6a407a6d0bfa16798396a50ad52cc66ea90abe6560"
-  },
-  "Sources/FotufilmCore/Stocks/ultramax400.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-7023 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "bed731553b70722f3da1959cac0f97c43f35b19dfa1b6165fccdd4b1ba18a886"
-  },
-  "Sources/FotufilmCore/Stocks/velvia50.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0221E2 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "4d6cc7a5fc3be97854106429fd07a52497dde5a78ab752b79e61f84de29145f6"
-  },
-  "Sources/FotufilmCore/Stocks/verita200d.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak H-1-5206 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "fe1009edf38e0673feb060e9a8fddb977bd343be2a18ca6a0a2bcbf1a168fd82"
-  },
-  "Sources/FotufilmCore/Stocks/vision250d.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "dbb37903aa6cb31bbd03025a2e7a73426bacee501c697082b0d640e897ad9a68"
-  },
-  "Sources/FotufilmCore/Stocks/vision500t.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "4a3a7bc23c004c9529eace54a17501a2c965bb38b75ee842c30812696c85edd5"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/acros100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "1d2a97a4ddbacb9768bf0b11ff5c7e19629917a4cfb4b3cf5f55d95cb13039f0"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/aerocolor2460.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "86bcfa782319116fbc678fe7f1d8715a7bb3064d3c3bfdf199ff32ee6f7613d4"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/agfachrome100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "c9198838fdea7a71b0d63227de9a10a138194c49a19bc202d950da20ff094678"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/agfachrome200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "beccfbc48780e9e1948b117e8dffb5015684b51ebd6a5522b43fa1d0aec6391f"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/agfachrome50.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "c48c772cbfdd319edb1a9e696576487612edcfce5ac604365e85573c5d0a2b82"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/astia100f.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "b0b70d19d67718eb5e3add7079c819188d284eb5dd4ab172ebfb3071c9ca3f07"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/c200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "4b6950cece6039e23d5131d941fcb756a92ec99e036e5ca146644f33860d39ad"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/cinestill400d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "950a8c2aadbe403815371831691a891754ed5a620f32f243d75f8ba0d0071ed5"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/cinestill800t.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "6816d6cf7fa97355448c77b6772727c557536c9244447efc489afa52ef13776f"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/delta3200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "242e76da1666ee0562e76213700d34b9c814058e4be50be3abba226114b25f62"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/doublex5222.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "0183b8d5f91d7fbc182eb403dd23ec1585d1a6991e378920d410853ce7f9d587"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/ektachromee100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "b57629e49b434c2857d21056626c2662ed6687301e821aa73f794fec01353f82"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/ektar100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "e535371f2dd3d91136dba1f76671b6c5df4439a11d4010b6dbbb92ec4abf6922"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/eterna500.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "04ac286a0c0b1e74aaca40215d53e38f9d2081dbc3f1a9f241ca9ac759115531"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/eternavivid500.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "872f3aa30310a8c3402cd285b4ca8ae1f195e31ed5daea7281420ab2dda5aaa4"
   },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/example-monochrome-100.png": {
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests with grain disabled; D65 scene illuminant independent of stock reference, equal-Y spectral exposure; no photographic source material.",
@@ -459,165 +251,17 @@
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests with grain disabled; D65 scene illuminant independent of stock reference, equal-Y spectral exposure; no photographic source material. Updated for spectral Status A inversion of transparent reversal records; generated synthetic chart, grain off. Reference-gray balance includes rendering LUT interpolation. Updated for the Digital Reference screen conversion: the slide levelled to SDR, its brightest content at white.",
     "sha256": "590d72f6e86b16d5aeb94b4316c45669d77234e4f3122fe7605a658c942792d4"
   },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/f64d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "4c92bf9e61e81851372bcda1819b3d6c16c930af455d2b245b842e5bc2ba0467"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/fp4plus125.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "f592d5fdd0ed0ff80d5e372b59f91213e99c58591186ae4c757154aa7c1f262f"
-  },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/gold200.png": {
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
     "sha256": "a9497c5cbdab0abe1224995e6cb6d0c1bf59931cc972ede6ece7d8ff78fc4baa"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/hp5plus400.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "23ce25c9d537398898c43e8c32abc04696734931a4120388a5da11e5fabee5f9"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/instaxmini.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "343c7db3e5a1a983e62e20f80feca88b9eebd1aa1e84a122d5b5d0bba74be71c"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/instaxwide.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "d5324944422ab3520a7603752aa682f65192fe2a40b67ca1de1942e73b2088d9"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/kodachrome200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "e00af90491c3c5adafe3f5259a35813e14beddf155615447b4df64a4dfe1aaea"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/kodachrome25.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "425a01aff9616464aa32e08c8f9d35d1526db82dd742efabeb75c401895a709f"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/kodachrome64.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "e54793c2f9c0d5d61ca81aa4670a23f4667550662da0e35cd69f2f8a6405f8ba"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/kodacolor100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "6f8b18b01de07ab9988b3426ec7929623d53e3926253b1b28eca30f618dd2830"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/lomocolor100.png": {
-    "provenance": "Generated regression baseline from the synthetic ReferenceChart fixtures; physical print timing and fixed-dye viewing update. No photographic or manufacturer artwork.",
-    "sha256": "363cc84a7567245954913f942040b89be8d014979ba52f2f96e37609f1f1ea31"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/portra400.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "b0a6b2b33ca27b1d55d3b4252e2e18456c60fde76b4db232f8ec31b222a5eff0"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/pro160ns.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "38cf7c3ebc53639ede8bea74a77498b1990be8db16b1e497130390bc7da79257"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/pro400h.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "05d04dadf6df864daba50038dd847991403fca1c40e2ee6976c2286723b8d1f2"
   },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/provia100f.png": {
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
     "sha256": "3ca92fb5baed19fedebe94ab7512dc4e4e48a93011b0491dbcfa2f94bd4cb6ab"
   },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/reala500d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "7456ca244fcc0c94fa11b057bec0797541b94d02dd494af8967fecfc6d1676b6"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/superia200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "0f90b81deeb458be6ccee48d09f93a70ec4b7ee6955ede9ddd87eb1378e77244"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/superia400.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "3be2b3c66465faef8c764276654c7efca703d3638241ceee71033a8dc83c76dd"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/tmax100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "891728cffaaf36f901ab5faeec9eaca48e1a2f21db41981893d80cc3f953d39a"
-  },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/trix400.png": {
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
     "sha256": "03a5934136b38467a21c16f4641d5d83d2c5038766f9999cbf13a644c4dcc5ce"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/ultramax400.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "aa29ac10820f3d90a0463bf20b03e3e784139628d12769b57e81094a1eeea527"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/velvia50.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "695dd025bc9e9e1e73596ed892698edb03d4bde2be75ef6922f3b6ae9d53bb3c"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/verita200d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "ecaefaafcb759cd33f36fc4aced8e02613ec5a67f70514afc5e71fe42b8aab73"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/vision250d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "e42891acccaafdbd51d2ca9c4c950fb582217ae1b270822354c83029d92b71d5"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/vision500t.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "43ae645d6b51f1df4cb07909ec500726d4b8892aac8d26f214cae0c8a8b8ed16"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/acros100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "758dc7f9a2a015aef84c6ad964eb83e9bf3a3ba6853bb4c584254db74b9ac707"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/aerocolor2460.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "562ec55251c7cceec48706667eccdc4b1db2ba5de87872ae76d39f19f8b4436c"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/agfachrome100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "21f46c78620203c382c1da13e35f2574d25bb2bad7a1211343dcee73ddfcbf41"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/agfachrome200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "664d10f623bdd6a8c2b5e214988cc3c9c31567ed6b7387d9b15e3ab21f643902"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/agfachrome50.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "240fc8e7ccb21b08d7117b267c7299f8c945132ed6d92d41428dfb4d3e31418b"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/astia100f.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "b29e18af1c9dd73366db8574883d07d285108efff7f54d461c9178dbd2762b1f"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/c200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "964a5c9ec06dcb41f3354cfda0ccb8f9a6a640221b9977c436b675947b4bbe85"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/cinestill400d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "ac3323b51dbdafa18f2a3a12a9dbceffdec903c1f0452f74b0b86af2f61ac5c5"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/cinestill800t.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "93504d54f063ca7c06a1fd7f91bff7635f422365873ff67a9d82fc25531a3f37"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/delta3200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "0ae9cff7e0d901241f0ec0b5fe5663f5fb7c0bc1b49b166ee173e233512b310e"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/doublex5222.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "4c4066750f80238e0fd3d11c19a637af13a34f4dc73c44d2a9694b49f718a06b"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/ektachromee100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "3dcf3d82eb42434a23c9d9b7a29c698273c8e8ed38b5003a568db3990aadb8e6"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/ektar100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "15298dbd918866171d8d5e6aecc9461f9e290e0643ce2fe989c138cc33cb4bc4"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/eterna500.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "85b43e28192dc2d5ef3a12dcda1785d096e77dc2ce1703de9b64ddbf998aa8c2"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/eternavivid500.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "67480eb927e57b500b1caa03e63e54b0d5ff9dff27fedbf8620aff8ff999a6e2"
   },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/example-monochrome-100.png": {
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests with grain disabled; D65 scene illuminant independent of stock reference, equal-Y spectral exposure; no photographic source material.",
@@ -631,165 +275,17 @@
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests with grain disabled; D65 scene illuminant independent of stock reference, equal-Y spectral exposure; no photographic source material. Updated for spectral Status A inversion of transparent reversal records; generated synthetic chart, grain off. Reference-gray balance includes rendering LUT interpolation. Updated for the Digital Reference screen conversion: the slide levelled to SDR, its brightest content at white.",
     "sha256": "0fc951d7053861795e44477c320cd14a2ee9edc228bae27eff8f762af222de48"
   },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/f64d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "dcc0acecbce9618bb8e9d736aca30ad65b4d51e6bcc061e1bff8d66a69f0395f"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/fp4plus125.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "1437fef812f9e625a474449de6e6981a140c9053360c2f8a484870344225dbe9"
-  },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/gold200.png": {
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
     "sha256": "fe6c31aa784211cc77a011d214f649b1c922c1b12fbe9c1f205d65af4d09eb13"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/hp5plus400.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "8271159394651be3cfd265c3419b9646aac289d5562cd1e301c6cde0d8a45fff"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/instaxmini.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "50ac91741755fa9f662a94d66b1fe3470bcc61d52263e7dfd97c90fffc7d5dc1"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/instaxwide.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "bb52e559409ffbb33b55a520ee52164450a2d05c0f337db4482161d9cc0b3e03"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/kodachrome200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "11a39f1525a857628289b86d30fe0482a2647a40e0029a7fbbfa5696605923da"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/kodachrome25.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "5a736a8d990886951eadf32eda4e32f4ddab01b3162299553dc485e571c3b397"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/kodachrome64.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "8bfa6b7c3bf734c1278ff689bb76f86623efeb18e3345ec84b2ab078bb8aa15f"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/kodacolor100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "7cb8402674345302a59a50dc08b44a3e033990f58f13ee513752dfbdd3d39ff0"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/lomocolor100.png": {
-    "provenance": "Generated regression baseline from the synthetic ReferenceChart fixtures; physical print timing and fixed-dye viewing update. No photographic or manufacturer artwork.",
-    "sha256": "b9e9fec9485cecc7c27bc09fc9a112bd4fa6e051e810abb971497bd37402a7ad"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/portra400.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "1d2741632f083093e20cde69d6ef8d5dc68540337cb562e742ee746dcebb09ab"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/pro160ns.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "56f56b0633d05277c359fb4482c3ea6b5b21d951bfbf064103f90061732693ff"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/pro400h.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "2047ea57b80e0c0f03f90e8c321793c7e4278b2fd6e6a5a3d04f450075ac2dc9"
   },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/provia100f.png": {
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
     "sha256": "4067072e37f9f4a7e63031435995ea3c2bb908eff8d3e6d5286c91bf3cea7dd5"
   },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/reala500d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "2fcd35b66b21ba6c7494dbc6337b52b23835efc5ceebc0558562147b387fdc15"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/superia200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "9fc0002a92bbe49a448db2059713b48c9b58dc57c3874009560547e44e5fe740"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/superia400.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "eb14b80df31c97c9f4220506b6be54e7e65f91416c7349d60605fef7ed512aef"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/tmax100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "d3505fa8cb268d1432b5ee6efabd433716ca3c57739f2fb0bf825fbe9f98dbd3"
-  },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/trix400.png": {
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
     "sha256": "1fbb12f388da039ed45fa08bddbc4ebd3f90e6c75cb7694a166fe6944c43ec35"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/ultramax400.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "16daf0f65d44e729b218138c6ac6161a881ecde2e931f90be22eb59014ebc81b"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/velvia50.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "99b4aaa970f26ad5f1c8a0eee12ea91f240645916ec6a0f7d73ab9d29d6723cc"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/verita200d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "fdba1b33fb69c9a53a23f0833ac398739e0d5958d12e89f31c96cf635d7ce543"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/vision250d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "ac16e694bbfabaa78701d192b4e549708c2cf95500f6680471102ee989df2c91"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/vision500t.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "5209ebc4b7ad0f22c1cb91f0438654985d8cc98fef8cd6a07bf1b93e44bd1cc9"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/acros100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "7c36a96892bce828cbc06c7db53b16ef0bb0407c5f1134a18b25f7788cdba8ce"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/aerocolor2460.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "52e4109b2bb68ae2ebf1fc5666817367de7a61340731b774e1b9c88723293b75"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/agfachrome100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "befa044bcc49830e024d4cef50f93875e5b8bfcc2a8f22378a95d1041fa67a59"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/agfachrome200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "f189f182c2465657f2af5bf36e4fbde4b8f1da0f0790735b94461db8ee9c768c"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/agfachrome50.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "857194ba197bdf79ccb5d20bdcc988b132c77d7c241defc6d165dca031a5c013"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/astia100f.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "a9ce294f1e80d1893e37ee643a2d31026b7788958e6aefe5c4ec437302213529"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/c200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "7f40fe3f1a7d0c90e0120fb0dd1a8ab6a583dfe8f7ffc7b427501d607acdece1"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/cinestill400d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "484972821ab2230b0901ea33fcbe388926dbe0f18b9964475ea1a21990ab0ef8"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/cinestill800t.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "a30164a66651a6a00066fe50f00725105649432b33451dafc958c91dee67e7c9"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/delta3200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "5fdbae40bde2b364f3ccd10e85471bf4231da74340c04229c5a6e60cd46ecd51"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/doublex5222.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "bd1eff7e146751fe1703b7d4c2251f5bd6337d1770665c00a55947375f904a12"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/ektachromee100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "3d7d4ff772ef301f8be915d1cbf61b3c56d8db9bb98eb57a6e98bc7c73df2989"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/ektar100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "f356874ce359dd1804301395ff121cbfca6526a5e3dbc5497cd8150e4c119d61"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/eterna500.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "c9be49258daf70948b5f11349668b7ce7b469056d157fdbb6dc865aca5b965c7"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/eternavivid500.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "18db526d9d660330457601787c6bcb4c5025edcf76397e64fde71bf491a3e5e9"
   },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/example-monochrome-100.png": {
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests with grain disabled; D65 scene illuminant independent of stock reference, equal-Y spectral exposure; no photographic source material.",
@@ -803,165 +299,17 @@
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests with grain disabled; D65 scene illuminant independent of stock reference, equal-Y spectral exposure; no photographic source material. Updated for spectral Status A inversion of transparent reversal records; generated synthetic chart, grain off. Reference-gray balance includes rendering LUT interpolation. Updated for the Digital Reference screen conversion: the slide levelled to SDR, its brightest content at white.",
     "sha256": "ba858a4c4d65a42eb5a096ae62eddaea6446af81ff3a7ba73c8a2c7d2de8aa11"
   },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/f64d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "eb7ef17edd8704d590f2944d679675df34f51d37378e06eb5aae50be3f859aaf"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/fp4plus125.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "4df481f2eaeb42b0181bbb1b8a52badd55ad3d2cfdd1bb206771f35ea2f9cde7"
-  },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/gold200.png": {
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
     "sha256": "fc1a5b4ead08d772334e875e087fa5d9f6dd9156d24c9247bc2a1216bf8b2813"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/hp5plus400.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "b0e467a98023897966ac93faa618ef283edc729db328b3592863dd10ebb1378c"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/instaxmini.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "66b7c561dbe51f6d67cb7143b6caf8c51774574c1216872070437d8ec0058af2"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/instaxwide.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "e9305714b4e8e40468720e49861280efa7ea160df641f885d24de0a92e61def3"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/kodachrome200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "3ce996a124e266593e8eb39b658e4d8ea5c8aa1e6eb30e7d811fe6c0d4a8280e"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/kodachrome25.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "1122cbafe029259445a396a01e91100f69337203bce81008aa4a218aa1f31705"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/kodachrome64.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "ec3c7a7965ab83df461d2b968a65f2e50e9a02fd1a13a21cce2e2f78e349a5d0"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/kodacolor100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "df1859747c40d83a3e141f6dc238ca492fe194ee881678f877197e9e1ca9e6d1"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/lomocolor100.png": {
-    "provenance": "Generated regression baseline from the synthetic ReferenceChart fixtures; physical print timing and fixed-dye viewing update. No photographic or manufacturer artwork.",
-    "sha256": "d6f6785e737b4d9edd03f4f87a7a4c7019e69b20b7b88fdf9ac495340e228811"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/portra400.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "8beb35f95f70b8fc590c9f4988b0c2aeb8d9e8ecbbbf4dfbcab232a7af12a1a5"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/pro160ns.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "85f98d6cf31c4389cdf3819641875fe5abb40cf2c386672ed29e772df29f9ee7"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/pro400h.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "91d3db634259e69698fbd02d1d5b2bced284ad06069417d7204632dc0202fa22"
   },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/provia100f.png": {
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
     "sha256": "defceab6467c3cbe97333d814ddf1f0fe4a6a8ff84b5b72cc8bdc8f6910c7ddd"
   },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/reala500d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "8d670f13cb46ee688ef814dd34a07a4ed34b3d68a922387954c0c9a911e93344"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/superia200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "486e6a8d4b6ef5eebc4a07804b30fb0a1c5a2e4217090bc6df8ea8415251af27"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/superia400.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "d7cab92ff7dd57e4701013d705d89d72da59effef13b681b188253ef4601d285"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/tmax100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "0315730b39b309d3c4ceeb6c5a7f6483ce4ada66b3edbdee1af238dc6f6ff278"
-  },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/trix400.png": {
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
     "sha256": "4b1c2680299d1892ba8669af0e7d838cacc532ff36bb9060110df13e60d8d8be"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/ultramax400.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "1d4792dfdd1fe41b726397ced7dfdf31861755137e8b4f806d46b713ee979ca5"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/velvia50.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "39f46a1396c6e5ee4bc0ee7f71fc6761609c6f42fe88a42542c942c86da3d326"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/verita200d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "3aa15201d4e1bc405c80ff73cf786cf35b2c5f35f61f600b0e30723c5dd3510a"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/vision250d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "2ada049f5ee80d5ceaee94622162319a35ae1cfe5e39b7b283089636434386c3"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/vision500t.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "af6451c1600388a77c2eb56dc4b06f05ef632205bbb67d05d881fc4c9533cf49"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/acros100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "1e054ba7eafb2a9da51dce47309e00921f91ffee321b9ff446e9a77b10738629"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/aerocolor2460.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "ef07cf9e7c0c921da815c8225da527de76a3f0fe3e13f24fdf56b800f2879a01"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/agfachrome100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "8340c3973d211c38448eabf6d1a6fc2d05b6765d0b7bd9a11cc2e0e53f2e4285"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/agfachrome200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "67337489d29c10c68c0dd1ba7ef2ffd2ae05d7d826b4348148a2f499d5ceb3a3"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/agfachrome50.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "2c339fd0c9d96ee41dc9c79188ad8cf1d3fdbc7a354e8cb5d8dd7d1cef910657"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/astia100f.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "8487703a718aef17f1b3ba0dfe573dd1a56eb50b2bec0a4a46f30cde40c50548"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/c200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "eb07161a9ffc910f54ca614bf9d54adec313f4abd94de13e7f4efc2b30ac3b12"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/cinestill400d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "d7a586394eca5f2d9ee75049f1a20feb2451e73abe0fee8872c0b4d8bd61c75c"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/cinestill800t.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "40b7c0b1e1343ad95a372e2b7153b324d1cd03919a812d2f536c37ad978032ac"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/delta3200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "c3296f406f334cc2bc8d7f14fe11fa3728772654434fe805e4802c479e3ac47f"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/doublex5222.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "f32782ddc0921863d9d2d7c3ce557753775cba25a7a39d66f208c16c4139f8b0"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/ektachromee100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "4d7a9a186e3d100dbf4eb69b0cb56e61b6188750fb8d6c538655d99319a98e26"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/ektar100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "983fd5a43083373826c7963935a8c1530b76779e95ca061e44ea05f3697ddaef"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/eterna500.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "00b9d80c4490728bf02852c721417d30604f45a2d49b166df7d71dd650019532"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/eternavivid500.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "00fb762ec67ace81e1017d595b112d44519287544b7e8f9f3d5be12a2de4d3f9"
   },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/example-monochrome-100.png": {
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests with grain disabled; D65 scene illuminant independent of stock reference, equal-Y spectral exposure; no photographic source material.",
@@ -975,105 +323,17 @@
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests with grain disabled; D65 scene illuminant independent of stock reference, equal-Y spectral exposure; no photographic source material. Updated for spectral Status A inversion of transparent reversal records; generated synthetic chart, grain off. Reference-gray balance includes rendering LUT interpolation. Updated for the Digital Reference screen conversion: the slide levelled to SDR, its brightest content at white.",
     "sha256": "6fcd47b7d95042a892c6306681a6062bf35f522b0779d3004fb769e0a32bfad2"
   },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/f64d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "21104e92c39f177b40f4b540ccb71b36cfe6255118826469d6258c051f6e6aa1"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/fp4plus125.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "2fde59ad0f704fe4e94ddf47cb8fe9b51c13f1eb51bfb1b1320e0a950cfe70b9"
-  },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/gold200.png": {
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
     "sha256": "42fd15dd900fe3ecc75f3d75824d2a2e3e43eb04287947cd920df5b9bb45a46f"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/hp5plus400.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "74739e0512c826b1ec9f457a3342e6d09524a5f7476bf04cc9a0b42f83b1a783"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/instaxmini.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "ab73c7aadaf7204735c57b8d5ce158b3a664c2185c5f1b955e6e904246122d94"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/instaxwide.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "ab73c7aadaf7204735c57b8d5ce158b3a664c2185c5f1b955e6e904246122d94"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/kodachrome200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "547a664025a053fbdf150691116f3f97c1a04bf2a868a0715cd389b519fb365f"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/kodachrome25.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "722856e97988e4c325758e296b4cfa4f2bb033711e3c26f84178d8714bdadb83"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/kodachrome64.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "653f329c9aa81352aa82935f9694de228acc3cf786941174d113d97944ef8151"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/kodacolor100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "42fd15dd900fe3ecc75f3d75824d2a2e3e43eb04287947cd920df5b9bb45a46f"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/lomocolor100.png": {
-    "provenance": "Generated regression baseline from the synthetic ReferenceChart fixtures; physical print timing and fixed-dye viewing update. No photographic or manufacturer artwork.",
-    "sha256": "5263946fd6c38bb235e4cfdfed2d073177f6f0488bc50d4e189df1b33ecb3c9e"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/portra400.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "3d6226ada779cfafd36e29450ef54a5a6a874a262595fa669008f2dd0969c56e"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/pro160ns.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "3dd66e802f2dc1de82605c949c2b89b95cea16a769c81813618bcf5927740601"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/pro400h.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "178ff0145d12b9aed3c21ee3ffb262f7a9cdcefeacb54fab6ddb538c516dfdd8"
   },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/provia100f.png": {
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
     "sha256": "bf78ab96e1570a72c72df8e31a8cee39c0e0e181d21a709ee0b2e8c38411ce73"
   },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/reala500d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "f63bcac6cb08b0a1eef7909ea27244334ece2588d025d4be21dfe2cd84f4ee71"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/superia200.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "46fe900907666dff4badcff1750b2a45654725e41beb8541135c2cd3895e528a"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/superia400.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "ba1ac31e43f38ad916d324d15caeaa8b29b0cd906e9f53ee8030bac653d008c7"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/tmax100.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "d014b711bf70fb01a858b8d079e35fb06f0cc1f25226d844e35fb7973608aab0"
-  },
   "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/trix400.png": {
     "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
     "sha256": "43caf1f33053324ef4f73c77ae4beaab282cf05a99b5b9bb10a4f4693d54edb8"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/ultramax400.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "fc21c759751300f1777fd1058310ef8e576d265d2e565f82d1d21504de6ef60f"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/velvia50.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "f3cd65cee424e9a287822a53249a28ba3b9caa5f06057d7dcafe782ee429b24b"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/verita200d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "c61e20e313ac95a00c0f902e6fc0e2a1a4a8560900cf857bdb4b623de3bf0e74"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/vision250d.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "9cfa3bd975160611022604d87fbd679dd259097843a6429c0244f4f93389ac10"
-  },
-  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/vision500t.png": {
-    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
-    "sha256": "e6b21f73c903cc7209fb069c366cb3b54af1858d67dd09fb0f761c98ca7cabb2"
   },
   "docs/assets/download-on-the-app-store.svg": {
     "provenance": "Apple App Store marketing badge Download_on_the_App_Store_Badge_US-UK_RGB_blk_4SVG_092917, unmodified; Apple artwork used only to link to the app's App Store listing under the App Store Marketing Guidelines (https://developer.apple.com/app-store/marketing/guidelines/).",
@@ -1158,6 +418,746 @@
   "web/src/assets/app-icon.png": {
     "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
     "sha256": "1bf1b4ef994da2b9f93cbeae7da8e60f58feb232d85a827e082344fb25942d7d"
+  },
+  "Sources/FotufilmCore/Stocks/acros100.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0258E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "2012acd9513be584e84e6ceb4a1287b23996207223cd070ed3429fde6e2d9d63"
+  },
+  "Sources/FotufilmCore/Stocks/aerocolor2460.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak AS-2652 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "a89d7a042132b9edbc20889ac6925ccb1e4ba3afacd46e749bce13ec048b8b8f"
+  },
+  "Sources/FotufilmCore/Stocks/agfachrome100.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Agfa F-PF-E4 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "dc2ed8e5687056fdf96a4f74f725cdc88c3ea245c988662b64357e0c40409e9d"
+  },
+  "Sources/FotufilmCore/Stocks/agfachrome200.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Agfa F-PF-E4 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "21f2c3b5c310426fd34745e8c35f1aafdaf8d0a1200fc397ac810f5953d88921"
+  },
+  "Sources/FotufilmCore/Stocks/agfachrome50.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Agfa F-PF-E4 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "d0f852ae75eea5ada41d59d8c0eb33b48c979c2aa44e05a10cc93f111b4ceebd"
+  },
+  "Sources/FotufilmCore/Stocks/astia100f.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-149E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "186c62452df2934368126ef9f5d9df0f62b844319e4a1a7cd18f2e7a38d5cc28"
+  },
+  "Sources/FotufilmCore/Stocks/c200.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0249E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "2d69950350028ac689d115abee3e29a18ed01a8c4ba822bcdf16299b9e0926f3"
+  },
+  "Sources/FotufilmCore/Stocks/cinestill400d.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "d2767df570fe6a04a17d5b96af467a4bd0d2cd17f7f8b79d9b28386286c2a2b3"
+  },
+  "Sources/FotufilmCore/Stocks/cinestill800t.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "dbd48022a365437d05aef4454748d84aba578ad932b236ab338663604d5fa5e2"
+  },
+  "Sources/FotufilmCore/Stocks/delta3200.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Ilford Delta 3200 TI (2002), DD-X 9-minute vector trace density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "1dad80c82eaf0375e0bca80070be943584845fe9c0038faf17a58a6be74688e2"
+  },
+  "Sources/FotufilmCore/Stocks/doublex5222.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak H-1-5222 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
+    "sha256": "7b6bd944d045ab25f893ea34b50ea8013e7b4d519394cee91cc1e006de02f122"
+  },
+  "Sources/FotufilmCore/Stocks/ektachromee100.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-4000 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "10f6aa302f1405655b767ee3319ad98fc7f9c6c972accf211e2124d3df852a7b"
+  },
+  "Sources/FotufilmCore/Stocks/ektar100.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-4046 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
+    "sha256": "cd9174f7de2a2e59cbbca0d6dc4d0c57150fdb42443718985e626b856d8b233f"
+  },
+  "Sources/FotufilmCore/Stocks/eterna500.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm KB-501E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "06369c7f1a91c008d26586b2fb49d2343c36e3b845ee26a7b19918946f4ca1c5"
+  },
+  "Sources/FotufilmCore/Stocks/eternavivid500.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm KB-0901E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "f91ec239886da0cdaecd7e5ca1c231fd46d2b80cfa095f6bc7a827906a87e45b"
+  },
+  "Sources/FotufilmCore/Stocks/f64d.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm KB-912ER density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "6e1666ea04daf8410a13a20f6614b0696d5e0d6e396aee9978bf69b64b7ed61f"
+  },
+  "Sources/FotufilmCore/Stocks/fp4plus125.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Sheet-notch metadata follows Ilford Notch Codes Guide; see sheetNotches.source.",
+    "sha256": "5d62e21024522b07c4c449e6b1248dbb416eec535da4dd3a0a61bf504a53e3be"
+  },
+  "Sources/FotufilmCore/Stocks/hp5plus400.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Ilford HP5 Plus TI (Nov 2018) density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md. Sheet-notch metadata follows Ilford Notch Codes Guide; see sheetNotches.source.",
+    "sha256": "461a2c021f412d71b7fbe84db422ee08563c74ad1d59a9a1c57877971fd61c97"
+  },
+  "Sources/FotufilmCore/Stocks/instaxmini.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-076E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "a4e63bbf80f51962ce82a39fa714fffff04a178b6ea579b9b8e99fd51c37902c"
+  },
+  "Sources/FotufilmCore/Stocks/instaxwide.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-076E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "226cb36a1039179ff50e7ef127979300f07cc565ba2390b1b67a67f60ba40585"
+  },
+  "Sources/FotufilmCore/Stocks/kodachrome200.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-55 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "149f00b85f78ac5c137af8c67e2d234ddb201f3a55d7d76da437ced78fbefc02"
+  },
+  "Sources/FotufilmCore/Stocks/kodachrome25.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-55 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "ceb947c1d43fa0e51835609fe3d5d10114b9cba48ed0bf0f474c3ee807322f86"
+  },
+  "Sources/FotufilmCore/Stocks/kodachrome64.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-55 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "939ec3cb8fafbf5565c66c1051a204595a3783b62132dfea473a13599edb280a"
+  },
+  "Sources/FotufilmCore/Stocks/kodacolor100.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-7022 (2016), shared Gold 200 curve retained by Kodacolor 100 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "3b929e9cea72bebb640701ff24e30fe88889425182f321cc2337a642ca48b08a"
+  },
+  "Sources/FotufilmCore/Stocks/lomocolor100.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "b930e72289cdfe90fd5a5ff1327d8638d7f036349b6df686d2a8d361546f4023"
+  },
+  "Sources/FotufilmCore/Stocks/portra400.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-4050 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
+    "sha256": "3488f4153abdeb50dd66ef6ae03c6d9e64c92e7cd0aebcb08bd07c3597905759"
+  },
+  "Sources/FotufilmCore/Stocks/pro160ns.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0232E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "6250710b67a2fb942ba7638187975f64d666e184c07416663e1f3d0db0886c98"
+  },
+  "Sources/FotufilmCore/Stocks/pro400h.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-176E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "9b4a216830c9581acb0a971b52779e0e8159aef45affd252f269d69120f2915e"
+  },
+  "Sources/FotufilmCore/Stocks/reala500d.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm KB-111E3 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "f088b1464e10f620ac65373467ca4c9bd661ed364ce6c6fc357a260065a1ec8c"
+  },
+  "Sources/FotufilmCore/Stocks/superia200.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-026E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "dc86b1affd3b60b930e03929819f940f77fab18e9c941b8321d2b9c64fb1e85c"
+  },
+  "Sources/FotufilmCore/Stocks/superia400.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0217E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "0f76230502476ebcee7aad8b00d87bdf1f2a4c04818b29a4c949fff030ecb3d8"
+  },
+  "Sources/FotufilmCore/Stocks/tmax100.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
+    "sha256": "e6336181c021c7686b24242b912cece534e1f2601e65a6b83d8b6ebaf2871cd1"
+  },
+  "Sources/FotufilmCore/Stocks/ultramax400.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-7023 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "bed731553b70722f3da1959cac0f97c43f35b19dfa1b6165fccdd4b1ba18a886"
+  },
+  "Sources/FotufilmCore/Stocks/velvia50.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0221E2 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
+    "sha256": "4d6cc7a5fc3be97854106429fd07a52497dde5a78ab752b79e61f84de29145f6"
+  },
+  "Sources/FotufilmCore/Stocks/verita200d.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak H-1-5206 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "fe1009edf38e0673feb060e9a8fddb977bd343be2a18ca6a0a2bcbf1a168fd82"
+  },
+  "Sources/FotufilmCore/Stocks/vision250d.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
+    "sha256": "dbb37903aa6cb31bbd03025a2e7a73426bacee501c697082b0d640e897ad9a68"
+  },
+  "Sources/FotufilmCore/Stocks/vision500t.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
+    "sha256": "4a3a7bc23c004c9529eace54a17501a2c965bb38b75ee842c30812696c85edd5"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/eterna500.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "04ac286a0c0b1e74aaca40215d53e38f9d2081dbc3f1a9f241ca9ac759115531"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/eternavivid500.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "872f3aa30310a8c3402cd285b4ca8ae1f195e31ed5daea7281420ab2dda5aaa4"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/f64d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "4c92bf9e61e81851372bcda1819b3d6c16c930af455d2b245b842e5bc2ba0467"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/reala500d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "7456ca244fcc0c94fa11b057bec0797541b94d02dd494af8967fecfc6d1676b6"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/verita200d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "ecaefaafcb759cd33f36fc4aced8e02613ec5a67f70514afc5e71fe42b8aab73"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/vision250d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "e42891acccaafdbd51d2ca9c4c950fb582217ae1b270822354c83029d92b71d5"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/vision500t.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "43ae645d6b51f1df4cb07909ec500726d4b8892aac8d26f214cae0c8a8b8ed16"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/eterna500.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "85b43e28192dc2d5ef3a12dcda1785d096e77dc2ce1703de9b64ddbf998aa8c2"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/eternavivid500.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "67480eb927e57b500b1caa03e63e54b0d5ff9dff27fedbf8620aff8ff999a6e2"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/f64d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "dcc0acecbce9618bb8e9d736aca30ad65b4d51e6bcc061e1bff8d66a69f0395f"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/reala500d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "2fcd35b66b21ba6c7494dbc6337b52b23835efc5ceebc0558562147b387fdc15"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/verita200d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "fdba1b33fb69c9a53a23f0833ac398739e0d5958d12e89f31c96cf635d7ce543"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/vision250d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "ac16e694bbfabaa78701d192b4e549708c2cf95500f6680471102ee989df2c91"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/vision500t.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "5209ebc4b7ad0f22c1cb91f0438654985d8cc98fef8cd6a07bf1b93e44bd1cc9"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/eterna500.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "c9be49258daf70948b5f11349668b7ce7b469056d157fdbb6dc865aca5b965c7"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/eternavivid500.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "18db526d9d660330457601787c6bcb4c5025edcf76397e64fde71bf491a3e5e9"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/f64d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "eb7ef17edd8704d590f2944d679675df34f51d37378e06eb5aae50be3f859aaf"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/reala500d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "8d670f13cb46ee688ef814dd34a07a4ed34b3d68a922387954c0c9a911e93344"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/verita200d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "3aa15201d4e1bc405c80ff73cf786cf35b2c5f35f61f600b0e30723c5dd3510a"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/vision250d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "2ada049f5ee80d5ceaee94622162319a35ae1cfe5e39b7b283089636434386c3"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/vision500t.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "af6451c1600388a77c2eb56dc4b06f05ef632205bbb67d05d881fc4c9533cf49"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/eterna500.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "00b9d80c4490728bf02852c721417d30604f45a2d49b166df7d71dd650019532"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/eternavivid500.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "00fb762ec67ace81e1017d595b112d44519287544b7e8f9f3d5be12a2de4d3f9"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/f64d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "21104e92c39f177b40f4b540ccb71b36cfe6255118826469d6258c051f6e6aa1"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/reala500d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "f63bcac6cb08b0a1eef7909ea27244334ece2588d025d4be21dfe2cd84f4ee71"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/verita200d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "c61e20e313ac95a00c0f902e6fc0e2a1a4a8560900cf857bdb4b623de3bf0e74"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/vision250d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "9cfa3bd975160611022604d87fbd679dd259097843a6429c0244f4f93389ac10"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/vision500t.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "e6b21f73c903cc7209fb069c366cb3b54af1858d67dd09fb0f761c98ca7cabb2"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/acros100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "1d2a97a4ddbacb9768bf0b11ff5c7e19629917a4cfb4b3cf5f55d95cb13039f0"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/aerocolor2460.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "86bcfa782319116fbc678fe7f1d8715a7bb3064d3c3bfdf199ff32ee6f7613d4"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/agfachrome100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "c9198838fdea7a71b0d63227de9a10a138194c49a19bc202d950da20ff094678"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/agfachrome200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "beccfbc48780e9e1948b117e8dffb5015684b51ebd6a5522b43fa1d0aec6391f"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/agfachrome50.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "c48c772cbfdd319edb1a9e696576487612edcfce5ac604365e85573c5d0a2b82"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/astia100f.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "b0b70d19d67718eb5e3add7079c819188d284eb5dd4ab172ebfb3071c9ca3f07"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/c200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "4b6950cece6039e23d5131d941fcb756a92ec99e036e5ca146644f33860d39ad"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/cinestill400d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "950a8c2aadbe403815371831691a891754ed5a620f32f243d75f8ba0d0071ed5"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/cinestill800t.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "6816d6cf7fa97355448c77b6772727c557536c9244447efc489afa52ef13776f"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/delta3200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "242e76da1666ee0562e76213700d34b9c814058e4be50be3abba226114b25f62"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/doublex5222.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "0183b8d5f91d7fbc182eb403dd23ec1585d1a6991e378920d410853ce7f9d587"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/ektachromee100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "b57629e49b434c2857d21056626c2662ed6687301e821aa73f794fec01353f82"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/ektar100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "e535371f2dd3d91136dba1f76671b6c5df4439a11d4010b6dbbb92ec4abf6922"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/fp4plus125.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "f592d5fdd0ed0ff80d5e372b59f91213e99c58591186ae4c757154aa7c1f262f"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/hp5plus400.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "23ce25c9d537398898c43e8c32abc04696734931a4120388a5da11e5fabee5f9"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/instaxmini.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "343c7db3e5a1a983e62e20f80feca88b9eebd1aa1e84a122d5b5d0bba74be71c"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/instaxwide.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "d5324944422ab3520a7603752aa682f65192fe2a40b67ca1de1942e73b2088d9"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/kodachrome200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "e00af90491c3c5adafe3f5259a35813e14beddf155615447b4df64a4dfe1aaea"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/kodachrome25.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "425a01aff9616464aa32e08c8f9d35d1526db82dd742efabeb75c401895a709f"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/kodachrome64.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "e54793c2f9c0d5d61ca81aa4670a23f4667550662da0e35cd69f2f8a6405f8ba"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/kodacolor100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "6f8b18b01de07ab9988b3426ec7929623d53e3926253b1b28eca30f618dd2830"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/lomocolor100.png": {
+    "provenance": "Generated regression baseline from the synthetic ReferenceChart fixtures; physical print timing and fixed-dye viewing update. No photographic or manufacturer artwork.",
+    "sha256": "363cc84a7567245954913f942040b89be8d014979ba52f2f96e37609f1f1ea31"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/portra400.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "b0a6b2b33ca27b1d55d3b4252e2e18456c60fde76b4db232f8ec31b222a5eff0"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/pro160ns.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "38cf7c3ebc53639ede8bea74a77498b1990be8db16b1e497130390bc7da79257"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/pro400h.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "05d04dadf6df864daba50038dd847991403fca1c40e2ee6976c2286723b8d1f2"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/superia200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "0f90b81deeb458be6ccee48d09f93a70ec4b7ee6955ede9ddd87eb1378e77244"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/superia400.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "3be2b3c66465faef8c764276654c7efca703d3638241ceee71033a8dc83c76dd"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/tmax100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "891728cffaaf36f901ab5faeec9eaca48e1a2f21db41981893d80cc3f953d39a"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/ultramax400.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "aa29ac10820f3d90a0463bf20b03e3e784139628d12769b57e81094a1eeea527"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/colorchecker/velvia50.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "695dd025bc9e9e1e73596ed892698edb03d4bde2be75ef6922f3b6ae9d53bb3c"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/acros100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "758dc7f9a2a015aef84c6ad964eb83e9bf3a3ba6853bb4c584254db74b9ac707"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/aerocolor2460.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "562ec55251c7cceec48706667eccdc4b1db2ba5de87872ae76d39f19f8b4436c"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/agfachrome100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "21f46c78620203c382c1da13e35f2574d25bb2bad7a1211343dcee73ddfcbf41"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/agfachrome200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "664d10f623bdd6a8c2b5e214988cc3c9c31567ed6b7387d9b15e3ab21f643902"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/agfachrome50.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "240fc8e7ccb21b08d7117b267c7299f8c945132ed6d92d41428dfb4d3e31418b"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/astia100f.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "b29e18af1c9dd73366db8574883d07d285108efff7f54d461c9178dbd2762b1f"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/c200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "964a5c9ec06dcb41f3354cfda0ccb8f9a6a640221b9977c436b675947b4bbe85"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/cinestill400d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "ac3323b51dbdafa18f2a3a12a9dbceffdec903c1f0452f74b0b86af2f61ac5c5"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/cinestill800t.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "93504d54f063ca7c06a1fd7f91bff7635f422365873ff67a9d82fc25531a3f37"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/delta3200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "0ae9cff7e0d901241f0ec0b5fe5663f5fb7c0bc1b49b166ee173e233512b310e"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/doublex5222.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "4c4066750f80238e0fd3d11c19a637af13a34f4dc73c44d2a9694b49f718a06b"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/ektachromee100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "3dcf3d82eb42434a23c9d9b7a29c698273c8e8ed38b5003a568db3990aadb8e6"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/ektar100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "15298dbd918866171d8d5e6aecc9461f9e290e0643ce2fe989c138cc33cb4bc4"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/fp4plus125.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "1437fef812f9e625a474449de6e6981a140c9053360c2f8a484870344225dbe9"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/hp5plus400.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "8271159394651be3cfd265c3419b9646aac289d5562cd1e301c6cde0d8a45fff"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/instaxmini.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "50ac91741755fa9f662a94d66b1fe3470bcc61d52263e7dfd97c90fffc7d5dc1"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/instaxwide.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "bb52e559409ffbb33b55a520ee52164450a2d05c0f337db4482161d9cc0b3e03"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/kodachrome200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "11a39f1525a857628289b86d30fe0482a2647a40e0029a7fbbfa5696605923da"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/kodachrome25.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "5a736a8d990886951eadf32eda4e32f4ddab01b3162299553dc485e571c3b397"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/kodachrome64.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "8bfa6b7c3bf734c1278ff689bb76f86623efeb18e3345ec84b2ab078bb8aa15f"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/kodacolor100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "7cb8402674345302a59a50dc08b44a3e033990f58f13ee513752dfbdd3d39ff0"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/lomocolor100.png": {
+    "provenance": "Generated regression baseline from the synthetic ReferenceChart fixtures; physical print timing and fixed-dye viewing update. No photographic or manufacturer artwork.",
+    "sha256": "b9e9fec9485cecc7c27bc09fc9a112bd4fa6e051e810abb971497bd37402a7ad"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/portra400.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "1d2741632f083093e20cde69d6ef8d5dc68540337cb562e742ee746dcebb09ab"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/pro160ns.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "56f56b0633d05277c359fb4482c3ea6b5b21d951bfbf064103f90061732693ff"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/pro400h.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "2047ea57b80e0c0f03f90e8c321793c7e4278b2fd6e6a5a3d04f450075ac2dc9"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/superia200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "9fc0002a92bbe49a448db2059713b48c9b58dc57c3874009560547e44e5fe740"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/superia400.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "eb14b80df31c97c9f4220506b6be54e7e65f91416c7349d60605fef7ed512aef"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/tmax100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "d3505fa8cb268d1432b5ee6efabd433716ca3c57739f2fb0bf825fbe9f98dbd3"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/ultramax400.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "16daf0f65d44e729b218138c6ac6161a881ecde2e931f90be22eb59014ebc81b"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/gamut/velvia50.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "99b4aaa970f26ad5f1c8a0eee12ea91f240645916ec6a0f7d73ab9d29d6723cc"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/acros100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "7c36a96892bce828cbc06c7db53b16ef0bb0407c5f1134a18b25f7788cdba8ce"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/aerocolor2460.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "52e4109b2bb68ae2ebf1fc5666817367de7a61340731b774e1b9c88723293b75"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/agfachrome100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "befa044bcc49830e024d4cef50f93875e5b8bfcc2a8f22378a95d1041fa67a59"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/agfachrome200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "f189f182c2465657f2af5bf36e4fbde4b8f1da0f0790735b94461db8ee9c768c"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/agfachrome50.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "857194ba197bdf79ccb5d20bdcc988b132c77d7c241defc6d165dca031a5c013"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/astia100f.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "a9ce294f1e80d1893e37ee643a2d31026b7788958e6aefe5c4ec437302213529"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/c200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "7f40fe3f1a7d0c90e0120fb0dd1a8ab6a583dfe8f7ffc7b427501d607acdece1"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/cinestill400d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "484972821ab2230b0901ea33fcbe388926dbe0f18b9964475ea1a21990ab0ef8"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/cinestill800t.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "a30164a66651a6a00066fe50f00725105649432b33451dafc958c91dee67e7c9"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/delta3200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "5fdbae40bde2b364f3ccd10e85471bf4231da74340c04229c5a6e60cd46ecd51"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/doublex5222.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "bd1eff7e146751fe1703b7d4c2251f5bd6337d1770665c00a55947375f904a12"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/ektachromee100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "3d7d4ff772ef301f8be915d1cbf61b3c56d8db9bb98eb57a6e98bc7c73df2989"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/ektar100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "f356874ce359dd1804301395ff121cbfca6526a5e3dbc5497cd8150e4c119d61"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/fp4plus125.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "4df481f2eaeb42b0181bbb1b8a52badd55ad3d2cfdd1bb206771f35ea2f9cde7"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/hp5plus400.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "b0e467a98023897966ac93faa618ef283edc729db328b3592863dd10ebb1378c"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/instaxmini.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "66b7c561dbe51f6d67cb7143b6caf8c51774574c1216872070437d8ec0058af2"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/instaxwide.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "e9305714b4e8e40468720e49861280efa7ea160df641f885d24de0a92e61def3"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/kodachrome200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "3ce996a124e266593e8eb39b658e4d8ea5c8aa1e6eb30e7d811fe6c0d4a8280e"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/kodachrome25.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "1122cbafe029259445a396a01e91100f69337203bce81008aa4a218aa1f31705"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/kodachrome64.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "ec3c7a7965ab83df461d2b968a65f2e50e9a02fd1a13a21cce2e2f78e349a5d0"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/kodacolor100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "df1859747c40d83a3e141f6dc238ca492fe194ee881678f877197e9e1ca9e6d1"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/lomocolor100.png": {
+    "provenance": "Generated regression baseline from the synthetic ReferenceChart fixtures; physical print timing and fixed-dye viewing update. No photographic or manufacturer artwork.",
+    "sha256": "d6f6785e737b4d9edd03f4f87a7a4c7019e69b20b7b88fdf9ac495340e228811"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/portra400.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "8beb35f95f70b8fc590c9f4988b0c2aeb8d9e8ecbbbf4dfbcab232a7af12a1a5"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/pro160ns.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "85f98d6cf31c4389cdf3819641875fe5abb40cf2c386672ed29e772df29f9ee7"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/pro400h.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "91d3db634259e69698fbd02d1d5b2bced284ad06069417d7204632dc0202fa22"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/superia200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "486e6a8d4b6ef5eebc4a07804b30fb0a1c5a2e4217090bc6df8ea8415251af27"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/superia400.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "d7cab92ff7dd57e4701013d705d89d72da59effef13b681b188253ef4601d285"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/tmax100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "0315730b39b309d3c4ceeb6c5a7f6483ce4ada66b3edbdee1af238dc6f6ff278"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/ultramax400.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "1d4792dfdd1fe41b726397ced7dfdf31861755137e8b4f806d46b713ee979ca5"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/spatial/velvia50.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "39f46a1396c6e5ee4bc0ee7f71fc6761609c6f42fe88a42542c942c86da3d326"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/acros100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "1e054ba7eafb2a9da51dce47309e00921f91ffee321b9ff446e9a77b10738629"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/aerocolor2460.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "ef07cf9e7c0c921da815c8225da527de76a3f0fe3e13f24fdf56b800f2879a01"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/agfachrome100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "8340c3973d211c38448eabf6d1a6fc2d05b6765d0b7bd9a11cc2e0e53f2e4285"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/agfachrome200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "67337489d29c10c68c0dd1ba7ef2ffd2ae05d7d826b4348148a2f499d5ceb3a3"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/agfachrome50.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "2c339fd0c9d96ee41dc9c79188ad8cf1d3fdbc7a354e8cb5d8dd7d1cef910657"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/astia100f.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "8487703a718aef17f1b3ba0dfe573dd1a56eb50b2bec0a4a46f30cde40c50548"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/c200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "eb07161a9ffc910f54ca614bf9d54adec313f4abd94de13e7f4efc2b30ac3b12"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/cinestill400d.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "d7a586394eca5f2d9ee75049f1a20feb2451e73abe0fee8872c0b4d8bd61c75c"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/cinestill800t.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "40b7c0b1e1343ad95a372e2b7153b324d1cd03919a812d2f536c37ad978032ac"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/delta3200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "c3296f406f334cc2bc8d7f14fe11fa3728772654434fe805e4802c479e3ac47f"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/doublex5222.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "f32782ddc0921863d9d2d7c3ce557753775cba25a7a39d66f208c16c4139f8b0"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/ektachromee100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "4d7a9a186e3d100dbf4eb69b0cb56e61b6188750fb8d6c538655d99319a98e26"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/ektar100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "983fd5a43083373826c7963935a8c1530b76779e95ca061e44ea05f3697ddaef"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/fp4plus125.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "2fde59ad0f704fe4e94ddf47cb8fe9b51c13f1eb51bfb1b1320e0a950cfe70b9"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/hp5plus400.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "74739e0512c826b1ec9f457a3342e6d09524a5f7476bf04cc9a0b42f83b1a783"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/instaxmini.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "ab73c7aadaf7204735c57b8d5ce158b3a664c2185c5f1b955e6e904246122d94"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/instaxwide.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "ab73c7aadaf7204735c57b8d5ce158b3a664c2185c5f1b955e6e904246122d94"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/kodachrome200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "547a664025a053fbdf150691116f3f97c1a04bf2a868a0715cd389b519fb365f"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/kodachrome25.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "722856e97988e4c325758e296b4cfa4f2bb033711e3c26f84178d8714bdadb83"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/kodachrome64.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "653f329c9aa81352aa82935f9694de228acc3cf786941174d113d97944ef8151"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/kodacolor100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "42fd15dd900fe3ecc75f3d75824d2a2e3e43eb04287947cd920df5b9bb45a46f"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/lomocolor100.png": {
+    "provenance": "Generated regression baseline from the synthetic ReferenceChart fixtures; physical print timing and fixed-dye viewing update. No photographic or manufacturer artwork.",
+    "sha256": "5263946fd6c38bb235e4cfdfed2d073177f6f0488bc50d4e189df1b33ecb3c9e"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/portra400.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "3d6226ada779cfafd36e29450ef54a5a6a874a262595fa669008f2dd0969c56e"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/pro160ns.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "3dd66e802f2dc1de82605c949c2b89b95cea16a769c81813618bcf5927740601"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/pro400h.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "178ff0145d12b9aed3c21ee3ffb262f7a9cdcefeacb54fab6ddb538c516dfdd8"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/superia200.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "46fe900907666dff4badcff1750b2a45654725e41beb8541135c2cd3895e528a"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/superia400.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "ba1ac31e43f38ad916d324d15caeaa8b29b0cd906e9f53ee8030bac653d008c7"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/tmax100.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "d014b711bf70fb01a858b8d079e35fb06f0cc1f25226d844e35fb7973608aab0"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/ultramax400.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "fc21c759751300f1777fd1058310ef8e576d265d2e565f82d1d21504de6ef60f"
+  },
+  "Tests/FotufilmCoreTests/Golden/Goldens/published/stepwedge/velvia50.png": {
+    "provenance": "Generated by ReferenceChart.swift and GoldenImageTests from the public film profiles with grain disabled; refreshed with the calibrated profile release of 2026-09-18 (measured CineStill return). No photographic or manufacturer artwork.",
+    "sha256": "f3cd65cee424e9a287822a53249a28ba3b9caa5f06057d7dcafe782ee429b24b"
   },
   "web/src/assets/fotufilm-wordmark.svg": {
     "provenance": "Fotufilm wordmark, copied from macos/Resources/FOTUFILM.svg in this repository.",
