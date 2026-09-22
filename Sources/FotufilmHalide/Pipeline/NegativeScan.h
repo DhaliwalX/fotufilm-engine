@@ -20,11 +20,7 @@ struct NegativeScanPipeline {
                 c == 1, -.1245505f*r + 1.1328999f*g - .0083494f*b,
                 -.0181508f*r - .1005789f*g + 1.1187297f*b);
         } else { samples(x,y,c) = input(x,y,c); }
-        Expr valid = Expr(1) == 1;
-        for (int k = 0; k < 3; ++k) {
-            Expr value = samples(x, y, k);
-            valid = valid && value > 0.0f && value < 1e20f;
-        }
+        Expr valid = negative_scan_valid(samples(x,y,0), samples(x,y,1), samples(x,y,2));
         Func positive("negative_linear_srgb");
         positive(x, y, c) = select(valid,
             negative_scan_channel(samples(x, y, channel), parameters(channel),

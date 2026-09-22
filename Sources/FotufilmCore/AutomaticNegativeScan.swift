@@ -30,8 +30,11 @@ public struct AutomaticNegativeScan: Encodable, Sendable {
         for y in my..<(preview.height - my) { for x in mx..<(preview.width - mx) {
             let i = y * preview.width + x
             let pixel = preview.planes.map { $0[i] }
-            guard pixel.allSatisfy({ $0.isFinite && $0 > 0 && $0 < 1e20 }) else { continue }
-            for c in 0..<3 { channels[c].append(pixel[c]) }
+            // Match negative_scan_valid: out-of-sRGB channels are valid after
+            // colour management. Clamp them per channel, never discard the RGB triplet.
+            guard pixel.allSatisfy({ $0.isFinite && abs($0) < 1e20 }),
+                  pixel.contains(where: { $0 > 0 }) else { continue }
+            for c in 0..<3 { channels[c].append(max(0, pixel[c])) }
         } }
         guard channels[0].count >= 4 else { throw Failure.insufficientSamples }
         sampleCount = channels[0].count
