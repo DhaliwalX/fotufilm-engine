@@ -68,95 +68,90 @@ enum {
     FOTUFILM_CONFIG_TONE_GRID_HEIGHT = 482,
     FOTUFILM_CONFIG_TONE_GRID_A = 483,
     FOTUFILM_CONFIG_TONE_GRID_B = 4579,
-    /// Non-zero to develop grain as a Boolean model of discs rather than as a blurred clump field.
+    /// Which model lays the grain: 0 the blurred clump field, 1 the film grain model's tiles
+    /// (FILM_TILE), 2 the crystal population (CRYSTAL_GRAIN).
     FOTUFILM_CONFIG_GRAIN_MODE = 8675,
-    /// Grain radius in pixels. The Boolean path is only taken once this reaches a pixel, below
-    /// which the clump field is already the model's own limit and far cheaper.
-    FOTUFILM_CONFIG_GRAIN_DISC_RADIUS = 8676,
-    /// Per-layer density amplitude for the Boolean path, calibrated so the covered fraction read
-    /// through a 48 um aperture carries the stock's published granularity.
-    FOTUFILM_CONFIG_GRAIN_DISC = 8677,
     /// Non-zero to run the three-way grade on the sRGB-encoded signal, the way a grading suite's
     /// three-way corrector does, rather than on display-linear light. Appended last so that adding
     /// it renumbered nothing.
-    FOTUFILM_CONFIG_GRADE_SPACE = 8680,
+    FOTUFILM_CONFIG_GRADE_SPACE = 8676,
     /// The grain-size mixture's second clump field — the soft mottle the coarse crystal population
     /// lays under the sharp grain. Blur sigma and radius in pixels, the coarse population's own
     /// clumps-per-pixel, and per-layer density amplitudes[3] carrying that component's share of the
     /// published granularity. Appended last so that adding them renumbered nothing.
-    FOTUFILM_CONFIG_MOTTLE_SIGMA = 8681,
-    FOTUFILM_CONFIG_MOTTLE_RADIUS = 8682,
-    FOTUFILM_CONFIG_MOTTLE_LAMBDA = 8683,
-    FOTUFILM_CONFIG_MOTTLE = 8684,
+    FOTUFILM_CONFIG_MOTTLE_SIGMA = 8677,
+    FOTUFILM_CONFIG_MOTTLE_RADIUS = 8678,
+    FOTUFILM_CONFIG_MOTTLE_LAMBDA = 8679,
+    FOTUFILM_CONFIG_MOTTLE = 8680,
     /// The paper's red and blue records, six curve parameters each, with the green record staying
     /// in the legacy FOTUFILM_CONFIG_PAPER slot; then the two records' own calibrated midpoints,
     /// the per-channel analogue of FOTUFILM_CONFIG_PAPER_MIDPOINT. A paper that publishes one curve
     /// packs it in all three slots. Appended last so that adding them renumbered nothing.
-    FOTUFILM_CONFIG_PAPER_RED = 8687,
-    FOTUFILM_CONFIG_PAPER_BLUE = 8693,
-    FOTUFILM_CONFIG_PAPER_MIDPOINT_RED = 8699,
-    FOTUFILM_CONFIG_PAPER_MIDPOINT_BLUE = 8700,
+    FOTUFILM_CONFIG_PAPER_RED = 8683,
+    FOTUFILM_CONFIG_PAPER_BLUE = 8689,
+    FOTUFILM_CONFIG_PAPER_MIDPOINT_RED = 8695,
+    FOTUFILM_CONFIG_PAPER_MIDPOINT_BLUE = 8696,
     /// Which granularity-against-density law the emulsion obeys. 0 is a chromogenic negative, whose
     /// measured curve peaks just above D-min and falls (the shape's coefficients are in
     /// FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE); 1 is opaque silver, whose Boolean aperture variance
     /// goes as `D * 10^(0.21004 D + 0.06114 D^2)`; 2 explicitly retains Selwyn's `sigma ∝ sqrt(D)`;
     /// 3 is dye reversal's saturating power law. Mirrors `GrainDensityLaw`.
-    FOTUFILM_CONFIG_GRAIN_LAW = 8701,
+    FOTUFILM_CONFIG_GRAIN_LAW = 8697,
     /// Per-layer net density the stock's published granularity is read at, and the per-layer
     /// developed fog added to both that anchor and the pixel's own density. The fog is what keeps
     /// granularity finite rather than zero where the negative is clear.
-    FOTUFILM_CONFIG_GRAIN_ANCHOR = 8702,
-    FOTUFILM_CONFIG_GRAIN_FOG = 8705,
+    FOTUFILM_CONFIG_GRAIN_ANCHOR = 8698,
+    FOTUFILM_CONFIG_GRAIN_FOG = 8701,
     /// Per-layer blur sigma in pixels for the sharp grain field and for the coarse mottle. The
     /// blue-sensitive layer of a colour negative carries the coarsest crystals, so its grain is
     /// lower in frequency and not merely louder. FOTUFILM_CONFIG_GRAIN_RADIUS and
     /// FOTUFILM_CONFIG_MOTTLE_RADIUS stay scalar: they are the widest of the three kernels, and the
     /// narrower ones have decayed to nothing out there.
-    FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER = 8708,
-    FOTUFILM_CONFIG_MOTTLE_SIGMA_LAYER = 8711,
+    FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER = 8704,
+    FOTUFILM_CONFIG_MOTTLE_SIGMA_LAYER = 8707,
     /// Gaussian sigma and radius, in pixels, of the enlarger lens and the paper's own light
     /// scattering. It acts on the light the negative transmits, so the pipeline applies it in
     /// transmittance rather than in density.
-    FOTUFILM_CONFIG_PRINT_MTF_SIGMA = 8714,
-    FOTUFILM_CONFIG_PRINT_MTF_RADIUS = 8715,
+    FOTUFILM_CONFIG_PRINT_MTF_SIGMA = 8710,
+    FOTUFILM_CONFIG_PRINT_MTF_RADIUS = 8711,
     /// Optional final row-major matrix, transfer, and premultiplication used by
     /// FOTUFILM_FRAME_ENCODE_OUT. Other variants return display-linear light.  0  identity — the
     /// host's space is already linear. 1  power law, sign-preserving: |v| <= c4 ? |v| * c0 : c1 *
     /// pow(|v|, c2) + c3, carried back across zero by the sign. Rec.709 gamma 2.4 and sRGB. 2
     /// logarithmic, signed: v <= c4 ? v * c0 + c3 : c1 * log2(v + c5) + c2. DaVinci Intermediate
     /// and ACEScct.  `fotufilm::outputTransformFor` defines the coefficients.
-    FOTUFILM_CONFIG_OUTPUT_MATRIX = 8716,
-    FOTUFILM_CONFIG_OUTPUT_TRANSFER = 8725,
-    FOTUFILM_CONFIG_OUTPUT_COEFFICIENTS = 8726,
-    FOTUFILM_CONFIG_OUTPUT_PREMULTIPLIED = 8732,
+    FOTUFILM_CONFIG_OUTPUT_MATRIX = 8712,
+    FOTUFILM_CONFIG_OUTPUT_TRANSFER = 8721,
+    FOTUFILM_CONFIG_OUTPUT_COEFFICIENTS = 8722,
+    FOTUFILM_CONFIG_OUTPUT_PREMULTIPLIED = 8728,
     /// The share of the detail under the print MTF's blur the finish returns, 0...1. An enlarger
     /// keeps 0; a scan finish keeps most of it, because a minilab sharpens its read. Appended after
     /// the output transform so that adding it renumbered nothing.
-    FOTUFILM_CONFIG_PRINT_SHARPEN = 8733,
+    FOTUFILM_CONFIG_PRINT_SHARPEN = 8729,
     /// The lens diffusion filter — mist, fog, black mist — which is the only stage that runs ahead
     /// of the emulsion, because the filter it models is screwed onto the front of the lens.
     /// Appended last so that adding it renumbered nothing.  The share of the beam that reached the
     /// film without meeting a particle. Perfectly sharp, and what keeps a diffused picture from
     /// looking defocused.
-    FOTUFILM_CONFIG_DIFFUSION_DIRECT = 8734,
+    FOTUFILM_CONFIG_DIFFUSION_DIRECT = 8730,
     /// How much of the scattered light each of the three scales carries, per record: `[record * 3 +
     /// scale]`, already multiplied by the scattered share. The records differ because the
     /// scattering angle goes as the wavelength, so a red halo is wider than a blue one; a row
     /// summing to less than the scattered share is light that went past the widest scale, and it
     /// has already been added to FOTUFILM_CONFIG_FLARE rather than dropped.
-    FOTUFILM_CONFIG_DIFFUSION_KERNEL = 8735,
+    FOTUFILM_CONFIG_DIFFUSION_KERNEL = 8731,
     /// Pixel radius of each scale. Strides and strided radii are derived from these by the same
     /// `fotufilm_halation_stride` rule the halation pyramid uses.
-    FOTUFILM_CONFIG_DIFFUSION_RADIUS = 8744,
+    FOTUFILM_CONFIG_DIFFUSION_RADIUS = 8740,
     /// The donor capture layer — a coated layer that develops and releases inhibitor but forms no
     /// image dye of its own (REALA's 4th Color Layer). Six H&D parameters for its own development
     /// curve, then one release weight per dye-forming receiver, in the engine's R, G, B record
     /// order. Read only when FOTUFILM_FRAME_DONOR_LAYER is set; appended last so that adding them
     /// renumbered nothing.
-    FOTUFILM_CONFIG_DONOR_CURVE = 8747,
-    FOTUFILM_CONFIG_DONOR_RELEASE = 8753,
+    FOTUFILM_CONFIG_DONOR_CURVE = 8743,
+    FOTUFILM_CONFIG_DONOR_RELEASE = 8749,
     /// Reserved legacy annular-basis radii. Continuous physical kernels leave these zero.
-    FOTUFILM_CONFIG_HALATION_RING_RADIUS = 8756,
+    FOTUFILM_CONFIG_HALATION_RING_RADIUS = 8752,
     /// Row-major 3x3 spectral halation return matrix, receiver rows by source columns, in the mix
     /// domain: entry [c][j] is the share of receiver c's developed exposure that arrives as source
     /// record j's base-returned light. Rows sum to the receiver's legacy mix share, so a diagonal
@@ -164,35 +159,35 @@ enum {
     /// diagonal terms are what the per-wavelength stack transmission (the orange mask favouring
     /// deep red on the return trip) routes between records. The scalar shares at
     /// FOTUFILM_CONFIG_HALATION are still written but no longer read by the kernels.
-    FOTUFILM_CONFIG_HALATION_MATRIX = 8759,
+    FOTUFILM_CONFIG_HALATION_MATRIX = 8755,
     /// Five parameters per dye-forming record for an optional second coated speed group: gamma,
     /// toe, toe width, shoulder, shoulder width. A zero gamma is the original six-parameter curve
     /// exactly. Appended so no existing configuration offset moves.
-    FOTUFILM_CONFIG_CURVE_SECONDARY = 8768,
+    FOTUFILM_CONFIG_CURVE_SECONDARY = 8764,
     /// A second positive Gaussian diffusion scale per record, followed by its radii and the primary
     /// scale's blend shares. Shares of one are the original single-Gaussian MTF exactly.
-    FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA = 8783,
-    FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS = 8786,
-    FOTUFILM_CONFIG_MTF_PRIMARY_SHARE = 8789,
+    FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA = 8779,
+    FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS = 8782,
+    FOTUFILM_CONFIG_MTF_PRIMARY_SHARE = 8785,
     /// Hill exponents for normalized inhibitor release by each dye-forming donor, followed by the
     /// optional donor-only layer's exponent. 1 is the historical linear law.
-    FOTUFILM_CONFIG_COUPLER_RELEASE_GAMMA = 8792,
-    FOTUFILM_CONFIG_DONOR_RELEASE_GAMMA = 8795,
+    FOTUFILM_CONFIG_COUPLER_RELEASE_GAMMA = 8788,
+    FOTUFILM_CONFIG_DONOR_RELEASE_GAMMA = 8791,
     /// Lens-diffusion scale weights for the optional donor capture record. Kept separate from the
     /// three dye-forming rows above so existing configuration offsets remain fixed.
-    FOTUFILM_CONFIG_DONOR_DIFFUSION_KERNEL = 8796,
+    FOTUFILM_CONFIG_DONOR_DIFFUSION_KERNEL = 8792,
     /// Whether development complements the formed density to a direct positive: 1 on a genuine
     /// reversal stock, 0 otherwise. Distinct from FOTUFILM_FRAME_REVERSAL, which also routes a
     /// negative shown on a light box or scanner past the paper; that negative is still developed as
     /// a negative, so its density law and its grain are evaluated in its own density.
-    FOTUFILM_CONFIG_DEVELOP_COMPLEMENT = 8799,
+    FOTUFILM_CONFIG_DEVELOP_COMPLEMENT = 8795,
     /// Superseded by FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS, which carries the shape per record with
     /// its second rise; still written with the green record's first three coefficients so a kernel
     /// built against the earlier layout renders the earlier law. Read only under
     /// FOTUFILM_CONFIG_GRAIN_LAW 0: the coarse sub-layer's variance amplitude, the toe density over
     /// which anything develops at all, and the density over which that coarse population decays
     /// onto the fine one.
-    FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE = 8800,
+    FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE = 8796,
     /// The knee of the SDR shoulder the delivery asks for, applied between the output matrix and
     /// the output transfer — the step `FilmOutputConversion` takes on the host, moved into the
     /// kernel so the encode variants can carry a shouldered delivery rather than only a bare one.
@@ -201,67 +196,68 @@ enum {
     /// scan bounded by its own white takes; 0.7 is a directly viewed transparency's. The host
     /// initialises it to the material's own knee, which the byte delivery reads, and an encode
     /// variant's `setOutputTransform` replaces it; appended without renumbering earlier fields.
-    FOTUFILM_CONFIG_OUTPUT_SHOULDER = 8803,
+    FOTUFILM_CONFIG_OUTPUT_SHOULDER = 8799,
     /// Enabled flag followed by three host-primary luminance weights. Fits chroma after the output
     /// matrix while preserving luminance and above-white highlights; zero disables it.
-    FOTUFILM_CONFIG_OUTPUT_GAMUT = 8804,
+    FOTUFILM_CONFIG_OUTPUT_GAMUT = 8800,
     /// Three records: sample count, then (log exposure, density, tangent) triples.
-    FOTUFILM_CONFIG_SAMPLED_CURVES = 8808,
+    FOTUFILM_CONFIG_SAMPLED_CURVES = 8804,
     /// 0: Gaussian/log-exposure adjacency; 1: screened diffusion/Nelson density response.
-    FOTUFILM_CONFIG_ADJACENCY_MODEL = 18027,
-    FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA = 18028,
-    FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS = 18029,
+    FOTUFILM_CONFIG_ADJACENCY_MODEL = 18023,
+    FOTUFILM_CONFIG_ADJACENCY_SECONDARY_SIGMA = 18024,
+    FOTUFILM_CONFIG_ADJACENCY_SECONDARY_RADIUS = 18025,
     /// Broad transport changes off-diagonal inhibition only; zero amount preserves legacy output.
-    FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT = 18030,
-    FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA = 18031,
-    FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS = 18032,
+    FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT = 18026,
+    FOTUFILM_CONFIG_CHROMATIC_FRINGE_SIGMA = 18027,
+    FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS = 18028,
     /// Typed record-exposure input seam. Zero is ordinary scene input.
-    FOTUFILM_CONFIG_RECORD_INPUT = 18033,
+    FOTUFILM_CONFIG_RECORD_INPUT = 18029,
     /// Dye reversal's [exponent p, shoulder density Ds], read under grain law 3.
-    FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE = 18034,
+    FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE = 18030,
     /// Crystal grain model, read under grain mode 2: per record and size bin, [lattice blur sigma
     /// of the bin's dye cloud in pixels, density one cloud adds to the pixel it lands in, the
     /// sublayer's coupler pool in density (0: silver, no pool), the mean-dye factor: the sum over
     /// the cloud's lattice taps of 1 - exp(-(density per cloud x tap) / pool), which by Campbell's
     /// theorem gives the expected dye of the Poisson field as pool (1 - exp(-count x factor)); for
     /// silver the density per cloud itself].
-    FOTUFILM_CONFIG_CRYSTAL_GRAIN_BIN = 18036,
+    FOTUFILM_CONFIG_CRYSTAL_GRAIN_BIN = 18032,
     /// Crystal grain model, exposure stage: per record and size bin, the mean count of latent
     /// (developable) crystals per pixel against the record's developed density as a fraction of its
     /// range, CRYSTAL_GRAIN_SAMPLES values from 0 to 1. Indexed by density rather than exposure so
     /// the split renderer's density-in tail can lay it; the curve is monotone, so the two say the
     /// same thing.
-    FOTUFILM_CONFIG_CRYSTAL_GRAIN_LAMBDA = 18084,
+    FOTUFILM_CONFIG_CRYSTAL_GRAIN_LAMBDA = 18080,
     /// Crystal grain model, print stage: per record, how many of the print material's own crystals
     /// one output pixel holds at full development (0 when nothing exposes a paper: a viewed
     /// transparency, a scan, a screen, the negative itself), then the frame's hash seed as a float,
     /// for the print pipeline whose arguments carry none. The paper's developed count is a Poisson
     /// draw at the paper's developed fraction of that, and its departure from the mean is what the
     /// paper's own grain adds.
-    FOTUFILM_CONFIG_CRYSTAL_PRINT_GRAIN = 18852,
+    FOTUFILM_CONFIG_CRYSTAL_PRINT_GRAIN = 18848,
     /// Uniform additive camera film preflash relative to metered mid-grey; 0 is off.
-    FOTUFILM_CONFIG_CAMERA_PREFLASH = 18856,
+    FOTUFILM_CONFIG_CAMERA_PREFLASH = 18852,
     /// Uniform additive paper preflash relative to paper mid-exposure; 0 is off.
-    FOTUFILM_CONFIG_PRINTER_PREFLASH = 18857,
+    FOTUFILM_CONFIG_PRINTER_PREFLASH = 18853,
     /// The primaries of the byte frames on the encoded-byte road, [input, output]: 0 Display P3, 1
     /// sRGB, both under the sRGB transfer. The decode steps the input basis into the working space;
     /// the delivery leaves the print's Display P3 for the output basis after the shoulder and
     /// before the clip. Read only on byte I/O; a float frame is the working space itself.
-    FOTUFILM_CONFIG_BYTE_BASIS = 18858,
+    FOTUFILM_CONFIG_BYTE_BASIS = 18854,
     /// The chromogenic negative's granularity-against-density shape per record, read only under
     /// FOTUFILM_CONFIG_GRAIN_LAW 0: for red, green and blue in turn, the coarse sub-layer's
     /// variance amplitude, the toe density over which anything develops at all, the density over
     /// which that coarse population decays onto the fine one, then the amplitude, centre density
     /// and width of the second rise where the slow sub-layer's coarse population comes in. Mirrors
     /// `FilmStock.grainDensityProfile`; appended without renumbering earlier fields.
-    FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS = 18860,
-    /// The film grain model (grain mode 3), sampled from its tiles: the pixel pitch in tile texels,
-    /// the grain amount the tiles' grain is scaled by, the id the host registered the tiles under,
-    /// each record's D-min then D-max (the range the levels span), then per record FILM_TILE_LEVELS
-    /// each of the level's mean light, the mean density a pixel of this pitch reads there, and the
-    /// correlation of its grain with the next level's at this pitch. Read only in grain mode 3;
-    /// appended without renumbering earlier fields.
-    FOTUFILM_CONFIG_FILM_TILE = 18878,
+    FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS = 18856,
+    /// The film grain model (grain mode 1), sampled from its tiles: the pixel pitch in tile texels,
+    /// the side of the film each pixel reads in tile texels, the id the host registered the tiles
+    /// under, each record's grain amount, the colour grain (1 keeps the records independent, 0
+    /// shares one grain), each record's D-min then D-max (the range the levels span), then per
+    /// record FILM_TILE_LEVELS each of the level's mean light, the mean density a pixel of this
+    /// pitch reads there, and the correlation of its grain with the next level's at this pitch.
+    /// Read only in grain mode 1; appended without renumbering earlier fields.
+    FOTUFILM_CONFIG_FILM_TILE = 18874,
 };
 
 enum {
@@ -308,8 +304,6 @@ enum {
     FOTUFILM_CONFIG_TONE_GRID_A_COUNT = 4096,
     FOTUFILM_CONFIG_TONE_GRID_B_COUNT = 4096,
     FOTUFILM_CONFIG_GRAIN_MODE_COUNT = 1,
-    FOTUFILM_CONFIG_GRAIN_DISC_RADIUS_COUNT = 1,
-    FOTUFILM_CONFIG_GRAIN_DISC_COUNT = 3,
     FOTUFILM_CONFIG_GRADE_SPACE_COUNT = 1,
     FOTUFILM_CONFIG_MOTTLE_SIGMA_COUNT = 1,
     FOTUFILM_CONFIG_MOTTLE_RADIUS_COUNT = 1,
@@ -365,7 +359,7 @@ enum {
     FOTUFILM_CONFIG_PRINTER_PREFLASH_COUNT = 1,
     FOTUFILM_CONFIG_BYTE_BASIS_COUNT = 2,
     FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS_COUNT = 18,
-    FOTUFILM_CONFIG_FILM_TILE_COUNT = 162,
+    FOTUFILM_CONFIG_FILM_TILE_COUNT = 166,
 };
 
 enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 19040 };

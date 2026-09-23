@@ -14,6 +14,10 @@
 #import <Metal/Metal.h>
 
 #include "FotufilmHalide.h"
+#if !defined(FOTUFILM_HALIDE_IOS_AOT)
+#include <Halide.h>
+#include "../Sources/FotufilmHalide/Pipeline/FilmTileStore.h"
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -47,6 +51,8 @@ struct Pack {
     int32_t feature_mask = 0;
     uint32_t seed = 0;
     std::vector<float> configuration, exposure, film, paper;
+    /// The film grain model's tiles, when the pack lays it (grain mode 1).
+    std::vector<float> film_tiles;
 };
 
 int32_t read_i32(const uint8_t *&cursor) {
@@ -101,8 +107,36 @@ bool read_pack(const char *path, Pack &pack) {
     take(pack.exposure, lut_count);
     take(pack.film, lut_count);
     take(pack.paper, lut_count);
+    // A film grain pack closes with its tiles, their count last.
+    if (int32_t(pack.configuration[FOTUFILM_CONFIG_GRAIN_MODE]) == 1) {
+        const uint8_t *end = bytes.data() + bytes.size() - sizeof(int32_t);
+        const int32_t count = read_i32(end);
+        const size_t tile_bytes = size_t(count) * sizeof(float);
+        if (count <= 0 || tile_bytes + sizeof(int32_t) > size_t(bytes.data() + bytes.size() - cursor)) {
+            return false;
+        }
+        pack.film_tiles.resize(size_t(count));
+        std::memcpy(pack.film_tiles.data(),
+                    bytes.data() + bytes.size() - sizeof(int32_t) - tile_bytes, tile_bytes);
+        return true;
+    }
     // Version 2 appends a resolution ladder. This fixed-size fixture uses only the base frame.
     return version == 2 || cursor == bytes.data() + bytes.size();
+}
+
+/// Registers the film grain tiles a pack sealed with `--grain-model film` closes with, under the
+/// id its FILM_TILE block names. The JIT road's Metal pipeline reads the process-wide JIT store,
+/// whose C entry point lives with the CPU road this harness does not link; the AOT road registers
+/// through its own entry point.
+bool register_film_tiles(const Pack &pack) {
+    const int32_t id = int32_t(pack.configuration[FOTUFILM_CONFIG_FILM_TILE + 2]);
+    const float *tiles = pack.film_tiles.data();
+    const int64_t count = int64_t(pack.film_tiles.size());
+#if defined(FOTUFILM_HALIDE_IOS_AOT)
+    return fotufilm_halide_set_film_tiles(id, tiles, count) == 0;
+#else
+    return fotufilm::BasicFilmTileStore<Halide::Buffer<float>>::shared().set(id, tiles, count);
+#endif
 }
 
 /// Fills the slots the browser export leaves alone, so that the stages selected by the variants
@@ -728,6 +762,10 @@ int main(int argc, char **argv) {
         return 2;
     }
     arm_configuration(pack.configuration);
+    if (!pack.film_tiles.empty() && !register_film_tiles(pack)) {
+        std::fprintf(stderr, "could not register the pack's film grain tiles\n");
+        return 2;
+    }
 
     std::vector<float> scene;
     std::vector<uint8_t> scene_u8;

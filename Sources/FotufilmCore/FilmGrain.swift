@@ -392,13 +392,61 @@ public struct FilmGrain: Sendable {
         return min(max(Int((pitch / finestSampleMM).rounded(.up)), 1), maxSupersample)
     }
 
+    /// How a frame lays the film's grain beyond its amount. None of it rebuilds the tiles: every
+    /// setting is the kernel's pitch, footprint, amounts or mix.
+    public struct Look: Sendable, Equatable {
+        /// Each record's share of the grain amount: red, green then blue sensitive.
+        public var layers: SIMD3<Float> = SIMD3(repeating: 1)
+        /// 1 keeps the records' grain independent, as the layers lay it; 0 gives all three one
+        /// shared grain. The three records' total variance is kept either way.
+        public var colour: Float = 1
+        /// The film's texture magnified this many times, its fluctuation divided by as much so
+        /// that the 48 µm aperture still reads the sheet's granularity: coarser, softer grain of
+        /// the same measured RMS above 1, finer below.
+        public var size: Float = 1
+        /// The side of film each pixel reads, in pixels: 1 for a scan as sharp as its pitch,
+        /// wider for a softer scan, which averages the grain down with it.
+        public var softness: Float = 1
+
+        public init(layers: SIMD3<Float> = SIMD3(repeating: 1), colour: Float = 1,
+                    size: Float = 1, softness: Float = 1) {
+            self.layers = layers
+            self.colour = colour
+            self.size = size
+            self.softness = softness
+        }
+
+        public static let sizeRange: ClosedRange<Float> = 0.5...4
+        public static let softnessRange: ClosedRange<Float> = 0.5...4
+
+        /// The pixel pitch and footprint in tile texels at `pxPerMM`.
+        func geometry(pxPerMM: Float) -> (pitch: Float, footprint: Float) {
+            let pitch = (1 / pxPerMM) / FilmGrain.tileTexelMM
+                / min(max(size, Self.sizeRange.lowerBound), Self.sizeRange.upperBound)
+            let softness = min(max(softness, Self.softnessRange.lowerBound), Self.softnessRange.upperBound)
+            return (pitch, pitch * softness)
+        }
+
+        /// Each record's grain amount at `amount`, the size's compensation included.
+        func recordAmounts(_ amount: Float) -> [Float] {
+            let size = min(max(size, Self.sizeRange.lowerBound), Self.sizeRange.upperBound)
+            return (0..<3).map { amount * max(layers[$0], 0) / size }
+        }
+
+        /// The weights of a record's own grain and of the records' mean in its colour mix.
+        static func mix(colour: Float) -> (own: Float, shared: Float) {
+            let own = min(max(colour, 0), 1)
+            return (own, (3 - 2 * own * own).squareRoot() - own)
+        }
+    }
+
     /// Lays the grain on `negative`, the grain-free developed gross density per record, for a
     /// frame of `pxPerMM` pixels per millimetre whose pixel (0, 0) sits at the film's origin,
     /// from the film tiles — the arithmetic of the Halide kernel, which renders frames in grain
-    /// mode 3 — with the grain scaled by `amount`.
+    /// mode 1 — scaled by `amount` and laid as `look` lays it.
     public func apply(to negative: ImageBuffer, pxPerMM: Float, seed: UInt32,
-                      amount: Float = 1) -> ImageBuffer {
-        applyTiled(to: negative, pxPerMM: pxPerMM, seed: seed, amount: amount)
+                      amount: Float = 1, look: Look = Look()) -> ImageBuffer {
+        applyTiled(to: negative, pxPerMM: pxPerMM, seed: seed, amount: amount, look: look)
     }
 
     /// The reference render: every crystal under the frame, laid and averaged as light. Its

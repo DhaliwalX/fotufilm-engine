@@ -23,13 +23,13 @@ public enum FilmEngineFeature {
     public static let realtime: Int32 = Int32(FOTUFILM_FRAME_REALTIME)
     /// Exact transcendentals rather than fast_* polynomials; mirrors FOTUFILM_FRAME_EXACT_MATH.
     public static let exactMath: Int32 = Int32(FOTUFILM_FRAME_EXACT_MATH)
-    /// Compiles the Boolean disc grain; mirrors FOTUFILM_FRAME_DISC_GRAIN. Its own variant rather
-    /// than a runtime branch: the disc arm is a large unrolled expression, and leaving it in the
-    /// pipeline costs every render its compile time even when nothing selects it.
-    public static let discGrain: Int32 = Int32(FOTUFILM_FRAME_DISC_GRAIN)
+    /// Compiles the crystal population (Organic Crystals); mirrors FOTUFILM_FRAME_CRYSTAL_GRAIN. Its
+    /// own variant rather than a runtime branch: the crystal arm is a large unrolled expression, and
+    /// leaving it in the pipeline costs every render its compile time even when nothing selects it.
+    public static let crystalGrain: Int32 = Int32(FOTUFILM_FRAME_CRYSTAL_GRAIN)
     /// The grain-size mixture's coarse second clump field; mirrors
     /// FOTUFILM_FRAME_GRAIN_MOTTLE. The host suppresses the stage under the
-    /// disc model and in any span but the full one, so a request there
+    /// crystal and film models and in any span but the full one, so a request there
     /// renders the single-radius field at full strength rather than a
     /// quieter half of the mixture.
     public static let grainMottle: Int32 = Int32(FOTUFILM_FRAME_GRAIN_MOTTLE)
@@ -495,54 +495,6 @@ public struct FilmEngineInvocation {
     /// The three halation radii in pixels, as the fields build wants them.
     public let halationPixelRadii: [Int32]
 
-    /// Sample points the Boolean grain path averages per pixel; mirrors `kBooleanSamplesPerAxis`
-    /// squared in `FotufilmHalide/Stages/Grain.h`.
-    static let discSamplesPerPixel: Float = 9
-
-    /// Per-layer density amplitudes for the Boolean grain path.
-    ///
-    /// The path is a texture, not the emulsion's own Boolean model: opaque discs of the sheet's
-    /// clump radius at the read density's coverage fluctuate 17× (Tri-X) to 23× (T-Max 100) more
-    /// than the published granularity, because the physical fluctuation unit is a crystal of
-    /// ~0.6 µm and the clump radius is a correlation length. The model fixes its own fluctuation
-    /// once the disc radius is chosen, so the amplitude is whatever scales that fluctuation
-    /// onto the stock's published granularity: the covered
-    /// fraction read through a 48 um aperture has a standard deviation this can be divided out
-    /// of, evaluated at the coverage the sheet's read density puts each record at
-    /// (`granularityAnchorActivation`). The estimate is a mean of nine points rather than the
-    /// fraction itself, and that sampling noise is white, so it survives the aperture divided
-    /// by the number of samples under it and is taken off in quadrature rather than ignored.
-    static func discAmplitudes(stock: FilmStock, grainScale: Float,
-                               pxPerMM: Float,
-                               active: Bool) -> [Float] {
-        guard active else { return [0, 0, 0] }
-        let aperture = FilmStock.granularityApertureRadiusMM
-        let aperturePixels = max(Float.pi * aperture * aperture * pxPerMM * pxPerMM, 1)
-        return stock.grainLayerWeights.enumerated().map { layer, weight in
-            // The coverage the anchor implies is Nutting's, matching what the pipeline now feeds
-            // the model: the sheet states a density, and an emulsion of opaque grains reaches it
-            // at `1 - 10^-D` covered, not at that fraction of its density scale.
-            let anchor = stock.granularityAnchorDensity(layer: layer)
-                + stock.grainFogDensity
-            let coverage = min(max(1 - pow(10, -anchor), 1e-4), 0.99)
-            let radius = stock.grainSizeMM * stock.grainLayerSizeRatio[layer]
-            let modelSigma = BooleanGrain.granularity(
-                radiusMM: radius, coverage: coverage,
-                apertureRadiusMM: aperture)
-            let samplingVariance = coverage * (1 - coverage)
-                / (Self.discSamplesPerPixel * aperturePixels)
-            let rendered = (modelSigma * modelSigma + samplingVariance).squareRoot()
-            guard rendered > 0 else { return 0 }
-            // The pipeline reads the model's fluctuation in *covered area* and converts it to
-            // density with Nutting's derivative, so the amplitude that carries the published
-            // figure has to be divided by that same gain at the anchor — otherwise the
-            // conversion would be counted twice and the sheet's density would not come back.
-            let gain = 1 / (max(1 - coverage, 1e-2) * Float(log(10.0)))
-            return stock.grainStrength * grainScale * weight
-                / (rendered * gain)
-        }
-    }
-
     /// Narrowest grain blur any schedule will apply, in pixels. Mirrors the floor the schedules
     /// clamp to (`FotufilmHalide.cpp` and `FotufilmHalideAndroid.cpp`); here it is only what the
     /// covariance factorization below returns when its target degenerates to white noise, so
@@ -843,7 +795,7 @@ public struct FilmEngineInvocation {
         | FilmEngineFeature.halation | FilmEngineFeature.couplers
         | FilmEngineFeature.couplerDiffusion | FilmEngineFeature.adjacency
         | FilmEngineFeature.grain | FilmEngineFeature.grainMottle
-        | FilmEngineFeature.discGrain
+        | FilmEngineFeature.crystalGrain
         // The donor rides the coupler stage, and its exposure comes off the scene through the
         // fourth channel of the exposure LUT — a density-in span is handed a developed negative
         // and has no scene light left to expose a fourth record with, which is why the frame
@@ -1100,19 +1052,16 @@ public struct FilmEngineInvocation {
         // coarse mottle, each corrected through the 48 µm aperture at its own
         // size — so the sum reads back the published figure whatever the split.
         // Suppressed — share and split together, so the sharp field keeps its whole
-        // amplitude — where the coarse field is not laid: the Boolean disc model
+        // amplitude — where the coarse field is not laid: the crystal population
         // carries the emulsion's texture itself, and the spans keep to the single
-        // field. A span or disc render with a mottle look therefore renders the
+        // field. A span or crystal render with a mottle look therefore renders the
         // single-radius field at full strength rather than a quieter half of the
         // mixture.
-        // The film grain model (mode 3) lays the film's own crystals from its tiles in place of
+        // The film grain model (mode 1) lays the film's own crystals from its tiles in place of
         // every field below, so the mixture that shapes them is not laid either.
         let filmActive = options.grainModel == .film
             && grainScale > 0 && stock.grainStrength > 0
-        let discWillRender = options.grainModel == .discs
-            && stock.grainDensityLaw == .silver
-            && stock.grainSizeMM * pxPerMM >= 1
-        let mottleShare = options.stage != .full || discWillRender || crystalActive || filmActive
+        let mottleShare = options.stage != .full || crystalActive || filmActive
             ? 0 : min(max(
             options.grainMottleShare ?? stock.grainMottleShare, 0), 0.9)
         // The override clamps to the pack's own validated range, so a look can
@@ -1273,11 +1222,11 @@ public struct FilmEngineInvocation {
             && SpectralRuntime.hasReconstructionModel
             // A 4th Color Layer is an inter-image device between colour records that modulates
             // how much *dye* each one forms, so it belongs to a chromogenic colour emulsion and
-            // to nothing else: the monochrome schedule develops one record, and the Boolean disc
-            // model is for materials whose image is opaque silver rather than a dye cloud. Both
-            // are gated here rather than left to the stocks. The crystal population is different:
-            // it rides the disc family on every material, so a donor stock developed with
-            // crystals asks for both bits at once, which every still class's `_disc` twin serves.
+            // to nothing else: the monochrome schedule develops one record, and a silver emulsion's
+            // image is opaque silver rather than a dye cloud. Both are gated here rather than left
+            // to the stocks. The crystal population rides its own family on every material, so a
+            // donor stock developed with crystals asks for both bits at once, which every still
+            // class's `_crystal` twin serves.
             && !stock.isMonochrome && stock.grainDensityLaw != .silver
         if donorActive { featureMask |= FilmEngineFeature.donorLayer }
         if (couplersActive || donorActive) && max(couplerRadius, fringeRadius) > 0 {
@@ -1369,28 +1318,11 @@ public struct FilmEngineInvocation {
         toneGrid[0] = 1
         configuration += toneGrid
 
-        // A disc smaller than a pixel is the clump field's own case: many grains land under one
-        // sample, the sum goes Gaussian, and the two models agree apart from the Boolean one's
-        // sampling noise. Rendering the cheap path there is not an approximation.
-        //
-        // The model itself is a silver one — a union of opaque discs that hide one another. A
-        // chromogenic emulsion has no such object: its silver is bleached out and what carries the
-        // image is a soft-edged dye cloud that adds density rather than occluding, which is the
-        // clump field's own shape. So the Boolean path is offered where the material has grains
-        // and withheld where it has clouds, rather than being a texture the caller picks.
-        let discRadiusPixels = stock.grainSizeMM * pxPerMM
-        let discActive = options.grainModel == .discs && discRadiusPixels >= 1
-            && stock.grainDensityLaw == .silver
-            && featureMask & FilmEngineFeature.grain != 0
-        // The crystal population rides the disc family, whose variants compile both arms, and
-        // is offered to every material: dye clouds and silver grains alike are what its
-        // crystals form.
-        if discActive || crystalActive { featureMask |= FilmEngineFeature.discGrain }
-        configuration += [filmActive ? 3 : (crystalActive ? 2 : (discActive ? 1 : 0)),
-                          discRadiusPixels]
-        configuration += Self.discAmplitudes(
-            stock: stock, grainScale: grainScale, pxPerMM: pxPerMM,
-            active: discActive)
+        // The crystal population rides its own variant family, whose variants compile its arm,
+        // and is offered to every material: dye clouds and silver grains alike are what its
+        // crystals form. The film grain model needs no variant: its tiles are a runtime input.
+        if crystalActive { featureMask |= FilmEngineFeature.crystalGrain }
+        configuration += [filmActive ? 1 : (crystalActive ? 2 : 0)]
         configuration += [options.gradeSpace == .encoded ? 1 : 0]
         configuration += [mottleSigma, Float(mottleRadius), mottleLambda]
         configuration += mottleStrength
@@ -1529,7 +1461,7 @@ public struct FilmEngineInvocation {
         if filmActive {
             let film = FilmGrain.registered(stock: stock, reference: referenceRoll)
             configuration += film.grain.configurationBlock(pxPerMM: pxPerMM, amount: grainScale,
-                                                           id: film.id)
+                                                           look: options.filmGrain, id: film.id)
         } else {
             configuration += [Float](repeating: 0, count: Int(FOTUFILM_CONFIG_FILM_TILE_COUNT))
         }

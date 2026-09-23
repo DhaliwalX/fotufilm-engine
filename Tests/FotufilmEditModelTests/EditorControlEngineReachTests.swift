@@ -79,49 +79,10 @@ final class EditorControlEngineReachTests: XCTestCase {
         try assertReachesTheEngine(.grainMottle) { $0.grainMottleShare = 0.9 }
     }
 
-    func testDiscGrainReachesTheEngineWhereAGrainCoversAPixel() throws {
-        // On a silver stock, because the disc is the silver model: an opaque grain covers a
-        // point or does not, which is what Nutting's relation counts. A chromogenic stock's
-        // dye cloud has no opaque area, so the row correctly leaves its instruction alone
-        // there — `testDiscGrainIsWithheldFromDyeCloudStocks` is that half.
-        let stock = try XCTUnwrap(FilmStock.presets["example-monochrome-100"],
-                                  "the example monochrome is not installed")
-        XCTAssertEqual(stock.grainDensityLaw, .silver)
-        let frameMM: Float = 1.2
-        var resting = FotufilmEngine.Options()
-        resting.format = FilmFormat(name: "grain bench", frameHeightMM: frameMM)
-        let side = Int(frameMM * 2 / stock.grainSizeMM)
-        try assertReachesTheEngine(.grainModel, on: stock, from: resting,
-                                   size: (side, side)) {
-            $0.grainModel = .discs
+    func testEveryGrainModelReachesTheEngine() throws {
+        for model in GrainModel.allCases where model != .clumpField {
+            try assertReachesTheEngine(.grainModel) { $0.grainModel = model }
         }
-    }
-
-    func testDiscGrainIsWithheldFromDyeCloudStocks() throws {
-        let stock = try stock()
-        XCTAssertEqual(stock.grainDensityLaw, .dyeCloud)
-        let frameMM: Float = 1.2
-        var resting = FotufilmEngine.Options()
-        resting.format = FilmFormat(name: "grain bench", frameHeightMM: frameMM)
-        let side = Int(frameMM * 2 / stock.grainSizeMM)
-        var moved = resting
-        moved.grainModel = .discs
-        let before = instruction(invocation(resting, stock, size: (side, side)))
-        let after = instruction(invocation(moved, stock, size: (side, side)))
-        XCTAssertTrue(after == before,
-                      "the disc choice reached a dye-cloud stock's instruction")
-    }
-
-    func testDiscGrainIsTheClumpFieldWhereAGrainIsSmallerThanAPixel() throws {
-        let stock = try stock()
-        var discs = FotufilmEngine.Options()
-        discs.grainModel = .discs
-        XCTAssertLessThan(stock.grainSizeMM * 2667 / 24, 1,
-                          "this frame already resolves grains, so the case "
-                          + "under test is not the one being measured")
-        XCTAssertEqual(
-            instruction(invocation(discs, stock)).mask,
-            instruction(invocation(FotufilmEngine.Options(), stock)).mask)
     }
 
     // MARK: - Emulsion

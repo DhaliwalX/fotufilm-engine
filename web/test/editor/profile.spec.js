@@ -76,7 +76,7 @@ const cases = [
   },
   {
     stock: "hp5plus400",
-    controls: { grainMottle: "heavy", grainModel: "discs" },
+    controls: { grainMottle: "heavy" },
   },
   {
     stock: "hp5plus400",

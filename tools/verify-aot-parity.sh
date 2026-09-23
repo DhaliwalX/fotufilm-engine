@@ -78,7 +78,9 @@ bash tools/verify-negative-aot.sh "$KERNELS"
 
 echo "--- fixture ---"
 PACK="$OUT/fixture.fswp"
-swift run -c release fotufilm --dump-wasm-pack "$PACK" --stock "$STOCK" --pack-size "$SIZE"
+GRAIN_MODEL="${FOTUFILM_PARITY_GRAIN_MODEL:-}"
+swift run -c release fotufilm --dump-wasm-pack "$PACK" --stock "$STOCK" --pack-size "$SIZE" \
+  ${GRAIN_MODEL:+--grain-model "$GRAIN_MODEL"}
 
 echo "--- building the AOT harness ---"
 xcrun clang++ -std=c++17 -O2 -fobjc-arc \

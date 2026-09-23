@@ -41,7 +41,7 @@ REQUIRED_SYMBOLS=(
   fotufilm_halide_ios_color_tail
   # The newest class is the one a half-updated link list drops first — which would not fail the
   # link visibly, it would refuse those frames.
-  fotufilm_halide_ios_color_float_fields_disc
+  fotufilm_halide_ios_color_float_fields_crystal
 )
 
 # Half the kernel set is linked into FotufilmKernels.framework rather than into the app: App Store

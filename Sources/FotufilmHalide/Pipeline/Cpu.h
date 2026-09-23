@@ -32,6 +32,9 @@ using Halide::Pipeline;
 using Halide::RDom;
 using Halide::Var;
 
+/// The JIT roads keep the film grain tiles as compiler buffers.
+using FilmTileStore = BasicFilmTileStore<Buffer<float>>;
+
 using namespace fotufilm;
 using namespace fotufilm::cpu;
 
@@ -257,10 +260,8 @@ public:
             false,
 #endif
             "develop_", suffix};
-#if !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
         inputs.film_tiles = &film_tiles_;
         inputs.film_on = film_grain_ != 0;
-#endif
         graph::Developed developed = graph::build_develop(backend, inputs, x, y, c);
 
         Func output = developed.developed;
@@ -351,7 +352,7 @@ public:
                 diffusion_strided_radius_2_,
             });
         }
-        args.push_back(features_);
+        args.insert(args.end(), {features_, film_tiles_, film_grain_});
         return args;
     }
 

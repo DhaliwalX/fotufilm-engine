@@ -435,8 +435,6 @@ public:
         const bool use_mtf = feature_mask & FOTUFILM_FRAME_MTF;
         const bool use_mtf_luma = feature_mask & FOTUFILM_FRAME_MTF_LUMA;
         const bool use_grain = feature_mask & FOTUFILM_FRAME_GRAIN;
-        const bool use_discs = use_grain && !realtime_
-            && (feature_mask & FOTUFILM_FRAME_DISC_GRAIN);
         const bool use_mottle = use_grain && (feature_mask & FOTUFILM_FRAME_GRAIN_MOTTLE);
         const bool monochrome = feature_mask & FOTUFILM_FRAME_MONOCHROME;
 
@@ -516,7 +514,6 @@ public:
             : Expr((runtime_features_ & FOTUFILM_FRAME_FLARE_MEASURE) != 0);
         policy.fields_in = fields_in_;
         policy.monochrome = monochrome;
-        policy.discs = use_discs;
         policy.packed_luts = packed_luts_;
         // Half tetrahedral arithmetic is confined to the byte-input realtime schedule. Float
         // paths keep the preservation contract even when they select other realtime techniques.
@@ -557,14 +554,12 @@ public:
             Expr(monochrome ? 1 : 0),
             Halide::cast<int32_t>(configuration_(FOTUFILM_CONFIG_GRAIN_MODE) + 0.5f),
             texture_, density_in_, false, light_out_, true, "frame_", suffix};
-#if !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
         // The film grain model's tiles are a buffer of their own, which WebGPU has no binding
         // left for; there a mode-3 frame renders the standard grain.
         if (!packed_luts_) {
             inputs.film_tiles = &film_tiles_;
             inputs.film_on = film_grain_ != 0;
         }
-#endif
         graph::Developed developed_frame = graph::build_develop(backend, inputs, x, y, channel);
         Func light = developed_frame.light;
         Func developed = developed_frame.developed;
@@ -611,7 +606,7 @@ public:
             // transcendental functions.
             graph::PrintInputs print{
                 configuration_, Expr(reversal_), monochrome,
-                (feature_mask & FOTUFILM_FRAME_DISC_GRAIN) != 0, "frame_", suffix};
+                (feature_mask & FOTUFILM_FRAME_CRYSTAL_GRAIN) != 0, "frame_", suffix};
             Func printed = graph::build_print(backend, print, developed, x, y, channel);
             display_linear(x, y, channel) = printed(x, y, channel);
         }
@@ -888,6 +883,10 @@ public:
         }
         arguments.push_back(runtime_features_);
         arguments.push_back(byte_basis_);
+        if (!packed_luts_) {
+            arguments.push_back(film_tiles_);
+            arguments.push_back(film_grain_);
+        }
         pipeline_.compile_to_static_library(prefix, arguments, function_name, target);
     }
 #endif

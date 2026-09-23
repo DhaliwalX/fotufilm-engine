@@ -14,6 +14,7 @@
 #include "FotufilmHalide.h"
 #include "FotufilmHalideGeometry.h"
 #include "FotufilmResolvedFrameParams.h"
+#include "Pipeline/FilmTileStore.h"
 
 #include <TargetConditionals.h>
 #include <objc/message.h>
@@ -133,6 +134,21 @@ ExecutionState &execution_state() {
     return bound_execution_state ? *bound_execution_state : fallback;
 }
 
+/// The film grain model's tiles, uploaded to the Metal device once as the host registers them.
+using FilmTileStore = fotufilm::BasicFilmTileStore<Buffer<float>>;
+
+FilmTileStore &film_tile_store() {
+    static FilmTileStore &store = [] () -> FilmTileStore & {
+        FilmTileStore &shared = FilmTileStore::shared();
+        shared.upload_with([](Buffer<float> &tiles) {
+            tiles.set_host_dirty();
+            return tiles.copy_to_device(halide_metal_device_interface());
+        });
+        return shared;
+    }();
+    return store;
+}
+
 /// The shape every generated variant shares: the u8 and float libraries differ only in the element
 /// type inside the buffers, which does not reach the signature.
 using FrameFunction = int (*)(
@@ -143,7 +159,7 @@ using FrameFunction = int (*)(
     int32_t, int32_t,
     int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
     int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
-    halide_buffer_t *);
+    halide_buffer_t *, int32_t, halide_buffer_t *);
 
 struct AotVariant {
     int32_t mask;
@@ -276,6 +292,9 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
 #endif
     auto *film = state.spectral_cache.film.raw_buffer();
     auto *paper = state.spectral_cache.paper.raw_buffer();
+    // Held for the call, so tiles the host forgets meanwhile stay alive until the kernel is done.
+    bool film_on = false;
+    Buffer<float> film_tiles = film_tile_store().tiles_for(configuration, film_on);
 #define FOTUFILM_ARGUMENTS \
     in, cfg, exposure, film, paper, width, height, frame.mtf_sigma_0, frame.mtf_sigma_1, \
     frame.mtf_sigma_2, frame.mtf_luma_sigma, frame.mtf_radius_0, frame.mtf_radius_1, \
@@ -288,7 +307,8 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     frame.halation_stride_2, frame.halation_strided_radius_0, frame.halation_strided_radius_1, \
     frame.halation_strided_radius_2, frame.diffusion_stride_0, frame.diffusion_stride_1, \
     frame.diffusion_stride_2, frame.diffusion_strided_radius_0, frame.diffusion_strided_radius_1, \
-    frame.diffusion_strided_radius_2, feature_mask, fotufilm_byte_basis(configuration)
+    frame.diffusion_strided_radius_2, feature_mask, fotufilm_byte_basis(configuration), \
+    film_tiles.raw_buffer(), film_on ? 1 : 0
     FrameFunction pipeline = select_variant(feature_mask);
     if (!pipeline) return -3;
 #if FOTUFILM_AOT_WINDOWED_HOST
@@ -1141,7 +1161,7 @@ extern "C" int32_t fotufilm_halide_metal_process_buffers_head(
         // same picture the unsplit path makes.
         const int32_t head_mask = (feature_mask
             & ~(FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_GRAIN_MOTTLE
-                | FOTUFILM_FRAME_DISC_GRAIN | FOTUFILM_FRAME_PRINT_MTF))
+                | FOTUFILM_FRAME_CRYSTAL_GRAIN | FOTUFILM_FRAME_PRINT_MTF))
             | FOTUFILM_FRAME_DENSITY_OUT;
         error = run_aot(state, input_buffer.raw_buffer(), density_buffer.raw_buffer(),
                         width, height, configuration, head_mask, seed,
@@ -1190,7 +1210,7 @@ extern "C" int32_t fotufilm_halide_metal_process_buffers_tail(
         // lays the field the frame actually asked for.
         const int32_t tail_mask = (feature_mask
             & (FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_REVERSAL
-               | FOTUFILM_FRAME_GRAIN_MOTTLE | FOTUFILM_FRAME_DISC_GRAIN
+               | FOTUFILM_FRAME_GRAIN_MOTTLE | FOTUFILM_FRAME_CRYSTAL_GRAIN
                | FOTUFILM_FRAME_PRINT_MTF))
             | FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_DENSITY_IN;
         error = run_aot(state, density_buffer.raw_buffer(), output_buffer.raw_buffer(),
@@ -1229,8 +1249,12 @@ extern "C" int32_t fotufilm_negative_scan(const float *in, float *out, int32_t w
 }
 
 extern "C" int32_t fotufilm_halide_available(void) { return 0; }
-// The ahead-of-time kernels carry no Film tiles; Film grain lays the clump field here.
-extern "C" int32_t fotufilm_halide_set_film_tiles(int32_t, const float *, int64_t) { return -1; }
+extern "C" int32_t fotufilm_halide_set_film_tiles(int32_t id, const float *tiles,
+                                                  int64_t count) {
+    return translate_exceptions([&] {
+        return film_tile_store().set(id, tiles, count) ? 0 : -1;
+    });
+}
 extern "C" int32_t fotufilm_halide_develop(
     const float *, const float *, const float *, float *, float *, float *,
     int32_t, int32_t, const float *, const float *, int32_t, int32_t,

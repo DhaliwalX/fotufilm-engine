@@ -83,6 +83,45 @@ static void init_flat(halide_buffer_t *buffer, halide_dimension_t *dim,
     buffer->type = halide_type_t(halide_type_float, 32);
 }
 
+/// The film grain model's tiles for the stock on screen, as `fotufilm --dump-wasm-pack
+/// --grain-model film` writes them beside the pack: ((side + 1)², levels, 3) floats. One set is
+/// kept; a frame whose FILM_TILE block names another id, or none, binds the one-float stand-in.
+static float *film_tiles = nullptr;
+static int32_t film_tiles_id = -1;
+static float film_tiles_stand_in = 0.0f;
+static const int32_t kFilmTileEntries = (FOTUFILM_FILM_TILE_SIDE + 1) * (FOTUFILM_FILM_TILE_SIDE + 1);
+static const int32_t kFilmTileCount = kFilmTileEntries * FOTUFILM_FILM_TILE_LEVELS * 3;
+
+/// Copies `count` floats as tiles `id`; a null or empty source forgets them. Returns 0 on success.
+EMSCRIPTEN_KEEPALIVE
+int fotufilm_wasm_set_film_tiles(int32_t id, const float *tiles, int32_t count) {
+    free(film_tiles);
+    film_tiles = nullptr;
+    film_tiles_id = -1;
+    if (!tiles || count == 0) return 0;
+    if (count != kFilmTileCount) return -1;
+    film_tiles = (float *)malloc(size_t(count) * sizeof(float));
+    if (!film_tiles) return -1;
+    memcpy(film_tiles, tiles, size_t(count) * sizeof(float));
+    film_tiles_id = id;
+    return 0;
+}
+
+static void init_film_tiles(halide_buffer_t *buffer, halide_dimension_t *dims, bool on) {
+    memset(buffer, 0, sizeof(*buffer));
+    const int32_t extents[3] = {on ? kFilmTileEntries : 1, on ? FOTUFILM_FILM_TILE_LEVELS : 1,
+                                on ? 3 : 1};
+    int32_t stride = 1;
+    for (int d = 0; d < 3; ++d) {
+        dims[d].min = 0; dims[d].extent = extents[d]; dims[d].stride = stride; dims[d].flags = 0;
+        stride *= extents[d];
+    }
+    buffer->host = (uint8_t *)(on ? film_tiles : &film_tiles_stand_in);
+    buffer->dim = dims;
+    buffer->dimensions = 3;
+    buffer->type = halide_type_t(halide_type_float, 32);
+}
+
 /// Develops one frame, or one tile of a larger one. Input and output are planar float RGB —
 /// three width*height planes — and scene-referred at both ends; the sRGB transfer belongs to the
 /// caller. `origin_x` and `origin_y` say where the buffers sit in the frame, so a tile carrying
@@ -123,6 +162,11 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
     const int32_t mtf_luma_radius = max_i(0, (int32_t)c[FOTUFILM_CONFIG_MTF_LUMA_RADIUS]);
     const int32_t grain_mode = (int32_t)c[FOTUFILM_CONFIG_GRAIN_MODE];
     const int32_t monochrome = (feature_mask & FOTUFILM_FRAME_MONOCHROME) != 0;
+    const bool film_on = grain_mode == 1 && film_tiles
+        && (int32_t)c[FOTUFILM_CONFIG_FILM_TILE + 2] == film_tiles_id;
+    halide_buffer_t film_tiles_buf;
+    halide_dimension_t ftd[3];
+    init_film_tiles(&film_tiles_buf, ftd, film_on);
 
 #define FOTUFILM_DEVELOP_ARGUMENTS \
     &in_r, &in_g, &in_b, &config_buf, &exposure_buf, width, height, resolved.mtf_sigma_0, \
@@ -137,7 +181,7 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
     resolved.mottle_radius, resolved.mottle_lambda, resolved.diffusion_stride_0, \
     resolved.diffusion_stride_1, resolved.diffusion_stride_2, resolved.diffusion_strided_radius_0, \
     resolved.diffusion_strided_radius_1, resolved.diffusion_strided_radius_2, feature_mask, \
-    &density_buf
+    &film_tiles_buf, film_on ? 1 : 0, &density_buf
 
     int status = 0;
     if (feature_mask & FOTUFILM_FRAME_DENSITY_IN) {
@@ -165,7 +209,7 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
         return 0;
     }
 
-    const int paper_grain = (feature_mask & FOTUFILM_FRAME_DISC_GRAIN) ? 4 : 0;
+    const int paper_grain = (feature_mask & FOTUFILM_FRAME_CRYSTAL_GRAIN) ? 4 : 0;
     switch ((resolved.reversal ? 1 : 0) | (monochrome ? 2 : 0) | paper_grain) {
     case 0: return print_0(&density_buf, &config_buf, &film_buf, &paper_buf, &out_buf);
     case 1: return print_1(&density_buf, &config_buf, &film_buf, &paper_buf, &out_buf);

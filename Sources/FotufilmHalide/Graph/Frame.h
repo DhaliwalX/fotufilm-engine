@@ -142,7 +142,7 @@ struct Inputs {
     bool runtime_gates;
     std::string prefix;
     std::string suffix;
-    /// The film grain model's tiles (grain mode 3), when this pipeline carries them, and whether
+    /// The film grain model's tiles (grain mode 1), when this pipeline carries them, and whether
     /// this frame lays them — a scalar, so the grain stages either side are skipped rather than
     /// computed and discarded.
     Halide::ImageParam *film_tiles = nullptr;
@@ -209,7 +209,7 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
     const bool use_adjacency = !density_in && (compiled & FOTUFILM_FRAME_ADJACENCY);
     const bool use_grain = (compiled & FOTUFILM_FRAME_GRAIN)
         && (!density_in || b.grain_on_density_input());
-    const bool use_discs = use_grain && !b.realtime() && (compiled & FOTUFILM_FRAME_DISC_GRAIN);
+    const bool use_crystals = use_grain && !b.realtime() && (compiled & FOTUFILM_FRAME_CRYSTAL_GRAIN);
     const bool use_mottle = use_grain && (compiled & FOTUFILM_FRAME_GRAIN_MOTTLE);
     const bool use_print_mtf = compiled & FOTUFILM_FRAME_PRINT_MTF;
 
@@ -223,7 +223,7 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
     Expr on_coupler_diffusion = on_couplers && gate(in, FOTUFILM_FRAME_COUPLER_DIFFUSION);
     Expr on_adjacency = gate(in, FOTUFILM_FRAME_ADJACENCY);
     Expr on_grain = gate(in, FOTUFILM_FRAME_GRAIN);
-    Expr on_discs = on_grain && gate(in, FOTUFILM_FRAME_DISC_GRAIN);
+    Expr on_crystals = on_grain && gate(in, FOTUFILM_FRAME_CRYSTAL_GRAIN);
     Expr on_mottle = on_grain && gate(in, FOTUFILM_FRAME_GRAIN_MOTTLE);
     Expr on_print_mtf = gate(in, FOTUFILM_FRAME_PRINT_MTF);
 
@@ -589,10 +589,7 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
             mottle = gated(on_mottle, fields.mottle(x, y, layer), 0.0f);
         }
         Expr clump = clump_grain(configuration, c, modulation, fields.grain(x, y, layer), mottle);
-        Expr disc, crystal;
-        if (use_discs) {
-            disc = disc_grain(configuration, density_view, position.net, x, y, c,
-                              p.origin_x_, p.origin_y_, p.seed_);
+        if (use_crystals) {
             std::vector<Func> bins;
             for (int bin = 0; bin < FOTUFILM_CRYSTAL_GRAIN_BINS; ++bin) {
                 const std::string tag = std::to_string(bin) + suffix;
@@ -609,33 +606,38 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
             }
             Func crystal_field(name("crystal_grain"));
             crystal_field(x, y, c) = crystal_grain(configuration, c, bins, x, y, position.amount);
-            crystal = b.store(crystal_field, Store::CrystalGrain, 3)(x, y, c);
-            Expr with_discs = selected_developed_density(
-                in.grain_mode, density_view(x, y, c), clump, disc, crystal);
-            Expr without = selected_developed_density(
-                in.grain_mode, density_view(x, y, c), clump, Expr(), Expr());
+            Expr crystal = b.store(crystal_field, Store::CrystalGrain, 3)(x, y, c);
+            Expr with_crystals = selected_developed_density(
+                in.grain_mode, density_view(x, y, c), clump, crystal);
+            Expr without = selected_developed_density(in.grain_mode, density_view(x, y, c), clump);
             Func grained(name("grained"));
-            grained(x, y, c) = gated(on_discs, with_discs, without);
+            grained(x, y, c) = gated(on_crystals, with_crystals, without);
             developed = grained;
         } else {
             Func grained(name("grained"));
-            grained(x, y, c) = selected_developed_density(
-                in.grain_mode, density_view(x, y, c), clump, Expr(), Expr());
+            grained(x, y, c) = selected_developed_density(in.grain_mode, density_view(x, y, c), clump);
             developed = grained;
         }
         if (in.film_tiles) {
-            // Film grain (mode 3) replaces the other models' grain outright: it is the film's
+            // Film grain (mode 1) replaces the other models' grain outright: it is the film's
             // own fluctuation about the curve, sampled from the host-rendered tiles.
             Expr film_on = on_grain && in.film_on;
             Expr record = Halide::select(in.monochrome != 0, 1, c);
             Func film(name("film_grain"));
-            film(x, y, c) = density_view(x, y, c)
-                + film_tile_grain(configuration, *in.film_tiles, density_view(x, y, c),
-                                  x + p.origin_x_, y + p.origin_y_, record, Expr(p.seed_),
-                                  film_on);
+            film(x, y, c) = film_tile_grain(configuration, *in.film_tiles, density_view(x, y, c),
+                                            x + p.origin_x_, y + p.origin_y_, record,
+                                            Expr(p.seed_), film_on);
             Func film_view = b.store(film, Store::FilmGrain, 3, film_on);
+            // Colour grain: each record's grain mixed toward the three records' mean, keeping
+            // their total variance — independent records at 1, one shared grain at 0.
+            Expr colour = Halide::clamp(
+                configuration(FOTUFILM_CONFIG_FILM_TILE + kFilmTileColour), 0.0f, 1.0f);
+            Expr shared = Halide::sqrt(3.0f - 2.0f * colour * colour) - colour;
+            Expr mean = (film_view(x, y, 0) + film_view(x, y, 1) + film_view(x, y, 2)) / 3.0f;
+            Expr mixed = Halide::select(in.monochrome != 0, film_view(x, y, c),
+                                        colour * film_view(x, y, c) + shared * mean);
             Func filmed(name("filmed"));
-            filmed(x, y, c) = gated(film_on, film_view(x, y, c), developed(x, y, c));
+            filmed(x, y, c) = gated(film_on, density_view(x, y, c) + mixed, developed(x, y, c));
             developed = filmed;
         }
         developed = select_stage(on_grain, developed, density_view, x, y, c,

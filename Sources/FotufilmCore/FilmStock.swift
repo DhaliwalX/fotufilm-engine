@@ -4,8 +4,8 @@ import Foundation
 /// grain model that renders it.
 ///
 /// Colour negatives peak above D-min and fall; dye reversals rise toward a shoulder.
-/// The silver disc model describes an idealized grain population, not a measured law for
-/// every silver emulsion/developer pair.
+/// The silver law describes an idealized grain population, not a measured law for every silver
+/// emulsion/developer pair.
 public enum GrainDensityLaw: Int32, Sendable, Codable {
     /// Chromogenic negative: the silver is bleached away and the image is a dye cloud per
     /// developed centre, but the coating is several sub-layers of different speed and crystal

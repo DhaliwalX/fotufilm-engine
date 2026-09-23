@@ -57,5 +57,11 @@ enum BridgeSlot {
     static let screenExposure = 55
     static let cameraPreflash = 56
     static let printerPreflash = 57
-    static let count = 58
+    static let filmGrainSize = 58
+    static let filmColourGrain = 59
+    static let filmRedLayer = 60
+    static let filmGreenLayer = 61
+    static let filmBlueLayer = 62
+    static let filmScanSoftness = 63
+    static let count = 64
 }

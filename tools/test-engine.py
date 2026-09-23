@@ -18,11 +18,10 @@ import time
 
 
 ROOT = Path(__file__).resolve().parents[1]
-# This pipeline already runs alone in CI because concurrent Metal compilation can exhaust
+# The crystal grain pipeline runs alone in CI because concurrent Metal compilation can exhaust
 # a hosted runner. It remains a required test and is included in the coverage audit below.
 EXCLUSIVE = {
-    "FotufilmCoreTests.PipelineStageMetalTests/"
-    "testResolvedSilverDiscsMatchCPUAndChangeWithTheSeed",
+    "FotufilmCoreTests.CrystalGrainTests/testCPUAndMetalAgree",
 }
 IDENTIFIER = re.compile(r"[\w.]+/\w+\Z")
 MAC_RESULT = re.compile(

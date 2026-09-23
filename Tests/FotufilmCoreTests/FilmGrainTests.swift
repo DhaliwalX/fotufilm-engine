@@ -160,6 +160,9 @@ final class FilmGrainTests: XCTestCase {
             options.halationScale = 0
             options.seed = 0x1234_5678
             options.format = FilmFormat(name: "film grain bench", frameHeightMM: 0.4)
+            // Every control moved off its rest, so the kernel's reading of each is checked too.
+            options.filmGrain = FilmGrain.Look(layers: SIMD3(0.6, 1, 1.4), colour: 0.4,
+                                               size: 1.7, softness: 1.5)
             var image = ImageBuffer(width: 200, height: 200)
             for c in 0..<3 { for i in 0..<image.pixelCount {
                 image.planes[c][i] = 0.01 * pow(2, Float(i % 200) / 20)
@@ -168,7 +171,7 @@ final class FilmGrainTests: XCTestCase {
             var plain = options; plain.grainScale = 0
             let clean = FotufilmEngine(stock: stock, options: plain).developNegative(linearRGB: image)
             let expected = FilmGrain.registered(stock: stock, reference: nil).grain
-                .apply(to: clean, pxPerMM: 500, seed: 0x1234_5678)
+                .apply(to: clean, pxPerMM: 500, seed: 0x1234_5678, look: options.filmGrain)
             for r in 0..<3 {
                 var worst: Float = 0, grain: Float = 0
                 for i in 0..<image.pixelCount {
@@ -178,6 +181,51 @@ final class FilmGrainTests: XCTestCase {
                 XCTAssertGreaterThan(grain, 0.01, "\(name) record \(r) lays grain")
                 XCTAssertLessThan(worst, 2e-3, "\(name) record \(r)")
             }
+        }
+    }
+
+    /// The look's controls do what they say on a flat patch of colour negative: each layer's
+    /// share scales its record, colour grain moves the records' correlation and keeps their total
+    /// strength, a softer scan smooths the grain, and a larger grain keeps the strength the
+    /// 48 µm aperture reads while its texture grows.
+    func testLookControls() {
+        let stock = TestStocks.negative
+        let grain = FilmGrain(stock: stock)
+        let negative = flat(stock, net: 0.6, side: 160)
+        func fluctuation(_ look: FilmGrain.Look, pxPerMM: Float = 250) -> [[Float]] {
+            let laid = grain.apply(to: negative, pxPerMM: pxPerMM, seed: 21, look: look)
+            return (0..<3).map { r in zip(laid.planes[r], negative.planes[r]).map { $0 - $1 } }
+        }
+        func sigma(_ v: [Float]) -> Float { moments(v).sigma }
+        func correlation(_ a: [Float], _ b: [Float]) -> Float {
+            let ma = a.reduce(0, +) / Float(a.count), mb = b.reduce(0, +) / Float(b.count)
+            var ab: Float = 0, aa: Float = 0, bb: Float = 0
+            for (x, y) in zip(a, b) { ab += (x - ma) * (y - mb); aa += (x - ma) * (x - ma); bb += (y - mb) * (y - mb) }
+            return ab / (aa * bb).squareRoot()
+        }
+        let rest = fluctuation(FilmGrain.Look())
+
+        let layered = fluctuation(FilmGrain.Look(layers: SIMD3(0.5, 1, 2)))
+        XCTAssertEqual(sigma(layered[0]) / sigma(rest[0]), 0.5, accuracy: 1e-3)
+        XCTAssertEqual(sigma(layered[1]) / sigma(rest[1]), 1, accuracy: 1e-3)
+        XCTAssertEqual(sigma(layered[2]) / sigma(rest[2]), 2, accuracy: 1e-3)
+
+        let shared = fluctuation(FilmGrain.Look(colour: 0))
+        XCTAssertLessThan(abs(correlation(rest[0], rest[1])), 0.1)
+        XCTAssertGreaterThan(correlation(shared[0], shared[1]), 0.9)
+        let total = { (g: [[Float]]) in g.map { sigma($0) * sigma($0) }.reduce(0, +) }
+        XCTAssertEqual(total(shared) / total(rest), 1, accuracy: 0.1)
+
+        let soft = fluctuation(FilmGrain.Look(softness: 2))
+        for r in 0..<3 {
+            XCTAssertLessThan(sigma(soft[r]), 0.7 * sigma(rest[r]), "record \(r)")
+        }
+
+        // Pixels of 48 µm are the sheet's own aperture: a larger grain reads the same there.
+        let sheet = fluctuation(FilmGrain.Look(), pxPerMM: 1 / 0.048)
+        let coarse = fluctuation(FilmGrain.Look(size: 2), pxPerMM: 1 / 0.048)
+        for r in 0..<3 {
+            XCTAssertEqual(sigma(coarse[r]) / sigma(sheet[r]), 1, accuracy: 0.25, "record \(r)")
         }
     }
 }

@@ -92,6 +92,12 @@ starts closed. Start with these settings:
   <tr><td>Mottle Amount (%)</td><td>Grain</td><td>Share of grain variance carried by coarse clumping.</td></tr>
   <tr><td>Grain Animation</td><td>Grain</td><td>Timeline changes grain each frame.</td></tr>
   <tr><td>Grain Model</td><td>Grain</td><td>Standard uses the calibrated clump field.</td></tr>
+  <tr><td>Grain Size</td><td>Grain</td><td>Film grain model only.</td></tr>
+  <tr><td>Colour Grain</td><td>Grain</td><td>Film grain model only.</td></tr>
+  <tr><td>Red Layer</td><td>Grain</td><td>Film grain model only.</td></tr>
+  <tr><td>Green Layer</td><td>Grain</td><td>Film grain model only.</td></tr>
+  <tr><td>Blue Layer</td><td>Grain</td><td>Film grain model only.</td></tr>
+  <tr><td>Scan Softness</td><td>Grain</td><td>Film grain model only.</td></tr>
   <tr><td>Grain Seed</td><td>Grain</td><td>Same seed and same frame give the same grain.</td></tr>
   <tr><td>Halation Model</td><td>Halation</td><td>Legacy or layered optical transport.</td></tr>
   <tr><td>Halation</td><td>Halation</td><td>Multiplier on the fraction of light the base returns.</td></tr>

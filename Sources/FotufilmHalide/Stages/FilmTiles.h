@@ -2,13 +2,14 @@
 #define FOTUFILM_HALIDE_STAGES_FILM_TILES_H
 
 #include "FotufilmHalide.h"
+#include "FilmTileLayout.h"
 #include "Random.h"
 
 #include <Halide.h>
 
 namespace fotufilm {
 
-// The film grain model (`GrainModel.film`, grain mode 3), sampled from its tiles.
+// The film grain model (`GrainModel.film`, grain mode 1), sampled from its tiles.
 //
 // The host renders each record of the film once, crystal by crystal, on a seamless square of film
 // FOTUFILM_FILM_TILE_SIDE texels a side at FOTUFILM_FILM_TILE_LEVELS gross densities, and hands
@@ -19,17 +20,6 @@ namespace fotufilm {
 // texels that each take the tile at their own hashed offset and orientation, so nothing repeats.
 // `FilmGrain` in FotufilmCore is the same arithmetic on the host, and the tests hold the two
 // together.
-
-/// Hash stream of the film tiles' block placement: one per record, above every other stream.
-constexpr int kFilmTileStream = 200;
-
-/// Offsets within the FOTUFILM_CONFIG_FILM_TILE block.
-constexpr int kFilmTilePitch = 0;
-constexpr int kFilmTileAmount = 1;
-constexpr int kFilmTileId = 2;
-constexpr int kFilmTileDMin = 3;
-constexpr int kFilmTileDMax = 6;
-constexpr int kFilmTileTables = 9;
 
 /// Where the tile's running sums for `level` of `record` start in `tiles`' first dimension is
 /// always 0; this is the entry at integer texel corner (ix, iy). `on` clamps every read to the
@@ -71,12 +61,14 @@ inline Halide::Expr film_tile_box(Halide::ImageParam &tiles, Halide::Expr x0, Ha
         + film_tile_sum_inside(tiles, x0, y0, level, record, on);
 }
 
-/// The film grain of one pixel: its density less the mean density its footprint reads, at the
-/// two levels either side of its developed gross density, blended so the blend keeps their
-/// variance, and scaled by the frame's grain amount. `px`, `py` are the pixel's column and row in
-/// the whole frame; the configuration's FOTUFILM_CONFIG_FILM_TILE block carries the pitch, the
-/// amount, each record's density range and, per record and level, the mean light, the mean
-/// density at this pitch and the correlation with the next level's grain at this pitch.
+/// The film grain of one pixel of one record: its density less the mean density its footprint
+/// reads, at the two levels either side of its developed gross density, blended so the blend
+/// keeps their variance, and scaled by the record's grain amount. `px`, `py` are the pixel's
+/// column and row in the whole frame. The footprint is the square of film the pixel reads,
+/// centred on it: its own pitch for a sharp scan, wider for a softer one. The configuration's
+/// FOTUFILM_CONFIG_FILM_TILE block carries the pitch, the footprint, the amounts, each record's
+/// density range and, per record and level, the mean light, the mean density through this
+/// footprint and the correlation with the next level's grain through it.
 inline Halide::Expr film_tile_grain(Halide::ImageParam &configuration, Halide::ImageParam &tiles,
                                     Halide::Expr gross, Halide::Expr px, Halide::Expr py,
                                     Halide::Expr record, Halide::Expr seed, Halide::Expr on) {
@@ -85,6 +77,7 @@ inline Halide::Expr film_tile_grain(Halide::ImageParam &configuration, Halide::I
     const float block = float(FOTUFILM_FILM_TILE_BLOCK);
     const int base = FOTUFILM_CONFIG_FILM_TILE;
     Expr pitch = configuration(base + kFilmTilePitch);
+    Expr footprint = configuration(base + kFilmTileFootprint);
     Expr d_min = configuration(base + kFilmTileDMin + record);
     Expr d_max = configuration(base + kFilmTileDMax + record);
     Expr table = base + kFilmTileTables + record * 3 * levels;
@@ -93,10 +86,10 @@ inline Halide::Expr film_tile_grain(Halide::ImageParam &configuration, Halide::I
     Expr k = Halide::clamp(Halide::cast<int32_t>(Halide::floor(t)), 0, levels - 2);
     Expr w = t - Halide::cast<float>(k);
 
-    // The blocks the footprint reaches, up to two each way from its corner: all of any pixel up
-    // to a block wide, which is one block for nearly every pixel, so the loop runs once there.
-    Expr x0 = Halide::cast<float>(px) * pitch, x1 = x0 + pitch;
-    Expr y0 = Halide::cast<float>(py) * pitch, y1 = y0 + pitch;
+    // The blocks the footprint reaches, up to two each way from its corner: all of any footprint
+    // up to a block wide, which is one block for nearly every pixel, so the loop runs once there.
+    Expr x0 = (Halide::cast<float>(px) + 0.5f) * pitch - 0.5f * footprint, x1 = x0 + footprint;
+    Expr y0 = (Halide::cast<float>(py) + 0.5f) * pitch - 0.5f * footprint, y1 = y0 + footprint;
     Expr bx0 = Halide::cast<int32_t>(Halide::floor(x0 * (1.0f / block)));
     Expr by0 = Halide::cast<int32_t>(Halide::floor(y0 * (1.0f / block)));
     Expr bx1 = Halide::min(Halide::cast<int32_t>(Halide::ceil(x1 * (1.0f / block))) - 1, bx0 + 1);
@@ -135,7 +128,7 @@ inline Halide::Expr film_tile_grain(Halide::ImageParam &configuration, Halide::I
         - configuration(table + levels + k + 1);
     Expr rho = configuration(table + 2 * levels + k);
     Expr kept = (1.0f - w) * (1.0f - w) + w * w + 2.0f * w * (1.0f - w) * rho;
-    return configuration(base + kFilmTileAmount) * (density_a + (density_b - density_a) * w)
+    return configuration(base + kFilmTileAmount + record) * (density_a + (density_b - density_a) * w)
         / Halide::sqrt(Halide::max(kept, 1.0e-4f));
 }
 

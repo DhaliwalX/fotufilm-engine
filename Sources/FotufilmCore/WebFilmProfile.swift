@@ -51,6 +51,11 @@ public enum WebFilmProfile {
         integer(1); integer(UInt32(min(width, height)))
         integer(UInt32(bitPattern: invocation.featureMask)); integer(invocation.seed)
         integer(UInt32(invocation.spatialSupport)); integer(0)
+        // The film grain model's tiles close the pack, their count last; see `--dump-wasm-pack`.
+        if let tiles = FilmGrain.registeredTiles(configuration: invocation.configuration) {
+            floats(tiles)
+            integer(UInt32(tiles.count))
+        }
         return data
     }
 }

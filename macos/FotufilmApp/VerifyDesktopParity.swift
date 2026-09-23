@@ -318,41 +318,32 @@ enum VerifyDesktopParity {
                         expecting: ["Output Medium", "Export Photo…"])
         },
 
-        Check(name: "disc grain is an edit, not only a setting") { editor in
+        Check(name: "the grain model is an edit, not only a setting") { editor in
             let model = editor.model
-            guard let silver = StockPreset.all.first(where: {
-                $0.stock.grainDensityLaw == .silver
-            }) else {
-                return .fail("no silver-grain film is installed")
+            guard let stock = StockPreset.all.first else {
+                return .fail("no film is installed")
             }
-            model.edit.stockID = silver.id
+            model.edit.stockID = stock.id
             model.edit.grain = 2
-            model.edit.discGrain = false
-            let appSetting = AppSettings.storedDiscGrainEnabled
-
-            // A bundled sample is too small to resolve an individual grain at any offered gauge.
-            // Ask the same engine invocation at a scale where the two models are distinct instead.
-            let frameHeight: Float = 1.2
-            let format = FilmFormat(name: "grain parity", frameHeightMM: frameHeight)
-            let side = Int(frameHeight * 2 / silver.stock.grainSizeMM)
-            var clumpOptions = model.edit.options(sensor: model.sensorFrame)
-            clumpOptions.format = format
+            model.edit.grainModel = .clumpField
+            let appSetting = AppSettings.storedGrainModel
+            let side = 256
             let clump = FilmEngineInvocation(
-                stock: silver.stock, options: clumpOptions, width: side, height: side)
+                stock: stock.stock, options: model.edit.options(sensor: model.sensorFrame),
+                width: side, height: side)
 
-            model.edit.discGrain = true
-            var discOptions = model.edit.options(sensor: model.sensorFrame)
-            discOptions.format = format
-            let discs = FilmEngineInvocation(
-                stock: silver.stock, options: discOptions, width: side, height: side)
-            guard clump.featureMask & FilmEngineFeature.discGrain == 0,
-                  discs.featureMask & FilmEngineFeature.discGrain != 0 else {
+            model.edit.grainModel = .crystals
+            let crystals = FilmEngineInvocation(
+                stock: stock.stock, options: model.edit.options(sensor: model.sensorFrame),
+                width: side, height: side)
+            guard clump.featureMask & FilmEngineFeature.crystalGrain == 0,
+                  crystals.featureMask & FilmEngineFeature.crystalGrain != 0 else {
                 return .fail("the per-photo choice did not reach the engine instruction")
             }
-            guard AppSettings.storedDiscGrainEnabled == appSetting else {
+            guard AppSettings.storedGrainModel == appSetting else {
                 return .fail("the photo changed the app-wide starting preference")
             }
-            return .pass("the photo selected the disc engine variant independently")
+            return .pass("the photo selected the crystal engine variant independently")
         },
 
         Check(name: "the exposure stage offers lens filters") { editor in

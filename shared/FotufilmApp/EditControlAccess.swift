@@ -46,6 +46,12 @@ extension EditorControlField {
             return .unstored("the Mottle menu carries the share")
         case .grainModel:
             return .bespoke { $0.grainModel != .clumpField }
+        case .filmGrainSize: return .number(\.filmGrainSize)
+        case .filmColourGrain: return .number(\.filmColourGrain)
+        case .filmRedLayer: return .number(\.filmRedLayer)
+        case .filmGreenLayer: return .number(\.filmGreenLayer)
+        case .filmBlueLayer: return .number(\.filmBlueLayer)
+        case .filmScanSoftness: return .number(\.filmScanSoftness)
         case .grainAnimation:
             return .unstored("a still has no timeline")
         case .seed:
@@ -236,10 +242,8 @@ extension EditState {
             if control.field == .grainModel {
                 switch grainModel {
                 case .clumpField: return .choice(0)
-                case .discs: return .choice(1)
+                case .film: return .choice(1)
                 case .crystals: return .choice(2)
-                // Not among the menu's choices.
-                case .film: return nil
                 }
             }
             return nil

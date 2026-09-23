@@ -495,7 +495,6 @@ public struct ControlsExport {
         KotlinField(name: "chosenFormatID", type: "String?", defaultValue: "null", control: nil),
         KotlinField(name: "grainMottleShare", type: "Double?", defaultValue: "null", control: nil),
         KotlinField(name: "grainModel", type: "String", defaultValue: "\"clump\"", control: nil),
-        KotlinField(name: "discGrain", type: "Boolean", defaultValue: "false", control: nil),
         KotlinField(name: "couplerGapReach", type: "List<Double>", defaultValue: "listOf(1.0, 1.0)", control: nil),
         KotlinField(name: "shutterSeconds", type: "Double?", defaultValue: "null", control: nil),
         KotlinField(name: "printLightKelvin", type: "Double?", defaultValue: "null", control: nil),
@@ -613,7 +612,7 @@ public struct ControlsExport {
             lines.append("    \(upperSnake(unit.rawValue)),")
         }
         lines += ["}", "", "enum class ControlAvailability {"]
-        for availability in [EditorControlAvailability.always, .film, .colourNegative, .transparentFilm,
+        for availability in [EditorControlAvailability.always, .film, .colourNegative, .colourFilm, .transparentFilm,
                              .printStage, .statedReciprocity, .couplerGeometry, .interlayerInhibition,
                              .measuredDevelopment] {
             lines.append("    \(upperSnake(availability.rawValue)),")
@@ -719,6 +718,7 @@ public struct ControlsExport {
             "        ControlAvailability.ALWAYS -> true",
             "        ControlAvailability.FILM -> stock != null",
             "        ControlAvailability.COLOUR_NEGATIVE -> stock != null && !stock.isMonochrome && !stock.isReversal",
+            "        ControlAvailability.COLOUR_FILM -> stock != null && !stock.isMonochrome",
             "        ControlAvailability.TRANSPARENT_FILM -> stock != null && !stock.isReflectionPrint",
             "        ControlAvailability.PRINT_STAGE -> stock != null",
             "        ControlAvailability.STATED_RECIPROCITY -> false",

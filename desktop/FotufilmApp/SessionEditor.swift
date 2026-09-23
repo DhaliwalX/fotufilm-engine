@@ -1041,8 +1041,8 @@ final class DesktopEditorViewController: SessionViewController {
         setGrainModel(.clumpField)
     }
 
-    @objc func setGrainModelParticle(_ sender: Any?) {
-        setGrainModel(.discs)
+    @objc func setGrainModelFilm(_ sender: Any?) {
+        setGrainModel(.film)
     }
 
     @objc func setGrainModelOrganic(_ sender: Any?) {
@@ -1053,7 +1053,19 @@ final class DesktopEditorViewController: SessionViewController {
         if model.isOpen {
             model.edit.grainModel = grainModel
         }
+        #if os(macOS)
         AppSettings.shared.grainModel = grainModel
+        #endif
+    }
+
+    /// The model the Grain Model menu ticks: the open photograph's, else what a new one starts on.
+    private var menuGrainModel: GrainModel {
+        if model.isOpen { return model.edit.grainModel }
+        #if os(macOS)
+        return AppSettings.shared.grainModel
+        #else
+        return .clumpField
+        #endif
     }
 
     /// The annular halation shapes, app-wide like disc grain: shape is a property of the film
@@ -1382,15 +1394,15 @@ extension DesktopEditorViewController: NSMenuItemValidation {
         case #selector(rerollGrain(_:)):
             return model.isOpen
         case #selector(setGrainModelStandard(_:)):
-            let current = model.isOpen ? model.edit.grainModel : AppSettings.shared.grainModel
+            let current = menuGrainModel
             item.state = current == .clumpField ? .on : .off
             return !model.isExporting
-        case #selector(setGrainModelParticle(_:)):
-            let current = model.isOpen ? model.edit.grainModel : AppSettings.shared.grainModel
-            item.state = current == .discs ? .on : .off
+        case #selector(setGrainModelFilm(_:)):
+            let current = menuGrainModel
+            item.state = current == .film ? .on : .off
             return !model.isExporting
         case #selector(setGrainModelOrganic(_:)):
-            let current = model.isOpen ? model.edit.grainModel : AppSettings.shared.grainModel
+            let current = menuGrainModel
             item.state = current == .crystals ? .on : .off
             return !model.isExporting
         case #selector(toggleEstimatedHalation(_:)):

@@ -132,7 +132,6 @@ enum GranularityMeter {
             // selected legacy law retains Selwyn. The disc path fluctuates covered *area* and converts
             // with Nutting's derivative, so its shape is the model's own sigma times that gain,
             // both taken at the coverage the density implies.
-            let aperture = FilmStock.granularityApertureRadiusMM
             let shape: Float
             switch model {
             case .clumpField:
@@ -166,19 +165,6 @@ enum GranularityMeter {
                 let model = CrystalGrainModel(stock: stock, layer: plane)
                 shape = model.sigma(netDensity: max(developed - curve.dMin, 0))
                     / max(model.sigma(netDensity: anchorD - stock.grainFogDensity), 1e-9)
-            case .discs:
-                let radius = stock.grainSizeMM * stock.grainLayerSizeRatio[plane]
-                func coverage(_ d: Float) -> Float {
-                    min(max(1 - pow(10, -max(d, 0)), 1e-4), 0.99)
-                }
-                func gain(_ a: Float) -> Float {
-                    1 / (max(1 - a, 1e-2) * Float(log(10.0)))
-                }
-                let a = coverage(here), a0 = coverage(anchorD)
-                shape = (BooleanGrain.granularity(radiusMM: radius, coverage: a,
-                                                  apertureRadiusMM: aperture) * gain(a))
-                    / (BooleanGrain.granularity(radiusMM: radius, coverage: a0,
-                                                apertureRadiusMM: aperture) * gain(a0))
             }
             let stated = stock.grainStrength * stock.grainLayerWeights[plane] * shape
             return measured / stated

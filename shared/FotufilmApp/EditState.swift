@@ -304,7 +304,7 @@ struct EditState: Equatable {
     /// The grade laid over the finished print: three bands of lift, gamma and gain.
     var grade = ColorGrade.neutral
     /// Whether that corrector works on the encoded signal rather than on light. Seeded from the
-    /// app-wide setting for the same reason `discGrain` is.
+    /// app-wide setting for the same reason `grainModel` is.
     var encodedGrade = AppSettings.storedGradeSpace == .encoded
 
     var grain = 1.0
@@ -313,15 +313,23 @@ struct EditState: Equatable {
     var grainMottleShare: Double? = nil
     /// Which grain model develops grain across the emulsion.
     ///
-    /// Seeded from the app-wide setting, as the gauge is: an edit begun after Settings › Advanced ›
-    /// Film Model was changed starts where that setting stands, and then travels with the
-    /// photograph instead of following the device.
+    /// On the Mac it is seeded from the app-wide setting, as the gauge is: an edit begun after the
+    /// Grain Model menu was changed starts where that setting stands, and then travels with the
+    /// photograph instead of following the device. iOS opens every film on Standard; the photo's
+    /// own Grain Model control picks another.
+    #if os(macOS)
     var grainModel: GrainModel = AppSettings.storedGrainModel
-    /// Backwards compatibility forwarder for legacy discGrain toggle.
-    var discGrain: Bool {
-        get { grainModel == .discs }
-        set { grainModel = newValue ? .discs : .clumpField }
-    }
+    #else
+    var grainModel: GrainModel = .clumpField
+    #endif
+    /// How the Film grain model lays its grain: the texture's size, the layers' shared colour
+    /// grain, each layer's share of the amount, and the scan's softness. Ignored by the others.
+    var filmGrainSize = 1.0
+    var filmColourGrain = 1.0
+    var filmRedLayer = 1.0
+    var filmGreenLayer = 1.0
+    var filmBlueLayer = 1.0
+    var filmScanSoftness = 1.0
     var halation = 1.0
     /// Nil follows the loaded film's returned/direct ratio.
     var halationReturnRatio: Double? = nil

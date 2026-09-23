@@ -16,6 +16,10 @@ inline int render_gpu(Fixture &f, Buffer<float> &in, Buffer<float> &out,
     Buffer<float> paper(f.paper.data(), int(f.paper.size()));
     in.set_host_dirty(); config.set_host_dirty();
     exposure.set_host_dirty(); film.set_host_dirty(); paper.set_host_dirty();
+    // The parity fixtures carry no film grain tiles: the one-float stand-in with the model off.
+    Buffer<float> film_tiles(1, 1, 1);
+    film_tiles(0, 0, 0) = 0.0f;
+    film_tiles.set_host_dirty();
     const fotufilm::ResolvedFrameParams resolved(configuration, width, height, seed,
         (feature_mask & FOTUFILM_FRAME_REVERSAL) != 0, origin_x, origin_y);
 #define FOTUFILM_GPU_ARGUMENTS \
@@ -33,7 +37,7 @@ inline int render_gpu(Fixture &f, Buffer<float> &in, Buffer<float> &out,
     resolved.halation_strided_radius_2, resolved.diffusion_stride_0, resolved.diffusion_stride_1, \
     resolved.diffusion_stride_2, resolved.diffusion_strided_radius_0, \
     resolved.diffusion_strided_radius_1, resolved.diffusion_strided_radius_2, feature_mask, \
-    fotufilm_byte_basis(configuration), out
+    fotufilm_byte_basis(configuration), film_tiles, 0, out
 
     auto fn = feature_mask & FOTUFILM_FRAME_NO_FILM ? vk_plain
         : feature_mask & FOTUFILM_FRAME_DENSITY_IN ? vk_print

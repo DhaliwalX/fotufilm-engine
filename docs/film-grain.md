@@ -4,7 +4,7 @@
 crystals at fixed places on the emulsion, each developed crystal forming a dye cloud or a
 silver grain of its own physical size, with every output pixel the light that passes through
 that patch of film. The stock's film is rendered once, crystal by crystal, onto tiles; every
-frame after that is sampled from them by a Halide stage (grain mode 3), so the model runs on
+frame after that is sampled from them by a Halide stage (grain mode 1), so the model runs on
 the CPU and Metal roads at the cost of the standard grain.
 
 ## What it does
@@ -63,6 +63,27 @@ the CPU and Metal roads at the cost of the standard grain.
   the engine. `FilmGrain.apply` is the same arithmetic in Swift, and the tests hold the two
   within 0.002 D of each other.
 
+## Controls
+
+None of these rebuilds the tiles: each is the kernel's pitch, footprint, amounts or mix, so
+they move as freely as the grain amount does.
+
+- **Grain Size** (0.5–4) magnifies the film under the frame and divides its fluctuation by as
+  much. Grain far finer than an aperture reads a variance that falls with the aperture's area,
+  so the 48 µm aperture still reads the sheet's granularity while the texture grows; at 48 µm
+  pixels the test holds it within a quarter. Crystal size cannot be set from the sheet (the
+  anchor trades crystal count for dye per crystal at the same granularity), so this is a look.
+- **Colour Grain** (0–1) mixes each record's grain toward the three records' mean with weights
+  that keep their total variance: 1 is the independent records the layers lay, 0 one shared
+  grain.
+- **Red, Green and Blue Layer** (0–2) scale each record's grain. The layer and colour controls are
+  offered on colour film only.
+- **Scan Softness** (0.5–4) is the side of the square of film each pixel reads, in pixels,
+  centred on the pixel: wider averages the grain down as a softer scan does, narrower reads a
+  patch smaller than the pixel. The tone tables are read through that footprint.
+
+Hosts offer these while the grain model is Film.
+
 ## What it is checked against
 
 | Check | Result |
@@ -71,7 +92,7 @@ the CPU and Metal roads at the cost of the standard grain.
 | Tone | mean within 0.006 D of the curve on Portra 400 and Provia 100F, 0.001 D on Tri-X at 4 µm pixels |
 | Tiles against the full render at 1 µm | pixel σ 0.97–1.01 of it, same neighbour correlation, similar skew |
 | Resolution | a 0.25 µm render averaged back to 1 µm correlates above 0.9 with the 1 µm render |
-| Halide against Swift | within 0.002 D per pixel |
+| Halide against Swift | within 0.002 D per pixel, with every control above moved |
 
 On an M4 Pro, a 1080p frame takes 19 ms on the Metal preview road (Standard: 16 ms), 31 ms
 on the Metal still road and 93 ms on the CPU. At 24 MP it matches the standard grain on
@@ -91,9 +112,12 @@ Metal (0.20 s preview, 0.40 s still) and adds about 0.8 s on the CPU.
   by most of a density unit, and that sample leaves Tri-X about 0.01 D under the curve; at the
   pitches frames are rendered at it is well under 0.001 D.
 
-## Where it does not run yet
+## Where it runs
 
-Ahead-of-time variants (the iOS-style AOT table, Android, the web) and WebGPU leave the stage
-out, and a frame that asks for the film grain there renders the standard grain. The iOS app's
-handwritten Metal needs its own port of the stage. Hosts without Swift will also need the
-tiles built without `FilmGrain`.
+Every Halide road but WebGPU carries the stage: the JIT roads, the ahead-of-time table the Mac
+app, Resolve and Final Cut link, Android's CPU and Vulkan kernels, and the browser's CPU
+kernels. Each host keeps the tiles `fotufilm_halide_set_film_tiles` hands it and uploads them
+to its device once per stock. A browser pack sealed with the film grain model closes with its
+tiles, their float count last. WebGPU has no storage binding left for them, so a mode-3 frame
+there renders the standard grain. The iOS app's handwritten Metal carries its own port of the
+stage.

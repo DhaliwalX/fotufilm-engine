@@ -152,8 +152,8 @@ enum MainMenu {
         let (grainModelItem, grainModelSubmenu) = submenu("Grain Model")
         add(grainModelSubmenu, "Standard",
             #selector(DesktopEditorViewController.setGrainModelStandard(_:)))
-        add(grainModelSubmenu, "Particle (Discs)",
-            #selector(DesktopEditorViewController.setGrainModelParticle(_:)))
+        add(grainModelSubmenu, "Film",
+            #selector(DesktopEditorViewController.setGrainModelFilm(_:)))
         add(grainModelSubmenu, "Organic Crystals",
             #selector(DesktopEditorViewController.setGrainModelOrganic(_:)))
         menu.addItem(grainModelItem)

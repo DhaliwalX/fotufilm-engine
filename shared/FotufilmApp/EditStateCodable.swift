@@ -28,7 +28,7 @@ extension EditState: Codable {
 
     static let bespokeKeys: [String] = [
         "stockID", "chosenFormatID", "sourceInterpretation", "captureIlluminantKelvin",
-        "filmLightKelvin", "sourceLightIndex", "halationReturnRatio", "grainMottleShare", "grainModel", "discGrain", "couplerGapReach", "paper", "paperFollowsStock",
+        "filmLightKelvin", "sourceLightIndex", "halationReturnRatio", "grainMottleShare", "grainModel", "couplerGapReach", "paper", "paperFollowsStock",
         "seed", "shutterSeconds", "printLightKelvin", "printFrame", "negativeViewing", "digitalReference", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop",
         "grade", "lensProfileID", "lensAdjustment", "lensFilterIDs", "lensFilterMetering", "selective",
     ]
@@ -90,8 +90,6 @@ extension EditState: Codable {
         if let modelRaw = try c.decodeIfPresent(String.self, forKey: EditKey("grainModel")),
            let model = GrainModel(rawValue: modelRaw) ?? GrainModel.named(modelRaw) {
             grainModel = model
-        } else if let disc = try c.decodeIfPresent(Bool.self, forKey: EditKey("discGrain")) {
-            grainModel = disc ? .discs : .clumpField
         }
         couplerGapReach = try c.decodeIfPresent([Double].self, forKey: EditKey("couplerGapReach"))
             ?? couplerGapReach
@@ -150,7 +148,6 @@ extension EditState: Codable {
         try c.encodeIfPresent(halationReturnRatio, forKey: EditKey("halationReturnRatio"))
         try c.encodeIfPresent(grainMottleShare, forKey: EditKey("grainMottleShare"))
         try c.encode(grainModel.rawValue, forKey: EditKey("grainModel"))
-        try c.encode(grainModel == .discs, forKey: EditKey("discGrain"))
         try c.encode(couplerGapReach, forKey: EditKey("couplerGapReach"))
         try c.encode(paper.id, forKey: EditKey("paper"))
         try c.encode(paperFollowsStock, forKey: EditKey("paperFollowsStock"))

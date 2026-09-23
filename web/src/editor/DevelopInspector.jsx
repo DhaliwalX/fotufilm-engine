@@ -40,7 +40,18 @@ export default function DevelopInspector() {
         <DisclosurePanel>
           <div className="control-stack">
             {<AdjustmentGroup group={"Character"} />}
-            {<ProfileFields fields={["grainMottle", "grainModel"]} />}
+            {<ProfileFields
+              fields={[
+                "grainMottle",
+                "grainModel",
+                "filmGrainSize",
+                "filmColourGrain",
+                "filmRedLayer",
+                "filmGreenLayer",
+                "filmBlueLayer",
+                "filmScanSoftness",
+              ]}
+            />}
             <Button
               size="S"
               UNSAFE_className="secondary full-width"

@@ -18,12 +18,11 @@ int main(int argc, char **argv) {
         setenv("HL_VK_ALLOC_CONFIG", "0:1:0:0:256", 0);
         halide_reuse_device_allocations(nullptr, true);
         Fixture f(argv[1]);
-        if (f.config[FOTUFILM_CONFIG_GRAIN_MODE] == 3)
-            throw std::runtime_error("Film grain tiles are not supported by these AOT variants; prepare a standard, particle or organic fixture");
+        if (f.config[FOTUFILM_CONFIG_GRAIN_MODE] == 1)
+            throw std::runtime_error("Film grain tiles are not supported by these AOT variants; prepare a standard or organic fixture");
         std::string test=argv[2]; int w=std::stoi(argv[3]), h=std::stoi(argv[4]);
         if (w<1 || h<1 || w>4096 || h>4096) return 2;
-        if((test=="stage-disc" && f.config[FOTUFILM_CONFIG_GRAIN_MODE]!=1)
-            || (test=="stage-crystal" && f.config[FOTUFILM_CONFIG_GRAIN_MODE]!=2))
+        if(test=="stage-crystal" && f.config[FOTUFILM_CONFIG_GRAIN_MODE]!=2)
             throw std::runtime_error("This grain mode requires a fixture prepared with --grain-model");
         f.config[FOTUFILM_CONFIG_FRAME_WIDTH]=w;
         f.config[FOTUFILM_CONFIG_FRAME_HEIGHT]=h;

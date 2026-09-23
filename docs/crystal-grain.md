@@ -8,7 +8,7 @@ numbers, and how it renders.
 
 ## Implicit dye cloud image formation
 
-The default grain model (and the Boolean disc model) computes a smooth characteristic curve
+The default grain model computes a smooth characteristic curve
 $D_{\text{curve}}$ first, then overlays an additive noise field $\delta D$ ($D = D_{\text{curve}} + \delta D$).
 
 In contrast, the crystal grain model forms the developed density implicitly:

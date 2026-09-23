@@ -3169,15 +3169,19 @@ int testPlugin() {
             check(digital >= 0, "finds Digital Reference by identity");
             if (digital >= 0) setChoice(plugin, instanceHandle, instance.params, "paper", digital);
             check(enabledOf("printLight") == 0, "Digital Reference disables the viewing lamp");
-            int measuredStocks = 0, silverStock = -1;
+            int measuredStocks = 0;
             for (int st : order) {
                 setChoice(plugin, instanceHandle, instance.params, "stock", st);
                 const int flags = fotufilm_bridge_control_capabilities(st, digital);
-                if ((flags & FOTUFILM_CONTROL_DISC_GRAIN) && silverStock < 0) silverStock = st;
                 check(enabledOf("bleachBypass") == ((flags & FOTUFILM_CONTROL_COLOUR_NEGATIVE) ? 1 : 0),
                       "bleach availability follows the film's material");
-                if (!(flags & FOTUFILM_CONTROL_DISC_GRAIN))
-                    check(enabledOf("grainModel") == 0, "dye-cloud stocks do not offer silver disc grain");
+                setChoice(plugin, instanceHandle, instance.params, "grainModel", 1);
+                const int grainOn = enabledOf("grainModel");
+                check(enabledOf("filmGrainSize") == grainOn, "the film grain model offers its grain size");
+                check(enabledOf("filmColourGrain") == ((flags & FOTUFILM_CONTROL_COLOUR_FILM) ? grainOn : 0),
+                      "colour grain follows the film's records");
+                setChoice(plugin, instanceHandle, instance.params, "grainModel", 0);
+                check(enabledOf("filmGrainSize") == 0, "the film grain controls follow the film grain model");
                 if (fotufilm_bridge_stock_pushes(st)) {
                     ++measuredStocks;
                     auto &menu = instance.params.params.at("pushCondition")->properties->strings[kOfxParamPropChoiceOption];
@@ -3195,29 +3199,6 @@ int testPlugin() {
             }
             if (std::getenv("FOTUFILM_REQUIRE_ADVANCED_STOCKS")) {
                 check(measuredStocks > 0, "exercises at least one measured development menu");
-                check(silverStock >= 0, "finds a silver-image stock for the disc render test");
-            }
-            if (silverStock >= 0) {
-                layOut(384, 256);
-                rest(silverStock);
-                setChoice(plugin, instanceHandle, instance.params, "format", 0);
-                setChoice(plugin, instanceHandle, instance.params, "frameCoverage", 5);
-                setChoice(plugin, instanceHandle, instance.params, "halation", 0);
-                setChoice(plugin, instanceHandle, instance.params, "couplers", 0);
-                if (digital >= 0) setChoice(plugin, instanceHandle, instance.params, "paper", digital);
-                setChoice(plugin, instanceHandle, instance.params, "renderMode", 2);
-                check(enabledOf("grainModel") == 1 && renderNow(), "renders clump-field silver grain on Reference");
-                const auto silverClumps = output->pixels;
-                setChoice(plugin, instanceHandle, instance.params, "grainModel", 1);
-                check(renderNow() && rmsAgainst(silverClumps) > moved,
-                      "resolved silver discs change the actual grain, not just the renderer selection");
-                if (const char *directory = std::getenv("FOTUFILM_CONTROL_PREVIEW_DIR")) {
-                    const std::string base = std::string(directory) + "/";
-                    check(parity::writeDump((base + "silverClumps.bin").c_str(), silverClumps.data(), 384, 256) &&
-                          parity::writeDump((base + "silverDiscs.bin").c_str(), output->pixels.data(), 384, 256),
-                          "writes silver grain model previews");
-                }
-                layOut(sizes[0].first, sizes[0].second);
             }
             rest(order[0]);
             setChoice(plugin, instanceHandle, instance.params, "renderMode", 2);
@@ -3230,10 +3211,6 @@ int testPlugin() {
             setChoice(plugin, instanceHandle, instance.params, "renderMode", 2);
             check(renderNow() && output->pixels == referenceMode,
                   "switching back to Reference restores the same frame, including cached tables");
-            setChoice(plugin, instanceHandle, instance.params, "grainModel", 1);
-            check(getInt(instance.params, "renderMode") == 2, "selecting discs selects Reference rendering");
-            setChoice(plugin, instanceHandle, instance.params, "renderMode", 1);
-            check(getInt(instance.params, "grainModel") == 0, "selecting Realtime restores supported clump grain");
             rest(order[0]);
             setChoice(plugin, instanceHandle, instance.params, "grainAnimation", 1);
             PropertySet *frozenPreferences = newPropertySet();

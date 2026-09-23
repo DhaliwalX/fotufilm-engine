@@ -9,6 +9,7 @@
 
 #include "FotufilmHalide.h"
 #include "FotufilmResolvedFrameParams.h"
+#include "Pipeline/FilmTileStore.h"
 
 #include <algorithm>
 #include <cstring>
@@ -16,6 +17,9 @@
 using Halide::Runtime::Buffer;
 
 namespace {
+
+/// The film grain model's tiles, shared with the Vulkan shim, which keeps its own device copy.
+using FilmTileStore = fotufilm::BasicFilmTileStore<Buffer<float>>;
 
 constexpr int kLutDimension = 33;
 constexpr int kLutValueCount = kLutDimension * kLutDimension * kLutDimension * 4;
@@ -38,6 +42,8 @@ int run_develop(const float *input_r, const float *input_g, const float *input_b
     // Standalone development returns a negative before the enlarger.
     resolved.print_mtf_radius = 0;
     const int32_t monochrome = (feature_mask & FOTUFILM_FRAME_MONOCHROME) != 0;
+    bool film_on = false;
+    Buffer<float> film_tiles = FilmTileStore::shared().tiles_for(configuration, film_on);
 
     return fotufilm_halide_android_develop(
         red, green, blue, config, exposure, width, height,
@@ -49,7 +55,8 @@ int run_develop(const float *input_r, const float *input_g, const float *input_b
         resolved.adjacency_secondary_sigma, resolved.adjacency_secondary_radius,
         resolved.fringe_sigma, resolved.fringe_radius,
         resolved.grain_sigma, resolved.grain_radius, resolved.grain_lambda, resolved.print_mtf_radius,
-        seed, resolved.reversal, monochrome, origin_x, origin_y, feature_mask, density);
+        seed, resolved.reversal, monochrome, origin_x, origin_y, feature_mask,
+        film_tiles, film_on ? 1 : 0, density);
 }
 
 int run_print(Buffer<float> &density, Buffer<float> &result,
@@ -79,6 +86,11 @@ int run_print(Buffer<float> &density, Buffer<float> &result,
 }
 
 extern "C" int32_t fotufilm_halide_available(void) { return 1; }
+
+extern "C" int32_t fotufilm_halide_set_film_tiles(int32_t id, const float *tiles,
+                                                  int64_t count) {
+    return FilmTileStore::shared().set(id, tiles, count) ? 0 : -1;
+}
 
 extern "C" int32_t fotufilm_halide_develop(
     const float *input_r, const float *input_g, const float *input_b,
