@@ -47,6 +47,8 @@ enum class Store {
     CrystalCounts,
     CrystalGrain,
     Inhibition,
+    FilmDensity,
+    FilmGrain,
     Transmittance,
     FlatTransmittance,
     Printed,
@@ -140,6 +142,11 @@ struct Inputs {
     bool runtime_gates;
     std::string prefix;
     std::string suffix;
+    /// The film grain model's tiles (grain mode 3), when this pipeline carries them, and whether
+    /// this frame lays them — a scalar, so the grain stages either side are skipped rather than
+    /// computed and discarded.
+    Halide::ImageParam *film_tiles = nullptr;
+    Expr film_on = Expr();
 };
 
 struct Developed {
@@ -569,7 +576,9 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
 
     Func developed = density;
     if (use_grain) {
-        Func density_view = b.store(density, Store::Density, 3);
+        // The film grain model reads the developed density at every pixel of a whole frame, so
+        // where it is compiled in the density is kept whole for every grain model alike.
+        Func density_view = b.store(density, in.film_tiles ? Store::FilmDensity : Store::Density, 3);
         GrainFields fields = b.grain_fields(configuration, p, in.monochrome, use_mottle,
                                             x, y, c, p.width_, p.height_, in.prefix, suffix);
         Expr layer = Halide::min(c, fields.channels - 1);
@@ -613,6 +622,21 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
             grained(x, y, c) = selected_developed_density(
                 in.grain_mode, density_view(x, y, c), clump, Expr(), Expr());
             developed = grained;
+        }
+        if (in.film_tiles) {
+            // Film grain (mode 3) replaces the other models' grain outright: it is the film's
+            // own fluctuation about the curve, sampled from the host-rendered tiles.
+            Expr film_on = on_grain && in.film_on;
+            Expr record = Halide::select(in.monochrome != 0, 1, c);
+            Func film(name("film_grain"));
+            film(x, y, c) = density_view(x, y, c)
+                + film_tile_grain(configuration, *in.film_tiles, density_view(x, y, c),
+                                  x + p.origin_x_, y + p.origin_y_, record, Expr(p.seed_),
+                                  film_on);
+            Func film_view = b.store(film, Store::FilmGrain, 3, film_on);
+            Func filmed(name("filmed"));
+            filmed(x, y, c) = gated(film_on, film_view(x, y, c), developed(x, y, c));
+            developed = filmed;
         }
         developed = select_stage(on_grain, developed, density_view, x, y, c,
                                  name("grain_selected"));

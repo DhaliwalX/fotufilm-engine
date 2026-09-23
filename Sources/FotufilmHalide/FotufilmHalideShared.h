@@ -14,6 +14,7 @@
 #include "Stages/Halation.h"
 #include "Stages/Random.h"
 #include "Stages/Grain.h"
+#include "Stages/FilmTiles.h"
 #include "Stages/Print.h"
 #include "Stages/NegativeScan.h"
 

@@ -19,6 +19,12 @@ public enum GrainModel: String, Sendable, CaseIterable, Codable, Identifiable {
     /// (`CrystalGrainModel`). Available only in the reference schedule, like `discs`, whose
     /// variant family carries it; realtime schedules use `clumpField`.
     case crystals = "crystals"
+    /// The film's own crystals laid where they sit on the emulsion (`FilmGrain`): hashed in film
+    /// millimetres so every resolution samples the same film, dye clouds sized by their dye over
+    /// the coupler capacity that caps them, silver grains opaque, and each pixel the average of
+    /// the light through it. Rendered once per stock onto tiles the Halide kernel samples (grain
+    /// mode 3); builds without those tiles — ahead-of-time variants and WebGPU — lay `clumpField`.
+    case film = "film"
 
     public var id: String { rawValue }
 
@@ -28,6 +34,7 @@ public enum GrainModel: String, Sendable, CaseIterable, Codable, Identifiable {
         case .clumpField: return "Standard"
         case .discs: return "Particle"
         case .crystals: return "Organic Crystals"
+        case .film: return "Film"
         }
     }
 
@@ -37,10 +44,11 @@ public enum GrainModel: String, Sendable, CaseIterable, Codable, Identifiable {
         case .clumpField: return "Fast calibrated RMS grain"
         case .discs: return "Discrete silver grains under magnification"
         case .crystals: return "Physical dye clouds and paper crystals"
+        case .film: return "Crystals on the film itself, averaged as light"
         }
     }
 
-    /// Resolves an identifier or alias (e.g. "standard", "clump", "particle", "discs", "organic", "crystals").
+    /// Resolves an identifier or alias (e.g. "standard", "clump", "particle", "discs", "organic", "crystals", "film").
     public static func named(_ name: String) -> GrainModel? {
         switch name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "clump", "clumpfield", "clump-field", "standard", "fast":
@@ -49,6 +57,8 @@ public enum GrainModel: String, Sendable, CaseIterable, Codable, Identifiable {
             return .discs
         case "crystals", "crystal", "organic", "organic-crystals", "physical":
             return .crystals
+        case "film", "real", "real-film", "film-grain":
+            return .film
         default:
             return nil
         }

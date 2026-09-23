@@ -160,8 +160,8 @@ enum GranularityMeter {
                         * sqrt((1 + pow(anchorD / ds, 2 * p))
                             / (1 + pow(here / ds, 2 * p)))
                 }
-            case .crystals:
-                // The population's own aperture variance, at this density and at the read
+            case .crystals, .film:
+                // The population's own aperture variance — the film model lays the same one, at this density and at the read
                 // density, both keyed on density above base — the model carries the fog.
                 let model = CrystalGrainModel(stock: stock, layer: plane)
                 shape = model.sigma(netDensity: max(developed - curve.dMin, 0))

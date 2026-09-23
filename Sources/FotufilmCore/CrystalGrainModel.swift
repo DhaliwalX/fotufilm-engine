@@ -72,7 +72,8 @@ public struct CrystalGrainPopulation: Codable, Equatable, Sendable {
 /// ask for, the dye that forms is `C (1 - exp(-demand / C))`, sized so that once the whole
 /// sublayer has developed a further crystal forms a tenth of what an unstarved one would. That
 /// starvation is what makes granularity fall past its peak; silver has no pool. Reversal dye
-/// forms in the crystals the first developer left, fog develops a share of every class, and a
+/// forms in the crystals the first developer left, fog develops a share of every class in
+/// proportion to its crystals' surface, so the large crystals carry most of it, and a
 /// pushed or pulled process is the same population developed differently: the sub-threshold
 /// centres it reaches and the mass each crystal grows to are refitted to the condition's
 /// measured curve with the coating held. `Development` is everything the tank decides.
@@ -206,8 +207,8 @@ public struct CrystalGrainModel: Sendable {
         public var bins: [Bin]
         public var isReversal: Bool
         public var isSilver: Bool
-        /// Fraction of every class fog develops regardless of exposure.
-        public var fogFraction: Float
+        /// Fraction of each class fog develops regardless of exposure.
+        public var fogFractions: [Float]
         /// The process's reach into the latent image (`Exposure.latentFraction`): 1 at the
         /// reference process.
         public var developability: Float
@@ -229,9 +230,10 @@ public struct CrystalGrainModel: Sendable {
 
         /// Dye-forming fraction of every class at `logExposure`, fog included.
         public func formingFractions(exposure: Exposure, logExposure: Float) -> [Float] {
-            exposure.latentFractions(logExposure: logExposure, developability: developability)
-                .map { latent in
-                    let developed = 1 - (1 - latent) * (1 - fogFraction)
+            zip(exposure.latentFractions(logExposure: logExposure, developability: developability),
+                fogFractions)
+                .map { latent, fog in
+                    let developed = 1 - (1 - latent) * (1 - fog)
                     return isReversal ? 1 - developed : developed
                 }
         }
@@ -368,7 +370,7 @@ public struct CrystalGrainModel: Sendable {
     public var bins: [Development.Bin] { development.bins }
     public var weights: [Float] { exposure.weights }
     public var fitError: Float { development.fitError }
-    public var fogFraction: Float { development.fogFraction }
+    public var fogFractions: [Float] { development.fogFractions }
     public var isReversal: Bool { development.isReversal }
     public var isSilver: Bool { development.isSilver }
     public static var classLogExposures: [Float] { Exposure.classLogExposures }
@@ -416,8 +418,6 @@ public struct CrystalGrainModel: Sendable {
             let formed = zip(row, weights).reduce(0) { $0 + $1.0 * Double($1.1) }
             worst = max(worst, abs(Float(formed) - target))
         }
-        let totalWeight = weights.reduce(0, +)
-        let fogFraction = totalWeight > 0 ? min(stock.grainFogDensity / totalWeight, 0.5) : 0
 
         // Size from speed, over the span a record holds, centred on the weight's log-mean.
         let active = weights.indices.filter { weights[$0] > 1e-6 * (weights.max() ?? 0) }
@@ -513,7 +513,10 @@ public struct CrystalGrainModel: Sendable {
         }
         exposure = Exposure(weights: weights, logRadius: logRadius)
         development = Development(bins: bins, isReversal: reversal, isSilver: silver,
-                                  fogFraction: fogFraction, developability: 1, fitError: worst)
+                                  fogFractions: Self.fogFractions(weights: weights,
+                                                                  logRadius: logRadius,
+                                                                  density: stock.grainFogDensity),
+                                  developability: 1, fitError: worst)
 
         // The sheet's figure fixes the dye per crystal of the reference size at the reference
         // process, and with it the crystal count every weight implies.
@@ -561,6 +564,27 @@ public struct CrystalGrainModel: Sendable {
             }
             readSigma /= sqrt(population.coatingDensityScale)
         }
+    }
+
+    /// Fog forms at sensitivity specks on a crystal's surface, so each class fogs in proportion
+    /// to its crystals' surface, `r²`, scaled so the classes' weights form `density` in all; no
+    /// class fogs more than half its crystals.
+    static func fogFractions(weights: [Float], logRadius: [Float], density: Float) -> [Float] {
+        let largest = zip(weights, logRadius).filter { $0.0 > 0 }.map { $0.1 }.max() ?? 0
+        let surface = logRadius.map { pow(10, 2 * ($0 - largest)) }
+        func formed(_ scale: Float) -> Float {
+            zip(weights, surface).reduce(0) { $0 + $1.0 * min(scale * $1.1, 0.5) }
+        }
+        guard density > 0, formed(.greatestFiniteMagnitude) > 0 else {
+            return [Float](repeating: 0, count: weights.count)
+        }
+        var low: Float = 0, high: Float = 1
+        while formed(high) < density && high < 1e9 { high *= 2 }
+        for _ in 0..<60 {
+            let mid = (low + high) / 2
+            if formed(mid) < density { low = mid } else { high = mid }
+        }
+        return surface.map { min(high * $0, 0.5) }
     }
 
     private static func withCurve(_ model: CrystalGrainModel, _ curve: CharacteristicCurve) -> CrystalGrainModel {
@@ -784,8 +808,9 @@ public struct CrystalGrainModel: Sendable {
     public var report: String {
         var lines: [String] = []
         lines.append(String(
-            format: "fit %.3f D, fog fraction %.4f, developability %.2f, read net %.2f D → σ48 %.4f",
-            fitError, fogFraction, development.developability, readNetDensity, readSigma))
+            format: "fit %.3f D, fog fraction %.4f…%.4f, developability %.2f, read net %.2f D → σ48 %.4f",
+            fitError, zip(weights, fogFractions).filter { $0.0 > 0 }.map { $0.1 }.min() ?? 0,
+            fogFractions.max() ?? 0, development.developability, readNetDensity, readSigma))
         for (i, bin) in bins.enumerated() where bin.cloudRadiusMM > 0 {
             let speeds = bin.classes.map { Exposure.classLogExposures[$0] }
             lines.append(String(

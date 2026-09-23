@@ -241,6 +241,12 @@ int32_t fotufilm_halide_develop(
     const float *exposure_lut, int32_t lut_dimension,
     int32_t feature_mask, uint32_t seed);
 
+/// Registers the film grain model's tiles under `id`: `count` floats, the running-sum tables of
+/// FOTUFILM_FILM_TILE_LEVELS levels for each of three records, ((side + 1)², levels, 3) in that
+/// order. A frame in grain mode 3 samples the tiles its FILM_TILE block names; a null or empty
+/// `tiles` forgets them. Returns 0, or -1 when the count is not the tiles' size.
+int32_t fotufilm_halide_set_film_tiles(int32_t id, const float *tiles, int64_t count);
+
 /// Stage 8: developed densities to display-linear RGB.
 int32_t fotufilm_halide_print(
     const float *input_r, const float *input_g, const float *input_b,

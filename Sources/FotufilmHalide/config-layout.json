@@ -29,6 +29,18 @@
     "CRYSTAL_GRAIN_SAMPLES": {
       "value": 64,
       "doc": "Samples per bin of the crystal grain model's developed-count table, against the record's developed density as a fraction of its range, 0...1."
+    },
+    "FILM_TILE_SIDE": {
+      "value": 256,
+      "doc": "Texels per side of the film grain model's seamless tile; a texel is a micron of film."
+    },
+    "FILM_TILE_LEVELS": {
+      "value": 17,
+      "doc": "Gross densities, D-min to D-max, the film grain model renders each record's tile at."
+    },
+    "FILM_TILE_BLOCK": {
+      "value": 64,
+      "doc": "Side, in texels, of the film blocks that each take the tile at their own hashed offset and orientation."
     }
   },
   "fields": [
@@ -469,6 +481,11 @@
       "name": "GRAIN_DENSITY_RECORDS",
       "count": 18,
       "doc": "The chromogenic negative's granularity-against-density shape per record, read only under FOTUFILM_CONFIG_GRAIN_LAW 0: for red, green and blue in turn, the coarse sub-layer's variance amplitude, the toe density over which anything develops at all, the density over which that coarse population decays onto the fine one, then the amplitude, centre density and width of the second rise where the slow sub-layer's coarse population comes in. Mirrors `FilmStock.grainDensityProfile`; appended without renumbering earlier fields."
+    },
+    {
+      "name": "FILM_TILE",
+      "count": "9 + 3 * 3 * FILM_TILE_LEVELS",
+      "doc": "The film grain model (grain mode 3), sampled from its tiles: the pixel pitch in tile texels, the grain amount the tiles' grain is scaled by, the id the host registered the tiles under, each record's D-min then D-max (the range the levels span), then per record FILM_TILE_LEVELS each of the level's mean light, the mean density a pixel of this pitch reads there, and the correlation of its grain with the next level's at this pitch. Read only in grain mode 3; appended without renumbering earlier fields."
     }
   ]
 }
