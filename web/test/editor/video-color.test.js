@@ -4,6 +4,7 @@ import catalog from '../../src/generated/video-color.json' with { type: 'json' }
 import {
   decodeCurve,
   decodeVideoPlanes,
+  sceneFromDisplayLight,
   videoTransform,
   VIDEO_ENCODINGS,
 } from '../../src/video-color.js'
@@ -116,6 +117,23 @@ test('NV12 legal black/white and full-range RGB use their declared transfer', ()
   )
   assert.ok(rgb[2] > rgb[0] && rgb[2] > rgb[1])
 })
+test('PQ display light returns to the scene: BT.2408 grey at 26 nits is 0.18', () => {
+  assert.equal(
+    videoTransform('standard', { transfer: 'smpte2084', primaries: 'bt2020' })
+      .displayLight,
+    true,
+  )
+  assert.equal(
+    videoTransform('standard', { transfer: 'arib-std-b67', primaries: 'bt2020' })
+      .displayLight,
+    false,
+  )
+  const grey = sceneFromDisplayLight(26 / 203, 26 / 203, 26 / 203)
+  for (const c of grey) assert.ok(Math.abs(c - 0.18) < 1e-3)
+  const white = sceneFromDisplayLight(1, 1, 1)
+  for (const c of white) assert.ok(Math.abs(c - 1) < 1e-12)
+})
+
 test('standard HDR white is normalized and unsupported color contracts fail explicitly', () => {
   assert.ok(
     Math.abs(

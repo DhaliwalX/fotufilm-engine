@@ -501,8 +501,9 @@ public:
         policy.approximate = approximate_;
         policy.realtime = realtime_;
         policy.windowed = windowed;
-        // The reference CPU samples this same 2048-entry table. Evaluating the
-        // analytic curve per pixel instead changes the model between backends.
+        // The reference CPU samples a 2048-entry table of each curve. The browser, Vulkan and
+        // the fast still road sample the same table; the native reference road evaluates the
+        // analytic curve, which the table matches within 1e-4 D.
         policy.tabulated_curves = reference_sampling()
             || fast(kStillFastCurves);
         // The reference CPU draws from these inverse-CDF tables. The browser GPU must
@@ -695,26 +696,34 @@ public:
                 Halide::select(channel == 3, input_(x, y, 3), linear));
         } else {
             Func srgb("frame_srgb" + suffix);
+            // The material's own SDR knee, which the host writes into the output shoulder slot:
+            // 1 for everything bounded by its own white (no roll, only the clip), earlier for a
+            // directly viewed transparency. A negative slot is no shoulder, which is a knee at
+            // display white.
+            Expr stated_knee = configuration_(FOTUFILM_CONFIG_OUTPUT_SHOULDER);
             Expr shoulder_knee = Halide::select(
-                reversal_ != 0, 0.7f, 0.9f);
-            // The print is Display P3. A frame delivered in sRGB leaves it here, after the
-            // shoulder and before the clip, the way the reference path does. The matrix reads
-            // all three shouldered channels, so that arm stores the print once rather than
+                stated_knee < 0.0f, 1.0f, Halide::clamp(stated_knee, 0.0f, 1.0f));
+            // The print is Display P3. A frame delivered in sRGB leaves it here, into the
+            // delivery's primaries first and through the shoulder after, the way every host
+            // delivery takes it (`host_output_shouldered`, `FilmOutputConversion.sRGBSDR`). The
+            // matrix reads all three channels, so that arm stores the print once rather than
             // develop it again per channel; the output is compiled per basis below, and the P3
             // arm neither reads the store nor runs it.
             Expr srgb_out = (byte_basis_ & 2) != 0;
-            Func shouldered("frame_shouldered" + suffix);
-            shouldered(x, y, channel) = display_shoulder(final_linear(x, y, channel),
-                                                         shoulder_knee);
-            Func shouldered_view = store_frame(shouldered, policy.half_store, 3);
+            Func delivered_print("frame_delivered_print" + suffix);
+            delivered_print(x, y, channel) = final_linear(x, y, channel);
+            Func print_view = store_frame(delivered_print, policy.half_store, 3);
             auto in_srgb = [&](int row) {
-                return kP3ToSRGB[3 * row] * graph::gated(srgb_out, shouldered_view(x, y, 0), 0.0f)
-                    + kP3ToSRGB[3 * row + 1] * graph::gated(srgb_out, shouldered_view(x, y, 1), 0.0f)
-                    + kP3ToSRGB[3 * row + 2] * graph::gated(srgb_out, shouldered_view(x, y, 2), 0.0f);
+                return kP3ToSRGB[3 * row] * graph::gated(srgb_out, print_view(x, y, 0), 0.0f)
+                    + kP3ToSRGB[3 * row + 1] * graph::gated(srgb_out, print_view(x, y, 1), 0.0f)
+                    + kP3ToSRGB[3 * row + 2] * graph::gated(srgb_out, print_view(x, y, 2), 0.0f);
             };
             Expr linear = Halide::clamp(
-                graph::gated(srgb_out, Halide::mux(channel, {in_srgb(0), in_srgb(1), in_srgb(2)}),
-                             display_shoulder(final_linear(x, y, channel), shoulder_knee)),
+                display_shoulder(
+                    graph::gated(srgb_out,
+                                 Halide::mux(channel, {in_srgb(0), in_srgb(1), in_srgb(2)}),
+                                 final_linear(x, y, channel)),
+                    shoulder_knee),
                 0.0f, 1.0f);
             srgb(x, y, channel) = sample_transfer(srgb_encode_, Halide::sqrt(linear));
             Expr dither = triangular_dither(

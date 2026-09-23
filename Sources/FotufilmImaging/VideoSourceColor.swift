@@ -46,7 +46,7 @@ public struct VideoSourceColor: Equatable, Sendable {
         switch transfer {
         case .sRGB: return 1
         case .hlg: return HLGSceneTransfer.headroom
-        case .pq: return PQSceneTransfer.headroom
+        case .pq: return pow(PQSceneTransfer.headroom, 1 / HLGTransfer.systemGamma)
         }
     }
 
@@ -70,11 +70,18 @@ public struct VideoSourceColor: Equatable, Sendable {
                            Self.pqScene(value.z))
         }
 
+        let working: SIMD3<Float>
         switch primaries {
-        case .rec2020: return linear
-        case .displayP3: return ColorScience.linearDisplayP3ToRec2020(linear)
-        case .rec709: return ColorScience.linearSRGBToRec2020(linear)
+        case .rec2020: working = linear
+        case .displayP3: working = ColorScience.linearDisplayP3ToRec2020(linear)
+        case .rec709: working = ColorScience.linearSRGBToRec2020(linear)
         }
+        guard transfer == .pq else { return working }
+        // PQ carries display light. The inverse of BT.2100's HLG OOTF, normalised at reference
+        // white, is BT.2408's PQ-to-HLG relation and returns it to the scene: a grey card mastered
+        // at 26 cd/m² decodes to 0.18, as the same card does from HLG and from SDR.
+        let scene = HLGTransfer.opticalToOpen(r: working.x, g: working.y, b: working.z)
+        return SIMD3(scene.r, scene.g, scene.b)
     }
 
     private static func signedSRGB(_ value: Float) -> Float {
@@ -98,8 +105,9 @@ public struct VideoSourceColor: Equatable, Sendable {
     }
 }
 
-/// SMPTE ST 2084 converted from absolute display luminance to the app's relative scene scale.
-/// BT.2408/ISO HDR reference white is 203 cd/m²; the film engine calls that diffuse white 1.0.
+/// SMPTE ST 2084 converted from absolute display luminance to display light relative to
+/// BT.2408/ISO HDR reference white, 203 cd/m², which the film engine calls diffuse white 1.0.
+/// `VideoSourceColor` takes it on to scene light through the inverse OOTF.
 public enum PQSceneTransfer {
     public static let referenceWhiteNits: Float = 203
     public static let peakNits: Float = 10_000
@@ -111,7 +119,7 @@ public enum PQSceneTransfer {
     private static let c2: Float = 2413.0 / 128.0
     private static let c3: Float = 2392.0 / 128.0
 
-    /// Full-range ST 2084 signal to relative linear light with reference white at 1.0.
+    /// Full-range ST 2084 signal to relative display light with reference white at 1.0.
     public static func sceneLight(_ signal: Float) -> Float {
         let encoded = min(max(signal, 0), 1)
         let power = pow(encoded, 1 / m2)

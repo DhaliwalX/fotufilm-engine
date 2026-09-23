@@ -36,7 +36,8 @@ struct RGBAImage {
         for i in 0..<(width * height) {
             for channel in 0..<3 {
                 let shouldered =
-                    ColorScience.displayShoulder(buffer.planes[channel][i])
+                    ColorScience.displayShoulder(
+                        buffer.planes[channel][i], knee: FilmSDRDelivery.boundedShoulderKnee)
                 let encoded = PrintEncoding.encode(shouldered)
                 bytes[i * 4 + channel] =
                     UInt8(max(0, min(255, (encoded * 255).rounded())))

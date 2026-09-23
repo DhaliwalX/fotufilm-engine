@@ -59,7 +59,8 @@ public enum HLGSceneTransfer {
     public static let a: Float = 0.17883277
     public static let b: Float = 0.28466892
     public static let c: Float = 0.55991073
-    /// BT.2408: diffuse white — graphics white, the 90% reflector — sits at 75% signal.
+    /// BT.2408: HDR reference white — graphics white, a 100% reflector — sits at 75% signal; the
+    /// 90% card sits at about 73% and an 18% grey card at 38%.
     public static let diffuseWhiteSignal: Float = 0.75
 
     /// Inverse OETF: full-range signal 0…1 to normalized scene light 0…1.
@@ -122,8 +123,10 @@ public enum CameraLogCurve: UInt32, CaseIterable, Codable, Sendable {
     }
 
     /// HLG RGB signal after AVFoundation has expanded the source's video-range Y′CbCr. BT.2100's
-    /// inverse OETF is scaled so BT.2408's 75%-signal diffuse white lands on the 0.9 reflectance
-    /// every other camera curve calls a white card.
+    /// inverse OETF is scaled so BT.2408's 75%-signal reference white lands on 0.9, the value
+    /// every other camera curve gives its white card, and so on the house diffuse white once the
+    /// 1/0.9 scale is taken. BT.2408 calls that signal a 100% reflector, so a grey card reads
+    /// 0.1635 here and 0.18 after the scale — the value the other HLG decoders give it.
     public static func hlgToLinear(_ code: Float) -> Float {
         let signal = min(max(code, 0), 1)
         return HLGSceneTransfer.sceneLight(signal) * 0.9

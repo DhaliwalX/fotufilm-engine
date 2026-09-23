@@ -137,10 +137,20 @@ final class PrintFrameTests: XCTestCase {
         }
         let edge = configuration(.paper)
         let endura = configuration(.paper, paper: .enduraPremier)
-        XCTAssertNotEqual(edge.baseRGB, endura.baseRGB)
         let warm = PrintFrameConfiguration(frame: .paper, formatID: "35mm", stockID: "hp5plus400",
                                           paper: .ektacolorEdge, viewingKelvin: 2856)
-        XCTAssertNotEqual(edge.baseRGB, warm.baseRGB)
+        // Clear paper is the print's own white, under whatever lamp the print is read by — the
+        // same white the photograph's highlights reach.
+        for base in [edge.baseRGB, endura.baseRGB, warm.baseRGB] {
+            for channel in 0..<3 { XCTAssertEqual(base[channel], 1, accuracy: 1e-4) }
+        }
+        // The dye a fully exposed rebate carries is the paper's own and meets the lamp.
+        func rebate(_ paper: PrintPaper, _ kelvin: Float?) -> SIMD3<Float> {
+            PrintFrameConfiguration(frame: .carrier, formatID: "35mm", stockID: "hp5plus400",
+                                    paper: paper, viewingKelvin: kelvin).rebateRGB
+        }
+        XCTAssertNotEqual(rebate(.ektacolorEdge, nil), rebate(.enduraPremier, nil))
+        XCTAssertNotEqual(rebate(.ektacolorEdge, nil), rebate(.ektacolorEdge, 2856))
         XCTAssertTrue(edge.detail.contains(PrintPaper.ektacolorEdge.name))
         XCTAssertNil(edge.geometry)
     }

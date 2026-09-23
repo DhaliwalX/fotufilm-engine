@@ -519,6 +519,9 @@ func loadLinear(path: String)
             contentHeadroom = declaredHeadroom
         }
     }
+    // An HLG or PQ file decodes as display light; its range is the scene's, stated by its transfer.
+    let hdrTransfer = isRaw ? nil : GainMapHeadroom.transfer(url: url)
+    if let hdrTransfer { contentHeadroom = hdrTransfer.sceneHeadroom }
     // Share the apps' eligibility rule and compare full-source renditions before crop or resize.
     if #available(macOS 14.0, *),
        ProcessedHDRExposure.isEligible(isRaw: isRaw, declaredHeadroom: declaredHeadroom),
@@ -554,6 +557,15 @@ func loadLinear(path: String)
                            format: .RGBAf, colorSpace: space)
         }
         for pixel in 0..<(width * height) { rgba[pixel * 4 + 3] = alpha[pixel] }
+    }
+    if hdrTransfer != nil {
+        for pixel in 0..<(width * height) {
+            let scene = GainMapHeadroom.Transfer.sceneLight(SIMD3(
+                rgba[pixel * 4], rgba[pixel * 4 + 1], rgba[pixel * 4 + 2]))
+            rgba[pixel * 4] = scene.x
+            rgba[pixel * 4 + 1] = scene.y
+            rgba[pixel * 4 + 2] = scene.z
+        }
     }
     if let corrected = profileCorrection {
         CameraProfileCorrection.apply(corrected.matrix, toRGBA: &rgba)
@@ -673,14 +685,15 @@ func saveHLG(_ rgba: [Float], width: Int, height: Int, path: String) {
 /// Writes display-linear reflectance (interleaved RGBA floats) as an sRGB
 /// image at the requested bit depth.
 func saveReflectance(_ rgba: [Float], width: Int, height: Int, path: String,
-                     depth: Int, seed: UInt64) {
+                     depth: Int, seed: UInt64, shoulderKnee: Float) {
     let n = width * height
     if depth <= 8 {
         var pixels = [UInt8](repeating: 255, count: n * 4)
         let ditherSeed = UInt32(truncatingIfNeeded: seed)
         for i in 0..<n {
             for c in 0..<3 {
-                let v = ColorScience.linearToSrgb(ColorScience.displayShoulder(rgba[i * 4 + c]))
+                let v = ColorScience.linearToSrgb(ColorScience.displayShoulder(
+                    rgba[i * 4 + c], knee: shoulderKnee))
                 let dither = triangularDither(index: UInt32(i), channel: UInt32(c), seed: ditherSeed)
                 pixels[i * 4 + c] = UInt8(clamp(v * 255 + 0.5 + dither, 0, 255))
             }
@@ -692,7 +705,8 @@ func saveReflectance(_ rgba: [Float], width: Int, height: Int, path: String,
     var pixels = [UInt16](repeating: 65535, count: n * 4)
     for i in 0..<n {
         for c in 0..<3 {
-            let v = ColorScience.linearToSrgb(ColorScience.displayShoulder(rgba[i * 4 + c]))
+            let v = ColorScience.linearToSrgb(ColorScience.displayShoulder(
+                    rgba[i * 4 + c], knee: shoulderKnee))
             pixels[i * 4 + c] = UInt16(clamp(v * 65535 + 0.5, 0, 65535))
         }
         pixels[i * 4 + 3] = UInt16(clamp(rgba[i * 4 + 3] * 65535 + 0.5, 0, 65535))
@@ -837,7 +851,8 @@ if let diffPath = flags["--diff"] {
     }
     let depth = Int(flags["--depth"] ?? "8") ?? 8
     saveReflectance(composite, width: width * 3, height: height,
-                    path: diffPath, depth: depth, seed: 0)
+                    path: diffPath, depth: depth, seed: 0,
+                    shoulderKnee: FilmSDRDelivery.boundedShoulderKnee)
     let pixels = Double(count * 3)
     print(String(format: "peak %.5f  mean %.5f  rms %.5f  gain %.0fx",
                  peak, sum / pixels, (sumSquares / pixels).squareRoot(), gain))
@@ -1008,7 +1023,8 @@ func writeStageSequence(linear: ImageBuffer, alpha: [Float], stock: FilmStock,
         }
         saveReflectance(reflectance, width: width, height: height,
                         path: "\(directory)/\(step.id).png", depth: depth,
-                        seed: step.options.seed)
+                        seed: step.options.seed,
+                        shoulderKnee: step.options.sdrShoulderKnee(for: step.stock))
 
         // The lightbox negative is an aside, not a step: it neither takes a
         // difference nor becomes the baseline for the print that follows it.
@@ -1034,7 +1050,8 @@ func writeStageSequence(linear: ImageBuffer, alpha: [Float], stock: FilmStock,
             for i in 0..<(count * 4) where i % 4 != 3 { difference[i] *= gain }
             saveReflectance(difference, width: width, height: height,
                             path: "\(directory)/\(step.id)-delta.png", depth: depth,
-                            seed: step.options.seed)
+                            seed: step.options.seed,
+                            shoulderKnee: FilmSDRDelivery.boundedShoulderKnee)
             print(String(format: "%@\tpeak %.4f\tgain %.0fx", step.label, peak, gain))
         } else {
             print(step.label)
@@ -1623,7 +1640,8 @@ if hlgOutput {
     saveHLG(reflectance, width: width, height: height, path: positional[1])
 } else {
     saveReflectance(reflectance, width: width, height: height, path: positional[1],
-                    depth: depth, seed: options.seed)
+                    depth: depth, seed: options.seed,
+                    shoulderKnee: options.sdrShoulderKnee(for: stock))
 }
 print("Processed \(width)x\(height) with \(stock.name) (halide) in \(String(format: "%.2f", elapsed))s -> \(positional[1])")
 if benchmarkIterations > 1 {

@@ -121,7 +121,7 @@ public struct FilmOutputTransform: Sendable, Equatable {
     /// The knee of the SDR shoulder to roll the highlights off against, taken after the matrix
     /// and before the transfer — where `FilmOutputConversion` takes it. Nil is no shoulder, which
     /// is what a linear space and an unshouldered encode both want; `FilmSDRDelivery` names the
-    /// two knees a print delivery uses. Mirrors FOTUFILM_CONFIG_OUTPUT_SHOULDER.
+    /// knees a material's SDR delivery uses. Mirrors FOTUFILM_CONFIG_OUTPUT_SHOULDER.
     public var shoulderKnee: Float?
     /// Optional luminance weights in the host's primaries. Enables a neutral-axis gamut fit
     /// after the matrix and before the shoulder and transfer; nil preserves wide-gamut light.
@@ -412,9 +412,9 @@ public struct FilmEngineInvocation {
     /// Per-record `[amplitude, toe, decay, hump, humpDensity, humpWidth]` rows at
     /// FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS, red, green, blue in turn.
     public static let grainDensityRecordsOffset = Int(FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS)
-    /// Index of the SDR shoulder knee the host output transform carries, a negative value
-    /// meaning none; mirrors FOTUFILM_CONFIG_OUTPUT_SHOULDER. Appended without
-    /// renumbering earlier fields.
+    /// Index of the SDR shoulder knee: the material's own, which the byte delivery reads, until
+    /// a host output transform replaces it; a negative value means none. Mirrors
+    /// FOTUFILM_CONFIG_OUTPUT_SHOULDER. Appended without renumbering earlier fields.
     public static let outputShoulderOffset = Int(FOTUFILM_CONFIG_OUTPUT_SHOULDER)
     public static let outputGamutOffset = Int(FOTUFILM_CONFIG_OUTPUT_GAMUT)
     public static let adjacencyModelOffset = Int(FOTUFILM_CONFIG_ADJACENCY_MODEL)
@@ -1459,9 +1459,9 @@ public struct FilmEngineInvocation {
         // The superseded shared slot keeps the green record's first three coefficients for
         // kernels built against the earlier layout; the per-record rows are appended below.
         configuration += Array(stock.grainDensityProfile.records[1].prefix(3))
-        // No shoulder until a delivery asks for one, matching the identity the rest of the
-        // output transform is initialized to.
-        configuration += [-1]
+        // The material's own SDR knee, which the byte delivery reads; `setOutputTransform`
+        // replaces it with the stated delivery's before enabling an `encodeOut` variant.
+        configuration += [options.sdrShoulderKnee(for: stock)]
         configuration += [0, 0, 0, 0] // optional output gamut fit
         for curve in stock.curves {
             var record = [Float](repeating: 0, count: Self.sampledCurveStride)

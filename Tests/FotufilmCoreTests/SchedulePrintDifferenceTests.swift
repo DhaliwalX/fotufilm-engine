@@ -75,7 +75,8 @@ final class SchedulePrintDifferenceTests: XCTestCase {
     }
 
     private static func print8(_ linear: Float) -> Double {
-        Double((PrintEncoding.encode(ColorScience.displayShoulder(linear)) * 255)
+        Double((PrintEncoding.encode(ColorScience.displayShoulder(
+            linear, knee: FilmSDRDelivery.boundedShoulderKnee)) * 255)
             .rounded())
     }
 

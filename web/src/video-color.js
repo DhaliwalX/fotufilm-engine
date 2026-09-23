@@ -108,7 +108,21 @@ export function videoTransform(encoding, colorSpace = {}) {
     )
   // Validate even a wholly black frame instead of deferring an unsupported tag error.
   standardTransfer(0, colorSpace.transfer)
-  return { matrix, decode: (v) => standardTransfer(v, colorSpace.transfer) }
+  return {
+    matrix,
+    decode: (v) => standardTransfer(v, colorSpace.transfer),
+    displayLight: colorSpace.transfer === 'smpte2084',
+  }
+}
+
+/// PQ carries display light; the film wants the scene. The inverse of BT.2100's HLG OOTF,
+/// normalised at 203 cd/m² reference white, is BT.2408's PQ-to-HLG relation: a grey card at
+/// 26 cd/m² returns to 0.18. `HLGTransfer.opticalToOpen` in the native decoder.
+export function sceneFromDisplayLight(r, g, b) {
+  const y = 0.2627 * r + 0.678 * g + 0.0593 * b
+  if (!(y > 1e-6)) return [0, 0, 0]
+  const scale = y ** ((1 - 1.2) / 1.2)
+  return [r * scale, g * scale, b * scale]
 }
 
 // Copy native YUV planes, never canvas-converted RGB: a canvas can tone-map HDR,
@@ -126,7 +140,7 @@ export function decodeVideoPlanes(
     const offset = p.offset + y * p.stride + x * bytes
     return bytes === 2 ? view.getUint16(offset, true) : view.getUint8(offset)
   }
-  const { matrix: m, decode } = videoTransform(encoding, colorSpace)
+  const { matrix: m, decode, displayLight } = videoTransform(encoding, colorSpace)
   const output = new Float32Array(width * height * 4)
   for (let y = 0; y < height; y++)
     for (let x = 0; x < width; x++) {
@@ -157,9 +171,15 @@ export function decodeVideoPlanes(
       g = decode(g)
       b = decode(b)
       const i = (y * width + x) * 4
-      output[i] = m[0] * r + m[1] * g + m[2] * b
-      output[i + 1] = m[3] * r + m[4] * g + m[5] * b
-      output[i + 2] = m[6] * r + m[7] * g + m[8] * b
+      let light = [
+        m[0] * r + m[1] * g + m[2] * b,
+        m[3] * r + m[4] * g + m[5] * b,
+        m[6] * r + m[7] * g + m[8] * b,
+      ]
+      if (displayLight) light = sceneFromDisplayLight(...light)
+      output[i] = light[0]
+      output[i + 1] = light[1]
+      output[i + 2] = light[2]
       output[i + 3] = 1
     }
   return output

@@ -1611,7 +1611,7 @@ enum VideoPipeline {
         outputWidth: Int, outputHeight: Int, scaledOutput: MTLBuffer?,
         adaptor: AVAssetWriterInputPixelBufferAdaptor, time: CMTime,
         ordinal: Int, hdr: Bool = false, codec: ExportCodec = .h264,
-        sdrShoulderKnee: Float = FilmSDRDelivery.standardShoulderKnee
+        sdrShoulderKnee: Float = FilmSDRDelivery.boundedShoulderKnee
     ) -> Bool {
         guard let pool = adaptor.pixelBufferPool else { return false }
         var outBufferOpt: CVPixelBuffer?
@@ -1762,7 +1762,7 @@ enum VideoPipeline {
         from gpuOutput: MTLBuffer, width: Int, height: Int,
         previewWidth: Int, previewHeight: Int,
         scaled: inout [Float], scratch: inout [UInt8],
-        sdrShoulderKnee: Float = FilmSDRDelivery.standardShoulderKnee
+        sdrShoulderKnee: Float = FilmSDRDelivery.boundedShoulderKnee
     ) -> CGImage? {
         var full = vImage_Buffer(
             data: gpuOutput.contents(), height: vImagePixelCount(height),

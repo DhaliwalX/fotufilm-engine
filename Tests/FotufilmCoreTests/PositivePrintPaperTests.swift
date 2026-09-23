@@ -66,23 +66,23 @@ final class PositivePrintPaperTests: XCTestCase {
         // already placed white, so it is delivered like a print.
         var direct = options(.screen)
         direct.digitalReference = .referenceExposure
-        XCTAssertEqual(direct.sdrShoulderKnee(for: stock), FilmSDRDelivery.reversalShoulderKnee)
+        XCTAssertEqual(direct.sdrShoulderKnee(for: stock), FilmSDRDelivery.transparencyShoulderKnee)
         XCTAssertTrue(direct.supportsHDRDelivery(for: stock))
         for style in [DigitalReferenceStyle.gradedPrint, .autoLevels] {
             var levelled = options(.screen)
             levelled.digitalReference = style
-            XCTAssertEqual(levelled.sdrShoulderKnee(for: stock), FilmSDRDelivery.standardShoulderKnee)
+            XCTAssertEqual(levelled.sdrShoulderKnee(for: stock), FilmSDRDelivery.boundedShoulderKnee)
             XCTAssertFalse(levelled.supportsHDRDelivery(for: stock))
         }
         for paper in papers {
             let o = options(paper)
-            XCTAssertEqual(o.sdrShoulderKnee(for: stock), FilmSDRDelivery.standardShoulderKnee)
+            XCTAssertEqual(o.sdrShoulderKnee(for: stock), FilmSDRDelivery.boundedShoulderKnee)
             let engine = FotufilmEngine(stock: stock, options: o)
             var input = ImageBuffer(width: 8, height: 8)
             for c in 0..<3 { input.planes[c] = Array(repeating: 1, count: 64) }
             let linear = try XCTUnwrap(HalideBackend.process(image: input, stock: stock, options: o))
             let rgb = ColorScience.linearDisplayP3ToSRGB(SIMD3((0..<3).map {
-                ColorScience.displayShoulder(linear.planes[$0][0], knee: FilmSDRDelivery.standardShoulderKnee)
+                ColorScience.displayShoulder(linear.planes[$0][0], knee: FilmSDRDelivery.boundedShoulderKnee)
             }))
             let bytes = engine.processSRGB8(Array(repeating: 255, count: 256), width: 8, height: 8)
             for c in 0..<3 {

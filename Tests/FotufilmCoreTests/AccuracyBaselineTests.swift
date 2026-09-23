@@ -250,7 +250,8 @@ final class AccuracyBaselineTests: XCTestCase {
     }
 
     private func code(_ v: Float) -> Double {
-        Double(ColorScience.linearToSrgb(ColorScience.displayShoulder(v)) * 255)
+        Double(ColorScience.linearToSrgb(ColorScience.displayShoulder(
+            v, knee: FilmSDRDelivery.boundedShoulderKnee)) * 255)
     }
 
     private func neutralMetrics(

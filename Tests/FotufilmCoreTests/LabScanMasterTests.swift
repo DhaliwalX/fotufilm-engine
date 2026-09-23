@@ -73,7 +73,8 @@ final class LabScanMasterTests: XCTestCase {
                 let y = output.planes[0][i] * 0.2289746
                     + output.planes[1][i] * 0.6917385 + output.planes[2][i] * 0.0792869
                 XCTAssertGreaterThan(y, 0, id); XCTAssertLessThan(y, 1, id)
-                codes.append(ColorScience.linearToSrgb(ColorScience.displayShoulder(y)) * 65535)
+                codes.append(ColorScience.linearToSrgb(ColorScience.displayShoulder(
+                    y, knee: FilmSDRDelivery.boundedShoulderKnee)) * 65535)
             }
             // A two-stop change must remain distinct after integer delivery where the old scan
             // had already reached white, and in the shadow interval approaching its film toe.

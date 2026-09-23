@@ -46,9 +46,9 @@ final class DensitometryTests: XCTestCase {
                     for blue in stride(from: Float(0), through: 2.0, by: 0.25) {
                         let target = SIMD3(red, green, blue)
                         let amounts = unmix.amounts(forStatusA: target)
-                        // Closure is asserted clear of the boundary blend;
-                        // the boundary itself is checked by the test below.
-                        guard min(amounts.x, min(amounts.y, amounts.z)) > 0.15
+                        // Closure is asserted inside the dye gamut; the
+                        // boundary itself is checked by the test below.
+                        guard min(amounts.x, min(amounts.y, amounts.z)) > 0
                         else { continue }
                         let read = Densitometry.statusADensity(
                             amounts: amounts, dyes: paper.analyticalDyes)
@@ -61,6 +61,21 @@ final class DensitometryTests: XCTestCase {
             XCTAssertLessThan(worst, 1e-4,
                               "\(paper.rawValue) does not close on its own "
                               + "densitometer: worst \(worst) D")
+        }
+    }
+
+    /// Clear paper carries no dye, so a print's white is display white under its own lamp.
+    func testClearPaperIsDisplayWhite() {
+        for paper in Self.physicalPrints {
+            let unmix = PrintDyeUnmix(dyes: paper.analyticalDyes)
+            XCTAssertEqual(unmix.amounts(forStatusA: .zero), .zero)
+            let receiver = SpectralRuntime.printReceiver(
+                stock: stock, paper: paper,
+                viewingLight: SpectralRuntime.referenceViewingLight(for: paper))
+            let white = receiver.rgb(density: .zero)
+            for channel in 0..<3 {
+                XCTAssertEqual(white[channel], 1, accuracy: 1e-4, "\(paper.rawValue)")
+            }
         }
     }
 

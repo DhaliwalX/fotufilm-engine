@@ -118,8 +118,10 @@ public enum ColorScience {
         return pow((coded + 0.055) / 1.055, 2.4)
     }
 
+    /// The SDR delivery shoulder. The knee is the delivery's own (`FilmSDRDelivery`); a knee at
+    /// display white leaves every value below it alone and clips the rest.
     @inlinable
-    public static func displayShoulder(_ x: Float, knee: Float = 0.9) -> Float {
+    public static func displayShoulder(_ x: Float, knee: Float) -> Float {
         highlightShoulder(x, ceiling: 1, knee: knee)
     }
 
@@ -152,15 +154,18 @@ public enum ColorScience {
         (0.2289746, 0.6917385, 0.0792869)
 }
 
-/// Material-aware SDR delivery. Reversal has no print-paper stage to absorb its long physical
-/// shoulder, so its output roll-off begins earlier and uses more of the SDR interval instead of
-/// bunching distinct highlight exposures immediately below code white.
+/// Material-aware SDR delivery. A print, a scan or a viewed negative is bounded by its own white —
+/// clear paper, clear base, the receiver's white — and its tone scale already has the medium's
+/// shoulder in it, so it reaches the display unrolled: the knee sits at display white and only
+/// clips. A directly viewed transparency has no print stage to absorb its long physical shoulder
+/// and carries light above display white, so its roll-off begins earlier and uses more of the SDR
+/// interval instead of bunching distinct highlight exposures immediately below code white.
 public enum FilmSDRDelivery {
-    public static let standardShoulderKnee: Float = 0.9
-    public static let reversalShoulderKnee: Float = 0.7
+    public static let boundedShoulderKnee: Float = 1
+    public static let transparencyShoulderKnee: Float = 0.7
 
     @inlinable
-    public static func shoulderKnee(isReversal: Bool) -> Float {
-        isReversal ? reversalShoulderKnee : standardShoulderKnee
+    public static func shoulderKnee(carriesHeadroom: Bool) -> Float {
+        carriesHeadroom ? transparencyShoulderKnee : boundedShoulderKnee
     }
 }

@@ -82,13 +82,14 @@ public enum FilmOutputConversion: String, CaseIterable, Identifiable, FilmOutput
     case linearDisplayP3
     /// Clamp and encode Display P3 with its sRGB transfer, without an output shoulder.
     case displayP3
-    /// Apply the calibrated SDR shoulder, then encode Display P3 with its sRGB transfer.
+    /// Encode Display P3 with its sRGB transfer through a bounded material's SDR shoulder.
     case displayP3SDR
     /// Convert to linear-light sRGB without clipping out-of-gamut values.
     case linearSRGB
-    /// Convert to sRGB, apply the SDR shoulder and encode with the sRGB transfer.
+    /// Convert to sRGB, apply a bounded material's SDR shoulder and encode with the sRGB transfer.
     case sRGBSDR
-    /// Relight HDR alpha, convert to Rec.709, apply the SDR shoulder and BT.709 OETF.
+    /// Relight HDR alpha, convert to Rec.709, apply a bounded material's SDR shoulder and the
+    /// BT.709 OETF.
     case rec709SDR
     /// Convert to linear-light Rec. 2020 without clipping out-of-gamut values.
     case linearRec2020
@@ -177,11 +178,14 @@ public enum FilmOutputConversion: String, CaseIterable, Identifiable, FilmOutput
         return SIMD3(channel(rgb.x), channel(rgb.y), channel(rgb.z))
     }
 
-    /// The established SDR print shoulder is per channel; keeping it here preserves existing output.
+    /// The SDR shoulder of a material bounded by its own white: a print, a scan, a viewed
+    /// negative. A transparency that carries headroom states its own knee through
+    /// `FilmDisplayP3SDRConversion` and `Options.sdrShoulderKnee(for:)`.
     private func shoulder(_ rgb: SIMD3<Float>) -> SIMD3<Float> {
-        SIMD3(ColorScience.displayShoulder(rgb.x),
-              ColorScience.displayShoulder(rgb.y),
-              ColorScience.displayShoulder(rgb.z))
+        let knee = FilmSDRDelivery.boundedShoulderKnee
+        return SIMD3(ColorScience.displayShoulder(rgb.x, knee: knee),
+                     ColorScience.displayShoulder(rgb.y, knee: knee),
+                     ColorScience.displayShoulder(rgb.z, knee: knee))
     }
 
     /// `ColorScience`'s matrix, not a local copy of it: the six-place copy this replaces was a
@@ -271,8 +275,8 @@ public enum DevelopedPrintOutput {
     }
 }
 
-/// Display-P3 SDR delivery with a caller-selected shoulder placement. FilmRender uses this for
-/// direct-positive stocks; the built-in enum retains its standard 0.9-knee compatibility path.
+/// Display-P3 SDR delivery with the material's own shoulder placement
+/// (`Options.sdrShoulderKnee(for:)`), which is how FilmRender delivers every still.
 public struct FilmDisplayP3SDRConversion: FilmOutputConverter {
     public let colorSpace = FilmOutputColorSpace.displayP3
     public let shoulderKnee: Float
