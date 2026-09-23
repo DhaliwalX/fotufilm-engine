@@ -1,0 +1,56 @@
+--- a/src/OffloadGPULoops.cpp
++++ b/src/OffloadGPULoops.cpp
+@@ -16,6 +16,7 @@
+ #include "InjectHostDevBufferCopies.h"
+ #include "OffloadGPULoops.h"
+ #include "Simplify.h"
++#include "Substitute.h"
+ #include "Util.h"
+
+ namespace Halide {
+@@ -147,6 +148,24 @@
+
+         // Determine the arguments that must be passed into the halide function
+         vector<DeviceArgument> closure_args = c.arguments();
++
++        // Vulkan forbids OpTypeBool in a uniform block. Give each scalar predicate a
++        // UInt32 ABI on both sides of the launch, restoring Bool inside the device IR.
++        // This also avoids relying on a driver's interpretation of one-byte bools.
++        Stmt device_loop = loop;
++        map<string, string> vulkan_bool_arguments;
++        if (loop->device_api == DeviceAPI::Vulkan) {
++            for (DeviceArgument &arg : closure_args) {
++                if (!arg.is_buffer && arg.type.is_bool()) {
++                    const string original_name = arg.name;
++                    arg.name = unique_name(original_name + ".vulkan_bool");
++                    arg.type = UInt(32);
++                    vulkan_bool_arguments[arg.name] = original_name;
++                    device_loop = substitute(original_name,
++                        Variable::make(UInt(32), arg.name) != make_zero(UInt(32)), device_loop);
++                }
++            }
++        }
+
+         // Sort the args by the size of the underlying type. This is
+         // helpful for avoiding struct-packing ambiguities in metal,
+@@ -175,7 +194,7 @@
+         user_assert(gpu_codegen != nullptr)
+             << "Loop is scheduled on device " << loop->device_api
+             << " which does not appear in target " << target.to_string() << "\n";
+-        gpu_codegen->add_kernel(loop, kernel_name, closure_args);
++        gpu_codegen->add_kernel(device_loop, kernel_name, closure_args);
+
+         // get the actual name of the generated kernel for this loop
+         kernel_name = gpu_codegen->get_current_kernel_name();
+@@ -190,7 +209,10 @@
+             if (i.is_buffer) {
+                 val = Variable::make(Handle(), i.name + ".buffer");
+             } else {
+-                val = Variable::make(i.type, i.name);
++                auto bool_arg = vulkan_bool_arguments.find(i.name);
++                val = bool_arg == vulkan_bool_arguments.end()
++                    ? Variable::make(i.type, i.name)
++                    : cast(UInt(32), Variable::make(Bool(), bool_arg->second));
+                 val = Call::make(type_of<void *>(), Call::make_struct, {val}, Call::Intrinsic);
+             }
+             args.emplace_back(val);

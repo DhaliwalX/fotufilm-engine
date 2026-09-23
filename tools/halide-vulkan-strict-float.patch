@@ -1,0 +1,15 @@
+--- a/src/CodeGen_Vulkan_Dev.cpp
++++ b/src/CodeGen_Vulkan_Dev.cpp
+@@ -2208,5 +2208,12 @@
+
+     SpvId result_id = builder.reserve_id(SpvResultId);
+     builder.append(SpvFactory::binary_op(op_code, type_id, result_id, src_a_id, src_b_id));
++    // Strict float operations must not be contracted into an implicit FMA by the driver.
++    // This does not promise CPU-identical transcendental functions or division rounding.
++    if (target.has_feature(Target::StrictFloat) && t.is_float() &&
++        (op_code == SpvOpFAdd || op_code == SpvOpFSub ||
++         op_code == SpvOpFMul || op_code == SpvOpFDiv || op_code == SpvOpFRem)) {
++        builder.add_annotation(result_id, SpvDecorationNoContraction);
++    }
+     builder.update_id(result_id);
+ }

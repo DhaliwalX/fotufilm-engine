@@ -107,7 +107,7 @@ public:
         case Store::Inhibition:
         case Store::MtfSelected:
         case Store::PrintMtfInput:
-            return schedule_.gpu_device_api() == DeviceAPI::WebGPU
+            return schedule_.reference_sampling()
                 ? remember(values, schedule_.store_frame(values, false, channels)) : values;
         case Store::Exposure:
         case Store::Diffused:
@@ -168,7 +168,7 @@ public:
                                   int channels) override {
         std::array<Expr, 3> scattered_at;
         const bool halation = ring_config_base >= 0;
-        const bool separate_weights = !halation || schedule_.gpu_device_api() == DeviceAPI::WebGPU;
+        const bool separate_weights = !halation || schedule_.reference_sampling();
         // A scale's spread read back at the pixel. The grid is addressed in *frame* cells and
         // the sample position formed from the frame coordinate, whatever part of the frame this
         // graph is developing: a ring tap's position is `frame + radius * direction`, and the
@@ -250,7 +250,7 @@ public:
                                            previous_width, previous_height, channels,
                                            scale_name);
             Func down_view = schedule_.store_frame(down, half, channels);
-            if (schedule_.gpu_device_api() != DeviceAPI::WebGPU) {
+            if (!schedule_.reference_sampling()) {
                 previous = down_view;
                 previous_stride = stride;
                 previous_phase_x = phase_x;
@@ -465,10 +465,12 @@ public:
             : lut_sample(paper_lut_, ax, ay, az, channel, policy_.half_tetra);
     }
 
-    Expr paper_grain_hash(ImageParam &, Expr x, Expr y, Expr channel,
+    Expr paper_grain_hash(ImageParam &configuration, Expr x, Expr y, Expr channel,
                           bool monochrome) override {
-        return pixel_hash(x + p_.origin_x_, y + p_.origin_y_, p_.seed_,
-                          kCrystalPaperStreamBase + (monochrome ? Expr(0) : channel));
+        // Paper carries its own exactly representable seed in the packed configuration.
+        // Use the shared print hash so GPU and CPU draw the same paper emulsion.
+        return fotufilm::paper_grain_hash(configuration, x + p_.origin_x_,
+                                         y + p_.origin_y_, channel, monochrome);
     }
 
 private:

@@ -3,6 +3,8 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Build support</title></head>
 <body>
 <h1>Build support</h1>
+<h2 id="vulkan-diagnostics">Vulkan diagnostics</h2>
+<p>The source checkout includes <code>tools/vulkan-parity</code> for CPU/Vulkan comparisons on an authorized arm64 Android phone. It requires an Android NDK and a Vulkan-capable Halide toolchain. Tests use the browser image-quality limits and retain float, 8-bit and 16-bit byte differences for diagnosis. Pass <code>--exact</code> to require identical bytes. See <code>tools/vulkan-parity/README.md</code> for setup, Linux software-Vulkan checks and remaining release requirements. These diagnostics do not establish Linux desktop or AppImage support.</p>
 <h2>Build requirements</h2>
 <p>Install Xcode 26 or newer and select it with <code>xcode-select</code>. Install Halide with Homebrew, or set <code>HALIDE_ROOT</code> to a compatible installation.</p>
 <p>Run <code>python3 tools/test-engine.py</code> to build and run the complete release test suite. It retains up to eight test workers and verifies that every discovered test ran exactly once. Use <code>--workers 2</code> to reduce concurrency. Logs and the timing report are in <code>build/engine-tests</code>; the report balances later runs without skipping tests. The standard <code>swift test -c release --parallel</code> command also remains supported.</p>

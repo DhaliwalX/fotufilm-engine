@@ -1,0 +1,54 @@
+diff --git a/src/runtime/internal/memory_resources.h b/src/runtime/internal/memory_resources.h
+index 339e167c8..97ed11278 100644
+--- a/src/runtime/internal/memory_resources.h
++++ b/src/runtime/internal/memory_resources.h
+@@ -173,9 +173,8 @@ ALWAYS_INLINE void conform_memory_request(MemoryRequest *request, size_t require
+     // sees a larger alignment and writes a larger nearest_multiple, which results in a larger size calculated
+     // in the second pass. The block allocator requires that conform is idempotent because it calls conform
+     // defensively several times at different layers.
+-    if (actual_alignment > nearest_multiple) {
+-        request->properties.nearest_multiple = actual_alignment;
+-    }
++    request->properties.nearest_multiple = max(request->properties.nearest_multiple,
++                                             max(actual_alignment, nearest_multiple));
+
+     size_t actual_offset = aligned_offset(request->offset, actual_alignment);
+     size_t actual_size = conform_size(actual_offset, required_size, actual_alignment, request->properties.nearest_multiple);
+diff --git a/test/runtime/block_allocator.cpp b/test/runtime/block_allocator.cpp
+index 77347356d..761d6aec1 100644
+--- a/test/runtime/block_allocator.cpp
++++ b/test/runtime/block_allocator.cpp
+@@ -487,6 +487,8 @@ int main(int argc, char **argv) {
+                                 halide_abort_if_false(user_context, request.properties.nearest_multiple == conformed.properties.nearest_multiple);
+
+                                 halide_abort_if_false(user_context, conformed.size >= required_size);
++                                halide_abort_if_false(user_context, conformed.properties.nearest_multiple >= nearest_multiple);
++                                halide_abort_if_false(user_context, conformed.properties.nearest_multiple >= conformed.alignment);
+                                 halide_abort_if_false(user_context, conformed.size >= conformed.alignment);
+                                 halide_abort_if_false(user_context, conformed.alignment == conform_alignment(request_alignment, required_alignment));
+                                 halide_abort_if_false(user_context, conformed.offset == aligned_offset(offset, conformed.alignment));
+@@ -504,10 +506,12 @@ int main(int argc, char **argv) {
+             // reporting 64-byte buffer alignment): a buffer whose size is a multiple of
+             // the config nearest_multiple but not of the device alignment must round up
+             // to the device alignment and stay stable across repeated conforms.
+-            size_t regression_required_size[2] = {96, 9338976};
+-            size_t regression_required_alignment[2] = {64, 64};
+-            size_t regression_nearest_multiple[2] = {32, 32};
+-            for (int i = 0; i < 2; ++i) {
++            // The configured padding can also exceed device alignment. Ignoring it
++            // leaves unaligned tails that can shrink a region below its requested size.
++            size_t regression_required_size[] = {96, 9338976, 124, 148, 164};
++            size_t regression_required_alignment[] = {64, 64, 64, 64, 64};
++            size_t regression_nearest_multiple[] = {32, 32, 256, 256, 256};
++            for (int i = 0; i < 5; ++i) {
+                 MemoryRequest request = {0};
+
+                 conform_memory_request(&request, regression_required_size[i], regression_required_alignment[i], regression_nearest_multiple[i]);
+@@ -516,6 +520,7 @@ int main(int argc, char **argv) {
+                 conform_memory_request(&request, regression_required_size[i], regression_required_alignment[i], regression_nearest_multiple[i]);
+
+                 halide_abort_if_false(user_context, conformed.size >= regression_required_size[i]);
++                halide_abort_if_false(user_context, (conformed.size % regression_nearest_multiple[i]) == 0);
+                 halide_abort_if_false(user_context, (conformed.size % regression_required_alignment[i]) == 0);
+                 halide_abort_if_false(user_context, request.size == conformed.size);
+                 halide_abort_if_false(user_context, request.alignment == conformed.alignment);

@@ -38,6 +38,10 @@ public:
     const GpuConfiguration &configuration() const { return configuration_; }
     Target gpu_target() const { return configuration_.target(); }
     DeviceAPI gpu_device_api() const { return configuration_.device; }
+    // Preserve the CPU model's sampling and operation order on portable GPU backends.
+    bool reference_sampling() const {
+        return gpu_device_api() == DeviceAPI::WebGPU || gpu_device_api() == DeviceAPI::Vulkan;
+    }
     int gpu_tile_x() const { return configuration_.tile_x; }
     int gpu_tile_y() const { return configuration_.tile_y; }
     int lut_bound() const {
@@ -186,7 +190,7 @@ public:
             Expr weight = Halide::exp(-Halide::cast<float>(k * k) / denominator);
             kernel(k, channel) = tap(Halide::select(
                 Halide::abs(k) <= window,
-                gpu_device_api() == DeviceAPI::WebGPU ? weight : weight / total,
+                reference_sampling() ? weight : weight / total,
                 0.0f));
         } else {
             Expr total = Halide::sum(
@@ -195,9 +199,9 @@ public:
                             / denominator),
                 name + "_norm_sum");
             Expr weight = Halide::exp(-Halide::cast<float>(k * k) / denominator);
-            // Match the CPU's unnormalized taps on WebGPU. Both directional passes already
+            // Match the CPU's unnormalized taps on portable GPUs. Both directional passes already
             // divide by the sum of the valid weights; normalizing twice adds rounding.
-            kernel(k, channel) = tap(gpu_device_api() == DeviceAPI::WebGPU
+            kernel(k, channel) = tap(reference_sampling()
                 ? weight : weight / total);
         }
         gpu_table(kernel, k, channel, channels, name);
@@ -275,7 +279,7 @@ public:
         RDom fold(-radius, radius * 2 + 1, -radius, radius * 2 + 1, name + "_fold");
         Func kernel(name + "_kernel");
         Expr inner = k - fold.x - fold.y;
-        if (gpu_device_api() == DeviceAPI::WebGPU) {
+        if (reference_sampling()) {
             // Preserve the CPU's rounding at each of the three box convolutions.
             Func box(name + "_box"), box_twice(name + "_box_twice");
             box(k) = Halide::select(Halide::abs(k) <= radius, box_scale, 0.0f);
@@ -385,16 +389,13 @@ public:
     /// True exactly when `decimated_gaussian_stride` ignores its sigma, which is what lets two of them
     /// over one source share a single downsample.
     bool decimated_stride_is_fixed() {
-        return gpu_device_api() == DeviceAPI::Vulkan;
+        return gpu_device_api() == DeviceAPI::Vulkan && configuration_.fixed_stride > 0;
     }
 
     /// The stride a decimated Gaussian of this sigma decimates by.
     Expr decimated_gaussian_stride(Expr sigma) {
-        // Vulkan miscompiles runtime-dependent decimation geometry at large sizes, producing unwritten
-        // reads. A literal stride lets Halide fold the geometry before kernel generation. Stride 2 is
-        // the best fixed compromise: compared with the CPU schedule, 1920×1080 and 4032×3024 differ by
-        // at most 1/255, with 97.2% and 98.5% identical samples respectively. FOTUFILM_GPU_STRIDE can
-        // override the build-time value with 1, 2, 4, or 8.
+        // Fixed strides are a diagnostic override. The default uses the same geometry
+        // as the CPU: forcing every blur to stride two changes the image model.
         return decimated_stride_is_fixed() ? Expr(configuration_.fixed_stride) : gaussian_stride(sigma);
     }
 
