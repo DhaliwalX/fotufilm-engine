@@ -27,6 +27,14 @@ import Foundation
 /// `silverGrainDensity`, in place of the coupler capacity — which makes the grain's projected
 /// area Nutting's `D = 0.434 n a` read backwards from the sheet.
 ///
+/// **No cloud is narrower than its crystal.** Where the sheet's dye per crystal would make a cloud
+/// narrower than `dyeCloudSpread` times its crystal — a silver grain narrower than the crystal
+/// itself — the cloud keeps that width and its demand stays below saturation instead, so it forms
+/// the same dye fainter: the sheet fixes how much dye a crystal forms, not how it is spread, and a
+/// cloud cannot be smaller than what formed it. The sublayer's capacity is unchanged, so where
+/// clouds overlap they still fill it.
+/// Crystal widths follow the population's size ladder down from `fastestCrystalMM`.
+///
 /// **Pixels average light.** Density adds through the depth of the film at one point; across an
 /// area it is the transmittance that averages. Each output pixel is sampled on a sub-grid at
 /// most `finestSampleMM` apart (up to `maxSupersample` per side), and its density is
@@ -52,6 +60,12 @@ public struct FilmGrain: Sendable {
     public static let silverGrainEdge: Float = 12
     /// Local density of a developed silver grain: transmits one percent. Not measured; a stance.
     public static let silverGrainDensity: Float = 2
+    /// Width of a record's fastest crystals, mm; slower classes follow the size ladder. Not
+    /// measured; a stance near the 1–2 µm tabular crystals of fast negative emulsions.
+    public static let fastestCrystalMM: Float = 0.0012
+    /// Narrowest dye cloud as a multiple of its crystal's width: oxidised developer spreads past
+    /// the crystal before it couples. Not measured; a stance.
+    public static let dyeCloudSpread: Float = 2
     /// Finest sub-pixel sample spacing, mm.
     public static let finestSampleMM: Float = 0.00035
     /// Most sub-samples per pixel side.
@@ -80,6 +94,12 @@ public struct FilmGrain: Sendable {
         public var peakDemand: Float
         /// Most density a point of the sublayer can form.
         public var capacity: Float
+        /// Peak demand over capacity of a cloud free to take its own width.
+        public var edge: Float
+        /// Narrowest demand sigma a cloud of this sublayer may take, mm.
+        public var smallestSigmaMM: Float
+        /// Dye one mark-1 crystal forms as a densitometer reads it, density × mm².
+        public var dyePerCloudMM2: Float
         /// Side of the film cell its crystals are hashed in, mm.
         public var cellMM: Float
         /// Dye-forming fraction against gross density, `tableSamples` from `dMin` to `dMax`.
@@ -88,6 +108,47 @@ public struct FilmGrain: Sendable {
         /// `λ` developed crystals per mm², `exp(-λ J)` is the expected `exp(-demand / C)` of the
         /// Poisson field (Campbell), so the sublayer's mean dye is `C (1 - exp(-λ J))` exactly.
         public var voidIntegralMM2: Float
+
+        init(coatedPerMM2: Float, capacity: Float, edge: Float, smallestSigmaMM: Float,
+             dyePerCloudMM2: Float, cellMM: Float, forming: [Float]) {
+            self.coatedPerMM2 = coatedPerMM2
+            self.capacity = capacity
+            self.edge = edge
+            self.peakDemand = edge * capacity
+            self.smallestSigmaMM = smallestSigmaMM
+            self.dyePerCloudMM2 = dyePerCloudMM2
+            self.cellMM = cellMM
+            self.forming = forming
+            sigmaMM = 0
+            voidIntegralMM2 = 0
+            shape()
+        }
+
+        /// Sets the cloud from its dye: as wide as its edge makes it, or held at its narrowest
+        /// width with its peak demand lowered until it forms that dye.
+        mutating func shape() {
+            var peak = edge
+            let free = (dyePerCloudMM2 / FilmGrain.unitCloudDye(capacity: capacity, edge: edge))
+                .squareRoot()
+            if free >= smallestSigmaMM {
+                sigmaMM = free
+            } else {
+                sigmaMM = smallestSigmaMM
+                let wanted = dyePerCloudMM2 / (smallestSigmaMM * smallestSigmaMM)
+                var low = log(edge * 1e-5), high = log(edge)
+                for _ in 0..<40 {
+                    let mid = (low + high) / 2
+                    if FilmGrain.unitCloudDye(capacity: capacity, edge: exp(mid)) < wanted {
+                        low = mid
+                    } else {
+                        high = mid
+                    }
+                }
+                peak = exp((low + high) / 2)
+            }
+            peakDemand = peak * capacity
+            voidIntegralMM2 = sigmaMM * sigmaMM * FilmGrain.unitVoidIntegral(edge: peak)
+        }
 
         /// Radius at which a mark-1 cloud has formed half its capacity, mm.
         public var halfCapacityRadiusMM: Float {
@@ -131,19 +192,22 @@ public struct FilmGrain: Sendable {
                 model.binFractions(logExposure: curve.logExposure(density: density))
             }
             var sublayers: [Sublayer] = []
+            let fastest = model.bins.first { $0.cloudRadiusMM > 0 }?.cloudRadiusMM ?? 1
             for (b, bin) in model.bins.enumerated()
             where bin.crystalsPerMM2 > 0 && bin.dyePerCloud > 0 {
-                let capacity = silver ? Self.silverGrainDensity : max(bin.pool, 0.05)
                 let edge = silver ? Self.silverGrainEdge : Self.dyeCloudEdge
-                let sigma = (bin.dyePerCloud / Self.unitCloudDye(capacity: capacity, edge: edge))
-                    .squareRoot()
+                // The crystal's width on the ladder, and the narrowest cloud it forms, as the
+                // width at half capacity of a demand Gaussian: 2σ √(2 ln(edge / ln 2)).
+                let crystal = Self.fastestCrystalMM * bin.cloudRadiusMM / fastest
+                let narrowest = crystal * (silver ? 1 : Self.dyeCloudSpread)
+                let smallestSigma = narrowest / (2 * (2 * log(edge / Float(M_LN2))).squareRoot())
                 // About eight coated crystals per cell keeps the Poisson draw short.
                 let cell = min(max((8 / bin.crystalsPerMM2).squareRoot(), 0.00025), 0.004)
-                sublayers.append(Sublayer(coatedPerMM2: bin.crystalsPerMM2, sigmaMM: sigma,
-                                          peakDemand: edge * capacity, capacity: capacity,
-                                          cellMM: cell, forming: fractions.map { $0[b] },
-                                          voidIntegralMM2: sigma * sigma
-                                            * Self.unitVoidIntegral(edge: edge)))
+                sublayers.append(Sublayer(coatedPerMM2: bin.crystalsPerMM2,
+                                          capacity: silver ? Self.silverGrainDensity : max(bin.pool, 0.05),
+                                          edge: edge, smallestSigmaMM: smallestSigma,
+                                          dyePerCloudMM2: bin.dyePerCloud, cellMM: cell,
+                                          forming: fractions.map { $0[b] }))
             }
             return Record(sublayers: sublayers, dMin: lo, dMax: hi)
         }
@@ -216,8 +280,8 @@ public struct FilmGrain: Sendable {
         guard factor > 0, factor != 1 else { return }
         for i in records[r].sublayers.indices {
             records[r].sublayers[i].coatedPerMM2 /= factor
-            records[r].sublayers[i].sigmaMM *= factor.squareRoot()
-            records[r].sublayers[i].voidIntegralMM2 *= factor
+            records[r].sublayers[i].dyePerCloudMM2 *= factor
+            records[r].sublayers[i].shape()
         }
     }
 

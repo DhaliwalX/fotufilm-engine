@@ -26,9 +26,15 @@ the CPU and Metal roads at the cost of the standard grain.
    grains use the same construction with an opaque grain (local density 2). The sheet's
    granularity read backwards through Nutting's `D = 0.434 n a` then gives Tri-X grains of
    0.3–1.7 µm, in line with photomicrographs of negative emulsions.
-4. **Pixels average light, not density.** A pixel's density is `-log10` of the mean
+4. **No cloud is narrower than its crystal.** The sheet fixes how much dye a crystal forms, not
+   how widely it spreads. Where the sheet's dye would make a cloud narrower than twice its
+   crystal (a silver grain narrower than the crystal itself), the cloud keeps that width and
+   stays below saturation, forming the same dye fainter. Crystals follow the population's size
+   ladder down from 1.2 µm for the fastest class. This keeps low-granularity, long-curve records
+   (Portra 400's red, the Fuji negatives) from being drawn as clouds smaller than a crystal.
+5. **Pixels average light, not density.** A pixel's density is `-log10` of the mean
    transmittance through its patch of film.
-5. **The anchors stay the measurements.** The frame's mean is the pipeline's developed density.
+6. **The anchors stay the measurements.** The frame's mean is the pipeline's developed density.
    The dye per crystal is solved on the model's own film so that a flat patch at the sheet's
    read density reads the sheet's RMS granularity through the 48 µm aperture, averaged in
    transmittance as a microdensitometer does. Each step of the solve takes the slope the last
@@ -61,7 +67,7 @@ the CPU and Metal roads at the cost of the standard grain.
 
 | Check | Result |
 |---|---|
-| σ48 at the sheet's read density, Portra 400, Tri-X, Provia 100F, Vision3 250D, every record | within ±13 % of the sheet |
+| σ48 at the sheet's read density, every record of Portra 400, Gold 200, UltraMax 400, Ektar 100, Superia X-TRA 400, Provia 100F and Tri-X | 0.86–1.21 of the sheet |
 | Tone | mean within 0.006 D of the curve on Portra 400 and Provia 100F, 0.001 D on Tri-X at 4 µm pixels |
 | Tiles against the full render at 1 µm | pixel σ 0.97–1.01 of it, same neighbour correlation, similar skew |
 | Resolution | a 0.25 µm render averaged back to 1 µm correlates above 0.9 with the 1 µm render |
@@ -73,7 +79,8 @@ Metal (0.20 s preview, 0.40 s still) and adds about 0.8 s on the CPU.
 
 ## What is not measured
 
-- The cloud rim (`dyeCloudEdge`, 4) and the silver grain's local density (2) are stances.
+- The cloud rim (`dyeCloudEdge`, 4), the silver grain's local density (2), the fastest crystal's
+  width (1.2 µm) and the narrowest cloud (twice its crystal) are stances.
 - The records are independent, so the grain carries more colour than the standard model's
   scan-fitted record correlation of 0.6.
 - The only colour-negative micrograph at hand is a soft web JPEG at unknown density and gain. It
