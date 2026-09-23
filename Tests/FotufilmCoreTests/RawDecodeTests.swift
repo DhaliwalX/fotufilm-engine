@@ -24,6 +24,12 @@ final class RawDecodeRecipeTests: XCTestCase {
         XCTAssertFalse(recipe.recoversHighlights)
         XCTAssertEqual(recipe, recipe)
     }
+
+    /// Core Image's HDR expansion multiplies a ProRAW's highlights thousands of times past the
+    /// light it recorded; the scene the film is exposed to must be the recorded one.
+    func testTheDefaultRecipeKeepsTheRecordedRadiance() {
+        XCTAssertEqual(RawDecode.Recipe().extendedDynamicRangeAmount, 0)
+    }
 }
 
 final class RawDecodeScaleTests: XCTestCase {

@@ -21,13 +21,17 @@ public enum RawDecode {
         public var targetLongEdge: Int?
         /// Nil preserves the decoder's lens-correction choice.
         public var correctsLens: Bool?
+        /// Core Image's HDR expansion of the decode. It changes nothing on a Bayer file, but on an
+        /// Apple ProRAW it multiplies the highlights far past the light the file recorded: an
+        /// iPhone 16 Pro frame whose ceiling is 2^BaselineExposure ≈ 22× white decoded to 3,700×
+        /// at 2, and the halation fed on it. Zero keeps the recorded radiance.
         public var extendedDynamicRangeAmount: Float
         public var recoversHighlights: Bool
 
         public init(neutralKelvin: Float? = nil,
                     targetLongEdge: Int? = nil,
                     correctsLens: Bool? = nil,
-                    extendedDynamicRangeAmount: Float = 2,
+                    extendedDynamicRangeAmount: Float = 0,
                     recoversHighlights: Bool = true) {
             precondition(neutralKelvin?.isFinite ?? true,
                          "RAW neutral temperature must be finite")
@@ -195,6 +199,11 @@ public enum RawDecode {
     public static func configure(_ filter: CIRAWFilter, recipe: Recipe) {
 
         filter.boostAmount = 0
+        filter.boostShadowAmount = 0
+        // Core Image subtracts a black offset from some DNGs by default — 5 on an iPhone's native
+        // Bayer file, 0 on its ProRAW — which pushes scene shadows below zero before the film
+        // sees them. The scene is the sensor's linear light; the film supplies its own toe.
+        filter.shadowBias = 0
         if filter.isLocalToneMapSupported { filter.localToneMapAmount = 0 }
         if filter.isContrastSupported { filter.contrastAmount = 0 }
         filter.isGamutMappingEnabled = false
