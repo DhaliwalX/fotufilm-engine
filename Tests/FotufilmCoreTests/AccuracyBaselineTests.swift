@@ -249,9 +249,10 @@ final class AccuracyBaselineTests: XCTestCase {
                      out.planes[2][centre])
     }
 
-    private func code(_ v: Float) -> Double {
-        Double(ColorScience.linearToSrgb(ColorScience.displayShoulder(
-            v, knee: FilmSDRDelivery.boundedShoulderKnee)) * 255)
+    /// Encoded as the stock is delivered by default: its own material's knee.
+    private func code(_ v: Float, stock: FilmStock) -> Double {
+        let knee = FotufilmEngine.Options().sdrShoulderKnee(for: stock)
+        return Double(ColorScience.linearToSrgb(ColorScience.displayShoulder(v, knee: knee)) * 255)
     }
 
     private func neutralMetrics(
@@ -261,7 +262,8 @@ final class AccuracyBaselineTests: XCTestCase {
         for step in stride(from: Float(-3), through: 3, by: 0.5) {
             let value = 0.18 * pow(2, step)
             let out = render(SIMD3(value, value, value), stock: stock)
-            let channels = [code(out.x), code(out.y), code(out.z)]
+            let channels = [code(out.x, stock: stock), code(out.y, stock: stock),
+                            code(out.z, stock: stock)]
             spread = max(spread, channels.max()! - channels.min()!)
         }
         let grey = render(SIMD3(0.18, 0.18, 0.18), stock: stock)
