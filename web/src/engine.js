@@ -908,6 +908,7 @@ class Developer {
           this.outputOffsets(region),
           colorSpace,
           destination,
+          this.configuration?.[CONFIG.OUTPUT_SHOULDER],
         )
       }
       if (t + 1 < this.tiles.length) await yieldToBrowser()

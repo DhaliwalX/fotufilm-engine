@@ -29,7 +29,8 @@ final class DenseRampTests: XCTestCase {
     }
 
     private static func code(_ linear: Float) -> Double {
-        Double(ColorScience.linearToSrgb(ColorScience.displayShoulder(linear)))
+        Double(ColorScience.linearToSrgb(ColorScience.displayShoulder(
+            linear, knee: FilmSDRDelivery.boundedShoulderKnee)))
             * 255
     }
 

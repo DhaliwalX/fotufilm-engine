@@ -32,11 +32,6 @@ public enum PrintEncoding {
             : 1.055 * pow(clamped, 1 / 2.4) - 0.055
     }
 
-    @inlinable
-    static func shoulder(_ x: Float) -> Float {
-        ColorScience.displayShoulder(x)
-    }
-
     /// BT.2100 hybrid log-gamma constants. `b` is `1 - 4a` and `c` is `0.5 - a·ln(4a)`, which is
     /// what makes the two branches meet at 0.5.
     public static let hlgA: Float = 0.17883277
@@ -169,7 +164,7 @@ public enum PrintEncoding {
         rows: Range<Int>, width: Int,
         into destination: UnsafeMutableBufferPointer<UInt16>,
         transfer: Transfer = .srgb,
-        shoulderKnee: Float = FilmSDRDelivery.standardShoulderKnee
+        shoulderKnee: Float = FilmSDRDelivery.boundedShoulderKnee
     ) {
         let chunks = (rows.count + encodeChunkRows - 1) / encodeChunkRows
         guard chunks > 1 else {

@@ -39,14 +39,19 @@ final class VideoSourceColorTests: XCTestCase {
         XCTAssertEqual(source.sceneHeadroom, HLGSceneTransfer.headroom)
     }
 
-    func testPQUses203NitReferenceWhite() {
+    /// PQ carries display light: reference white at 203 cd/m² and BT.2408's grey card at 26 cd/m².
+    /// The film is exposed by the scene, so the inverse OOTF returns that card to 0.18.
+    func testPQReturnsDisplayLightToTheScene() {
         let source = VideoSourceColor(transfer: .pq, primaries: .rec2020)
         let reference = source.linearRec2020(SIMD3(
             repeating: pqSignal(nits: 203)))
         XCTAssertEqual(reference.x, 1, accuracy: 2e-4)
+        let grey = source.linearRec2020(SIMD3(repeating: pqSignal(nits: 26)))
+        XCTAssertEqual(grey.x, 0.18, accuracy: 1e-3)
+        let sceneHeadroom = powf(10_000 / 203, 1 / HLGTransfer.systemGamma)
         let peak = source.linearRec2020(SIMD3(repeating: 1))
-        XCTAssertEqual(peak.x, 10_000 / 203, accuracy: 2e-3)
-        XCTAssertEqual(source.sceneHeadroom, PQSceneTransfer.headroom)
+        XCTAssertEqual(peak.x, sceneHeadroom, accuracy: 2e-3)
+        XCTAssertEqual(source.sceneHeadroom, sceneHeadroom, accuracy: 1e-4)
     }
 
     func testHDRSourcePrimariesAreConvertedAfterTransfer() {

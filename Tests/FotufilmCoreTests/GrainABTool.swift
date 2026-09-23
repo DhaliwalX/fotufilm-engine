@@ -194,7 +194,8 @@ final class GrainABTool: XCTestCase {
         var bytes = [UInt8](repeating: 255, count: image.width * image.height * 4)
         for index in 0..<image.pixelCount {
             for channel in 0..<3 {
-                let rolled = ColorScience.displayShoulder(image.planes[channel][index])
+                let rolled = ColorScience.displayShoulder(
+                    image.planes[channel][index], knee: FilmSDRDelivery.boundedShoulderKnee)
                 let encoded = ColorScience.linearToSrgb(min(max(rolled, 0), 1))
                 bytes[index * 4 + channel] = UInt8(min(max(encoded * 255 + 0.5, 0), 255))
             }

@@ -344,10 +344,10 @@ public struct FotufilmEngine {
                 && !medium.levelsPositive(for: stock, digitalReference: digitalReference)
         }
 
-        /// Physical prints use the standard SDR shoulder; only a directly viewed reversal
-        /// needs the earlier roll-off for its extended highlight range.
+        /// The SDR delivery knee: at display white for everything bounded by its own white;
+        /// only a directly viewed transparency rolls its extended highlight range off earlier.
         public func sdrShoulderKnee(for stock: FilmStock) -> Float {
-            FilmSDRDelivery.shoulderKnee(isReversal: supportsHDRDelivery(for: stock))
+            FilmSDRDelivery.shoulderKnee(carriesHeadroom: supportsHDRDelivery(for: stock))
         }
     }
 
@@ -414,13 +414,13 @@ public struct FotufilmEngine {
         let shoulderKnee = options.sdrShoulderKnee(for: stock)
         for i in 0..<(width * height) {
             let alpha = bytesPerPixel >= 4 ? Float(pixels[i * bytesPerPixel + 3]) : 255
-            let displayP3 = SIMD3<Float>(
-                ColorScience.displayShoulder(out.planes[0][i], knee: shoulderKnee),
-                ColorScience.displayShoulder(out.planes[1][i], knee: shoulderKnee),
-                ColorScience.displayShoulder(out.planes[2][i], knee: shoulderKnee))
-            let srgb = ColorScience.linearDisplayP3ToSRGB(displayP3)
+            // Into the delivery's primaries first, then its shoulder: the order every other
+            // sRGB delivery takes, so a saturated highlight is rolled in the space it is shown in.
+            let srgb = ColorScience.linearDisplayP3ToSRGB(SIMD3<Float>(
+                out.planes[0][i], out.planes[1][i], out.planes[2][i]))
             for c in 0..<3 {
-                let v = ColorScience.linearToSrgb(clamp(srgb[c], 0, 1))
+                let v = ColorScience.linearToSrgb(
+                    ColorScience.displayShoulder(srgb[c], knee: shoulderKnee))
                 let dither = triangularDither(index: UInt32(i), channel: UInt32(c), seed: ditherSeed)
                 result[i * bytesPerPixel + c] = UInt8(clamp(v * alpha + 0.5 + dither, 0, alpha))
             }

@@ -420,10 +420,9 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
 }
 
 extension PrintPaper {
-    /// An unexposed border uses minimum density for negative paper and maximum density
-    /// for positive paper, under the viewing
-    /// lamp. Crystal Archive shares the engine's explicitly documented RA-4 curve proxy.
-    /// This is the model's paper base, not a new measured substrate-reflectance claim.
+    /// An unexposed border is clear paper for negative paper and maximum density for positive
+    /// paper, under the viewing lamp. Crystal Archive shares the engine's explicitly documented
+    /// RA-4 curve proxy.
     func frameBaseRGB(viewingKelvin: Float?) -> SIMD3<Float>? {
         frameRGB(viewingKelvin: viewingKelvin, dense: false)
     }
@@ -434,9 +433,12 @@ extension PrintPaper {
         isPositivePaper ? nil : frameRGB(viewingKelvin: viewingKelvin, dense: true)
     }
 
+    /// Density above the paper base, which is what the receiver reads and what the photograph's
+    /// own tones are made of: clear paper is the print's white in the frame and in the picture.
     private func frameRGB(viewingKelvin: Float?, dense: Bool) -> SIMD3<Float>? {
         let density: SIMD3<Float>
-        func pick(_ curve: CharacteristicCurve) -> Float { dense ? curve.dMax : curve.dMin }
+        func pick(_ curve: CharacteristicCurve) -> Float { dense ? curve.dMax - curve.dMin : 0 }
+        func maximum(_ curve: CharacteristicCurve) -> Float { curve.dMax - curve.dMin }
         switch self {
         case .ektacolorEdge:
             density = SIMD3(pick(Self.ra4PrintCurveRed), pick(Self.ra4PrintCurve), pick(Self.ra4PrintCurveBlue))
@@ -444,8 +446,8 @@ extension PrintPaper {
             density = SIMD3(pick(EnduraPremierPaperSpectra.redCurve),
                             pick(EnduraPremierPaperSpectra.greenCurve), pick(EnduraPremierPaperSpectra.blueCurve))
         case .crystalArchive: density = SIMD3(repeating: pick(Self.ra4PrintCurve))
-        case .ilfochromeCPS1K: density = SIMD3(repeating: Self.ilfochromeNormalCurve.dMax)
-        case .ilfochromeCLM1K: density = SIMD3(repeating: Self.ilfochromeMediumCurve.dMax)
+        case .ilfochromeCPS1K: density = SIMD3(repeating: maximum(Self.ilfochromeNormalCurve))
+        case .ilfochromeCLM1K: density = SIMD3(repeating: maximum(Self.ilfochromeMediumCurve))
         default: return nil
         }
         let receiver = SpectralRuntime.PrintReceiver(dyes: analyticalDyes, flare: viewingFlare,

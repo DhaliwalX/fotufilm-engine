@@ -38,8 +38,9 @@ final class KernelDeliveryTests: XCTestCase {
     }
 
     /// What `FilmRender` asks the engine for, and what it asks the host for when the engine
-    /// cannot carry it. One knee, one transfer, two spellings.
-    private let knee = FilmSDRDelivery.standardShoulderKnee
+    /// cannot carry it. One knee, one transfer, two spellings. The transparency's knee, because it
+    /// is the one that rolls: a bounded material's sits at display white and only clips.
+    private let knee = FilmSDRDelivery.transparencyShoulderKnee
 
     private func hostDelivered(_ printed: ImageBuffer,
                                shouldered: Bool) -> [Float] {
@@ -205,14 +206,17 @@ final class KernelDeliveryTests: XCTestCase {
         assertMatches(inKernel, host, tolerance: 1e-5)
     }
 
-    /// A negative knee is no shoulder at all — the sentinel a linear or unshouldered delivery
-    /// writes, and the value every configuration carries until a delivery replaces it.
-    func testNoShoulderIsTheDefaultTheConfigurationCarries() throws {
+    /// Until a delivery replaces it, the configuration carries the material's own SDR knee, which
+    /// the byte delivery reads: display white for a negative's print, bounded by its paper.
+    func testTheConfigurationCarriesTheMaterialsOwnKnee() throws {
+        let options = self.options()
         let invocation = FilmEngineInvocation(
-            stock: TestStocks.negative, options: options(), width: 8, height: 8)
-        XCTAssertLessThan(
-            invocation.configuration[FilmEngineInvocation.outputShoulderOffset], 0,
-            "a configuration nobody has given a delivery must carry no shoulder")
+            stock: TestStocks.negative, options: options, width: 8, height: 8)
+        XCTAssertEqual(
+            invocation.configuration[FilmEngineInvocation.outputShoulderOffset],
+            options.sdrShoulderKnee(for: TestStocks.negative))
+        XCTAssertEqual(options.sdrShoulderKnee(for: TestStocks.negative),
+                       FilmSDRDelivery.boundedShoulderKnee)
     }
 
     // MARK: - The fused GPU road

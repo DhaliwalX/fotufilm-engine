@@ -308,6 +308,14 @@ enum FilmRender {
                 source: source, upright: upright)
             decoded = ProcessedHDRExposure.applying(gain, to: decoded)
         }
+        // An HLG or PQ file decodes as display light — reference white at 1.0, HLG's system gamma
+        // applied — and the film is exposed to the scene. Taken after the processed-HDR exposure,
+        // which compares two renditions of the same display light.
+        let hdrTransfer = source.isRaw || inputConversion == .platformToneMap ? nil
+            : GainMapHeadroom.transfer(profileName: source.descriptor.sourceColorProfile)
+        if hdrTransfer != nil {
+            decoded = GainMapHeadroom.sceneLight(decoded)
+        }
 
         var contentHeadroom: Float = 1
         if !source.isRaw {
@@ -327,6 +335,9 @@ enum FilmRender {
             if contentHeadroom <= 1, let declared = declaredHeadroom {
                 contentHeadroom = declared
             }
+            // Core Image states an HDR transfer's range in display light; the film meters the
+            // scene's.
+            if let hdrTransfer { contentHeadroom = hdrTransfer.sceneHeadroom }
         }
 
         // The lens is undone first, on the frame as the camera drew it. Every step after this one
@@ -754,7 +765,7 @@ enum FilmRender {
             ? AnyFilmOutputConverter(FilmOutputConversion.displayP3)
             : AnyFilmOutputConverter(FilmDisplayP3SDRConversion(
                 shoulderKnee: stock.map { options.sdrShoulderKnee(for: $0) }
-                    ?? FilmSDRDelivery.standardShoulderKnee))
+                    ?? FilmSDRDelivery.boundedShoulderKnee))
         // The same delivery, named so the engine can take it in the producing kernel instead of
         // handing back display-linear light for the host to walk. Three things have to hold: the
         // engine's streaming path is the one developing (the film-free and viewport paths do
@@ -774,7 +785,7 @@ enum FilmRender {
                stock: film.stock, options: options, width: width,
                height: height, exactMath: exact) {
             outputTransform = .displayP3(shoulderKnee: stock.map { options.sdrShoulderKnee(for: $0) }
-                ?? FilmSDRDelivery.standardShoulderKnee)
+                ?? FilmSDRDelivery.boundedShoulderKnee)
         }
         if wantsKernelDelivery, let plainEngine,
            plainEngine.carriesOutputTransform(

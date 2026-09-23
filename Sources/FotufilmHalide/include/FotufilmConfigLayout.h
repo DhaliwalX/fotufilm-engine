@@ -193,12 +193,14 @@ enum {
     /// which anything develops at all, and the density over which that coarse population decays
     /// onto the fine one.
     FOTUFILM_CONFIG_GRAIN_DENSITY_PROFILE = 8800,
-    /// The knee of the SDR shoulder the host's delivery asks for, applied between the output matrix
-    /// and the output transfer — the step `FilmOutputConversion` takes on the host, moved into the
+    /// The knee of the SDR shoulder the delivery asks for, applied between the output matrix and
+    /// the output transfer — the step `FilmOutputConversion` takes on the host, moved into the
     /// kernel so the encode variants can carry a shouldered delivery rather than only a bare one.
-    /// Negative means no shoulder, which is the identity a linear or unshouldered space wants; 0.9
-    /// is the standard print knee and 0.7 the reversal one. Read only under
-    /// FOTUFILM_FRAME_ENCODE_OUT; appended without renumbering earlier fields.
+    /// Negative means no shoulder, which is the identity a linear or unshouldered space wants; 1
+    /// leaves everything below display white alone and clips above it, which is what a print or
+    /// scan bounded by its own white takes; 0.7 is a directly viewed transparency's. The host
+    /// initialises it to the material's own knee, which the byte delivery reads, and an encode
+    /// variant's `setOutputTransform` replaces it; appended without renumbering earlier fields.
     FOTUFILM_CONFIG_OUTPUT_SHOULDER = 8803,
     /// Enabled flag followed by three host-primary luminance weights. Fits chroma after the output
     /// matrix while preserving luminance and above-white highlights; zero disables it.

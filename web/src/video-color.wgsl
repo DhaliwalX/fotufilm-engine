@@ -46,7 +46,14 @@ fn pixel(x: u32, y: u32) -> vec3f {
         code=vec3f(r,(yy-f(16u)*r-f(17u)*b)/(1.0-f(16u)-f(17u)),b);
     }
     let v=vec3f(transfer(code.r),transfer(code.g),transfer(code.b));
-    return vec3f(dot(vec3f(f(20u),f(21u),f(22u)),v),dot(vec3f(f(23u),f(24u),f(25u)),v),dot(vec3f(f(26u),f(27u),f(28u)),v));
+    let rgb=vec3f(dot(vec3f(f(20u),f(21u),f(22u)),v),dot(vec3f(f(23u),f(24u),f(25u)),v),dot(vec3f(f(26u),f(27u),f(28u)),v));
+    // PQ is display light: the inverse HLG OOTF at 203 cd/m2 returns it to the scene (BT.2408).
+    if (p[35] == 2u) {
+        let lum=dot(vec3f(0.2627,0.678,0.0593),rgb);
+        if (lum <= 1e-6) { return vec3f(0.0); }
+        return rgb*pow(lum,(1.0-1.2)/1.2);
+    }
+    return rgb;
 }
 @compute @workgroup_size(16,16)
 fn main(@builtin(global_invocation_id) id: vec3u) {

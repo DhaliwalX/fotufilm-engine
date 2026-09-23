@@ -12,7 +12,7 @@ import FotufilmImaging
 enum SDR10Recording {
     static func write(
         print source: UnsafePointer<Float>, width: Int, height: Int,
-        shoulderKnee: Float = FilmSDRDelivery.standardShoulderKnee,
+        shoulderKnee: Float = FilmSDRDelivery.boundedShoulderKnee,
         into destination: CVPixelBuffer
     ) -> Bool {
         guard width > 0, height > 0, width.isMultiple(of: 2),

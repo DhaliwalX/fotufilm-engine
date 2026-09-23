@@ -114,19 +114,10 @@ struct PrintDyeUnmix: Sendable {
             }
             amounts -= apply(inverse, residual)
         }
-        return SIMD3(Self.nonNegative(amounts.x), Self.nonNegative(amounts.y),
-                     Self.nonNegative(amounts.z))
-    }
-
-    /// Width of the softplus approach to zero dye, in density: wide enough to leave no crease in
-    /// the delivered table, narrow enough that closure holds above about 0.1 D.
-    private static let boundaryWidth: Float = 0.02
-
-    private static func nonNegative(_ amount: Float) -> Float {
-        let scaled = amount / boundaryWidth
-        if scaled > 20 { return amount }
-        if scaled < -20 { return 0 }
-        return boundaryWidth * log(1 + exp(scaled))
+        // Clear paper is no dye at all: zero density above base unmixes to exactly zero, so paper
+        // white reaches display white. A softer floor has to lift zero to meet it, and every
+        // highlight with it; the output table's cells are wider than any useful blend anyway.
+        return SIMD3(max(amounts.x, 0), max(amounts.y, 0), max(amounts.z, 0))
     }
 
     private func apply(_ m: [SIMD3<Float>], _ v: SIMD3<Float>) -> SIMD3<Float> {

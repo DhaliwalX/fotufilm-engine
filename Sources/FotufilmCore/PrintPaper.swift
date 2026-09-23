@@ -97,10 +97,12 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// Whether output on this medium can hold light above display white.
     public var showsHDR: Bool { self == .screen }
 
-    /// Whether this stock may use the medium's range above display white. Negative film keeps its
-    /// full exposure latitude in the film model, but is delivered as an SDR positive.
+    /// Whether this stock may use the medium's range above display white: only a transparency
+    /// viewed directly. Negative film keeps its full exposure latitude in the film model but is
+    /// delivered as an SDR positive, and an integral instant sheet is a reflection print whose
+    /// white is its own paper.
     public func supportsHDRDelivery(for stock: FilmStock) -> Bool {
-        showsHDR && stock.isReversal
+        showsHDR && stock.isReversal && !stock.isReflectionPrint
     }
 
     /// Whether the finished output is the developed negative itself.

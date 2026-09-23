@@ -654,14 +654,12 @@ final class PipelineTests: XCTestCase {
             working.x, working.y, working.z, size: width))
         let seed = UInt32(truncatingIfNeeded: options.seed)
         for index in 0..<(width * height) {
-            let printP3 = SIMD3<Float>(
-                ColorScience.displayShoulder(rendered.planes[0][index]),
-                ColorScience.displayShoulder(rendered.planes[1][index]),
-                ColorScience.displayShoulder(rendered.planes[2][index]))
-            let printSRGB = ColorScience.linearDisplayP3ToSRGB(printP3)
+            let printSRGB = ColorScience.linearDisplayP3ToSRGB(SIMD3<Float>(
+                rendered.planes[0][index], rendered.planes[1][index],
+                rendered.planes[2][index]))
             for channel in 0..<3 {
-                let encoded = ColorScience.linearToSrgb(
-                    min(max(printSRGB[channel], 0), 1))
+                let encoded = ColorScience.linearToSrgb(ColorScience.displayShoulder(
+                    printSRGB[channel], knee: options.sdrShoulderKnee(for: TestStocks.negative)))
                 let dither = triangularDither(
                     index: UInt32(index), channel: UInt32(channel), seed: seed)
                 let expected = UInt8(clamp(encoded * 255 + 0.5 + dither, 0, 255))

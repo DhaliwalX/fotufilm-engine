@@ -538,7 +538,8 @@ final class SceneReferredTests: XCTestCase {
         var worst = 0
         for i in 0..<(size * size) {
             for c in 0..<3 {
-                let rolled = ColorScience.displayShoulder(float[i * 4 + c])
+                let rolled = ColorScience.displayShoulder(
+                    float[i * 4 + c], knee: options.sdrShoulderKnee(for: TestStocks.negative))
                 let linear = min(max(rolled, 0), 1)
                 let encoded = linear <= 0.0031308
                     ? linear * 12.92 : 1.055 * pow(linear, 1 / 2.4) - 0.055
@@ -581,7 +582,8 @@ final class SceneReferredTests: XCTestCase {
         var worst = 0
         for i in 0..<(size * size) {
             for c in 0..<3 {
-                let rolled = ColorScience.displayShoulder(developed[i * 4 + c])
+                let rolled = ColorScience.displayShoulder(
+                    developed[i * 4 + c], knee: options.sdrShoulderKnee(for: TestStocks.negative))
                 let linear = min(max(rolled, 0), 1)
                 let encoded = linear <= 0.0031308
                     ? linear * 12.92 : 1.055 * pow(linear, 1 / 2.4) - 0.055

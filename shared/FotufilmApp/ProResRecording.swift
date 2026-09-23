@@ -12,7 +12,7 @@ enum ProResRecording {
     static func write(
         print source: UnsafePointer<Float>, width: Int, height: Int,
         hdr: Bool,
-        sdrShoulderKnee: Float = FilmSDRDelivery.standardShoulderKnee,
+        sdrShoulderKnee: Float = FilmSDRDelivery.boundedShoulderKnee,
         into destination: CVPixelBuffer
     ) -> Bool {
         guard width > 0, height > 0,

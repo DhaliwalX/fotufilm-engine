@@ -138,20 +138,20 @@ final class PrintEncodingTests: XCTestCase {
 
     func testReversalSDRShoulderPreservesMoreHighlightSeparation() {
         let standardLow = ColorScience.displayShoulder(
-            1, knee: FilmSDRDelivery.standardShoulderKnee)
+            1, knee: FilmSDRDelivery.boundedShoulderKnee)
         let standardHigh = ColorScience.displayShoulder(
-            2, knee: FilmSDRDelivery.standardShoulderKnee)
+            2, knee: FilmSDRDelivery.boundedShoulderKnee)
         let reversalLow = ColorScience.displayShoulder(
-            1, knee: FilmSDRDelivery.reversalShoulderKnee)
+            1, knee: FilmSDRDelivery.transparencyShoulderKnee)
         let reversalHigh = ColorScience.displayShoulder(
-            2, knee: FilmSDRDelivery.reversalShoulderKnee)
+            2, knee: FilmSDRDelivery.transparencyShoulderKnee)
         XCTAssertGreaterThan(reversalHigh - reversalLow,
                              standardHigh - standardLow)
         XCTAssertLessThan(reversalLow, standardLow)
         XCTAssertEqual(ColorScience.displayShoulder(
-            FilmSDRDelivery.reversalShoulderKnee,
-            knee: FilmSDRDelivery.reversalShoulderKnee),
-            FilmSDRDelivery.reversalShoulderKnee)
+            FilmSDRDelivery.transparencyShoulderKnee,
+            knee: FilmSDRDelivery.transparencyShoulderKnee),
+            FilmSDRDelivery.transparencyShoulderKnee)
     }
 
     func testSixteenBitImageIsAcceptedAndCarriesItsValues() throws {
@@ -262,18 +262,16 @@ final class PrintEncodingTests: XCTestCase {
         }
     }
 
-    func testShouldersAgreeBelowTheKneeAndPartAboveIt() {
+    func testHDRShoulderIsTheIdentityBelowItsKneeAndHoldsAboveSDRWhite() {
         for step in 0...90 {
             let x = Float(step) / 100
-            XCTAssertEqual(PrintEncoding.shoulder(x), PrintEncoding.hdrShoulder(x),
-                           accuracy: 1e-7,
-                           "the shoulders disagree at \(x), below the knee")
             XCTAssertEqual(PrintEncoding.hdrShoulder(x), x, accuracy: 1e-7,
                            "the HDR shoulder is not the identity at \(x)")
         }
         for x in [Float(1), 2, 8, 1000] {
-            XCTAssertLessThan(PrintEncoding.shoulder(x), 1)
-            XCTAssertGreaterThan(PrintEncoding.hdrShoulder(x), PrintEncoding.shoulder(x))
+            XCTAssertGreaterThan(PrintEncoding.hdrShoulder(x),
+                                 ColorScience.displayShoulder(
+                                     x, knee: FilmSDRDelivery.transparencyShoulderKnee))
             XCTAssertLessThan(PrintEncoding.hdrShoulder(x), PrintEncoding.hdrDisplayCeiling)
         }
         XCTAssertEqual(PrintEncoding.hdrShoulder(2), 1.7638, accuracy: 1e-3)
@@ -330,7 +328,8 @@ final class PrintEncodingTests: XCTestCase {
             "the SDR chain bent something the shoulder should have passed")
         XCTAssertEqual(encoded(1, .srgb), 65535)
 
-        let sdrWhite = PrintEncoding.encode(PrintEncoding.shoulder(1))
+        let sdrWhite = PrintEncoding.encode(
+            ColorScience.displayShoulder(1, knee: FilmSDRDelivery.boundedShoulderKnee))
         let hdrWhite = Float(encoded(1, .hlg)) / 65535
         XCTAssertEqual(encoded(1, .shoulderedSRGB),
                        UInt16((sdrWhite * 65535).rounded()))

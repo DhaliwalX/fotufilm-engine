@@ -84,7 +84,8 @@ final class GamutShowcaseTool: XCTestCase {
                     let source = y * image.width + x
                     let destination = (y * width + xOffset + x) * 4
                     for c in 0..<3 {
-                        let rolled = ColorScience.displayShoulder(image.planes[c][source])
+                        let rolled = ColorScience.displayShoulder(
+                            image.planes[c][source], knee: FilmSDRDelivery.boundedShoulderKnee)
                         let encoded = ColorScience.linearToSrgb(min(max(rolled, 0), 1))
                         bytes[destination + c] = UInt8(min(max(encoded * 255 + 0.5, 0), 255))
                     }

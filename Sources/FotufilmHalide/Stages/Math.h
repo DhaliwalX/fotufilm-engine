@@ -47,11 +47,13 @@ inline Halide::Expr softplus(Halide::Expr value, bool approximate = false) {
 }
 
 /// Soft display shoulder: rolls a display-linear channel off toward the gamut
-/// ceiling instead of hard-clamping it at 1.
+/// ceiling instead of hard-clamping it at 1. A knee at 1 leaves every value
+/// below display white alone; the bounded denominator keeps the arm the select
+/// discards finite there.
 inline Halide::Expr display_shoulder(Halide::Expr x, Halide::Expr knee) {
     Halide::Expr room = 1.0f - knee;
     Halide::Expr over = x - knee;
-    Halide::Expr rolled = knee + room * over / (over + room);
+    Halide::Expr rolled = knee + room * over / Halide::max(over + room, 1.0e-20f);
     return Halide::select(x > knee, rolled, x);
 }
 

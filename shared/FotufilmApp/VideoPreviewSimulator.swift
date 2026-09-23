@@ -432,10 +432,13 @@ final class VideoPreviewSimulator: NSObject, ObservableObject, @unchecked Sendab
                         let codes = source + row * width * 4
                         let out = linear + row * width * 4
                         for x in 0..<width {
-                            for channel in 0..<3 {
-                                out[x * 4 + channel] =
-                                    lut[Int(codes[x * 4 + channel])]
-                            }
+                            // Drawn in Display P3; the engine takes linear Rec.2020.
+                            let working = ColorScience.linearDisplayP3ToRec2020(SIMD3(
+                                lut[Int(codes[x * 4])], lut[Int(codes[x * 4 + 1])],
+                                lut[Int(codes[x * 4 + 2])]))
+                            out[x * 4] = working.x
+                            out[x * 4 + 1] = working.y
+                            out[x * 4 + 2] = working.z
                             out[x * 4 + 3] = 1
                         }
                     }
@@ -463,14 +466,18 @@ final class VideoPreviewSimulator: NSObject, ObservableObject, @unchecked Sendab
                   shoulderKnee: options.sdrShoulderKnee(for: stock)),
               let source = Self.encodeDeveloped(
                   input, width: width, height: height,
-                  transfer: .srgb, colorSpace: p3) else { return nil }
+                  transfer: .srgb, colorSpace: Self.sourceSpace) else { return nil }
         return (printed, source)
     }
+
+    /// The engine's input is linear Rec.2020, so the source held against the print is tagged
+    /// with those primaries rather than the print's Display P3.
+    private static let sourceSpace = CGColorSpace(name: CGColorSpace.itur_2020_sRGBGamma)!
 
     private static func encodeDeveloped(
         _ buffer: MTLBuffer, width: Int, height: Int,
         transfer: PrintEncoding.Transfer, colorSpace: CGColorSpace,
-        shoulderKnee: Float = FilmSDRDelivery.standardShoulderKnee
+        shoulderKnee: Float = FilmSDRDelivery.boundedShoulderKnee
     ) -> CGImage? {
         let components = width * height * 4
         let pixels = UnsafeMutableBufferPointer<UInt16>
@@ -548,7 +555,7 @@ final class VideoPreviewSimulator: NSObject, ObservableObject, @unchecked Sendab
                   shoulderKnee: options.sdrShoulderKnee(for: stock)),
               let source = encodeDeveloped(
                   input, width: width, height: height,
-                  transfer: .srgb, colorSpace: p3) else { return nil }
+                  transfer: .srgb, colorSpace: sourceSpace) else { return nil }
         return (printed, source)
     }
 

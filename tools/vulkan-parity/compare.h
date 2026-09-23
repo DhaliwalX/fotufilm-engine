@@ -45,8 +45,10 @@ inline Difference compare(Buffer<float> &cpu, Buffer<float> &gpu, uint32_t seed,
         Buffer<uint32_t> a(cpu.width()*words,cpu.height()), b(cpu.width()*words,cpu.height());
         auto cf=bits==8?cpu_display_rgba8:cpu_display_rgba16;
         auto gf=bits==8?vk_display_rgba8:vk_display_rgba16;
-        int status=cf(cpu,ox,oy,cpu.width()+ox,0,seed,a);
-        if (!status) status=gf(gpu,ox,oy,gpu.width()+ox,0,seed,b);
+        // The transparency knee, so the comparison covers the shoulder's roll as well as its clip.
+        const float knee=0.7f;
+        int status=cf(cpu,ox,oy,cpu.width()+ox,0,seed,knee,a);
+        if (!status) status=gf(gpu,ox,oy,gpu.width()+ox,0,seed,knee,b);
         if (!status) status=b.copy_to_host();
         if (status) { d.encoding_status=status; continue; }
         size_t bytes=different_bytes(a.data(),b.data(),a.number_of_elements()*4);

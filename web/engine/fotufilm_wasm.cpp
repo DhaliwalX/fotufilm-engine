@@ -167,7 +167,8 @@ int fotufilm_wasm_render_display(float *input, float *output, int32_t width, int
                         float *exposure_lut, int32_t feature_mask, uint32_t seed,
                         uint32_t *pixels, int32_t depth, int32_t p3, int32_t frame_width) {
     if (depth != 8 && depth != 16) return halide_error_code_bad_type;
-    const DisplayOutput display{pixels, depth, p3, frame_width};
+    const DisplayOutput display{pixels, depth, p3, frame_width,
+                                configuration[FOTUFILM_CONFIG_OUTPUT_SHOULDER]};
     return render_frame(input, output, width, height, origin_x, origin_y,
                         configuration, exposure_lut, feature_mask, seed, &display);
 }

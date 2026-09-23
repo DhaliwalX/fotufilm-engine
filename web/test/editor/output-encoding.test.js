@@ -5,7 +5,9 @@ import { WebgpuDeveloper, pixelSource } from '../../src/engine.js'
 test('print encoding matches native dithered quantization without a second rounding', async () => {
   const ramp = [-0.02, 0, 0.0001, 0.003, 0.018, 0.1, 0.18, 0.5, 0.9, 1, 2, 10]
   // Golden bytes from native ColorScience and triangularDither, followed by
-  // the native UInt8 conversion. Includes black, the transfer toe and HDR shoulder.
+  // the native UInt8 conversion. Includes black, the transfer toe and the clip a
+  // print's delivery takes above display white: its knee sits at white, so
+  // white dithers across the top step as native does.
   const expected = [
     [0, 0, 0],
     [1, 0, 0],
@@ -16,8 +18,8 @@ test('print encoding matches native dithered quantization without a second round
     [117, 118, 117],
     [188, 188, 187],
     [244, 244, 243],
-    [249, 249, 249],
-    [253, 254, 254],
+    [255, 255, 255],
+    [254, 255, 255],
     [255, 255, 255],
   ].flatMap((rgb) => [...rgb, 255])
   const data = new Float32Array(ramp.flatMap((v) => [v, v, v, 1]))

@@ -14,11 +14,12 @@ const P3_TO_SRGB = [
   -0.0786361, 1.0982735,
 ]
 
-/// The soft clip the CLI applies before encoding, so print highlights roll off instead of
-/// clipping flat at display white.
-function displayShoulder(x) {
-  const knee = 0.9
-  if (x <= knee) return x
+/// The SDR delivery shoulder, `ColorScience.displayShoulder`. The knee is the material's own
+/// (`FilmSDRDelivery`, carried in the pack's OUTPUT_SHOULDER slot): 1 for everything bounded by
+/// its own white, which leaves every value below display white alone and clips the rest, and 0.7
+/// for a directly viewed transparency. A negative slot is no shoulder.
+function displayShoulder(x, knee) {
+  if (!(knee >= 0) || knee >= 1 || x <= knee) return x
   const over = x - knee
   const room = 1 - knee
   return knee + (room * over) / (over + room)
@@ -40,10 +41,10 @@ function triangularDither(index, channelSeed) {
   return (h1 >>> 8) / 16777216 + (h2 >>> 8) / 16777216 - 1
 }
 
-/// The print's interior of one tile, encoded for a canvas into its place in the frame. The
-/// shoulder and the clip belong to the print, so they happen in P3 where the CLI does them; only
-/// then does the result change primaries. The dither is indexed by the pixel's place in the frame,
-/// not in the tile, so how the frame was cut leaves no trace in it.
+/// The print's interior of one tile, encoded for a canvas into its place in the frame. The print
+/// moves into the canvas's primaries first and takes the shoulder and the clip there, as every
+/// native delivery does. The dither is indexed by the pixel's place in the frame, not in the tile,
+/// so how the frame was cut leaves no trace in it.
 export function encodeTileInto(
   pixels,
   frameWidth,
@@ -54,6 +55,7 @@ export function encodeTileInto(
   offsets,
   colorSpace = 'srgb',
   destination = { x: 0, y: 0, width: frameWidth },
+  shoulderKnee = 1,
 ) {
   validateColorSpace(colorSpace)
   const sixteen = pixels instanceof Uint16Array
@@ -67,17 +69,19 @@ export function encodeTileInto(
   for (let y = tile.y; y < tile.y + tile.height; ++y) {
     for (let x = tile.x; x < tile.x + tile.width; ++x) {
       const at = ((y - region.y) * region.width + (x - region.x)) * stride
-      const r = clamp01(displayShoulder(output[at + o0]))
-      const g = clamp01(displayShoulder(output[at + o1]))
-      const b = clamp01(displayShoulder(output[at + o2]))
+      const r = output[at + o0]
+      const g = output[at + o1]
+      const b = output[at + o2]
+      const delivered = (c) =>
+        clamp01(
+          displayShoulder(n[c * 3] * r + n[c * 3 + 1] * g + n[c * 3 + 2] * b, shoulderKnee),
+        )
       const p = y * frameWidth + x
       const i =
         ((y - destination.y) * destination.width + x - destination.x) * 4
       if (sixteen) {
         for (let c = 0; c < 3; c++) {
-          const value = linearToSrgb(
-            n[c * 3] * r + n[c * 3 + 1] * g + n[c * 3 + 2] * b,
-          )
+          const value = linearToSrgb(delivered(c))
           pixels[i + c] = Number.isFinite(value)
             ? Math.round(clamp01(value) * 65535)
             : 0
@@ -88,17 +92,17 @@ export function encodeTileInto(
       // Native UInt8 conversion truncates after the half-step and dither.
       // Uint8ClampedArray rounds instead, so floor first to avoid a second round.
       pixels[i] = Math.floor(
-        linearToSrgb(n[0] * r + n[1] * g + n[2] * b) * 255 +
+        linearToSrgb(delivered(0)) * 255 +
           0.5 +
           triangularDither(p, channelSeeds[0]),
       )
       pixels[i + 1] = Math.floor(
-        linearToSrgb(n[3] * r + n[4] * g + n[5] * b) * 255 +
+        linearToSrgb(delivered(1)) * 255 +
           0.5 +
           triangularDither(p, channelSeeds[1]),
       )
       pixels[i + 2] = Math.floor(
-        linearToSrgb(n[6] * r + n[7] * g + n[8] * b) * 255 +
+        linearToSrgb(delivered(2)) * 255 +
           0.5 +
           triangularDither(p, channelSeeds[2]),
       )
