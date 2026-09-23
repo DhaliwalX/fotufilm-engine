@@ -503,11 +503,11 @@ public:
         policy.windowed = windowed;
         // The reference CPU samples this same 2048-entry table. Evaluating the
         // analytic curve per pixel instead changes the model between backends.
-        policy.tabulated_curves = gpu_device_api() == DeviceAPI::WebGPU
+        policy.tabulated_curves = reference_sampling()
             || fast(kStillFastCurves);
         // The reference CPU draws from these inverse-CDF tables. The browser GPU must
         // use the same seeded samples, rather than a different analytic approximation.
-        policy.table_grain = gpu_device_api() == DeviceAPI::WebGPU
+        policy.table_grain = reference_sampling()
             || fast(kStillFastGrainTable);
         // A folded graph never sees the whole frame, so it can only read the host's mean.
         policy.measure_flare = windowed
@@ -682,11 +682,11 @@ public:
                     shape_linear, shape_power, shape_log);
                 return Halide::select(premultiply, value * alpha, value);
             };
-            // Linear: the browser receives the same unencoded linear float result as
+            // Linear: browser and Vulkan float delivery receive the same unencoded linear float result as
             // PrintPipeline. Preserve negative working-space components until its display
             // conversion. Native print delivery keeps its existing floor; texture always
             // preserves scene light.
-            Expr linear = texture_ || gpu_device_api() == DeviceAPI::WebGPU
+            Expr linear = texture_ || reference_sampling()
                 ? linear_delivery(x, y, safe_channel)
                 : Halide::max(linear_delivery(x, y, safe_channel), 0.0f);
             output(x, y, channel) = graph::gated(

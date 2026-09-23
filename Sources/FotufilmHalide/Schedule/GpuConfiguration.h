@@ -28,7 +28,7 @@ struct GpuConfiguration {
 #endif
     int tile_x = 32;
     int tile_y = 2;
-    int fixed_stride = 2;
+    int fixed_stride = 0; // Zero selects the shared sigma-dependent reference geometry.
     bool half_blur = false;
     bool half_lut = false;
     bool half_tetra = false;
@@ -74,7 +74,7 @@ inline GpuConfiguration resolve_gpu_configuration(GpuConfiguration defaults = {}
     defaults.tile_x = bounded("FOTUFILM_GPU_TILE_X", vulkan ? square : defaults.tile_x, 2, 64);
     defaults.tile_y = bounded("FOTUFILM_GPU_TILE_Y", vulkan ? square : defaults.tile_y, 1, 64);
     const int stride = integer("FOTUFILM_GPU_STRIDE", defaults.fixed_stride);
-    defaults.fixed_stride = stride == 1 || stride == 2 || stride == 4 || stride == 8 ? stride : 2;
+    defaults.fixed_stride = stride == 0 || stride == 1 || stride == 2 || stride == 4 || stride == 8 ? stride : 0;
     defaults.half_blur = integer("FOTUFILM_F16_BLUR", defaults.half_blur) != 0;
     defaults.half_lut = integer("FOTUFILM_F16_LUT", defaults.half_lut) != 0;
     defaults.half_tetra = integer("FOTUFILM_F16_TETRA", defaults.half_tetra) != 0;

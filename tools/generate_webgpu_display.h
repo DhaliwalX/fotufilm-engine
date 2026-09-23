@@ -6,7 +6,9 @@
 #include "../Sources/FotufilmHalide/Stages/Random.h"
 
 inline void generate_webgpu_display(const std::filesystem::path &directory,
-                                    const Halide::Target &target) {
+                                    const Halide::Target &target,
+                                    Halide::DeviceAPI device = Halide::DeviceAPI::WebGPU,
+                                    const std::string &prefix = "") {
     using namespace Halide;
     ImageParam input(Float(32), 3, "input");
     input.dim(0).set_stride(4);
@@ -33,7 +35,7 @@ inline void generate_webgpu_display(const std::filesystem::path &directory,
                 : Expr(0.0f);
             encoded[c] = cast<uint32_t>(clamp(floor(value * maximum + 0.5f + noise), 0.0f, maximum));
         }
-        const std::string name = depth == 8 ? "display_rgba8" : "display_rgba16";
+        const std::string name = prefix + (depth == 8 ? "display_rgba8" : "display_rgba16");
         Func output(name);
         if (depth == 8) {
             output(x, y) = encoded[0] | (encoded[1] << 8) | (encoded[2] << 16) | Expr(uint32_t{0xff000000});
@@ -41,7 +43,10 @@ inline void generate_webgpu_display(const std::filesystem::path &directory,
             output(x, y) = select(x % 2 == 0, encoded[0] | (encoded[1] << 16),
                                   encoded[2] | Expr(uint32_t{0xffff0000}));
         }
-        output.gpu_tile(x, y, xi, yi, 32, 2, TailStrategy::GuardWithIf, DeviceAPI::WebGPU);
+        if (device == DeviceAPI::None)
+            output.vectorize(x, 8, TailStrategy::GuardWithIf).parallel(y);
+        else
+            output.gpu_tile(x, y, xi, yi, 32, 2, TailStrategy::GuardWithIf, device);
         output.compile_to_static_library((directory / name).string(),
             {input, origin_x, origin_y, frame_width, p3, seed}, name, target.with_feature(Target::NoRuntime));
     }

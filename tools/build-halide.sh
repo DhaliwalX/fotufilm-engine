@@ -34,7 +34,7 @@ if [[ "${1:-}" == "--webgpu" ]]; then
   # --force above puts the checkout back to the PR's own content, so the patches always apply to
   # an unpatched tree however many times this is run. In this order: each patch was written on
   # top of the one before it. Each file explains what it carries and why.
-  for patch in halide-webgpu-storage-limit halide-webgpu-pipeline-cache halide-webgpu-release-handles halide-webgpu-strict-float halide-webgpu-pow-zero halide-webgpu-error-waits halide-webgpu-buffer-cache; do
+  for patch in halide-webgpu-storage-limit halide-webgpu-pipeline-cache halide-webgpu-release-handles halide-webgpu-strict-float halide-webgpu-pow-zero halide-webgpu-error-waits halide-webgpu-buffer-cache halide-vulkan-strict-float halide-vulkan-bool-uniforms halide-vulkan-allocation-padding; do
     git -C "$SOURCE" apply "$PWD/tools/$patch.patch"
   done
   python3 - "$SOURCE/src/FotufilmExactWGSL.h" <<'PY'
@@ -46,7 +46,7 @@ Path(sys.argv[1]).write_text('/*\n' + license + '\n*/\n'
     + 'static const char *fotufilm_exact_wgsl = R"WGSLSOURCE(\n'
     + shader + '\n)WGSLSOURCE";\n')
 PY
-  echo "Halide PR #$WEBGPU_PR at $(git -C "$SOURCE" rev-parse --short HEAD), plus tools/halide-webgpu-*.patch"
+  echo "Halide PR #$WEBGPU_PR at $(git -C "$SOURCE" rev-parse --short HEAD), plus local WebGPU and Vulkan patches"
 fi
 
 [[ -f "$SOURCE/CMakeLists.txt" ]] || {
