@@ -22,4 +22,3 @@ export function videoDimensions(image, edit, maxEdge) {
     height: Math.max(2, Math.ceil(size.height / 2) * 2),
   }
 }
-
