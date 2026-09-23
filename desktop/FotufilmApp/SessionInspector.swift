@@ -214,6 +214,8 @@ final class InspectorViewController: SessionViewController {
             String(showsViewingLight),
             String(showsEnlarger),
             String(showsPrintCorrection),
+            // The paper grade comes and goes with the conversion style, not only the medium.
+            String(showsScreenGrade),
             String(model.edit.lensCorrectionEnabled),
             String(model.hasLensMeasurement),
             String(model.matchedLensProfile != nil),
@@ -233,33 +235,18 @@ final class InspectorViewController: SessionViewController {
         ].joined(separator: "|")
     }
 
-    /// Only a physical reflection or projection print has a viewing illuminant to replace.
-    private var showsViewingLight: Bool {
-        model.edit.hasFilm && model.edit.resolvedPaper.acceptsViewingIlluminant
+    /// Whether the output medium puts this control in front of the user, decided in one place for
+    /// every editor.
+    private func mediumOffers(_ field: EditorControlField) -> Bool {
+        EditorControlCatalogue.medium(model.edit.resolvedPaper, offers: field, stock: activeStock,
+                                      digitalReference: model.edit.digitalReference)
     }
 
-    /// Only an optically enlarged reflection print has a lamp house to choose.
-    private var showsScreenConversion: Bool {
-        guard let stock = model.edit.stock else { return false }
-        return model.edit.resolvedPaper == .screen && !stock.isReflectionPrint
-    }
-
-    /// The paper grade belongs to the graded curve, which only a negative prints through.
-    private var showsScreenGrade: Bool {
-        guard showsScreenConversion, let stock = model.edit.stock else { return false }
-        return !stock.isReversal && model.edit.digitalReference != .referenceExposure
-    }
-
-    private var showsEnlarger: Bool {
-        guard model.edit.hasFilm, let stock = model.edit.stock else { return false }
-        return Enlarger.illuminates(stock: stock, paper: model.edit.resolvedPaper)
-    }
-
-    private var showsPrintCorrection: Bool {
-        model.edit.hasFilm && !(model.edit.stock?.isReversal ?? false)
-            && !(model.edit.stock?.isMonochrome ?? false)
-            && model.edit.resolvedPaper.acceptsPrintCorrection
-    }
+    private var showsViewingLight: Bool { mediumOffers(.printLight) }
+    private var showsScreenConversion: Bool { mediumOffers(.screenExposure) }
+    private var showsScreenGrade: Bool { mediumOffers(.screenGrade) }
+    private var showsEnlarger: Bool { mediumOffers(.enlarger) }
+    private var showsPrintCorrection: Bool { mediumOffers(.printCorrection) }
 
     private var shutterChoices: [Double] {
         guard let stated = model.edit.stock?.reciprocityFailure,
@@ -395,11 +382,7 @@ final class InspectorViewController: SessionViewController {
             switch control.field {
             case .sceneLightKelvin:
                 return EditorControlCatalogue.sourceLights[model.edit.sourceLightIndex].id == "custom"
-            case .digitalReference, .screenExposure: return showsScreenConversion
-            case .screenGrade: return showsScreenGrade
-            case .enlarger: return showsEnlarger
-            case .printCorrection: return showsPrintCorrection
-            default: return true
+            default: return mediumOffers(control.field)
             }
         }.flatMap { control in
             let made = rowFactory.rows(for: control)
