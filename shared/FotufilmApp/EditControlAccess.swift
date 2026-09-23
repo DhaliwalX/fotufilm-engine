@@ -129,7 +129,7 @@ extension EditorControlField {
         case .printCorrection: return .number(\.printCorrection)
         case .printerPreflash: return .number(\.printerPreflash)
         case .negativeViewing:
-            return .unstored("Settings chooses the lightbox or scanner reading")
+            return .bespoke { $0.negativeViewing != .lightBox }
         case .gradeSpace: return .flag(\.encodedGrade)
 
         case .gradeShadowsWarmth: return Self.grade(.shadows, .warmth)
@@ -269,6 +269,7 @@ extension EditState {
     mutating func reset(_ field: EditorControlField) {
         if field == .digitalReference { digitalReference = .default; return }
         if field == .printFrame { printFrame = .none; return }
+        if field == .negativeViewing { negativeViewing = .lightBox; return }
         if field == .halationReturn { halationReturnRatio = nil; return }
         if field == .grainModel { grainModel = .clumpField; return }
         guard let control = EditorControlCatalogue.control(field) else { return }

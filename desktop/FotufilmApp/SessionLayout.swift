@@ -48,6 +48,16 @@ func makeStack(_ axis: StackAxis, spacing: CGFloat = 0,
     return stack
 }
 
+#if canImport(UIKit)
+/// Once a slider has the finger the column does not take it back, however the finger wanders;
+/// any other row gives the touch up to a scroll that starts on it.
+private final class ColumnScrollView: UIScrollView {
+    override func touchesShouldCancel(in view: UIView) -> Bool {
+        !(view is UISlider)
+    }
+}
+#endif
+
 /// A column of content taller than the space it is in.
 ///
 /// The two scroll views are built from opposite ends — AppKit hangs a document view inside a clip
@@ -62,7 +72,7 @@ final class ScrollColumn: SessionView {
     let content = SessionView()
 
     #if canImport(UIKit)
-    private let scroll = UIScrollView()
+    private let scroll = ColumnScrollView()
     #else
     private let scroll = NSScrollView()
     #endif
@@ -88,6 +98,9 @@ final class ScrollColumn: SessionView {
         ])
 
         #if canImport(UIKit)
+        // A slider's finger reaches it at once instead of after the scroll view's pause, so a
+        // quick drag along it moves the slider rather than the column.
+        scroll.delaysContentTouches = false
         scroll.alwaysBounceVertical = true
         scroll.showsHorizontalScrollIndicator = false
         scroll.showsVerticalScrollIndicator = showsScroller

@@ -59,13 +59,18 @@ public enum WebProfileCatalogue {
                 return (control.field.rawValue, ControlsManifest.Scale(scale))
             })
             let media = Dictionary(uniqueKeysWithValues: PrintPaper.choices(for: stock).map { paper in
-                (paper.id, Medium(
+                // The browser reads the style gate on the paper grade itself, from the edit.
+                let offers: (EditorControlField) -> Bool = { field in
+                    EditorControlCatalogue.medium(paper, offers: field, stock: stock,
+                                                  digitalReference: .autoLevels)
+                }
+                return (paper.id, Medium(
                     viewingLights: EditorControlCatalogue.viewingLights(for: paper).map(encodedChoice),
-                    enlarger: Enlarger.illuminates(stock: stock, paper: paper),
-                    correction: !stock.isReversal && !stock.isMonochrome && paper.acceptsPrintCorrection,
-                    screenConversion: paper == .screen && !stock.isReflectionPrint,
-                    screenGrade: paper == .screen && !stock.isReflectionPrint && !stock.isReversal,
-                    negative: paper.isNegative))
+                    enlarger: offers(.enlarger),
+                    correction: offers(.printCorrection),
+                    screenConversion: offers(.screenExposure),
+                    screenGrade: offers(.screenGrade),
+                    negative: offers(.negativeViewing)))
             })
             result[id] = Stock(available: controls.map { $0.field.rawValue },
                 nativeFormat: definition.nativeFormatID ?? FilmFormat.houseDefaultID,

@@ -4136,9 +4136,8 @@
       "group" : "print",
       "kind" : "menu",
       "omitted" : {
-        "android" : "Frame finishing is offered in the iPhone photo editor.",
-        "cli" : "Frame finishing is offered in the iPhone photo editor.",
-        "desktop" : "Frame finishing is offered in the iPhone photo editor.",
+        "android" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+        "cli" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
         "finalcut" : "The host owns output framing.",
         "resolve" : "The host owns output framing."
       },
@@ -4146,6 +4145,7 @@
       "section" : "printPaper",
       "surfaces" : [
         "app",
+        "desktop",
         "web"
       ],
       "title" : "Frame",
@@ -4382,14 +4382,13 @@
       },
       "kind" : "menu",
       "omitted" : {
-        "android" : "Settings chooses the lightbox or scanner reading",
-        "app" : "Settings chooses the lightbox or scanner reading",
-        "desktop" : "Settings chooses the lightbox or scanner reading"
+        "android" : "Settings chooses the lightbox or scanner reading"
       },
-      "scope" : "global",
+      "scope" : "edit",
       "section" : "printPaper",
-      "settingKey" : "fotufilm.negative-viewing",
       "surfaces" : [
+        "app",
+        "desktop",
         "resolve",
         "finalcut",
         "web",

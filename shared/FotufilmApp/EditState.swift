@@ -377,6 +377,9 @@ struct EditState: Equatable {
     /// developed film itself as the output.
     var paper = PrintPaper.editorDefault
     var printFrame = PrintFrame.none
+    /// How the developed negative is read when it is the output: on the light box with its
+    /// orange base, or through a scanner that divides the base out.
+    var negativeViewing = NegativeViewing.lightBox
     /// An edit can explicitly follow the loaded stock's physical reference path: still negative
     /// to RA-4 paper, motion negative to its native release print, and reversal to its direct
     /// positive. New edits instead use the HDR-capable digital reference selected above.
@@ -625,7 +628,7 @@ struct EditState: Equatable {
         let outputMedium = resolvedPaper
         o.paper = outputMedium
         if outputMedium.isNegative {
-            o.negativeViewing = filmFrameNegative ?? AppSettings.storedNegativeViewing
+            o.negativeViewing = filmFrameNegative ?? negativeViewing
         }
         o.format = FilmFormat.preset(id: formatID) ?? .still35
         o.seed = seed

@@ -214,6 +214,8 @@ final class InspectorViewController: SessionViewController {
             String(showsViewingLight),
             String(showsEnlarger),
             String(showsPrintCorrection),
+            // The paper grade comes and goes with the conversion style, not only the medium.
+            String(showsScreenGrade),
             String(model.edit.lensCorrectionEnabled),
             String(model.hasLensMeasurement),
             String(model.matchedLensProfile != nil),
@@ -233,33 +235,18 @@ final class InspectorViewController: SessionViewController {
         ].joined(separator: "|")
     }
 
-    /// Only a physical reflection or projection print has a viewing illuminant to replace.
-    private var showsViewingLight: Bool {
-        model.edit.hasFilm && model.edit.resolvedPaper.acceptsViewingIlluminant
+    /// Whether the output medium puts this control in front of the user, decided in one place for
+    /// every editor.
+    private func mediumOffers(_ field: EditorControlField) -> Bool {
+        EditorControlCatalogue.medium(model.edit.resolvedPaper, offers: field, stock: activeStock,
+                                      digitalReference: model.edit.digitalReference)
     }
 
-    /// Only an optically enlarged reflection print has a lamp house to choose.
-    private var showsScreenConversion: Bool {
-        guard let stock = model.edit.stock else { return false }
-        return model.edit.resolvedPaper == .screen && !stock.isReflectionPrint
-    }
-
-    /// The paper grade belongs to the graded curve, which only a negative prints through.
-    private var showsScreenGrade: Bool {
-        guard showsScreenConversion, let stock = model.edit.stock else { return false }
-        return !stock.isReversal && model.edit.digitalReference != .referenceExposure
-    }
-
-    private var showsEnlarger: Bool {
-        guard model.edit.hasFilm, let stock = model.edit.stock else { return false }
-        return Enlarger.illuminates(stock: stock, paper: model.edit.resolvedPaper)
-    }
-
-    private var showsPrintCorrection: Bool {
-        model.edit.hasFilm && !(model.edit.stock?.isReversal ?? false)
-            && !(model.edit.stock?.isMonochrome ?? false)
-            && model.edit.resolvedPaper.acceptsPrintCorrection
-    }
+    private var showsViewingLight: Bool { mediumOffers(.printLight) }
+    private var showsScreenConversion: Bool { mediumOffers(.screenExposure) }
+    private var showsScreenGrade: Bool { mediumOffers(.screenGrade) }
+    private var showsEnlarger: Bool { mediumOffers(.enlarger) }
+    private var showsPrintCorrection: Bool { mediumOffers(.printCorrection) }
 
     private var shutterChoices: [Double] {
         guard let stated = model.edit.stock?.reciprocityFailure,
@@ -395,11 +382,7 @@ final class InspectorViewController: SessionViewController {
             switch control.field {
             case .sceneLightKelvin:
                 return EditorControlCatalogue.sourceLights[model.edit.sourceLightIndex].id == "custom"
-            case .digitalReference, .screenExposure: return showsScreenConversion
-            case .screenGrade: return showsScreenGrade
-            case .enlarger: return showsEnlarger
-            case .printCorrection: return showsPrintCorrection
-            default: return true
+            default: return mediumOffers(control.field)
             }
         }.flatMap { control in
             let made = rowFactory.rows(for: control)
@@ -447,6 +430,18 @@ final class InspectorViewController: SessionViewController {
                 get: { [model] in model.edit.digitalReference },
                 set: { [model] in model.edit.digitalReference = $0 }),
                 NoteRow { [model] in model.edit.digitalReference.detail }]
+        case .negativeViewing:
+            return [PopUpRow<NegativeViewing>(
+                control.title, options: NegativeViewing.allCases.map { ($0.name, $0) },
+                get: { [model] in model.edit.negativeViewing },
+                set: { [model] in model.edit.negativeViewing = $0 }),
+                NoteRow { [model] in model.edit.negativeViewing.detail }]
+        case .printFrame:
+            return [PopUpRow<PrintFrame>(
+                control.title, options: PrintFrame.allCases.map { ($0.name, $0) },
+                get: { [model] in model.edit.printFrame },
+                set: { [model] in model.edit.printFrame = $0 }),
+                NoteRow { [model] in model.edit.frameConfiguration.detail }]
         case .enlarger:
             guard showsEnlarger else { return [] }
             return [PopUpRow<Enlarger>(
@@ -615,10 +610,17 @@ final class InspectorViewController: SessionViewController {
 
     private func printSections() -> [FormSectionView] {
         let print = FormSectionView(title: "Output")
-        let catalogued = rows(in: .printPaper)
+        let catalogued = rows(in: .printPaper, matching: { $0.field != .printFrame })
         for row in catalogued { print.add(row) }
         if catalogued.isEmpty { for row in paperRows() { print.add(row) } }
-        guard showsEnlarger else { return [print] }
+        var sections = [print]
+        // Borders finish a photograph; a clip has no frame to put one round.
+        if model.hasPhoto {
+            let frame = FormSectionView(title: "Frame")
+            for row in rows(in: .printPaper, matching: { $0.field == .printFrame }) { frame.add(row) }
+            if !frame.rows.isEmpty { sections.append(frame) }
+        }
+        guard showsEnlarger else { return sections }
         let lamp = FormSectionView(title: EditorControlSection.printLamp.title)
         for row in rows(in: .printLamp) { lamp.add(row) }
         lamp.add(NoteRow { [model] in
@@ -626,7 +628,7 @@ final class InspectorViewController: SessionViewController {
                 ? "A simulated tungsten lamp and colour filters expose the paper through the film. More exposure darkens negative paper and lightens positive paper."
                 : "Enable Simulated Printer to adjust lamp temperature, paper exposure and filtration."
         })
-        return [print, lamp]
+        return sections + [lamp]
     }
 
     private func paperRows() -> [FormRowView] {

@@ -322,12 +322,65 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertFalse(bleach.availability.admits(stock: nil))
     }
 
+    // MARK: - What the medium puts in front of the user
+
+    private func offers(_ paper: PrintPaper, _ field: EditorControlField, _ stock: FilmStock?,
+                        style: DigitalReferenceStyle = .autoLevels) -> Bool {
+        EditorControlCatalogue.medium(paper, offers: field, stock: stock, digitalReference: style)
+    }
+
+    func testEveryFilmThatIsViewedDirectlyTakesTheScreenConversion() throws {
+        for id in ["example-negative-400", "example-monochrome-100", "example-reversal-64"] {
+            let stock = try preset(id)
+            XCTAssertTrue(offers(.screen, .digitalReference, stock), id)
+            XCTAssertTrue(offers(.screen, .screenExposure, stock), id)
+            XCTAssertFalse(offers(.ektacolorEdge, .screenExposure, stock), id)
+        }
+        let instant = try preset("instaxmini")
+        XCTAssertFalse(offers(.screen, .digitalReference, instant))
+        XCTAssertFalse(offers(.screen, .digitalReference, nil))
+    }
+
+    func testPaperGradeFollowsTheGradedCurveOfANegative() throws {
+        let negative = try preset("example-negative-400")
+        XCTAssertTrue(offers(.screen, .screenGrade, negative))
+        XCTAssertTrue(offers(.screen, .screenGrade, try preset("example-monochrome-100")))
+        XCTAssertFalse(offers(.screen, .screenGrade, negative, style: .referenceExposure))
+        XCTAssertFalse(offers(.screen, .screenGrade, try preset("example-reversal-64")))
+        XCTAssertFalse(offers(.ektacolorEdge, .screenGrade, negative))
+    }
+
+    func testAPositivePrintTakesAViewingLampButNotTheNegativesCorrection() throws {
+        let reversal = try preset("example-reversal-64")
+        XCTAssertTrue(offers(.ilfochromeCPS1K, .printLight, reversal))
+        XCTAssertFalse(offers(.screen, .printLight, reversal))
+        XCTAssertFalse(offers(.ilfochromeCPS1K, .printCorrection, reversal))
+
+        let negative = try preset("example-negative-400")
+        XCTAssertTrue(offers(.ektacolorEdge, .printLight, negative))
+        XCTAssertTrue(offers(.ektacolorEdge, .printCorrection, negative))
+        XCTAssertFalse(offers(.labScan, .printLight, negative))
+        XCTAssertFalse(offers(.ektacolorEdge, .printLight, nil))
+    }
+
+    func testTheLampHouseStandsOnlyOverAnEnlargedPrint() throws {
+        let negative = try preset("example-negative-400")
+        for field in EditorControlCatalogue.controls(in: .printLamp, for: negative).map(\.field) {
+            XCTAssertEqual(offers(.ektacolorEdge, field, negative),
+                           Enlarger.illuminates(stock: negative, paper: .ektacolorEdge), "\(field)")
+            XCTAssertFalse(offers(.screen, field, negative), "\(field)")
+        }
+        XCTAssertTrue(offers(.negative, .negativeViewing, negative))
+        XCTAssertFalse(offers(.screen, .negativeViewing, negative))
+    }
+
     func testReversalOffersPrintControlsForPositivePaper() throws {
         let reversal = try preset("example-reversal-64")
         let offered = EditorControlCatalogue.controls(in: .printPaper,
                                                       for: reversal)
         XCTAssertEqual(offered.map(\.field),
-                       [.printFrame, .paper, .printLight, .printCorrection, .digitalReference,
+                       [.printFrame, .paper, .printLight, .printCorrection, .negativeViewing,
+                        .digitalReference,
                         .screenGrade, .screenExposure])
         XCTAssertTrue(EditorControlCatalogue.control(.printFrame)!.availability.admits(stock: nil))
 
@@ -335,7 +388,8 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertEqual(
             EditorControlCatalogue.controls(in: .printPaper, for: negative)
                 .map(\.field),
-                       [.printFrame, .paper, .printLight, .printCorrection, .digitalReference,
+                       [.printFrame, .paper, .printLight, .printCorrection, .negativeViewing,
+                        .digitalReference,
                         .screenGrade, .screenExposure])
         XCTAssertEqual(EditorControlCatalogue.controls(in: .printLamp, for: negative).map(\.field),
                        [.enlarger, .printerEnabled, .printerLamp, .printerExposure,

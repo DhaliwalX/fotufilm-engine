@@ -249,9 +249,8 @@ final class DesktopEditorViewController: SessionViewController {
         // A separate settings window can stay open while editing. Update the preview when
         // rendering defaults change, after the published values have been stored.
         let settings = AppSettings.shared
-        renderingSettingsObserver = Publishers.CombineLatest4(
-            settings.$renderingMode, settings.$negativeViewing,
-            settings.$stillDynamicRange, settings.$videoDevelopQuality)
+        renderingSettingsObserver = Publishers.CombineLatest3(
+            settings.$renderingMode, settings.$stillDynamicRange, settings.$videoDevelopQuality)
             .dropFirst()
             .debounce(for: .milliseconds(100), scheduler: RunLoop.main)
             .sink { [weak self] _ in self?.model.rerender(debounce: false) }
@@ -291,7 +290,7 @@ final class DesktopEditorViewController: SessionViewController {
     }
 
     private func observe() {
-        _ = (model.edit, model.processed, model.original, model.isProcessing,
+        _ = (model.edit, model.processed, model.framed, model.original, model.isProcessing,
              model.isExporting, model.errorMessage, model.videoAsset,
              model.documentName, model.canUndo, model.canRedo,
              model.isCropMode, model.canvasResetToken, model.previewSource,
@@ -450,10 +449,8 @@ final class DesktopEditorViewController: SessionViewController {
 
         switch kind {
         case .still:
-            if let image = model.processed ?? model.original {
-                zoomCanvas.show(image: image,
-                                original: model.processed == nil
-                                    ? nil : model.original)
+            if let image = model.canvasImage {
+                zoomCanvas.show(image: image, original: model.canvasOriginal)
             }
             zoomCanvas.setInsets(canvasInsets, animated: false)
         case .crop:
@@ -1249,7 +1246,7 @@ final class DesktopEditorViewController: SessionViewController {
     /// The developed picture, on the clipboard. What is copied is the print as it stands — the same
     /// pixels the canvas is showing, not the file that was opened.
     @objc func copyPhoto(_ sender: Any?) {
-        guard let image = model.processed ?? model.original else { return }
+        guard let image = model.canvasImage else { return }
         #if canImport(UIKit)
         UIPasteboard.general.image = image
         #else

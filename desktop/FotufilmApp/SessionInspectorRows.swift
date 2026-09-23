@@ -55,7 +55,7 @@ struct InspectorRowFactory {
         case .curve(let curve):
             return [self.curve(control, curve: curve)]
         case .menu(.fixed(let choices)):
-            if control.field == .enlarger || control.field == .digitalReference { return bespoke(control) }
+            if [.enlarger, .digitalReference, .printFrame].contains(control.field) { return bespoke(control) }
             return [menu(control, choices: choices)]
         case .menu(.dynamic), .takeover:
             return bespoke(control)

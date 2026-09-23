@@ -28,6 +28,13 @@ public enum NegativeViewing: String, Sendable, CaseIterable, Identifiable {
         }
     }
 
+    public var detail: String {
+        switch self {
+        case .lightBox: "Keeps the film’s orange base, lit just under white."
+        case .scanner: "Divides the film base out, so clear film reads white."
+        }
+    }
+
     /// A small stable integer for cache identities.
     var ordinal: UInt64 {
         switch self {
