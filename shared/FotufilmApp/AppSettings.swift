@@ -18,7 +18,6 @@ final class AppSettings: ObservableObject {
         static let stillRange = "fotufilm.still-dynamic-range"
         static let videoRange = "fotufilm.video-dynamic-range"
         static let renderingMode = "fotufilm.rendering-mode"
-        static let negativeViewing = "fotufilm.negative-viewing"
         static let couplerRange = "fotufilm.coupler-range"
         static let couplerSelf = "fotufilm.coupler-self"
         static let discGrain = "fotufilm.disc-grain"
@@ -379,11 +378,6 @@ final class AppSettings: ObservableObject {
         Rendered.HDRContainer.gainMap.isAvailable ? .gainMap : .hlg
     }
 
-    nonisolated static var storedNegativeViewing: NegativeViewing {
-        UserDefaults.standard.string(forKey: Key.negativeViewing)
-            .flatMap(NegativeViewing.init(rawValue:)) ?? .lightBox
-    }
-
     nonisolated static var storedRenderingMode: RenderingMode {
         UserDefaults.standard.string(forKey: Key.renderingMode)
             .flatMap(RenderingMode.init(rawValue:)) ?? defaultRenderingMode
@@ -456,13 +450,6 @@ final class AppSettings: ObservableObject {
         didSet {
             UserDefaults.standard.set(videoExportBitrate.rawValue,
                                       forKey: Key.videoExportBitrate)
-        }
-    }
-
-    @Published var negativeViewing: NegativeViewing {
-        didSet {
-            UserDefaults.standard.set(negativeViewing.rawValue,
-                                      forKey: Key.negativeViewing)
         }
     }
 
@@ -748,7 +735,6 @@ final class AppSettings: ObservableObject {
         renderingMode = Self.storedRenderingMode
         videoDevelopQuality = Self.storedVideoDevelopQuality
         videoExportBitrate = Self.storedVideoExportBitrate
-        negativeViewing = Self.storedNegativeViewing
         couplerRange = Self.storedCouplerRange
         couplerSelf = Self.storedCouplerSelf
         grainModel = Self.storedGrainModel
@@ -772,7 +758,6 @@ final class AppSettings: ObservableObject {
         renderingMode = Self.defaultRenderingMode
         videoDevelopQuality = .full
         videoExportBitrate = .automatic
-        negativeViewing = .lightBox
         resetCouplerGeometry()
         grainModel = .clumpField
         halationModel = .legacy

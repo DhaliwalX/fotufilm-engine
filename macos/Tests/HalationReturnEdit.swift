@@ -16,7 +16,6 @@ enum AppSettings {
     static let storedHalationModel = HalationModel.legacy
     static let storedGrainModel = GrainModel.clumpField
     static let storedEstimatedHalationEnabled = false
-    static let storedNegativeViewing = NegativeViewing.lightBox
 }
 
 @main

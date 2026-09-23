@@ -16,7 +16,6 @@ enum AppSettings {
     static let storedHalationModel = HalationModel.legacy
     static let storedGrainModel = GrainModel.clumpField
     static let storedEstimatedHalationEnabled = false
-    static let storedNegativeViewing = NegativeViewing.scanner
 }
 
 @main
@@ -52,6 +51,8 @@ enum PrintFrameEditCheck {
         film.paper = .enduraPremier
         film.paperFollowsStock = false
         film.printLightKelvin = 2856
+        // The rebate is always seen on the light box, whatever reading the edit keeps for Negative.
+        film.negativeViewing = .scanner
         precondition(film.filmFrameNegative == .lightBox)
         let negative = film.frameRenderState
         precondition(negative.resolvedPaper == .negative)
@@ -110,6 +111,18 @@ enum PrintFrameEditCheck {
             edit.reset(.printFrame)
             precondition(edit.printFrame == .none)
         }
+        precondition(legacy.negativeViewing == .lightBox)
+        for viewing in NegativeViewing.allCases {
+            var edit = legacy
+            edit.paper = .negative
+            edit.negativeViewing = viewing
+            let restored = try JSONDecoder().decode(EditState.self, from: JSONEncoder().encode(edit))
+            precondition(restored == edit)
+            precondition(restored.options.negativeViewing == viewing)
+            precondition(restored.isMoved(.negativeViewing) == (viewing != .lightBox))
+            edit.reset(.negativeViewing)
+            precondition(edit.negativeViewing == .lightBox)
+        }
         do {
             _ = try JSONDecoder().decode(EditState.self,
                 from: Data("{\"printFrame\":\"unknown\"}".utf8))
@@ -126,6 +139,6 @@ enum PrintFrameEditCheck {
         session.edit.printFrame = .paper
         session.restoreHistoryCheckpoint(checkpoint)
         precondition(session.edit.printFrame == .film)
-        print("Print frame edit checks passed: negative delivery, matching rebate, retained paper, direct positives, persistence, reset, undo, redo, and cancel.")
+        print("Print frame edit checks passed: negative delivery, negative reading, matching rebate, retained paper, direct positives, persistence, reset, undo, redo, and cancel.")
     }
 }

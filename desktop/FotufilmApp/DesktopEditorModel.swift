@@ -70,6 +70,21 @@ final class DesktopEditorModel {
 
     private(set) var original: PlatformImage?
     private(set) var processed: PlatformImage?
+    /// The print inside the edit's frame. Kept apart from `processed` so the crop and selective
+    /// tools, which leave the frame off, keep working in the photograph's own pixels.
+    private(set) var framed: PlatformImage?
+    private var framedOriginal: (configuration: PrintFrameConfiguration, source: PlatformImage,
+                                 image: PlatformImage)?
+
+    /// What the still canvas puts up, and what a press compares it with.
+    var canvasImage: PlatformImage? { framed ?? processed ?? original }
+    var canvasOriginal: PlatformImage? {
+        guard processed != nil else { return nil }
+        guard framed != nil else { return original }
+        guard let framedOriginal, framedOriginal.source === original,
+              framedOriginal.configuration == edit.frameConfiguration else { return nil }
+        return framedOriginal.image
+    }
     private(set) var isProcessing = false
     private(set) var isExporting = false
 
@@ -284,13 +299,13 @@ final class DesktopEditorModel {
     var negativeViewing: NegativeViewing? {
         guard canRenderNegative,
               showsNegative || edit.resolvedPaper.isNegative else { return nil }
-        return AppSettings.storedNegativeViewing
+        return edit.negativeViewing
     }
 
     /// Whether showing the negative means anything for the film loaded — what the menu asks
     /// before offering it. A reversal stock reaches no negative, and neither does no film.
     var canShowNegative: Bool {
-        canRenderNegative && !edit.resolvedPaper.isNegative
+        canRenderNegative && !edit.resolvedPaper.isNegative && edit.filmFrameNegative == nil
     }
 
     private var canRenderNegative: Bool {
@@ -558,6 +573,7 @@ final class DesktopEditorModel {
             ? nil
             : PlatformImage(data: data).flatMap { $0.size == .zero ? nil : $0 }
         processed = nil
+        framed = nil
         documentName = name
         canvasResetToken = UUID()
         clearHistory()
@@ -672,6 +688,7 @@ final class DesktopEditorModel {
         resetRenderLoop()
         original = nil
         processed = nil
+        framed = nil
         isProcessing = false
         documentName = name
         clearHistory()
@@ -715,6 +732,7 @@ final class DesktopEditorModel {
         previewSource = nil
         original = nil
         processed = nil
+        framed = nil
         documentName = nil
         isProcessing = false
         clearHistory()
@@ -880,9 +898,19 @@ final class DesktopEditorModel {
         let draftTarget = max(1, Int(previewLongEdge) / 2)
         let session = renderSession
 
-        let negative = negativeViewing
+        let previewingNegative = showsNegative
         let selection = selective
         let showMask = isSelectiveMode && showsSelectionMask
+        // The crop and selective tools work in the photograph's own pixels, so they leave the
+        // frame off; everywhere else the canvas shows the finished print inside it.
+        let frame = state.printFrame != .none && !strip && !isSelectiveMode
+            ? state.frameConfiguration : nil
+        let developState = frame == nil ? state : state.frameRenderState
+        let negative = frame.flatMap { _ in state.filmFrameNegative } ?? negativeViewing
+        let originalImage = original
+        let cachedFramedOriginal = framedOriginal.flatMap {
+            $0.configuration == frame && $0.source === originalImage ? $0 : nil
+        }
         let fullKey = FilmRender.SceneKey(state: state, longEdge: nil)
         let draftKey = FilmRender.SceneKey(state: state, longEdge: draftTarget)
         let renderKey = draft ? draftKey : fullKey
@@ -897,7 +925,8 @@ final class DesktopEditorModel {
         Task { [weak self] in
             let rendered = await Task.detached(priority: .userInitiated) {
                 () -> (full: FilmRender.Scene?, draft: FilmRender.Scene?,
-                       image: CGImage?, selectionSource: CGImage?, print: CGImage?)? in
+                       image: CGImage?, selectionSource: CGImage?, print: CGImage?,
+                       framed: CGImage?, framedOriginal: CGImage?)? in
                 let renderScene: FilmRender.Scene
                 if draft {
                     guard let reduced = cachedDraft ?? FilmRender.scene(
@@ -921,7 +950,7 @@ final class DesktopEditorModel {
                 let maskSource = plain.map(CIImage.init(cgImage:))
                 var completedPrint: CGImage?
                 func print(_ scene: FilmRender.Scene) -> CGImage? {
-                    let ground = FilmRender.develop(scene, state: state,
+                    let ground = FilmRender.develop(scene, state: developState,
                                                     negative: negative)?
                         .image.image
                     completedPrint = ground
@@ -934,12 +963,21 @@ final class DesktopEditorModel {
                         showMask: showMask, context: SelectiveRender.context,
                         colorSpace: SelectiveRender.space, preparedMask: mask) ?? ground
                 }
-                if draft {
-                    let image = print(renderScene)
-                    return (cachedFull, renderScene, image, plain, completedPrint)
-                }
                 let image = print(renderScene)
-                return (renderScene, cachedDraft, image, plain, completedPrint)
+                let framed = frame.flatMap { frame in
+                    completedPrint.flatMap { PrintFrameRenderer.render($0, configuration: frame) }
+                }
+                // The press compares with the original in the same frame, drawn once per frame.
+                let framedOriginal = draft || cachedFramedOriginal != nil ? nil
+                    : frame.flatMap { frame in
+                        originalImage.flatMap(Self.cgImage).flatMap {
+                            PrintFrameRenderer.render($0, configuration: frame)
+                        }
+                    }
+                if draft {
+                    return (cachedFull, renderScene, image, plain, completedPrint, framed, framedOriginal)
+                }
+                return (renderScene, cachedDraft, image, plain, completedPrint, framed, framedOriginal)
             }.value
             guard let self else { return }
             if self.renderSession == session, let rendered {
@@ -950,11 +988,19 @@ final class DesktopEditorModel {
                 }
                 if let image = rendered.image {
                     self.processed = PlatformImage.from(image)
+                    self.framed = rendered.framed.map(PlatformImage.from)
+                    if frame != nil, rendered.framed == nil {
+                        self.errorMessage = "The frame could not be rendered. Try another frame or choose None."
+                    }
+                    if let frame, let originalImage, let framedOriginal = rendered.framedOriginal {
+                        self.framedOriginal = (frame, originalImage, PlatformImage.from(framedOriginal))
+                    }
                     self.developedLongEdge = max(image.width, image.height)
-                    // The shelf's thumbnail is the print, never the negative the canvas may be
-                    // showing instead.
-                    if !draft, !strip, negative == nil, self.edit == state {
-                        self.lastPrint = rendered.print
+                    // The shelf's thumbnail is the finished print, never the negative the canvas
+                    // may be showing instead.
+                    if !draft, !strip, !previewingNegative, self.edit == state,
+                       state.printFrame == .none || rendered.framed != nil {
+                        self.lastPrint = rendered.framed ?? rendered.print
                         if state.selective != nil { self.editSession.schedulePersist() }
                     }
                 }
@@ -1117,10 +1163,11 @@ final class DesktopEditorModel {
         let exact = AppSettings.effectiveRenderingMode == .accurate
         let hdr = delivery.hdrContainer != nil
         let written = await Task.detached(priority: .userInitiated) { () -> Bool in
-            guard let rendered = FilmRender.render(
-                source: source, state: state, longEdge: longEdge,
+            guard let developed = FilmRender.render(
+                source: source, state: state.frameRenderState, longEdge: longEdge,
                 hdr: hdr, dynamicRange: hdr ? .hdr : .sdr,
-                exact: exact)
+                exact: exact, negative: state.filmFrameNegative),
+                  let rendered = Self.framed(developed, configuration: state.frameConfiguration)
             else { return false }
             if let hdrContainer = delivery.hdrContainer {
                 return rendered.writeHDR(to: output, as: hdrContainer,
@@ -1135,11 +1182,23 @@ final class DesktopEditorModel {
             if ExportDestination.asksAfterwards {
                 exportResult = ExportResult(url: output, isVideo: false,
                                             contentType: outputType,
-                                            preview: processed)
+                                            preview: framed ?? processed)
             }
         } else {
             errorMessage = "The photo couldn’t be exported in that format."
         }
+    }
+
+    /// The canvas's border pass over a finished export, keeping its metadata and HDR rendition.
+    nonisolated private static func framed(_ rendered: Rendered,
+                                           configuration: PrintFrameConfiguration) -> Rendered? {
+        guard configuration.frame != .none else { return rendered }
+        guard let image = PrintFrameRenderer.render(rendered.image, configuration: configuration)
+        else { return nil }
+        let hdr = rendered.hdrImage.flatMap { PrintFrameRenderer.render($0, configuration: configuration) }
+        guard rendered.hdrImage == nil || hdr != nil else { return nil }
+        return Rendered(image: image, hdrImage: hdr, metadata: rendered.metadata,
+                        orientation: rendered.orientation)
     }
 
     private func exportVideo(_ request: VideoRenderRequest) async {

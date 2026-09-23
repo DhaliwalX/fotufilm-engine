@@ -135,12 +135,12 @@ final class SettingsSheetController: SessionViewController {
         #if !canImport(UIKit)
         switch pane {
         case .general: return [newPhotos(), reset()]
-        case .output: return output() + [negativePreview()]
+        case .output: return output()
         case .filmModel: return filmModel()
         }
         #else
         var result: [FormSectionView] = []
-        result += [newPhotos()] + output() + [negativePreview()] + filmModel()
+        result += [newPhotos()] + output() + filmModel()
         result.append(reset())
         return result
         #endif
@@ -234,21 +234,6 @@ final class SettingsSheetController: SessionViewController {
         #else
         return [photos, videos]
         #endif
-    }
-
-    // MARK: - Negative output and preview
-
-    private func negativePreview() -> FormSectionView {
-        let section = makeSection("Negative")
-        section.add(PopUpRow<NegativeViewing>(
-            "Reading",
-            options: NegativeViewing.allCases.map {
-                (title: $0.name, value: $0)
-            },
-            get: { AppSettings.shared.negativeViewing },
-            set: { AppSettings.shared.negativeViewing = $0 }))
-        section.add(NoteRow("Sets how negatives are displayed and exported. Light Box keeps the film’s orange mask. Scanner removes the mask so the clear film base appears white."))
-        return section
     }
 
     // MARK: - Film model

@@ -379,7 +379,8 @@ final class EditorControlCatalogueTests: XCTestCase {
         let offered = EditorControlCatalogue.controls(in: .printPaper,
                                                       for: reversal)
         XCTAssertEqual(offered.map(\.field),
-                       [.printFrame, .paper, .printLight, .printCorrection, .digitalReference,
+                       [.printFrame, .paper, .printLight, .printCorrection, .negativeViewing,
+                        .digitalReference,
                         .screenGrade, .screenExposure])
         XCTAssertTrue(EditorControlCatalogue.control(.printFrame)!.availability.admits(stock: nil))
 
@@ -387,7 +388,8 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertEqual(
             EditorControlCatalogue.controls(in: .printPaper, for: negative)
                 .map(\.field),
-                       [.printFrame, .paper, .printLight, .printCorrection, .digitalReference,
+                       [.printFrame, .paper, .printLight, .printCorrection, .negativeViewing,
+                        .digitalReference,
                         .screenGrade, .screenExposure])
         XCTAssertEqual(EditorControlCatalogue.controls(in: .printLamp, for: negative).map(\.field),
                        [.enlarger, .printerEnabled, .printerLamp, .printerExposure,

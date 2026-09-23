@@ -430,6 +430,18 @@ final class InspectorViewController: SessionViewController {
                 get: { [model] in model.edit.digitalReference },
                 set: { [model] in model.edit.digitalReference = $0 }),
                 NoteRow { [model] in model.edit.digitalReference.detail }]
+        case .negativeViewing:
+            return [PopUpRow<NegativeViewing>(
+                control.title, options: NegativeViewing.allCases.map { ($0.name, $0) },
+                get: { [model] in model.edit.negativeViewing },
+                set: { [model] in model.edit.negativeViewing = $0 }),
+                NoteRow { [model] in model.edit.negativeViewing.detail }]
+        case .printFrame:
+            return [PopUpRow<PrintFrame>(
+                control.title, options: PrintFrame.allCases.map { ($0.name, $0) },
+                get: { [model] in model.edit.printFrame },
+                set: { [model] in model.edit.printFrame = $0 }),
+                NoteRow { [model] in model.edit.frameConfiguration.detail }]
         case .enlarger:
             guard showsEnlarger else { return [] }
             return [PopUpRow<Enlarger>(
@@ -598,10 +610,17 @@ final class InspectorViewController: SessionViewController {
 
     private func printSections() -> [FormSectionView] {
         let print = FormSectionView(title: "Output")
-        let catalogued = rows(in: .printPaper)
+        let catalogued = rows(in: .printPaper, matching: { $0.field != .printFrame })
         for row in catalogued { print.add(row) }
         if catalogued.isEmpty { for row in paperRows() { print.add(row) } }
-        guard showsEnlarger else { return [print] }
+        var sections = [print]
+        // Borders finish a photograph; a clip has no frame to put one round.
+        if model.hasPhoto {
+            let frame = FormSectionView(title: "Frame")
+            for row in rows(in: .printPaper, matching: { $0.field == .printFrame }) { frame.add(row) }
+            if !frame.rows.isEmpty { sections.append(frame) }
+        }
+        guard showsEnlarger else { return sections }
         let lamp = FormSectionView(title: EditorControlSection.printLamp.title)
         for row in rows(in: .printLamp) { lamp.add(row) }
         lamp.add(NoteRow { [model] in
@@ -609,7 +628,7 @@ final class InspectorViewController: SessionViewController {
                 ? "A simulated tungsten lamp and colour filters expose the paper through the film. More exposure darkens negative paper and lightens positive paper."
                 : "Enable Simulated Printer to adjust lamp temperature, paper exposure and filtration."
         })
-        return [print, lamp]
+        return sections + [lamp]
     }
 
     private func paperRows() -> [FormRowView] {
