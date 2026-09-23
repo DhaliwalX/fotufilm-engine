@@ -24,28 +24,6 @@
     }
   }
   @media (min-width: 834px) and (max-width: 1009px) {
-    .editor {
-      grid-template-columns: 60px minmax(0, 1fr) 330px;
-    }
-    .editor.inspector-collapsed {
-      grid-template-columns: 60px minmax(0, 1fr) 46px;
-    }
-    .sidebar-heading,
-    .search-field,
-    .stock-copy,
-    .stock-row > svg {
-      display: none;
-    }
-    .stock-list {
-      padding: 9px 5px;
-    }
-    .stock-row {
-      padding: 3px;
-    }
-    .stock-thumb {
-      width: 44px;
-      height: 44px;
-    }
     .toolbar-leading {
       min-width: 0;
     }

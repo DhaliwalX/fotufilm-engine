@@ -2,12 +2,13 @@ import { Dialog, Heading, Content } from "@react-spectrum/s2/Dialog";
 import { PickerItem, Picker } from "@react-spectrum/s2/Picker";
 import { Adjustment } from "../Adjustment.jsx";
 import { VIDEO_LABELS } from "../generated/controls.js";
-import { videoDimensions } from "../video-export.js";
-import { colorSpaceLabel, preferredCanvasColorSpace } from "../canvas-color.js";
+import { videoDimensions } from "../video-settings.js";
+import { colorSpaceLabel } from "../canvas-color.js";
 import { Button } from "@react-spectrum/s2/Button";
 import { useEditor } from "./EditorContext.jsx";
 export default function ExportDialog() {
   const {
+    backend,
     active,
     exporting,
     setDialog,
@@ -132,7 +133,7 @@ export default function ExportDialog() {
                 ? "srgb"
                 : exportType === "image/tiff"
                   ? "display-p3"
-                  : preferredCanvasColorSpace(),
+                  : backend.outputColorSpace({ type: exportType }),
             )}{" "}
             ·{" "}
             {exportType === "image/tiff" && !active?.image.video

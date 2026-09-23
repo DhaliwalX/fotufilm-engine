@@ -68,19 +68,26 @@
     transition-delay: 100ms, 0s;
   }
   .stock-copy,
-  .sidebar-heading,
+  .film-heading-label,
   .search-field {
     transition: opacity 140ms ease;
   }
-  .film-collapsed .sidebar-heading,
+  .sidebar-heading {
+    transition: padding 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .film-heading-label {
+    transition:
+      opacity 140ms ease,
+      flex-grow 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      margin-right 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
   .film-collapsed .search-field {
     opacity: 0;
     height: 0;
     padding: 0;
     overflow: hidden;
   }
-  .film-collapsed .stock-copy,
-  .film-collapsed .stock-row > svg {
+  .film-collapsed .stock-copy {
     opacity: 0;
     width: 0;
     overflow: hidden;

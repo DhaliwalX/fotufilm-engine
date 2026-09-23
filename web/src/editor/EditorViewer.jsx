@@ -3,8 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import Presence from "../Presence.jsx";
 import { Icon } from "../icons.jsx";
 import { ImageCanvas } from "../ImageCanvas.jsx";
-import { frameSamplePoint } from "../print-frame.js";
-import { newSelection, sampleScene } from "../selective.js";
+import { useSceneSampling } from "./useSceneSampling.js";
 import VideoControls from "../VideoControls.jsx";
 import { Button } from "@react-spectrum/s2/Button";
 import { ActionButton } from "@react-spectrum/s2/ActionButton";
@@ -54,6 +53,14 @@ export default function EditorViewer() {
     setLibraryError,
     files,
   } = useEditor();
+  const sample = useSceneSampling({
+    shownResult,
+    sampling,
+    edit,
+    patch,
+    setSampling,
+    setError,
+  });
   return (
     <main
       className={`viewer ${dragOver ? "drag-over" : ""}`}
@@ -90,20 +97,7 @@ export default function EditorViewer() {
             <>
               <ImageCanvas
                 sampling={sampling}
-                onSample={(point) => {
-                  if (!shownResult?.sceneSource) return;
-                  point = frameSamplePoint(point, shownResult.framePlan);
-                  if (!point) return;
-                  const selective = edit.selective || newSelection(edit);
-                  patch({
-                    selective: {
-                      ...selective,
-                      point,
-                      sample: sampleScene(shownResult.sceneSource, point),
-                    },
-                  });
-                  setSampling(false);
-                }}
+                onSample={sample}
                 onDetailError={setError}
                 onDetailBackend={setDetailBackend}
                 detailSession={session}

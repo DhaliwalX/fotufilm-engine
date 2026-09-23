@@ -360,23 +360,38 @@ test('video UI imports, seeks, changes log encoding, undoes, trims and exports',
     .locator('input[type=file][multiple]')
     .setInputFiles(resolve(fixtures, 'source.mp4'))
   await expect(page.getByLabel('Video controls')).toBeVisible()
-  await expect(page.locator('.viewer-status > [role=status]')).toContainText(
-    '96 × 64',
-  )
-  await page
-    .getByRole('combobox', { name: 'Input color space' })
-    .selectOption('appleLog2')
+  await expect(page.locator('.viewer-status > [role=status]')).toHaveCount(0)
+  await expect(page.getByRole('img', {name: 'Developed photo', exact: true})).toBeVisible()
+  const videoSettings = page.getByRole('button', { name: 'Video settings', exact: true })
+  await videoSettings.click()
+  const encoding = page.getByRole('button', { name: /Input color space/ })
+  await encoding.click()
+  await page.getByRole('option', { name: 'Apple Log 2 · Apple Wide Gamut', exact: true }).click()
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog', {name: 'Video settings', exact: true})).toHaveCount(0)
   await page.getByRole('button', { name: 'Undo (⌘Z)', exact: true }).click()
-  await expect(
-    page.getByRole('combobox', { name: 'Input color space' }),
-  ).toHaveValue('standard')
-  await page
-    .getByRole('combobox', { name: 'Input color space' })
-    .selectOption('slog3Cine')
-  await page.getByRole('slider', { name: 'Video position' }).fill('0.5')
-  await expect(page.locator('.video-timeline output')).toContainText('0:00.50')
-  await page.getByRole('spinbutton', { name: 'Trim in' }).fill('0.25')
-  await page.getByRole('spinbutton', { name: 'Trim out' }).fill('0.75')
+  await videoSettings.click()
+  await expect(encoding).toContainText('Standard')
+  await encoding.click()
+  await page.getByRole('option', { name: 'S-Log3 · S-Gamut3.Cine', exact: true }).click()
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog', {name: 'Video settings', exact: true})).toHaveCount(0)
+  const timeline = page.getByRole('slider', { name: 'Video position' })
+  await timeline.focus()
+  await timeline.press('Home')
+  await timeline.press('ArrowRight')
+  await expect(timeline).toHaveValue('0.001')
+  await expect(page.locator('.video-timecode')).toContainText('0:00.00')
+  await videoSettings.click()
+  const trimIn = page.getByRole('textbox', { name: 'Trim in' })
+  const trimOut = page.getByRole('textbox', { name: 'Trim out' })
+  await trimIn.fill('0.25'); await trimIn.press('Enter')
+  await trimOut.fill('0.75'); await trimOut.press('Enter')
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog', {name: 'Video settings', exact: true})).toHaveCount(0)
   await page.screenshot({
     path: info.outputPath('video-editor.png'),
     fullPage: true,
@@ -385,12 +400,12 @@ test('video UI imports, seeks, changes log encoding, undoes, trims and exports',
     window.showSaveFilePicker = undefined
   })
   await page.getByRole('button', { name: 'Export (⌘S)', exact: true }).click()
-  await expect(page.getByRole('dialog', { name: 'Export video' })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Export image' })).toBeVisible()
   await page.getByRole('button', { name: 'Export', exact: true }).click()
   await expect(
     page.getByRole('link', { name: /Download source-normal.mp4/ }),
   ).toBeVisible()
-  await page.getByRole('button', { name: 'Dismiss', exact: true }).click()
+  await page.locator('.video-download').getByRole('button', { name: 'Dismiss', exact: true }).click()
   await expect(page.locator('.video-download')).toHaveCount(0)
 })
 

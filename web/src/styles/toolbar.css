@@ -21,6 +21,9 @@
     min-width: 224px;
     flex-shrink: 0;
   }
+  [data-native-host="macos"] .toolbar-leading {
+    padding-inline-start: 74px;
+  }
   .toolbar-brand {
     margin: 0 auto 0 7px;
   }

@@ -352,6 +352,8 @@ public struct ControlsExport {
                 withJSONObject: FilmFormat.presets.map { ["id": $0.id, "name": $0.format.name] },
                 options: [.sortedKeys]), as: UTF8.self) + "\n"
             + "export const VIDEO_LABELS = {\n" + labels.joined(separator: "\n") + "\n}\n"
+            + "export const LEGAL_MENU = " + String(decoding: try! JSONSerialization.data(
+                withJSONObject: EditorControlCatalogue.webLegalMenu, options: [.sortedKeys]), as: UTF8.self) + "\n"
             + "export const SELECTION = " + String(decoding: try! JSONSerialization.data(
                 withJSONObject: EditorControlCatalogue.webSelection, options: [.sortedKeys]), as: UTF8.self) + "\n"
             + "export const HISTOGRAM = " + String(decoding: try! JSONSerialization.data(

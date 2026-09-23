@@ -15,6 +15,27 @@
     padding: 0 16px;
     font-weight: 600;
   }
+  .film-heading-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    margin-right: 8px;
+  }
+  @media (min-width: 834px) {
+    .film-collapsed .sidebar-heading {
+      justify-content: center;
+      padding: 0;
+    }
+    .film-collapsed .film-heading-label {
+      flex: 0;
+      opacity: 0;
+      margin: 0;
+    }
+  }
   .sidebar-heading small {
     color: var(--muted);
     font-size: 11px;
@@ -40,11 +61,6 @@
     border-radius: 6px;
     min-height: 57px;
     text-align: left;
-  }
-  .stock-row > svg {
-    width: 14px;
-    height: 14px;
-    color: var(--accent);
   }
   .stock-thumb {
     display: flex;

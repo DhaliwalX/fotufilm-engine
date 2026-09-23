@@ -19,6 +19,7 @@
   "encodings": {
     "appleLog": {
       "curve": "appleLog",
+      "curveIndex": 0,
       "label": "Apple Log \u00b7 Rec.2020",
       "matrix": [
         1,
@@ -51,6 +52,7 @@
     },
     "appleLog2": {
       "curve": "appleLog",
+      "curveIndex": 0,
       "label": "Apple Log 2 \u00b7 Apple Wide Gamut",
       "matrix": [
         1.0281009381655295,
@@ -83,6 +85,7 @@
     },
     "flog": {
       "curve": "fLog",
+      "curveIndex": 4,
       "label": "F-Log \u00b7 F-Gamut",
       "matrix": [
         1,
@@ -115,6 +118,7 @@
     },
     "flog2": {
       "curve": "fLog2",
+      "curveIndex": 5,
       "label": "F-Log2 \u00b7 F-Gamut",
       "matrix": [
         1,
@@ -147,6 +151,7 @@
     },
     "flog2C": {
       "curve": "fLog2",
+      "curveIndex": 5,
       "label": "F-Log2 C \u00b7 F-Gamut C",
       "matrix": [
         1.253541145088534,
@@ -179,6 +184,7 @@
     },
     "hlg": {
       "curve": "hlg",
+      "curveIndex": 3,
       "label": "HLG \u00b7 Rec.2020",
       "matrix": [
         1,
@@ -211,6 +217,7 @@
     },
     "slog2": {
       "curve": "sLog2",
+      "curveIndex": 2,
       "label": "S-Log2 \u00b7 S-Gamut",
       "matrix": [
         1.118856876674265,
@@ -243,6 +250,7 @@
     },
     "slog3": {
       "curve": "sLog3",
+      "curveIndex": 1,
       "label": "S-Log3 \u00b7 S-Gamut3",
       "matrix": [
         1.118856876674265,
@@ -275,6 +283,7 @@
     },
     "slog3Cine": {
       "curve": "sLog3",
+      "curveIndex": 1,
       "label": "S-Log3 \u00b7 S-Gamut3.Cine",
       "matrix": [
         0.9600463438105846,

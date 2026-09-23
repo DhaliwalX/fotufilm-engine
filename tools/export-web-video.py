@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate the browser camera gamut catalog and decode reference vectors from Swift."""
-import json, re, subprocess, tempfile, sys
+import json, re, subprocess, tempfile, sys, runpy
 from pathlib import Path
 root = Path(__file__).resolve().parents[1]
 source = (root / 'Sources/FotufilmCore/CameraSourceDecode.swift').read_text()
@@ -19,13 +19,18 @@ curves, gamuts = lookup('curve'), lookup('gamut')
 labels = dict(re.findall(r'case \.(\w+): return "([^"]+)"', mac.split('var title:')[1].split('var requiresExplicitDecode')[0]))
 expressions=[]
 for key, curve in curves.items():
-    expressions.append(f'"{key}": ["curve": "{curve}", "matrix": CameraGamut.{gamuts[key]}.toRec2020, "reference": codes.map {{ CameraLogCurve.{curve}.linear($0) }}]')
+    expressions.append(f'"{key}": ["curve": "{curve}", "curveIndex": CameraLogCurve.{curve}.rawValue, "matrix": CameraGamut.{gamuts[key]}.toRec2020, "reference": codes.map {{ CameraLogCurve.{curve}.linear($0) }}]')
 source += '\nlet codes: [Float] = [-0.02, 0, 0.05, 0.092864, 0.10053777, 0.10068668, 0.16736099, 0.20855531, 0.3, 0.41, 0.5, 0.75, 0.9, 1, 1.05]\n'
 source += 'let rows: [String: Any] = [' + ',\n'.join(expressions) + ']\n'
-source += 'let data = try JSONSerialization.data(withJSONObject: ["codes": codes, "encodings": rows], options: [.sortedKeys])\nprint(String(data: data, encoding: .utf8)!)\n'
+source += 'let data = try JSONSerialization.data(withJSONObject: ["codes": codes, "encodings": rows, "metal": CameraLogCurve.metalSource], options: [.sortedKeys])\nprint(String(data: data, encoding: .utf8)!)\n'
 with tempfile.TemporaryDirectory() as tmp:
     path = Path(tmp) / 'main.swift'; path.write_text(source)
     data = json.loads(subprocess.check_output(['swift', str(path)], text=True))
+wgsl = runpy.run_path(str(root / 'tools/video-curve-wgsl.py'))['camera_wgsl'](data.pop('metal'))
+shader = root / 'web/src/generated/video-curves.wgsl'
+if '--check' in sys.argv:
+    if not shader.exists() or shader.read_text() != wgsl: sys.exit('Video GPU curves are stale.')
+else: shader.write_text(wgsl)
 for key,row in data['encodings'].items(): row['label']=labels[key]
 target = root / 'web/src/generated/video-color.json'
 text = json.dumps(data, indent=2, sort_keys=True)+'\n'

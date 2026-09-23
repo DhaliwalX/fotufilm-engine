@@ -1,42 +1,46 @@
 import { useEffect, useRef, useState } from "react";
+import { useBackend } from "./backend/BackendContext.jsx";
 
 export function useHistogram(result, open) {
-  const frameResult = useRef(null),
-    worker = useRef(null),
-    generation = useRef(0);
-  const [snapshot, setSnapshot] = useState(null);
-  const [error, setError] = useState(null);
+  const backend = useBackend(),
+    analyser = useRef(null);
+  const [snapshot, setSnapshot] = useState(null),
+    [error, setError] = useState(null);
   useEffect(() => {
     if (!open) return;
-    const instance = new Worker(
-      new URL("./histogram.worker.js", import.meta.url),
-      { type: "module" },
-    );
-    worker.current = instance;
-    instance.onmessage = ({ data }) => {
-      if (data.generation !== generation.current) return;
-      if (data.error) setError(data.error);
-      else
-        setSnapshot({ analysis: data.analysis, result: frameResult.current });
-    };
-    instance.onerror = () => setError("Histogram analysis could not start.");
+    try {
+      analyser.current = backend.createHistogram();
+    } catch (error) {
+      setError(error.message);
+      return;
+    }
+    const instance = analyser.current;
     return () => {
-      worker.current = null;
-      instance.terminate();
+      analyser.current = null;
+      instance.dispose();
     };
-  }, [open]);
+  }, [backend, open]);
   useEffect(() => {
-    const id = ++generation.current;
-    frameResult.current = result;
+    const controller = new AbortController();
     setSnapshot(null);
-    setError(null);
-    if (open && result?.blob && worker.current)
-      worker.current.postMessage({
-        generation: id,
-        output: result.blob,
-        colorSpace: result.colorSpace || "srgb",
-      });
-  }, [result, open]);
+    if (open && result?.blob && analyser.current) {
+      setError(null);
+      const instance = analyser.current;
+      Promise.resolve()
+        .then(() => {
+          if (!controller.signal.aborted)
+            return instance.analyse(result, { signal: controller.signal });
+        })
+        .then((analysis) => {
+          if (!controller.signal.aborted) setSnapshot({ analysis, result });
+        })
+        .catch((error) => {
+          if (!controller.signal.aborted && error.name !== "AbortError")
+            setError(error.message);
+        });
+    }
+    return () => controller.abort();
+  }, [backend, result, open]);
   // Never associate counts from an older render with the current photo.
   return {
     analysis: open && snapshot?.result === result ? snapshot.analysis : null,

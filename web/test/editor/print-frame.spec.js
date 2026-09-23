@@ -292,7 +292,7 @@ test("physical perforations stay on the film edges through every gauge and portr
   await ready(page);
   const results = await page.evaluate(async () => {
     const { defaultEdit } = await import("/src/editor-state.js");
-    const { loadPrintFrame } = await import("/src/print-frame.js");
+    const { loadPrintFrame } = await import("/src/backend/browser-print-frame.js");
     const { renderPrintFrame } = await import("/src/print-frame-renderer.js");
     const results = [];
     for (const format of ["35mm", "super35", "16mm", "super8"])

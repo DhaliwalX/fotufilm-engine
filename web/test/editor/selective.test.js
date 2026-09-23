@@ -1,3 +1,4 @@
+import { sampleScene, compositeSelection } from "../../src/backend/browser-selective.js";
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -9,9 +10,7 @@ import {
 import { sourceIlluminant } from '../../src/editor-catalogue.js'
 import {
   newSelection,
-  sampleScene,
   selectionWeight,
-  compositeSelection,
 } from '../../src/selective.js'
 import { pixelSource, developNormalReference } from '../../src/engine.js'
 

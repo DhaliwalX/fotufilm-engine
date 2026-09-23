@@ -68,15 +68,13 @@ test("phone tools have touch targets and panels leave the image visible", async 
     await expect(
       page.getByRole("button", { name: "Toggle adjustments", exact: true }),
     ).toBeFocused();
-    await page
-      .getByRole("button", { name: "Toggle film sidebar", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Film", exact: true }).click();
     await expect(
       page.getByRole("searchbox", { name: "Search films" }),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "Close film library" }).click();
+    ).toHaveCount(0);
+    await page.getByRole("button", { name: "Toggle film sidebar", exact: true }).click();
     await expect(
-      page.getByRole("button", { name: "Toggle film sidebar", exact: true }),
+      page.getByRole("button", { name: "Film", exact: true }),
     ).toBeFocused();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),
@@ -119,6 +117,12 @@ test("rotating from desktop collapses the panels and keeps desktop geometry on r
   const panel = await page.locator(".inspector").boundingBox();
   expect(panel.width).toBe(330);
   expect(panel.x + panel.width).toBe(1440);
+  await page
+    .getByRole("button", { name: "Toggle film sidebar", exact: true })
+    .click();
+  await expect(
+    page.getByRole("searchbox", { name: "Search films" }),
+  ).toBeVisible();
 });
 
 test("phone edits, undo and menus remain accessible with touch and reduced motion", async ({

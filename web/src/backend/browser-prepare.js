@@ -1,3 +1,4 @@
+import { prepareVideoColor } from "../video-color-client.js";
 import { GPU_WARMUP_GROUPS } from "../gpu-warmup.js";
 import { assetUrl } from "../engine.js";
 import { prepareNegativeWorker } from "../negative-worker-pool.js";
@@ -10,19 +11,28 @@ export async function prepareEditor(renderer, report) {
     label: "Loading image engine",
   };
   let negativeDone = false;
+  let videoDone = false;
   const update = () =>
     report({
       value: Math.round(
-        (100 * (film.completed + Number(negativeDone))) / (film.total + 1),
+        (100 * (film.completed + Number(negativeDone) + Number(videoDone))) /
+          (film.total + 2),
       ),
       label:
         film.completed < film.total
           ? film.label
-          : "Preparing negative conversion",
+          : !negativeDone
+            ? "Preparing negative conversion"
+            : "Preparing video conversion",
       done: false,
     });
   update();
   await Promise.all([
+    prepareVideoColor().then((available) => {
+      videoDone = true;
+      update();
+      return available;
+    }),
     renderer
       .prepare((state) => {
         film = state;

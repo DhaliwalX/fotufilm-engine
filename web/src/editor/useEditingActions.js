@@ -81,8 +81,9 @@ export default function useEditingActions({
       setStage(null);
       setDifference(false);
     }
-    setInspectorOpen(true);
-    if (compactLayout) setFilmOpen(false);
+    const showFilms = compactLayout && value === "film";
+    setInspectorOpen(!showFilms);
+    if (compactLayout) setFilmOpen(showFilms);
     setCompare(false);
   };
   return {

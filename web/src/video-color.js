@@ -1,3 +1,4 @@
+import { videoPlaneLayout } from './video-plane-layout.js'
 import catalog from './generated/video-color.json' with { type: 'json' }
 
 export const VIDEO_ENCODINGS = [
@@ -117,16 +118,8 @@ export function decodeVideoPlanes(
   { data, layout, format, width, height, colorSpace = {} },
   encoding,
 ) {
-  const planar = /^(I420|I422|I444)(A)?(P10|P12)?$/.exec(format)
-  const nv12 = format === 'NV12',
-    rgb = /^(RGBA|RGBX|BGRA|BGRX)$/.test(format)
-  if (!planar && !nv12 && !rgb)
-    throw new Error(
-      `The browser cannot expose ${format || 'this video’s'} pixels without color conversion. Try a different browser or codec.`,
-    )
-  const depth = planar?.[3] ? Number(planar[3].slice(1)) : 8
-  const bytes = depth > 8 ? 2 : 1,
-    maximum = 2 ** depth - 1
+  const { nv12, rgb, bytes, maximum, kr, kb, full, scale, subX, subY } =
+    videoPlaneLayout({ format, colorSpace })
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
   const read = (plane, x, y) => {
     const p = layout[plane]
@@ -134,19 +127,6 @@ export function decodeVideoPlanes(
     return bytes === 2 ? view.getUint16(offset, true) : view.getUint8(offset)
   }
   const { matrix: m, decode } = videoTransform(encoding, colorSpace)
-  const coefficients = {
-    bt709: [0.2126, 0.0722],
-    'bt2020-ncl': [0.2627, 0.0593],
-    smpte170m: [0.299, 0.114],
-    bt470bg: [0.299, 0.114],
-  }
-  const [kr, kb] = coefficients[colorSpace.matrix || 'bt709'] || []
-  if (!rgb && kr === undefined)
-    throw new Error(`Unsupported video YUV matrix: ${colorSpace.matrix}.`)
-  const full = colorSpace.fullRange === true
-  const scale = 2 ** (depth - 8)
-  const subX = planar?.[1] === 'I444' ? 1 : 2
-  const subY = planar?.[1] === 'I420' || nv12 ? 2 : 1
   const output = new Float32Array(width * height * 4)
   for (let y = 0; y < height; y++)
     for (let x = 0; x < width; x++) {
