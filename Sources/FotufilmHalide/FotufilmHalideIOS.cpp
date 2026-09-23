@@ -1229,6 +1229,8 @@ extern "C" int32_t fotufilm_negative_scan(const float *in, float *out, int32_t w
 }
 
 extern "C" int32_t fotufilm_halide_available(void) { return 0; }
+// The ahead-of-time kernels carry no Film tiles; Film grain lays the clump field here.
+extern "C" int32_t fotufilm_halide_set_film_tiles(int32_t, const float *, int64_t) { return -1; }
 extern "C" int32_t fotufilm_halide_develop(
     const float *, const float *, const float *, float *, float *, float *,
     int32_t, int32_t, const float *, const float *, int32_t, int32_t,

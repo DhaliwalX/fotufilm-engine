@@ -238,6 +238,8 @@ extension EditState {
                 case .clumpField: return .choice(0)
                 case .discs: return .choice(1)
                 case .crystals: return .choice(2)
+                // Not among the menu's choices.
+                case .film: return nil
                 }
             }
             return nil
