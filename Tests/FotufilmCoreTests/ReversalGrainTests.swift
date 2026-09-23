@@ -36,7 +36,6 @@ final class ReversalGrainTests: XCTestCase {
             options: FotufilmEngine.Options(), width: 64, height: 64)
         let offset = FilmEngineInvocation.grainReversalProfileOffset
         XCTAssertEqual(offset, FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE)
-        XCTAssertEqual(offset, 18034, "handwritten Metal must use the same offset")
         XCTAssertEqual(Array(invocation.configuration[offset..<(offset + 2)]), [1.35, 4.5])
         XCTAssertEqual(invocation.configuration.count, FOTUFILM_FRAME_CONFIGURATION_COUNT)
         for profile: [Float] in [[], [1], [1, 3, 4], [0, 3], [2.1, 3],

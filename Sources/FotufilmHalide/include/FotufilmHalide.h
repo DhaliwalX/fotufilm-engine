@@ -65,10 +65,11 @@ enum {
     /// The hybrid fast develop's two halves.
     FOTUFILM_FRAME_DENSITY_OUT = 1 << 13,
     FOTUFILM_FRAME_DENSITY_IN = 1 << 14,
-    /// Compiles the Boolean disc grain alongside the clump field. It is its own variant rather
-    /// than a runtime branch because the disc arm is a large unrolled expression: leaving it in
-    /// the pipeline costs every render its compile time even when nothing selects it.
-    FOTUFILM_FRAME_DISC_GRAIN = 1 << 15,
+    /// Compiles the crystal grain model (grain mode 2) and its paper crystals alongside the clump
+    /// field. It is its own variant rather than a runtime branch because the crystal bins are
+    /// whole-frame fields: leaving them in the pipeline costs every render their compile time
+    /// even when nothing selects them.
+    FOTUFILM_FRAME_CRYSTAL_GRAIN = 1 << 15,
     /// Compiles the grain-size mixture's second clump field: a coarse crystal
     /// population blurred at its own correlation length and laid under the
     /// sharp one. Deliberately outside every FOTUFILM_AOT_* variant list — the
@@ -243,7 +244,7 @@ int32_t fotufilm_halide_develop(
 
 /// Registers the film grain model's tiles under `id`: `count` floats, the running-sum tables of
 /// FOTUFILM_FILM_TILE_LEVELS levels for each of three records, ((side + 1)², levels, 3) in that
-/// order. A frame in grain mode 3 samples the tiles its FILM_TILE block names; a null or empty
+/// order. A frame in grain mode 1 samples the tiles its FILM_TILE block names; a null or empty
 /// `tiles` forgets them. Returns 0, or -1 when the count is not the tiles' size.
 int32_t fotufilm_halide_set_film_tiles(int32_t id, const float *tiles, int64_t count);
 

@@ -10,6 +10,7 @@ extern "C" int32_t halide_vulkan_batch_set(void *user_context, int32_t enabled);
 
 #include "FotufilmHalide.h"
 #include "FotufilmResolvedFrameParams.h"
+#include "Pipeline/FilmTileStore.h"
 
 #include <algorithm>
 #include <cstring>
@@ -101,6 +102,30 @@ int upload(Buffer<float> &buffer) {
 }
 int upload(Buffer<uint8_t> &buffer) {
     return buffer.copy_to_device(halide_vulkan_device_interface());
+}
+
+/// The film grain tiles the frame names, on the device. The CPU shim's store keeps the host
+/// floats; this holds its buffer (so a forgotten stock stays alive while it is bound) and a
+/// device copy of it, uploaded once per stock rather than once per frame.
+struct FilmTileCache {
+    Buffer<float> host, device;
+
+    int ensure(const float *configuration, bool &on) {
+        Buffer<float> tiles = fotufilm::BasicFilmTileStore<Buffer<float>>::shared()
+            .tiles_for(configuration, on);
+        if (device.data() && tiles.data() == host.data()) return 0;
+        host = tiles;
+        device = Buffer<float>(tiles.data(), tiles.dim(0).extent(), tiles.dim(1).extent(),
+                               tiles.dim(2).extent());
+        device.set_host_dirty();
+        return upload(device);
+    }
+};
+
+/// Deliberately never destroyed.
+FilmTileCache &film_tile_cache() {
+    static FilmTileCache *cache = new FilmTileCache();
+    return *cache;
 }
 
 /// Deliberately never destroyed.
@@ -200,6 +225,8 @@ extern "C" int32_t fotufilm_halide_android_gpu_process_rgba8(
     if (int failed = upload(spectral.exposure)) return failed;
     if (int failed = upload(spectral.film)) return failed;
     if (int failed = upload(spectral.paper)) return failed;
+    bool film_on = false;
+    if (int failed = film_tile_cache().ensure(configuration, film_on)) return failed;
 
     const fotufilm::ResolvedFrameParams resolved(configuration, width, height, seed,
         (feature_mask & FOTUFILM_FRAME_REVERSAL) != 0, origin_x, origin_y);
@@ -219,7 +246,7 @@ extern "C" int32_t fotufilm_halide_android_gpu_process_rgba8(
     resolved.halation_strided_radius_2, resolved.diffusion_stride_0, resolved.diffusion_stride_1, \
     resolved.diffusion_stride_2, resolved.diffusion_strided_radius_0, \
     resolved.diffusion_strided_radius_1, resolved.diffusion_strided_radius_2, feature_mask, \
-    fotufilm_byte_basis(configuration), out
+    fotufilm_byte_basis(configuration), film_tile_cache().device, film_on ? 1 : 0, out
 
     // Every pass the kernel launches shares one command buffer and one sync.
     halide_vulkan_batch_set(nullptr, 1);

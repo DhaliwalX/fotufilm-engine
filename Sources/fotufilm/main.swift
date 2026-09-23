@@ -1148,7 +1148,7 @@ if let model = flags["--grain-model"] {
         options.grainModel = resolved
     } else {
         FileHandle.standardError.write(Data(
-            "unknown grain model '\(model)'; expected standard/clump, particle/discs, organic/crystals or film\n".utf8))
+            "unknown grain model '\(model)'; expected standard/clump, film or organic/crystals\n".utf8))
         exit(2)
     }
 }
@@ -1452,6 +1452,12 @@ if let packPath = flags["--dump-wasm-pack"] {
                 appendDelta(rung.tail.configuration, base: plan.tail.configuration)
                 for component in rung.components { appendBands(component) }
             }
+        }
+        // The film grain model's tiles close the pack, their count last so a reader finds them
+        // from the end: every rung samples the same film.
+        if let tiles = FilmGrain.registeredTiles(configuration: invocation.configuration) {
+            pack.appendFloats(tiles)
+            pack.appendInt32(Int32(tiles.count))
         }
         try pack.write(to: URL(fileURLWithPath: packPath))
     } catch {

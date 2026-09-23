@@ -1,74 +1,10 @@
 import Foundation
 
-/// Which model develops grain.
-public enum GrainModel: String, Sendable, CaseIterable, Codable, Identifiable {
-    /// A unit-variance field blurred to the clump's correlation length: Poisson counts for dye
-    /// clouds and a continuous normal field for silver, whose clump size is a correlation length
-    /// rather than one countable particle. Granularity is calibrated and cost is flat, but the
-    /// texture is tied to the output lattice.
-    case clumpField = "clump"
-    /// Lattice-free Boolean discs with overlap saturation, laid at the clump radius and scaled
-    /// onto the published granularity (`FilmEngineInvocation.discAmplitudes`): a texture at the
-    /// emulsion's correlation length, not a model of its crystals. Available only in the
-    /// reference schedule; realtime schedules use `clumpField`.
-    case discs = "discs"
-    /// The crystals that form the image, rendered as what they form: Poisson counts of
-    /// developed crystals per size bin at the mean the developed density gives each, laid as
-    /// dye clouds — or silver grains — at each bin's own radius, drawn from each sublayer's
-    /// coupler pool, with the population read off the record's characteristic curve
-    /// (`CrystalGrainModel`). Available only in the reference schedule, like `discs`, whose
-    /// variant family carries it; realtime schedules use `clumpField`.
-    case crystals = "crystals"
-    /// The film's own crystals laid where they sit on the emulsion (`FilmGrain`): hashed in film
-    /// millimetres so every resolution samples the same film, dye clouds sized by their dye over
-    /// the coupler capacity that caps them, silver grains opaque, and each pixel the average of
-    /// the light through it. Rendered once per stock onto tiles the Halide kernel samples (grain
-    /// mode 3); builds without those tiles — ahead-of-time variants and WebGPU — lay `clumpField`.
-    case film = "film"
-
-    public var id: String { rawValue }
-
-    /// User-facing display title.
-    public var title: String {
-        switch self {
-        case .clumpField: return "Standard"
-        case .discs: return "Particle"
-        case .crystals: return "Organic Crystals"
-        case .film: return "Film"
-        }
-    }
-
-    /// User-facing detail explanation.
-    public var detail: String {
-        switch self {
-        case .clumpField: return "Fast calibrated RMS grain"
-        case .discs: return "Discrete silver grains under magnification"
-        case .crystals: return "Physical dye clouds and paper crystals"
-        case .film: return "Crystals on the film itself, averaged as light"
-        }
-    }
-
-    /// Resolves an identifier or alias (e.g. "standard", "clump", "particle", "discs", "organic", "crystals", "film").
-    public static func named(_ name: String) -> GrainModel? {
-        switch name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-        case "clump", "clumpfield", "clump-field", "standard", "fast":
-            return .clumpField
-        case "discs", "disc", "particle", "particles", "boolean-discs":
-            return .discs
-        case "crystals", "crystal", "organic", "organic-crystals", "physical":
-            return .crystals
-        case "film", "real", "real-film", "film-grain":
-            return .film
-        default:
-            return nil
-        }
-    }
-}
-
-/// Boolean grain model using equal-radius discs from a Poisson process.
-/// Coverage `a` fixes point intensity at `-ln(1 - a) / (πr²)`. `FilmStock.grainSizeMM` is a
-/// clump radius, not a crystal radius; `radius(forGranularity:)` gives the crystal-scale radius
-/// whose unscaled fluctuation would match a published figure.
+/// Covariance of a silver emulsion's grain, modelled as equal-radius opaque discs from a Poisson
+/// process. Coverage `a` fixes point intensity at `-ln(1 - a) / (πr²)`. The Standard clump field
+/// takes its silver correlation from here (`FilmEngineInvocation.booleanGrainCorrelation`).
+/// `FilmStock.grainSizeMM` is a clump radius, not a crystal radius; `radius(forGranularity:)`
+/// gives the crystal-scale radius whose unscaled fluctuation would match a published figure.
 public enum BooleanGrain {
 
     /// Area shared by two discs of equal radius whose centres are `separation` apart.

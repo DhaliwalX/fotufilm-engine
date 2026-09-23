@@ -23,6 +23,11 @@ import {
 } from './color-controls.js'
 
 import { CONTROLS } from './generated/controls.js'
+
+/// Offsets within the configuration's FILM_TILE block: kFilmTileId and kFilmTileAmount in
+/// Sources/FotufilmHalide/Stages/FilmTileLayout.h.
+const FILM_TILE_ID = 2
+const FILM_TILE_AMOUNT = 3
 // The browser half of the film engine.
 //
 // The WebAssembly module holds the same Halide kernels the phones run, but none of the physics
@@ -140,6 +145,14 @@ export function parsePack(bytes) {
   const exposure = take(lutCount)
   const film = take(lutCount)
   const paper = take(lutCount)
+  // A pack sealed with the film grain model closes with its tiles, their count last. Only the
+  // CPU kernels sample them; WebGPU renders the standard grain.
+  let filmTiles
+  if (configuration[CONFIG.GRAIN_MODE] === 1) {
+    const count = view.getInt32(bytes.byteLength - 4, true)
+    const start = bytes.byteLength - 4 - count * 4
+    filmTiles = new Float32Array(bytes.slice(start, start + count * 4))
+  }
 
   const ladder = []
   if (version >= 2) {
@@ -252,8 +265,8 @@ export function parsePack(bytes) {
       sizes,
     }
   }
-  if (offset !== bytes.byteLength)
-    throw new Error(`pack has ${bytes.byteLength - offset} trailing bytes`)
+  const end = bytes.byteLength - (filmTiles ? filmTiles.length * 4 + 4 : 0)
+  if (offset !== end) throw new Error(`pack has ${end - offset} trailing bytes`)
 
   return {
     bytes,
@@ -272,6 +285,7 @@ export function parsePack(bytes) {
     exposure,
     film,
     paper,
+    filmTiles,
   }
 }
 
@@ -711,6 +725,7 @@ class Developer {
       film: pack.film,
       paper: pack.paper,
       exposure: pack.exposure,
+      filmTiles: pack.filmTiles,
     }
     if (this.width) this.plan()
   }
@@ -784,6 +799,11 @@ class Developer {
           ['number', 'number', 'number'],
           [this.configPtr, this.grainPtr, value],
         )
+        // The film grain model carries its own per-layer amounts, sealed at grain 1.
+        for (let r = 0; r < 3; ++r) {
+          const slot = CONFIG.FILM_TILE + FILM_TILE_AMOUNT + r
+          module.HEAPF32[this.configPtr / 4 + slot] = this.configuration[slot] * value
+        }
         continue
       }
       const slot = module.ccall(
@@ -807,11 +827,9 @@ class Developer {
     applyColorControls(configuration, controls)
     configuration[CONFIG.CAMERA_PREFLASH] =
       this.featureMask === 1 << 29 ? 0 : (controls.cameraPreflash ?? 0)
-    // Keep coarse and resolved grain at the same strength as the clump field.
-    for (const offset of [CONFIG.MOTTLE, CONFIG.GRAIN_DISC]) {
-      for (let c = 0; c < 3; c++)
-        configuration[offset + c] *= controls.grain ?? 1
-    }
+    // Keep coarse grain at the same strength as the clump field.
+    for (let c = 0; c < 3; c++)
+      configuration[CONFIG.MOTTLE + c] *= controls.grain ?? 1
     this.seed = ((controls.seed ?? 0) + this.pack.seed) >>> 0
   }
 
@@ -1123,6 +1141,24 @@ export class SimdDeveloper extends Developer {
       if (this.uploaded[name] !== pack[name])
         module.HEAPF32.set(pack[name], ptr / 4)
     }
+    if (this.uploaded.filmTiles !== pack.filmTiles) this.uploadFilmTiles(pack)
+  }
+
+  /// The kernel keeps its own copy of the tiles, so the staging copy is freed straight away.
+  uploadFilmTiles(pack) {
+    const { module } = this
+    const tiles = pack.filmTiles
+    const id = pack.configuration[CONFIG.FILM_TILE + FILM_TILE_ID]
+    if (!tiles) {
+      module.ccall('fotufilm_wasm_set_film_tiles', 'number', ['number', 'number', 'number'], [id, 0, 0])
+      return
+    }
+    const ptr = module._malloc(tiles.length * 4)
+    module.HEAPF32.set(tiles, ptr / 4)
+    const status = module.ccall('fotufilm_wasm_set_film_tiles', 'number',
+      ['number', 'number', 'number'], [id, ptr, tiles.length])
+    module._free(ptr)
+    if (status !== 0) throw new Error(`film grain tiles rejected (${tiles.length} floats)`)
   }
 
   allocateFrame(pixels) {

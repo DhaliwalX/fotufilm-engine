@@ -10,7 +10,7 @@ static inline int32_t fotufilm_develop_features(int32_t feature_mask) {
         | FOTUFILM_FRAME_HALATION | FOTUFILM_FRAME_COUPLERS
         | FOTUFILM_FRAME_ADJACENCY | FOTUFILM_FRAME_GRAIN
         | FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_COUPLER_DIFFUSION
-        | FOTUFILM_FRAME_DISC_GRAIN | FOTUFILM_FRAME_GRAIN_MOTTLE
+        | FOTUFILM_FRAME_CRYSTAL_GRAIN | FOTUFILM_FRAME_GRAIN_MOTTLE
         | FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_DENSITY_IN
         | FOTUFILM_FRAME_TEXTURE | FOTUFILM_FRAME_DIFFUSION
         | FOTUFILM_FRAME_DONOR_LAYER | FOTUFILM_FRAME_HALATION_ANNULAR
@@ -26,7 +26,7 @@ static inline int32_t fotufilm_develop_variant(int32_t feature_mask) {
     return (features & stage_bits)
         | ((features & FOTUFILM_FRAME_MTF_LUMA) ? 64 : 0)
         | ((features & FOTUFILM_FRAME_COUPLER_DIFFUSION) ? 128 : 0)
-        | ((features & FOTUFILM_FRAME_DISC_GRAIN) ? 256 : 0)
+        | ((features & FOTUFILM_FRAME_CRYSTAL_GRAIN) ? 256 : 0)
         | ((features & FOTUFILM_FRAME_GRAIN_MOTTLE) ? 512 : 0)
         | ((features & FOTUFILM_FRAME_PRINT_MTF) ? 1024 : 0)
         | ((features & FOTUFILM_FRAME_DENSITY_IN) ? 2048 : 0)

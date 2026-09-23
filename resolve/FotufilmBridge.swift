@@ -592,7 +592,7 @@ func fotufilm_bridge_control_capabilities(_ stockIndex: Int32, _ paperIndex: Int
     var flags: Int32 = 0
     if !stock.isMonochrome && !stock.isReversal { flags |= 1 }
     if stock.couplerGeometry != nil { flags |= 2 }
-    if stock.grainDensityLaw == .silver { flags |= 32 }
+    if !stock.isMonochrome { flags |= 32 }
     if stock.couplerInhibition.contains(where: { $0.contains(where: { $0 != 0 }) })
         || stock.adjacencyStrength > 0 {
         flags |= 64
@@ -642,11 +642,10 @@ func fotufilm_bridge_development_stop(_ stockIndex: Int32, _ index: Int32) -> Fl
     return stops.indices.contains(Int(index)) ? stops[Int(index)] : .nan
 }
 
-/// Disc grain cannot run in the realtime family. This policy is also queried by the OFX
-/// decoder, so a per-node override changes every pass together, including striped frames.
+/// The node's schedule. This policy is also queried by the OFX decoder, so a per-node override
+/// changes every pass together, including striped frames.
 @_cdecl("fotufilm_bridge_effective_realtime")
 func fotufilm_bridge_effective_realtime(_ parameters: UnsafePointer<Float>?) -> Int32 {
-    if parameters?[Parameter.grainModel] == 1 { return 0 }
     switch whole(parameters?[Parameter.renderMode] ?? 0) {
     case 1: return 1
     case 2: return 0

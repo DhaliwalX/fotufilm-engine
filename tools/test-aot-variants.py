@@ -32,12 +32,12 @@ class VariantTableTests(unittest.TestCase):
             self.assertEqual(wrapped, plain | self.table.bits[family["adds"]], family["name"])
 
     def test_a_family_call_and_its_bit_are_told_apart(self):
-        self.assertEqual(self.table.evaluate("DISC(MTF)"),
-                         self.table.bits["MTF"] | self.table.bits["DISC_GRAIN"])
-        self.assertEqual(self.table.evaluate("DISC_GRAIN | MTF"),
-                         self.table.bits["MTF"] | self.table.bits["DISC_GRAIN"])
-        self.assertEqual(self.table.c_expression("DISC(MTF | FLARE)"),
-                         "FOTUFILM_AOT_DISC(FOTUFILM_FRAME_MTF | FOTUFILM_FRAME_FLARE)")
+        self.assertEqual(self.table.evaluate("CRYSTAL(MTF)"),
+                         self.table.bits["MTF"] | self.table.bits["CRYSTAL_GRAIN"])
+        self.assertEqual(self.table.evaluate("CRYSTAL_GRAIN | MTF"),
+                         self.table.bits["MTF"] | self.table.bits["CRYSTAL_GRAIN"])
+        self.assertEqual(self.table.c_expression("CRYSTAL(MTF | FLARE)"),
+                         "FOTUFILM_AOT_CRYSTAL(FOTUFILM_FRAME_MTF | FOTUFILM_FRAME_FLARE)")
 
     def test_one_variant_per_exact_class_carries_every_stage(self):
         full = self.table.evaluate("FULL_STAGES")
@@ -48,7 +48,7 @@ class VariantTableTests(unittest.TestCase):
             if exact & self.table.bits["NO_FILM"]:
                 continue
             stages = [mask & self.table.stage_bits for _, mask in members]
-            self.assertIn(full, [s & ~self.table.bits["DISC_GRAIN"] for s in stages],
+            self.assertIn(full, [s & ~self.table.bits["CRYSTAL_GRAIN"] for s in stages],
                           f"class {exact:#x} has no full-stage variant: {members}")
 
     def test_the_delivery_encode_is_no_axis(self):
@@ -79,10 +79,10 @@ class VariantTableTests(unittest.TestCase):
                     best = (extra, other)
             self.assertEqual(best[0], 0, f"{name} is never the narrowest match; {best[1]} is")
 
-    def test_every_grain_laying_donor_variant_has_a_disc_twin(self):
-        self.assertEqual(self.table.missing_donor_disc_twins(), [])
+    def test_every_grain_laying_donor_variant_has_a_crystal_twin(self):
+        self.assertEqual(self.table.missing_donor_crystal_twins(), [])
         schema = copy.deepcopy(SCHEMA)
-        schema["variants"] = [v for v in schema["variants"] if v["name"] != "color_float_disc"]
+        schema["variants"] = [v for v in schema["variants"] if v["name"] != "color_float_crystal"]
         with self.assertRaisesRegex(ValueError, "color_float"):
             aot.Table(schema)
 

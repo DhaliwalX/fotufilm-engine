@@ -58,6 +58,13 @@ export function profileControlAvailable(c, edit, stock) {
       return !!medium?.correction;
     case "negativeViewing":
       return !!medium?.negative;
+    case "filmGrainSize":
+    case "filmColourGrain":
+    case "filmRedLayer":
+    case "filmGreenLayer":
+    case "filmBlueLayer":
+    case "filmScanSoftness":
+      return edit.profile?.grainModel === "film";
     default:
       return true;
   }

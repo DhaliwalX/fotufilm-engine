@@ -175,13 +175,13 @@ extension FilmGrain {
         return TileLevel(sums: sums, meanLight: Float(mean))
     }
 
-    public func pitchTables(_ tiles: Tiles, pxPerMM: Float) -> PitchTables {
-        let pitch = (1 / pxPerMM) / Self.tileTexelMM
-        return tiles.tables(pitch: pitch) { Self.measurePitch(tiles, pitch: Double(pitch)) }
+    /// The tables of pixels that each read `footprint` texels of film a side.
+    public func pitchTables(_ tiles: Tiles, footprint: Float) -> PitchTables {
+        tiles.tables(pitch: footprint) { Self.measurePitch(tiles, pitch: Double(footprint)) }
     }
 
-    /// Each level read through pixels of `pitch` texels laid as a frame lays them — through the
-    /// blocks' own placements — at `side²` pixels scattered over many blocks.
+    /// Each level read through footprints of `pitch` texels laid as a frame lays them — through
+    /// the blocks' own placements — at `side²` footprints scattered over many blocks.
     static func measurePitch(_ tiles: Tiles, pitch: Double, side: Int = 128) -> PitchTables {
         let pixels = (0..<(side * side)).map { i in
             (Double((i % side) * 7919 % 4096) * pitch, Double((i / side) * 104_729 % 4096) * pitch)
@@ -267,12 +267,14 @@ extension FilmGrain {
 
     /// Lays the grain from the tiles: see `Tiles`.
     func applyTiled(to negative: ImageBuffer, pxPerMM: Float, seed: UInt32,
-                    amount: Float) -> ImageBuffer {
+                    amount: Float, look: Look) -> ImageBuffer {
         let tiles = tiles()
         let width = negative.width, height = negative.height
         let active = monochrome ? [1] : [0, 1, 2]
-        let pitch = Double(1 / pxPerMM) / Double(Self.tileTexelMM)   // pixel side, texels
-        let tables = pitchTables(tiles, pxPerMM: pxPerMM)
+        let geometry = look.geometry(pxPerMM: pxPerMM)
+        let pitch = Double(geometry.pitch), footprint = Double(geometry.footprint)
+        let amounts = look.recordAmounts(amount)
+        let tables = pitchTables(tiles, footprint: geometry.footprint)
         var planes = negative.planes
         var fluctuations = [[Float]](repeating: [], count: 3)
         for r in active where !tiles.levels[r].isEmpty {
@@ -284,14 +286,15 @@ extension FilmGrain {
             let out = UnsafeMutableBufferPointer<Float>.allocate(capacity: width * height)
             defer { out.deallocate() }
             let box = TileOutput(out)
+            let amount = amounts[r]
             DispatchQueue.concurrentPerform(iterations: height) { y in
-                let y0 = Double(y) * pitch, y1 = y0 + pitch
+                let y0 = (Double(y) + 0.5) * pitch - 0.5 * footprint, y1 = y0 + footprint
                 for x in 0..<width {
                     let gross = source[y * width + x]
                     let t = min(max((gross - lo) / max(hi - lo, 1e-6), 0), 1) * steps
                     let k = min(Int(t), Self.tileLevels - 2)
                     let w = t - Float(k)
-                    let x0 = Double(x) * pitch, x1 = x0 + pitch
+                    let x0 = (Double(x) + 0.5) * pitch - 0.5 * footprint, x1 = x0 + footprint
                     let (a, b) = Self.footprintLight(levels[k], levels[k + 1], x0, x1, y0, y1,
                                                      seed: seed, record: r)
                     let da = -log10(max(a, 1e-9)) - meanAt[k]
@@ -301,10 +304,18 @@ extension FilmGrain {
             }
             fluctuations[r] = Array(out)
         }
-        for r in 0..<3 {
-            let grain = monochrome ? fluctuations[1] : fluctuations[r]
-            guard !grain.isEmpty else { continue }
-            for i in 0..<(width * height) { planes[r][i] += grain[i] }
+        if monochrome {
+            for r in 0..<3 where !fluctuations[1].isEmpty {
+                for i in 0..<(width * height) { planes[r][i] += fluctuations[1][i] }
+            }
+        } else {
+            let (own, shared) = Look.mix(colour: look.colour)
+            let zero = [Float](repeating: 0, count: width * height)
+            let grain = fluctuations.map { $0.isEmpty ? zero : $0 }
+            for i in 0..<(width * height) {
+                let mean = (grain[0][i] + grain[1][i] + grain[2][i]) / 3
+                for r in 0..<3 { planes[r][i] += own * grain[r][i] + shared * mean }
+            }
         }
         return ImageBuffer(width: width, height: height, planes: planes)
     }
@@ -359,14 +370,16 @@ extension FilmGrain {
     // MARK: - The kernel's inputs
 
     /// The configuration's FILM_TILE block for a frame of `pxPerMM` whose grain is scaled by
-    /// `amount`, naming tiles `id`: the pitch, the amount, the id, each record's density range,
-    /// then per record the levels' mean light, their mean density at this pitch and the
-    /// correlation of neighbouring levels' grain there.
-    public func configurationBlock(pxPerMM: Float, amount: Float, id: Int32) -> [Float] {
+    /// `amount` and laid as `look` lays it, naming tiles `id`: the pitch and footprint, the id, each record's amount, the colour
+    /// mix, each record's density range, then per record the levels' mean light, their mean
+    /// density through the footprint and the correlation of neighbouring levels' grain there.
+    public func configurationBlock(pxPerMM: Float, amount: Float, look: Look, id: Int32) -> [Float] {
         let tiles = tiles()
-        let tables = pitchTables(tiles, pxPerMM: pxPerMM)
+        let geometry = look.geometry(pxPerMM: pxPerMM)
+        let tables = pitchTables(tiles, footprint: geometry.footprint)
         let levels = Self.tileLevels
-        var block: [Float] = [(1 / pxPerMM) / Self.tileTexelMM, amount, Float(id)]
+        var block: [Float] = [geometry.pitch, geometry.footprint, Float(id)]
+        block += look.recordAmounts(amount) + [monochrome ? 1 : look.colour]
         block += tiles.dMin + tiles.dMax
         for r in 0..<3 {
             guard !tiles.levels[r].isEmpty else {
@@ -389,6 +402,15 @@ extension FilmGrain {
     /// frame's grain amount scales the grain in the kernel, so moving it rebuilds nothing.
     public static func registered(stock: FilmStock, reference: FilmStock?) -> (grain: FilmGrain, id: Int32) {
         registry.entry(stock: stock, reference: reference)
+    }
+
+    /// The packed tiles a frame's configuration names in its `FILM_TILE` block, for a renderer
+    /// that samples them itself rather than through the Halide stage and for the browser pack;
+    /// nil when the frame lays another grain model or the tiles were evicted.
+    public static func registeredTiles(configuration: [Float]) -> [Float]? {
+        guard configuration[Int(FOTUFILM_CONFIG_GRAIN_MODE)] == 1 else { return nil }
+        return registry.grain(id: Int32(configuration[Int(FOTUFILM_CONFIG_FILM_TILE) + 2]))?
+            .tiles().packed()
     }
 
     private static let registry = Registry()
@@ -417,6 +439,12 @@ extension FilmGrain {
                 _ = fotufilm_halide_set_film_tiles(evicted.id, nil, 0)
             }
             return (grain, id)
+        }
+
+        func grain(id: Int32) -> FilmGrain? {
+            lock.lock()
+            defer { lock.unlock() }
+            return entries.first { $0.id == id }?.grain
         }
     }
 }

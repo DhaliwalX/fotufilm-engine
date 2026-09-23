@@ -215,17 +215,7 @@
     {
       "name": "GRAIN_MODE",
       "count": 1,
-      "doc": "Non-zero to develop grain as a Boolean model of discs rather than as a blurred clump field."
-    },
-    {
-      "name": "GRAIN_DISC_RADIUS",
-      "count": 1,
-      "doc": "Grain radius in pixels. The Boolean path is only taken once this reaches a pixel, below which the clump field is already the model's own limit and far cheaper."
-    },
-    {
-      "name": "GRAIN_DISC",
-      "count": 3,
-      "doc": "Per-layer density amplitude for the Boolean path, calibrated so the covered fraction read through a 48 um aperture carries the stock's published granularity."
+      "doc": "Which model lays the grain: 0 the blurred clump field, 1 the film grain model's tiles (FILM_TILE), 2 the crystal population (CRYSTAL_GRAIN)."
     },
     {
       "name": "GRADE_SPACE",
@@ -484,8 +474,8 @@
     },
     {
       "name": "FILM_TILE",
-      "count": "9 + 3 * 3 * FILM_TILE_LEVELS",
-      "doc": "The film grain model (grain mode 3), sampled from its tiles: the pixel pitch in tile texels, the grain amount the tiles' grain is scaled by, the id the host registered the tiles under, each record's D-min then D-max (the range the levels span), then per record FILM_TILE_LEVELS each of the level's mean light, the mean density a pixel of this pitch reads there, and the correlation of its grain with the next level's at this pitch. Read only in grain mode 3; appended without renumbering earlier fields."
+      "count": "13 + 3 * 3 * FILM_TILE_LEVELS",
+      "doc": "The film grain model (grain mode 1), sampled from its tiles: the pixel pitch in tile texels, the side of the film each pixel reads in tile texels, the id the host registered the tiles under, each record's grain amount, the colour grain (1 keeps the records independent, 0 shares one grain), each record's D-min then D-max (the range the levels span), then per record FILM_TILE_LEVELS each of the level's mean light, the mean density a pixel of this pitch reads there, and the correlation of its grain with the next level's at this pitch. Read only in grain mode 1; appended without renumbering earlier fields."
     }
   ]
 }

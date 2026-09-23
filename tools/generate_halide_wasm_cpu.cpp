@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
     // presets. The same runtime gates used by native AOT classes bypass unrequested stages.
     // Annular halation is an exact schedule choice and therefore has its own fallback.
     for (int annular = 0; !plain_only && annular < 2; ++annular) {
-        const int32_t features = FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_DISC_GRAIN
+        const int32_t features = FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_CRYSTAL_GRAIN
             | (annular ? FOTUFILM_FRAME_HALATION_ANNULAR : 0);
         const std::string name = annular ? "develop_flexible_annular" : "develop_flexible";
         std::cout << "  " << name << std::flush;

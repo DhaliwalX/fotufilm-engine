@@ -140,7 +140,7 @@ test("new grain, gauge and halation combinations render deterministically", asyn
       },
       {
         stock: "hp5plus400",
-        controls: { grainMottle: "heavy", grainModel: "discs" },
+        controls: { grainModel: "film" },
       },
       {
         stock: "hp5plus400",

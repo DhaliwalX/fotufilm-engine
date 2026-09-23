@@ -9,7 +9,6 @@ enum AppSettings {
     static let storedCameraStockID: String? = nil
     static let storedFormatID: String? = nil
     static let storedGradeSpace = ColorGrade.Space.linear
-    static let storedDiscGrainEnabled = false
     static let storedCouplerBarrierRedGreen = 1.0
     static let storedCouplerBarrierGreenBlue = 1.0
     static let storedCouplerSelf = 1.0

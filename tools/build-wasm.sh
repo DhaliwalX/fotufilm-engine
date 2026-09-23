@@ -206,7 +206,7 @@ em++ -std=c++17 -O3 web/engine/fotufilm_wasm_cpu.cpp \
   -msimd128 -sALLOW_MEMORY_GROWTH=1 \
   -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,worker \
   -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,HEAPF32 \
-  -sEXPORTED_FUNCTIONS=_fotufilm_wasm_transport,_fotufilm_wasm_control_count,_fotufilm_wasm_control_slot,_fotufilm_wasm_set_slot,_fotufilm_wasm_cpu_render,_fotufilm_wasm_frame_size_slot,_fotufilm_wasm_set_exposure,_fotufilm_wasm_set_scene,_fotufilm_wasm_set_white_balance,_fotufilm_wasm_set_grain,_fotufilm_wasm_configuration_count,_fotufilm_wasm_lut_count,_malloc,_free \
+  -sEXPORTED_FUNCTIONS=_fotufilm_wasm_transport,_fotufilm_wasm_control_count,_fotufilm_wasm_control_slot,_fotufilm_wasm_set_slot,_fotufilm_wasm_cpu_render,_fotufilm_wasm_set_film_tiles,_fotufilm_wasm_frame_size_slot,_fotufilm_wasm_set_exposure,_fotufilm_wasm_set_scene,_fotufilm_wasm_set_white_balance,_fotufilm_wasm_set_grain,_fotufilm_wasm_configuration_count,_fotufilm_wasm_lut_count,_malloc,_free \
   -o web/public/fotufilm.mjs
 
 # The WebGPU road. One generator for every stock rather than one per mask: the fused kernel takes

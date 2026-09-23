@@ -13,6 +13,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
 
     case stock, gauge, frameCoverage
     case grain, grainMottle, mottleOverride, mottleShare, grainModel, grainAnimation, seed
+    case filmGrainSize, filmColourGrain, filmRedLayer, filmGreenLayer, filmBlueLayer, filmScanSoftness
     case halation, halationReturn, halationColour, halationSpectrum, halationModel, estimatedHalation
     case couplers, couplerReach, couplerSelf, couplerRedGreen, couplerGreenBlue
     case chromaticFringeAmount, chromaticFringeRadius
@@ -243,6 +244,8 @@ public enum EditorControlAvailability: String, Sendable, Equatable, Codable {
     case always
     case film
     case colourNegative
+    /// Any colour film, negative or reversal: one whose three layers each lay their own grain.
+    case colourFilm
     /// Film that is developed as a transparency — negative or positive — rather than as an
     /// integral print.
     case transparentFilm
@@ -261,6 +264,9 @@ public enum EditorControlAvailability: String, Sendable, Equatable, Codable {
         case .colourNegative:
             guard let stock else { return false }
             return !stock.isMonochrome && !stock.isReversal
+        case .colourFilm:
+            guard let stock else { return false }
+            return !stock.isMonochrome
         case .transparentFilm:
             guard let stock else { return false }
             return !stock.isReflectionPrint
@@ -369,5 +375,18 @@ public struct EditorControl: Sendable, Equatable, Identifiable {
     public var storedNeutral: Double? {
         guard let neutral = kind.scale?.neutral, let encoding = persistence.encoding else { return nil }
         return encoding.stored(fromDisplayed: neutral)
+    }
+}
+
+extension EditorControlField {
+    /// A control only the film grain model reads, which a host offers while that model is chosen.
+    public var needsFilmGrainModel: Bool {
+        switch self {
+        case .filmGrainSize, .filmColourGrain, .filmRedLayer, .filmGreenLayer, .filmBlueLayer,
+             .filmScanSoftness:
+            return true
+        default:
+            return false
+        }
     }
 }

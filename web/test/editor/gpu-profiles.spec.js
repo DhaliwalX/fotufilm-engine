@@ -56,7 +56,7 @@ test("background WebGPU matches CPU for film, filters, chemistry and resolved gr
         },
         {
           stock: "hp5plus400",
-          controls: { grainMottle: "heavy", grainModel: "discs" },
+          controls: { grainMottle: "heavy" },
         },
         {
           stock: "hp5plus400",

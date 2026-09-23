@@ -174,237 +174,229 @@
       "offset": 8675,
       "count": 1
     },
-    "GRAIN_DISC_RADIUS": {
+    "GRADE_SPACE": {
       "offset": 8676,
       "count": 1
     },
-    "GRAIN_DISC": {
-      "offset": 8677,
-      "count": 3
-    },
-    "GRADE_SPACE": {
-      "offset": 8680,
-      "count": 1
-    },
     "MOTTLE_SIGMA": {
-      "offset": 8681,
+      "offset": 8677,
       "count": 1
     },
     "MOTTLE_RADIUS": {
-      "offset": 8682,
+      "offset": 8678,
       "count": 1
     },
     "MOTTLE_LAMBDA": {
-      "offset": 8683,
+      "offset": 8679,
       "count": 1
     },
     "MOTTLE": {
-      "offset": 8684,
+      "offset": 8680,
       "count": 3
     },
     "PAPER_RED": {
-      "offset": 8687,
+      "offset": 8683,
       "count": 6
     },
     "PAPER_BLUE": {
-      "offset": 8693,
+      "offset": 8689,
       "count": 6
     },
     "PAPER_MIDPOINT_RED": {
-      "offset": 8699,
+      "offset": 8695,
       "count": 1
     },
     "PAPER_MIDPOINT_BLUE": {
-      "offset": 8700,
+      "offset": 8696,
       "count": 1
     },
     "GRAIN_LAW": {
-      "offset": 8701,
+      "offset": 8697,
       "count": 1
     },
     "GRAIN_ANCHOR": {
-      "offset": 8702,
+      "offset": 8698,
       "count": 3
     },
     "GRAIN_FOG": {
-      "offset": 8705,
+      "offset": 8701,
       "count": 3
     },
     "GRAIN_SIGMA_LAYER": {
-      "offset": 8708,
+      "offset": 8704,
       "count": 3
     },
     "MOTTLE_SIGMA_LAYER": {
-      "offset": 8711,
+      "offset": 8707,
       "count": 3
     },
     "PRINT_MTF_SIGMA": {
-      "offset": 8714,
+      "offset": 8710,
       "count": 1
     },
     "PRINT_MTF_RADIUS": {
-      "offset": 8715,
+      "offset": 8711,
       "count": 1
     },
     "OUTPUT_MATRIX": {
-      "offset": 8716,
+      "offset": 8712,
       "count": 9
     },
     "OUTPUT_TRANSFER": {
-      "offset": 8725,
+      "offset": 8721,
       "count": 1
     },
     "OUTPUT_COEFFICIENTS": {
-      "offset": 8726,
+      "offset": 8722,
       "count": 6
     },
     "OUTPUT_PREMULTIPLIED": {
-      "offset": 8732,
+      "offset": 8728,
       "count": 1
     },
     "PRINT_SHARPEN": {
-      "offset": 8733,
+      "offset": 8729,
       "count": 1
     },
     "DIFFUSION_DIRECT": {
-      "offset": 8734,
+      "offset": 8730,
       "count": 1
     },
     "DIFFUSION_KERNEL": {
-      "offset": 8735,
+      "offset": 8731,
       "count": 9
     },
     "DIFFUSION_RADIUS": {
-      "offset": 8744,
+      "offset": 8740,
       "count": 3
     },
     "DONOR_CURVE": {
-      "offset": 8747,
+      "offset": 8743,
       "count": 6
     },
     "DONOR_RELEASE": {
-      "offset": 8753,
+      "offset": 8749,
       "count": 3
     },
     "HALATION_RING_RADIUS": {
-      "offset": 8756,
+      "offset": 8752,
       "count": 3
     },
     "HALATION_MATRIX": {
-      "offset": 8759,
+      "offset": 8755,
       "count": 9
     },
     "CURVE_SECONDARY": {
-      "offset": 8768,
+      "offset": 8764,
       "count": 15
     },
     "MTF_SECONDARY_SIGMA": {
-      "offset": 8783,
+      "offset": 8779,
       "count": 3
     },
     "MTF_SECONDARY_RADIUS": {
-      "offset": 8786,
+      "offset": 8782,
       "count": 3
     },
     "MTF_PRIMARY_SHARE": {
-      "offset": 8789,
+      "offset": 8785,
       "count": 3
     },
     "COUPLER_RELEASE_GAMMA": {
-      "offset": 8792,
+      "offset": 8788,
       "count": 3
     },
     "DONOR_RELEASE_GAMMA": {
-      "offset": 8795,
+      "offset": 8791,
       "count": 1
     },
     "DONOR_DIFFUSION_KERNEL": {
-      "offset": 8796,
+      "offset": 8792,
       "count": 3
     },
     "DEVELOP_COMPLEMENT": {
-      "offset": 8799,
+      "offset": 8795,
       "count": 1
     },
     "GRAIN_DENSITY_PROFILE": {
-      "offset": 8800,
+      "offset": 8796,
       "count": 3
     },
     "OUTPUT_SHOULDER": {
-      "offset": 8803,
+      "offset": 8799,
       "count": 1
     },
     "OUTPUT_GAMUT": {
-      "offset": 8804,
+      "offset": 8800,
       "count": 4
     },
     "SAMPLED_CURVES": {
-      "offset": 8808,
+      "offset": 8804,
       "count": 9219
     },
     "ADJACENCY_MODEL": {
-      "offset": 18027,
+      "offset": 18023,
       "count": 1
     },
     "ADJACENCY_SECONDARY_SIGMA": {
-      "offset": 18028,
+      "offset": 18024,
       "count": 1
     },
     "ADJACENCY_SECONDARY_RADIUS": {
-      "offset": 18029,
+      "offset": 18025,
       "count": 1
     },
     "CHROMATIC_FRINGE_AMOUNT": {
-      "offset": 18030,
+      "offset": 18026,
       "count": 1
     },
     "CHROMATIC_FRINGE_SIGMA": {
-      "offset": 18031,
+      "offset": 18027,
       "count": 1
     },
     "CHROMATIC_FRINGE_RADIUS": {
-      "offset": 18032,
+      "offset": 18028,
       "count": 1
     },
     "RECORD_INPUT": {
-      "offset": 18033,
+      "offset": 18029,
       "count": 1
     },
     "GRAIN_REVERSAL_PROFILE": {
-      "offset": 18034,
+      "offset": 18030,
       "count": 2
     },
     "CRYSTAL_GRAIN_BIN": {
-      "offset": 18036,
+      "offset": 18032,
       "count": 48
     },
     "CRYSTAL_GRAIN_LAMBDA": {
-      "offset": 18084,
+      "offset": 18080,
       "count": 768
     },
     "CRYSTAL_PRINT_GRAIN": {
-      "offset": 18852,
+      "offset": 18848,
       "count": 4
     },
     "CAMERA_PREFLASH": {
-      "offset": 18856,
+      "offset": 18852,
       "count": 1
     },
     "PRINTER_PREFLASH": {
-      "offset": 18857,
+      "offset": 18853,
       "count": 1
     },
     "BYTE_BASIS": {
-      "offset": 18858,
+      "offset": 18854,
       "count": 2
     },
     "GRAIN_DENSITY_RECORDS": {
-      "offset": 18860,
+      "offset": 18856,
       "count": 18
     },
     "FILM_TILE": {
-      "offset": 18878,
-      "count": 162
+      "offset": 18874,
+      "count": 166
     }
   }
 }

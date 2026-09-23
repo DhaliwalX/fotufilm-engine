@@ -228,7 +228,7 @@
       "text" : "Not yet examined"
     }
   ],
-  "bridgeSlotCount" : 58,
+  "bridgeSlotCount" : 64,
   "bridgeSlots" : [
     "EXPOSURE_EV",
     "TEMPERATURE",
@@ -287,7 +287,13 @@
     "SCREEN_GRADE",
     "SCREEN_EXPOSURE",
     "CAMERA_PREFLASH",
-    "PRINTER_PREFLASH"
+    "PRINTER_PREFLASH",
+    "FILM_GRAIN_SIZE",
+    "FILM_COLOUR_GRAIN",
+    "FILM_RED_LAYER",
+    "FILM_GREEN_LAYER",
+    "FILM_BLUE_LAYER",
+    "FILM_SCAN_SOFTNESS"
   ],
   "controls" : [
     {
@@ -716,6 +722,414 @@
       "title" : "Mottle Amount"
     },
     {
+      "availability" : "film",
+      "binding" : "filmGrainSize",
+      "commandLineFlag" : "--film-grain-size",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Film grain model: magnify the film's texture at the same measured granularity (0.5...4, default: 1)",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Make the film's grain coarser or finer at the same measured granularity.",
+      "documentation" : "Magnifies the Film grain model's crystals and dye clouds, scaling their fluctuation so the sheet's RMS granularity at the 48 µm aperture holds.",
+      "drives" : [
+
+      ],
+      "field" : "filmGrainSize",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 4,
+        "clampMin" : 0.5,
+        "composed" : false,
+        "delta" : 0.01,
+        "group" : "grainAdvanced",
+        "hint" : "Film grain model only. Magnifies the film's crystals and clouds, with their fluctuation scaled down so the 48 µm aperture still reads the sheet's granularity: coarser, softer grain above 1, finer below.",
+        "kind" : "double",
+        "label" : "Grain Size",
+        "max" : 4,
+        "min" : 0.5,
+        "ofxName" : "filmGrainSize",
+        "order" : 11,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 58,
+        "slotSymbol" : "FILM_GRAIN_SIZE",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "finalcut" : "not yet offered; the Grain Model menu is not offered"
+      },
+      "persistedKey" : "filmGrainSize",
+      "scale" : {
+        "admittedMax" : 4,
+        "admittedMin" : 0.5,
+        "max" : 4,
+        "min" : 0.5,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "multiplier"
+      },
+      "scope" : "edit",
+      "section" : "filmGrain",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "web",
+        "cli"
+      ],
+      "title" : "Grain Size",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "colourFilm",
+      "binding" : "filmColourGrain",
+      "commandLineFlag" : "--colour-grain",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Film grain model: 1 keeps the layers' grain independent, 0 shares one grain (default: 1)",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Blend each layer's grain from independent colour speckle toward one shared grain.",
+      "documentation" : "Mixes each layer's Film grain toward the layers' mean at constant variance, from independent colour grain to a single shared grain.",
+      "drives" : [
+
+      ],
+      "field" : "filmColourGrain",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "group" : "grainAdvanced",
+        "hint" : "Film grain model only. 100% keeps the three layers' grain independent, as the emulsion lays it; 0% gives them one shared grain. The grain's total strength is kept.",
+        "kind" : "double",
+        "label" : "Colour Grain",
+        "max" : 1,
+        "min" : 0,
+        "ofxName" : "filmColourGrain",
+        "order" : 12,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 59,
+        "slotSymbol" : "FILM_COLOUR_GRAIN",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "finalcut" : "not yet offered; the Grain Model menu is not offered"
+      },
+      "persistedKey" : "filmColourGrain",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : 0,
+        "max" : 1,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "filmGrain",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "web",
+        "cli"
+      ],
+      "title" : "Colour Grain",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "colourFilm",
+      "binding" : "filmGrainLayer(0)",
+      "commandLineFlag" : "--film-red-layer",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Film grain model: the red-sensitive layer's grain multiplier (0...2, default: 1)",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Scale the grain of the red-sensitive layer when Grain Model is Film.",
+      "documentation" : "Scales the red-sensitive layer's grain in the Film grain model, leaving the other layers alone.",
+      "drives" : [
+
+      ],
+      "field" : "filmRedLayer",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 2,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "group" : "grainAdvanced",
+        "hint" : "Film grain model only. Multiplier on the red-sensitive layer's grain, 1 at the sheet's granularity.",
+        "kind" : "double",
+        "label" : "Red Layer",
+        "max" : 2,
+        "min" : 0,
+        "ofxName" : "filmRedLayer",
+        "order" : 13,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 60,
+        "slotSymbol" : "FILM_RED_LAYER",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "finalcut" : "not yet offered; the Grain Model menu is not offered"
+      },
+      "persistedKey" : "filmRedLayer",
+      "scale" : {
+        "admittedMax" : 2,
+        "admittedMin" : 0,
+        "max" : 2,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "multiplier"
+      },
+      "scope" : "edit",
+      "section" : "filmGrain",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "web",
+        "cli"
+      ],
+      "title" : "Red Layer",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "colourFilm",
+      "binding" : "filmGrainLayer(1)",
+      "commandLineFlag" : "--film-green-layer",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Film grain model: the green-sensitive layer's grain multiplier (0...2, default: 1)",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Scale the grain of the green-sensitive layer when Grain Model is Film.",
+      "documentation" : "Scales the green-sensitive layer's grain in the Film grain model, leaving the other layers alone.",
+      "drives" : [
+
+      ],
+      "field" : "filmGreenLayer",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 2,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "group" : "grainAdvanced",
+        "hint" : "Film grain model only. Multiplier on the green-sensitive layer's grain, 1 at the sheet's granularity.",
+        "kind" : "double",
+        "label" : "Green Layer",
+        "max" : 2,
+        "min" : 0,
+        "ofxName" : "filmGreenLayer",
+        "order" : 14,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 61,
+        "slotSymbol" : "FILM_GREEN_LAYER",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "finalcut" : "not yet offered; the Grain Model menu is not offered"
+      },
+      "persistedKey" : "filmGreenLayer",
+      "scale" : {
+        "admittedMax" : 2,
+        "admittedMin" : 0,
+        "max" : 2,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "multiplier"
+      },
+      "scope" : "edit",
+      "section" : "filmGrain",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "web",
+        "cli"
+      ],
+      "title" : "Green Layer",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "colourFilm",
+      "binding" : "filmGrainLayer(2)",
+      "commandLineFlag" : "--film-blue-layer",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Film grain model: the blue-sensitive layer's grain multiplier (0...2, default: 1)",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Scale the grain of the blue-sensitive layer when Grain Model is Film.",
+      "documentation" : "Scales the blue-sensitive layer's grain in the Film grain model, leaving the other layers alone.",
+      "drives" : [
+
+      ],
+      "field" : "filmBlueLayer",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 2,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "group" : "grainAdvanced",
+        "hint" : "Film grain model only. Multiplier on the blue-sensitive layer's grain, 1 at the sheet's granularity.",
+        "kind" : "double",
+        "label" : "Blue Layer",
+        "max" : 2,
+        "min" : 0,
+        "ofxName" : "filmBlueLayer",
+        "order" : 15,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 62,
+        "slotSymbol" : "FILM_BLUE_LAYER",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "finalcut" : "not yet offered; the Grain Model menu is not offered"
+      },
+      "persistedKey" : "filmBlueLayer",
+      "scale" : {
+        "admittedMax" : 2,
+        "admittedMin" : 0,
+        "max" : 2,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "multiplier"
+      },
+      "scope" : "edit",
+      "section" : "filmGrain",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "web",
+        "cli"
+      ],
+      "title" : "Blue Layer",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "film",
+      "binding" : "filmScanSoftness",
+      "commandLineFlag" : "--scan-softness",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Film grain model: side of film each pixel averages, in pixels (0.5...4, default: 1)",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Read a wider patch of film per pixel, as a softer scan does, smoothing the grain.",
+      "documentation" : "Sets the scanning aperture the Film grain model averages each pixel over, relative to the pixel pitch.",
+      "drives" : [
+
+      ],
+      "field" : "filmScanSoftness",
+      "group" : "film",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 4,
+        "clampMin" : 0.5,
+        "composed" : false,
+        "delta" : 0.01,
+        "group" : "grainAdvanced",
+        "hint" : "Film grain model only. The side of film each pixel averages, in pixels: 1 is a scan as sharp as its pitch, wider softens the grain, narrower sharpens it.",
+        "kind" : "double",
+        "label" : "Scan Softness",
+        "max" : 4,
+        "min" : 0.5,
+        "ofxName" : "filmScanSoftness",
+        "order" : 16,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 63,
+        "slotSymbol" : "FILM_SCAN_SOFTNESS",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+        "finalcut" : "not yet offered; the Grain Model menu is not offered"
+      },
+      "persistedKey" : "filmScanSoftness",
+      "scale" : {
+        "admittedMax" : 4,
+        "admittedMin" : 0.5,
+        "max" : 4,
+        "min" : 0.5,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "multiplier"
+      },
+      "scope" : "edit",
+      "section" : "filmGrain",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "web",
+        "cli"
+      ],
+      "title" : "Scan Softness",
+      "webTransform" : "profile"
+    },
+    {
       "availability" : "always",
       "choices" : [
         {
@@ -787,7 +1201,7 @@
     },
     {
       "availability" : "film",
-      "binding" : "discGrain",
+      "binding" : "grainModel",
       "choices" : [
         {
           "detail" : "Fast calibrated RMS grain",
@@ -796,9 +1210,9 @@
           "value" : 0
         },
         {
-          "detail" : "Discrete silver grains under magnification",
-          "id" : "discs",
-          "label" : "Particle",
+          "detail" : "Crystals on the film itself, averaged as light",
+          "id" : "film",
+          "label" : "Film",
           "value" : 1
         },
         {
@@ -810,10 +1224,10 @@
       ],
       "commandLineFlag" : "--grain-model",
       "commandLineGeneric" : false,
-      "commandLineHelp" : "standard/clump (default), particle/discs, or organic/crystals. `particle` lays Boolean discs at the film's clump radius, scaled onto its published granularity, instead of a blurred clump field: the texture survives enlargement, saturates where discs overlap, and only differs once a disc covers a pixel. `organic`/`crystals` develops the crystal population read off the film's own curve: Poisson counts of developed crystals per size class at every pixel, each laying its dye cloud from its sublayer's coupler pool, with paper grain in the print stage.",
+      "commandLineHelp" : "standard/clump (default), film, or organic/crystals. `film` lays the stock's crystals at fixed places on the emulsion, rendered once per stock, and averages the light through each pixel's patch of film. `organic`/`crystals` develops the crystal population read off the film's own curve: Poisson counts of developed crystals per size class at every pixel, each laying its dye cloud from its sublayer's coupler pool, with paper grain in the print stage.",
       "commandLinePlaceholder" : "<m>",
       "detail" : "Choose how film grain is formed across the emulsion.",
-      "documentation" : "Selects the film grain simulation method: Standard (fast calibrated RMS noise), Particle (discrete Boolean discs resolving under magnification on silver stocks), or Organic Crystals (physically simulated dye clouds and paper crystals formed from the exposure).",
+      "documentation" : "Selects the film grain simulation method: Standard (fast calibrated RMS noise), Film (the stock's crystals at fixed places on the emulsion, with each pixel the light through its patch of film), or Organic Crystals (physically simulated dye clouds and paper crystals formed from the exposure).",
       "drives" : [
 
       ],
@@ -831,8 +1245,8 @@
           },
           {
             "detail" : "",
-            "id" : "discs",
-            "label" : "Particle",
+            "id" : "film",
+            "label" : "Film",
             "value" : 1
           },
           {
@@ -844,7 +1258,7 @@
         ],
         "composed" : false,
         "group" : "grainAdvanced",
-        "hint" : "Standard uses the calibrated clump field. Particle renders discrete Boolean discs under magnification. Organic Crystals develops the film's own crystal population — sparse coarse dye clouds where little developed, a fine dense haze where most did — with photographic paper crystals.",
+        "hint" : "Standard uses the calibrated clump field. Film lays the stock's crystals at fixed places on the emulsion and averages the light through each pixel's patch of film. Organic Crystals develops the film's own crystal population — sparse coarse dye clouds where little developed, a fine dense haze where most did — with photographic paper crystals.",
         "kind" : "choice",
         "label" : "Grain Model",
         "ofxName" : "grainModel",
@@ -859,7 +1273,7 @@
       },
       "kind" : "menu",
       "omitted" : {
-        "finalcut" : "not yet offered; discs and crystals need Reference rendering"
+        "finalcut" : "not yet offered; film and crystals need Reference rendering"
       },
       "scope" : "edit",
       "section" : "filmGrain",
@@ -5866,7 +6280,7 @@
         ],
         "composed" : false,
         "group" : "render",
-        "hint" : "Default preserves the launch-time renderer setting. Realtime and Reference override it for this node, for both preview and delivery. Disc grain uses Reference.",
+        "hint" : "Default preserves the launch-time renderer setting. Realtime and Reference override it for this node, for both preview and delivery.",
         "kind" : "choice",
         "label" : "Render Mode",
         "ofxName" : "renderMode",

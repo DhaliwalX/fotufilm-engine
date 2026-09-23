@@ -125,7 +125,9 @@ struct InspectorRowFactory {
                 get: { [model] in model.edit.grainModel },
                 set: { [model] in
                     model.edit.grainModel = $0
+                    #if os(macOS)
                     AppSettings.shared.grainModel = $0
+                    #endif
                 })
         case .rotation:
             return PopUpRow<Int>(

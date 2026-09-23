@@ -37,6 +37,9 @@ using Halide::Target;
 using Halide::UInt;
 using Halide::Var;
 
+/// The JIT roads keep the film grain tiles as compiler buffers.
+using FilmTileStore = BasicFilmTileStore<Buffer<float>>;
+
 using namespace fotufilm;
 using namespace fotufilm::gpu;
 
@@ -54,7 +57,6 @@ struct GpuPolicy {
     Expr measure_flare;
     bool fields_in = false;
     bool monochrome = false;
-    bool discs = false;
     bool packed_luts = false;
     bool half_tetra = false;
     int film_lut_base = 0;
@@ -99,7 +101,7 @@ public:
             return policy_.realtime
                 ? values : remember(values, schedule_.store_frame(values, half, channels));
         case Store::Density:
-            return policy_.discs ? remember(values, schedule_.store_frame(values, false, 3)) : values;
+            return values;
         // Reduce crystal bins and chemical inhibition before their final combination.
         // Keeping every field inline exceeds WebGPU's per-stage storage bindings.
         // Native GPU schedules retain the existing fused expression.

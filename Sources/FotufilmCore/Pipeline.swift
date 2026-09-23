@@ -57,6 +57,9 @@ public struct FotufilmEngine {
         }
         /// Which model develops the grain.
         public var grainModel: GrainModel = .clumpField
+        /// How the film grain model (`GrainModel.film`) lays its grain: grain size, colour grain,
+        /// each layer's share and the scan's softness. The other models ignore it.
+        public var filmGrain = FilmGrain.Look()
         /// Multiplier on the fraction of light the base returns (0 disables halation).
         public var halationScale: Float = 1
         /// Red returned/direct exposure ratio, 0...1, before amount and spectrum edits.

@@ -177,7 +177,7 @@ public enum EngineBinding: Equatable, Sendable {
     case vibrance
     case grainScale
     case grainMottleShare
-    case discGrain
+    case grainModel
     case halationStops
     case halationSourceColour
     case halationReturnRatio
@@ -214,6 +214,11 @@ public enum EngineBinding: Equatable, Sendable {
     case halationScale
     case cameraPreflash
     case printerPreflash
+    case filmGrainSize
+    case filmColourGrain
+    /// One record's share of the film grain: 0 red, 1 green, 2 blue sensitive.
+    case filmGrainLayer(Int)
+    case filmScanSoftness
 
     public var optionNames: [String] {
         switch self {
@@ -226,7 +231,7 @@ public enum EngineBinding: Equatable, Sendable {
         case .vibrance: return ["vibrance"]
         case .grainScale: return ["grainScale"]
         case .grainMottleShare: return ["grainMottleShare"]
-        case .discGrain: return ["grainModel"]
+        case .grainModel: return ["grainModel"]
         case .halationStops: return ["halationScale"]
         case .halationReturnRatio: return ["halationReturnRatio"]
         case .halationSourceColour: return ["halationSourceColour"]
@@ -262,6 +267,7 @@ public enum EngineBinding: Equatable, Sendable {
         case .halationScale: return ["halationScale"]
         case .cameraPreflash: return ["cameraPreflash"]
         case .printerPreflash: return ["printerPreflash"]
+        case .filmGrainSize, .filmColourGrain, .filmGrainLayer, .filmScanSoftness: return ["filmGrain"]
         }
     }
 
@@ -291,12 +297,9 @@ public enum EngineBinding: Equatable, Sendable {
             if let number = value.number { options.grainScale = Float(number) }
         case .grainMottleShare:
             options.grainMottleShare = value.number.map(Float.init)
-        case .discGrain:
-            // A host menu carries all three models; the app's toggle only the first two.
+        case .grainModel:
             if case .choice(let index) = value {
-                options.grainModel = index >= 2 ? .crystals : index == 1 ? .discs : .clumpField
-            } else if let flag = value.flag {
-                options.grainModel = flag ? .discs : .clumpField
+                options.grainModel = [.clumpField, .film, .crystals][min(max(index, 0), 2)]
             }
         case .halationStops:
             if let number = value.number {
@@ -394,6 +397,14 @@ public enum EngineBinding: Equatable, Sendable {
             if let number = value.number { options.cameraPreflash = Float(number) }
         case .printerPreflash:
             if let number = value.number { options.printerPreflash = Float(number) }
+        case .filmGrainSize:
+            if let number = value.number { options.filmGrain.size = Float(number) }
+        case .filmColourGrain:
+            if let number = value.number { options.filmGrain.colour = Float(number) }
+        case .filmGrainLayer(let record):
+            if let number = value.number { options.filmGrain.layers[record] = Float(number) }
+        case .filmScanSoftness:
+            if let number = value.number { options.filmGrain.softness = Float(number) }
         }
     }
 }

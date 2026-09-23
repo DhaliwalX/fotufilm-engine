@@ -106,10 +106,9 @@ PrintPipeline *print_pipeline_for(int32_t feature_mask) {
     // be compiled in; without one the shape is read per pixel, exactly as the fused GPU pipeline
     // reads it when the caller asked for no shaped variant.
     const int shape = output_transfer_shape_for(feature_mask);
-    // The crystal grain model's print stage rides the disc family here as it does in develop:
-    // the frame that asked for crystals carries the bit, and the paper it lands on grows its
-    // own. A disc frame carries it too and reads a zero count, which adds nothing.
-    const bool paper_grain = (feature_mask & FOTUFILM_FRAME_DISC_GRAIN) != 0;
+    // The crystal grain model's print stage rides the crystal family here as it does in develop:
+    // the frame that asked for crystals carries the bit, and the paper it lands on grows its own.
+    const bool paper_grain = (feature_mask & FOTUFILM_FRAME_CRYSTAL_GRAIN) != 0;
     static std::unique_ptr<PrintPipeline> pipelines[64];
     static std::mutex pipelines_mutex;
     std::lock_guard<std::mutex> lock(pipelines_mutex);

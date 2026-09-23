@@ -250,7 +250,7 @@ final class CrystalGrainTests: XCTestCase {
         let stock = TestStocks.negative
         var options = FotufilmEngine.Options()
         let plain = FilmEngineInvocation(stock: stock, options: options, width: 512, height: 512)
-        XCTAssertEqual(plain.featureMask & FilmEngineFeature.discGrain, 0)
+        XCTAssertEqual(plain.featureMask & FilmEngineFeature.crystalGrain, 0)
         XCTAssertEqual(plain.configuration.count, FilmEngineInvocation.configurationCount)
         let binOffset = FilmEngineInvocation.crystalGrainBinOffset
         let lambdaOffset = FilmEngineInvocation.crystalGrainLambdaOffset
@@ -276,7 +276,7 @@ final class CrystalGrainTests: XCTestCase {
 
         options.grainModel = .crystals
         let crystals = FilmEngineInvocation(stock: stock, options: options, width: 512, height: 512)
-        XCTAssertNotEqual(crystals.featureMask & FilmEngineFeature.discGrain, 0)
+        XCTAssertNotEqual(crystals.featureMask & FilmEngineFeature.crystalGrain, 0)
         XCTAssertEqual(crystals.featureMask & FilmEngineFeature.grainMottle, 0)
         XCTAssertEqual(crystals.configuration[Int(FOTUFILM_CONFIG_GRAIN_MODE)], 2)
         let pxPerMM = Float(512) / options.format.frameHeightMM
@@ -316,7 +316,7 @@ final class CrystalGrainTests: XCTestCase {
         // Grain off leaves nothing to develop, whatever the model.
         options.grainScale = 0
         let off = FilmEngineInvocation(stock: stock, options: options, width: 512, height: 512)
-        XCTAssertEqual(off.featureMask & FilmEngineFeature.discGrain, 0)
+        XCTAssertEqual(off.featureMask & FilmEngineFeature.crystalGrain, 0)
         XCTAssertEqual(off.configuration[Int(FOTUFILM_CONFIG_GRAIN_MODE)], 0)
     }
 

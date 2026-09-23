@@ -168,7 +168,7 @@ public enum EditorControlCatalogue {
 
     public static let retiredFxplugIDs: [Int] = [33]
     public static let fxplugTextureStageIDs: ClosedRange<Int> = 40...71
-    public static let bridgeSlotCount = 58
+    public static let bridgeSlotCount = 64
 
     static let hostOnly: [EditorSurface: String] = [
         .app: "a plugin host's own setting, with no meaning on a photograph",
@@ -396,6 +396,114 @@ public enum EditorControlCatalogue {
                     + "granularity is preserved. Custom mottle uses the engine's video delivery size.",
                 kind: .double(min: 0, max: 90, value: 0), paramScale: 0.01, clamp: 0...0.9, order: 30)),
         EditorControl(
+            .filmGrainSize, title: "Grain Size",
+            detail: "Make the film's grain coarser or finer at the same measured granularity.",
+            section: .filmGrain,
+            kind: .slider(EditorControlScale(0.5...4, neutral: 1, unit: .multiplier)),
+            availability: .film,
+            binding: .filmGrainSize,
+            surfaces: [.app, .desktop, .android, .resolve, .cli, .web],
+            omitted: [.finalcut: filmGrainOmission],
+            host: HostParameter(
+                slot: 58, slotSymbol: "FILM_GRAIN_SIZE", ofxName: "filmGrainSize", group: .grainAdvanced,
+                label: "Grain Size",
+                hint: "Film grain model only. Magnifies the film's crystals and clouds, with their fluctuation scaled down so the 48 µm aperture still reads the sheet's granularity: coarser, softer grain above 1, finer below.",
+                kind: .double(min: 0.5, max: 4, value: 1), clamp: 0.5...4, order: 11),
+            web: .profile,
+            commandLine: CommandLineFlag("--film-grain-size", placeholder: "<f>",
+                                         help: "Film grain model: magnify the film's texture at the same measured granularity (0.5...4, default: 1)"),
+            documentation: "Magnifies the Film grain model's crystals and dye clouds, scaling their fluctuation so the sheet's RMS granularity at the 48 µm aperture holds."),
+        EditorControl(
+            .filmColourGrain, title: "Colour Grain",
+            detail: "Blend each layer's grain from independent colour speckle toward one shared grain.",
+            section: .filmGrain,
+            kind: .slider(EditorControlScale(0...1, neutral: 1, unit: .percent)),
+            availability: .colourFilm,
+            binding: .filmColourGrain,
+            surfaces: [.app, .desktop, .android, .resolve, .cli, .web],
+            omitted: [.finalcut: filmGrainOmission],
+            host: HostParameter(
+                slot: 59, slotSymbol: "FILM_COLOUR_GRAIN", ofxName: "filmColourGrain", group: .grainAdvanced,
+                label: "Colour Grain",
+                hint: "Film grain model only. 100% keeps the three layers' grain independent, as the emulsion lays it; 0% gives them one shared grain. The grain's total strength is kept.",
+                kind: .double(min: 0, max: 1, value: 1), clamp: 0...1, order: 12),
+            web: .profile,
+            commandLine: CommandLineFlag("--colour-grain", placeholder: "<f>",
+                                         help: "Film grain model: 1 keeps the layers' grain independent, 0 shares one grain (default: 1)"),
+            documentation: "Mixes each layer's Film grain toward the layers' mean at constant variance, from independent colour grain to a single shared grain."),
+        EditorControl(
+            .filmRedLayer, title: "Red Layer",
+            detail: "Scale the grain of the red-sensitive layer when Grain Model is Film.",
+            section: .filmGrain,
+            kind: .slider(EditorControlScale(0...2, neutral: 1, unit: .multiplier)),
+            availability: .colourFilm,
+            binding: .filmGrainLayer(0),
+            surfaces: [.app, .desktop, .android, .resolve, .cli, .web],
+            omitted: [.finalcut: filmGrainOmission],
+            host: HostParameter(
+                slot: 60, slotSymbol: "FILM_RED_LAYER", ofxName: "filmRedLayer", group: .grainAdvanced,
+                label: "Red Layer",
+                hint: "Film grain model only. Multiplier on the red-sensitive layer's grain, 1 at the sheet's granularity.",
+                kind: .double(min: 0, max: 2, value: 1), clamp: 0...2, order: 13),
+            web: .profile,
+            commandLine: CommandLineFlag("--film-red-layer", placeholder: "<f>",
+                                         help: "Film grain model: the red-sensitive layer's grain multiplier (0...2, default: 1)"),
+            documentation: "Scales the red-sensitive layer's grain in the Film grain model, leaving the other layers alone."),
+        EditorControl(
+            .filmGreenLayer, title: "Green Layer",
+            detail: "Scale the grain of the green-sensitive layer when Grain Model is Film.",
+            section: .filmGrain,
+            kind: .slider(EditorControlScale(0...2, neutral: 1, unit: .multiplier)),
+            availability: .colourFilm,
+            binding: .filmGrainLayer(1),
+            surfaces: [.app, .desktop, .android, .resolve, .cli, .web],
+            omitted: [.finalcut: filmGrainOmission],
+            host: HostParameter(
+                slot: 61, slotSymbol: "FILM_GREEN_LAYER", ofxName: "filmGreenLayer", group: .grainAdvanced,
+                label: "Green Layer",
+                hint: "Film grain model only. Multiplier on the green-sensitive layer's grain, 1 at the sheet's granularity.",
+                kind: .double(min: 0, max: 2, value: 1), clamp: 0...2, order: 14),
+            web: .profile,
+            commandLine: CommandLineFlag("--film-green-layer", placeholder: "<f>",
+                                         help: "Film grain model: the green-sensitive layer's grain multiplier (0...2, default: 1)"),
+            documentation: "Scales the green-sensitive layer's grain in the Film grain model, leaving the other layers alone."),
+        EditorControl(
+            .filmBlueLayer, title: "Blue Layer",
+            detail: "Scale the grain of the blue-sensitive layer when Grain Model is Film.",
+            section: .filmGrain,
+            kind: .slider(EditorControlScale(0...2, neutral: 1, unit: .multiplier)),
+            availability: .colourFilm,
+            binding: .filmGrainLayer(2),
+            surfaces: [.app, .desktop, .android, .resolve, .cli, .web],
+            omitted: [.finalcut: filmGrainOmission],
+            host: HostParameter(
+                slot: 62, slotSymbol: "FILM_BLUE_LAYER", ofxName: "filmBlueLayer", group: .grainAdvanced,
+                label: "Blue Layer",
+                hint: "Film grain model only. Multiplier on the blue-sensitive layer's grain, 1 at the sheet's granularity.",
+                kind: .double(min: 0, max: 2, value: 1), clamp: 0...2, order: 15),
+            web: .profile,
+            commandLine: CommandLineFlag("--film-blue-layer", placeholder: "<f>",
+                                         help: "Film grain model: the blue-sensitive layer's grain multiplier (0...2, default: 1)"),
+            documentation: "Scales the blue-sensitive layer's grain in the Film grain model, leaving the other layers alone."),
+        EditorControl(
+            .filmScanSoftness, title: "Scan Softness",
+            detail: "Read a wider patch of film per pixel, as a softer scan does, smoothing the grain.",
+            section: .filmGrain,
+            kind: .slider(EditorControlScale(0.5...4, neutral: 1, unit: .multiplier)),
+            availability: .film,
+            binding: .filmScanSoftness,
+            surfaces: [.app, .desktop, .android, .resolve, .cli, .web],
+            omitted: [.finalcut: filmGrainOmission],
+            host: HostParameter(
+                slot: 63, slotSymbol: "FILM_SCAN_SOFTNESS", ofxName: "filmScanSoftness", group: .grainAdvanced,
+                label: "Scan Softness",
+                hint: "Film grain model only. The side of film each pixel averages, in pixels: 1 is a scan as sharp as its pitch, wider softens the grain, narrower sharpens it.",
+                kind: .double(min: 0.5, max: 4, value: 1), clamp: 0.5...4, order: 16),
+            web: .profile,
+            commandLine: CommandLineFlag("--scan-softness", placeholder: "<f>",
+                                         help: "Film grain model: side of film each pixel averages, in pixels (0.5...4, default: 1)"),
+            documentation: "Sets the scanning aperture the Film grain model averages each pixel over, relative to the pixel pitch."),
+        EditorControl(
             .grainAnimation, title: "Grain Animation",
             detail: "Choose whether the grain pattern changes between video frames.",
             section: .filmGrain,
@@ -418,36 +526,35 @@ public enum EditorControlCatalogue {
             section: .filmGrain,
             kind: .menu(.fixed([
                 EditorMenuChoice(0, "Standard", detail: "Fast calibrated RMS grain", id: "clump"),
-                EditorMenuChoice(1, "Particle", detail: "Discrete silver grains under magnification", id: "discs"),
+                EditorMenuChoice(1, "Film", detail: "Crystals on the film itself, averaged as light", id: "film"),
                 EditorMenuChoice(2, "Organic Crystals", detail: "Physical dye clouds and paper crystals", id: "crystals"),
             ])),
             availability: .film,
             persistence: .bespoke,
-            binding: .discGrain,
+            binding: .grainModel,
             surfaces: [.app, .desktop, .android, .resolve, .cli, .web],
-            omitted: [.finalcut: "not yet offered; discs and crystals need Reference rendering"],
+            omitted: [.finalcut: "not yet offered; film and crystals need Reference rendering"],
             host: HostParameter(
                 slot: 43, slotSymbol: "GRAIN_MODEL", ofxName: "grainModel", group: .grainAdvanced,
                 label: "Grain Model",
-                hint: "Standard uses the calibrated clump field. Particle renders discrete Boolean discs under magnification. Organic Crystals develops the film's own crystal population — sparse coarse dye clouds where little developed, a fine dense haze where most did — with photographic paper crystals.",
+                hint: "Standard uses the calibrated clump field. Film lays the stock's crystals at fixed places on the emulsion and averages the light through each pixel's patch of film. Organic Crystals develops the film's own crystal population — sparse coarse dye clouds where little developed, a fine dense haze where most did — with photographic paper crystals.",
                 kind: .choice(.fixed([EditorMenuChoice(0, "Standard", id: "clump"),
-                                      EditorMenuChoice(1, "Particle", id: "discs"),
+                                      EditorMenuChoice(1, "Film", id: "film"),
                                       EditorMenuChoice(2, "Organic Crystals", id: "crystals")]),
                               value: 0),
                 order: 10),
             web: .profile,
             commandLine: CommandLineFlag("--grain-model", placeholder: "<m>",
-                                         help: "standard/clump (default), particle/discs, or organic/crystals. `particle` lays Boolean "
-                                             + "discs at the film's clump radius, scaled onto its published "
-                                             + "granularity, instead of a blurred clump field: the texture "
-                                             + "survives enlargement, saturates where discs overlap, and "
-                                             + "only differs once a disc covers a pixel. `organic`/`crystals` "
+                                         help: "standard/clump (default), film, or organic/crystals. `film` lays "
+                                             + "the stock's crystals at fixed places on the emulsion, "
+                                             + "rendered once per stock, and averages the light through "
+                                             + "each pixel's patch of film. `organic`/`crystals` "
                                              + "develops the crystal population read off the film's own "
                                              + "curve: Poisson counts of developed crystals per size class "
                                              + "at every pixel, each laying its dye cloud from its "
                                              + "sublayer's coupler pool, with paper grain in the print stage.",
                                          generic: false),
-            documentation: "Selects the film grain simulation method: Standard (fast calibrated RMS noise), Particle (discrete Boolean discs resolving under magnification on silver stocks), or Organic Crystals (physically simulated dye clouds and paper crystals formed from the exposure)."),
+            documentation: "Selects the film grain simulation method: Standard (fast calibrated RMS noise), Film (the stock's crystals at fixed places on the emulsion, with each pixel the light through its patch of film), or Organic Crystals (physically simulated dye clouds and paper crystals formed from the exposure)."),
         EditorControl(
             .seed, title: "Grain Seed",
             detail: "Choose a grain pattern. The same seed and frame produce the same pattern.",
@@ -1640,6 +1747,8 @@ public enum EditorControlCatalogue {
             documentation: "Pre-exposes the print paper with uniform illumination to soften highlights without affecting maximum black."),
     ]
 
+    private static let filmGrainOmission = "not yet offered; the Grain Model menu is not offered"
+
     private static let screenCurveOmission =
         "The Android photo editor does not yet carry the screen conversion's grade and exposure."
     private static let printerOmissions: [EditorSurface: String] = [
@@ -1843,7 +1952,7 @@ public enum EditorControlCatalogue {
             host: HostParameter(
                 slot: 45, slotSymbol: "RENDER_MODE", ofxName: "renderMode", group: .render, label: "Render Mode",
                 hint: "Default preserves the launch-time renderer setting. Realtime and Reference "
-                    + "override it for this node, for both preview and delivery. Disc grain uses Reference.",
+                    + "override it for this node, for both preview and delivery.",
                 kind: .choice(.fixed([EditorMenuChoice(0, "Default", id: "default"),
                                       EditorMenuChoice(1, "Realtime", id: "realtime"),
                                       EditorMenuChoice(2, "Reference", id: "reference")]), value: 0),

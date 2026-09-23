@@ -1124,15 +1124,20 @@ void updateContextControls(Instance *instance, OfxTime time) {
         (!texture || carries("adjacency"));
     const bool geometry = couplers && (capabilities & FOTUFILM_CONTROL_COUPLER_GEOMETRY) != 0 &&
         controlValue(instance, FOTUFILM_BRIDGE_COUPLER_SCALE, time) > 0;
-    const bool silver = (capabilities & FOTUFILM_CONTROL_DISC_GRAIN) != 0;
-    const bool discs = silver && choiceValue(instance->parameters[FOTUFILM_BRIDGE_GRAIN_MODEL], time) == 1;
+    const bool colourFilm = (capabilities & FOTUFILM_CONTROL_COLOUR_FILM) != 0;
+    const int grainModel = choiceValue(instance->parameters[FOTUFILM_BRIDGE_GRAIN_MODEL], time);
+    const bool clump = grainModel == 0, film = grainModel == 1;
     enable(FOTUFILM_BRIDGE_GRAIN_SCALE, grain);
     enableParameter(instance->seed, grainOn);
     enableParameter(instance->newSeed, grainOn);
     enable(FOTUFILM_BRIDGE_GRAIN_FROZEN, grainOn);
-    enable(FOTUFILM_BRIDGE_GRAIN_MODEL, grainOn && silver);
-    enable(FOTUFILM_BRIDGE_MOTTLE_OVERRIDE, full && grainOn && !discs);
-    enable(FOTUFILM_BRIDGE_MOTTLE_SHARE, full && grainOn && !discs &&
+    enable(FOTUFILM_BRIDGE_GRAIN_MODEL, grainOn);
+    enable(FOTUFILM_BRIDGE_FILM_GRAIN_SIZE, grainOn && film);
+    enable(FOTUFILM_BRIDGE_FILM_SCAN_SOFTNESS, grainOn && film);
+    for (int slot = FOTUFILM_BRIDGE_FILM_COLOUR_GRAIN; slot <= FOTUFILM_BRIDGE_FILM_BLUE_LAYER; ++slot)
+        enable(slot, grainOn && film && colourFilm);
+    enable(FOTUFILM_BRIDGE_MOTTLE_OVERRIDE, full && grainOn && clump);
+    enable(FOTUFILM_BRIDGE_MOTTLE_SHARE, full && grainOn && clump &&
            choiceValue(instance->parameters[FOTUFILM_BRIDGE_MOTTLE_OVERRIDE], time) == 1);
     enable(FOTUFILM_BRIDGE_HALATION_SCALE, halo);
     enable(FOTUFILM_BRIDGE_ESTIMATED_HALATION, haloOn);
@@ -1230,9 +1235,9 @@ void updateContextControls(Instance *instance, OfxTime time) {
     if (instance->renderStatus) gParameter->paramSetValue(instance->renderStatus,
         fotufilm_bridge_effective_realtime(parameters) != 0 ? "Realtime" : "Reference");
     if (instance->grainStatus) gParameter->paramSetValue(instance->grainStatus,
-        !silver ? "Dye clouds · clump field grain"
-        : discs ? "Discs · Reference required; subpixel grains use clump field"
-              : (full ? "Clump field · custom mottle available" : "Clump field · mottle requires Full"));
+        film ? "Film · the stock's crystals on the emulsion"
+        : !clump ? "Organic Crystals · dye clouds and paper crystals"
+                 : (full ? "Clump field · custom mottle available" : "Clump field · mottle requires Full"));
 }
 
 /// Greys out the controls the chosen span does not read, and says in the status line what the
@@ -1773,15 +1778,6 @@ OfxStatus instanceChanged(OfxImageEffectHandle effect, OfxPropertySetHandle inAr
         }
         updateStageControls(instance, time);
         return kOfxStatOK;
-    }
-    if (std::strcmp(name, "grainModel") == 0 &&
-        choiceValue(instance->parameters[FOTUFILM_BRIDGE_GRAIN_MODEL]) == 1) {
-        gParameter->paramSetValue(instance->parameters[FOTUFILM_BRIDGE_RENDER_MODE], 2);
-    }
-    if (std::strcmp(name, "renderMode") == 0 &&
-        choiceValue(instance->parameters[FOTUFILM_BRIDGE_RENDER_MODE]) != 2 &&
-        choiceValue(instance->parameters[FOTUFILM_BRIDGE_GRAIN_MODEL]) == 1) {
-        gParameter->paramSetValue(instance->parameters[FOTUFILM_BRIDGE_GRAIN_MODEL], 0);
     }
     if (std::strcmp(name, kColorSpaceParam) == 0 ||
         std::strcmp(name, kColorManagementParam) == 0 ||
