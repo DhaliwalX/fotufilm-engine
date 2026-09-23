@@ -1,3 +1,4 @@
+import { useBackend } from "../backend/BackendContext.jsx";
 import useEditorState from "./useEditorState.js";
 import usePreviewState from "./usePreviewState.js";
 import useEditingActions from "./useEditingActions.js";
@@ -10,7 +11,7 @@ import useExportActions from "./useExportActions.js";
 import useEditorShortcuts from "./useEditorShortcuts.js";
 import useOutputState from "./useOutputState.js";
 export default function useEditorModel() {
-  let editor = {};
+  let editor = { backend: useBackend() };
   editor = {
     ...editor,
     ...useEditorState(editor),

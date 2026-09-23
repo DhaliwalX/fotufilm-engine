@@ -1,17 +1,11 @@
 import { useEffect, useSyncExternalStore } from "react";
-import {
-  lensCatalogueSnapshot,
-  loadLensCatalogue,
-  subscribeLensCatalogue,
-} from "./lens-catalogue.js";
+import { useBackend } from "./backend/BackendContext.jsx";
 
 export function useLensCatalogue() {
-  const catalogue = useSyncExternalStore(
-    subscribeLensCatalogue,
-    lensCatalogueSnapshot,
-  );
+  const { lenses } = useBackend();
+  const catalogue = useSyncExternalStore(lenses.subscribe, lenses.snapshot);
   useEffect(() => {
-    loadLensCatalogue();
+    lenses.load();
   }, []);
   return catalogue;
 }

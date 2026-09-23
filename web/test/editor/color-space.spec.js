@@ -22,7 +22,7 @@ test('P3 survives input, crop, developed delivery, frames and background PNG/JPE
     const { canvasBlob, orientImage, cropImage } = await import(
       '/src/geometry.js'
     )
-    const { loadPrintFrame } = await import('/src/print-frame.js')
+    const { loadPrintFrame } = await import('/src/backend/browser-print-frame.js')
     const { renderPrintFrame16 } = await import('/src/print-frame-16.js')
     const { exportTiff } = await import('/src/tiff-export.js')
     const width = 120,

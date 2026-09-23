@@ -61,10 +61,10 @@ test('selective edits preview, undo, save, and export without exporting the mask
   const rect = await page.locator('.photo-plane').boundingBox()
   await page.mouse.click(rect.x + rect.width * 0.2, rect.y + rect.height * 0.5)
   await page
-    .getByRole('spinbutton', { name: 'Exposure value', exact: true })
+    .getByRole('textbox', { name: 'Exposure value', exact: true })
     .fill('1')
   await page
-    .getByRole('spinbutton', { name: 'Exposure value', exact: true })
+    .getByRole('textbox', { name: 'Exposure value', exact: true })
     .press('Tab')
   await expect
     .poll(async () => (await pixels())[0][0])
@@ -73,17 +73,19 @@ test('selective edits preview, undo, save, and export without exporting the mask
   expect(selected[1]).toEqual(before[1])
   await page.getByRole('button', { name: 'Undo (⌘Z)', exact: true }).click()
   await expect(
-    page.getByRole('spinbutton', { name: 'Exposure value', exact: true }),
+    page.getByRole('textbox', { name: 'Exposure value', exact: true }),
   ).toHaveValue('0')
   await page.getByRole('button', { name: 'Redo (⇧⌘Z)', exact: true }).click()
   await expect(
-    page.getByRole('spinbutton', { name: 'Exposure value', exact: true }),
+    page.getByRole('textbox', { name: 'Exposure value', exact: true }),
   ).toHaveValue('1')
-  await page.getByRole('switch', { name: 'Show Mask', exact: true }).click()
+  const mask = page.getByRole('switch', { name: 'Show Mask', exact: true })
+  await mask.focus()
+  await mask.press('Space')
   await expect.poll(async () => (await pixels())[0][0]).toBe(255)
   await page.getByRole('button', { name: 'More options', exact: true }).click()
   const savedPromise = page.waitForEvent('download')
-  await page.getByRole('button', { name: 'Save edits…', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Save edits…', exact: true }).click()
   const saved = await savedPromise
   const edit = JSON.parse(await readFile(await saved.path(), 'utf8')).edit
   expect(edit.selective.params.ev).toBe(1)

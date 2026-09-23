@@ -8,6 +8,7 @@ import {
 } from "@react-spectrum/s2/Menu";
 import { Icon } from "../icons.jsx";
 import { editorControl } from "../editor-catalogue.js";
+import { LEGAL_MENU } from "../generated/controls.js";
 import { useEditor } from "./EditorContext.jsx";
 
 export default function OptionsMenu() {
@@ -101,6 +102,20 @@ export default function OptionsMenu() {
             <Icon slot="icon" name="help" />
             <Text>Browser support</Text>
           </MenuItem>
+        </MenuSection>
+        <MenuSection aria-label={LEGAL_MENU.title}>
+          {LEGAL_MENU.links.map(({ id, title, icon, href }) => (
+            <MenuItem
+              key={id}
+              id={id}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Icon slot="icon" name={icon} />
+              <Text>{title}</Text>
+            </MenuItem>
+          ))}
         </MenuSection>
       </Menu>
     </MenuTrigger>

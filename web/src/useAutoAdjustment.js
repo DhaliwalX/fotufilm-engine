@@ -1,3 +1,4 @@
+import { useBackend } from "./backend/BackendContext.jsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AutoAdjustmentController } from "./auto-adjustment.js";
 import { historyReducer } from "./editor-state.js";
@@ -11,6 +12,7 @@ export function useAutoAdjustment({
   onError,
   onApplied,
 }) {
+  const backend = useBackend();
   const [state, setState] = useState({
     active: false,
     busy: false,
@@ -29,6 +31,7 @@ export function useAutoAdjustment({
   };
   if (!owner.current)
     owner.current = new AutoAdjustmentController({
+      solve: (request) => backend.autoAdjust(request),
       snapshot: () => latest.current,
       onState: setState,
       onError: (message) => latest.current.onError(message),

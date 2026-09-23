@@ -18,20 +18,22 @@ export default function ViewerStatus() {
   return (
     <div className="viewer-status">
       <span className="document-name">{active?.name || "No photo open"}</span>
-      <span role="status">
-        {auto.status ||
-          status ||
-          (active && shownResult?.key !== previewKey
-            ? error
-              ? "Preview unavailable"
-              : interacting
-                ? "Waiting for adjustments to settle before full-detail preview"
-                : "Waiting for the next display frame"
-            : null) ||
-          (shownResult
-            ? `${shownResult.width} × ${shownResult.height} · ${shownResult.elapsed.toFixed(0)} ms`
-            : "")}
-      </span>
+      {!active?.image.video && (
+        <span role="status">
+          {auto.status ||
+            status ||
+            (active && shownResult?.key !== previewKey
+              ? error
+                ? "Preview unavailable"
+                : interacting
+                  ? "Waiting for adjustments to settle before full-detail preview"
+                  : "Waiting for the next display frame"
+              : null) ||
+            (shownResult
+              ? `${shownResult.width} × ${shownResult.height} · ${shownResult.elapsed.toFixed(0)} ms`
+              : "")}
+        </span>
+      )}
       {active && (
         <ActionButton
           size="S"
@@ -49,9 +51,11 @@ export default function ViewerStatus() {
       <span className="backend-label">
         {(detailBackend || shownResult?.backend) === "webgpu"
           ? "WebGPU"
-          : shownResult
-            ? "CPU"
-            : ""}
+          : (detailBackend || shownResult?.backend) === "Halide/Metal"
+            ? "Metal"
+            : shownResult
+              ? "CPU"
+              : ""}
       </span>
     </div>
   );

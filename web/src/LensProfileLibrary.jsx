@@ -5,9 +5,10 @@ import {
 } from "@react-spectrum/s2/Disclosure";
 import { ActionButton } from "@react-spectrum/s2/ActionButton";
 import { useRef, useState } from "react";
-import { importLensCatalogue, removeLensCatalogue } from "./lens-catalogue.js";
+import { useBackend } from "./backend/BackendContext.jsx";
 import { useLensCatalogue } from "./useLensCatalogue.js";
 export default function LensProfileLibrary({ disabled }) {
+  const { lenses } = useBackend();
   const catalogue = useLensCatalogue(),
     input = useRef(null);
   const [busy, setBusy] = useState(false),
@@ -18,7 +19,7 @@ export default function LensProfileLibrary({ disabled }) {
     setBusy(true);
     setError(null);
     try {
-      const count = await importLensCatalogue(file, setProgress);
+      const count = await lenses.import(file, setProgress);
       setProgress(
         `${count} lens ${count === 1 ? "profile" : "profiles"} imported.`,
       );
@@ -67,7 +68,7 @@ export default function LensProfileLibrary({ disabled }) {
                 setBusy(true);
                 setError(null);
                 try {
-                  await removeLensCatalogue();
+                  await lenses.remove();
                   setProgress("Imported lens profiles removed.");
                 } catch (error) {
                   setError(error.message);

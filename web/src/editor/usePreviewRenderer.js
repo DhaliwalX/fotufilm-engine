@@ -34,6 +34,7 @@ export default function usePreviewRenderer({
     const request = {
       image: active.image,
       videoTime,
+      interactive: previewInteracting,
       edit: previewEdit,
       showMask,
       stock: stockId,

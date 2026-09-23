@@ -33,7 +33,7 @@ test("automatic negative preview, cancellation and full-resolution import", asyn
       .getByRole("button", { name: "More options", exact: true })
       .click();
     await page
-      .getByRole("button", { name: "Import Scanned Negative…", exact: true })
+      .getByRole("menuitem", { name: "Import Scanned Negative…", exact: true })
       .click();
     const dialog = page.getByRole("dialog", {
       name: "Import Scanned Negative",
@@ -53,9 +53,10 @@ test("automatic negative preview, cancellation and full-resolution import", asyn
   await expect(dialog).toBeHidden();
   await expect(status).toHaveText(previous);
   dialog = await open();
-  await dialog
-    .getByRole("checkbox", { name: "Black & white", exact: true })
-    .check();
+  const monochrome = dialog.getByRole("switch", { name: "Black & white", exact: true });
+  await monochrome.focus();
+  await monochrome.press("Space");
+  await expect(monochrome).toBeChecked();
   await expect(
     dialog.getByRole("button", { name: "Import Positive", exact: true }),
   ).toBeEnabled();
@@ -104,7 +105,7 @@ test("RAW negative import recovers after malformed input and applies orientation
   const status = page.locator(".viewer-status > [role=status]");
   await page.getByRole("button", { name: "More options", exact: true }).click();
   await page
-    .getByRole("button", { name: "Import Scanned Negative…", exact: true })
+    .getByRole("menuitem", { name: "Import Scanned Negative…", exact: true })
     .click();
   const dialog = page.getByRole("dialog", { name: "Import Scanned Negative" });
   const picker = dialog.locator("input[type=file]");

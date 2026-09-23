@@ -9,18 +9,23 @@
       overflow: clip;
       --phone-header: calc(100px + env(safe-area-inset-top));
       --phone-dock: calc(60px + env(safe-area-inset-bottom));
+      --phone-film-strip: 0px;
     }
     .editor,
     .editor.film-collapsed,
     .editor.inspector-collapsed,
     .editor.film-collapsed.inspector-collapsed {
       grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: var(--phone-header) minmax(0, 1fr) var(--phone-dock);
+      grid-template-rows: var(--phone-header) minmax(0, 1fr) var(
+          --phone-film-strip
+        ) var(--phone-dock);
       transition: grid-template-rows 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
     }
-    .editor:not(.film-collapsed),
     .editor:not(.inspector-collapsed) {
       --phone-dock: clamp(220px, 44dvh, 400px);
+    }
+    .editor:not(.film-collapsed) {
+      --phone-film-strip: 196px;
     }
     .toolbar {
       display: grid;
@@ -65,6 +70,9 @@
       overflow: hidden;
       box-shadow: 0 -4px 18px #00000009;
     }
+    .inspector {
+      grid-row: 4;
+    }
     .inspector-collapsed .inspector,
     .film-collapsed .film-sidebar {
       visibility: hidden;
@@ -75,18 +83,13 @@
     }
     .inspector-rail {
       grid-column: 1;
-      grid-row: 3;
+      grid-row: 4;
       flex-direction: row;
       justify-content: space-around;
       gap: 4px;
       padding: 4px max(8px, env(safe-area-inset-right))
         env(safe-area-inset-bottom) max(8px, env(safe-area-inset-left));
       align-items: flex-start;
-    }
-    .editor:not(.film-collapsed) .inspector-rail {
-      opacity: 0;
-      visibility: hidden;
-      pointer-events: none;
     }
     .compact-panel-label {
       display: block;
@@ -146,9 +149,11 @@
     .editor {
       --phone-header: calc(52px + env(safe-area-inset-top));
     }
-    .editor:not(.film-collapsed),
     .editor:not(.inspector-collapsed) {
       --phone-dock: 42dvh;
+    }
+    .editor:not(.film-collapsed) {
+      --phone-film-strip: 138px;
     }
     .toolbar {
       display: flex;

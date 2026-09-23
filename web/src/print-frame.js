@@ -1,6 +1,5 @@
 import { editorControl } from "./editor-catalogue.js";
 import { PROFILE_MENUS } from "./generated/controls.js";
-import { loadFilmProfile } from "./film-profile.js";
 
 export const frameChoices = () => editorControl("printFrame").choices;
 export function parsePrintFrame(value) {
@@ -22,13 +21,6 @@ export function frameRequest(edit, width = 1, height = 1) {
     width,
     height,
   };
-}
-export async function loadPrintFrame(edit, width = 1, height = 1, onProgress) {
-  return JSON.parse(
-    new TextDecoder().decode(
-      await loadFilmProfile(frameRequest(edit, width, height), onProgress),
-    ),
-  );
 }
 export function frameRenderEdit(edit, plan) {
   if (!plan || plan.configuration.frame === "none") return edit;

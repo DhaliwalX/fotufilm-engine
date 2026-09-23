@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { encodeTiff16 } from "../../src/tiff.js";
 import { encodeTileInto } from "../../src/engine.js";
-import { compositeSelection } from "../../src/selective.js";
+import { compositeSelection } from "../../src/backend/browser-selective.js";
 
 export function readTiff(buffer) {
   const view = new DataView(buffer),

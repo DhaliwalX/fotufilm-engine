@@ -51,7 +51,7 @@ export default function useEditorState({}) {
     [videoQuality, setVideoQuality] = useState("high"),
     [videoDownload, setVideoDownload] = useState(null);
   const videoExportController = useRef(null),
-    clips = useRef(new Set()),
+    imageResources = useRef(new Set()),
     videoDownloadRef = useRef(null);
   const [sampling, setSampling] = useState(false);
   const [showMask, setShowMask] = useState(false);
@@ -133,7 +133,7 @@ export default function useEditorState({}) {
     videoDownload,
     setVideoDownload,
     videoExportController,
-    clips,
+    imageResources,
     videoDownloadRef,
     sampling,
     setSampling,

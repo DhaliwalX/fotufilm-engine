@@ -1,3 +1,4 @@
+import { openChart } from "./photo-fixture.js";
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -7,6 +8,7 @@ test("Auto solves Normal, negative, reversal and monochrome identically to the n
   page,
 }) => {
   await page.goto("/");
+  await openChart(page, 480, 320);
   await expect(page.locator(".viewer-status > [role=status]")).toContainText(
     /\d+ × \d+/,
   );
@@ -71,6 +73,7 @@ test("Auto measures neutrally and uses the current crop and source interpretatio
   page,
 }) => {
   await page.goto("/");
+  await openChart(page, 480, 320);
   await expect(page.locator(".viewer-status > [role=status]")).toContainText(
     /\d+ × \d+/,
   );
@@ -78,7 +81,7 @@ test("Auto measures neutrally and uses the current crop and source interpretatio
     const { LinearImage } = await import("/src/linear-image.js");
     const { defaultEdit } = await import("/src/editor-state.js");
     const { RenderSession } = await import("/src/render-session.js");
-    const { solveAutoAdjustment } = await import("/src/auto-adjustment.js");
+    const { solveAutoAdjustment } = await import("/src/backend/browser-auto-adjustment.js");
     const pixels = new Float32Array(128 * 64 * 4);
     for (let y = 0; y < 64; y++)
       for (let x = 0; x < 128; x++) {
@@ -141,19 +144,21 @@ test("Auto menu and shortcut apply undoable settings, re-solve on film changes a
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
+  await openChart(page, 480, 320);
   await expect(page.locator(".viewer-status > [role=status]")).toContainText(
     /\d+ × \d+/,
   );
-  await page.getByRole("tab", { name: "Expose", exact: true }).click();
-  const exposure = page.getByRole("spinbutton", {
+  await page.getByRole("radio", { name: "Expose", exact: true }).click();
+  const exposure = page.getByRole("textbox", {
     name: "Exposure value",
     exact: true,
   });
   await page.getByRole("button", { name: "More options", exact: true }).click();
-  await page.getByRole("button", { name: "Auto Adjust", exact: true }).click();
+  await page.getByRole("menuitemcheckbox", { name: "Auto Adjust", exact: true }).click();
   await expect(page.locator(".viewer-status > [role=status]")).toContainText(
     /\d+ × \d+/,
   );
+  await page.keyboard.press("Escape");
   const normalEV = await exposure.inputValue();
   expect(Number(normalEV)).not.toBe(0);
   await page.getByRole("button", { name: "Undo (⌘Z)", exact: true }).click();
@@ -164,28 +169,26 @@ test("Auto menu and shortcut apply undoable settings, re-solve on film changes a
   await page
     .getByRole("searchbox", { name: "Search films", exact: true })
     .fill("Gold 200");
-  await page.getByTitle("Gold 200", { exact: true }).click();
+  await page.getByRole("button", { name: "Gold 200 Film", exact: true }).click();
   await expect(page.locator(".viewer-status > [role=status]")).toContainText(
     /\d+ × \d+/,
   );
   await page.getByRole("button", { name: "More options", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Auto Adjust", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+    page.getByRole("menuitemcheckbox", { name: "Auto Adjust", exact: true }),
+  ).toHaveAttribute("aria-checked", "true");
   await page.screenshot({ path: testInfo.outputPath('auto-adjust.png') });
   const savedDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Save edits…", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Save edits…", exact: true }).click();
   const saved = JSON.parse(await readFile(await (await savedDownload).path()));
-  expect(saved.edit.params.ev).toBeCloseTo(
-    Number(await exposure.inputValue()),
-    2,
-  );
+  // The Spectrum field displays EV rounded to its 0.05 step; saved edits retain solver precision.
+  expect(Math.abs(saved.edit.params.ev - Number(await exposure.inputValue()))).toBeLessThanOrEqual(0.025);
   expect(saved.edit.autoAdjustment).toBeUndefined();
   await exposure.fill("1.1");
   await exposure.press("Tab");
   await page.getByRole("button", { name: "More options", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Auto Adjust", exact: true }),
-  ).toHaveAttribute("aria-pressed", "false");
+    page.getByRole("menuitemcheckbox", { name: "Auto Adjust", exact: true }),
+  ).toHaveAttribute("aria-checked", "false");
   expect(errors).toEqual([]);
 });

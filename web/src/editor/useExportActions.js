@@ -1,8 +1,6 @@
-import { cleanName, download } from "./file-download.js";
-import { createVideoDestination, exportVideo } from "../video-export.js";
-import { exportTiff } from "../tiff-export.js";
-import { canvasBlob } from "../geometry.js";
+import { cleanName } from "./file-download.js";
 export default function useExportActions({
+  backend,
   active,
   session,
   exporting,
@@ -31,13 +29,12 @@ export default function useExportActions({
     setStatus("Choose an export destination");
     try {
       const filename = `${cleanName(active.name)}-${edit.stock || "normal"}.${videoFormat}`;
-      const destination = await createVideoDestination(filename);
-      const saved = await exportVideo({
+      const saved = await backend.exportVideo({
         image: active.image,
         edit,
         stock: stockId,
         session,
-        destination,
+        filename,
         format: videoFormat,
         quality: videoQuality,
         maxEdge: exportSize === "full" ? Infinity : Number(exportSize),
@@ -77,30 +74,19 @@ export default function useExportActions({
     setExporting(true);
     setError(null);
     try {
-      const next = await session.render({
+      const extension =
+        exportType === "image/jpeg" ? "jpg" : exportType.split("/")[1];
+      await backend.exportImage({
+        session,
         image: active.image,
         edit,
         stock: stockId,
         maxEdge: exportSize === "full" ? Infinity : Number(exportSize),
-        comparison: false,
-        purpose: "export",
-        bitDepth: exportType === "image/tiff" ? 16 : 8,
+        type: exportType,
+        quality: quality / 100,
         onProgress: setStatus,
+        filename: `${cleanName(active.name)}-${edit.stock || "normal"}${edit.medium ? `-${edit.medium}` : ""}.${extension}`,
       });
-      if (!next) throw new Error("Export was cancelled.");
-      setStatus(`Encoding ${exportType.split("/")[1].toUpperCase()} export`);
-      const blob =
-        exportType === "image/tiff"
-          ? await exportTiff(next)
-          : exportType === "image/png"
-            ? next.blob
-            : await canvasBlob(next.canvas, exportType, quality / 100);
-      const extension =
-        exportType === "image/jpeg" ? "jpg" : exportType.split("/")[1];
-      download(
-        blob,
-        `${cleanName(active.name)}-${edit.stock || "normal"}${edit.medium ? `-${edit.medium}` : ""}.${extension}`,
-      );
       setDialog(null);
     } catch (e) {
       setError(e.message);

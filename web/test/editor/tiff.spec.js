@@ -10,14 +10,12 @@ test("TIFF download carries 16-bit samples, full dimensions and an ICC profile",
   await expect(page.locator(".viewer-status > [role=status]")).toContainText(
     "720 × 480",
   );
-  await page.getByRole("tab", { name: "Expose", exact: true }).click();
-  await page.getByRole("spinbutton", { name: "Exposure value", exact: true }).fill("-0.35");
-  await page.getByRole("spinbutton", { name: "Exposure value", exact: true }).press("Tab");
-  await page.getByRole("tab", { name: "Print", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Export Photo…", exact: true })
-    .click();
-  await page.getByLabel("Format", { exact: true }).selectOption("image/tiff");
+  await page.getByRole("radio", { name: "Expose", exact: true }).click();
+  await page.getByRole("textbox", { name: "Exposure value", exact: true }).fill("-0.35");
+  await page.getByRole("textbox", { name: "Exposure value", exact: true }).press("Tab");
+  await page.getByRole("button", { name: "Export (⌘S)", exact: true }).click();
+  await page.getByRole("button", { name: /PNG Format/ }).click();
+  await page.getByRole("option", { name: "TIFF · 16-bit", exact: true }).click();
   await expect(page.getByLabel("Quality", { exact: true })).toHaveCount(0);
   await expect(page.locator(".export-detail").first()).toContainText("16-bit");
   const pending = page.waitForEvent("download");
@@ -67,7 +65,7 @@ test("16-bit film development preserves cropped precision and every framed inter
     const { LinearImage } = await import("/src/linear-image.js");
     const { defaultEdit } = await import("/src/editor-state.js");
     const { renderPrintFrame16 } = await import("/src/print-frame-16.js");
-    const { loadPrintFrame } = await import("/src/print-frame.js");
+    const { loadPrintFrame } = await import("/src/backend/browser-print-frame.js");
     const width = 512,
       height = 128,
       pixels = new Float32Array(width * height * 4);

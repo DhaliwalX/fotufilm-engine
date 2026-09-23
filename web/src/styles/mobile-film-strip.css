@@ -1,0 +1,82 @@
+/* Reuse the desktop stock buttons and render queue in a touch-scrolling strip. */
+@media (max-width: 833px) {
+  .film-sidebar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 44px minmax(0, 1fr);
+    padding-bottom: 0;
+  }
+  .film-sidebar .sidebar-heading {
+    grid-column: 1;
+    grid-row: 1;
+    height: 44px;
+    padding: 0 8px 0 16px;
+    gap: 8px;
+  }
+  .film-sidebar .sidebar-heading button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .film-sidebar .stock-list {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    padding: 4px 12px 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 12px;
+    overscroll-behavior-x: contain;
+  }
+  .stock-list > div,
+  .stock-list > .normal-row {
+    flex: 0 0 126px;
+    min-width: 0;
+    scroll-snap-align: center;
+  }
+  .film-sidebar .stock-row {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 126px;
+    height: 100%;
+    max-height: none;
+    padding: 6px;
+    margin: 0;
+    gap: 6px;
+    border-radius: 10px;
+    white-space: normal;
+    transition:
+      background-color 160ms ease,
+      color 160ms ease;
+  }
+  .film-sidebar .stock-thumb {
+    width: 100%;
+    height: auto;
+    flex: 1;
+    min-height: 0;
+    border-radius: 6px;
+  }
+  .film-sidebar .stock-thumb img {
+    animation: content-enter 180ms ease-out;
+  }
+  .film-sidebar .stock-copy {
+    flex: 0 0 auto;
+    width: 100%;
+    text-align: center;
+    font-size: 11px;
+  }
+  .film-sidebar .stock-copy > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .film-sidebar .stock-copy small {
+    display: none;
+  }
+  .film-sidebar .empty-search {
+    white-space: nowrap;
+  }
+}

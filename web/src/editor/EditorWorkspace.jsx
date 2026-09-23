@@ -5,10 +5,10 @@ import FilmLibrary from "./FilmLibrary.jsx";
 import EditorViewer from "./EditorViewer.jsx";
 import InspectorRail from "./InspectorRail.jsx";
 import EditorInspector from "./EditorInspector.jsx";
-import { IMAGE_ACCEPT } from "../raw-import.js";
-import { VIDEO_ACCEPT } from "../video-import.js";
+import { IMAGE_ACCEPT } from "../media-types.js";
+import { VIDEO_ACCEPT } from "../media-types.js";
 import NegativeImportDialog from "../NegativeImportDialog.jsx";
-import { defaultEdit } from "../editor-state.js";
+import { useNegativeImportDialog } from "./useNegativeImportDialog.js";
 import ExportDialog from "./ExportDialog.jsx";
 import { VIDEO_LABELS } from "../generated/controls.js";
 import ShortcutsDialog from "./ShortcutsDialog.jsx";
@@ -24,22 +24,11 @@ export default function Workspace() {
     restoreEdit,
     dialog,
     setDialog,
-    urls,
-    activeId,
-    histories,
-    history,
-    setFiles,
-    setActiveId,
-    dispatch,
-    replaceResult,
-    setStage,
-    setDifference,
-    setVideoTime,
-    setInspector,
     videoDownload,
     videoDownloadRef,
     setVideoDownload,
   } = useEditor();
+  const negative = useNegativeImportDialog();
   return (
     <div
       className={`editor ${filmOpen ? "" : "film-collapsed"} ${inspectorOpen ? "" : "inspector-collapsed"}`}
@@ -74,22 +63,7 @@ export default function Workspace() {
         {dialog === "negative" ? (
           <NegativeImportDialog
             onClose={() => setDialog(null)}
-            onImport={(file) => {
-              urls.current.add(file.url);
-              if (activeId) histories.current.set(activeId, history);
-              setFiles((current) => [...current, file]);
-              setActiveId(file.id);
-              dispatch({
-                type: "load",
-                edit: defaultEdit(null),
-              });
-              replaceResult(null);
-              setStage(null);
-              setDifference(false);
-              setVideoTime(0);
-              setDialog(null);
-              setInspector("crop");
-            }}
+            model={negative}
           />
         ) : dialog === "export" ? (
           <ExportDialog />

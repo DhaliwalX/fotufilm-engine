@@ -1,17 +1,16 @@
 import { useCallback } from "react";
-import { isVideoFile, importVideo, VIDEO_ACCEPT } from "../video-import.js";
-import { isEXRFile, importEXR } from "../exr-import.js";
-import { isRawFile, importRaw, IMAGE_ACCEPT } from "../raw-import.js";
-import { importPhoto } from "../photo-import.js";
+import { VIDEO_ACCEPT } from "../media-types.js";
+import { IMAGE_ACCEPT } from "../media-types.js";
 import { defaultEdit, initialHistory } from "../editor-state.js";
 export default function useDocumentActions({
+  backend,
   exporting,
   input,
   loadGeneration,
   importController,
   setImportStatus,
   urls,
-  clips,
+  imageResources,
   activeId,
   histories,
   history,
@@ -50,47 +49,19 @@ export default function useDocumentActions({
       errors = [];
     for (const file of Array.from(incoming || [])) {
       if (controller.signal.aborted) break;
-      if (isVideoFile(file) || isEXRFile(file) || isRawFile(file)) {
-        try {
-          const decoded = await (
-            isVideoFile(file)
-              ? importVideo
-              : isEXRFile(file)
-                ? importEXR
-                : importRaw
-          )(file, {
-            signal: controller.signal,
-            onProgress: (text) => {
-              if (!controller.signal.aborted)
-                setImportStatus(`${text}: ${file.name}`);
-            },
-          });
-          loaded.push({
-            id: crypto.randomUUID(),
-            name: file.name,
-            ...decoded,
-          });
-        } catch (e) {
-          if (e.name !== "AbortError")
-            errors.push(`${file.name}: ${e.message}`);
-        }
-        continue;
-      }
-      if (
-        !file.type.startsWith("image/") &&
-        !/\.(png|jpe?g|webp|avif|gif|bmp|tiff?)$/i.test(file.name)
-      ) {
-        errors.push(`${file.name}: choose a photo, camera RAW file, or video.`);
-        continue;
-      }
       try {
-        const decoded = await importPhoto(file, {
+        const decoded = await backend.importMedia(file, {
           signal: controller.signal,
           onProgress: (text) => {
             if (!controller.signal.aborted)
               setImportStatus(`${text}: ${file.name}`);
           },
         });
+        if (controller.signal.aborted) {
+          backend.releaseImage(decoded.image);
+          URL.revokeObjectURL(decoded.url);
+          break;
+        }
         loaded.push({
           id: crypto.randomUUID(),
           name: file.name,
@@ -105,7 +76,7 @@ export default function useDocumentActions({
     }
     if (generation !== loadGeneration.current) {
       loaded.forEach((file) => {
-        file.image.video?.dispose();
+        backend.releaseImage(file.image);
         URL.revokeObjectURL(file.url);
       });
       return;
@@ -115,7 +86,7 @@ export default function useDocumentActions({
     if (loaded.length) {
       loaded.forEach((file) => {
         urls.current.add(file.url);
-        if (file.image.video) clips.current.add(file.image.video);
+        imageResources.current.add(file.image);
       });
       if (activeId) histories.current.set(activeId, history);
       setFiles((current) => [...current, ...loaded]);
@@ -163,8 +134,8 @@ export default function useDocumentActions({
       });
       replaceResult(null);
     }
-    file.image.video?.dispose();
-    clips.current.delete(file.image.video);
+    backend.releaseImage(file.image);
+    imageResources.current.delete(file.image);
     histories.current.delete(file.id);
     setFiles(remaining);
     URL.revokeObjectURL(file.url);

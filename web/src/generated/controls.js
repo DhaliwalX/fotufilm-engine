@@ -12,21 +12,33 @@ export const PROFILE_MENUS = {"negativeViewing":[{"detail":"","id":"light-box","
 export const FILM_FORMATS = [{"id":"super8","name":"Super 8"},{"id":"16mm","name":"16mm"},{"id":"super35","name":"35mm motion (Super 35)"},{"id":"35mm","name":"35mm still"},{"id":"instaxmini","name":"instax mini"},{"id":"120","name":"120 medium format (6x6)"},{"id":"instaxsquare","name":"instax SQUARE"},{"id":"instaxwide","name":"instax wide"},{"id":"4x5","name":"4x5 large format"}]
 export const VIDEO_LABELS = {
   'audio': 'Include audio',
+  'back': 'Back 5 seconds',
   'dismiss': 'Dismiss',
   'encoding': 'Input color space',
   'export': 'Export video',
+  'forward': 'Forward 5 seconds',
   'high': 'High',
+  'loop': 'Loop selection',
   'medium': 'Medium',
   'mp4': 'MP4 · H.264',
+  'mute': 'Mute preview',
   'pause': 'Pause',
   'play': 'Play',
   'position': 'Video position',
   'quality': 'Video quality',
+  'resetTrim': 'Reset trim',
+  'selection': 'Selection',
+  'setIn': 'Set in at playhead',
+  'setOut': 'Set out at playhead',
+  'settings': 'Video settings',
+  'speed': 'Playback speed',
   'trimEnd': 'Trim out',
   'trimStart': 'Trim in',
+  'unmute': 'Unmute preview',
   'veryHigh': 'Very high',
   'webm': 'WebM · VP9',
 }
+export const LEGAL_MENU = {"links":[{"href":"https:\/\/fotufilm.com\/third-party.html","icon":"licenses","id":"licenses","title":"Open-source licenses"},{"href":"https:\/\/fotufilm.com\/privacy.html","icon":"privacy","id":"privacy","title":"Privacy policy"},{"href":"https:\/\/fotufilm.com\/terms.html","icon":"terms","id":"terms","title":"Terms"}],"title":"Legal"}
 export const SELECTION = {"choices":[{"label":"Color","value":"color"},{"label":"Light","value":"light"}],"clear":"Clear Selection","kind":"Select By","mask":"Show Mask","match":"Match the Photograph","sample":"Sample a Point","sampling":"Click the Photo…","section":"Selection","sliders":[{"def":0.25,"key":"range","label":"Range","max":0.59999999999999998,"min":0.050000000000000003,"step":0.01},{"def":0.5,"key":"softness","label":"Softness","max":1,"min":0.050000000000000003,"step":0.01}],"title":"Selective"}
 export const HISTOGRAM = {"close":"Close histogram","mode":"Histogram count mode","modes":[{"id":"log","label":"Log"},{"id":"linear","label":"Linear"}],"move":"Move histogram","resize":"Resize histogram","title":"Histogram","view":"Histogram channels","views":[{"id":"rgb","label":"RGB"},{"id":"luma","label":"Luma"},{"id":"chroma","label":"Chroma"},{"id":"oklab-l","label":"OKLab L"},{"id":"oklab-ab","label":"OKLab a\/b"}]}
 export const SCREEN_CONVERSION = {"choices":[{"detail":"Fixed calibrated exposure; mid-grey and contrast never depend on the frame.","id":"reference-exposure","name":"Reference Exposure"},{"detail":"Fixed exposure through a graded paper curve with a soft highlight shoulder; a positive's clear base sets white.","id":"graded-print","name":"Graded Print"},{"detail":"The frame's brightest content sets white and a negative's film base sets black.","id":"auto-levels","name":"Auto Levels"}],"default":"auto-levels","title":"Screen Conversion"}

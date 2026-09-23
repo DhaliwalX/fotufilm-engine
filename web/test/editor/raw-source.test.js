@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { rawSource } from '../../src/raw-source.js'
 import { pixelSource, developNormal } from '../../src/engine.js'
 import { defaultEdit } from '../../src/editor-state.js'
-import { isRawFile, IMAGE_ACCEPT } from '../../src/raw-import.js'
+import { isRawFile, IMAGE_ACCEPT } from '../../src/media-types.js'
 
 const image = {
   naturalWidth: 3,

@@ -2,42 +2,6 @@ import { attachLinearPreview } from './linear-preview.js'
 import { readPhotoMetadata } from './photo-metadata.js'
 import { assetUrl } from './engine.js'
 
-export const RAW_EXTENSIONS = [
-  'dng',
-  'cr2',
-  'cr3',
-  'crw',
-  'nef',
-  'nrw',
-  'arw',
-  'srf',
-  'sr2',
-  'raf',
-  'orf',
-  'ori',
-  'rw2',
-  'raw',
-  'rwl',
-  'pef',
-  'ptx',
-  'srw',
-  '3fr',
-  'fff',
-  'iiq',
-  'kdc',
-  'dcr',
-  'mrw',
-  'mos',
-  'erf',
-  'mef',
-  'mdc',
-  'x3f',
-]
-export const IMAGE_ACCEPT = ['image/*', '.exr', ...RAW_EXTENSIONS.map((ext) => `.${ext}`)].join(',')
-export const isRawFile = (file) =>
-  RAW_EXTENSIONS.includes(file.name.split('.').at(-1).toLowerCase()) ||
-  /(?:raw|dng|cr2|cr3|nef|arw|raf)/i.test(file.type)
-
 // Treat a decoded RAW like an image resource. Pixel buffers must stay opaque to
 // React/devtools state inspection, which can otherwise enumerate millions of samples.
 class RawImage {

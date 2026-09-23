@@ -2,7 +2,7 @@ import { attachLinearPreview } from './linear-preview.js'
 import { LinearImage } from './linear-image.js'
 import { decodeImageWorker } from './image-worker.js'
 
-export const isEXRFile = (file) => /\.exr$/i.test(file.name)
+
 
 export async function decodeEXRFile(file, options = {}) {
   options.onProgress?.('Reading linear EXR')

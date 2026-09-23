@@ -23,7 +23,7 @@ export default function SelectiveInspector() {
       setSampling={setSampling}
       showMask={showMask}
       setShowMask={setShowMask}
-      canSample={!!shownResult?.sceneSource}
+      canSample={!!shownResult}
     />
   );
 }

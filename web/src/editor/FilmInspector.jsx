@@ -48,7 +48,7 @@ export default function FilmInspector() {
                   <span>{selectedStock?.name}</span>
                 </div>
                 <p className="medium-detail">
-                  Choose a stock from the film library on the left.
+                  Choose a stock from the film library.
                 </p>
               </>
             ) : (

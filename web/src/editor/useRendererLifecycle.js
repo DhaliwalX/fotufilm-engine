@@ -1,8 +1,7 @@
-import { prepareEditor } from "./prepare-editor.js";
 import { useRef, useEffect, useCallback, useState } from "react";
-import { RenderSession, loadStockIndex } from "../render-session.js";
 import { PreviewQueue } from "../preview-queue.js";
 export default function useRendererLifecycle({
+  backend,
   activeId,
   previewKey,
   exporting,
@@ -15,7 +14,7 @@ export default function useRendererLifecycle({
   setSession,
   videoExportController,
   videoDownloadRef,
-  clips,
+  imageResources,
   importController,
   loadGeneration,
   urls,
@@ -45,7 +44,7 @@ export default function useRendererLifecycle({
     interactionKey,
   };
   useEffect(() => {
-    const renderer = new RenderSession();
+    const renderer = backend.createSession();
     renderer.onRendererReady = () => {
       if (alive.current) setRetry((value) => value + 1);
     };
@@ -57,9 +56,21 @@ export default function useRendererLifecycle({
     let cancelled = false;
     // Defer one task so React's development remount does not start two engines.
     const startup = setTimeout(() => {
-      void prepareEditor(renderer, (state) => {
-        if (!cancelled) setStartupProgress(state);
-      });
+      Promise.resolve()
+        .then(() =>
+          backend.prepare(renderer, (state) => {
+            if (!cancelled) setStartupProgress(state);
+          }),
+        )
+        .catch((error) => {
+          if (cancelled) return;
+          setLibraryError(error.message);
+          setStartupProgress({
+            value: 100,
+            label: "Image engine unavailable",
+            done: true,
+          });
+        });
     }, 0);
     return () => {
       cancelled = true;
@@ -69,8 +80,8 @@ export default function useRendererLifecycle({
       renderer.dispose();
       videoExportController.current?.abort();
       videoDownloadRef.current?.dispose();
-      for (const clip of clips.current) clip.dispose();
-      clips.current.clear();
+      for (const image of imageResources.current) backend.releaseImage(image);
+      imageResources.current.clear();
       importController.current?.abort();
       loadGeneration.current++;
       for (const url of urls.current) URL.revokeObjectURL(url);
@@ -81,7 +92,8 @@ export default function useRendererLifecycle({
     let cancelled = false;
     setLibraryError(null);
     setStatus("Loading films");
-    loadStockIndex()
+    backend
+      .loadStocks()
       .then((index) => {
         if (!cancelled) {
           setStocks(index);

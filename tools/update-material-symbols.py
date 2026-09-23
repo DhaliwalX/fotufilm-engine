@@ -23,6 +23,10 @@ SYMBOLS = {
     'negative': 'invert_colors', 'autoAdjust': 'auto_fix_high',
     'saveEdits': 'save', 'loadEdits': 'folder_open',
     'pipeline': 'account_tree', 'shortcuts': 'keyboard',
+    'play': 'play_arrow', 'pause': 'pause', 'replay5': 'replay_5',
+    'forward5': 'forward_5', 'loop': 'repeat',
+    'volume': 'volume_up', 'muted': 'volume_off',
+    'licenses': 'code', 'privacy': 'privacy_tip', 'terms': 'description',
 }
 ROOT = Path(__file__).resolve().parents[1]
 

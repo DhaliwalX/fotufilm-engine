@@ -57,11 +57,27 @@ public enum EditorControlCatalogue {
 
     public static let all: [EditorControl] = film + light + print + frame + pipeline
 
+    public static let webLegalMenu: [String: Any] = [
+        "title": "Legal",
+        "links": [
+            ["id": "licenses", "title": "Open-source licenses", "icon": "licenses",
+             "href": "https://fotufilm.com/third-party.html"],
+            ["id": "privacy", "title": "Privacy policy", "icon": "privacy",
+             "href": "https://fotufilm.com/privacy.html"],
+            ["id": "terms", "title": "Terms", "icon": "terms",
+             "href": "https://fotufilm.com/terms.html"],
+        ],
+    ]
+
     // Browser media transport and delivery controls do not occupy film-engine
     // slots. Export their labels with the shared catalogue, separately from
     // parameters that cross the WASM / plugin bridge.
     public static let webVideoLabels: [String: String] = [
         "play": "Play", "pause": "Pause", "position": "Video position",
+        "back": "Back 5 seconds", "forward": "Forward 5 seconds", "loop": "Loop selection",
+        "mute": "Mute preview", "unmute": "Unmute preview", "speed": "Playback speed",
+        "settings": "Video settings", "setIn": "Set in at playhead", "setOut": "Set out at playhead",
+        "resetTrim": "Reset trim", "selection": "Selection",
         "encoding": "Input color space", "trimStart": "Trim in", "trimEnd": "Trim out",
         "audio": "Include audio", "export": "Export video", "quality": "Video quality",
         "medium": "Medium", "high": "High", "veryHigh": "Very high",

@@ -15,7 +15,7 @@ import {
   lensFields,
 } from "./lens-correction.js";
 import LensProfileLibrary from "./LensProfileLibrary.jsx";
-import { resolveLensPlan } from "./lens-plan.js";
+import { useBackend } from "./backend/BackendContext.jsx";
 import { useLensCatalogue } from "./useLensCatalogue.js";
 import "./motion.css";
 import "./LensControls.css";
@@ -26,6 +26,7 @@ export default function LensControls({
   onChange,
   onEnd,
 }) {
+  const backend = useBackend();
   const catalogue = useLensCatalogue();
   const [plan, setPlan] = useState(null),
     [error, setError] = useState(null);
@@ -38,7 +39,7 @@ export default function LensControls({
     setPlan(null);
     setError(null);
     if (image && lens.enabled) {
-      resolveLensPlan(image, {
+      backend.resolveLensPlan(image, {
         ...defaultLens(),
         ...JSON.parse(settings),
       })
