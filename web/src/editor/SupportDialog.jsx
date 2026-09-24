@@ -16,7 +16,7 @@ export default function SupportDialog() {
           </p>
           <p>
             The browser supports film selection and format, ageing, halation,
-            grain models, measured push/pull, bleach bypass, colour separation,
+            grain models, push/pull, bleach bypass, colour separation,
             print viewing, a simulated printer, an ordered lens-filter stack,
             automatic and manual lens correction, Auto Adjust, photo frames,
             light and color adjustments, three-way grading, color and light
