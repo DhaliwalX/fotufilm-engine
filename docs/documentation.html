@@ -61,7 +61,7 @@
   <tr><td>Edge Contrast</td><td>Scales inhibition acting within a layer rather than across two.</td><td>1.00×</td></tr>
   <tr><td>Fringe Amount</td><td>Spreads a share of inter-layer inhibition farther around colour boundaries.</td><td>0%</td></tr>
   <tr><td>Fringe Radius</td><td>Sets the broad spread on the film in micrometres.</td><td>100 µm</td></tr>
-  <tr><td>Push</td><td>Adjusts chemical development timing using measured push/pull sensitometry curves.</td><td>+0.0 EV</td></tr>
+  <tr><td>Push</td><td>Adjusts development time using the film's push/pull curves, each measured, carried from a sister film, or estimated from its process.</td><td>+0.0 EV</td></tr>
   <tr><td>Bleach Bypass</td><td>Retains metallic silver in color negative processing, increasing contrast and lowering dye saturation.</td><td>0%</td></tr>
   <tr><td>Expired</td><td>Simulates room-temperature aging: speed loss, baseline fog density, increased grain, and layer sensitivity drift.</td><td>Fresh</td></tr>
   <tr><td>Long Exposure</td><td>Evaluates the emulsion's measured reciprocity failure characteristics under low-intensity long exposures.</td><td>Off</td></tr>
@@ -319,7 +319,7 @@
   <tr><td>Focal Length</td><td>The taking lens's focal length in millimetres, read only by the diffusion filter: a ray deviated by an angle ahead of the lens lands focal length times that angle off its unscattered position, so the same filter glows bigger on a longer lens, exactly as it does in the world. 0 — the default — is the gauge's own normal lens, which is what the grade numbering on a filter's ring is calibrated around.</td></tr>
   <tr><td>Veiling Glare</td><td>Veiling glare from the taking lens, as a multiplier on the stock's figure. It defaults to 0 because a photographed clip already carries the glare of the lens that shot it, and this stage would veil the shadows a second time. Raise it for light that has met no glass — a render or a synthetic chart — or to stand in for glass worse than the camera's.</td></tr>
   <tr><td>Filter Coating</td><td>Coating on every fitted absorbing and diffusion filter. Changes transmission and added glare. Multicoated preserves the existing filter look.</td></tr>
-  <tr><td>Push / Pull</td><td>Measured push or pull conditions for this film's stated developer, dilution, temperature and agitation. The control is disabled when the stock pack has no measured response.</td></tr>
+  <tr><td>Push / Pull</td><td>Push or pull conditions for this film's stated developer and process: measured on its own datasheet, carried from a sister film's published curves, or estimated from the process's published push response. The control is disabled when the stock pack lists no conditions.</td></tr>
   <tr><td>Bleach Bypass</td><td>How much of the developed silver the bleach leaves in the negative. The retained silver is a black-and-white image over the colour one: contrast up, chroma down, together.</td></tr>
   <tr><td>Film Age (years)</td><td>Years the roll sat past its process-by date. Speed falls a stop a decade with the blue-sensitive layer going first, base fog rises, and grain rises with the fog — the muddy, crossed toe of an old roll.</td></tr>
   <tr><td>Long Exposure (s)</td><td>Exposure duration for the stock's measured reciprocity response. 0 disables the override. Corrections stop at the last measured duration; no motion blur is added. Use the same value in paired Negative Only and Print Only nodes.</td></tr>

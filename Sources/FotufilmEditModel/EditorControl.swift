@@ -253,7 +253,7 @@ public enum EditorControlAvailability: String, Sendable, Equatable, Codable {
     case statedReciprocity
     case couplerGeometry
     case interlayerInhibition
-    case measuredDevelopment
+    case developmentConditions
 
     public func admits(stock: FilmStock?) -> Bool {
         switch self {
@@ -282,8 +282,8 @@ public enum EditorControlAvailability: String, Sendable, Equatable, Codable {
             return stock.couplerInhibition.enumerated().contains { receiver, row in
                 row.enumerated().contains { donor, value in receiver != donor && value != 0 }
             }
-        case .measuredDevelopment:
-            return stock?.hasMeasuredDevelopmentResponse == true
+        case .developmentConditions:
+            return stock?.hasDevelopmentConditions == true
         }
     }
 

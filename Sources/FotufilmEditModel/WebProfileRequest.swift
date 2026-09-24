@@ -110,7 +110,7 @@ public struct WebProfileRequest: Decodable {
             default: throw Failure(description: "Invalid value for \(control.title).")
             }
             if field == .push, let stops = value.number, !stock.supportsDevelopment(stops: Float(stops)) {
-                throw Failure(description: "This film has no measured development at the selected stop value.")
+                throw Failure(description: "This film has no development condition at the selected stop value.")
             }
             switch field {
             case .printerEnabled: printerEnabled = value.flag ?? false

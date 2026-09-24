@@ -75,7 +75,8 @@ int32_t fotufilm_bridge_stock_prints(int32_t stock);
 
 /// Whether the stock carries at least one measured non-reference development condition.
 int32_t fotufilm_bridge_stock_pushes(int32_t stock);
-/// The nearest measured condition, including reference development at zero. This keeps Resolve's
+int32_t fotufilm_bridge_development_basis(int32_t stock, char *out, int32_t capacity);
+/// The nearest listed condition, including reference development at zero. This keeps Resolve's
 /// numeric OFX parameter from creating an interpolated process the engine does not carry.
 float fotufilm_bridge_stock_snap_push(int32_t stock, float requested);
 

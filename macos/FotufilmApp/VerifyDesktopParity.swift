@@ -131,7 +131,7 @@ enum VerifyDesktopParity {
                 guard missing.isEmpty else {
                     return .fail("\(preset.id): missing \(missing.joined(separator: ", "))")
                 }
-                if !preset.stock.hasMeasuredDevelopmentResponse, shows(found, "Push") {
+                if !preset.stock.hasDevelopmentConditions, shows(found, "Push") {
                     return .fail("\(preset.id): kept the previous film's Push control")
                 }
                 if !preset.stock.isMonochrome && !preset.stock.isReversal {

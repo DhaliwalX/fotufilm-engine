@@ -1225,6 +1225,9 @@ void updateContextControls(Instance *instance, OfxTime time) {
         conditions += text;
     }
     conditions += stops.size() == 1 ? " stops · reference only" : " stops";
+    char basis[512];
+    if (stops.size() > 1 && fotufilm_bridge_development_basis(stock, basis, sizeof(basis)) > 0)
+        conditions += std::string(" · ") + basis;
     if (instance->developmentStatus) gParameter->paramSetValue(instance->developmentStatus, conditions.c_str());
     if (instance->pushCondition && choiceValue(instance->pushCondition) != selected)
         gParameter->paramSetValue(instance->pushCondition, selected);

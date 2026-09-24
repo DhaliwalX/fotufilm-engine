@@ -228,6 +228,10 @@ public struct FilmStockDefinition: Codable, Sendable {
             public var label: String
             public var timeMinutes: Float
             public var exposureIndex: Float?
+            /// "measured", "transferred" (with `basisStock`) or "estimated".
+            public var basis: String
+            /// The stock whose published push or pull a transferred condition carries.
+            public var basisStock: String?
             public var curves: [CurveSpec]
             public var donorCurves: [CurveSpec]?
             public var grainStrength: Float?
@@ -241,6 +245,11 @@ public struct FilmStockDefinition: Codable, Sendable {
                 label = condition.label
                 timeMinutes = condition.timeMinutes
                 exposureIndex = condition.exposureIndex
+                switch condition.basis {
+                case .measured: basis = "measured"
+                case .transferred(let stock): basis = "transferred"; basisStock = stock
+                case .estimated: basis = "estimated"
+                }
                 curves = condition.curves.map(CurveSpec.init)
                 donorCurves = condition.donorCurves.isEmpty
                     ? nil : condition.donorCurves.map(CurveSpec.init)
@@ -251,10 +260,21 @@ public struct FilmStockDefinition: Codable, Sendable {
                 adjacencyStrength = condition.adjacencyStrength
             }
 
+            /// Nil for a basis the validator rejects.
+            public var resolvedBasis: FilmDevelopmentBasis? {
+                switch (basis, basisStock) {
+                case ("measured", nil): return .measured
+                case ("transferred", let stock?): return .transferred(from: stock)
+                case ("estimated", nil): return .estimated
+                default: return nil
+                }
+            }
+
             public var condition: FilmDevelopmentCondition {
                 FilmDevelopmentCondition(
                     stops: stops, label: label, timeMinutes: timeMinutes,
-                    exposureIndex: exposureIndex, curves: curves.map(\.curve),
+                    exposureIndex: exposureIndex, basis: resolvedBasis ?? .estimated,
+                    curves: curves.map(\.curve),
                     donorCurves: donorCurves?.map(\.curve) ?? [],
                     grainStrength: grainStrength, grainSizeMM: grainSizeMM,
                     grainLayerWeights: grainLayerWeights,

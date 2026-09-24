@@ -137,7 +137,7 @@
         "Reference · 0 stops"
       ],
       "group" : "lab",
-      "hint" : "Measured development conditions for this stock. The saved stop value is preserved when the menu is rebuilt. Pair a push with the intended camera exposure.",
+      "hint" : "Development conditions for this stock. The saved stop value is preserved when the menu is rebuilt. Pair a push with the intended camera exposure.",
       "kind" : "choice",
       "label" : "Push / Pull",
       "ofxName" : "pushCondition",
@@ -151,7 +151,7 @@
     {
       "group" : "lab",
       "kind" : "label",
-      "label" : "Measured Conditions",
+      "label" : "Development Conditions",
       "ofxName" : "developmentStatus",
       "order" : 16,
       "surfaces" : [
@@ -2178,14 +2178,14 @@
       "webTransform" : "profile"
     },
     {
-      "availability" : "measuredDevelopment",
+      "availability" : "developmentConditions",
       "binding" : "developmentEV",
       "commandLineFlag" : "--push",
       "commandLineGeneric" : false,
-      "commandLineHelp" : "Push (positive) or pull (negative) development, in stops (default: 0). Must name an exact condition measured for this stock's stated developer, dilution, temperature and agitation; stocks or stop values without measurements are rejected. Pair a push with its exposure change via --ev",
+      "commandLineHelp" : "Push (positive) or pull (negative) development, in stops (default: 0). Must name a condition the stock pack lists; other values are rejected with the list. Pair a push with its exposure change via --ev",
       "commandLinePlaceholder" : "<stops>",
-      "detail" : "Choose a measured push or pull development setting for this film.",
-      "documentation" : "Adjusts chemical development timing using measured push/pull sensitometry curves.",
+      "detail" : "Choose a push or pull development for this film.",
+      "documentation" : "Adjusts development time using the film's push/pull curves, each measured, carried from a sister film, or estimated from its process.",
       "drives" : [
 
       ],
@@ -2198,7 +2198,7 @@
         "delta" : 0.01,
         "fxplugID" : 22,
         "group" : "lab",
-        "hint" : "Measured push or pull conditions for this film's stated developer, dilution, temperature and agitation. The control is disabled when the stock pack has no measured response.",
+        "hint" : "Push or pull conditions for this film's stated developer and process: measured on its own datasheet, carried from a sister film's published curves, or estimated from the process's published push response. The control is disabled when the stock pack lists no conditions.",
         "kind" : "double",
         "label" : "Push / Pull",
         "max" : 2,

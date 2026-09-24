@@ -1189,7 +1189,7 @@ if let model = flags["--adjacency-model"] {
 if let m = flags["--mottle"] { options.grainMottleShare = Float(m) }
 if let p = flags["--push"] {
     guard let stops = Float(p), stops.isFinite else {
-        fail("Invalid --push value '\(p)'; expected a measured stop value for this stock.")
+        fail("Invalid --push value '\(p)'; expected a stop value this stock lists.")
     }
     do {
         _ = try stock.pushed(stops: stops)

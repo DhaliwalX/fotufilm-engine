@@ -46,13 +46,14 @@ final class WebProfileRequestTests: XCTestCase {
         XCTAssertThrowsError(try request(["halationSpectrum": [1, 2]]).configured())
     }
 
-    func testPushAcceptsOnlyMeasuredConditions() throws {
+    func testPushAcceptsOnlyListedConditions() throws {
         var definition = try XCTUnwrap(FilmStock.presetDefinitions["example-negative-400"])
         let stock = try definition.validated().stock
         definition.development = .init(FilmDevelopmentProfile(
             developer: "synthetic fixture", temperatureC: 20, agitation: "test",
             source: "synthetic regression", sourcePage: 1,
-            conditions: [.init(stops: 1, label: "Push 1", timeMinutes: 10, curves: stock.curves)]))
+            conditions: [.init(stops: 1, label: "Push 1", timeMinutes: 10, basis: .measured,
+                               curves: stock.curves)]))
         XCTAssertEqual(try request(["push": 1], definition: definition).configured().1.developmentEV, 1)
         XCTAssertThrowsError(try request(["push": 0.5], definition: definition).configured())
         XCTAssertThrowsError(try request(["push": 1]).configured())

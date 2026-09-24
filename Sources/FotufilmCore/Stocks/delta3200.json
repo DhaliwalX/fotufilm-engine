@@ -11711,6 +11711,7 @@
         ],
         "exposureIndex": 800,
         "label": "Pull 2 · EI 800 · 7 min",
+        "basis": "measured",
         "stops": -2,
         "timeMinutes": 7
       },
@@ -17560,6 +17561,7 @@
         ],
         "exposureIndex": 6400,
         "label": "Push 1 · EI 6400 · 12 min",
+        "basis": "measured",
         "stops": 1,
         "timeMinutes": 12
       },
@@ -23409,6 +23411,7 @@
         ],
         "exposureIndex": 12500,
         "label": "Push 2 · EI 12500 · 16 min",
+        "basis": "measured",
         "stops": 2,
         "timeMinutes": 16
       }

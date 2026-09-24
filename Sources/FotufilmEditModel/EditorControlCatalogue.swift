@@ -137,11 +137,11 @@ public enum EditorControlCatalogue {
         HostAuxiliary(ofxName: "inspectorShape", fxplugID: 92, group: nil, label: "Inspector Shape",
                       kind: .hiddenString, surfaces: [.finalcut], order: 980),
         HostAuxiliary(ofxName: "pushCondition", group: .lab, label: "Push / Pull",
-                      hint: "Measured development conditions for this stock. The saved stop value is "
+                      hint: "Development conditions for this stock. The saved stop value is "
                           + "preserved when the menu is rebuilt. Pair a push with the intended camera exposure.",
                       kind: .choice(["Reference · 0 stops"], value: 0, persistent: false),
                       surfaces: [.resolve], order: 15),
-        HostAuxiliary(ofxName: "developmentStatus", group: .lab, label: "Measured Conditions",
+        HostAuxiliary(ofxName: "developmentStatus", group: .lab, label: "Development Conditions",
                       kind: .label(text: "Not yet examined", hint: nil), surfaces: [.resolve], order: 16),
         HostAuxiliary(ofxName: "newSeed", group: .grainAdvanced, label: "New Seed",
                       hint: "Choose a different deterministic grain field. Included in Undo with Grain Seed.",
@@ -844,29 +844,29 @@ public enum EditorControlCatalogue {
 
         EditorControl(
             .push, title: "Push",
-            detail: "Choose a measured push or pull development setting for this film.",
+            detail: "Choose a push or pull development for this film.",
             section: .filmLab,
             kind: .slider(EditorControlScale(-2...2, neutral: 0, unit: .stops,
                                              stops: [-2, 0, 1, 2])),
-            availability: .measuredDevelopment,
+            availability: .developmentConditions,
             binding: .developmentEV,
             surfaces: [.app, .desktop, .android, .resolve, .finalcut, .cli, .web],
             host: HostParameter(
                 slot: 12, slotSymbol: "PUSH_PULL", ofxName: "push", fxplugID: 22, group: .lab,
                 label: "Push / Pull",
-                hint: "Measured push or pull conditions for this film's stated developer, dilution, "
-                    + "temperature and agitation. The control is disabled when the stock pack has no "
-                    + "measured response.",
+                hint: "Push or pull conditions for this film's stated developer and process: measured "
+                    + "on its own datasheet, carried from a sister film's published curves, or estimated "
+                    + "from the process's published push response. The control is disabled when the "
+                    + "stock pack lists no conditions.",
                 kind: .double(min: -2, max: 2, value: 0), animates: false, secret: true, order: 10),
             web: .profile,
             commandLine: CommandLineFlag("--push", placeholder: "<stops>",
                                          help: "Push (positive) or pull (negative) development, in stops "
-                                             + "(default: 0). Must name an exact condition measured for "
-                                             + "this stock's stated developer, dilution, temperature and "
-                                             + "agitation; stocks or stop values without measurements are "
-                                             + "rejected. Pair a push with its exposure change via --ev",
+                                             + "(default: 0). Must name a condition the stock pack lists; "
+                                             + "other values are rejected with the list. Pair a push with "
+                                             + "its exposure change via --ev",
                                          generic: false),
-            documentation: "Adjusts chemical development timing using measured push/pull sensitometry curves."),
+            documentation: "Adjusts development time using the film's push/pull curves, each measured, carried from a sister film, or estimated from its process."),
         EditorControl(
             .bleach, title: "Bleach Bypass",
             detail: "Leave silver in the negative to increase contrast and reduce color saturation.",
@@ -1963,6 +1963,29 @@ public enum EditorControlCatalogue {
 }
 
 public extension EditorControlCatalogue {
+    /// Where this film's push and pull curves come from, as the control's detail line.
+    static func pushDetail(_ profile: FilmDevelopmentProfile) -> String {
+        var groups: [(String, [Float])] = []
+        for condition in profile.conditions.sorted(by: { $0.stops < $1.stops }) {
+            let source: String
+            switch condition.basis {
+            case .measured: source = "Measured on this film's datasheet"
+            case .transferred(let stock): source = "Carried from \(stock)'s published curves"
+            case .estimated: source = "Estimated from the process's published push response"
+            }
+            if let index = groups.firstIndex(where: { $0.0 == source }) {
+                groups[index].1.append(condition.stops)
+            } else {
+                groups.append((source, [condition.stops]))
+            }
+        }
+        if groups.count == 1 { return groups[0].0 + "." }
+        return groups.map { source, stops in
+            let values = stops.map { String(format: $0 == $0.rounded() ? "%+.0f" : "%+.2g", $0) }
+            return "\(source): \(values.joined(separator: ", "))."
+        }.joined(separator: " ")
+    }
+
     static func controls(for stock: FilmStock?, on surface: EditorSurface = .app) -> [EditorControl] {
         all.compactMap { control in
             guard control.offered(on: surface) else { return nil }
@@ -1986,7 +2009,8 @@ public extension EditorControlCatalogue {
                 .map { Double($0) }
             guard let lower = stops.first, let upper = stops.last else { return nil }
             return EditorControl(
-                control.field, title: control.title, detail: control.detail,
+                control.field, title: control.title,
+                detail: stock.developmentProfile.map(pushDetail) ?? control.detail,
                 section: control.section,
                 kind: .slider(EditorControlScale(
                     lower...upper, neutral: 0, unit: .stops, stops: stops)),

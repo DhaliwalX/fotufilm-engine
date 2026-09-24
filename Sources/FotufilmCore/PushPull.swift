@@ -1,21 +1,35 @@
 import Foundation
 
-/// One measured result of developing a stock away from its pack's reference process.
+/// What stands behind a development condition's curves.
+public enum FilmDevelopmentBasis: Sendable, Equatable {
+    /// Read from this stock's own published development family.
+    case measured
+    /// Another stock's published push or pull, carried onto this stock's own curves.
+    case transferred(from: String)
+    /// A process-level rule — the published development-time table and the response the process's
+    /// measured families share — applied to this stock's own curves.
+    case estimated
+}
+
+/// One result of developing a stock away from its pack's reference process.
 ///
 /// Push/pull is not a stock-only exponent. The developer, dilution, temperature, agitation and
 /// time jointly determine the finished characteristic curves, and colour records need not move
-/// together. A condition therefore carries the complete measured curves rather than rates to
-/// apply to the reference curves. Optional fields are replaced only where the same source measured
-/// them; an absent measurement never becomes an inferred grain or adjacency change.
+/// together. A condition therefore carries complete curves rather than rates the engine applies
+/// to the reference curves, and states in `basis` where those curves come from. Optional fields
+/// are replaced only where a source states them; an absent statement never becomes an inferred
+/// grain or adjacency change.
 public struct FilmDevelopmentCondition: Sendable {
     /// Exposure-rating difference from the pack's reference process, in stops.
     public var stops: Float
     /// Label printed in editors and validation errors.
     public var label: String
-    /// Development time that produced these measurements.
+    /// Development time the condition describes.
     public var timeMinutes: Float
     /// Meter setting associated with this condition, where the source states one.
     public var exposureIndex: Float?
+    /// Where the curves come from.
+    public var basis: FilmDevelopmentBasis
     /// Complete dye-forming layer curves at this condition.
     public var curves: [CharacteristicCurve]
     /// Complete donor-layer curves, where the stock coats donor records.
@@ -32,6 +46,7 @@ public struct FilmDevelopmentCondition: Sendable {
         label: String,
         timeMinutes: Float,
         exposureIndex: Float? = nil,
+        basis: FilmDevelopmentBasis,
         curves: [CharacteristicCurve],
         donorCurves: [CharacteristicCurve] = [],
         grainStrength: Float? = nil,
@@ -44,6 +59,7 @@ public struct FilmDevelopmentCondition: Sendable {
         self.label = label
         self.timeMinutes = timeMinutes
         self.exposureIndex = exposureIndex
+        self.basis = basis
         self.curves = curves
         self.donorCurves = donorCurves
         self.grainStrength = grainStrength
@@ -85,7 +101,7 @@ public struct FilmDevelopmentProfile: Sendable {
 
 public enum FilmDevelopmentError: Error, Equatable, CustomStringConvertible, LocalizedError {
     case unavailable(stock: String, requestedStops: Float)
-    case unmeasuredCondition(stock: String, requestedStops: Float, availableStops: [Float])
+    case unlistedCondition(stock: String, requestedStops: Float, availableStops: [Float])
     case invalidProfile(stock: String, condition: String, reason: String)
 
     public var errorDescription: String? { "invalid development request: \(description)" }
@@ -93,12 +109,12 @@ public enum FilmDevelopmentError: Error, Equatable, CustomStringConvertible, Loc
     public var description: String {
         switch self {
         case let .unavailable(stock, requested):
-            return "\(stock) has no measured push/pull response; cannot apply \(Self.stops(requested))"
-        case let .unmeasuredCondition(stock, requested, available):
+            return "\(stock) has no push/pull conditions; cannot apply \(Self.stops(requested))"
+        case let .unlistedCondition(stock, requested, available):
             let choices = available.map(Self.stops).joined(separator: ", ")
-            return "\(stock) has no measured response at \(Self.stops(requested)); available: \(choices)"
+            return "\(stock) has no condition at \(Self.stops(requested)); available: \(choices)"
         case let .invalidProfile(stock, condition, reason):
-            return "\(stock) has an invalid measured condition '\(condition)': \(reason)"
+            return "\(stock) has an invalid development condition '\(condition)': \(reason)"
         }
     }
 
@@ -114,26 +130,26 @@ public extension FilmStock {
         developmentProfile?.conditions.map(\.stops).sorted() ?? []
     }
 
-    var hasMeasuredDevelopmentResponse: Bool {
+    var hasDevelopmentConditions: Bool {
         !supportedDevelopmentStops.isEmpty
     }
 
-    /// Whether a requested condition is measured. Reference development is always exact because
+    /// Whether a requested condition is listed. Reference development is always exact because
     /// it is the stock itself; it is not repeated in `developmentProfile.conditions`.
     func supportsDevelopment(stops: Float) -> Bool {
         stops == 0 || developmentCondition(stops: stops) != nil
     }
 
-    /// The stock as measured after the requested development. Reference development returns
-    /// `self` exactly. Any other request must match a pack condition; interpolation would put an
-    /// unmeasured curve back into the path this type exists to remove.
+    /// The stock after the requested development. Reference development returns `self` exactly.
+    /// Any other request must match a pack condition; interpolating between conditions would
+    /// render a curve no source describes.
     func pushed(stops: Float) throws -> FilmStock {
         guard stops != 0 else { return self }
         guard let profile = developmentProfile else {
             throw FilmDevelopmentError.unavailable(stock: name, requestedStops: stops)
         }
         guard let condition = developmentCondition(stops: stops) else {
-            throw FilmDevelopmentError.unmeasuredCondition(
+            throw FilmDevelopmentError.unlistedCondition(
                 stock: name, requestedStops: stops,
                 availableStops: profile.conditions.map(\.stops).sorted())
         }

@@ -19,13 +19,13 @@ final class FilmEnginePreparationTests: XCTestCase {
             developer: "Synthetic test developer", temperatureC: 20,
             agitation: "Test", source: "Synthetic regression fixture", sourcePage: 1,
             conditions: [FilmDevelopmentCondition(
-                stops: 1, label: "+1", timeMinutes: 10, curves: [])])
+                stops: 1, label: "+1", timeMinutes: 10, basis: .measured, curves: [])])
         var options = FotufilmEngine.Options()
         options.developmentEV = 2
         XCTAssertThrowsError(try FilmEngineInvocation(
             validating: stock, options: options, width: 16, height: 12)) { error in
                 XCTAssertEqual(error as? FilmDevelopmentError,
-                               .unmeasuredCondition(stock: stock.name, requestedStops: 2,
+                               .unlistedCondition(stock: stock.name, requestedStops: 2,
                                                     availableStops: [1]))
             }
         options.developmentEV = 1
@@ -99,7 +99,7 @@ final class FilmEnginePreparationTests: XCTestCase {
             child.waitUntilExit()
             XCTAssertNotEqual(child.terminationStatus, 0, entryPoint)
             XCTAssertTrue(output.contains("invalid development request:"), output)
-            XCTAssertTrue(output.contains("no measured push/pull response"), output)
+            XCTAssertTrue(output.contains("no push/pull conditions"), output)
             XCTAssertFalse(output.contains("Install Halide"), output)
         }
     }
@@ -111,7 +111,7 @@ final class FilmEnginePreparationTests: XCTestCase {
             options.developmentEV = stops
             XCTAssertThrowsError(try FilmEngineInvocation(
                 validating: TestStocks.negative, options: options, width: 4, height: 4)) { error in
-                    XCTAssertTrue(String(describing: error).contains("no measured push/pull"))
+                    XCTAssertTrue(String(describing: error).contains("no push/pull conditions"))
                 }
         }
     }
@@ -125,7 +125,7 @@ final class FilmEnginePreparationTests: XCTestCase {
             developer: "Synthetic test developer", temperatureC: 20,
             agitation: "Test", source: "Synthetic regression fixture", sourcePage: 1,
             conditions: [FilmDevelopmentCondition(
-                stops: 1, label: "+1", timeMinutes: 10, curves: pushedCurves)])
+                stops: 1, label: "+1", timeMinutes: 10, basis: .measured, curves: pushedCurves)])
         var options = FotufilmEngine.Options()
         options.developmentEV = 1
         options.grainScale = 0

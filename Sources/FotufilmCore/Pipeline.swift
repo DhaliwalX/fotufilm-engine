@@ -133,11 +133,11 @@ public struct FotufilmEngine {
         /// leave rendering bit-identical.
         public var shutterSeconds: Float? = nil
         /// Stops of push (positive) or pull (negative) development, the instruction on the
-        /// film can's sticker. Non-zero values must name an exact measured condition in the
-        /// stock's `developmentProfile`; arbitrary values and stocks without a measured family
-        /// are rejected rather than receiving a generic contrast/fog/grain transform. Pair a push
-        /// with the underexposure it was bought for (`exposureEV`). 0 — the default — is the
-        /// stock pack's reference development, bit-identically.
+        /// film can's sticker. Non-zero values must name an exact condition in the stock's
+        /// `developmentProfile`, each carrying complete curves and their `basis`; other values and
+        /// stocks without conditions are rejected rather than interpolated. Pair a push with the
+        /// underexposure it was bought for (`exposureEV`). 0 — the default — is the stock pack's
+        /// reference development, bit-identically.
         public var developmentEV: Float = 0
         /// How much of the developed silver the bleach leaves in the negative, 0...1. The bleach's
         /// whole job is to take the metallic silver back out once the dyes are formed; skipping it
