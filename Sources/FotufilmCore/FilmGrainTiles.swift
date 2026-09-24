@@ -110,11 +110,11 @@ extension FilmGrain {
     private final class TileCache: @unchecked Sendable {
         private let lock = NSLock()
         private var entries: [(key: String, tiles: Tiles)] = []
-        func tiles(_ key: String, build: () -> Tiles) -> Tiles {
+        func tiles(_ key: String, build: () throws -> Tiles) rethrows -> Tiles {
             lock.lock()
             if let hit = entries.first(where: { $0.key == key }) { lock.unlock(); return hit.tiles }
             lock.unlock()
-            let built = build()
+            let built = try build()
             lock.lock()
             entries.removeAll { $0.key == key }
             entries.append((key, built))
@@ -128,7 +128,14 @@ extension FilmGrain {
 
     /// This population's tiles, rendered on first use.
     public func tiles() -> Tiles {
-        assetTiles ?? Self.tileCache.tiles(key) { buildTiles(seed: Self.tileSeed) }
+        tiles(checkCancellation: {})
+    }
+
+    func tiles(checkCancellation: () throws -> Void) rethrows -> Tiles {
+        try checkCancellation()
+        return try assetTiles ?? Self.tileCache.tiles(key) {
+            try buildTiles(seed: Self.tileSeed, checkCancellation: checkCancellation)
+        }
     }
 
     /// Transmittance of one record's tile at `gross`, `tileSide²` texels.
@@ -144,6 +151,12 @@ extension FilmGrain {
     }
 
     func buildTiles(seed: UInt64, parallel: Bool = true) -> Tiles {
+        buildTiles(seed: seed, parallel: parallel, checkCancellation: {})
+    }
+
+    func buildTiles(seed: UInt64, parallel: Bool = true,
+                    checkCancellation: () throws -> Void) rethrows -> Tiles {
+        try checkCancellation()
         let active = (monochrome ? [1] : [0, 1, 2]).filter { !records[$0].sublayers.isEmpty }
         let count = active.count * Self.tileLevels
         let results = TileLevelResults(count: count)
@@ -151,8 +164,12 @@ extension FilmGrain {
         // queue fed without opening all 51 levels' temporary render storage at once.
         let workers = min(parallel ? 2 : 1, count)
         if workers > 0 {
-            DispatchQueue.concurrentPerform(iterations: workers) { worker in
-                for index in stride(from: worker, to: count, by: workers) {
+            // Join each pair before checking cancellation on the calling task. Dispatch workers
+            // do not inherit Swift task cancellation. Never publish a partially generated bank.
+            for start in stride(from: 0, to: count, by: workers) {
+                try checkCancellation()
+                DispatchQueue.concurrentPerform(iterations: min(workers, count - start)) { offset in
+                    let index = start + offset
                     let r = active[index / Self.tileLevels], k = index % Self.tileLevels
                     let record = records[r]
                     let gross = record.dMin
@@ -161,6 +178,7 @@ extension FilmGrain {
                 }
             }
         }
+        try checkCancellation()
         var levels = [[TileLevel]](repeating: [], count: 3)
         for (index, record) in active.enumerated() {
             levels[record] = (0..<Self.tileLevels).map { results.values[index * Self.tileLevels + $0]! }
@@ -454,11 +472,11 @@ extension FilmGrain {
         private let tiles: Tiles
         let registrationStatus: Int32
 
-        fileprivate init(grain: FilmGrain, id: Int32) {
+        fileprivate init(grain: FilmGrain, tiles: Tiles, id: Int32) {
             var timing = StageTiming()
             self.grain = grain
             self.id = id
-            tiles = grain.tiles()
+            self.tiles = tiles
             timing.mark("tiles")
             let packed = tiles.packed()
             timing.mark("packing")
@@ -493,12 +511,13 @@ extension FilmGrain {
     /// engine under the id returned. The registry caches the last few populations; complete
     /// rendering invocations retain their binding independently of that cache.
     public static func registered(stock: FilmStock, reference: FilmStock?) -> (grain: FilmGrain, id: Int32) {
-        let binding = registry.entry(stock: stock, reference: reference)
+        let binding = registry.entry(stock: stock, reference: reference, checkCancellation: {})
         return (binding.grain, binding.id)
     }
 
-    static func binding(stock: FilmStock, reference: FilmStock?) -> TileBinding {
-        registry.entry(stock: stock, reference: reference)
+    static func binding(stock: FilmStock, reference: FilmStock?,
+                        checkCancellation: () throws -> Void) rethrows -> TileBinding {
+        try registry.entry(stock: stock, reference: reference, checkCancellation: checkCancellation)
     }
 
     /// The packed tiles a frame's configuration names in its `FILM_TILE` block; nil when the
@@ -519,24 +538,50 @@ extension FilmGrain {
             init(_ value: TileBinding) { self.value = value }
         }
 
-        private let lock = NSLock()
+        private let lock = NSCondition()
         private var entries: [(key: Data, binding: TileBinding)] = []
         private var live: [Int32: WeakBinding] = [:]
         private var nextID: Int32 = 1
+        // Bound cold preparation to one bank, while allowing cached banks to be read immediately.
+        private var preparing = false
 
-        func entry(stock: FilmStock, reference: FilmStock?) -> TileBinding {
+        func entry(stock: FilmStock, reference: FilmStock?,
+                   checkCancellation: () throws -> Void) rethrows -> TileBinding {
             let key = FilmGrainAsset.identity(stock: stock, reference: reference)
             lock.lock()
-            defer { lock.unlock() }
-            if let hit = entries.first(where: { $0.key == key }) { return hit.binding }
-            let grain = FilmGrainAsset.provided(identity: key)
-                ?? FilmGrain(stock: stock, reference: reference)
-            let binding = TileBinding(grain: grain, id: nextID)
+            while true {
+                do { try checkCancellation() } catch { lock.unlock(); throw error }
+                if let hit = entries.first(where: { $0.key == key }) {
+                    lock.unlock()
+                    return hit.binding
+                }
+                if !preparing { break }
+                _ = lock.wait(until: Date(timeIntervalSinceNow: 0.02))
+            }
+            preparing = true
+            let id = nextID
             nextID += 1
+            lock.unlock()
+            defer {
+                lock.lock()
+                preparing = false
+                lock.broadcast()
+                lock.unlock()
+            }
+            let grain = try FilmGrainAsset.provided(identity: key)
+                ?? FilmGrain(stock: stock, reference: reference, useCachedAnchor: true,
+                             checkCancellation: checkCancellation)
+            try checkCancellation()
+            let tiles = try grain.tiles(checkCancellation: checkCancellation)
+            try checkCancellation()
+            let binding = TileBinding(grain: grain, tiles: tiles, id: id)
+            try checkCancellation()
+            lock.lock()
             live = live.filter { $0.value.value != nil }
             live[binding.id] = WeakBinding(binding)
             entries.append((key, binding))
             if entries.count > 4 { entries.removeFirst() }
+            lock.unlock()
             return binding
         }
 

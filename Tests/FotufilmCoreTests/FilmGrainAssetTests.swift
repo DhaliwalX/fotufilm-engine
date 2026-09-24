@@ -6,7 +6,7 @@ final class FilmGrainAssetTests: XCTestCase {
     func testPopulationAndEveryBankBitRoundTripIncludingNondefaultLook() throws {
         for stock in [TestStocks.negative, TestStocks.monochrome, TestStocks.reversal] {
             let identity = FilmGrainAsset.identity(stock: stock)
-            let original = FilmGrain(stock: stock, useCachedAnchor: false)
+            let original = FilmGrain(stock: stock, useCachedAnchor: false, checkCancellation: {})
             let bytes = try FilmGrainAsset.encode(grain: original, identity: identity,
                 tiles: original.buildTiles(seed: FilmGrain.tileSeed))
             let restored = try FilmGrainAsset.decode(bytes, identity: identity)
@@ -79,7 +79,7 @@ final class FilmGrainAssetTests: XCTestCase {
         let bytes = try FilmGrainAsset.generate(stock: stock)
         let identity = FilmGrainAsset.identity(stock: stock)
         FilmGrain.installAssetProvider { requested in requested == identity ? bytes : nil }
-        let loaded = FilmGrain.binding(stock: stock, reference: nil)
+        let loaded = FilmGrain.binding(stock: stock, reference: nil, checkCancellation: {})
         XCTAssertTrue(loaded.usedAsset)
         XCTAssertEqual(try FilmGrainAsset.encode(grain: loaded.grain, identity: identity), bytes)
         // The generation API must ignore both an installed provider and a live asset binding.
@@ -90,7 +90,7 @@ final class FilmGrainAssetTests: XCTestCase {
             empty.name = "Asset fallback \(label) \(UUID().uuidString)"
             empty.grainStrength = 0
             FilmGrain.installAssetProvider { _ in supplied }
-            let fallback = FilmGrain.binding(stock: empty, reference: nil)
+            let fallback = FilmGrain.binding(stock: empty, reference: nil, checkCancellation: {})
             XCTAssertFalse(fallback.usedAsset, label)
             XCTAssertTrue(fallback.grain.records.allSatisfy { $0.sublayers.isEmpty }, label)
         }
