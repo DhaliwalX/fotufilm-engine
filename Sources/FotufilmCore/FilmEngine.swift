@@ -475,6 +475,8 @@ public struct FilmEngineInvocation {
     public var configuration: [Float]
     /// Keeps the frame's canonical Film bank registered across cache eviction and tile calls.
     public let filmTileBinding: FilmGrain.TileBinding?
+    /// The Film grain population this develop draws, bound or not; nil under another model.
+    public let filmGrainPopulation: FilmGrain.Population?
     public var spectral: SpectralPipelineTables
     public var spectralCacheID: UInt64
     public var featureMask: Int32
@@ -841,9 +843,14 @@ public struct FilmEngineInvocation {
     /// development condition, or `CancellationError` when the calling task is cancelled. Cold
     /// Film grain preparation checks cancellation between calibration passes and tile batches.
     /// Valid settings produce the same configuration as `init(stock:...)`.
+    ///
+    /// `bindsFilmGrain: false` is for an invocation that is only measured — its feature mask and
+    /// supports, for a memory estimate — and never rendered: it skips the Film grain population,
+    /// which a stock without a bundled one takes seconds to prepare, and leaves the film tile block
+    /// empty.
     public init(validating stock: FilmStock, options: FotufilmEngine.Options,
                 width: Int, height: Int, frameIndex: UInt64 = 0,
-                noFilm: Bool = false,
+                noFilm: Bool = false, bindsFilmGrain: Bool = true,
                 checkCancellation: () throws -> Void = { try Task.checkCancellation() }) throws {
         try checkCancellation()
         var options = options
@@ -1466,7 +1473,9 @@ public struct FilmEngineInvocation {
         // The byte frames' primaries, input then output: Display P3 until a road says sRGB.
         configuration += [0, 0]
         configuration += stock.grainDensityProfile.records.flatMap { $0 }
-        if filmActive {
+        filmGrainPopulation = filmActive
+            ? FilmGrain.Population(stock: stock, reference: referenceRoll) : nil
+        if filmActive && bindsFilmGrain {
             let film = try FilmGrain.binding(stock: stock, reference: referenceRoll,
                                              checkCancellation: checkCancellation)
             if film.registrationStatus != 0,

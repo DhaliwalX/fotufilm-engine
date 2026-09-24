@@ -89,6 +89,29 @@ final class FilmGrainCancellationTests: XCTestCase {
         await waiting.value
     }
 
+    func testMeasuredInvocationNamesThePopulationWithoutPreparingIt() throws {
+        var stock = TestStocks.negative
+        stock.name = "Measured only \(UUID().uuidString)"
+        var options = FotufilmEngine.Options()
+        options.grainModel = .film
+        let measured = try FilmEngineInvocation(validating: stock, options: options,
+                                                width: 64, height: 48, bindsFilmGrain: false,
+                                                checkCancellation: {})
+        XCTAssertNil(measured.filmTileBinding)
+        let population = try XCTUnwrap(measured.filmGrainPopulation)
+        XCTAssertFalse(FilmGrain.isPrepared(population))
+        let rendered = try FilmEngineInvocation(validating: stock, options: options,
+                                                width: 64, height: 48, checkCancellation: {})
+        XCTAssertNotNil(rendered.filmTileBinding)
+        XCTAssertEqual(rendered.filmGrainPopulation?.identity, population.identity)
+        XCTAssertTrue(FilmGrain.isPrepared(population))
+        XCTAssertEqual(measured.featureMask, rendered.featureMask)
+        XCTAssertEqual(measured.spatialSupport, rendered.spatialSupport)
+        XCTAssertEqual(measured.spatialSupportSansHalation, rendered.spatialSupportSansHalation)
+        XCTAssertEqual(measured.lightSupport, rendered.lightSupport)
+        XCTAssertEqual(measured.halationPixelRadii, rendered.halationPixelRadii)
+    }
+
     func testValidatingInvocationHonoursTaskCancellation() async {
         let task = Task.detached {
             withUnsafeCurrentTask { $0?.cancel() }
