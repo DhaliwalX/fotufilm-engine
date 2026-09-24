@@ -1720,8 +1720,11 @@ public final class HalideMetalFilmRenderer {
                                         stock: FilmStock,
                                         options: FotufilmEngine.Options,
                                         exactMath: Bool = false) -> Int? {
+        // Only the invocation's mask and supports are read, so it skips the Film grain population:
+        // the export sheet asks this on the main thread.
         guard var invocation = try? FilmEngineInvocation(
-            validating: stock, options: options, width: width, height: height)
+            validating: stock, options: options, width: width, height: height,
+            bindsFilmGrain: false)
         else { return nil }
         invocation.featureMask |= FilmEngineFeature.floatIO
         if exactMath { invocation.featureMask |= FilmEngineFeature.exactMath }

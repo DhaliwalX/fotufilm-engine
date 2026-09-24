@@ -143,6 +143,9 @@ public enum FilmGrainAsset {
 
     static func install(_ value: (@Sendable (Data) -> Data?)?) { provider.set(value) }
 
+    /// Whether the provider carries a population for `identity`, without decoding it.
+    static func isProvided(identity: Data) -> Bool { provider.get()?(identity) != nil }
+
     static func provided(identity: Data) -> FilmGrain? {
         var timing = StageTiming()
         guard let data = provider.get()?(identity) else { return nil }

@@ -520,6 +520,30 @@ extension FilmGrain {
         try registry.entry(stock: stock, reference: reference, checkCancellation: checkCancellation)
     }
 
+    /// The rolls a develop's Film grain population is prepared for — the developed roll and its
+    /// reference-process twin — as `FilmEngineInvocation.filmGrainPopulation` names them.
+    public struct Population: Sendable {
+        let stock: FilmStock
+        let reference: FilmStock?
+        /// Equal for every develop that draws the same population.
+        public var identity: Data { FilmGrainAsset.identity(stock: stock, reference: reference) }
+    }
+
+    /// Whether a develop would find `population` without preparing it: kept from an earlier
+    /// develop, or carried by the asset provider. Preparing one takes seconds.
+    public static func isPrepared(_ population: Population) -> Bool {
+        registry.isPrepared(population.identity)
+    }
+
+    /// Prepares `population` and keeps it. A population depends on the roll, not on the grade, so
+    /// a caller that develops again at every edit prepares it here, on a task only a change of
+    /// roll cancels, rather than inside develops that each edit cancels.
+    public static func prepare(_ population: Population,
+                               checkCancellation: () throws -> Void) rethrows {
+        _ = try registry.entry(stock: population.stock, reference: population.reference,
+                               checkCancellation: checkCancellation)
+    }
+
     /// The packed tiles a frame's configuration names in its `FILM_TILE` block; nil when the
     /// frame uses another model or neither a frame nor the cache retains its binding.
     public static func registeredTiles(configuration: [Float]) -> [Float]? {
@@ -548,6 +572,12 @@ extension FilmGrain {
         func entry(stock: FilmStock, reference: FilmStock?,
                    checkCancellation: () throws -> Void) rethrows -> TileBinding {
             let key = FilmGrainAsset.identity(stock: stock, reference: reference)
+            if let hit = cached(key) { return hit }
+            // A provided population only decodes, so it does not queue behind a cold preparation.
+            if let provided = FilmGrainAsset.provided(identity: key) {
+                return publish(key, grain: provided,
+                               tiles: try provided.tiles(checkCancellation: checkCancellation))
+            }
             lock.lock()
             while true {
                 do { try checkCancellation() } catch { lock.unlock(); throw error }
@@ -559,8 +589,6 @@ extension FilmGrain {
                 _ = lock.wait(until: Date(timeIntervalSinceNow: 0.02))
             }
             preparing = true
-            let id = nextID
-            nextID += 1
             lock.unlock()
             defer {
                 lock.lock()
@@ -568,20 +596,38 @@ extension FilmGrain {
                 lock.broadcast()
                 lock.unlock()
             }
-            let grain = try FilmGrainAsset.provided(identity: key)
-                ?? FilmGrain(stock: stock, reference: reference, useCachedAnchor: true,
-                             checkCancellation: checkCancellation)
+            let grain = try FilmGrain(stock: stock, reference: reference, useCachedAnchor: true,
+                                      checkCancellation: checkCancellation)
             try checkCancellation()
             let tiles = try grain.tiles(checkCancellation: checkCancellation)
             try checkCancellation()
-            let binding = TileBinding(grain: grain, tiles: tiles, id: id)
-            try checkCancellation()
+            return publish(key, grain: grain, tiles: tiles)
+        }
+
+        func isPrepared(_ key: Data) -> Bool {
+            cached(key) != nil || FilmGrainAsset.isProvided(identity: key)
+        }
+
+        private func cached(_ key: Data) -> TileBinding? {
             lock.lock()
+            defer { lock.unlock() }
+            return entries.first(where: { $0.key == key })?.binding
+        }
+
+        /// Registers a finished population, or hands back the one another caller finished first.
+        private func publish(_ key: Data, grain: FilmGrain, tiles: Tiles) -> TileBinding {
+            lock.lock()
+            let id = nextID
+            nextID += 1
+            lock.unlock()
+            let binding = TileBinding(grain: grain, tiles: tiles, id: id)
+            lock.lock()
+            defer { lock.unlock() }
+            if let hit = entries.first(where: { $0.key == key }) { return hit.binding }
             live = live.filter { $0.value.value != nil }
             live[binding.id] = WeakBinding(binding)
             entries.append((key, binding))
             if entries.count > 4 { entries.removeFirst() }
-            lock.unlock()
             return binding
         }
 
