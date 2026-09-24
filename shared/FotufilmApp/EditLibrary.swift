@@ -33,10 +33,24 @@ final class EditLibrary {
                 return .failed
             }
         }
+
+        /// Rewrites the record on disk in place, after every write queued ahead of it.
+        func rewrite(_ url: URL, revision: UInt64,
+                     _ change: @Sendable (Data) -> Data?) -> Result {
+            guard revision >= newestRevision[url, default: 0] else {
+                return .superseded
+            }
+            guard let old = try? Data(contentsOf: url), let data = change(old) else {
+                return .failed
+            }
+            return write(data, to: url, revision: revision)
+        }
     }
 
     private static let recordWriter = RecordWriter()
     private var nextRecordRevision: UInt64 = 0
+    /// Saves still on their way to the writer, by entry.
+    private var pendingRecordWrites: [String: Int] = [:]
     private var newestAppliedRecordRevision: [String: UInt64] = [:]
 
     /// One edited photograph, as the gallery sees it.
@@ -55,13 +69,15 @@ final class EditLibrary {
         var stockID: String = ""
         /// Whether this entry only *points* at its media rather than keeping it.
         var isVideo = false
+        /// A photograph whose original is the library asset's rather than a copy kept here.
+        var linksOriginal = false
 
         var directory: URL { EditLibrary.root.appendingPathComponent(id) }
         var thumbnailURL: URL {
             directory.appendingPathComponent(EditLibrary.thumbName)
         }
         /// The untouched bytes this edit develops from — absent for entries that only point at
-        /// their media.
+        /// their media: clips, and photographs that link their library original.
         var originalURL: URL {
             directory.appendingPathComponent(EditLibrary.originalName)
         }
@@ -80,6 +96,15 @@ final class EditLibrary {
         var edit: EditState
         /// Optional for backward compatibility because synthesized decoding ignores property defaults.
         var isVideo: Bool?
+        /// The original is the library asset's; no copy is kept beside the record.
+        var linksOriginal: Bool?
+    }
+
+    /// Where an entry's original lives.
+    enum Original {
+        case bytes(Data)
+        /// The library asset with this identifier; the caller reads it from the library.
+        case libraryAsset(String)
     }
 
     private nonisolated static let originalName = "original"
@@ -157,7 +182,8 @@ final class EditLibrary {
                              assetIdentifier: record.assetIdentifier,
                              thumbStamp: stamp ?? record.modified,
                              stockID: record.edit.stockID,
-                             isVideo: record.isVideo ?? false)
+                             isVideo: record.isVideo ?? false,
+                             linksOriginal: record.linksOriginal ?? false)
             }
             .sorted { $0.modified > $1.modified }
             return (entries, developed)
@@ -209,15 +235,17 @@ final class EditLibrary {
         return id
     }
 
-    /// Puts a clip's grade on the shelf without its bytes: the record and the identifier of the
-    /// library asset it develops, and nothing else.
-    func create(linkedAsset identifier: String,
-                edit: EditState) async -> String? {
+    /// Puts an edit on the shelf without its bytes: the record and the identifier of the library
+    /// asset it develops, and nothing else. A clip is always kept this way; a photograph is when
+    /// the shelf stays on this device, where the library it links is.
+    func create(linkedAsset identifier: String, rawTypeHint: String? = nil,
+                isVideo: Bool, edit: EditState) async -> String? {
         let id = UUID().uuidString
         let dir = Self.root.appendingPathComponent(id)
-        let record = Record(created: .now, modified: .now, rawTypeHint: nil,
+        let record = Record(created: .now, modified: .now, rawTypeHint: rawTypeHint,
                             assetIdentifier: identifier, edit: edit,
-                            isVideo: true)
+                            isVideo: isVideo ? true : nil,
+                            linksOriginal: isVideo ? nil : true)
         let written = await Task.detached(priority: .utility) { () -> Bool in
             do {
                 try FileManager.default.createDirectory(
@@ -232,11 +260,12 @@ final class EditLibrary {
         guard written else { return nil }
         entries.insert(Entry(id: id, created: record.created,
                              modified: record.modified,
-                             rawTypeHint: nil,
+                             rawTypeHint: rawTypeHint,
                              assetIdentifier: identifier,
                              thumbStamp: record.modified,
                              stockID: edit.stockID,
-                             isVideo: true), at: 0)
+                             isVideo: isVideo,
+                             linksOriginal: !isVideo), at: 0)
         return id
     }
 
@@ -252,13 +281,16 @@ final class EditLibrary {
         let record = Record(created: entry.created, modified: entry.modified,
                             rawTypeHint: entry.rawTypeHint,
                             assetIdentifier: entry.assetIdentifier, edit: edit,
-                            isVideo: entry.isVideo ? true : nil)
+                            isVideo: entry.isVideo ? true : nil,
+                            linksOriginal: entry.linksOriginal ? true : nil)
         guard let data = try? Self.encode(record) else { return false }
         nextRecordRevision &+= 1
         let revision = nextRecordRevision
         let url = entry.directory.appendingPathComponent(Self.recordName)
+        pendingRecordWrites[id, default: 0] += 1
         let result = await Self.recordWriter.write(data, to: url,
                                                    revision: revision)
+        pendingRecordWrites[id, default: 1] -= 1
         switch result {
         case .failed:
             return false
@@ -328,17 +360,71 @@ final class EditLibrary {
         return data as Data
     }
 
-    /// Everything a reopen needs: the original bytes and the saved state.
-    func load(id: String) async -> (data: Data, rawTypeHint: String?,
+    /// Everything a reopen needs: where the original is and the saved state. A copy kept here
+    /// wins over a link, so an entry caught between the two still opens its own photograph.
+    func load(id: String) async -> (original: Original, rawTypeHint: String?,
                                     edit: EditState)? {
         let dir = Self.root.appendingPathComponent(id)
         return await Task.detached(priority: .userInitiated) {
-            guard let record = Self.readRecord(in: dir),
-                  let data = try? Data(contentsOf:
-                    dir.appendingPathComponent(Self.originalName))
-            else { return nil }
-            return (data, record.rawTypeHint, record.edit.openableByPurchase())
+            guard let record = Self.readRecord(in: dir) else { return nil }
+            let original: Original
+            if let data = try? Data(contentsOf: dir.appendingPathComponent(Self.originalName)) {
+                original = .bytes(data)
+            } else if record.linksOriginal == true, let asset = record.assetIdentifier {
+                original = .libraryAsset(asset)
+            } else {
+                return nil
+            }
+            return (original, record.rawTypeHint, record.edit.openableByPurchase())
         }.value
+    }
+
+    /// Drops the copy an entry keeps of a library original, leaving the link. The caller has
+    /// checked the library still holds these very bytes. The record is marked first, so an
+    /// interruption leaves a marked entry that still has its copy.
+    func linkOriginal(id: String) async -> Bool {
+        guard let index = entries.firstIndex(where: { $0.id == id }),
+              !entries[index].isVideo, !entries[index].linksOriginal,
+              entries[index].assetIdentifier != nil else { return false }
+        let original = entries[index].originalURL
+        guard await relink(id: id, linksOriginal: true) else { return false }
+        await Task.detached(priority: .utility) {
+            try? FileManager.default.removeItem(at: original)
+        }.value
+        return true
+    }
+
+    /// Keeps a copy of a linked entry's original again — for a shelf about to leave this device,
+    /// and the library with it. The copy is written before the record forgets the link.
+    func keepOriginal(id: String, data: Data) async -> Bool {
+        guard let index = entries.firstIndex(where: { $0.id == id }),
+              entries[index].linksOriginal else { return false }
+        let original = entries[index].originalURL
+        let written = await Task.detached(priority: .utility) { () -> Bool in
+            (try? data.write(to: original, options: .atomic)) != nil
+        }.value
+        guard written else { return false }
+        return await relink(id: id, linksOriginal: false)
+    }
+
+    /// Changes an entry's link on disk without touching its edit. Refused while a save is on its
+    /// way, which would carry the old link; saves started from here on carry the new one.
+    private func relink(id: String, linksOriginal: Bool) async -> Bool {
+        guard pendingRecordWrites[id, default: 0] == 0,
+              let index = entries.firstIndex(where: { $0.id == id }) else { return false }
+        entries[index].linksOriginal = linksOriginal
+        nextRecordRevision &+= 1
+        let url = entries[index].directory.appendingPathComponent(Self.recordName)
+        let result = await Self.recordWriter.rewrite(url, revision: nextRecordRevision) { old in
+            guard var record = Self.decode(old) else { return nil }
+            record.linksOriginal = linksOriginal ? true : nil
+            return try? Self.encode(record)
+        }
+        guard result == .failed else { return true }
+        if let current = entries.firstIndex(where: { $0.id == id }) {
+            entries[current].linksOriginal = !linksOriginal
+        }
+        return false
     }
 
     /// The newest edit made from a given library photograph, if one exists — `entries` is
@@ -414,6 +500,10 @@ final class EditLibrary {
         guard let data = try? Data(contentsOf:
                 directory.appendingPathComponent(recordName))
         else { return nil }
+        return decode(data)
+    }
+
+    private nonisolated static func decode(_ data: Data) -> Record? {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try? decoder.decode(Record.self, from: data)
