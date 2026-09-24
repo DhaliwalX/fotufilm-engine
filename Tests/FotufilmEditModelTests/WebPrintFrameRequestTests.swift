@@ -18,7 +18,7 @@ final class WebPrintFrameRequestTests: XCTestCase {
     }
 
     func testEveryFrameUsesNativePhysicalMaterialAndOrientation() throws {
-        for frame in PrintFrame.allCases {
+        for frame in PrintFrame.allCases where frame != .emulsion {
             let stock = frame == .slideMount ? "ektachromee100" : "gold200"
             let paper = frame == .slideMount ? "ilfochrome-cps-1k" : "ektacolor-edge"
             for size in [(300, 200), (200, 300), (100, 100)] {
@@ -49,6 +49,10 @@ final class WebPrintFrameRequestTests: XCTestCase {
         XCTAssertEqual(normal.configuration.frame, .none)
         XCTAssertFalse(normal.available.contains(.film))
         XCTAssertTrue(normal.available.contains(.socialStory))
+        // The browser does not develop the film beyond the gate that Emulsion Border prints.
+        let emulsion = try result(request(.emulsion))
+        XCTAssertEqual(emulsion.configuration.frame, .none)
+        XCTAssertFalse(emulsion.available.contains(.emulsion))
         let projected = try result(request(.paper, medium: "vision-2383"))
         XCTAssertEqual(projected.configuration.frame, .none)
         for format in ["35mm", "super35", "16mm", "super8", "120", "4x5"] {

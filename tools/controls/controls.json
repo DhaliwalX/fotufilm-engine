@@ -4505,7 +4505,7 @@
           "value" : 7
         },
         {
-          "detail" : "A dark, uneven edge with soft wear and a white paper margin.",
+          "detail" : "The film just outside the camera gate, printed with the photograph: the stock's own unexposed tone, glow and grain, inside a paper margin.",
           "id" : "emulsion",
           "label" : "Emulsion Border",
           "value" : 8
@@ -4542,7 +4542,7 @@
         }
       ],
       "detail" : "Choose a film, slide mount, paper, carrier, emulsion, plain mount, or posting canvas.",
-      "documentation" : "Choose Film Border for the selected film gauge, Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for a dark, uneven edge on a white margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports.",
+      "documentation" : "Choose Film Border for the selected film gauge, Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for the film's unexposed edge outside the camera gate — the stock's own tone, halation glow and grain — printed with the photograph inside a paper margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports.",
       "drives" : [
 
       ],

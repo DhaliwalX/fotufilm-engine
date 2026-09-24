@@ -204,7 +204,7 @@ selection is retained for other frames.
 White Mount and Black Mount are crop-following presentation margins with no material behind
 them: 8% of the photograph's short side on every side, rounded up to whole pixels. White Mount
 uses the selected reflection paper's modelled base and Viewing Light where there is one and the
-same neutral 0.91 display-linear P3 mount as Emulsion Border elsewhere. Black Mount is a neutral
+same neutral 0.91 display-linear P3 mount as Emulsion Border's margin elsewhere. Black Mount is a neutral
 0.02 display-linear P3 board on every output; it is not a paper's maximum density. Both are
 available with every film and output medium, including scans and Negative.
 
@@ -220,29 +220,52 @@ own; the margin is a presentation choice. These are offered with every film and 
 
 ## Emulsion Border
 
-Emulsion Border is a reference-inspired presentation style: a dense blue-black band, gently
-uneven silhouette, mottled translucent residue, a few subdued brown traces, and a clean white
-mount. It does not identify or claim measured properties of a particular film, transfer process,
-or paper product. The existing Film Border and Paper Border retain their physical constructions.
-No perforations, sheet notches, frame numbers or manufacturer inscriptions are added to this style.
+Emulsion Border prints the film just outside the camera gate around the photograph. Nothing
+about the band is drawn: the photograph's light falls on a piece of film larger than the aperture,
+and that whole piece is developed and printed as one frame (`UnexposedEdge`,
+`FilmRender.developFilm(beyond:)`).
 
-The mount follows the chosen crop, without fitting it to a film aperture or fixed paper aspect.
-Horizontal margins are 9.5% and vertical margins 13.5% of the photograph's short side, rounded up
-to whole pixels. The dark band is approximately 3.2% of that side, with variable outer wear.
-These proportions are presentation choices. Reflection outputs retain their selected paper's
-modelled base and Viewing Light; all other outputs use a neutral mount at 0.91 display-linear P3.
-The chosen output medium is preserved, including an explicitly selected Negative output.
+- **The lens's image.** The host places the photograph in the middle of the larger frame and
+  continues it past its edges from the nearest edge pixel: the world does not stop at the frame
+  edge, the gate does. Everything the lens forms — the direct image, a diffusion filter's halo,
+  veiling glare, a camera preflash — is formed over the whole plane, so the glare meter and the
+  halo near the edge see what they see in the photograph's own develop.
+- **The gate.** The renderers then pass that light through the gate (FOTUFILM_CONFIG_GATE): 1
+  inside the aperture, 0 beyond it, and between them the shadow of the edge. Everything after it —
+  halation, emulsion diffusion, couplers, development, grain, the print — is the film's own and runs
+  over the whole frame, the shaded film included.
+- **Tone.** Beyond the gate the film saw no light, so it prints as whatever the chosen output makes
+  of unexposed film: base plus fog on a negative, maximum density on a reversal stock, through the
+  same receiver, levels and viewing light as the picture. Auto Levels prints on the photograph's own
+  reading rather than one metered over film the gate shaded.
+- **Glow and grain.** The frame's light spreads past the gate through the stock's halation and
+  emulsion diffusion, as far and in the colour its layers return it, and the grain runs unbroken
+  from the picture into the band at the stock's own density. The film's scale is the photograph's:
+  it is reckoned from the aperture, not from the larger buffer.
+- **Inner edge.** The gate's aperture plate stands in front of the emulsion by
+  `gateSeparationMM` = 0.15 mm, about one support thickness between the film's outer and inner
+  rails. Each point of the exit pupil casts the edge at a different place, so each edge passes the
+  fraction of a uniform pupil disc on the open side of a straight line, of radius `0.15 / (2 N)` mm,
+  drawn for a reference aperture of f/8 (`referenceFNumber`); the two axes multiply. Both figures are
+  representative, not measurements of a particular camera.
+- **Width.** The film runs from the gate to the first thing that is not continuous emulsion, in
+  the gauge's `FilmBorderGeometry`: the inner edge of the perforation row, the film's cut edge on
+  unperforated gauges, or halfway to the next frame along the roll. On 135 that is about 0.70 mm
+  across and 1.0 mm along the film; 120 and sheet film run to the edge. A photograph standing the
+  other way from the aperture turns the film with it. The outer edge is the straight cut of the
+  film or the perforation row, with no wear.
+- **Selective edits** are drawn on the photograph; their mask reaches the film beyond as the picture
+  does, continued from the nearest edge.
 
-The procedural edge is deterministic in coordinates normalised to the photo's short side.
-Its separate sRGB texture is bounded to 2048 pixels on its long side, then colour-managed into
-the output profile. The photograph is copied first at full resolution, with no cropping or
-resampling, and the band is laid over it: a lifted emulsion's picture fades into its dark rim
-rather than stopping at a cut line, so the band's inner edge bleeds a soft, uneven way into the
-photograph — dense against the edge, gone within 4.5% of the short side, with the same coarse
-and toothed noise breaking the line up. The renderer clips the band at that rim, so every pixel
-deeper than it is exactly the developed photograph; this is the one frame that alters any
-photograph pixel. The mounted output retains 16-bit precision and the photograph's colour
-profile, including P3 and HLG. No scanned borders or reference photos ship.
+The band is offered with any film and any roll or sheet gauge; integral instant film has its mask
+there instead of emulsion and Normal has no film. The browser does not offer it: its kernels carry the
+gate, but its host does not build the larger frame. The paper margin beyond the band follows the
+crop at 7% of the photograph's short side horizontally and 11% vertically, rounded up to whole
+pixels, and is the selected reflection paper's modelled base and Viewing Light where there is one
+and a neutral 0.91 display-linear P3 mount elsewhere. The developed film goes down whole at integer
+pixel coordinates in its colour profile and 16-bit precision. The photograph inside it is the same
+develop as the band, so it is not the photograph's own unframed develop pixel for pixel: near the
+gate the film's halation and scatter see the dark film beyond it instead of more picture.
 
 ## Positive paper
 

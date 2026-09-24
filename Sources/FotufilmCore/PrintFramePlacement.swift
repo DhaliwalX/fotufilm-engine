@@ -14,20 +14,28 @@ public struct PrintFramePlacement: Codable, Equatable, Sendable {
     public let scale: Double
     public let rotated: Bool
 
-    public static func layout(width: Int, height: Int, configuration: PrintFrameConfiguration) -> Self {
+    /// `edge` is the Emulsion Border's developed band around the photograph; the paper margin
+    /// stands beyond it. Every other frame ignores it.
+    public static func layout(width: Int, height: Int, configuration: PrintFrameConfiguration,
+                              edge: UnexposedEdge.Margins? = nil) -> Self {
         guard configuration.frame != .none else {
             return Self(size: Size(width: Double(width), height: Double(height)),
                           image: Rect(x: 0, y: 0, width: Double(width), height: Double(height)),
                           scale: 1, rotated: false)
         }
         if configuration.frame == .emulsion || configuration.frame.isPlainMount {
-            // A crop-following mount, not a claim of physical film or paper dimensions.
+            // A crop-following mount, not a claim of physical film or paper dimensions. The
+            // Emulsion Border's band is the film's own and stands inside the mount.
+            let band = configuration.frame == .emulsion
+                ? edge ?? UnexposedEdge.Margins(left: 0, right: 0, top: 0, bottom: 0)
+                : UnexposedEdge.Margins(left: 0, right: 0, top: 0, bottom: 0)
             let short = Double(min(width, height))
-            let horizontal = ceil(short * (configuration.frame == .emulsion ? 0.095 : 0.08))
-            let vertical = ceil(short * (configuration.frame == .emulsion ? 0.135 : 0.08))
-            return Self(size: Size(width: Double(width) + 2 * horizontal,
-                                       height: Double(height) + 2 * vertical),
-                          image: Rect(x: horizontal, y: vertical,
+            let horizontal = ceil(short * (configuration.frame == .emulsion ? 0.07 : 0.08))
+            let vertical = ceil(short * (configuration.frame == .emulsion ? 0.11 : 0.08))
+            return Self(size: Size(width: Double(width + band.left + band.right) + 2 * horizontal,
+                                       height: Double(height + band.top + band.bottom) + 2 * vertical),
+                          image: Rect(x: horizontal + Double(band.left),
+                                            y: vertical + Double(band.bottom),
                                             width: Double(width), height: Double(height)),
                           scale: 1, rotated: false)
         }

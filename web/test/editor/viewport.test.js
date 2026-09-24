@@ -55,12 +55,12 @@ test('Normal fallback ROI is exactly a full-frame crop with global tone and dith
   }
 });
 
-test('visible detail leaves the emulsion frame overlay intact at the photo edge', () => {
+test('visible detail covers the whole framed photograph', () => {
   const v = visiblePhotoViewport({ room: [1200, 900], displayWidth: 1000, displayHeight: 800,
     zoom: 1, offset: [0, 0], pixelRatio: 2,
-    framePlan: { configuration: { frame: 'emulsion' }, placement: { size: { width: 1000, height: 800 },
+    framePlan: { configuration: { frame: 'mount' }, placement: { size: { width: 1000, height: 800 },
       image: { x: 100, y: 100, width: 800, height: 600 } } } });
-  assert.deepEqual(v.region, { x: 54, y: 54, width: 1492, height: 1092 });
+  assert.deepEqual(v.region, { x: 0, y: 0, width: 1600, height: 1200 });
 });
 
 test('viewport tile budgeting includes the halo beyond a visible rectangle that fits by itself', () => {

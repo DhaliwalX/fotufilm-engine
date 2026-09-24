@@ -72,7 +72,7 @@ public enum LayeredTransportRenderer {
         head.featureMask |= FilmEngineFeature.lightOut
         tail.clearTransportOptics(keepLens: false)
         tail.configuration[Int(FOTUFILM_CONFIG_RECORD_INPUT)] = 1
-        let pitch = Double(options.format.frameHeightMM * min(max(options.frameCoverage, 0.05), 1)) / Double(min(width, height))
+        let pitch = options.pixelPitchMM(width: width, height: height)
         return TransportRenderPlan(head: head, tail: tail, components: try prepared.compilation.kernels.indices.compactMap { k in
             let table = prepared.exposure.table(component: k, interpolation: t)
             guard table.values.contains(where: { $0 > 0 }) else { return nil }
@@ -119,8 +119,7 @@ public enum LayeredTransportRenderer {
                 invocation.measureToneBase(planarR: r, g: g, b: b, width: image.width, height: image.height)
             }
         }
-        let pitch = pixelPitchMM ?? (Double(options.format.frameHeightMM * min(max(options.frameCoverage, 0.05), 1))
-            / Double(min(image.width, image.height)))
+        let pitch = pixelPitchMM ?? options.pixelPitchMM(width: image.width, height: image.height)
         var exposure = ImageBuffer(width: image.width, height: image.height)
         for k in prepared.compilation.kernels.indices {
             let table = prepared.exposure.table(component: k, interpolation: t)

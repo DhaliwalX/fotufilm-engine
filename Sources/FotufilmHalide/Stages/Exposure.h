@@ -281,6 +281,32 @@ inline Halide::Expr scene_exposure(Halide::ImageParam &configuration,
     return Halide::select(flash > 0.0f, raw_exp + flash, raw_exp);
 }
 
+/// Share of the lens's light the camera gate passes at frame pixel (`frame_x`, `frame_y`): 1 with
+/// no gate (FOTUFILM_CONFIG_GATE's radius negative), otherwise the product of each axis's edge
+/// shadow. Each edge passes the share of the uniform pupil disc on the open side of a straight
+/// line, `(acos(v) - v sqrt(1 - v^2)) / pi` for `v` the pixel centre's distance beyond the edge in
+/// radii, with acos by Abramowitz and Stegun 4.4.45 so that every renderer computes it in the same
+/// exact arithmetic. Mirrors `UnexposedEdge.gateTransmission` and Metal's `optics_gate`.
+inline Halide::Expr gate_transmission(Halide::ImageParam &configuration,
+                                      Halide::Expr frame_x, Halide::Expr frame_y) {
+    Halide::Expr radius = configuration(FOTUFILM_CONFIG_GATE + 4);
+    auto edge = [&](Halide::Expr position, Halide::Expr low, Halide::Expr high) {
+        Halide::Expr centre = Halide::cast<float>(position) + 0.5f;
+        Halide::Expr beyond = Halide::max(low - centre, centre - high);
+        Halide::Expr u = Halide::clamp(beyond / Halide::max(radius, 1.0e-6f), -1.0f, 1.0f);
+        Halide::Expr v = Halide::abs(u);
+        Halide::Expr arc = Halide::sqrt(1.0f - v)
+            * (1.5707288f + v * (-0.2121144f + v * (0.0742610f + v * -0.0187293f)));
+        Halide::Expr shaded = (arc - v * Halide::sqrt(1.0f - v * v)) * 0.318309886f;
+        return Halide::select(u >= 0.0f, shaded, 1.0f - shaded);
+    };
+    Halide::Expr pass =
+        edge(frame_x, configuration(FOTUFILM_CONFIG_GATE), configuration(FOTUFILM_CONFIG_GATE + 2))
+        * edge(frame_y, configuration(FOTUFILM_CONFIG_GATE + 1),
+               configuration(FOTUFILM_CONFIG_GATE + 3));
+    return Halide::select(radius >= 0.0f, pass, 1.0f);
+}
+
 /// Luminance of a three-plane Func at one pixel, in the renderer's working primaries.
 inline Halide::Expr luminance(Halide::Func planes, Halide::Expr x, Halide::Expr y) {
     return kLumaR * planes(x, y, 0) + kLumaG * planes(x, y, 1)

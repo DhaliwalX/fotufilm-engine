@@ -287,13 +287,20 @@ extension FilmEngineInvocation {
             exposureGain: configuration[Self.exposureGainOffset])
     }
 
+    /// The Auto Levels reading this develop takes from a whole-frame measurement, or nil where it
+    /// does not meter for levels. A host hands it to the develops that must print on the same
+    /// levels as this frame, such as its unexposed edge.
+    public func sceneHighlightStops(_ measurement: ToneBaseMeasurement) -> Float? {
+        guard screenMeterStock != nil else { return nil }
+        return AutoAdjustment.SceneStops(regionStops: measurement.regionStops())?.bright
+    }
+
     /// Solves the accumulated measurement and pins the grid into the packed
     /// configuration, replacing the identity default.
     public mutating func setToneBase(_ measurement: ToneBaseMeasurement) {
-        if let stock = screenMeterStock,
-           let scene = AutoAdjustment.SceneStops(regionStops: measurement.regionStops()) {
+        if let stock = screenMeterStock, let bright = sceneHighlightStops(measurement) {
             applyScreenLevels(DigitalReferenceReceiver.levels(
-                for: stock, style: .autoLevels, sceneHighlightStops: scene.bright))
+                for: stock, style: .autoLevels, sceneHighlightStops: bright))
         }
         // Auto Levels meters the same regions even when local tone is disabled. Keep the
         // identity key in that case: automatic headroom adjustment can still supply a

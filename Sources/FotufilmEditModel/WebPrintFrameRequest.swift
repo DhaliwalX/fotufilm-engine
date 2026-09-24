@@ -41,8 +41,11 @@ public struct WebPrintFrameRequest: Decodable {
         }
         let requestedPaper = medium.flatMap(PrintPaper.preset(id:)) ?? film.map(PrintPaper.default(for:)) ?? .editorDefault
         let paper = film.map { requestedPaper.resolved(for: $0) } ?? requestedPaper
+        // Emulsion Border develops a piece of film larger than the aperture, which the browser's
+        // host does not build.
         func configuration(_ choice: PrintFrame) -> PrintFrameConfiguration {
-            PrintFrameConfiguration(frame: choice, formatID: format, definition: definition,
+            PrintFrameConfiguration(frame: choice == .emulsion ? .none : choice, formatID: format,
+                definition: definition,
                 paper: paper, viewingKelvin: choice.viewsTransparency ? nil : viewingKelvin,
                 negativeViewing: .lightBox)
         }

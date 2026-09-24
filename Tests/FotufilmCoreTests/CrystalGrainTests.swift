@@ -261,11 +261,11 @@ final class CrystalGrainTests: XCTestCase {
         XCTAssertEqual(lambdaOffset, binOffset + 3 * CrystalGrainModel.binCount * 4)
         XCTAssertEqual(printOffset, lambdaOffset + 3 * CrystalGrainModel.binCount * CrystalGrainModel.samples)
         // The print stage's four, the two preflashes, the byte frames' two primaries, the
-        // per-record grain rows and the film grain model's tile block, all appended past the
-        // print grain.
+        // per-record grain rows, the film grain model's tile block and the camera gate, all
+        // appended past the print grain.
         XCTAssertEqual(FilmEngineInvocation.configurationCount,
                        printOffset + 8 + Int(FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS_COUNT)
-                           + Int(FOTUFILM_CONFIG_FILM_TILE_COUNT))
+                           + Int(FOTUFILM_CONFIG_FILM_TILE_COUNT) + Int(FOTUFILM_CONFIG_GATE_COUNT))
         for slot in binOffset..<printOffset {
             XCTAssertEqual(plain.configuration[slot], 0)
         }
