@@ -457,7 +457,7 @@
   },
   "Sources/FotufilmCore/Stocks/delta3200.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Ilford Delta 3200 TI (2002), DD-X 9-minute vector trace density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "1dad80c82eaf0375e0bca80070be943584845fe9c0038faf17a58a6be74688e2"
+    "sha256": "400615fb208a5e537866bb0abcfe5c5e36a40fb652911c001ece552fa42354fe"
   },
   "Sources/FotufilmCore/Stocks/doublex5222.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak H-1-5222 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
