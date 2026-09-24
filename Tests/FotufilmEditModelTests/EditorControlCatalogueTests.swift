@@ -473,7 +473,7 @@ final class EditorControlCatalogueTests: XCTestCase {
         }
         XCTAssertEqual(scale.range, 0...1)
         XCTAssertEqual(scale.stops, [0, 1])
-        XCTAssertEqual(measured.detail, "Measured on this film's datasheet.")
+        XCTAssertEqual(measured.detail, "Measured from this film's published curves.")
     }
 
     func testPushDetailSaysWhereEachConditionComesFrom() throws {
@@ -491,7 +491,7 @@ final class EditorControlCatalogueTests: XCTestCase {
         ])), "Carried from Portra 800's published curves.")
         XCTAssertEqual(EditorControlCatalogue.pushDetail(profile([
             condition(2, .estimated), condition(-1, .measured), condition(1, .estimated),
-        ])), "Measured on this film's datasheet: -1. "
+        ])), "Measured from this film's published curves: -1. "
             + "Estimated from the process's published push response: +1, +2.")
     }
 

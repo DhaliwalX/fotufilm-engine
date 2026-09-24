@@ -855,10 +855,10 @@ public enum EditorControlCatalogue {
                 slot: 12, slotSymbol: "PUSH_PULL", ofxName: "push", fxplugID: 22, group: .lab,
                 label: "Push / Pull",
                 hint: "Push or pull conditions for this film's stated developer and process: measured "
-                    + "on its own datasheet, carried from a sister film's published curves, or estimated "
+                    + "from its own published curves, carried from a sister film's published curves, or estimated "
                     + "from the process's published push response. The control is disabled when the "
                     + "stock pack lists no conditions.",
-                kind: .double(min: -2, max: 2, value: 0), animates: false, secret: true, order: 10),
+                kind: .double(min: -2, max: 4, value: 0), animates: false, secret: true, order: 10),
             web: .profile,
             commandLine: CommandLineFlag("--push", placeholder: "<stops>",
                                          help: "Push (positive) or pull (negative) development, in stops "
@@ -1969,7 +1969,7 @@ public extension EditorControlCatalogue {
         for condition in profile.conditions.sorted(by: { $0.stops < $1.stops }) {
             let source: String
             switch condition.basis {
-            case .measured: source = "Measured on this film's datasheet"
+            case .measured: source = "Measured from this film's published curves"
             case .transferred(let stock): source = "Carried from \(stock)'s published curves"
             case .estimated: source = "Estimated from the process's published push response"
             }
