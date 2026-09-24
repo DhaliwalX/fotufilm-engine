@@ -198,11 +198,12 @@ public struct FilmGrain: Sendable {
     /// The population of `stock` as developed; `reference` is the same roll at the pack's
     /// reference process, as `CrystalGrainModel` takes it.
     public init(stock: FilmStock, reference: FilmStock? = nil, grainScale: Float = 1) {
-        self.init(stock: stock, reference: reference, grainScale: grainScale, useCachedAnchor: true)
+        self.init(stock: stock, reference: reference, grainScale: grainScale, useCachedAnchor: true, checkCancellation: {})
     }
 
     init(stock: FilmStock, reference: FilmStock? = nil, grainScale: Float = 1,
-         useCachedAnchor: Bool) {
+         useCachedAnchor: Bool, checkCancellation: () throws -> Void) rethrows {
+        try checkCancellation()
         var timing = StageTiming()
         monochrome = stock.isMonochrome
         key = Self.populationKey(identity: FilmGrainAsset.identity(stock: stock, reference: reference),
@@ -245,7 +246,7 @@ public struct FilmGrain: Sendable {
             return Record(sublayers: sublayers, dMin: lo, dMax: hi)
         }
         timing.mark("records")
-        anchorToSheet(anchors, key: key, useCache: useCachedAnchor)
+        try anchorToSheet(anchors, key: key, useCache: useCachedAnchor, checkCancellation: checkCancellation)
         timing.mark("anchor")
         timing.report("Film population")
     }
@@ -288,7 +289,8 @@ public struct FilmGrain: Sendable {
     /// cloud's area follows its dye. How far the reading moves with the dye depends on how full
     /// the clouds are, so each step takes the slope the last one measured.
     mutating func anchorToSheet(_ anchors: [(gross: Float, sigma: Float)], key: String,
-                               useCache: Bool = true) {
+                               useCache: Bool = true, checkCancellation: () throws -> Void) rethrows {
+        try checkCancellation()
         if useCache, let cached = Self.anchorCache.get(key) {
             records = cached
             return
@@ -299,7 +301,9 @@ public struct FilmGrain: Sendable {
             var slope: Float = 0.5
             var last: (factor: Float, sigma: Float)?
             for _ in 0..<Self.anchorPasses {
+                try checkCancellation()
                 let measured = sigma48(record: r, gross: anchors[r].gross)
+                try checkCancellation()
                 guard measured > 0 else { break }
                 let miss = log(anchors[r].sigma / measured)
                 if abs(miss) < Self.anchorTolerance { break }
@@ -317,6 +321,7 @@ public struct FilmGrain: Sendable {
             solved[0] = solved[1]; solved[2] = solved[1]
             for r in [0, 2] { scale(record: r, by: solved[r]) }
         }
+        try checkCancellation()
         if useCache { Self.anchorCache.set(key, records) }
     }
 

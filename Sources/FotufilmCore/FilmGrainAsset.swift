@@ -42,7 +42,7 @@ public enum FilmGrainAsset {
     /// bank generated on another host: serialization preserves bits, not a host's libm behavior.
     public static func generate(stock: FilmStock, reference: FilmStock? = nil) throws -> Data {
         let identity = identity(stock: stock, reference: reference)
-        let grain = FilmGrain(stock: stock, reference: reference, useCachedAnchor: false)
+        let grain = FilmGrain(stock: stock, reference: reference, useCachedAnchor: false, checkCancellation: {})
         return try encode(grain: grain, identity: identity,
                           tiles: grain.buildTiles(seed: FilmGrain.tileSeed))
     }

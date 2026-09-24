@@ -831,17 +831,21 @@ public struct FilmEngineInvocation {
                 noFilm: Bool = false) {
         do {
             self = try Self(validating: stock, options: options, width: width, height: height,
-                            frameIndex: frameIndex, noFilm: noFilm)
+                            frameIndex: frameIndex, noFilm: noFilm, checkCancellation: {})
         } catch {
             preconditionFailure("invalid development request: \(error)")
         }
     }
 
     /// Prepares the invocation or throws `FilmDevelopmentError` for an unsupported or malformed
-    /// development condition. Valid settings produce the same configuration as `init(stock:...)`.
+    /// development condition, or `CancellationError` when the calling task is cancelled. Cold
+    /// Film grain preparation checks cancellation between calibration passes and tile batches.
+    /// Valid settings produce the same configuration as `init(stock:...)`.
     public init(validating stock: FilmStock, options: FotufilmEngine.Options,
                 width: Int, height: Int, frameIndex: UInt64 = 0,
-                noFilm: Bool = false) throws {
+                noFilm: Bool = false,
+                checkCancellation: () throws -> Void = { try Task.checkCancellation() }) throws {
+        try checkCancellation()
         var options = options
         // A larger piece of film than the aperture prints on the photograph's own levels.
         if let stops = options.unexposedEdge?.sceneHighlightStops { options.sceneHighlightStops = stops }
@@ -1463,14 +1467,17 @@ public struct FilmEngineInvocation {
         configuration += [0, 0]
         configuration += stock.grainDensityProfile.records.flatMap { $0 }
         if filmActive {
-            let film = FilmGrain.binding(stock: stock, reference: referenceRoll)
+            let film = try FilmGrain.binding(stock: stock, reference: referenceRoll,
+                                             checkCancellation: checkCancellation)
             if film.registrationStatus != 0,
                fotufilm_halide_available() == 1 || fotufilm_halide_metal_available() == 1 {
                 throw TransportError.backend("Film grain tile registration failed (status \(film.registrationStatus))")
             }
+            try checkCancellation()
             self.filmTileBinding = film
             configuration += film.configurationBlock(pxPerMM: pxPerMM, amount: grainScale,
                                                       look: options.filmGrain)
+            try checkCancellation()
         } else {
             self.filmTileBinding = nil
             configuration += [Float](repeating: 0, count: Int(FOTUFILM_CONFIG_FILM_TILE_COUNT))
