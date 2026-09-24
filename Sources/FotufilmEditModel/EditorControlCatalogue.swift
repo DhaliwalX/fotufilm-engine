@@ -1475,7 +1475,7 @@ public enum EditorControlCatalogue {
                       .finalcut: "The host owns output framing.",
                       .cli: "Frame finishing is offered in the iPhone, iPad and Mac photo editors."],
             web: .runtime,
-            documentation: "Choose Film Border for the selected film gauge, Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for a dark, uneven edge on a white margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports."),
+            documentation: "Choose Film Border for the selected film gauge, Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for the film's unexposed edge outside the camera gate — the stock's own tone, halation glow and grain — printed with the photograph inside a paper margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports."),
         EditorControl(
             .paper, title: "Output Medium",
             detail: "Choose how the film is printed, scanned, or viewed.",
@@ -2067,6 +2067,8 @@ public enum EngineOptionCoverage: Sendable, Equatable {
 public extension EngineOptionCoverage {
     static let unbound: [String: EngineOptionCoverage] = [
         "sceneHighlightStops": .derived("whole-frame highlight meter, optionally smoothed by a video host"),
+        "unexposedEdge": .derived(
+            "set by the host on the piece of film larger than the aperture it develops for Emulsion Border"),
         "sceneHeadroom": .derived(
             "the source interpretation the overflow menu sets, against the source's declared range"),
         "grainMottleSizeRatio": .derived(

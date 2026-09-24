@@ -9,7 +9,7 @@ const ready = async (page) => {
   );
 };
 
-test("all frame materials and placements agree with native, preserving every photo pixel outside emulsion wear", async ({
+test("all frame materials and placements agree with native, preserving every photo pixel", async ({
   page,
 }, testInfo) => {
   await ready(page);
@@ -23,7 +23,6 @@ test("all frame materials and placements agree with native, preserving every pho
     "paper8x10",
     "paper5x5",
     "carrier",
-    "emulsion",
     "mount",
     "darkMount",
     "socialSquare",
@@ -74,11 +73,7 @@ test("all frame materials and placements agree with native, preserving every pho
       ctx.putImageData(data, 0, 0);
       const output = await renderPrintFrame(source, plan);
       const p = plan.placement,
-        r = p.image,
-        rim =
-          request.frame === "emulsion"
-            ? Math.ceil(Math.min(r.width, r.height) * 0.045)
-            : 0;
+        r = p.image;
       const copied = output
         .getContext("2d")
         .getImageData(
@@ -88,8 +83,8 @@ test("all frame materials and placements agree with native, preserving every pho
           r.height,
         ).data;
       let mismatches = 0;
-      for (let y = rim; y < r.height - rim; y++)
-        for (let x = rim; x < r.width - rim; x++)
+      for (let y = 0; y < r.height; y++)
+        for (let x = 0; x < r.width; x++)
           for (let c = 0; c < 4; c++)
             if (
               copied[(y * r.width + x) * 4 + c] !==

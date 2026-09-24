@@ -288,31 +288,50 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
         }
     }
 
+    // The light the lens formed — the image, a diffusion filter's halo, a preflash, and veiling
+    // glare below — reaches the film only through the camera gate. Everything after it is the
+    // film's own and runs over the whole frame, the part the gate shades included.
+    Expr gate_pass = gate_transmission(configuration, x + p.origin_x_, y + p.origin_y_);
+    auto through_gate = [&](Func planes, const char *stage) {
+        Func gated(name(stage));
+        gated(x, y, c) = planes(x, y, c) * gate_pass;
+        return gated;
+    };
+    // Glare is metered on the lens's image as formed, before the gate.
+    Func lens_light = light;
+    light = through_gate(lens_light, "through_gate");
+    if (use_donor) donor_exposure = through_gate(donor_exposure, "donor_through_gate");
+
     const bool merged_luma = use_mtf_luma && b.merged_luma();
     const int light_channels = merged_luma ? 4 : 3;
     auto widened = [&](Func planes, const char *stage) {
         return merged_luma ? widen_with_luminance(planes, x, y, c, name(stage)) : planes;
     };
+    // The gated light with its neutral: the lens's neutral through the gate, so that no sum
+    // takes the gate's products, which a GPU compiler may fuse differently in each kernel.
+    auto widened_light = [&](const char *stage, const char *gate_stage) {
+        return merged_luma ? through_gate(widened(lens_light, stage), gate_stage) : light;
+    };
 
     bool materialised = false;
     Func flare_mean;
     if (use_flare) {
-        Func exposure_view = store_light(widened(light, "exposure_luma"), Store::Light,
+        Func exposure_view = store_light(widened_light("exposure_luma", "exposure_gate"), Store::Light,
                                          light_channels);
-        flare_mean = b.frame_mean(exposure_view, light_channels, p.width_, p.height_,
-                                  name("flare"));
+        flare_mean = b.frame_mean(widened(lens_light, "lens_luma"), light_channels, p.width_,
+                                  p.height_, name("flare"));
         // Gated through its fraction: the blur behind reads this per tap, and with the
         // fraction and mean both zero a tap is the exposure exactly.
         Func flared(name("flared"));
         flared(x, y, c) = veiling_glare(exposure_view(x, y, c),
-                                        gated(on_flare, flare_mean(c), 0.0f),
+                                        gate_pass * gated(on_flare, flare_mean(c), 0.0f),
                                         gated(on_flare, configuration(FOTUFILM_CONFIG_FLARE), 0.0f));
         light = flared;
         materialised = true;
     }
 
     if (in.texture && !materialised) {
-        light = store_light(widened(light, "texture_light_luma"), Store::TextureLight,
+        light = store_light(widened_light("texture_light_luma", "texture_light_gate"), Store::TextureLight,
                             light_channels);
         materialised = true;
     }
@@ -320,7 +339,7 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
 
     if (use_mtf) {
         Func pre_mtf = materialised
-            ? light : store_light(widened(light, "light_luma"), Store::Light, light_channels);
+            ? light : store_light(widened_light("light_luma", "light_gate"), Store::Light, light_channels);
         materialised = true;
         Expr mtf_radius = Halide::max(
             p.mtf_radius_0_, Halide::max(p.mtf_radius_1_, p.mtf_radius_2_));

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "count": 19040,
+  "count": 19045,
   "fields": {
     "CURVES": {
       "offset": 0,
@@ -397,6 +397,10 @@
     "FILM_TILE": {
       "offset": 18874,
       "count": 166
+    },
+    "GATE": {
+      "offset": 19040,
+      "count": 5
     }
   }
 }

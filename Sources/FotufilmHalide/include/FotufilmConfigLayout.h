@@ -258,6 +258,14 @@ enum {
     /// pitch reads there, and the correlation of its grain with the next level's at this pitch.
     /// Read only in grain mode 1; appended without renumbering earlier fields.
     FOTUFILM_CONFIG_FILM_TILE = 18874,
+    /// The camera gate, for a frame larger than the aperture (Emulsion Border's film beyond the
+    /// gate): the aperture's left, top, right and bottom edges in frame pixels, then the radius in
+    /// pixels of the lens pupil's shadow of its edge. Light the lens formed — the direct image, a
+    /// diffusion filter's halo, veiling glare, a camera preflash — reaches the film only through
+    /// it: each edge passes the share of a uniform disc on the open side of a straight line, and
+    /// the two axes multiply. A negative radius is no gate, and the light passes unchanged.
+    /// Appended without renumbering earlier fields.
+    FOTUFILM_CONFIG_GATE = 19040,
 };
 
 enum {
@@ -360,8 +368,9 @@ enum {
     FOTUFILM_CONFIG_BYTE_BASIS_COUNT = 2,
     FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS_COUNT = 18,
     FOTUFILM_CONFIG_FILM_TILE_COUNT = 166,
+    FOTUFILM_CONFIG_GATE_COUNT = 5,
 };
 
-enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 19040 };
+enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 19045 };
 
 #endif

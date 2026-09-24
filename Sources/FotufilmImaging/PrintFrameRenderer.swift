@@ -17,21 +17,30 @@ public enum PrintFrameRenderer {
         public let rotated: Bool
     }
 
-    /// How far Emulsion Border's band may bleed into the photograph, as a fraction of its short
-    /// side. Every other frame leaves the whole photograph untouched.
-    public static let emulsionRim: CGFloat = EmulsionBorderRenderer.rim
-
     public static func layout(width: Int, height: Int,
-                              configuration: PrintFrameConfiguration) -> Layout {
-        let p = PrintFramePlacement.layout(width: width, height: height, configuration: configuration)
+                              configuration: PrintFrameConfiguration,
+                              edge: UnexposedEdge.Margins? = nil) -> Layout {
+        let p = PrintFramePlacement.layout(width: width, height: height, configuration: configuration,
+                                           edge: edge)
         return Layout(size: CGSize(width: p.size.width, height: p.size.height),
                       imageRect: CGRect(x: p.image.x, y: p.image.y, width: p.image.width, height: p.image.height),
                       pixelsPerMM: p.scale, rotated: p.rotated)
     }
 
-    public static func render(_ image: CGImage, configuration: PrintFrameConfiguration) -> CGImage? {
+    /// Every frame but the Emulsion Border takes the developed photograph. The Emulsion Border
+    /// takes the developed piece of film larger than the aperture (`UnexposedEdge`) and how far it
+    /// reaches beyond the photograph on each side, `edge`, which it requires.
+    public static func render(_ image: CGImage, configuration: PrintFrameConfiguration,
+                              edge: UnexposedEdge.Margins? = nil) -> CGImage? {
         guard configuration.frame != .none else { return image }
-        let placement = layout(width: image.width, height: image.height, configuration: configuration)
+        let band = configuration.frame == .emulsion ? edge : nil
+        if configuration.frame == .emulsion, band == nil { return nil }
+        let film = band ?? UnexposedEdge.Margins(left: 0, right: 0, top: 0, bottom: 0)
+        let photoWidth = image.width - film.left - film.right
+        let photoHeight = image.height - film.top - film.bottom
+        guard photoWidth > 0, photoHeight > 0 else { return nil }
+        let placement = layout(width: photoWidth, height: photoHeight, configuration: configuration,
+                               edge: band)
         guard let space = image.colorSpace, space.model == .rgb,
               let context = CGContext(data: nil, width: Int(placement.size.width),
                                       height: Int(placement.size.height), bitsPerComponent: 16,
@@ -50,25 +59,10 @@ public enum PrintFrameRenderer {
             context.translateBy(x: material.size.height, y: 0)
             context.rotate(by: .pi / 2)
         }
-        // Copy at integer pixel coordinates. The original profile, 16-bit depth and every
-        // photograph pixel survive, including P3 and HLG delivery. Every frame but the emulsion
-        // border is drawn first and never touches the picture; the emulsion band is laid over
-        // it afterwards so its inner edge can bleed a soft rim into the photograph.
-        func copyPhotograph() {
-            context.saveGState()
-            context.interpolationQuality = .none
-            context.setBlendMode(.copy)
-            context.draw(image, in: placement.imageRect)
-            context.restoreGState()
-        }
-        if configuration.frame == .emulsion {
-            context.restoreGState()
-            copyPhotograph()
-            context.saveGState()
-            context.scaleBy(x: placement.pixelsPerMM, y: placement.pixelsPerMM)
-            guard EmulsionBorderRenderer.draw(in: context, around: placement.imageRect) else { return nil }
-        } else if configuration.frame.isPlainMount || configuration.canvas != nil {
-            // The base fill is the whole mount or canvas.
+        if configuration.frame == .emulsion || configuration.frame.isPlainMount
+            || configuration.canvas != nil {
+            // The base fill is the whole mount or canvas; the Emulsion Border's band is part of
+            // the film that goes down below.
         } else if let mount = configuration.slideMount {
             drawSlideMount(in: context, mount: mount, base: baseColor(configuration.baseRGB))
         } else if let sheet = configuration.sheet {
@@ -92,7 +86,16 @@ public enum PrintFrameRenderer {
             }
         }
         context.restoreGState()
-        if configuration.frame != .emulsion { copyPhotograph() }
+        // Copy at integer pixel coordinates. The original profile, 16-bit depth and every
+        // developed pixel survive, including P3 and HLG delivery.
+        context.saveGState()
+        context.interpolationQuality = .none
+        context.setBlendMode(.copy)
+        let photo = placement.imageRect
+        context.draw(image, in: CGRect(x: photo.minX - CGFloat(film.left),
+                                       y: photo.minY - CGFloat(film.bottom),
+                                       width: CGFloat(image.width), height: CGFloat(image.height)))
+        context.restoreGState()
         return context.makeImage()
     }
 
@@ -246,8 +249,8 @@ public enum PrintFrameRenderer {
                 // Displacement is normal to the side, in millimetres, bounded to a quarter
                 // of the rebate so the line never closes over the photograph.
                 let along = Float(length * t)
-                let wobble = CGFloat(EmulsionBorderRenderer.noise(along * 0.35, Float(side) * 7.3, seed: 409)
-                                     + 0.4 * EmulsionBorderRenderer.noise(along * 1.6, Float(side) * 3.1, seed: 613))
+                let wobble = CGFloat(filingNoise(along * 0.35, Float(side) * 7.3, seed: 409)
+                                     + 0.4 * filingNoise(along * 1.6, Float(side) * 3.1, seed: 613))
                 let amount = min(max(wobble * 0.22, -width * 0.25), width * 0.25)
                 let normal: CGPoint
                 switch side {
@@ -266,6 +269,23 @@ public enum PrintFrameRenderer {
         context.addPath(path)
         context.fillPath()
         context.restoreGState()
+    }
+
+    /// Smooth value noise in about -1...1 for the filed carrier's hand-worked edge.
+    private static func filingNoise(_ x: Float, _ y: Float, seed: UInt32) -> Float {
+        let ix = Int32(floor(x)), iy = Int32(floor(y))
+        let fx = x - Float(ix), fy = y - Float(iy)
+        let u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy)
+        func sample(_ a: Int32, _ b: Int32) -> Float {
+            var n = UInt32(bitPattern: a) &* 374_761_393
+                &+ UInt32(bitPattern: b) &* 668_265_263 &+ seed &* 1_013_904_223
+            n = (n ^ (n >> 13)) &* 1_274_126_177
+            n ^= n >> 16
+            return Float(n & 0xFFFF) / 32767.5 - 1
+        }
+        let a = sample(ix, iy), b = sample(ix &+ 1, iy)
+        let c = sample(ix, iy &+ 1), d = sample(ix &+ 1, iy &+ 1)
+        return (a + (b - a) * u) * (1 - v) + (c + (d - c) * u) * v
     }
 
     /// The rounded aperture cut through a plain white card mount. The transparency's rebate

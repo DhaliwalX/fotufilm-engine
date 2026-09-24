@@ -908,9 +908,6 @@ final class DesktopEditorModel {
         let developState = frame == nil ? state : state.frameRenderState
         let negative = frame.flatMap { _ in state.filmFrameNegative } ?? negativeViewing
         let originalImage = original
-        let cachedFramedOriginal = framedOriginal.flatMap {
-            $0.configuration == frame && $0.source === originalImage ? $0 : nil
-        }
         let fullKey = FilmRender.SceneKey(state: state, longEdge: nil)
         let draftKey = FilmRender.SceneKey(state: state, longEdge: draftTarget)
         let renderKey = draft ? draftKey : fullKey
@@ -965,19 +962,23 @@ final class DesktopEditorModel {
                 }
                 let image = print(renderScene)
                 let framed = frame.flatMap { frame in
-                    completedPrint.flatMap { PrintFrameRenderer.render($0, configuration: frame) }
-                }
-                // The press compares with the original in the same frame, drawn once per frame.
-                let framedOriginal = draft || cachedFramedOriginal != nil ? nil
-                    : frame.flatMap { frame in
-                        originalImage.flatMap(Self.cgImage).flatMap {
-                            PrintFrameRenderer.render($0, configuration: frame)
-                        }
+                    completedPrint.flatMap {
+                        FilmRender.framed(Rendered(image: $0), in: frame, scene: renderScene,
+                                          state: developState, negative: negative)
                     }
-                if draft {
-                    return (cachedFull, renderScene, image, plain, completedPrint, framed, framedOriginal)
                 }
-                return (renderScene, cachedDraft, image, plain, completedPrint, framed, framedOriginal)
+                // The press compares with the original in the same frame.
+                let framedOriginal = draft ? nil : framed.flatMap { framed in
+                    originalImage.flatMap(Self.cgImage).flatMap {
+                        FilmRender.comparing($0, in: framed.rendered.image, layout: framed.layout)
+                    }
+                }
+                if draft {
+                    return (cachedFull, renderScene, image, plain, completedPrint,
+                            framed?.rendered.image, framedOriginal)
+                }
+                return (renderScene, cachedDraft, image, plain, completedPrint,
+                        framed?.rendered.image, framedOriginal)
             }.value
             guard let self else { return }
             if self.renderSession == session, let rendered {
@@ -1163,11 +1164,11 @@ final class DesktopEditorModel {
         let exact = AppSettings.effectiveRenderingMode == .accurate
         let hdr = delivery.hdrContainer != nil
         let written = await Task.detached(priority: .userInitiated) { () -> Bool in
-            guard let developed = FilmRender.render(
+            guard let rendered = FilmRender.render(
                 source: source, state: state.frameRenderState, longEdge: longEdge,
                 hdr: hdr, dynamicRange: hdr ? .hdr : .sdr,
-                exact: exact, negative: state.filmFrameNegative),
-                  let rendered = Self.framed(developed, configuration: state.frameConfiguration)
+                exact: exact, negative: state.filmFrameNegative,
+                frame: state.printFrame == .none ? nil : state.frameConfiguration)
             else { return false }
             if let hdrContainer = delivery.hdrContainer {
                 return rendered.writeHDR(to: output, as: hdrContainer,
@@ -1187,18 +1188,6 @@ final class DesktopEditorModel {
         } else {
             errorMessage = "The photo couldn’t be exported in that format."
         }
-    }
-
-    /// The canvas's border pass over a finished export, keeping its metadata and HDR rendition.
-    nonisolated private static func framed(_ rendered: Rendered,
-                                           configuration: PrintFrameConfiguration) -> Rendered? {
-        guard configuration.frame != .none else { return rendered }
-        guard let image = PrintFrameRenderer.render(rendered.image, configuration: configuration)
-        else { return nil }
-        let hdr = rendered.hdrImage.flatMap { PrintFrameRenderer.render($0, configuration: configuration) }
-        guard rendered.hdrImage == nil || hdr != nil else { return nil }
-        return Rendered(image: image, hdrImage: hdr, metadata: rendered.metadata,
-                        orientation: rendered.orientation)
     }
 
     private func exportVideo(_ request: VideoRenderRequest) async {

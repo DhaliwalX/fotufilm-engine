@@ -842,6 +842,9 @@ public struct FilmEngineInvocation {
     public init(validating stock: FilmStock, options: FotufilmEngine.Options,
                 width: Int, height: Int, frameIndex: UInt64 = 0,
                 noFilm: Bool = false) throws {
+        var options = options
+        // A larger piece of film than the aperture prints on the photograph's own levels.
+        if let stops = options.unexposedEdge?.sceneHighlightStops { options.sceneHighlightStops = stops }
         // A development condition supplies the fresh roll's curves before age and reciprocity.
         let developed = try stock.pushed(stops: options.developmentEV)
         // The same roll at the pack's reference process, aged and reciprocity-shifted alike:
@@ -863,9 +866,7 @@ public struct FilmEngineInvocation {
         // A crop keeps only `frameCoverage` of the frame's short edge, so the same buffer
         // spans fewer millimetres of emulsion and every millimetre-sized structure grows
         // in pixels. The floor keeps a degenerate sliver from asking for unbounded radii.
-        let coverage = min(max(options.frameCoverage, 0.05), 1)
-        let pxPerMM = Float(min(width, height))
-            / (options.format.frameHeightMM * coverage)
+        let pxPerMM = options.pixelsPerMM(width: width, height: height)
         // Disable texture stages by zeroing their radius or share, not by clearing feature bits.
         // AOT dispatch may select a superset variant, so configuration must remain authoritative.
         let selected = { (spatial: TextureStages) in
@@ -1448,8 +1449,9 @@ public struct FilmEngineInvocation {
             && CrystalGrainModel.Print.exposesCrystals(stock: stock, paper: printMedium)
         let paperCrystals = paperExposed
             ? CrystalGrainModel.Print.crystalsPerPixel(
-                paper: printMedium, shortEdgePixels: min(width, height), pxPerMM: pxPerMM,
-                frameCoverage: coverage)
+                paper: printMedium,
+                shortEdgePixels: options.frameShortEdgePixels(width: width, height: height),
+                pxPerMM: pxPerMM, frameCoverage: options.frameCoverage)
             : 0
         configuration += [paperCrystals, paperCrystals, paperCrystals,
                           Float(UInt32(truncatingIfNeeded: animatedSeed) & 0xFFFFFF)]
@@ -1473,6 +1475,7 @@ public struct FilmEngineInvocation {
             self.filmTileBinding = nil
             configuration += [Float](repeating: 0, count: Int(FOTUFILM_CONFIG_FILM_TILE_COUNT))
         }
+        configuration += options.gateConfiguration(width: width, height: height)
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0

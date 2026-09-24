@@ -364,8 +364,7 @@ public final class HalideMetalFilmRenderer {
                                        width: frameWidth, height: frameHeight,
                                        encoding: .linearRec2020)
         if options.transportConstruction(for: stock) != nil {
-            let pitch = Double(options.format.frameHeightMM * min(max(options.frameCoverage, 0.05), 1))
-                / Double(min(densityWidth, densityHeight))
+            let pitch = options.pixelPitchMM(width: densityWidth, height: densityHeight)
             context.layered = (stock, options, frameIndex, pitch)
         }
         return context

@@ -1,5 +1,5 @@
 import { colorContext, canvasColorSpace } from "./canvas-color.js";
-import { frameNoise, emulsionTexture, emulsionRim } from "./frame-texture.js";
+import { frameNoise } from "./frame-texture.js";
 import { yieldToBrowser } from "./yield.js";
 const encode = (v) =>
   v <= 0.0031308
@@ -176,7 +176,7 @@ async function lustre(ctx, size, photo, stale) {
 }
 
 /** One finishing path for previews, comparisons and exports. Photograph pixels are copied
- * at integer coordinates; only the intentional emulsion rim may cover their edges. */
+ * at integer coordinates and never covered. */
 export async function renderPrintFrame(
   image,
   plan,
@@ -274,41 +274,6 @@ export async function renderPrintFrame(
       .getContext("2d")
       .getImageData(0, 0, image.width, image.height);
     ctx.putImageData(pixels, r.x, top);
-  }
-  if (c.frame === "emulsion") {
-    const texture = await emulsionTexture(r.width, r.height, stale);
-    if (!texture) return null;
-    const layer = document.createElement("canvas");
-    layer.width = texture.width;
-    layer.height = texture.height;
-    layer
-      .getContext("2d")
-      .putImageData(
-        new ImageData(texture.bytes, texture.width, texture.height),
-        0,
-        0,
-      );
-    const keep = Math.ceil(Math.min(r.width, r.height) * emulsionRim);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, 0, canvas.width, canvas.height);
-    ctx.rect(
-      r.x + keep,
-      top + keep,
-      Math.max(0, r.width - 2 * keep),
-      Math.max(0, r.height - 2 * keep),
-    );
-    ctx.clip("evenodd");
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(
-      layer,
-      r.x - texture.fringe * texture.unit,
-      top - texture.fringe * texture.unit,
-      texture.width * texture.unit * texture.step,
-      texture.height * texture.unit * texture.step,
-    );
-    ctx.restore();
   }
   return canvas;
 }

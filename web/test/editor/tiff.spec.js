@@ -94,7 +94,7 @@ test("16-bit film development preserves cropped precision and every framed inter
         maxEdge: Infinity,
       });
       const frameResults = [];
-      for (const printFrame of ["film", "emulsion", "socialPortrait"]) {
+      for (const printFrame of ["film", "carrier", "socialPortrait"]) {
         const plan = await loadPrintFrame(
           { ...edit, printFrame },
           developed.width,
@@ -107,14 +107,10 @@ test("16-bit film development preserves cropped precision and every framed inter
           plan,
         );
         const r = plan.placement.image,
-          top = result.height - r.y - r.height,
-          rim =
-            printFrame === "emulsion"
-              ? Math.ceil(Math.min(r.width, r.height) * 0.045)
-              : 0;
+          top = result.height - r.y - r.height;
         let mismatches = 0;
-        for (let y = rim; y < r.height - rim; y++)
-          for (let x = rim; x < r.width - rim; x++)
+        for (let y = 0; y < r.height; y++)
+          for (let x = 0; x < r.width; x++)
             for (let c = 0; c < 4; c++)
               if (
                 result.pixels[((top + y) * result.width + r.x + x) * 4 + c] !==

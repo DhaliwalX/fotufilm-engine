@@ -30,14 +30,47 @@ final class PrintFrameTests: XCTestCase {
         configuration(frame, stock: frame == .slideMount ? "velvia50" : "hp5plus400")
     }
 
-    /// The photograph's crop in top-left image coordinates, inset by the rim the emulsion band may
-    /// bleed into; every other frame leaves the whole photograph untouched.
-    private func untouched(_ frame: PrintFrame, layout: PrintFrameRenderer.Layout,
-                           width: Int, height: Int) -> CGRect {
-        let crop = CGRect(x: layout.imageRect.minX, y: layout.size.height - layout.imageRect.maxY,
-                          width: CGFloat(width), height: CGFloat(height))
-        let rim = frame == .emulsion ? ceil(CGFloat(min(width, height)) * PrintFrameRenderer.emulsionRim) : 0
-        return crop.insetBy(dx: rim, dy: rim)
+    /// The photograph's crop in top-left image coordinates; no frame touches it.
+    private func untouched(layout: PrintFrameRenderer.Layout, width: Int, height: Int) -> CGRect {
+        CGRect(x: layout.imageRect.minX, y: layout.size.height - layout.imageRect.maxY,
+               width: CGFloat(width), height: CGFloat(height))
+    }
+
+    /// A stand-in for the host's developed piece of film larger than the aperture: `image` in the
+    /// middle and a flat developed tone as far beyond it as the gauge's emulsion reaches, at a
+    /// 24 mm short side.
+    private func film(around image: CGImage, format: String = "35mm",
+                      tone: [CGFloat] = [0.05, 0.04, 0.03, 1]) throws
+        -> (image: CGImage, margins: UnexposedEdge.Margins) {
+        let margins = try XCTUnwrap(UnexposedEdge.Geometry.preset(format))
+            .margins(photoWidth: image.width, photoHeight: image.height,
+                     pixelsPerMM: Float(min(image.width, image.height)) / 24)
+        let space = try XCTUnwrap(image.colorSpace)
+        let width = image.width + margins.left + margins.right
+        let height = image.height + margins.top + margins.bottom
+        let context = try XCTUnwrap(CGContext(data: nil, width: width, height: height,
+            bitsPerComponent: 16, bytesPerRow: 0, space: space,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder16Little.rawValue))
+        context.setFillColor(try XCTUnwrap(CGColor(colorSpace: space, components: tone)))
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        context.setBlendMode(.copy)
+        context.draw(image, in: CGRect(x: margins.left, y: margins.bottom,
+                                       width: image.width, height: image.height))
+        return (try XCTUnwrap(context.makeImage()), margins)
+    }
+
+    /// Renders any frame, handing the Emulsion Border the developed film around the photograph.
+    private func render(_ image: CGImage, _ config: PrintFrameConfiguration) throws -> CGImage? {
+        guard config.frame == .emulsion else {
+            return PrintFrameRenderer.render(image, configuration: config)
+        }
+        let film = try film(around: image)
+        return PrintFrameRenderer.render(film.image, configuration: config, edge: film.margins)
+    }
+
+    private func layout(_ image: CGImage, _ config: PrintFrameConfiguration) throws -> PrintFrameRenderer.Layout {
+        PrintFrameRenderer.layout(width: image.width, height: image.height, configuration: config,
+                                  edge: config.frame == .emulsion ? try film(around: image).margins : nil)
     }
 
     private func rgb(_ image: CGImage, _ data: Data, _ x: Int, _ y: Int) -> SIMD3<Float> {
@@ -58,8 +91,8 @@ final class PrintFrameTests: XCTestCase {
         for frame in PrintFrame.allCases where frame != .none {
             let config = representative(frame)
             XCTAssertEqual(config.frame, frame)
-            let layout = PrintFrameRenderer.layout(width: source.width, height: source.height, configuration: config)
-            let result = try XCTUnwrap(PrintFrameRenderer.render(source, configuration: config))
+            let layout = try layout(source, config)
+            let result = try XCTUnwrap(render(source, config))
             XCTAssertEqual(result.width, Int(layout.size.width))
             XCTAssertEqual(result.height, Int(layout.size.height))
             XCTAssertGreaterThan(result.width, source.width)
@@ -68,12 +101,8 @@ final class PrintFrameTests: XCTestCase {
             XCTAssertEqual(result.bitsPerComponent, 16)
             XCTAssertEqual(result.colorSpace, source.colorSpace)
             // CGImage cropping uses top-left coordinates; the layout uses bottom-left.
-            let crop = untouched(frame, layout: layout, width: source.width, height: source.height)
-            let centre = try XCTUnwrap(result.cropping(to: crop))
-            let inner = CGRect(x: crop.minX - layout.imageRect.minX,
-                               y: crop.minY - (layout.size.height - layout.imageRect.maxY),
-                               width: crop.width, height: crop.height)
-            XCTAssertEqual(try pixels(centre), try pixels(XCTUnwrap(source.cropping(to: inner))),
+            let crop = untouched(layout: layout, width: source.width, height: source.height)
+            XCTAssertEqual(try pixels(XCTUnwrap(result.cropping(to: crop))), try pixels(source),
                            "\(frame) changed the photograph")
         }
     }
@@ -82,8 +111,8 @@ final class PrintFrameTests: XCTestCase {
         let source = try fixture()
         var signatures = Set<Data>()
         for frame in PrintFrame.allCases {
-            let a = try XCTUnwrap(PrintFrameRenderer.render(source, configuration: representative(frame)))
-            let b = try XCTUnwrap(PrintFrameRenderer.render(source, configuration: representative(frame)))
+            let a = try XCTUnwrap(render(source, representative(frame)))
+            let b = try XCTUnwrap(render(source, representative(frame)))
             let bytes = try pixels(a)
             XCTAssertEqual(bytes, try pixels(b))
             signatures.insert(bytes)
@@ -155,39 +184,33 @@ final class PrintFrameTests: XCTestCase {
         XCTAssertNil(edge.geometry)
     }
 
-    func testEmulsionKeepsTheCropAndIsAvailableWithoutFilmOrReflectionPaper() throws {
-        for (w, h) in [(200, 300), (300, 200), (200, 200), (1000, 1)] {
-            for format in ["35mm", "120", "4x5", "unknown"] {
-                let config = configuration(.emulsion, format: format, paper: .screen, stock: "original")
-                XCTAssertEqual(config.frame, .emulsion)
-                XCTAssertNil(config.geometry)
-                XCTAssertNil(config.sheetNotches)
-                XCTAssertNil(config.edgePrinting)
-                let layout = PrintFrameRenderer.layout(width: w, height: h, configuration: config)
-                XCTAssertEqual(layout.imageRect.size, CGSize(width: w, height: h))
-                let x = ceil(Double(min(w, h)) * 0.095), y = ceil(Double(min(w, h)) * 0.135)
-                XCTAssertEqual(layout.imageRect.minX, x)
-                XCTAssertEqual(layout.imageRect.minY, y)
-                XCTAssertEqual(layout.size, CGSize(width: Double(w) + 2 * x, height: Double(h) + 2 * y))
-            }
+    func testEmulsionNeedsAFilmOnARollOrSheetGauge() {
+        for format in ["35mm", "120", "4x5", "super35", "16mm"] {
+            let config = configuration(.emulsion, format: format, paper: .screen, stock: "portra400")
+            XCTAssertEqual(config.frame, .emulsion, format)
+            XCTAssertNil(config.geometry)
+            XCTAssertNil(config.sheetNotches)
+            XCTAssertNil(config.edgePrinting)
+            XCTAssertTrue(config.detail.hasSuffix("unexposed edge"), config.detail)
         }
-        // An extreme panorama must not allocate a texture proportional to its aspect ratio.
-        let context = try XCTUnwrap(CGContext(data: nil, width: 1000, height: 1, bitsPerComponent: 8,
-            bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-        let framed = try XCTUnwrap(PrintFrameRenderer.render(XCTUnwrap(context.makeImage()),
-            configuration: configuration(.emulsion)))
-        XCTAssertEqual(framed.width, 1002)
-        XCTAssertEqual(framed.height, 3)
+        // No film means no emulsion; integral instant film has its mask there instead.
+        for (format, stock) in [("35mm", "original"), ("instaxmini", "portra400"), ("unknown", "portra400"),
+                                ("35mm", "invalid")] {
+            let config = configuration(.emulsion, format: format, paper: .screen, stock: stock)
+            XCTAssertEqual(config.frame, .none, "\(format) \(stock)")
+            XCTAssertEqual(config.detail, "Choose a film and a roll or sheet film format.")
+        }
+        let none = PrintFrameConfiguration(frame: .emulsion, formatID: nil, stockID: "portra400", paper: .screen)
+        XCTAssertEqual(none.frame, .none)
     }
 
-    func testEmulsionMountUsesPaperWhiteAndPreservesItsViewingLight() {
+    func testEmulsionMarginUsesPaperWhiteAndPreservesItsViewingLight() {
         for paper in [PrintPaper.ektacolorEdge, .enduraPremier, .crystalArchive] {
             for kelvin in [Float(2856), 5000, 6500] {
-                let emulsion = PrintFrameConfiguration(frame: .emulsion, formatID: nil,
-                    stockID: "original", paper: paper, viewingKelvin: kelvin)
-                let sheet = PrintFrameConfiguration(frame: .paper, formatID: nil,
-                    stockID: "original", paper: paper, viewingKelvin: kelvin)
+                let emulsion = PrintFrameConfiguration(frame: .emulsion, formatID: "35mm",
+                    stockID: "portra400", paper: paper, viewingKelvin: kelvin)
+                let sheet = PrintFrameConfiguration(frame: .paper, formatID: "35mm",
+                    stockID: "portra400", paper: paper, viewingKelvin: kelvin)
                 XCTAssertEqual(emulsion.frame, .emulsion)
                 XCTAssertEqual(emulsion.baseRGB, sheet.baseRGB)
             }
@@ -199,55 +222,44 @@ final class PrintFrameTests: XCTestCase {
         }
     }
 
-    func testEmulsionHasADarkBandWornOuterEdgeAndCleanMount() throws {
+    func testEmulsionPrintsTheDevelopedFilmInsideTheMargin() throws {
         let source = try fixture()
         let config = configuration(.emulsion, paper: .screen)
-        let result = try XCTUnwrap(PrintFrameRenderer.render(source, configuration: config))
+        XCTAssertNil(PrintFrameRenderer.render(source, configuration: config),
+                     "the band is the film's develop; the renderer does not draw one")
+        // 300 × 200 at 24 mm: 1.0 mm along the roll is 8 px, 0.696 mm across is 6 px.
+        let film = try film(around: source)
+        XCTAssertEqual(film.margins, .init(left: 8, right: 8, top: 6, bottom: 6))
+        let layout = try layout(source, config)
+        let horizontal = ceil(200 * 0.07), vertical = ceil(200 * 0.11)
+        XCTAssertEqual(layout.size, CGSize(width: 300 + 16 + 2 * horizontal, height: 200 + 12 + 2 * vertical))
+        XCTAssertEqual(layout.imageRect, CGRect(x: horizontal + 8, y: vertical + 6, width: 300, height: 200))
+        let result = try XCTUnwrap(render(source, config))
+        XCTAssertEqual(result.width, Int(layout.size.width))
         let data = try pixels(result)
-        func rgb(_ x: Int, _ y: Int) -> SIMD3<Float> {
-            let offset = (y * result.width + x) * 8
-            return SIMD3((0..<3).map { channel in
-                let i = offset + channel * 2
-                return Float(UInt16(data[i]) | UInt16(data[i + 1]) << 8) / 65535
-            })
-        }
-        let white = rgb(0, 0)
-        for point in [(3, 100), (result.width - 3, 100), (150, 3), (150, result.height - 3)] {
-            XCTAssertEqual(rgb(point.0, point.1), white, "Outer paper should remain clean")
-        }
-        let band = rgb(17, 100)
-        XCTAssertLessThan(max(band.x, band.y, band.z), 0.15)
-        let fringe = (50..<150).map { rgb(12, $0).x }
-        XCTAssertGreaterThan(fringe.max()! - fringe.min()!, 0.08, "The edge should have varying coverage")
-        let otherGauge = configuration(.emulsion, format: "4x5", paper: .screen, stock: "portra400")
-        XCTAssertEqual(data, try pixels(XCTUnwrap(PrintFrameRenderer.render(source, configuration: otherGauge))))
-    }
-
-    func testEmulsionBandFadesIntoThePhotographWithAnUnevenEdge() throws {
-        let source = try fixture()
-        let config = configuration(.emulsion, paper: .screen)
-        let layout = PrintFrameRenderer.layout(width: source.width, height: source.height, configuration: config)
-        let result = try XCTUnwrap(PrintFrameRenderer.render(source, configuration: config))
-        let data = try pixels(result)
-        let original = try pixels(source)
         let left = Int(layout.imageRect.minX), top = Int(layout.size.height - layout.imageRect.maxY)
-        let rim = Int(ceil(Double(min(source.width, source.height)) * Double(PrintFrameRenderer.emulsionRim)))
-        // The picture's own edge is under the band: darker than the source, and not a cut line.
-        var depth = [Int]()
-        for x in stride(from: 20, to: source.width - 20, by: 4) {
-            var run = 0
-            while run < rim, rgb(result, data, left + x, top + run).y < rgb(source, original, x, run).y * 0.5 { run += 1 }
-            depth.append(run)
+        let tone = rgb(result, data, left - 8, top - 6)
+        XCTAssertEqual(tone.x, 0.05, accuracy: 0.002)
+        // The whole film goes down as developed: the band, corners included, and the photograph.
+        for (x, y) in [(-8, -6), (-1, -1), (150, -6), (150, -1), (307, 100), (-8, 205), (307, 205),
+                       (150, 200), (-1, 100), (300, 0)] {
+            XCTAssertEqual(rgb(result, data, left + x, top + y), tone, "(\(x), \(y))")
         }
-        XCTAssertGreaterThan(depth.min()!, 0, "the band should cover the photograph's edge")
-        XCTAssertGreaterThan(depth.max()! - depth.min()!, 2, "the inner edge should be uneven")
-        XCTAssertLessThan(depth.max()!, rim, "the band must stop within the rim")
-        // Halfway through the rim the picture shows through; past the rim it is untouched.
-        let mid = rgb(result, data, left + source.width / 2, top + rim / 2)
-        XCTAssertGreaterThan(mid.y, 0.05)
-        XCTAssertLessThan(mid.y, rgb(source, original, source.width / 2, rim / 2).y)
-        XCTAssertEqual(rgb(result, data, left + source.width / 2, top + rim + 2),
-                       rgb(source, original, source.width / 2, rim + 2))
+        let original = try pixels(source)
+        XCTAssertEqual(rgb(result, data, left, top), rgb(source, original, 0, 0))
+        XCTAssertEqual(rgb(result, data, left + 299, top + 199), rgb(source, original, 299, 199))
+        // Beyond the film is the clean paper margin.
+        let white = rgb(result, data, 0, 0)
+        XCTAssertGreaterThan(white.x, 0.9)
+        for (x, y) in [(left - 9, 100), (left + 308, 100), (150, top - 7), (150, top + 206)] {
+            XCTAssertEqual(rgb(result, data, x, y), white, "(\(x), \(y))")
+        }
+        // A wider gauge's film widens the print by its own margins.
+        let sheet = try self.film(around: source, format: "4x5")
+        let wide = try XCTUnwrap(PrintFrameRenderer.render(sheet.image, configuration: config,
+                                                           edge: sheet.margins))
+        XCTAssertEqual(wide.width, 300 + sheet.margins.left + sheet.margins.right + 2 * Int(horizontal))
+        XCTAssertGreaterThan(sheet.margins.left, film.margins.left)
     }
 
     func testNotchPatternsFollowTheStockOnlyOnSheetFilm() throws {
@@ -432,16 +444,12 @@ final class PrintFrameTests: XCTestCase {
             let space = try XCTUnwrap(CGColorSpace(name: name))
             let source = try fixture(space: space)
             for frame in [PrintFrame.paper, .emulsion] {
-                let result = try XCTUnwrap(PrintFrameRenderer.render(source, configuration: configuration(frame)))
+                let result = try XCTUnwrap(render(source, configuration(frame)))
                 XCTAssertEqual(result.colorSpace, space)
                 XCTAssertEqual(result.bitsPerComponent, 16)
-                let layout = PrintFrameRenderer.layout(width: source.width, height: source.height, configuration: configuration(frame))
-                let crop = untouched(frame, layout: layout, width: source.width, height: source.height)
-                let inner = CGRect(x: crop.minX - layout.imageRect.minX,
-                                   y: crop.minY - (layout.size.height - layout.imageRect.maxY),
-                                   width: crop.width, height: crop.height)
-                XCTAssertEqual(try pixels(XCTUnwrap(result.cropping(to: crop))),
-                               try pixels(XCTUnwrap(source.cropping(to: inner))))
+                let layout = try layout(source, configuration(frame))
+                let crop = untouched(layout: layout, width: source.width, height: source.height)
+                XCTAssertEqual(try pixels(XCTUnwrap(result.cropping(to: crop))), try pixels(source))
             }
         }
     }

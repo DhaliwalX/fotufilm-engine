@@ -1,6 +1,6 @@
 import Foundation
 
-/// Physical film/paper finishing, mounts, and an explicitly styled emulsion border.
+/// Physical film/paper finishing, mounts, and the film's unexposed edge printed with the picture.
 public enum PrintFrame: String, CaseIterable, Codable, Sendable, Identifiable {
     case none, film, slideMount, paper, paper5x7, paper8x10, paper5x5, carrier, emulsion, mount, darkMount,
          socialSquare, socialPortrait, socialStory
@@ -33,7 +33,7 @@ public enum PrintFrame: String, CaseIterable, Codable, Sendable, Identifiable {
         case .paper8x10: return "The selected photographic paper, in an 8 × 10 inch print."
         case .paper5x5: return "The selected photographic paper, in a 5 × 5 inch print."
         case .carrier: return "The film rebate printed through a filed-out negative carrier: a black line inside the paper margin."
-        case .emulsion: return "A dark, uneven edge with soft wear and a white paper margin."
+        case .emulsion: return "The film just outside the camera gate, printed with the photograph: the stock's own unexposed tone, glow and grain, inside a paper margin."
         case .mount: return "A clean white margin around the photograph."
         case .darkMount: return "A clean black margin around the photograph."
         case .socialSquare: return "A square 1 : 1 canvas for posting, the photograph inside a white margin."
@@ -304,9 +304,14 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
         // rebate of a transparency prints the same as the unexposed margin and shows nothing.
         let carrierAvailable = reflective && !paper.isPositivePaper
             && definition?.stock.isReversal == false && !nativeInstant
+        // The unexposed edge is developed from the stock over the gauge's gate-to-edge margins;
+        // integral instant film has a mask there instead of emulsion.
+        let edgeAvailable = definition != nil && !nativeInstant
+            && formatID.flatMap { UnexposedEdge.Geometry.preset($0, motionPictureStock: motionStock) } != nil
         let available: Bool
         switch frame {
-        case .none, .emulsion, .mount, .darkMount, .socialSquare, .socialPortrait, .socialStory: available = true
+        case .none, .mount, .darkMount, .socialSquare, .socialPortrait, .socialStory: available = true
+        case .emulsion: available = edgeAvailable
         case .film: available = filmAvailable
         case .slideMount: available = slideAvailable
         case .carrier: available = carrierAvailable
@@ -402,9 +407,15 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
             detail = carrierAvailable
                 ? "\(paper.name) · filed carrier · 8 × 10 in"
                 : "Choose a negative film and a reflection paper such as Ektacolor Edge."
-        case .emulsion, .mount:
+        case .emulsion:
+            // The band itself is developed by the host; the margin around it is the paper's white.
+            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? SIMD3(repeating: 0.91)
+            detail = edgeAvailable
+                ? "\(name) · \(definition?.name ?? "Film") · unexposed edge"
+                : "Choose a film and a roll or sheet film format."
+        case .mount:
             // Reflection outputs retain their modelled paper white. Other outputs use a
-            // neutral presentation mount; these styles do not identify a manufactured stock.
+            // neutral presentation mount; this style does not identify a manufactured stock.
             baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? SIMD3(repeating: 0.91)
             detail = frame.detail
         case .darkMount:

@@ -211,6 +211,9 @@ enum FilmRender {
         var ready: RowWatermark?
         /// Places an upright original-coordinate subject mask on this scene's pixel lattice.
         var placeSelectionMask: ((CIImage) -> CIImage)? = nil
+        /// Set on a piece of film larger than the aperture (`developFilm(beyond:...)`): where the
+        /// photograph stands in it, and the levels it prints on.
+        var unexposedEdge: UnexposedEdge.Develop? = nil
 
         /// Blocks until `rows` have been laid down. Free — not even a lock — on a settled scene.
         func waitForRows(through row: Int) {
@@ -729,6 +732,7 @@ enum FilmRender {
         upright: Bool = true,
         usesSourceFrame: Bool = true,
         negative: NegativeViewing? = nil,
+        frame: PrintFrameConfiguration? = nil,
         report: Reporter? = nil
     ) -> Rendered? {
         // The develop reads the frame top-down in strips and the rasterise lays it down top-down
@@ -744,10 +748,21 @@ enum FilmRender {
         // develop keeps for the next frame is worth more to the encode that follows it.
         defer { HalideMetalFilmRenderer.releaseIdleBuffers() }
         #endif
-        guard var rendered = develop(
+        // The Emulsion Border develops a larger piece of film, the photograph included.
+        let print = frame?.frame == .emulsion ? nil : develop(
             scene, state: state, hdr: hdr, dynamicRange: dynamicRange,
             exact: exact, negative: negative, report: report
-        )?.image else { return nil }
+        )?.image
+        var rendered: Rendered
+        if let frame {
+            guard let framed = framed(print, in: frame, scene: scene, state: state, hdr: hdr,
+                                      dynamicRange: dynamicRange, exact: exact,
+                                      negative: negative) else { return nil }
+            rendered = framed.rendered
+        } else {
+            guard let print else { return nil }
+            rendered = print
+        }
         rendered.metadata = source.captureMetadata
         rendered.orientation = upright ? .up : source.orientation
         return rendered
@@ -842,6 +857,7 @@ enum FilmRender {
         // picture is an enlargement, and the engine scales grain and the other
         // millimetre-sized structures to match.
         options.frameCoverage = scene.frameCoverage
+        options.unexposedEdge = scene.unexposedEdge
         // state.options selects stock-native or explicit source light. Capture white remains
         // attached to the decoded scene for provenance, not as an implicit rendering override.
         // The recorded range above diffuse white, so an HDR source's highlights are metered
@@ -1174,6 +1190,171 @@ enum FilmRender {
         }
         return (rendered, normalized(bins),
                 hdrImage == nil ? nil : normalized(hdrBins))
+    }
+
+    /// A print inside its frame, and where the photograph stands in it.
+    struct Framed: @unchecked Sendable {
+        let rendered: Rendered
+        let layout: PrintFrameRenderer.Layout
+    }
+
+    /// The print of `scene` inside `frame`. Every frame but the Emulsion Border is drawn around
+    /// `print`, the print `develop` made of `scene`. The Emulsion Border prints a larger piece of
+    /// film, developed here from `scene` under the same arguments, so it ignores `print` and a
+    /// caller that has not developed one may pass nil.
+    static func framed(
+        _ print: Rendered?, in frame: PrintFrameConfiguration, scene: Scene?, state: EditState,
+        hdr: Bool = false,
+        dynamicRange: AppSettings.DynamicRange = AppSettings.storedStillDynamicRange,
+        exact: Bool = false, negative: NegativeViewing? = nil,
+        shouldContinue: (() -> Bool)? = nil
+    ) -> Framed? {
+        if frame.frame == .emulsion {
+            guard let scene,
+                  let film = developFilm(beyond: scene, state: state, hdr: hdr,
+                                         dynamicRange: dynamicRange, exact: exact,
+                                         negative: negative, shouldContinue: shouldContinue),
+                  let image = PrintFrameRenderer.render(film.rendered.image, configuration: frame,
+                                                        edge: film.margins)
+            else { return nil }
+            var hdrImage: CGImage?
+            if let developed = film.rendered.hdrImage {
+                guard let framed = PrintFrameRenderer.render(developed, configuration: frame,
+                                                             edge: film.margins)
+                else { return nil }
+                hdrImage = framed
+            }
+            return Framed(
+                rendered: Rendered(image: image, hdrImage: hdrImage,
+                                   metadata: print?.metadata, orientation: print?.orientation ?? .up),
+                layout: PrintFrameRenderer.layout(width: scene.width, height: scene.height,
+                                                  configuration: frame, edge: film.margins))
+        }
+        guard let print, let image = PrintFrameRenderer.render(print.image, configuration: frame)
+        else { return nil }
+        var hdrImage: CGImage?
+        if let developed = print.hdrImage {
+            guard let framed = PrintFrameRenderer.render(developed, configuration: frame)
+            else { return nil }
+            hdrImage = framed
+        }
+        return Framed(
+            rendered: Rendered(image: image, hdrImage: hdrImage, metadata: print.metadata,
+                               orientation: print.orientation),
+            layout: PrintFrameRenderer.layout(width: print.image.width, height: print.image.height,
+                                              configuration: frame))
+    }
+
+    /// `original` in the photograph's place inside a framed print, for press-to-compare: the
+    /// frame stays as it is and only the picture changes.
+    static func comparing(_ original: CGImage, in framed: CGImage,
+                          layout: PrintFrameRenderer.Layout) -> CGImage? {
+        guard let space = framed.colorSpace,
+              let context = CGContext(data: nil, width: framed.width, height: framed.height,
+                                      bitsPerComponent: framed.bitsPerComponent, bytesPerRow: 0,
+                                      space: space, bitmapInfo: framed.bitmapInfo.rawValue)
+        else { return nil }
+        let whole = CGRect(x: 0, y: 0, width: framed.width, height: framed.height)
+        context.draw(framed, in: whole)
+        context.interpolationQuality = .high
+        context.draw(original, in: layout.imageRect)
+        return context.makeImage()
+    }
+
+    /// A piece of film larger than the camera's aperture, developed whole: `scene` is the light
+    /// the lens forms inside the aperture, continued past its edges as the world beyond them, and
+    /// the gate passes it only inside (`UnexposedEdge`). The film reaches as far beyond the
+    /// aperture as the gauge's emulsion does before its perforations or cut edge. Nil with no
+    /// film, on a gauge with no emulsion there, or when the develop fails.
+    static func developFilm(
+        beyond scene: Scene, state: EditState, hdr: Bool = false,
+        dynamicRange: AppSettings.DynamicRange = AppSettings.storedStillDynamicRange,
+        exact: Bool = false, negative: NegativeViewing? = nil,
+        shouldContinue: (() -> Bool)? = nil
+    ) -> (rendered: Rendered, margins: UnexposedEdge.Margins)? {
+        guard let stock = state.stock, scene.viewport == nil, scene.unexposedEdge == nil,
+              scene.width > 0, scene.height > 0 else { return nil }
+        var options = state.options(sensor: scene.sensorFrame)
+        options.frameCoverage = scene.frameCoverage
+        options.sceneHeadroom = scene.inputConversion == .preserveHDR ? scene.contentHeadroom : 1
+        options.paper = state.resolvedPaper
+        if let negative { options.negativeViewing = negative }
+        let motionPicture = FilmFormat.preset(id: StockPreset.nativeFormatID(for: state.stockID))?
+            .isMotionPicture == true
+        guard let geometry = UnexposedEdge.Geometry.preset(options.format.presetID ?? state.formatID,
+                                                           motionPictureStock: motionPicture),
+              let invocation = try? FilmEngineInvocation(validating: stock, options: options,
+                                                         width: scene.width, height: scene.height)
+        else { return nil }
+        let margins = geometry.margins(
+            photoWidth: scene.width, photoHeight: scene.height,
+            pixelsPerMM: options.pixelsPerMM(width: scene.width, height: scene.height))
+        // The photograph's own Auto Levels reading, metered as its develop meters it.
+        var stops = options.sceneHighlightStops
+        if stops == nil, invocation.sceneMeteringActive {
+            var measurement = invocation.toneBaseMeasurement()
+            let bandRows = max(1, 262_144 / scene.width)
+            var scratch = [Float](repeating: 0, count: min(bandRows, scene.height) * scene.width * 4)
+            scene.withPixels { pixels in
+                var row = 0
+                while row < scene.height {
+                    let upper = min(scene.height, row + bandRows)
+                    scratch.withUnsafeMutableBufferPointer { buffer in
+                        expand(pixels, rows: row..<upper, width: scene.width, into: buffer,
+                               inputConversion: scene.inputConversion)
+                        measurement.add(linearRGBA: buffer.baseAddress!, rows: row..<upper)
+                    }
+                    row = upper
+                }
+            }
+            stops = invocation.sceneHighlightStops(measurement)
+        }
+        let width = scene.width + margins.left + margins.right
+        let height = scene.height + margins.top + margins.bottom
+        guard shouldContinue?() != false,
+              let pixels = MappedBuffer(byteCount: width * height * 4 * MemoryLayout<Float>.size)
+        else { return nil }
+        scene.withPixels {
+            UnexposedEdge.extend($0, width: scene.width, height: scene.height, margins: margins,
+                                 into: pixels.bound(to: Float.self))
+        }
+        pixels.flush(byteOffset: 0, byteCount: width * height * 4 * MemoryLayout<Float>.size)
+        var key = scene.key
+        key.longEdge = max(width, height)
+        let film = Scene(
+            pixels: pixels, width: width, height: height, key: key,
+            sceneKelvin: scene.sceneKelvin, sceneChromaticity: scene.sceneChromaticity,
+            contentHeadroom: scene.contentHeadroom, inputConversion: scene.inputConversion,
+            frameCoverage: scene.frameCoverage, viewport: nil, sensorFrame: scene.sensorFrame,
+            unexposedEdge: .init(margins: margins, sceneHighlightStops: stops))
+        func print(_ state: EditState) -> Rendered? {
+            develop(film, state: state, hdr: hdr, dynamicRange: dynamicRange, exact: exact,
+                    negative: negative, shouldContinue: shouldContinue)?.image
+        }
+        guard let selection = state.selective, selection.hasSelection else {
+            return print(state).map { ($0, margins) }
+        }
+        // A selective edit is drawn on the photograph. Its mask reaches the film beyond as the
+        // picture does, continued from the nearest edge.
+        var base = state
+        base.selective = nil
+        guard let source = selectionSource(scene),
+              let photoMask = selectionMask(scene, state: selection, source: source),
+              let ground = print(base),
+              let over = print(selection.edit.applying(to: base)) else { return nil }
+        let mask = photoMask.clampedToExtent()
+            .transformed(by: CGAffineTransform(translationX: CGFloat(margins.left),
+                                               y: CGFloat(margins.bottom)))
+            .cropped(to: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let image = compositeSelection(ground: ground.image, over: over.image, mask: mask,
+                                             state: selection) else { return nil }
+        var hdrImage: CGImage?
+        if let groundHDR = ground.hdrImage, let overHDR = over.hdrImage {
+            guard let blended = compositeSelection(ground: groundHDR, over: overHDR, mask: mask,
+                                                   state: selection) else { return nil }
+            hdrImage = blended
+        }
+        return (Rendered(image: image, hdrImage: hdrImage), margins)
     }
 
     /// Stable, geometry-correct source shared by the Mac sampler, iOS sampler and saved masks.

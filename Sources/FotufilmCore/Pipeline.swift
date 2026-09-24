@@ -214,6 +214,9 @@ public struct FotufilmEngine {
         /// whole-frame meter. An invocation without scene pixels falls back to the fixed graded
         /// print. Video hosts can supply a temporally smoothed measurement.
         public var sceneHighlightStops: Float? = nil
+        /// Set when this develop is the unexposed film just outside the camera gate, which the
+        /// Emulsion Border prints around the photograph. See `UnexposedEdge`.
+        public var unexposedEdge: UnexposedEdge.Develop? = nil
         /// The contrast of the graded paper curve Digital Reference's graded styles print a
         /// negative through, as a variable-contrast paper grade 0…5. Grade 2 is the calibrated
         /// curve; softer grades roll highlights off earlier, harder grades later, each holding
