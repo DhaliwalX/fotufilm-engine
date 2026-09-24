@@ -193,6 +193,58 @@ final class PrintEncodingTests: XCTestCase {
             colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!))
     }
 
+    func testMappedImageRejectsInvalidOrOverflowingDimensionsBeforeRetaining() throws {
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        weak var owner: MappedBuffer?
+        try autoreleasepool {
+            let buffer = try XCTUnwrap(MappedBuffer(byteCount: 8, storage: .boundedMemory(upTo: 0)))
+            owner = buffer
+            let dimensions = [(0, 1), (1, 0), (-1, 1), (1, -1),
+                              (Int.max, 1), (1, Int.max), (Int.max / 8, 2), (2, 1)]
+            for (width, height) in dimensions {
+                XCTAssertNil(PrintEncoding.makeImage(takingOwnershipOf: buffer,
+                    width: width, height: height, colorSpace: space))
+            }
+        }
+        XCTAssertNil(owner)
+    }
+
+    func testMappedImageProviderRetainsBackingIndependentlyOfImage() throws {
+        let width = 128, height = 64
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.displayP3))
+        let samples: [UInt16] = [1234, 5678, 9012, 65535]
+        weak var owner: MappedBuffer?
+        try autoreleasepool {
+            func makeImage() throws -> CGImage {
+                let buffer = try XCTUnwrap(MappedBuffer(byteCount: width * height * 8,
+                                                        storage: .boundedMemory(upTo: 0)))
+                owner = buffer
+                samples.withUnsafeBytes {
+                    buffer.write(from: $0.baseAddress!, byteOffset: 0, byteCount: $0.count)
+                    buffer.write(from: $0.baseAddress!, byteOffset: buffer.byteCount - $0.count, byteCount: $0.count)
+                }
+                return try XCTUnwrap(PrintEncoding.makeImage(takingOwnershipOf: buffer,
+                    width: width, height: height, colorSpace: space))
+            }
+            var image: CGImage? = try makeImage()
+            XCTAssertNotNil(owner)
+            var provider: CGDataProvider? = try XCTUnwrap(image?.dataProvider)
+            image = nil
+            XCTAssertNotNil(owner, "the provider must keep its mapping after the image is released")
+            let data = try XCTUnwrap(provider?.data)
+            let bytes = try XCTUnwrap(CFDataGetBytePtr(data))
+            XCTAssertEqual(CFDataGetLength(data), width * height * 8)
+            samples.withUnsafeBytes { expected in
+                for index in 0..<expected.count {
+                    XCTAssertEqual(bytes[index], expected[index])
+                    XCTAssertEqual(bytes[width * height * 8 - expected.count + index], expected[index])
+                }
+            }
+            provider = nil
+        }
+        XCTAssertNil(owner)
+    }
+
     func testRowsLandWhereTheyAreAddressed() {
         let width = 4, height = 6
         var destination = [UInt16](repeating: 0, count: width * height * 4)

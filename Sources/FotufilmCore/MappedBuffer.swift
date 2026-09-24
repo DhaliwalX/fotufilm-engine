@@ -8,28 +8,78 @@ import Android
 /// memory allowance on it. iOS kills an app for the *dirty* pages it holds, not for the address
 /// space it has mapped.
 public final class MappedBuffer: @unchecked Sendable {
+    public enum StoragePreference: Sendable {
+        /// Large buffers use temporary files to limit resident memory.
+        case automatic
+        /// Keep a buffer in memory only within the caller's explicit allowance.
+        /// Larger buffers retain automatic storage; allocation failure may use a file.
+        case memory(upTo: Int)
+        /// Limits anonymous memory for this allocation. Sizes above the cap must use a
+        /// temporary file or fail; they never fall back to anonymous memory. A zero or
+        /// negative cap requires file backing even below `mappingThreshold`.
+        /// Sizes at or below the cap try memory first and may fall back to a file.
+        /// This does not limit aggregate allocations or the residency of mapped pages.
+        case boundedMemory(upTo: Int)
+    }
+
     /// Above this, a buffer is worth putting on disk.
     public static let mappingThreshold = 32 << 20
 
     public let byteCount: Int
     /// False when this fell back to — or never left — anonymous memory.
     public let isMapped: Bool
+    /// The allowance reserved by this allocation, including an explicit memory preference.
+    public var residentByteCount: Int { isMapped ? 0 : byteCount }
     public let baseAddress: UnsafeMutableRawPointer
     /// The backing file, kept open for `write`; -1 when not mapped.
     private let descriptor: Int32
 
-    /// Allocates `byteCount` bytes, mapped or not according to size.
-    public init?(byteCount: Int) {
+    /// Allocates `byteCount` bytes using the requested per-allocation storage policy.
+    public convenience init?(byteCount: Int, storage: StoragePreference = .automatic) {
+        self.init(byteCount: byteCount, storage: storage, allocation: .system)
+    }
+
+    /// Per-call resource factories keep allocation-failure tests independent of process globals.
+    /// Successful factories must retain the standard malloc/free and mmap/munmap ownership.
+    struct Allocation {
+        var memory: (Int) -> UnsafeMutableRawPointer?
+        var file: (Int) -> (UnsafeMutableRawPointer, Int32)?
+
+        static var system: Self {
+            Self(memory: { malloc($0) }, file: MappedBuffer.map)
+        }
+    }
+
+    init?(byteCount: Int, storage: StoragePreference, allocation: Allocation) {
         guard byteCount > 0 else { return nil }
         self.byteCount = byteCount
-        if byteCount >= Self.mappingThreshold,
-           let (mapped, descriptor) = Self.map(byteCount: byteCount) {
+        let prefersMemory: Bool
+        let requiresMapping: Bool
+        switch storage {
+        case .automatic:
+            prefersMemory = false; requiresMapping = false
+        case .memory(let limit):
+            prefersMemory = byteCount <= limit; requiresMapping = false
+        case .boundedMemory(let limit):
+            prefersMemory = byteCount <= max(0, limit)
+            requiresMapping = !prefersMemory
+        }
+        if requiresMapping || (!prefersMemory && byteCount >= Self.mappingThreshold) {
+            if let (mapped, descriptor) = allocation.file(byteCount) {
+                baseAddress = mapped
+                self.descriptor = descriptor
+                isMapped = true
+                return
+            }
+            guard !requiresMapping else { return nil }
+        }
+        guard let memory = allocation.memory(byteCount) else {
+            guard prefersMemory, let (mapped, descriptor) = allocation.file(byteCount) else { return nil }
             baseAddress = mapped
             self.descriptor = descriptor
             isMapped = true
             return
         }
-        guard let memory = malloc(byteCount) else { return nil }
         memory.initializeMemory(as: UInt8.self, repeating: 0, count: byteCount)
         baseAddress = memory
         descriptor = -1
@@ -50,7 +100,8 @@ public final class MappedBuffer: @unchecked Sendable {
     /// Maps a temporary file, or nil if any step of it fails.
     private static func map(byteCount: Int) -> (UnsafeMutableRawPointer, Int32)? {
         #if os(WASI)
-        // WebAssembly linear memory cannot map files. Use the allocator fallback above.
+        // WebAssembly linear memory cannot map files. Policies that require mapping fail;
+        // other policies retain their existing allocator fallback above.
         return nil
         #else
         let path = (NSTemporaryDirectory() as NSString)
@@ -123,7 +174,8 @@ public final class MappedBuffer: @unchecked Sendable {
             count: count)
     }
 
-    /// What a buffer of this size really costs the process's allowance.
+    /// What automatic storage of this size reserves. Use `residentByteCount` for an allocation
+    /// that supplies an explicit storage preference or may have fallen back to memory.
     public static func residentBytes(_ byteCount: Int) -> Int {
         #if os(WASI)
         return byteCount

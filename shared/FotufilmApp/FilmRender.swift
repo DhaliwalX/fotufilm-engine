@@ -15,6 +15,23 @@ import FotufilmMetal
 import FotufilmImaging
 #endif
 
+/// App-supplied development for an existing scene. Implementations may receive concurrent
+/// requests, and must throw for unsupported work: an installed backend is never a fallback hint.
+protocol FilmRenderDetailContext: Sendable {}
+
+protocol FilmRenderBackend: AnyObject, Sendable {
+    func sceneStorage(byteCount: Int) -> MappedBuffer.StoragePreference
+    func spatialSupport(for invocation: FilmEngineInvocation) throws -> Int
+    func detailMeasurements(of scene: FilmRender.Scene, state: EditState,
+                            negative: NegativeViewing?) throws -> any FilmRenderDetailContext
+    func develop(_ request: FilmRender.DevelopmentRequest) throws -> FilmRender.DevelopmentOutput
+    func developRegion(_ request: FilmRender.DevelopmentRequest) throws -> FilmRender.RegionOutput
+}
+
+extension FilmRenderBackend {
+    func sceneStorage(byteCount: Int) -> MappedBuffer.StoragePreference { .automatic }
+}
+
 /// The scene-referred still pipeline.
 enum FilmRender {
     /// One measured step of a render, for the progress UI.
@@ -41,6 +58,54 @@ enum FilmRender {
     }
 
     typealias Reporter = @Sendable (Event) -> Void
+    typealias DevelopmentOutput = (image: Rendered, histogram: [[Float]]?, hdrHistogram: [[Float]]?)
+
+    /// The existing develop contract, without exposing a particular engine or GPU resource type.
+    /// State is already the caller's chosen rendering state; negative is an explicit view override.
+    struct DevelopmentRequest {
+        let scene: Scene
+        let state: EditState
+        let detailMeasurements: DetailMeasurements?
+        let collectHistogram: Bool
+        let hdr: Bool
+        let dynamicRange: AppSettings.DynamicRange
+        let exact: Bool
+        let stock: FilmStock?
+        let negative: NegativeViewing?
+        let report: Reporter?
+        let shouldContinue: (() -> Bool)?
+    }
+
+    /// Only the apron-free image is publishable. Its viewport retains the virtual-frame origin
+    /// and density used to form it; callers must not crop this image a second time.
+    struct RegionOutput {
+        let rendered: Rendered
+        let viewport: PreviewViewport
+    }
+
+    private final class BackendRegistry: @unchecked Sendable {
+        private let lock = NSLock()
+        private var backend: (any FilmRenderBackend)?
+
+        func install(_ value: (any FilmRenderBackend)?) {
+            lock.lock()
+            backend = value
+            lock.unlock()
+        }
+
+        func current() -> (any FilmRenderBackend)? {
+            lock.lock()
+            defer { lock.unlock() }
+            return backend
+        }
+    }
+    private static let backendRegistry = BackendRegistry()
+
+    /// Nil preserves the built-in renderer. Installing a backend makes its failures explicit;
+    /// unsupported requests must not quietly run through another renderer.
+    static func installDevelopmentBackend(_ backend: (any FilmRenderBackend)?) {
+        backendRegistry.install(backend)
+    }
 
     private static let linearSpace = CGColorSpace(name: CGColorSpace.extendedLinearITUR_2020)!
     fileprivate static let outputSpace = CGColorSpace(name: CGColorSpace.displayP3)!
@@ -170,7 +235,18 @@ enum FilmRender {
 
     /// Whole-frame tone and flare readings retained across settled viewport requests.
     struct DetailMeasurements: @unchecked Sendable {
-        fileprivate let context: FilmFrameContext
+        fileprivate enum Storage {
+            case builtIn(FilmFrameContext)
+            case backend(any FilmRenderBackend, any FilmRenderDetailContext)
+        }
+        fileprivate let storage: Storage
+
+        /// Measurements are owned by the backend instance that created them. A newly installed
+        /// backend must measure again instead of interpreting another renderer's cached context.
+        func context(for backend: any FilmRenderBackend) -> (any FilmRenderDetailContext)? {
+            guard case let .backend(owner, context) = storage, owner === backend else { return nil }
+            return context
+        }
     }
 
     /// Synchronizes top-to-bottom Core Image rasterization with striped film development.
@@ -212,6 +288,15 @@ enum FilmRender {
         of scene: Scene, state: EditState,
         negative: NegativeViewing? = nil
     ) -> DetailMeasurements? {
+        if let backend = backendRegistry.current() {
+            do {
+                return DetailMeasurements(storage: .backend(backend,
+                    try backend.detailMeasurements(of: scene, state: state, negative: negative)))
+            } catch {
+                print("FilmRender backend measurements failed: \(error.localizedDescription) (\(error))")
+                return nil
+            }
+        }
         guard let stock = state.stock,
               let engine = HalideMetalFilmRenderer.shared,
               let device = MTLCreateSystemDefaultDevice() else { return nil }
@@ -237,8 +322,41 @@ enum FilmRender {
         return engine.makeLinearFloatFrameContext(
             input: input, width: scene.width, height: scene.height,
             stock: stock, options: options).map {
-                DetailMeasurements(context: $0)
+                DetailMeasurements(storage: .builtIn($0))
             }
+    }
+
+    /// Develops and publishes only a viewport's valid core. Histograms remain whole-frame
+    /// readings from the base preview; the spatial apron is never counted or published here.
+    static func developDetail(
+        _ scene: Scene, measurements: DetailMeasurements, state: EditState,
+        hdr: Bool = false, dynamicRange: AppSettings.DynamicRange = .sdr,
+        exact: Bool = false, negative: NegativeViewing? = nil,
+        report: Reporter? = nil, shouldContinue: (() -> Bool)? = nil
+    ) -> RegionOutput? {
+        guard let viewport = scene.viewport, shouldContinue?() != false else { return nil }
+        if let backend = backendRegistry.current() {
+            do {
+                let output = try backend.developRegion(DevelopmentRequest(scene: scene, state: state,
+                    detailMeasurements: measurements, collectHistogram: false, hdr: hdr,
+                    dynamicRange: dynamicRange, exact: exact, stock: nil, negative: negative,
+                    report: report, shouldContinue: shouldContinue))
+                return shouldContinue?() == false ? nil : output
+            } catch {
+                if shouldContinue?() != false {
+                    print("FilmRender backend region failed: \(error.localizedDescription) (\(error))")
+                }
+                return nil
+            }
+        }
+        guard let output = develop(scene, state: state, detailMeasurements: measurements,
+            hdr: hdr, dynamicRange: dynamicRange, exact: exact, negative: negative,
+            report: report, shouldContinue: shouldContinue),
+              let image = output.image.image.cropping(to: viewport.displayCropPixelRect.integral)
+        else { return nil }
+        var rendered = Rendered(image: image)
+        rendered.hdrImage = output.image.hdrImage?.cropping(to: viewport.displayCropPixelRect.integral)
+        return RegionOutput(rendered: rendered, viewport: viewport)
     }
 
     /// Decodes, places and rasterises the photograph. Automatic interpretation follows source
@@ -256,6 +374,7 @@ enum FilmRender {
         upright: Bool = true,
         usesSourceFrame: Bool = true,
         streaming: Bool = false,
+        storage: MappedBuffer.StoragePreference? = nil,
         report: Reporter? = nil
     ) -> Scene? {
         func time<T>(_ stage: Stage, _ detail: String = "", _ body: () -> T) -> T {
@@ -346,7 +465,7 @@ enum FilmRender {
         var frameCoverage: Float = 1
         var viewport: PreviewViewport?
         let placed = time(.geometry, longEdge.map { "long edge \($0) px" } ?? "native") {
-            () -> CIImage in
+            () -> CIImage? in
             let corrected = LensCorrectionFilter.apply(decoded, stack: lens.stack)
             let framed = geometry(corrected, state: state)
             // How much of the frame's short edge the geometry kept. Cropping and
@@ -376,9 +495,18 @@ enum FilmRender {
                     height: max(1, Int(density.height)))
                 // Layered transport currently solves the complete virtual frame so tails and
                 // reduction-grid phases remain identical while panning and zooming.
-                let support = options.transportConstruction(for: stock) == nil
-                    ? invocation.spatialSupport
-                    : Int(max(requestedViewport.virtualFrameSize.width, requestedViewport.virtualFrameSize.height))
+                let support: Int
+                if let backend = backendRegistry.current() {
+                    do { support = try backend.spatialSupport(for: invocation) }
+                    catch {
+                        print("FilmRender backend region sizing failed: \(error)")
+                        return nil
+                    }
+                } else {
+                    support = options.transportConstruction(for: stock) == nil
+                        ? invocation.spatialSupport
+                        : Int(max(requestedViewport.virtualFrameSize.width, requestedViewport.virtualFrameSize.height))
+                }
                 prepared = requestedViewport.addingSpatialSupport(support)
             }
             viewport = prepared
@@ -394,6 +522,7 @@ enum FilmRender {
             let cropped = atOrigin(framed.cropped(to: region))
             return resample(cropped, pixelSize: prepared.renderPixelSize)
         }
+        guard let placed else { return nil }
         let extent = placed.extent.integral
         let width = Int(extent.width), height = Int(extent.height)
         guard width > 0, height > 0 else { return nil }
@@ -421,7 +550,9 @@ enum FilmRender {
         // Source Illuminant; changing it does not invalidate or re-demosaic these pixels.
         let sceneKelvin = source.isRaw ? decodeKelvin : nil
         let rowBytes = width * MemoryLayout<Float>.size * 4
-        guard let buffer = MappedBuffer(byteCount: rowBytes * height) else {
+        let sceneBytes = rowBytes * height
+        let sceneStorage = storage ?? backendRegistry.current()?.sceneStorage(byteCount: sceneBytes) ?? .automatic
+        guard let buffer = MappedBuffer(byteCount: sceneBytes, storage: sceneStorage) else {
             return nil
         }
         /// One band of scene, finished: rendered into scratch, colour-corrected there, and
@@ -635,13 +766,28 @@ enum FilmRender {
         negative: NegativeViewing? = nil,
         report: Reporter? = nil,
         shouldContinue: (() -> Bool)? = nil
-    ) -> (image: Rendered, histogram: [[Float]]?,
-          hdrHistogram: [[Float]]?)? {
+    ) -> DevelopmentOutput? {
         if let selection = state.selective, selection.hasSelection {
             return developSelection(scene, state: state, selection: selection,
                 detailMeasurements: detailMeasurements, collectHistogram: collectHistogram,
                 hdr: hdr, dynamicRange: dynamicRange, exact: exact, stock: stockOverride,
                 negative: negative, report: report, shouldContinue: shouldContinue)
+        }
+        if let backend = backendRegistry.current() {
+            guard shouldContinue?() != false else { return nil }
+            let request = DevelopmentRequest(scene: scene, state: state,
+                detailMeasurements: detailMeasurements, collectHistogram: collectHistogram,
+                hdr: hdr, dynamicRange: dynamicRange, exact: exact, stock: stockOverride,
+                negative: negative, report: report, shouldContinue: shouldContinue)
+            do {
+                let output = try backend.develop(request)
+                return shouldContinue?() == false ? nil : output
+            } catch {
+                if shouldContinue?() != false {
+                    print("FilmRender backend failed: \(error.localizedDescription) (\(error))")
+                }
+                return nil
+            }
         }
         func time<T>(_ stage: Stage, _ detail: String = "", _ body: () -> T) -> T {
             report?(.began(stage, detail: detail))
@@ -939,7 +1085,7 @@ enum FilmRender {
                     viewport: viewport, film: film,
                     options: options,
                     inputConversion: inputConversion,
-                    shouldContinue: shouldContinue, writeTile: writeTile)
+                    exactMath: exact, shouldContinue: shouldContinue, writeTile: writeTile)
             }
             return film.engine.developStreaming(
                 width: width, height: height, stock: film.stock, options: options,
@@ -1186,17 +1332,19 @@ enum FilmRender {
         film: (stock: FilmStock, engine: HalideMetalFilmRenderer),
         options: FotufilmEngine.Options,
         inputConversion: FilmInputConversion,
+        exactMath: Bool,
         shouldContinue: (() -> Bool)?,
         writeTile: (Range<Int>, Range<Int>, UnsafeBufferPointer<Float>) -> Void
     ) -> Bool {
         let density = viewport.densityReferencePixelSize
-        guard let context = film.engine.makeLinearFloatVirtualFrameContext(
-            measurements: measurements.context,
+        guard case let .builtIn(measured) = measurements.storage,
+              let context = film.engine.makeLinearFloatVirtualFrameContext(
+            measurements: measured,
             densityWidth: max(1, Int(density.width)),
             densityHeight: max(1, Int(density.height)),
             frameWidth: Int(viewport.virtualFrameSize.width),
             frameHeight: Int(viewport.virtualFrameSize.height),
-            stock: film.stock, options: options) else { return false }
+            stock: film.stock, options: options, exactMath: exactMath) else { return false }
 
         if options.transportConstruction(for: film.stock) == nil {
             // A zoom tile includes an apron that can be larger than the visible image at small
@@ -1205,7 +1353,7 @@ enum FilmRender {
             return film.engine.developRegionStreaming(
                 width: width, height: height,
                 originX: Int(viewport.origin.x), originY: Int(viewport.origin.y),
-                context: context, shouldContinue: shouldContinue,
+                context: context, exactMath: exactMath, shouldContinue: shouldContinue,
                 readTile: { rows, columns, into in
                     expand(scene, rows: rows, columns: columns, width: width,
                            into: into, inputConversion: inputConversion)

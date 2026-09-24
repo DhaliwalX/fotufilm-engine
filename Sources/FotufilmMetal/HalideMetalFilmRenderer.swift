@@ -312,7 +312,7 @@ public final class HalideMetalFilmRenderer {
         densityWidth: Int, densityHeight: Int,
         frameWidth: Int, frameHeight: Int,
         stock: FilmStock, options: FotufilmEngine.Options,
-        frameIndex: UInt64 = 0, realtime: Bool = false
+        frameIndex: UInt64 = 0, realtime: Bool = false, exactMath: Bool = false
     ) -> FilmFrameContext? {
         precondition(densityWidth > 0 && densityHeight > 0)
         precondition(frameWidth >= densityWidth && frameHeight >= densityHeight)
@@ -323,6 +323,7 @@ public final class HalideMetalFilmRenderer {
             frameIndex: frameIndex)
         else { return nil }
         if realtime { invocation.featureMask |= FilmEngineFeature.realtime }
+        if exactMath { invocation.featureMask |= FilmEngineFeature.exactMath }
 
         invocation.copyScreenLevels(from: measured.invocation)
         if invocation.localToneActive {
@@ -692,7 +693,7 @@ public final class HalideMetalFilmRenderer {
     @discardableResult
     public func developRegionStreaming(
         width: Int, height: Int, originX: Int, originY: Int,
-        context: FilmFrameContext, memoryBudget: Int? = nil,
+        context: FilmFrameContext, memoryBudget: Int? = nil, exactMath: Bool = false,
         shouldContinue: (() -> Bool)? = nil,
         readTile: (_ rows: Range<Int>, _ columns: Range<Int>,
                    _ into: UnsafeMutableBufferPointer<Float>) -> Void,
@@ -708,6 +709,7 @@ public final class HalideMetalFilmRenderer {
         let budget = min(memoryBudget ?? availableBudget, availableBudget)
         var invocation = context.invocation
         invocation.featureMask |= FilmEngineFeature.floatIO
+        if exactMath { invocation.featureMask |= FilmEngineFeature.exactMath }
         let apron = invocation.spatialSupport
         guard let shape = Self.tileShape(
             width: width, height: height, apron: apron,
@@ -845,7 +847,8 @@ public final class HalideMetalFilmRenderer {
         }
         for tileWidth in candidates {
             guard let tileRows = tileRows(width: width, height: height, tileWidth: tileWidth,
-                                          apron: apron, budget: budget, overlap: overlap)
+                                          apron: apron, budget: budget, overlap: overlap,
+                                          allowOversizedBand: fullWidth)
             else { continue }
             let bytes = tileBytes(width: width, height: height, tileWidth: tileWidth,
                                   tileRows: tileRows, apron: apron, overlap: overlap)
@@ -880,13 +883,18 @@ public final class HalideMetalFilmRenderer {
     }
 
     /// The most rows a tile `tileWidth` wide can deliver under `budget` and `maximumTilePixels`,
-    /// or nil when not even `minimumTile` rows fit.
+    /// or nil when not even `minimumTile` rows fit. Row-only callers cannot narrow a band, so
+    /// they may exceed the pixel ceiling to preserve that minimum, but never the memory budget.
     static func tileRows(width: Int, height: Int, tileWidth: Int, apron: Int, budget: Int,
-                         overlap: Bool) -> Int? {
+                         overlap: Bool, allowOversizedBand: Bool = false) -> Int? {
         let floor = min(height, minimumTile)
+        let pixelLimitedRows = maximumTilePixels / min(width, tileWidth)
+        // Reject wide candidates instead of silently promoting their height past the pixel
+        // ceiling. A 6000-pixel iPhone band otherwise starts at 1.5 MP, three times its cap.
+        guard pixelLimitedRows >= floor || allowOversizedBand else { return nil }
         guard tileBytes(width: width, height: height, tileWidth: tileWidth, tileRows: floor,
                         apron: apron, overlap: overlap) <= budget else { return nil }
-        var low = floor, high = max(floor, min(height, maximumTilePixels / min(width, tileWidth)))
+        var low = floor, high = max(floor, min(height, pixelLimitedRows))
         while low < high {
             let middle = (low + high + 1) / 2
             if tileBytes(width: width, height: height, tileWidth: tileWidth, tileRows: middle,

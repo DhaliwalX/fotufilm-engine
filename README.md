@@ -314,6 +314,7 @@ the approximate conversion’s limits.
 
 - [User guide](docs/documentation.html)
 - [Crystal grain](docs/crystal-grain.md)
+- [Renderer integration, buffer storage, and grain assets](docs/rendering-integration.md)
 - [Build support](docs/support.html)
 - [Licensing](LICENSING.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)

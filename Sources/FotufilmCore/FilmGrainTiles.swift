@@ -128,7 +128,7 @@ extension FilmGrain {
 
     /// This population's tiles, rendered on first use.
     public func tiles() -> Tiles {
-        Self.tileCache.tiles(key) { buildTiles(seed: Self.tileSeed) }
+        assetTiles ?? Self.tileCache.tiles(key) { buildTiles(seed: Self.tileSeed) }
     }
 
     /// Transmittance of one record's tile at `gross`, `tileSide²` texels.
@@ -143,18 +143,39 @@ extension FilmGrain {
         return field.map { pow(10, -$0) }
     }
 
-    func buildTiles(seed: UInt64) -> Tiles {
-        let active = monochrome ? [1] : [0, 1, 2]
-        var levels = [[TileLevel]](repeating: [], count: 3)
-        for r in active where !records[r].sublayers.isEmpty {
-            let record = records[r]
-            levels[r] = (0..<Self.tileLevels).map { k in
-                let gross = record.dMin
-                    + (record.dMax - record.dMin) * Float(k) / Float(Self.tileLevels - 1)
-                return Self.tileLevel(light: tileLight(record: r, gross: gross, seed: seed))
+    func buildTiles(seed: UInt64, parallel: Bool = true) -> Tiles {
+        let active = (monochrome ? [1] : [0, 1, 2]).filter { !records[$0].sublayers.isEmpty }
+        let count = active.count * Self.tileLevels
+        let results = TileLevelResults(count: count)
+        // A level already parallelizes its small image tiles. Two independent levels keep that
+        // queue fed without opening all 51 levels' temporary render storage at once.
+        let workers = min(parallel ? 2 : 1, count)
+        if workers > 0 {
+            DispatchQueue.concurrentPerform(iterations: workers) { worker in
+                for index in stride(from: worker, to: count, by: workers) {
+                    let r = active[index / Self.tileLevels], k = index % Self.tileLevels
+                    let record = records[r]
+                    let gross = record.dMin
+                        + (record.dMax - record.dMin) * Float(k) / Float(Self.tileLevels - 1)
+                    results.values[index] = Self.tileLevel(light: tileLight(record: r, gross: gross, seed: seed))
+                }
             }
         }
+        var levels = [[TileLevel]](repeating: [], count: 3)
+        for (index, record) in active.enumerated() {
+            levels[record] = (0..<Self.tileLevels).map { results.values[index * Self.tileLevels + $0]! }
+        }
         return Tiles(levels: levels, dMin: records.map(\.dMin), dMax: records.map(\.dMax))
+    }
+
+    /// Workers publish distinct complete levels. Arrays are collected only after the join.
+    private final class TileLevelResults: @unchecked Sendable {
+        let values: UnsafeMutableBufferPointer<TileLevel?>
+        init(count: Int) {
+            values = .allocate(capacity: count)
+            values.initialize(repeating: nil)
+        }
+        deinit { values.deinitialize(); values.deallocate() }
     }
 
     static func tileLevel(light: [Float]) -> TileLevel {
@@ -249,20 +270,36 @@ extension FilmGrain {
         let mean = total / Double(n * n)
         let d = light.map { Double($0) - mean }
         let reach = 16
-        var power = 0.0
-        for dy in -reach...reach {
+        let lagSide = reach * 2 + 1
+        let sums = LagSums(count: lagSide * lagSide)
+        // Each row of lags is independent. Keep every texel sum serial, then combine the
+        // finished lags in the original dy/dx order: calibration must retain the same bits.
+        DispatchQueue.concurrentPerform(iterations: lagSide) { rowIndex in
+            let dy = rowIndex - reach
             for dx in -reach...reach {
                 var c = 0.0
                 for y in 0..<n {
                     let row = y * n, other = ((y + dy + n) % n) * n
                     for x in 0..<n { c += d[row + x] * d[other + (x + dx + n) % n] }
                 }
-                power += c / Double(n * n)
+                sums.values[rowIndex * lagSide + dx + reach] = c / Double(n * n)
             }
         }
+        var power = 0.0
+        for value in sums.values { power += value }
         let radius = Double(FilmStock.granularityApertureRadiusMM / tileTexelMM)
         let lightVariance = max(power, 0) / (Double.pi * radius * radius)
         return Float(lightVariance.squareRoot() / (mean * 2.302_585_093))
+    }
+
+    /// Concurrent writers own disjoint lag rows; the calling thread reads after the join.
+    private final class LagSums: @unchecked Sendable {
+        let values: UnsafeMutableBufferPointer<Double>
+        init(count: Int) {
+            values = .allocate(capacity: count)
+            values.initialize(repeating: 0)
+        }
+        deinit { values.deallocate() }
     }
 
     /// Lays the grain from the tiles: see `Tiles`.
@@ -374,9 +411,17 @@ extension FilmGrain {
     /// mix, each record's density range, then per record the levels' mean light, their mean
     /// density through the footprint and the correlation of neighbouring levels' grain there.
     public func configurationBlock(pxPerMM: Float, amount: Float, look: Look, id: Int32) -> [Float] {
-        let tiles = tiles()
+        configurationBlock(pxPerMM: pxPerMM, amount: amount, look: look, id: id, tiles: nil)
+    }
+
+    fileprivate func configurationBlock(pxPerMM: Float, amount: Float, look: Look, id: Int32,
+                                        tiles supplied: Tiles?) -> [Float] {
+        var timing = StageTiming()
+        let tiles = supplied ?? tiles()
+        timing.mark("tiles")
         let geometry = look.geometry(pxPerMM: pxPerMM)
         let tables = pitchTables(tiles, footprint: geometry.footprint)
+        timing.mark("pitch_tables")
         let levels = Self.tileLevels
         var block: [Float] = [geometry.pitch, geometry.footprint, Float(id)]
         block += look.recordAmounts(amount) + [monochrome ? 1 : look.colour]
@@ -392,59 +437,113 @@ extension FilmGrain {
             block += tables.meanDensity[r]
             block += tables.blendCorrelation[r] + [1]
         }
+        timing.mark("configuration")
+        timing.report("Film configuration id=\(id) footprint=\(geometry.footprint)")
         return block
     }
 }
 
 extension FilmGrain {
+    /// A canonical tile bank and its backend registration. A frame keeps this binding so cache
+    /// eviction cannot remove its grain while another stock is preparing or rendering.
+    public final class TileBinding: Sendable {
+        public let grain: FilmGrain
+        public let id: Int32
+        /// True only after a provider asset passed identity, bounds and finite-data validation.
+        public var usedAsset: Bool { grain.assetTiles != nil }
+        private let tiles: Tiles
+        let registrationStatus: Int32
+
+        fileprivate init(grain: FilmGrain, id: Int32) {
+            var timing = StageTiming()
+            self.grain = grain
+            self.id = id
+            tiles = grain.tiles()
+            timing.mark("tiles")
+            let packed = tiles.packed()
+            timing.mark("packing")
+            registrationStatus = packed.withUnsafeBufferPointer {
+                fotufilm_halide_set_film_tiles(id, $0.baseAddress, Int64($0.count))
+            }
+            timing.mark("registration")
+            timing.report("Film binding id=\(id)")
+        }
+
+        /// Uses this binding's retained tiles and pitch cache even after the shared cache moves
+        /// to other stocks. The numerical configuration has one implementation for both paths.
+        func configurationBlock(pxPerMM: Float, amount: Float, look: Look) -> [Float] {
+            grain.configurationBlock(pxPerMM: pxPerMM, amount: amount, look: look, id: id, tiles: tiles)
+        }
+
+        /// The immutable bank in the canonical (entry, level, record) layout.
+        public func packed() -> [Float] {
+            var timing = StageTiming()
+            let packed = tiles.packed()
+            timing.mark("packing")
+            timing.report("Film binding read id=\(id)")
+            return packed
+        }
+
+        deinit {
+            if registrationStatus == 0 { _ = fotufilm_halide_set_film_tiles(id, nil, 0) }
+        }
+    }
+
     /// The population of `stock` at its sheet's own granularity, its tiles handed to the Halide
-    /// engine under the id returned: built and registered on first use, the last few kept. A
-    /// frame's grain amount scales the grain in the kernel, so moving it rebuilds nothing.
+    /// engine under the id returned. The registry caches the last few populations; complete
+    /// rendering invocations retain their binding independently of that cache.
     public static func registered(stock: FilmStock, reference: FilmStock?) -> (grain: FilmGrain, id: Int32) {
+        let binding = registry.entry(stock: stock, reference: reference)
+        return (binding.grain, binding.id)
+    }
+
+    static func binding(stock: FilmStock, reference: FilmStock?) -> TileBinding {
         registry.entry(stock: stock, reference: reference)
     }
 
-    /// The packed tiles a frame's configuration names in its `FILM_TILE` block, for a renderer
-    /// that samples them itself rather than through the Halide stage and for the browser pack;
-    /// nil when the frame lays another grain model or the tiles were evicted.
+    /// The packed tiles a frame's configuration names in its `FILM_TILE` block; nil when the
+    /// frame uses another model or neither a frame nor the cache retains its binding.
     public static func registeredTiles(configuration: [Float]) -> [Float]? {
-        guard configuration[Int(FOTUFILM_CONFIG_GRAIN_MODE)] == 1 else { return nil }
-        return registry.grain(id: Int32(configuration[Int(FOTUFILM_CONFIG_FILM_TILE) + 2]))?
-            .tiles().packed()
+        let base = Int(FOTUFILM_CONFIG_FILM_TILE)
+        guard configuration.count > base + 2,
+              configuration[Int(FOTUFILM_CONFIG_GRAIN_MODE)] == 1,
+              let id = Int32(exactly: configuration[base + 2]) else { return nil }
+        return registry.binding(id: id)?.packed()
     }
 
     private static let registry = Registry()
 
     private final class Registry: @unchecked Sendable {
-        private let lock = NSLock()
-        private var entries: [(key: String, grain: FilmGrain, id: Int32)] = []
-        private var nextID: Int32 = 1
-
-        func entry(stock: FilmStock, reference: FilmStock?) -> (grain: FilmGrain, id: Int32) {
-            let key = FilmGrain.anchorKey(stock: stock, grainScale: 1)
-                + "|\(reference.map { $0.curves.map { [$0.dMin, $0.dMax] } } ?? [])"
-            lock.lock()
-            defer { lock.unlock() }
-            if let hit = entries.first(where: { $0.key == key }) { return (hit.grain, hit.id) }
-            let grain = FilmGrain(stock: stock, reference: reference)
-            let packed = grain.tiles().packed()
-            let id = nextID
-            nextID += 1
-            _ = packed.withUnsafeBufferPointer {
-                fotufilm_halide_set_film_tiles(id, $0.baseAddress, Int64($0.count))
-            }
-            entries.append((key, grain, id))
-            if entries.count > 4 {
-                let evicted = entries.removeFirst()
-                _ = fotufilm_halide_set_film_tiles(evicted.id, nil, 0)
-            }
-            return (grain, id)
+        private final class WeakBinding {
+            weak var value: TileBinding?
+            init(_ value: TileBinding) { self.value = value }
         }
 
-        func grain(id: Int32) -> FilmGrain? {
+        private let lock = NSLock()
+        private var entries: [(key: Data, binding: TileBinding)] = []
+        private var live: [Int32: WeakBinding] = [:]
+        private var nextID: Int32 = 1
+
+        func entry(stock: FilmStock, reference: FilmStock?) -> TileBinding {
+            let key = FilmGrainAsset.identity(stock: stock, reference: reference)
             lock.lock()
             defer { lock.unlock() }
-            return entries.first { $0.id == id }?.grain
+            if let hit = entries.first(where: { $0.key == key }) { return hit.binding }
+            let grain = FilmGrainAsset.provided(identity: key)
+                ?? FilmGrain(stock: stock, reference: reference)
+            let binding = TileBinding(grain: grain, id: nextID)
+            nextID += 1
+            live = live.filter { $0.value.value != nil }
+            live[binding.id] = WeakBinding(binding)
+            entries.append((key, binding))
+            if entries.count > 4 { entries.removeFirst() }
+            return binding
+        }
+
+        func binding(id: Int32) -> TileBinding? {
+            lock.lock()
+            defer { lock.unlock() }
+            return live[id]?.value
         }
     }
 }
