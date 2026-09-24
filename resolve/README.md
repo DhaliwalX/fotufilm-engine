@@ -83,7 +83,7 @@ starts closed. Start with these settings:
   <tr><td>Focal Length</td><td>Lens &amp; Filters</td><td>The taking lens's focal length in millimetres, read only by the diffusion filter: a ray deviated by an angle ahead of the lens lands focal length times that angle off its unscattered position, so the same filter glows bigger on a longer lens, exactly as it does in the world.</td></tr>
   <tr><td>Veiling Glare</td><td>Lens &amp; Filters</td><td>Veiling glare from the taking lens, as a multiplier on the stock's figure.</td></tr>
   <tr><td>Filter Coating</td><td>Lens &amp; Filters</td><td>Coating on every fitted absorbing and diffusion filter.</td></tr>
-  <tr><td>Push / Pull</td><td>Development</td><td>Measured push or pull conditions for this film's stated developer, dilution, temperature and agitation.</td></tr>
+  <tr><td>Push / Pull</td><td>Development</td><td>Push or pull conditions for this film's stated developer and process: measured from its own published curves, carried from a sister film's published curves, or estimated from the process's published push response.</td></tr>
   <tr><td>Bleach Bypass</td><td>Development</td><td>How much of the developed silver the bleach leaves in the negative.</td></tr>
   <tr><td>Film Age (years)</td><td>Development</td><td>Years the roll sat past its process-by date.</td></tr>
   <tr><td>Long Exposure (s)</td><td>Development</td><td>Exposure duration for the stock's measured reciprocity response.</td></tr>

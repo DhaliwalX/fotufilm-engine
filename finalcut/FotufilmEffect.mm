@@ -942,7 +942,7 @@ struct FotufilmGating {
 }
 
 /// The status line, composed from what the plugin would do right now. `requested` and `measured`
-/// are the push the user asked for and the one the film was measured at; they differ when the
+/// are the push the user asked for and the listed condition it snaps to; they differ when the
 /// slider had to be snapped.
 - (NSString *)statusForStock:(NSInteger)stock
                        stage:(NSInteger)stage
@@ -985,11 +985,11 @@ struct FotufilmGating {
                           "density, which carries no colour space, and Auto will not guess."];
     }
     if (!gating.pushes) {
-        [lines addObject:[NSString stringWithFormat:@"%@ has no measured push or pull, so "
+        [lines addObject:[NSString stringWithFormat:@"%@ has no push or pull conditions, so "
                                                      "Push / Pull stays at 0.", film]];
     } else if (std::fabs(requested - measured) > 1e-4) {
         [lines addObject:[NSString stringWithFormat:@"Push / Pull %+.2f is not a development "
-                                                     "%@ was measured at; it is snapped to "
+                                                     "%@ lists; it is snapped to "
                                                      "%+.2f for the render.",
                                                     requested, film, measured]];
     }

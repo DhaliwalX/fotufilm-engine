@@ -362,6 +362,12 @@ public extension FilmStockDefinition {
                 try Self.checkText(condition.label, field: "\(field).label",
                                    limit: 64, required: true, fail: fail)
                 try check("\(field).timeMinutes", condition.timeMinutes, 0.1...120)
+                guard condition.resolvedBasis != nil else {
+                    throw fail("\(field).basis", "is \(condition.basis); expected measured, "
+                               + "transferred with basisStock, or estimated without it")
+                }
+                try Self.checkText(condition.basisStock, field: "\(field).basisStock",
+                                   limit: 64, required: condition.basis == "transferred", fail: fail)
                 if let exposureIndex = condition.exposureIndex {
                     try check("\(field).exposureIndex", exposureIndex, 1...1_000_000)
                 }

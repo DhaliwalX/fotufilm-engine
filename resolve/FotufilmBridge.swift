@@ -656,7 +656,16 @@ func fotufilm_bridge_effective_realtime(_ parameters: UnsafePointer<Float>?) -> 
 @_cdecl("fotufilm_bridge_stock_pushes")
 func fotufilm_bridge_stock_pushes(_ stockIndex: Int32) -> Int32 {
     guard let stock = stock(at: stockIndex) else { return 0 }
-    return stock.hasMeasuredDevelopmentResponse ? 1 : 0
+    return stock.hasDevelopmentConditions ? 1 : 0
+}
+
+/// Where the stock's push and pull curves come from; empty without conditions.
+@_cdecl("fotufilm_bridge_development_basis")
+func fotufilm_bridge_development_basis(_ stockIndex: Int32, _ out: UnsafeMutablePointer<CChar>?,
+                                       _ capacity: Int32) -> Int32 {
+    guard let stock = stock(at: stockIndex) else { return -1 }
+    return copyOut(stock.developmentProfile.map(EditorControlCatalogue.pushDetail) ?? "",
+                   out, capacity)
 }
 
 /// Keep the persisted numeric development condition on the stock's measurements. The visible

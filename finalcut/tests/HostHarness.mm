@@ -936,8 +936,8 @@ int main(int argc, const char *argv[]) {
 
         printf("push snapping\n");
         {
-            // Push / Pull is a continuous slider over a set of measured conditions. The engine
-            // carries a film's response only at the developments it was measured at and throws on
+            // Push / Pull is a continuous slider over a set of listed conditions. The engine
+            // carries a film's response only at the developments its pack lists and throws on
             // anything between them, so every value the slider can land on that is not one of them
             // is a frame that does not render. The plugin snaps instead: when the control moves,
             // when the film changes, and again in the state call, because a restored project and
@@ -985,7 +985,7 @@ int main(int argc, const char *argv[]) {
             expect(host.timedFloatWrites == keyframesBefore,
                    "and keyframes nothing, so opening a project cannot change it");
             expect(saysThat(host, pushed >= 0 ? @"is not a development"
-                                              : @"has no measured push or pull"),
+                                              : @"has no push or pull conditions"),
                    "the status line says what happened to the value that was asked for");
             expect(pushed < 0 || saysThat(host, @"snapped to"),
                    "and where it will actually be developed");
@@ -997,7 +997,7 @@ int main(int argc, const char *argv[]) {
                    "the state carries the snapped push, not the one on the control");
 
             // The project saved under another film, and the keyframe interpolated between two
-            // measured stops: neither passes through parameterChanged:, and the state call is the
+            // listed stops: neither passes through parameterChanged:, and the state call is the
             // last place to catch them before the engine refuses the frame.
             host.values[@(kFotufilmParam_Push)] = @(asked);
             [effect pluginState:&state atTime:kCMTimeZero quality:2 error:&error];
@@ -1013,14 +1013,14 @@ int main(int argc, const char *argv[]) {
                 host.values[@(kFotufilmParam_Push)] = @2.0;
                 chooseStock(effect, host, unpushed);
                 expect(dimmed(host, kFotufilmParam_Push),
-                       [NSString stringWithFormat:@"%@ has no measured push, so the slider is "
+                       [NSString stringWithFormat:@"%@ has no push conditions, so the slider is "
                                                    "dimmed", stockName(unpushed)].UTF8String);
-                expect(saysThat(host, @"has no measured push or pull"),
+                expect(saysThat(host, @"has no push or pull conditions"),
                        "the status line says why the Push / Pull slider is dimmed");
                 [effect pluginState:&state atTime:kCMTimeZero quality:2 error:&error];
                 [state getBytes:&unpacked length:sizeof(unpacked)];
                 expect(unpacked.parameters[FOTUFILM_BRIDGE_PUSH_PULL] == 0.0f,
-                       "a film with no measured development renders at reference development");
+                       "a film with no development conditions renders at reference development");
             } else {
                 printf("  note  every film in this pack carries a measured push; the "
                        "no-profile path was not exercised\n");

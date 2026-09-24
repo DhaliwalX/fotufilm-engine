@@ -354,8 +354,8 @@ public struct FilmStock: Sendable {
     /// long-exposure table. nil keeps the classic one-stop-per-decade rule.
     public var reciprocityFailure: ReciprocityFailure?
 
-    /// Complete sensitometric results for non-reference development conditions. `nil` means the
-    /// pack has no measured push/pull family and the engine will reject a non-zero request.
+    /// Complete curves for non-reference development conditions, each with its basis. `nil` means
+    /// the pack lists no push/pull conditions and the engine will reject a non-zero request.
     public var developmentProfile: FilmDevelopmentProfile?
 
     /// True for black-and-white stocks: exposure is panchromatic and the output is forced neutral.

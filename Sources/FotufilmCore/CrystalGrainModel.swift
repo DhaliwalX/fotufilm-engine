@@ -601,7 +601,7 @@ public struct CrystalGrainModel: Sendable {
         }
     }
 
-    /// The development stage's refit for a measured condition: over the developability grid,
+    /// The development stage's refit for a development condition: over the developability grid,
     /// the per-sublayer gains that bring the developed sublayers' mean closest to the
     /// condition's curve above base, with the coating — the crystal counts, the clouds, the
     /// pools and the class shares — held. Each sublayer's gain is solved by golden-section

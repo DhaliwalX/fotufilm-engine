@@ -451,9 +451,9 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertFalse(rule.admits(stock: nil))
     }
 
-    func testPushPullIsOfferedOnlyWithAMeasuredDevelopmentFamily() throws {
+    func testPushPullIsOfferedOnlyWithDevelopmentConditions() throws {
         let push = try XCTUnwrap(EditorControlCatalogue.control(.push))
-        XCTAssertEqual(push.availability, .measuredDevelopment)
+        XCTAssertEqual(push.availability, .developmentConditions)
         var stock = try preset("example-negative-400")
 
         XCTAssertFalse(push.availability.admits(stock: stock))
@@ -463,7 +463,7 @@ final class EditorControlCatalogueTests: XCTestCase {
             developer: "test", temperatureC: 20, agitation: "test",
             source: "test measurement", sourcePage: 1,
             conditions: [FilmDevelopmentCondition(
-                stops: 1, label: "Push 1", timeMinutes: 10,
+                stops: 1, label: "Push 1", timeMinutes: 10, basis: .measured,
                 curves: stock.curves)])
         XCTAssertTrue(push.availability.admits(stock: stock))
         let measured = try XCTUnwrap(
@@ -473,6 +473,26 @@ final class EditorControlCatalogueTests: XCTestCase {
         }
         XCTAssertEqual(scale.range, 0...1)
         XCTAssertEqual(scale.stops, [0, 1])
+        XCTAssertEqual(measured.detail, "Measured from this film's published curves.")
+    }
+
+    func testPushDetailSaysWhereEachConditionComesFrom() throws {
+        let curves = try preset("example-negative-400").curves
+        func condition(_ stops: Float, _ basis: FilmDevelopmentBasis) -> FilmDevelopmentCondition {
+            FilmDevelopmentCondition(stops: stops, label: "\(stops)", timeMinutes: 4,
+                                     basis: basis, curves: curves)
+        }
+        func profile(_ conditions: [FilmDevelopmentCondition]) -> FilmDevelopmentProfile {
+            FilmDevelopmentProfile(developer: "C-41", temperatureC: 37.8, agitation: "test",
+                                   source: "test", sourcePage: 1, conditions: conditions)
+        }
+        XCTAssertEqual(EditorControlCatalogue.pushDetail(profile([
+            condition(1, .transferred(from: "Portra 800")), condition(2, .transferred(from: "Portra 800")),
+        ])), "Carried from Portra 800's published curves.")
+        XCTAssertEqual(EditorControlCatalogue.pushDetail(profile([
+            condition(2, .estimated), condition(-1, .measured), condition(1, .estimated),
+        ])), "Measured from this film's published curves: -1. "
+            + "Estimated from the process's published push response: +1, +2.")
     }
 
     // MARK: - Against the engine itself

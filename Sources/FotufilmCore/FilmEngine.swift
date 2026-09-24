@@ -840,7 +840,7 @@ public struct FilmEngineInvocation {
     public init(validating stock: FilmStock, options: FotufilmEngine.Options,
                 width: Int, height: Int, frameIndex: UInt64 = 0,
                 noFilm: Bool = false) throws {
-        // A measured condition supplies the fresh roll's curves before age and reciprocity.
+        // A development condition supplies the fresh roll's curves before age and reciprocity.
         let developed = try stock.pushed(stops: options.developmentEV)
         // The same roll at the pack's reference process, aged and reciprocity-shifted alike:
         // the coating the crystal grain model reads its population from, so that a pushed or

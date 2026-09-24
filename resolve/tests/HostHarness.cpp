@@ -2859,7 +2859,7 @@ int testPlugin() {
                 {"estimatedHalation", 1, nullptr, 0},
                 {"halationColour", 1.0, nullptr, 0},
                 {"printCorrection", 1.0, nullptr, 0},
-                // The push is snapped to a measured condition per film below.
+                // The push is snapped to a listed condition per film below.
                 {"push", 2.0, nullptr, 0},
                 {"bleachBypass", 1.0, nullptr, 0},
                 {"expired", 10, nullptr, 0},
@@ -2914,7 +2914,7 @@ int testPlugin() {
                     layOut(sizes[s].first, sizes[s].second);
                     double atThisSize = 0;
                     for (int stock : order) {
-                        // A film with no measured push condition is right to ignore the
+                        // A film with no push condition is right to ignore the
                         // control, exactly as the lab sweep above treats it.
                         if (isPush && fotufilm_bridge_stock_pushes(stock) == 0) continue;
                         if (std::strcmp(lever.name, "shutterSeconds") == 0 &&
@@ -3186,7 +3186,7 @@ int testPlugin() {
                     ++measuredStocks;
                     auto &menu = instance.params.params.at("pushCondition")->properties->strings[kOfxParamPropChoiceOption];
                     const int count = fotufilm_bridge_development_count(st);
-                    check(static_cast<int>(menu.size()) == count, "development menu contains exactly the measured conditions");
+                    check(static_cast<int>(menu.size()) == count, "development menu contains exactly the listed conditions");
                     setChoice(plugin, instanceHandle, instance.params, "pushCondition", count - 1);
                     check(std::abs(instance.params.params.at("push")->doubleValue -
                                    fotufilm_bridge_development_stop(st, count - 1)) < 1e-4,
