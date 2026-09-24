@@ -99,12 +99,22 @@
     X(monochrome_float_texture, FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_TEXTURE) \
     X(monochrome_float_texture_crystal, FOTUFILM_AOT_CRYSTAL(FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_TEXTURE)) \
     X(color_float_negative, FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_DENSITY_OUT) \
+    /* Precise Float32 negative-density oracle for native Metal validation on physical iPhones. */ \
+    X(color_float_negative_exact, FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_DENSITY_OUT | FOTUFILM_FRAME_CRYSTAL_GRAIN | FOTUFILM_FRAME_EXACT_MATH) \
     X(color_float_negative_crystal, FOTUFILM_AOT_CRYSTAL(FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_DENSITY_OUT)) \
     X(monochrome_float_negative, FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_DENSITY_OUT) \
+    /* Precise Float32 negative-density oracle for native Metal validation on physical iPhones. */ \
+    X(monochrome_float_negative_exact, FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_DENSITY_OUT | FOTUFILM_FRAME_CRYSTAL_GRAIN | FOTUFILM_FRAME_EXACT_MATH) \
     X(monochrome_float_negative_crystal, FOTUFILM_AOT_CRYSTAL(FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_DENSITY_OUT)) \
     X(color_float_print, FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_DENSITY_IN) \
+    /* Precise Float32 density-input oracle for validating Metal print stages on physical \
+       iPhones. */ \
+    X(color_float_print_exact, FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_DENSITY_IN | FOTUFILM_FRAME_CRYSTAL_GRAIN | FOTUFILM_FRAME_EXACT_MATH) \
     X(color_float_print_crystal, FOTUFILM_AOT_CRYSTAL(FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_DENSITY_IN)) \
     X(monochrome_float_print, FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_DENSITY_IN) \
+    /* Precise Float32 density-input oracle for validating Metal print stages on physical \
+       iPhones. */ \
+    X(monochrome_float_print_exact, FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_DENSITY_IN | FOTUFILM_FRAME_CRYSTAL_GRAIN | FOTUFILM_FRAME_EXACT_MATH) \
     X(monochrome_float_print_crystal, FOTUFILM_AOT_CRYSTAL(FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_DENSITY_IN)) \
     /* The two halves of the two-pass striped render; see FOTUFILM_FRAME_LIGHT_OUT and \
        FOTUFILM_FRAME_FIELDS_IN. */ \
@@ -114,7 +124,11 @@
     X(monochrome_float_fields_crystal, FOTUFILM_AOT_CRYSTAL(FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_FIELDS_IN)) \
     /* Nothing past the light is compiled, so the grain bits cost nothing and cover any request. */ \
     X(color_float_light, FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_CRYSTAL_GRAIN | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT) \
+    /* Float32 light-stage oracle for validating native Metal on physical iPhones with the same \
+       exact-math expressions as the desktop reference. */ \
+    X(color_float_light_exact, FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_CRYSTAL_GRAIN | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT | FOTUFILM_FRAME_EXACT_MATH) \
     X(monochrome_float_light, FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_CRYSTAL_GRAIN | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT) \
+    X(monochrome_float_light_exact, FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_CRYSTAL_GRAIN | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT | FOTUFILM_FRAME_EXACT_MATH) \
     /* No film in the gate: `PlainDevelop` as a kernel. Its own class rather than a corner of the \
        others, because FOTUFILM_FRAME_NO_FILM is an exact bit — a variant that develops film is \
        not a richer version of one that develops none, it is a different picture — so a request \

@@ -5,6 +5,64 @@ import XCTest
 @testable import FotufilmMetal
 
 final class RegionStreamingTests: XCTestCase {
+    func testExactRegionalMathSurvivesWholeSceneMeasurementReuse() throws {
+        try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable, "Halide engine required")
+        let gpu = try XCTUnwrap(HalideMetalFilmRenderer.shared)
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let width = 73, height = 41
+        var source = [Float](repeating: 1, count: width * height * 4)
+        for index in source.indices where index % 4 != 3 {
+            let pattern = (index * 17 + (index / 4) * 3) % 509
+            source[index] = Float(pattern) / 173
+        }
+        let input = try XCTUnwrap(device.makeBuffer(bytes: source,
+            length: source.count * 4, options: .storageModeShared))
+        var options = FotufilmEngine.Options()
+        options.format = .super8
+        let measured = try XCTUnwrap(gpu.makeLinearFloatFrameContext(input: input,
+            width: width, height: height, stock: TestStocks.negative, options: options))
+        let exactContext = try XCTUnwrap(gpu.makeLinearFloatVirtualFrameContext(
+            measurements: measured, densityWidth: width, densityHeight: height,
+            frameWidth: width, frameHeight: height, stock: TestStocks.negative,
+            options: options, exactMath: true))
+        var expected = [Float](repeating: .nan, count: source.count)
+        XCTAssertTrue(gpu.developStreaming(width: width, height: height,
+            stock: TestStocks.negative, options: options, exactMath: true,
+            readRows: { rows, into in
+                source.withUnsafeBufferPointer {
+                    into.baseAddress!.update(from: $0.baseAddress! + rows.lowerBound * width * 4,
+                                             count: rows.count * width * 4)
+                }
+            }, writeRows: { rows, from in
+                expected.replaceSubrange((rows.lowerBound * width * 4)..<(rows.upperBound * width * 4),
+                                         with: from)
+            }))
+        // Both public entry points must retain the same exact arithmetic after metering.
+        for (context, requestedExact) in [(measured, true), (exactContext, false)] {
+            var actual = [Float](repeating: .nan, count: source.count)
+            XCTAssertTrue(gpu.developRegionStreaming(width: width, height: height,
+                originX: 0, originY: 0, context: context, exactMath: requestedExact,
+                readTile: { rows, columns, into in
+                    for (index, row) in rows.enumerated() {
+                        source.withUnsafeBufferPointer {
+                            into.baseAddress!.advanced(by: index * columns.count * 4)
+                                .update(from: $0.baseAddress! + (row * width + columns.lowerBound) * 4,
+                                        count: columns.count * 4)
+                        }
+                    }
+                }, writeTile: { rows, columns, from in
+                    for (index, row) in rows.enumerated() {
+                        let start = (row * width + columns.lowerBound) * 4
+                        let rowSamples = columns.count * 4
+                        let sourceStart = index * rowSamples
+                        actual.replaceSubrange(start..<(start + rowSamples),
+                            with: from[sourceStart..<(sourceStart + rowSamples)])
+                    }
+                }))
+            XCTAssertEqual(actual.map(\.bitPattern), expected.map(\.bitPattern))
+        }
+    }
+
     func testMeteredRegionTilesMatchSinglePassAtNonzeroOrigin() throws {
         try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable, "Halide engine required")
         let gpu = try XCTUnwrap(HalideMetalFilmRenderer.shared)

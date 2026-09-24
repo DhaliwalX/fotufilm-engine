@@ -211,12 +211,22 @@
       "mask": "FULL_STAGES | FLOAT_IO | DENSITY_OUT"
     },
     {
+      "name": "color_float_negative_exact",
+      "mask": "FULL_STAGES | FLOAT_IO | DENSITY_OUT | CRYSTAL_GRAIN | EXACT_MATH",
+      "doc": "Precise Float32 negative-density oracle for native Metal validation on physical iPhones."
+    },
+    {
       "name": "color_float_negative_crystal",
       "mask": "CRYSTAL(FULL_STAGES | FLOAT_IO | DENSITY_OUT)"
     },
     {
       "name": "monochrome_float_negative",
       "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | DENSITY_OUT"
+    },
+    {
+      "name": "monochrome_float_negative_exact",
+      "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | DENSITY_OUT | CRYSTAL_GRAIN | EXACT_MATH",
+      "doc": "Precise Float32 negative-density oracle for native Metal validation on physical iPhones."
     },
     {
       "name": "monochrome_float_negative_crystal",
@@ -227,12 +237,22 @@
       "mask": "FULL_STAGES | FLOAT_IO | DENSITY_IN"
     },
     {
+      "name": "color_float_print_exact",
+      "mask": "FULL_STAGES | FLOAT_IO | DENSITY_IN | CRYSTAL_GRAIN | EXACT_MATH",
+      "doc": "Precise Float32 density-input oracle for validating Metal print stages on physical iPhones."
+    },
+    {
       "name": "color_float_print_crystal",
       "mask": "CRYSTAL(FULL_STAGES | FLOAT_IO | DENSITY_IN)"
     },
     {
       "name": "monochrome_float_print",
       "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | DENSITY_IN"
+    },
+    {
+      "name": "monochrome_float_print_exact",
+      "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | DENSITY_IN | CRYSTAL_GRAIN | EXACT_MATH",
+      "doc": "Precise Float32 density-input oracle for validating Metal print stages on physical iPhones."
     },
     {
       "name": "monochrome_float_print_crystal",
@@ -261,8 +281,17 @@
       "doc": "Nothing past the light is compiled, so the grain bits cost nothing and cover any request."
     },
     {
+      "name": "color_float_light_exact",
+      "mask": "FULL_STAGES | CRYSTAL_GRAIN | FLOAT_IO | LIGHT_OUT | EXACT_MATH",
+      "doc": "Float32 light-stage oracle for validating native Metal on physical iPhones with the same exact-math expressions as the desktop reference."
+    },
+    {
       "name": "monochrome_float_light",
       "mask": "FULL_STAGES | CRYSTAL_GRAIN | MONOCHROME | FLOAT_IO | LIGHT_OUT"
+    },
+    {
+      "name": "monochrome_float_light_exact",
+      "mask": "FULL_STAGES | CRYSTAL_GRAIN | MONOCHROME | FLOAT_IO | LIGHT_OUT | EXACT_MATH"
     },
     {
       "name": "no_film_float",

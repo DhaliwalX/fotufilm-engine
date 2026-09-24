@@ -43,6 +43,13 @@ final class FrameVariantTests: XCTestCase {
              densityOut, densityIn, fieldsIn].map { mono | FilmEngineFeature.floatIO | $0 }
         }
 
+    private static let exactSeamClasses: [Int32] =
+        [Int32(0), FilmEngineFeature.monochrome].flatMap { mono in
+            [densityOut, densityIn, lightOut].map {
+                mono | FilmEngineFeature.floatIO | FilmEngineFeature.exactMath | $0
+            }
+        }
+
     /// The table: every realtime class carries the crystal bit at no cost, every still class has
     /// a crystal twin, the light-out classes compile nothing past the light, and no film is its own.
     private static let variants: [Int32] =
@@ -51,6 +58,7 @@ final class FrameVariantTests: XCTestCase {
         + [Int32(0), FilmEngineFeature.monochrome].map {
             fullStages | FilmEngineFeature.crystalGrain | FilmEngineFeature.floatIO | lightOut | $0
         }
+        + exactSeamClasses.map { fullStages | FilmEngineFeature.crystalGrain | $0 }
         + [FilmEngineFeature.floatIO | noFilm,
            FilmEngineFeature.floatIO | FilmEngineFeature.exactMath | noFilm]
 
@@ -101,6 +109,18 @@ final class FrameVariantTests: XCTestCase {
     func testEveryClassIsSelectedByItsOwnMask() {
         for variant in Self.variants {
             XCTAssertEqual(selected(for: variant), variant)
+        }
+    }
+
+    func testPreciseSpatialSeamsPreserveTheirClassForEveryGrainFamily() {
+        for seam in Self.exactSeamClasses {
+            for grain in [Int32(0), FilmEngineFeature.grain,
+                          FilmEngineFeature.grain | FilmEngineFeature.crystalGrain] {
+                let mask = seam | grain
+                let variant = assertServed(mask, "precise spatial seam with grain mask \(grain)")
+                XCTAssertNotNil(variant)
+                XCTAssertEqual(variant.map { $0 & Self.exactBits }, seam)
+            }
         }
     }
 

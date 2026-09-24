@@ -274,6 +274,12 @@ public struct SpectralPipelineTables: Sendable {
     public let filmOutput: SpectralLUT
     /// Paper layer density -> display-linear RGB; nil when film is viewed directly.
     public let paperOutput: SpectralLUT?
+
+    public init(exposure: SpectralLUT, filmOutput: SpectralLUT, paperOutput: SpectralLUT?) {
+        self.exposure = exposure
+        self.filmOutput = filmOutput
+        self.paperOutput = paperOutput
+    }
 }
 
 /// Builds and caches the LUT acceleration of the wavelength-domain model.

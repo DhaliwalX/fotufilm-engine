@@ -473,6 +473,8 @@ public struct FilmEngineInvocation {
     public static let toneGridBOffset = Int(FOTUFILM_CONFIG_TONE_GRID_B)
 
     public var configuration: [Float]
+    /// Keeps the frame's canonical Film bank registered across cache eviction and tile calls.
+    public let filmTileBinding: FilmGrain.TileBinding?
     public var spectral: SpectralPipelineTables
     public var spectralCacheID: UInt64
     public var featureMask: Int32
@@ -1459,10 +1461,16 @@ public struct FilmEngineInvocation {
         configuration += [0, 0]
         configuration += stock.grainDensityProfile.records.flatMap { $0 }
         if filmActive {
-            let film = FilmGrain.registered(stock: stock, reference: referenceRoll)
-            configuration += film.grain.configurationBlock(pxPerMM: pxPerMM, amount: grainScale,
-                                                           look: options.filmGrain, id: film.id)
+            let film = FilmGrain.binding(stock: stock, reference: referenceRoll)
+            if film.registrationStatus != 0,
+               fotufilm_halide_available() == 1 || fotufilm_halide_metal_available() == 1 {
+                throw TransportError.backend("Film grain tile registration failed (status \(film.registrationStatus))")
+            }
+            self.filmTileBinding = film
+            configuration += film.configurationBlock(pxPerMM: pxPerMM, amount: grainScale,
+                                                      look: options.filmGrain)
         } else {
+            self.filmTileBinding = nil
             configuration += [Float](repeating: 0, count: Int(FOTUFILM_CONFIG_FILM_TILE_COUNT))
         }
         precondition(configuration.count == Self.configurationCount)
@@ -1985,10 +1993,12 @@ public struct FilmEngineInvocation {
         _ body: (UnsafePointer<Float>?, UnsafePointer<Float>?, UnsafePointer<Float>?) -> Result
     ) -> Result {
         let paper = spectral.paperOutput ?? spectral.filmOutput
-        return spectral.exposure.values.withUnsafeBufferPointer { exposure in
-            spectral.filmOutput.values.withUnsafeBufferPointer { film in
-                paper.values.withUnsafeBufferPointer { paper in
-                    body(exposure.baseAddress, film.baseAddress, paper.baseAddress)
+        return withExtendedLifetime(filmTileBinding) {
+            spectral.exposure.values.withUnsafeBufferPointer { exposure in
+                spectral.filmOutput.values.withUnsafeBufferPointer { film in
+                    paper.values.withUnsafeBufferPointer { paper in
+                        body(exposure.baseAddress, film.baseAddress, paper.baseAddress)
+                    }
                 }
             }
         }

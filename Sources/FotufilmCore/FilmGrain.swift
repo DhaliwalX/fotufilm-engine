@@ -124,6 +124,22 @@ public struct FilmGrain: Sendable {
             shape()
         }
 
+        /// Restores an already solved population without re-running its numerical fit.
+        init(coatedPerMM2: Float, sigmaMM: Float, peakDemand: Float, capacity: Float,
+             edge: Float, smallestSigmaMM: Float, dyePerCloudMM2: Float, cellMM: Float,
+             forming: [Float], voidIntegralMM2: Float) {
+            self.coatedPerMM2 = coatedPerMM2
+            self.sigmaMM = sigmaMM
+            self.peakDemand = peakDemand
+            self.capacity = capacity
+            self.edge = edge
+            self.smallestSigmaMM = smallestSigmaMM
+            self.dyePerCloudMM2 = dyePerCloudMM2
+            self.cellMM = cellMM
+            self.forming = forming
+            self.voidIntegralMM2 = voidIntegralMM2
+        }
+
         /// Sets the cloud from its dye: as wide as its edge makes it, or held at its narrowest
         /// width with its peak demand lowered until it forms that dye.
         mutating func shape() {
@@ -169,12 +185,29 @@ public struct FilmGrain: Sendable {
     public var monochrome: Bool
     /// Identity of this population: the stock and grain scale it was built for.
     let key: String
+    /// A decoded bank belongs to the population, independently of shared cache eviction.
+    let assetTiles: Tiles?
+
+    init(records: [Record], monochrome: Bool, identity: Data, tiles: Tiles) {
+        self.records = records
+        self.monochrome = monochrome
+        key = Self.populationKey(identity: identity, grainScale: 1)
+        assetTiles = tiles
+    }
 
     /// The population of `stock` as developed; `reference` is the same roll at the pack's
     /// reference process, as `CrystalGrainModel` takes it.
     public init(stock: FilmStock, reference: FilmStock? = nil, grainScale: Float = 1) {
+        self.init(stock: stock, reference: reference, grainScale: grainScale, useCachedAnchor: true)
+    }
+
+    init(stock: FilmStock, reference: FilmStock? = nil, grainScale: Float = 1,
+         useCachedAnchor: Bool) {
+        var timing = StageTiming()
         monochrome = stock.isMonochrome
-        key = Self.anchorKey(stock: stock, grainScale: grainScale)
+        key = Self.populationKey(identity: FilmGrainAsset.identity(stock: stock, reference: reference),
+                                 grainScale: grainScale)
+        assetTiles = nil
         let silver = stock.grainDensityLaw == .silver
         var anchors: [(gross: Float, sigma: Float)] = []
         records = (0..<3).map { layer in
@@ -211,24 +244,40 @@ public struct FilmGrain: Sendable {
             }
             return Record(sublayers: sublayers, dMin: lo, dMax: hi)
         }
-        anchorToSheet(anchors, key: key)
+        timing.mark("records")
+        anchorToSheet(anchors, key: key, useCache: useCachedAnchor)
+        timing.mark("anchor")
+        timing.report("Film population")
     }
 
     // MARK: - The sheet's anchor
 
-    /// Scale factors already solved, per stock and grain scale.
+    /// Solved records, per stock and grain scale. Reapplying a product of calibration factors
+    /// changes rounding relative to the successive cold-calibration steps.
     private static let anchorCache = AnchorCache()
 
     private final class AnchorCache: @unchecked Sendable {
         private let lock = NSLock()
-        private var factors: [String: [Float]] = [:]
-        func get(_ key: String) -> [Float]? { lock.lock(); defer { lock.unlock() }; return factors[key] }
-        func set(_ key: String, _ value: [Float]) { lock.lock(); factors[key] = value; lock.unlock() }
+        private var entries: [(key: String, records: [Record])] = []
+        func get(_ key: String) -> [Record]? {
+            lock.lock(); defer { lock.unlock() }
+            return entries.first { $0.key == key }?.records
+        }
+        func set(_ key: String, _ records: [Record]) {
+            lock.lock(); defer { lock.unlock() }
+            entries.removeAll { $0.key == key }
+            entries.append((key, records))
+            if entries.count > 4 { entries.removeFirst() }
+        }
     }
 
     static func anchorKey(stock: FilmStock, grainScale: Float) -> String {
-        "\(stock.name)|\(grainScale)|\(stock.grainStrength)|\(stock.grainLayerWeights)|\(stock.grainSizeMM)"
-            + "|\(stock.curves.map { [$0.dMin, $0.dMax] })"
+        populationKey(identity: FilmGrainAsset.identity(stock: stock, reference: nil),
+                      grainScale: grainScale)
+    }
+
+    static func populationKey(identity: Data, grainScale: Float) -> String {
+        identity.base64EncodedString() + "|\(grainScale.bitPattern)"
     }
 
     /// The crystal population's dye per crystal was set so that an additive density field
@@ -238,9 +287,10 @@ public struct FilmGrain: Sendable {
     /// scaled until it reads the sheet — its count by the inverse, so the mean holds and the
     /// cloud's area follows its dye. How far the reading moves with the dye depends on how full
     /// the clouds are, so each step takes the slope the last one measured.
-    mutating func anchorToSheet(_ anchors: [(gross: Float, sigma: Float)], key: String) {
-        if let cached = Self.anchorCache.get(key) {
-            for r in 0..<3 { scale(record: r, by: cached[r]) }
+    mutating func anchorToSheet(_ anchors: [(gross: Float, sigma: Float)], key: String,
+                               useCache: Bool = true) {
+        if useCache, let cached = Self.anchorCache.get(key) {
+            records = cached
             return
         }
         var solved = [Float](repeating: 1, count: 3)
@@ -267,7 +317,7 @@ public struct FilmGrain: Sendable {
             solved[0] = solved[1]; solved[2] = solved[1]
             for r in [0, 2] { scale(record: r, by: solved[r]) }
         }
-        Self.anchorCache.set(key, solved)
+        if useCache { Self.anchorCache.set(key, records) }
     }
 
     /// Steps the anchor takes at most, and how near the sheet it stops, as a log ratio.
@@ -289,7 +339,13 @@ public struct FilmGrain: Sendable {
     /// as a microdensitometer reads it: on the periodic tile the fast road samples, rendered at
     /// the texel pitch where the reference has converged.
     func sigma48(record r: Int, gross: Float) -> Float {
-        Self.tileSigma48(tileLight(record: r, gross: gross, seed: Self.tileSeed))
+        var timing = StageTiming()
+        let light = tileLight(record: r, gross: gross, seed: Self.tileSeed)
+        timing.mark("render")
+        let sigma = Self.tileSigma48(light)
+        timing.mark("covariance")
+        timing.report("Film anchor record=\(r)")
+        return sigma
     }
 
     /// Dye one cloud of unit demand sigma forms as a densitometer reads it — the small-signal

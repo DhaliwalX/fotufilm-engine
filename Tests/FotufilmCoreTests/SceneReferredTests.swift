@@ -351,6 +351,9 @@ final class SceneReferredTests: XCTestCase {
                 }
                 XCTAssertGreaterThanOrEqual(min(shape.tileWidth, shape.tileRows), least,
                                             "a tile smaller than the smallest worth cutting")
+                XCTAssertLessThanOrEqual(shape.tileWidth * shape.tileRows,
+                                         HalideMetalFilmRenderer.maximumTilePixels,
+                                         "minimum tile height must not override the pixel ceiling")
                 XCTAssertLessThanOrEqual(shape.bytes, budget,
                                          "a \(shape.tileWidth)x\(shape.tileRows) tile with a "
                                          + "\(apron)-pixel apron overruns \(budget >> 20) MB")
@@ -361,6 +364,47 @@ final class SceneReferredTests: XCTestCase {
                         tileRows: shape.tileRows, apron: apron, overlap: true))
             }
         }
+    }
+
+    func testWideFramesRespectTilePixelCeiling() throws {
+        let ceiling = HalideMetalFilmRenderer.maximumTilePixels
+        let least = HalideMetalFilmRenderer.minimumTile
+        // Include the 24 MP phone export and widths that also exceed the Mac's larger ceiling.
+        for (width, height) in [(6000, 4000), (12_000, 2000), (16_001, 1500)] {
+            for apron in [1, 64, 293] {
+                let budget = 1 << 30
+                let shape = try XCTUnwrap(HalideMetalFilmRenderer.tileShape(
+                    width: width, height: height, apron: apron, fineApron: apron,
+                    budget: budget, overlap: true, fullWidth: false))
+                XCTAssertLessThanOrEqual(shape.tileWidth * shape.tileRows, ceiling)
+                XCTAssertGreaterThanOrEqual(min(shape.tileWidth, shape.tileRows), least)
+                XCTAssertLessThanOrEqual(shape.bytes, budget)
+                if width * least > ceiling {
+                    XCTAssertLessThan(shape.tileWidth, width,
+                                      "a wide frame must split across columns to respect the cap")
+                }
+            }
+        }
+    }
+
+    func testFullWidthRowsCanExceedPixelCeilingWithinMemoryBudget() throws {
+        let least = HalideMetalFilmRenderer.minimumTile
+        let width = HalideMetalFilmRenderer.maximumTilePixels / least + 1
+        let height = least * 4
+        let apron = 64
+        let required = HalideMetalFilmRenderer.tileBytes(
+            width: width, height: height, tileWidth: width, tileRows: least,
+            apron: apron, overlap: true)
+        let shape = try XCTUnwrap(HalideMetalFilmRenderer.tileShape(
+            width: width, height: height, apron: apron, fineApron: apron,
+            budget: required, overlap: true, fullWidth: true))
+        XCTAssertEqual(shape.tileWidth, width)
+        XCTAssertEqual(shape.tileRows, least)
+        XCTAssertEqual(shape.bytes, required)
+        XCTAssertNil(HalideMetalFilmRenderer.tileShape(
+            width: width, height: height, apron: apron, fineApron: apron,
+            budget: required - 1, overlap: true, fullWidth: true),
+                     "row-only callers may exceed the pixel cap, never the memory budget")
     }
 
     /// The apron is what the light chain walks: every tile prices its whole input, apron

@@ -64,19 +64,22 @@ extension PrintEncoding {
         takingOwnershipOf buffer: MappedBuffer,
         width: Int, height: Int, colorSpace: CGColorSpace
     ) -> CGImage? {
+        guard width > 0, height > 0, width <= Int.max / height / 8 else { return nil }
         let byteCount = width * height * 8
-        guard width > 0, height > 0, buffer.byteCount >= byteCount else {
-            return nil
-        }
+        guard buffer.byteCount >= byteCount else { return nil }
         buffer.flush(byteOffset: 0, byteCount: byteCount)
+        let owner = Unmanaged.passRetained(buffer)
         guard let provider = CGDataProvider(
-            dataInfo: Unmanaged.passRetained(buffer).toOpaque(),
+            dataInfo: owner.toOpaque(),
             data: buffer.baseAddress, size: byteCount,
             releaseData: { info, _, _ in
                 guard let info else { return }
                 Unmanaged<MappedBuffer>.fromOpaque(info).release()
             }
-        ) else { return nil }
+        ) else {
+            owner.release()
+            return nil
+        }
         let info = CGBitmapInfo(rawValue:
             CGImageAlphaInfo.premultipliedLast.rawValue
             | CGBitmapInfo.byteOrder16Little.rawValue)

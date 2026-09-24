@@ -55,6 +55,17 @@ class VariantTableTests(unittest.TestCase):
         for bit in ("ENCODE_OUT", "OUTPUT_LINEAR", "OUTPUT_POWER", "OUTPUT_LOG"):
             self.assertEqual(self.table.bits[bit] & (self.table.stage_bits | self.table.exact_bits), 0)
 
+    def test_precise_light_and_density_seams_keep_their_class(self):
+        bits = self.table.bits
+        for mono in (0, bits["MONOCHROME"]):
+            for seam in (bits["LIGHT_OUT"], bits["DENSITY_OUT"], bits["DENSITY_IN"]):
+                exact = mono | bits["FLOAT_IO"] | bits["EXACT_MATH"] | seam
+                for grain in (0, bits["GRAIN"], bits["GRAIN"] | bits["CRYSTAL_GRAIN"]):
+                    request = exact | grain
+                    candidates = [mask for _, mask, _ in self.table.variants
+                                  if mask & self.table.exact_bits == exact and mask & request == request]
+                    self.assertTrue(candidates, f"precise seam request {request:#x} has no variant")
+
     def test_windowed_twins_fit_the_reach_the_shim_bounds(self):
         basic = self.table.evaluate("BASIC_STAGES")
         for name, mask, _ in self.table.windowed:
