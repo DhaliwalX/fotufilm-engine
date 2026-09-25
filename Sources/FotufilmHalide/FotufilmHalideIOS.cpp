@@ -5,6 +5,7 @@
 #endif
 
 #include "FotufilmHalideIOSVariants.h"
+#include "FotufilmFilmTileBuild.h"
 #include "FotufilmNegativeScan.h"
 #include "fotufilm_halide_ios_negative_cpu.h"
 #include "fotufilm_halide_ios_negative_metal.h"
@@ -1249,6 +1250,11 @@ extern "C" int32_t fotufilm_negative_scan(const float *in, float *out, int32_t w
 }
 
 extern "C" int32_t fotufilm_halide_available(void) { return 0; }
+// The Film tile builder needs the Halide compiler; ahead-of-time hosts build tiles in Metal.
+extern "C" int32_t fotufilm_film_tile_build(int32_t, int32_t, int32_t, const float *, int32_t,
+    const float *, const float *, int32_t, uint32_t, int32_t, float *) {
+    return -3;
+}
 extern "C" int32_t fotufilm_halide_set_film_tiles(int32_t id, const float *tiles,
                                                   int64_t count) {
     return translate_exceptions([&] {
