@@ -57,7 +57,8 @@ the CPU and Metal roads at the cost of the standard grain.
   in Metal wherever it runs — each cell's crystals drawn once, every level laid in one pass —
   and by a Halide CPU builder or the Swift reference elsewhere; all three lay the same film.
   Solving a colour stock's population and building its tiles takes about 0.17 s on an M4 Pro
-  in Metal (0.8 s in Halide on the CPU, 1.1 s in Swift), once per stock. The frame's grain amount scales the grain in the kernel, so
+  in Metal (0.8 s in Halide on the CPU, 1.1 s in Swift) and 0.55 s on an iPhone 16 Pro (3.7 s
+  in Swift), once per stock; the phone and the Mac lay byte-identical tiles. The frame's grain amount scales the grain in the kernel, so
   moving the slider rebuilds nothing.
 - **Blocks.** The frame is cut into 64 µm blocks. Each takes the tile at its own hashed offset,
   inside one period so no read wraps, and one of the eight flips and turns of the square, per
