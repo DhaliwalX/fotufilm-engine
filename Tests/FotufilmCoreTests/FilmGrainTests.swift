@@ -155,6 +155,37 @@ final class FilmGrainTests: XCTestCase {
         }
     }
 
+    /// A wide term blurred on the coarse grid lays what the full-resolution blur lays: the same
+    /// mass, and the same field to a few percent of its peak.
+    func testCoarseCloudTermIsTheFullBlur() {
+        let side = 96, margin = 30, core = side - 2 * margin
+        var deposits = [Float](repeating: 0, count: side * side)
+        deposits[48 * side + 47] = 1; deposits[40 * side + 52] = 0.5; deposits[57 * side + 45] = 2
+        let sigma: Float = 7.5
+        var laid = [Float](repeating: 0, count: core * core)
+        deposits.withUnsafeBufferPointer { d in
+            laid.withUnsafeMutableBufferPointer { l in
+                FilmGrain.layCloudTerm(d.baseAddress!, width: side, height: side, margin: margin,
+                                       into: l.baseAddress!, coreWidth: core, coreHeight: core,
+                                       sigma: sigma, weight: 1)
+            }
+        }
+        var full = [Float](repeating: 0, count: core * core)
+        let scale = 2 * Float.pi * sigma * sigma
+        for y in 0..<core { for x in 0..<core {
+            var sum: Float = 0
+            for (i, mass) in deposits.enumerated() where mass > 0 {
+                let dx = Float(x + margin - i % side), dy = Float(y + margin - i / side)
+                sum += mass * exp(-(dx * dx + dy * dy) / (2 * sigma * sigma)) / (2 * Float.pi * sigma * sigma)
+            }
+            full[y * core + x] = scale * sum
+        } }
+        let peak = full.max() ?? 1
+        let worst = zip(laid, full).map { abs($0 - $1) }.max() ?? 0
+        XCTAssertLessThan(worst / peak, 0.03, "worst \(worst) of peak \(peak)")
+        XCTAssertEqual(laid.reduce(0, +) / full.reduce(0, +), 1, accuracy: 0.01)
+    }
+
     /// A silver grain is opaque, so the sheet's granularity read backwards through Nutting's
     /// `D = 0.434 n a` gives its projected area; for Tri-X that lands on the 0.3–2.5 µm grains
     /// photomicrographs of negative emulsions show (Mees, *The Theory of the Photographic

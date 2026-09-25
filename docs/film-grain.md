@@ -52,8 +52,11 @@ the CPU and Metal roads at the cost of the standard grain.
   1 µm texels (where the render has converged), at 17 gross densities from D-min to D-max.
   Each level is kept as the running sum of its transmittance less its mean (a summed-area
   table), so the light through any rectangle of film is four lookups, exact at any pitch.
-  Rendering and registering a stock's tiles takes about 1.5 s, once per stock. The frame's
-  grain amount scales the grain in the kernel, so moving the slider rebuilds nothing.
+  A sublayer's dye clouds are its developed crystals blurred by the cloud's four Gaussian
+  terms, the two widest on a grid four and two samples coarser. Solving a colour stock's
+  population and rendering its tiles takes about 1 s on an M4 Pro (Portra 400 1.0 s, Provia
+  100F 0.85 s), once per stock. The frame's grain amount scales the grain in the kernel, so
+  moving the slider rebuilds nothing.
 - **Blocks.** The frame is cut into 64 µm blocks. Each takes the tile at its own hashed offset,
   inside one period so no read wraps, and one of the eight flips and turns of the square, per
   record and per frame seed. Nothing repeats, and a new seed is another placement of the same

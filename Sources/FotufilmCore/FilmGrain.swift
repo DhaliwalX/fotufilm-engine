@@ -194,18 +194,34 @@ public struct FilmGrain: Sendable {
                 sigmaMM = free
             } else {
                 sigmaMM = smallestSigmaMM
-                let wanted = dyePerCloudMM2 / (smallestSigmaMM * smallestSigmaMM)
+                // The dye grows smoothly with the log of the peak, so a bracketed secant
+                // (Illinois) finds it in a handful of integrals.
+                let wanted = log(dyePerCloudMM2 / (smallestSigmaMM * smallestSigmaMM))
+                func miss(_ x: Float) -> Float {
+                    log(FilmGrain.unitCloudDye(capacity: capacity, edge: exp(x), profile: profile)) - wanted
+                }
                 var low = profile == .silverGrain ? log(edge * 1e-5) : log(Float(1e-6))
                 var high = profile == .silverGrain ? log(edge) : log(Float(1e4))
-                for _ in 0..<40 {
-                    let mid = (low + high) / 2
-                    if FilmGrain.unitCloudDye(capacity: capacity, edge: exp(mid), profile: profile) < wanted {
-                        low = mid
-                    } else {
-                        high = mid
+                var fLow = miss(low), fHigh = miss(high)
+                var x = fLow >= 0 ? low : high
+                if fLow < 0 && fHigh > 0 {
+                    var side = 0
+                    for _ in 0..<40 {
+                        x = (low * fHigh - high * fLow) / (fHigh - fLow)
+                        let fx = miss(x)
+                        if abs(fx) < 1e-6 || high - low < 1e-6 { break }
+                        if fx < 0 {
+                            low = x; fLow = fx
+                            if side == -1 { fHigh /= 2 }
+                            side = -1
+                        } else {
+                            high = x; fHigh = fx
+                            if side == 1 { fLow /= 2 }
+                            side = 1
+                        }
                     }
                 }
-                peak = exp((low + high) / 2)
+                peak = exp(x)
             }
             peakDemand = peak * capacity
             voidIntegralMM2 = sigmaMM * sigmaMM * FilmGrain.unitVoidIntegral(edge: peak, profile: profile)
@@ -426,7 +442,7 @@ public struct FilmGrain: Sendable {
             var area = 0.0
             for i in 0..<steps {
                 let dye = Double(capacity) * (1 - exp(-peak * values[i]))
-                area += (1 - pow(10, -dye)) * radii[i] * dr
+                area += (1 - exp(-2.302585092994046 * dye)) * radii[i] * dr
             }
             total += 0.4342944819 * 2 * Double.pi * area
         }
@@ -824,30 +840,12 @@ public struct FilmGrain: Sendable {
                 }
             }
             if dye {
-                // Each term is a normalised Gaussian of `term.sigma` decay lengths; its weight
-                // times 2π s² turns the crystal's peak into the mass that blur spreads.
-                var across = [Float](repeating: 0, count: gh * sw)
-                for term in Self.dyeCloudTerms {
-                    let s = term.sigma * sigma / h
-                    let radius = max(Int((3.5 * s).rounded(.up)), 1)
-                    var kernel = (-radius...radius).map { exp(-Float($0 * $0) / (2 * s * s)) }
-                    let total = kernel.reduce(0, +)
-                    kernel = kernel.map { $0 / total }
-                    let scale = term.weight * 2 * Float.pi * s * s
-                    for j in 0..<gh {
-                        let row = j * gw + margin - radius
-                        for i in 0..<sw {
-                            var sum: Float = 0
-                            for t in 0..<kernel.count { sum += kernel[t] * deposits[row + i + t] }
-                            across[j * sw + i] = sum
-                        }
-                    }
-                    for j in 0..<sh {
-                        let top = j + margin - radius
-                        for i in 0..<sw {
-                            var sum: Float = 0
-                            for t in 0..<kernel.count { sum += kernel[t] * across[(top + t) * sw + i] }
-                            demand[j * sw + i] += scale * sum
+                deposits.withUnsafeBufferPointer { source in
+                    demand.withUnsafeMutableBufferPointer { target in
+                        for term in Self.dyeCloudTerms {
+                            Self.layCloudTerm(source.baseAddress!, width: gw, height: gh, margin: margin,
+                                              into: target.baseAddress!, coreWidth: sw, coreHeight: sh,
+                                              sigma: term.sigma * sigma / h, weight: term.weight)
                         }
                     }
                 }
@@ -879,6 +877,145 @@ public struct FilmGrain: Sendable {
                 }
                 output[(y0 + py) * width + x0 + px] = -log10(max(transmitted * norm, 1e-6))
                 means?[(y0 + py) * width + x0 + px] = averaged * norm
+            }
+        }
+    }
+}
+
+extension FilmGrain {
+    /// Adds one of the cloud's terms to the core of `demand`: the deposits blurred by a
+    /// normalised Gaussian of `sigma` samples, times `weight · 2π sigma²`, which turns each
+    /// crystal's peak into the mass the blur spreads. A term many samples wide is blurred on a
+    /// grid `factor` samples coarser — the deposits shared linearly between the cells about them,
+    /// which keeps each one's place, and read back linearly, the blur narrowed by the `factor² / 6`
+    /// each of those two tents adds, so the laid term keeps its width.
+    static func layCloudTerm(_ deposits: UnsafePointer<Float>, width gw: Int, height gh: Int,
+                             margin: Int, into demand: UnsafeMutablePointer<Float>,
+                             coreWidth sw: Int, coreHeight sh: Int, sigma: Float, weight: Float) {
+        let scale = weight * 2 * Float.pi * sigma * sigma
+        let factor = max(Int(sigma / 1.6), 1)
+        guard factor > 1 else {
+            let kernel = gaussianKernel(sigma: sigma)
+            let radius = kernel.count / 2
+            var across = [Float](repeating: 0, count: gh * sw)
+            across.withUnsafeMutableBufferPointer { across in
+                blurRows(deposits, rowStride: gw, firstColumn: margin - radius, rows: gh,
+                         columns: sw, kernel: kernel, into: across.baseAddress!)
+                blurColumns(across.baseAddress!, columns: sw, firstRow: margin - radius,
+                            rows: sh, kernel: kernel, scale: scale, into: demand)
+            }
+            return
+        }
+        let f = Float(factor)
+        let coarse = ((sigma * sigma - f * f / 3).squareRoot()) / f
+        let kernel = gaussianKernel(sigma: coarse)
+        let radius = kernel.count / 2
+        // The coarse grid covers the padded grid and `radius` cells either side, so the blur
+        // reads zeros past the deposits rather than any bound.
+        let cw = (gw + factor - 1) / factor + 2 * radius + 1
+        let ch = (gh + factor - 1) / factor + 2 * radius + 1
+        var cells = [Float](repeating: 0, count: cw * ch)
+        // A sample's centre sits at `(x + 0.5) / factor - 0.5` cells, the cells' centres at
+        // integers; `radius` cells of zeros lead each side.
+        let place = (0..<max(gw, gh)).map { x -> (Int, Float) in
+            let u = (Float(x) + 0.5) / f - 0.5
+            let i = Int(u.rounded(.down))
+            return (i + radius, u - Float(i))
+        }
+        for y in 0..<gh {
+            let (j, av) = place[y]
+            for x in 0..<gw {
+                let mass = deposits[y * gw + x]
+                if mass == 0 { continue }
+                let (i, au) = place[x]
+                cells[j * cw + i] += mass * (1 - au) * (1 - av)
+                cells[j * cw + i + 1] += mass * au * (1 - av)
+                cells[(j + 1) * cw + i] += mass * (1 - au) * av
+                cells[(j + 1) * cw + i + 1] += mass * au * av
+            }
+        }
+        var across = [Float](repeating: 0, count: ch * cw)
+        var blurred = [Float](repeating: 0, count: ch * cw)
+        cells.withUnsafeBufferPointer { cells in
+            across.withUnsafeMutableBufferPointer { across in
+                blurRows(cells.baseAddress!, rowStride: cw, firstColumn: 0, rows: ch,
+                         columns: cw - 2 * radius, kernel: kernel,
+                         into: across.baseAddress!, outputStride: cw, outputOffset: radius)
+                blurred.withUnsafeMutableBufferPointer { blurred in
+                    blurColumns(across.baseAddress!, columns: cw, firstRow: 0, rows: ch - 2 * radius,
+                                kernel: kernel, scale: 1, into: blurred.baseAddress! + radius * cw,
+                                accumulate: false)
+                }
+            }
+        }
+        // Read back linearly at each core sample's centre; a cell holds `factor²` samples' mass.
+        let perSample = scale / (f * f)
+        for j in 0..<sh {
+            let v = (Float(j + margin) + 0.5) / f - 0.5 + Float(radius)
+            let j0 = min(max(Int(v.rounded(.down)), 0), ch - 2)
+            let av = v - Float(j0)
+            for i in 0..<sw {
+                let u = (Float(i + margin) + 0.5) / f - 0.5 + Float(radius)
+                let i0 = min(max(Int(u.rounded(.down)), 0), cw - 2)
+                let au = u - Float(i0)
+                let top = blurred[j0 * cw + i0] * (1 - au) + blurred[j0 * cw + i0 + 1] * au
+                let bottom = blurred[(j0 + 1) * cw + i0] * (1 - au) + blurred[(j0 + 1) * cw + i0 + 1] * au
+                demand[j * sw + i] += perSample * (top * (1 - av) + bottom * av)
+            }
+        }
+    }
+
+    /// A normalised Gaussian of `sigma` samples, 3.5 sigma either side.
+    static func gaussianKernel(sigma: Float) -> [Float] {
+        let radius = max(Int((3.5 * sigma).rounded(.up)), 1)
+        let kernel = (-radius...radius).map { exp(-Float($0 * $0) / (2 * sigma * sigma)) }
+        let total = kernel.reduce(0, +)
+        return kernel.map { $0 / total }
+    }
+
+    /// Each of `rows` rows blurred along x: output column `i` reads input columns
+    /// `firstColumn + i ...` through the kernel. Every tap sweeps a whole row, so the inner loop
+    /// vectorises.
+    static func blurRows(_ input: UnsafePointer<Float>, rowStride: Int, firstColumn: Int,
+                         rows: Int, columns: Int, kernel: [Float],
+                         into output: UnsafeMutablePointer<Float>, outputStride: Int? = nil,
+                         outputOffset: Int = 0) {
+        let stride = outputStride ?? columns
+        kernel.withUnsafeBufferPointer { k in
+            for j in 0..<rows {
+                let out = output + j * stride + outputOffset
+                out.update(repeating: 0, count: columns)
+                let row = input + j * rowStride + firstColumn
+                for t in 0..<k.count {
+                    let weight = k[t], source = row + t
+                    for i in 0..<columns { out[i] += weight * source[i] }
+                }
+            }
+        }
+    }
+
+    /// `rows` output rows blurred along y from `input` rows `firstRow + j ...`, times `scale`,
+    /// added to (or written into) `output`.
+    static func blurColumns(_ input: UnsafePointer<Float>, columns: Int, firstRow: Int, rows: Int,
+                            kernel: [Float], scale: Float, into output: UnsafeMutablePointer<Float>,
+                            accumulate: Bool = true) {
+        var line = [Float](repeating: 0, count: columns)
+        kernel.withUnsafeBufferPointer { k in
+            line.withUnsafeMutableBufferPointer { line in
+                let sum = line.baseAddress!
+                for j in 0..<rows {
+                    sum.update(repeating: 0, count: columns)
+                    for t in 0..<k.count {
+                        let weight = k[t], source = input + (firstRow + j + t) * columns
+                        for i in 0..<columns { sum[i] += weight * source[i] }
+                    }
+                    let out = output + j * columns
+                    if accumulate {
+                        for i in 0..<columns { out[i] += scale * sum[i] }
+                    } else {
+                        for i in 0..<columns { out[i] = scale * sum[i] }
+                    }
+                }
             }
         }
     }
