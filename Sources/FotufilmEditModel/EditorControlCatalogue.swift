@@ -527,34 +527,28 @@ public enum EditorControlCatalogue {
             kind: .menu(.fixed([
                 EditorMenuChoice(0, "Standard", detail: "Fast calibrated RMS grain", id: "clump"),
                 EditorMenuChoice(1, "Film", detail: "Crystals on the film itself, averaged as light", id: "film"),
-                EditorMenuChoice(2, "Organic Crystals", detail: "Physical dye clouds and paper crystals", id: "crystals"),
             ])),
             availability: .film,
             persistence: .bespoke,
             binding: .grainModel,
             surfaces: [.app, .desktop, .android, .resolve, .cli, .web],
-            omitted: [.finalcut: "not yet offered; film and crystals need Reference rendering"],
+            omitted: [.finalcut: "not yet offered; film needs Reference rendering"],
             host: HostParameter(
                 slot: 43, slotSymbol: "GRAIN_MODEL", ofxName: "grainModel", group: .grainAdvanced,
                 label: "Grain Model",
-                hint: "Standard uses the calibrated clump field. Film lays the stock's crystals at fixed places on the emulsion and averages the light through each pixel's patch of film. Organic Crystals develops the film's own crystal population — sparse coarse dye clouds where little developed, a fine dense haze where most did — with photographic paper crystals.",
+                hint: "Standard uses the calibrated clump field. Film lays the stock's crystals at fixed places on the emulsion and averages the light through each pixel's patch of film.",
                 kind: .choice(.fixed([EditorMenuChoice(0, "Standard", id: "clump"),
-                                      EditorMenuChoice(1, "Film", id: "film"),
-                                      EditorMenuChoice(2, "Organic Crystals", id: "crystals")]),
+                                      EditorMenuChoice(1, "Film", id: "film")]),
                               value: 0),
                 order: 10),
             web: .profile,
             commandLine: CommandLineFlag("--grain-model", placeholder: "<m>",
-                                         help: "standard/clump (default), film, or organic/crystals. `film` lays "
+                                         help: "standard/clump (default) or film. `film` lays "
                                              + "the stock's crystals at fixed places on the emulsion, "
                                              + "rendered once per stock, and averages the light through "
-                                             + "each pixel's patch of film. `organic`/`crystals` "
-                                             + "develops the crystal population read off the film's own "
-                                             + "curve: Poisson counts of developed crystals per size class "
-                                             + "at every pixel, each laying its dye cloud from its "
-                                             + "sublayer's coupler pool, with paper grain in the print stage.",
+                                             + "each pixel's patch of film.",
                                          generic: false),
-            documentation: "Selects the film grain simulation method: Standard (fast calibrated RMS noise), Film (the stock's crystals at fixed places on the emulsion, with each pixel the light through its patch of film), or Organic Crystals (physically simulated dye clouds and paper crystals formed from the exposure)."),
+            documentation: "Selects the film grain simulation method: Standard (fast calibrated RMS noise) or Film (the stock's crystals at fixed places on the emulsion, with each pixel the light through its patch of film)."),
         EditorControl(
             .seed, title: "Grain Seed",
             detail: "Choose a grain pattern. The same seed and frame produce the same pattern.",

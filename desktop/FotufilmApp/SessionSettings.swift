@@ -301,7 +301,7 @@ final class SettingsSheetController: SessionViewController {
             options: GrainModel.allCases.map { (title: $0.title, value: $0) },
             get: { AppSettings.shared.grainModel },
             set: { AppSettings.shared.grainModel = $0 }))
-        grain.add(NoteRow("Standard uses fast calibrated RMS noise, Film lays the stock's crystals at fixed places on the emulsion, and Organic Crystals simulates physical dye clouds and photographic paper crystals."))
+        grain.add(NoteRow("Standard uses fast calibrated RMS noise, and Film lays the stock's crystals at fixed places on the emulsion."))
         #endif
         halation.add(PopUpRow<HalationModel>(
             "Halation Model",

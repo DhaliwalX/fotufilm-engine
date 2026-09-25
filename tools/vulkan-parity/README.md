@@ -72,20 +72,8 @@ stitched-tile equivalence. No claim of complete application coverage follows fro
 this matrix alone. Android reports set `completed` only after every selected case
 finishes; an interrupted run is not a completed sweep.
 
-Physical and organic grain require fixtures prepared for their respective modes;
-changing only the mode number leaves required parameters uninitialized. For example:
-
-```sh
-swift run -c release fotufilm --dump-wasm-pack build/vulkan-parity/organic.pack \
-  --stock example-negative-400 --grain-model organic --pack-size 65x49
-tools/vulkan-parity/run-android.py --serial DEVICE_SERIAL \
-  --stocks example-negative-400 --fixture build/vulkan-parity/organic.pack \
-  --cases stage-crystal stock --sizes 65x49
-```
-
-The CPU reference includes all eight print variants, including paper grain. Rebuild
-its AOT archives after updating the adapter; older four-variant archives cannot
-link the current adapter. Reports distinguish CPU and Vulkan nonfinite output so
+The CPU reference includes the four print variants. Rebuild its AOT archives after
+updating the adapter. Reports distinguish CPU and Vulkan nonfinite output so
 an invalid reference cannot be treated as a Vulkan-only failure.
 
 ## Linux runtime smoke test

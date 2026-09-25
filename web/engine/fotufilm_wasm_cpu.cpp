@@ -27,10 +27,6 @@
 #include "print_1.h"
 #include "print_2.h"
 #include "print_3.h"
-#include "print_4.h"
-#include "print_5.h"
-#include "print_6.h"
-#include "print_7.h"
 #include "plain_float.h"
 
 #ifdef __EMSCRIPTEN__
@@ -209,16 +205,11 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
         return 0;
     }
 
-    const int paper_grain = (feature_mask & FOTUFILM_FRAME_CRYSTAL_GRAIN) ? 4 : 0;
-    switch ((resolved.reversal ? 1 : 0) | (monochrome ? 2 : 0) | paper_grain) {
+    switch ((resolved.reversal ? 1 : 0) | (monochrome ? 2 : 0)) {
     case 0: return print_0(&density_buf, &config_buf, &film_buf, &paper_buf, &out_buf);
     case 1: return print_1(&density_buf, &config_buf, &film_buf, &paper_buf, &out_buf);
     case 2: return print_2(&density_buf, &config_buf, &film_buf, &paper_buf, &out_buf);
-    case 3: return print_3(&density_buf, &config_buf, &film_buf, &paper_buf, &out_buf);
-    case 4: return print_4(&density_buf, &config_buf, &film_buf, &paper_buf, &out_buf);
-    case 5: return print_5(&density_buf, &config_buf, &film_buf, &paper_buf, &out_buf);
-    case 6: return print_6(&density_buf, &config_buf, &film_buf, &paper_buf, &out_buf);
-    default: return print_7(&density_buf, &config_buf, &film_buf, &paper_buf, &out_buf);
+    default: return print_3(&density_buf, &config_buf, &film_buf, &paper_buf, &out_buf);
     }
 }
 

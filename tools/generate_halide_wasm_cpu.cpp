@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
     // presets. The same runtime gates used by native AOT classes bypass unrequested stages.
     // Annular halation is an exact schedule choice and therefore has its own fallback.
     for (int annular = 0; !plain_only && annular < 2; ++annular) {
-        const int32_t features = FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_CRYSTAL_GRAIN
+        const int32_t features = FOTUFILM_AOT_FULL_STAGES
             | (annular ? FOTUFILM_FRAME_HALATION_ANNULAR : 0);
         const std::string name = annular ? "develop_flexible_annular" : "develop_flexible";
         std::cout << "  " << name << std::flush;
@@ -85,15 +85,14 @@ int main(int argc, char **argv) {
         std::cout << " ok\n";
     }
 
-    // Reversal, monochrome and paper grain each change the print graph.
-    for (int variant = 0; !plain_only && variant < 8; ++variant) {
+    // Reversal and monochrome each change the print graph.
+    for (int variant = 0; !plain_only && variant < 4; ++variant) {
         const bool reversal = (variant & 1) != 0;
         const bool monochrome = (variant & 2) != 0;
         const std::string name = "print_" + std::to_string(variant);
         std::cout << "  " << name << std::flush;
         PrintPipeline pipeline(reversal, monochrome,
-                               "_print_variant_" + std::to_string(variant),
-                               false, -1, (variant & 4) != 0);
+                               "_print_variant_" + std::to_string(variant));
         pipeline.compile_aot((output / name).string(), name, false, target);
         std::cout << " ok\n";
     }

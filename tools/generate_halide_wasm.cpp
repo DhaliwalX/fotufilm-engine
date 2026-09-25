@@ -90,10 +90,10 @@ int main(int argc, char **argv) {
         // keeps the warp's add-back and develops the donor stocks red. Monochrome coats no
         // 4th Color Layer, so its kernel stays as it was.
         {"color_float",
-         FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_CRYSTAL_GRAIN | FOTUFILM_FRAME_FLOAT_IO
+         FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_FLOAT_IO
              | FOTUFILM_FRAME_DONOR_LAYER | FOTUFILM_FRAME_EXACT_MATH, true},
         {"monochrome_float",
-         FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_CRYSTAL_GRAIN | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO
+         FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_FLOAT_IO
              | FOTUFILM_FRAME_EXACT_MATH, false},
         {"plain_float", FOTUFILM_FRAME_NO_FILM | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_EXACT_MATH, false},
         // Scans already contain developed film density. Their print stage must not

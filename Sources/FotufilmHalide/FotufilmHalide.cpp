@@ -106,18 +106,15 @@ PrintPipeline *print_pipeline_for(int32_t feature_mask) {
     // be compiled in; without one the shape is read per pixel, exactly as the fused GPU pipeline
     // reads it when the caller asked for no shaped variant.
     const int shape = output_transfer_shape_for(feature_mask);
-    // The crystal grain model's print stage rides the crystal family here as it does in develop:
-    // the frame that asked for crystals carries the bit, and the paper it lands on grows its own.
-    const bool paper_grain = (feature_mask & FOTUFILM_FRAME_CRYSTAL_GRAIN) != 0;
-    static std::unique_ptr<PrintPipeline> pipelines[64];
+    static std::unique_ptr<PrintPipeline> pipelines[32];
     static std::mutex pipelines_mutex;
     std::lock_guard<std::mutex> lock(pipelines_mutex);
     const int variant = (reversal ? 1 : 0) | (monochrome ? 2 : 0)
-        | (encode ? 4 : 0) | ((shape + 1) << 3) | (paper_grain ? 32 : 0);
+        | (encode ? 4 : 0) | ((shape + 1) << 3);
     if (!pipelines[variant]) {
         pipelines[variant] = std::make_unique<PrintPipeline>(
             reversal, monochrome, "_print_variant_" + std::to_string(variant),
-            encode, shape, paper_grain);
+            encode, shape);
     }
     return pipelines[variant].get();
 }

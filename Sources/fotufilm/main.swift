@@ -1148,7 +1148,7 @@ if let model = flags["--grain-model"] {
         options.grainModel = resolved
     } else {
         FileHandle.standardError.write(Data(
-            "unknown grain model '\(model)'; expected standard/clump, film or organic/crystals\n".utf8))
+            "unknown grain model '\(model)'; expected standard/clump or film\n".utf8))
         exit(2)
     }
 }

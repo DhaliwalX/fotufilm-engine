@@ -67,20 +67,12 @@
       "doc": "Common float video graphs. AOT windowed twins keep the same arguments and physics, with their intermediate rows stored in bounded circular buffers; the shim picks one only for a request inside this stage set."
     }
   ],
-  "families": [
-    {
-      "name": "CRYSTAL",
-      "adds": "CRYSTAL_GRAIN",
-      "doc": "The crystal grain model, the one stage that is expensive to compile rather than to skip. A still class carries it as a twin; a realtime class never develops crystals, so its one variant carries the bit for coverage at no cost."
-    }
-  ],
   "axes": {
     "doc": "A stage bit is covered by any variant that carries it; an exact bit must match. The delivery encode and its transfer (ENCODE_OUT, OUTPUT_*) and the whole-frame glare measurement (FLARE_MEASURE) are neither: the pipeline chooses them at run time.",
     "stage": [
       "ALL_STAGES",
       "GRAIN_MOTTLE",
       "FLARE",
-      "CRYSTAL_GRAIN",
       "DONOR_LAYER"
     ],
     "exact": [
@@ -99,95 +91,79 @@
   "variants": [
     {
       "name": "color",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN",
-      "doc": "The byte-input classes are realtime by construction: half-precision stores and no crystal model."
+      "mask": "FULL_STAGES",
+      "doc": "The byte-input classes are realtime by construction: half-precision stores."
     },
     {
       "name": "monochrome",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | MONOCHROME"
+      "mask": "FULL_STAGES | MONOCHROME"
     },
     {
       "name": "color_head",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | DENSITY_OUT",
+      "mask": "FULL_STAGES | DENSITY_OUT",
       "doc": "The split recording road: the head develops to a density seam, the tail images it. See FOTUFILM_AOT_HEAD and FOTUFILM_AOT_TAIL for the stages each half runs."
     },
     {
       "name": "monochrome_head",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | MONOCHROME | DENSITY_OUT"
+      "mask": "FULL_STAGES | MONOCHROME | DENSITY_OUT"
     },
     {
       "name": "color_tail",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | DENSITY_IN"
+      "mask": "FULL_STAGES | DENSITY_IN"
     },
     {
       "name": "monochrome_tail",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | MONOCHROME | DENSITY_IN"
+      "mask": "FULL_STAGES | MONOCHROME | DENSITY_IN"
     },
     {
       "name": "color_float_realtime",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | FLOAT_IO | REALTIME",
+      "mask": "FULL_STAGES | FLOAT_IO | REALTIME",
       "doc": "Deep video: float I/O on the realtime schedule, which keeps full-precision stores. The delivery encode and its transfer are chosen by the request, not the variant."
     },
     {
       "name": "monochrome_float_realtime",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | MONOCHROME | FLOAT_IO | REALTIME"
+      "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | REALTIME"
     },
     {
       "name": "color_float_realtime_texture",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | FLOAT_IO | REALTIME | TEXTURE"
+      "mask": "FULL_STAGES | FLOAT_IO | REALTIME | TEXTURE"
     },
     {
       "name": "monochrome_float_realtime_texture",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | MONOCHROME | FLOAT_IO | REALTIME | TEXTURE"
+      "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | TEXTURE"
     },
     {
       "name": "color_float_realtime_negative",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | FLOAT_IO | REALTIME | DENSITY_OUT"
+      "mask": "FULL_STAGES | FLOAT_IO | REALTIME | DENSITY_OUT"
     },
     {
       "name": "monochrome_float_realtime_negative",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | MONOCHROME | FLOAT_IO | REALTIME | DENSITY_OUT"
+      "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | DENSITY_OUT"
     },
     {
       "name": "color_float_realtime_print",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | FLOAT_IO | REALTIME | DENSITY_IN"
+      "mask": "FULL_STAGES | FLOAT_IO | REALTIME | DENSITY_IN"
     },
     {
       "name": "monochrome_float_realtime_print",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | MONOCHROME | FLOAT_IO | REALTIME | DENSITY_IN"
+      "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | REALTIME | DENSITY_IN"
     },
     {
       "name": "color_float",
       "mask": "FULL_STAGES | FLOAT_IO",
-      "doc": "The float still classes: the reference schedule, with the crystal grain model as a twin."
-    },
-    {
-      "name": "color_float_crystal",
-      "mask": "CRYSTAL(FULL_STAGES | FLOAT_IO)"
+      "doc": "The float still classes: the reference schedule."
     },
     {
       "name": "monochrome_float",
       "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO"
     },
     {
-      "name": "monochrome_float_crystal",
-      "mask": "CRYSTAL(FULL_STAGES | MONOCHROME | FLOAT_IO)"
-    },
-    {
       "name": "color_float_exact",
       "mask": "FULL_STAGES | FLOAT_IO | EXACT_MATH"
     },
     {
-      "name": "color_float_exact_crystal",
-      "mask": "CRYSTAL(FULL_STAGES | FLOAT_IO | EXACT_MATH)"
-    },
-    {
       "name": "monochrome_float_exact",
       "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | EXACT_MATH"
-    },
-    {
-      "name": "monochrome_float_exact_crystal",
-      "mask": "CRYSTAL(FULL_STAGES | MONOCHROME | FLOAT_IO | EXACT_MATH)"
     },
     {
       "name": "color_float_texture",
@@ -195,16 +171,8 @@
       "doc": "An empty spatial selection is served here too: a bypassed stage is an identity on both sides of the density difference."
     },
     {
-      "name": "color_float_texture_crystal",
-      "mask": "CRYSTAL(FULL_STAGES | FLOAT_IO | TEXTURE)"
-    },
-    {
       "name": "monochrome_float_texture",
       "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | TEXTURE"
-    },
-    {
-      "name": "monochrome_float_texture_crystal",
-      "mask": "CRYSTAL(FULL_STAGES | MONOCHROME | FLOAT_IO | TEXTURE)"
     },
     {
       "name": "color_float_negative",
@@ -212,12 +180,8 @@
     },
     {
       "name": "color_float_negative_exact",
-      "mask": "FULL_STAGES | FLOAT_IO | DENSITY_OUT | CRYSTAL_GRAIN | EXACT_MATH",
+      "mask": "FULL_STAGES | FLOAT_IO | DENSITY_OUT | EXACT_MATH",
       "doc": "Precise Float32 negative-density oracle for native Metal validation on physical iPhones."
-    },
-    {
-      "name": "color_float_negative_crystal",
-      "mask": "CRYSTAL(FULL_STAGES | FLOAT_IO | DENSITY_OUT)"
     },
     {
       "name": "monochrome_float_negative",
@@ -225,12 +189,8 @@
     },
     {
       "name": "monochrome_float_negative_exact",
-      "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | DENSITY_OUT | CRYSTAL_GRAIN | EXACT_MATH",
+      "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | DENSITY_OUT | EXACT_MATH",
       "doc": "Precise Float32 negative-density oracle for native Metal validation on physical iPhones."
-    },
-    {
-      "name": "monochrome_float_negative_crystal",
-      "mask": "CRYSTAL(FULL_STAGES | MONOCHROME | FLOAT_IO | DENSITY_OUT)"
     },
     {
       "name": "color_float_print",
@@ -238,12 +198,8 @@
     },
     {
       "name": "color_float_print_exact",
-      "mask": "FULL_STAGES | FLOAT_IO | DENSITY_IN | CRYSTAL_GRAIN | EXACT_MATH",
+      "mask": "FULL_STAGES | FLOAT_IO | DENSITY_IN | EXACT_MATH",
       "doc": "Precise Float32 density-input oracle for validating Metal print stages on physical iPhones."
-    },
-    {
-      "name": "color_float_print_crystal",
-      "mask": "CRYSTAL(FULL_STAGES | FLOAT_IO | DENSITY_IN)"
     },
     {
       "name": "monochrome_float_print",
@@ -251,12 +207,8 @@
     },
     {
       "name": "monochrome_float_print_exact",
-      "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | DENSITY_IN | CRYSTAL_GRAIN | EXACT_MATH",
+      "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | DENSITY_IN | EXACT_MATH",
       "doc": "Precise Float32 density-input oracle for validating Metal print stages on physical iPhones."
-    },
-    {
-      "name": "monochrome_float_print_crystal",
-      "mask": "CRYSTAL(FULL_STAGES | MONOCHROME | FLOAT_IO | DENSITY_IN)"
     },
     {
       "name": "color_float_fields",
@@ -264,34 +216,26 @@
       "doc": "The two halves of the two-pass striped render; see FOTUFILM_FRAME_LIGHT_OUT and FOTUFILM_FRAME_FIELDS_IN."
     },
     {
-      "name": "color_float_fields_crystal",
-      "mask": "CRYSTAL(FULL_STAGES | FLOAT_IO | FIELDS_IN)"
-    },
-    {
       "name": "monochrome_float_fields",
       "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | FIELDS_IN"
     },
     {
-      "name": "monochrome_float_fields_crystal",
-      "mask": "CRYSTAL(FULL_STAGES | MONOCHROME | FLOAT_IO | FIELDS_IN)"
-    },
-    {
       "name": "color_float_light",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | FLOAT_IO | LIGHT_OUT",
+      "mask": "FULL_STAGES | FLOAT_IO | LIGHT_OUT",
       "doc": "Nothing past the light is compiled, so the grain bits cost nothing and cover any request."
     },
     {
       "name": "color_float_light_exact",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | FLOAT_IO | LIGHT_OUT | EXACT_MATH",
+      "mask": "FULL_STAGES | FLOAT_IO | LIGHT_OUT | EXACT_MATH",
       "doc": "Float32 light-stage oracle for validating native Metal on physical iPhones with the same exact-math expressions as the desktop reference."
     },
     {
       "name": "monochrome_float_light",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | MONOCHROME | FLOAT_IO | LIGHT_OUT"
+      "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | LIGHT_OUT"
     },
     {
       "name": "monochrome_float_light_exact",
-      "mask": "FULL_STAGES | CRYSTAL_GRAIN | MONOCHROME | FLOAT_IO | LIGHT_OUT | EXACT_MATH"
+      "mask": "FULL_STAGES | MONOCHROME | FLOAT_IO | LIGHT_OUT | EXACT_MATH"
     },
     {
       "name": "no_film_float",

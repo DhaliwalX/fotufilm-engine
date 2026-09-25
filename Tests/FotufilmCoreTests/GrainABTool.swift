@@ -75,7 +75,7 @@ final class GrainABTool: XCTestCase {
                                   "candidate tone fit requires review: \(id) \(label)")
                 var options = FotufilmEngine.Options()
                 options.format = FilmFormat(name: "population detail", frameHeightMM: 2.4)
-                options.grainModel = .crystals
+                options.grainModel = .film
                 options.seed = 42
                 options.halationScale = 0
                 options.couplerScale = 0

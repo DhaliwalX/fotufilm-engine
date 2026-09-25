@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
             pipeline.output.compile_to_static_library(prefix,
                 {pipeline.input, pipeline.parameters}, name, target);
         } else {
-            int mask = FOTUFILM_AOT_FULL_STAGES | FOTUFILM_FRAME_CRYSTAL_GRAIN;
+            int mask = FOTUFILM_AOT_FULL_STAGES;
             if (name == "vk_plain") mask = FOTUFILM_FRAME_NO_FILM;
             else if (name == "vk_print") mask = FOTUFILM_FRAME_DENSITY_IN | FOTUFILM_FRAME_PRINT_MTF;
             else if (name == "vk_mono") mask |= FOTUFILM_FRAME_MONOCHROME;

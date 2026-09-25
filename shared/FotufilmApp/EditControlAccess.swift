@@ -243,7 +243,6 @@ extension EditState {
                 switch grainModel {
                 case .clumpField: return .choice(0)
                 case .film: return .choice(1)
-                case .crystals: return .choice(2)
                 }
             }
             return nil

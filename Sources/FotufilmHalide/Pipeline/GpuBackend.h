@@ -102,10 +102,9 @@ public:
                 ? values : remember(values, schedule_.store_frame(values, half, channels));
         case Store::Density:
             return values;
-        // Reduce crystal bins and chemical inhibition before their final combination.
-        // Keeping every field inline exceeds WebGPU's per-stage storage bindings.
-        // Native GPU schedules retain the existing fused expression.
-        case Store::CrystalGrain:
+        // Reduce chemical inhibition before its final combination. Keeping every field inline
+        // exceeds WebGPU's per-stage storage bindings. Native GPU schedules retain the existing
+        // fused expression.
         case Store::Inhibition:
         case Store::MtfSelected:
         case Store::PrintMtfInput:
@@ -129,7 +128,6 @@ public:
             return remember(values, schedule_.store_frame(values, false, channels, branch));
         case Store::Noise:
         case Store::MottleNoise:
-        case Store::CrystalCounts:
         case Store::Transmittance:
         case Store::FlatTransmittance:
             return remember(values, schedule_.store_frame(values, half, channels));
@@ -467,13 +465,6 @@ public:
             : lut_sample(paper_lut_, ax, ay, az, channel, policy_.half_tetra);
     }
 
-    Expr paper_grain_hash(ImageParam &configuration, Expr x, Expr y, Expr channel,
-                          bool monochrome) override {
-        // Paper carries its own exactly representable seed in the packed configuration.
-        // Use the shared print hash so GPU and CPU draw the same paper emulsion.
-        return fotufilm::paper_grain_hash(configuration, x + p_.origin_x_,
-                                         y + p_.origin_y_, channel, monochrome);
-    }
 
 private:
     Func remember(Func original, Func view) {

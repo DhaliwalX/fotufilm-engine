@@ -299,7 +299,7 @@ public struct FilmStock: Sendable {
     /// `D = net density + grainFogDensity` and normalised at the density the published figure
     /// is read at. The default is the Vision3 family shape; measured packs provide their own.
     public var grainDensityProfile: GrainDensityProfile
-    /// Authored population parameters for Organic Crystals.
+    /// Authored crystal population parameters for the Film grain model.
     public var crystalGrainPopulation: CrystalGrainPopulation
     /// `[exponent p, shoulder density Ds]` for `dyeCloudReversal`, in developed density
     /// above base plus fog, like the other grain laws. The generic profile is a provisional

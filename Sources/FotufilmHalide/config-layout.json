@@ -22,14 +22,6 @@
     "SAMPLED_CURVE_STRIDE": {
       "value": "1 + 3 * SAMPLED_CURVE_MAX_SAMPLES"
     },
-    "CRYSTAL_GRAIN_BINS": {
-      "value": 4,
-      "doc": "Crystal size bins per record in the crystal grain model: coated sublayers from the fastest, coarsest crystals down to the slowest, finest."
-    },
-    "CRYSTAL_GRAIN_SAMPLES": {
-      "value": 64,
-      "doc": "Samples per bin of the crystal grain model's developed-count table, against the record's developed density as a fraction of its range, 0...1."
-    },
     "FILM_TILE_SIDE": {
       "value": 256,
       "doc": "Texels per side of the film grain model's seamless tile; a texel is a micron of film."
@@ -215,7 +207,7 @@
     {
       "name": "GRAIN_MODE",
       "count": 1,
-      "doc": "Which model lays the grain: 0 the blurred clump field, 1 the film grain model's tiles (FILM_TILE), 2 the crystal population (CRYSTAL_GRAIN)."
+      "doc": "Which model lays the grain: 0 the blurred clump field, 1 the film grain model's tiles (FILM_TILE)."
     },
     {
       "name": "GRADE_SPACE",
@@ -436,21 +428,6 @@
       "name": "GRAIN_REVERSAL_PROFILE",
       "count": 2,
       "doc": "Dye reversal's [exponent p, shoulder density Ds], read under grain law 3."
-    },
-    {
-      "name": "CRYSTAL_GRAIN_BIN",
-      "count": "3 * CRYSTAL_GRAIN_BINS * 4",
-      "doc": "Crystal grain model, read under grain mode 2: per record and size bin, [lattice blur sigma of the bin's dye cloud in pixels, density one cloud adds to the pixel it lands in, the sublayer's coupler pool in density (0: silver, no pool), the mean-dye factor: the sum over the cloud's lattice taps of 1 - exp(-(density per cloud x tap) / pool), which by Campbell's theorem gives the expected dye of the Poisson field as pool (1 - exp(-count x factor)); for silver the density per cloud itself]."
-    },
-    {
-      "name": "CRYSTAL_GRAIN_LAMBDA",
-      "count": "3 * CRYSTAL_GRAIN_BINS * CRYSTAL_GRAIN_SAMPLES",
-      "doc": "Crystal grain model, exposure stage: per record and size bin, the mean count of latent (developable) crystals per pixel against the record's developed density as a fraction of its range, CRYSTAL_GRAIN_SAMPLES values from 0 to 1. Indexed by density rather than exposure so the split renderer's density-in tail can lay it; the curve is monotone, so the two say the same thing."
-    },
-    {
-      "name": "CRYSTAL_PRINT_GRAIN",
-      "count": 4,
-      "doc": "Crystal grain model, print stage: per record, how many of the print material's own crystals one output pixel holds at full development (0 when nothing exposes a paper: a viewed transparency, a scan, a screen, the negative itself), then the frame's hash seed as a float, for the print pipeline whose arguments carry none. The paper's developed count is a Poisson draw at the paper's developed fraction of that, and its departure from the mean is what the paper's own grain adds."
     },
     {
       "name": "CAMERA_PREFLASH",

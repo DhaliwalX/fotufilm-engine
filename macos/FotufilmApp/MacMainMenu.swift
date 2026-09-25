@@ -154,8 +154,6 @@ enum MainMenu {
             #selector(DesktopEditorViewController.setGrainModelStandard(_:)))
         add(grainModelSubmenu, "Film",
             #selector(DesktopEditorViewController.setGrainModelFilm(_:)))
-        add(grainModelSubmenu, "Organic Crystals",
-            #selector(DesktopEditorViewController.setGrainModelOrganic(_:)))
         menu.addItem(grainModelItem)
         add(menu, "Estimated Halation Shape (Advanced)",
             #selector(DesktopEditorViewController.toggleEstimatedHalation(_:)))

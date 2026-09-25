@@ -332,18 +332,18 @@ enum VerifyDesktopParity {
                 stock: stock.stock, options: model.edit.options(sensor: model.sensorFrame),
                 width: side, height: side)
 
-            model.edit.grainModel = .crystals
-            let crystals = FilmEngineInvocation(
+            model.edit.grainModel = .film
+            let film = FilmEngineInvocation(
                 stock: stock.stock, options: model.edit.options(sensor: model.sensorFrame),
                 width: side, height: side)
-            guard clump.featureMask & FilmEngineFeature.crystalGrain == 0,
-                  crystals.featureMask & FilmEngineFeature.crystalGrain != 0 else {
+            let mode = FilmEngineInvocation.grainModeOffset
+            guard clump.configuration[mode] == 0, film.configuration[mode] == 1 else {
                 return .fail("the per-photo choice did not reach the engine instruction")
             }
             guard AppSettings.storedGrainModel == appSetting else {
                 return .fail("the photo changed the app-wide starting preference")
             }
-            return .pass("the photo selected the crystal engine variant independently")
+            return .pass("the photo selected the film grain model independently")
         },
 
         Check(name: "the exposure stage offers lens filters") { editor in

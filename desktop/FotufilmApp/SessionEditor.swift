@@ -1045,10 +1045,6 @@ final class DesktopEditorViewController: SessionViewController {
         setGrainModel(.film)
     }
 
-    @objc func setGrainModelOrganic(_ sender: Any?) {
-        setGrainModel(.crystals)
-    }
-
     private func setGrainModel(_ grainModel: GrainModel) {
         if model.isOpen {
             model.edit.grainModel = grainModel
@@ -1400,10 +1396,6 @@ extension DesktopEditorViewController: NSMenuItemValidation {
         case #selector(setGrainModelFilm(_:)):
             let current = menuGrainModel
             item.state = current == .film ? .on : .off
-            return !model.isExporting
-        case #selector(setGrainModelOrganic(_:)):
-            let current = menuGrainModel
-            item.state = current == .crystals ? .on : .off
             return !model.isExporting
         case #selector(toggleEstimatedHalation(_:)):
             item.state = AppSettings.shared.estimatedHalationEnabled ? .on : .off

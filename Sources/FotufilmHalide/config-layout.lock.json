@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "count": 19045,
+  "count": 18225,
   "fields": {
     "CURVES": {
       "offset": 0,
@@ -366,40 +366,28 @@
       "offset": 18030,
       "count": 2
     },
-    "CRYSTAL_GRAIN_BIN": {
-      "offset": 18032,
-      "count": 48
-    },
-    "CRYSTAL_GRAIN_LAMBDA": {
-      "offset": 18080,
-      "count": 768
-    },
-    "CRYSTAL_PRINT_GRAIN": {
-      "offset": 18848,
-      "count": 4
-    },
     "CAMERA_PREFLASH": {
-      "offset": 18852,
+      "offset": 18032,
       "count": 1
     },
     "PRINTER_PREFLASH": {
-      "offset": 18853,
+      "offset": 18033,
       "count": 1
     },
     "BYTE_BASIS": {
-      "offset": 18854,
+      "offset": 18034,
       "count": 2
     },
     "GRAIN_DENSITY_RECORDS": {
-      "offset": 18856,
+      "offset": 18036,
       "count": 18
     },
     "FILM_TILE": {
-      "offset": 18874,
+      "offset": 18054,
       "count": 166
     },
     "GATE": {
-      "offset": 19040,
+      "offset": 18220,
       "count": 5
     }
   }

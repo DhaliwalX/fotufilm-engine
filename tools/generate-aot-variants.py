@@ -13,7 +13,6 @@ HEADER = ROOT / "Sources/FotufilmHalide/include/FotufilmAotVariants.h"
 SHIM_INCLUDES = ROOT / "Sources/FotufilmHalide/FotufilmHalideIOSVariants.h"
 PREFIX = "fotufilm_halide_ios_"
 TOKEN = re.compile(r"\b[A-Z][A-Z0-9_]*\b")
-CALL = re.compile(r"\b([A-Z][A-Z0-9_]*)\s*\(")
 
 
 def frame_bits():
@@ -29,10 +28,6 @@ class Table:
     def __init__(self, schema):
         self.schema = schema
         self.bits = frame_bits()
-        self.families = {family["name"]: family["adds"] for family in schema["families"]}
-        for family in schema["families"]:
-            if family["adds"] not in self.bits:
-                raise ValueError(f"Family {family['name']} adds unknown bit {family['adds']}")
         self.spans = {}
         for span in schema["spans"]:
             self.spans[span["name"]] = self.evaluate(span["mask"])
@@ -51,22 +46,6 @@ class Table:
         self.exact_bits = sum(self.resolve(t) for t in schema["axes"]["exact"])
         if self.stage_bits & self.exact_bits:
             raise ValueError("A bit cannot be both coverable and exact")
-        missing = self.missing_donor_crystal_twins()
-        if missing:
-            raise ValueError("Donor variants that lay grain need a _crystal twin, because the crystal "
-                             "grain model rides its own family on every material: "
-                             + ", ".join(missing))
-
-    def missing_donor_crystal_twins(self):
-        """Names of grain-laying donor variants with no variant serving the same mask plus CRYSTAL_GRAIN.
-
-        The crystal population rides its own family on every material, so a donor stock developed
-        with crystals asks for both bits at once."""
-        donor, grain, crystal = self.bits["DONOR_LAYER"], self.bits["GRAIN"], self.bits["CRYSTAL_GRAIN"]
-        masks = {mask for _, mask, _ in self.variants}
-        return [name for name, mask, _ in self.variants
-                if mask & donor and mask & grain and not mask & crystal
-                and (mask | crystal) not in masks]
 
     def resolve(self, token):
         if token in self.spans:
@@ -76,20 +55,10 @@ class Table:
         raise ValueError(f"Unknown span or FOTUFILM_FRAME_ bit: {token}")
 
     def evaluate(self, expression):
-        names = {}
-        for token in set(CALL.findall(expression)):
-            if token not in self.families:
-                raise ValueError(f"Unknown family: {token}")
-            adds = self.bits[self.families[token]]
-            names["family_" + token] = (lambda adds: lambda mask: mask | adds)(adds)
-        python = CALL.sub(lambda m: "family_" + m.group(1) + "(", expression)
-        for token in set(TOKEN.findall(python)):
-            if not token.startswith("family_"):
-                names[token] = self.resolve(token)
-        return int(eval(python, {"__builtins__": {}}, names)) & 0x7fffffff  # noqa: S307
+        names = {token: self.resolve(token) for token in set(TOKEN.findall(expression))}
+        return int(eval(expression, {"__builtins__": {}}, names)) & 0x7fffffff  # noqa: S307
 
     def c_expression(self, expression):
-        expression = CALL.sub(lambda m: "FOTUFILM_AOT_" + m.group(1) + "(", expression)
         def qualify(match):
             token = match.group(0)
             if token.startswith("FOTUFILM_"):
@@ -138,11 +107,6 @@ def render_header(table):
     for span in schema["spans"]:
         out += doc_comment(span.get("doc", ""))
         out.append(f"#define FOTUFILM_AOT_{span['name']} ({table.c_expression(span['mask'])})")
-        out.append("")
-    for family in schema["families"]:
-        out += doc_comment(family.get("doc", ""))
-        out.append(f"#define FOTUFILM_AOT_{family['name']}(mask) "
-                   f"((mask) | FOTUFILM_FRAME_{family['adds']})")
         out.append("")
 
     def entries(variants):

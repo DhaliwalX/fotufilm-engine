@@ -1161,8 +1161,7 @@ extern "C" int32_t fotufilm_halide_metal_process_buffers_head(
         // in it — so stripping it here is what keeps the split path's print the
         // same picture the unsplit path makes.
         const int32_t head_mask = (feature_mask
-            & ~(FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_GRAIN_MOTTLE
-                | FOTUFILM_FRAME_CRYSTAL_GRAIN | FOTUFILM_FRAME_PRINT_MTF))
+            & ~(FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_GRAIN_MOTTLE | FOTUFILM_FRAME_PRINT_MTF))
             | FOTUFILM_FRAME_DENSITY_OUT;
         error = run_aot(state, input_buffer.raw_buffer(), density_buffer.raw_buffer(),
                         width, height, configuration, head_mask, seed,
@@ -1211,8 +1210,7 @@ extern "C" int32_t fotufilm_halide_metal_process_buffers_tail(
         // lays the field the frame actually asked for.
         const int32_t tail_mask = (feature_mask
             & (FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_REVERSAL
-               | FOTUFILM_FRAME_GRAIN_MOTTLE | FOTUFILM_FRAME_CRYSTAL_GRAIN
-               | FOTUFILM_FRAME_PRINT_MTF))
+               | FOTUFILM_FRAME_GRAIN_MOTTLE | FOTUFILM_FRAME_PRINT_MTF))
             | FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_DENSITY_IN;
         error = run_aot(state, density_buffer.raw_buffer(), output_buffer.raw_buffer(),
                         width, height, configuration, tail_mask, seed,

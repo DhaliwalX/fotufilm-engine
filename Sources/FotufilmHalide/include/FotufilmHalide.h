@@ -65,11 +65,6 @@ enum {
     /// The hybrid fast develop's two halves.
     FOTUFILM_FRAME_DENSITY_OUT = 1 << 13,
     FOTUFILM_FRAME_DENSITY_IN = 1 << 14,
-    /// Compiles the crystal grain model (grain mode 2) and its paper crystals alongside the clump
-    /// field. It is its own variant rather than a runtime branch because the crystal bins are
-    /// whole-frame fields: leaving them in the pipeline costs every render their compile time
-    /// even when nothing selects them.
-    FOTUFILM_FRAME_CRYSTAL_GRAIN = 1 << 15,
     /// Compiles the grain-size mixture's second clump field: a coarse crystal
     /// population blurred at its own correlation length and laid under the
     /// sharp one. Deliberately outside every FOTUFILM_AOT_* variant list — the

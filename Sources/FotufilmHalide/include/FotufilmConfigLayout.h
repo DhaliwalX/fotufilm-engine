@@ -10,12 +10,6 @@ enum {
     FOTUFILM_TONE_GRID_CELLS = FOTUFILM_TONE_GRID_EDGE * FOTUFILM_TONE_GRID_EDGE,
     FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES = 1024,
     FOTUFILM_SAMPLED_CURVE_STRIDE = 1 + 3 * FOTUFILM_SAMPLED_CURVE_MAX_SAMPLES,
-    /// Crystal size bins per record in the crystal grain model: coated sublayers from the fastest,
-    /// coarsest crystals down to the slowest, finest.
-    FOTUFILM_CRYSTAL_GRAIN_BINS = 4,
-    /// Samples per bin of the crystal grain model's developed-count table, against the record's
-    /// developed density as a fraction of its range, 0...1.
-    FOTUFILM_CRYSTAL_GRAIN_SAMPLES = 64,
     /// Texels per side of the film grain model's seamless tile; a texel is a micron of film.
     FOTUFILM_FILM_TILE_SIDE = 256,
     /// Gross densities, D-min to D-max, the film grain model renders each record's tile at.
@@ -69,7 +63,7 @@ enum {
     FOTUFILM_CONFIG_TONE_GRID_A = 483,
     FOTUFILM_CONFIG_TONE_GRID_B = 4579,
     /// Which model lays the grain: 0 the blurred clump field, 1 the film grain model's tiles
-    /// (FILM_TILE), 2 the crystal population (CRYSTAL_GRAIN).
+    /// (FILM_TILE).
     FOTUFILM_CONFIG_GRAIN_MODE = 8675,
     /// Non-zero to run the three-way grade on the sRGB-encoded signal, the way a grading suite's
     /// three-way corrector does, rather than on display-linear light. Appended last so that adding
@@ -214,42 +208,22 @@ enum {
     FOTUFILM_CONFIG_RECORD_INPUT = 18029,
     /// Dye reversal's [exponent p, shoulder density Ds], read under grain law 3.
     FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE = 18030,
-    /// Crystal grain model, read under grain mode 2: per record and size bin, [lattice blur sigma
-    /// of the bin's dye cloud in pixels, density one cloud adds to the pixel it lands in, the
-    /// sublayer's coupler pool in density (0: silver, no pool), the mean-dye factor: the sum over
-    /// the cloud's lattice taps of 1 - exp(-(density per cloud x tap) / pool), which by Campbell's
-    /// theorem gives the expected dye of the Poisson field as pool (1 - exp(-count x factor)); for
-    /// silver the density per cloud itself].
-    FOTUFILM_CONFIG_CRYSTAL_GRAIN_BIN = 18032,
-    /// Crystal grain model, exposure stage: per record and size bin, the mean count of latent
-    /// (developable) crystals per pixel against the record's developed density as a fraction of its
-    /// range, CRYSTAL_GRAIN_SAMPLES values from 0 to 1. Indexed by density rather than exposure so
-    /// the split renderer's density-in tail can lay it; the curve is monotone, so the two say the
-    /// same thing.
-    FOTUFILM_CONFIG_CRYSTAL_GRAIN_LAMBDA = 18080,
-    /// Crystal grain model, print stage: per record, how many of the print material's own crystals
-    /// one output pixel holds at full development (0 when nothing exposes a paper: a viewed
-    /// transparency, a scan, a screen, the negative itself), then the frame's hash seed as a float,
-    /// for the print pipeline whose arguments carry none. The paper's developed count is a Poisson
-    /// draw at the paper's developed fraction of that, and its departure from the mean is what the
-    /// paper's own grain adds.
-    FOTUFILM_CONFIG_CRYSTAL_PRINT_GRAIN = 18848,
     /// Uniform additive camera film preflash relative to metered mid-grey; 0 is off.
-    FOTUFILM_CONFIG_CAMERA_PREFLASH = 18852,
+    FOTUFILM_CONFIG_CAMERA_PREFLASH = 18032,
     /// Uniform additive paper preflash relative to paper mid-exposure; 0 is off.
-    FOTUFILM_CONFIG_PRINTER_PREFLASH = 18853,
+    FOTUFILM_CONFIG_PRINTER_PREFLASH = 18033,
     /// The primaries of the byte frames on the encoded-byte road, [input, output]: 0 Display P3, 1
     /// sRGB, both under the sRGB transfer. The decode steps the input basis into the working space;
     /// the delivery leaves the print's Display P3 for the output basis after the shoulder and
     /// before the clip. Read only on byte I/O; a float frame is the working space itself.
-    FOTUFILM_CONFIG_BYTE_BASIS = 18854,
+    FOTUFILM_CONFIG_BYTE_BASIS = 18034,
     /// The chromogenic negative's granularity-against-density shape per record, read only under
     /// FOTUFILM_CONFIG_GRAIN_LAW 0: for red, green and blue in turn, the coarse sub-layer's
     /// variance amplitude, the toe density over which anything develops at all, the density over
     /// which that coarse population decays onto the fine one, then the amplitude, centre density
     /// and width of the second rise where the slow sub-layer's coarse population comes in. Mirrors
     /// `FilmStock.grainDensityProfile`; appended without renumbering earlier fields.
-    FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS = 18856,
+    FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS = 18036,
     /// The film grain model (grain mode 1), sampled from its tiles: the pixel pitch in tile texels,
     /// the side of the film each pixel reads in tile texels, the id the host registered the tiles
     /// under, each record's grain amount, the colour grain (1 keeps the records independent, 0
@@ -257,7 +231,7 @@ enum {
     /// record FILM_TILE_LEVELS each of the level's mean light, the mean density a pixel of this
     /// pitch reads there, and the correlation of its grain with the next level's at this pitch.
     /// Read only in grain mode 1; appended without renumbering earlier fields.
-    FOTUFILM_CONFIG_FILM_TILE = 18874,
+    FOTUFILM_CONFIG_FILM_TILE = 18054,
     /// The camera gate, for a frame larger than the aperture (Emulsion Border's film beyond the
     /// gate): the aperture's left, top, right and bottom edges in frame pixels, then the radius in
     /// pixels of the lens pupil's shadow of its edge. Light the lens formed — the direct image, a
@@ -265,7 +239,7 @@ enum {
     /// it: each edge passes the share of a uniform disc on the open side of a straight line, and
     /// the two axes multiply. A negative radius is no gate, and the light passes unchanged.
     /// Appended without renumbering earlier fields.
-    FOTUFILM_CONFIG_GATE = 19040,
+    FOTUFILM_CONFIG_GATE = 18220,
 };
 
 enum {
@@ -360,9 +334,6 @@ enum {
     FOTUFILM_CONFIG_CHROMATIC_FRINGE_RADIUS_COUNT = 1,
     FOTUFILM_CONFIG_RECORD_INPUT_COUNT = 1,
     FOTUFILM_CONFIG_GRAIN_REVERSAL_PROFILE_COUNT = 2,
-    FOTUFILM_CONFIG_CRYSTAL_GRAIN_BIN_COUNT = 48,
-    FOTUFILM_CONFIG_CRYSTAL_GRAIN_LAMBDA_COUNT = 768,
-    FOTUFILM_CONFIG_CRYSTAL_PRINT_GRAIN_COUNT = 4,
     FOTUFILM_CONFIG_CAMERA_PREFLASH_COUNT = 1,
     FOTUFILM_CONFIG_PRINTER_PREFLASH_COUNT = 1,
     FOTUFILM_CONFIG_BYTE_BASIS_COUNT = 2,
@@ -371,6 +342,6 @@ enum {
     FOTUFILM_CONFIG_GATE_COUNT = 5,
 };
 
-enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 19045 };
+enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18225 };
 
 #endif

@@ -25,7 +25,7 @@ p.add_argument('--exact', action='store_true', help='Require identical bytes ins
 a = p.parse_args()
 allowed = {'stock','plain','pointwise','all','annular','print','viewport','negative','negative-mono'}
 allowed.update('stage-'+s for s in ['mtf','luma','halation','couplers','adjacency','grain',
-                                   'mottle','disc','crystal','print-mtf','diffusion','flare','donor'])
+                                   'mottle','disc','print-mtf','diffusion','flare','donor'])
 if a.cases and any(case not in allowed for case in a.cases): p.error('Unknown case')
 try:
     sizes = [tuple(map(int,size.split('x'))) for size in a.sizes]
