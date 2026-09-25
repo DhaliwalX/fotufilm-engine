@@ -10,6 +10,9 @@ import UniformTypeIdentifiers
 #if canImport(FotufilmCore)
 import FotufilmCore
 #endif
+#if canImport(FotufilmEditModel)
+import FotufilmEditModel
+#endif
 
 @MainActor
 @Observable
@@ -71,6 +74,8 @@ final class EditLibrary {
         var isVideo = false
         /// A photograph whose original is the library asset's rather than a copy kept here.
         var linksOriginal = false
+        /// A scanned negative's conversion, for an entry whose original is the scan.
+        var scan: NegativeScanRecipe?
 
         var directory: URL { EditLibrary.root.appendingPathComponent(id) }
         var thumbnailURL: URL {
@@ -98,6 +103,8 @@ final class EditLibrary {
         var isVideo: Bool?
         /// The original is the library asset's; no copy is kept beside the record.
         var linksOriginal: Bool?
+        /// The original is a scanned negative, converted by this recipe rather than `edit`.
+        var scan: NegativeScanRecipe?
     }
 
     /// Where an entry's original lives.
@@ -183,7 +190,8 @@ final class EditLibrary {
                              thumbStamp: stamp ?? record.modified,
                              stockID: record.edit.stockID,
                              isVideo: record.isVideo ?? false,
-                             linksOriginal: record.linksOriginal ?? false)
+                             linksOriginal: record.linksOriginal ?? false,
+                             scan: record.scan)
             }
             .sorted { $0.modified > $1.modified }
             return (entries, developed)
@@ -282,7 +290,60 @@ final class EditLibrary {
                             rawTypeHint: entry.rawTypeHint,
                             assetIdentifier: entry.assetIdentifier, edit: edit,
                             isVideo: entry.isVideo ? true : nil,
-                            linksOriginal: entry.linksOriginal ? true : nil)
+                            linksOriginal: entry.linksOriginal ? true : nil,
+                            scan: entry.scan)
+        return await write(record, for: entry, stockName: FilmChoice.name(for: edit.stockID))
+    }
+
+    /// Puts a scanned negative on the shelf: the scan's bytes and the recipe that converts it.
+    func create(scan original: Data, rawTypeHint: String?,
+                recipe: NegativeScanRecipe) async -> String? {
+        var edit = EditState()
+        edit.stockID = Self.stockID(of: recipe)
+        guard let id = await create(original: original, rawTypeHint: rawTypeHint, edit: edit),
+              let index = entries.firstIndex(where: { $0.id == id }) else { return nil }
+        entries[index].scan = recipe
+        return await save(id: id, scan: recipe) ? id : nil
+    }
+
+    /// Rewrites a scanned negative's recipe.
+    @discardableResult
+    func save(id: String, scan recipe: NegativeScanRecipe) async -> Bool {
+        guard let index = entries.firstIndex(where: { $0.id == id }) else {
+            return false
+        }
+        var entry = entries[index]
+        entry.modified = .now
+        entry.stockID = Self.stockID(of: recipe)
+        entry.scan = recipe
+        var edit = EditState()
+        edit.stockID = entry.stockID
+        let record = Record(created: entry.created, modified: entry.modified,
+                            rawTypeHint: entry.rawTypeHint,
+                            assetIdentifier: entry.assetIdentifier, edit: edit, scan: recipe)
+        return await write(record, for: entry, stockName: "Negative scan")
+    }
+
+    /// The film a scan's entry names: the one it is read as, or none for an automatic conversion.
+    private static func stockID(of recipe: NegativeScanRecipe) -> String {
+        recipe.conversion == .film ? recipe.stockID : StockPreset.noFilmID
+    }
+
+    /// A scanned negative's bytes and recipe, for reopening it.
+    func loadScan(id: String) async -> (original: Data, rawTypeHint: String?,
+                                        recipe: NegativeScanRecipe)? {
+        let dir = Self.root.appendingPathComponent(id)
+        return await Task.detached(priority: .userInitiated) {
+            guard let record = Self.readRecord(in: dir), let recipe = record.scan,
+                  let data = try? Data(contentsOf: dir.appendingPathComponent(Self.originalName))
+            else { return nil }
+            return (data, record.rawTypeHint, recipe)
+        }.value
+    }
+
+    /// Queues a record behind earlier saves and, once written, moves its entry to the front.
+    private func write(_ record: Record, for entry: Entry, stockName: String) async -> Bool {
+        let id = entry.id
         guard let data = try? Self.encode(record) else { return false }
         nextRecordRevision &+= 1
         let revision = nextRecordRevision
@@ -308,7 +369,7 @@ final class EditLibrary {
         entries.remove(at: currentIndex)
         entries.insert(entry, at: 0)
         SpotlightIndex.index(id: entry.id,
-                             stockName: FilmChoice.name(for: edit.stockID),
+                             stockName: stockName,
                              modified: entry.modified,
                              thumbnailURL: entry.thumbnailURL)
         publishRecents()
