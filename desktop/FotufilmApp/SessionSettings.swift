@@ -23,6 +23,9 @@ final class SettingsSheetController: SessionViewController {
     private let column = ScrollColumn(inset: 0, pad: 4, bottom: 8)
     private var rows: [FormRowView] = []
     private var sink: AnyCancellable?
+    #if canImport(UIKit)
+    private var proSink: AnyCancellable?
+    #endif
     private var structure = ""
 
     private var settings: AppSettings { .shared }
@@ -102,10 +105,22 @@ final class SettingsSheetController: SessionViewController {
         sink = settings.objectWillChange.sink { [weak self] _ in
             DispatchQueue.main.async { self?.refresh() }
         }
+        #if canImport(UIKit)
+        // `objectWillChange` fires before the store records the change; the hop to the main
+        // queue reads it after.
+        proSink = ProStore.shared.objectWillChange.map { _ in }
+            .merge(with: NotificationCenter.default.publisher(for: .proAccessChanged).map { _ in })
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.refresh() }
+        #endif
     }
 
     private var structureSignature: String {
+        #if canImport(UIKit)
+        "\(AppSettings.isFilmModelAdjusted) \(proState)"
+        #else
         "\(AppSettings.isFilmModelAdjusted)"
+        #endif
     }
 
     private func refresh() {
@@ -140,11 +155,43 @@ final class SettingsSheetController: SessionViewController {
         }
         #else
         var result: [FormSectionView] = []
-        result += [newPhotos()] + output() + filmModel()
+        result += [pro(), newPhotos()] + output() + filmModel()
         result.append(reset())
         return result
         #endif
     }
+
+    #if canImport(UIKit)
+    // MARK: - Pro
+
+    /// Settings is where the purchase always is, as on iPhone: the film list's own button folds
+    /// away with the list on a narrow iPad, and installs outside the App Store hold Pro without
+    /// buying it, so no gate raises the sheet there.
+    private enum ProState { case offered, purchased, subscribed }
+
+    private var proState: ProState {
+        if ProStore.shared.subscribed { return .subscribed }
+        return ProAccess.purchased ? .purchased : .offered
+    }
+
+    private func pro() -> FormSectionView {
+        let section = makeSection("Fotufilm Pro")
+        switch proState {
+        case .offered:
+            section.add(ButtonRow("Upgrade to Fotufilm Pro", symbol: "lock.open") {
+                ProGate.present()
+            })
+        case .purchased:
+            section.add(ValueRow("Fotufilm Pro", value: { "Purchased" }))
+        case .subscribed:
+            section.add(ButtonRow("Manage Subscription") { [weak self] in
+                guard let scene = self?.view.window?.windowScene else { return }
+                Task { try? await ProStore.shared.manageSubscription(in: scene) }
+            })
+        }
+        return section
+    }
+    #endif
 
     // MARK: - New photos
 
