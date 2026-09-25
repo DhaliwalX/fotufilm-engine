@@ -15,25 +15,24 @@ import Foundation
 /// the four sublayers along speed, the crystal counts and the dye per crystal that the sheet's
 /// RMS granularity fixes. Nothing here is fitted per stock.
 ///
-/// **A dye cloud's size follows from its dye and its coupler.** Couplers are dispersed evenly
-/// through a sublayer (Hunt, *The Reproduction of Colour* §18.7: oil globules a tenth of the
-/// grain's diameter), so the most dye any point of the sublayer can form is its coupler
-/// capacity — the sublayer's pool, which is also what a fully developed sublayer reaches. The
-/// oxidised developer a developed crystal releases spreads as a Gaussian demand and forms dye up
-/// to that capacity, `C (1 - exp(-demand / C))`, summed with every other cloud of the sublayer
-/// before it saturates: clouds are dense and flat-topped where they formed, and merge where they
-/// meet. The cloud's width is solved so that its dye, read as a densitometer reads it, is the
-/// dye per crystal the sheet implies. Silver is the same construction with an opaque grain,
-/// `silverGrainDensity`, in place of the coupler capacity — which makes the grain's projected
-/// area Nutting's `D = 0.434 n a` read backwards from the sheet.
+/// **A dye cloud spreads as Jarvis measured it.** Couplers are dispersed evenly through a
+/// sublayer (Hunt, *The Reproduction of Colour* §18.7: oil globules a tenth of the grain's
+/// diameter), so the most dye any point of the sublayer can form is its coupler capacity — the
+/// sublayer's pool, which is also what a fully developed sublayer reaches. The oxidised developer
+/// a developed crystal releases spreads as the dye cloud Jarvis measured on C-41 coatings,
+/// `exp(-r / k)` with decay length `dyeCloudDecayMM` (J. Photogr. Sci. 40:105, 1992), and forms
+/// dye up to that capacity, `C (1 - exp(-demand / C))`, summed with every other cloud of the
+/// sublayer before it saturates: clouds merge where they meet, and a crystal whose demand passes
+/// the capacity grows a flat top wider than the decay length. The sheet fixes how much dye a
+/// crystal forms; the coupler, not the dye, fixes how far it spreads, so the dye per crystal sets
+/// the cloud's peak demand at the measured width.
 ///
-/// **No cloud is narrower than its crystal.** Where the sheet's dye per crystal would make a cloud
-/// narrower than `dyeCloudSpread` times its crystal — a silver grain narrower than the crystal
-/// itself — the cloud keeps that width and its demand stays below saturation instead, so it forms
-/// the same dye fainter: the sheet fixes how much dye a crystal forms, not how it is spread, and a
-/// cloud cannot be smaller than what formed it. The sublayer's capacity is unchanged, so where
-/// clouds overlap they still fill it.
-/// Crystal widths follow the population's size ladder down from `fastestCrystalMM`.
+/// **A silver grain follows from its dye.** Silver is the same construction with an opaque grain,
+/// `silverGrainDensity`, in place of the coupler capacity and a flat-topped Gaussian in place of
+/// the cloud, its width solved so that its density-area is the sheet's — which makes the grain's
+/// projected area Nutting's `D = 0.434 n a` read backwards from the sheet. No grain is narrower
+/// than its crystal, whose width follows the population's size ladder down from
+/// `fastestCrystalMM`; one that would be keeps the crystal's width and forms its silver fainter.
 ///
 /// **Pixels average light.** Density adds through the depth of the film at one point; across an
 /// area it is the transmittance that averages. Each output pixel is sampled on a sub-grid at
@@ -52,20 +51,29 @@ import Foundation
 /// The model runs on the CPU at the density seam (`developNegative` then `printPositive`) and is
 /// a reference: its cost grows with the film area over the square of the sample spacing.
 public struct FilmGrain: Sendable {
-    /// Peak oxidised-developer demand of a dye cloud over its sublayer's coupler capacity: how
-    /// far past saturation the cloud's centre is, which sets how flat its top is and how soft its
-    /// rim. Not measured; a stance.
-    public static let dyeCloudEdge: Float = 4
-    /// The same for a developed silver grain, whose edge is the crystal's own.
+    /// Decay length `k` of a dye cloud's point spread `exp(-r / k) / (2π k²)`, mm, whose transfer
+    /// function is `[1 + (2π k f)²]^(-3/2)` (Jarvis, J. Photogr. Sci. 40:105, 1992, Eqs. 2 and 4).
+    /// Jarvis measured k = 0.76, 1.07, 1.37 and 1.45 µm on C-41 coatings of 0.8, 0.5, 0.2 and
+    /// 0.1 g/m² cyan coupler: the less coupler, the further oxidised developer travels before it
+    /// couples. 1.45 µm is the value Jarvis (J. Photogr. Sci. 43:136, 1995) calls typical of a
+    /// coupler-starved commercial colour-negative layer; noise spectra of C-41 coatings give
+    /// clouds 4–6 µm across (Graves & Saunders, J. Photogr. Sci. 33:145, 1985), about 3k.
+    public static let dyeCloudDecayMM: Float = 0.00145
+    /// Jarvis's cloud `exp(-ρ)`, ρ = r / k, as four Gaussians `weight · exp(-ρ² / 2σ²)`, so a
+    /// sublayer's clouds lay as four separable blurs of its crystals: fitted to the transfer
+    /// function to 9 % wherever it is above 10⁻³ and to the profile to 0.03 of its peak, with
+    /// `Σ weight σ² = 1` so each cloud carries its dye exactly.
+    static let dyeCloudTerms: [(sigma: Float, weight: Float)] = [
+        (0.1162, 0.1096), (0.3089, 0.2167), (0.7469, 0.4030), (1.732, 0.2510),
+    ]
+    /// Peak demand of a developed silver grain over its local density: how far past saturation
+    /// its centre is, which sets how flat its top is and how hard its rim. Not measured; a stance.
     public static let silverGrainEdge: Float = 12
     /// Local density of a developed silver grain: transmits one percent. Not measured; a stance.
     public static let silverGrainDensity: Float = 2
     /// Width of a record's fastest crystals, mm; slower classes follow the size ladder. Not
     /// measured; a stance near the 1–2 µm tabular crystals of fast negative emulsions.
     public static let fastestCrystalMM: Float = 0.0012
-    /// Narrowest dye cloud as a multiple of its crystal's width: oxidised developer spreads past
-    /// the crystal before it couples. Not measured; a stance.
-    public static let dyeCloudSpread: Float = 2
     /// Finest sub-pixel sample spacing, mm.
     public static let finestSampleMM: Float = 0.00035
     /// Most sub-samples per pixel side.
@@ -84,19 +92,48 @@ public struct FilmGrain: Sendable {
     /// the mean by a few thousandths.
     static let biasPatchMM: Float = 0.16
 
+    /// How a developed crystal's demand spreads over the film.
+    public enum Profile: UInt32, Sendable {
+        /// A silver grain: a Gaussian of sigma `sigmaMM`, flat-topped by its edge.
+        case silverGrain = 0
+        /// A dye cloud: Jarvis's `exp(-r / k)` with `k` = `sigmaMM`, laid as `dyeCloudTerms`.
+        case dyeCloud = 1
+
+        /// The profile at radius `ρ` in units of its length, 1 at the centre.
+        func value(_ rho: Double) -> Double {
+            switch self {
+            case .silverGrain:
+                return exp(-rho * rho / 2)
+            case .dyeCloud:
+                return FilmGrain.dyeCloudTerms.reduce(0) {
+                    let s = Double($1.sigma)
+                    return $0 + Double($1.weight) * exp(-rho * rho / (2 * s * s))
+                }
+            }
+        }
+
+        /// Radius past which a profile of centre `peak` lays less than 10⁻⁷, in its length.
+        func reach(peak: Double) -> Double {
+            let widest = self == .silverGrain ? 1.0 : Double(FilmGrain.dyeCloudTerms.last!.sigma)
+            return widest * (2 * log(max(peak * 8, 1) / 1e-7)).squareRoot()
+        }
+    }
+
     /// One coated sublayer of a record, as this model lays it.
     public struct Sublayer: Sendable {
         /// Crystals coated per mm².
         public var coatedPerMM2: Float
-        /// Gaussian sigma of the demand one developed crystal of mark 1 releases, mm.
+        /// Length of the demand one developed crystal releases, mm: a silver grain's Gaussian
+        /// sigma, a dye cloud's decay length.
         public var sigmaMM: Float
         /// Peak demand of a mark-1 crystal, density.
         public var peakDemand: Float
         /// Most density a point of the sublayer can form.
         public var capacity: Float
-        /// Peak demand over capacity of a cloud free to take its own width.
+        /// Peak demand over capacity of a silver grain free to take its own width; a dye cloud,
+        /// held at its measured width, takes whatever peak its dye needs.
         public var edge: Float
-        /// Narrowest demand sigma a cloud of this sublayer may take, mm.
+        /// Narrowest length a crystal's demand of this sublayer may take, mm.
         public var smallestSigmaMM: Float
         /// Dye one mark-1 crystal forms as a densitometer reads it, density × mm².
         public var dyePerCloudMM2: Float
@@ -108,9 +145,12 @@ public struct FilmGrain: Sendable {
         /// `λ` developed crystals per mm², `exp(-λ J)` is the expected `exp(-demand / C)` of the
         /// Poisson field (Campbell), so the sublayer's mean dye is `C (1 - exp(-λ J))` exactly.
         public var voidIntegralMM2: Float
+        /// How its crystals' demand spreads.
+        public var profile: Profile
 
-        init(coatedPerMM2: Float, capacity: Float, edge: Float, smallestSigmaMM: Float,
-             dyePerCloudMM2: Float, cellMM: Float, forming: [Float]) {
+        init(profile: Profile, coatedPerMM2: Float, capacity: Float, edge: Float,
+             smallestSigmaMM: Float, dyePerCloudMM2: Float, cellMM: Float, forming: [Float]) {
+            self.profile = profile
             self.coatedPerMM2 = coatedPerMM2
             self.capacity = capacity
             self.edge = edge
@@ -125,9 +165,10 @@ public struct FilmGrain: Sendable {
         }
 
         /// Restores an already solved population without re-running its numerical fit.
-        init(coatedPerMM2: Float, sigmaMM: Float, peakDemand: Float, capacity: Float,
-             edge: Float, smallestSigmaMM: Float, dyePerCloudMM2: Float, cellMM: Float,
-             forming: [Float], voidIntegralMM2: Float) {
+        init(profile: Profile, coatedPerMM2: Float, sigmaMM: Float, peakDemand: Float,
+             capacity: Float, edge: Float, smallestSigmaMM: Float, dyePerCloudMM2: Float,
+             cellMM: Float, forming: [Float], voidIntegralMM2: Float) {
+            self.profile = profile
             self.coatedPerMM2 = coatedPerMM2
             self.sigmaMM = sigmaMM
             self.peakDemand = peakDemand
@@ -140,21 +181,25 @@ public struct FilmGrain: Sendable {
             self.voidIntegralMM2 = voidIntegralMM2
         }
 
-        /// Sets the cloud from its dye: as wide as its edge makes it, or held at its narrowest
-        /// width with its peak demand lowered until it forms that dye.
+        /// Sets the demand from its dye. A silver grain is as wide as its edge makes it, or held
+        /// at its crystal's width with its peak lowered until it forms that density-area; a dye
+        /// cloud keeps its measured decay length and takes the peak its dye needs.
         mutating func shape() {
             var peak = edge
-            let free = (dyePerCloudMM2 / FilmGrain.unitCloudDye(capacity: capacity, edge: edge))
-                .squareRoot()
+            let free = profile == .silverGrain
+                ? (dyePerCloudMM2 / FilmGrain.unitCloudDye(capacity: capacity, edge: edge,
+                                                           profile: profile)).squareRoot()
+                : 0
             if free >= smallestSigmaMM {
                 sigmaMM = free
             } else {
                 sigmaMM = smallestSigmaMM
                 let wanted = dyePerCloudMM2 / (smallestSigmaMM * smallestSigmaMM)
-                var low = log(edge * 1e-5), high = log(edge)
+                var low = profile == .silverGrain ? log(edge * 1e-5) : log(Float(1e-6))
+                var high = profile == .silverGrain ? log(edge) : log(Float(1e4))
                 for _ in 0..<40 {
                     let mid = (low + high) / 2
-                    if FilmGrain.unitCloudDye(capacity: capacity, edge: exp(mid)) < wanted {
+                    if FilmGrain.unitCloudDye(capacity: capacity, edge: exp(mid), profile: profile) < wanted {
                         low = mid
                     } else {
                         high = mid
@@ -163,15 +208,20 @@ public struct FilmGrain: Sendable {
                 peak = exp((low + high) / 2)
             }
             peakDemand = peak * capacity
-            voidIntegralMM2 = sigmaMM * sigmaMM * FilmGrain.unitVoidIntegral(edge: peak)
+            voidIntegralMM2 = sigmaMM * sigmaMM * FilmGrain.unitVoidIntegral(edge: peak, profile: profile)
         }
 
-        /// Radius at which a mark-1 cloud has formed half its capacity, mm.
+        /// Radius at which a mark-1 crystal has formed half its capacity, mm.
         public var halfCapacityRadiusMM: Float {
-            let formed = -log(0.5) // demand = C ln 2 gives C/2
-            let ratio = peakDemand / max(capacity, 1e-6)
-            guard ratio > Float(formed) else { return 0 }
-            return sigmaMM * (2 * log(ratio / Float(formed))).squareRoot()
+            let formed = Double(M_LN2) // demand = C ln 2 gives C/2
+            let ratio = Double(peakDemand / max(capacity, 1e-6))
+            guard ratio > formed else { return 0 }
+            var low = 0.0, high = profile.reach(peak: ratio)
+            for _ in 0..<50 {
+                let mid = (low + high) / 2
+                if ratio * profile.value(mid) > formed { low = mid } else { high = mid }
+            }
+            return sigmaMM * Float((low + high) / 2)
         }
     }
 
@@ -229,15 +279,18 @@ public struct FilmGrain: Sendable {
             let fastest = model.bins.first { $0.cloudRadiusMM > 0 }?.cloudRadiusMM ?? 1
             for (b, bin) in model.bins.enumerated()
             where bin.crystalsPerMM2 > 0 && bin.dyePerCloud > 0 {
-                let edge = silver ? Self.silverGrainEdge : Self.dyeCloudEdge
-                // The crystal's width on the ladder, and the narrowest cloud it forms, as the
-                // width at half capacity of a demand Gaussian: 2σ √(2 ln(edge / ln 2)).
-                let crystal = Self.fastestCrystalMM * bin.cloudRadiusMM / fastest
-                let narrowest = crystal * (silver ? 1 : Self.dyeCloudSpread)
-                let smallestSigma = narrowest / (2 * (2 * log(edge / Float(M_LN2))).squareRoot())
+                // A silver grain is no narrower than its crystal on the ladder, taken as the
+                // width at half capacity of its Gaussian: 2σ √(2 ln(edge / ln 2)). A dye cloud
+                // spreads over its measured decay length.
+                let edge: Float = silver ? Self.silverGrainEdge : 1
+                let smallestSigma = silver
+                    ? Self.fastestCrystalMM * bin.cloudRadiusMM / fastest
+                        / (2 * (2 * log(edge / Float(M_LN2))).squareRoot())
+                    : Self.dyeCloudDecayMM
                 // About eight coated crystals per cell keeps the Poisson draw short.
                 let cell = min(max((8 / bin.crystalsPerMM2).squareRoot(), 0.00025), 0.004)
-                sublayers.append(Sublayer(coatedPerMM2: bin.crystalsPerMM2,
+                sublayers.append(Sublayer(profile: silver ? .silverGrain : .dyeCloud,
+                                          coatedPerMM2: bin.crystalsPerMM2,
                                           capacity: silver ? Self.silverGrainDensity : max(bin.pool, 0.05),
                                           edge: edge, smallestSigmaMM: smallestSigma,
                                           dyePerCloudMM2: bin.dyePerCloud, cellMM: cell,
@@ -353,47 +406,59 @@ public struct FilmGrain: Sendable {
         return sigma
     }
 
-    /// Dye one cloud of unit demand sigma forms as a densitometer reads it — the small-signal
+    /// Dye one crystal of unit demand length forms as a densitometer reads it — the small-signal
     /// density-area `0.434 ∫ (1 - 10^-dye)` — averaged over the crystals' gamma marks.
-    static func unitCloudDye(capacity: Float, edge: Float) -> Float {
+    static func unitCloudDye(capacity: Float, edge: Float, profile: Profile) -> Float {
         let shape = Double(markShape)
         // Marks at the gamma's quantile midpoints: deterministic and smooth enough.
         let quantiles = 24
+        let marks = (0..<quantiles).map {
+            gammaQuantile((Double($0) + 0.5) / Double(quantiles), shape: shape) / shape
+        }
+        let steps = 800
+        let top = profile.reach(peak: Double(edge) * (marks.last ?? 1))
+        let dr = top / Double(steps)
+        let radii = (0..<steps).map { (Double($0) + 0.5) * dr }
+        let values = radii.map { profile.value($0) }
         var total = 0.0
-        for q in 0..<quantiles {
-            let p = (Double(q) + 0.5) / Double(quantiles)
-            let mark = gammaQuantile(p, shape: shape) / shape
+        for mark in marks {
             let peak = Double(edge) * mark
             var area = 0.0
-            let steps = 400
-            let top = 8.0
             for i in 0..<steps {
-                let rho = (Double(i) + 0.5) * top / Double(steps)
-                let demand = peak * exp(-rho * rho / 2)
-                let dye = Double(capacity) * (1 - exp(-demand))
-                area += (1 - pow(10, -dye)) * rho * (top / Double(steps))
+                let dye = Double(capacity) * (1 - exp(-peak * values[i]))
+                area += (1 - pow(10, -dye)) * radii[i] * dr
             }
             total += 0.4342944819 * 2 * Double.pi * area
         }
         return Float(total / Double(quantiles))
     }
 
-    /// `E_mark ∫ (1 - exp(-edge · mark · e^{-ρ²/2})) d²ρ` for a unit demand sigma.
-    static func unitVoidIntegral(edge: Float) -> Float {
+    /// `E_mark ∫ (1 - exp(-edge · mark · profile(ρ))) d²ρ` for a unit demand length.
+    static func unitVoidIntegral(edge: Float, profile: Profile) -> Float {
         let shape = Double(markShape)
         let quantiles = 24
         var total = 0.0
         for q in 0..<quantiles {
             let mark = gammaQuantile((Double(q) + 0.5) / Double(quantiles), shape: shape) / shape
-            total += Double(occupiedArea(peak: edge * Float(mark)))
+            total += Double(occupiedArea(peak: edge * Float(mark), profile: profile))
         }
         return Float(total / Double(quantiles))
     }
 
-    /// `∫ (1 - exp(-peak · e^{-ρ²/2})) d²ρ` in closed form, `2π Ein(peak)`: the share of the
-    /// capacity a cloud of unit demand sigma fills, as an area.
-    static func occupiedArea(peak: Float) -> Float {
+    /// `∫ (1 - exp(-peak · profile(ρ))) d²ρ`: the share of the capacity a crystal of unit demand
+    /// length fills, as an area. For the Gaussian it is `2π Ein(peak)` in closed form.
+    static func occupiedArea(peak: Float, profile: Profile) -> Float {
         let p = Double(max(peak, 0))
+        guard profile == .silverGrain else {
+            let steps = 800
+            let dr = profile.reach(peak: p) / Double(steps)
+            var area = 0.0
+            for i in 0..<steps {
+                let rho = (Double(i) + 0.5) * dr
+                area += (1 - exp(-p * profile.value(rho))) * rho * dr
+            }
+            return Float(2 * Double.pi * area)
+        }
         var ein: Double
         if p < 6 {
             // Ein(p) = Σ (-1)^{k+1} p^k / (k · k!)
@@ -653,7 +718,16 @@ public struct FilmGrain: Sendable {
             // Between the two it lays both, weighted, so that a cloud growing through the
             // sample size changes the film smoothly: the anchor scales clouds through it.
             let resolvedShare = min(max((sigma / h - 0.5) / 1.5, 0), 1)
-            let reach = resolvedShare > 0 ? 4.2 * sigma : 3 * sigma + h
+            // A dye cloud's demand adds before it saturates, so a sublayer's clouds are one
+            // field: each developed crystal leaves its peak demand at its place, on a grid
+            // `margin` samples wider than the tile, which the profile's terms then blur.
+            let dye = layer.profile == .dyeCloud
+            let margin = dye
+                ? Int((3.5 * Self.dyeCloudTerms.last!.sigma * sigma / h).rounded(.up)) + 1 : 0
+            let gw = sw + 2 * margin, gh = sh + 2 * margin
+            var deposits = [Float](repeating: 0, count: dye ? gw * gh : 0)
+            let reach = dye ? Float(margin) * h
+                : resolvedShare > 0 ? 4.2 * sigma : 3 * sigma + h
             // A periodic film repeats its crystals every `periodMM`, so its cells must divide it.
             let periodCells = periodMM.map { max(Int(($0 / layer.cellMM).rounded()), 1) }
             let cell = periodMM.map { $0 / Float(periodCells!) } ?? layer.cellMM
@@ -690,6 +764,23 @@ public struct FilmGrain: Sendable {
                         let fraction = layer.forming[ti] * (1 - tf) + layer.forming[ti + 1] * tf
                         guard develop < fraction else { continue }
                         let lx = (px - fx0) / h, ly = (py - fy0) / h   // in sample units, edges at integers
+                        if dye {
+                            // Shared between the four grid samples around it, by distance.
+                            let u = lx - 0.5 + Float(margin), v = ly - 0.5 + Float(margin)
+                            let i0 = Int(u.rounded(.down)), j0 = Int(v.rounded(.down))
+                            let au = u - Float(i0), av = v - Float(j0)
+                            let amount = edge * mark
+                            for (dj, wy) in [(0, 1 - av), (1, av)] {
+                                let j = j0 + dj
+                                guard j >= 0, j < gh else { continue }
+                                for (di, wx) in [(0, 1 - au), (1, au)] {
+                                    let i = i0 + di
+                                    guard i >= 0, i < gw else { continue }
+                                    deposits[j * gw + i] += amount * wx * wy
+                                }
+                            }
+                            continue
+                        }
                         if resolvedShare > 0 {
                             let span = reach / h
                             let ix0 = max(Int((lx - span).rounded(.down)), 0)
@@ -712,7 +803,7 @@ public struct FilmGrain: Sendable {
                         }
                         if resolvedShare < 1 {
                             let covering = 1 - resolvedShare
-                            let side = sigma * Self.occupiedArea(peak: edge * mark).squareRoot() / h
+                            let side = sigma * Self.occupiedArea(peak: edge * mark, profile: layer.profile).squareRoot() / h
                             let left = lx - side / 2, right = lx + side / 2
                             let top = ly - side / 2, bottom = ly + side / 2
                             let ix0 = max(Int(left.rounded(.down)), 0), ix1 = min(Int(right.rounded(.down)), sw - 1)
@@ -728,6 +819,35 @@ public struct FilmGrain: Sendable {
                                     logUncovered[base + i] += log(max(1 - covering * ox * oy, 1e-6))
                                 }
                             }
+                        }
+                    }
+                }
+            }
+            if dye {
+                // Each term is a normalised Gaussian of `term.sigma` decay lengths; its weight
+                // times 2π s² turns the crystal's peak into the mass that blur spreads.
+                var across = [Float](repeating: 0, count: gh * sw)
+                for term in Self.dyeCloudTerms {
+                    let s = term.sigma * sigma / h
+                    let radius = max(Int((3.5 * s).rounded(.up)), 1)
+                    var kernel = (-radius...radius).map { exp(-Float($0 * $0) / (2 * s * s)) }
+                    let total = kernel.reduce(0, +)
+                    kernel = kernel.map { $0 / total }
+                    let scale = term.weight * 2 * Float.pi * s * s
+                    for j in 0..<gh {
+                        let row = j * gw + margin - radius
+                        for i in 0..<sw {
+                            var sum: Float = 0
+                            for t in 0..<kernel.count { sum += kernel[t] * deposits[row + i + t] }
+                            across[j * sw + i] = sum
+                        }
+                    }
+                    for j in 0..<sh {
+                        let top = j + margin - radius
+                        for i in 0..<sw {
+                            var sum: Float = 0
+                            for t in 0..<kernel.count { sum += kernel[t] * across[(top + t) * sw + i] }
+                            demand[j * sw + i] += scale * sum
                         }
                     }
                 }

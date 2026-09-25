@@ -280,7 +280,10 @@ extension FilmGrain {
     /// microdensitometer reads it. The grain is far smaller than the aperture, so the aperture's
     /// light variance is the field's noise power at zero frequency over the aperture's area — the
     /// autocovariance summed over every lag it reaches, which every texel of the tile informs —
-    /// and the density's is that over the light's mean, by `ln 10`.
+    /// and the density's is that over the light's mean, by `ln 10`. Frames lay the tile in blocks
+    /// at independent offsets, so two points a lag apart share a block, and their covariance,
+    /// only for `(1 - |dx| / B)(1 - |dy| / B)` of the pairs: each lag counts that share, and the
+    /// anchor reads the grain as the frames lay it.
     static func tileSigma48(_ light: [Float]) -> Float {
         let n = tileSide
         var total = 0.0
@@ -303,8 +306,15 @@ extension FilmGrain {
                 sums.values[rowIndex * lagSide + dx + reach] = c / Double(n * n)
             }
         }
+        let block = Double((tileBlockMM / tileTexelMM).rounded())
         var power = 0.0
-        for value in sums.values { power += value }
+        for rowIndex in 0..<lagSide {
+            for column in 0..<lagSide {
+                let shared = (1 - Double(abs(rowIndex - reach)) / block)
+                    * (1 - Double(abs(column - reach)) / block)
+                power += sums.values[rowIndex * lagSide + column] * shared
+            }
+        }
         let radius = Double(FilmStock.granularityApertureRadiusMM / tileTexelMM)
         let lightVariance = max(power, 0) / (Double.pi * radius * radius)
         return Float(lightVariance.squareRoot() / (mean * 2.302_585_093))

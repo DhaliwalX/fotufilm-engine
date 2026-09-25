@@ -57,6 +57,7 @@ final class FilmGrainPreparationTests: XCTestCase {
         let mean = total / Double(n * n)
         let d = light.map { Double($0) - mean }
         let reach = 16
+        let block = Double((FilmGrain.tileBlockMM / FilmGrain.tileTexelMM).rounded())
         var power = 0.0
         for dy in -reach...reach {
             for dx in -reach...reach {
@@ -66,6 +67,7 @@ final class FilmGrainPreparationTests: XCTestCase {
                     for x in 0..<n { c += d[row + x] * d[other + (x + dx + n) % n] }
                 }
                 power += c / Double(n * n)
+                    * (1 - Double(abs(dy)) / block) * (1 - Double(abs(dx)) / block)
             }
         }
         let radius = Double(FilmStock.granularityApertureRadiusMM / FilmGrain.tileTexelMM)
