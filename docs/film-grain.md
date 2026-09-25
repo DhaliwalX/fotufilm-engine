@@ -53,9 +53,11 @@ the CPU and Metal roads at the cost of the standard grain.
   Each level is kept as the running sum of its transmittance less its mean (a summed-area
   table), so the light through any rectangle of film is four lookups, exact at any pitch.
   A sublayer's dye clouds are its developed crystals blurred by the cloud's four Gaussian
-  terms, the two widest on a grid four and two samples coarser. Solving a colour stock's
-  population and rendering its tiles takes about 1 s on an M4 Pro (Portra 400 1.0 s, Provia
-  100F 0.85 s), once per stock. The frame's grain amount scales the grain in the kernel, so
+  terms, the two widest on a grid four and two samples coarser. The tiles are built on the GPU
+  in Metal wherever it runs — each cell's crystals drawn once, every level laid in one pass —
+  and by a Halide CPU builder or the Swift reference elsewhere; all three lay the same film.
+  Solving a colour stock's population and building its tiles takes about 0.17 s on an M4 Pro
+  in Metal (0.8 s in Halide on the CPU, 1.1 s in Swift), once per stock. The frame's grain amount scales the grain in the kernel, so
   moving the slider rebuilds nothing.
 - **Blocks.** The frame is cut into 64 µm blocks. Each takes the tile at its own hashed offset,
   inside one period so no read wraps, and one of the eight flips and turns of the square, per
@@ -102,6 +104,7 @@ Hosts offer these while the grain model is Film.
 | Tiles against the full render at 1 µm | pixel σ 0.97–1.01 of it, same neighbour correlation, similar skew |
 | Resolution | a 0.25 µm render averaged back to 1 µm correlates above 0.9 with the 1 µm render |
 | Halide against Swift | within 0.002 D per pixel, with every control above moved |
+| Tile builders (Metal, Halide) against the Swift reference | correlation above 0.9999, within 0.002 D per texel |
 
 On an M4 Pro, a 1080p frame takes 19 ms on the Metal preview road (Standard: 16 ms), 31 ms
 on the Metal still road and 93 ms on the CPU. At 24 MP it matches the standard grain on

@@ -747,7 +747,7 @@ public struct FilmGrain: Sendable {
             // A periodic film repeats its crystals every `periodMM`, so its cells must divide it.
             let periodCells = periodMM.map { max(Int(($0 / layer.cellMM).rounded()), 1) }
             let cell = periodMM.map { $0 / Float(periodCells!) } ?? layer.cellMM
-            let meanPerCell = layer.coatedPerMM2 * cell * cell
+            let thresholds = FilmRandom.countThresholds(mean: layer.coatedPerMM2 * cell * cell)
             let cx0 = Int(((fx0 - reach) / cell).rounded(.down))
             let cx1 = Int(((fx0 + Float(sw) * h + reach) / cell).rounded(.down))
             let cy0 = Int(((fy0 - reach) / cell).rounded(.down))
@@ -759,9 +759,9 @@ public struct FilmGrain: Sendable {
                     let hy = periodCells.map { ((cy % $0) + $0) % $0 } ?? cy
                     // The count takes a stream of its own, so the crystals' draws do not move
                     // with it.
-                    var counter = FilmRandom(seed: seed ^ 0xC0DE_C0DE_C0DE_C0DE, record: recordIndex,
-                                             sublayer: b, x: hx, y: hy)
-                    let count = counter.poisson(meanPerCell)
+                    var counter = FilmRandom(seed: seed, record: recordIndex, sublayer: b, stream: 1,
+                                             x: hx, y: hy)
+                    let count = FilmRandom.count(counter.uniform(), thresholds)
                     var rng = FilmRandom(seed: seed, record: recordIndex, sublayer: b, x: hx, y: hy)
                     for _ in 0..<count {
                         // Every crystal draws the same numbers whether or not it develops, so the
@@ -965,6 +965,14 @@ extension FilmGrain {
         }
     }
 
+    /// Grid factor a periodic tile blurs a term of `sigma` samples at: `layCloudTerm`'s rule, held
+    /// to a divisor of the tile's `samples` so the coarse grid wraps too.
+    static func tileTermFactor(sigma: Float, samples: Int) -> Int {
+        var factor = max(Int(sigma / 1.6), 1)
+        while factor > 1 && samples % factor != 0 { factor -= 1 }
+        return factor
+    }
+
     /// A normalised Gaussian of `sigma` samples, 3.5 sigma either side.
     static func gaussianKernel(sigma: Float) -> [Float] {
         let radius = max(Int((3.5 * sigma).rounded(.up)), 1)
@@ -1021,48 +1029,57 @@ extension FilmGrain {
     }
 }
 
-/// Counter-based draws for one film cell of one sublayer: the same cell always draws the same.
+/// Counter-based draws for one film cell of one sublayer: the same cell always draws the same,
+/// and the `n`th draw is `pcg(key ^ n φ)`, so a GPU thread can take any crystal's draws
+/// directly (`FilmTileBuild.h` computes the same).
 struct FilmRandom {
-    var state: UInt64
+    let key: UInt32
+    private var counter: UInt32 = 0
 
-    init(seed: UInt64, record: Int, sublayer: Int, x: Int, y: Int) {
-        var h = seed ^ 0x9E37_79B9_7F4A_7C15
-        h = Self.mix(h ^ UInt64(bitPattern: Int64(record &* 0x1F1F + sublayer &* 0x2B)))
-        h = Self.mix(h ^ UInt64(bitPattern: Int64(x)))
-        h = Self.mix(h ^ (UInt64(bitPattern: Int64(y)) &* 0xD6E8_FEB8_6659_FD93))
-        state = h
+    /// Stream 0 draws the cell's crystals, stream 1 its count.
+    init(seed: UInt64, record: Int, sublayer: Int, stream: Int = 0, x: Int, y: Int) {
+        let base = Self.seed32(seed)
+            ^ (UInt32(truncatingIfNeeded: record &* 8 &+ sublayer &* 2 &+ stream) &* 0x9E37_79B9)
+        key = pcgHash(UInt32(truncatingIfNeeded: x) ^ pcgHash(UInt32(truncatingIfNeeded: y) ^ pcgHash(base)))
     }
 
-    static func mix(_ value: UInt64) -> UInt64 {
-        var z = value &+ 0x9E37_79B9_7F4A_7C15
-        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
-        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
-        return z ^ (z >> 31)
+    /// The film seed folded to the 32 bits the draws hash.
+    static func seed32(_ seed: UInt64) -> UInt32 {
+        pcgHash(UInt32(truncatingIfNeeded: seed)) ^ UInt32(truncatingIfNeeded: seed >> 32)
     }
 
-    mutating func next() -> UInt64 {
-        state = state &+ 0x9E37_79B9_7F4A_7C15
-        return Self.mix(state)
+    mutating func next() -> UInt32 {
+        let h = pcgHash(key ^ (counter &* 0x9E37_79B9))
+        counter &+= 1
+        return h
     }
 
     /// Uniform in (0, 1).
     mutating func uniform() -> Float {
-        (Float(next() >> 40) + 0.5) * (1 / 16_777_216)
+        (Float(next() >> 8) + 0.5) * (1 / 16_777_216)
     }
 
-    /// Poisson count of mean `mean` from one uniform, by the inverse of its distribution: the
-    /// same draw gives a count that only grows with the mean, so a cell whose mean moves keeps
+    /// Most crystals a cell holds. A cell is sized for about eight, so a Poisson count past this
+    /// is under one in 10¹⁴ at the densest cells a stock lays.
+    static let maxCount = 48
+
+    /// `P(N ≤ k)` of a Poisson count of mean `mean`, k = 0 ..< `maxCount`, as floats: a cell's
+    /// count is how many of them its uniform passes — the inverse of the distribution, so the
+    /// same draw gives a count that only grows with the mean, and a cell whose mean moves keeps
     /// its crystals and gains or loses the last few.
-    mutating func poisson(_ mean: Float) -> Int {
-        guard mean > 0 else { return 0 }
-        let u = Double(uniform())
-        let m = Double(min(mean, 600))
-        var term = exp(-m), total = term, count = 0
-        while u > total && count < 4096 {
-            count += 1
-            term *= m / Double(count)
-            total += term
+    static func countThresholds(mean: Float) -> [Float] {
+        let m = Double(max(mean, 0))
+        var term = exp(-m), total = term
+        return (0..<maxCount).map { k in
+            if k > 0 { term *= m / Double(k); total += term }
+            return Float(min(total, 1))
         }
-        return count
+    }
+
+    /// The count one uniform draws against `thresholds`.
+    static func count(_ u: Float, _ thresholds: [Float]) -> Int {
+        var n = 0
+        for t in thresholds where t < u { n += 1 }
+        return n
     }
 }
