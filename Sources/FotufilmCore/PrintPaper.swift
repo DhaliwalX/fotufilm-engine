@@ -173,7 +173,8 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// Veiling glare between the print and the eye, as a fraction of the
     /// medium's own reference white. The papers are measured at 0/45, which
     /// excludes the first-surface reflection a viewer gets back, so 1/400
-    /// carries their 2.10 D to the 1.98 D a glossy print reads in a booth. A
+    /// carries Ektacolor Edge's 2.30 D green to the 2.12 D a glossy print
+    /// reads in a booth. A
     /// projection port is a darker surround than a room.
     public var viewingFlare: Float {
         switch self {

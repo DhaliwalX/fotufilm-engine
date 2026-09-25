@@ -40,8 +40,8 @@ public struct CharacteristicCurve: Sendable {
     public var dMin: Float
     /// Straight-line slope, ~0.55-0.65 for color negative film. A print's toe
     /// and shoulder overlap, so there is no straight line and this is an
-    /// asymptote it never reaches: the RA-4 paper carries 5.851 and turns over
-    /// at 3.16 D per decade, 2383 carries 6.409 and turns over at 4.09.
+    /// asymptote it never reaches: the RA-4 paper's green carries 8.5 and turns
+    /// over at 3.15 D per decade, 2383 carries 6.409 and turns over at 4.09.
     public var gamma: Float
     /// Log-exposure position of the toe (relative to mid-gray at 0).
     public var toe: Float

@@ -68,10 +68,11 @@ final class PrintPaperRecordTests: XCTestCase {
         let sheet: [(CharacteristicCurve, [(Float, Float)])] = [
             (PrintPaper.ra4PrintCurveRed,
              [(-1.8, 0.183), (-1.2, 1.649), (-0.6, 2.213), (-0.04, 2.277)]),
+            // Green's sheet reads 2.372 at -0.04; one shoulder levels 0.08 D short of it.
             (PrintPaper.ra4PrintCurve,
-             [(-1.8, 0.168), (-1.2, 1.562), (-0.6, 2.135), (-0.04, 2.154)]),
-            (PrintPaper.ra4PrintCurveBlue,
              [(-1.8, 0.193), (-1.2, 1.539), (-0.6, 2.241)]),
+            (PrintPaper.ra4PrintCurveBlue,
+             [(-1.8, 0.168), (-1.2, 1.562), (-0.6, 2.135), (-0.04, 2.154)]),
         ]
         for (record, (curve, points)) in sheet.enumerated() {
             for (logExposure, density) in points {

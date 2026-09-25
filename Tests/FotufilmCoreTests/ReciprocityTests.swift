@@ -212,10 +212,11 @@ final class ReciprocityTests: XCTestCase {
         let freshShadow = printed(stock, stops: -2)
         let metShadow = printed(met, stops: -2)
         XCTAssertGreaterThan(luminance(metShadow) / luminance(freshShadow), 1.1)
-        // And casts them warm: chroma 0.073 → 0.192, red flattest so red lightest.
-        XCTAssertGreaterThan(chroma(metShadow), chroma(freshShadow) + 0.08)
-        XCTAssertGreaterThan(metShadow.x, metShadow.y)
-        XCTAssertGreaterThan(metShadow.y, metShadow.z)
+        // And casts them warm: red flattest, so red lifts most (1.30 against 1.12 and 1.10).
+        // Read against the fresh shadow, so the paper's own shadow cast stays out of it.
+        let lift = metShadow / freshShadow
+        XCTAssertGreaterThan(lift.x, lift.y + 0.1)
+        XCTAssertGreaterThan(lift.y, lift.z)
         // Highlights lean cool: chroma 0.028 → 0.041 at +1.5 stops, b>g>r.
         let freshHigh = printed(stock, stops: 1.5)
         let metHigh = printed(met, stops: 1.5)

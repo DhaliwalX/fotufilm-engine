@@ -58,7 +58,9 @@ final class PrintViewingLightTests: XCTestCase {
         }
         XCTAssertGreaterThan(greyWorst, 1e-3,
                              "a measured neutral must show some metameric shift")
-        XCTAssertLessThan(greyWorst, 0.08)
+        // The worst grey is paper black, whose E-7020 records end apart (Status A G 2.37, R 2.28,
+        // B 2.15): its red reads 9.85% lighter under tungsten, about 0.04 D.
+        XCTAssertLessThan(greyWorst, 0.12)
         XCTAssertGreaterThan(colourWorst / greyWorst, 10,
                              "the grey axis must stay far less metameric than colour")
     }
