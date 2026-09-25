@@ -35,5 +35,5 @@ em++ -O3 web/engine/fotufilm_wasm.cpp \
   --use-port=emdawnwebgpu -sJSPI -sJSPI_EXPORTS=fotufilm_wasm_render,fotufilm_wasm_render_display \
   -sALLOW_MEMORY_GROWTH=1 -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,worker \
   -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,HEAPF32 \
-  -sEXPORTED_FUNCTIONS=_fotufilm_wasm_render,_fotufilm_wasm_render_display,_fotufilm_wasm_control_count,_fotufilm_wasm_control_slot,_fotufilm_wasm_set_slot,_fotufilm_wasm_frame_size_slot,_fotufilm_wasm_set_exposure,_fotufilm_wasm_set_scene,_fotufilm_wasm_set_white_balance,_fotufilm_wasm_set_grain,_fotufilm_wasm_configuration_count,_fotufilm_wasm_lut_count,_fotufilm_wasm_packed_count,_malloc,_free \
+  -sEXPORTED_FUNCTIONS=_fotufilm_wasm_render,_fotufilm_wasm_render_display,_fotufilm_wasm_set_film_tiles,_fotufilm_wasm_control_count,_fotufilm_wasm_control_slot,_fotufilm_wasm_set_slot,_fotufilm_wasm_frame_size_slot,_fotufilm_wasm_set_exposure,_fotufilm_wasm_set_scene,_fotufilm_wasm_set_white_balance,_fotufilm_wasm_set_grain,_fotufilm_wasm_configuration_count,_fotufilm_wasm_lut_count,_fotufilm_wasm_packed_count,_malloc,_free \
   -o web/public/fotufilm-webgpu.mjs

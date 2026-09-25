@@ -145,8 +145,8 @@ export function parsePack(bytes) {
   const exposure = take(lutCount)
   const film = take(lutCount)
   const paper = take(lutCount)
-  // A pack sealed with the film grain model closes with its tiles, their count last. Only the
-  // CPU kernels sample them; WebGPU renders the standard grain.
+  // A pack sealed with the film grain model closes with its tiles, their count last. Both roads
+  // sample them: the CPU kernels on the host, the WebGPU kernels from a device copy.
   let filmTiles
   if (configuration[CONFIG.GRAIN_MODE] === 1) {
     const count = view.getInt32(bytes.byteLength - 4, true)
@@ -712,6 +712,23 @@ class Developer {
     this.plan()
   }
 
+  /// The kernel keeps its own copy of the tiles, so the staging copy is freed straight away.
+  uploadFilmTiles(pack) {
+    const { module } = this
+    const tiles = pack.filmTiles
+    const id = pack.configuration[CONFIG.FILM_TILE + FILM_TILE_ID]
+    if (!tiles) {
+      module.ccall('fotufilm_wasm_set_film_tiles', 'number', ['number', 'number', 'number'], [id, 0, 0])
+      return
+    }
+    const ptr = module._malloc(tiles.length * 4)
+    module.HEAPF32.set(tiles, ptr / 4)
+    const status = module.ccall('fotufilm_wasm_set_film_tiles', 'number',
+      ['number', 'number', 'number'], [id, ptr, tiles.length])
+    module._free(ptr)
+    if (status !== 0) throw new Error(`film grain tiles rejected (${tiles.length} floats)`)
+  }
+
   /// Develops through a different set of tables from here on — a pipeline stage of the same stock,
   /// which shares the slot layout and usually two of the three cubes.
   ///
@@ -1003,6 +1020,7 @@ export class WebgpuDeveloper extends Developer {
     if (this.uploaded.exposure !== pack.exposure) {
       module.HEAPF32.set(pack.exposure, this.exposurePtr / 4)
     }
+    if (this.uploaded.filmTiles !== pack.filmTiles) this.uploadFilmTiles(pack)
   }
 
   allocateFrame(pixels) {
@@ -1142,23 +1160,6 @@ export class SimdDeveloper extends Developer {
         module.HEAPF32.set(pack[name], ptr / 4)
     }
     if (this.uploaded.filmTiles !== pack.filmTiles) this.uploadFilmTiles(pack)
-  }
-
-  /// The kernel keeps its own copy of the tiles, so the staging copy is freed straight away.
-  uploadFilmTiles(pack) {
-    const { module } = this
-    const tiles = pack.filmTiles
-    const id = pack.configuration[CONFIG.FILM_TILE + FILM_TILE_ID]
-    if (!tiles) {
-      module.ccall('fotufilm_wasm_set_film_tiles', 'number', ['number', 'number', 'number'], [id, 0, 0])
-      return
-    }
-    const ptr = module._malloc(tiles.length * 4)
-    module.HEAPF32.set(tiles, ptr / 4)
-    const status = module.ccall('fotufilm_wasm_set_film_tiles', 'number',
-      ['number', 'number', 'number'], [id, ptr, tiles.length])
-    module._free(ptr)
-    if (status !== 0) throw new Error(`film grain tiles rejected (${tiles.length} floats)`)
   }
 
   allocateFrame(pixels) {

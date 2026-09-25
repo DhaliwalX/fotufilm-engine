@@ -11,7 +11,7 @@ public enum GrainModel: String, Sendable, CaseIterable, Codable, Identifiable {
     /// millimetres so every resolution samples the same film, dye clouds sized by their dye over
     /// the coupler capacity that caps them, silver grains opaque, and each pixel the average of
     /// the light through it. Rendered once per stock onto tiles the kernel samples (grain mode 1);
-    /// builds without those tiles — WebGPU — lay `clumpField`.
+    /// a build that has no tiles for the frame lays `clumpField`.
     case film = "film"
 
     public var id: String { rawValue }

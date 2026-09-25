@@ -15,6 +15,7 @@
 
 #include "FotufilmHalide.h"
 #include "../../Sources/FotufilmHalide/FotufilmResolvedFrameParams.h"
+#include "../../Sources/FotufilmHalide/Stages/FilmTileLayout.h"
 #include "color_float.h"
 #include "monochrome_float.h"
 #include "plain_float.h"
@@ -64,6 +65,70 @@ static void init_flat(halide_buffer_t *buffer, halide_dimension_t *dim,
     buffer->type = halide_type_t(halide_type_float, 32);
 }
 
+/// The film grain model's tiles for the stock on screen, as `fotufilm --dump-wasm-pack
+/// --grain-model film` writes them beside the pack: ((side + 1)², levels, 3) floats. One set is
+/// kept, and unlike the per-frame buffers below its device copy outlives the frame: the tiles are
+/// 13 MB that stay the same from frame to frame, so they cross to the GPU once per stock. A frame
+/// whose FILM_TILE block names another id, or none, binds the one-float stand-in. The CPU module
+/// keeps the same pair in fotufilm_wasm_cpu.cpp.
+static const int32_t kFilmTileEntries = (FOTUFILM_FILM_TILE_SIDE + 1) * (FOTUFILM_FILM_TILE_SIDE + 1);
+static const int32_t kFilmTileCount = kFilmTileEntries * FOTUFILM_FILM_TILE_LEVELS * 3;
+
+struct FilmTiles {
+    float *host = nullptr;
+    halide_buffer_t buffer;
+    halide_dimension_t dims[3];
+};
+static FilmTiles film_tiles, film_tiles_stand_in;
+static float film_tiles_stand_in_value = 0.0f;
+static int32_t film_tiles_id = -1;
+
+static void init_film_tiles(FilmTiles &tiles, float *host, bool whole) {
+    memset(&tiles.buffer, 0, sizeof(tiles.buffer));
+    const int32_t extents[3] = {whole ? kFilmTileEntries : 1, whole ? FOTUFILM_FILM_TILE_LEVELS : 1,
+                                whole ? 3 : 1};
+    int32_t stride = 1;
+    for (int d = 0; d < 3; ++d) {
+        tiles.dims[d].min = 0; tiles.dims[d].extent = extents[d];
+        tiles.dims[d].stride = stride; tiles.dims[d].flags = 0;
+        stride *= extents[d];
+    }
+    tiles.host = host;
+    tiles.buffer.host = (uint8_t *)host;
+    tiles.buffer.dim = tiles.dims;
+    tiles.buffer.dimensions = 3;
+    tiles.buffer.type = halide_type_t(halide_type_float, 32);
+    mark_host_dirty(&tiles.buffer);
+}
+
+/// Copies `count` floats as tiles `id`; a null or empty source forgets them. Returns 0 on success.
+EMSCRIPTEN_KEEPALIVE
+int fotufilm_wasm_set_film_tiles(int32_t id, const float *tiles, int32_t count) {
+    if (film_tiles.host) {
+        halide_device_free(nullptr, &film_tiles.buffer);
+        free(film_tiles.host);
+        film_tiles.host = nullptr;
+    }
+    film_tiles_id = -1;
+    if (!tiles || count == 0) return 0;
+    if (count != kFilmTileCount) return -1;
+    float *host = (float *)malloc(size_t(count) * sizeof(float));
+    if (!host) return -1;
+    memcpy(host, tiles, size_t(count) * sizeof(float));
+    init_film_tiles(film_tiles, host, true);
+    film_tiles_id = id;
+    return 0;
+}
+
+/// The tiles buffer a frame binds, and whether it samples them.
+static halide_buffer_t *film_tiles_for(const float *configuration, bool &on) {
+    on = (int32_t)configuration[FOTUFILM_CONFIG_GRAIN_MODE] == 1 && film_tiles.host
+        && (int32_t)configuration[FOTUFILM_CONFIG_FILM_TILE + fotufilm::kFilmTileId] == film_tiles_id;
+    if (on) return &film_tiles.buffer;
+    if (!film_tiles_stand_in.host) init_film_tiles(film_tiles_stand_in, &film_tiles_stand_in_value, false);
+    return &film_tiles_stand_in.buffer;
+}
+
 /// Develops one frame, or one tile of a larger one. `input` and `output` are interleaved linear
 /// RGBA floats, scene-referred in and print-referred out — the sRGB encode belongs to the caller.
 ///
@@ -103,6 +168,8 @@ static int render_frame(float *input, float *output, int32_t width, int32_t heig
     mark_host_dirty(&exposure_buf);
 
     const float *c = configuration;
+    bool film_on = false;
+    halide_buffer_t *film_tiles_buf = film_tiles_for(configuration, film_on);
     const fotufilm::ResolvedFrameParams resolved(configuration, width, height, seed,
         (feature_mask & FOTUFILM_FRAME_REVERSAL) != 0, origin_x, origin_y);
 
@@ -120,7 +187,8 @@ static int render_frame(float *input, float *output, int32_t width, int32_t heig
     resolved.halation_strided_radius_1, resolved.halation_strided_radius_2, \
     resolved.diffusion_stride_0, resolved.diffusion_stride_1, resolved.diffusion_stride_2, \
     resolved.diffusion_strided_radius_0, resolved.diffusion_strided_radius_1, \
-    resolved.diffusion_strided_radius_2, feature_mask, fotufilm_byte_basis(c), &out_buf
+    resolved.diffusion_strided_radius_2, feature_mask, fotufilm_byte_basis(c), film_tiles_buf, film_on ? 1 : 0, \
+    &out_buf
 
     int status;
     if (feature_mask & FOTUFILM_FRAME_NO_FILM) {
