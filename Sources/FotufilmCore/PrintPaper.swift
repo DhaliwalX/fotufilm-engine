@@ -170,20 +170,6 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         return media + [.screen]
     }
 
-    /// Veiling glare between the print and the eye, as a fraction of the
-    /// medium's own reference white. The papers are measured at 0/45, which
-    /// excludes the first-surface reflection a viewer gets back, so 1/400
-    /// carries Ektacolor Edge's 2.30 D green to the 2.12 D a glossy print
-    /// reads in a booth. A
-    /// projection port is a darker surround than a room.
-    public var viewingFlare: Float {
-        switch self {
-        case .vision2383, .vision2393, .eternaCP: return 1.0 / 2000.0
-        case .ektacolorEdge, .enduraPremier, .crystalArchive, .ilfochromeCPS1K, .ilfochromeCLM1K: return 1.0 / 400.0
-        case .labScan, .telecine, .screen, .negative: return 0
-        }
-    }
-
     /// Whether this finished positive is projected rather than held: a transparency on a screen
     /// in a dark room, not a sheet under a room's light.
     ///
@@ -282,19 +268,16 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// has no print exposure to correct. Digital Reference preserves individual channel contrast.
     public var acceptsPrintCorrection: Bool { self != .screen && !isNegative && !isPositivePaper }
 
-    /// Nominal visual mid-grey, relative to clear white and after viewing flare, used by
+    /// Nominal visual mid-grey, relative to clear white, used by
     /// reflection/digital outputs and the single-record monochrome convention. Colour cine
     /// prints are placed at their published gross Status A LAD aims by `printExposureMidpoints`;
     /// those aims are not three equal densities above base or a forced 10% RGB value.
     public var midDensity: Float { isProjected ? 1.0 : 0.744 }
 
-    /// Nominal density above base needed to read at `midDensity` after viewing flare.
+    /// Nominal density above base that reads at `midDensity`. The print is read as its 0/45
+    /// measurement with no viewing glare, so the two are the same.
     /// Colour print records use `printExposureMidpoints`, including their setup calibration.
-    public var anchorDensity: Float {
-        guard viewingFlare > 0 else { return midDensity }
-        let read = pow(10, -midDensity)
-        return -log10(max(read * (1 + viewingFlare) - viewingFlare, 1e-6))
-    }
+    public var anchorDensity: Float { midDensity }
 
     /// Compatibility entry point for callers that still pass a stock's legacy grey.
     @available(*, deprecated, message: "Use anchorDensity; the output medium sets mid-grey.")

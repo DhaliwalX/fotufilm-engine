@@ -59,8 +59,8 @@ final class PrintViewingLightTests: XCTestCase {
         XCTAssertGreaterThan(greyWorst, 1e-3,
                              "a measured neutral must show some metameric shift")
         // The worst grey is paper black, whose E-7020 records end apart (Status A G 2.37, R 2.28,
-        // B 2.15): its red reads 9.85% lighter under tungsten, about 0.04 D.
-        XCTAssertLessThan(greyWorst, 0.12)
+        // B 2.15): its red reads 13.0% lighter under tungsten, about 0.05 D.
+        XCTAssertLessThan(greyWorst, 0.14)
         XCTAssertGreaterThan(colourWorst / greyWorst, 10,
                              "the grey axis must stay far less metameric than colour")
     }
@@ -149,7 +149,7 @@ final class PrintViewingLightTests: XCTestCase {
                     let actual = receiver.rgb(density: density)
                     let expected = SpectralRuntime.transmissionRGB(
                         density: [amounts.x, amounts.y, amounts.z], dyes: paper.analyticalDyes,
-                        flare: paper.viewingFlare, illuminant: light)
+                        illuminant: light)
                     for channel in 0..<3 {
                         XCTAssertEqual(actual[channel], expected[channel], accuracy: 2e-5,
                                        "\(paper): a viewing lamp must not retime dye")
