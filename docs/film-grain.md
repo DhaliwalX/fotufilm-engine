@@ -130,10 +130,12 @@ Metal (0.20 s preview, 0.40 s still) and adds about 0.8 s on the CPU.
 
 ## Where it runs
 
-Every Halide road but WebGPU carries the stage: the JIT roads, the ahead-of-time table the Mac
-app, Resolve and Final Cut link, Android's CPU and Vulkan kernels, and the browser's CPU
+Every Halide road carries the stage: the JIT roads, the ahead-of-time table the Mac app,
+Resolve and Final Cut link, Android's CPU and Vulkan kernels, and the browser's CPU and WebGPU
 kernels. Each host keeps the tiles `fotufilm_halide_set_film_tiles` hands it and uploads them
 to its device once per stock. A browser pack sealed with the film grain model closes with its
-tiles, their float count last. WebGPU has no storage binding left for them, so a mode-3 frame
-there renders the standard grain. The iOS app's handwritten Metal carries its own port of the
-stage.
+tiles, their float count last; both browser modules take them through
+`fotufilm_wasm_set_film_tiles`, and the WebGPU one keeps its device copy from frame to frame.
+Only the film grain kernel binds the tiles, beside the configuration and the stored density, so
+they fit WebGPU's per-stage storage limit. The iOS app's handwritten Metal carries its own port
+of the stage.

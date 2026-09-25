@@ -554,12 +554,10 @@ public:
             Expr(monochrome ? 1 : 0),
             Halide::cast<int32_t>(configuration_(FOTUFILM_CONFIG_GRAIN_MODE) + 0.5f),
             texture_, density_in_, false, light_out_, true, "frame_", suffix};
-        // The film grain model's tiles are a buffer of their own, which WebGPU has no binding
-        // left for; there a mode-3 frame renders the standard grain.
-        if (!packed_luts_) {
-            inputs.film_tiles = &film_tiles_;
-            inputs.film_on = film_grain_ != 0;
-        }
+        // The film grain model's tiles are a buffer of their own. Only the film grain kernel binds
+        // them, beside the configuration and the stored density, so WebGPU has the room too.
+        inputs.film_tiles = &film_tiles_;
+        inputs.film_on = film_grain_ != 0;
         graph::Developed developed_frame = graph::build_develop(backend, inputs, x, y, channel);
         Func light = developed_frame.light;
         Func developed = developed_frame.developed;
@@ -881,10 +879,8 @@ public:
         }
         arguments.push_back(runtime_features_);
         arguments.push_back(byte_basis_);
-        if (!packed_luts_) {
-            arguments.push_back(film_tiles_);
-            arguments.push_back(film_grain_);
-        }
+        arguments.push_back(film_tiles_);
+        arguments.push_back(film_grain_);
         pipeline_.compile_to_static_library(prefix, arguments, function_name, target);
     }
 #endif
