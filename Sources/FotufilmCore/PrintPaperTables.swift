@@ -203,18 +203,20 @@ extension PrintPaper {
             shoulder: span / 2, shoulderWidth: span / 10)
     }
 
-    /// KODAK EKTACOLOR EDGE records from E-7020 page 3, fitted by `extract_fit.py`.
-    /// RMS errors are 0.0036 D green, 0.0116 D red, and 0.0067 D blue. Red and blue use the
-    /// smallest gamma within 0.0005 D of the degenerate fit minimum.
+    /// KODAK EKTACOLOR EDGE records from E-7020 page 3, fitted by `extract_fit.py`, each named
+    /// by the label printed beside its end: green is the top curve at log E 0, blue the bottom.
+    /// RMS errors are 0.0129 D green, 0.0116 D red, and 0.0036 D blue. Green's worst, 0.077 D,
+    /// is past log E -0.4, where the sheet keeps rising to 2.37 D and one shoulder levels at
+    /// 2.30. Red and green use the smallest gamma within 0.0005 D of the degenerate fit minimum.
     static let ra4PrintCurve = CharacteristicCurve(
-        dMin: 0.051, gamma: 5.851,
-        toe: -1.541, toeWidth: 0.145, shoulder: -1.182, shoulderWidth: 0.152)
+        dMin: 0.094, gamma: 8.5,
+        toe: -1.493, toeWidth: 0.154, shoulder: -1.234, shoulderWidth: 0.184)
     static let ra4PrintCurveRed = CharacteristicCurve(
         dMin: 0.089, gamma: 9.5,
         toe: -1.480, toeWidth: 0.142, shoulder: -1.253, shoulderWidth: 0.153)
     static let ra4PrintCurveBlue = CharacteristicCurve(
-        dMin: 0.090, gamma: 8.5,
-        toe: -1.479, toeWidth: 0.155, shoulder: -1.222, shoulderWidth: 0.176)
+        dMin: 0.051, gamma: 5.851,
+        toe: -1.541, toeWidth: 0.145, shoulder: -1.182, shoulderWidth: 0.152)
 
     /// Editable scan tone scale, independent of a paper's limited density range. Equal toe and
     /// shoulder widths keep their softplus difference positive instead of crossing below D-min

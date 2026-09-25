@@ -16,10 +16,10 @@ extension SpectralRuntime {
     }
 
     static func transmissionRGB(density: [Float], stock: FilmStock,
-                                flare: Float = 0, neutralDensity: Float = 0,
+                                neutralDensity: Float = 0,
                                 illuminant: [Float]? = nil) -> SIMD3<Float> {
         transmissionRGB(density: density, dyes: stock.spectralProfile.imageDyeDensity,
-                        flare: flare, neutralDensity: neutralDensity, illuminant: illuminant,
+                        neutralDensity: neutralDensity, illuminant: illuminant,
                         densityOffset: filmDensityOffset(for: stock))
     }
 

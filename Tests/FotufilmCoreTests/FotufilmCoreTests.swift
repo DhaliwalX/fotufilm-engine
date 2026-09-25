@@ -494,8 +494,8 @@ final class PipelineTests: XCTestCase {
         // As a proportion of the shadow, not a fixed number of display-linear
         // units: how far the lift carries depends on the density scale the
         // print lands on, which is the paper's property rather than the
-        // glare's. The measured sheet is 2.10 D where the invented curve was
-        // 2.44, and the lift measures 9.3% of the shadow on it.
+        // glare's. The measured sheet's green is 2.30 D where the invented
+        // curve was 2.44.
         XCTAssertGreaterThan(brightScene, darkScene * 1.05,
                              "veiling glare must lift shadows when the scene is bright: "
                                  + "\(brightScene) against \(darkScene)")

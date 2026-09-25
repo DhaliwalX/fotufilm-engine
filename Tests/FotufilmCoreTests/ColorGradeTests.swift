@@ -96,7 +96,7 @@ final class ColorGradeTests: XCTestCase {
         let gainedWhite = channelMeans(render(gained, stock, level: white)).1 - whiteBase
         let gainedBlack = channelMeans(render(gained, stock, level: black)).1 - blackBase
         XCTAssertGreaterThan(gainedWhite, 12, "a full gain should carry white up")
-        // The measured sheet turns over at 2.10 D, limiting gain above diffuse white. Compare gain
+        // The measured sheet turns over at 2.30 D, limiting gain above diffuse white. Compare gain
         // with lift so the assertion tests band separation independently of paper range.
         XCTAssertGreaterThan(gainedWhite, 1.8 * gainedBlack,
                              "a gain should be a highlight control: white moved \(gainedWhite), black \(gainedBlack)")
