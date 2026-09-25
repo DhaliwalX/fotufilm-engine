@@ -140,6 +140,12 @@ extension FilmGrain {
 
     /// Transmittance of one record's tile at `gross`, `tileSide²` texels.
     func tileLight(record r: Int, gross: Float, seed: UInt64) -> [Float] {
+        builtLights(record: r, grosses: [gross], seed: seed)?[0]
+            ?? referenceTileLight(record: r, gross: gross, seed: seed)
+    }
+
+    /// The same tile laid by the Swift reference.
+    func referenceTileLight(record r: Int, gross: Float, seed: UInt64) -> [Float] {
         let side = Self.tileSide
         let pxPerMM = 1 / Self.tileTexelMM
         var unused = [Float]()
@@ -150,6 +156,122 @@ extension FilmGrain {
         return field.map { pow(10, -$0) }
     }
 
+    /// What lays dye-cloud tiles faster than the Swift reference.
+    enum TileBuilder: Equatable {
+        /// Hand-written Metal, on every Apple platform.
+        case metal
+        /// The Halide builder on the CPU, where the Halide compiler is linked.
+        case halide
+    }
+
+    /// One sublayer of a tile build: cells along a tile side, peak demand over capacity, capacity,
+    /// the count thresholds `FilmRandom.countThresholds` gives and the developed fraction at each
+    /// level.
+    struct TileSublayer {
+        var cells: Int
+        var edge: Float
+        var capacity: Float
+        var thresholds: [Float]
+        var fractions: [Float]
+    }
+
+    /// Builders tried in turn; the Swift reference lays whatever they cannot.
+    /// `FOTUFILM_FILM_TILE_BUILD` = `metal`, `halide` or `swift` holds it to one.
+    static let tileBuilders: [TileBuilder] = {
+        switch ProcessInfo.processInfo.environment["FOTUFILM_FILM_TILE_BUILD"] {
+        case "swift": return []
+        case "metal": return [.metal]
+        case "halide": return [.halide]
+        default: return [.metal, .halide]
+        }
+    }()
+
+    /// Light of a dye-cloud record's tile at each of `grosses`, `tileSide²` texels each, laid by
+    /// the first of `builders` that can — the same crystals `renderTile` lays, on a tile that
+    /// wraps. Nil where none can, which the Swift reference then does.
+    func builtLights(record r: Int, grosses: [Float], seed: UInt64,
+                     builders: [TileBuilder] = FilmGrain.tileBuilders) -> [[Float]]? {
+        let record = records[r]
+        let sublayerSlots = 4
+        guard !builders.isEmpty, !record.sublayers.isEmpty,
+              record.sublayers.count <= sublayerSlots,
+              record.sublayers.allSatisfy({ $0.profile == .dyeCloud }),
+              let decay = record.sublayers.first?.sigmaMM,
+              record.sublayers.allSatisfy({ $0.sigmaMM == decay }) else { return nil }
+        let side = Self.tileSide
+        let supersample = Self.supersample(pxPerMM: 1 / Self.tileTexelMM)
+        let h = Self.tileTexelMM / Float(supersample)
+        let period = Float(side) * Self.tileTexelMM
+        let terms = Self.dyeCloudTerms.map { (sigma: $0.sigma * decay / h, weight: $0.weight) }
+        let tableScale = Float(Self.tableSamples - 1) / max(record.dMax - record.dMin, 1e-6)
+        let layers = record.sublayers.map { layer in
+            // The cells `renderTile` lays a periodic film in.
+            let cells = max(Int((period / layer.cellMM).rounded()), 1)
+            let cell = period / Float(cells)
+            let fractions = grosses.map { gross in
+                let t = min(max((gross - record.dMin) * tableScale, 0), Float(Self.tableSamples - 1))
+                let ti = min(Int(t), Self.tableSamples - 2)
+                let tf = t - Float(ti)
+                return layer.forming[ti] * (1 - tf) + layer.forming[ti + 1] * tf
+            }
+            return TileSublayer(
+                cells: cells, edge: layer.peakDemand / layer.capacity, capacity: layer.capacity,
+                thresholds: FilmRandom.countThresholds(mean: layer.coatedPerMM2 * cell * cell),
+                fractions: fractions)
+        }
+        let texels = side * side
+        var light: [Float]?
+        for builder in builders where light == nil {
+            light = build(builder, texels: side, supersample: supersample, terms: terms,
+                          sublayers: layers, seed: FilmRandom.seed32(seed), record: r)
+        }
+        guard let light else { return nil }
+        return grosses.indices.map { k in Array(light[(k * texels)..<((k + 1) * texels)]) }
+    }
+
+    private func build(_ builder: TileBuilder, texels: Int, supersample: Int,
+                       terms: [(sigma: Float, weight: Float)], sublayers: [TileSublayer],
+                       seed: UInt32, record: Int) -> [Float]? {
+        if builder == .metal {
+            #if canImport(Metal)
+            return FilmTileMetalBuilder.shared?.build(
+                texels: texels, supersample: supersample, markShape: Self.markShape, terms: terms,
+                sublayers: sublayers, seed: seed, record: record)
+            #else
+            return nil
+            #endif
+        }
+        // The Halide builder holds every sublayer's deposits per level, so it lays a few at a time.
+        let slots = 4, fields = 3 + FilmRandom.maxCount, perCall = 4
+        var packed = [Float](repeating: 1, count: slots * fields)
+        for (b, layer) in sublayers.enumerated() {
+            packed[b * fields] = Float(layer.cells)
+            packed[b * fields + 1] = layer.edge
+            packed[b * fields + 2] = layer.capacity
+            packed.replaceSubrange((b * fields + 3)..<((b + 1) * fields), with: layer.thresholds)
+        }
+        let flatTerms = terms.flatMap { [$0.sigma, $0.weight] }
+        let total = sublayers[0].fractions.count
+        var light: [Float] = []
+        for start in stride(from: 0, to: total, by: perCall) {
+            let levels = min(perCall, total - start)
+            var fractions = [Float](repeating: 0, count: slots * levels)
+            for (b, layer) in sublayers.enumerated() {
+                fractions.replaceSubrange((b * levels)..<((b + 1) * levels),
+                                          with: layer.fractions[start..<(start + levels)])
+            }
+            var part = [Float](repeating: 0, count: texels * texels * levels)
+            let status = part.withUnsafeMutableBufferPointer { out in
+                fotufilm_film_tile_build(Int32(texels), Int32(supersample), Int32(Self.markShape),
+                                         flatTerms, Int32(terms.count), packed, fractions, Int32(levels),
+                                         seed, Int32(record), out.baseAddress)
+            }
+            guard status == 0 else { return nil }
+            light += part
+        }
+        return light
+    }
+
     func buildTiles(seed: UInt64, parallel: Bool = true) -> Tiles {
         buildTiles(seed: seed, parallel: parallel, checkCancellation: {})
     }
@@ -157,7 +279,19 @@ extension FilmGrain {
     func buildTiles(seed: UInt64, parallel: Bool = true,
                     checkCancellation: () throws -> Void) rethrows -> Tiles {
         try checkCancellation()
-        let active = (monochrome ? [1] : [0, 1, 2]).filter { !records[$0].sublayers.isEmpty }
+        var active = (monochrome ? [1] : [0, 1, 2]).filter { !records[$0].sublayers.isEmpty }
+        var levels = [[TileLevel]](repeating: [], count: 3)
+        let grosses = { (r: Int) in (0..<Self.tileLevels).map { k in
+            self.records[r].dMin
+                + (self.records[r].dMax - self.records[r].dMin) * Float(k) / Float(Self.tileLevels - 1)
+        } }
+        for r in active {
+            try checkCancellation()
+            if let built = builtLights(record: r, grosses: grosses(r), seed: seed) {
+                levels[r] = built.map(Self.tileLevel(light:))
+            }
+        }
+        active.removeAll { !levels[$0].isEmpty }
         let count = active.count * Self.tileLevels
         let results = TileLevelResults(count: count)
         // A level already parallelizes its small image tiles. Two independent levels keep that
@@ -174,12 +308,12 @@ extension FilmGrain {
                     let record = records[r]
                     let gross = record.dMin
                         + (record.dMax - record.dMin) * Float(k) / Float(Self.tileLevels - 1)
-                    results.values[index] = Self.tileLevel(light: tileLight(record: r, gross: gross, seed: seed))
+                    results.values[index] = Self.tileLevel(
+                        light: referenceTileLight(record: r, gross: gross, seed: seed))
                 }
             }
         }
         try checkCancellation()
-        var levels = [[TileLevel]](repeating: [], count: 3)
         for (index, record) in active.enumerated() {
             levels[record] = (0..<Self.tileLevels).map { results.values[index * Self.tileLevels + $0]! }
         }
@@ -280,7 +414,10 @@ extension FilmGrain {
     /// microdensitometer reads it. The grain is far smaller than the aperture, so the aperture's
     /// light variance is the field's noise power at zero frequency over the aperture's area — the
     /// autocovariance summed over every lag it reaches, which every texel of the tile informs —
-    /// and the density's is that over the light's mean, by `ln 10`.
+    /// and the density's is that over the light's mean, by `ln 10`. Frames lay the tile in blocks
+    /// at independent offsets, so two points a lag apart share a block, and their covariance,
+    /// only for `(1 - |dx| / B)(1 - |dy| / B)` of the pairs: each lag counts that share, and the
+    /// anchor reads the grain as the frames lay it.
     static func tileSigma48(_ light: [Float]) -> Float {
         let n = tileSide
         var total = 0.0
@@ -303,8 +440,15 @@ extension FilmGrain {
                 sums.values[rowIndex * lagSide + dx + reach] = c / Double(n * n)
             }
         }
+        let block = Double((tileBlockMM / tileTexelMM).rounded())
         var power = 0.0
-        for value in sums.values { power += value }
+        for rowIndex in 0..<lagSide {
+            for column in 0..<lagSide {
+                let shared = (1 - Double(abs(rowIndex - reach)) / block)
+                    * (1 - Double(abs(column - reach)) / block)
+                power += sums.values[rowIndex * lagSide + column] * shared
+            }
+        }
         let radius = Double(FilmStock.granularityApertureRadiusMM / tileTexelMM)
         let lightVariance = max(power, 0) / (Double.pi * radius * radius)
         return Float(lightVariance.squareRoot() / (mean * 2.302_585_093))

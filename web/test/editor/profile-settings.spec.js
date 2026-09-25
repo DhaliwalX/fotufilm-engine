@@ -59,7 +59,7 @@ test("native film settings update pixels, undo, save and full-size export", asyn
     .getByRole("combobox", { name: "Grain Model", exact: true })
     .click();
   await page
-    .getByRole("option", { name: "Organic Crystals", exact: true })
+    .getByRole("option", { name: "Film", exact: true })
     .click();
   await ready(page);
   expect(await pixels(page)).not.toEqual(aged);

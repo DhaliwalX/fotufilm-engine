@@ -19,11 +19,9 @@ int main(int argc, char **argv) {
         halide_reuse_device_allocations(nullptr, true);
         Fixture f(argv[1]);
         if (f.config[FOTUFILM_CONFIG_GRAIN_MODE] == 1)
-            throw std::runtime_error("Film grain tiles are not supported by these AOT variants; prepare a standard or organic fixture");
+            throw std::runtime_error("Film grain tiles are not supported by these AOT variants; prepare a standard fixture");
         std::string test=argv[2]; int w=std::stoi(argv[3]), h=std::stoi(argv[4]);
         if (w<1 || h<1 || w>4096 || h>4096) return 2;
-        if(test=="stage-crystal" && f.config[FOTUFILM_CONFIG_GRAIN_MODE]!=2)
-            throw std::runtime_error("This grain mode requires a fixture prepared with --grain-model");
         f.config[FOTUFILM_CONFIG_FRAME_WIDTH]=w;
         f.config[FOTUFILM_CONFIG_FRAME_HEIGHT]=h;
         for(int c=0;c<3;++c) f.config[FOTUFILM_CONFIG_FLARE_MEAN+c]=.18f;

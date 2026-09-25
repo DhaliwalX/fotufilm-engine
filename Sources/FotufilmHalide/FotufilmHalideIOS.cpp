@@ -5,6 +5,7 @@
 #endif
 
 #include "FotufilmHalideIOSVariants.h"
+#include "FotufilmFilmTileBuild.h"
 #include "FotufilmNegativeScan.h"
 #include "fotufilm_halide_ios_negative_cpu.h"
 #include "fotufilm_halide_ios_negative_metal.h"
@@ -1160,8 +1161,7 @@ extern "C" int32_t fotufilm_halide_metal_process_buffers_head(
         // in it — so stripping it here is what keeps the split path's print the
         // same picture the unsplit path makes.
         const int32_t head_mask = (feature_mask
-            & ~(FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_GRAIN_MOTTLE
-                | FOTUFILM_FRAME_CRYSTAL_GRAIN | FOTUFILM_FRAME_PRINT_MTF))
+            & ~(FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_GRAIN_MOTTLE | FOTUFILM_FRAME_PRINT_MTF))
             | FOTUFILM_FRAME_DENSITY_OUT;
         error = run_aot(state, input_buffer.raw_buffer(), density_buffer.raw_buffer(),
                         width, height, configuration, head_mask, seed,
@@ -1210,8 +1210,7 @@ extern "C" int32_t fotufilm_halide_metal_process_buffers_tail(
         // lays the field the frame actually asked for.
         const int32_t tail_mask = (feature_mask
             & (FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_REVERSAL
-               | FOTUFILM_FRAME_GRAIN_MOTTLE | FOTUFILM_FRAME_CRYSTAL_GRAIN
-               | FOTUFILM_FRAME_PRINT_MTF))
+               | FOTUFILM_FRAME_GRAIN_MOTTLE | FOTUFILM_FRAME_PRINT_MTF))
             | FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_DENSITY_IN;
         error = run_aot(state, density_buffer.raw_buffer(), output_buffer.raw_buffer(),
                         width, height, configuration, tail_mask, seed,
@@ -1249,6 +1248,11 @@ extern "C" int32_t fotufilm_negative_scan(const float *in, float *out, int32_t w
 }
 
 extern "C" int32_t fotufilm_halide_available(void) { return 0; }
+// The Film tile builder needs the Halide compiler; ahead-of-time hosts build tiles in Metal.
+extern "C" int32_t fotufilm_film_tile_build(int32_t, int32_t, int32_t, const float *, int32_t,
+    const float *, const float *, int32_t, uint32_t, int32_t, float *) {
+    return -3;
+}
 extern "C" int32_t fotufilm_halide_set_film_tiles(int32_t id, const float *tiles,
                                                   int64_t count) {
     return translate_exceptions([&] {

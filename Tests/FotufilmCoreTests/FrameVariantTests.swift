@@ -21,7 +21,7 @@ final class FrameVariantTests: XCTestCase {
     private static let fieldsIn: Int32 = 1 << 21
     private static let noFilm: Int32 = 1 << 29
 
-    private static let stageBits = fullStages | FilmEngineFeature.crystalGrain
+    private static let stageBits = fullStages
     private static let exactBits = FilmEngineFeature.monochrome | FilmEngineFeature.floatIO
         | FilmEngineFeature.realtime | FilmEngineFeature.exactMath
         | densityOut | densityIn | lightOut | fieldsIn
@@ -50,15 +50,14 @@ final class FrameVariantTests: XCTestCase {
             }
         }
 
-    /// The table: every realtime class carries the crystal bit at no cost, every still class has
-    /// a crystal twin, the light-out classes compile nothing past the light, and no film is its own.
+    /// The table: one full variant per class, the light-out classes compile nothing past the
+    /// light, and no film is its own.
     private static let variants: [Int32] =
-        realtimeClasses.map { fullStages | FilmEngineFeature.crystalGrain | $0 }
-        + stillClasses.flatMap { [fullStages | $0, fullStages | FilmEngineFeature.crystalGrain | $0] }
+        (realtimeClasses + stillClasses).map { fullStages | $0 }
         + [Int32(0), FilmEngineFeature.monochrome].map {
-            fullStages | FilmEngineFeature.crystalGrain | FilmEngineFeature.floatIO | lightOut | $0
+            fullStages | FilmEngineFeature.floatIO | lightOut | $0
         }
-        + exactSeamClasses.map { fullStages | FilmEngineFeature.crystalGrain | $0 }
+        + exactSeamClasses.map { fullStages | $0 }
         + [FilmEngineFeature.floatIO | noFilm,
            FilmEngineFeature.floatIO | FilmEngineFeature.exactMath | noFilm]
 
@@ -112,10 +111,9 @@ final class FrameVariantTests: XCTestCase {
         }
     }
 
-    func testPreciseSpatialSeamsPreserveTheirClassForEveryGrainFamily() {
+    func testPreciseSpatialSeamsPreserveTheirClassWithAndWithoutGrain() {
         for seam in Self.exactSeamClasses {
-            for grain in [Int32(0), FilmEngineFeature.grain,
-                          FilmEngineFeature.grain | FilmEngineFeature.crystalGrain] {
+            for grain in [Int32(0), FilmEngineFeature.grain] {
                 let mask = seam | grain
                 let variant = assertServed(mask, "precise spatial seam with grain mask \(grain)")
                 XCTAssertNotNil(variant)
@@ -206,11 +204,6 @@ final class FrameVariantTests: XCTestCase {
             var options = FotufilmEngine.Options()
             options.grainModel = model
             for (stock, mask) in masks(width: 3840, height: 2160, options: options) {
-                // Organic Crystals is the one model with its own family; the film grain model's
-                // tiles are a runtime input and ask for no bit.
-                XCTAssertEqual(mask & FilmEngineFeature.crystalGrain != 0,
-                               model == .crystals && mask & FilmEngineFeature.grain != 0,
-                               "\(stock.name) with \(model.title) grain")
                 for road in Self.roads {
                     assertServed(mask | road.adds, "\(stock.name) with \(model.title) grain on \(road.name)")
                 }
@@ -224,7 +217,7 @@ final class FrameVariantTests: XCTestCase {
             FilmEngineFeature.mtfLuma, FilmEngineFeature.halation,
             FilmEngineFeature.couplers, FilmEngineFeature.couplerDiffusion,
             FilmEngineFeature.adjacency, FilmEngineFeature.grain,
-            FilmEngineFeature.crystalGrain, FilmEngineFeature.printMTF,
+            FilmEngineFeature.printMTF,
             FilmEngineFeature.diffusion, FilmEngineFeature.donorLayer,
             FilmEngineFeature.grainMottle,
         ]

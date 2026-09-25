@@ -44,8 +44,6 @@ enum class Store {
     Density,
     Noise,
     MottleNoise,
-    CrystalCounts,
-    CrystalGrain,
     Inhibition,
     FilmDensity,
     FilmGrain,
@@ -120,8 +118,6 @@ struct Backend {
 
     virtual Expr film_lut_sample(Expr ar, Expr ag, Expr ab, Expr channel) = 0;
     virtual Expr paper_lut_sample(Expr ax, Expr ay, Expr az, Expr channel) = 0;
-    virtual Expr paper_grain_hash(Halide::ImageParam &configuration, Expr x, Expr y,
-                                  Expr channel, bool monochrome) = 0;
 };
 
 struct Inputs {
@@ -209,7 +205,6 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
     const bool use_adjacency = !density_in && (compiled & FOTUFILM_FRAME_ADJACENCY);
     const bool use_grain = (compiled & FOTUFILM_FRAME_GRAIN)
         && (!density_in || b.grain_on_density_input());
-    const bool use_crystals = use_grain && !b.realtime() && (compiled & FOTUFILM_FRAME_CRYSTAL_GRAIN);
     const bool use_mottle = use_grain && (compiled & FOTUFILM_FRAME_GRAIN_MOTTLE);
     const bool use_print_mtf = compiled & FOTUFILM_FRAME_PRINT_MTF;
 
@@ -223,7 +218,6 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
     Expr on_coupler_diffusion = on_couplers && gate(in, FOTUFILM_FRAME_COUPLER_DIFFUSION);
     Expr on_adjacency = gate(in, FOTUFILM_FRAME_ADJACENCY);
     Expr on_grain = gate(in, FOTUFILM_FRAME_GRAIN);
-    Expr on_crystals = on_grain && gate(in, FOTUFILM_FRAME_CRYSTAL_GRAIN);
     Expr on_mottle = on_grain && gate(in, FOTUFILM_FRAME_GRAIN_MOTTLE);
     Expr on_print_mtf = gate(in, FOTUFILM_FRAME_PRINT_MTF);
 
@@ -608,35 +602,9 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
             mottle = gated(on_mottle, fields.mottle(x, y, layer), 0.0f);
         }
         Expr clump = clump_grain(configuration, c, modulation, fields.grain(x, y, layer), mottle);
-        if (use_crystals) {
-            std::vector<Func> bins;
-            for (int bin = 0; bin < FOTUFILM_CRYSTAL_GRAIN_BINS; ++bin) {
-                const std::string tag = std::to_string(bin) + suffix;
-                Func counts(in.prefix + "crystal_counts_" + tag);
-                counts(x, y, c) = crystal_latent_count(
-                    configuration, x + p.origin_x_, y + p.origin_y_, p.seed_, c, bin,
-                    crystal_lambda(configuration, c, bin, position.amount), approximate);
-                Func counts_view = b.store(counts, Store::CrystalCounts, 3);
-                bins.push_back(b.gaussian(
-                    counts_view, crystal_bin_field(configuration, 0, bin, 0),
-                    crystal_bin_field(configuration, 1, bin, 0),
-                    crystal_bin_field(configuration, 2, bin, 0), p.grain_radius_,
-                    p.width_, p.height_, in.prefix + "crystal_field_" + tag, 3));
-            }
-            Func crystal_field(name("crystal_grain"));
-            crystal_field(x, y, c) = crystal_grain(configuration, c, bins, x, y, position.amount);
-            Expr crystal = b.store(crystal_field, Store::CrystalGrain, 3)(x, y, c);
-            Expr with_crystals = selected_developed_density(
-                in.grain_mode, density_view(x, y, c), clump, crystal);
-            Expr without = selected_developed_density(in.grain_mode, density_view(x, y, c), clump);
-            Func grained(name("grained"));
-            grained(x, y, c) = gated(on_crystals, with_crystals, without);
-            developed = grained;
-        } else {
-            Func grained(name("grained"));
-            grained(x, y, c) = selected_developed_density(in.grain_mode, density_view(x, y, c), clump);
-            developed = grained;
-        }
+        Func grained(name("grained"));
+        grained(x, y, c) = selected_developed_density(density_view(x, y, c), clump);
+        developed = grained;
         if (in.film_tiles) {
             // Film grain (mode 1) replaces the other models' grain outright: it is the film's
             // own fluctuation about the curve, sampled from the host-rendered tiles.
@@ -697,7 +665,6 @@ struct PrintInputs {
     Halide::ImageParam &configuration;
     Expr reversal;
     bool monochrome;
-    bool paper_grain;
     std::string prefix;
     std::string suffix;
 };
@@ -718,13 +685,7 @@ inline Func build_print(Backend &b, const PrintInputs &in, Func developed, Var x
     Func paper_curve = paper_curve_table(configuration, name("print_paper_curve"), b.device(),
                                          approximate);
     Func activated(name("print_paper_activation"));
-    Expr on_paper = paper_activation(configuration, paper_curve, c, relative(c), approximate);
-    if (in.paper_grain) {
-        on_paper = on_paper + paper_grain_expr(
-            configuration, c, b.paper_grain_hash(configuration, x, y, c, in.monochrome),
-            on_paper, approximate);
-    }
-    activated(x, y, c) = on_paper;
+    activated(x, y, c) = paper_activation(configuration, paper_curve, c, relative(c), approximate);
     Func activated_view = b.store(activated, Store::PaperActivation, 3);
 
     Func display(name("print_display"));

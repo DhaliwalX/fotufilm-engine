@@ -124,8 +124,9 @@ final class FilmGrainTests: XCTestCase {
         }
     }
 
-    /// Where few crystals developed the field is sparse dense clouds on clear film — a heavy
-    /// dark tail — and where most did it evens out.
+    /// Where few crystals developed the field is sparse clouds on clear film — a dark tail — and
+    /// where most did it evens out. Jarvis's clouds spread each crystal's dye over microns, so
+    /// even the sparse field is soft: the tail is there, not spiky.
     func testSparseCloudsGiveAHeavyTail() {
         let stock = TestStocks.negative
         let grain = FilmGrain(stock: stock)
@@ -133,8 +134,56 @@ final class FilmGrainTests: XCTestCase {
                                        seed: 2).planes[1])
         let dense = moments(grain.apply(to: flat(stock, net: 1.2, side: 160), pxPerMM: 4000,
                                         seed: 2).planes[1])
-        XCTAssertGreaterThan(thin.skew, 1, "thin skew \(thin.skew)")
+        XCTAssertGreaterThan(thin.skew, 0.3, "thin skew \(thin.skew)")
         XCTAssertLessThan(dense.skew, thin.skew, "dense skew \(dense.skew)")
+    }
+
+    /// A dye cloud is the one Jarvis measured: its terms carry one cloud's dye and reproduce the
+    /// transfer function `[1 + (2π k f)²]^(-3/2)` wherever it is above 10⁻³.
+    func testDyeCloudIsJarvisCloud() {
+        let terms = FilmGrain.dyeCloudTerms
+        XCTAssertEqual(terms.reduce(0) { $0 + $1.weight * $1.sigma * $1.sigma }, 1, accuracy: 1e-3)
+        for step in 0...300 {
+            let f = Double(step) / 100   // cycles per decay length
+            let jarvis = pow(1 + pow(2 * Double.pi * f, 2), -1.5)
+            guard jarvis > 1e-3 else { break }
+            let laid = terms.reduce(0.0) {
+                let s = Double($1.sigma)
+                return $0 + Double($1.weight) * s * s * exp(-2 * Double.pi * Double.pi * s * s * f * f)
+            }
+            XCTAssertEqual(log(laid / jarvis), 0, accuracy: 0.1, "f \(f)")
+        }
+    }
+
+    /// A wide term blurred on the coarse grid lays what the full-resolution blur lays: the same
+    /// mass, and the same field to a few percent of its peak.
+    func testCoarseCloudTermIsTheFullBlur() {
+        let side = 96, margin = 30, core = side - 2 * margin
+        var deposits = [Float](repeating: 0, count: side * side)
+        deposits[48 * side + 47] = 1; deposits[40 * side + 52] = 0.5; deposits[57 * side + 45] = 2
+        let sigma: Float = 7.5
+        var laid = [Float](repeating: 0, count: core * core)
+        deposits.withUnsafeBufferPointer { d in
+            laid.withUnsafeMutableBufferPointer { l in
+                FilmGrain.layCloudTerm(d.baseAddress!, width: side, height: side, margin: margin,
+                                       into: l.baseAddress!, coreWidth: core, coreHeight: core,
+                                       sigma: sigma, weight: 1)
+            }
+        }
+        var full = [Float](repeating: 0, count: core * core)
+        let scale = 2 * Float.pi * sigma * sigma
+        for y in 0..<core { for x in 0..<core {
+            var sum: Float = 0
+            for (i, mass) in deposits.enumerated() where mass > 0 {
+                let dx = Float(x + margin - i % side), dy = Float(y + margin - i / side)
+                sum += mass * exp(-(dx * dx + dy * dy) / (2 * sigma * sigma)) / (2 * Float.pi * sigma * sigma)
+            }
+            full[y * core + x] = scale * sum
+        } }
+        let peak = full.max() ?? 1
+        let worst = zip(laid, full).map { abs($0 - $1) }.max() ?? 0
+        XCTAssertLessThan(worst / peak, 0.03, "worst \(worst) of peak \(peak)")
+        XCTAssertEqual(laid.reduce(0, +) / full.reduce(0, +), 1, accuracy: 0.01)
     }
 
     /// A silver grain is opaque, so the sheet's granularity read backwards through Nutting's
@@ -216,9 +265,11 @@ final class FilmGrainTests: XCTestCase {
         let total = { (g: [[Float]]) in g.map { sigma($0) * sigma($0) }.reduce(0, +) }
         XCTAssertEqual(total(shared) / total(rest), 1, accuracy: 0.1)
 
+        // Four times the area averages grain whose clouds span the 4 µm pixel less than white
+        // noise's half.
         let soft = fluctuation(FilmGrain.Look(softness: 2))
         for r in 0..<3 {
-            XCTAssertLessThan(sigma(soft[r]), 0.7 * sigma(rest[r]), "record \(r)")
+            XCTAssertLessThan(sigma(soft[r]), 0.8 * sigma(rest[r]), "record \(r)")
         }
 
         // Pixels of 48 µm are the sheet's own aperture: a larger grain reads the same there.

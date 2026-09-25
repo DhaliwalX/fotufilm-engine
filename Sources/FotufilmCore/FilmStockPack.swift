@@ -74,7 +74,7 @@ public struct FilmStockDefinition: Codable, Sendable {
     /// three records, or one such row per record; a row of three is the earlier form without
     /// the hump. Absent uses the Vision3 family shape; see `GrainDensityProfile`.
     public var grainDensityProfile: GrainDensityProfile?
-    /// Required population parameters for Organic Crystals.
+    /// Required crystal population parameters for the Film grain model.
     public var crystalGrainPopulation: CrystalGrainPopulation
     /// `[exponent p, shoulder density Ds]` of the dye reversal's saturating power law.
     /// Absent uses the provisional family profile [1.1, 3].

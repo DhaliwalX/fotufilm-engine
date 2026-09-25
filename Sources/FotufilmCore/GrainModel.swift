@@ -13,13 +13,6 @@ public enum GrainModel: String, Sendable, CaseIterable, Codable, Identifiable {
     /// the light through it. Rendered once per stock onto tiles the kernel samples (grain mode 1);
     /// builds without those tiles — WebGPU — lay `clumpField`.
     case film = "film"
-    /// The crystals that form the image, rendered as what they form: Poisson counts of
-    /// developed crystals per size bin at the mean the developed density gives each, laid as
-    /// dye clouds — or silver grains — at each bin's own radius, drawn from each sublayer's
-    /// coupler pool, with the population read off the record's characteristic curve
-    /// (`CrystalGrainModel`). Available only in the reference schedule, whose crystal variant
-    /// family carries it; realtime schedules use `clumpField`.
-    case crystals = "crystals"
 
     public var id: String { rawValue }
 
@@ -28,7 +21,6 @@ public enum GrainModel: String, Sendable, CaseIterable, Codable, Identifiable {
         switch self {
         case .clumpField: return "Standard"
         case .film: return "Film"
-        case .crystals: return "Organic Crystals"
         }
     }
 
@@ -37,19 +29,16 @@ public enum GrainModel: String, Sendable, CaseIterable, Codable, Identifiable {
         switch self {
         case .clumpField: return "Fast calibrated RMS grain"
         case .film: return "Crystals on the film itself, averaged as light"
-        case .crystals: return "Physical dye clouds and paper crystals"
         }
     }
 
-    /// Resolves an identifier or alias (e.g. "standard", "clump", "film", "organic", "crystals").
+    /// Resolves an identifier or alias (e.g. "standard", "clump", "film").
     public static func named(_ name: String) -> GrainModel? {
         switch name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "clump", "clumpfield", "clump-field", "standard", "fast":
             return .clumpField
         case "film", "real", "real-film", "film-grain":
             return .film
-        case "crystals", "crystal", "organic", "organic-crystals", "physical":
-            return .crystals
         default:
             return nil
         }

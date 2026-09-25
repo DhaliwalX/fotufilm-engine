@@ -313,7 +313,7 @@ the approximate conversion’s limits.
 ## More information
 
 - [User guide](docs/documentation.html)
-- [Crystal grain](docs/crystal-grain.md)
+- [Film grain](docs/film-grain.md)
 - [Renderer integration, buffer storage, and grain assets](docs/rendering-integration.md)
 - [Build support](docs/support.html)
 - [Licensing](LICENSING.md)

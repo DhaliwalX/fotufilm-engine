@@ -18,27 +18,33 @@ the CPU and Metal roads at the cost of the standard grain.
    `CrystalGrainModel` fits to the record's characteristic curve, with four sublayers along
    speed. A crystal develops with the probability its speed class has at the local developed
    density.
-3. **A dye cloud's size follows from its dye and its coupler.** Couplers are dispersed evenly
-   through a sublayer, so no point of it can form more dye than the sublayer's coupler capacity
-   (its pool). Each developed crystal releases a Gaussian of oxidised developer. The dye that
-   forms is `C (1 - exp(-demand / C))`, summed over all clouds of the sublayer before it
-   saturates, so clouds are flat-topped where they formed and merge where they meet. Silver
-   grains use the same construction with an opaque grain (local density 2). The sheet's
-   granularity read backwards through Nutting's `D = 0.434 n a` then gives Tri-X grains of
-   0.3–1.7 µm, in line with photomicrographs of negative emulsions.
-4. **No cloud is narrower than its crystal.** The sheet fixes how much dye a crystal forms, not
-   how widely it spreads. Where the sheet's dye would make a cloud narrower than twice its
-   crystal (a silver grain narrower than the crystal itself), the cloud keeps that width and
-   stays below saturation, forming the same dye fainter. Crystals follow the population's size
-   ladder down from 1.2 µm for the fastest class. This keeps low-granularity, long-curve records
-   (Portra 400's red, the Fuji negatives) from being drawn as clouds smaller than a crystal.
+3. **A dye cloud spreads as Jarvis measured it.** Couplers are dispersed evenly through a
+   sublayer, so no point of it can form more dye than the sublayer's coupler capacity (its
+   pool). Each developed crystal releases oxidised developer that spreads as the dye cloud
+   Jarvis measured on C-41 coatings, `exp(-r / k)` with `k` = 1.45 µm, the value he gives for a
+   coupler-starved commercial colour-negative layer (J. Photogr. Sci. 40:105, 1992; 43:136,
+   1995). The dye that forms is `C (1 - exp(-demand / C))`, summed over all clouds of the
+   sublayer before it saturates, so clouds merge where they meet and a crystal whose demand
+   passes the capacity grows a flat top. The sheet fixes how much dye a crystal forms and sets
+   the cloud's peak demand; the coupler, not the dye, fixes how far it spreads. The clouds are
+   laid as four separable Gaussian blurs of the developed crystals, fitted to Jarvis's transfer
+   function `[1 + (2π k f)²]^(-3/2)` to 9 % wherever it is above 10⁻³.
+4. **A silver grain follows from the sheet.** Silver grains use the flat-topped Gaussian
+   construction with an opaque grain (local density 2), their width solved so that the sheet's
+   granularity read backwards through Nutting's `D = 0.434 n a` gives their projected area:
+   Tri-X grains of 0.3–1.7 µm, in line with photomicrographs of negative emulsions. No grain is
+   narrower than its crystal, whose width follows the population's size ladder down from 1.2 µm
+   for the fastest class; one that would be keeps the crystal's width and forms its silver
+   fainter.
 5. **Pixels average light, not density.** A pixel's density is `-log10` of the mean
    transmittance through its patch of film.
 6. **The anchors stay the measurements.** The frame's mean is the pipeline's developed density.
    The dye per crystal is solved on the model's own film so that a flat patch at the sheet's
    read density reads the sheet's RMS granularity through the 48 µm aperture, averaged in
-   transmittance as a microdensitometer does. Each step of the solve takes the slope the last
-   one measured, and a scaled population is the same crystals, so the solve converges.
+   transmittance as a microdensitometer does. Frames lay the tile in 64 µm blocks at
+   independent offsets, so the reading counts each lag of the tile's covariance only for the
+   share of pairs that fall in one block. Each step of the solve takes the slope the last one
+   measured, and a scaled population is the same crystals, so the solve converges.
 
 ## How it runs
 
@@ -46,8 +52,14 @@ the CPU and Metal roads at the cost of the standard grain.
   1 µm texels (where the render has converged), at 17 gross densities from D-min to D-max.
   Each level is kept as the running sum of its transmittance less its mean (a summed-area
   table), so the light through any rectangle of film is four lookups, exact at any pitch.
-  Rendering and registering a stock's tiles takes about 1.5 s, once per stock. The frame's
-  grain amount scales the grain in the kernel, so moving the slider rebuilds nothing.
+  A sublayer's dye clouds are its developed crystals blurred by the cloud's four Gaussian
+  terms, the two widest on a grid four and two samples coarser. The tiles are built on the GPU
+  in Metal wherever it runs — each cell's crystals drawn once, every level laid in one pass —
+  and by a Halide CPU builder or the Swift reference elsewhere; all three lay the same film.
+  Solving a colour stock's population and building its tiles takes about 0.17 s on an M4 Pro
+  in Metal (0.8 s in Halide on the CPU, 1.1 s in Swift) and 0.55 s on an iPhone 16 Pro (3.7 s
+  in Swift), once per stock; the phone and the Mac lay byte-identical tiles. The frame's grain amount scales the grain in the kernel, so
+  moving the slider rebuilds nothing.
 - **Blocks.** The frame is cut into 64 µm blocks. Each takes the tile at its own hashed offset,
   inside one period so no read wraps, and one of the eight flips and turns of the square, per
   record and per frame seed. Nothing repeats, and a new seed is another placement of the same
@@ -93,6 +105,7 @@ Hosts offer these while the grain model is Film.
 | Tiles against the full render at 1 µm | pixel σ 0.97–1.01 of it, same neighbour correlation, similar skew |
 | Resolution | a 0.25 µm render averaged back to 1 µm correlates above 0.9 with the 1 µm render |
 | Halide against Swift | within 0.002 D per pixel, with every control above moved |
+| Tile builders (Metal, Halide) against the Swift reference | correlation above 0.9999, within 0.002 D per texel |
 
 On an M4 Pro, a 1080p frame takes 19 ms on the Metal preview road (Standard: 16 ms), 31 ms
 on the Metal still road and 93 ms on the CPU. At 24 MP it matches the standard grain on
@@ -100,8 +113,11 @@ Metal (0.20 s preview, 0.40 s still) and adds about 0.8 s on the CPU.
 
 ## What is not measured
 
-- The cloud rim (`dyeCloudEdge`, 4), the silver grain's local density (2), the fastest crystal's
-  width (1.2 µm) and the narrowest cloud (twice its crystal) are stances.
+- The cloud's decay length is Jarvis's for a coupler-starved single-layer C-41 coating, not a
+  measurement of any stock; his coupler-rich coatings reach 0.76 µm, and no stock's coupler
+  laydown is published. Every sublayer of every dye stock takes 1.45 µm.
+- The silver grain's rim (12) and local density (2) and the fastest crystal's width (1.2 µm)
+  are stances.
 - The records are independent, so the grain carries more colour than the standard model's
   scan-fitted record correlation of 0.6.
 - The only colour-negative micrograph at hand is a soft web JPEG at unknown density and gain. It

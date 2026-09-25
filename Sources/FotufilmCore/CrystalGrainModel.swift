@@ -1,7 +1,6 @@
 import Foundation
-import FotufilmHalide
 
-/// Stock-authoring parameters for the organic crystal model. These are effective model
+/// Stock-authoring parameters for the film grain model's crystal population. These are effective model
 /// populations, not a measurement of silver mass or a unique reconstruction of the emulsion.
 public struct CrystalGrainPopulation: Codable, Equatable, Sendable {
     /// Maximum radius ratio on the class ladder; 1 gives equal radii.
@@ -48,8 +47,8 @@ public struct CrystalGrainPopulation: Codable, Equatable, Sendable {
     }
 }
 
-/// Grain formed by the crystals that form the image, for `GrainModel.crystals`, in the three
-/// stages a real emulsion's grain passes through.
+/// The crystals that form the image, the population `FilmGrain` lays, in the two stages a real
+/// emulsion's grain passes through before it is seen.
 ///
 /// **Exposure** decides which crystals will develop. One record of an emulsion is a population
 /// of silver halide crystals; each has a speed — the exposure at which it absorbs one photon on
@@ -78,22 +77,14 @@ public struct CrystalGrainPopulation: Codable, Equatable, Sendable {
 /// centres it reaches and the mass each crystal grows to are refitted to the condition's
 /// measured curve with the coating held. `Development` is everything the tank decides.
 ///
-/// **Print** is what the paper sees and what it adds. The negative's developed field reaches
-/// the paper through the enlarger's spread and the paper's curve, which the pipeline already
-/// lays; the paper — or the release print's film — is an emulsion of its own, and its
-/// developed crystals are a Poisson field at the paper's own activation. `Print` derives that
-/// population from the silver chloride cubes a colour paper coats.
-///
 /// Two measurements anchor the scale: the sheet's RMS granularity at its read density fixes the
 /// dye one crystal of the reference size forms at the reference process, and with it how many
 /// crystals the record coats per square millimetre; `grainSizeMM` fixes the cloud. Each stock
 /// authors its population width and allocation; an explicit coating-density scale also
 /// changes RMS and must not be mistaken for a measured stock calibration.
 public struct CrystalGrainModel: Sendable {
-    /// Size bins per record, matching FOTUFILM_CRYSTAL_GRAIN_BINS.
-    public static let binCount = Int(FOTUFILM_CRYSTAL_GRAIN_BINS)
-    /// Samples of the per-bin count table, matching FOTUFILM_CRYSTAL_GRAIN_SAMPLES.
-    public static let samples = Int(FOTUFILM_CRYSTAL_GRAIN_SAMPLES)
+    /// Size bins per record: the sublayers the film grain model coats.
+    public static let binCount = 4
     /// Log-exposure grid the fits and the density inversion run on.
     static let fitLogExposures: [Float] = stride(from: -4.0, through: 4.0, by: 0.05)
         .map { Float($0) }
@@ -287,74 +278,6 @@ public struct CrystalGrainModel: Sendable {
 
     /// The print material's own crystals: the emulsion the negative's light exposes.
     ///
-    /// A colour paper coats cubic silver chloride crystals — 0.2 to 0.5 µm on edge in Kodak's
-    /// and Fuji's patents, chosen for the rapid, complete development a minilab's process asks
-    /// for — at a few tenths of a gram of silver per square metre per record, with coupler in
-    /// excess. Every crystal that develops forms its share of the record's range, so the
-    /// paper's grain is a plain Poisson field: no pool, and no sheet to anchor it to, because
-    /// no manufacturer publishes a paper's granularity. The count per coated area follows from
-    /// the edge and the coating weight alone.
-    public enum Print {
-        /// Edge of the paper's cubic crystals, mm.
-        public static let crystalEdgeMM: Float = 0.25e-3
-        /// Silver coated per record, g/m².
-        public static let silverGramsPerM2: Float = 0.2
-        /// Density of silver chloride, g/cm³.
-        public static let silverChlorideDensity: Float = 5.56
-        /// Coating weights are expressed as silver, not AgCl. CIAAW atomic weights give
-        /// Ag / (Ag + Cl); omitting chlorine's mass undercounts the coated crystals.
-        public static let silverMassFraction: Float = 107.8682 / (107.8682 + 35.45)
-        /// The sheet a negative is printed on when nothing says otherwise: 8 × 10 in, its short
-        /// edge filled by the frame's. A release print is a contact print, magnified by one.
-        public static let sheetShortEdgeMM: Float = 203.2
-
-        /// Crystals the paper coats per mm²: the silver per area over the silver per crystal.
-        public static var crystalsPerMM2: Float {
-            let gramsPerMM2 = silverGramsPerM2 * 1e-6
-            let gramsPerMM3 = silverChlorideDensity * 1e-3
-            let silverPerCrystal = gramsPerMM3 * crystalEdgeMM * crystalEdgeMM * crystalEdgeMM
-                * silverMassFraction
-            return gramsPerMM2 / silverPerCrystal
-        }
-
-        /// Whether the medium exposes an emulsion of its own. A viewed transparency, a scan,
-        /// the screen's fixed receiver and the negative itself expose none.
-        public static func exposesCrystals(stock: FilmStock, paper: PrintPaper) -> Bool {
-            !paper.viewsFilmDirectly(for: stock) && !stock.isReflectionPrint
-                && paper != .screen && !paper.isScan && !paper.isNegative
-        }
-
-        /// The size of one output pixel on the print, mm: the frame's short edge fills the
-        /// sheet's. A crop retains the corresponding fraction of the original sheet instead
-        /// of enlarging the crop to fill a new sheet. A contact print's pixel is the negative's.
-        public static func pixelMM(paper: PrintPaper, shortEdgePixels: Int, pxPerMM: Float,
-                                   frameCoverage: Float = 1) -> Float {
-            if paper.isProjected { return pxPerMM > 0 ? 1 / pxPerMM : 0 }
-            let coverage = min(max(frameCoverage, 0.05), 1)
-            return shortEdgePixels > 0 ? sheetShortEdgeMM * coverage / Float(shortEdgePixels) : 0
-        }
-
-        /// Crystals of the print material one output pixel holds at full development.
-        public static func crystalsPerPixel(paper: PrintPaper, shortEdgePixels: Int,
-                                            pxPerMM: Float, frameCoverage: Float = 1) -> Float {
-            let pixel = pixelMM(paper: paper, shortEdgePixels: shortEdgePixels, pxPerMM: pxPerMM,
-                                frameCoverage: frameCoverage)
-            return crystalsPerMM2 * pixel * pixel
-        }
-
-        /// The paper's own RMS granularity through the 48 µm aperture where a record of `range`
-        /// has formed `netDensity` above base: a Poisson field of `N f` crystals per area each
-        /// forming `range / N`, with the marks' second moment.
-        public static func sigma(netDensity: Float, range: Float) -> Float {
-            let apertureArea = Float.pi * FilmStock.granularityApertureRadiusMM
-                * FilmStock.granularityApertureRadiusMM
-            let perCrystal = range / crystalsPerMM2
-            let developed = max(netDensity, 0) / max(perCrystal, 1e-9)
-            return (developed * perCrystal * perCrystal * Development.markSecondMoment
-                    / apertureArea).squareRoot()
-        }
-    }
-
     // MARK: - The record
 
     public var exposure: Exposure
@@ -718,61 +641,6 @@ public struct CrystalGrainModel: Sendable {
     /// RMS granularity through the 48 µm aperture where the record has formed `netDensity`.
     public func sigma(netDensity: Float) -> Float {
         apertureVariance(logExposure: logExposure(netDensity: netDensity)).squareRoot()
-    }
-
-    // MARK: - Kernel tables
-
-    /// Mean latent-crystal count per pixel for each bin against the record's developed density
-    /// as a fraction of its range, `samples` values from 0 to 1, for a lattice of `pxPerMM`
-    /// pixels per millimetre: the exposure stage's field, read back through the curve.
-    public func countTable(pxPerMM: Float) -> [[Float]] {
-        let pixelArea = 1 / (pxPerMM * pxPerMM)
-        var tables = [[Float]](repeating: [], count: bins.count)
-        for i in 0..<Self.samples {
-            let amount = Float(i) / Float(Self.samples - 1)
-            let fractions = binFractions(logExposure: logExposure(netDensity: amount * range))
-            for (b, bin) in bins.enumerated() {
-                tables[b].append(bin.crystalsPerMM2 * pixelArea * fractions[b])
-            }
-        }
-        return tables
-    }
-
-    /// Density one cloud of `bin` adds to the pixel it lands in, on a lattice of `pxPerMM`.
-    public func densityPerCloud(bin: Int, pxPerMM: Float) -> Float {
-        bins[bin].dyePerCloud * pxPerMM * pxPerMM
-    }
-
-    /// The mean-dye factor the kernel subtracts with: the sum over the cloud's lattice taps
-    /// `K` of the marks' expectation of `1 - exp(-mark q K / C)`, `q` the density one cloud
-    /// adds to its pixel and `C` the pool, so that by Campbell's theorem the marked Poisson
-    /// field's expected dye is `C (1 - exp(-count × factor))`. The taps are the separable
-    /// Gaussian the schedules lay: `sigmaPixels` read at integer offsets to `radius` and
-    /// normalised. Silver's factor is `q`, the marks' mean being one.
-    public static func meanDyeFactor(sigmaPixels: Float, radius: Int, densityPerCloud q: Float,
-                                     pool: Float) -> Float {
-        guard pool > 0 else { return q }
-        guard q > 0 else { return 0 }
-        let reach = max(radius, 0)
-        var taps = (-reach...reach).map { exp(-Float($0 * $0) / (2 * max(sigmaPixels, 1e-3) * max(sigmaPixels, 1e-3))) }
-        let total = taps.reduce(0, +)
-        taps = taps.map { $0 / total }
-        let heavy = Double(1 + Development.markDispersion)
-        let light = Double(1 - Development.markDispersion)
-        var factor: Double = 0
-        for a in taps {
-            for b in taps {
-                let tap = Double(q * a * b / pool)
-                factor += 1 - 0.5 * (exp(-heavy * tap) + exp(-light * tap))
-            }
-        }
-        return Float(factor)
-    }
-
-    /// Gaussian sigma of a bin's cloud on the film, mm: half its radius, the convention the
-    /// clump field uses for `grainSizeMM`.
-    public func cloudSigmaMM(bin: Int) -> Float {
-        bins[bin].cloudRadiusMM / 2
     }
 
     // MARK: - Fit

@@ -13,7 +13,6 @@ inline int case_mask(const std::string &name, int stock) {
         {"stage-adjacency", FOTUFILM_FRAME_ADJACENCY},
         {"stage-grain", FOTUFILM_FRAME_GRAIN},
         {"stage-mottle", FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_GRAIN_MOTTLE},
-        {"stage-crystal", FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_CRYSTAL_GRAIN},
         {"stage-print-mtf", FOTUFILM_FRAME_PRINT_MTF},
         {"stage-diffusion", FOTUFILM_FRAME_DIFFUSION},
         {"stage-flare", FOTUFILM_FRAME_FLARE},

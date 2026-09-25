@@ -1214,20 +1214,14 @@
           "id" : "film",
           "label" : "Film",
           "value" : 1
-        },
-        {
-          "detail" : "Physical dye clouds and paper crystals",
-          "id" : "crystals",
-          "label" : "Organic Crystals",
-          "value" : 2
         }
       ],
       "commandLineFlag" : "--grain-model",
       "commandLineGeneric" : false,
-      "commandLineHelp" : "standard/clump (default), film, or organic/crystals. `film` lays the stock's crystals at fixed places on the emulsion, rendered once per stock, and averages the light through each pixel's patch of film. `organic`/`crystals` develops the crystal population read off the film's own curve: Poisson counts of developed crystals per size class at every pixel, each laying its dye cloud from its sublayer's coupler pool, with paper grain in the print stage.",
+      "commandLineHelp" : "standard/clump (default) or film. `film` lays the stock's crystals at fixed places on the emulsion, rendered once per stock, and averages the light through each pixel's patch of film.",
       "commandLinePlaceholder" : "<m>",
       "detail" : "Choose how film grain is formed across the emulsion.",
-      "documentation" : "Selects the film grain simulation method: Standard (fast calibrated RMS noise), Film (the stock's crystals at fixed places on the emulsion, with each pixel the light through its patch of film), or Organic Crystals (physically simulated dye clouds and paper crystals formed from the exposure).",
+      "documentation" : "Selects the film grain simulation method: Standard (fast calibrated RMS noise) or Film (the stock's crystals at fixed places on the emulsion, with each pixel the light through its patch of film).",
       "drives" : [
 
       ],
@@ -1248,17 +1242,11 @@
             "id" : "film",
             "label" : "Film",
             "value" : 1
-          },
-          {
-            "detail" : "",
-            "id" : "crystals",
-            "label" : "Organic Crystals",
-            "value" : 2
           }
         ],
         "composed" : false,
         "group" : "grainAdvanced",
-        "hint" : "Standard uses the calibrated clump field. Film lays the stock's crystals at fixed places on the emulsion and averages the light through each pixel's patch of film. Organic Crystals develops the film's own crystal population — sparse coarse dye clouds where little developed, a fine dense haze where most did — with photographic paper crystals.",
+        "hint" : "Standard uses the calibrated clump field. Film lays the stock's crystals at fixed places on the emulsion and averages the light through each pixel's patch of film.",
         "kind" : "choice",
         "label" : "Grain Model",
         "ofxName" : "grainModel",
@@ -1273,7 +1261,7 @@
       },
       "kind" : "menu",
       "omitted" : {
-        "finalcut" : "not yet offered; film and crystals need Reference rendering"
+        "finalcut" : "not yet offered; film needs Reference rendering"
       },
       "scope" : "edit",
       "section" : "filmGrain",

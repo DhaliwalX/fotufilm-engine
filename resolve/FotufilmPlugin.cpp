@@ -1239,8 +1239,7 @@ void updateContextControls(Instance *instance, OfxTime time) {
         fotufilm_bridge_effective_realtime(parameters) != 0 ? "Realtime" : "Reference");
     if (instance->grainStatus) gParameter->paramSetValue(instance->grainStatus,
         film ? "Film · the stock's crystals on the emulsion"
-        : !clump ? "Organic Crystals · dye clouds and paper crystals"
-                 : (full ? "Clump field · custom mottle available" : "Clump field · mottle requires Full"));
+             : (full ? "Clump field · custom mottle available" : "Clump field · mottle requires Full"));
 }
 
 /// Greys out the controls the chosen span does not read, and says in the status line what the

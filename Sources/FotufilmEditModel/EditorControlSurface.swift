@@ -299,7 +299,7 @@ public enum EngineBinding: Equatable, Sendable {
             options.grainMottleShare = value.number.map(Float.init)
         case .grainModel:
             if case .choice(let index) = value {
-                options.grainModel = [.clumpField, .film, .crystals][min(max(index, 0), 2)]
+                options.grainModel = [.clumpField, .film][min(max(index, 0), 1)]
             }
         case .halationStops:
             if let number = value.number {

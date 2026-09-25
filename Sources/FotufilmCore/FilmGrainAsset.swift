@@ -5,8 +5,8 @@ import Foundation
 public enum FilmGrainAsset {
     // Bump algorithmVersion whenever population fitting, calibration, random draws, tile
     // construction, or their numerical constants change. Format changes also bump formatVersion.
-    private static let formatVersion: UInt32 = 1
-    private static let algorithmVersion: UInt32 = 1
+    private static let formatVersion: UInt32 = 2
+    private static let algorithmVersion: UInt32 = 2
     private static let magic = Data("FFGRAIN\0".utf8)
     static let maximumByteCount = 32 * 1024 * 1024
     private static let maximumIdentityBytes = 1024 * 1024
@@ -28,9 +28,10 @@ public enum FilmGrainAsset {
         writer.word(UInt32(truncatingIfNeeded: FilmGrain.tileSeed))
         writer.word(UInt32(truncatingIfNeeded: FilmGrain.tileSeed >> 32))
         writer.floats([FilmGrain.tileTexelMM, FilmGrain.tileBlockMM,
-                       FilmGrain.dyeCloudEdge, FilmGrain.silverGrainEdge,
+                       FilmGrain.dyeCloudDecayMM, FilmGrain.silverGrainEdge,
                        FilmGrain.silverGrainDensity, FilmGrain.fastestCrystalMM,
-                       FilmGrain.dyeCloudSpread, FilmGrain.finestSampleMM])
+                       FilmGrain.finestSampleMM])
+        writer.floats(FilmGrain.dyeCloudTerms.flatMap { [$0.sigma, $0.weight] })
         writer.stock(stock)
         writer.word(reference == nil ? 0 : 1)
         if let reference { writer.stock(reference) }
@@ -59,6 +60,7 @@ public enum FilmGrainAsset {
             writer.float(record.dMax)
             writer.word(UInt32(record.sublayers.count))
             for layer in record.sublayers {
+                writer.word(layer.profile.rawValue)
                 writer.floats([layer.coatedPerMM2, layer.sigmaMM, layer.peakDemand,
                                layer.capacity, layer.edge, layer.smallestSigmaMM,
                                layer.dyePerCloudMM2, layer.cellMM, layer.voidIntegralMM2])
@@ -99,12 +101,15 @@ public enum FilmGrainAsset {
             let count = try reader.count(maximum: CrystalGrainModel.binCount)
             var sublayers: [FilmGrain.Sublayer] = []
             for _ in 0..<count {
+                guard let profile = FilmGrain.Profile(rawValue: try reader.word()) else {
+                    throw AssetError.invalidData
+                }
                 let fields = try reader.floats(count: 9)
                 guard fields.allSatisfy({ $0 > 0 }) else { throw AssetError.invalidData }
                 let forming = try reader.floats(count: FilmGrain.tableSamples)
                 // A weighted Float reduction can round slightly beyond one. Preserve the
                 // canonical finite coefficients rather than clamp or reject that rounding.
-                sublayers.append(FilmGrain.Sublayer(coatedPerMM2: fields[0], sigmaMM: fields[1],
+                sublayers.append(FilmGrain.Sublayer(profile: profile, coatedPerMM2: fields[0], sigmaMM: fields[1],
                     peakDemand: fields[2], capacity: fields[3], edge: fields[4],
                     smallestSigmaMM: fields[5], dyePerCloudMM2: fields[6], cellMM: fields[7],
                     forming: forming, voidIntegralMM2: fields[8]))

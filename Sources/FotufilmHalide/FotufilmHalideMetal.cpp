@@ -110,12 +110,11 @@ GpuFramePipeline *pipeline_for(int32_t feature_mask) {
     const int32_t requested = feature_mask & variant_bits & ~FOTUFILM_FRAME_REVERSAL;
     // One pipeline per class, not per request: every stage the class can carry is compiled in
     // and the request selects at runtime, so the frame a stock asks for costs what that stock's
-    // stages cost and a second stock in the same class compiles nothing. The crystal model stays
-    // its own class — its bins are the one stage that is expensive to compile rather than to
-    // skip — and no film needs no stages at all.
+    // stages cost and a second stock in the same class compiles nothing. No film needs no
+    // stages at all.
     int32_t variant = requested;
     if (!(requested & FOTUFILM_FRAME_NO_FILM)) {
-        variant |= FOTUFILM_VARIANT_STAGE_BITS & ~FOTUFILM_FRAME_CRYSTAL_GRAIN;
+        variant |= FOTUFILM_VARIANT_STAGE_BITS;
     }
     // Keyed by the mask in a map rather than a mask-wide sparse array. The array version cost
     // "nothing but address space" — until FOTUFILM_FRAME_DONOR_LAYER pushed the mask past bit 26
@@ -588,8 +587,7 @@ extern "C" int32_t fotufilm_halide_metal_process_buffers_head(
         // in it — so stripping it here is what keeps the split path's print the
         // same picture the unsplit path makes.
         const int32_t head_mask = (feature_mask
-            & ~(FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_GRAIN_MOTTLE
-                | FOTUFILM_FRAME_CRYSTAL_GRAIN | FOTUFILM_FRAME_PRINT_MTF))
+            & ~(FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_GRAIN_MOTTLE | FOTUFILM_FRAME_PRINT_MTF))
             | FOTUFILM_FRAME_DENSITY_OUT;
         pipeline_for(head_mask)->run_wrapped<uint8_t, Halide::float16_t>(
             input_mtl_buffer, density_mtl_buffer, width, height, configuration,
@@ -621,8 +619,7 @@ extern "C" int32_t fotufilm_halide_metal_process_buffers_tail(
         // lays the field the frame actually asked for.
         const int32_t tail_mask = (feature_mask
             & (FOTUFILM_FRAME_MONOCHROME | FOTUFILM_FRAME_REVERSAL
-               | FOTUFILM_FRAME_GRAIN_MOTTLE | FOTUFILM_FRAME_CRYSTAL_GRAIN
-               | FOTUFILM_FRAME_PRINT_MTF))
+               | FOTUFILM_FRAME_GRAIN_MOTTLE | FOTUFILM_FRAME_PRINT_MTF))
             | FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_DENSITY_IN;
         pipeline_for(tail_mask)->run_wrapped<Halide::float16_t, uint8_t>(
             density_mtl_buffer, output_mtl_buffer, width, height, configuration,

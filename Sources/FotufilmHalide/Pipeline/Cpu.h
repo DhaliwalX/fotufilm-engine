@@ -78,7 +78,7 @@ public:
     using graph::Backend::store;
     Func store(Func values, graph::Store point, int channels, Expr branch) override {
         if (!values.defined() || stored_.count(values.name())) return values;
-        if (point == graph::Store::MtfSelected || point == graph::Store::CrystalGrain || point == graph::Store::Inhibition) return values;
+        if (point == graph::Store::MtfSelected || point == graph::Store::Inhibition) return values;
         Var x("x"), y("y"), c("c");
         cpu_pointwise(values, x, y, c, channels);
         stored_.insert(values.name());
@@ -205,10 +205,6 @@ public:
         return lut_sample(*paper_lut_, ax, ay, az, channel);
     }
 
-    Expr paper_grain_hash(ImageParam &configuration, Expr x, Expr y, Expr channel,
-                          bool monochrome) override {
-        return fotufilm::paper_grain_hash(configuration, x, y, channel, monochrome);
-    }
 
     void bind_configuration(ImageParam &configuration) { configuration_ = configuration; }
 
@@ -382,7 +378,7 @@ private:
 class PrintPipeline {
 public:
     PrintPipeline(bool reversal, bool monochrome, const std::string &suffix,
-                  bool encode = false, int transfer_shape = -1, bool paper_grain = false)
+                  bool encode = false, int transfer_shape = -1)
         : input_(Float(32), 3, "print_input" + suffix),
           configuration_(Float(32), 1, "print_configuration" + suffix),
           film_lut_(Float(32), 1, "print_film_lut" + suffix),
@@ -395,8 +391,7 @@ public:
         backend.bind_configuration(configuration_);
         Func developed("print_developed" + suffix);
         developed(x, y, c) = input_(x, y, c);
-        graph::PrintInputs inputs{configuration_, Expr(reversal ? 1 : 0), monochrome,
-                                  paper_grain, "", suffix};
+        graph::PrintInputs inputs{configuration_, Expr(reversal ? 1 : 0), monochrome, "", suffix};
         Func printed = graph::build_print(backend, inputs, developed, x, y, c);
 
         Func output("print_output" + suffix);
@@ -418,8 +413,7 @@ public:
         cpu_pointwise(output, x, y, c);
         pipeline_ = Pipeline(output);
         cached_.prepare(pipeline_, "print:" + std::to_string(reversal) + ":" + std::to_string(monochrome)
-                + ":" + std::to_string(encode) + ":" + std::to_string(transfer_shape)
-                + ":" + std::to_string(paper_grain),
+                + ":" + std::to_string(encode) + ":" + std::to_string(transfer_shape),
             {input_, configuration_, film_lut_, paper_lut_}, reference_target());
     }
 
