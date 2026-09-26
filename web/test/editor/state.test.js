@@ -169,7 +169,7 @@ test('explicit source light cannot silently use transport components for a diffe
 })
 
 test('film settings survive edits and validate stock-independent values', () => {
-  const edit = { ...defaultEdit('gold200'), format: '16mm', profile: { expired: 10, grainModel: 'crystals', grainMottle: 'heavy' } }
+  const edit = { ...defaultEdit('gold200'), format: '16mm', profile: { expired: 10, grainModel: 'film', grainMottle: 'heavy' } }
   const save = edit => JSON.stringify({ version: 1, edit })
   assert.deepEqual(parseEdit(save(edit), ['gold200']), edit)
   for (const profile of [{ expired: -1 }, { grainModel: 'unknown' }, { grainMottle: 1 }, { madeUp: 1 }, []])
