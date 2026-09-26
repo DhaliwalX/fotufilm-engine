@@ -3,7 +3,10 @@ import PhotoTile from "./PhotoTile.jsx";
 
 const PADDING = 16,
   GAP = 4,
-  OVERSCAN = 2;
+  OVERSCAN = 2,
+  // How far ahead a fling mounts tiles, in milliseconds of travel.
+  LOOKAHEAD = 300,
+  MAX_AHEAD = 12;
 
 // Rows of square cells that stretch to fill the width. Only rows near the
 // viewport are mounted, so a folder of any size scrolls at the same cost.
@@ -39,8 +42,14 @@ export default function PhotoGrid({
 }) {
   const scroller = useRef(null),
     frame = useRef(0),
-    anchor = useRef(0);
-  const [view, setView] = useState({ width: 0, height: 0, top: 0 });
+    anchor = useRef(0),
+    motion = useRef({ top: 0, time: 0 });
+  const [view, setView] = useState({
+    width: 0,
+    height: 0,
+    top: 0,
+    velocity: 0,
+  });
   const layout = gridLayout(view.width, photos.length, tileSize);
   const [reflowing, setReflowing] = useState(false);
   const firstReflow = useRef(true);
@@ -88,20 +97,65 @@ export default function PhotoGrid({
   const onScroll = () => {
     cancelAnimationFrame(frame.current);
     frame.current = requestAnimationFrame(() => {
-      const top = scroller.current.scrollTop;
+      const top = scroller.current.scrollTop,
+        time = performance.now(),
+        last = motion.current;
+      // px per ms, smoothed so one uneven frame does not swing the window.
+      const velocity =
+        time - last.time < 100
+          ? 0.6 * ((top - last.top) / Math.max(1, time - last.time)) +
+            0.4 * view.velocity
+          : 0;
+      motion.current = { top, time };
       anchor.current =
         Math.max(0, Math.floor((top - PADDING) / layout.row + 0.5)) *
         layout.columns;
-      setView((current) => ({ ...current, top }));
+      setView((current) => ({ ...current, top, velocity }));
     });
   };
   useEffect(() => () => cancelAnimationFrame(frame.current), []);
 
+  // Mount further ahead in the direction of travel, and less behind.
+  const ahead = Math.min(
+    MAX_AHEAD,
+    Math.max(
+      OVERSCAN,
+      Math.ceil((Math.abs(view.velocity) * LOOKAHEAD) / layout.row),
+    ),
+  );
+  const moving = Math.abs(view.velocity) > 0.5;
+  const before = moving && view.velocity > 0 ? 1 : moving ? ahead : OVERSCAN,
+    after = moving && view.velocity < 0 ? 1 : moving ? ahead : OVERSCAN;
   const firstRow = Math.max(
     0,
-    Math.floor((view.top - PADDING) / layout.row) - OVERSCAN,
+    Math.floor((view.top - PADDING) / layout.row) - before,
   );
-  const lastRow = Math.ceil((view.top + view.height) / layout.row) + OVERSCAN;
+  const lastRow = Math.ceil((view.top + view.height) / layout.row) + after;
+
+  // When scrolling pauses, prepare the next two screens below and one above
+  // at low priority, so the next scroll lands on finished thumbnails.
+  useEffect(() => {
+    if (!thumbnails || !layout.columns) return;
+    let requests = [];
+    const timer = setTimeout(() => {
+      const screen = Math.ceil(view.height / layout.row);
+      const ranges = [
+        [lastRow, lastRow + screen * 2],
+        [firstRow - screen, firstRow],
+      ];
+      for (const [from, to] of ranges)
+        for (
+          let index = Math.max(0, from) * layout.columns;
+          index < Math.min(photos.length, to * layout.columns);
+          index++
+        )
+          requests.push(thumbnails.request(photos[index], { prefetch: true }));
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      requests.forEach((request) => request.cancel());
+    };
+  }, [thumbnails, photos, firstRow, lastRow, layout.columns, view.height]);
   const tiles = [];
   for (
     let index = firstRow * layout.columns;

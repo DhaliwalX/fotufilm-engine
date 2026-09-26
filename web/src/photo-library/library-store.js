@@ -52,8 +52,19 @@ export const loadPhotoRecords = (folderId) =>
   transact("photos", "readonly", (store) =>
     store.getAll(folderRange(folderId)),
   );
-export const loadThumbnail = (key) =>
-  transact("thumbnails", "readonly", (store) => store.get(key));
+// Tiles entering the view together are read in one transaction.
+export async function loadThumbnails(keys) {
+  const results = [];
+  await transact("thumbnails", "readonly", (store) => {
+    let last;
+    keys.forEach((key, index) => {
+      last = store.get(key);
+      last.onsuccess = ({ target }) => (results[index] = target.result);
+    });
+    return last;
+  });
+  return results;
+}
 export const saveThumbnail = (record) =>
   transact("thumbnails", "readwrite", (store) => store.put(record));
 
