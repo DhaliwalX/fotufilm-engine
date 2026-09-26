@@ -73,6 +73,29 @@ Cold starts, fresh Chrome profile, Apple M4 Pro:
 
 A cold first frame is byte-identical to the warm frames after it.
 
+## Video playback
+
+Playback previews one frame after another. Each frame used to seek from its
+keyframe, convert every native pixel, read them back and resample them on the CPU,
+then encode the preview and its comparison original as compressed PNGs in newly
+started workers. Now one decode runs forward through the clip, the colour kernel
+converts straight to the preview size when the edit leaves the geometry alone, and
+previews use an uncompressed PNG from one persistent worker. Exports and film
+thumbnails still use the compressed encoder.
+
+The kernel computes its bilinear positions in integers. With float texel centres a
+3840-wide frame lost about 1e-4 of a texel, which S-Log3's sub-black codes (about
+−6 linear) turned into errors of up to 5e-2. Direct conversion now agrees with the
+full-size road to 1.5e-5.
+
+Gold 200 previews on 3840 × 2160 camera S-Log3 clips (H.264 4:2:2 10-bit, 59.94p),
+comparison original included, Apple M4 Pro:
+
+| Preview edge | `main` | This change |
+| --- | ---: | ---: |
+| 800 | 459–512 ms | 36–39 ms |
+| 1600 | 573–618 ms | 74–77 ms |
+
 ## Local measurements, 26 September 2026
 
 Chrome on an Apple M4 Pro, grain enabled. Medians of warm frames from two

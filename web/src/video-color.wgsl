@@ -55,6 +55,16 @@ fn pixel(x: u32, y: u32) -> vec3f {
     }
     return rgb;
 }
+// Bilinear source position of output index i along an axis of d outputs over s inputs, as
+// (whole texel, fraction). Exact integer arithmetic: f32 texel centres lose ~1e-4 of a texel
+// at 4K, which S-Log3's sub-black codes (about -6 linear) turn into visible error.
+fn axis(i: u32, d: u32, s: u32) -> vec2f {
+    let num=i32((2u*i+1u)*s)-i32(d);
+    if (num <= 0) { return vec2f(0.0); }
+    let whole=u32(num)/(2u*d);
+    if (whole >= s-1u) { return vec2f(f32(s-1u),0.0); }
+    return vec2f(f32(whole),f32(u32(num)%(2u*d))/f32(2u*d));
+}
 @compute @workgroup_size(16,16)
 fn main(@builtin(global_invocation_id) id: vec3u) {
     if (id.x >= p[2] || id.y >= p[3]) { return; }
@@ -64,15 +74,14 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     else if (p[4] == 90u && p[0] == p[3] && p[1] == p[2]) { result=pixel(id.y,p[1]-1u-id.x); }
     else if (p[4] == 270u && p[0] == p[3] && p[1] == p[2]) { result=pixel(p[0]-1u-id.y,id.x); }
     else {
-        var uv=(vec2f(id.xy)+0.5)/vec2f(f32(p[2]),f32(p[3]));
+        var sx: vec2f; var sy: vec2f;
         switch p[4] {
-            case 90u: { uv=vec2f(uv.y,1.0-uv.x); }
-            case 180u: { uv=1.0-uv; }
-            case 270u: { uv=vec2f(1.0-uv.y,uv.x); }
-            default: {}
+            case 90u: { sx=axis(id.y,p[3],p[0]); sy=axis(p[2]-1u-id.x,p[2],p[1]); }
+            case 180u: { sx=axis(p[2]-1u-id.x,p[2],p[0]); sy=axis(p[3]-1u-id.y,p[3],p[1]); }
+            case 270u: { sx=axis(p[3]-1u-id.y,p[3],p[0]); sy=axis(id.x,p[2],p[1]); }
+            default: { sx=axis(id.x,p[2],p[0]); sy=axis(id.y,p[3],p[1]); }
         }
-        let pos=clamp(uv*vec2f(f32(p[0]),f32(p[1]))-0.5,vec2f(0.0),vec2f(f32(p[0]-1u),f32(p[1]-1u)));
-        let lo=vec2u(pos); let hi=min(lo+1u,vec2u(p[0]-1u,p[1]-1u)); let a=fract(pos);
+        let lo=vec2u(u32(sx.x),u32(sy.x)); let hi=min(lo+1u,vec2u(p[0]-1u,p[1]-1u)); let a=vec2f(sx.y,sy.y);
         result=mix(mix(pixel(lo.x,lo.y),pixel(hi.x,lo.y),a.x),mix(pixel(lo.x,hi.y),pixel(hi.x,hi.y),a.x),a.y);
     }
     output[id.y*p[2]+id.x]=vec4f(result,1.0);
