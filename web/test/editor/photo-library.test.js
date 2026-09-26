@@ -12,19 +12,18 @@ import {
   validPreviews,
 } from "../../src/photo-library/image-probe.js";
 import {
+  currentFile,
+  indexRows,
+  indexedPhotos,
+  photoEntry,
   scanDirectory,
   uploadedFolders,
 } from "../../src/photo-library/library-scan.js";
 import { thumbnailSize } from "../../src/photo-library/thumbnail-resampler.js";
 import { libraryMediaKind } from "../../src/media-types.js";
 
-const photo = (folderId, path, modified = 0) => ({
-  key: `${folderId}/${path}`,
-  folderId,
-  path,
-  name: path.split("/").at(-1),
-  modified,
-});
+const photo = (folderId, path, modified = 0) =>
+  photoEntry({ id: folderId }, path, 1, modified);
 const folders = [
   {
     id: "a",
@@ -69,6 +68,18 @@ test("library views filter by folder, name, rating and edits and sort naturally"
   assert.equal(
     visiblePhotos(folders, records, { folderId: ALL_FOLDERS }).length,
     3,
+  );
+});
+
+test("names sort naturally, ignoring case and accents", () => {
+  const names = ["b.jpg", "Écru.jpg", "IMG_10.jpg", "img_9.jpg", "ecru 2.jpg"];
+  const list = visiblePhotos(
+    [{ id: "a", photos: names.map((name) => photo("a", name)) }],
+    new Map(),
+  );
+  assert.deepEqual(
+    list.map((item) => item.name),
+    ["b.jpg", "Écru.jpg", "ecru 2.jpg", "img_9.jpg", "IMG_10.jpg"],
   );
 });
 
@@ -232,25 +243,28 @@ test("thumbnail sizes keep the long edge and swap for quarter turns", () => {
   assert.deepEqual(thumbnailSize(200, 100, 480), [200, 100]);
 });
 
+// A directory handle over {name: size} files; a null size is a file deleted
+// after it was listed.
 function directory(tree) {
+  const file = (name, value) => ({
+    kind: "file",
+    getFile: async () => {
+      if (value === null) throw new DOMException("Gone.", "NotFoundError");
+      return { name, size: value, lastModified: value };
+    },
+  });
+  const child = (name, value) =>
+    typeof value === "object" && value !== null
+      ? directory(value)
+      : file(name, value);
   return {
     kind: "directory",
     async *entries() {
       for (const [name, value] of Object.entries(tree))
-        yield [
-          name,
-          typeof value === "object"
-            ? directory(value)
-            : {
-                kind: "file",
-                getFile: async () => ({
-                  name,
-                  size: value,
-                  lastModified: value,
-                }),
-              },
-        ];
+        yield [name, child(name, value)];
     },
+    getDirectoryHandle: async (name) => directory(tree[name]),
+    getFileHandle: async (name) => file(name, tree[name]),
   };
 }
 
@@ -259,18 +273,40 @@ test("folder scans walk subfolders and skip hidden and unsupported files", async
     id: "f",
     handle: directory({
       "a.jpg": 1,
+      "gone.jpg": null,
       "notes.txt": 2,
       ".hidden.jpg": 3,
       "._a.jpg": 4,
       day: { "b.ARW": 5, ".cache": { "c.jpg": 6 } },
     }),
   });
+  assert.deepEqual(photos.map((item) => [item.key, item.kind]).sort(), [
+    ["f/a.jpg", "image"],
+    ["f/day/b.ARW", "raw"],
+  ]);
+  const raw = photos.find((item) => item.kind === "raw");
+  assert.equal((await currentFile(raw)).size, 5);
+
+  // The saved list restores the same photos, reopened through the folder.
+  const restored = indexedPhotos(
+    { id: "f", handle: raw.root },
+    indexRows(photos),
+  );
   assert.deepEqual(
-    photos.map((item) => [item.key, item.kind]),
-    [
-      ["f/a.jpg", "image"],
-      ["f/day/b.ARW", "raw"],
-    ],
+    restored.map(({ key, kind, size, modified, order }) => [
+      key,
+      kind,
+      size,
+      modified,
+      order,
+    ]),
+    photos.map(({ key, kind, size, modified, order }) => [
+      key,
+      kind,
+      size,
+      modified,
+      order,
+    ]),
   );
   const uploads = uploadedFolders([
     { name: "a.jpg", webkitRelativePath: "Roll 1/a.jpg" },

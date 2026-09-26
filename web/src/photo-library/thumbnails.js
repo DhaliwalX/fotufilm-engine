@@ -1,5 +1,9 @@
 import { runtimeAssetUrl } from "../runtime-assets.js";
-import { loadThumbnails, saveThumbnail } from "./library-store.js";
+import {
+  loadThumbnails,
+  saveThumbnail,
+  trimThumbnails,
+} from "./library-store.js";
 import { currentFile } from "./library-scan.js";
 
 // Tiles are at most ~240 CSS px; this keeps them sharp at 2x.
@@ -7,6 +11,9 @@ export const THUMBNAIL_EDGE = 480;
 // Object URLs kept alive for tiles that scrolled away; older ones are revoked.
 // Cached blobs are disk-backed, so this costs little memory.
 const RETAINED = 1500;
+// Thumbnails kept on disk, about 650 MB; checked every TRIM_EVERY new ones.
+const STORED = 20000,
+  TRIM_EVERY = 500;
 
 const runtimeUrl = () =>
   runtimeAssetUrl(
@@ -55,6 +62,7 @@ export function createThumbnails({
     pending = new Map(),
     reads = new Map();
   let serial = 0,
+    saves = 0,
     disposed = false;
   const stamp = (photo) => `${photo.size}:${photo.modified}`;
 
@@ -179,7 +187,11 @@ export function createThumbnails({
       key: photo.key,
       stamp: stamp(photo),
       blob: result.blob,
-    }).catch(() => {});
+    })
+      .then(() => {
+        if (++saves % TRIM_EVERY === 0) return trimThumbnails(STORED);
+      })
+      .catch(() => {});
     return { blob: result.blob, fresh: true };
   }
 

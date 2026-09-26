@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import PhotoTile from "./PhotoTile.jsx";
 
 const PADDING = 16,
@@ -84,7 +84,10 @@ export default function PhotoGrid({
   }, [layout.columns, layout.row]);
 
   // Scroll the keyboard focus into view.
-  const focusIndex = photos.findIndex((photo) => photo.key === focusKey);
+  const focusIndex = useMemo(
+    () => photos.findIndex((photo) => photo.key === focusKey),
+    [photos, focusKey],
+  );
   useEffect(() => {
     if (focusIndex < 0) return;
     const element = scroller.current;

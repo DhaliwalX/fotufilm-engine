@@ -7,11 +7,10 @@ export const LIBRARY_SORTS = [
   { id: "rating", label: "Rating" },
 ];
 
-const collator = new Intl.Collator(undefined, { numeric: true });
-const byName = (a, b) =>
-  collator.compare(a.name, b.name) ||
-  collator.compare(a.path, b.path) ||
-  collator.compare(a.key, b.key);
+// Photos carry a precomputed natural-order key (see photoEntry); the photo key
+// breaks ties.
+const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+const byName = (a, b) => compare(a.order, b.order) || compare(a.key, b.key);
 const COMPARE = {
   name: () => byName,
   newest: () => (a, b) => b.modified - a.modified || byName(a, b),
@@ -21,31 +20,38 @@ const COMPARE = {
     byName(a, b),
 };
 
+// Folders' photo lists merged in the chosen order. Only the rating order
+// depends on the records, so ratings re-sort nothing otherwise.
+export const sortedPhotos = (lists, records, sort = "name") =>
+  lists.flat().sort(COMPARE[sort](records));
+
+export function filteredPhotos(
+  photos,
+  records,
+  { search = "", minRating = 0, editedOnly = false } = {},
+) {
+  const query = search.trim().toLowerCase();
+  if (!query && !minRating && !editedOnly) return photos;
+  return photos.filter((photo) => {
+    const record = records.get(photo.key);
+    return (
+      (!query || photo.path.toLowerCase().includes(query)) &&
+      (record?.rating || 0) >= minRating &&
+      (!editedOnly || !!record?.edit)
+    );
+  });
+}
+
 // The grid's contents: one folder or all of them, filtered and sorted.
 export function visiblePhotos(
   folders,
   records,
-  {
-    folderId = ALL_FOLDERS,
-    search = "",
-    sort = "name",
-    minRating = 0,
-    editedOnly = false,
-  } = {},
+  { folderId = ALL_FOLDERS, sort, ...filters } = {},
 ) {
-  const query = search.trim().toLowerCase();
-  return folders
+  const lists = folders
     .filter((folder) => folderId === ALL_FOLDERS || folder.id === folderId)
-    .flatMap((folder) => folder.photos || [])
-    .filter((photo) => {
-      const record = records.get(photo.key);
-      return (
-        (!query || photo.path.toLowerCase().includes(query)) &&
-        (record?.rating || 0) >= minRating &&
-        (!editedOnly || !!record?.edit)
-      );
-    })
-    .sort(COMPARE[sort](records));
+    .map((folder) => folder.photos || []);
+  return filteredPhotos(sortedPhotos(lists, records, sort), records, filters);
 }
 
 // Click, Shift-click and Command/Control-click selection over the visible

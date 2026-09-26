@@ -17,9 +17,10 @@ import PhotoGrid, { tileId } from "./PhotoGrid.jsx";
 import { currentFile } from "./library-scan.js";
 import {
   ALL_FOLDERS,
+  filteredPhotos,
   nextSelection,
+  sortedPhotos,
   steppedKey,
-  visiblePhotos,
 } from "./library-model.js";
 import { createThumbnails } from "./thumbnails.js";
 import { supportsFolderAccess, usePhotoLibrary } from "./usePhotoLibrary.js";
@@ -28,6 +29,18 @@ import "./photo-library.css";
 const EASE = [0.2, 0.8, 0.2, 1];
 const TILE_SIZE_KEY = "fotufilm.library.tileSize";
 const noFilters = { search: "", sort: "name", minRating: 0, editedOnly: false };
+
+// The same array while its items are the same, so a folder's status changing
+// does not re-sort its photos.
+function useSameItems(list) {
+  const kept = useRef(list);
+  if (
+    list.length !== kept.current.length ||
+    list.some((item, index) => item !== kept.current[index])
+  )
+    kept.current = list;
+  return kept.current;
+}
 
 function EmptyState({ folders, filtered, onAdd, onClear }) {
   if (filtered)
@@ -98,24 +111,25 @@ export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
       );
   }, [open]);
 
+  const folder = library.folders.find((item) => item.id === folderId);
+  if (folderId !== ALL_FOLDERS && !folder) setFolderId(ALL_FOLDERS);
+  const scopeFolders = folder ? [folder] : library.folders;
+
   const search = useDeferredValue(filters.search);
+  const lists = useSameItems(scopeFolders.map((item) => item.photos));
+  const sortRecords = filters.sort === "rating" ? library.records : null;
+  const sorted = useMemo(
+    () => sortedPhotos(lists, sortRecords, filters.sort),
+    [lists, sortRecords, filters.sort],
+  );
   const photos = useMemo(
-    () =>
-      visiblePhotos(library.folders, library.records, {
-        ...filters,
-        search,
-        folderId,
-      }),
-    [library.folders, library.records, filters, search, folderId],
+    () => filteredPhotos(sorted, library.records, { ...filters, search }),
+    [sorted, library.records, filters, search],
   );
   const total = library.folders.reduce(
     (sum, folder) => sum + folder.photos.length,
     0,
   );
-  const folder = library.folders.find((item) => item.id === folderId);
-  if (folderId !== ALL_FOLDERS && !folder) setFolderId(ALL_FOLDERS);
-
-  const scopeFolders = folder ? [folder] : library.folders;
   const selectedPhotos = photos.filter((photo) =>
     selection.selected.has(photo.key),
   );

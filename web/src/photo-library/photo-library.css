@@ -99,10 +99,17 @@
     position: absolute;
     top: 50%;
     right: 4px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
     transform: translateY(-50%);
     opacity: 0;
     transition: opacity 120ms ease;
   }
+  .library-folder.asking {
+    padding-right: 88px;
+  }
+  .library-folder-actions.asking,
   .library-folder-row:hover .library-folder-actions,
   .library-folder-actions:focus-within {
     opacity: 1;

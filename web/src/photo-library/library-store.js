@@ -1,17 +1,26 @@
 // Library records survive reloads: folder handles (Chromium keeps directory
-// permissions per origin), per-photo ratings and edits, and cached thumbnails.
+// permissions per origin), each folder's last photo list, per-photo ratings
+// and edits, and cached thumbnails.
 const NAME = "fotufilm-photo-library";
-const STORES = ["folders", "photos", "thumbnails"];
+const STORES = {
+  folders: "id",
+  indexes: "id",
+  photos: "key",
+  thumbnails: "key",
+};
 let database;
 
 function openDatabase() {
   database ??= new Promise((resolve, reject) => {
-    const request = indexedDB.open(NAME, 1);
+    const request = indexedDB.open(NAME, 2);
     request.onupgradeneeded = () => {
-      for (const store of STORES)
-        request.result.createObjectStore(store, {
-          keyPath: store === "folders" ? "id" : "key",
-        });
+      const db = request.result;
+      for (const [store, keyPath] of Object.entries(STORES))
+        if (!db.objectStoreNames.contains(store))
+          db.createObjectStore(store, { keyPath });
+      const thumbnails = request.transaction.objectStore("thumbnails");
+      if (!thumbnails.indexNames.contains("saved"))
+        thumbnails.createIndex("saved", "saved");
     };
     request.onsuccess = () => {
       request.result.onversionchange = () => {
@@ -48,6 +57,12 @@ export const loadFolders = () =>
   transact("folders", "readonly", (store) => store.getAll());
 export const saveFolder = (folder) =>
   transact("folders", "readwrite", (store) => store.put(folder));
+export const loadIndex = (id) =>
+  transact("indexes", "readonly", (store) => store.get(id)).then(
+    (index) => index?.rows ?? null,
+  );
+export const saveIndex = (id, rows) =>
+  transact("indexes", "readwrite", (store) => store.put({ id, rows }));
 export const loadPhotoRecords = (folderId) =>
   transact("photos", "readonly", (store) =>
     store.getAll(folderRange(folderId)),
@@ -66,35 +81,60 @@ export async function loadThumbnails(keys) {
   return results;
 }
 export const saveThumbnail = (record) =>
-  transact("thumbnails", "readwrite", (store) => store.put(record));
+  transact("thumbnails", "readwrite", (store) =>
+    store.put({ ...record, saved: Date.now() }),
+  );
+// Past `limit`, the oldest thumbnails are dropped; they are remade if needed.
+export const trimThumbnails = (limit) =>
+  transact("thumbnails", "readwrite", (store) => {
+    const counting = store.count();
+    counting.onsuccess = () => {
+      let excess = counting.result - limit;
+      if (excess > 0)
+        store.index("saved").openKeyCursor().onsuccess = ({ target }) => {
+          if (!target.result || excess-- <= 0) return;
+          store.delete(target.result.primaryKey);
+          target.result.continue();
+        };
+    };
+    return counting;
+  });
 
 const listeners = new Set();
-// Called with each record after it is saved, from whichever view saved it.
+// Called with the records after they are saved, from whichever view saved them.
 export function onRecordChange(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
-// Ratings and edits are written from different places; merge them in one
-// transaction so neither overwrites the other.
-export async function updatePhotoRecord(key, patch) {
-  let record;
-  await transact("photos", "readwrite", (store) => {
-    const request = store.get(key);
-    request.onsuccess = () => {
-      record = { ...request.result, ...patch, key };
-      store.put(record);
-    };
-    return request;
-  });
-  for (const listener of listeners) listener(record);
-  return record;
+// Ratings and edits are written from different places; each merges into the
+// stored record so neither overwrites the other. Large batches are written in
+// slices, so rating a whole library never blocks the page for long.
+const SLICE = 1000;
+export async function updatePhotoRecords(keys, patch) {
+  const records = [];
+  for (let from = 0; from < keys.length; from += SLICE)
+    await transact("photos", "readwrite", (store) => {
+      let last;
+      for (const key of keys.slice(from, from + SLICE)) {
+        last = store.get(key);
+        last.onsuccess = ({ target }) => {
+          const record = { ...target.result, ...patch, key };
+          records.push(record);
+          store.put(record);
+        };
+      }
+      return last;
+    });
+  for (const listener of listeners) listener(records);
+  return records;
 }
 export async function forgetFolder(id) {
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORES, "readwrite");
+    const transaction = db.transaction(Object.keys(STORES), "readwrite");
     transaction.objectStore("folders").delete(id);
+    transaction.objectStore("indexes").delete(id);
     transaction.objectStore("photos").delete(folderRange(id));
     transaction.objectStore("thumbnails").delete(folderRange(id));
     transaction.oncomplete = () => resolve();
