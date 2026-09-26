@@ -27,6 +27,9 @@ SYMBOLS = {
     'forward5': 'forward_5', 'loop': 'repeat',
     'volume': 'volume_up', 'muted': 'volume_off',
     'licenses': 'code', 'privacy': 'privacy_tip', 'terms': 'description',
+    'library': 'photo_library', 'folder': 'folder', 'addFolder': 'create_new_folder',
+    'refresh': 'refresh', 'star': 'star', 'starFilled': 'star_fill1',
+    'edited': 'edit',
 }
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -36,7 +39,9 @@ def read(path):
 
 def symbol(item):
     key, name = item
-    root = ET.fromstring(read(f'symbols/web/{name}/materialsymbolsrounded/{name}_40px.svg'))
+    # Filled variants live beside their outline symbol, e.g. star/…/star_fill1_40px.svg.
+    folder = name.removesuffix('_fill1')
+    root = ET.fromstring(read(f'symbols/web/{folder}/materialsymbolsrounded/{name}_40px.svg'))
     paths = []
     for element in root:
         if element.tag != '{http://www.w3.org/2000/svg}path' or set(element.attrib) != {'d'}:

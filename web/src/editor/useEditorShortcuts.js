@@ -20,6 +20,8 @@ export default function useEditorShortcuts({
   endEdit,
   setHistogram,
   setInspectorOpen,
+  libraryOpen,
+  setLibraryOpen,
 }) {
   useEffect(() => {
     function keydown(event) {
@@ -32,6 +34,11 @@ export default function useEditorShortcuts({
         return;
       }
       if (isTyping(event.target) || exporting) return;
+      if (!command && event.key.toLowerCase() === "l") {
+        setLibraryOpen((open) => !open);
+        return;
+      }
+      if (libraryOpen) return;
       if (command && event.key.toLowerCase() === "o") {
         event.preventDefault();
         openFiles();
@@ -92,5 +99,6 @@ export default function useEditorShortcuts({
     auto.available,
     auto.toggle,
     dispatch,
+    libraryOpen,
   ]);
 }
