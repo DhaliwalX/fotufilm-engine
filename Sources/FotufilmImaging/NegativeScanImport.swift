@@ -22,6 +22,9 @@ public enum NegativeScanImport {
     }
 
     public static let linearSpace = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!
+    /// Where a film reading takes its samples: wide enough that no real scan's dense dyes fall
+    /// outside it and read as negative light.
+    public static let filmSpace = CGColorSpace(name: CGColorSpace.extendedLinearITUR_2020)!
 
     public static func decode(data: Data, identifierHint: String? = nil, linearSamples: Bool = false) throws -> CIImage {
         if RawDecode.isRaw(data: data, identifierHint: identifierHint) {
@@ -46,7 +49,8 @@ public enum NegativeScanImport {
         return atOrigin(image.oriented(forExifOrientation: orientation))
     }
 
-    public static func sampleBorder(image: CIImage, rect: CGRect) throws -> SIMD3<Float> {
+    public static func sampleBorder(image: CIImage, rect: CGRect,
+                                    colorSpace: CGColorSpace = linearSpace) throws -> SIMD3<Float> {
         let e = image.extent
         let r = CGRect(x: e.minX + rect.minX * e.width, y: e.maxY - rect.maxY * e.height,
                        width: rect.width * e.width, height: rect.height * e.height).integral.intersection(e)
@@ -54,7 +58,7 @@ public enum NegativeScanImport {
         var patch = atOrigin(image.cropped(to: r))
         let scale = min(1, 128 / max(r.width, r.height))
         patch = patch.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        let buffer = try samples(patch)
+        let buffer = try samples(patch, colorSpace: colorSpace)
         var result = SIMD3<Float>.zero
         for c in 0..<3 {
             let values = buffer.planes[c].filter { $0.isFinite && $0 > 0 }.sorted()
@@ -64,14 +68,15 @@ public enum NegativeScanImport {
         return result
     }
 
-    public static func samples(_ image: CIImage) throws -> ImageBuffer {
+    public static func samples(_ image: CIImage,
+                               colorSpace: CGColorSpace = linearSpace) throws -> ImageBuffer {
         let image = atOrigin(image)
         let w = Int(image.extent.width), h = Int(image.extent.height)
         guard w > 0, h > 0, w <= 40000, h <= 40000, w * h <= 150_000_000 else { throw Failure.unreadable }
         var rgba = [Float](repeating: 0, count: w * h * 4)
         let context = CIContext(options: [.workingColorSpace: linearSpace])
         context.render(image, toBitmap: &rgba, rowBytes: w * 16,
-                       bounds: CGRect(x: 0, y: 0, width: w, height: h), format: .RGBAf, colorSpace: linearSpace)
+                       bounds: CGRect(x: 0, y: 0, width: w, height: h), format: .RGBAf, colorSpace: colorSpace)
         var result = ImageBuffer(width: w, height: h)
         for c in 0..<3 { for i in 0..<w*h { result.planes[c][i] = rgba[4*i+c] } }
         return result

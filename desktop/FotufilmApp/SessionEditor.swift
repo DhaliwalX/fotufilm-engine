@@ -84,6 +84,13 @@ final class DesktopEditorViewController: SessionViewController {
     private lazy var padOpenFilesItem = padToolbarItem(
         symbol: "folder", title: "Open from Files",
         action: #selector(openDocument(_:)))
+    private lazy var padNegativeItem: UIBarButtonItem = {
+        let item = UIBarButtonItem(
+            image: UIImage(systemName: "film"),
+            menu: SessionNegativeScanController.openingMenu { [weak self] in self })
+        item.accessibilityLabel = "Convert Negative"
+        return item
+    }()
     private lazy var padHistogramItem = padToolbarItem(
         symbol: "waveform", title: "Histogram",
         action: #selector(toggleHistogram(_:)))
@@ -358,7 +365,7 @@ final class DesktopEditorViewController: SessionViewController {
     private func configurePadToolbar() {
         navigationItem.largeTitleDisplayMode = .never
         navigationItem.leftBarButtonItems = [
-            padStockItem, padOpenPhotoItem, padOpenFilesItem,
+            padStockItem, padOpenPhotoItem, padOpenFilesItem, padNegativeItem,
         ]
         navigationItem.rightBarButtonItems = [
             padSettingsItem, padInspectorItem, padExportItem, padResetItem,

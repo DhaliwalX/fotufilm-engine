@@ -12,6 +12,23 @@ import AppKit
 import FotufilmImaging
 #endif
 
+/// What the crop canvas frames: the picture it stands over, and where the crop it draws is kept.
+/// The photo editor's model is one; the scan editor frames a converted negative through another.
+@MainActor
+protocol CropCanvasSource: AnyObject {
+    /// The whole picture the window stands over, turned the way it will print.
+    var cropPicture: PlatformImage? { get }
+    /// The kept rectangle, from the top left; nil for the whole picture.
+    var cropRectangle: CGRect? { get }
+    /// A four-corner crop, for a source that keeps one.
+    var cropCorners: QuadrilateralCrop? { get }
+    var cropAspect: AspectOption { get }
+    /// Changes whenever the crop is replaced by anything but a drag: an undo, another picture.
+    var cropToken: UUID { get }
+    /// Keeps what a finished drag chose.
+    func commitCrop(rectangle: CGRect?, corners: QuadrilateralCrop?)
+}
+
 /// The crop: the photograph is drawn by this view rather than by the zoomable canvas, scaled so that
 /// the crop sits large and centred — and when a drag ends, the picture settles to re-centre what was
 /// just chosen.
@@ -19,7 +36,7 @@ import FotufilmImaging
 /// Every rectangle here has its origin at the top left, which is what `SessionView` gives on both
 /// platforms.
 final class CropCanvasView: DragTarget {
-    private let model: DesktopEditorModel
+    private let model: CropCanvasSource
 
     private enum Side { case minX, maxX, minY, maxY }
 
@@ -33,13 +50,13 @@ final class CropCanvasView: DragTarget {
     // the whole editor, including thumbnail generation and persistence.
     private var draftRectangle: CGRect?
     private var draftCorners: QuadrilateralCrop?
-    private var dragStartEdit: EditState?
+    private var dragStart: (rectangle: CGRect?, corners: QuadrilateralCrop?)?
     private var dragSourceToken: UUID?
     private weak var previewSource: PlatformImage?
     private var previewImage: PlatformImage?
     private var previewGeneration = UUID()
 
-    private var corners: QuadrilateralCrop? { draftCorners ?? model.edit.cornerCrop }
+    private var corners: QuadrilateralCrop? { draftCorners ?? model.cropCorners }
 
     private var cornerGrip: Int?
     private var grip: Grip?
@@ -64,7 +81,7 @@ final class CropCanvasView: DragTarget {
     private var thirdsStrength: CGFloat = 0
     private var wantsThirds = false
 
-    init(model: DesktopEditorModel) {
+    init(model: CropCanvasSource) {
         self.model = model
         super.init(frame: .zero)
         focusCrop = unitCrop
@@ -95,7 +112,7 @@ final class CropCanvasView: DragTarget {
     }
 
     func imageChanged() {
-        setAXLabel(model.edit.cornerCrop == nil ? "Crop rectangle" : "Four-corner crop")
+        setAXLabel(model.cropCorners == nil ? "Crop rectangle" : "Four-corner crop")
         preparePreview()
         redraw()
     }
@@ -103,12 +120,12 @@ final class CropCanvasView: DragTarget {
     /// Rasterize a bounded display copy once per print, off the UI thread. Drag frames
     /// reuse it instead of repeatedly scaling a full-resolution scan. Export keeps the original.
     private func preparePreview() {
-        guard previewSource !== model.processed else { return }
-        previewSource = model.processed
+        guard previewSource !== model.cropPicture else { return }
+        previewSource = model.cropPicture
         previewImage = nil
         let generation = UUID()
         previewGeneration = generation
-        guard let source = model.processed else { return }
+        guard let source = model.cropPicture else { return }
         #if canImport(UIKit)
         let cg = source.cgImage
         #else
@@ -179,12 +196,11 @@ final class CropCanvasView: DragTarget {
     }
 
     private var unitCrop: CGRect {
-        draftRectangle ?? UnitCropCoordinates.verticallyFlipped(
-            model.edit.crop ?? CGRect(x: 0, y: 0, width: 1, height: 1))
+        draftRectangle ?? model.cropRectangle ?? CGRect(x: 0, y: 0, width: 1, height: 1)
     }
 
     private var presentation: Presentation? {
-        guard let image = model.processed else { return nil }
+        guard let image = model.cropPicture else { return nil }
         let stage = stageRect
         guard stage.width > 1, stage.height > 1 else { return nil }
         return Presentation(imageSize: image.size, stage: stage, focus: corners == nil ? focusCrop : CGRect(x: 0, y: 0, width: 1, height: 1))
@@ -195,14 +211,14 @@ final class CropCanvasView: DragTarget {
     }
 
     private var lockedRatio: CGFloat? {
-        guard let image = model.processed else { return nil }
+        guard let image = model.cropPicture else { return nil }
         return model.cropAspect.ratio(for: image.size)
     }
 
     // MARK: - Drawing
 
     override func draw(_ dirtyRect: CGRect) {
-        guard let image = model.processed, let presentation,
+        guard let image = model.cropPicture, let presentation,
               let context = Draw.context else { return }
         let rect = presentation.display(unitCrop)
 
@@ -300,8 +316,8 @@ final class CropCanvasView: DragTarget {
                distance(corners.points[index], to: location, frame: presentation.imageRect) <= handleReach {
                 draftCorners = corners
                 dragActive = true
-                dragStartEdit = model.edit
-                dragSourceToken = model.canvasResetToken
+                dragStart = (model.cropRectangle, model.cropCorners)
+                dragSourceToken = model.cropToken
             } else { cornerGrip = nil }
             return
         }
@@ -312,8 +328,8 @@ final class CropCanvasView: DragTarget {
         grip = hitTest(location, rect: rect)
         if grip != nil {
             draftRectangle = unitCrop
-            dragStartEdit = model.edit
-            dragSourceToken = model.canvasResetToken
+            dragStart = (model.cropRectangle, model.cropCorners)
+            dragSourceToken = model.cropToken
             setThirds(visible: true)
         }
     }
@@ -342,28 +358,27 @@ final class CropCanvasView: DragTarget {
 
     private func ended() {
         let rectangle = draftRectangle, quadrilateral = draftCorners
-        let initial = dragStartEdit, token = dragSourceToken
+        let initial = dragStart, token = dragSourceToken
         draftRectangle = nil
         draftCorners = nil
-        dragStartEdit = nil
+        dragStart = nil
         dragSourceToken = nil
         cornerGrip = nil
         grip = nil
         dragActive = false
 
         // An undo or another photograph arriving during a drag supersedes the local draft.
-        if token == model.canvasResetToken, let initial, model.edit == initial {
-            var next = initial
+        if token == model.cropToken, let initial, model.cropRectangle == initial.rectangle,
+           model.cropCorners == initial.corners {
             if let quadrilateral {
-                next.cornerCrop = quadrilateral
+                if quadrilateral != initial.corners {
+                    model.commitCrop(rectangle: initial.rectangle, corners: quadrilateral)
+                }
             } else if let rectangle {
-                next.crop = rectangle.width > 0.999 && rectangle.height > 0.999
-                    ? nil : UnitCropCoordinates.verticallyFlipped(rectangle)
-            }
-            if next != initial {
-                model.beginContinuousEdit()
-                model.edit = next
-                model.endContinuousEdit()
+                let kept = rectangle.width > 0.999 && rectangle.height > 0.999 ? nil : rectangle
+                if kept != initial.rectangle {
+                    model.commitCrop(rectangle: kept, corners: initial.corners)
+                }
             }
         }
         setThirds(visible: false)
@@ -574,5 +589,22 @@ final class CropCanvasView: DragTarget {
 
         redraw()
         if !busy { stopDisplayLink() }
+    }
+}
+
+extension DesktopEditorModel: CropCanvasSource {
+    var cropPicture: PlatformImage? { processed }
+    var cropRectangle: CGRect? { UnitCropCoordinates.verticallyFlipped(edit.crop) }
+    var cropCorners: QuadrilateralCrop? { edit.cornerCrop }
+    var cropToken: UUID { canvasResetToken }
+
+    func commitCrop(rectangle: CGRect?, corners: QuadrilateralCrop?) {
+        var next = edit
+        next.crop = UnitCropCoordinates.verticallyFlipped(rectangle)
+        next.cornerCrop = corners
+        guard next != edit else { return }
+        beginContinuousEdit()
+        edit = next
+        endContinuousEdit()
     }
 }
