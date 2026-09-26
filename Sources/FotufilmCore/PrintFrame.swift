@@ -279,15 +279,16 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
     public let hasLustre: Bool
 
     public init(frame: PrintFrame, formatID: String?, stockID: String,
-                paper: PrintPaper, viewingKelvin: Float? = nil,
+                paper: PrintPaper, viewingKelvin: Float? = nil, displayBlack: Bool = true,
                 negativeViewing: NegativeViewing = .lightBox) {
         self.init(frame: frame, formatID: formatID, definition: FilmStock.presetDefinitions[stockID],
-                  paper: paper, viewingKelvin: viewingKelvin, negativeViewing: negativeViewing)
+                  paper: paper, viewingKelvin: viewingKelvin, displayBlack: displayBlack,
+                  negativeViewing: negativeViewing)
     }
 
     /// Explicit stock metadata also supports isolated runtimes without a process-wide pack registry.
     public init(frame: PrintFrame, formatID: String?, definition: FilmStockDefinition?,
-                paper: PrintPaper, viewingKelvin: Float? = nil,
+                paper: PrintPaper, viewingKelvin: Float? = nil, displayBlack: Bool = true,
                 negativeViewing: NegativeViewing = .lightBox) {
         let nativeID = definition?.nativeFormatID
         let motionStock = nativeID.flatMap(FilmFormat.preset(id:))?.isMotionPicture == true
@@ -348,7 +349,7 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
         } else {
             edgeRGB = .zero
         }
-        rebateRGB = self.frame == .carrier ? paper.frameDenseRGB(viewingKelvin: viewingKelvin) ?? .zero : .zero
+        rebateRGB = self.frame == .carrier ? paper.frameDenseRGB(viewingKelvin: viewingKelvin, displayBlack: displayBlack) ?? .zero : .zero
         switch frame {
         case .none:
             baseRGB = .zero
@@ -398,25 +399,25 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
                 detail = "Choose a slide film in 35mm or 120."
             }
         case .paper, .paper5x7, .paper8x10, .paper5x5:
-            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? .zero
+            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin, displayBlack: displayBlack) ?? .zero
             let size = sheet.map { "\(Int(($0.widthMM / 25.4).rounded())) × \(Int(($0.heightMM / 25.4).rounded())) in" } ?? ""
             detail = reflective ? "\(paper.name) · \(hasLustre ? "lustre" : "high gloss") · \(size)"
                 : "Choose a reflection paper such as Ektacolor Edge or Ilfochrome."
         case .carrier:
-            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? .zero
+            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin, displayBlack: displayBlack) ?? .zero
             detail = carrierAvailable
                 ? "\(paper.name) · filed carrier · 8 × 10 in"
                 : "Choose a negative film and a reflection paper such as Ektacolor Edge."
         case .emulsion:
             // The band itself is developed by the host; the margin around it is the paper's white.
-            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? SIMD3(repeating: 0.91)
+            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin, displayBlack: displayBlack) ?? SIMD3(repeating: 0.91)
             detail = edgeAvailable
                 ? "\(name) · \(definition?.name ?? "Film") · unexposed edge"
                 : "Choose a film and a roll or sheet film format."
         case .mount:
             // Reflection outputs retain their modelled paper white. Other outputs use a
             // neutral presentation mount; this style does not identify a manufactured stock.
-            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? SIMD3(repeating: 0.91)
+            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin, displayBlack: displayBlack) ?? SIMD3(repeating: 0.91)
             detail = frame.detail
         case .darkMount:
             // A neutral presentation board, not the paper's own maximum density.
@@ -433,37 +434,41 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
 extension PrintPaper {
     /// An unexposed border is clear paper for negative paper and maximum density for positive
     /// paper, under the viewing lamp. Crystal Archive shares the engine's explicitly documented
-    /// RA-4 curve proxy.
-    func frameBaseRGB(viewingKelvin: Float?) -> SIMD3<Float>? {
-        frameRGB(viewingKelvin: viewingKelvin, dense: false)
+    /// RA-4 curve proxy. With `displayBlack` the paper's maximum density is display black, as it
+    /// is in the photograph.
+    func frameBaseRGB(viewingKelvin: Float?, displayBlack: Bool = true) -> SIMD3<Float>? {
+        frameRGB(viewingKelvin: viewingKelvin, dense: isPositivePaper, displayBlack: displayBlack)
     }
 
     /// A fully exposed negative-paper border, as the clear rebate of a negative prints through
     /// a filed carrier. Positive paper has no dark rebate exposure to print.
-    func frameDenseRGB(viewingKelvin: Float?) -> SIMD3<Float>? {
-        isPositivePaper ? nil : frameRGB(viewingKelvin: viewingKelvin, dense: true)
+    func frameDenseRGB(viewingKelvin: Float?, displayBlack: Bool = true) -> SIMD3<Float>? {
+        isPositivePaper ? nil
+            : frameRGB(viewingKelvin: viewingKelvin, dense: true, displayBlack: displayBlack)
     }
 
     /// Density above the paper base, which is what the receiver reads and what the photograph's
     /// own tones are made of: clear paper is the print's white in the frame and in the picture.
-    private func frameRGB(viewingKelvin: Float?, dense: Bool) -> SIMD3<Float>? {
-        let density: SIMD3<Float>
-        func pick(_ curve: CharacteristicCurve) -> Float { dense ? curve.dMax - curve.dMin : 0 }
-        func maximum(_ curve: CharacteristicCurve) -> Float { curve.dMax - curve.dMin }
+    private func frameRGB(viewingKelvin: Float?, dense: Bool, displayBlack: Bool) -> SIMD3<Float>? {
+        func range(_ curve: CharacteristicCurve) -> Float { curve.dMax - curve.dMin }
+        let maximum: SIMD3<Float>
         switch self {
         case .ektacolorEdge:
-            density = SIMD3(pick(Self.ra4PrintCurveRed), pick(Self.ra4PrintCurve), pick(Self.ra4PrintCurveBlue))
+            maximum = SIMD3(range(Self.ra4PrintCurveRed), range(Self.ra4PrintCurve),
+                            range(Self.ra4PrintCurveBlue))
         case .enduraPremier:
-            density = SIMD3(pick(EnduraPremierPaperSpectra.redCurve),
-                            pick(EnduraPremierPaperSpectra.greenCurve), pick(EnduraPremierPaperSpectra.blueCurve))
-        case .crystalArchive: density = SIMD3(repeating: pick(Self.ra4PrintCurve))
-        case .ilfochromeCPS1K: density = SIMD3(repeating: maximum(Self.ilfochromeNormalCurve))
-        case .ilfochromeCLM1K: density = SIMD3(repeating: maximum(Self.ilfochromeMediumCurve))
+            maximum = SIMD3(range(EnduraPremierPaperSpectra.redCurve),
+                            range(EnduraPremierPaperSpectra.greenCurve),
+                            range(EnduraPremierPaperSpectra.blueCurve))
+        case .crystalArchive: maximum = SIMD3(repeating: range(Self.ra4PrintCurve))
+        case .ilfochromeCPS1K: maximum = SIMD3(repeating: range(Self.ilfochromeNormalCurve))
+        case .ilfochromeCLM1K: maximum = SIMD3(repeating: range(Self.ilfochromeMediumCurve))
         default: return nil
         }
-        let receiver = SpectralRuntime.PrintReceiver(dyes: analyticalDyes,
+        var receiver = SpectralRuntime.PrintReceiver(dyes: analyticalDyes,
             viewingLight: viewingKelvin.map(SpectralRuntime.printLightSPD) ?? Illuminant.d50,
             unmix: PrintDyeUnmix(dyes: analyticalDyes))
-        return receiver.rgb(density: density)
+        if displayBlack { receiver = receiver.displayingBlack(at: maximum, midDensity: midDensity) }
+        return receiver.rgb(density: dense ? maximum : .zero)
     }
 }

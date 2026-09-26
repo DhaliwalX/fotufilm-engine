@@ -1521,6 +1521,26 @@ public enum EditorControlCatalogue {
                                          generic: false),
             documentation: "Changes the viewing lamp without re-timing the developed print; digital media ignore it."),
         EditorControl(
+            .displayBlack, title: "Display Black",
+            detail: "Show the paper's deepest black as the screen's black.",
+            section: .printPaper, kind: .toggle(restingOn: true), availability: .printStage,
+            persistence: .key("displayBlack", .same),
+            binding: .displayBlack,
+            surfaces: [.app, .desktop, .cli, .web],
+            omitted: [
+                .android: "Android keeps the default display black; its editor is not being extended.",
+                .resolve: "the host owns the delivery's black level through its colour corrector",
+                .finalcut: "the host owns the delivery's black level through its colour corrector",
+            ],
+            web: .profile,
+            commandLine: CommandLineFlag("--display-black", placeholder: "<0|1>",
+                                         help: "Show a physical print's paper black as display black, "
+                                             + "white and mid-grey held (default: 1). 0 shows the paper's own "
+                                             + "maximum density, as a viewing booth does. Scans, "
+                                             + "screen and negative output ignore it",
+                                         generic: false),
+            documentation: "Shows a physical print's maximum density as display black, holding paper white and mid-grey; off shows the paper's black as a viewing booth does."),
+        EditorControl(
             .printCorrection, title: "Channel Contrast Match",
             detail: "Optional digital channel-contrast correction; not a printer-light adjustment.",
             section: .printPaper,

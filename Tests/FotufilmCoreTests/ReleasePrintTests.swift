@@ -28,7 +28,8 @@ final class ReleasePrintTests: XCTestCase {
                     }
                 }
                 let tone = SpectralRuntime.neutralToneScale(
-                    stops: [0], stock: stock, paper: paper, printCorrection: 1)
+                    stops: [0], stock: stock, paper: paper, printCorrection: 1,
+                    displayBlack: false)
                 let receiver = SpectralRuntime.printReceiver(stock: stock, paper: paper,
                     viewingLight: SpectralRuntime.referenceViewingLight(for: paper))
                 let density = SIMD3((0..<3).map {

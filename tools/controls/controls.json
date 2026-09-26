@@ -4680,6 +4680,40 @@
     },
     {
       "availability" : "printStage",
+      "binding" : "displayBlack",
+      "commandLineFlag" : "--display-black",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Show a physical print's paper black as display black, white and mid-grey held (default: 1). 0 shows the paper's own maximum density, as a viewing booth does. Scans, screen and negative output ignore it",
+      "commandLinePlaceholder" : "<0|1>",
+      "detail" : "Show the paper's deepest black as the screen's black.",
+      "documentation" : "Shows a physical print's maximum density as display black, holding paper white and mid-grey; off shows the paper's black as a viewing booth does.",
+      "drives" : [
+
+      ],
+      "field" : "displayBlack",
+      "group" : "print",
+      "kind" : "toggle",
+      "omitted" : {
+        "android" : "Android keeps the default display black; its editor is not being extended.",
+        "finalcut" : "the host owns the delivery's black level through its colour corrector",
+        "resolve" : "the host owns the delivery's black level through its colour corrector"
+      },
+      "persistedKey" : "displayBlack",
+      "restingOn" : true,
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web",
+        "cli"
+      ],
+      "title" : "Display Black",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "printStage",
       "binding" : "printCorrection",
       "commandLineFlag" : "--print-correction",
       "commandLineGeneric" : true,

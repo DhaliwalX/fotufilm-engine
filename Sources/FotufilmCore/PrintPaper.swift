@@ -187,6 +187,13 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// characterize their receiver bands into display colour.
     public var isScan: Bool { self == .labScan || self == .telecine }
 
+    /// Whether this medium ends in a physical print with a paper black of its own for display
+    /// black to compensate: a reflection or projection print. Scans, the digital reference,
+    /// viewed negatives and directly viewed transparencies have none.
+    public func hasPaperBlack(for stock: FilmStock) -> Bool {
+        self != .screen && !isScan && !isNegative && !viewsFilmDirectly(for: stock)
+    }
+
     /// Whether a caller can replace the medium's reference viewing illuminant. Physical sheets
     /// and projected positives can be inspected under another lamp. A scan is already a digital
     /// signal, and the screen is the fixed D65 display the renderer targets, so neither takes a

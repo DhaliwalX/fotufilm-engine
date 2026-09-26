@@ -33,9 +33,11 @@ public enum AutoAdjustment {
         let step: Float = 0.25
         let reach: Float = 12
         let stops = Array(stride(from: -reach, through: reach, by: step))
+        // Latitude is where the medium itself separates tones, so it is read on the paper as
+        // the booth sees it: display black would stretch the paper's flattened toe into slope.
         let scale = SpectralRuntime.neutralToneScale(
             stops: stops, stock: stock, paper: paper,
-            printCorrection: printCorrection, callier: callier)
+            printCorrection: printCorrection, callier: callier, displayBlack: false)
         let logScale = scale.map { log2(max($0, 1e-6)) }
         func slope(_ index: Int) -> Float {
             (logScale[index + 1] - logScale[index - 1]) / (2 * step)

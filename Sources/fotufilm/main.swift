@@ -1199,6 +1199,10 @@ if let p = flags["--push"] {
     options.developmentEV = stops
 }
 if let k = flags["--print-light"] { options.printViewingKelvin = Float(k) }
+if let black = flags["--display-black"] {
+    guard black == "0" || black == "1" else { fail("--display-black takes 0 or 1") }
+    options.displayBlack = black == "1"
+}
 if let s = flags["--seed"] { options.seed = UInt64(s) ?? options.seed }
 if let coating = flags["--filter-coating"], FilterCoating(rawValue: coating) == nil {
     fail("Unknown coating '\(coating)'. Choices: "

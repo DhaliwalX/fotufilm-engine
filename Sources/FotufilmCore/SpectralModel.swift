@@ -369,6 +369,7 @@ public enum SpectralRuntime {
                               paper: PrintPaper = .default,
                               bleachBypass: Float = 0,
                               printViewingKelvin: Float? = nil,
+                              displayBlack: Bool = true,
                               callier: Float = 1,
                               printer: PrinterProfile? = nil,
                               digitalReference: DigitalReferenceStyle = .default,
@@ -385,8 +386,10 @@ public enum SpectralRuntime {
         let printViewingKelvin = !paper.acceptsViewingIlluminant ? nil
             : printLightKelvin(printViewingKelvin)
         let callier = callierCoefficient(callier, stock: stock, paper: paper)
+        let displayBlack = displayBlack || !paper.hasPaperBlack(for: stock)
         let key = cacheIdentifier(for: stock, paper: paper, bleachBypass: bleachBypass,
-                                  printViewingKelvin: printViewingKelvin, callier: callier,
+                                  printViewingKelvin: printViewingKelvin,
+                                  displayBlack: displayBlack, callier: callier,
                                   printer: printer, digitalReference: digitalReference,
                                   screenGrade: screenGrade, screenExposureEV: screenExposureEV)
         lock.lock()
@@ -405,7 +408,8 @@ public enum SpectralRuntime {
         lock.unlock()
 
         let built = buildTables(for: stock, paper: paper, bleachBypass: bleachBypass,
-                                printViewingKelvin: printViewingKelvin, callier: callier,
+                                printViewingKelvin: printViewingKelvin,
+                                displayBlack: displayBlack, callier: callier,
                                 printer: printer, digitalReference: digitalReference,
                                 screenGrade: screenGrade, screenExposureEV: screenExposureEV)
 
@@ -475,6 +479,7 @@ public enum SpectralRuntime {
                                        paper: PrintPaper = .default,
                                        bleachBypass: Float = 0,
                                        printViewingKelvin: Float? = nil,
+                                       displayBlack: Bool = true,
                                        callier: Float = 1,
                                        printer: PrinterProfile? = nil,
                                        digitalReference: DigitalReferenceStyle = .default,
@@ -540,6 +545,10 @@ public enum SpectralRuntime {
            let kelvin = printLightKelvin(printViewingKelvin) {
             h = (h ^ UInt64(kelvin.bitPattern)) &* 0x9E3779B97F4A7C15
         }
+        // Display black is the default, so only a paper-black print changes the identity.
+        if !displayBlack, paper.hasPaperBlack(for: stock) {
+            h = (h ^ 0x50415045524B) &* 0x100000001b3
+        }
         // A diffuser head is the read the sheets were measured in, so it leaves the identity alone.
         let callier = callierCoefficient(callier, stock: stock, paper: paper)
         if callier != 1 {
@@ -559,6 +568,7 @@ public enum SpectralRuntime {
                                     paper: PrintPaper,
                                     bleachBypass: Float = 0,
                                     printViewingKelvin: Float? = nil,
+                                    displayBlack: Bool = true,
                                     callier: Float = 1,
                                     printer: PrinterProfile? = nil,
                                     digitalReference: DigitalReferenceStyle = .default,
@@ -738,21 +748,15 @@ public enum SpectralRuntime {
                 return paper.deliversRec709
                     ? ColorScience.linearSRGBToDisplayP3(rgb) : rgb
             }
-        } else if !stock.isMonochrome {
-            let receiver = printReceiver(stock: stock, paper: paper,
-                                         viewingLight: viewingLight)
-            paperOutput = buildLUT { activation in
-                receiver.rgb(density: SIMD3(activation.x * paperRanges[0],
-                                            activation.y * paperRanges[1],
-                                            activation.z * paperRanges[2]))
-            }
         } else {
+            let maximum = SIMD3(paperRanges[0], paperRanges[1], paperRanges[2])
+            var receiver = printReceiver(stock: stock, paper: paper,
+                                         viewingLight: viewingLight)
+            if displayBlack {
+                receiver = receiver.displayingBlack(at: maximum, midDensity: paper.midDensity)
+            }
             paperOutput = buildLUT { activation in
-                let density = [activation.x * paperRanges[0],
-                               activation.y * paperRanges[1],
-                               activation.z * paperRanges[2]]
-                return transmissionRGB(density: density, dyes: paper.dyes,
-                                       illuminant: viewingLight)
+                receiver.rgb(density: activation * maximum)
             }
         }
         return SpectralPipelineTables(exposure: exposure, filmOutput: printing,
@@ -2027,8 +2031,45 @@ public enum SpectralRuntime {
         let dyes: [[Float]]
         let viewingLight: [Float]?
         let unmix: PrintDyeUnmix?
+        /// The paper's own white and black as this receiver reads them, and the exponent that
+        /// holds its mid-grey aim, when its black is shown as display black; nil reads the paper
+        /// as the booth sees it.
+        var levels: (white: SIMD3<Float>, black: SIMD3<Float>, gamma: SIMD3<Float>)? = nil
 
         func rgb(density: SIMD3<Float>) -> SIMD3<Float> {
+            let read = viewed(density)
+            guard let levels else { return read }
+            var shown = SIMD3<Float>()
+            for c in 0..<3 {
+                // No clamp: a dye colour outside the P3 basis reads a component below zero, and
+                // it carries on through, mirrored, to the delivery that judges it.
+                let span = max(levels.white[c] - levels.black[c], 1e-6)
+                let t = (read[c] - levels.black[c]) / span
+                shown[c] = levels.white[c] * (t < 0 ? -pow(-t, levels.gamma[c])
+                                                    : pow(t, levels.gamma[c]))
+            }
+            return shown
+        }
+
+        /// The same receiver with the paper's black at `maximum` density shown as display black:
+        /// black-point compensation record by record — paper white holds, maximum density lands
+        /// on zero — then the power through both ends that returns the paper's mid-grey aim,
+        /// `midDensity` below white, to where the print was timed to put it. Only the shadows
+        /// move; the tone scale above mid-grey is the paper's within a fraction of a percent.
+        func displayingBlack(at maximum: SIMD3<Float>, midDensity: Float) -> PrintReceiver {
+            let white = viewed(.zero), black = viewed(maximum)
+            let aim = pow(10, -midDensity)
+            var gamma = SIMD3<Float>(repeating: 1)
+            for c in 0..<3 {
+                let t = (white[c] * aim - black[c]) / max(white[c] - black[c], 1e-6)
+                if t > 0, t < 1 { gamma[c] = log(aim) / log(t) }
+            }
+            var receiver = self
+            receiver.levels = (white: white, black: black, gamma: gamma)
+            return receiver
+        }
+
+        private func viewed(_ density: SIMD3<Float>) -> SIMD3<Float> {
             guard let unmix else {
                 return SpectralRuntime.transmissionRGB(
                     density: [density.x, density.y, density.z], dyes: dyes,
@@ -2270,7 +2311,8 @@ extension SpectralRuntime {
                                  digitalReference: DigitalReferenceStyle = .default,
                                  sceneHighlightStops: Float? = nil,
                                  screenGrade: Float = 2,
-                                 screenExposureEV: Float = 0) -> [Float] {
+                                 screenExposureEV: Float = 0,
+                                 displayBlack: Bool = true) -> [Float] {
         let paper = paper.resolved(for: stock)
         let callier = callierCoefficient(callier, stock: stock, paper: paper)
         let grade = effectiveScreenGrade(screenGrade, stock: stock, paper: paper,
@@ -2356,8 +2398,13 @@ extension SpectralRuntime {
             xMids = xMids.map { $0 + paper.exposureDirection * (levels.shift + exposureShift) }
         }
         let viewingLight = referenceViewingLight(for: paper)
-        let receiver = printReceiver(stock: stock, paper: paper,
+        var receiver = printReceiver(stock: stock, paper: paper,
                                      viewingLight: viewingLight)
+        if displayBlack, paper.hasPaperBlack(for: stock) {
+            let ranges = curves.map { $0.dMax - $0.dMin }
+            receiver = receiver.displayingBlack(at: SIMD3(ranges[0], ranges[1], ranges[2]),
+                                                midDensity: paper.midDensity)
+        }
         return stops.map { s in
             let density = (0..<3).map {
                 stock.developedDensity(layer: $0, logExposure: s * perStop)

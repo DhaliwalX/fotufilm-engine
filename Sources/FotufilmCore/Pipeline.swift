@@ -182,6 +182,15 @@ public struct FotufilmEngine {
         /// values are bounded to 1000...25000 K and canonicalized to 100 K buckets; invalid or
         /// non-positive values use the reference. The developed print is not re-timed.
         public var printViewingKelvin: Float? = nil
+        /// Whether a physical print's maximum density is shown as display black. A print's black
+        /// is its paper's own maximum density — about 2.1 D on RA-4, a visible grey on a screen
+        /// that can show far deeper. On, each record is stretched between the paper's white and
+        /// its black so that white holds and black lands on zero, the black-point compensation a
+        /// colour-managed proof applies, with mid-grey held where the print was timed to put it.
+        /// Off shows the paper's black as the booth sees it. Only reflection and projection
+        /// prints have one; scans, the digital reference, viewed negatives and directly viewed
+        /// transparencies ignore it.
+        public var displayBlack = true
         /// The grade laid over the finished image — lift, gamma and gain by band.
         public var grade: ColorGrade = .neutral
         /// Which signal that grade works on. `.linear` is what this engine has always done and stays
@@ -420,9 +429,9 @@ public struct FotufilmEngine {
         let shoulderKnee = options.sdrShoulderKnee(for: stock)
         for i in 0..<(width * height) {
             let alpha = bytesPerPixel >= 4 ? Float(pixels[i * bytesPerPixel + 3]) : 255
-            // Into the delivery's primaries first, then its shoulder: the order every other
-            // sRGB delivery takes, so a saturated highlight is rolled in the space it is shown in.
-            let srgb = ColorScience.linearDisplayP3ToSRGB(SIMD3<Float>(
+            // Into the delivery's gamut first, then its shoulder: the order every other sRGB
+            // delivery takes, so a saturated highlight is rolled in the space it is shown in.
+            let srgb = ColorScience.linearDisplayP3ToSRGBGamut(SIMD3<Float>(
                 out.planes[0][i], out.planes[1][i], out.planes[2][i]))
             for c in 0..<3 {
                 let v = ColorScience.linearToSrgb(

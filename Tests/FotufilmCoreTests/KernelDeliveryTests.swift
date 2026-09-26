@@ -206,6 +206,51 @@ final class KernelDeliveryTests: XCTestCase {
         assertMatches(inKernel, host, tolerance: 1e-5)
     }
 
+    /// The kernel's gamut fit is `ColorScience.fitToGamut`, expression for expression. A
+    /// saturating matrix pushes the print well outside the container so both ends of the fit —
+    /// channels below zero and above one — are exercised.
+    func testKernelGamutFitMatchesTheHostFit() throws {
+        guard HalideBackend.isAvailable else { throw XCTSkip("Halide not linked") }
+        let width = 64, height = 32
+        let stock = TestStocks.negative
+        let density = try developed(stock, width: width, height: height)
+        let linear = try XCTUnwrap(HalideBackend.print(
+            density: density, stock: stock, options: options()))
+        let saturating: [Float] = [
+             2.2, -1.0, -0.2,
+            -0.6,  1.8, -0.2,
+            -0.3, -0.5,  1.8,
+        ]
+        let luma = ColorScience.srgbLuminanceWeights
+        let inKernel = try XCTUnwrap(HalideBackend.print(
+            density: density, stock: stock, options: options(),
+            outputTransform: FilmOutputTransform(
+                matrix: saturating, transfer: .powerLaw,
+                coefficients: FilmOutputTransform.srgbCoefficients,
+                premultiplied: false, shoulderKnee: knee,
+                gamutLuminance: SIMD3(luma.0, luma.1, luma.2))))
+
+        var host = [Float](repeating: 0, count: linear.pixelCount * 4)
+        var fitted = 0
+        for index in 0..<linear.pixelCount {
+            let p3 = SIMD3(linear.planes[0][index], linear.planes[1][index],
+                           linear.planes[2][index])
+            let row = { (r: Int) in
+                saturating[3 * r] * p3.x + saturating[3 * r + 1] * p3.y
+                    + saturating[3 * r + 2] * p3.z
+            }
+            let wide = SIMD3(row(0), row(1), row(2))
+            let inside = ColorScience.fitToGamut(wide, luminance: luma)
+            if inside != wide { fitted += 1 }
+            for channel in 0..<3 {
+                host[index * 4 + channel] = ColorScience.linearToSrgb(
+                    ColorScience.displayShoulder(inside[channel], knee: knee))
+            }
+        }
+        XCTAssertGreaterThan(fitted, linear.pixelCount / 8, "the matrix left the print in gamut")
+        assertMatches(inKernel, host, tolerance: 1e-5)
+    }
+
     /// Until a delivery replaces it, the configuration carries the material's own SDR knee, which
     /// the byte delivery reads: display white for a negative's print, bounded by its paper.
     func testTheConfigurationCarriesTheMaterialsOwnKnee() throws {

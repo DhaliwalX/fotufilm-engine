@@ -95,8 +95,10 @@ final class BleachBypassTests: XCTestCase {
             guard peak > 1e-6 else { return 0 }
             return (peak - min(rgb.x, rgb.y, rgb.z)) / peak
         }
-        let tables0 = SpectralRuntime.tables(for: stock, bleachBypass: 0)
-        let tables1 = SpectralRuntime.tables(for: stock, bleachBypass: 1)
+        // The paper's own cast on the deepest tones is the measure, so read it as the booth sees
+        // it rather than stretched to display black.
+        let tables0 = SpectralRuntime.tables(for: stock, bleachBypass: 0, displayBlack: false)
+        let tables1 = SpectralRuntime.tables(for: stock, bleachBypass: 1, displayBlack: false)
         let paper = FotufilmEngine.Options().paper(for: stock)
         let paperCurves = paper.printCurves(for: stock)
         let perStop = Float(log10(2.0))

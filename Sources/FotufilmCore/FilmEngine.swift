@@ -1506,6 +1506,7 @@ public struct FilmEngineInvocation {
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
                 printViewingKelvin: options.printViewingKelvin,
+                displayBlack: options.displayBlack,
                 callier: callier, printer: printer,
                 digitalReference: options.digitalReference,
                 screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV)
@@ -1513,6 +1514,7 @@ public struct FilmEngineInvocation {
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
                 printViewingKelvin: options.printViewingKelvin,
+                displayBlack: options.displayBlack,
                 callier: callier, printer: printer,
                 digitalReference: options.digitalReference,
                 screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV)

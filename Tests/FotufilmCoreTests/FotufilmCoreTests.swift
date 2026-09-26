@@ -654,7 +654,7 @@ final class PipelineTests: XCTestCase {
             working.x, working.y, working.z, size: width))
         let seed = UInt32(truncatingIfNeeded: options.seed)
         for index in 0..<(width * height) {
-            let printSRGB = ColorScience.linearDisplayP3ToSRGB(SIMD3<Float>(
+            let printSRGB = ColorScience.linearDisplayP3ToSRGBGamut(SIMD3<Float>(
                 rendered.planes[0][index], rendered.planes[1][index],
                 rendered.planes[2][index]))
             for channel in 0..<3 {

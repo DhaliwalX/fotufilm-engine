@@ -147,6 +147,46 @@ public enum ColorScience {
     /// Swift reference path mirrors those kernels value for value.
     public static let luminanceWeights: (Float, Float, Float) = (0.2627002, 0.6779981, 0.0593017)
 
+    /// CIE Y weights for linear sRGB and Rec.709 — row two of their shared RGB to XYZ matrix.
+    public static let srgbLuminanceWeights: (Float, Float, Float) = (0.2126390, 0.7151687, 0.0721923)
+
+    /// A delivery colour the container's primaries cannot hold, moved the least distance toward
+    /// the neutral axis that brings every channel inside 0...1. Y is constant along that axis, so
+    /// luminance and hue hold and only the purity the container lacks is given up, where a clip
+    /// per channel would shift the hue and flatten the gradient. In gamut is the identity, bit
+    /// for bit. At or below black, and at or above white, there is no in-gamut colour of the same
+    /// luminance to move to: negatives are floored and the level is left to the shoulder.
+    ///
+    /// The single definition of the fit: the kernels' `fit_to_gamut` and the plugins'
+    /// `fotufilm::fitToGamut` are the same expressions in the same order.
+    @inlinable
+    public static func fitToGamut(_ rgb: SIMD3<Float>,
+                                  luminance: (Float, Float, Float)) -> SIMD3<Float> {
+        let lo = min(min(rgb.x, rgb.y), rgb.z)
+        let hi = max(max(rgb.x, rgb.y), rgb.z)
+        if lo >= 0, hi <= 1 { return rgb }
+        let y = luminance.0 * rgb.x + luminance.1 * rgb.y + luminance.2 * rgb.z
+        guard y > 0, y < 1 else {
+            return SIMD3(max(rgb.x, 0), max(rgb.y, 0), max(rgb.z, 0))
+        }
+        var scale: Float = 1
+        for c in 0..<3 {
+            let v = rgb[c]
+            if v > 1 { scale = min(scale, (1 - y) / (v - y)) }
+            else if v < 0 { scale = min(scale, y / (y - v)) }
+        }
+        if scale >= 1 { return rgb }
+        scale = max(scale, 0)
+        return SIMD3(y + (rgb.x - y) * scale, y + (rgb.y - y) * scale, y + (rgb.z - y) * scale)
+    }
+
+    /// Linear Display P3 print light into sRGB, fitted to the sRGB gamut: what every sRGB and
+    /// Rec.709 delivery does before its shoulder and transfer.
+    @inlinable
+    public static func linearDisplayP3ToSRGBGamut(_ rgb: SIMD3<Float>) -> SIMD3<Float> {
+        fitToGamut(linearDisplayP3ToSRGB(rgb), luminance: srgbLuminanceWeights)
+    }
+
     /// CIE Y weights for the print side's Display P3 basis — row two of the P3 to XYZ matrix.
     /// The finished print is integrated and output in P3, so anything weighing *developed*
     /// colour (reversal balance, the neutral tone scale, print measurement) meters with these.

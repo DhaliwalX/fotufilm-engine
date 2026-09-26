@@ -14,6 +14,27 @@ const P3_TO_SRGB = [
   -0.0786361, 1.0982735,
 ]
 
+const SRGB_LUMA = [0.212639, 0.7151687, 0.0721923]
+
+/// `ColorScience.fitToGamut`: the least move toward the neutral axis that brings every channel
+/// inside 0...1, holding luminance and hue. In gamut is the identity; at or below black and at or
+/// above white only negatives are floored and the level is left to the shoulder.
+export function fitToGamut(rgb, luma = SRGB_LUMA) {
+  const lo = Math.min(rgb[0], rgb[1], rgb[2])
+  const hi = Math.max(rgb[0], rgb[1], rgb[2])
+  if (lo >= 0 && hi <= 1) return rgb
+  const y = luma[0] * rgb[0] + luma[1] * rgb[1] + luma[2] * rgb[2]
+  if (!(y > 0 && y < 1)) return rgb.map((v) => Math.max(v, 0))
+  let scale = 1
+  for (const v of rgb) {
+    if (v > 1) scale = Math.min(scale, (1 - y) / (v - y))
+    else if (v < 0) scale = Math.min(scale, y / (y - v))
+  }
+  if (scale >= 1) return rgb
+  scale = Math.max(scale, 0)
+  return rgb.map((v) => y + (v - y) * scale)
+}
+
 /// The SDR delivery shoulder, `ColorScience.displayShoulder`. The knee is the material's own
 /// (`FilmSDRDelivery`, carried in the pack's OUTPUT_SHOULDER slot): 1 for everything bounded by
 /// its own white, which leaves every value below display white alone and clips the rest, and 0.7
@@ -42,8 +63,8 @@ function triangularDither(index, channelSeed) {
 }
 
 /// The print's interior of one tile, encoded for a canvas into its place in the frame. The print
-/// moves into the canvas's primaries first and takes the shoulder and the clip there, as every
-/// native delivery does. The dither is indexed by the pixel's place in the frame, not in the tile,
+/// moves into the canvas's primaries and gamut first and takes the shoulder and the clip there, as
+/// every native delivery does. The dither is indexed by the pixel's place in the frame, not in the tile,
 /// so how the frame was cut leaves no trace in it.
 export function encodeTileInto(
   pixels,
@@ -59,8 +80,8 @@ export function encodeTileInto(
 ) {
   validateColorSpace(colorSpace)
   const sixteen = pixels instanceof Uint16Array
-  const n =
-    colorSpace === 'display-p3' ? [1, 0, 0, 0, 1, 0, 0, 0, 1] : P3_TO_SRGB
+  const p3 = colorSpace === 'display-p3'
+  const n = P3_TO_SRGB
   const [o0, o1, o2] = offsets
   const channelSeeds = [0, 1, 2].map((channel) =>
     pcgHash((channel + Math.imul(seed, 0x9e3779b9)) >>> 0),
@@ -72,10 +93,12 @@ export function encodeTileInto(
       const r = output[at + o0]
       const g = output[at + o1]
       const b = output[at + o2]
-      const delivered = (c) =>
-        clamp01(
-          displayShoulder(n[c * 3] * r + n[c * 3 + 1] * g + n[c * 3 + 2] * b, shoulderKnee),
-        )
+      let inGamut = [r, g, b]
+      if (!p3) {
+        inGamut = [0, 1, 2].map((c) => n[c * 3] * r + n[c * 3 + 1] * g + n[c * 3 + 2] * b)
+        inGamut = fitToGamut(inGamut)
+      }
+      const delivered = (c) => clamp01(displayShoulder(inGamut[c], shoulderKnee))
       const p = y * frameWidth + x
       const i =
         ((y - destination.y) * destination.width + x - destination.x) * 4

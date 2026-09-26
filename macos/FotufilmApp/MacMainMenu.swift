@@ -368,6 +368,7 @@ private final class EditHistoryMenuDelegate: NSObject, NSMenuDelegate {
         if new.printLightKelvin != old.printLightKelvin {
             return "Viewing Illuminant"
         }
+        if new.displayBlack != old.displayBlack { return "Display Black" }
         if new.digitalReference != old.digitalReference { return "Screen Conversion" }
         if new.screenGrade != old.screenGrade { return "Paper Grade" }
         if new.screenExposure != old.screenExposure { return "Screen Exposure" }
