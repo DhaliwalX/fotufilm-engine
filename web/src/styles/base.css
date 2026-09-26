@@ -44,6 +44,18 @@
     grid-template-rows: 52px minmax(0, 1fr);
     overflow: hidden;
   }
+  /* Editor panels stay in the grid; the wrapper only makes them inert together. */
+  .editor-panels {
+    display: contents;
+  }
+  .library-handoff {
+    position: fixed;
+    z-index: 20;
+    border-radius: 2px;
+    box-shadow: 0 8px 28px #00000033;
+    pointer-events: none;
+    will-change: transform;
+  }
   .full-width {
     width: 100%;
   }

@@ -14,6 +14,8 @@ import { VIDEO_LABELS } from "../generated/controls.js";
 import ShortcutsDialog from "./ShortcutsDialog.jsx";
 import SupportDialog from "./SupportDialog.jsx";
 import { useEditor } from "./EditorContext.jsx";
+import { PhotoLibrary } from "../photo-library/index.js";
+import LibraryHandoff from "./LibraryHandoff.jsx";
 export default function Workspace() {
   const {
     filmOpen,
@@ -27,17 +29,28 @@ export default function Workspace() {
     videoDownload,
     videoDownloadRef,
     setVideoDownload,
+    libraryOpen,
+    setLibraryOpen,
+    openFromLibrary,
   } = useEditor();
   const negative = useNegativeImportDialog();
   return (
     <div
-      className={`editor ${filmOpen ? "" : "film-collapsed"} ${inspectorOpen ? "" : "inspector-collapsed"}`}
+      className={`editor ${filmOpen ? "" : "film-collapsed"} ${inspectorOpen ? "" : "inspector-collapsed"} ${libraryOpen ? "library-open" : ""}`}
     >
       <EditorToolbar />
-      <FilmLibrary />
-      <EditorViewer />
-      <InspectorRail />
-      <EditorInspector />
+      <div className="editor-panels" inert={libraryOpen}>
+        <FilmLibrary />
+        <EditorViewer />
+        <InspectorRail />
+        <EditorInspector />
+      </div>
+      <PhotoLibrary
+        open={libraryOpen}
+        onOpenPhotos={openFromLibrary}
+        onClose={() => setLibraryOpen(false)}
+      />
+      <LibraryHandoff />
       <input
         ref={input}
         type="file"
