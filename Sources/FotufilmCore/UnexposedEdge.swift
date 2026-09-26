@@ -125,7 +125,7 @@ public enum UnexposedEdge {
         let outerHeight = height + margins.top + margins.bottom
         precondition(photo.count >= width * height * 4
                      && extended.count >= outerWidth * outerHeight * 4)
-        DispatchQueue.concurrentPerform(iterations: outerHeight) { row in
+        ParallelWork.forEach(iterations: outerHeight) { row in
             let source = min(max(row - margins.top, 0), height - 1) * width * 4
             let target = row * outerWidth * 4
             for column in 0..<outerWidth {
