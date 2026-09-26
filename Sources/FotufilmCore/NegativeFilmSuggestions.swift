@@ -17,6 +17,12 @@ public struct NegativeFilmSuggestions: Sendable {
         public let name: String
         /// Base density in each linear Rec.2020 channel, against the lamp.
         public let base: SIMD3<Float>
+
+        public init(id: String, name: String, base: SIMD3<Float>) {
+            self.id = id
+            self.name = name
+            self.base = base
+        }
     }
 
     /// Films whose predicted bases a scan cannot tell apart, with how likely they are together.
