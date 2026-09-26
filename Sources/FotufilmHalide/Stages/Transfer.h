@@ -135,6 +135,34 @@ inline Halide::Expr host_transfer_decode(Halide::ImageParam &parameters,
 ///
 /// The single definition of the step, shared by the fused GPU pipeline and the staged CPU one, so
 /// that a delivery cannot mean two things depending on which road developed it.
+/// Channel `row` of `rgb` moved the least distance toward the neutral axis of luminance weights
+/// `luma` that brings every channel inside 0...1: hue and luminance hold, and only the purity the
+/// container's primaries lack is given up. In gamut is the identity. At or below black and at or
+/// above white there is no in-gamut colour of the same luminance, so negatives are floored and
+/// the level is left to the shoulder. The same expressions as `ColorScience.fitToGamut` and the
+/// plugins' CPU fallback `fotufilm::fitToGamut`.
+inline Halide::Expr fit_to_gamut(const Halide::Expr (&rgb)[3],
+                                 const Halide::Expr (&luma)[3], int row) {
+    // Select operands are evaluated eagerly: bound unused denominators away from zero.
+    Halide::Expr y = luma[0] * rgb[0] + luma[1] * rgb[1] + luma[2] * rgb[2];
+    Halide::Expr scale = 1.0f;
+    for (const Halide::Expr &v : rgb) {
+        scale = Halide::min(scale, Halide::select(
+            v > 1.0f, (1.0f - y) / Halide::max(v - y, 1.0e-20f),
+            v < 0.0f, y / Halide::max(y - v, 1.0e-20f), 1.0f));
+    }
+    Halide::Expr fitted = Halide::select(
+        !(y > 0.0f && y < 1.0f), Halide::max(rgb[row], 0.0f),
+        scale >= 1.0f, rgb[row],
+        y + (rgb[row] - y) * Halide::max(scale, 0.0f));
+    Halide::Expr inside = Halide::min(rgb[0], Halide::min(rgb[1], rgb[2])) >= 0.0f
+        && Halide::max(rgb[0], Halide::max(rgb[1], rgb[2])) <= 1.0f;
+    return Halide::select(inside, rgb[row], fitted);
+}
+
+/// CIE Y weights of linear sRGB and Rec.709, `ColorScience.srgbLuminanceWeights`.
+constexpr float kSRGBLuma[3] = {0.2126390f, 0.7151687f, 0.0721923f};
+
 inline Halide::Expr host_output_shouldered(Halide::ImageParam &configuration,
                                            Halide::Expr r, Halide::Expr g,
                                            Halide::Expr b, int row) {
@@ -144,26 +172,12 @@ inline Halide::Expr host_output_shouldered(Halide::ImageParam &configuration,
             + configuration(FOTUFILM_CONFIG_OUTPUT_MATRIX + 3 * c + 1) * g
             + configuration(FOTUFILM_CONFIG_OUTPUT_MATRIX + 3 * c + 2) * b;
     }
-    // Same neutral-axis fit as the plugin's CPU fallback (fotufilm::fitToGamut).
-    // Select operands are evaluated eagerly: bound unused denominators away from zero.
-    Halide::Expr y = configuration(FOTUFILM_CONFIG_OUTPUT_GAMUT + 1) * host[0]
-        + configuration(FOTUFILM_CONFIG_OUTPUT_GAMUT + 2) * host[1]
-        + configuration(FOTUFILM_CONFIG_OUTPUT_GAMUT + 3) * host[2];
-    Halide::Expr scale = 1.0f;
-    for (const Halide::Expr &v : host) {
-        scale = Halide::min(scale, Halide::select(
-            v > 1.0f, (1.0f - y) / Halide::max(v - y, 1.0e-20f),
-            v < 0.0f, y / Halide::max(y - v, 1.0e-20f), 1.0f));
-    }
-    Halide::Expr fitted = Halide::select(
-        !(y > 0.0f && y < 1.0f), Halide::max(host[row], 0.0f),
-        scale >= 1.0f, host[row],
-        y + (host[row] - y) * Halide::max(scale, 0.0f));
-    Halide::Expr inside = Halide::min(host[0], Halide::min(host[1], host[2])) >= 0.0f
-        && Halide::max(host[0], Halide::max(host[1], host[2])) <= 1.0f;
+    const Halide::Expr luma[3] = {configuration(FOTUFILM_CONFIG_OUTPUT_GAMUT + 1),
+                                  configuration(FOTUFILM_CONFIG_OUTPUT_GAMUT + 2),
+                                  configuration(FOTUFILM_CONFIG_OUTPUT_GAMUT + 3)};
     Halide::Expr in_host_primaries = Halide::select(
-        configuration(FOTUFILM_CONFIG_OUTPUT_GAMUT) == 0.0f || inside,
-        host[row], fitted);
+        configuration(FOTUFILM_CONFIG_OUTPUT_GAMUT) == 0.0f,
+        host[row], fit_to_gamut(host, luma, row));
     Halide::Expr knee = configuration(FOTUFILM_CONFIG_OUTPUT_SHOULDER);
     return Halide::select(
         knee < 0.0f, in_host_primaries,

@@ -2194,7 +2194,7 @@ public final class HalideMetalFilmRenderer {
             for i in 0..<width*height {
                 var rgb = SIMD3(developed[4*i], developed[4*i+1], developed[4*i+2])
                 if options.stage == .texture { rgb = ColorScience.linearRec2020ToDisplayP3(rgb) }
-                if srgb { rgb = ColorScience.linearDisplayP3ToSRGB(rgb) }
+                if srgb { rgb = ColorScience.linearDisplayP3ToSRGBGamut(rgb) }
                 let alpha = Float(pixels[i*4+3])/255
                 for c in 0..<3 {
                     let value = ColorScience.linearToSrgb(ColorScience.displayShoulder(

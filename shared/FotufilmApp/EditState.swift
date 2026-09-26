@@ -380,6 +380,8 @@ struct EditState: Equatable {
     /// D50 for reflection paper and calibrated 5400 K xenon for a cinema print. Digital media
     /// ignore it.
     var printLightKelvin: Double? = nil
+    /// Whether a physical print's paper black is shown as display black.
+    var displayBlack = true
 
     /// Where the developed image is finished. Most choices form a positive; `.negative` keeps the
     /// developed film itself as the output.
@@ -547,7 +549,7 @@ struct EditState: Equatable {
         PrintFrameConfiguration(frame: printFrame, formatID: formatID,
                                 stockID: stockID, paper: resolvedPaper,
                                 viewingKelvin: printFrame.viewsTransparency ? nil : printLightKelvin.map(Float.init),
-                                negativeViewing: .lightBox)
+                                displayBlack: displayBlack, negativeViewing: .lightBox)
     }
 
     /// A negative stock is seen by transmission on the same reference light box as its rebate.

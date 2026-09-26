@@ -173,13 +173,20 @@ final class PrintFrameTests: XCTestCase {
         for base in [edge.baseRGB, endura.baseRGB, warm.baseRGB] {
             for channel in 0..<3 { XCTAssertEqual(base[channel], 1, accuracy: 1e-4) }
         }
-        // The dye a fully exposed rebate carries is the paper's own and meets the lamp.
-        func rebate(_ paper: PrintPaper, _ kelvin: Float?) -> SIMD3<Float> {
+        // The dye a fully exposed rebate carries is the paper's own and meets the lamp, as the
+        // booth sees it; display black shows it as the photograph's own black.
+        func rebate(_ paper: PrintPaper, _ kelvin: Float?, displayBlack: Bool = false) -> SIMD3<Float> {
             PrintFrameConfiguration(frame: .carrier, formatID: "35mm", stockID: "hp5plus400",
-                                    paper: paper, viewingKelvin: kelvin).rebateRGB
+                                    paper: paper, viewingKelvin: kelvin,
+                                    displayBlack: displayBlack).rebateRGB
         }
         XCTAssertNotEqual(rebate(.ektacolorEdge, nil), rebate(.enduraPremier, nil))
         XCTAssertNotEqual(rebate(.ektacolorEdge, nil), rebate(.ektacolorEdge, 2856))
+        for paper in [PrintPaper.ektacolorEdge, .enduraPremier] {
+            for channel in 0..<3 {
+                XCTAssertEqual(rebate(paper, 2856, displayBlack: true)[channel], 0, accuracy: 1e-6)
+            }
+        }
         XCTAssertTrue(edge.detail.contains(PrintPaper.ektacolorEdge.name))
         XCTAssertNil(edge.geometry)
     }
@@ -545,7 +552,8 @@ final class PrintFrameTests: XCTestCase {
         XCTAssertEqual(configuration(.carrier, paper: .screen).frame, .none)
         XCTAssertEqual(configuration(.carrier, paper: .negative).frame, .none)
         XCTAssertEqual(configuration(.carrier, format: "instaxmini", stock: "instaxmini").frame, .none)
-        XCTAssertNotEqual(configuration(.carrier).rebateRGB, configuration(.carrier, paper: .enduraPremier).rebateRGB)
+        XCTAssertEqual(configuration(.carrier).rebateRGB, .zero)
+        XCTAssertEqual(configuration(.carrier, paper: .enduraPremier).rebateRGB, .zero)
         XCTAssertEqual(configuration(.paper).rebateRGB, .zero)
 
         // Enlarge the fixture so the 8 × 10 sheet renders at about 4 px/mm.

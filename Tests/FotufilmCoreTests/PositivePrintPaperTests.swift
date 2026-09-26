@@ -39,13 +39,17 @@ final class PositivePrintPaperTests: XCTestCase {
     func testPositivePaperBorderIsUnexposedDarkAndSmooth() {
         for paper in papers {
             let frame = PrintFrameConfiguration(frame: .paper, formatID: "35mm",
-                stockID: "provia100f", paper: paper)
+                stockID: "provia100f", paper: paper, displayBlack: false)
             XCTAssertEqual(frame.frame, .paper)
             XCTAssertFalse(frame.hasLustre)
             for c in 0..<3 {
                 XCTAssertGreaterThan(frame.baseRGB[c], 0)
                 XCTAssertLessThan(frame.baseRGB[c], 0.03)
             }
+            // Display black shows the same unexposed maximum density as the photograph's black.
+            let display = PrintFrameConfiguration(frame: .paper, formatID: "35mm",
+                stockID: "provia100f", paper: paper)
+            for c in 0..<3 { XCTAssertEqual(display.baseRGB[c], 0, accuracy: 1e-6) }
         }
     }
 
@@ -128,9 +132,12 @@ final class PositivePrintPaperTests: XCTestCase {
             for c in 0..<3 { input.planes[c][i] = stock.developedDensity(layer: c, logExposure: stops[i % stops.count] * log10(2)) }
         }
         for paper in papers {
-            var o = options(paper); o.stage = .print
+            // The anchor is the paper's own, as the booth sees it; display black moves mid-grey by
+            // its black-point share, and the mirror follows either way.
+            var o = options(paper); o.stage = .print; o.displayBlack = false
             let output = try XCTUnwrap(HalideBackend.print(density: input, stock: stock, options: o))
-            let reference = SpectralRuntime.neutralToneScale(stops: stops, stock: stock, paper: paper, printCorrection: 0)
+            let reference = SpectralRuntime.neutralToneScale(stops: stops, stock: stock, paper: paper,
+                                                             printCorrection: 0, displayBlack: false)
             let w = ColorScience.displayP3LuminanceWeights
             var previous: Float = 0
             for i in stops.indices {

@@ -23,12 +23,19 @@ inline void generate_webgpu_display(const std::filesystem::path &directory,
         const int words = depth == 8 ? 1 : 2;
         Expr px = x / words;
         Expr encoded[3];
+        // Into the delivery's primaries and gamut first, then the shoulder, as every native
+        // delivery.
+        Expr srgb[3];
         for (int c = 0; c < 3; ++c) {
-            // Into the delivery's primaries first, then the shoulder, as every native delivery.
-            Expr srgb = fotufilm::kP3ToSRGB[c * 3] * input(px, y, 0)
+            srgb[c] = fotufilm::kP3ToSRGB[c * 3] * input(px, y, 0)
                 + fotufilm::kP3ToSRGB[c * 3 + 1] * input(px, y, 1)
                 + fotufilm::kP3ToSRGB[c * 3 + 2] * input(px, y, 2);
-            Expr delivered = select(p3 != 0, input(px, y, c), srgb);
+        }
+        const Expr srgb_luma[3] = {fotufilm::kSRGBLuma[0], fotufilm::kSRGBLuma[1],
+                                   fotufilm::kSRGBLuma[2]};
+        for (int c = 0; c < 3; ++c) {
+            Expr delivered = select(p3 != 0, input(px, y, c),
+                                    fotufilm::fit_to_gamut(srgb, srgb_luma, c));
             Expr value = fotufilm::srgb_encode(clamp(
                 fotufilm::display_shoulder(delivered, clamp(shoulder_knee, 0.0f, 1.0f)),
                 0.0f, 1.0f));

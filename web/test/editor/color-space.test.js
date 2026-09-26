@@ -51,8 +51,18 @@ test('print delivery preserves P3 values outside sRGB and quantizes directly to 
     0,
     65535,
   ])
-  assert.ok(srgb[1] > p3[1])
   assert.notEqual(p3[1] % 257, 0)
+  // The P3 green is outside sRGB: it is fitted toward grey at its own luminance rather than
+  // clipped channel by channel: red, the binding channel, lands on zero, blue opens instead of
+  // flooring, and Y holds.
+  const decode = (code) => {
+    const v = code / 65535
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+  }
+  const fitted = Array.from(srgb.slice(0, 3), decode)
+  assert.ok(fitted[0] === 0 && fitted[2] > 0)
+  const y = 0.212639 * fitted[0] + 0.7151687 * fitted[1] + 0.0721923 * fitted[2]
+  assert.ok(Math.abs(y - 0.6917385 * 0.5) < 1e-3)
 })
 test('P3 frame materials are encoded from the native linear P3 palette', () => {
   const plan = {

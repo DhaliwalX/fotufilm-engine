@@ -192,6 +192,7 @@ public enum EngineBinding: Equatable, Sendable {
     case expiredYears
     case shutterSeconds
     case printViewingKelvin
+    case displayBlack
     case printCorrection
     case grade(GradeBand, GradeAxis)
     case gradeSpaceEncoded
@@ -246,6 +247,7 @@ public enum EngineBinding: Equatable, Sendable {
         case .expiredYears: return ["expiredYears"]
         case .shutterSeconds: return ["shutterSeconds"]
         case .printViewingKelvin: return ["printViewingKelvin"]
+        case .displayBlack: return ["displayBlack"]
         case .printCorrection: return ["printCorrection"]
         case .grade: return ["grade"]
         case .gradeSpaceEncoded: return ["gradeSpace"]
@@ -335,6 +337,8 @@ public enum EngineBinding: Equatable, Sendable {
             options.shutterSeconds = value.number.flatMap { $0 > 0 ? Float($0) : nil }
         case .printViewingKelvin:
             options.printViewingKelvin = value.number.flatMap { $0 > 0 ? Float($0) : nil }
+        case .displayBlack:
+            if let flag = value.flag { options.displayBlack = flag }
         case .printCorrection:
             if let number = value.number { options.printCorrection = Float(number) }
         case .grade(let band, let axis):

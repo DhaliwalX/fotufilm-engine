@@ -62,7 +62,7 @@ public struct WebPrintFrameRequest: Decodable {
             renderMedium = PrintPaper.screen.id
         } else { renderMedium = nil }
         func encoded(_ p3: SIMD3<Float>) -> [Float] {
-            let rgb = ColorScience.linearDisplayP3ToSRGB(p3)
+            let rgb = ColorScience.linearDisplayP3ToSRGBGamut(p3)
             return [rgb.x, rgb.y, rgb.z].map { max(0, min(1, ColorScience.linearToSrgb($0))) }
         }
         let palette = ["base": encoded(config.baseRGB), "edge": encoded(config.edgeRGB),

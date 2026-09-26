@@ -86,10 +86,11 @@ public enum FilmOutputConversion: String, CaseIterable, Identifiable, FilmOutput
     case displayP3SDR
     /// Convert to linear-light sRGB without clipping out-of-gamut values.
     case linearSRGB
-    /// Convert to sRGB, apply a bounded material's SDR shoulder and encode with the sRGB transfer.
+    /// Convert to sRGB, fit the print to the sRGB gamut, apply a bounded material's SDR shoulder
+    /// and encode with the sRGB transfer.
     case sRGBSDR
-    /// Relight HDR alpha, convert to Rec.709, apply a bounded material's SDR shoulder and the
-    /// BT.709 OETF.
+    /// Relight HDR alpha, convert to Rec.709, fit the print to its gamut, apply a bounded
+    /// material's SDR shoulder and the BT.709 OETF.
     case rec709SDR
     /// Convert to linear-light Rec. 2020 without clipping out-of-gamut values.
     case linearRec2020
@@ -136,12 +137,11 @@ public enum FilmOutputConversion: String, CaseIterable, Identifiable, FilmOutput
                 converted = ColorScience.linearDisplayP3ToSRGB(rgb)
             case .sRGBSDR:
                 converted = encodeSRGB(shoulder(
-                    ColorScience.linearDisplayP3ToSRGB(rgb)))
+                    ColorScience.linearDisplayP3ToSRGBGamut(rgb)))
             case .rec709SDR:
                 let relit = rgb * max(developed[source + 3], 1)
-                let rec709 = ColorScience.linearDisplayP3ToSRGB(relit)
-                converted = encodeRec709(shoulder(SIMD3(
-                    max(rec709.x, 0), max(rec709.y, 0), max(rec709.z, 0))))
+                converted = encodeRec709(shoulder(
+                    ColorScience.linearDisplayP3ToSRGBGamut(relit)))
             case .linearRec2020:
                 converted = displayP3ToRec2020(rgb)
             case .rec2020HLG:

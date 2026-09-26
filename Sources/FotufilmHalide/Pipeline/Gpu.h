@@ -695,11 +695,11 @@ public:
             Expr shoulder_knee = Halide::select(
                 stated_knee < 0.0f, 1.0f, Halide::clamp(stated_knee, 0.0f, 1.0f));
             // The print is Display P3. A frame delivered in sRGB leaves it here, into the
-            // delivery's primaries first and through the shoulder after, the way every host
-            // delivery takes it (`host_output_shouldered`, `FilmOutputConversion.sRGBSDR`). The
-            // matrix reads all three channels, so that arm stores the print once rather than
-            // develop it again per channel; the output is compiled per basis below, and the P3
-            // arm neither reads the store nor runs it.
+            // delivery's primaries and gamut first and through the shoulder after, the way every
+            // host delivery takes it (`host_output_shouldered`, `FilmOutputConversion.sRGBSDR`).
+            // The matrix and the fit read all three channels, so that arm stores the print once
+            // rather than develop it again per channel; the output is compiled per basis below,
+            // and the P3 arm neither reads the store nor runs it.
             Expr srgb_out = (byte_basis_ & 2) != 0;
             Func delivered_print("frame_delivered_print" + suffix);
             delivered_print(x, y, channel) = final_linear(x, y, channel);
@@ -709,10 +709,14 @@ public:
                     + kP3ToSRGB[3 * row + 1] * graph::gated(srgb_out, print_view(x, y, 1), 0.0f)
                     + kP3ToSRGB[3 * row + 2] * graph::gated(srgb_out, print_view(x, y, 2), 0.0f);
             };
+            const Expr srgb_print[3] = {in_srgb(0), in_srgb(1), in_srgb(2)};
+            const Expr srgb_luma[3] = {kSRGBLuma[0], kSRGBLuma[1], kSRGBLuma[2]};
             Expr linear = Halide::clamp(
                 display_shoulder(
                     graph::gated(srgb_out,
-                                 Halide::mux(channel, {in_srgb(0), in_srgb(1), in_srgb(2)}),
+                                 Halide::mux(channel, {fit_to_gamut(srgb_print, srgb_luma, 0),
+                                                       fit_to_gamut(srgb_print, srgb_luma, 1),
+                                                       fit_to_gamut(srgb_print, srgb_luma, 2)}),
                                  final_linear(x, y, channel)),
                     shoulder_knee),
                 0.0f, 1.0f);

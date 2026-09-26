@@ -113,6 +113,7 @@ extension EditorControlField {
             return .bespoke { $0.printFrame != .none }
         case .printLight:
             return .bespoke { $0.printLightKelvin != nil }
+        case .displayBlack: return .flag(\.displayBlack)
         case .digitalReference:
             return .bespoke { $0.digitalReference != .default }
         case .screenGrade: return .number(\.screenGrade)
