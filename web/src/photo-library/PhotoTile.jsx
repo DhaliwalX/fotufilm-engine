@@ -12,7 +12,7 @@ function useThumbnail(thumbnails, photo) {
     let live = true;
     const request = thumbnails.request(photo);
     request.promise.then(
-      (url) => live && setState({ url: url || false, fresh: true }),
+      ({ url, fresh }) => live && setState({ url: url || false, fresh }),
     );
     return () => {
       live = false;
