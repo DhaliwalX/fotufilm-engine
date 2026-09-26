@@ -6,7 +6,9 @@ export const checkAbort = (signal) => {
     throw new DOMException('Video operation cancelled.', 'AbortError')
 }
 
-export async function sampleImage(sample, encoding) {
+// `size`, in displayed orientation, converts straight to that size, resampled as
+// `rawSource` would resample the full frame; otherwise the frame is converted whole.
+export async function sampleImage(sample, encoding, size = null) {
   const { width, height } = sample.visibleRect
   if (width * height > 40000000)
     throw new Error('Video frames above 40 megapixels are not supported.')
@@ -25,8 +27,8 @@ export async function sampleImage(sample, encoding) {
       height,
       colorSpace: sample.colorSpace,
       rotation: sample.rotation,
-      displayWidth: sample.displayWidth,
-      displayHeight: sample.displayHeight,
+      displayWidth: size?.width ?? sample.displayWidth,
+      displayHeight: size?.height ?? sample.displayHeight,
     },
     encoding,
   )
@@ -113,6 +115,7 @@ export async function importVideo(
     }
     checkAbort(signal)
     playbackUrl = URL.createObjectURL(file)
+    const cursor = playbackCursor(sink)
     const clip = {
       file,
       input,
@@ -122,20 +125,21 @@ export async function importVideo(
       start,
       playbackUrl,
       closed: false,
-      async frame(time, encoding) {
+      async frame(time, encoding, size = null) {
         if (this.closed) throw new DOMException('Video closed.', 'AbortError')
-        const sample = await sink.getSample(
+        const sample = await cursor.sample(
           Math.max(start, Math.min(duration - 0.000001, time)),
         )
         if (!sample) throw new Error('No video frame at this time.')
         try {
-          return await sampleImage(sample, encoding)
+          return await sampleImage(sample, encoding, size)
         } finally {
           sample.close()
         }
       },
       dispose() {
         this.closed = true
+        cursor.close()
         input.dispose()
         URL.revokeObjectURL(playbackUrl)
         URL.revokeObjectURL(posterUrl)
@@ -158,6 +162,64 @@ export async function importVideo(
     throw error
   } finally {
     signal?.removeEventListener('abort', abort)
+  }
+}
+
+// Playback asks for frames in order. Seeking decodes from the keyframe before each
+// requested time, so every frame of a long-GOP clip cost the frames before it in
+// its group of pictures. The cursor keeps one decode running forward instead and
+// restarts it only for a step back or a jump. It returns what `getSample` would:
+// the last frame starting at or before the time, as a clone the caller closes.
+const CURSOR_JUMP_SECONDS = 2
+// Frame times are rounded to the container's timescale, so a time on a frame
+// boundary can fall a hair short of the frame's own timestamp.
+const TIMESTAMP_TOLERANCE = 1e-6
+export function playbackCursor(sink) {
+  let iterator = null,
+    current = null,
+    next = null,
+    last = -Infinity,
+    queue = Promise.resolve()
+  const reset = async () => {
+    current?.close()
+    next?.close()
+    current = next = null
+    await iterator?.return()
+    iterator = null
+  }
+  const advance = async () => {
+    const step = await iterator.next()
+    return step.done ? null : step.value
+  }
+  const seek = async (time) => {
+    if (!iterator || time < last || time - last > CURSOR_JUMP_SECONDS) {
+      await reset()
+      iterator = sink.samples(time)
+      current = await advance()
+      next = current && (await advance())
+      if (current && current.timestamp > time + TIMESTAMP_TOLERANCE) {
+        // Before the first frame: nothing starts at or before the time.
+        last = -Infinity
+        return null
+      }
+    }
+    while (next && next.timestamp <= time + TIMESTAMP_TOLERANCE) {
+      current.close()
+      current = next
+      next = await advance()
+    }
+    last = time
+    return current?.clone() ?? null
+  }
+  return {
+    sample(time) {
+      const result = queue.then(() => seek(time))
+      queue = result.catch(() => reset())
+      return result
+    },
+    close() {
+      queue = queue.then(reset)
+    },
   }
 }
 

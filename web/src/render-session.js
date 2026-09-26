@@ -22,7 +22,7 @@ import {
 import { loadMediumBytes } from './output-media.js'
 import { loadSceneExposure } from './scene-light.js'
 import { rawSource } from './raw-source.js'
-import { defaultEdit } from './editor-state.js'
+import { defaultEdit, fullCrop } from './editor-state.js'
 import { validateStockSettings } from './stock-settings.js'
 import { sourceIlluminant } from './editor-catalogue.js'
 import { compositeSelection } from './backend/browser-selective.js'
@@ -39,9 +39,34 @@ import {
   loadStages,
 } from './engine.js'
 import { canvasBlob, cropImage, orientImage } from './geometry.js'
+import { encodePreview } from './canvas-encoder.js'
 
 import { loadStockIndex } from "./stock-index.js";
 export { loadStockIndex } from "./stock-index.js";
+
+const sameCrop = (a, b) => a.every((point, i) => point.every((v, c) => v === b[i][c]))
+// The size to convert a video frame to when the edit leaves its geometry alone.
+// `rawSource` would then only scale the whole frame, sampling it where the video
+// conversion samples it, so converting at that size gives the same pixels
+// without converting, copying and reading back every native pixel first.
+function videoFrameSize(image, edit, maxEdge, cropMode, displaySize) {
+  const identity =
+    !displaySize &&
+    !lensIsActive(edit.lens) &&
+    !edit.rotation &&
+    !edit.flip &&
+    Math.abs(edit.straighten) <= 0.001 &&
+    !edit.perspectiveV &&
+    !edit.perspectiveH &&
+    (cropMode || sameCrop(edit.crop, fullCrop()))
+  const { naturalWidth: width, naturalHeight: height } = image
+  const scale = Math.min(1, maxEdge / Math.max(width, height))
+  if (!identity || scale >= 1) return null
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  }
+}
 
 // WASM instances share a heap. Serialize stock changes, renders, exports and disposal.
 export class RenderSession {
@@ -184,6 +209,7 @@ export class RenderSession {
       const frame = await image.video.frame(
         videoTime ?? image.video.start,
         edit.video.encoding,
+        videoFrameSize(image, edit, maxEdge, cropMode, displaySize),
       )
       return this.source(
         frame,
@@ -612,7 +638,13 @@ export class RenderSession {
           )
           if (!canvas || stale()) return null
         }
-        const blob = encode ? await canvasBlob(canvas) : null
+        // Exports and background thumbnails keep their blob; previews are shown and replaced.
+        const transient = !background && purpose !== 'export'
+        const blob = !encode
+          ? null
+          : transient && !framePlan
+            ? await encodePreview(pixels, outputWidth, outputHeight, colorSpace)
+            : await canvasBlob(canvas)
         let original = viewport ? null : prepared.original
         if (comparison && !original) report('Preparing original for comparison')
         if (comparison && !original && sourceCanvas)
@@ -628,13 +660,16 @@ export class RenderSession {
             { colorSpace, region },
           )
           if (!baseline || stale()) return null
-          const comparison = pixelsCanvas(
-            baseline.pixels,
-            outputWidth,
-            outputHeight,
-            colorSpace,
-          )
-          original = await canvasBlob(comparison)
+          original = transient
+            ? await encodePreview(
+                baseline.pixels,
+                outputWidth,
+                outputHeight,
+                colorSpace,
+              )
+            : await canvasBlob(
+                pixelsCanvas(baseline.pixels, outputWidth, outputHeight, colorSpace),
+              )
         }
         if (!viewport) prepared.original = original
         if (
