@@ -44,7 +44,9 @@ final class NegativeScan: @unchecked Sendable {
     private let lock = NSLock()
     private var plans: [PlanKey: AutomaticNegativeScan] = [:]
     private var balances: [BalanceKey: ApproximateNegativeScan.Balance] = [:]
-    private var estimate: [Float]?
+    private var estimates: [String: [Float]] = [:]
+    private var sources: [String: CIImage] = [:]
+    private var preparedSource: (key: SourceKey, image: CIImage)?
     private var preview: (key: FrameKey, samples: [Float], width: Int, height: Int)?
 
     init(data: Data, typeHint: String?) throws {
@@ -66,12 +68,69 @@ final class NegativeScan: @unchecked Sendable {
         return stock
     }
 
+    /// Whether a reading's positive carries colour: a reading on a colour negative.
+    static func carriesColour(_ recipe: NegativeScanRecipe) -> Bool {
+        recipe.conversion == .automatic ? !recipe.monochrome
+            : (try? film(recipe.stockID))?.isMonochrome != true
+    }
+
+    // MARK: - Light
+
+    /// The scan with the recipe's light source evened out, or as scanned without one.
+    private func source(_ lightFrameID: String?) -> CIImage {
+        guard let lightFrameID, let light = NegativeScanRoll.lightFrame(lightFrameID) else {
+            return image
+        }
+        if let even = lock.withLock({ sources[lightFrameID] }) { return even }
+        let even = light.measured.flatten(image)
+        lock.withLock { sources[lightFrameID] = even }
+        return even
+    }
+
+    // MARK: - Preparation
+
+    /// Work an app does on the scan before a recipe reads it: what the work is, and the scan it
+    /// makes, or nil when `shouldContinue` stopped it.
+    struct Preparation: @unchecked Sendable {
+        let identity: AnyHashable
+        let prepare: (_ shouldContinue: (() -> Bool)?) -> CIImage?
+    }
+
+    /// How an app prepares a scan for a recipe; nil, or nil from it, reads the scan as it is.
+    nonisolated(unsafe) static var preparation: ((NegativeScan, NegativeScanRecipe) -> Preparation?)?
+
+    private func preparation(_ recipe: NegativeScanRecipe) -> Preparation? {
+        Self.preparation?(self, recipe)
+    }
+
+    private struct SourceKey: Equatable {
+        var light: String?, prepared: AnyHashable
+    }
+
+    /// The scan the recipe reads: prepared by the app, then its light source evened out.
+    private func source(_ recipe: NegativeScanRecipe) -> CIImage {
+        guard let preparation = preparation(recipe) else { return source(recipe.lightFrameID) }
+        let key = SourceKey(light: recipe.lightFrameID, prepared: preparation.identity)
+        if let kept = lock.withLock({ preparedSource }), kept.key == key { return kept.image }
+        guard let prepared = preparation.prepare(nil) else { return source(recipe.lightFrameID) }
+        let even = recipe.lightFrameID.flatMap(NegativeScanRoll.lightFrame)
+            .map { $0.measured.flatten(prepared) } ?? prepared
+        lock.withLock { preparedSource = (key, even) }
+        return even
+    }
+
     // MARK: - Geometry
 
-    /// The scan turned and flipped as the recipe shows it, cropped unless `cropped` is false,
-    /// and drawn down to `longEdge` when that is smaller.
+    /// The scan turned, flipped and straightened as the recipe shows it, cropped unless `cropped`
+    /// is false, and drawn down to `longEdge` when that is smaller.
     func frame(_ recipe: NegativeScanRecipe, longEdge: Int?, cropped: Bool = true) -> CIImage {
-        var picture = image
+        framed(source(recipe), recipe, longEdge: longEdge, cropped: cropped)
+    }
+
+    /// Any picture of the scan's frame, turned, flipped, straightened and cropped as `frame` is.
+    func framed(_ picture: CIImage, _ recipe: NegativeScanRecipe, longEdge: Int?,
+                        cropped: Bool) -> CIImage {
+        var picture = picture
         if recipe.mirrored {
             picture = atOrigin(picture.transformed(by: CGAffineTransform(scaleX: -1, y: 1)))
         }
@@ -81,6 +140,7 @@ final class NegativeScan: @unchecked Sendable {
             picture = atOrigin(picture.transformed(
                 by: CGAffineTransform(rotationAngle: -CGFloat(turns) * .pi / 2)))
         }
+        picture = Self.straighten(picture, degrees: recipe.straighten)
         let e = picture.extent
         if cropped {
             let crop = recipe.crop.clamped()
@@ -100,6 +160,27 @@ final class NegativeScan: @unchecked Sendable {
         ])).cropped(to: CGRect(x: 0, y: 0, width: width, height: height))
     }
 
+    /// Turns a picture counter-clockwise by `degrees` about its centre and enlarges it by
+    /// `NegativeScanRecipe.straightenScale` so it still fills its own frame.
+    static func straighten(_ picture: CIImage, degrees: Double) -> CIImage {
+        guard degrees != 0 else { return picture }
+        let e = picture.extent
+        let scale = NegativeScanRecipe.straightenScale(size: e.size, degrees: degrees)
+        let turn = CGAffineTransform(translationX: -e.midX, y: -e.midY)
+            .concatenating(CGAffineTransform(rotationAngle: degrees * .pi / 180))
+            .concatenating(CGAffineTransform(scaleX: scale, y: scale))
+            .concatenating(CGAffineTransform(translationX: e.midX, y: e.midY))
+        return picture.transformed(by: turn).cropped(to: e)
+    }
+
+    /// A shown picture straightened as the scan's frame is, for the crop's live ruler.
+    func straightened(_ picture: CGImage, degrees: Double) -> CGImage? {
+        let turned = Self.straighten(CIImage(cgImage: picture), degrees: degrees)
+        return context.createCGImage(turned, from: turned.extent, format: .RGBA8,
+                                     colorSpace: picture.colorSpace
+                                        ?? CGColorSpace(name: CGColorSpace.displayP3)!)
+    }
+
     private func atOrigin(_ image: CIImage) -> CIImage {
         image.transformed(by: CGAffineTransform(translationX: -image.extent.minX,
                                                 y: -image.extent.minY))
@@ -107,19 +188,20 @@ final class NegativeScan: @unchecked Sendable {
 
     // MARK: - Film border
 
-    /// Samples clear film around `point`, a unit point in the oriented, uncropped picture.
-    /// Returns the linear border and the area it came from in the scan's own frame.
+    /// Samples clear film around `point`, a unit point in the oriented, straightened, uncropped
+    /// picture. Returns the linear border and the area it came from in the scan's own frame.
     func sampleBorder(at point: CGPoint, recipe: NegativeScanRecipe) throws
         -> (border: [Float], area: NegativeScanRecipe.Area) {
         let side = 0.03
         let shown = recipe.orientedSize(of: size)
+        let point = recipe.unstraighten(point, orientedSize: shown)
         let w = side * Double(min(shown.width, shown.height)) / Double(shown.width)
         let h = side * Double(min(shown.width, shown.height)) / Double(shown.height)
         let oriented = NegativeScanRecipe.Area(
             x: Double(point.x) - w / 2, y: Double(point.y) - h / 2, width: w, height: h)
             .clamped(minimum: 0.001)
         let area = recipe.unorient(oriented)
-        let border = try NegativeScanImport.sampleBorder(image: image, rect: CGRect(
+        let border = try NegativeScanImport.sampleBorder(image: source(recipe.lightFrameID), rect: CGRect(
             x: area.x, y: area.y, width: area.width, height: area.height),
             colorSpace: NegativeScanImport.filmSpace)
         return ([border.x, border.y, border.z], area)
@@ -128,13 +210,12 @@ final class NegativeScan: @unchecked Sendable {
     /// A stand-in for the film border until one is sampled: the thinnest film in the scan, read
     /// as the median of the percent that passes the most light across all three channels. An
     /// open holder in the frame passes more, which is why a sampled border replaces this.
-    func estimatedBorder() throws -> [Float] {
-        lock.lock()
-        if let estimate { lock.unlock(); return estimate }
-        lock.unlock()
+    func estimatedBorder(lightFrameID: String? = nil) throws -> [Float] {
+        let key = lightFrameID ?? ""
+        if let estimate = lock.withLock({ estimates[key] }) { return estimate }
         let scale = min(1, 512 / max(size.width, size.height))
         let samples = try NegativeScanImport.samples(
-            image.transformed(by: CGAffineTransform(scaleX: scale, y: scale)),
+            source(lightFrameID).transformed(by: CGAffineTransform(scaleX: scale, y: scale)),
             colorSpace: NegativeScanImport.filmSpace)
         let film = (0..<samples.pixelCount).filter { i in
             (0..<3).allSatisfy { c in samples.planes[c][i].isFinite && samples.planes[c][i] > 0 }
@@ -149,33 +230,62 @@ final class NegativeScan: @unchecked Sendable {
             let values = brightest.map { samples.planes[c][$0] }.sorted()
             return values[values.count / 2]
         }
-        lock.lock()
-        estimate = border
-        lock.unlock()
+        lock.withLock { estimates[key] = border }
         return border
+    }
+
+    /// The border the recipe reads against: the sampled one, or the scan's own estimate.
+    func border(for recipe: NegativeScanRecipe) throws -> [Float] {
+        try recipe.border ?? estimatedBorder(lightFrameID: recipe.lightFrameID)
+    }
+
+    // MARK: - Frame
+
+    /// Where the exposed picture sits in the recipe's straightened frame, as a crop; nil when it
+    /// already fills the frame or none stands out.
+    func detectedFrame(_ recipe: NegativeScanRecipe) throws -> NegativeScanRecipe.Area? {
+        let border = try border(for: recipe)
+        let samples = try NegativeScanImport.samples(
+            frame(recipe, longEdge: 512, cropped: false), colorSpace: NegativeScanImport.filmSpace)
+        return NegativeFrameDetection.imageArea(
+            of: samples, border: SIMD3(border[0], border[1], border[2]))
+            .map(NegativeScanRecipe.Area.init)
     }
 
     // MARK: - Printing
 
+    /// What decides which part of the scan a picture shows, and how it is lit.
+    private struct Framing: Hashable {
+        var turns: Int, mirrored: Bool, straighten: Double, crop: [Double], light: String?
+        var prepared: AnyHashable?
+
+        init(_ scan: NegativeScan, _ recipe: NegativeScanRecipe) {
+            prepared = scan.preparation(recipe)?.identity
+            let crop = recipe.crop
+            turns = recipe.quarterTurns
+            mirrored = recipe.mirrored
+            straighten = recipe.straighten
+            self.crop = [crop.x, crop.y, crop.width, crop.height]
+            light = recipe.lightFrameID
+        }
+    }
+
     private struct PlanKey: Hashable {
-        var turns: Int, mirrored: Bool, crop: [Double], monochrome: Bool
+        var framing: Framing, monochrome: Bool
     }
 
     private struct BalanceKey: Hashable {
-        var turns: Int, mirrored: Bool, crop: [Double], border: [Float], stockID: String
+        var framing: Framing, border: [Float], stockID: String
     }
 
     private struct FrameKey: Equatable {
-        var turns: Int, mirrored: Bool, crop: [Double], cropped: Bool, longEdge: Int?, film: Bool
+        var framing: Framing, cropped: Bool, longEdge: Int?, film: Bool
     }
 
     /// How the framed picture reads on the recipe's film, measured once per framing.
     private func balance(_ recipe: NegativeScanRecipe, stock: FilmStock,
                          border: [Float]) throws -> ApproximateNegativeScan.Balance {
-        let crop = recipe.crop
-        let key = BalanceKey(turns: recipe.quarterTurns, mirrored: recipe.mirrored,
-                             crop: [crop.x, crop.y, crop.width, crop.height],
-                             border: border, stockID: recipe.stockID)
+        let key = BalanceKey(framing: Framing(self, recipe), border: border, stockID: recipe.stockID)
         lock.lock()
         if let balance = balances[key] { lock.unlock(); return balance }
         lock.unlock()
@@ -190,10 +300,7 @@ final class NegativeScan: @unchecked Sendable {
     }
 
     private func automaticPlan(_ recipe: NegativeScanRecipe) throws -> AutomaticNegativeScan {
-        let crop = recipe.crop
-        let key = PlanKey(turns: recipe.quarterTurns, mirrored: recipe.mirrored,
-                          crop: [crop.x, crop.y, crop.width, crop.height],
-                          monochrome: recipe.monochrome)
+        let key = PlanKey(framing: Framing(self, recipe), monochrome: recipe.monochrome)
         lock.lock()
         if let plan = plans[key] { lock.unlock(); return plan }
         lock.unlock()
@@ -210,13 +317,16 @@ final class NegativeScan: @unchecked Sendable {
     /// framing does not read the scan again.
     func develop(_ recipe: NegativeScanRecipe, longEdge: Int?, cropped: Bool = true,
                  shouldContinue: (() -> Bool)? = nil) throws -> CGImage {
+        // The app's preparation runs first, under the print's own stop, so a newer print need
+        // not wait.
+        if let preparation = preparation(recipe), preparation.prepare(shouldContinue) == nil {
+            throw CancellationError()
+        }
         let picture = frame(recipe, longEdge: longEdge, cropped: cropped)
         let width = Int(picture.extent.width), height = Int(picture.extent.height)
         guard width > 0, height > 0 else { throw Failure.render }
-        let crop = recipe.crop
-        let key = FrameKey(turns: recipe.quarterTurns, mirrored: recipe.mirrored,
-                           crop: [crop.x, crop.y, crop.width, crop.height],
-                           cropped: cropped, longEdge: longEdge, film: recipe.conversion == .film)
+        let key = FrameKey(framing: Framing(self, recipe), cropped: cropped, longEdge: longEdge,
+                           film: recipe.conversion == .film)
         // The automatic stage is defined on linear sRGB; a film reading wants every dye positive.
         let space = recipe.conversion == .film ? NegativeScanImport.filmSpace
                                                : NegativeScanImport.linearSpace
@@ -279,6 +389,7 @@ final class NegativeScan: @unchecked Sendable {
     ) throws -> Bool {
         let plan = try automaticPlan(recipe)
         let gains = recipe.displayGains(printingOn: nil)
+        let tone = recipe.tone
         let band = 256
         var rgba = [Float](repeating: 0, count: band * width * 4)
         for top in stride(from: 0, to: height, by: band) {
@@ -291,8 +402,8 @@ final class NegativeScan: @unchecked Sendable {
             let positive = try plan.convert(scan)
             for i in 0..<count {
                 // The automatic stage delivers display sRGB primaries; the print is tagged P3.
-                let rgb = ColorScience.linearSRGBToDisplayP3(SIMD3(
-                    positive.planes[0][i], positive.planes[1][i], positive.planes[2][i]) * gains)
+                let rgb = ColorScience.linearSRGBToDisplayP3(tone.apply(SIMD3(
+                    positive.planes[0][i], positive.planes[1][i], positive.planes[2][i]) * gains))
                 rgba[i * 4] = rgb.x
                 rgba[i * 4 + 1] = rgb.y
                 rgba[i * 4 + 2] = rgb.z
@@ -311,14 +422,15 @@ final class NegativeScan: @unchecked Sendable {
         into output: UnsafeMutableBufferPointer<UInt16>, shouldContinue: (() -> Bool)?
     ) throws -> Bool {
         let stock = try Self.film(recipe.stockID)
-        let sampled = try recipe.border ?? estimatedBorder()
+        let sampled = try border(for: recipe)
         let balance = try balance(recipe, stock: stock, border: sampled)
         let calibration = try ApproximateNegativeScan(
             stock: stock, border: SIMD3(sampled[0], sampled[1], sampled[2]), gains: balance.gains)
         let options = recipe.printOptions(for: stock, highlightStops: balance.highlightStops)
         guard let gpu = HalideMetalFilmRenderer.shared else { throw Failure.render }
         let gains = recipe.displayGains(printingOn: stock)
-        let neutral = gains == SIMD3(repeating: 1)
+        let tone = recipe.tone
+        let neutral = gains == SIMD3(repeating: 1) && tone.isNeutral
         var graded = [Float]()
         return gpu.printScan(
             width: width, height: height, stock: stock,
@@ -336,6 +448,7 @@ final class NegativeScan: @unchecked Sendable {
                     graded[i + 1] *= gains.y
                     graded[i + 2] *= gains.z
                 }
+                tone.apply(rgba: &graded)
                 graded.withUnsafeBufferPointer {
                     PrintEncoding.encodeRows($0, rows: rows, width: width, into: output,
                                              transfer: .shoulderedSRGB)
@@ -360,14 +473,21 @@ final class NegativeScan: @unchecked Sendable {
         case jpeg, tiff
         var type: UTType { self == .jpeg ? .jpeg : .tiff }
         var title: String { self == .jpeg ? "JPEG" : "16-bit TIFF" }
+        var fileExtension: String { type.preferredFilenameExtension ?? "dat" }
     }
 
-    /// Writes a full-resolution print of the recipe to a temporary file.
-    func export(_ recipe: NegativeScanRecipe, as format: Format, named name: String) throws -> URL {
-        let print = try develop(recipe, longEdge: nil)
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent(name)
-            .appendingPathExtension(format.type.preferredFilenameExtension ?? "dat")
+    /// The scan itself as the recipe frames it, for showing the negative beside its positive.
+    func negative(_ recipe: NegativeScanRecipe, longEdge: Int, cropped: Bool = true) -> CGImage? {
+        let picture = frame(recipe, longEdge: longEdge, cropped: cropped)
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        return context.createCGImage(picture, from: picture.extent, format: .RGBA8,
+                                     colorSpace: space)
+    }
+
+    /// Writes a full-resolution print of the recipe to `url`.
+    func export(_ recipe: NegativeScanRecipe, as format: Format, to url: URL,
+                shouldContinue: (() -> Bool)? = nil) throws {
+        let print = try develop(recipe, longEdge: nil, shouldContinue: shouldContinue)
         try? FileManager.default.removeItem(at: url)
         switch format {
         case .tiff:
@@ -382,6 +502,5 @@ final class NegativeScan: @unchecked Sendable {
             ] as CFDictionary)
             guard CGImageDestinationFinalize(destination) else { throw Failure.render }
         }
-        return url
     }
 }

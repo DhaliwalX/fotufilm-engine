@@ -87,7 +87,7 @@ final class DesktopEditorViewController: SessionViewController {
     private lazy var padNegativeItem: UIBarButtonItem = {
         let item = UIBarButtonItem(
             image: UIImage(systemName: "film"),
-            menu: NegativeScanOpening.menu { [weak self] in self })
+            menu: SessionNegativeScanController.openingMenu { [weak self] in self })
         item.accessibilityLabel = "Convert Negative"
         return item
     }()

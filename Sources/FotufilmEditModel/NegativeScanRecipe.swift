@@ -1,3 +1,6 @@
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 import Foundation
 #if canImport(FotufilmCore)
 import FotufilmCore
@@ -29,6 +32,15 @@ public struct NegativeScanRecipe: Codable, Equatable, Sendable {
 
         public static let full = Area(x: 0, y: 0, width: 1, height: 1)
 
+        public init(_ rect: CGRect) {
+            self.init(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height)
+        }
+
+        /// The area as a crop canvas holds it: nil for the whole frame.
+        public var unitRect: CGRect? {
+            self == .full ? nil : CGRect(x: x, y: y, width: width, height: height)
+        }
+
         /// The same area kept inside the frame and at least `minimum` on a side.
         public func clamped(minimum: Double = 0.05) -> Area {
             let w = min(max(width, minimum), 1), h = min(max(height, minimum), 1)
@@ -38,6 +50,9 @@ public struct NegativeScanRecipe: Codable, Equatable, Sendable {
 
     public static let exposureRange: ClosedRange<Float> = -3...3
     public static let colourRange: ClosedRange<Float> = -1...1
+    /// Contrast, highlights and shadows share one signed scale.
+    public static let toneRange: ClosedRange<Float> = -1...1
+    public static let straightenRange: ClosedRange<Double> = -15...15
 
     public var conversion: Conversion = .automatic
     /// Automatic conversion reads a black-and-white negative from one channel.
@@ -57,14 +72,56 @@ public struct NegativeScanRecipe: Codable, Equatable, Sendable {
     public var warmth: Float = 0
     /// Positive is more magenta.
     public var tint: Float = 0
+    /// The positive's tone after conversion: contrast about mid-grey, then the bright and the dark
+    /// ends on their own (`NegativeScanTone`). A black-and-white positive shows contrast as a paper
+    /// grade.
+    public var contrast: Float = 0
+    public var highlights: Float = 0
+    public var shadows: Float = 0
+    /// A photograph of the bare light source the scan was made on, dividing out its unevenness.
+    public var lightFrameID: String?
+    /// What an app keeps with a frame's edit that the engine carries, saves and undoes without
+    /// reading, by the app's own key. Each frame keeps its own.
+    public var attachments: [String: Data] = [:]
     /// Clockwise quarter turns, applied after `mirrored`.
     public var quarterTurns = 0
     /// Flipped left to right, for a scan made through the base side.
     public var mirrored = false
-    /// The kept frame, in the oriented picture.
+    /// Degrees, counter-clockwise, after the turns and the flip; the frame is enlarged to stay
+    /// filled.
+    public var straighten = 0.0
+    /// The kept frame, in the oriented and straightened picture.
     public var crop = Area.full
 
     public init() {}
+
+    /// Any field a saved recipe does not carry keeps its default, so a recipe written before a
+    /// control existed opens with that control at rest.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = Self()
+        func read<T: Decodable>(_ key: CodingKeys, _ fallback: T) throws -> T {
+            try c.decodeIfPresent(T.self, forKey: key) ?? fallback
+        }
+        conversion = try read(.conversion, d.conversion)
+        monochrome = try read(.monochrome, d.monochrome)
+        stockID = try read(.stockID, d.stockID)
+        border = try c.decodeIfPresent([Float].self, forKey: .border)
+        borderArea = try c.decodeIfPresent(Area.self, forKey: .borderArea)
+        paperID = try read(.paperID, d.paperID)
+        exposure = try read(.exposure, d.exposure)
+        warmth = try read(.warmth, d.warmth)
+        tint = try read(.tint, d.tint)
+        contrast = try read(.contrast, d.contrast)
+        highlights = try read(.highlights, d.highlights)
+        shadows = try read(.shadows, d.shadows)
+        lightFrameID = try c.decodeIfPresent(String.self, forKey: .lightFrameID)
+        attachments = try read(.attachments, d.attachments)
+        quarterTurns = try read(.quarterTurns, d.quarterTurns)
+        mirrored = try read(.mirrored, d.mirrored)
+        straighten = try read(.straighten, d.straighten)
+        crop = try read(.crop, d.crop)
+    }
 
     /// The receivers a scan prints on: the display conversion, the RA-4 papers and the lab scanner.
     public static func papers(for stock: FilmStock) -> [PrintPaper] {
@@ -147,6 +204,38 @@ public struct NegativeScanRecipe: Codable, Equatable, Sendable {
     /// Stops of red-against-blue (or green-against-magenta) a full step of balance moves.
     static let balanceStopsPerStep: Float = 0.6
 
+    /// The tone after conversion.
+    public var tone: NegativeScanTone {
+        NegativeScanTone(contrast: Self.toneRange.clamp(contrast),
+                         highlights: Self.toneRange.clamp(highlights),
+                         shadows: Self.toneRange.clamp(shadows))
+    }
+
+    // MARK: - Paper grade
+
+    /// The grades of a multigrade paper, softest first. Grade 2 is the paper's normal contrast.
+    public static let grades: ClosedRange<Double> = 0...5
+
+    /// The contrast a paper grade prints at: each grade a third of the scale, grade 2 at none.
+    public static func contrast(forGrade grade: Double) -> Float {
+        Float((min(max(grade, grades.lowerBound), grades.upperBound) - 2) / 3)
+    }
+
+    public static func grade(forContrast contrast: Float) -> Double {
+        min(max(Double(contrast) * 3 + 2, grades.lowerBound), grades.upperBound)
+    }
+
+    // MARK: - A roll
+
+    /// Takes another frame's conversion — how it is read, printed and toned, and the light and
+    /// base it was measured against — and keeps this frame's own framing and attachments. Frames
+    /// of one roll share all of that and none of their framing.
+    public mutating func adoptConversion(of other: NegativeScanRecipe) {
+        let own = (quarterTurns, mirrored, straighten, crop, attachments)
+        self = other
+        (quarterTurns, mirrored, straighten, crop, attachments) = own
+    }
+
     // MARK: - Orientation
 
     /// The oriented picture's size for a scan of `size`.
@@ -190,12 +279,48 @@ public struct NegativeScanRecipe: Codable, Equatable, Sendable {
 
     /// Flips the picture left to right as it is shown, keeping the same part of the scan in the
     /// crop. On a turned picture the scan's own left-right flip reads upside down, so a half
-    /// turn goes with it.
+    /// turn goes with it; a flipped tilt leans the other way.
     public mutating func toggleMirror() {
         let kept = unorient(crop)
         mirrored.toggle()
         if !quarterTurns.isMultiple(of: 2) { quarterTurns = Self.normalized(quarterTurns + 2) }
         crop = orient(kept)
+        straighten = -straighten
+    }
+
+    // MARK: - Straightening
+
+    /// How much a picture of `size` is enlarged when turned by `degrees`, so that the turned
+    /// picture still fills its own frame.
+    public static func straightenScale(size: CGSize, degrees: Double) -> Double {
+        guard size.width > 0, size.height > 0 else { return 1 }
+        let angle = abs(degrees) * .pi / 180
+        let (c, s) = (cos(angle), sin(angle))
+        let w = Double(size.width), h = Double(size.height)
+        return max(c + s * h / w, c + s * w / h)
+    }
+
+    /// Maps a unit point of the picture as shown — cropped unless `cropped` is false — back
+    /// into the scan's own frame, for a scan of `size`.
+    public func scanPoint(ofShown point: CGPoint, cropped: Bool = true, scanSize size: CGSize) -> CGPoint {
+        let crop = cropped ? self.crop.clamped() : .full
+        let uncropped = CGPoint(x: crop.x + Double(point.x) * crop.width,
+                                y: crop.y + Double(point.y) * crop.height)
+        return unorient(unstraighten(uncropped, orientedSize: orientedSize(of: size)))
+    }
+
+    /// Maps a unit point of the straightened picture back into the oriented picture of `size`,
+    /// both from the top left.
+    public func unstraighten(_ point: CGPoint, orientedSize size: CGSize) -> CGPoint {
+        guard straighten != 0, size.width > 0, size.height > 0 else { return point }
+        let scale = Self.straightenScale(size: size, degrees: straighten)
+        let angle = straighten * .pi / 180
+        let (c, s) = (cos(angle), sin(angle))
+        let w = Double(size.width), h = Double(size.height)
+        // Pixels from the centre, y down. The picture turns counter-clockwise as seen, so a point
+        // of it is found clockwise of where it shows.
+        let x = (Double(point.x) - 0.5) * w / scale, y = (Double(point.y) - 0.5) * h / scale
+        return CGPoint(x: (c * x - s * y) / w + 0.5, y: (s * x + c * y) / h + 0.5)
     }
 }
 
