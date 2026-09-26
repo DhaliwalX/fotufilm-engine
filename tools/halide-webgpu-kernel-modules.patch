@@ -1,0 +1,729 @@
+Compile each WebGPU kernel from its own shader module and its pipelines in parallel. The code
+generator marks where each kernel's declarations begin; the runtime compiles the shared part as
+the pipeline's module and each kernel from that part and its own section. A dispatch whose
+pipeline is still compiling is recorded, with every dispatch after it, and encoded in order when
+the batch is next submitted, so a frame's missing pipelines compile together. A failed compile is
+reported at that submit.
+
+diff --git a/src/CodeGen_WebGPU_Dev.cpp b/src/CodeGen_WebGPU_Dev.cpp
+index 4ef6412fb..dce52eefa 100644
+--- a/src/CodeGen_WebGPU_Dev.cpp
++++ b/src/CodeGen_WebGPU_Dev.cpp
+@@ -320,6 +320,11 @@ void CodeGen_WebGPU_Dev::CodeGen_WGSL::add_kernel(
+     FindBufferAccessesRequiringEmulation fbare;
+     s.accept(&fbare);
+ 
++    // Mark where each kernel's declarations begin. Everything before the first
++    // marker is shared; each kernel's section names only its own bindings and
++    // arguments, so the runtime can compile a kernel with the shared part alone.
++    stream << "// halide-kernel " << name << "\n";
++
+     // The name of the variable that contains the non-buffer arguments.
+     string args_var = "Args_" + name;
+ 
+diff --git a/src/runtime/webgpu.cpp b/src/runtime/webgpu.cpp
+index 89720dd45..8bbd8e091 100644
+--- a/src/runtime/webgpu.cpp
++++ b/src/runtime/webgpu.cpp
+@@ -370,18 +370,14 @@ void record_bound_arguments(BoundArguments &bound, WGPUComputePipeline pipeline,
+     if (bound.cacheable) memcpy(bound.uniforms, uniforms, uniform_size);
+ }
+ 
+-BoundArguments *find_bound_arguments(WGPUComputePipeline pipeline, void *args[],
+-                                     const int8_t arg_is_buffer[], uint32_t num_args,
+-                                     const uint32_t *uniforms, uint32_t uniform_size) {
+-    BoundArguments key;
+-    record_bound_arguments(key, pipeline, args, arg_is_buffer, num_args, uniforms, uniform_size);
++BoundArguments *find_bound_arguments(const BoundArguments &key) {
+     if (!key.cacheable) return nullptr;
+     for (auto &bound : bound_cache) {
+-        if (bound.pipeline != pipeline || bound.buffer_count != key.buffer_count
+-            || bound.uniform_size != uniform_size) {
++        if (bound.pipeline != key.pipeline || bound.buffer_count != key.buffer_count
++            || bound.uniform_size != key.uniform_size) {
+             continue;
+         }
+-        bool same = memcmp(bound.uniforms, uniforms, uniform_size) == 0;
++        bool same = memcmp(bound.uniforms, key.uniforms, key.uniform_size) == 0;
+         for (uint32_t b = 0; same && b < key.buffer_count; ++b) {
+             same = bound.buffers[b] == key.buffers[b] && bound.offsets[b] == key.offsets[b]
+                 && bound.sizes[b] == key.sizes[b] && bound.bindings[b] == key.bindings[b];
+@@ -457,10 +453,13 @@ WGPUComputePassEncoder batch_pass(WGPUDevice device) {
+     return pending_batch.pass;
+ }
+ 
++void resolve_deferred_dispatches();
++
+ // Submits the open batch, if any, without waiting on it. Its error scopes stay
+ // open until `submit_batch` or a read back pops them.
+ void flush_commands(WGPUQueue queue) {
+     if (!pending_batch.encoder) return;
++    resolve_deferred_dispatches();
+     dispatches_since_submit = 0;
+     const PendingBatch batch = pending_batch;
+     pending_batch = {};
+@@ -478,13 +477,17 @@ void flush_commands(WGPUQueue queue) {
+ }
+ 
+ // Submits the open batch and reports the errors its scopes collected.
++int take_deferred_error();
++
+ int submit_batch(void *user_context, WGPUInstance instance, WGPUQueue queue) {
+     flush_commands(queue);
+-    if (!scoped_device) return halide_error_code_success;
++    const int deferred = take_deferred_error();
++    if (!scoped_device) return deferred;
+     WGPUDevice device = scoped_device;
+     scoped_device = nullptr;
+     ErrorScope error_scope(user_context, instance, device, false);
+-    return error_scope.wait();
++    const int scoped = error_scope.wait();
++    return deferred ? deferred : scoped;
+ }
+ 
+ // Storage buffers are reused only after their last command has been submitted.
+@@ -553,6 +556,120 @@ void release_cached_storage(WGPUDevice device) {
+ WEAK Halide::Internal::GPUCompilationCache<WGPUDevice, WGPUShaderModule>
+     shader_cache;
+ 
++// A pipeline's WGSL holds every one of its kernels, and compiling a pipeline
++// processes the whole module it names: in Chrome each kernel of a 7.5 MB module
++// took about 160 ms, however small. Where the code generator marked each
++// kernel's section, the cached module holds only the shared declarations and
++// each kernel compiles from its own module, those declarations and its section.
++// Protected by the context lock.
++constexpr const char *kKernelMarker = "// halide-kernel ";
++struct KernelSection {
++    const char *name;
++    size_t name_length;
++    size_t begin;
++    size_t end;
++};
++struct SplitSource {
++    WGPUDevice device;
++    WGPUShaderModule module;
++    const char *src;
++    size_t shared_length;
++    KernelSection *sections;
++    uint32_t count;
++};
++constexpr uint32_t kMaxSplitSources = 32;
++WEAK SplitSource split_sources[kMaxSplitSources] = {};
++
++namespace {
++
++void forget_split_sources(WGPUDevice device) {
++    for (auto &split : split_sources) {
++        if (split.module && (device == nullptr || split.device == device)) {
++            free(split.sections);
++            split = {};
++        }
++    }
++}
++
++// Indexes the kernel sections of `src`, whose shared part `module` compiled.
++void record_split_source(WGPUDevice device, WGPUShaderModule module, const char *src,
++                         const char *first) {
++    SplitSource *slot = nullptr;
++    for (auto &split : split_sources) {
++        // A released module's handle can come back for another source.
++        if (split.module == module && split.device == device) {
++            free(split.sections);
++            split = {};
++        }
++    }
++    for (auto &split : split_sources) {
++        if (!split.module) {
++            slot = &split;
++            break;
++        }
++    }
++    if (!slot) return;
++    const size_t marker_length = strlen(kKernelMarker);
++    uint32_t count = 0;
++    for (const char *at = first; at; at = strstr(at + marker_length, kKernelMarker)) {
++        count++;
++    }
++    KernelSection *sections = (KernelSection *)malloc(count * sizeof(KernelSection));
++    if (!sections) return;
++    uint32_t i = 0;
++    for (const char *at = first; at; at = strstr(at + marker_length, kKernelMarker)) {
++        const char *name = at + marker_length;
++        const char *line_end = name;
++        while (*line_end && *line_end != '\n') line_end++;
++        sections[i].name = name;
++        sections[i].name_length = line_end - name;
++        sections[i].begin = at - src;
++        if (i > 0) sections[i - 1].end = sections[i].begin;
++        i++;
++    }
++    sections[count - 1].end = strlen(src);
++    *slot = {device, module, src, (size_t)(first - src), sections, count};
++}
++
++// A module of `module`'s shared declarations and the section of `entry_name`,
++// or null when `module` holds the whole source.
++WGPUShaderModule kernel_module(WGPUDevice device, WGPUShaderModule module,
++                               const char *entry_name) {
++    const SplitSource *split = nullptr;
++    for (const auto &candidate : split_sources) {
++        if (candidate.module == module && candidate.device == device) {
++            split = &candidate;
++            break;
++        }
++    }
++    if (!split) return nullptr;
++    const size_t name_length = strlen(entry_name);
++    for (uint32_t i = 0; i < split->count; i++) {
++        const KernelSection &section = split->sections[i];
++        if (section.name_length != name_length
++            || strncmp(section.name, entry_name, name_length) != 0) {
++            continue;
++        }
++        const size_t length = split->shared_length + (section.end - section.begin);
++        char *code = (char *)malloc(length);
++        if (!code) return nullptr;
++        memcpy(code, split->src, split->shared_length);
++        memcpy(code + split->shared_length, split->src + section.begin,
++               section.end - section.begin);
++        WGPUShaderSourceWGSL wgsl_desc = WGPU_SHADER_SOURCE_WGSL_INIT;
++        wgsl_desc.code.data = code;
++        wgsl_desc.code.length = length;
++        WGPUShaderModuleDescriptor desc = WGPU_SHADER_MODULE_DESCRIPTOR_INIT;
++        desc.nextInChain = (WGPUChainedStruct *)(&wgsl_desc);
++        WGPUShaderModule kernel = wgpuDeviceCreateShaderModule(device, &desc);
++        free(code);
++        return kernel;
++    }
++    return nullptr;
++}
++
++}  // namespace
++
+ // A cache of compute pipelines: one per shader module, entry point and set of
+ // override constants.
+ //
+@@ -844,6 +961,250 @@ WEAK int create_webgpu_context(void *user_context) {
+     return init_error_code;
+ }
+ 
++
++// Pipelines compiling for the dispatches recorded behind them. Waiting for
++// each kernel's pipeline before recording the next compiled them one at a
++// time; recording the dispatches and compiling every missing pipeline at once
++// lets the browser compile them in parallel (60 kernels in Chrome: 1.0 s one
++// at a time, 0.16 s together). The recorded dispatches are encoded in order
++// when the batch is next submitted, and a failed compile is reported there.
++// Protected by the context lock.
++struct PendingPipeline {
++    WGPUInstance instance;
++    WGPUDevice device;
++    WGPUShaderModule module;
++    WGPUShaderModule entry_module;
++    char *entry_name;
++    int threads[3];
++    int workgroup_mem_bytes;
++    WGPUFuture future;
++    volatile WGPUCreatePipelineAsyncStatus status;
++    WGPUComputePipeline pipeline;
++    bool cached;
++    char message[256];
++};
++struct DeferredDispatch {
++    PendingPipeline *pending;
++    WGPUComputePipeline pipeline;
++    BoundArguments bound;
++    uint32_t groups[3];
++};
++constexpr uint32_t kMaxPendingPipelines = 256;
++constexpr uint32_t kMaxDeferredDispatches = 256;
++WEAK PendingPipeline *pending_pipelines[kMaxPendingPipelines] = {};
++WEAK uint32_t pending_pipeline_count = 0;
++WEAK DeferredDispatch *deferred_dispatches = nullptr;
++WEAK uint32_t deferred_dispatch_count = 0;
++WEAK int deferred_error = halide_error_code_success;
++
++int take_deferred_error() {
++    const int error = deferred_error;
++    deferred_error = halide_error_code_success;
++    return error;
++}
++
++PendingPipeline *find_pending_pipeline(WGPUDevice device, WGPUShaderModule module,
++                                       const char *entry_name, int threadsX, int threadsY,
++                                       int threadsZ, int workgroup_mem_bytes) {
++    for (uint32_t i = 0; i < pending_pipeline_count; i++) {
++        PendingPipeline *p = pending_pipelines[i];
++        if (p->device == device && p->module == module && p->threads[0] == threadsX
++            && p->threads[1] == threadsY && p->threads[2] == threadsZ
++            && p->workgroup_mem_bytes == workgroup_mem_bytes
++            && strcmp(p->entry_name, entry_name) == 0) {
++            return p;
++        }
++    }
++    return nullptr;
++}
++
++PendingPipeline *start_pipeline(WGPUInstance instance, WGPUDevice device,
++                                WGPUShaderModule module, const char *entry_name,
++                                int threadsX, int threadsY, int threadsZ,
++                                int workgroup_mem_bytes) {
++    if (pending_pipeline_count == kMaxPendingPipelines) return nullptr;
++    PendingPipeline *p = (PendingPipeline *)malloc(sizeof(PendingPipeline));
++    if (!p) return nullptr;
++    const size_t name_size = strlen(entry_name) + 1;
++    p->entry_name = (char *)malloc(name_size);
++    if (!p->entry_name) {
++        free(p);
++        return nullptr;
++    }
++    memcpy(p->entry_name, entry_name, name_size);
++    p->instance = instance;
++    p->device = device;
++    p->module = module;
++    p->threads[0] = threadsX;
++    p->threads[1] = threadsY;
++    p->threads[2] = threadsZ;
++    p->workgroup_mem_bytes = workgroup_mem_bytes;
++    // A non-success sentinel, should the callback never fire.
++    p->status = WGPUCreatePipelineAsyncStatus_CallbackCancelled;
++    p->pipeline = nullptr;
++    p->cached = false;
++    p->message[0] = '\0';
++    p->entry_module = kernel_module(device, module, entry_name);
++
++    WGPUConstantEntry overrides[4];
++    const char *keys[4] = {"wgsize_x", "wgsize_y", "wgsize_z", "workgroup_mem_bytes"};
++    const int values[4] = {threadsX, threadsY, threadsZ, workgroup_mem_bytes};
++    for (int i = 0; i < 4; i++) {
++        overrides[i] = WGPU_CONSTANT_ENTRY_INIT;
++        overrides[i].key.data = keys[i];
++        overrides[i].key.length = WGPU_STRLEN;
++        overrides[i].value = (double)values[i];
++    }
++    WGPUComputeState compute_state = WGPU_COMPUTE_STATE_INIT;
++    compute_state.module = p->entry_module ? p->entry_module : module;
++    compute_state.entryPoint.data = p->entry_name;
++    compute_state.entryPoint.length = WGPU_STRLEN;
++    compute_state.constantCount = 4;
++    compute_state.constants = overrides;
++    WGPUComputePipelineDescriptor pipeline_desc = WGPU_COMPUTE_PIPELINE_DESCRIPTOR_INIT;
++    pipeline_desc.compute = compute_state;
++
++    WGPUCreateComputePipelineAsyncCallbackInfo callback_info =
++        WGPU_CREATE_COMPUTE_PIPELINE_ASYNC_CALLBACK_INFO_INIT;
++    callback_info.mode = WGPUCallbackMode_WaitAnyOnly;
++    callback_info.callback = [](WGPUCreatePipelineAsyncStatus status,
++                                WGPUComputePipeline pipeline, WGPUStringView message,
++                                void *userdata1, void *) {
++        PendingPipeline *p = (PendingPipeline *)userdata1;
++        p->status = status;
++        p->pipeline = pipeline;
++        wgpu_sv_to_cstr(message, p->message, sizeof(p->message));
++    };
++    callback_info.userdata1 = p;
++    p->future = wgpuDeviceCreateComputePipelineAsync(device, &pipeline_desc, callback_info);
++    pending_pipelines[pending_pipeline_count++] = p;
++    return p;
++}
++
++bool defer_dispatch(PendingPipeline *pending, WGPUComputePipeline pipeline,
++                    const BoundArguments &bound, const uint32_t groups[3]) {
++    if (!deferred_dispatches) {
++        deferred_dispatches =
++            (DeferredDispatch *)malloc(kMaxDeferredDispatches * sizeof(DeferredDispatch));
++        if (!deferred_dispatches) return false;
++    }
++    if (deferred_dispatch_count == kMaxDeferredDispatches) return false;
++    DeferredDispatch &d = deferred_dispatches[deferred_dispatch_count++];
++    d.pending = pending;
++    d.pipeline = pipeline;
++    d.bound = bound;
++    for (int i = 0; i < 3; i++) d.groups[i] = groups[i];
++    return true;
++}
++
++// Sets `pipeline` and the bind groups for `record` on `pass`, reusing the
++// cached groups for the same arguments, and dispatches.
++void encode_dispatch(WGPUDevice device, WGPUComputePassEncoder pass,
++                     WGPUComputePipeline pipeline, bool pipeline_is_cached,
++                     const BoundArguments &record, const uint32_t *uniforms,
++                     uint32_t uniform_size, const uint32_t groups[3]) {
++    wgpuComputePassEncoderSetPipeline(pass, pipeline);
++    BoundArguments fresh = record;
++    fresh.pipeline = pipeline;
++    BoundArguments *bound = pipeline_is_cached ? find_bound_arguments(fresh) : nullptr;
++    if (!bound) {
++        bound = &fresh;
++        if (fresh.buffer_count > 0) {
++            // Set up a bind group entry for each buffer argument.
++            WGPUBindGroupEntry entries[kMaxBoundBuffers];
++            for (uint32_t b = 0; b < fresh.buffer_count; b++) {
++                entries[b] = WGPU_BIND_GROUP_ENTRY_INIT;
++                entries[b].binding = fresh.bindings[b];
++                entries[b].buffer = fresh.buffers[b];
++                entries[b].offset = fresh.offsets[b];
++                entries[b].size = fresh.sizes[b];
++            }
++            WGPUBindGroupLayout layout = wgpuComputePipelineGetBindGroupLayout(pipeline, 0);
++            WGPUBindGroupDescriptor desc = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
++            desc.layout = layout;
++            desc.entryCount = fresh.buffer_count;
++            desc.entries = entries;
++            fresh.storage_group = wgpuDeviceCreateBindGroup(device, &desc);
++            wgpuBindGroupLayoutRelease(layout);
++        }
++        if (uniform_size > 0) {
++            // A uniform buffer for the non-buffer arguments.
++            WGPUBufferDescriptor desc = WGPU_BUFFER_DESCRIPTOR_INIT;
++            desc.usage = WGPUBufferUsage_Uniform;
++            desc.size = uniform_size;
++            desc.mappedAtCreation = true;
++            fresh.uniform_buffer = wgpuDeviceCreateBuffer(device, &desc);
++            void *mapped = wgpuBufferGetMappedRange(fresh.uniform_buffer, 0, uniform_size);
++            memcpy(mapped, uniforms, uniform_size);
++            wgpuBufferUnmap(fresh.uniform_buffer);
++
++            WGPUBindGroupLayout layout = wgpuComputePipelineGetBindGroupLayout(pipeline, 1);
++            WGPUBindGroupEntry entry = WGPU_BIND_GROUP_ENTRY_INIT;
++            entry.binding = 0;
++            entry.buffer = fresh.uniform_buffer;
++            entry.offset = 0;
++            entry.size = uniform_size;
++            WGPUBindGroupDescriptor bind_desc = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
++            bind_desc.layout = layout;
++            bind_desc.entryCount = 1;
++            bind_desc.entries = &entry;
++            fresh.uniform_group = wgpuDeviceCreateBindGroup(device, &bind_desc);
++            wgpuBindGroupLayoutRelease(layout);
++        }
++    }
++    if (bound->storage_group) {
++        wgpuComputePassEncoderSetBindGroup(pass, 0, bound->storage_group, 0, nullptr);
++    }
++    if (bound->uniform_group) {
++        wgpuComputePassEncoderSetBindGroup(pass, 1, bound->uniform_group, 0, nullptr);
++    }
++    if (bound == &fresh && (!pipeline_is_cached || !keep_bound_arguments(fresh))) {
++        release_bound_arguments(fresh);
++    }
++    wgpuComputePassEncoderDispatchWorkgroups(pass, groups[0], groups[1], groups[2]);
++}
++
++// Waits for every pending compile, then encodes the recorded dispatches in
++// order into the open pass.
++void resolve_deferred_dispatches() {
++    if (!pending_pipeline_count && !deferred_dispatch_count) return;
++    for (uint32_t i = 0; i < pending_pipeline_count; i++) {
++        PendingPipeline *p = pending_pipelines[i];
++        WGPUFutureWaitInfo wait_info = WGPU_FUTURE_WAIT_INFO_INIT;
++        wait_info.future = p->future;
++        wgpuInstanceWaitAny(p->instance, 1, &wait_info, UINT64_MAX);
++        if (p->entry_module) wgpuShaderModuleRelease(p->entry_module);
++        if (p->status != WGPUCreatePipelineAsyncStatus_Success) {
++            error(nullptr) << "WGPU: wgpuDeviceCreateComputePipelineAsync failed ("
++                           << p->status << ") for " << p->entry_name << ": " << p->message << "\n";
++            if (p->pipeline) wgpuComputePipelineRelease(p->pipeline);
++            p->pipeline = nullptr;
++            if (!deferred_error) deferred_error = halide_error_code_generic_error;
++            continue;
++        }
++        p->cached = cache_pipeline(p->device, p->module, p->entry_name, p->threads[0],
++                                   p->threads[1], p->threads[2], p->workgroup_mem_bytes,
++                                   p->pipeline);
++    }
++    for (uint32_t i = 0; i < deferred_dispatch_count; i++) {
++        const DeferredDispatch &d = deferred_dispatches[i];
++        WGPUComputePipeline pipeline = d.pending ? d.pending->pipeline : d.pipeline;
++        if (!pipeline) continue;
++        encode_dispatch(pending_batch.device, pending_batch.pass, pipeline,
++                        d.pending ? d.pending->cached : true, d.bound, d.bound.uniforms,
++                        d.bound.uniform_size, d.groups);
++    }
++    deferred_dispatch_count = 0;
++    for (uint32_t i = 0; i < pending_pipeline_count; i++) {
++        PendingPipeline *p = pending_pipelines[i];
++        if (!p->cached && p->pipeline) wgpuComputePipelineRelease(p->pipeline);
++        free(p->entry_name);
++        free(p);
++        pending_pipelines[i] = nullptr;
++    }
++    pending_pipeline_count = 0;
++}
++
+ }  // namespace WebGPU
+ }  // namespace Internal
+ }  // namespace Runtime
+@@ -1007,6 +1368,7 @@ WEAK int halide_webgpu_device_release(void *user_context) {
+         release_staging();
+         release_cached_storage(device);
+         release_cached_pipelines(user_context, device);
++        forget_split_sources(device);
+         shader_cache.delete_context(user_context, device,
+                                     wgpuShaderModuleRelease);
+ 
+@@ -1428,8 +1790,9 @@ WEAK int halide_webgpu_buffer_copy(void *user_context,
+                                        from_host, to_host);
+         pending_read_scope = nullptr;
+         const int scope_error = error_scope.wait();
++        const int deferred_error = take_deferred_error();
+         if (err == halide_error_code_success) {
+-            err = scope_error;
++            err = deferred_error ? deferred_error : scope_error;
+         }
+     }
+ 
+@@ -1547,9 +1910,11 @@ WEAK int halide_webgpu_initialize_kernels(void *user_context, void **state_ptr,
+             [&]() -> WGPUShaderModule {
+                 ErrorScope error_scope(user_context, context.instance, context.device);
+ 
++                // With kernel sections, only the shared part is compiled here.
++                const char *first = strstr(src, kKernelMarker);
+                 WGPUShaderSourceWGSL wgsl_desc = WGPU_SHADER_SOURCE_WGSL_INIT;
+                 wgsl_desc.code.data = src;
+-                wgsl_desc.code.length = WGPU_STRLEN;
++                wgsl_desc.code.length = first ? (size_t)(first - src) : WGPU_STRLEN;
+                 WGPUShaderModuleDescriptor desc = WGPU_SHADER_MODULE_DESCRIPTOR_INIT;
+                 desc.nextInChain = (WGPUChainedStruct *)(&wgsl_desc);
+                 WGPUShaderModule shader_module =
+@@ -1559,6 +1924,7 @@ WEAK int halide_webgpu_initialize_kernels(void *user_context, void **state_ptr,
+                 if (error_code != halide_error_code_success) {
+                     return nullptr;  // from the lambda
+                 }
++                if (first) record_split_source(context.device, shader_module, src, first);
+ 
+                 return shader_module;
+             })) {
+@@ -1609,100 +1975,34 @@ WEAK int halide_webgpu_run(void *user_context,
+     halide_abort_if_false(user_context, found && shader_module != nullptr);
+ 
+     // Reuse the pipeline compiled for this entry point and workgroup shape, or
+-    // compile it now and keep it for the next dispatch.
++    // start compiling it and record the dispatch behind it.
+     WGPUComputePipeline pipeline = lookup_cached_pipeline(
+         context.device, shader_module, entry_name,
+         threadsX, threadsY, threadsZ, workgroup_mem_bytes);
+-    bool pipeline_is_cached = pipeline != nullptr;
++    PendingPipeline *pending = nullptr;
+     if (pipeline == nullptr) {
+-        // Create the compute pipeline.
+-        WGPUConstantEntry overrides[4];
+-        overrides[0] = WGPU_CONSTANT_ENTRY_INIT;
+-        overrides[0].key.data = "wgsize_x";
+-        overrides[0].key.length = WGPU_STRLEN;
+-        overrides[0].value = (double)threadsX;
+-        overrides[1] = WGPU_CONSTANT_ENTRY_INIT;
+-        overrides[1].key.data = "wgsize_y";
+-        overrides[1].key.length = WGPU_STRLEN;
+-        overrides[1].value = (double)threadsY;
+-        overrides[2] = WGPU_CONSTANT_ENTRY_INIT;
+-        overrides[2].key.data = "wgsize_z";
+-        overrides[2].key.length = WGPU_STRLEN;
+-        overrides[2].value = (double)threadsZ;
+-        overrides[3] = WGPU_CONSTANT_ENTRY_INIT;
+-        overrides[3].key.data = "workgroup_mem_bytes";
+-        overrides[3].key.length = WGPU_STRLEN;
+-        overrides[3].value = (double)workgroup_mem_bytes;
+-        WGPUComputeState compute_state = WGPU_COMPUTE_STATE_INIT;
+-        compute_state.module = shader_module;
+-        compute_state.entryPoint.data = entry_name;
+-        compute_state.entryPoint.length = WGPU_STRLEN;
+-        compute_state.constantCount = 4;
+-        compute_state.constants = overrides;
+-
+-        WGPUComputePipelineDescriptor pipeline_desc = WGPU_COMPUTE_PIPELINE_DESCRIPTOR_INIT;
+-        pipeline_desc.compute = compute_state;
+-
+-        // Create the compute pipeline asynchronously.
+-        struct PipelineResult {
+-            volatile WGPUCreatePipelineAsyncStatus status;
+-            WGPUComputePipeline pipeline;
+-            char message[512];
+-        };
+-        PipelineResult pipeline_result;
+-        // Initialize status to a non-success sentinel so that if the callback
+-        // never fires, we take the error path instead of reading uninitialized
+-        // memory. See wgpuInstanceWaitAny below.
+-        pipeline_result.status = WGPUCreatePipelineAsyncStatus_CallbackCancelled;
+-        pipeline_result.pipeline = nullptr;
+-        pipeline_result.message[0] = '\0';
+-
+-        WGPUCreateComputePipelineAsyncCallbackInfo pipeline_callback_info =
+-            WGPU_CREATE_COMPUTE_PIPELINE_ASYNC_CALLBACK_INFO_INIT;
+-        pipeline_callback_info.mode = WGPUCallbackMode_WaitAnyOnly;
+-        pipeline_callback_info.callback = [](WGPUCreatePipelineAsyncStatus status,
+-                                             WGPUComputePipeline pipeline,
+-                                             WGPUStringView message,
+-                                             void *userdata1, void *userdata2) {
+-            PipelineResult *result = (PipelineResult *)userdata1;
+-            result->status = status;
+-            result->pipeline = pipeline;
+-            wgpu_sv_to_cstr(message, result->message, sizeof(result->message));
+-        };
+-        pipeline_callback_info.userdata1 = &pipeline_result;
+-
+-        WGPUFuture pipeline_future = wgpuDeviceCreateComputePipelineAsync(
+-            context.device, &pipeline_desc, pipeline_callback_info);
+-
+-        // Wait for the pipeline to be created.
+-        WGPUFutureWaitInfo wait_info = WGPU_FUTURE_WAIT_INFO_INIT;
+-        wait_info.future = pipeline_future;
+-        wgpuInstanceWaitAny(context.instance, 1, &wait_info, UINT64_MAX);
+-
+-        if (pipeline_result.status != WGPUCreatePipelineAsyncStatus_Success) {
+-            error(user_context) << "WGPU: wgpuDeviceCreateComputePipelineAsync failed ("
+-                                << pipeline_result.status << "): " << pipeline_result.message << "\n";
+-            return halide_error_code_generic_error;
++        pending = find_pending_pipeline(context.device, shader_module, entry_name,
++                                        threadsX, threadsY, threadsZ, workgroup_mem_bytes);
++        if (!pending) {
++            pending = start_pipeline(context.instance, context.device, shader_module, entry_name,
++                                     threadsX, threadsY, threadsZ, workgroup_mem_bytes);
++        }
++        if (!pending) {
++            // Full: encode what is recorded, which frees every slot, and retry.
++            resolve_deferred_dispatches();
++            pending = start_pipeline(context.instance, context.device, shader_module, entry_name,
++                                     threadsX, threadsY, threadsZ, workgroup_mem_bytes);
++            if (!pending) {
++                return halide_error_code_out_of_memory;
++            }
+         }
+-
+-        pipeline = pipeline_result.pipeline;
+-        pipeline_is_cached = cache_pipeline(
+-            context.device, shader_module, entry_name,
+-            threadsX, threadsY, threadsZ, workgroup_mem_bytes, pipeline);
+-        debug(user_context) << "WGPU: compiled pipeline for " << entry_name
+-                            << (pipeline_is_cached ? " (cached)" : " (not cached)") << "\n";
+     }
+ 
+-    wgpuComputePassEncoderSetPipeline(pass, pipeline);
+-
+     // Process function arguments.
+     uint32_t num_args = 0;
+-    uint32_t num_buffers = 0;
+     uint32_t uniform_size = 0;
+     while (args[num_args] != nullptr) {
+-        if (arg_is_buffer[num_args]) {
+-            num_buffers++;
+-        } else {
++        if (!arg_is_buffer[num_args]) {
+             uint32_t arg_size = arg_types[num_args].bytes();
+             halide_debug_assert(user_context, arg_size <= 4);
+ 
+@@ -1788,88 +2088,30 @@ WEAK int halide_webgpu_run(void *user_context,
+         }
+     }
+ 
+-    BoundArguments *bound = pipeline_is_cached
+-        ? find_bound_arguments(pipeline, args, arg_is_buffer, num_args, arg_values, uniform_size)
+-        : nullptr;
+-    BoundArguments fresh = {};
+-    if (!bound) {
+-        bound = &fresh;
+-        record_bound_arguments(fresh, pipeline, args, arg_is_buffer, num_args, arg_values, uniform_size);
+-        if (num_buffers > 0) {
+-            // Set up a bind group entry for each buffer argument.
+-            WGPUBindGroupEntry *bind_group_entries =
+-                (WGPUBindGroupEntry *)malloc(
+-                    num_buffers * sizeof(WGPUBindGroupEntry));
+-            for (uint32_t b = 0; b < fresh.buffer_count; b++) {
+-                WGPUBindGroupEntry entry = WGPU_BIND_GROUP_ENTRY_INIT;
+-                entry.binding = fresh.bindings[b];
+-                entry.buffer = fresh.buffers[b];
+-                entry.offset = fresh.offsets[b];
+-                entry.size = fresh.sizes[b];
+-                bind_group_entries[b] = entry;
+-            }
+-
+-            // Create a bind group for the buffer arguments.
+-            WGPUBindGroupLayout layout =
+-                wgpuComputePipelineGetBindGroupLayout(pipeline, 0);
+-            WGPUBindGroupDescriptor bindgroup_desc = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
+-            bindgroup_desc.layout = layout;
+-            bindgroup_desc.entryCount = num_buffers;
+-            bindgroup_desc.entries = bind_group_entries;
+-            fresh.storage_group =
+-                wgpuDeviceCreateBindGroup(context.device, &bindgroup_desc);
+-            wgpuBindGroupLayoutRelease(layout);
+-
+-            free(bind_group_entries);
+-        }
+-        if (num_args > num_buffers) {
+-            // Create a uniform buffer for the non-buffer arguments.
+-            WGPUBufferDescriptor desc = WGPU_BUFFER_DESCRIPTOR_INIT;
+-            desc.usage = WGPUBufferUsage_Uniform;
+-            desc.size = uniform_size;
+-            desc.mappedAtCreation = true;
+-            fresh.uniform_buffer = wgpuDeviceCreateBuffer(context.device, &desc);
+-            void *mapped = wgpuBufferGetMappedRange(fresh.uniform_buffer, 0, uniform_size);
+-            memcpy(mapped, arg_values, uniform_size);
+-            wgpuBufferUnmap(fresh.uniform_buffer);
+-
+-            // Create a bind group for the uniform buffer.
+-            WGPUBindGroupLayout layout =
+-                wgpuComputePipelineGetBindGroupLayout(pipeline, 1);
+-            WGPUBindGroupEntry entry = WGPU_BIND_GROUP_ENTRY_INIT;
+-            entry.binding = 0;
+-            entry.buffer = fresh.uniform_buffer;
+-            entry.offset = 0;
+-            entry.size = uniform_size;
+-            WGPUBindGroupDescriptor bindgroup_desc = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
+-            bindgroup_desc.layout = layout;
+-            bindgroup_desc.entryCount = 1;
+-            bindgroup_desc.entries = &entry;
+-            fresh.uniform_group =
+-                wgpuDeviceCreateBindGroup(context.device, &bindgroup_desc);
+-            wgpuBindGroupLayoutRelease(layout);
+-        }
+-    }
+-    free(arg_values);
+-    if (bound->storage_group) {
+-        wgpuComputePassEncoderSetBindGroup(pass, 0, bound->storage_group, 0, nullptr);
+-    }
+-    if (bound->uniform_group) {
+-        wgpuComputePassEncoderSetBindGroup(pass, 1, bound->uniform_group, 0, nullptr);
++    BoundArguments record;
++    record_bound_arguments(record, pipeline, args, arg_is_buffer, num_args, arg_values, uniform_size);
++    const uint32_t groups[3] = {(uint32_t)groupsX, (uint32_t)groupsY, (uint32_t)groupsZ};
++    if ((pending || deferred_dispatch_count) && record.cacheable
++        && defer_dispatch(pending, pipeline, record, groups)) {
++        free(arg_values);
++        return halide_error_code_success;
+     }
+-    if (bound == &fresh) {
+-        if (!pipeline_is_cached || !keep_bound_arguments(fresh)) {
+-            release_bound_arguments(fresh);
++    if (pending || deferred_dispatch_count) {
++        // Not recordable: finish every compile and recorded dispatch first.
++        resolve_deferred_dispatches();
++        pipeline = lookup_cached_pipeline(context.device, shader_module, entry_name,
++                                          threadsX, threadsY, threadsZ, workgroup_mem_bytes);
++        if (!pipeline) {
++            free(arg_values);
++            const int deferred = take_deferred_error();
++            return deferred ? deferred : halide_error_code_generic_error;
+         }
+     }
+-
+-    wgpuComputePassEncoderDispatchWorkgroups(pass, groupsX, groupsY, groupsZ);
++    encode_dispatch(context.device, pass, pipeline, true, record, arg_values, uniform_size, groups);
++    free(arg_values);
+     if (++dispatches_since_submit >= dispatches_per_submit) {
+         flush_commands(context.queue);
+     }
+-    if (!pipeline_is_cached) {
+-        wgpuComputePipelineRelease(pipeline);
+-    }
+ 
+     return halide_error_code_success;
+ }
+@@ -1881,6 +2123,7 @@ WEAK const struct halide_device_interface_t *halide_webgpu_device_interface() {
+ namespace {
+ WEAK __attribute__((destructor)) void halide_webgpu_cleanup() {
+     release_cached_pipelines(nullptr, nullptr);
++    forget_split_sources(nullptr);
+     shader_cache.release_all(nullptr, wgpuShaderModuleRelease);
+     halide_webgpu_device_release(nullptr);
+ }
