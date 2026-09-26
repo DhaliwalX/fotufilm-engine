@@ -682,7 +682,7 @@ public struct FilmGrain: Sendable {
         let record = records[r]
         let box = Sendable_Box(output)
         let meanBox = wantPointMeans ? Sendable_Box(means) : nil
-        DispatchQueue.concurrentPerform(iterations: tilesX * tilesY) { index in
+        ParallelWork.forEach(iterations: tilesX * tilesY) { index in
             let tx = index % tilesX, ty = index / tilesX
             let x0 = tx * tile, y0 = ty * tile
             let tw = min(tile, width - x0), th = min(tile, height - y0)

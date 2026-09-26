@@ -302,7 +302,7 @@ extension FilmGrain {
             // do not inherit Swift task cancellation. Never publish a partially generated bank.
             for start in stride(from: 0, to: count, by: workers) {
                 try checkCancellation()
-                DispatchQueue.concurrentPerform(iterations: min(workers, count - start)) { offset in
+                ParallelWork.forEach(iterations: min(workers, count - start)) { offset in
                     let index = start + offset
                     let r = active[index / Self.tileLevels], k = index % Self.tileLevels
                     let record = records[r]
@@ -429,7 +429,7 @@ extension FilmGrain {
         let sums = LagSums(count: lagSide * lagSide)
         // Each row of lags is independent. Keep every texel sum serial, then combine the
         // finished lags in the original dy/dx order: calibration must retain the same bits.
-        DispatchQueue.concurrentPerform(iterations: lagSide) { rowIndex in
+        ParallelWork.forEach(iterations: lagSide) { rowIndex in
             let dy = rowIndex - reach
             for dx in -reach...reach {
                 var c = 0.0
@@ -486,7 +486,7 @@ extension FilmGrain {
             defer { out.deallocate() }
             let box = TileOutput(out)
             let amount = amounts[r]
-            DispatchQueue.concurrentPerform(iterations: height) { y in
+            ParallelWork.forEach(iterations: height) { y in
                 let y0 = (Double(y) + 0.5) * pitch - 0.5 * footprint, y1 = y0 + footprint
                 for x in 0..<width {
                     let gross = source[y * width + x]
