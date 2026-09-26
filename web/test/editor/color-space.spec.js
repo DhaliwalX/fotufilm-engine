@@ -1,3 +1,4 @@
+import { openEditor } from './photo-fixture.js'
 import { test, expect } from '@playwright/test'
 import { writeFile } from 'node:fs/promises'
 
@@ -5,10 +6,7 @@ test('P3 survives input, crop, developed delivery, frames and background PNG/JPE
   page,
 }, testInfo) => {
   test.setTimeout(180000)
-  await page.goto('/')
-  await expect(page.locator('.viewer-status > [role=status]')).toContainText(
-    /\d+ × \d+/,
-  )
+  await openEditor(page)
   const report = await page.evaluate(async () => {
     const {
       preferredCanvasColorSpace,
@@ -158,10 +156,7 @@ test('sRGB canvas fallback stays correctly tagged while TIFF still carries P3', 
       }
     }
   })
-  await page.goto('/')
-  await expect(page.locator('.viewer-status > [role=status]')).toContainText(
-    /\d+ × \d+/,
-  )
+  await openEditor(page)
   const report = await page.evaluate(async () => {
     const { preferredCanvasColorSpace } = await import('/src/canvas-color.js')
     const { RenderSession } = await import('/src/render-session.js')
@@ -203,10 +198,7 @@ test('sRGB canvas fallback stays correctly tagged while TIFF still carries P3', 
 test('GPU and CPU deliver the same 16-bit P3 print samples', async ({
   page,
 }) => {
-  await page.goto('/')
-  await expect(page.locator('.viewer-status > [role=status]')).toContainText(
-    /\d+ × \d+/,
-  )
+  await openEditor(page)
   const report = await page.evaluate(async () => {
     const { createBackgroundDeveloper } = await import(
       '/src/background-developer.js'
@@ -311,10 +303,7 @@ test('a real 16-bit PNG retains more than 8-bit detail through orientation and c
     chunk('IDAT', deflateSync(samples)),
     chunk('IEND', Buffer.alloc(0)),
   ])
-  await page.goto('/')
-  await expect(page.locator('.viewer-status > [role=status]')).toContainText(
-    /\d+ × \d+/,
-  )
+  await openEditor(page)
   const result = await page.evaluate(async (bytes) => {
     const { importPhoto } = await import('/src/photo-import.js')
     const { rawSource } = await import('/src/raw-source.js')

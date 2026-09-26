@@ -1,3 +1,30 @@
+import { expect } from "@playwright/test";
+
+export const viewerStatus = (page) =>
+  page.locator(".viewer-status > [role=status]");
+
+// The editor opens with an empty canvas.
+export async function openEditor(page, url = "/") {
+  await page.goto(url);
+  await expect(page.locator(".viewer-status .document-name")).toHaveText(
+    "No photo open",
+  );
+}
+
+// Open the editor on the chart and wait for its first preview.
+export async function openEditorWithChart(page, width, height) {
+  await openEditor(page);
+  await openChart(page, width, height);
+  await expect(viewerStatus(page)).toContainText(/\d+ × \d+/);
+}
+
+// Show one of the inspector's adjustment panels: Film, Expose, Develop or Print.
+export const openPanel = (page, name) =>
+  page
+    .getByRole("radiogroup", { name: "Adjustment panels" })
+    .getByRole("radio", { name, exact: true })
+    .click();
+
 // Generate a deterministic photo for editor interactions.
 export async function openChart(page, width = 1600, height = 1000) {
   const bytes = await page.evaluate(

@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { test, expect } from "@playwright/test";
-import { openChart } from "./photo-fixture.js";
+import { openChart, openPanel } from "./photo-fixture.js";
 
 test("lens worker tables agree with native and invalid requests leave the worker usable", async ({
   page,
@@ -80,7 +80,7 @@ test("Lens controls retain edits on bypass, undo, save/load and export without c
   await expect(page.locator(".viewer-status > [role=status]")).toContainText(
     /1600 × 1000/,
   );
-  await page.getByRole("tab", { name: "Expose", exact: true }).click();
+  await openPanel(page, "Expose");
   const toggle = page.getByRole("switch", {
     name: "Lens Correction",
     exact: true,

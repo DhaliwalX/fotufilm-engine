@@ -1,4 +1,4 @@
-import { openChart } from './photo-fixture.js'
+import { openChart, openPanel } from './photo-fixture.js'
 import { test, expect } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import { makeDNG } from './raw-fixture.js'
@@ -70,7 +70,7 @@ test('RAW import, film, exposure, crop and export use the full original', async 
   await ready(page)
   // The first film shader family compiles asynchronously after the CPU preview.
   await expect(page.locator('.backend-label')).toHaveText('WebGPU', { timeout: 60000 })
-  await page.getByRole('tab', { name: 'Expose' }).click()
+  await openPanel(page, 'Expose')
   await page.getByRole('spinbutton', { name: 'Exposure value', exact: true }).fill('2')
   await page.getByRole('spinbutton', { name: 'Exposure value', exact: true }).press('Tab')
   await ready(page)

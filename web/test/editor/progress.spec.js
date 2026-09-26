@@ -1,4 +1,4 @@
-import { openChart } from './photo-fixture.js'
+import { openChart, openPanel } from './photo-fixture.js'
 import { test, expect } from '@playwright/test'
 
 test('queued edits keep the active operation visible and replace the pending edit', async ({ page }) => {
@@ -6,7 +6,7 @@ test('queued edits keep the active operation visible and replace the pending edi
   const status = page.locator('.viewer-status > [role=status]')
   await openChart(page)
   await expect(status).toContainText(/1600 × 1000 · \d+ ms/)
-  await page.getByRole('tab', { name: 'Expose', exact: true }).click()
+  await openPanel(page, 'Expose')
   // Hold one real render before it starts to make the queue deterministic.
   await page.evaluate(async () => {
     // Use the module URL actually imported by the app, including Vite's HMR revision.
