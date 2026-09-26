@@ -53,6 +53,26 @@ Its `kernel` includes the GPU display pass and readback. Native timing returns
 linear float pixels and excludes display encoding. This is a comparison of the
 rendering paths, not an equal-output microbenchmark or a universal device guarantee.
 
+## Startup
+
+Each film pipeline's WGSL holds all its kernels (color_float: 7.5 MB, 132 entry
+points). Compiling a pipeline processes the whole module it names, so in Chrome
+every kernel cost about 160 ms, however small, and a pipeline's kernels compiled
+one at a time on first dispatch. The code generator now marks each kernel's
+section. Each kernel compiles from the shared declarations and its own section,
+and a frame's missing pipelines compile together: dispatches behind a pending
+compile are recorded and encoded in order at the next submit.
+
+Cold starts, fresh Chrome profile, Apple M4 Pro:
+
+| | `main` | This change |
+| --- | ---: | ---: |
+| First Gold 200 frame, 960 × 540 | 8.75 s | 0.27 s |
+| Editor warmup to Ready, first visit | 24.6 s | 1.4 s |
+| Editor warmup to Ready, repeat visit | 9.0 s | 0.95 s |
+
+A cold first frame is byte-identical to the warm frames after it.
+
 ## Local measurements, 26 September 2026
 
 Chrome on an Apple M4 Pro, grain enabled. Medians of warm frames from two
