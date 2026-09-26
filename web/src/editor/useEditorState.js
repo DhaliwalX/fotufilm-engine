@@ -30,6 +30,7 @@ export default function useEditorState({}) {
     [error, setError] = useState(null),
     [libraryError, setLibraryError] = useState(null),
     [importStatus, setImportStatus] = useState(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [dialog, setDialog] = useState(null),
     [exporting, setExporting] = useState(false),
     [exportType, setExportType] = useState("image/png"),
@@ -98,6 +99,8 @@ export default function useEditorState({}) {
     setLibraryError,
     importStatus,
     setImportStatus,
+    libraryOpen,
+    setLibraryOpen,
     dialog,
     setDialog,
     exporting,

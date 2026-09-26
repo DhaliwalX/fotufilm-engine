@@ -228,6 +228,7 @@ bash tools/build-hdr-wasm.sh
 bash tools/build-png-wasm.sh
 bash tools/build-tiff-wasm.sh
 FOTUFILM_WEBGPU_HALIDE="$WEBGPU_HALIDE" HALIDE_ROOT="$HALIDE_PREFIX" EMSDK_ROOT="$EMSDK" bash tools/build-negative-wasm.sh
+HALIDE_ROOT="$HALIDE_PREFIX" EMSDK_ROOT="$EMSDK" bash tools/build-library-wasm.sh
 bash tools/build-web-scene.sh
 bash tools/build-web-profile.sh
 bash tools/build-wasm-flexible-test.sh "$OUTPUT/cpu"
@@ -236,3 +237,4 @@ node tools/test-web-scene.mjs
 node tools/test-wasm-transport-colour.mjs
 node tools/test-wasm.mjs
 node tools/test-wasm-tiles.mjs
+node tools/test-library-wasm.mjs

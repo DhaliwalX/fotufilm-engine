@@ -39,6 +39,9 @@ export default function useDocumentActions({
     [exporting, input],
   );
 
+  // A new document starts from its library edit, or from the current film.
+  const startingEdit = (file) => file?.libraryEdit || defaultEdit(edit.stock);
+  // `incoming` holds Files, or library items {file, libraryKey, edit}.
   async function acceptFiles(incoming) {
     if (exporting) return;
     const generation = ++loadGeneration.current;
@@ -47,7 +50,12 @@ export default function useDocumentActions({
     importController.current = controller;
     const loaded = [],
       errors = [];
-    for (const file of Array.from(incoming || [])) {
+    for (const item of Array.from(incoming || [])) {
+      const {
+        file,
+        libraryKey = null,
+        edit: libraryEdit = null,
+      } = item instanceof Blob ? { file: item } : item;
       if (controller.signal.aborted) break;
       try {
         const decoded = await backend.importMedia(file, {
@@ -65,6 +73,8 @@ export default function useDocumentActions({
         loaded.push({
           id: crypto.randomUUID(),
           name: file.name,
+          libraryKey,
+          libraryEdit,
           ...decoded,
         });
       } catch (e) {
@@ -94,7 +104,7 @@ export default function useDocumentActions({
       setVideoTime(loaded[0].image.video?.start || 0);
       dispatch({
         type: "load",
-        edit: defaultEdit(edit.stock),
+        edit: startingEdit(loaded[0]),
       });
       replaceResult(null);
       setStage(null);
@@ -111,7 +121,7 @@ export default function useDocumentActions({
       type: "restore",
       history: histories.current.get(file.id) || {
         ...initialHistory,
-        present: defaultEdit(edit.stock),
+        present: startingEdit(file),
       },
     });
     replaceResult(null);
@@ -129,7 +139,7 @@ export default function useDocumentActions({
         type: "restore",
         history: histories.current.get(next?.id) || {
           ...initialHistory,
-          present: defaultEdit(edit.stock),
+          present: startingEdit(next),
         },
       });
       replaceResult(null);

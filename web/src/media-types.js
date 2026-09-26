@@ -38,3 +38,28 @@ export const VIDEO_ACCEPT = 'video/*,.mp4,.mov,.m4v,.webm,.mkv'
 export const isVideoFile = (file) =>
   file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.name)
 export const isEXRFile = (file) => /\.exr$/i.test(file.name)
+
+const LIBRARY_IMAGE_EXTENSIONS = [
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+  'avif',
+  'gif',
+  'bmp',
+  'heic',
+  'heif',
+  'tif',
+  'tiff',
+  'exr',
+]
+const LIBRARY_VIDEO_EXTENSIONS = ['mp4', 'mov', 'm4v', 'webm', 'mkv']
+// Library folders are scanned by name alone; reading every header would make
+// opening a large folder as slow as importing it.
+export function libraryMediaKind(name) {
+  const extension = name.split('.').at(-1).toLowerCase()
+  if (RAW_EXTENSIONS.includes(extension)) return 'raw'
+  if (LIBRARY_IMAGE_EXTENSIONS.includes(extension)) return 'image'
+  if (LIBRARY_VIDEO_EXTENSIONS.includes(extension)) return 'video'
+  return null
+}

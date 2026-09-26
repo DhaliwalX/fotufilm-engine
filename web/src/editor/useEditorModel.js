@@ -7,6 +7,7 @@ import usePreviewRenderer from "./usePreviewRenderer.js";
 import usePipelineStages from "./usePipelineStages.js";
 import useDocumentActions from "./useDocumentActions.js";
 import useFilmActions from "./useFilmActions.js";
+import useLibraryDocuments from "./useLibraryDocuments.js";
 import useExportActions from "./useExportActions.js";
 import useEditorShortcuts from "./useEditorShortcuts.js";
 import useOutputState from "./useOutputState.js";
@@ -43,6 +44,10 @@ export default function useEditorModel() {
   editor = {
     ...editor,
     ...useFilmActions(editor),
+  };
+  editor = {
+    ...editor,
+    ...useLibraryDocuments(editor),
   };
   editor = {
     ...editor,
