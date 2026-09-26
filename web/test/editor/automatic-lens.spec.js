@@ -1,3 +1,4 @@
+import { openPanel } from "./photo-fixture.js";
 import { readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
@@ -114,7 +115,7 @@ test("DNG correction, imported profile matching, persistent library and removal 
     await expect(page.locator(".viewer-status > [role=status]")).toContainText(
       "320 × 192",
     );
-    await page.getByRole("tab", { name: "Expose", exact: true }).click();
+    await openPanel(page, "Expose");
     await page
       .getByRole("switch", { name: "Lens Correction", exact: true })
       .click();
@@ -208,7 +209,7 @@ test("automatic lens correction keeps full RAW pixels through film, crop and exp
   await expect(page.locator(".viewer-status > [role=status]")).toContainText(
     "320 × 192",
   );
-  await page.getByRole("tab", { name: "Expose", exact: true }).click();
+  await openPanel(page, "Expose");
   await page
     .getByRole("switch", { name: "Lens Correction", exact: true })
     .click();

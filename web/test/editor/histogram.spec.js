@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { openChart } from "./photo-fixture.js";
+import { openChart, openPanel } from "./photo-fixture.js";
 
 test.use({ ignoreHTTPSErrors: true });
 
@@ -442,7 +442,7 @@ test("updated counts keep the prior graph visible while analysis is pending", as
     .click();
   const panel = page.getByRole("region", { name: "Histogram", exact: true });
   await expect(panel).toHaveAttribute("aria-busy", "false");
-  await page.getByRole("tab", { name: "Expose", exact: true }).click();
+  await openPanel(page, "Expose");
   const exposure = page.getByRole("spinbutton", {
     name: "Exposure value",
     exact: true,

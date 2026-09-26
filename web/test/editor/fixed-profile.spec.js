@@ -1,4 +1,4 @@
-import { openChart } from './photo-fixture.js'
+import { openChart, openPanel } from './photo-fixture.js'
 import { test, expect } from '@playwright/test'
 
 test('compiled films clear unsupported settings and remain renderable without authoring assets', async ({ page }) => {
@@ -24,7 +24,7 @@ test('compiled films clear unsupported settings and remain renderable without au
   await expect(page.getByText('This film uses a fixed profile.', { exact: false })).toBeVisible()
   await expect(page.getByRole('combobox', { name: 'Format', exact: true })).toHaveCount(0)
   await expect(page.locator('.viewer-status > [role=status]')).toContainText(/\d+ × \d+/)
-  await page.getByRole('tab', { name: 'Print', exact: true }).click()
+  await openPanel(page, 'Print')
   await expect(page.getByRole('combobox', { name: 'Print Frame', exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'More options', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Auto Adjust', exact: true })).toBeDisabled()

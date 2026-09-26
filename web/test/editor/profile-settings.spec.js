@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
-import { openChart } from "./photo-fixture.js";
+import { openChart, openPanel } from "./photo-fixture.js";
 
 async function ready(page) {
   await expect(page.locator(".viewer-status > [role=status]")).toContainText(
@@ -34,7 +34,7 @@ test("native film settings update pixels, undo, save and full-size export", asyn
   await page.getByRole("searchbox", { name: "Search films" }).fill("Gold 200");
   await page.getByTitle("Gold 200", { exact: true }).click();
   await ready(page);
-  await page.getByRole("tab", { name: "Film", exact: true }).click();
+  await openPanel(page, "Film");
   const before = await pixels(page);
   await page
     .getByRole("spinbutton", { name: "Expired value", exact: true })
@@ -54,7 +54,7 @@ test("native film settings update pixels, undo, save and full-size export", asyn
   await page.getByRole("button", { name: "Redo (⇧⌘Z)", exact: true }).click();
   await ready(page);
   await expect.poll(() => pixels(page)).toEqual(aged);
-  await page.getByRole("tab", { name: "Develop", exact: true }).click();
+  await openPanel(page, "Develop");
   await page
     .getByRole("combobox", { name: "Grain Model", exact: true })
     .click();
@@ -63,7 +63,7 @@ test("native film settings update pixels, undo, save and full-size export", asyn
     .click();
   await ready(page);
   expect(await pixels(page)).not.toEqual(aged);
-  await page.getByRole("tab", { name: "Film", exact: true }).click();
+  await openPanel(page, "Film");
   await page.getByRole("combobox", { name: "Format", exact: true }).click();
   await page.getByRole("option", { name: "16mm", exact: true }).click();
   await ready(page);
@@ -114,7 +114,7 @@ test("halation curves, chemistry and printer controls retain settings across med
     await input.fill(String(value));
     await input.press("Tab");
   };
-  await page.getByRole("tab", { name: "Film", exact: true }).click();
+  await openPanel(page, "Film");
   await expect(page.locator(".inspector-section").first()).toContainText(
     "Loaded Film",
   );
@@ -133,12 +133,12 @@ test("halation curves, chemistry and printer controls retain settings across med
     page.getByRole("button", { name: "Use Film Return", exact: true }),
   ).toBeDisabled();
   await ready(page);
-  await page.getByRole("tab", { name: "Develop", exact: true }).click();
+  await openPanel(page, "Develop");
   const before = await pixels(page);
   await choose("Bleach Bypass", "Half");
   await expect.poll(() => pixels(page)).not.toEqual(before);
   await number("Couplers", 1.5);
-  await page.getByRole("tab", { name: "Print", exact: true }).click();
+  await openPanel(page, "Print");
   await choose("Output medium", "Kodak Ektacolor Edge Paper");
   const printer = page.getByRole("switch", {
     name: "Simulated Printer",

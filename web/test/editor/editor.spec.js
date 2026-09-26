@@ -1,4 +1,4 @@
-import { openChart } from "./photo-fixture.js";
+import { openChart, openPanel } from "./photo-fixture.js";
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
@@ -43,7 +43,7 @@ test("real WebGPU editor: normal, film, adjustments, history, crop and full-size
   });
   const film = await framePixels(page);
   expect(film).not.toEqual(normal);
-  await page.getByRole("tab", { name: "Expose" }).click();
+  await openPanel(page, "Expose");
   await page
     .getByRole("spinbutton", { name: "Exposure value", exact: true })
     .fill("0.8");
@@ -110,7 +110,7 @@ test("CPU fallback, keyboard compare, per-photo edits and saved edit files", asy
   await page.getByTitle("Gold 200", { exact: true }).click();
   await ready(page);
   await expect(page.locator(".backend-label")).toHaveText("CPU");
-  await page.getByRole("tab", { name: "Expose" }).click();
+  await openPanel(page, "Expose");
   await page
     .getByRole("spinbutton", { name: "Exposure value", exact: true })
     .fill("1");

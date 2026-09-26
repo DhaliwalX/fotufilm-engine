@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
-import { openChart } from "./photo-fixture.js";
+import { openChart, openPanel } from "./photo-fixture.js";
 
 async function pixels(page) {
   return page.locator(".photo-plane > img").evaluate(async (image) => {
@@ -30,7 +30,7 @@ test("Mac filter stack edits change pixels and survive ordering, undo, save and 
   await expect(page.locator(".viewer-status > [role=status]")).toContainText(
     /1600 × 1000/,
   );
-  await page.getByRole("tab", { name: "Expose", exact: true }).click();
+  await openPanel(page, "Expose");
   const choose = async (name, option) => {
     await page.getByRole("combobox", { name, exact: true }).click();
     await page.getByRole("option", { name: option, exact: true }).click();

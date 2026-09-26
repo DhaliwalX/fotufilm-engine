@@ -1,4 +1,4 @@
-import { openEditor } from "./photo-fixture.js";
+import { openEditor, openPanel } from "./photo-fixture.js";
 import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 
@@ -126,7 +126,7 @@ test("Source Interpretation follows Mac placement, undo, saved edits and export"
     "96 × 64",
   );
   await expect(page.locator(".pixel-readout")).toContainText("HDR");
-  await page.getByRole("tab", { name: "Expose", exact: true }).click();
+  await openPanel(page, "Expose");
   const choice = page.getByRole("combobox", {
     name: "Highlights",
     exact: true,

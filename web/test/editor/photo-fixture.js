@@ -18,6 +18,13 @@ export async function openEditorWithChart(page, width, height) {
   await expect(viewerStatus(page)).toContainText(/\d+ × \d+/);
 }
 
+// Show one of the inspector's adjustment panels: Film, Expose, Develop or Print.
+export const openPanel = (page, name) =>
+  page
+    .getByRole("radiogroup", { name: "Adjustment panels" })
+    .getByRole("radio", { name, exact: true })
+    .click();
+
 // Generate a deterministic photo for editor interactions.
 export async function openChart(page, width = 1600, height = 1000) {
   const bytes = await page.evaluate(

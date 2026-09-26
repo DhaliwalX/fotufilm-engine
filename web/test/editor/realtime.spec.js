@@ -1,4 +1,4 @@
-import { openChart } from "./photo-fixture.js";
+import { openChart, openPanel } from "./photo-fixture.js";
 import { test, expect } from "@playwright/test";
 
 test("Halide Normal agrees with the reference across all light and grade controls", async ({
@@ -75,7 +75,7 @@ for (const stock of [null, "Gold 200"])
         page.locator(".viewer-status > [role=status]"),
       ).toContainText("1600 × 1000");
     }
-    await page.getByRole("tab", { name: "Expose" }).click();
+    await openPanel(page, "Expose");
     await page.evaluate(() => {
       window.previewFrames = [];
       new MutationObserver(() =>
@@ -119,7 +119,7 @@ for (const stock of [null, "Gold 200"])
     };
     for (const name of ["Exposure", "Shadows", "Temperature"]) await drag(name);
     if (stock) {
-      await page.getByRole("tab", { name: "Develop", exact: true }).click();
+      await openPanel(page, "Develop");
       await drag("Grain");
     }
     await page.getByRole("button", { name: "Crop", exact: true }).click();

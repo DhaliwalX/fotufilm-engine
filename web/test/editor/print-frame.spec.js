@@ -1,4 +1,4 @@
-import { openEditor, openEditorWithChart } from "./photo-fixture.js";
+import { openEditor, openEditorWithChart, openPanel } from "./photo-fixture.js";
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -227,7 +227,7 @@ test("frame picker is undoable, saves its choice, exports the displayed dimensio
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await openEditorWithChart(page);
-  await page.getByRole("tab", { name: "Print", exact: true }).click();
+  await openPanel(page, "Print");
   const picker = page.getByRole("combobox", { name: "Frame", exact: true });
   await expect(picker).toBeEnabled();
   await picker.click();
