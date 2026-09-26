@@ -2,12 +2,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   forgetFolder,
   loadFolders,
+  loadIndex,
   loadPhotoRecords,
   onRecordChange,
   saveFolder,
-  updatePhotoRecord,
+  saveIndex,
+  updatePhotoRecords,
 } from "./library-store.js";
-import { scanDirectory, uploadedFolders } from "./library-scan.js";
+import {
+  indexRows,
+  indexedPhotos,
+  scanDirectory,
+  uploadedFolders,
+} from "./library-scan.js";
 
 export const supportsFolderAccess = () =>
   typeof globalThis.showDirectoryPicker === "function";
@@ -17,6 +24,20 @@ const message = (error, fallback) =>
   error?.name === "NotFoundError"
     ? "This folder has moved or been deleted."
     : error?.message || fallback;
+
+// A refreshed folder keeps the objects of unchanged photos, and the same list
+// when nothing changed, so a refresh redraws only what it must.
+function keepUnchanged(previous, photos) {
+  const known = new Map(previous.map((photo) => [photo.key, photo]));
+  let changed = photos.length !== previous.length;
+  const next = photos.map((photo) => {
+    const old = known.get(photo.key);
+    if (old?.size === photo.size && old.modified === photo.modified) return old;
+    changed = true;
+    return photo;
+  });
+  return changed ? next : previous;
+}
 
 // Folders, their photos, and per-photo records (rating, saved edit). Nothing is
 // read until the library is first shown.
@@ -47,41 +68,57 @@ export function usePhotoLibrary(active) {
     [],
   );
 
+  // A folder shown from its saved list is refreshed quietly. A new one fills
+  // in as it is read, less often as it grows, since each update re-sorts it.
   const scan = useCallback(
     async (folder) => {
       scans.current.get(folder.id)?.abort();
       const controller = new AbortController();
       scans.current.set(folder.id, controller);
-      patchFolder(folder.id, { status: "scanning", error: null, photos: [] });
+      const refreshing = folder.photos?.length > 0;
+      patchFolder(folder.id, {
+        status: "scanning",
+        error: null,
+        ...(refreshing ? {} : { photos: [] }),
+      });
       let shown = 0;
       try {
-        const [photos, saved] = await Promise.all([
-          scanDirectory(folder, {
-            signal: controller.signal,
-            // Fill the grid as the walk goes, a few times a second.
-            onProgress(found) {
-              const now = performance.now();
-              if (now - shown < 160) return;
-              shown = now;
-              patchFolder(folder.id, { photos: found.slice() });
-            },
-          }),
-          loadPhotoRecords(folder.id).catch(() => []),
-        ]);
-        mergeRecords(saved);
-        patchFolder(folder.id, { status: "ready", photos });
+        const photos = await scanDirectory(folder, {
+          signal: controller.signal,
+          onProgress: refreshing
+            ? null
+            : (found) => {
+                const now = performance.now();
+                if (now - shown < Math.max(160, found.length / 25)) return;
+                shown = now;
+                patchFolder(folder.id, { photos: found.slice() });
+              },
+        });
+        setFolders((list) =>
+          list.map((item) =>
+            item.id === folder.id
+              ? {
+                  ...item,
+                  status: "ready",
+                  photos: keepUnchanged(item.photos, photos),
+                }
+              : item,
+          ),
+        );
+        saveIndex(folder.id, indexRows(photos)).catch(() => {});
       } catch (reason) {
         if (reason.name !== "AbortError")
           patchFolder(folder.id, {
             status: "error",
             error: message(reason, "This folder could not be read."),
+            photos: [],
           });
       } finally {
         if (scans.current.get(folder.id) === controller)
           scans.current.delete(folder.id);
       }
     },
-    [patchFolder, mergeRecords],
+    [patchFolder],
   );
 
   // Chromium keeps a stored folder's permission for the origin, but may ask
@@ -103,30 +140,36 @@ export function usePhotoLibrary(active) {
   useEffect(() => {
     if (!active || started.current) return;
     started.current = true;
+    // Saved folders show their last photo list and records at once, then
+    // are read again for changes.
     loadFolders()
-      .then((list) => {
+      .then(async (list) => {
         list.sort((a, b) => a.added - b.added);
-        setFolders((current) => [
-          ...list.map((folder) => ({
-            ...folder,
-            status: "scanning",
-            photos: [],
-          })),
-          ...current,
-        ]);
-        list.forEach((folder) => connect(folder));
+        const saved = await Promise.all(
+          list.map((folder) =>
+            Promise.all([
+              loadIndex(folder.id).catch(() => null),
+              loadPhotoRecords(folder.id).catch(() => []),
+            ]),
+          ),
+        );
+        const shown = list.map((folder, index) => ({
+          ...folder,
+          status: "scanning",
+          photos: indexedPhotos(folder, saved[index][0] ?? []),
+        }));
+        mergeRecords(saved.flatMap(([, records]) => records));
+        setFolders((current) => [...shown, ...current]);
+        shown.forEach((folder) => connect(folder));
       })
       .catch(() =>
         setError(
           "The library could not be opened. Folders added now last for this session.",
         ),
       );
-  }, [active, connect]);
+  }, [active, connect, mergeRecords]);
 
-  useEffect(
-    () => onRecordChange((record) => mergeRecords([record])),
-    [mergeRecords],
-  );
+  useEffect(() => onRecordChange(mergeRecords), [mergeRecords]);
   useEffect(
     () => () => scans.current.forEach((controller) => controller.abort()),
     [],
@@ -160,6 +203,9 @@ export function usePhotoLibrary(active) {
       () => true,
       () => false,
     );
+    // Ask the browser to keep ratings and edits under storage pressure;
+    // Chromium decides without prompting.
+    if (saved) navigator.storage?.persist?.().catch(() => {});
     setFolders((list) => [
       ...list,
       { ...folder, transient: !saved, status: "scanning", photos: [] },
@@ -202,11 +248,17 @@ export function usePhotoLibrary(active) {
     });
   }, []);
 
+  // Stars change at once; the records follow when they are saved.
   const rate = useCallback((keys, rating) => {
-    for (const key of keys)
-      updatePhotoRecord(key, { rating }).catch(() =>
-        setError("Ratings could not be saved in this browser."),
-      );
+    setRecords((current) => {
+      const next = new Map(current);
+      for (const key of keys)
+        next.set(key, { ...current.get(key), key, rating });
+      return next;
+    });
+    updatePhotoRecords(keys, { rating }).catch(() =>
+      setError("Ratings could not be saved in this browser."),
+    );
   }, []);
 
   return {
