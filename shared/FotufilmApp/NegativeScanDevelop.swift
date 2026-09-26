@@ -207,9 +207,8 @@ final class NegativeScan: @unchecked Sendable {
         return ([border.x, border.y, border.z], area)
     }
 
-    /// A stand-in for the film border until one is sampled: the thinnest film in the scan, read
-    /// as the median of the percent that passes the most light across all three channels. An
-    /// open holder in the frame passes more, which is why a sampled border replaces this.
+    /// A stand-in for the film border until one is sampled
+    /// (`ApproximateNegativeScan.estimatedBorder`).
     func estimatedBorder(lightFrameID: String? = nil) throws -> [Float] {
         let key = lightFrameID ?? ""
         if let estimate = lock.withLock({ estimates[key] }) { return estimate }
@@ -217,19 +216,10 @@ final class NegativeScan: @unchecked Sendable {
         let samples = try NegativeScanImport.samples(
             source(lightFrameID).transformed(by: CGAffineTransform(scaleX: scale, y: scale)),
             colorSpace: NegativeScanImport.filmSpace)
-        let film = (0..<samples.pixelCount).filter { i in
-            (0..<3).allSatisfy { c in samples.planes[c][i].isFinite && samples.planes[c][i] > 0 }
+        guard let estimate = ApproximateNegativeScan.estimatedBorder(preview: samples) else {
+            throw NegativeScanImport.Failure.invalidBorder
         }
-        guard !film.isEmpty else { throw NegativeScanImport.Failure.invalidBorder }
-        let transmission = { (i: Int) -> Float in
-            (0..<3).reduce(0) { $0 + log10(samples.planes[$1][i]) }
-        }
-        let brightest = film.sorted { transmission($0) > transmission($1) }
-            .prefix(max(1, film.count / 100))
-        let border = (0..<3).map { c -> Float in
-            let values = brightest.map { samples.planes[c][$0] }.sorted()
-            return values[values.count / 2]
-        }
+        let border = [estimate.x, estimate.y, estimate.z]
         lock.withLock { estimates[key] = border }
         return border
     }

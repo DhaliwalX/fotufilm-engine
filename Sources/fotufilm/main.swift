@@ -34,6 +34,11 @@ Usage:
   fotufilm <a> <b> --diff <output>         Write A | B | amplified difference
   fotufilm --make-chart <f> --scene spectrum  Write the demo's spectrum scene
   fotufilm --list-stocks                   List stocks and the gauge each is known on
+  fotufilm --list-film-bases               List each negative film's predicted base densities
+                                           (linear Rec.2020, against the bare lamp)
+  fotufilm --suggest-film <scan>           Suggest which films a scanned negative could be, from
+                                           its clear film base; add --light-frame <image> of the
+                                           bare light source to weigh the base's density too
   fotufilm --list-web-media                Export browser output-medium choices as JSON
   fotufilm --dump-web-camera-profiles <f>  Export native camera correction anchors (or - for stdout)
   fotufilm --dump-web-scene <directory>    Export scene-light spectral reconstruction for the browser
@@ -115,6 +120,7 @@ var args = Array(CommandLine.arguments.dropFirst())
 while !args.isEmpty {
     let a = args.removeFirst()
     if a == "--list-web-media" || a == "--list-stocks" || a == "--list-stock-capabilities" || a == "--list-formats" || a == "--dump-curves"
+        || a == "--list-film-bases"
         || a == "--dump-spectra" || a == "--help" || a == "-h"
         || a == "--autoexpose" || a == "--check-stocks" || a == "--make-pack-key"
         || a == "--stages" || a == "--hlg" || valuelessControlFlags.contains(a) {
@@ -145,6 +151,56 @@ if flags["--list-stocks"] != nil || flags["--list-stock-capabilities"] != nil {
         let capability = flags["--list-stock-capabilities"] != nil
             ? "\t\(stock.donorLayers.isEmpty ? "true" : "false")" : ""
         print("\(key)\t\(stock.name)\t\(FilmFormat.nativeID(forStockID: key))\(capability)")
+    }
+    exit(0)
+}
+
+if flags["--list-film-bases"] != nil {
+    for film in NegativeFilmSuggestions(stocks: FilmStock.presets).films {
+        print(String(format: "%@\t%.3f\t%.3f\t%.3f", film.id, film.base.x, film.base.y, film.base.z))
+    }
+    exit(0)
+}
+
+if let scanPath = flags["--suggest-film"] {
+    /// A 512-pixel preview of a scan in the film reading's linear Rec.2020, and its median.
+    func scanPreview(_ path: String) -> ImageBuffer {
+        let url = URL(fileURLWithPath: path)
+        guard let data = try? Data(contentsOf: url) else { fail("Cannot read \(path)") }
+        do {
+            let image = try NegativeScanImport.decode(
+                data: data, identifierHint: UTType(filenameExtension: url.pathExtension)?.identifier)
+            let scale = min(1, 512 / max(image.extent.width, image.extent.height))
+            return try NegativeScanImport.samples(
+                image.transformed(by: CGAffineTransform(scaleX: scale, y: scale)),
+                colorSpace: NegativeScanImport.filmSpace)
+        } catch {
+            fail("\(path): \(error.localizedDescription)")
+        }
+    }
+    func median(_ preview: ImageBuffer) -> SIMD3<Float> {
+        var value = SIMD3<Float>()
+        for c in 0..<3 {
+            let sorted = preview.planes[c].filter(\.isFinite).sorted()
+            value[c] = sorted.isEmpty ? 0 : sorted[sorted.count / 2]
+        }
+        return value
+    }
+    guard var reading = NegativeFilmSuggestions.read(preview: scanPreview(scanPath)) else {
+        fail("No clear film found in \(scanPath).")
+    }
+    if let path = flags["--light-frame"] {
+        reading = .init(border: reading.border, lamp: median(scanPreview(path)), measuresDensity: true)
+    }
+    let light = reading.lamp ?? SIMD3(repeating: 1)
+    let measured = (0..<3).map { -log10(max(reading.border[$0] / light[$0], 1e-6)) }
+    print(String(format: "Film base: R %.3f  G %.3f  B %.3f%@", measured[0], measured[1], measured[2],
+                 reading.measuresDensity ? "" : reading.lamp == nil
+                    ? " (colour only, against the scan's white balance)"
+                    : " (colour only, against the light shown in the frame)"))
+    for suggestion in NegativeFilmSuggestions(stocks: FilmStock.presets).suggest(reading) {
+        let names = suggestion.films.map { "\($0.name) (\($0.id))" }.joined(separator: ", ")
+        print(String(format: "%5.1f%%  ", suggestion.likelihood * 100) + names)
     }
     exit(0)
 }
