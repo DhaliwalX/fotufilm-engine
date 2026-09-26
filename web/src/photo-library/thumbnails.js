@@ -17,7 +17,8 @@ const runtimeUrl = () =>
       : "",
   );
 
-// A <video> can only be read on the main thread; the worker gets one frame.
+// Fallback for videos WebCodecs cannot decode. A <video> element can only be
+// read on the main thread; the worker gets the frame.
 function videoFrame(file) {
   return new Promise((resolve) => {
     const video = document.createElement("video"),
@@ -65,8 +66,22 @@ export function createThumbnails({
     const slot = { worker, job: null };
     worker.onmessage = ({ data }) => {
       const job = slot.job;
-      slot.job = null;
-      if (job?.id === data.id) job.done(data.error ? null : data.result);
+      if (job?.id === data.id && data.result?.fallback) {
+        // WebCodecs could not decode this video; a <video> element may.
+        videoFrame(job.file).then((bitmap) => {
+          if (bitmap && slot.job === job)
+            worker.postMessage({ ...job.message, file: null, bitmap }, [
+              bitmap,
+            ]);
+          else finish(job);
+        });
+        return;
+      }
+      finish(job, data.error ? null : data.result);
+    };
+    const finish = (job, result = null) => {
+      if (slot.job === job) slot.job = null;
+      job?.done(result);
       pump();
     };
     worker.onerror = () => {
@@ -111,16 +126,14 @@ export function createThumbnails({
         id,
         photo,
         async start() {
-          const file = await currentFile(photo);
-          const message = {
+          job.file = await currentFile(photo);
+          job.message = {
             id,
             kind: photo.kind,
             edge: THUMBNAIL_EDGE,
             runtime: runtimeUrl(),
           };
-          if (photo.kind !== "video") return { ...message, file };
-          const bitmap = await videoFrame(file);
-          return bitmap && { ...message, bitmap };
+          return { ...job.message, file: job.file };
         },
         done: resolve,
       };

@@ -155,6 +155,7 @@ test("raw probes find embedded previews and the raw's orientation", () => {
     width: 1620,
     height: 1080,
     orientation: 1,
+    previews: [],
   });
 
   // A DNG's lossless raw strip (compression 7, CFA photometry) is not a preview.
@@ -190,8 +191,13 @@ test("raw probes find embedded previews and the raw's orientation", () => {
   assert.deepEqual(probed.previews, [{ offset: 700, length: 4300 }]);
 });
 
-test("JPEG probes read size and EXIF orientation", () => {
-  const exif = tiff([[0x0112, 3, 1, 3]]).subarray(0, 64);
+test("JPEG probes read size, EXIF orientation and the EXIF thumbnail", () => {
+  // Orientation 3 and a thumbnail 64 bytes into the TIFF (file offset 12 + 64).
+  const exif = tiff([
+    [0x0112, 3, 1, 3],
+    [0x0201, 4, 1, 64],
+    [0x0202, 4, 1, 500],
+  ]).subarray(0, 64);
   const app1 = [
     0xff,
     0xe1,
@@ -217,6 +223,7 @@ test("JPEG probes read size and EXIF orientation", () => {
     }))(probeImage(jpeg)),
     { format: "jpeg", width: 4000, height: 3000, orientation: 3 },
   );
+  assert.deepEqual(probeImage(jpeg).previews, [{ offset: 76, length: 500 }]);
 });
 
 test("thumbnail sizes keep the long edge and swap for quarter turns", () => {
