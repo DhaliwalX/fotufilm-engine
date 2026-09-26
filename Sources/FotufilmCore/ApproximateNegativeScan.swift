@@ -92,6 +92,28 @@ public struct ApproximateNegativeScan: Encodable, Sendable {
         return Result(density: try converter.negativeDensity(linearScan: scan, calibration: calibration), invalid: invalid)
     }
 
+    /// A stand-in for the film border until one is sampled: the thinnest film in `preview`,
+    /// linear scan RGB, read as the median of the percent that passes the most light across all
+    /// three channels. An open holder in the frame passes more, which is why a sampled border
+    /// replaces this. Nil when no pixel passes light in every channel.
+    public static func estimatedBorder(preview: ImageBuffer) -> SIMD3<Float>? {
+        let film = (0..<preview.pixelCount).filter { i in
+            (0..<3).allSatisfy { c in preview.planes[c][i].isFinite && preview.planes[c][i] > 0 }
+        }
+        guard !film.isEmpty else { return nil }
+        let transmission = { (i: Int) -> Float in
+            (0..<3).reduce(0) { $0 + log10(preview.planes[$1][i]) }
+        }
+        let brightest = film.sorted { transmission($0) > transmission($1) }
+            .prefix(max(1, film.count / 100))
+        var border = SIMD3<Float>()
+        for c in 0..<3 {
+            let values = brightest.map { preview.planes[c][$0] }.sorted()
+            border[c] = values[values.count / 2]
+        }
+        return border
+    }
+
     /// What a frame's own tones say about reading it on a film: per-record gains, and where its
     /// highlights sit.
     public struct Balance: Equatable, Sendable {
