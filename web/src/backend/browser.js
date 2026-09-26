@@ -24,6 +24,7 @@ export function createBrowserBackend() {
     releaseImage: (image) => image?.video?.dispose(),
     analyseNegative,
     convertNegative,
+    negativeContrast: true,
     makePreview: attachLinearPreview,
     createHistogram,
     autoAdjust: solveAutoAdjustment,

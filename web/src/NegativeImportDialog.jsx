@@ -2,8 +2,18 @@ import { Dialog, Heading, Content } from "@react-spectrum/s2/Dialog";
 import { ToggleButton } from "@react-spectrum/s2/ToggleButton";
 import { Switch } from "@react-spectrum/s2/Switch";
 import { ActionButton } from "@react-spectrum/s2/ActionButton";
-import { useRef } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { RAW_EXTENSIONS } from "./media-types.js";
+import { colorContext } from "./canvas-color.js";
+import { useBackend } from "./backend/BackendContext.jsx";
+import { Adjustment } from "./Adjustment.jsx";
+import {
+  NEGATIVE_ADJUSTMENTS,
+  NEGATIVE_CONTRAST,
+  defaultNegativeSettings,
+  isColourAdjustment,
+} from "./negative-live-preview.js";
+import { useLivePositive } from "./useNegativePreview.js";
 import "./negative-import.css";
 
 // The dialog owns every provisional image, URL and conversion. Only a completed
@@ -13,10 +23,7 @@ export default function NegativeImportDialog({ onClose, model }) {
     file,
     setFile,
     decoded,
-    positive,
     plan,
-    monochrome,
-    setMonochrome,
     negative,
     setNegative,
     status,
@@ -25,6 +32,25 @@ export default function NegativeImportDialog({ onClose, model }) {
     importPositive,
   } = model;
   const picker = useRef(null);
+  const [settings, setSettings] = useState(defaultNegativeSettings);
+  // Closing the dialog clears the file; the next negative starts from the defaults.
+  useEffect(() => {
+    if (!file) setSettings(defaultNegativeSettings());
+  }, [file]);
+  const positive = useLivePositive(model, settings);
+  // One stable handler for every slider lets an unchanged slider skip re-rendering.
+  const setValue = useCallback(
+    (key, value) =>
+      setSettings((current) =>
+        key === NEGATIVE_CONTRAST.key
+          ? { ...current, contrast: value }
+          : {
+              ...current,
+              adjustments: { ...current.adjustments, [key]: value },
+            },
+      ),
+    [],
+  );
   return (
     <Dialog
       aria-label="Import Scanned Negative"
@@ -44,9 +70,11 @@ export default function NegativeImportDialog({ onClose, model }) {
               Choose Negative…
             </ActionButton>
             <Switch
-              isSelected={monochrome}
+              isSelected={settings.monochrome}
               isDisabled={busy}
-              onChange={(e) => setMonochrome(e)}
+              onChange={(monochrome) =>
+                setSettings((current) => ({ ...current, monochrome }))
+              }
               size={"S"}
             >
               {" "}
@@ -79,14 +107,10 @@ export default function NegativeImportDialog({ onClose, model }) {
             }}
           />
           <div className="negative-import-preview" aria-busy={!!file && !plan}>
-            {(negative ? decoded : positive)?.src ? (
-              <img
-                key={negative ? "negative" : positive.src}
-                src={(negative ? decoded : positive).src}
-                alt={
-                  negative ? "Original negative" : "Converted positive preview"
-                }
-              />
+            {negative && decoded?.src ? (
+              <img key="negative" src={decoded.src} alt="Original negative" />
+            ) : !negative && positive ? (
+              <PositiveCanvas frame={positive} />
             ) : (
               <span>
                 {file
@@ -95,6 +119,11 @@ export default function NegativeImportDialog({ onClose, model }) {
               </span>
             )}
           </div>
+          <NegativeAdjustments
+            settings={settings}
+            disabled={!plan || busy}
+            onChange={setValue}
+          />
           <p className="negative-import-status" role="status">
             {status}
           </p>
@@ -108,7 +137,7 @@ export default function NegativeImportDialog({ onClose, model }) {
               Cancel
             </ActionButton>
             <ActionButton
-              onPress={importPositive}
+              onPress={() => importPositive(settings)}
               isDisabled={!plan || busy}
               size={"S"}
             >
@@ -118,5 +147,79 @@ export default function NegativeImportDialog({ onClose, model }) {
         </div>
       </Content>
     </Dialog>
+  );
+}
+
+// Every change re-renders the positive while the slider moves.
+function NegativeAdjustments({ settings, disabled, onChange }) {
+  const { negativeContrast } = useBackend();
+  return (
+    <div className="negative-import-adjustments">
+      {negativeContrast && (
+        <NegativeSlider
+          slider={NEGATIVE_CONTRAST}
+          value={settings.contrast}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      )}
+      {NEGATIVE_ADJUSTMENTS.map((slider) => (
+        <NegativeSlider
+          key={slider.key}
+          slider={slider}
+          value={settings.adjustments[slider.key]}
+          disabled={
+            disabled || (settings.monochrome && isColourAdjustment(slider))
+          }
+          onChange={onChange}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Re-renders only when its own value or availability changes.
+const NegativeSlider = memo(function NegativeSlider({
+  slider,
+  value,
+  disabled,
+  onChange,
+}) {
+  return (
+    <Adjustment
+      slider={slider}
+      value={value}
+      disabled={disabled}
+      onChange={(next) => onChange(slider.key, next)}
+    />
+  );
+});
+
+// Frames are drawn as they arrive: decoding off the main thread and drawing
+// directly keeps a moving slider in step with the positive.
+function PositiveCanvas({ frame }) {
+  const canvas = useRef(null);
+  useEffect(() => {
+    let current = true;
+    createImageBitmap(frame.blob).then((bitmap) => {
+      const target = canvas.current;
+      if (current && target) {
+        target.width = bitmap.width;
+        target.height = bitmap.height;
+        colorContext(target, frame.colorSpace).drawImage(bitmap, 0, 0);
+      }
+      bitmap.close();
+    });
+    return () => {
+      current = false;
+    };
+  }, [frame]);
+  return (
+    <canvas
+      ref={canvas}
+      role="img"
+      aria-label="Converted positive preview"
+      className="negative-import-positive"
+    />
   );
 }

@@ -2,8 +2,10 @@
 
 Mac: **File → Import Scanned Negative… → Preview Positive**. Web: **More options →
 Import Scanned Negative…**. No drawn reference is required. Review the preview,
-then import the positive and refine its crop, colour and tone. Cancelling preserves
-the current photograph. Both accept unadjusted TIFF, PNG, JPEG and supported camera RAW negatives.
+then import the positive and refine its crop, colour and tone. On web, Contrast
+(the curve's mid-grey slope, in stops from the automatic value) and the editor's
+tone and colour adjustments can be set before import and stay editable afterwards.
+Cancelling preserves the current photograph. Both accept unadjusted TIFF, PNG, JPEG and supported camera RAW negatives.
 Browser RAW-negative decoding preserves linear values without photographic
 highlight reconstruction, DNG baseline exposure or scene spectral correction.
 
@@ -33,7 +35,8 @@ usable transmission range**, not a recovered physical film base.
 `Stages/NegativeScan.h` owns the pixel operations. Colour-managed linear sRGB is
 encoded with the sRGB transfer before inversion and endpoint normalization. The
 normal range maps to 0.02…0.98, with continuous exponential tails outside it. The
-symmetric inverse sigmoid uses exponent 0.6. These numerical defaults and the
+symmetric inverse sigmoid uses exponent 0.6, which is also its slope at mid-grey;
+web Contrast multiplies it by 2 raised to the slider value. These numerical defaults and the
 exponential shoulder are our choices; they have not been fitted to a scanner corpus.
 The result is decoded to linear RGB. No stock simulation, new grain or second
 film development is applied.
