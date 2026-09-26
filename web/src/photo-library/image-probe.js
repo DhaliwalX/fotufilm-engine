@@ -91,8 +91,11 @@ function readTiff(bytes, base = 0) {
   };
 }
 
+// Size, EXIF orientation and the EXIF thumbnail (IFD1), which phones make
+// large enough to use: Samsung stores 512 × 384.
 function readJpeg(bytes) {
-  let orientation = 1;
+  let orientation = 1,
+    previews = [];
   for (let at = 2; at + 9 < bytes.length; ) {
     if (bytes[at] !== 0xff) return null;
     const marker = bytes[at + 1];
@@ -101,12 +104,14 @@ function readJpeg(bytes) {
       continue;
     }
     const length = (bytes[at + 2] << 8) | bytes[at + 3];
-    if (marker === 0xe1 && ascii(bytes, at + 4, 4) === "Exif")
-      orientation =
-        readTiff(
-          bytes.subarray(0, Math.min(bytes.length, at + 2 + length)),
-          at + 10,
-        )?.orientation || 1;
+    if (marker === 0xe1 && ascii(bytes, at + 4, 4) === "Exif") {
+      const exif = readTiff(
+        bytes.subarray(0, Math.min(bytes.length, at + 2 + length)),
+        at + 10,
+      );
+      orientation = exif?.orientation || 1;
+      previews = exif?.previews || [];
+    }
     // Start of frame: every SOFn except DHT (C4), JPG (C8) and DAC (CC).
     if (
       marker >= 0xc0 &&
@@ -117,6 +122,7 @@ function readJpeg(bytes) {
         width: (bytes[at + 7] << 8) | bytes[at + 8],
         height: (bytes[at + 5] << 8) | bytes[at + 6],
         orientation,
+        previews,
       };
     if (marker === 0xda || length < 2) return null;
     at += 2 + length;
