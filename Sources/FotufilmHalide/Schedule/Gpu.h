@@ -119,12 +119,16 @@ public:
         return low + fraction * (table(index + 1) - low);
     }
 
+    /// The innermost GPU thread loop of a pass `gpu_pointwise` scheduled.
+    static Var thread_var(const Func &function) { return Var(function.name() + "_thread_x"); }
+
     /// `branch`, when given, is a stage gate the pass reads through a select: the pass is compiled
     /// once per side so each side is the exact graph — the bypass side never loads the skipped
     /// stage's field and the staged side never recomputes the bypass.
     void gpu_pointwise(Func function, Var x, Var y, Var channel, int channels,
                               Expr branch = Expr()) {
-        Var block_x, block_y, thread_x, thread_y;
+        Var block_x, block_y, thread_y;
+        Var thread_x = gpu_device_api() == DeviceAPI::WebGPU ? thread_var(function) : Var();
         if (windowed_) window_stores_.push_back(function);
         function.compute_root()
             .bound(channel, 0, channels)
@@ -152,6 +156,39 @@ public:
         Func stored(values.name() + "_stored");
         stored(x, y, channel) = Halide::cast<float>(packed(x, y, channel));
         return stored;
+    }
+
+    /// Defines `f` as the sum of `data` over its taps divided by the sum of `weight`, the weight of
+    /// the taps inside the frame. On WebGPU both sums run in one loop, which shares each tap's bounds
+    /// test and kernel load: as two loops, the weights cost most of what the blur itself did. Each
+    /// accumulator adds the same terms in the same order as its own sum would, so the result is
+    /// the same. `stored` says `f` is scheduled as its own pass, the accumulators' home.
+    void normalized_taps(Func f, Var x, Var y, Var channel, Expr data, Expr weight,
+                         bool stored, const std::string &name) {
+        if (gpu_device_api() != DeviceAPI::WebGPU || !stored) {
+            f(x, y, channel) = Halide::sum(data, name + "_sum")
+                / Halide::max(Halide::sum(weight, name + "_weight"), 1.0e-12f);
+            return;
+        }
+        Func sums(name + "_sums");
+        sums(x, y, channel) = {Halide::cast(data.type(), 0), Halide::cast(weight.type(), 0)};
+        sums(x, y, channel) = {sums(x, y, channel)[0] + data, sums(x, y, channel)[1] + weight};
+        f(x, y, channel) = sums(x, y, channel)[0] / Halide::max(sums(x, y, channel)[1], 1.0e-12f);
+        sums.compute_at(f, thread_var(f));
+    }
+
+    /// How many of the `cells` samples from `start` fall inside `[0, size)`.
+    static Expr cells_inside(Expr start, Expr cells, Expr size) {
+        return Halide::max(0, Halide::min(size - 1, start + cells - 1) - Halide::max(0, start) + 1);
+    }
+
+    /// A cell's valid samples, counted. The sum of a 1 per valid sample is that same integer, exact
+    /// in float, and WebGPU spends a loop over the cell computing it; it reads the count instead.
+    Expr cell_count(Expr valid, Expr start_x, Expr start_y, Expr cells, Expr width, Expr height,
+                    const std::string &name) {
+        if (gpu_device_api() != DeviceAPI::WebGPU) return Halide::sum(valid, name);
+        return Halide::cast<float>(cells_inside(start_x, cells, width)
+                                   * cells_inside(start_y, cells, height));
     }
 
     /// Separable Gaussian with a per-channel sigma, each direction a single dispatch: the taps run as
@@ -210,27 +247,23 @@ public:
                                          {{0, width}, {0, height}, {0, channels}});
         RDom horizontal_taps(-extent, extent * 2 + 1, name + "_horizontal_taps");
         Func horizontal(name + "_horizontal");
-        Expr horizontal_weight = Halide::sum(
+        normalized_taps(horizontal, x, y, channel,
+            tap(bounded(x + horizontal_taps.x, y, channel))
+                * kernel(horizontal_taps.x, channel),
             Halide::select(x + horizontal_taps.x >= 0
                                && x + horizontal_taps.x < width,
                            Halide::cast<float>(kernel(horizontal_taps.x, channel)), 0.0f),
-            name + "_horizontal_weight");
-        horizontal(x, y, channel) = Halide::sum(
-            tap(bounded(x + horizontal_taps.x, y, channel))
-                * kernel(horizontal_taps.x, channel),
-            name + "_horizontal_sum") / Halide::max(horizontal_weight, 1.0e-12f);
+            !half, name + "_horizontal");
         Func horizontal_view = store_frame(horizontal, half, channels);
         RDom vertical_taps(-extent, extent * 2 + 1, name + "_vertical_taps");
         Func vertical(name);
-        Expr vertical_weight = Halide::sum(
+        normalized_taps(vertical, x, y, channel,
+            tap(horizontal_view(x, y + vertical_taps.x, channel))
+                * kernel(vertical_taps.x, channel),
             Halide::select(y + vertical_taps.x >= 0
                                && y + vertical_taps.x < height,
                            Halide::cast<float>(kernel(vertical_taps.x, channel)), 0.0f),
-            name + "_vertical_weight");
-        vertical(x, y, channel) = Halide::sum(
-            tap(horizontal_view(x, y + vertical_taps.x, channel))
-                * kernel(vertical_taps.x, channel),
-            name + "_vertical_sum") / Halide::max(vertical_weight, 1.0e-12f);
+            store_result && !half, name + "_vertical");
         if (!store_result && taps16) {
             Func widened(name + "_widened");
             widened(x, y, channel) = Halide::cast<float>(vertical(x, y, channel));
@@ -259,11 +292,12 @@ public:
         Expr valid = Halide::select(source_x >= 0 && source_x < previous_width
                                         && source_y >= 0 && source_y < previous_height,
                                     1.0f, 0.0f);
-        Expr cell_count = Halide::sum(valid, name + "_down_weight");
+        Expr count = cell_count(valid, x * factor - offset_x, y * factor - offset_y, factor,
+                                previous_width, previous_height, name + "_down_weight");
         down(x, y, channel) = Halide::sum(
             bounded_source(x * factor - offset_x + cell.x,
                            y * factor - offset_y + cell.y, channel),
-            name + "_down_sum") / Halide::max(cell_count, 1.0f);
+            name + "_down_sum") / Halide::max(count, 1.0f);
         return down;
     }
 
@@ -302,27 +336,23 @@ public:
             source, typed_zero(source), {{0, width}, {0, height}, {0, channels}});
         RDom horizontal_taps(-radius * kTripleBoxPasses, radius * (2 * kTripleBoxPasses) + 1, name + "_horizontal_taps");
         Func horizontal(name + "_horizontal");
-        Expr horizontal_weight = Halide::sum(
+        normalized_taps(horizontal, x, y, channel,
+            tap(bounded(x + horizontal_taps.x, y, channel))
+                * kernel(horizontal_taps.x),
             Halide::select(x + horizontal_taps.x >= 0
                                && x + horizontal_taps.x < width,
                            Halide::cast<float>(kernel(horizontal_taps.x)), 0.0f),
-            name + "_horizontal_weight");
-        horizontal(x, y, channel) = Halide::sum(
-            tap(bounded(x + horizontal_taps.x, y, channel))
-                * kernel(horizontal_taps.x),
-            name + "_horizontal_sum") / Halide::max(horizontal_weight, 1.0e-12f);
+            !half, name + "_horizontal");
         Func horizontal_view = store_frame(horizontal, half, channels);
         RDom vertical_taps(-radius * kTripleBoxPasses, radius * (2 * kTripleBoxPasses) + 1, name + "_vertical_taps");
         Func vertical(name);
-        Expr vertical_weight = Halide::sum(
+        normalized_taps(vertical, x, y, channel,
+            tap(horizontal_view(x, y + vertical_taps.x, channel))
+                * kernel(vertical_taps.x),
             Halide::select(y + vertical_taps.x >= 0
                                && y + vertical_taps.x < height,
                            Halide::cast<float>(kernel(vertical_taps.x)), 0.0f),
-            name + "_vertical_weight");
-        vertical(x, y, channel) = Halide::sum(
-            tap(horizontal_view(x, y + vertical_taps.x, channel))
-                * kernel(vertical_taps.x),
-            name + "_vertical_sum") / Halide::max(vertical_weight, 1.0e-12f);
+            !half, name + "_vertical");
         return store_frame(vertical, half, channels);
     }
 
@@ -375,11 +405,12 @@ public:
             Expr valid = Halide::select(source_x >= 0 && source_x < width
                                             && source_y >= 0 && source_y < height,
                                         1.0f, 0.0f);
-            Expr cell_count = Halide::sum(valid, name + "_down_weight");
+            Expr count = cell_count(valid, x * stride - phase_x, y * stride - phase_y, stride,
+                                    width, height, name + "_down_weight");
             down(x, y, channel) = Halide::sum(
                 bounded_source(x * stride - phase_x + cell.x,
                                y * stride - phase_y + cell.y, channel),
-                name + "_down_sum") / Halide::max(cell_count, 1.0f);
+                name + "_down_sum") / Halide::max(count, 1.0f);
         }
         return {store_frame(down, half), stride, phase_x, phase_y,
                 down_width, down_height};

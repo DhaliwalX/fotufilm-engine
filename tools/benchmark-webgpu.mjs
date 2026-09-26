@@ -9,7 +9,9 @@ try {
     if (message.type() === 'error' || message.text().startsWith('BENCH'))
       console.log(message.text())
   })
-  await page.goto(process.argv[2] || 'http://127.0.0.1:5173/')
+  await page.goto(
+    process.argv[2] || 'http://127.0.0.1:5173/test/benchmark.html',
+  )
   const report = await page.evaluate(async () => {
     const { assetUrl, loadPack, normalPack, WebgpuDeveloper, pixelSource } =
       await import('/src/engine.js')
@@ -49,21 +51,29 @@ try {
               pixels[i + 2] = 0.1 + 0.5 * (1 - x / width)
               pixels[i + 3] = 1
             }
-          const source = pixelSource({ width, height, data: pixels }),
-            frames = []
-          for (let run = 0; run < 7; run++) {
-            const start = performance.now()
-            const result = await developer.develop(source, { grain: 1 })
-            frames.push({
-              wall: performance.now() - start,
-              kernel: result.elapsed,
-            })
+          // `repeated` develops one source again, as a slider edit does, and the runtime
+          // keeps its pixels on the device; `fresh` hands over new pixels every frame.
+          for (const source of ['repeated', 'fresh']) {
+            const repeated = pixelSource({ width, height, data: pixels }),
+              frames = []
+            for (let run = 0; run < 7; run++) {
+              const frame =
+                source === 'fresh'
+                  ? pixelSource({ width, height, data: pixels.slice() })
+                  : repeated
+              const start = performance.now()
+              const result = await developer.develop(frame, { grain: 1 })
+              frames.push({
+                wall: performance.now() - start,
+                kernel: result.elapsed,
+              })
+            }
+            if (id === 'gold200' && width === 1600 && source === 'repeated')
+              report.nativeFixture = nativeFramePack(developer)
+            const row = { kind: 'webgpu', id, source, width, height, frames }
+            report.results.push(row)
+            console.log('BENCH ' + JSON.stringify(row))
           }
-          if (id === 'gold200' && width === 1600)
-            report.nativeFixture = nativeFramePack(developer)
-          const row = { kind: 'webgpu', id, width, height, frames }
-          report.results.push(row)
-          console.log('BENCH ' + JSON.stringify(row))
         }
       } finally {
         developer.dispose()

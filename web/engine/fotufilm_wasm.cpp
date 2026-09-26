@@ -28,7 +28,40 @@
 extern "C" {
 EMSCRIPTEN_KEEPALIVE int fotufilm_wasm_plain_supported() { return 1; }
 
+/// A float RGBA region already has the kernel's layout, so the browser leaves it where it is and
+/// names it `Module.fotufilmInputAlias` ({ptr, bytes}) in place of copying it to `ptr` in the
+/// heap. The runtime's staged upload then copies it into the GPU's mapping directly, one copy
+/// instead of two. Anything else that needs the host bytes gets them written to the heap first.
+EM_JS(int, fotufilm_write_mapped_js, (void *staging, const void *src, size_t size), {
+    var alias = Module['fotufilmInputAlias'];
+    try {
+        var mapped = new Uint8Array(WebGPU.getJsObject(staging).getMappedRange(0, size));
+        if (alias && src >= alias.ptr && src + size <= alias.ptr + alias.bytes.byteLength) {
+            mapped.set(alias.bytes.subarray(src - alias.ptr, src - alias.ptr + size));
+        } else {
+            mapped.set(HEAPU8.subarray(src, src + size));
+        }
+        return 0;
+    } catch (e) {
+        return -1;
+    }
+});
 
+EM_JS(void, fotufilm_host_bytes_js, (const void *src, size_t size), {
+    var alias = Module['fotufilmInputAlias'];
+    if (alias && src < alias.ptr + alias.bytes.byteLength && src + size > alias.ptr) {
+        HEAPU8.set(alias.bytes, alias.ptr);
+        Module['fotufilmInputAlias'] = null;
+    }
+});
+
+int halide_webgpu_write_mapped(void *, void *staging, const void *src, size_t size) {
+    return fotufilm_write_mapped_js(staging, src, size);
+}
+
+void halide_webgpu_host_bytes(void *, const void *src, size_t size) {
+    fotufilm_host_bytes_js(src, size);
+}
 
 /// Marks a buffer's host side as the fresh copy. Every buffer the kernel reads needs this: the
 /// runtime allocates device memory lazily and only uploads what it is told has changed, so a
@@ -129,6 +162,50 @@ static halide_buffer_t *film_tiles_for(const float *configuration, bool &on) {
     return &film_tiles_stand_in.buffer;
 }
 
+/// The device buffers the last frame read, left allocated for the next: dragging a slider
+/// develops the same region again, and a frame whose buffers change identity also misses every
+/// bind group the runtime cached for them. The configuration and exposure cube are uploaded into
+/// theirs every frame. The input's upload, the largest single cost of a frame, is skipped when
+/// the browser says the region's pixels are the ones already there (`fotufilm_wasm_reuse_input`).
+struct ResidentBuffer {
+    halide_buffer_t buffer;
+    int64_t elements;
+};
+static ResidentBuffer resident[3];
+static bool reuse_input;
+
+static void release_resident(ResidentBuffer &kept) {
+    if (kept.buffer.device) halide_device_free(nullptr, &kept.buffer);
+    kept = ResidentBuffer();
+}
+
+/// Gives `buffer` the kept device allocation for the same host memory and size, if there is
+/// one, and marks its host side fresh unless `current` says the device already holds it.
+static void adopt_resident(ResidentBuffer &kept, halide_buffer_t *buffer, int64_t elements,
+                           bool current) {
+    if (kept.buffer.device && kept.buffer.host == buffer->host && kept.elements == elements) {
+        buffer->device = kept.buffer.device;
+        buffer->device_interface = kept.buffer.device_interface;
+    } else {
+        release_resident(kept);
+        current = false;
+    }
+    if (!current) mark_host_dirty(buffer);
+}
+
+/// Keeps a buffer's device allocation for the next frame, or frees it after a failed one.
+static void keep_resident(ResidentBuffer &kept, halide_buffer_t *buffer, int64_t elements,
+                          bool succeeded) {
+    if (succeeded && buffer->device) {
+        kept.buffer = *buffer;
+        kept.buffer.dim = nullptr;
+        kept.elements = elements;
+    } else {
+        halide_device_free(nullptr, buffer);
+        kept = ResidentBuffer();
+    }
+}
+
 /// Develops one frame, or one tile of a larger one. `input` and `output` are interleaved linear
 /// RGBA floats, scene-referred in and print-referred out — the sRGB encode belongs to the caller.
 ///
@@ -163,9 +240,11 @@ static int render_frame(float *input, float *output, int32_t width, int32_t heig
 
     // The output is left clean: the kernel writes it on the device and marks it device-dirty, and
     // the copy back below is what makes the host side current.
-    mark_host_dirty(&in_buf);
-    mark_host_dirty(&config_buf);
-    mark_host_dirty(&exposure_buf);
+    const int64_t counts[3] = {int64_t(width) * height * 4,
+                               FOTUFILM_FRAME_CONFIGURATION_COUNT + 2 * lut_count, lut_count};
+    halide_buffer_t *inputs[3] = {&in_buf, &config_buf, &exposure_buf};
+    for (int i = 0; i < 3; ++i) adopt_resident(resident[i], inputs[i], counts[i], i == 0 && reuse_input);
+    reuse_input = false;
 
     const float *c = configuration;
     bool film_on = false;
@@ -212,13 +291,22 @@ static int render_frame(float *input, float *output, int32_t width, int32_t heig
                          : halide_copy_to_host(nullptr, &out_buf);
     }
 
-    // Release frame ownership. The runtime retains reusable storage within its
-    // fixed cache budget, including when the next frame changes dimensions.
-    halide_device_free(nullptr, &in_buf);
+    // Release the output to the runtime, which retains reusable storage within its fixed cache
+    // budget, including when the next frame changes dimensions; the inputs stay for the next frame.
     halide_device_free(nullptr, &out_buf);
-    halide_device_free(nullptr, &config_buf);
-    halide_device_free(nullptr, &exposure_buf);
+    for (int i = 0; i < 3; ++i) keep_resident(resident[i], inputs[i], counts[i], status == 0);
     return status;
+}
+
+/// Lets the next frame read the input the last one left on the device instead of uploading it.
+/// The browser calls this only when the region's pixels are the ones it developed last.
+EMSCRIPTEN_KEEPALIVE
+void fotufilm_wasm_reuse_input() { reuse_input = true; }
+
+/// Frees the kept device buffers, for host buffers about to be freed or reused.
+EMSCRIPTEN_KEEPALIVE
+void fotufilm_wasm_release_inputs() {
+    for (ResidentBuffer &kept : resident) release_resident(kept);
 }
 
 EMSCRIPTEN_KEEPALIVE

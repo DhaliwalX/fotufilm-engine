@@ -1,0 +1,1005 @@
+Record kernel launches into one command encoder and compute pass, submitted every four
+dispatches with one pair of error scopes popped at the next read back or sync. Defer destroying
+evicted storage until the batch is submitted, and size the storage cache from peak use.
+Keep bind groups and uniform buffers for repeated dispatches. Upload through mapped staging
+buffers in 4 MB chunks and read back through one staging buffer the size of the copy, copying
+once with Write/ReadMappedRange. Weak hooks let an embedder write host bytes held outside
+linear memory.
+
+diff --git a/src/runtime/webgpu.cpp b/src/runtime/webgpu.cpp
+index 44de0d563..89720dd45 100644
+--- a/src/runtime/webgpu.cpp
++++ b/src/runtime/webgpu.cpp
+@@ -175,11 +175,15 @@ const char *wgpu_sv_to_cstr(WGPUStringView sv, char *buf, size_t buf_size) {
+ // within a particular scope.
+ class ErrorScope {
+ public:
+-    ALWAYS_INLINE ErrorScope(void *user_context, WGPUInstance instance, WGPUDevice device)
++    // `push` false adopts the two scopes a command batch pushed when it opened.
++    ALWAYS_INLINE ErrorScope(void *user_context, WGPUInstance instance, WGPUDevice device,
++                             bool push = true)
+         : user_context(user_context), instance(instance), device(device) {
+         // Capture validation and OOM errors.
+-        wgpuDevicePushErrorScope(device, WGPUErrorFilter_Validation);
+-        wgpuDevicePushErrorScope(device, WGPUErrorFilter_OutOfMemory);
++        if (push) {
++            wgpuDevicePushErrorScope(device, WGPUErrorFilter_Validation);
++            wgpuDevicePushErrorScope(device, WGPUErrorFilter_OutOfMemory);
++        }
+     }
+ 
+     ALWAYS_INLINE ~ErrorScope() {
+@@ -188,12 +192,13 @@ public:
+         }
+     }
+ 
+-    // Wait for all error callbacks in this scope to fire.
+-    // Returns the error code (or success).
+-    halide_error_code_t wait() {
+-        if (already_waited) {
+-            return error_code;
++    // Pop both scopes without waiting, so the pops can resolve while other work
++    // is waited on.
++    void begin() {
++        if (began) {
++            return;
+         }
++        began = true;
+         error_code = halide_error_code_success;
+ 
+         WGPUPopErrorScopeCallbackInfo callbackInfo = WGPU_POP_ERROR_SCOPE_CALLBACK_INFO_INIT;
+@@ -203,8 +208,17 @@ public:
+ 
+         // Start both callbacks before waiting. Their LIFO order is preserved,
+         // but the browser can resolve validation and OOM in the same turn.
+-        WGPUFuture future1 = wgpuDevicePopErrorScope(device, callbackInfo);
+-        WGPUFuture future2 = wgpuDevicePopErrorScope(device, callbackInfo);
++        future1 = wgpuDevicePopErrorScope(device, callbackInfo);
++        future2 = wgpuDevicePopErrorScope(device, callbackInfo);
++    }
++
++    // Wait for all error callbacks in this scope to fire.
++    // Returns the error code (or success).
++    halide_error_code_t wait() {
++        if (already_waited) {
++            return error_code;
++        }
++        begin();
+         WGPUFutureWaitInfo wait_info1 = WGPU_FUTURE_WAIT_INFO_INIT;
+         wait_info1.future = future1;
+         wgpuInstanceWaitAny(instance, 1, &wait_info1, UINT64_MAX);
+@@ -225,6 +239,9 @@ private:
+     // The error code reported by the callback functions.
+     volatile halide_error_code_t error_code;
+     bool already_waited = false;
++    bool began = false;
++    WGPUFuture future1 = {};
++    WGPUFuture future2 = {};
+ 
+     // The error callback function. Logs any errors.
+     static void error_callback(WGPUPopErrorScopeStatus status,
+@@ -264,6 +281,212 @@ struct WgpuBufferHandle {
+     WGPUBuffer buffer;
+ };
+ 
++// Kernel launches are recorded into one command encoder and one compute pass,
++// submitted every few dispatches and at the next point that needs queue order
++// or a result: a host or device transfer, a sync, or device release. WebGPU
++// makes every dispatch its own usage scope, so later dispatches in the pass
++// still see earlier writes. One pair of error scopes spans the batch and is
++// popped at its next read back or sync. Chrome answers each popErrorScope from
++// the GPU process, and waiting on them after every dispatch cost two round trips
++// per kernel. All of this state is protected by WgpuContext's context lock.
++struct PendingBatch {
++    WGPUDevice device;
++    WGPUCommandEncoder encoder;
++    WGPUComputePassEncoder pass;
++};
++WEAK PendingBatch pending_batch = {};
++
++// The batch's error scopes while a read back is in flight: popped as soon as
++// its map is requested, so the pops resolve while the map waits on the GPU.
++WEAK ErrorScope *pending_read_scope = nullptr;
++// The device whose batch error scopes are open (commands may already be submitted).
++WEAK WGPUDevice scoped_device = nullptr;
++// Dispatches recorded since the last submit. Submitting every few lets the GPU
++// start on the first kernels while later ones are still being encoded; one
++// submit per frame left it idle until the whole frame was.
++constexpr int dispatches_per_submit = 4;
++WEAK int dispatches_since_submit = 0;
++
++// Bytes held by the storage cache, and by storage in use now and at most so far.
++WEAK uint64_t cached_storage_bytes = 0;
++WEAK uint64_t live_storage_bytes = 0;
++WEAK uint64_t peak_live_storage_bytes = 0;
++
++// Storage evicted while a batch is open may still be bound by one of its
++// dispatches, and a destroyed buffer fails the submit. Destroy it afterwards.
++WEAK WGPUBuffer deferred_destroy[64] = {};
++WEAK uint32_t deferred_destroy_count = 0;
++
++// The bind groups and uniform buffer a dispatch binds, kept for the next
++// dispatch of the same pipeline with the same buffers and scalar arguments.
++// Storage comes back from the cache above, so a frame that repeats the last
++// one binds exactly what it bound before. Chrome creates each bind group and
++// uniform buffer in the GPU process, and creating two groups and a buffer for
++// every dispatch left the GPU idle between dispatches. Entries naming a
++// buffer are dropped before that buffer is destroyed, so a recycled handle
++// never matches. Protected by the context lock.
++constexpr uint32_t kMaxBoundBuffers = 16;
++constexpr uint32_t kMaxBoundUniformWords = 128;
++constexpr uint32_t kBoundCacheSize = 256;
++struct BoundArguments {
++    WGPUComputePipeline pipeline;
++    uint32_t buffer_count;
++    WGPUBuffer buffers[kMaxBoundBuffers];
++    uint64_t offsets[kMaxBoundBuffers];
++    uint64_t sizes[kMaxBoundBuffers];
++    uint32_t bindings[kMaxBoundBuffers];
++    uint32_t uniform_size;
++    uint32_t uniforms[kMaxBoundUniformWords];
++    WGPUBindGroup storage_group;
++    WGPUBindGroup uniform_group;
++    WGPUBuffer uniform_buffer;
++    bool cacheable;
++};
++WEAK BoundArguments bound_cache[kBoundCacheSize] = {};
++WEAK uint32_t next_bound_slot = 0;
++
++void record_bound_arguments(BoundArguments &bound, WGPUComputePipeline pipeline,
++                            void *args[], const int8_t arg_is_buffer[], uint32_t num_args,
++                            const uint32_t *uniforms, uint32_t uniform_size) {
++    bound = {};
++    bound.pipeline = pipeline;
++    bound.cacheable = uniform_size <= 4 * kMaxBoundUniformWords;
++    for (uint32_t i = 0; i < num_args; i++) {
++        if (!arg_is_buffer[i]) continue;
++        halide_buffer_t *buffer = (halide_buffer_t *)args[i];
++        WgpuBufferHandle *handle = (WgpuBufferHandle *)(buffer->device);
++        if (bound.buffer_count == kMaxBoundBuffers) {
++            // Too many to key; still bound, never cached.
++            bound.cacheable = false;
++            continue;
++        }
++        const uint32_t b = bound.buffer_count++;
++        bound.buffers[b] = handle->buffer;
++        bound.offsets[b] = handle->offset;
++        bound.sizes[b] = (buffer->size_in_bytes() + 3) & ~(uint64_t)3;
++        bound.bindings[b] = i;
++    }
++    bound.uniform_size = uniform_size;
++    if (bound.cacheable) memcpy(bound.uniforms, uniforms, uniform_size);
++}
++
++BoundArguments *find_bound_arguments(WGPUComputePipeline pipeline, void *args[],
++                                     const int8_t arg_is_buffer[], uint32_t num_args,
++                                     const uint32_t *uniforms, uint32_t uniform_size) {
++    BoundArguments key;
++    record_bound_arguments(key, pipeline, args, arg_is_buffer, num_args, uniforms, uniform_size);
++    if (!key.cacheable) return nullptr;
++    for (auto &bound : bound_cache) {
++        if (bound.pipeline != pipeline || bound.buffer_count != key.buffer_count
++            || bound.uniform_size != uniform_size) {
++            continue;
++        }
++        bool same = memcmp(bound.uniforms, uniforms, uniform_size) == 0;
++        for (uint32_t b = 0; same && b < key.buffer_count; ++b) {
++            same = bound.buffers[b] == key.buffers[b] && bound.offsets[b] == key.offsets[b]
++                && bound.sizes[b] == key.sizes[b] && bound.bindings[b] == key.bindings[b];
++        }
++        if (same) return &bound;
++    }
++    return nullptr;
++}
++
++void release_bound_arguments(BoundArguments &bound) {
++    if (bound.storage_group) wgpuBindGroupRelease(bound.storage_group);
++    if (bound.uniform_group) wgpuBindGroupRelease(bound.uniform_group);
++    if (bound.uniform_buffer) wgpuBufferRelease(bound.uniform_buffer);
++    bound = {};
++}
++
++void forget_bound_buffer(WGPUBuffer buffer) {
++    for (auto &bound : bound_cache) {
++        if (!bound.pipeline) continue;
++        for (uint32_t b = 0; b < bound.buffer_count; ++b) {
++            if (bound.buffers[b] == buffer) {
++                release_bound_arguments(bound);
++                break;
++            }
++        }
++    }
++}
++
++void forget_all_bound_arguments() {
++    for (auto &bound : bound_cache) {
++        if (bound.pipeline) release_bound_arguments(bound);
++    }
++}
++
++// Takes ownership of `bound`'s objects when it can be cached.
++bool keep_bound_arguments(BoundArguments &bound) {
++    if (!bound.cacheable) return false;
++    BoundArguments &slot = bound_cache[next_bound_slot];
++    if (slot.pipeline) release_bound_arguments(slot);
++    slot = bound;
++    next_bound_slot = (next_bound_slot + 1) % kBoundCacheSize;
++    return true;
++}
++
++void destroy_storage(WGPUBuffer buffer) {
++    forget_bound_buffer(buffer);
++    if (!pending_batch.encoder) {
++        wgpuBufferDestroy(buffer);
++        wgpuBufferRelease(buffer);
++    } else if (deferred_destroy_count < 64) {
++        deferred_destroy[deferred_destroy_count++] = buffer;
++    } else {
++        // The batch keeps its own reference; the memory goes when that does.
++        wgpuBufferRelease(buffer);
++    }
++}
++
++void open_scopes(WGPUDevice device) {
++    if (!scoped_device) {
++        wgpuDevicePushErrorScope(device, WGPUErrorFilter_Validation);
++        wgpuDevicePushErrorScope(device, WGPUErrorFilter_OutOfMemory);
++        scoped_device = device;
++    }
++}
++
++WGPUComputePassEncoder batch_pass(WGPUDevice device) {
++    open_scopes(device);
++    if (!pending_batch.encoder) {
++        pending_batch.device = device;
++        pending_batch.encoder = wgpuDeviceCreateCommandEncoder(device, nullptr);
++        pending_batch.pass = wgpuCommandEncoderBeginComputePass(pending_batch.encoder, nullptr);
++    }
++    return pending_batch.pass;
++}
++
++// Submits the open batch, if any, without waiting on it. Its error scopes stay
++// open until `submit_batch` or a read back pops them.
++void flush_commands(WGPUQueue queue) {
++    if (!pending_batch.encoder) return;
++    dispatches_since_submit = 0;
++    const PendingBatch batch = pending_batch;
++    pending_batch = {};
++    wgpuComputePassEncoderEnd(batch.pass);
++    wgpuComputePassEncoderRelease(batch.pass);
++    WGPUCommandBuffer commands = wgpuCommandEncoderFinish(batch.encoder, nullptr);
++    wgpuQueueSubmit(queue, 1, &commands);
++    wgpuCommandBufferRelease(commands);
++    wgpuCommandEncoderRelease(batch.encoder);
++    for (uint32_t i = 0; i < deferred_destroy_count; ++i) {
++        destroy_storage(deferred_destroy[i]);
++        deferred_destroy[i] = nullptr;
++    }
++    deferred_destroy_count = 0;
++}
++
++// Submits the open batch and reports the errors its scopes collected.
++int submit_batch(void *user_context, WGPUInstance instance, WGPUQueue queue) {
++    flush_commands(queue);
++    if (!scoped_device) return halide_error_code_success;
++    WGPUDevice device = scoped_device;
++    scoped_device = nullptr;
++    ErrorScope error_scope(user_context, instance, device, false);
++    return error_scope.wait();
++}
++
+ // Storage buffers are reused only after their last command has been submitted.
+ // Queue ordering protects prior readers when a later frame writes the buffer.
+ // All access is protected by WgpuContext's context lock.
+@@ -273,16 +496,21 @@ struct CachedStorageBuffer {
+     uint64_t size;
+ };
+ WEAK CachedStorageBuffer cached_storage[64] = {};
+-WEAK uint64_t cached_storage_bytes = 0;
+ WEAK uint32_t next_storage_slot = 0;
+-constexpr uint64_t storage_cache_limit = 128 * 1024 * 1024;
++// The byte budget: twice the most storage in use at once so far, and at least
++// 128 MiB. A frame frees its intermediates as it goes; within this budget the
++// next frame takes them all back rather than creating any.
++constexpr uint64_t storage_cache_floor = 128 * 1024 * 1024;
++uint64_t storage_cache_limit_now() {
++    const uint64_t budget = 2 * peak_live_storage_bytes;
++    return budget > storage_cache_floor ? budget : storage_cache_floor;
++}
+ 
+ void discard_storage_slot(uint32_t slot) {
+     CachedStorageBuffer &entry = cached_storage[slot];
+     if (!entry.buffer) return;
+     cached_storage_bytes -= entry.size;
+-    wgpuBufferDestroy(entry.buffer);
+-    wgpuBufferRelease(entry.buffer);
++    destroy_storage(entry.buffer);
+     entry = {};
+ }
+ 
+@@ -300,14 +528,13 @@ WGPUBuffer take_cached_storage(WGPUDevice device, uint64_t size) {
+ 
+ void retain_storage(WGPUDevice device, WGPUBuffer buffer) {
+     const uint64_t size = wgpuBufferGetSize(buffer);
+-    if (size > storage_cache_limit) {
+-        wgpuBufferDestroy(buffer);
+-        wgpuBufferRelease(buffer);
++    if (size > storage_cache_limit_now()) {
++        destroy_storage(buffer);
+         return;
+     }
+     // Evict oldest entries until both the fixed entry count and byte budget fit.
+     discard_storage_slot(next_storage_slot);
+-    while (cached_storage_bytes + size > storage_cache_limit) {
++    while (cached_storage_bytes + size > storage_cache_limit_now()) {
+         next_storage_slot = (next_storage_slot + 1) % 64;
+         discard_storage_slot(next_storage_slot);
+     }
+@@ -647,19 +874,23 @@ WEAK int halide_webgpu_device_malloc(void *user_context, halide_buffer_t *buf) {
+     device_handle->buffer = take_cached_storage(context.device, size);
+     device_handle->offset = 0;
+     if (!device_handle->buffer) {
+-        ErrorScope error_scope(user_context, context.instance, context.device);
++        // Out-of-memory and validation errors are reported with the batch.
++        open_scopes(context.device);
+         WGPUBufferDescriptor desc = WGPU_BUFFER_DESCRIPTOR_INIT;
+         desc.usage = WGPUBufferUsage_Storage | WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc;
+         desc.size = size;
+         device_handle->buffer = wgpuDeviceCreateBuffer(context.device, &desc);
+-        const int error_code = error_scope.wait();
+-        if (error_code != halide_error_code_success) {
+-            if (device_handle->buffer) wgpuBufferRelease(device_handle->buffer);
++        if (!device_handle->buffer) {
+             free(device_handle);
+-            return error_code;
++            return halide_error_code_out_of_memory;
+         }
+     }
+ 
++    live_storage_bytes += size;
++    if (live_storage_bytes > peak_live_storage_bytes) {
++        peak_live_storage_bytes = live_storage_bytes;
++    }
++
+     buf->device = (uint64_t)device_handle;
+     buf->device_interface = &webgpu_device_interface;
+     buf->device_interface->impl->use_module();
+@@ -686,6 +917,8 @@ WEAK int halide_webgpu_device_free(void *user_context, halide_buffer_t *buf) {
+         return context.error_code;
+     }
+ 
++    const uint64_t size = wgpuBufferGetSize(handle->buffer);
++    live_storage_bytes = live_storage_bytes > size ? live_storage_bytes - size : 0;
+     retain_storage(context.device, handle->buffer);
+     free(handle);
+     buf->device = 0;
+@@ -700,6 +933,9 @@ WEAK int halide_webgpu_device_sync(void *user_context, halide_buffer_t *) {
+     if (context.error_code) {
+         return context.error_code;
+     }
++    if (int batch_error = submit_batch(user_context, context.instance, context.queue)) {
++        return batch_error;
++    }
+ 
+     ErrorScope error_scope(user_context, context.instance, context.device);
+ 
+@@ -739,6 +975,10 @@ WEAK int halide_webgpu_device_sync(void *user_context, halide_buffer_t *) {
+     return halide_error_code_success;
+ }
+ 
++namespace {
++void release_staging();
++}  // namespace
++
+ WEAK int halide_webgpu_device_release(void *user_context) {
+     debug(user_context)
+         << "WGPU: halide_webgpu_device_release (user_context: " << user_context
+@@ -758,6 +998,13 @@ WEAK int halide_webgpu_device_release(void *user_context) {
+     }
+ 
+     if (device) {
++        if (scoped_device == device || (pending_batch.encoder && pending_batch.device == device)) {
++            WGPUQueue queue = wgpuDeviceGetQueue(device);
++            (void)submit_batch(user_context, instance, queue);
++            wgpuQueueRelease(queue);
++        }
++        forget_all_bound_arguments();
++        release_staging();
+         release_cached_storage(device);
+         release_cached_pipelines(user_context, device);
+         shader_cache.delete_context(user_context, device,
+@@ -809,11 +1056,174 @@ WEAK int halide_webgpu_device_and_host_free(void *user_context,
+ 
+ namespace {
+ 
++// Staging buffers for host transfers, kept between frames.
++//
++// Uploads go through a mapped MapWrite buffer and a buffer copy rather than
++// wgpuQueueWriteBuffer. Measured in Chrome on an Apple GPU, writeBuffer of a
++// 23 MB frame took 4.4 ms to reach the GPU and a mapped staging buffer 1.3 ms:
++// the browser copies queue writes through its own transfer memory. Each upload
++// buffer is mapped again as soon as its copy is submitted, so by the next frame
++// the map has normally resolved and the upload does not wait.
++//
++// Read backs use one staging buffer the size of the copy, so a frame larger
++// than the context's 4 MB staging buffer is read in one copy and one map
++// rather than one per 4 MB. Protected by the context lock.
++struct StagingBuffer {
++    WGPUBuffer buffer;
++    uint64_t size;
++    WGPUFuture future;
++    bool pending;
++    volatile WGPUMapAsyncStatus status;
++};
++constexpr uint32_t kUploadStagingCount = 16;
++// Large uploads go in chunks with a staging buffer each, so the browser's GPU
++// process copies one chunk out of shared memory while the next is written in.
++constexpr uint64_t kUploadChunk = 4 * 1024 * 1024;
++constexpr uint32_t kReadbackStagingCount = 4;
++constexpr uint64_t kStagedUploadMinimum = 256 * 1024;
++WEAK StagingBuffer upload_staging[kUploadStagingCount] = {};
++WEAK StagingBuffer readback_staging[kReadbackStagingCount] = {};
++WEAK uint32_t next_upload_staging = 0;
++WEAK uint32_t next_readback_staging = 0;
++
++void discard_staging(StagingBuffer &staging) {
++    if (staging.buffer) {
++        wgpuBufferDestroy(staging.buffer);
++        wgpuBufferRelease(staging.buffer);
++    }
++    staging = {};
++}
++
++void release_staging() {
++    for (auto &staging : upload_staging) discard_staging(staging);
++    for (auto &staging : readback_staging) discard_staging(staging);
++}
++
++WGPUBuffer create_staging(WGPUDevice device, uint64_t size, WGPUBufferUsage usage,
++                          bool mapped) {
++    WGPUBufferDescriptor desc = WGPU_BUFFER_DESCRIPTOR_INIT;
++    desc.usage = usage;
++    desc.size = size;
++    desc.mappedAtCreation = mapped;
++    return wgpuDeviceCreateBuffer(device, &desc);
++}
++
++// A write-mapped upload buffer of exactly `size` bytes, or null.
++StagingBuffer *mapped_upload_staging(WGPUInstance instance, WGPUDevice device, uint64_t size) {
++    for (auto &staging : upload_staging) {
++        if (!staging.buffer || staging.size != size) continue;
++        if (staging.pending) {
++            // Poll: a map that has not resolved is still waiting on its last copy.
++            WGPUFutureWaitInfo wait_info = WGPU_FUTURE_WAIT_INFO_INIT;
++            wait_info.future = staging.future;
++            if (wgpuInstanceWaitAny(instance, 1, &wait_info, 0) != WGPUWaitStatus_Success
++                || !wait_info.completed) {
++                continue;
++            }
++            staging.pending = false;
++            if (staging.status != WGPUMapAsyncStatus_Success) {
++                discard_staging(staging);
++                continue;
++            }
++        }
++        return &staging;
++    }
++    StagingBuffer &staging = upload_staging[next_upload_staging];
++    next_upload_staging = (next_upload_staging + 1) % kUploadStagingCount;
++    discard_staging(staging);
++    staging.buffer = create_staging(device, size,
++                                    WGPUBufferUsage_MapWrite | WGPUBufferUsage_CopySrc, true);
++    if (!staging.buffer) return nullptr;
++    staging.size = size;
++    return &staging;
++}
++
++}  // namespace
++
++// Writes `size` bytes from `src` into the start of a write-mapped staging
++// buffer. An embedder whose host bytes can live outside linear memory replaces
++// this, and `halide_webgpu_host_bytes`, which makes a host range real in memory
++// before anything else reads it.
++extern "C" WEAK int halide_webgpu_write_mapped(void *user_context, WGPUBuffer staging,
++                                              const void *src, size_t size) {
++    return wgpuBufferWriteMappedRange(staging, 0, src, size) == WGPUStatus_Success ? 0 : -1;
++}
++
++extern "C" WEAK void halide_webgpu_host_bytes(void *user_context, const void *src, size_t size) {
++}
++
++namespace {
++
++int staged_upload_chunk(WgpuContext *context, WGPUBuffer dst, uint64_t dst_offset,
++                        const void *src, uint64_t size) {
++    StagingBuffer *staging = mapped_upload_staging(context->instance, context->device, size);
++    // One copy straight into the mapping. GetMappedRange would hand back a
++    // zeroed heap copy of it and copy that across again on unmap.
++    if (!staging || halide_webgpu_write_mapped(nullptr, staging->buffer, src, size) != 0) {
++        if (staging) discard_staging(*staging);
++        halide_webgpu_host_bytes(nullptr, src, size);
++        wgpuQueueWriteBuffer(context->queue, dst, dst_offset, src, size);
++        return halide_error_code_success;
++    }
++    wgpuBufferUnmap(staging->buffer);
++
++    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(context->device, nullptr);
++    wgpuCommandEncoderCopyBufferToBuffer(encoder, staging->buffer, 0, dst, dst_offset, size);
++    WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, nullptr);
++    wgpuQueueSubmit(context->queue, 1, &commands);
++    wgpuCommandBufferRelease(commands);
++    wgpuCommandEncoderRelease(encoder);
++
++    WGPUBufferMapCallbackInfo callback_info = WGPU_BUFFER_MAP_CALLBACK_INFO_INIT;
++    callback_info.mode = WGPUCallbackMode_WaitAnyOnly;
++    callback_info.callback = [](WGPUMapAsyncStatus status, WGPUStringView, void *userdata1, void *) {
++        ((StagingBuffer *)userdata1)->status = status;
++    };
++    callback_info.userdata1 = staging;
++    staging->status = WGPUMapAsyncStatus_Error;
++    staging->future = wgpuBufferMapAsync(staging->buffer, WGPUMapMode_Write, 0, size, callback_info);
++    staging->pending = true;
++    return halide_error_code_success;
++}
++
++int staged_upload(WgpuContext *context, WGPUBuffer dst, uint64_t dst_offset,
++                  const void *src, uint64_t size) {
++    for (uint64_t offset = 0; offset < size; offset += kUploadChunk) {
++        const uint64_t bytes = size - offset < kUploadChunk ? size - offset : kUploadChunk;
++        int error = staged_upload_chunk(context, dst, dst_offset + offset,
++                                        (const uint8_t *)src + offset, bytes);
++        if (error) return error;
++    }
++    return halide_error_code_success;
++}
++
++// An unmapped read-back buffer of exactly `size` bytes, or null.
++WGPUBuffer readback_buffer(WGPUDevice device, uint64_t size) {
++    for (auto &staging : readback_staging) {
++        if (staging.buffer && staging.size == size) return staging.buffer;
++    }
++    StagingBuffer &staging = readback_staging[next_readback_staging];
++    next_readback_staging = (next_readback_staging + 1) % kReadbackStagingCount;
++    discard_staging(staging);
++    staging.buffer = create_staging(device, size,
++                                    WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst, false);
++    staging.size = staging.buffer ? size : 0;
++    return staging.buffer;
++}
++
+ // Copy `size` bytes of data from buffer `src` to a host pointer `dst`.
+ int do_copy_to_host(void *user_context, WgpuContext *context, uint8_t *dst,
+                     WGPUBuffer src, int64_t src_offset, int64_t size) {
+-    // Copy chunks via the staging buffer.
+-    int64_t staging_buffer_size = wgpuBufferGetSize(context->staging_buffer);
++    // Copy chunks via the staging buffer, or all at once through one the size
++    // of the copy.
++    WGPUBuffer staging_buffer = context->staging_buffer;
++    int64_t staging_buffer_size = wgpuBufferGetSize(staging_buffer);
++    if (size > staging_buffer_size) {
++        if (WGPUBuffer whole = readback_buffer(context->device, size)) {
++            staging_buffer = whole;
++            staging_buffer_size = size;
++        }
++    }
+     for (int64_t offset = 0; offset < size; offset += staging_buffer_size) {
+         int64_t num_bytes = staging_buffer_size;
+         if (offset + num_bytes > size) {
+@@ -824,7 +1234,7 @@ int do_copy_to_host(void *user_context, WgpuContext *context, uint8_t *dst,
+         WGPUCommandEncoder encoder =
+             wgpuDeviceCreateCommandEncoder(context->device, nullptr);
+         wgpuCommandEncoderCopyBufferToBuffer(encoder, src, src_offset + offset,
+-                                             context->staging_buffer,
++                                             staging_buffer,
+                                              0, num_bytes);
+         WGPUCommandBuffer command_buffer =
+             wgpuCommandEncoderFinish(encoder, nullptr);
+@@ -851,8 +1261,12 @@ int do_copy_to_host(void *user_context, WgpuContext *context, uint8_t *dst,
+         mapCallbackInfo.userdata1 = &result;
+ 
+         WGPUFuture map_future = wgpuBufferMapAsync(
+-            context->staging_buffer, WGPUMapMode_Read, 0, num_bytes,
++            staging_buffer, WGPUMapMode_Read, 0, num_bytes,
+             mapCallbackInfo);
++        if (pending_read_scope) {
++            pending_read_scope->begin();
++            pending_read_scope = nullptr;
++        }
+ 
+         WGPUFutureWaitInfo wait_info = WGPU_FUTURE_WAIT_INFO_INIT;
+         wait_info.future = map_future;
+@@ -865,10 +1279,14 @@ int do_copy_to_host(void *user_context, WgpuContext *context, uint8_t *dst,
+         }
+ 
+         // Copy the data from the mapped staging buffer to the host allocation.
+-        const void *src = wgpuBufferGetConstMappedRange(context->staging_buffer,
+-                                                        0, num_bytes);
+-        memcpy(dst + offset, src, num_bytes);
+-        wgpuBufferUnmap(context->staging_buffer);
++        // Straight into the destination, rather than through a heap copy of
++        // the mapping.
++        const WGPUStatus read_status =
++            wgpuBufferReadMappedRange(staging_buffer, 0, dst + offset, num_bytes);
++        wgpuBufferUnmap(staging_buffer);
++        if (read_status != WGPUStatus_Success) {
++            return halide_error_code_copy_to_host_failed;
++        }
+     }
+ 
+     return halide_error_code_success;
+@@ -900,9 +1318,15 @@ int do_multidimensional_copy(void *user_context, WgpuContext *context,
+                                   src->buffer, src_idx + src->offset,
+                                   copy_size);
+         } else if (from_host && !to_host) {
+-            wgpuQueueWriteBuffer(context->queue, dst->buffer,
+-                                 dst_idx + dst->offset,
+-                                 (void *)(c.src + src_idx), copy_size);
++            if (copy_size >= kStagedUploadMinimum) {
++                err = staged_upload(context, dst->buffer, dst_idx + dst->offset,
++                                    (const void *)(c.src + src_idx), copy_size);
++            } else {
++                halide_webgpu_host_bytes(user_context, (const void *)(c.src + src_idx), copy_size);
++                wgpuQueueWriteBuffer(context->queue, dst->buffer,
++                                     dst_idx + dst->offset,
++                                     (void *)(c.src + src_idx), copy_size);
++            }
+         } else if (!from_host && !to_host) {
+             // Create a command encoder and encode a copy command.
+             WGPUCommandEncoder encoder =
+@@ -983,14 +1407,29 @@ WEAK int halide_webgpu_buffer_copy(void *user_context,
+         if (context.error_code) {
+             return context.error_code;
+         }
+-
+-        ErrorScope error_scope(user_context, context.instance, context.device);
+-
++        if (!to_host) {
++            // Queue writes land ahead of unsubmitted commands, so submit those first.
++            // Errors are reported with the batch, at the next read back or sync.
++            flush_commands(context.queue);
++            open_scopes(context.device);
++            return do_multidimensional_copy(user_context, &context, c,
++                                            c.src_begin, c.dst_begin, dst->dimensions,
++                                            from_host, to_host);
++        }
++        // The copy joins the batch: its commands fall inside the batch's error
++        // scopes, which are popped once the copy's map has been requested.
++        flush_commands(context.queue);
++        open_scopes(context.device);
++        ErrorScope error_scope(user_context, context.instance, scoped_device, false);
++        scoped_device = nullptr;
++        pending_read_scope = &error_scope;
+         err = do_multidimensional_copy(user_context, &context, c,
+                                        c.src_begin, c.dst_begin, dst->dimensions,
+                                        from_host, to_host);
++        pending_read_scope = nullptr;
++        const int scope_error = error_scope.wait();
+         if (err == halide_error_code_success) {
+-            err = error_scope.wait();
++            err = scope_error;
+         }
+     }
+ 
+@@ -1162,7 +1601,8 @@ WEAK int halide_webgpu_run(void *user_context,
+         return context.error_code;
+     }
+ 
+-    ErrorScope error_scope(user_context, context.instance, context.device);
++    // Errors from here on are reported when the batch is submitted.
++    WGPUComputePassEncoder pass = batch_pass(context.device);
+ 
+     WGPUShaderModule shader_module = nullptr;
+     bool found = shader_cache.lookup(context.device, state_ptr, shader_module);
+@@ -1253,11 +1693,6 @@ WEAK int halide_webgpu_run(void *user_context,
+                             << (pipeline_is_cached ? " (cached)" : " (not cached)") << "\n";
+     }
+ 
+-    // Set up a compute shader dispatch command.
+-    WGPUCommandEncoder encoder =
+-        wgpuDeviceCreateCommandEncoder(context.device, nullptr);
+-    WGPUComputePassEncoder pass =
+-        wgpuCommandEncoderBeginComputePass(encoder, nullptr);
+     wgpuComputePassEncoderSetPipeline(pass, pipeline);
+ 
+     // Process function arguments.
+@@ -1278,163 +1713,165 @@ WEAK int halide_webgpu_run(void *user_context,
+         }
+         num_args++;
+     }
+-    if (num_buffers > 0) {
+-        // Set up a bind group entry for each buffer argument.
+-        WGPUBindGroupEntry *bind_group_entries =
+-            (WGPUBindGroupEntry *)malloc(
+-                num_buffers * sizeof(WGPUBindGroupEntry));
+-        for (uint32_t i = 0, b = 0; i < num_args; i++) {
+-            if (arg_is_buffer[i]) {
+-                halide_buffer_t *buffer = (halide_buffer_t *)args[i];
+-                WgpuBufferHandle *handle = (WgpuBufferHandle *)(buffer->device);
+-                WGPUBindGroupEntry entry = WGPU_BIND_GROUP_ENTRY_INIT;
+-                entry.binding = i;
+-                entry.buffer = handle->buffer;
+-                entry.offset = handle->offset;
+-                entry.size = round_up_to_multiple_of_4(buffer->size_in_bytes());
+-                bind_group_entries[b] = entry;
+-                b++;
+-            }
++    // Scalar arguments widened to 32 bits, as the uniform buffer holds them.
++    uint32_t *arg_values = (uint32_t *)malloc(uniform_size ? uniform_size : 4);
++    for (uint32_t a = 0, i = 0; a < num_args; a++) {
++        if (arg_is_buffer[a]) {
++            continue;
+         }
+ 
+-        // Create a bind group for the buffer arguments.
+-        WGPUBindGroupLayout layout =
+-            wgpuComputePipelineGetBindGroupLayout(pipeline, 0);
+-        WGPUBindGroupDescriptor bindgroup_desc = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
+-        bindgroup_desc.layout = layout;
+-        bindgroup_desc.entryCount = num_buffers;
+-        bindgroup_desc.entries = bind_group_entries;
+-        WGPUBindGroup bind_group =
+-            wgpuDeviceCreateBindGroup(context.device, &bindgroup_desc);
+-        wgpuComputePassEncoderSetBindGroup(pass, 0, bind_group, 0, nullptr);
+-        wgpuBindGroupRelease(bind_group);
+-        wgpuBindGroupLayoutRelease(layout);
+-
+-        free(bind_group_entries);
+-    }
+-    if (num_args > num_buffers) {
+-        // Create a uniform buffer for the non-buffer arguments.
+-        WGPUBufferDescriptor desc = WGPU_BUFFER_DESCRIPTOR_INIT;
+-        desc.usage = WGPUBufferUsage_Uniform;
+-        desc.size = uniform_size;
+-        desc.mappedAtCreation = true;
+-        WGPUBuffer arg_buffer = wgpuDeviceCreateBuffer(context.device, &desc);
+-
+-        // Write the argument values to the uniform buffer.
+-        uint32_t *arg_values =
+-            (uint32_t *)wgpuBufferGetMappedRange(arg_buffer, 0, uniform_size);
+-        for (uint32_t a = 0, i = 0; a < num_args; a++) {
+-            if (arg_is_buffer[a]) {
+-                continue;
+-            }
++        halide_type_t arg_type = arg_types[a];
++        halide_debug_assert(user_context, arg_type.bits > 0);
++        halide_debug_assert(user_context, arg_type.bits <= 32);
+ 
+-            halide_type_t arg_type = arg_types[a];
+-            halide_debug_assert(user_context, arg_type.bits > 0);
+-            halide_debug_assert(user_context, arg_type.bits <= 32);
++        void *arg_in = args[a];
++        void *arg_out = &arg_values[i++];
+ 
+-            void *arg_in = args[a];
+-            void *arg_out = &arg_values[i++];
+-
+-            // Copy the argument value, expanding it to 32-bits.
+-            switch (arg_type.code) {
+-            case halide_type_float: {
+-                halide_debug_assert(user_context, arg_type.bits == 32);
+-                *(float *)arg_out = *(float *)arg_in;
++        // Copy the argument value, expanding it to 32-bits.
++        switch (arg_type.code) {
++        case halide_type_float: {
++            halide_debug_assert(user_context, arg_type.bits == 32);
++            *(float *)arg_out = *(float *)arg_in;
++            break;
++        }
++        case halide_type_int: {
++            switch (arg_type.bits) {
++            case 1: {
++                *(int32_t *)arg_out = *((int8_t *)arg_in);
+                 break;
+             }
+-            case halide_type_int: {
+-                switch (arg_type.bits) {
+-                case 1: {
+-                    *(int32_t *)arg_out = *((int8_t *)arg_in);
+-                    break;
+-                }
+-                case 8: {
+-                    *(int32_t *)arg_out = *((int8_t *)arg_in);
+-                    break;
+-                }
+-                case 16: {
+-                    *(int32_t *)arg_out = *((int16_t *)arg_in);
+-                    break;
+-                }
+-                case 32: {
+-                    *(int32_t *)arg_out = *((int32_t *)arg_in);
+-                    break;
+-                }
+-                default: {
+-                    halide_debug_assert(user_context, false);
+-                }
+-                }
++            case 8: {
++                *(int32_t *)arg_out = *((int8_t *)arg_in);
+                 break;
+             }
+-            case halide_type_uint: {
+-                switch (arg_type.bits) {
+-                case 1: {
+-                    *(uint32_t *)arg_out = *((uint8_t *)arg_in);
+-                    break;
+-                }
+-                case 8: {
+-                    *(uint32_t *)arg_out = *((uint8_t *)arg_in);
+-                    break;
+-                }
+-                case 16: {
+-                    *(uint32_t *)arg_out = *((uint16_t *)arg_in);
+-                    break;
+-                }
+-                case 32: {
+-                    *(uint32_t *)arg_out = *((uint32_t *)arg_in);
+-                    break;
+-                }
+-                default: {
+-                    halide_debug_assert(user_context, false);
+-                }
+-                }
++            case 16: {
++                *(int32_t *)arg_out = *((int16_t *)arg_in);
++                break;
++            }
++            case 32: {
++                *(int32_t *)arg_out = *((int32_t *)arg_in);
++                break;
++            }
++            default: {
++                halide_debug_assert(user_context, false);
++            }
++            }
++            break;
++        }
++        case halide_type_uint: {
++            switch (arg_type.bits) {
++            case 1: {
++                *(uint32_t *)arg_out = *((uint8_t *)arg_in);
++                break;
++            }
++            case 8: {
++                *(uint32_t *)arg_out = *((uint8_t *)arg_in);
++                break;
++            }
++            case 16: {
++                *(uint32_t *)arg_out = *((uint16_t *)arg_in);
++                break;
++            }
++            case 32: {
++                *(uint32_t *)arg_out = *((uint32_t *)arg_in);
+                 break;
+             }
+             default: {
+-                halide_debug_assert(user_context, false && "unhandled type");
++                halide_debug_assert(user_context, false);
+             }
+             }
++            break;
++        }
++        default: {
++            halide_debug_assert(user_context, false && "unhandled type");
++        }
+         }
+-        wgpuBufferUnmap(arg_buffer);
+-
+-        // Create a bind group for the uniform buffer.
+-        WGPUBindGroupLayout layout =
+-            wgpuComputePipelineGetBindGroupLayout(pipeline, 1);
+-        WGPUBindGroupEntry entry = WGPU_BIND_GROUP_ENTRY_INIT;
+-        entry.binding = 0;
+-        entry.buffer = arg_buffer;
+-        entry.offset = 0;
+-        entry.size = uniform_size;
+-        WGPUBindGroupDescriptor bindgroup_desc = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
+-        bindgroup_desc.layout = layout;
+-        bindgroup_desc.entryCount = 1;
+-        bindgroup_desc.entries = &entry;
+-        WGPUBindGroup bind_group =
+-            wgpuDeviceCreateBindGroup(context.device, &bindgroup_desc);
+-        wgpuComputePassEncoderSetBindGroup(pass, 1, bind_group, 0, nullptr);
+-        wgpuBindGroupRelease(bind_group);
+-        wgpuBindGroupLayoutRelease(layout);
+-
+-        wgpuBufferRelease(arg_buffer);
+     }
+ 
+-    wgpuComputePassEncoderDispatchWorkgroups(pass, groupsX, groupsY, groupsZ);
+-    wgpuComputePassEncoderEnd(pass);
+-    wgpuComputePassEncoderRelease(pass);
++    BoundArguments *bound = pipeline_is_cached
++        ? find_bound_arguments(pipeline, args, arg_is_buffer, num_args, arg_values, uniform_size)
++        : nullptr;
++    BoundArguments fresh = {};
++    if (!bound) {
++        bound = &fresh;
++        record_bound_arguments(fresh, pipeline, args, arg_is_buffer, num_args, arg_values, uniform_size);
++        if (num_buffers > 0) {
++            // Set up a bind group entry for each buffer argument.
++            WGPUBindGroupEntry *bind_group_entries =
++                (WGPUBindGroupEntry *)malloc(
++                    num_buffers * sizeof(WGPUBindGroupEntry));
++            for (uint32_t b = 0; b < fresh.buffer_count; b++) {
++                WGPUBindGroupEntry entry = WGPU_BIND_GROUP_ENTRY_INIT;
++                entry.binding = fresh.bindings[b];
++                entry.buffer = fresh.buffers[b];
++                entry.offset = fresh.offsets[b];
++                entry.size = fresh.sizes[b];
++                bind_group_entries[b] = entry;
++            }
+ 
+-    // Submit the compute command.
+-    WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, nullptr);
+-    wgpuQueueSubmit(context.queue, 1, &commands);
++            // Create a bind group for the buffer arguments.
++            WGPUBindGroupLayout layout =
++                wgpuComputePipelineGetBindGroupLayout(pipeline, 0);
++            WGPUBindGroupDescriptor bindgroup_desc = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
++            bindgroup_desc.layout = layout;
++            bindgroup_desc.entryCount = num_buffers;
++            bindgroup_desc.entries = bind_group_entries;
++            fresh.storage_group =
++                wgpuDeviceCreateBindGroup(context.device, &bindgroup_desc);
++            wgpuBindGroupLayoutRelease(layout);
++
++            free(bind_group_entries);
++        }
++        if (num_args > num_buffers) {
++            // Create a uniform buffer for the non-buffer arguments.
++            WGPUBufferDescriptor desc = WGPU_BUFFER_DESCRIPTOR_INIT;
++            desc.usage = WGPUBufferUsage_Uniform;
++            desc.size = uniform_size;
++            desc.mappedAtCreation = true;
++            fresh.uniform_buffer = wgpuDeviceCreateBuffer(context.device, &desc);
++            void *mapped = wgpuBufferGetMappedRange(fresh.uniform_buffer, 0, uniform_size);
++            memcpy(mapped, arg_values, uniform_size);
++            wgpuBufferUnmap(fresh.uniform_buffer);
++
++            // Create a bind group for the uniform buffer.
++            WGPUBindGroupLayout layout =
++                wgpuComputePipelineGetBindGroupLayout(pipeline, 1);
++            WGPUBindGroupEntry entry = WGPU_BIND_GROUP_ENTRY_INIT;
++            entry.binding = 0;
++            entry.buffer = fresh.uniform_buffer;
++            entry.offset = 0;
++            entry.size = uniform_size;
++            WGPUBindGroupDescriptor bindgroup_desc = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
++            bindgroup_desc.layout = layout;
++            bindgroup_desc.entryCount = 1;
++            bindgroup_desc.entries = &entry;
++            fresh.uniform_group =
++                wgpuDeviceCreateBindGroup(context.device, &bindgroup_desc);
++            wgpuBindGroupLayoutRelease(layout);
++        }
++    }
++    free(arg_values);
++    if (bound->storage_group) {
++        wgpuComputePassEncoderSetBindGroup(pass, 0, bound->storage_group, 0, nullptr);
++    }
++    if (bound->uniform_group) {
++        wgpuComputePassEncoderSetBindGroup(pass, 1, bound->uniform_group, 0, nullptr);
++    }
++    if (bound == &fresh) {
++        if (!pipeline_is_cached || !keep_bound_arguments(fresh)) {
++            release_bound_arguments(fresh);
++        }
++    }
+ 
+-    // Release the command buffer as well as the encoder: a submitted command
+-    // buffer that is never released keeps every buffer it referenced alive.
+-    wgpuCommandBufferRelease(commands);
+-    wgpuCommandEncoderRelease(encoder);
++    wgpuComputePassEncoderDispatchWorkgroups(pass, groupsX, groupsY, groupsZ);
++    if (++dispatches_since_submit >= dispatches_per_submit) {
++        flush_commands(context.queue);
++    }
+     if (!pipeline_is_cached) {
+         wgpuComputePipelineRelease(pipeline);
+     }
+ 
+-    return error_scope.wait();
++    return halide_error_code_success;
+ }
+ 
+ WEAK const struct halide_device_interface_t *halide_webgpu_device_interface() {

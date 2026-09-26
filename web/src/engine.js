@@ -897,9 +897,17 @@ class Developer {
       this.module.HEAPF32.set(grid.a, offset + CONFIG.TONE_GRID_A)
       this.module.HEAPF32.set(grid.b, offset + CONFIG.TONE_GRID_B)
     }
-    const pixels = new (bitDepth === 16 ? Uint16Array : Uint8ClampedArray)(
-      destination.width * destination.height * 4,
-    )
+    const PixelArray = bitDepth === 16 ? Uint16Array : Uint8ClampedArray
+    const count = destination.width * destination.height * 4
+    // A single encoded tile that is the whole destination is copied out in one piece below, so
+    // the frame is only allocated, zeroed and assembled row by row when there is more than one.
+    const whole = (tile) =>
+      this.encodedRegion &&
+      this.tiles.length === 1 &&
+      ['x', 'y', 'width', 'height'].every(
+        (k) => tile[k] === destination[k] && tile.region[k] === destination[k],
+      )
+    let pixels = whole(this.tiles[0]) ? null : new PixelArray(count)
     let elapsed = 0
     for (let t = 0; t < this.tiles.length; ++t) {
       if (stale()) return null
@@ -925,7 +933,12 @@ class Developer {
       if (status !== 0) throw new Error(`engine returned ${status}`)
       // Read the heap after the call, not before: the module can grow its memory mid-render,
       // which detaches any view taken earlier.
-      if (this.encodedRegion) {
+      if (!pixels) {
+        const encoded = this.encodedRegion(region, bitDepth)
+        pixels = new PixelArray(
+          encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength),
+        )
+      } else if (this.encodedRegion) {
         copyEncodedTile(
           pixels,
           this.encodedRegion(region, bitDepth),
@@ -1030,6 +1043,9 @@ export class WebgpuDeveloper extends Developer {
   }
 
   freeFrame() {
+    this.module.ccall('fotufilm_wasm_release_inputs', null, [], [])
+    this.module.fotufilmInputAlias = null
+    this.uploadedInput = this.hostInput = null
     if (this.inputPtr) this.module._free(this.inputPtr)
     if (this.outputPtr) this.module._free(this.outputPtr)
     if (this.displayPtr) this.module._free(this.displayPtr)
@@ -1044,7 +1060,30 @@ export class WebgpuDeveloper extends Developer {
   }
 
   decodeRegion(bytes, region) {
+    const holds = (input) =>
+      input?.bytes === bytes &&
+      input.ptr === this.inputPtr &&
+      ['x', 'y', 'width', 'height'].every((k) => input.region[k] === region[k])
+    // A source hands back the same array for the same region while its pixels stand (a prepared
+    // source is never written after it is made). When the last frame left that region on the
+    // device, and the host side still holds it should the kernel need to upload it after all,
+    // develop it from there rather than decode and upload it again.
+    this.inputResident = holds(this.uploadedInput) && holds(this.hostInput)
+    this.decoded = true
+    if (this.inputResident) return
+    this.hostInput = { bytes, ptr: this.inputPtr, region: { ...region } }
     const n = region.width * region.height
+    // Float RGBA is already the kernel's input layout, so the upload reads it in place rather
+    // than through a copy in the heap. The alias stands for the heap region until the next decode
+    // or frame, and is written there only if something else reads it; see fotufilm_wasm.cpp.
+    if (bytes instanceof Float32Array && bytes.length >= n * 4) {
+      this.module.fotufilmInputAlias = {
+        ptr: this.inputPtr,
+        bytes: new Uint8Array(bytes.buffer, bytes.byteOffset, n * 16),
+      }
+      return
+    }
+    this.module.fotufilmInputAlias = null
     decodeInto(
       this.module.HEAPF32.subarray(
         this.inputPtr / 4,
@@ -1058,6 +1097,15 @@ export class WebgpuDeveloper extends Developer {
   }
 
   run(region, delivery) {
+    // The kernel checks the kept input is the one this region uploaded before it reads it.
+    if (this.inputResident)
+      this.module.ccall('fotufilm_wasm_reuse_input', null, [], [])
+    this.inputResident = false
+    // What the device holds after this frame: the decoded region. A frame dropped between decode
+    // and run leaves it unchanged; after a run with no decode, which uploads whatever the host
+    // side holds, it is unknown.
+    this.uploadedInput = this.decoded ? this.hostInput : null
+    this.decoded = false
     const args = [
       this.inputPtr,
       this.outputPtr,
