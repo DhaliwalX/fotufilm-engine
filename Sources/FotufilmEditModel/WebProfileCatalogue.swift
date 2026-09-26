@@ -47,6 +47,9 @@ public enum WebProfileCatalogue {
         let choices: [String: [ControlsManifest.Choice]]
         let media: [String: Medium]
         let filterHalos: [String: EditorLensFilters.DiffusionPreview]
+        /// A negative's predicted clear base, for suggesting films from a scan
+        /// (`NegativeFilmSuggestions`). Absent for films with no negative.
+        let filmBase: [Float]?
     }
 
     public static func data(_ definitions: [String: FilmStockDefinition]) throws -> Data {
@@ -76,7 +79,9 @@ public enum WebProfileCatalogue {
                 nativeFormat: definition.nativeFormatID ?? FilmFormat.houseDefaultID,
                 scales: scales,
                 choices: ["shutter": choices(.shutter, stock: stock, paper: .default)!.map(encodedChoice)],
-                media: media, filterHalos: EditorLensFilters.previews(for: stock))
+                media: media, filterHalos: EditorLensFilters.previews(for: stock),
+                filmBase: stock.isReversal || stock.isReflectionPrint ? nil
+                    : { let b = NegativeFilmSuggestions.base(of: stock); return [b.x, b.y, b.z] }())
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]

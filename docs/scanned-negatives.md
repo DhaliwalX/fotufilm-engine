@@ -115,6 +115,29 @@ The check requires actual WebGPU, compares linear output before display encoding
 and checks 16-bit Display P3 delivery through the background worker. References and
 build output stay in the ignored build directory.
 
+## Film suggestions
+
+`NegativeFilmSuggestions` ranks the installed negative films a scan could be, from the colour of
+its clear film base. Each film's base is predicted from its spectral model as a colorimetric scan
+white-balanced on its light source records it. `read(preview:)` finds the base in a linear
+Rec.2020 preview as the thinnest density plateau. When a neutral light shows past the film's edge
+with an orange base under it, the base is read against that light. `suggest(_:)` fits each scan's
+colour saturation, since cameras record the mask about 1.25 times as saturated as colorimetry
+predicts, and returns suggestions with a likelihood share.
+
+A light frame of the bare light source, captured like the scan, also fixes the base's overall
+density. Only then can black-and-white films, whose bases differ only in density, be told apart.
+Films with the same predicted base are suggested together. Suggestions are a starting point:
+fading, fog, processing and a scanner's own channel response move a real base as far as films of
+one family sit apart. A scan white-balanced on the film border shows no mask and reads as
+black-and-white film. Tone-mapped JPEG or PNG captures distort the base's colour; use raw or
+linear captures.
+
+```sh
+swift run -c release fotufilm --suggest-film scan.dng [--light-frame light.dng]
+swift run -c release fotufilm --list-film-bases
+```
+
 ## Mac app import
 
 Choose **File → Import Scanned Negative…** and open an unconverted negative with

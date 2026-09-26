@@ -48,7 +48,8 @@
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 4px 20px;
   }
-  .negative-import-status {
+  .negative-import-status,
+  .negative-import-films {
     font-size: 12px;
     opacity: 0.75;
   }

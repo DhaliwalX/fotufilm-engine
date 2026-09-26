@@ -7,7 +7,9 @@ const pending = new Map(),
 
 export function loadFilmProfile(request, onProgress = () => {}) {
   // Image analyses are one-shot; do not retain multi-megabyte scan data as cache keys.
-  const key = request.kind === "negative-auto" ? null : JSON.stringify(request);
+  const key = ["negative-auto", "negative-film"].includes(request.kind)
+    ? null
+    : JSON.stringify(request);
   if (cache.has(key)) {
     const entry = cache.get(key);
     cache.delete(key);

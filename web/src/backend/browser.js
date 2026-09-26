@@ -4,7 +4,11 @@ import { prepareEditor } from "./browser-prepare.js";
 import { importMedia } from "./browser-import.js";
 import { exportImage, exportVideo } from "./browser-export.js";
 import { createHistogram } from "./browser-histogram.js";
-import { analyseNegative, convertNegative } from "../negative-conversion.js";
+import {
+  analyseNegative,
+  convertNegative,
+  suggestNegativeFilms,
+} from "../negative-conversion.js";
 import { attachLinearPreview } from "../linear-preview.js";
 import { solveAutoAdjustment } from "./browser-auto-adjustment.js";
 import { loadPrintFrame } from "./browser-print-frame.js";
@@ -25,6 +29,7 @@ export function createBrowserBackend() {
     analyseNegative,
     convertNegative,
     negativeContrast: true,
+    suggestNegativeFilms,
     makePreview: attachLinearPreview,
     createHistogram,
     autoAdjust: solveAutoAdjustment,

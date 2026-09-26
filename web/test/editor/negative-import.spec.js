@@ -178,6 +178,9 @@ test("negative adjustments update the positive live and carry into the imported 
     name: "Converted positive preview",
   });
   await expect(positive).toBeVisible();
+  await expect(
+    dialog.getByText(/^The film base looks like .+\.$/),
+  ).toBeVisible();
   const pixels = () =>
     positive.evaluate((canvas) =>
       Array.from(

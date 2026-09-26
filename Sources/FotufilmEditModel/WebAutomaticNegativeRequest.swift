@@ -19,18 +19,11 @@ public struct WebAutomaticNegativeRequest: Decodable {
         }
         let planes: [[Float]]
         if let samples {
-            let count = width * height
-            guard self.planes == nil, samples.count == count * 3 * 4 else {
+            guard self.planes == nil,
+                  let unpacked = Self.planes(samples, count: width * height) else {
                 throw AutomaticNegativeScan.Failure.invalidImage
             }
-            planes = samples.withUnsafeBytes { bytes in
-                (0..<3).map { channel in
-                    (0..<count).map { index in
-                        let bits = bytes.loadUnaligned(fromByteOffset: (channel * count + index) * 4, as: UInt32.self)
-                        return Float(bitPattern: UInt32(littleEndian: bits))
-                    }
-                }
-            }
+            planes = unpacked
         } else {
             guard let supplied = self.planes, supplied.count == 3,
                   supplied.allSatisfy({ $0.count == width * height }) else {
@@ -46,5 +39,18 @@ public struct WebAutomaticNegativeRequest: Decodable {
             }
         }
         return try JSONEncoder().encode(AutomaticNegativeScan(preview: preview, monochrome: monochrome))
+    }
+
+    /// Three planes of `count` little-endian float32 samples, or nil when the size disagrees.
+    static func planes(_ samples: Data, count: Int) -> [[Float]]? {
+        guard samples.count == count * 3 * 4 else { return nil }
+        return samples.withUnsafeBytes { bytes in
+            (0..<3).map { channel in
+                (0..<count).map { index in
+                    let bits = bytes.loadUnaligned(fromByteOffset: (channel * count + index) * 4, as: UInt32.self)
+                    return Float(bitPattern: UInt32(littleEndian: bits))
+                }
+            }
+        }
     }
 }

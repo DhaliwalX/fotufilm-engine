@@ -14,6 +14,10 @@ import {
   isColourAdjustment,
 } from "./negative-live-preview.js";
 import { useLivePositive } from "./useNegativePreview.js";
+import {
+  useNegativeFilmSuggestions,
+  suggestionName,
+} from "./useNegativeFilmSuggestions.js";
 import "./negative-import.css";
 
 // The dialog owns every provisional image, URL and conversion. Only a completed
@@ -38,6 +42,7 @@ export default function NegativeImportDialog({ onClose, model }) {
     if (!file) setSettings(defaultNegativeSettings());
   }, [file]);
   const positive = useLivePositive(model, settings);
+  const suggestions = useNegativeFilmSuggestions(decoded);
   // One stable handler for every slider lets an unchanged slider skip re-rendering.
   const setValue = useCallback(
     (key, value) =>
@@ -124,6 +129,7 @@ export default function NegativeImportDialog({ onClose, model }) {
             disabled={!plan || busy}
             onChange={setValue}
           />
+          <FilmSuggestions suggestions={suggestions} />
           <p className="negative-import-status" role="status">
             {status}
           </p>
@@ -147,6 +153,19 @@ export default function NegativeImportDialog({ onClose, model }) {
         </div>
       </Content>
     </Dialog>
+  );
+}
+
+// A starting point for choosing the film, not an identification.
+function FilmSuggestions({ suggestions }) {
+  if (!suggestions.length) return null;
+  const names = suggestions.map(suggestionName);
+  const list =
+    names.length > 1
+      ? `${names.slice(0, -1).join(", ")} or ${names.at(-1)}`
+      : names[0];
+  return (
+    <p className="negative-import-films">The film base looks like {list}.</p>
   );
 }
 

@@ -7,6 +7,7 @@ import { loadFilmProfile } from "./film-profile.js";
 import { defaultEdit } from "./editor-state.js";
 import { rawSource } from "./raw-source.js";
 import { LinearImage } from "./linear-image.js";
+import { loadStockIndex } from "./stock-index.js";
 
 // Previews read one resampled copy of the scan. Resampling a large photo decodes
 // all of it, so each analysis and preview conversion would otherwise pay for that.
@@ -26,13 +27,17 @@ function previewScan(image) {
   return scan;
 }
 
-export async function analyseNegative(image, monochrome = false, onProgress) {
+// The native analyses read one 512-pixel copy of the scan, packed as planar
+// little-endian float32: that keeps a full 512² preview under the WASI request
+// limit without rounding transmission values.
+const analysisPreviews = new WeakMap();
+function analysisPreview(image) {
+  let preview = analysisPreviews.get(image);
+  if (preview) return preview;
   const source = rawSource(previewScan(image), defaultEdit(), 512);
   if (source.width < 2 || source.height < 2)
     throw new Error("The negative is too small to analyse.");
   const pixels = source.read(0, 0, source.width, source.height);
-  // Packed little-endian float32 keeps a full 512² analysis under the WASI
-  // request limit without rounding transmission values or shrinking the preview.
   const count = source.width * source.height;
   const packed = new Uint8Array(count * 3 * 4);
   const view = new DataView(packed.buffer);
@@ -42,19 +47,58 @@ export async function analyseNegative(image, monochrome = false, onProgress) {
   const chunks = [];
   for (let i = 0; i < packed.length; i += 16384)
     chunks.push(String.fromCharCode(...packed.subarray(i, i + 16384)));
-  const samples = btoa(chunks.join(""));
+  preview = {
+    width: source.width,
+    height: source.height,
+    samples: btoa(chunks.join("")),
+  };
+  analysisPreviews.set(image, preview);
+  return preview;
+}
+
+export async function analyseNegative(image, monochrome = false, onProgress) {
   const bytes = await loadFilmProfile(
     {
       kind: "negative-auto",
-      width: source.width,
-      height: source.height,
-      samples,
+      ...analysisPreview(image),
       monochrome,
       rec2020: true,
     },
     onProgress,
   );
   return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+// The installed negatives and their predicted clear bases, read once.
+let negativeFilms = null;
+function loadNegativeFilms() {
+  negativeFilms ??= loadStockIndex().then((stocks) =>
+    stocks
+      .filter((stock) => stock.profile.filmBase)
+      .map(({ id, name, profile }) => ({ id, name, base: profile.filmBase })),
+  );
+  return negativeFilms.catch((error) => {
+    negativeFilms = null;
+    throw error;
+  });
+}
+
+// The installed films whose clear base the scan's looks like, most likely first.
+export async function suggestNegativeFilms(image) {
+  const films = await loadNegativeFilms();
+  if (!films.length) return [];
+  const bytes = await loadFilmProfile({
+    kind: "negative-film",
+    ...analysisPreview(image),
+    films,
+  });
+  const names = new Map(films.map((film) => [film.id, film.name]));
+  return JSON.parse(new TextDecoder().decode(bytes)).suggestions.map(
+    (suggestion) => ({
+      films: suggestion.films.map((id) => ({ id, name: names.get(id) })),
+      likelihood: suggestion.likelihood,
+    }),
+  );
 }
 
 // The inverse sigmoid's slope at mid-grey, scaled by 2^contrast from the plan's.

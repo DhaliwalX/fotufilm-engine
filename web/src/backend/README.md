@@ -40,6 +40,7 @@ events and cancellation messages, rather than attempting to serialize functions.
 | `releaseImage(image)` | Release the caller's image lease, including video resources. Idempotent, non-throwing, safe while previously submitted work completes. |
 | `analyseNegative(image, monochrome, onProgress?)` | Return the negative-conversion plan, including `weak`. The plan is otherwise opaque to the UI. |
 | `convertNegative(image, plan, options)` | Options `{signal, maxEdge?, contrast?, onProgress({progress})}`. Return `{image, backend}` with a **new owned image**, preserving full source precision. `contrast` is stops of mid-grey slope from the plan's automatic contrast (0 keeps it); honour it only when the backend sets `negativeContrast: true`. |
+| `suggestNegativeFilms(image)` | Optional. Return up to three `{films: [{id, name}], likelihood}` for the installed films whose clear base the scan's looks like, most likely first; films a scan cannot tell apart share one entry. Suggestions, not an identification. |
 | `makePreview(image, options)` | Decorate that same owned image with `src`; return `{image, url}`. Do not create a second image lease. |
 | `createHistogram()` | `{analyse(renderResult, {signal}), dispose()}`. Return the histogram schema below. |
 | `autoAdjust(request)` | `{image, edit, session, signal, onProgress(text)}` → `{ev, highlights, shadows}`. |
