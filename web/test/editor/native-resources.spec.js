@@ -33,7 +33,9 @@ test("negative dialog releases provisional native images and transfers an accept
       mimeType: "image/png",
       buffer: Buffer.from(bytes),
     });
-    await expect(page.getByAltText("Converted positive preview")).toBeVisible();
+    await expect(
+      page.getByRole("img", { name: "Converted positive preview" }),
+    ).toBeVisible();
   }
   await openNegative();
   await expect

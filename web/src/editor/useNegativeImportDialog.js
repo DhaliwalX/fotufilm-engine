@@ -1,5 +1,5 @@
 import { useEditor } from "./EditorContext.jsx";
-import { defaultEdit } from "../editor-state.js";
+import { negativeEdit } from "../negative-live-preview.js";
 import useNegativeImport from "../useNegativeImport.js";
 
 export function useNegativeImportDialog() {
@@ -19,19 +19,24 @@ export function useNegativeImportDialog() {
     setDifference,
     setVideoTime,
     setInspector,
+    session,
   } = useEditor();
-  return useNegativeImport((file) => {
-    urls.current.add(file.url);
-    imageResources.current.add(file.image);
-    if (activeId) histories.current.set(activeId, history);
-    setFiles((current) => [...current, file]);
-    setActiveId(file.id);
-    dispatch({ type: "load", edit: defaultEdit(null) });
-    replaceResult(null);
-    setStage(null);
-    setDifference(false);
-    setVideoTime(0);
-    setDialog(null);
-    setInspector("crop");
-  }, dialog === "negative");
+  return useNegativeImport(
+    (file, settings) => {
+      urls.current.add(file.url);
+      imageResources.current.add(file.image);
+      if (activeId) histories.current.set(activeId, history);
+      setFiles((current) => [...current, file]);
+      setActiveId(file.id);
+      dispatch({ type: "load", edit: negativeEdit(settings) });
+      replaceResult(null);
+      setStage(null);
+      setDifference(false);
+      setVideoTime(0);
+      setDialog(null);
+      setInspector("crop");
+    },
+    dialog === "negative",
+    session,
+  );
 }

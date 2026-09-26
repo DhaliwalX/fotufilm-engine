@@ -34,12 +34,17 @@ struct NegativeScanPipeline {
         output.bound(c, 0, 3);
         parameters.dim(0).set_bounds(0, 8);
         input.dim(2).set_bounds(0, 3);
+        // Each output channel of the Rec.2020 road mixes all three positive channels,
+        // so compute them once per pixel rather than once per output channel.
+        positive.bound(c, 0, 3);
         if (device != DeviceAPI::None) {
             Var bx, by, tx, ty;
             output.reorder(c, x, y).unroll(c)
                 .gpu_tile(x, y, bx, by, tx, ty, 16, 8, TailStrategy::GuardWithIf, device);
+            positive.compute_at(output, tx).reorder(c, x, y).unroll(c);
         } else {
             output.reorder(x, c, y).vectorize(x, 8, TailStrategy::GuardWithIf).parallel(y);
+            positive.compute_at(output, y).reorder(x, c, y).vectorize(x, 8, TailStrategy::GuardWithIf);
         }
     }
 };

@@ -8,8 +8,26 @@ import { defaultEdit } from "./editor-state.js";
 import { rawSource } from "./raw-source.js";
 import { LinearImage } from "./linear-image.js";
 
+// Previews read one resampled copy of the scan. Resampling a large photo decodes
+// all of it, so each analysis and preview conversion would otherwise pay for that.
+const PREVIEW_EDGE = 1200;
+const previewScans = new WeakMap();
+function previewScan(image) {
+  let scan = previewScans.get(image);
+  if (!scan) {
+    const source = rawSource(image, defaultEdit(), PREVIEW_EDGE);
+    scan = new LinearImage({
+      pixels: source.read(0, 0, source.width, source.height),
+      width: source.width,
+      height: source.height,
+    });
+    previewScans.set(image, scan);
+  }
+  return scan;
+}
+
 export async function analyseNegative(image, monochrome = false, onProgress) {
-  const source = rawSource(image, defaultEdit(), 512);
+  const source = rawSource(previewScan(image), defaultEdit(), 512);
   if (source.width < 2 || source.height < 2)
     throw new Error("The negative is too small to analyse.");
   const pixels = source.read(0, 0, source.width, source.height);
@@ -39,10 +57,24 @@ export async function analyseNegative(image, monochrome = false, onProgress) {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
+// The inverse sigmoid's slope at mid-grey, scaled by 2^contrast from the plan's.
+const CONTRAST_PARAMETER = 6;
+function planParameters(plan, contrast) {
+  const parameters = [...plan.parameters];
+  parameters[CONTRAST_PARAMETER] *= 2 ** contrast;
+  return parameters;
+}
+
 export function convertNegative(
   image,
   plan,
-  { signal, maxEdge = Infinity, preferGpu = true, onProgress = () => {} } = {},
+  {
+    signal,
+    maxEdge = Infinity,
+    contrast = 0,
+    preferGpu = true,
+    onProgress = () => {},
+  } = {},
 ) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted)
@@ -53,7 +85,8 @@ export function convertNegative(
       !plan.parameters.every(Number.isFinite)
     )
       return reject(new Error("Invalid negative conversion settings."));
-    const source = rawSource(image, defaultEdit(), maxEdge);
+    const input = maxEdge <= PREVIEW_EDGE ? previewScan(image) : image;
+    const source = rawSource(input, defaultEdit(), maxEdge);
     if (source.width * source.height > 120000000)
       return reject(
         new Error("Images above 120 megapixels are not supported."),
@@ -119,7 +152,7 @@ export function convertNegative(
       kind: "convert",
       width: source.width,
       height: source.height,
-      parameters: plan.parameters,
+      parameters: planParameters(plan, contrast),
       preferGpu,
       base: assetUrl("negative/"),
     });

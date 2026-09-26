@@ -15,6 +15,10 @@ export function createImageScope(backend) {
       else urls.add(url);
       return image;
     },
+    // Releases a superseded provisional image before the scope closes.
+    release(image) {
+      if (images.delete(image)) backend.releaseImage(image);
+    },
     transfer(image, url) {
       images.delete(image);
       urls.delete(url);

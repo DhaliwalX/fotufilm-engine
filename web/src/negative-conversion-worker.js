@@ -78,10 +78,13 @@ self.onmessage = async ({ data }) => {
               waiting.set(id, { resolve, reject });
               self.postMessage({ kind: "read", id, x, y, width: w, height: h });
             });
+        // The heap view is replaced when WASM memory grows, so take it per pass.
         const upload = () => {
+          const heap = runtime.HEAPF32,
+            start = input / 4;
           for (let c = 0; c < 3; c++)
             for (let i = 0; i < count; i++)
-              runtime.HEAPF32[input / 4 + c * count + i] = pixels[i * 4 + c];
+              heap[start + c * count + i] = pixels[i * 4 + c];
         };
         upload();
         let code;
@@ -112,13 +115,14 @@ self.onmessage = async ({ data }) => {
           );
         }
         if (code) throw new Error(`Negative conversion failed (${code}).`);
+        const heap = runtime.HEAPF32,
+          start = output / 4;
         for (let row = 0; row < h; row++)
           for (let col = 0; col < w; col++) {
             const i = row * w + col,
               destination = ((y + row) * data.width + x + col) * 4;
             for (let c = 0; c < 3; c++)
-              result[destination + c] =
-                runtime.HEAPF32[output / 4 + c * count + i];
+              result[destination + c] = heap[start + c * count + i];
             result[destination + 3] = 1;
           }
       }

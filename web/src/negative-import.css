@@ -35,12 +35,18 @@
     overflow: hidden;
     border-radius: 8px;
   }
-  .negative-import-preview img {
+  .negative-import-preview img,
+  .negative-import-preview canvas {
     width: 100%;
     height: 100%;
     object-fit: contain;
     min-height: 0;
     animation: negative-preview-in 180ms ease-out;
+  }
+  .negative-import-adjustments {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 4px 20px;
   }
   .negative-import-status {
     font-size: 12px;
@@ -58,7 +64,8 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .negative-import-preview img {
+    .negative-import-preview img,
+  .negative-import-preview canvas {
       animation: none;
     }
   }
