@@ -1,18 +1,13 @@
+import { openEditor, openEditorWithChart } from "./photo-fixture.js";
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { test, expect } from "@playwright/test";
-const ready = async (page) => {
-  await page.goto("/");
-  await expect(page.locator(".viewer-status > [role=status]")).toContainText(
-    /\d+ × \d+/,
-  );
-};
 
 test("all frame materials and placements agree with native, preserving every photo pixel", async ({
   page,
 }, testInfo) => {
-  await ready(page);
+  await openEditor(page);
   const gallery = [];
   const frames = [
     "none",
@@ -142,7 +137,7 @@ test("all frame materials and placements agree with native, preserving every pho
 test("film framing develops the actual negative, while crop mode and video remain unframed", async ({
   page,
 }) => {
-  await ready(page);
+  await openEditor(page);
   const actual = await page.evaluate(async () => {
     const { defaultEdit } = await import("/src/editor-state.js");
     const { RenderSession } = await import("/src/render-session.js");
@@ -231,7 +226,7 @@ test("frame picker is undoable, saves its choice, exports the displayed dimensio
 }, testInfo) => {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await ready(page);
+  await openEditorWithChart(page);
   await page.getByRole("tab", { name: "Print", exact: true }).click();
   const picker = page.getByRole("combobox", { name: "Frame", exact: true });
   await expect(picker).toBeEnabled();
@@ -284,7 +279,7 @@ test("frame picker is undoable, saves its choice, exports the displayed dimensio
 test("physical perforations stay on the film edges through every gauge and portrait rotation", async ({
   page,
 }) => {
-  await ready(page);
+  await openEditor(page);
   const results = await page.evaluate(async () => {
     const { defaultEdit } = await import("/src/editor-state.js");
     const { loadPrintFrame } = await import("/src/backend/browser-print-frame.js");

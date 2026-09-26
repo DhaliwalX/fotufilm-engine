@@ -1,12 +1,10 @@
+import { openEditor } from "./photo-fixture.js";
 import { test, expect } from "@playwright/test";
 
 test("large background development stays responsive and discards superseded detail", async ({
   page,
 }) => {
-  await page.goto("/");
-  await expect(page.locator(".viewer-status > [role=status]")).toContainText(
-    /\d+ × \d+/,
-  );
+  await openEditor(page);
   const report = await page.evaluate(async () => {
     const { createBackgroundDeveloper } = await import(
       "/src/background-developer.js"
