@@ -77,6 +77,30 @@
   <true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key>
   <true/>
+  <!-- The Mac app's Finder service (macos/FotufilmApp/Info.plist), named for this app. -->
+  <key>NSServices</key>
+  <array>
+    <dict>
+      <key>NSMenuItem</key>
+      <dict>
+        <key>default</key>
+        <string>Open in ${PRODUCT_NAME}</string>
+      </dict>
+      <key>NSMessage</key>
+      <string>openInFotufilm</string>
+      <key>NSPortName</key>
+      <string>${PRODUCT_NAME}</string>
+      <key>NSSendFileTypes</key>
+      <array>
+        <string>public.image</string>
+        <string>public.movie</string>
+      </array>
+      <key>NSRequiredContext</key>
+      <dict/>
+      <key>NSServiceDescription</key>
+      <string>Open the selected photos or videos in ${PRODUCT_NAME}.</string>
+    </dict>
+  </array>
   <key>NSPrincipalClass</key>
   <string>FotufilmApplication</string>
 </dict>

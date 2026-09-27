@@ -79,6 +79,27 @@ NSMutableArray<NSURL*>* g_pending_urls = [NSMutableArray array];
   [self openURLs:urls];
 }
 
+// Finder › Services › Open in Fotufilm Desktop (NSServices in Info.plist), as the Mac app's
+// FinderServiceProvider answers it; several files open together here.
+- (void)openInFotufilm:(NSPasteboard*)pasteboard
+              userData:(NSString*)userData
+                 error:(NSString**)error {
+  NSArray<NSURL*>* urls = [pasteboard readObjectsForClasses:@[ NSURL.class ]
+                                                    options:@{
+                                                      NSPasteboardURLReadingFileURLsOnlyKey : @YES,
+                                                      NSPasteboardURLReadingContentsConformToTypesKey :
+                                                          @[ UTTypeImage.identifier, UTTypeMovie.identifier ],
+                                                    }];
+  if (!urls.count) {
+    if (error) *error = @"Choose a photo or video to open in Fotufilm.";
+    return;
+  }
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [self openURLs:urls];
+    [NSApp activateIgnoringOtherApps:YES];
+  });
+}
+
 - (void)openDocument:(id)sender {
   NSOpenPanel* panel = [NSOpenPanel openPanel];
   panel.allowedContentTypes = @[ UTTypeImage, UTTypeMovie ];
@@ -180,6 +201,7 @@ int main(int argc, char* argv[]) {
     [FotufilmApplication sharedApplication];
     FotufilmAppDelegate* delegate = [FotufilmAppDelegate new];
     NSApp.delegate = delegate;
+    NSApp.servicesProvider = delegate;
     // The View menu carries Enter Full Screen itself; AppKit would add a second.
     [NSUserDefaults.standardUserDefaults registerDefaults:@{@"NSFullScreenMenuItemEverywhere" : @NO}];
     std::string capabilities;
