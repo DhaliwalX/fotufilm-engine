@@ -17,6 +17,9 @@ export const APP_SETTINGS = Object.freeze({
   photoHDR: false,
   // Whether an HEVC or ProRes movie exports as HDR (HLG) where the film delivers it.
   videoHDR: false,
+  // Video File Size: what a native movie export may spend per pixel (the backend's
+  // `videoBitrates`; "automatic" leaves it to the encoder).
+  videoBitrate: "automatic",
   // Photo Quality: exports evaluate the film exactly ("accurate") or approximately ("fast").
   photoQuality: "accurate",
   // The settings of the last photo and movie exported, for Use Last Export Settings.
@@ -37,14 +40,23 @@ function storage() {
   }
 }
 
+// The value last read for each key, by its stored text: an object setting reads back as the same
+// object until it changes, as useSyncExternalStore requires of a snapshot.
+const parsed = new Map();
+
 export function appSetting(key) {
   const stored = storage()?.getItem(PREFIX + key);
   if (stored == null) return APP_SETTINGS[key];
+  const cached = parsed.get(key);
+  if (cached?.stored === stored) return cached.value;
+  let value;
   try {
-    return JSON.parse(stored);
+    value = JSON.parse(stored);
   } catch {
     return APP_SETTINGS[key];
   }
+  parsed.set(key, { stored, value });
+  return value;
 }
 
 export function setAppSetting(key, value) {

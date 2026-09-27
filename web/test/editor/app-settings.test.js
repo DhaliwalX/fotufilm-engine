@@ -50,3 +50,13 @@ test("the film model settings seed a new photograph's edit, and reset clears the
     assert.equal(appSetting("grainModel"), "clump");
     assert.equal(newPhotoEdit(defaultEdit("gold200")).format, null);
   }));
+
+test("an object setting reads back as the same object until it changes", () =>
+  withStorage(() => {
+    setAppSetting("lastVideoExport", { format: "mp4", frameRate: 24 });
+    const first = appSetting("lastVideoExport");
+    assert.equal(appSetting("lastVideoExport"), first);
+    setAppSetting("lastVideoExport", { format: "mp4", frameRate: 30 });
+    assert.notEqual(appSetting("lastVideoExport"), first);
+    assert.equal(appSetting("lastVideoExport").frameRate, 30);
+  }));
