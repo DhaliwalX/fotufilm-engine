@@ -37,12 +37,26 @@ const COMMANDS = {
   showOriginal: (e) => e.setCompare((shown) => !shown),
   histogram: (e) => e.setHistogram((shown) => !shown),
   showNegative: (e) => e.setShowNegative((shown) => !shown),
+  estimatedHalation: (e) =>
+    e.setProfile("estimatedHalation", e.edit.profile?.estimatedHalation !== true),
   filmSidebar: (e) => e.toggleFilms(),
   inspector: (e) => e.toggleInspector(),
   ...Object.fromEntries(
     MENU_PANELS.map((id) => [`panel:${id}`, (e) => e.setInspector(id)]),
   ),
 };
+
+// Commands with an argument: Film › Choose Film ("film:<id>", "film:none") and Film › Grain Model
+// ("grainModel:<id>").
+function commandFor(command) {
+  if (COMMANDS[command]) return COMMANDS[command];
+  const [kind, value] = String(command).split(":");
+  if (kind === "film" && value)
+    return (e) => e.selectStock(value === "none" ? null : value);
+  if (kind === "grainModel" && value)
+    return (e) => e.setProfile("grainModel", value);
+  return null;
+}
 
 // Which commands apply now and which are ticked, by the rules the toolbars use.
 export function menuState(e) {
@@ -88,12 +102,25 @@ export function menuState(e) {
     inspector: !!e.inspectorOpen,
   };
   if (e.inspectorOpen) checked[`panel:${e.panel}`] = true;
-  return { enabled, checked };
+
+  // The film list, and the film model of the one loaded, where its settings are not fixed.
+  const films = [["film:none", "Normal"], ...e.stocks.map(({ id, name }) => [`film:${id}`, name])];
+  for (const [command] of films) enabled[command] = photo;
+  checked[`film:${e.edit?.stock ?? "none"}`] = true;
+  const modelled = photo && !!e.edit?.stock && !e.fixedSettings;
+  const grainModel = e.edit?.profile?.grainModel ?? "clump";
+  for (const model of ["clump", "film"]) {
+    enabled[`grainModel:${model}`] = modelled;
+    checked[`grainModel:${model}`] = modelled && grainModel === model;
+  }
+  enabled.estimatedHalation = modelled && e.edit.halationModel !== "layered";
+  checked.estimatedHalation = modelled && e.edit.profile?.estimatedHalation === true;
+  return { enabled, checked, menus: { films } };
 }
 
 // Runs a menu command if it still applies; the host's copy of the state may be a frame old.
 export function runCommand(editor, command) {
-  const run = COMMANDS[command];
+  const run = commandFor(command);
   if (!run || !menuState(editor).enabled[command]) return false;
   run(editor);
   return true;

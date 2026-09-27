@@ -102,3 +102,35 @@ test("ticks follow the toolbar toggles and the open tab", () => {
     "crop",
   ]);
 });
+
+test("Choose Film, Grain Model and Estimated Halation run on the loaded film", () => {
+  const e = editor({
+    stocks: [{ id: "gold200", name: "Gold 200" }, { id: "portra400", name: "Portra 400" }],
+    edit: { stock: "gold200", profile: {}, halationModel: "legacy" },
+    selectStock: (id) => e.calls.push(["stock", id]),
+    setProfile: (key, value) => e.calls.push(["profile", key, value]),
+  });
+  const state = menuState(e);
+  assert.deepEqual(state.menus.films.map(([command]) => command), [
+    "film:none",
+    "film:gold200",
+    "film:portra400",
+  ]);
+  assert.equal(state.checked["film:gold200"], true);
+  assert.equal(state.checked["grainModel:clump"], true);
+  assert.equal(state.checked.estimatedHalation, false);
+  assert.equal(runCommand(e, "film:portra400"), true);
+  assert.equal(runCommand(e, "film:none"), true);
+  assert.equal(runCommand(e, "grainModel:film"), true);
+  assert.equal(runCommand(e, "estimatedHalation"), true);
+  assert.deepEqual(e.calls, [
+    ["stock", "portra400"],
+    ["stock", null],
+    ["profile", "grainModel", "film"],
+    ["profile", "estimatedHalation", true],
+  ]);
+  // Layered transport has no estimated shape; a fixed profile has no film model to change.
+  const layered = menuState({ ...e, edit: { ...e.edit, halationModel: "layered" } });
+  assert.equal(layered.enabled.estimatedHalation, false);
+  assert.equal(menuState({ ...e, fixedSettings: true }).enabled["grainModel:film"], false);
+});

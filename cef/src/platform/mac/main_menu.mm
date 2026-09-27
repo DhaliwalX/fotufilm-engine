@@ -94,8 +94,33 @@ static const NSUInteger kRecentLimit = 10;
 
 @end
 
+// A submenu the editor fills (Film › Choose Film), built as it is pulled down from the list the
+// focused window's editor last reported.
+@interface FotufilmEditorListMenu : NSObject <NSMenuDelegate>
+@property(nonatomic, copy) NSString* list;
+@end
+
+@implementation FotufilmEditorListMenu
+
+- (void)menuNeedsUpdate:(NSMenu*)menu {
+  [menu removeAllItems];
+  id target = [NSApp targetForAction:@selector(editorMenuItems:)];
+  NSArray<NSArray<NSString*>*>* items =
+      [target respondsToSelector:@selector(editorMenuItems:)] ? [target editorMenuItems:self.list]
+                                                              : @[];
+  for (NSArray<NSString*>* item in items) Command(menu, item[1], item[0]);
+  if (!items.count) [menu addItemWithTitle:@"No Films" action:nil keyEquivalent:@""].enabled = NO;
+}
+
+@end
+
 NSMenu* FotufilmMainMenu() {
   static FotufilmRecentMenu* recent = [FotufilmRecentMenu new];
+  static FotufilmEditorListMenu* films = [] {
+    FotufilmEditorListMenu* menu = [FotufilmEditorListMenu new];
+    menu.list = @"films";
+    return menu;
+  }();
   NSMenu* bar = [NSMenu new];
 
   NSMenu* app = Submenu(bar, @"Fotufilm");
@@ -139,9 +164,14 @@ NSMenu* FotufilmMainMenu() {
   [edit addItem:[NSMenuItem separatorItem]];
   Command(edit, @"Copy Photo", @"copyPhoto", @"c", kCommand | kShift);
 
-  // The Mac app's grain model, halation and film-list items have no editor action yet.
   NSMenu* film = Submenu(bar, @"Film");
+  Submenu(film, @"Choose Film").delegate = films;
+  [film addItem:[NSMenuItem separatorItem]];
   Command(film, @"New Grain Pattern", @"newGrainPattern", @"g", kCommand | kShift);
+  NSMenu* grain = Submenu(film, @"Grain Model");
+  Command(grain, @"Standard", @"grainModel:clump");
+  Command(grain, @"Film", @"grainModel:film");
+  Command(film, @"Estimated Halation Shape (Advanced)", @"estimatedHalation");
   [film addItem:[NSMenuItem separatorItem]];
   Command(film, @"Choose Film Per Photo", @"autoFilm", @"");
   Command(film, @"Forget What I've Taught It", @"forgetFilms", @"");

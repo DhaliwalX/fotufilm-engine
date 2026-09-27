@@ -464,6 +464,7 @@ class MacView : public fotufilm::ViewDelegate {
   // The editor's commands that apply now and those ticked, as it last reported them.
   std::set<std::string> _enabled;
   std::set<std::string> _checked;
+  NSDictionary<NSString*, NSArray<NSArray<NSString*>*>*>* _menuLists;
   // Files to open once the editor listens for them.
   NSMutableArray<NSString*>* _pendingPaths;
   BOOL _pageListening;
@@ -616,6 +617,25 @@ class MacView : public fotufilm::ViewDelegate {
           strong->_enabled = names(fields->GetDictionary("enabled"));
           strong->_checked = names(fields->GetDictionary("checked"));
           strong->_pageEditsText = fields->GetBool("textInput");
+          // Submenus the editor fills: {"films": [[command, title], …]}.
+          NSMutableDictionary* lists = [NSMutableDictionary dictionary];
+          if (CefRefPtr<CefDictionaryValue> menus = fields->GetDictionary("menus")) {
+            CefDictionaryValue::KeyList keys;
+            menus->GetKeys(keys);
+            for (const CefString& key : keys) {
+              CefRefPtr<CefListValue> list = menus->GetList(key);
+              NSMutableArray* items = [NSMutableArray array];
+              for (size_t i = 0; list && i < list->GetSize(); ++i) {
+                CefRefPtr<CefListValue> pair = list->GetList(i);
+                if (!pair || pair->GetSize() != 2) continue;
+                [items addObject:@[
+                  @(pair->GetString(0).ToString().c_str()), @(pair->GetString(1).ToString().c_str())
+                ]];
+              }
+              lists[@(key.ToString().c_str())] = items;
+            }
+          }
+          strong->_menuLists = lists;
         }
         reply->Resolve(nullptr);
       });
@@ -690,6 +710,10 @@ class MacView : public fotufilm::ViewDelegate {
 
 - (BOOL)commandEnabled:(NSString*)command {
   return _enabled.count(command.UTF8String) > 0;
+}
+
+- (NSArray<NSArray<NSString*>*>*)editorMenuItems:(NSString*)menu {
+  return _menuLists[menu] ?: @[];
 }
 
 - (void)performEditorCommand:(id)sender {

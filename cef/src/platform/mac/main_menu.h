@@ -14,6 +14,8 @@
 - (void)clearRecentFiles:(id)sender;
 // Opens the fotufilm.com page named by the item's representedObject.
 - (void)openHelpPage:(id)sender;
+// The items the editor lists for a submenu it fills itself ("films"), as {command, title} pairs.
+- (NSArray<NSArray<NSString*>*>*)editorMenuItems:(NSString*)menu;
 @end
 
 NSMenu* FotufilmMainMenu();
