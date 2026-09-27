@@ -72,7 +72,7 @@ test("Mac filter stack edits change pixels and survive ordering, undo, save and 
     .click();
   await expect(page.locator(".fitted-filter")).toHaveCount(0);
   await expect.poll(() => pixels(page)).toEqual(before);
-  await page.getByRole("button", { name: "Undo (⌘Z)", exact: true }).click();
+  await page.getByRole("button", { name: /^Undo \(/ }).click();
   await expect(page.locator(".fitted-filter")).toHaveCount(3);
   await page.getByRole("button", { name: "More options", exact: true }).click();
   const saveDownload = page.waitForEvent("download");
@@ -88,7 +88,7 @@ test("Mac filter stack edits change pixels and survive ordering, undo, save and 
       mimeType: "application/json",
       buffer: savedBytes,
     });
-  await page.getByRole("button", { name: "Export (⌘S)", exact: true }).click();
+  await page.getByRole("button", { name: /^Export \(/ }).click();
   const exportDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export", exact: true }).click();
   const png = await readFile(await (await exportDownload).path());

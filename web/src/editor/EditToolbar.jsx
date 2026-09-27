@@ -5,6 +5,7 @@ import { ToggleButton } from "@react-spectrum/s2/ToggleButton";
 import { useEditor } from "./EditorContext.jsx";
 import OptionsMenu from "./OptionsMenu.jsx";
 import { filmNamer, redoTitle, undoTitle } from "../edit-history.js";
+import { shortcutLabel } from "../shortcut-label.js";
 export default function EditToolbar() {
   const {
     toggleInspector,
@@ -45,13 +46,13 @@ export default function EditToolbar() {
             })
           }
           isDisabled={!history.past.length || exporting}
-          aria-label={"Undo (⌘Z)"}
+          aria-label={`Undo (${shortcutLabel("⌘Z")})`}
           size={"S"}
           isQuiet
         >
           <Icon name={"undo"} />
         </ActionButton>
-        <Tooltip>{`${undoTitle(history, filmName)} (⌘Z)`}</Tooltip>
+        <Tooltip>{`${undoTitle(history, filmName)} (${shortcutLabel("⌘Z")})`}</Tooltip>
       </TooltipTrigger>
       <TooltipTrigger>
         <ActionButton
@@ -61,13 +62,13 @@ export default function EditToolbar() {
             })
           }
           isDisabled={!history.future.length || exporting}
-          aria-label={"Redo (⇧⌘Z)"}
+          aria-label={`Redo (${shortcutLabel("⇧⌘Z")})`}
           size={"S"}
           isQuiet
         >
           <Icon name={"redo"} />
         </ActionButton>
-        <Tooltip>{`${redoTitle(history, filmName)} (⇧⌘Z)`}</Tooltip>
+        <Tooltip>{`${redoTitle(history, filmName)} (${shortcutLabel("⇧⌘Z")})`}</Tooltip>
       </TooltipTrigger>
       <TooltipTrigger>
         <ActionButton
@@ -85,13 +86,13 @@ export default function EditToolbar() {
         <ActionButton
           onPress={() => setDialog("export")}
           isDisabled={!active || !stocks.length || exporting}
-          aria-label={"Export (⌘S)"}
+          aria-label={`Export (${shortcutLabel("⌘S")})`}
           size={"S"}
           isQuiet
         >
           <Icon name={"export"} />
         </ActionButton>
-        <Tooltip>{"Export (⌘S)"}</Tooltip>
+        <Tooltip>{`Export (${shortcutLabel("⌘S")})`}</Tooltip>
       </TooltipTrigger>
       <OptionsMenu />
       <TooltipTrigger>

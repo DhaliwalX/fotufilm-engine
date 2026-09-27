@@ -161,7 +161,7 @@ test("Auto menu and shortcut apply undoable settings, re-solve on film changes a
   await page.keyboard.press("Escape");
   const normalEV = await exposure.inputValue();
   expect(Number(normalEV)).not.toBe(0);
-  await page.getByRole("button", { name: "Undo (⌘Z)", exact: true }).click();
+  await page.getByRole("button", { name: /^Undo \(/ }).click();
   await expect(exposure).toHaveValue("0");
   await exposure.focus();
   await page.keyboard.press("Meta+Shift+A");

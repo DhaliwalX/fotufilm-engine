@@ -232,7 +232,7 @@ test("automatic lens correction keeps full RAW pixels through film, crop and exp
     .click();
   await page.getByRole("option", { name: "1:1", exact: true }).click();
   await page.getByRole("button", { name: "Done", exact: true }).click();
-  await page.getByRole("button", { name: "Export (⌘S)", exact: true }).click();
+  await page.getByRole("button", { name: /^Export \(/ }).click();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export", exact: true }).click();
   const png = await readFile(await (await download).path());

@@ -160,7 +160,7 @@ test("phone edits, undo and menus remain accessible with touch and reduced motio
       ),
     ).toBeGreaterThanOrEqual(40);
     await page.getByRole("button", { name: "Close adjustments" }).tap();
-    await page.getByRole("button", { name: "Undo (⌘Z)", exact: true }).tap();
+    await page.getByRole("button", { name: /^Undo \(/ }).tap();
     await page.getByRole("button", { name: "Expose", exact: true }).tap();
     await expect(exposure).toHaveValue("0");
     await page.getByRole("button", { name: "Close adjustments" }).tap();
@@ -177,7 +177,7 @@ test("phone edits, undo and menus remain accessible with touch and reduced motio
         .getByRole("heading", { name: "Crop", exact: true }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Close adjustments" }).tap();
-    await page.getByRole("button", { name: "Export (⌘S)", exact: true }).tap();
+    await page.getByRole("button", { name: /^Export \(/ }).tap();
     await expect(page.getByRole("dialog")).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth),

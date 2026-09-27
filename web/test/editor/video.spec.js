@@ -370,7 +370,7 @@ test('video UI imports, seeks, changes log encoding, undoes, trims and exports',
   await expect(page.getByRole('listbox')).toHaveCount(0)
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog', {name: 'Video settings', exact: true})).toHaveCount(0)
-  await page.getByRole('button', { name: 'Undo (⌘Z)', exact: true }).click()
+  await page.getByRole('button', { name: /^Undo \(/ }).click()
   await videoSettings.click()
   await expect(encoding).toContainText('Standard')
   await encoding.click()
@@ -399,7 +399,7 @@ test('video UI imports, seeks, changes log encoding, undoes, trims and exports',
   await page.evaluate(() => {
     window.showSaveFilePicker = undefined
   })
-  await page.getByRole('button', { name: 'Export (⌘S)', exact: true }).click()
+  await page.getByRole('button', { name: /^Export \(/ }).click()
   await expect(page.getByRole('dialog', { name: 'Export image' })).toBeVisible()
   await page.getByRole('button', { name: 'Export', exact: true }).click()
   await expect(

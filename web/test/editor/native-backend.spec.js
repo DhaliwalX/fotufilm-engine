@@ -57,7 +57,7 @@ test("same editor uses native handles for preview, histogram, selection, Auto an
     .poll(() => page.evaluate(() => window.nativeCalls.includes("autoAdjust")))
     .toBe(true);
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Export (⌘S)", exact: true }).click();
+  await page.getByRole("button", { name: /^Export \(/ }).click();
   await page
     .getByRole("dialog", { name: "Export image" })
     .getByRole("button", { name: "Export", exact: true })

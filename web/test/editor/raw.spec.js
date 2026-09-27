@@ -80,7 +80,7 @@ test('RAW import, film, exposure, crop and export use the full original', async 
   await page.getByRole('option', { name: '1:1', exact: true }).click()
   await page.getByRole('button', { name: 'Done', exact: true }).click()
   await ready(page)
-  await page.getByRole('button', { name: 'Export (⌘S)', exact: true }).click()
+  await page.getByRole('button', { name: /^Export \(/ }).click()
   const promise = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Export', exact: true }).click()
   const download = await promise,

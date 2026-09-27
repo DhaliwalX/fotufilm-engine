@@ -71,11 +71,11 @@ test('selective edits preview, undo, save, and export without exporting the mask
     .toBeGreaterThan(before[0][0])
   const selected = await pixels()
   expect(selected[1]).toEqual(before[1])
-  await page.getByRole('button', { name: 'Undo (⌘Z)', exact: true }).click()
+  await page.getByRole('button', { name: /^Undo \(/ }).click()
   await expect(
     page.getByRole('textbox', { name: 'Exposure value', exact: true }),
   ).toHaveValue('0')
-  await page.getByRole('button', { name: 'Redo (⇧⌘Z)', exact: true }).click()
+  await page.getByRole('button', { name: /^Redo \(/ }).click()
   await expect(
     page.getByRole('textbox', { name: 'Exposure value', exact: true }),
   ).toHaveValue('1')
@@ -90,7 +90,7 @@ test('selective edits preview, undo, save, and export without exporting the mask
   const edit = JSON.parse(await readFile(await saved.path(), 'utf8')).edit
   expect(edit.selective.params.ev).toBe(1)
   expect(edit.selective.sample).toHaveLength(3)
-  await page.getByRole('button', { name: 'Export (⌘S)', exact: true }).click()
+  await page.getByRole('button', { name: /^Export \(/ }).click()
   const exportPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Export', exact: true }).click()
   const exported = await exportPromise

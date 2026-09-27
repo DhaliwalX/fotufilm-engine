@@ -1,5 +1,6 @@
 import { Dialog, Heading, Content } from "@react-spectrum/s2/Dialog";
 import { editorControl } from "../editor-catalogue.js";
+import { shortcutLabel } from "../shortcut-label.js";
 export default function ShortcutsDialog() {
   return (
     <Dialog aria-label="Keyboard shortcuts" isDismissible size={"M"}>
@@ -7,13 +8,13 @@ export default function ShortcutsDialog() {
       <Content>
         <dl className="shortcuts">
           {[
-            ["Open images", "⌘ / Ctrl O"],
-            ["Export", "⌘ / Ctrl S"],
-            ["Undo", "⌘ / Ctrl Z"],
-            ["Redo", "⇧ ⌘ / Ctrl Z"],
-            [editorControl("autoAdjustment").title, "⇧ ⌘ / Ctrl A"],
+            ["Open images", shortcutLabel("⌘O")],
+            ["Export", shortcutLabel("⌘S")],
+            ["Undo", shortcutLabel("⌘Z")],
+            ["Redo", shortcutLabel("⇧⌘Z")],
+            [editorControl("autoAdjustment").title, shortcutLabel("⇧⌘A")],
             ["Compare photo", "Hold Space"],
-            ["Show negative", "⌥ ⌘ / Ctrl Alt N"],
+            ["Show negative", shortcutLabel("⌥⌘N")],
             ["Video play / pause", "Space / K in viewer"],
             ["Video seek", "← / → or J / L in viewer"],
             ["Mute video preview", "M in viewer"],

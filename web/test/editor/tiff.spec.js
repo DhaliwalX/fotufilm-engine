@@ -13,7 +13,7 @@ test("TIFF download carries 16-bit samples, full dimensions and an ICC profile",
   await page.getByRole("radio", { name: "Expose", exact: true }).click();
   await page.getByRole("textbox", { name: "Exposure value", exact: true }).fill("-0.35");
   await page.getByRole("textbox", { name: "Exposure value", exact: true }).press("Tab");
-  await page.getByRole("button", { name: "Export (⌘S)", exact: true }).click();
+  await page.getByRole("button", { name: /^Export \(/ }).click();
   await page.getByRole("button", { name: /PNG Format/ }).click();
   await page.getByRole("option", { name: "TIFF · 16-bit", exact: true }).click();
   await expect(page.getByLabel("Quality", { exact: true })).toHaveCount(0);

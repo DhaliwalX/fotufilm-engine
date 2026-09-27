@@ -30,7 +30,7 @@ test("Spectrum adjustments retain numeric editing, undo and compare", async ({
   await expect(
     page.getByRole("slider", { name: "Exposure", exact: true }),
   ).toHaveValue("0.5");
-  await page.getByRole("button", { name: "Undo (⌘Z)", exact: true }).click();
+  await page.getByRole("button", { name: /^Undo \(/ }).click();
   await expect(field).toHaveValue("0");
   const compare = page.getByRole("button", {
     name: "Hold to compare with original",
@@ -103,7 +103,7 @@ test("film development, crop and 16-bit export remain available", async ({
   await expect(
     page.getByRole("button", { name: "Top left crop corner" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Export (⌘S)", exact: true }).click();
+  await page.getByRole("button", { name: /^Export \(/ }).click();
   await choose(page, /PNG Format/, "TIFF · 16-bit");
   await expect(
     page.getByRole("dialog", { name: "Export image", exact: true }),
