@@ -33,6 +33,8 @@ public final class HostImage {
     /// Original copies, as the Mac app's does.
     var isRAW = false
     var originalFile: URL?
+    /// The frame the file says its camera exposed, which a gauge nobody picked follows.
+    var sensorFrame: SensorFrame?
     private let lock = NSLock()
     /// The most recent reductions, newest last: an editor asks for one or two sizes at a time.
     private var reductions: [(width: Int, height: Int, rgba: [Float])] = []
@@ -43,6 +45,10 @@ public final class HostImage {
         if contentHeadroom > 1 { descriptor["hdr"] = ["headroom": contentHeadroom] }
         if let video { descriptor["video"] = video.descriptor }
         if let originalFile { descriptor["original"] = ["name": originalFile.lastPathComponent] }
+        // The editor's format picker says what an unpicked gauge follows, as the Mac app's does.
+        if let sensorFrame {
+            descriptor["sensor"] = ["gauge": sensorFrame.gauge.id, "frameSize": sensorFrame.frameSize]
+        }
         return descriptor
     }
 
@@ -251,7 +257,7 @@ public final class HostEngine {
     public func render(_ image: HostImage, request: Data, into target: Target) throws
         -> (width: Int, height: Int) {
         let edit: WebNativeEdit
-        do { edit = try JSONDecoder().decode(WebNativeEdit.self, from: request) }
+        do { edit = try JSONDecoder().decode(WebNativeEdit.self, from: request).following(image.sensorFrame) }
         catch { throw Failure(description: "Unreadable render request: \(error)") }
         let (width, height) = image.renderSize(maxEdge: target.maxEdge)
         let bytesPerPixel = target.format == .rgba8DisplayP3 ? 4 : 16

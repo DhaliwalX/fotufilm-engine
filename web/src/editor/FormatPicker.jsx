@@ -59,7 +59,11 @@ export default function FormatPicker({ disabled, onChange }) {
   const { edit, active, videoTime, backend, session, selectedStock } = useEditor();
   const [detail, setDetail] = useState(true);
   const source = useThumbnailSource({ active, edit, videoTime, backend });
-  const selected = edit.format ?? selectedStock?.nativeFormat;
+  // An unpicked format follows the camera's frame where the file records it, the film's
+  // otherwise, as the engine develops it.
+  const sensor = active?.image.sensor;
+  const selected = edit.format ?? sensor?.gauge ?? selectedStock?.nativeFormat;
+  const followed = FILM_FORMATS.find(({ id }) => id === selected);
   return (
     <div className="format-picker">
       <div className="format-grid">
@@ -81,8 +85,13 @@ export default function FormatPicker({ disabled, onChange }) {
       </Switch>
       {edit.format ? (
         <Button size="S" variant="secondary" isDisabled={disabled} onPress={() => onChange(null)}>
-          Match the Film
+          {sensor ? "Match the Camera" : "Match the Film"}
         </Button>
+      ) : sensor ? (
+        <p className="medium-detail">
+          Following the camera. The camera’s frame size is {sensor.frameSize}.
+          Fotufilm uses the closest film format: {followed?.name}.
+        </p>
       ) : (
         <p className="medium-detail">Following the film.</p>
       )}

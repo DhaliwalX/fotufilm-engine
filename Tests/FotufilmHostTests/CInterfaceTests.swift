@@ -179,7 +179,8 @@ final class CInterfaceTests: XCTestCase {
         XCTAssertTrue(error.map { String(cString: $0) }?.contains("nope") ?? false)
     }
 
-    private func writeRamp(to url: URL, width: Int, height: Int) throws {
+    private func writeRamp(to url: URL, width: Int, height: Int, type: UTType = .png,
+                           exif: [CFString: Any] = [:]) throws {
         var bytes = [UInt8](repeating: 255, count: width * height * 4)
         for y in 0..<height {
             for x in 0..<width {
@@ -195,8 +196,9 @@ final class CInterfaceTests: XCTestCase {
             bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
             provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent))
         let destination = try XCTUnwrap(CGImageDestinationCreateWithURL(
-            url as CFURL, UTType.png.identifier as CFString, 1, nil))
-        CGImageDestinationAddImage(destination, image, nil)
+            url as CFURL, type.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, image, exif.isEmpty ? nil
+            : [kCGImagePropertyExifDictionary: exif] as CFDictionary)
         XCTAssertTrue(CGImageDestinationFinalize(destination))
     }
     #endif
@@ -337,6 +339,42 @@ extension CInterfaceTests {
         XCTAssertThrowsError(try service.call(
             "exportOriginal", params: Data(#"{"handle": \#(handle), "path": "/tmp/x.png"}"#.utf8),
             payload: nil))
+    }
+
+    /// A gauge nobody picked follows the frame the file's camera exposed, as the Mac app develops
+    /// it: an iPhone-sized sensor lands on the nearest small gauge rather than the film's 35 mm.
+    func testUnpickedGaugeFollowsTheCamerasFrame() throws {
+        let engine = try makeEngine()
+        defer { fotufilm_engine_destroy(engine) }
+        let service = Unmanaged<HostEngine>.fromOpaque(UnsafeRawPointer(engine))
+            .takeUnretainedValue().service
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fotufilm-sensor-\(UUID().uuidString).jpg")
+        try writeRamp(to: url, width: 240, height: 180, type: .jpeg, exif: [
+            kCGImagePropertyExifFocalLength: 6.86, kCGImagePropertyExifFocalLenIn35mmFilm: 24,
+        ])
+        defer { try? FileManager.default.removeItem(at: url) }
+        let opened = try service.call("importPath", params: Data(#"{"path": "\#(url.path)"}"#.utf8),
+                                      payload: nil)
+        let descriptor = try XCTUnwrap(JSONSerialization.jsonObject(with: opened.json) as? [String: Any])
+        let gauge = try XCTUnwrap((descriptor["sensor"] as? [String: Any])?["gauge"] as? String)
+        XCTAssertNotEqual(gauge, "35mm")
+        let handle = try XCTUnwrap(descriptor["handle"] as? Int)
+
+        func render(_ format: String?) throws -> Data {
+            let request: [String: Any] = [
+                "handle": handle, "maxEdge": NSNull(),
+                "edit": ["stock": "gold200", "params": [String: Any]()],
+                "profileRequest": ["controls": [String: Any](), "format": format.map { $0 as Any } ?? NSNull()],
+            ]
+            let answer = try service.call("render", params: JSONSerialization.data(
+                withJSONObject: request), payload: nil)
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: answer.json) as? [String: Any])
+            let range = try XCTUnwrap((body["payloads"] as? [String: [Int]])?["preview"])
+            return Data(answer.payload[range[0]..<(range[0] + range[1])])
+        }
+        XCTAssertEqual(try render(nil), try render(gauge))
+        XCTAssertNotEqual(try render(nil), try render("35mm"))
     }
 
     /// The editor's own calls: import a photograph's bytes, develop a cropped render of it.

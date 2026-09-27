@@ -15,6 +15,7 @@ struct CoreImageDecoder: HostImageDecoder {
                               contentHeadroom: scene.contentHeadroom)
         image.lensShot = LensShot(contentsOf: url)
         image.captureMetadata = HostCaptureMetadata.read(url)
+        image.sensorFrame = SensorFrame.read(url: url)
         image.isRAW = RawDecode.isRaw(url: url)
         return image
     }

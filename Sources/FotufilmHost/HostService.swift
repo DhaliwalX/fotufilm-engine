@@ -287,14 +287,15 @@ public final class HostService {
     }
 
     func prepare(_ params: Data) throws -> Prepared {
-        let request: RenderRequest, edit: WebNativeEdit
+        let request: RenderRequest, decoded: WebNativeEdit
         do {
             request = try JSONDecoder().decode(RenderRequest.self, from: params)
-            edit = try JSONDecoder().decode(WebNativeEdit.self, from: params)
+            decoded = try JSONDecoder().decode(WebNativeEdit.self, from: params)
         } catch {
             throw HostEngine.Failure(description: "Unreadable render request: \(error)")
         }
         let image = try self.image(request.handle)
+        let edit = decoded.following(image.sensorFrame)
         image.video?.select(params)
         let geometry = request.cropMode == true ? request.edit.uncropped() : request.edit
         // A viewport asks for part of a larger virtual picture: develop the whole frame at that
@@ -333,6 +334,7 @@ public final class HostService {
             HostFrames.settings(&body, for: plan)
             edit = try JSONDecoder().decode(WebNativeEdit.self,
                                             from: JSONSerialization.data(withJSONObject: body))
+                .following(image.sensorFrame)
         }
 
         // Cache keys: everything but the viewport decides the developed frame.
@@ -821,5 +823,16 @@ public final class HostService {
         }
         if !ranges.isEmpty { body["payloads"] = ranges }
         return Answer(json: try JSONSerialization.data(withJSONObject: body), payload: payload)
+    }
+}
+
+extension WebNativeEdit {
+    /// A gauge nobody picked follows the frame the photograph's camera exposed, the nearest film
+    /// format to it, as the Mac app develops it (`EditState.resolvedFormat(sensor:)`).
+    func following(_ sensor: SensorFrame?) -> WebNativeEdit {
+        guard profileRequest.format == nil, let sensor else { return self }
+        var edit = self
+        edit.profileRequest.format = sensor.gauge.id
+        return edit
     }
 }
