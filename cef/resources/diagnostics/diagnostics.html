@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fotufilm Desktop · Bridge diagnostics</title>
+<style>
+  :root { color-scheme: dark; font: 13px/1.45 -apple-system, system-ui, sans-serif; }
+  /* The page is transparent: the host draws its image layer beneath it. */
+  html, body { margin: 0; background: transparent; color: #e8e8ea; }
+  main { display: grid; grid-template-columns: 380px 1fr; height: 100vh; }
+  aside { padding: 16px 20px; background: #1d1e21; overflow: auto; }
+  h1 { font-size: 15px; margin: 0 0 12px; }
+  h2 { font-size: 12px; margin: 18px 0 6px; color: #9a9ba1; text-transform: uppercase; letter-spacing: 0.06em; }
+  button { margin: 2px 4px 2px 0; }
+  pre { white-space: pre-wrap; font: 11.5px/1.5 ui-monospace, monospace; background: #111214;
+        padding: 8px 10px; border-radius: 6px; min-height: 2em; }
+  #stage { position: relative; }
+  /* Only the frame is painted; the hole inside it shows the native layer. */
+  #hole { position: absolute; inset: 48px; border: 1px solid #ff8a1f; border-radius: 4px; resize: both; overflow: hidden; }
+  #hole span { position: absolute; left: 8px; top: 6px; font-size: 11px; background: #000a; padding: 1px 6px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<main>
+  <aside>
+    <h1>Bridge diagnostics</h1>
+    <pre id="info">Connecting…</pre>
+    <h2>Messages</h2>
+    <button id="roundtrip">Round trips</button>
+    <pre id="roundtrip-out"></pre>
+    <h2>Shared-memory payloads</h2>
+    <button id="payloads">Echo payloads</button>
+    <pre id="payloads-out"></pre>
+    <h2>Native layer</h2>
+    <p>The orange frame is page content; the pattern inside it is drawn by the host beneath the
+      page. Drag the corner to resize the hole: the layer should follow without lag.</p>
+    <button id="layer">Toggle layer</button>
+    <button id="stats">Compositor stats</button>
+    <pre id="layer-out"></pre>
+  </aside>
+  <section id="stage"><div id="hole"><span>native layer</span></div></section>
+</main>
+<script type="module">
+const transport = window.fotufilmDesktop ?? window.fotufilmNativeTransport;
+const call = (method, params = {}, payload) =>
+  transport.postMessage({ id: crypto.randomUUID(), method, params }, payload);
+const $ = (id) => document.getElementById(id);
+const quantile = (sorted, q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
+const summary = (times) => {
+  const sorted = times.slice().sort((a, b) => a - b);
+  return `median ${(quantile(sorted, 0.5) * 1000).toFixed(0)} µs · p95 ${(quantile(sorted, 0.95) * 1000).toFixed(0)} µs · p99 ${(quantile(sorted, 0.99) * 1000).toFixed(0)} µs`;
+};
+
+if (!transport) $("info").textContent = "No native transport in this page.";
+else $("info").textContent = JSON.stringify(await call("hostInfo"), null, 1);
+
+$("roundtrip").onclick = async () => {
+  const lines = [];
+  for (const method of ["echoUi", "echo"]) {
+    for (let i = 0; i < 50; i++) await call(method, { i });
+    // The page's clock is coarse (100 µs without cross-origin isolation), so the mean of a batch
+    // is the sharper figure.
+    const times = [];
+    const batch = performance.now();
+    for (let i = 0; i < 1000; i++) {
+      const start = performance.now();
+      await call(method, { i, edit: { exposure: 0.3, temperature: 5600 } });
+      times.push(performance.now() - start);
+    }
+    const mean = (performance.now() - batch);
+    lines.push(`${method === "echo" ? "engine thread" : "UI thread"}: mean ${mean.toFixed(0)} µs · ${summary(times)}`);
+  }
+  $("roundtrip-out").textContent = lines.join("\n");
+};
+
+$("payloads").onclick = async () => {
+  const lines = [];
+  const sizes = [[64 << 10, "64 KB"], [1 << 20, "1 MB"], [3840 * 2160 * 4, "4K RGBA8"], [3840 * 2160 * 8, "4K RGBA16F"]];
+  for (const [size, label] of sizes) {
+    const bytes = new Uint8Array(size);
+    for (let i = 0; i < size; i += 4096) bytes[i] = i & 255;
+    const times = [];
+    let intact = true;
+    for (let i = 0; i < 12; i++) {
+      const start = performance.now();
+      const result = await call("echo", { size }, bytes);
+      times.push(performance.now() - start);
+      const back = new Uint8Array(result.payload);
+      intact &&= back.length === size && back[4096] === bytes[4096] && back[size - 4096] === bytes[size - 4096];
+    }
+    const sorted = times.slice(2).sort((a, b) => a - b);
+    const median = quantile(sorted, 0.5);
+    lines.push(`${label.padEnd(11)} there and back ${median.toFixed(2)} ms · ${(2 * size / 1e9 / (median / 1000)).toFixed(1)} GB/s${intact ? "" : " · CORRUPT"}`);
+  }
+  $("payloads-out").textContent = lines.join("\n");
+};
+
+let layer = false;
+const hole = $("hole");
+const placeLayer = () => {
+  const { x, y, width, height } = hole.getBoundingClientRect();
+  return call("setImageLayer", layer ? { x: x + 1, y: y + 1, width: width - 2, height: height - 2 } : {});
+};
+new ResizeObserver(() => layer && placeLayer()).observe(hole);
+window.addEventListener("resize", () => layer && placeLayer());
+$("layer").onclick = async () => {
+  layer = !layer;
+  await placeLayer();
+  $("layer-out").textContent = layer ? "Layer on." : "Layer off.";
+};
+$("stats").onclick = async () => {
+  $("layer-out").textContent = JSON.stringify(await call("compositorStats"), null, 1);
+};
+</script>
+</body>
+</html>

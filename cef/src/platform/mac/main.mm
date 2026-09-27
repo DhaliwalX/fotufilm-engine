@@ -1,0 +1,168 @@
+#import <Cocoa/Cocoa.h>
+
+#include <memory>
+#include <string>
+
+#include "app/browser_app.h"
+#include "app/scheme.h"
+#include "bridge/dispatcher.h"
+#include "include/cef_application_mac.h"
+#include "include/cef_command_line.h"
+#include "include/wrapper/cef_library_loader.h"
+#import "platform/mac/host_window.h"
+#include "switches.h"
+
+namespace {
+
+std::unique_ptr<fotufilm::Dispatcher> g_dispatcher;
+FotufilmHostWindow* g_window = nil;
+
+std::string ResourcePath(NSString* name) {
+  return [NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:name]
+      .UTF8String;
+}
+
+// Library records and settings live in IndexedDB and local storage, so the profile must persist.
+std::string ProfilePath() {
+  NSURL* support = [NSFileManager.defaultManager URLsForDirectory:NSApplicationSupportDirectory
+                                                        inDomains:NSUserDomainMask]
+                       .firstObject;
+  NSURL* profile = [support URLByAppendingPathComponent:@"Fotufilm Desktop" isDirectory:YES];
+  [NSFileManager.defaultManager createDirectoryAtURL:profile
+                         withIntermediateDirectories:YES
+                                          attributes:nil
+                                               error:nil];
+  return profile.path.UTF8String;
+}
+
+NSMenuItem* Item(NSString* title, SEL action, NSString* key,
+                 NSEventModifierFlags modifiers = NSEventModifierFlagCommand) {
+  NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:title action:action keyEquivalent:key];
+  item.keyEquivalentModifierMask = modifiers;
+  return item;
+}
+
+NSMenu* MainMenu() {
+  NSMenu* bar = [NSMenu new];
+  auto submenu = [bar](NSString* title) {
+    NSMenuItem* holder = [bar addItemWithTitle:title action:nil keyEquivalent:@""];
+    NSMenu* menu = [[NSMenu alloc] initWithTitle:title];
+    holder.submenu = menu;
+    return menu;
+  };
+  NSMenu* app = submenu(@"Fotufilm");
+  [app addItem:Item(@"Hide Fotufilm", @selector(hide:), @"h")];
+  [app addItem:Item(@"Hide Others", @selector(hideOtherApplications:), @"h",
+                    NSEventModifierFlagCommand | NSEventModifierFlagOption)];
+  [app addItem:[NSMenuItem separatorItem]];
+  [app addItem:Item(@"Quit Fotufilm", @selector(terminate:), @"q")];
+
+  // Sent to the host view, which applies them to the page's focused frame.
+  NSMenu* edit = submenu(@"Edit");
+  [edit addItem:Item(@"Undo", @selector(undo:), @"z")];
+  [edit addItem:Item(@"Redo", @selector(redo:), @"z",
+                     NSEventModifierFlagCommand | NSEventModifierFlagShift)];
+  [edit addItem:[NSMenuItem separatorItem]];
+  [edit addItem:Item(@"Cut", @selector(cut:), @"x")];
+  [edit addItem:Item(@"Copy", @selector(copy:), @"c")];
+  [edit addItem:Item(@"Paste", @selector(paste:), @"v")];
+  [edit addItem:Item(@"Select All", @selector(selectAll:), @"a")];
+
+  NSMenu* window = submenu(@"Window");
+  [window addItem:Item(@"Minimize", @selector(performMiniaturize:), @"m")];
+  [window addItem:Item(@"Zoom", @selector(performZoom:), @"")];
+  [window addItem:Item(@"Close", @selector(performClose:), @"w")];
+  NSApp.windowsMenu = window;
+  return bar;
+}
+
+}  // namespace
+
+// CEF runs the message loop and needs to know when AppKit is dispatching an event.
+@interface FotufilmApplication : NSApplication <CefAppProtocol>
+@end
+
+@implementation FotufilmApplication {
+  BOOL _handlingSendEvent;
+}
+
+- (BOOL)isHandlingSendEvent {
+  return _handlingSendEvent;
+}
+
+- (void)setHandlingSendEvent:(BOOL)handlingSendEvent {
+  _handlingSendEvent = handlingSendEvent;
+}
+
+- (void)sendEvent:(NSEvent*)event {
+  CefScopedSendingEvent sending;
+  [super sendEvent:event];
+}
+
+// AppKit's terminate would exit under CEF's feet: close the browser and let the loop end.
+- (void)terminate:(id)sender {
+  if (g_window && !g_window.closed)
+    [g_window requestClose];
+  else
+    CefQuitMessageLoop();
+}
+
+@end
+
+int main(int argc, char* argv[]) {
+  CefScopedLibraryLoader library;
+  if (!library.LoadInMain()) return 1;
+
+  @autoreleasepool {
+    [FotufilmApplication sharedApplication];
+    NSApp.mainMenu = MainMenu();
+
+    CefMainArgs arguments(argc, argv);
+    CefRefPtr<CefCommandLine> command_line = CefCommandLine::CreateCommandLine();
+    command_line->InitFromArgv(argc, argv);
+
+    fotufilm::BrowserApp::Options options;
+    std::string url = std::string(fotufilm::kAppOrigin) + "/";
+    options.web_root = ResourcePath(@"web");
+    if (command_line->HasSwitch(fotufilm::switches::kWebRoot))
+      options.web_root =
+          command_line->GetSwitchValue(fotufilm::switches::kWebRoot).ToString();
+    if (command_line->HasSwitch(fotufilm::switches::kDiagnostics)) {
+      options.web_root = ResourcePath(@"diagnostics");
+      url += "diagnostics.html";
+    }
+    if (command_line->HasSwitch(fotufilm::switches::kDevUrl)) {
+      url = command_line->GetSwitchValue(fotufilm::switches::kDevUrl).ToString();
+      NSURL* dev = [NSURL URLWithString:@(url.c_str())];
+      options.dev_origin = std::string(dev.scheme.UTF8String) + "://" + dev.host.UTF8String +
+                           (dev.port ? ":" + std::string(dev.port.stringValue.UTF8String) : "");
+    }
+    options.transport_global = fotufilm::switches::kDefaultTransportGlobal;
+
+    g_dispatcher = std::make_unique<fotufilm::Dispatcher>();
+    CefRefPtr<fotufilm::BrowserApp> app =
+        new fotufilm::BrowserApp(options, [url] {
+          g_window = [[FotufilmHostWindow alloc] initWithURL:url
+                                                  dispatcher:g_dispatcher.get()];
+        });
+
+    CefSettings settings;
+    settings.windowless_rendering_enabled = true;
+#if !defined(CEF_USE_SANDBOX)
+    settings.no_sandbox = true;
+#endif
+    const std::string profile = ProfilePath();
+    CefString(&settings.root_cache_path) = profile;
+    CefString(&settings.cache_path) = profile + "/Default";
+    settings.log_severity = LOGSEVERITY_WARNING;
+    if (!CefInitialize(arguments, settings, app, nullptr))
+      return CefGetExitCode();
+
+    CefRunMessageLoop();
+    g_window = nil;
+    g_dispatcher->Shutdown();
+    CefShutdown();
+    g_dispatcher.reset();
+  }
+  return 0;
+}

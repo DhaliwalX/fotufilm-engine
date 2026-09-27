@@ -1,0 +1,136 @@
+# Fotufilm Desktop: the web editor in the Chromium Embedded Framework, over a native compositor.
+#
+#   cmake -S cef -B build/cef-host -G Ninja -DCEF_ROOT="$(cef/fetch-cef.sh)"
+#   cmake --build build/cef-host
+#
+# cef/build.sh does both and bundles the web build.
+cmake_minimum_required(VERSION 3.21)
+project(FotufilmDesktop LANGUAGES C CXX)
+if(APPLE)
+  enable_language(OBJC OBJCXX)
+endif()
+
+set(CEF_ROOT "" CACHE PATH "The unpacked CEF distribution (cef/fetch-cef.sh prints it)")
+if(NOT EXISTS "${CEF_ROOT}/cmake/FindCEF.cmake")
+  message(FATAL_ERROR "Set CEF_ROOT to the path cef/fetch-cef.sh prints.")
+endif()
+set(FOTUFILM_WEB_DIST "${CMAKE_CURRENT_SOURCE_DIR}/../web/dist" CACHE PATH
+    "The built web editor bundled as fotufilm://app/")
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
+find_package(CEF REQUIRED)
+SET_CEF_TARGET_OUT_DIR()
+add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
+
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/../version.env" _versions)
+foreach(_line ${_versions})
+  if(_line MATCHES "^MARKETING_VERSION=(.*)$")
+    set(FOTUFILM_MARKETING_VERSION "${CMAKE_MATCH_1}")
+  elseif(_line MATCHES "^CURRENT_PROJECT_VERSION=(.*)$")
+    set(FOTUFILM_PROJECT_VERSION "${CMAKE_MATCH_1}")
+  endif()
+endforeach()
+
+# The renderer installs bridge.js before any page script runs; it is compiled in, not fetched.
+set(_bridge_js "${CMAKE_CURRENT_SOURCE_DIR}/src/renderer/bridge.js")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_bridge_js}")
+file(READ "${_bridge_js}" FOTUFILM_BRIDGE_JS)
+file(CONFIGURE
+  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/renderer/bridge_script.h"
+  CONTENT "#pragma once\n\n// Generated from src/renderer/bridge.js.\ninline constexpr char kBridgeScript[] = R\"FOTUFILM(@FOTUFILM_BRIDGE_JS@)FOTUFILM\";\n"
+  @ONLY)
+
+set(FOTUFILM_COMMON_SOURCES
+  src/app/browser_app.cc
+  src/app/scheme.cc
+  src/renderer/renderer_bridge.cc
+)
+set(FOTUFILM_BROWSER_SOURCES
+  src/app/client.cc
+  src/bridge/dispatcher.cc
+)
+
+function(fotufilm_target target)
+  SET_EXECUTABLE_TARGET_PROPERTIES(${target})
+  add_dependencies(${target} libcef_dll_wrapper)
+  target_link_libraries(${target} libcef_dll_wrapper ${CEF_STANDARD_LIBS})
+  target_include_directories(${target} PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated")
+endfunction()
+
+if(OS_MAC)
+  set(FOTUFILM_APP_NAME "Fotufilm Desktop")
+  set(FOTUFILM_HELPER_NAME "Fotufilm Desktop Helper")
+  set(_mac_sources
+    src/platform/mac/compositor.mm
+    src/platform/mac/host_window.mm
+    src/platform/mac/main.mm)
+  # CEF's flags cover C++ sources only; Objective-C++ needs the same standard.
+  set_source_files_properties(${_mac_sources} PROPERTIES COMPILE_OPTIONS "-fobjc-arc;-std=c++20")
+
+  add_executable(fotufilm_desktop MACOSX_BUNDLE
+    ${FOTUFILM_COMMON_SOURCES} ${FOTUFILM_BROWSER_SOURCES} ${_mac_sources})
+  fotufilm_target(fotufilm_desktop)
+  target_link_libraries(fotufilm_desktop
+    "-framework Metal" "-framework QuartzCore" "-framework IOSurface")
+  set(EXECUTABLE_NAME "${FOTUFILM_APP_NAME}")
+  set(PRODUCT_NAME "${FOTUFILM_APP_NAME}")
+  configure_file(mac/Info.plist.in "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
+  set_target_properties(fotufilm_desktop PROPERTIES
+    OUTPUT_NAME "${FOTUFILM_APP_NAME}"
+    MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
+  set(_app "${CEF_TARGET_OUT_DIR}/${FOTUFILM_APP_NAME}.app")
+
+  add_custom_command(TARGET fotufilm_desktop POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CEF_BINARY_DIR}/Chromium Embedded Framework.framework"
+            "${_app}/Contents/Frameworks/Chromium Embedded Framework.framework"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/diagnostics"
+            "${_app}/Contents/Resources/diagnostics"
+    VERBATIM)
+  if(EXISTS "${FOTUFILM_WEB_DIST}/index.html")
+    add_custom_command(TARGET fotufilm_desktop POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E rm -rf "${_app}/Contents/Resources/web"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${FOTUFILM_WEB_DIST}"
+              "${_app}/Contents/Resources/web"
+      VERBATIM)
+  else()
+    message(WARNING "No web build at ${FOTUFILM_WEB_DIST}; run npm run build in web/.")
+  endif()
+
+  # Chromium launches each process type from its own helper bundle.
+  foreach(_suffixes ${CEF_HELPER_APP_SUFFIXES})
+    string(REPLACE ":" ";" _suffixes ${_suffixes})
+    list(GET _suffixes 0 _name_suffix)
+    list(GET _suffixes 1 _target_suffix)
+    list(GET _suffixes 2 _plist_suffix)
+    set(_helper "fotufilm_desktop_helper${_target_suffix}")
+    set(_helper_name "${FOTUFILM_HELPER_NAME}${_name_suffix}")
+    set(EXECUTABLE_NAME "${_helper_name}")
+    set(PRODUCT_NAME "${_helper_name}")
+    set(BUNDLE_ID_SUFFIX "${_plist_suffix}")
+    configure_file(mac/helper-Info.plist.in
+                   "${CMAKE_CURRENT_BINARY_DIR}/helper-Info${_target_suffix}.plist")
+    add_executable(${_helper} MACOSX_BUNDLE
+      ${FOTUFILM_COMMON_SOURCES} src/platform/mac/helper.cc)
+    fotufilm_target(${_helper})
+    set_target_properties(${_helper} PROPERTIES
+      OUTPUT_NAME "${_helper_name}"
+      MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/helper-Info${_target_suffix}.plist")
+    add_dependencies(fotufilm_desktop ${_helper})
+    add_custom_command(TARGET fotufilm_desktop POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory
+              "${CEF_TARGET_OUT_DIR}/${_helper_name}.app"
+              "${_app}/Contents/Frameworks/${_helper_name}.app"
+      VERBATIM)
+  endforeach()
+else()
+  message(FATAL_ERROR "Fotufilm Desktop builds on macOS so far; Windows and Linux follow cef/README.md.")
+endif()
+
+PRINT_CEF_CONFIG()
