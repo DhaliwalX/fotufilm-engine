@@ -161,6 +161,8 @@ public final class HostService {
                                                     withIntermediateDirectories: true)
             try data.write(to: url, options: .atomic)
             return try answer(value: catalogue.profiles.count)
+        case "filmPacks", "importFilmPack", "removeFilmPack":
+            return try filmPacks(method, parameters: parameters, payload: payload)
         case "removeLensCatalogue":
             if let url = Self.lensCatalogueURL { try? FileManager.default.removeItem(at: url) }
             return try answer(value: NSNull())
@@ -170,6 +172,14 @@ public final class HostService {
     }
 
     private var catalogueEntries: [[String: Any]]?
+
+    /// The installed films changed (a film pack added or removed): the engine reloads them, and
+    /// the library and the last develop are built again from what is there now.
+    func filmsChanged() {
+        engine.reloadFilms()
+        catalogueEntries = nil
+        developed = nil
+    }
 
     /// The film library, built once: the screen conversions solve their meter tables.
     private func catalogue() throws -> [[String: Any]] {

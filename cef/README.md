@@ -120,6 +120,25 @@ does (`suggestFilm`, from `FotufilmStockMatch`) and applies the best; the film a
 is recorded (`recordFilmChoice`) in `Application Support/Fotufilm Desktop/StockPreference.json`,
 and Forget What I've Taught It clears it (`forgetFilmChoices`).
 
+File › Import Film Pack… (⇧⌘I) is the Mac app's: an open panel for `.fotufilmpack` files, whose
+paths reach the editor as any opened file does (so does a pack double-clicked in the Finder, which
+the app offers to open without owning the type), and the editor installs them with
+`importFilmPack` {path}; a pack chosen in the page (Options › Import Film Pack…, Settings, a drop)
+crosses as bytes. The engine checks it exactly as the Mac app does (`FilmPackLibrary` in
+FotufilmCore, shared with `CustomStockStore`): a community pack this release reads, with valid
+films, under an id that is not the person's own films; refusals and "Pack added — Name v1 — 3
+films" read as the Mac app's alert, and a pack needing a newer release asks for an update. Packs
+go into the directory the platform names (`HostPlatform.filmPacks`); on macOS that is the Mac
+app's own custom store (`FilmPackLibrary.directory`, Application Support/CustomPacks, or
+FotufilmSource/CustomPacks for source builds), which neither app is sandboxed out of, so a pack
+added in either app, or for the plugins, shows in both. The engine then reloads its films and
+warms the new ones without restarting, and the editor asks for its film list again.
+`filmPacks` lists the installed community packs (and notices packs another app added since),
+`removeFilmPack` {packID} takes one away; Settings › General lists them with Remove. The engine is
+compiled with the same pack key material the Mac app is (`FOTUFILM_PACK_KEY_SOURCE`, defining
+`FOTUFILM_PACK_KEY_MATERIAL`), and the page offers all of this only when the capabilities say
+`filmPacks`.
+
 Fotufilm › Settings… (⌘,) opens the editor's Settings dialog (`web/src/editor/SettingsDialog.jsx`),
 which every backend shares: the starting film, format and film model of new photographs, film
 suggestions, and HDR photo export, kept on the device in `web/src/app-settings.js`.
@@ -165,7 +184,8 @@ panel goes through the same `DestinationPicker` as a still's, and its progress a
    `convertNegative` with contrast, `suggestNegativeFilms`), the pipeline inspector (`stages`,
    stage and difference renders), selective edits by colour, light or subject (Vision's
    foreground instances, as the Mac app selects), film suggestion, the Resolve and Final Cut
-   plug-ins (`plugins`, `installPlugin`, `revealPlugin`) and video answer today: movies
+   plug-ins (`plugins`, `installPlugin`, `revealPlugin`), film packs (`filmPacks`,
+   `importFilmPack`, `removeFilmPack`) and video answer today: movies
    upload in 8 MB binary chunks or open in place, render the frame at `videoTime` through the
    same geometry and film, and export (`exportVideo`, with progress and cancel) as H.264, 10-bit
    HEVC or Apple ProRes 422/4444 with the sound carried across; HEVC and ProRes write BT.2100 HLG when HDR is on and the film delivers it.

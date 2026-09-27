@@ -22,6 +22,40 @@
         <string>public.movie</string>
       </array>
     </dict>
+    <!-- Installed into the Mac app's pack library; the Mac app remains the owner. -->
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Film Pack</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>com.muastudio.fotufilm.pack</string>
+      </array>
+    </dict>
+  </array>
+  <!-- The Mac app exports the pack type; this app only reads it. -->
+  <key>UTImportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key>
+      <string>com.muastudio.fotufilm.pack</string>
+      <key>UTTypeDescription</key>
+      <string>Fotufilm Film Pack</string>
+      <key>UTTypeConformsTo</key>
+      <array>
+        <string>public.data</string>
+      </array>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array>
+          <string>fotufilmpack</string>
+        </array>
+      </dict>
+    </dict>
   </array>
   <key>CFBundleExecutable</key>
   <string>${EXECUTABLE_NAME}</string>

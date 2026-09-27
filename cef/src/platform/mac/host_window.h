@@ -21,7 +21,8 @@ class Dispatcher;
 @property(nonatomic, readonly) BOOL closed;
 @property(nonatomic, readonly) NSWindow* window;
 
-// Opens files in the editor, by path, once it listens; each is noted in Open Recent.
+// Opens files in the editor, by path, once it listens; each is noted in Open Recent. The editor
+// installs film packs among them (web/src/editor/useFilmPacks.js).
 - (void)openURLs:(NSArray<NSURL*>*)urls;
 // Whether the editor, as it last reported, can run `command` now.
 - (BOOL)commandEnabled:(NSString*)command;

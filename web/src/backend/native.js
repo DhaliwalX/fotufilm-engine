@@ -57,6 +57,16 @@ export function createNativeBackend(host) {
     for (const name of ["pluginStatus", "installPlugin", "revealPlugin"])
       backend[name] = host[name].bind(host);
   }
+  // Optional: installing community film packs, and loading the films again after a change.
+  if (host.filmPacks)
+    backend.filmPacks = Object.freeze(
+      requireMethods(
+        { ...host.filmPacks },
+        ["list", "importPath", "importFile", "remove"],
+        "Film packs",
+      ),
+    );
+  if (typeof host.reloadStocks === "function") backend.reloadStocks = host.reloadStocks.bind(host);
   backend.createSession = () => {
     const session = host.createSession();
     return requireMethods(

@@ -126,10 +126,15 @@ public final class HostEngine {
     private let renderLock = NSLock()
     private let stateLock = NSLock()
     private var generation: UInt64 = 0
-    private var stocks: [String: FilmStock] = [:]
+    private var loadedStocks: [String: FilmStock] = [:]
+    /// The kernel schedules warm-up has compiled, so films added later compile only new ones.
+    private var warmedSchedules = Set<Int32>()
 
     /// The platform's GPU developer, or the portable Halide CPU one.
     let developer: HostDeveloper
+
+    /// Where this person's film packs are installed; tests use their own. `reloadFilms` reads it.
+    var filmPacks: HostFilmPackLibrary? = HostPlatform.current.filmPacks
 
     public init() throws {
         if let gpu = HostPlatform.current.developer {
@@ -139,19 +144,44 @@ public final class HostEngine {
         } else {
             throw Failure(description: "The Halide engine is not linked into this build.")
         }
-        stocks = FilmStock.presets
-        guard !stocks.isEmpty else { throw Failure(description: "No film stocks are installed.") }
-        warmUp()
+        HostFilmPacks.publish(filmPacks)
+        loadedStocks = FilmStock.presets
+        guard !loadedStocks.isEmpty else {
+            throw Failure(description: "No film stocks are installed.")
+        }
+        warmUp(FilmStock.presetIDs)
     }
 
-    /// Builds every film's spectral tables and compiles each distinct kernel schedule in the
+    private var stocks: [String: FilmStock] {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return loadedStocks
+    }
+
+    /// Reads the installed films again, after a film pack was added or removed, and warms the
+    /// ones that arrived.
+    func reloadFilms() {
+        HostFilmPacks.publish(filmPacks)
+        let presets = FilmStock.presets
+        stateLock.lock()
+        let previous = loadedStocks
+        loadedStocks = presets
+        stateLock.unlock()
+        // A pack's films are warmed whenever it arrives: an updated pack may keep its ids.
+        warmUp(FilmStock.presetIDs.filter {
+            previous[$0] == nil || FilmStock.origin(of: $0)?.packID != nil
+        })
+    }
+
+    /// Builds each film's spectral tables and compiles each distinct kernel schedule in the
     /// background, as the Mac app's `StockTableWarmup` does, so the first develop on a film costs
     /// what later ones do rather than seconds.
-    private func warmUp() {
-        let stocks = FilmStock.presetIDs.compactMap { id in self.stocks[id].map { (id, $0) } }
+    private func warmUp(_ ids: [String]) {
+        let current = stocks
+        let films = ids.compactMap { id in current[id].map { (id, $0) } }
+        guard !films.isEmpty else { return }
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            var seen = Set<Int32>()
-            for (id, stock) in stocks {
+            for (id, stock) in films {
                 guard let self,
                       let request = try? JSONSerialization.data(withJSONObject: [
                         "edit": ["stock": id], "profileRequest": ["controls": [String: Any]()],
@@ -162,7 +192,10 @@ public final class HostEngine {
                         validating: stock, options: options, width: Self.warmWidth,
                         height: Self.warmHeight)
                 else { continue }
-                if seen.insert(invocation.featureMask).inserted {
+                self.stateLock.lock()
+                let fresh = self.warmedSchedules.insert(invocation.featureMask).inserted
+                self.stateLock.unlock()
+                if fresh {
                     self.developer.prepare(stock: stock, options: options, width: Self.warmWidth,
                                            height: Self.warmHeight)
                 }
@@ -176,12 +209,16 @@ public final class HostEngine {
     public var backend: String { developer.kind }
     /// The name the editor shows (`web/src/editor/ViewerStatus.jsx`).
     public var backendName: String { developer.name }
-    public var stockIDs: [String] { FilmStock.presetIDs.filter { stocks[$0] != nil } }
+    public var stockIDs: [String] {
+        let stocks = self.stocks
+        return FilmStock.presetIDs.filter { stocks[$0] != nil }
+    }
 
     public func describe() -> String {
         let definitions = FilmStock.presetDefinitions
+        let loaded = self.stocks
         let stocks = FilmStock.presetIDs.compactMap { id -> [String: Any]? in
-            guard let stock = self.stocks[id] else { return nil }
+            guard let stock = loaded[id] else { return nil }
             var row: [String: Any] = ["id": id, "name": stock.name]
             if let format = definitions[id]?.nativeFormatID { row["nativeFormat"] = format }
             return row

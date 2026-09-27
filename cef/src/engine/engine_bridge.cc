@@ -17,6 +17,8 @@ constexpr const char* kMethods[] = {
     // The Resolve and Final Cut plug-ins. An install holds the engine thread until the copy is
     // done and macOS has registered it, as the Mac app's menu item holds its own.
     "plugins",          "installPlugin",    "revealPlugin",
+    // Community film packs, installed where the Mac app keeps them.
+    "filmPacks",        "importFilmPack", "removeFilmPack",
 };
 
 }  // namespace

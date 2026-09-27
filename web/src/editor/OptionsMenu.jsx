@@ -26,6 +26,8 @@ export default function OptionsMenu() {
     history,
     dispatch,
     stocks,
+    filmPacks,
+    openFilmPacks,
   } = useEditor();
   const imageOnlyDisabled = !active || !!active.image.video || exporting;
   // The Edit History, as the Mac app's Edit menu lists it: every step, the one shown ticked.
@@ -45,6 +47,12 @@ export default function OptionsMenu() {
             <Icon slot="icon" name="negative" />
             <Text>Import Scanned Negative…</Text>
           </MenuItem>
+          {filmPacks && (
+            <MenuItem id="filmPack" isDisabled={exporting} onAction={openFilmPacks}>
+              <Icon slot="icon" name="film" />
+              <Text>Import Film Pack…</Text>
+            </MenuItem>
+          )}
         </MenuSection>
         <MenuSection
           aria-label="Automatic adjustments"

@@ -93,6 +93,25 @@ NSMutableArray<NSURL*>* g_pending_urls = [NSMutableArray array];
     finish([panel runModal]);
 }
 
+// The Mac app's File › Import Film Pack…: the chosen packs go to the editor by path, as a Finder
+// double-click on one does, and the engine installs them where the Mac app keeps its packs.
+- (void)importFilmPack:(id)sender {
+  NSOpenPanel* panel = [NSOpenPanel openPanel];
+  if (UTType* pack = [UTType typeWithFilenameExtension:@"fotufilmpack"])
+    panel.allowedContentTypes = @[ pack ];
+  panel.allowsMultipleSelection = YES;
+  panel.canChooseDirectories = NO;
+  panel.prompt = @"Add";
+  panel.message = @"Choose a Fotufilm film pack to add to your library.";
+  auto finish = ^(NSModalResponse response) {
+    if (response == NSModalResponseOK) [self openURLs:panel.URLs];
+  };
+  if (NSWindow* window = g_window.window)
+    [panel beginSheetModalForWindow:window completionHandler:finish];
+  else
+    finish([panel runModal]);
+}
+
 - (void)openRecentFile:(id)sender {
   if (NSURL* url = [sender representedObject]) [self openURLs:@[ url ]];
 }
@@ -113,6 +132,10 @@ NSMutableArray<NSURL*>* g_pending_urls = [NSMutableArray array];
   // Nothing opens while the editor is exporting, as its own import buttons are greyed.
   if (action == @selector(openDocument:) || action == @selector(openRecentFile:))
     return !g_window || [g_window commandEnabled:@"open"];
+  // Only an engine that installs packs offers it (the `filmPacks` capability), and never while
+  // the editor exports.
+  if (action == @selector(importFilmPack:))
+    return g_window && [g_window commandEnabled:@"importFilmPack"];
   return YES;
 }
 

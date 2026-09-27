@@ -148,11 +148,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let alert = NSAlert()
         do {
             let result = try CustomStockStore.importPack(from: url)
-            let films = result.stockNames.count == 1
-                ? result.stockNames[0]
-                : "\(result.stockNames.count) films"
-            alert.messageText = result.replacedExisting ? "Pack updated" : "Pack added"
-            alert.informativeText = "\(result.name)\(result.version.map { " v\($0)" } ?? "") — \(films)"
+            alert.messageText = result.title
+            alert.informativeText = result.summary
             alert.informativeText += "\n\nRestart Resolve or Final Cut Pro to use this pack in the Fotufilm plugin."
             // The film list is a list of what is installed, and something just was.
             windowController?.editor.reloadFilmLibrary()
