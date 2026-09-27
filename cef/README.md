@@ -90,8 +90,9 @@ The transport keeps the contract in `web/src/backend/README.md` and the call sha
    `render` (geometry, viewport tiles cut from one develop), `autoAdjust`, `sampleScene`,
    `export` (PNG, 16-bit TIFF, JPEG, HEIC, to a native save panel), print frames (`printFrame`,
    framed renders and exports), lens correction (`lensPlan`, the catalogue, and the correction in
-   the geometry resample) answer today. Still to come: `stages`,
-   `analyseNegative`/`convertNegative`, selective edits and video.
+   the geometry resample), negatives (`analyseNegative`, `convertNegative` with contrast,
+   `suggestNegativeFilms`) and the pipeline inspector (`stages`, stage and difference renders)
+   answer today. Still to come: selective edits and video.
 2. **Native presentation in the editor.** A backend capability that lets `ImageCanvas` leave the
    photograph's area transparent and report its rectangle, zoom and pan to the host (as
    `setImageLayer` does in the diagnostics page); renders then go to the image layer instead of

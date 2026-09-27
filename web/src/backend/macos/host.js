@@ -63,7 +63,10 @@ export function createMacBackend(channel) {
     releaseImage,
     analyseNegative: (image, monochrome) =>
       call("analyseNegative", { handle: image.handle, monochrome }),
-    async convertNegative(image, plan, { signal, maxEdge, onProgress } = {}) {
+    negativeContrast: channel.binary === true,
+    suggestNegativeFilms: (image) =>
+      call("suggestNegativeFilms", { handle: image.handle }),
+    async convertNegative(image, plan, { signal, maxEdge, contrast = 0, onProgress } = {}) {
       onProgress?.({ progress: 0 });
       const result = await call(
         "convertNegative",
@@ -71,6 +74,7 @@ export function createMacBackend(channel) {
           handle: image.handle,
           nativePlan: plan.nativePlan,
           maxEdge: Number.isFinite(maxEdge) ? maxEdge : null,
+          contrast,
         },
         { signal },
       );

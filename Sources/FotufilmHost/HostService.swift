@@ -57,6 +57,26 @@ public final class HostService {
                 SceneGeometry.Lens.self,
                 from: JSONSerialization.data(withJSONObject: parameters["lens"] ?? [:]))
             return Answer(json: try JSONEncoder().encode(lensPlan(image, lens)), payload: [])
+        case "analyseNegative":
+            let image = try self.image(parameters["handle"])
+            let plan = try AutomaticNegativeScan(preview: negativePreview(image, rec2020: false),
+                                                 monochrome: parameters["monochrome"] as? Bool ?? false)
+            return try answer(["weak": plan.weak, "sampleCount": plan.sampleCount,
+                               "parameters": plan.parameters,
+                               "nativePlan": ["parameters": plan.parameters]])
+        case "convertNegative":
+            return try convertNegative(parameters)
+        case "suggestNegativeFilms":
+            let image = try self.image(parameters["handle"])
+            let catalogue = NegativeFilmSuggestions(stocks: FilmStock.presets)
+            let reading = NegativeFilmSuggestions.read(preview: negativePreview(image, rec2020: true))
+            let suggestions = reading.map { catalogue.suggest($0, limit: 3) } ?? []
+            return try answer(value: suggestions.map { suggestion -> [String: Any] in
+                ["films": suggestion.films.map { ["id": $0.id, "name": $0.name] },
+                 "likelihood": suggestion.likelihood]
+            })
+        case "stages":
+            return try answer(value: stages(parameters))
         case "printFrame":
             return Answer(json: try HostFrames.answer(parameters), payload: [])
         case "autoAdjust":
@@ -118,14 +138,20 @@ public final class HostService {
         try Data(bytes: bytes.baseAddress!, count: bytes.count).write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
         let image = try HostImage(opening: file)
+        var descriptor = image.descriptor
+        descriptor["handle"] = register(image)
+        return try answer(descriptor, images: ["preview": previewPNG(image)])
+    }
+
+    /// Opens a lease on a photograph the host already holds; the editor releases it.
+    @discardableResult
+    public func register(_ image: HostImage) -> Int {
         lock.lock()
+        defer { lock.unlock() }
         let handle = nextHandle
         nextHandle += 1
         images[handle] = image
-        lock.unlock()
-        var descriptor = image.descriptor
-        descriptor["handle"] = handle
-        return try answer(descriptor, images: ["preview": previewPNG(image)])
+        return handle
     }
 
     /// The photograph as decoded, bounded for the library and the strip.
@@ -227,12 +253,18 @@ public final class HostService {
         if developed?.key != developKey {
             var pixels = [UInt8](repeating: 0, count: width * height * 4)
             let developStart = DispatchTime.now().uptimeNanoseconds
-            try pixels.withUnsafeMutableBytes { buffer in
-                try engine.develop(scene, width: width, height: height,
-                                   contentHeadroom: image.contentHeadroom, edit: edit,
-                                   into: .init(maxEdge: 0, format: .rgba8DisplayP3,
-                                               pixels: buffer.baseAddress!, rowBytes: width * 4,
-                                               capacity: buffer.count))
+            if let stage = body["stage"] as? Int {
+                pixels = try developStage(stage, difference: body["difference"] as? Bool ?? false,
+                                          scene: scene, width: width, height: height,
+                                          image: image, edit: edit)
+            } else {
+                try pixels.withUnsafeMutableBytes { buffer in
+                    try engine.develop(scene, width: width, height: height,
+                                       contentHeadroom: image.contentHeadroom, edit: edit,
+                                       into: .init(maxEdge: 0, format: .rgba8DisplayP3,
+                                                   pixels: buffer.baseAddress!, rowBytes: width * 4,
+                                                   capacity: buffer.count))
+                }
             }
             renderMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - developStart) / 1e6
             var frame = (pixels: pixels, width: width, height: height)
@@ -282,6 +314,110 @@ public final class HostService {
         if let plan { answerBody["framePlan"] = plan.json }
         return try answer(answerBody, images: ["preview": png(developedFrame),
                                                "original": png(originalFrame)])
+    }
+
+    // MARK: Pipeline walk
+
+    /// The walk's steps for a film, as the pipeline inspector lists them. Layered transport
+    /// develops in one piece and has none, as in the browser.
+    private func stages(_ parameters: [String: Any]) throws -> [[String: Any]] {
+        guard parameters["halationModel"] as? String != "layered",
+              let stock = engine.stock(parameters["stock"] as? String) else { return [] }
+        var settings: [String: Any] = ["controls": [
+            "digitalReference": parameters["digitalReference"] as? String ?? "auto-levels"]]
+        if let medium = parameters["medium"] as? String { settings["medium"] = medium }
+        let edit = try JSONDecoder().decode(WebNativeEdit.self, from: JSONSerialization.data(
+            withJSONObject: ["edit": ["stock": parameters["stock"]!], "profileRequest": settings]))
+        let options = try engine.options(edit, stock: stock, contentHeadroom: 1)
+        return PipelineWalk.steps(stock: stock, options: options).map { ["id": $0.id, "label": $0.label] }
+    }
+
+    /// One step of the walk, or its difference from the step before, amplified as the browser
+    /// amplifies it: a peak change under half a code value shows as is, a larger one is scaled so
+    /// it fills the range about mid-grey.
+    private func developStage(_ index: Int, difference: Bool, scene: [Float], width: Int,
+                              height: Int, image: HostImage, edit: WebNativeEdit) throws -> [UInt8] {
+        guard let stock = engine.stock(edit.edit.stock) else {
+            throw HostEngine.Failure(description: "Pipeline inspection needs a film.")
+        }
+        let steps = PipelineWalk.steps(stock: stock, options: try engine.options(
+            edit, stock: stock, contentHeadroom: image.contentHeadroom))
+        guard steps.indices.contains(index) else {
+            throw HostEngine.Failure(description: "This pipeline stage is unavailable.")
+        }
+        func develop(_ step: PipelineWalk.Step) throws -> [UInt8] {
+            var pixels = [UInt8](repeating: 0, count: width * height * 4)
+            try pixels.withUnsafeMutableBytes { buffer in
+                try engine.develop(scene, width: width, height: height, film: step.stock,
+                                   options: step.options,
+                                   into: .init(maxEdge: 0, format: .rgba8DisplayP3,
+                                               pixels: buffer.baseAddress!, rowBytes: width * 4,
+                                               capacity: buffer.count))
+            }
+            return pixels
+        }
+        let pixels = try develop(steps[index])
+        guard difference, index > 0 else { return pixels }
+        let before = try develop(steps[index - 1])
+        var peak: Float = 0
+        for i in pixels.indices where i % 4 != 3 {
+            peak = max(peak, abs(Float(pixels[i]) - Float(before[i])))
+        }
+        let gain: Float = peak < 0.5 ? 1 : min(128, 127 / peak)
+        return pixels.indices.map { i in
+            i % 4 == 3 ? 255
+                : UInt8(clamp(128 + (Float(pixels[i]) - Float(before[i])) * gain, 0, 255))
+        }
+    }
+
+    // MARK: Negatives
+
+    /// The 512-pixel planar copy of a scan the automatic analyses read, in linear sRGB for the
+    /// inversion's statistics or linear Rec.2020 for reading the film base.
+    private func negativePreview(_ image: HostImage, rec2020: Bool) -> ImageBuffer {
+        let (width, height) = image.renderSize(maxEdge: 512)
+        return planes(image.scene(width: width, height: height), width: width, height: height,
+                      sRGB: !rec2020)
+    }
+
+    private func planes(_ rgba: [Float], width: Int, height: Int, sRGB: Bool) -> ImageBuffer {
+        var buffer = ImageBuffer(width: width, height: height)
+        for i in 0..<(width * height) {
+            var rgb = SIMD3(rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2])
+            if sRGB { rgb = AutomaticNegativeScan.rec2020ToSRGB(rgb) }
+            for c in 0..<3 { buffer.planes[c][i] = rgb[c] }
+        }
+        return buffer
+    }
+
+    /// Inverts the scan with the plan the analysis solved, the contrast adjusted as the browser
+    /// adjusts it, into a new photograph the editor owns.
+    private func convertNegative(_ parameters: [String: Any]) throws -> Answer {
+        let image = try self.image(parameters["handle"])
+        guard var solved = (parameters["nativePlan"] as? [String: Any])?["parameters"] as? [Double],
+              solved.count == 8, solved.allSatisfy(\.isFinite) else {
+            throw HostEngine.Failure(description: "Invalid negative conversion settings.")
+        }
+        // The inverse sigmoid's slope at mid-grey (web/src/negative-conversion.js).
+        solved[6] *= pow(2, parameters["contrast"] as? Double ?? 0)
+        let (width, height) = image.renderSize(maxEdge: parameters["maxEdge"] as? Int ?? 0)
+        let scan = planes(image.scene(width: width, height: height), width: width, height: height,
+                          sRGB: true)
+        let positive = try AutomaticNegativeScan(parameters: solved.map(Float.init)).convert(scan)
+        var rgba = [Float](repeating: 1, count: width * height * 4)
+        for i in 0..<(width * height) {
+            let rgb = ColorScience.linearSRGBToRec2020(SIMD3(positive.planes[0][i],
+                                                             positive.planes[1][i],
+                                                             positive.planes[2][i]))
+            rgba[i * 4] = rgb.x
+            rgba[i * 4 + 1] = rgb.y
+            rgba[i * 4 + 2] = rgb.z
+        }
+        let converted = HostImage(rgba: rgba, width: width, height: height, contentHeadroom: 1)
+        converted.lensShot = image.lensShot
+        var descriptor = converted.descriptor
+        descriptor["handle"] = register(converted)
+        return try answer(descriptor, images: ["preview": previewPNG(converted)])
     }
 
     // MARK: Measuring and exporting

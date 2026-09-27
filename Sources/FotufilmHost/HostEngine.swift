@@ -172,12 +172,28 @@ public final class HostEngine {
         } else {
             film = nil
         }
-        let stock = film ?? .noFilm
+        try develop(scene, width: width, height: height, film: film,
+                    options: options(edit, stock: film ?? .noFilm, contentHeadroom: contentHeadroom),
+                    into: target)
+    }
+
+    /// The options an edit develops with on `stock`, the scene's recorded range included.
+    public func options(_ edit: WebNativeEdit, stock: FilmStock,
+                        contentHeadroom: Float) throws -> FotufilmEngine.Options {
         var options = try edit.document.options(
             for: stock,
             nativeFormatID: edit.edit.stock.flatMap { FilmStock.presetDefinitions[$0]?.nativeFormatID })
         options.sceneHeadroom = contentHeadroom
+        return options
+    }
 
+    public func stock(_ id: String?) -> FilmStock? { id.flatMap { stocks[$0] } }
+
+    /// Develops with an explicit film and options: a step of the pipeline walk, for instance.
+    /// `film` nil develops with no film.
+    public func develop(_ scene: [Float], width: Int, height: Int, film: FilmStock?,
+                        options: FotufilmEngine.Options, into target: Target) throws {
+        let stock = film ?? .noFilm
         let started = currentGeneration
         let shouldContinue = { self.currentGeneration == started }
         renderLock.lock()
