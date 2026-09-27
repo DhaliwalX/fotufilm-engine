@@ -118,6 +118,34 @@ void Dispatcher::PostEngine(std::function<void()> task) {
   wake_.notify_one();
 }
 
+void Dispatcher::PostCall(std::shared_ptr<Call> call, std::function<void()> task) {
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (stopping_) return;
+    Enqueue(std::move(call), std::move(task));
+  }
+  wake_.notify_one();
+}
+
+void Dispatcher::Enqueue(std::shared_ptr<Call> call, std::function<void()> task) {
+  running_.emplace(call->id, call->cancelled);
+  queue_.emplace_back([this, call, task = std::move(task)] {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      current_ = call->id;
+    }
+    task();
+    std::lock_guard<std::mutex> lock(mutex_);
+    current_.clear();
+    const auto [first, last] = running_.equal_range(call->id);
+    for (auto entry = first; entry != last; ++entry)
+      if (entry->second.lock() == call->cancelled) {
+        running_.erase(entry);
+        break;
+      }
+  });
+}
+
 void Dispatcher::RunEngine() {
   for (;;) {
     std::function<void()> task;
@@ -181,24 +209,11 @@ bool Dispatcher::OnProcessMessage(CefRefPtr<CefFrame> frame,
     return true;
   }
   Handler handler = route->second.handler;
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (stopping_) return true;
-  running_.emplace(call->id, call->cancelled);
-  queue_.emplace_back([this, handler, call, reply] {
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      current_ = call->id;
-    }
-    handler(*call, reply);
+  {
     std::lock_guard<std::mutex> lock(mutex_);
-    current_.clear();
-    const auto [first, last] = running_.equal_range(call->id);
-    for (auto entry = first; entry != last; ++entry)
-      if (entry->second.lock() == call->cancelled) {
-        running_.erase(entry);
-        break;
-      }
-  });
+    if (stopping_) return true;
+    Enqueue(call, [handler, call, reply] { handler(*call, reply); });
+  }
   wake_.notify_one();
   return true;
 }

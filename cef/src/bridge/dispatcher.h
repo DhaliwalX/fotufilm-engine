@@ -48,6 +48,9 @@ class Reply {
   void Resolve(CefRefPtr<CefValue> result, const void* payload, size_t length);
   void Reject(const std::string& message, const std::string& name = "Error");
 
+  // The page the answer goes to, for progress events on the way.
+  CefRefPtr<CefFrame> frame() const { return frame_; }
+
  private:
   void Send(bool ok, const std::string& json, const void* payload,
             size_t length);
@@ -82,6 +85,10 @@ class Dispatcher {
   // Queues work behind the engine thread's calls, for a UI handler that has finished its part.
   void PostEngine(std::function<void()> task);
 
+  // Queues the rest of a call a UI handler has begun (an export after its save panel) as an
+  // engine call: a "cancel" with its id reaches it, and the cancel hook while it runs.
+  void PostCall(std::shared_ptr<Call> call, std::function<void()> task);
+
   // Stops the engine thread after the work already queued.
   void Shutdown();
 
@@ -91,6 +98,8 @@ class Dispatcher {
     Handler handler;
   };
   void RunEngine();
+  // Queues `task` for `call` on the engine thread. The mutex is held.
+  void Enqueue(std::shared_ptr<Call> call, std::function<void()> task);
 
   std::map<std::string, Route> routes_;
   std::mutex mutex_;
