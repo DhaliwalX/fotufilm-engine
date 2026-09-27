@@ -37,25 +37,39 @@ public struct WebProfileRequest: Decodable {
         return try WebFilmProfile.prepare(stock: stock, options: options, width: width, height: height)
     }
 
+    /// The request's edit as one document: top-level choices become the controls they stand for.
+    public var document: EditDocument {
+        var document = EditDocument()
+        for (name, input) in controls {
+            guard let field = EditorControlField(rawValue: name) else { continue }
+            switch input {
+            case .number(let number): document[field] = .number(number)
+            case .flag(let flag): document[field] = .flag(flag)
+            case .choice(let id): document[field] = .choice(id)
+            case .curve(let points): document[field] = .curve(points)
+            }
+        }
+        if let format { document[.gauge] = .choice(format) }
+        if let medium { document[.paper] = .choice(medium) }
+        if let filters { document[.lensFilterStack] = .choices(filters) }
+        if let filterMetering { document[.metering] = .choice(filterMetering) }
+        if let sceneKelvin {
+            document[.sceneLight] = .choice("custom")
+            document[.sceneLightKelvin] = .number(Double(sceneKelvin))
+        }
+        return document
+    }
+
     public func configured() throws -> (FilmStock, FotufilmEngine.Options) {
         let stock = try self.stock.validated().stock
-        var options = FotufilmEngine.Options()
-        let formatID = format ?? self.stock.nativeFormatID ?? FilmFormat.houseDefaultID
-        guard let format = FilmFormat.preset(id: formatID) else {
-            throw Failure(description: "Unknown film format: \(formatID)")
+        if let unknown = controls.keys.first(where: { EditorControlField(rawValue: $0) == nil }) {
+            throw Failure(description: "Unsupported profile control: \(unknown)")
         }
-        options.format = format
-        if let medium {
-            guard let paper = PrintPaper.preset(id: medium) else {
-                throw Failure(description: "Unknown output medium: \(medium)")
-            }
-            options.paper = paper
-        }
-        if let sceneKelvin {
-            guard sceneKelvin.isFinite, (1000...25000).contains(sceneKelvin) else {
-                throw Failure(description: "Invalid source illuminant.")
-            }
-            options.sceneIlluminantKelvin = sceneKelvin
+        var options: FotufilmEngine.Options
+        do {
+            options = try document.options(for: stock, nativeFormatID: self.stock.nativeFormatID)
+        } catch let failure as EditDocument.Failure {
+            throw Failure(description: failure.description)
         }
         if let sceneHighlightStops {
             guard sceneHighlightStops.isFinite, (-64...64).contains(sceneHighlightStops) else {
@@ -63,66 +77,6 @@ public struct WebProfileRequest: Decodable {
             }
             options.sceneHighlightStops = sceneHighlightStops
         }
-        let fitted = EditorLensFilters.resolve(filters ?? [])
-        guard fitted.unknown.isEmpty else { throw Failure(description: "Unknown lens filter.") }
-        guard let metering = LensFilterCompensation(rawValue: filterMetering ?? "throughTheLens") else {
-            throw Failure(description: "Unknown filter metering choice.")
-        }
-        options.lensFilters = LensFilterStack(fitted.absorbing, compensation: metering)
-        options.diffusionFilter = fitted.diffusion
-        let paper = (options.paper ?? .default(for: stock)).resolved(for: stock)
-        let stockControls = Dictionary(uniqueKeysWithValues:
-            EditorControlCatalogue.controls(for: stock, on: .web).map { ($0.field, $0) })
-        var printer = PrinterProfile.simulatedTungsten
-        var printerEnabled = false
-        for (name, input) in controls.sorted(by: { $0.key < $1.key }) {
-            guard let field = EditorControlField(rawValue: name),
-                  let control = stockControls[field] ?? EditorControlCatalogue.control(field),
-                  control.binding != nil || [.printerEnabled, .printerLamp, .printerExposure,
-                      .printerMagenta, .printerYellow].contains(field) else {
-                throw Failure(description: "Unsupported profile control: \(name)")
-            }
-            let value: EditorControlValue
-            switch (control.kind, input) {
-            case (.slider(let scale), .number(let number)),
-                 (.chips(let scale, _), .number(let number)):
-                guard scale.admitted.contains(number) else {
-                    throw Failure(description: "\(control.title) is outside its supported range.")
-                }
-                value = .number(number)
-            case (.toggle, .flag(let flag)): value = .flag(flag)
-            case (.menu, .choice(let id)):
-                guard let choices = WebProfileCatalogue.choices(field, stock: stock, paper: paper),
-                      let index = choices.firstIndex(where: { $0.id == id }) else {
-                    throw Failure(description: "Unknown \(control.title) choice: \(id)")
-                }
-                switch control.binding {
-                case .grainMottleShare, .shutterSeconds, .printViewingKelvin:
-                    value = .optionalNumber(choices[index].value)
-                default: value = .choice(index)
-                }
-            case (.curve(let curve), .curve(let values)):
-                guard values.count == curve.handles.count,
-                      values.allSatisfy({ $0.isFinite && curve.range.contains($0) }) else {
-                    throw Failure(description: "Invalid \(control.title) control points.")
-                }
-                value = .curve(values)
-            default: throw Failure(description: "Invalid value for \(control.title).")
-            }
-            if field == .push, let stops = value.number, !stock.supportsDevelopment(stops: Float(stops)) {
-                throw Failure(description: "This film has no development condition at the selected stop value.")
-            }
-            switch field {
-            case .printerEnabled: printerEnabled = value.flag ?? false
-            case .printerLamp: printer.lampKelvin = Float(value.number!)
-            case .printerExposure: printer.exposureEV = Float(value.number!)
-            case .printerMagenta: printer.magenta = Float(value.number!)
-            case .printerYellow: printer.yellow = Float(value.number!)
-            default: control.binding?.apply(value, to: &options)
-            }
-        }
-        options.printer = printerEnabled ? printer.normalized : nil
-        if !paper.isNegative { options.negativeViewing = nil }
         return (stock, options)
     }
 }
