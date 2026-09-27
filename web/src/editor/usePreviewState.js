@@ -4,6 +4,7 @@ import { usePreviewQuality } from "../usePreviewQuality.js";
 import { useLensCatalogue } from "../useLensCatalogue.js";
 import { fixedStockSettings } from "../stock-settings.js";
 import { previewBudget } from "../preview-budget.js";
+import { negativeViewEdit } from "../negative-view.js";
 export default function usePreviewState({
   backend,
   panel,
@@ -21,17 +22,23 @@ export default function usePreviewState({
   retry,
   error,
   libraryError,
+  showNegative,
 }) {
   const cropMode = panel === "crop" && inspectorOpen;
   const [zoomReadout, setZoomReadout] = useState(100);
+  const viewed = negativeViewEdit(
+    edit,
+    stocks.find((stock) => stock.id === edit.stock),
+    showNegative,
+  );
   const previewEditJSON = JSON.stringify(
     cropMode
       ? {
-          ...edit,
+          ...viewed,
           crop: fullCrop(),
           ratio: "free",
         }
-      : edit,
+      : viewed,
   );
   const [viewerMoving, setViewerMoving] = useState(false);
   const [detailBackend, setDetailBackend] = useState(null);

@@ -13,6 +13,7 @@ export default function ShortcutsDialog() {
             ["Redo", "⇧ ⌘ / Ctrl Z"],
             [editorControl("autoAdjustment").title, "⇧ ⌘ / Ctrl A"],
             ["Compare photo", "Hold Space"],
+            ["Show negative", "⌥ ⌘ / Ctrl Alt N"],
             ["Video play / pause", "Space / K in viewer"],
             ["Video seek", "← / → or J / L in viewer"],
             ["Mute video preview", "M in viewer"],

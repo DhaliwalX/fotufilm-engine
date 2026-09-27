@@ -24,6 +24,7 @@ export default function useEditorShortcuts({
   setInspectorOpen,
   libraryOpen,
   setLibraryOpen,
+  setShowNegative,
 }) {
   useEffect(() => {
     function keydown(event) {
@@ -49,6 +50,10 @@ export default function useEditorShortcuts({
         dispatch({
           type: event.shiftKey ? "redo" : "undo",
         });
+      } else if (command && event.altKey && event.code === "KeyN" && active) {
+        // Show Negative (⌥⌘N); the code, since Option changes the character on a Mac.
+        event.preventDefault();
+        setShowNegative((shown) => !shown);
       } else if (command && event.key.toLowerCase() === "s" && active) {
         event.preventDefault();
         setDialog("export");

@@ -44,7 +44,9 @@ export default function useEditorState({}) {
     setExportHDR = (value) => setAppSetting("photoHDR", value);
   const [stage, setStage] = useState(null),
     [stages, setStages] = useState([]),
-    [difference, setDifference] = useState(false);
+    [difference, setDifference] = useState(false),
+    // View › Show Negative: a way of looking, not part of the edit.
+    [showNegative, setShowNegative] = useState(false);
   const [session, setSession] = useState(null),
     [retry, setRetry] = useState(0);
   const input = useRef(null),
@@ -120,6 +122,8 @@ export default function useEditorState({}) {
     exportMetadata,
     setExportMetadata,
     exportHDR,
+    showNegative,
+    setShowNegative,
     setExportHDR,
     stage,
     setStage,

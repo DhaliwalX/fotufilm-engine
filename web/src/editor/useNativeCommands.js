@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { inspectorPanels } from "../editor-catalogue.js";
 import { appSetting, setAppSetting } from "../app-settings.js";
+import { canShowNegative } from "../negative-view.js";
 
 // The native menu bar (cef/src/platform/mac) runs the editor's own handlers: the host sends
 // "fotufilm-native-command" {command} and "fotufilm-native-open" {paths}, and the editor reports
@@ -35,6 +36,7 @@ const COMMANDS = {
   zoomToFit: (e) => e.setZoom(1),
   showOriginal: (e) => e.setCompare((shown) => !shown),
   histogram: (e) => e.setHistogram((shown) => !shown),
+  showNegative: (e) => e.setShowNegative((shown) => !shown),
   filmSidebar: (e) => e.toggleFilms(),
   inspector: (e) => e.toggleInspector(),
   ...Object.fromEntries(
@@ -68,6 +70,8 @@ export function menuState(e) {
     zoomToFit: photo && e.zoom !== 1,
     showOriginal: photo,
     histogram: photo,
+    showNegative:
+      photo && canShowNegative(e.edit, e.stocks?.find(({ id }) => id === e.edit?.stock)),
     filmSidebar: !e.libraryOpen,
     inspector: !e.libraryOpen,
   };
@@ -79,6 +83,7 @@ export function menuState(e) {
     autoAdjust: !!e.auto.active,
     showOriginal: !!e.compare,
     histogram: !!e.histogram,
+    showNegative: !!e.showNegative,
     filmSidebar: !!e.filmOpen,
     inspector: !!e.inspectorOpen,
   };

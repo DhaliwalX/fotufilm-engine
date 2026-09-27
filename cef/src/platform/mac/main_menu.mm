@@ -155,6 +155,7 @@ NSMenu* FotufilmMainMenu() {
   Command(view, @"Zoom to Fit", @"zoomToFit", @"0");
   [view addItem:[NSMenuItem separatorItem]];
   Command(view, @"Show Original", @"showOriginal", @"\\");
+  Command(view, @"Show Negative", @"showNegative", @"n", kCommand | kOption);
   Command(view, @"Show Histogram", @"histogram", @"h", kCommand | kControl);
   [view addItem:[NSMenuItem separatorItem]];
   Command(view, @"Film Stocks", @"filmSidebar", @"s", kCommand | kControl);
