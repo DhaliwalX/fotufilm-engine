@@ -96,8 +96,29 @@ export default function useExportActions({
       setStatus(null);
     }
   }
+  // Only a host with a pasteboard of its own copies the developed picture (Copy Photo).
+  async function copyPhoto() {
+    if (!backend.copyImage || !active || active.image.video || !session || exporting)
+      return;
+    setError(null);
+    setStatus("Copying the photo");
+    try {
+      await backend.copyImage({
+        session,
+        image: active.image,
+        edit,
+        stock: stockId,
+        maxEdge: Infinity,
+      });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setStatus(null);
+    }
+  }
   return {
     exportClip,
     exportImage,
+    copyPhoto,
   };
 }

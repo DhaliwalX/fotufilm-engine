@@ -71,6 +71,8 @@ class Client : public CefClient,
                           PaintElementType type,
                           const RectList& dirty_rects,
                           const CefAcceleratedPaintInfo& info) override;
+  void UpdateDragCursor(CefRefPtr<CefBrowser> browser,
+                        DragOperation operation) override;
 
   // CefDisplayHandler
   void OnTitleChange(CefRefPtr<CefBrowser> browser,

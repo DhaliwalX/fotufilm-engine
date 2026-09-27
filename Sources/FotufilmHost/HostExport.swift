@@ -20,6 +20,26 @@ enum HostExport {
         guard let uti = identifiers[type] else {
             throw HostEngine.Failure(description: "This host cannot write \(type).")
         }
+        let image = try cgImage(pixels, width: width, height: height, deep: deep, knee: knee)
+        guard let destination = CGImageDestinationCreateWithURL(
+                url as CFURL, uti.identifier as CFString, 1, nil) else {
+            throw HostEngine.Failure(description: "The image could not be encoded.")
+        }
+        CGImageDestinationAddImage(destination, image, [
+            kCGImageDestinationLossyCompressionQuality: quality,
+        ] as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else {
+            throw HostEngine.Failure(description: "The image could not be written to \(url.path).")
+        }
+        #else
+        throw HostEngine.Failure(description: "This build has no image encoder.")
+        #endif
+    }
+
+    #if canImport(ImageIO)
+    /// The developed frame as a Display P3 image: 8-bit pixels as they are, 16-bit from linear light.
+    static func cgImage(_ pixels: [UInt8], width: Int, height: Int, deep: Bool,
+                        knee: Float) throws -> CGImage {
         let space = CGColorSpace(name: CGColorSpace.displayP3)!
         let data: Data, bits: Int
         if deep {
@@ -51,19 +71,11 @@ enum HostExport {
                 bytesPerRow: width * bits / 2, space: space,
                 bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue
                     | (bits == 16 ? CGBitmapInfo.byteOrder16Little.rawValue : 0)),
-                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent),
-              let destination = CGImageDestinationCreateWithURL(
-                url as CFURL, uti.identifier as CFString, 1, nil) else {
+                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
+        else {
             throw HostEngine.Failure(description: "The image could not be encoded.")
         }
-        CGImageDestinationAddImage(destination, image, [
-            kCGImageDestinationLossyCompressionQuality: quality,
-        ] as CFDictionary)
-        guard CGImageDestinationFinalize(destination) else {
-            throw HostEngine.Failure(description: "The image could not be written to \(url.path).")
-        }
-        #else
-        throw HostEngine.Failure(description: "This build has no image encoder.")
-        #endif
+        return image
     }
+    #endif
 }

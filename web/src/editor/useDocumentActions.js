@@ -41,7 +41,8 @@ export default function useDocumentActions({
 
   // A new document starts from its library edit, or from the current film.
   const startingEdit = (file) => file?.libraryEdit || defaultEdit(edit.stock);
-  // `incoming` holds Files, or library items {file, libraryKey, edit}.
+  // `incoming` holds Files, library items {file, libraryKey, edit}, or files a native host
+  // chose {path, name}, which it opens in place.
   async function acceptFiles(incoming) {
     if (exporting) return;
     const generation = ++loadGeneration.current;
@@ -53,18 +54,22 @@ export default function useDocumentActions({
     for (const item of Array.from(incoming || [])) {
       const {
         file,
+        path,
+        name = file?.name,
         libraryKey = null,
         edit: libraryEdit = null,
       } = item instanceof Blob ? { file: item } : item;
       if (controller.signal.aborted) break;
       try {
-        const decoded = await backend.importMedia(file, {
+        const options = {
           signal: controller.signal,
           onProgress: (text) => {
-            if (!controller.signal.aborted)
-              setImportStatus(`${text}: ${file.name}`);
+            if (!controller.signal.aborted) setImportStatus(`${text}: ${name}`);
           },
-        });
+        };
+        const decoded = path
+          ? await backend.importPath(path, options)
+          : await backend.importMedia(file, options);
         if (controller.signal.aborted) {
           backend.releaseImage(decoded.image);
           URL.revokeObjectURL(decoded.url);
@@ -72,7 +77,7 @@ export default function useDocumentActions({
         }
         loaded.push({
           id: crypto.randomUUID(),
-          name: file.name,
+          name,
           libraryKey,
           libraryEdit,
           ...decoded,
@@ -80,7 +85,7 @@ export default function useDocumentActions({
       } catch (e) {
         if (e.name !== "AbortError")
           errors.push(
-            `${file.name}: ${e.message || "Could not decode image."}`,
+            `${name}: ${e.message || "Could not decode image."}`,
           );
       }
     }

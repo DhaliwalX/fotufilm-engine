@@ -1,4 +1,7 @@
 import XCTest
+#if canImport(AppKit)
+import AppKit
+#endif
 import CFotufilmHost
 @testable import FotufilmHost
 #if canImport(ImageIO)
@@ -251,6 +254,29 @@ extension CInterfaceTests {
 
         _ = try call("release", #"{"handle": \#(handle)}"#)
         XCTAssertThrowsError(try call("preview", #"{"handle": \#(handle)}"#))
+
+        // A file the host chose opens in place, without its bytes.
+        let opened = try call("importPath", #"{"path": "\#(url.path)"}"#)
+        let path = try XCTUnwrap(opened.json["handle"] as? Int)
+        XCTAssertEqual(opened.json["naturalHeight"] as? Int, 80)
+        XCTAssertThrowsError(try call("importPath", #"{"path": "/nonexistent/photo.png"}"#))
+
+        #if canImport(AppKit)
+        // Copy Photo puts the developed frame on the pasteboard at its full size.
+        let pasteboard = NSPasteboard(name: .init("fotufilm-test-\(UUID().uuidString)"))
+        defer { pasteboard.releaseGlobally() }
+        Unmanaged<HostEngine>.fromOpaque(UnsafeRawPointer(engine)).takeUnretainedValue()
+            .service.pasteboard = pasteboard
+        let copied = try call("copyImage", """
+        {"handle": \(path), "maxEdge": null, "edit": {"stock": "gold200", "params": {}},
+         "profileRequest": {"controls": {}}}
+        """)
+        XCTAssertEqual(copied.json["width"] as? Int, 120)
+        for type in [NSPasteboard.PasteboardType.png, .tiff] {
+            let pasted = try XCTUnwrap(pasteboard.data(forType: type).flatMap(NSBitmapImageRep.init))
+            XCTAssertEqual([pasted.pixelsWide, pasted.pixelsHigh], [120, 80])
+        }
+        #endif
     }
 }
 #endif

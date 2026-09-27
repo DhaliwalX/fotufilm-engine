@@ -6,6 +6,23 @@
   <string>en</string>
   <key>CFBundleDisplayName</key>
   <string>Fotufilm Desktop</string>
+  <!-- Offered in Open With and accepted on the Dock icon, without claiming any type. -->
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Photo or Video</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>public.image</string>
+        <string>public.movie</string>
+      </array>
+    </dict>
+  </array>
   <key>CFBundleExecutable</key>
   <string>${EXECUTABLE_NAME}</string>
   <key>CFBundleIdentifier</key>

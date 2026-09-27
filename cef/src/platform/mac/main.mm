@@ -15,6 +15,7 @@
 #include "include/cef_command_line.h"
 #include "include/wrapper/cef_library_loader.h"
 #import "platform/mac/host_window.h"
+#import "platform/mac/main_menu.h"
 #include "switches.h"
 
 namespace {
@@ -43,48 +44,68 @@ std::string ProfilePath() {
   return profile.path.UTF8String;
 }
 
-NSMenuItem* Item(NSString* title, SEL action, NSString* key,
-                 NSEventModifierFlags modifiers = NSEventModifierFlagCommand) {
-  NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:title action:action keyEquivalent:key];
-  item.keyEquivalentModifierMask = modifiers;
-  return item;
-}
-
-NSMenu* MainMenu() {
-  NSMenu* bar = [NSMenu new];
-  auto submenu = [bar](NSString* title) {
-    NSMenuItem* holder = [bar addItemWithTitle:title action:nil keyEquivalent:@""];
-    NSMenu* menu = [[NSMenu alloc] initWithTitle:title];
-    holder.submenu = menu;
-    return menu;
-  };
-  NSMenu* app = submenu(@"Fotufilm");
-  [app addItem:Item(@"Hide Fotufilm", @selector(hide:), @"h")];
-  [app addItem:Item(@"Hide Others", @selector(hideOtherApplications:), @"h",
-                    NSEventModifierFlagCommand | NSEventModifierFlagOption)];
-  [app addItem:[NSMenuItem separatorItem]];
-  [app addItem:Item(@"Quit Fotufilm", @selector(terminate:), @"q")];
-
-  // Sent to the host view, which applies them to the page's focused frame.
-  NSMenu* edit = submenu(@"Edit");
-  [edit addItem:Item(@"Undo", @selector(undo:), @"z")];
-  [edit addItem:Item(@"Redo", @selector(redo:), @"z",
-                     NSEventModifierFlagCommand | NSEventModifierFlagShift)];
-  [edit addItem:[NSMenuItem separatorItem]];
-  [edit addItem:Item(@"Cut", @selector(cut:), @"x")];
-  [edit addItem:Item(@"Copy", @selector(copy:), @"c")];
-  [edit addItem:Item(@"Paste", @selector(paste:), @"v")];
-  [edit addItem:Item(@"Select All", @selector(selectAll:), @"a")];
-
-  NSMenu* window = submenu(@"Window");
-  [window addItem:Item(@"Minimize", @selector(performMiniaturize:), @"m")];
-  [window addItem:Item(@"Zoom", @selector(performZoom:), @"")];
-  [window addItem:Item(@"Close", @selector(performClose:), @"w")];
-  NSApp.windowsMenu = window;
-  return bar;
-}
+// Files the system asked to open before the window existed.
+NSMutableArray<NSURL*>* g_pending_urls = [NSMutableArray array];
 
 }  // namespace
+
+// Files and help, for the whole application: Finder opens (double-click, Open With, the Dock icon),
+// File > Open and Open Recent, and the help pages. Files go to the editor by path.
+@interface FotufilmAppDelegate : NSObject <NSApplicationDelegate, NSMenuItemValidation,
+                                           FotufilmMenuActions>
+@end
+
+@implementation FotufilmAppDelegate
+
+- (void)openURLs:(NSArray<NSURL*>*)urls {
+  if (g_window && !g_window.closed)
+    [g_window openURLs:urls];
+  else
+    [g_pending_urls addObjectsFromArray:urls];
+}
+
+- (void)application:(NSApplication*)application openURLs:(NSArray<NSURL*>*)urls {
+  [self openURLs:urls];
+}
+
+- (void)openDocument:(id)sender {
+  NSOpenPanel* panel = [NSOpenPanel openPanel];
+  panel.allowedContentTypes = @[ UTTypeImage, UTTypeMovie ];
+  panel.allowsMultipleSelection = YES;
+  panel.canChooseDirectories = NO;
+  auto finish = ^(NSModalResponse response) {
+    if (response == NSModalResponseOK) [self openURLs:panel.URLs];
+  };
+  if (NSWindow* window = g_window.window)
+    [panel beginSheetModalForWindow:window completionHandler:finish];
+  else
+    finish([panel runModal]);
+}
+
+- (void)openRecentFile:(id)sender {
+  if (NSURL* url = [sender representedObject]) [self openURLs:@[ url ]];
+}
+
+- (void)clearRecentFiles:(id)sender {
+  [FotufilmRecentFiles clear];
+}
+
+// The same pages the Mac app opens (FotufilmMacApp.swift).
+- (void)openHelpPage:(id)sender {
+  NSString* page = [sender representedObject];
+  [NSWorkspace.sharedWorkspace
+      openURL:[NSURL URLWithString:[NSString stringWithFormat:@"https://fotufilm.com/%@.html", page]]];
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem*)item {
+  const SEL action = item.action;
+  // Nothing opens while the editor is exporting, as its own import buttons are greyed.
+  if (action == @selector(openDocument:) || action == @selector(openRecentFile:))
+    return !g_window || [g_window commandEnabled:@"open"];
+  return YES;
+}
+
+@end
 
 // CEF runs the message loop and needs to know when AppKit is dispatching an event.
 @interface FotufilmApplication : NSApplication <CefAppProtocol>
@@ -123,7 +144,11 @@ int main(int argc, char* argv[]) {
 
   @autoreleasepool {
     [FotufilmApplication sharedApplication];
-    NSApp.mainMenu = MainMenu();
+    FotufilmAppDelegate* delegate = [FotufilmAppDelegate new];
+    NSApp.delegate = delegate;
+    // The View menu carries Enter Full Screen itself; AppKit would add a second.
+    [NSUserDefaults.standardUserDefaults registerDefaults:@{@"NSFullScreenMenuItemEverywhere" : @NO}];
+    NSApp.mainMenu = FotufilmMainMenu();
 
     CefMainArgs arguments(argc, argv);
     CefRefPtr<CefCommandLine> command_line = CefCommandLine::CreateCommandLine();
@@ -169,6 +194,8 @@ int main(int argc, char* argv[]) {
         new fotufilm::BrowserApp(options, [url] {
           g_window = [[FotufilmHostWindow alloc] initWithURL:url
                                                   dispatcher:g_dispatcher.get()];
+          [g_window openURLs:g_pending_urls];
+          [g_pending_urls removeAllObjects];
         });
 
     CefSettings settings;
@@ -176,7 +203,14 @@ int main(int argc, char* argv[]) {
 #if !defined(CEF_USE_SANDBOX)
     settings.no_sandbox = true;
 #endif
-    const std::string profile = ProfilePath();
+    // CEF wants the cache inside the root as spelled after symbolic links (/tmp is /private/tmp).
+    const std::string profile =
+        command_line->HasSwitch(fotufilm::switches::kProfile)
+            ? std::string(@(command_line->GetSwitchValue(fotufilm::switches::kProfile)
+                                .ToString()
+                                .c_str())
+                              .stringByResolvingSymlinksInPath.UTF8String)
+            : ProfilePath();
     CefString(&settings.root_cache_path) = profile;
     CefString(&settings.cache_path) = profile + "/Default";
     settings.log_severity = LOGSEVERITY_WARNING;

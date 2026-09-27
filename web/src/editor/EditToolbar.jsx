@@ -2,14 +2,12 @@ import { Icon } from "../icons.jsx";
 import { ActionButton } from "@react-spectrum/s2/ActionButton";
 import { Tooltip, TooltipTrigger } from "@react-spectrum/s2/Tooltip";
 import { ToggleButton } from "@react-spectrum/s2/ToggleButton";
-import { defaultEdit } from "../editor-state.js";
 import { useEditor } from "./EditorContext.jsx";
 import OptionsMenu from "./OptionsMenu.jsx";
 export default function EditToolbar() {
   const {
-    compactLayout,
-    setFilmOpen,
-    setInspectorOpen,
+    toggleInspector,
+    resetEdits,
     exporting,
     active,
     inspectorOpen,
@@ -17,9 +15,6 @@ export default function EditToolbar() {
     setHistogram,
     dispatch,
     history,
-    edit,
-    setStage,
-    setDifference,
     setDialog,
     stocks,
   } = useEditor();
@@ -73,15 +68,7 @@ export default function EditToolbar() {
       </TooltipTrigger>
       <TooltipTrigger>
         <ActionButton
-          onPress={() => {
-            dispatch({
-              type: "edit",
-              patch: defaultEdit(edit.stock),
-              restoring: true,
-            });
-            setStage(null);
-            setDifference(false);
-          }}
+          onPress={resetEdits}
           isDisabled={!active || exporting}
           aria-label={"Reset all edits"}
           size={"S"}
@@ -106,10 +93,7 @@ export default function EditToolbar() {
       <OptionsMenu />
       <TooltipTrigger>
         <ToggleButton
-          onPress={() => {
-            setInspectorOpen((v) => !v);
-            if (compactLayout) setFilmOpen(false);
-          }}
+          onPress={toggleInspector}
           data-panel-toggle="inspector"
           aria-expanded={inspectorOpen}
           aria-label={"Toggle adjustments"}

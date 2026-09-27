@@ -15,6 +15,8 @@ export default function useEditorShortcuts({
   setDialog,
   setCompare,
   setZoom,
+  zoomIn,
+  zoomOut,
   cropMode,
   setPanel,
   endEdit,
@@ -70,9 +72,8 @@ export default function useEditorShortcuts({
         setPanel("crop");
         setInspectorOpen(true);
       } else if (event.key === "0") setZoom(1);
-      else if (event.key === "+" || event.key === "=")
-        setZoom((z) => Math.min(8, z + 0.25));
-      else if (event.key === "-") setZoom((z) => Math.max(1, z - 0.25));
+      else if (event.key === "+" || event.key === "=") zoomIn();
+      else if (event.key === "-") zoomOut();
       else if (event.key === "Tab") return;
     }
     const release = (event) => {

@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(AppKit)
+import AppKit
+#endif
 #if canImport(FotufilmCore)
 import FotufilmCore
 #endif
@@ -23,6 +26,11 @@ public final class HostService {
     private var developed: (key: String, width: Int, height: Int, pixels: [UInt8])?
     private var originals: (key: String, width: Int, height: Int, pixels: [UInt8])?
 
+    #if canImport(AppKit)
+    /// Where Copy Photo puts the picture; tests use a private pasteboard.
+    var pasteboard = NSPasteboard.general
+    #endif
+
     public init(engine: HostEngine) {
         self.engine = engine
     }
@@ -39,6 +47,17 @@ public final class HostService {
             }
             return try importImage(name: parameters["name"] as? String ?? "photo",
                                    bytes: payload)
+        case "importPath":
+            // A file the host chose (open panel, Finder, a drop): read in place, so its bytes
+            // never cross the bridge.
+            guard let path = parameters["path"] as? String, !path.isEmpty else {
+                throw HostEngine.Failure(description: "No file was named.")
+            }
+            guard FileManager.default.isReadableFile(atPath: path) else {
+                throw HostEngine.Failure(
+                    description: "\(URL(fileURLWithPath: path).lastPathComponent) cannot be read.")
+            }
+            return try register(HostImage(opening: URL(fileURLWithPath: path)))
         case "preview":
             let image = try self.image(parameters["handle"])
             return try answer(image.descriptor, images: ["preview": previewPNG(image)])
@@ -57,6 +76,8 @@ public final class HostService {
             return try answer(value: sampleScene(parameters))
         case "export":
             return try answer(export(params, parameters: parameters))
+        case "copyImage":
+            return try answer(copyImage(parameters))
         case "lensCatalogue":
             let data = Self.lensCatalogueURL.flatMap { try? Data(contentsOf: $0) }
             let profiles = data.flatMap { try? JSONSerialization.jsonObject(with: $0) } ?? []
@@ -109,7 +130,11 @@ public final class HostService {
             UUID().uuidString + "." + (URL(fileURLWithPath: name).pathExtension))
         try Data(bytes: bytes.baseAddress!, count: bytes.count).write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
-        let image = try HostImage(opening: file)
+        return try register(HostImage(opening: file))
+    }
+
+    /// Keeps a decoded photograph under a new handle and describes it to the editor.
+    private func register(_ image: HostImage) throws -> Answer {
         lock.lock()
         let handle = nextHandle
         nextHandle += 1
@@ -309,14 +334,50 @@ public final class HostService {
         guard let path = parameters["path"] as? String else {
             throw HostEngine.Failure(description: "No destination was chosen.")
         }
+        let type = parameters["type"] as? String ?? "image/png"
+        let quality = (parameters["quality"] as? Double).map { min(max($0, 0.01), 1) } ?? 0.95
+        let deep = type == "image/tiff"
+        let frame = try developFrame(parameters, deep: deep)
+        try HostExport.write(frame.pixels, width: frame.width, height: frame.height, deep: deep,
+                             knee: frame.knee, type: type, quality: quality,
+                             to: URL(fileURLWithPath: path))
+        return ["filename": URL(fileURLWithPath: path).lastPathComponent, "width": frame.width,
+                "height": frame.height]
+    }
+
+    /// The developed picture on the pasteboard, as the Mac app's Copy Photo puts it: the print
+    /// as it stands, in 8-bit Display P3.
+    private func copyImage(_ parameters: [String: Any]) throws -> [String: Any] {
+        #if canImport(AppKit)
+        let frame = try developFrame(parameters, deep: false)
+        let image = try HostExport.cgImage(frame.pixels, width: frame.width, height: frame.height,
+                                           deep: false, knee: frame.knee)
+        // Written out now, not promised: a promise would be kept on this engine thread, which
+        // has no run loop to answer another app's paste.
+        let bitmap = NSBitmapImageRep(cgImage: image)
+        guard let png = bitmap.representation(using: .png, properties: [:]),
+              let tiff = bitmap.tiffRepresentation(using: .lzw, factor: 0) else {
+            throw HostEngine.Failure(description: "The picture could not be encoded.")
+        }
+        pasteboard.clearContents()
+        guard pasteboard.setData(png, forType: .png), pasteboard.setData(tiff, forType: .tiff) else {
+            throw HostEngine.Failure(description: "The picture could not be copied.")
+        }
+        return ["width": frame.width, "height": frame.height]
+        #else
+        throw HostEngine.Failure(description: "This host has no pasteboard.")
+        #endif
+    }
+
+    /// The whole frame of a render request at its delivered size: 8-bit Display P3, or
+    /// display-linear P3 floats when `deep`, with the shoulder those take on encoding.
+    private func developFrame(_ parameters: [String: Any], deep: Bool) throws
+        -> (pixels: [UInt8], width: Int, height: Int, knee: Float) {
         var body = parameters
         body["viewport"] = nil
         let prepared = try prepare(JSONSerialization.data(withJSONObject: body))
         let scene = try sceneFor(prepared.image, geometry: prepared.geometry, sizes: prepared.sizes)
         let (width, height) = prepared.sizes.output
-        let type = parameters["type"] as? String ?? "image/png"
-        let quality = (parameters["quality"] as? Double).map { min(max($0, 0.01), 1) } ?? 0.95
-        let deep = type == "image/tiff"
         var pixels = [UInt8](repeating: 0, count: width * height * (deep ? 16 : 4))
         try pixels.withUnsafeMutableBytes { buffer in
             try engine.develop(scene, width: width, height: height,
@@ -330,10 +391,7 @@ public final class HostService {
                 try? prepared.edit.document.options(for: stock).sdrShoulderKnee(for: stock)
             }
         } ?? FilmSDRDelivery.boundedShoulderKnee
-        try HostExport.write(pixels, width: width, height: height, deep: deep, knee: knee,
-                             type: type, quality: quality, to: URL(fileURLWithPath: path))
-        return ["filename": URL(fileURLWithPath: path).lastPathComponent, "width": width,
-                "height": height]
+        return (pixels, width, height, knee)
     }
 
     private var sceneCache: (key: String, scene: [Float])?

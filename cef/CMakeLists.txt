@@ -80,6 +80,7 @@ if(OS_MAC)
   set(_mac_sources
     src/platform/mac/compositor.mm
     src/platform/mac/host_window.mm
+    src/platform/mac/main_menu.mm
     src/platform/mac/main.mm)
   # CEF's flags cover C++ sources only; Objective-C++ needs the same standard.
   set_source_files_properties(${_mac_sources} PROPERTIES COMPILE_OPTIONS "-fobjc-arc;-std=c++20")
