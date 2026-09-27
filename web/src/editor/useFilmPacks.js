@@ -110,6 +110,19 @@ export default function useFilmPacks({
     if (filmPacks) refreshPacks().catch(console.error);
   }, [filmPacks, refreshPacks]);
 
+  // A pack the Mac app added while this window was in the background shows when it comes back,
+  // unless an export holds the engine.
+  const busy = useRef(exporting);
+  busy.current = exporting;
+  useEffect(() => {
+    if (!filmPacks) return;
+    const focused = () => {
+      if (!busy.current) refreshPacks().catch(console.error);
+    };
+    window.addEventListener("focus", focused);
+    return () => window.removeEventListener("focus", focused);
+  }, [filmPacks, refreshPacks]);
+
   return {
     filmPacks,
     packInput,
