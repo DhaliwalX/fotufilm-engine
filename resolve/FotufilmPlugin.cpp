@@ -1988,7 +1988,7 @@ void forRows(int begin, int end, void (*work)(int begin, int end, void *context)
 /// Reads the float parameter block the bridge takes, as of `time`.
 void readParameters(Instance *instance, OfxTime time,
                     float parameters[FOTUFILM_BRIDGE_PARAMETER_COUNT]) {
-    for (int i = 0; i < FOTUFILM_BRIDGE_PARAMETER_COUNT; ++i) parameters[i] = 0;
+    fotufilm_bridge_resting_parameters(parameters, FOTUFILM_BRIDGE_PARAMETER_COUNT);
     const int32_t hostCount = fotufilm_bridge_host_parameter_count(FOTUFILM_HOST_RESOLVE);
     for (int32_t i = 0; i < hostCount; ++i) {
         const int32_t slot = fotufilm_bridge_host_parameter_slot(FOTUFILM_HOST_RESOLVE, i);

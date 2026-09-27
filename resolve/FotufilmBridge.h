@@ -163,6 +163,9 @@ int32_t fotufilm_bridge_host_parameter_choice(int32_t host, int32_t index, int32
                                               int32_t capacity);
 double fotufilm_bridge_host_parameter_choice_value(int32_t host, int32_t index, int32_t choice);
 int32_t fotufilm_bridge_control_capabilities_mask_for(int32_t host, int32_t index);
+/// Every slot at its control's resting value, as a host would write it. A host seeds its block
+/// with this so the controls it does not offer render at rest rather than at zero.
+void fotufilm_bridge_resting_parameters(float *parameters, int32_t count);
 int32_t fotufilm_bridge_resolved_format(int32_t stock, int32_t format, char *out, int32_t capacity);
 int32_t fotufilm_bridge_resolved_paper(int32_t stock, int32_t paper, char *out, int32_t capacity);
 int32_t fotufilm_bridge_development_count(int32_t stock);
