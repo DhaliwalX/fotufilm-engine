@@ -53,6 +53,20 @@ final class CInterfaceTests: XCTestCase {
 
     #if canImport(ImageIO)
     /// A grey ramp PNG, opened and developed through nothing but the C functions.
+    func testSubjectWeightsFollowThePickedInstance() {
+        // Two subjects side by side on a background, at the detector's resolution.
+        let labels: [UInt8] = [1, 1, 0, 2, 2,
+                               1, 1, 0, 2, 2]
+        let subject = HostSubject(labels: labels, width: 5, height: 2)
+        let left = subject.weights(at: [0.1, 0.5], width: 10, height: 4, softness: 0)
+        XCTAssertEqual(left[1 * 10 + 0], 1, accuracy: 1e-6)
+        XCTAssertEqual(left[1 * 10 + 9], 0, accuracy: 1e-6)
+        let every = subject.weights(at: [0.5, 0.5], width: 10, height: 4, softness: 0)
+        XCTAssertEqual(every[1 * 10 + 0], 1, accuracy: 1e-6)
+        XCTAssertEqual(every[1 * 10 + 9], 1, accuracy: 1e-6)
+        XCTAssertEqual(every[1 * 10 + 5], 0, accuracy: 0.5)
+    }
+
     func testOpenAndRenderThroughTheCInterface() throws {
         let engine = try makeEngine()
         defer { fotufilm_engine_destroy(engine) }
@@ -257,6 +271,27 @@ extension CInterfaceTests {
          "profileRequest": {"controls": {}}}
         """)
         XCTAssertEqual(corrected.json["width"] as? Int, 120)
+
+        // A selection of the bright end develops brighter than the photograph around it.
+        let selective = #""selective": {"kind": "light", "sample": [1, 1, 1], "range": 0.3, "softness": 0.5, "params": {"ev": 2}}"#
+        let plain = try call("render", """
+        {"handle": \(handle), "maxEdge": 64, "edit": {"stock": "gold200", "params": {}},
+         "profileRequest": {"controls": {}}}
+        """)
+        let selected = try call("render", """
+        {"handle": \(handle), "maxEdge": 64, "edit": {"stock": "gold200", "params": {}, \(selective)},
+         "profileRequest": {"controls": {}}}
+        """)
+        func pixel(_ result: (json: [String: Any], payload: Data), _ x: Int) throws -> UInt8 {
+            let range = try XCTUnwrap((result.json["payloads"] as? [String: [Int]])?["preview"])
+            let png = result.payload.subdata(in: range[0]..<(range[0] + range[1]))
+            let image = try XCTUnwrap(CGImageSourceCreateWithData(png as CFData, nil)
+                .flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) })
+            let data = try XCTUnwrap(image.dataProvider?.data as Data?)
+            return data[(image.height / 2) * image.bytesPerRow + x * (image.bitsPerPixel / 8) + 1]
+        }
+        XCTAssertGreaterThan(try pixel(selected, 60), try pixel(plain, 60))
+        XCTAssertEqual(try pixel(selected, 2), try pixel(plain, 2), accuracy: 2)
 
         // The pipeline inspector lists the walk and renders a step and its difference.
         let stages = try JSONSerialization.jsonObject(with: Data(try callRaw("stages",

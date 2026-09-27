@@ -244,7 +244,7 @@ export function parseEdit(json, stockIDs) {
   if (edit.selective != null) {
     const local = edit.selective;
     if (
-      !["color", "light"].includes(local.kind) ||
+      !["color", "light", "subject"].includes(local.kind) ||
       typeof local.localTone !== "boolean" ||
       typeof local.gradeSpace !== "boolean" ||
       !Number.isFinite(local.range) ||

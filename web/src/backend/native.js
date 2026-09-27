@@ -19,9 +19,10 @@ export function createNativeBackend(host) {
   };
   for (const name of BACKEND_METHODS) backend[name] = host[name].bind(host);
   // Optional: the still formats this host writes, when they are not the browser's, whether it
-  // honours a negative's contrast, and film suggestions for a scan.
+  // honours a negative's contrast, whether it selects subjects, and film suggestions for a scan.
   if (host.imageExportTypes) backend.imageExportTypes = Object.freeze([...host.imageExportTypes]);
   if (host.negativeContrast === true) backend.negativeContrast = true;
+  if (host.subjectSelection === true) backend.subjectSelection = true;
   if (typeof host.suggestNegativeFilms === "function")
     backend.suggestNegativeFilms = host.suggestNegativeFilms.bind(host);
   backend.createSession = () => {

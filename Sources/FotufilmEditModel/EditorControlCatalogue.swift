@@ -88,7 +88,9 @@ public enum EditorControlCatalogue {
         "title": "Selective", "section": "Selection", "kind": "Select By",
         "sample": "Sample a Point", "sampling": "Click the Photo…",
         "mask": "Show Mask", "clear": "Clear Selection", "match": "Match the Photograph",
-        "choices": [["value": "color", "label": "Color"], ["value": "light", "label": "Light"]],
+        // A subject needs the native host's subject detection.
+        "choices": [["value": "color", "label": "Color"], ["value": "light", "label": "Light"],
+                    ["value": "subject", "label": "Subject", "native": true]],
         "sliders": [
             ["key": "range", "label": "Range", "min": 0.05, "max": 0.6, "def": 0.25, "step": 0.01],
             ["key": "softness", "label": "Softness", "min": 0.05, "max": 1.0, "def": 0.5, "step": 0.01],

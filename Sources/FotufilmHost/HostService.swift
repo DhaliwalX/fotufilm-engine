@@ -258,13 +258,9 @@ public final class HostService {
                                           scene: scene, width: width, height: height,
                                           image: image, edit: edit)
             } else {
-                try pixels.withUnsafeMutableBytes { buffer in
-                    try engine.develop(scene, width: width, height: height,
-                                       contentHeadroom: image.contentHeadroom, edit: edit,
-                                       into: .init(maxEdge: 0, format: .rgba8DisplayP3,
-                                                   pixels: buffer.baseAddress!, rowBytes: width * 4,
-                                                   capacity: buffer.count))
-                }
+                pixels = try developSelective(scene, width: width, height: height, image: image,
+                                              edit: edit, body: body,
+                                              cropMode: request.cropMode == true)
             }
             renderMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - developStart) / 1e6
             var frame = (pixels: pixels, width: width, height: height)
@@ -314,6 +310,60 @@ public final class HostService {
         if let plan { answerBody["framePlan"] = plan.json }
         return try answer(answerBody, images: ["preview": png(developedFrame),
                                                "original": png(originalFrame)])
+    }
+
+    /// The photograph's develop, with a selective adjustment blended over it when the edit has
+    /// one and the crop tool is not showing.
+    private func developSelective(_ scene: [Float], width: Int, height: Int, image: HostImage,
+                                  edit: WebNativeEdit, body: [String: Any],
+                                  cropMode: Bool) throws -> [UInt8] {
+        func develop(_ edit: WebNativeEdit) throws -> [UInt8] {
+            var pixels = [UInt8](repeating: 0, count: width * height * 4)
+            try pixels.withUnsafeMutableBytes { buffer in
+                try engine.develop(scene, width: width, height: height,
+                                   contentHeadroom: image.contentHeadroom, edit: edit,
+                                   into: .init(maxEdge: 0, format: .rgba8DisplayP3,
+                                               pixels: buffer.baseAddress!, rowBytes: width * 4,
+                                               capacity: buffer.count))
+            }
+            return pixels
+        }
+        let ground = try develop(edit)
+        guard !cropMode,
+              let saved = (body["edit"] as? [String: Any])?["selective"] as? [String: Any]
+        else { return ground }
+        let selection = try JSONDecoder().decode(HostSelection.self,
+                                                 from: JSONSerialization.data(withJSONObject: saved))
+        guard selection.isActive else { return ground }
+        let showMask = body["showMask"] as? Bool ?? false
+        var subject: [Float]?
+        if selection.isSubject {
+            guard let found = subjects(scene, width: width, height: height, image: image) else {
+                throw HostEngine.Failure(description: "No subject was found in this photograph.")
+            }
+            subject = found.weights(at: selection.point, width: width, height: height,
+                                    softness: selection.softness)
+        }
+        let selected = showMask ? nil : try develop(selection.develop(edit))
+        return selection.composite(ground: ground, selected: selected, scene: scene, width: width,
+                                   height: height, showMask: showMask, subject: subject)
+    }
+
+    private var subjectCache: (key: String, subject: HostSubject?)?
+
+    /// Subject detection over the framed photograph, kept per photograph and geometry: the model
+    /// sees the picture at no more than 1024 pixels, so a preview and an export share a reading.
+    private func subjects(_ scene: [Float], width: Int, height: Int, image: HostImage) -> HostSubject? {
+        let key = sceneCache.map { $0.key.split(separator: "|").prefix(2).joined(separator: "|") }
+            ?? "\(ObjectIdentifier(image))"
+        if let subjectCache, subjectCache.key == key { return subjectCache.subject }
+        let scale = min(1, 1024 / Double(max(width, height)))
+        let (w, h) = (max(1, Int(Double(width) * scale)), max(1, Int(Double(height) * scale)))
+        let reduced = scale < 1 ? AreaResample.reduce(scene, width: width, height: height, to: w, h)
+                                : scene
+        let subject = HostSubject.detect(image.display(reduced, width: w, height: h), width: w, height: h)
+        subjectCache = (key, subject)
+        return subject
     }
 
     // MARK: Pipeline walk

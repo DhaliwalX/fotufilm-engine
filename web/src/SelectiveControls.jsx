@@ -10,6 +10,7 @@ import { SELECTION } from "./generated/controls.js";
 import { SLIDERS } from "./editor-state.js";
 import { newSelection, selectionDevelop, selectionKeys } from "./selective.js";
 import { Adjustment } from "./Adjustment.jsx";
+import { useBackend } from "./backend/BackendContext.jsx";
 export default function SelectiveControls({
   edit,
   patch,
@@ -21,7 +22,12 @@ export default function SelectiveControls({
   canSample,
   disabled,
 }) {
+  const backend = useBackend();
   const selection = edit.selective || newSelection(edit);
+  // Subjects come from the native host's detector; the browser selects by colour and light.
+  const choices = SELECTION.choices.filter(
+    (option) => !option.native || backend.subjectSelection,
+  );
   const change = (value, group) =>
     patch(
       {
@@ -57,7 +63,7 @@ export default function SelectiveControls({
                 width: "100%",
               }}
             >
-              {SELECTION.choices.map((option) => (
+              {choices.map((option) => (
                 <PickerItem
                   id={option.value}
                   key={option.value}
@@ -115,8 +121,9 @@ export default function SelectiveControls({
               {SELECTION.clear}
             </Button>
             <p className="medium-detail">
-              Sample the photo to select similar colors or brightness, then
-              adjust the selection.
+              {selection.kind === "subject"
+                ? "Click a subject in the photo to select it, or the background to select every subject, then adjust the selection."
+                : "Sample the photo to select similar colors or brightness, then adjust the selection."}
             </p>
           </div>
         </DisclosurePanel>

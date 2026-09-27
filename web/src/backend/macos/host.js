@@ -64,6 +64,7 @@ export function createMacBackend(channel) {
     analyseNegative: (image, monochrome) =>
       call("analyseNegative", { handle: image.handle, monochrome }),
     negativeContrast: channel.binary === true,
+    subjectSelection: channel.binary === true,
     suggestNegativeFilms: (image) =>
       call("suggestNegativeFilms", { handle: image.handle }),
     async convertNegative(image, plan, { signal, maxEdge, contrast = 0, onProgress } = {}) {

@@ -91,8 +91,9 @@ The transport keeps the contract in `web/src/backend/README.md` and the call sha
    `export` (PNG, 16-bit TIFF, JPEG, HEIC, to a native save panel), print frames (`printFrame`,
    framed renders and exports), lens correction (`lensPlan`, the catalogue, and the correction in
    the geometry resample), negatives (`analyseNegative`, `convertNegative` with contrast,
-   `suggestNegativeFilms`) and the pipeline inspector (`stages`, stage and difference renders)
-   answer today. Still to come: selective edits and video.
+   `suggestNegativeFilms`), the pipeline inspector (`stages`, stage and difference renders) and
+   selective edits by colour, light or subject (Vision's foreground instances, as the Mac app
+   selects) answer today. Still to come: video.
 2. **Native presentation in the editor.** A backend capability that lets `ImageCanvas` leave the
    photograph's area transparent and report its rectangle, zoom and pan to the host (as
    `setImageLayer` does in the diagnostics page); renders then go to the image layer instead of

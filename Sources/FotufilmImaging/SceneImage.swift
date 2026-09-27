@@ -48,6 +48,14 @@ public struct SceneImage {
     /// Decodes any supported image as associated scene-referred linear Rec.2020 RGBA, preserving
     /// values above 1 for HDR/raw sources. Association is retained until the caller composites the
     /// scene.
+    private static func orientation(of url: URL) -> CGImagePropertyOrientation? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
+              let value = properties[kCGImagePropertyOrientation as String] as? NSNumber
+        else { return nil }
+        return CGImagePropertyOrientation(rawValue: value.uint32Value)
+    }
+
     public static func decode(url: URL) throws -> SceneImage {
         let path = url.path
         let isRaw = RawDecode.isRaw(url: url)
@@ -107,8 +115,15 @@ public struct SceneImage {
                 expandedHDR: hdr, sdrReference: reference, context: context)
             image = ProcessedHDRExposure.applying(gain, to: hdr)
         }
-        guard let ci = image else {
+        guard var ci = image else {
             throw Failure(description: "Could not read image: \(path)")
+        }
+        // Upright as the apps show it: a camera's orientation tag turns the pixels (RAW decodes
+        // upright already).
+        if !isRaw, let orientation = orientation(of: url), orientation != .up {
+            ci = ci.oriented(orientation)
+            ci = ci.transformed(by: CGAffineTransform(translationX: -ci.extent.minX,
+                                                      y: -ci.extent.minY))
         }
         let width = Int(ci.extent.width.rounded()), height = Int(ci.extent.height.rounded())
         guard width > 0, height > 0, ci.extent.isInfinite == false else {
