@@ -65,6 +65,42 @@ final class PackContainerTests: XCTestCase {
             in: directory.appendingPathComponent("missing"), macAppVersion: "1.7").isEmpty)
     }
 
+    func testLibraryInstallsReplacesListsAndRemovesCommunityPacks() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let ring = keyring()
+        func seal(_ id: String, _ kind: FilmPackKind = .community) throws -> Data {
+            try FilmPackContainer.seal(
+                FilmPackManifest(packID: id, name: "Pack \(id)", version: "2",
+                                 stocks: [sample(id: "one"), sample(id: "two")]),
+                kind: kind, keyID: 1, key: key)
+        }
+        let added = try FilmPackLibrary.install(seal("shared"), in: directory,
+                                                macAppVersion: "1.7", keyring: ring)
+        XCTAssertEqual(added.title, "Pack added")
+        XCTAssertEqual(added.summary, "Pack shared v2 — 2 films")
+        XCTAssertEqual(try FilmPackLibrary.install(seal("shared"), in: directory,
+                                                   macAppVersion: "1.7", keyring: ring).title,
+                       "Pack updated")
+        for (data, failure) in [(try seal("mine"), FilmPackLibrary.Failure.collidesWithOwnFilms),
+                                (try seal("a.b"), .unstorableID),
+                                (try seal("device", .local), .deviceBound),
+                                (try seal("app", .vault), .partOfAnApp)] {
+            XCTAssertThrowsError(try FilmPackLibrary.install(data, in: directory,
+                                                             macAppVersion: "1.7", keyring: ring)) {
+                XCTAssertEqual($0 as? FilmPackLibrary.Failure, failure)
+            }
+        }
+        let installed = FilmPackLibrary.installedCommunityPacks(in: directory, macAppVersion: "1.7",
+                                                                keyring: ring)
+        XCTAssertEqual(installed.map(\.packID), ["shared"])
+        XCTAssertEqual(installed.first?.stockIDs, ["shared.one", "shared.two"])
+        try FilmPackLibrary.remove(packID: "shared", in: directory)
+        XCTAssertThrowsError(try FilmPackLibrary.remove(packID: "shared", in: directory)) {
+            XCTAssertEqual($0 as? FilmPackLibrary.Failure, .notFound("shared"))
+        }
+    }
+
     private func keyring() -> FilmPackKeyring {
         let ring = FilmPackKeyring()
         for kind in [FilmPackKind.vault, .community, .local] {

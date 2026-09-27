@@ -4,12 +4,14 @@ import { appSetting, setAppSetting } from "../app-settings.js";
 import { canShowNegative } from "../negative-view.js";
 import { PLAYBACK_TOGGLE } from "../video-player/usePlayerShortcuts.js";
 import { editHistory, filmNamer, redoTitle, undoTitle } from "../edit-history.js";
+import { isFilmPack } from "./useFilmPacks.js";
 
 // The native menu bar (cef/src/platform/mac) runs the editor's own handlers: the host sends
 // "fotufilm-native-command" {command} and "fotufilm-native-open" {paths}, and the editor reports
 // which commands apply now ("menuState") so the menus grey out and tick as its toolbars do, what
 // Undo and Redo would undo ("titles") and the Edit History ("history", one title per step; the
-// command "history:<step>" goes to a step).
+// command "history:<step>" goes to a step). Film packs among the opened paths (File › Import Film
+// Pack…, a Finder double-click) are installed.
 
 // The inspector tabs in the order ⌘1…⌘6 choose them.
 export const MENU_PANELS = [
@@ -123,6 +125,7 @@ export function menuState(e) {
     newGrainPattern: photo && !!e.edit?.stock,
     settings: true,
     plugins: !!e.plugins && !e.exporting,
+    importFilmPack: !!e.filmPacks && !e.exporting,
     autoFilm: !!e.backend?.suggestFilm,
     forgetFilms: !!e.backend?.forgetFilmChoices,
     zoomIn: photo && !e.cropMode && e.zoom < 8,
@@ -223,10 +226,9 @@ export default function useNativeCommands(editor) {
     const open = (event) => {
       const paths = event.detail?.paths;
       if (!paths?.length) return;
-      latest.current.setLibraryOpen(false);
-      latest.current.acceptFiles(
-        paths.map((path) => ({ path, name: path.split("/").pop() })),
-      );
+      const items = paths.map((path) => ({ path, name: path.split("/").pop() }));
+      if (items.some(({ name }) => !isFilmPack(name))) latest.current.setLibraryOpen(false);
+      latest.current.acceptFiles(items);
     };
     document.addEventListener("focusin", focus);
     document.addEventListener("focusout", focus);

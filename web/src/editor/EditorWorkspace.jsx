@@ -15,6 +15,8 @@ import ShortcutsDialog from "./ShortcutsDialog.jsx";
 import SupportDialog from "./SupportDialog.jsx";
 import SettingsDialog from "./SettingsDialog.jsx";
 import PluginsDialog from "./PluginsDialog.jsx";
+import FilmPackNotice from "./FilmPackNotice.jsx";
+import { FILM_PACK_EXTENSION } from "./useFilmPacks.js";
 import { useEditor } from "./EditorContext.jsx";
 import { PhotoLibrary } from "../photo-library/index.js";
 import LibraryHandoff from "./LibraryHandoff.jsx";
@@ -34,6 +36,9 @@ export default function Workspace() {
     libraryOpen,
     setLibraryOpen,
     openFromLibrary,
+    filmPacks,
+    packInput,
+    importFilmPacks,
   } = useEditor();
   const negative = useNegativeImportDialog();
   return (
@@ -74,6 +79,19 @@ export default function Workspace() {
           e.target.value = "";
         }}
       />
+      {filmPacks && (
+        <input
+          ref={packInput}
+          type="file"
+          accept={FILM_PACK_EXTENSION}
+          multiple
+          hidden
+          onChange={(e) => {
+            importFilmPacks(Array.from(e.target.files)).catch(console.error);
+            e.target.value = "";
+          }}
+        />
+      )}
       <DialogContainer onDismiss={() => setDialog(null)}>
         {dialog === "negative" ? (
           <NegativeImportDialog
@@ -90,6 +108,8 @@ export default function Workspace() {
           <SettingsDialog />
         ) : dialog === "plugins" ? (
           <PluginsDialog />
+        ) : dialog === "filmPack" ? (
+          <FilmPackNotice />
         ) : null}
       </DialogContainer>
       {videoDownload && (

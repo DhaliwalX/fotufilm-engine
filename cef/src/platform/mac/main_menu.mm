@@ -52,6 +52,8 @@ static const NSUInteger kRecentLimit = 10;
 }
 
 + (void)note:(NSURL*)url {
+  // A film pack is installed rather than opened, so it is no recent document.
+  if ([url.pathExtension caseInsensitiveCompare:@"fotufilmpack"] == NSOrderedSame) return;
   NSMutableArray<NSString*>* paths =
       [[NSUserDefaults.standardUserDefaults stringArrayForKey:kRecentKey] mutableCopy]
           ?: [NSMutableArray array];
@@ -164,6 +166,8 @@ NSMenu* FotufilmMainMenu(NSArray<NSDictionary*>* plugins) {
   Command(file, @"Import Scanned Negative…", @"importNegative");
   NSMenu* recents = Submenu(file, @"Open Recent");
   recents.delegate = recent;
+  [file addItem:[NSMenuItem separatorItem]];
+  Add(file, @"Import Film Pack…", @selector(importFilmPack:), @"i", kCommand | kShift);
   [file addItem:[NSMenuItem separatorItem]];
   Command(file, @"Export…", @"export", @"e");
   [file addItem:[NSMenuItem separatorItem]];

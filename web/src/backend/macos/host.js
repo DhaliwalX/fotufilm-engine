@@ -213,6 +213,25 @@ export function createMacBackend(channel) {
       }, { signal: request.signal, onProgress: request.onProgress });
       return { ...saved, dispose() {} };
     },
+    // Import Film Pack: the engine installs community packs where this person's films live and
+    // reloads its films; `reloadStocks` then makes the next `loadStocks` ask again.
+    filmPacks: can.filmPacks
+      ? {
+          list: () => call("filmPacks"),
+          importPath: (path) => call("importFilmPack", { path }),
+          async importFile(file) {
+            if (channel.binary)
+              return call("importFilmPack", { name: file.name }, {
+                payload: await file.arrayBuffer(),
+              });
+            return call("importFilmPack", { name: file.name, data: await fileBase64(file) });
+          },
+          remove: (packID) => call("removeFilmPack", { packID }),
+        }
+      : undefined,
+    reloadStocks() {
+      ready = stocks = undefined;
+    },
     lenses,
   };
 }

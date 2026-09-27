@@ -11,6 +11,8 @@
 // Runs the editor command named by the item's representedObject (web/src/editor/useNativeCommands.js).
 - (void)performEditorCommand:(id)sender;
 - (void)openRecentFile:(id)sender;
+// File › Import Film Pack…: an open panel for .fotufilmpack files, which the editor installs.
+- (void)importFilmPack:(id)sender;
 - (void)clearRecentFiles:(id)sender;
 // Opens the fotufilm.com page named by the item's representedObject.
 - (void)openHelpPage:(id)sender;
@@ -35,6 +37,7 @@ NSMenu* FotufilmMainMenu(NSArray<NSDictionary*>* plugins);
 @interface FotufilmRecentFiles : NSObject
 // The files still where they were, newest first.
 + (NSArray<NSURL*>*)URLs;
+// Film packs are not noted: they are installed, not opened.
 + (void)note:(NSURL*)url;
 + (void)clear;
 @end

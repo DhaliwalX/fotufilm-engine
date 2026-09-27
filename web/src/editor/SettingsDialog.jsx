@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, Heading, Content } from "@react-spectrum/s2/Dialog";
 import { PickerItem, Picker } from "@react-spectrum/s2/Picker";
 import {
@@ -16,6 +16,7 @@ import {
   useAppSetting,
 } from "../app-settings.js";
 import { useEditor } from "./EditorContext.jsx";
+import { FILM_PACK_EXTENSION, packNotice } from "./useFilmPacks.js";
 
 // The Mac app's Settings window: what new photographs start on, how photos export, and the film
 // model. Everything here is kept on this device; open photographs keep their own edits.
@@ -53,6 +54,88 @@ function SettingSwitch({ label, setting }) {
     <Switch isSelected={value} onChange={(next) => setAppSetting(setting, next)}>
       {label}
     </Switch>
+  );
+}
+
+// The community packs installed where this person's films live: add more, or take one away with
+// its films.
+function FilmPacks() {
+  const { installedPacks, refreshPacks, importFilmPacks, removeFilmPack, exporting } =
+    useEditor();
+  const input = useRef(null);
+  const [notice, setNotice] = useState(null);
+  const [busy, setBusy] = useState(false);
+  // Read afresh each time: another app may have added one since.
+  useEffect(() => {
+    refreshPacks().catch(console.error);
+  }, [refreshPacks]);
+  const run = async (work, failure) => {
+    setBusy(true);
+    try {
+      setNotice(await work());
+    } catch (error) {
+      setNotice({ title: failure, message: error.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <h3>Film Packs</h3>
+      {installedPacks?.length ? (
+        <ul className="film-packs" aria-label="Installed film packs">
+          {installedPacks.map((pack) => (
+            <li key={pack.packID}>
+              <span>
+                {pack.version ? `${pack.name} v${pack.version}` : pack.name}
+                <small>{pack.problem ?? pack.films.join(", ")}</small>
+              </span>
+              <Button
+                size="S"
+                variant={"secondary"}
+                aria-label={`Remove ${pack.name}`}
+                isDisabled={busy || exporting}
+                onPress={() =>
+                  run(() => removeFilmPack(pack.packID).then(() => null), "Pack not removed")
+                }
+              >
+                {"Remove"}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="medium-detail">No film packs are installed.</p>
+      )}
+      <Button
+        size="S"
+        variant={"secondary"}
+        isDisabled={busy || exporting}
+        onPress={() => input.current?.click()}
+      >
+        {"Import Film Pack…"}
+      </Button>
+      <input
+        ref={input}
+        type="file"
+        accept={FILM_PACK_EXTENSION}
+        multiple
+        hidden
+        onChange={(e) => {
+          const files = Array.from(e.target.files);
+          e.target.value = "";
+          run(
+            async () => packNotice(await importFilmPacks(files, { quiet: true })),
+            "Pack not added",
+          );
+        }}
+      />
+      {notice && (
+        <p className="medium-detail film-pack-notice" role="status">
+          {`${notice.title} — ${notice.message}`}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -105,6 +188,7 @@ function General({ backend, stocks }) {
           {forgotten ? "Film Suggestions Reset" : "Reset Film Suggestions"}
         </Button>
       )}
+      {backend.filmPacks && <FilmPacks />}
       <h3>Reset</h3>
       <Button size="S" variant={"negative"} onPress={resetAppSettings}>
         {"Reset All Settings"}
