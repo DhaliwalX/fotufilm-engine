@@ -319,6 +319,26 @@ extension CInterfaceTests {
         XCTAssertEqual(service.filmPreferences.observationCount, 0)
     }
 
+    /// Export Original copies only a camera RAW read in place; anything else is refused.
+    func testExportOriginalNeedsACameraRAW() throws {
+        let engine = try makeEngine()
+        defer { fotufilm_engine_destroy(engine) }
+        let service = Unmanaged<HostEngine>.fromOpaque(UnsafeRawPointer(engine))
+            .takeUnretainedValue().service
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fotufilm-original-\(UUID().uuidString).png")
+        try writeRamp(to: url, width: 32, height: 16)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let opened = try service.call("importPath", params: Data(#"{"path": "\#(url.path)"}"#.utf8),
+                                      payload: nil)
+        let descriptor = try XCTUnwrap(JSONSerialization.jsonObject(with: opened.json) as? [String: Any])
+        XCTAssertNil(descriptor["original"])
+        let handle = try XCTUnwrap(descriptor["handle"] as? Int)
+        XCTAssertThrowsError(try service.call(
+            "exportOriginal", params: Data(#"{"handle": \#(handle), "path": "/tmp/x.png"}"#.utf8),
+            payload: nil))
+    }
+
     /// The editor's own calls: import a photograph's bytes, develop a cropped render of it.
     func testHostCallsImportAndRender() throws {
         let engine = try makeEngine()

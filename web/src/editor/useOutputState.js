@@ -1,5 +1,6 @@
 import { outputSize } from "../geometry.js";
 import { usePrintFrame } from "../usePrintFrame.js";
+import { exportMaxEdge } from "../export-sizes.js";
 export default function useOutputState({
   stocks,
   search,
@@ -21,10 +22,10 @@ export default function useOutputState({
   const width = edit.rotation % 2 ? rawHeight : rawWidth,
     height = edit.rotation % 2 ? rawWidth : rawHeight;
   const cropSize = outputSize(edit.crop, width, height);
-  const exportScale =
-    exportSize === "full"
-      ? 1
-      : Math.min(1, Number(exportSize) / Math.max(width, height));
+  const exportScale = Math.min(
+    1,
+    exportMaxEdge(exportSize, width, height) / Math.max(width, height),
+  );
   const exportSourceSize = outputSize(
     edit.crop,
     Math.max(1, Math.round(width * exportScale)),

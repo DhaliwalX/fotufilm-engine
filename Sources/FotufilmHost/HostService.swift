@@ -63,7 +63,12 @@ public final class HostService {
                 return try importMovie(at: url, owned: false,
                                        playback: parameters["playback"] as? Bool == true)
             }
-            return try imported(HostImage.open(url))
+            let image = try HostImage.open(url)
+            // A camera RAW read in place can be exported as itself.
+            if image.isRAW { image.originalFile = url }
+            return try imported(image)
+        case "exportOriginal":
+            return try answer(exportOriginal(parameters))
         case "preview":
             let image = try self.image(parameters["handle"])
             return try answer(image.descriptor, images: ["preview": previewPNG(image)])
@@ -182,6 +187,24 @@ public final class HostService {
         try Data(bytes: bytes.baseAddress!, count: bytes.count).write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
         return try imported(HostImage.open(file))
+    }
+
+    /// Export Original: the camera RAW file itself, copied where the save panel chose. No edit
+    /// and no size applies, as in the Mac app.
+    private func exportOriginal(_ parameters: [String: Any]) throws -> [String: Any] {
+        let image = try self.image(parameters["handle"])
+        guard let source = image.originalFile else {
+            throw HostEngine.Failure(description: "Export Original needs a camera RAW opened from a file.")
+        }
+        guard let path = parameters["path"] as? String, !path.isEmpty else {
+            throw HostEngine.Failure(description: "No destination was chosen.")
+        }
+        let destination = URL(fileURLWithPath: path)
+        if destination.standardizedFileURL != source.standardizedFileURL {
+            try? FileManager.default.removeItem(at: destination)
+            try FileManager.default.copyItem(at: source, to: destination)
+        }
+        return ["filename": destination.lastPathComponent]
     }
 
     /// Keeps a decoded photograph under a new handle and describes it to the editor.

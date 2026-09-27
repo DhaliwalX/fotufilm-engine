@@ -153,6 +153,9 @@ export function createMacBackend(channel) {
         filename: request.filename,
       });
     },
+    // Export Original: a camera RAW opened from a file, copied as it is.
+    exportOriginal: (image) =>
+      call("exportOriginal", { handle: image.handle, filename: image.original.name, type: "" }),
     // What the native engine can write for this edit: metadata policies and HDR HEIC.
     exportOptions: can.imageExportTypes?.length
       ? async (request) => call("exportOptions", renderRequest(request, await catalogue()))

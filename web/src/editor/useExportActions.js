@@ -1,4 +1,6 @@
+import { exportMaxEdge } from "../export-sizes.js";
 import { cleanName } from "./file-download.js";
+import { setAppSetting } from "../app-settings.js";
 export default function useExportActions({
   backend,
   active,
@@ -22,6 +24,11 @@ export default function useExportActions({
   exportMetadata,
   exportHDR,
 }) {
+  // The picture's upright size, which a fractional export size is a fraction of.
+  const upright = () => {
+    const { naturalWidth: w = 0, naturalHeight: h = 0 } = active?.image ?? {};
+    return edit.rotation % 2 ? [h, w] : [w, h];
+  };
   async function exportClip() {
     if (!active?.image.video || !session || exporting) return;
     const controller = new AbortController();
@@ -42,7 +49,7 @@ export default function useExportActions({
         filename,
         format: videoFormat,
         quality: videoQuality,
-        maxEdge: exportSize === "full" ? Infinity : Number(exportSize),
+        maxEdge: exportMaxEdge(exportSize, ...upright()),
         signal: controller.signal,
         onProgress: ({ progress, frames, finalizing }) =>
           setStatus(
@@ -55,6 +62,11 @@ export default function useExportActions({
         await saved.dispose();
         return;
       }
+      setAppSetting("lastVideoExport", {
+        format: videoFormat,
+        quality: videoQuality,
+        size: exportSize,
+      });
       await videoDownloadRef.current?.dispose();
       videoDownloadRef.current = saved;
       setVideoDownload(saved);
@@ -79,6 +91,12 @@ export default function useExportActions({
     setExporting(true);
     setError(null);
     try {
+      if (exportType === "original") {
+        // The camera RAW itself: no render, no size, no settings to remember.
+        await backend.exportOriginal(active.image);
+        setDialog(null);
+        return;
+      }
       const extension =
         exportType === "image/jpeg" ? "jpg" : exportType.split("/")[1];
       await backend.exportImage({
@@ -86,13 +104,19 @@ export default function useExportActions({
         image: active.image,
         edit,
         stock: stockId,
-        maxEdge: exportSize === "full" ? Infinity : Number(exportSize),
+        maxEdge: exportMaxEdge(exportSize, ...upright()),
         type: exportType,
         quality: quality / 100,
         metadata: exportMetadata,
         hdr: exportHDR,
         onProgress: setStatus,
         filename: `${cleanName(active.name)}-${edit.stock || "normal"}${edit.medium ? `-${edit.medium}` : ""}.${extension}`,
+      });
+      setAppSetting("lastPhotoExport", {
+        type: exportType,
+        size: exportSize,
+        quality,
+        metadata: exportMetadata,
       });
       setDialog(null);
     } catch (e) {

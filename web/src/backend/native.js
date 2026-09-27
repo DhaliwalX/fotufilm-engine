@@ -36,6 +36,7 @@ export function createNativeBackend(host) {
     "importPath",
     "copyImage",
     "exportOptions",
+    "exportOriginal",
     "suggestFilm",
     "recordFilmChoice",
     "forgetFilmChoices",

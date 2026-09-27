@@ -15,6 +15,9 @@ export const APP_SETTINGS = Object.freeze({
   estimatedHalation: false,
   // Whether a HEIC export starts as HDR where the edit allows it.
   photoHDR: false,
+  // The settings of the last photo and movie exported, for Use Last Export Settings.
+  lastPhotoExport: null,
+  lastVideoExport: null,
 });
 
 const PREFIX = "fotufilm.setting.";

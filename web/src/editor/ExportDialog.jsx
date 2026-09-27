@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Dialog, Heading, Content } from "@react-spectrum/s2/Dialog";
 import { PickerItem, Picker } from "@react-spectrum/s2/Picker";
 import { Adjustment } from "../Adjustment.jsx";
@@ -8,6 +9,8 @@ import { Button } from "@react-spectrum/s2/Button";
 import { Switch } from "@react-spectrum/s2/Switch";
 import { useEditor } from "./EditorContext.jsx";
 import { METADATA_LABELS, useExportOptions } from "./useExportOptions.js";
+import { exportMaxEdge, exportSizeOptions } from "../export-sizes.js";
+import { useAppSetting } from "../app-settings.js";
 
 const IMAGE_TYPES = [
   { id: "image/png", label: "PNG" },
@@ -16,6 +19,8 @@ const IMAGE_TYPES = [
   { id: "image/webp", label: "WebP" },
 ];
 const LOSSY = ["image/jpeg", "image/webp", "image/heic"];
+/** Export Original's format: the camera RAW file itself (`backend.exportOriginal`). */
+export const ORIGINAL = "original";
 
 /** The browser encoder's movie formats; a native backend lists its own. */
 export function videoExportTypes(backend) {
@@ -46,6 +51,8 @@ export default function ExportDialog() {
     edit,
     framedSize,
     cropSize,
+    width,
+    height,
     exportScale,
     status,
     videoExportController,
@@ -58,6 +65,32 @@ export default function ExportDialog() {
     stockId,
   } = useEditor();
   const options = useExportOptions({ backend, active, edit, stockId });
+  const video = !!active?.image.video;
+  const originalAvailable =
+    !video && !!backend.exportOriginal && !!active?.image.original;
+  const original = originalAvailable && exportType === ORIGINAL;
+  // A photograph with no camera RAW behind it has no original to export.
+  useEffect(() => {
+    if (exportType === ORIGINAL && !originalAvailable && !video)
+      setExportType((backend.imageExportTypes ?? IMAGE_TYPES)[0].id);
+  }, [exportType, originalAvailable, video, backend, setExportType]);
+  const sizes = exportSizeOptions(width, height, video, cropSize);
+  // The settings of the last export of this kind, offered back as the Mac app offers them.
+  const last = useAppSetting(video ? "lastVideoExport" : "lastPhotoExport");
+  const current = video
+    ? { format: videoFormat, quality: videoQuality, size: exportSize }
+    : { type: exportType, size: exportSize, quality, metadata: exportMetadata };
+  const applyLast = () => {
+    if (video) {
+      setVideoFormat(last.format);
+      setVideoQuality(last.quality);
+    } else {
+      setExportType(last.type);
+      setQuality(last.quality);
+      setExportMetadata(last.metadata);
+    }
+    setExportSize(last.size);
+  };
   const hdr = exportType === "image/heic" && options?.hdr === true && exportHDR;
   const videoType = active?.image.video
     ? videoExportTypes(backend).find(({ id }) => id === videoFormat)
@@ -69,6 +102,11 @@ export default function ExportDialog() {
       </Heading>
       <Content>
         <fieldset disabled={exporting}>
+          {last && JSON.stringify(last) !== JSON.stringify(current) && (
+            <Button size="S" variant={"secondary"} onPress={applyLast}>
+              {"Use Last Export Settings"}
+            </Button>
+          )}
           <div className="select-row">
             Format
             <Picker
@@ -86,7 +124,10 @@ export default function ExportDialog() {
                   </PickerItem>
                 ))
               ) : (
-                (backend.imageExportTypes ?? IMAGE_TYPES).map(({ id, label }) => (
+                [
+                  ...(backend.imageExportTypes ?? IMAGE_TYPES),
+                  ...(originalAvailable ? [{ id: ORIGINAL, label: "Original RAW" }] : []),
+                ].map(({ id, label }) => (
                   <PickerItem key={id} id={id}>
                     {label}
                   </PickerItem>
@@ -94,18 +135,26 @@ export default function ExportDialog() {
               )}
             </Picker>
           </div>
+          {original ? (
+            <p className="export-detail">
+              Copies the original camera RAW file. Fotufilm edits and the
+              resolution setting are not included.
+            </p>
+          ) : (
+            <>
           <div className="select-row">
             Size
             <Picker
               aria-label="Size"
-              value={exportSize}
+              value={sizes.some(({ id }) => id === exportSize) ? exportSize : "full"}
               onChange={(e) => setExportSize(e)}
               size={"S"}
             >
-              <PickerItem id="full">Full resolution</PickerItem>
-              <PickerItem id="3840">3840 px long edge</PickerItem>
-              <PickerItem id="2048">2048 px long edge</PickerItem>
-              <PickerItem id="1600">1600 px long edge</PickerItem>
+              {sizes.map(({ id, label, detail }) => (
+                <PickerItem key={id} id={id} textValue={label}>
+                  {detail ? `${label} · ${detail}` : label}
+                </PickerItem>
+              ))}
             </Picker>
           </div>
           {!active?.image.video &&
@@ -169,7 +218,7 @@ export default function ExportDialog() {
               ? videoDimensions(
                   active.image,
                   edit,
-                  exportSize === "full" ? Infinity : Number(exportSize),
+                  exportMaxEdge(exportSize, width, height),
                 ).width
               : (framedSize.plan?.placement.size.width ??
                 Math.max(1, Math.round(cropSize.width * exportScale)))}{" "}
@@ -178,7 +227,7 @@ export default function ExportDialog() {
               ? videoDimensions(
                   active.image,
                   edit,
-                  exportSize === "full" ? Infinity : Number(exportSize),
+                  exportMaxEdge(exportSize, width, height),
                 ).height
               : (framedSize.plan?.placement.size.height ??
                 Math.max(1, Math.round(cropSize.height * exportScale)))}{" "}
@@ -204,8 +253,10 @@ export default function ExportDialog() {
               ? "Exports every frame in the trim range with the current film, crop, and adjustments. Writes directly to disk; no upload. Odd dimensions are padded by one pixel."
               : "Exports the finished image with the current crop and adjustments."}
           </p>
+            </>
+          )}
         </fieldset>
-        {!active?.image.video && framedSize.error && (
+        {!active?.image.video && !original && framedSize.error && (
           <p role="alert">{framedSize.error}</p>
         )}
         {exporting && <p role="status">{status || "Preparing export"}</p>}
@@ -229,7 +280,7 @@ export default function ExportDialog() {
             isDisabled={exporting}
             variant={"accent"}
           >
-            {exporting ? "Exporting…" : "Export"}
+            {exporting ? "Exporting…" : original ? "Export Original" : "Export"}
           </Button>
         </div>
       </Content>

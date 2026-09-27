@@ -25,7 +25,7 @@ EngineBridge::EngineBridge(Dispatcher& dispatcher) : dispatcher_(dispatcher) {
                           Handle(call, std::move(reply));
                         });
   // Choosing the destination is the host's; encoding and writing are the engine's.
-  for (const char* method : {"export", "exportVideo"})
+  for (const char* method : {"export", "exportVideo", "exportOriginal"})
     dispatcher.Register(method, Dispatcher::Thread::kUi,
                         [this](const Call& call, std::shared_ptr<Reply> reply) {
                           Export(call, std::move(reply));

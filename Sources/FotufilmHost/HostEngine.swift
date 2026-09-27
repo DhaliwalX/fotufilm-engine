@@ -29,6 +29,10 @@ public final class HostImage {
     var pace: (frameIndex: UInt64, realtime: Bool) = (0, false)
     /// The movie a video's image shows, kept alive by it.
     var video: HostVideo?
+    /// Whether the source is camera RAW, and the file it was read from in place: what Export
+    /// Original copies, as the Mac app's does.
+    var isRAW = false
+    var originalFile: URL?
     private let lock = NSLock()
     /// The most recent reductions, newest last: an editor asks for one or two sizes at a time.
     private var reductions: [(width: Int, height: Int, rgba: [Float])] = []
@@ -38,6 +42,7 @@ public final class HostImage {
         var descriptor: [String: Any] = ["naturalWidth": width, "naturalHeight": height]
         if contentHeadroom > 1 { descriptor["hdr"] = ["headroom": contentHeadroom] }
         if let video { descriptor["video"] = video.descriptor }
+        if let originalFile { descriptor["original"] = ["name": originalFile.lastPathComponent] }
         return descriptor
     }
 
