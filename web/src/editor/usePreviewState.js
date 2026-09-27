@@ -3,7 +3,9 @@ import { fullCrop } from "../editor-state.js";
 import { usePreviewQuality } from "../usePreviewQuality.js";
 import { useLensCatalogue } from "../useLensCatalogue.js";
 import { fixedStockSettings } from "../stock-settings.js";
+import { previewBudget } from "../preview-budget.js";
 export default function usePreviewState({
+  backend,
   panel,
   inspectorOpen,
   edit,
@@ -43,15 +45,20 @@ export default function usePreviewState({
     videoTime,
   ]);
   const interactionKey = JSON.stringify([editInteractionKey, zoom]);
+  const budget = previewBudget(backend);
   const interacting = usePreviewQuality(
     interactionKey,
     !!history.group || viewerMoving,
+    budget.settleMs,
   );
   const previewInteracting = usePreviewQuality(
     editInteractionKey,
     !!history.group,
+    budget.settleMs,
   );
-  const [interactiveEdge, setInteractiveEdge] = useState(512);
+  const [interactiveEdge, setInteractiveEdge] = useState(
+    budget.initialInteractiveEdge,
+  );
   const previewEdge = Math.min(
     Math.max(
       active?.image.naturalWidth || 1600,

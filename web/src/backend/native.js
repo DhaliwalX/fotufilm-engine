@@ -23,6 +23,8 @@ export function createNativeBackend(host) {
   if (host.imageExportTypes) backend.imageExportTypes = Object.freeze([...host.imageExportTypes]);
   if (host.negativeContrast === true) backend.negativeContrast = true;
   if (host.subjectSelection === true) backend.subjectSelection = true;
+  // Optional: how fast this host develops previews while an edit moves (preview-budget.js).
+  if (host.previewBudget) backend.previewBudget = Object.freeze({ ...host.previewBudget });
   if (typeof host.suggestNegativeFilms === "function")
     backend.suggestNegativeFilms = host.suggestNegativeFilms.bind(host);
   // Optional: opening files by path, copying the picture and the still-export options, for hosts

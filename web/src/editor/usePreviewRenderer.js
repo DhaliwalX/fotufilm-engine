@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { previewLabel } from "../preview-queue.js";
+import { previewBudget } from "../preview-budget.js";
 export default function usePreviewRenderer({
+  backend,
   active,
   stockId,
   session,
@@ -86,13 +88,14 @@ export default function usePreviewRenderer({
           )
             return;
           if (previewInteracting) {
+            const budget = previewBudget(backend);
             if (next.renderMilliseconds > 65)
               setInteractiveEdge((edge) =>
-                Math.max(256, Math.round(edge * 0.8)),
+                Math.max(budget.minInteractiveEdge, Math.round(edge * 0.8)),
               );
             else if (next.renderMilliseconds < 25)
               setInteractiveEdge((edge) =>
-                Math.min(800, Math.round(edge * 1.1)),
+                Math.min(budget.maxInteractiveEdge, Math.round(edge * 1.1)),
               );
           }
           const url = URL.createObjectURL(next.blob),
