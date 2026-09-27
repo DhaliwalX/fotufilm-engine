@@ -46,6 +46,12 @@ final class HostVideoTests: XCTestCase {
                                                 capacity: buffer.count))
             }
         }
+        // And every road the video pipeline takes, for the same reason.
+        for road in VideoRoad.allCases {
+            if let roads = try? pipelines(engine, road) {
+                _ = try? develop(roads.pipeline, roads.scene, frameIndex: 0)
+            }
+        }
         self.engine = engine
     }
 
@@ -276,6 +282,235 @@ final class HostVideoTests: XCTestCase {
             let nominal = try waitFor { try await track.load(.nominalFrameRate) }
             XCTAssertEqual(Double(nominal), Double(frames), accuracy: 0.5)
         }
+    }
+
+    func testFastProcessingPrintsAtTheDeliveredSize() throws {
+        let engine = try makeEngine()
+        let service = engine.service
+        XCTAssertEqual(HostPlatform.current.capabilities["videoProcessing"] as? Bool,
+                       HostPlatform.current.videoDeveloper != nil)
+        let (handle, _) = try importMovie(service)
+        // Fast develops the film at no more than its edge, here 32 pixels, and prints at 64.
+        setenv("FOTUFILM_FAST_EDGE", "32", 1)
+        defer { unsetenv("FOTUFILM_FAST_EDGE") }
+        if HostPlatform.current.videoDeveloper != nil {
+            let request = renderRequest(handle, time: 0)
+            let prepared = try service.prepare(JSONSerialization.data(withJSONObject: request))
+            let format = try XCTUnwrap(HostPlatform.current.videoWriter?.formats
+                .first { $0.id == "mp4" })
+            for (processing, size) in [(HostVideoProcessing.full, (64, 48)), (.fast, (32, 24))] {
+                let development = try service.videoPipeline(
+                    prepared, body: request, format: format, interpretation: .standard,
+                    processing: processing, proceed: { true }).development
+                XCTAssertEqual(development.developWidth, size.0, "\(processing)")
+                XCTAssertEqual(development.developHeight, size.1, "\(processing)")
+            }
+        }
+        var developed: [String: [UInt8]] = [:]
+        for processing in ["full", "fast"] {
+            let output = FileManager.default.temporaryDirectory
+                .appendingPathComponent("fotufilm-export-\(UUID().uuidString).mp4")
+            defer { try? FileManager.default.removeItem(at: output) }
+            var request = renderRequest(handle, time: 0, video: ["audio": false])
+            request["format"] = "mp4"
+            request["videoProcessing"] = processing
+            request["path"] = output.path
+            let saved = try json(service.call("exportVideo", params: JSONSerialization.data(
+                withJSONObject: request), payload: nil) { _ in })
+            XCTAssertEqual(saved["frames"] as? Int, Self.frames, processing)
+            XCTAssertEqual(saved["width"] as? Int, Self.size.width, processing)
+            XCTAssertEqual(saved["height"] as? Int, Self.size.height, processing)
+            developed[processing] = try Self.middleFrame(of: output)
+        }
+        // The same picture either way: the fast film is the full one, a little softer.
+        let (mean, _) = Self.difference8(try XCTUnwrap(developed["full"]),
+                                         try XCTUnwrap(developed["fast"]))
+        XCTAssertLessThan(mean, 2)
+    }
+
+    /// The pipeline against the frame-by-frame develop it replaces, road by road, on one frame
+    /// of a colour ramp: 8-bit roads in codes, deep ones relative to the mean light.
+    func testPipelineAgreesWithTheFrameByFrameDevelop() throws {
+        let engine = try makeEngine()
+        guard HostPlatform.current.videoDeveloper != nil else {
+            throw XCTSkip("This platform develops movies frame by frame.")
+        }
+        for road in VideoRoad.allCases {
+            let roads = try Self.pipelines(engine, road)
+            XCTAssertFalse(roads.pipeline is HostFrameVideoPipeline, "\(road)")
+            let fast = try Self.develop(roads.pipeline, roads.scene, frameIndex: 7)
+            let reference = try Self.develop(roads.portable, roads.fullScene, frameIndex: 7)
+            // The grain moves from frame to frame and holds within one.
+            XCTAssertEqual(try Self.develop(roads.pipeline, roads.scene, frameIndex: 7), fast,
+                           "\(road)")
+            XCTAssertNotEqual(try Self.develop(roads.pipeline, roads.scene, frameIndex: 8), fast,
+                              "\(road)")
+            let (mean, largest) = roads.pipeline.development.linearOutput
+                ? Self.differenceLinear(reference, fast) : Self.difference8(reference, fast)
+            XCTAssertLessThan(mean, road.meanTolerance, "\(road)")
+            XCTAssertLessThan(largest, road.largestTolerance, "\(road)")
+        }
+    }
+
+    func testSelectionsAndNoFilmTakeTheFrameByFrameDevelop() throws {
+        let engine = try makeEngine()
+        guard HostPlatform.current.videoDeveloper != nil else {
+            throw XCTSkip("This platform develops movies frame by frame.")
+        }
+        let selective: [String: Any] = ["kind": "light", "sample": [0.2, 0.2, 0.2], "range": 2,
+                                        "params": ["ev": 1.0]]
+        let selected = try Self.pipelines(engine, .eightBit, edit: ["selective": selective])
+        XCTAssertTrue(selected.pipeline is HostFrameVideoPipeline)
+        let plain = try Self.pipelines(engine, .eightBit)
+        // The selection, reaching every light here, brightens the frame.
+        let lifted = try Self.develop(selected.pipeline, selected.scene, frameIndex: 3)
+        let ground = try Self.develop(plain.portable, plain.fullScene, frameIndex: 3)
+        XCTAssertGreaterThan(lifted.reduce(0) { $0 + Int($1) }, ground.reduce(0) { $0 + Int($1) })
+        let noFilm = try Self.pipelines(engine, .eightBit, stock: nil)
+        XCTAssertTrue(noFilm.pipeline is HostFrameVideoPipeline)
+    }
+
+    // MARK: Pipelines
+
+    /// The roads through the engine an export can take (`HostVideoRoad`), and how closely each
+    /// agrees with the frame-by-frame develop.
+    enum VideoRoad: CaseIterable {
+        /// An 8-bit source to H.264: the 8-bit kernels against the float reference.
+        case eightBit
+        /// Fast: the film at half size, printed at the delivered one.
+        case fast
+        /// An 8-bit source to ProRes: the float kernel's realtime schedule.
+        case deepRealtime
+        /// An HDR source to H.264 and to ProRes: the float reference both ways.
+        case deepReference8
+        case deepReference
+
+        var format: String { self == .deepRealtime || self == .deepReference ? "prores422" : "mp4" }
+        var deepSource: Bool { self == .deepReference8 || self == .deepReference }
+        /// Measured on an M4 Pro: 0.61 and 0.64 codes mean, 6 at most, on the 8-bit roads;
+        /// 0.4% of the mean light, 4% at most, on the realtime float schedule; nothing at all on
+        /// the reference, which is the develop the frame-by-frame road makes.
+        var meanTolerance: Double {
+            switch self {
+            case .eightBit, .fast: return 1.5
+            case .deepRealtime: return 0.01
+            case .deepReference8: return 0.01
+            case .deepReference: return 1e-6
+            }
+        }
+        var largestTolerance: Double {
+            switch self {
+            case .eightBit, .fast: return 16
+            case .deepRealtime: return 0.15
+            case .deepReference8: return 1
+            case .deepReference: return 1e-4
+            }
+        }
+    }
+
+    /// A 64 x 48 colour ramp through the service's own pipeline for `road`, and the
+    /// frame-by-frame develop of the same development.
+    private static func pipelines(
+        _ engine: HostEngine, _ road: VideoRoad, edit: [String: Any] = [:],
+        stock: String? = "gold200"
+    ) throws -> (pipeline: HostVideoPipeline, portable: HostVideoPipeline, scene: [Float],
+                 fullScene: [Float]) {
+        let service = engine.service
+        let (width, height) = (64, 48)
+        var rgba = [Float](repeating: 1, count: width * height * 4)
+        for y in 0..<height {
+            for x in 0..<width {
+                let u = Float(x) / Float(width - 1), v = Float(y) / Float(height - 1)
+                let light = ColorScience.linearDisplayP3ToRec2020(
+                    SIMD3(u, 1 - u, 0.25 + 0.5 * u) * (0.03 + 0.9 * v))
+                for c in 0..<3 { rgba[(y * width + x) * 4 + c] = light[c] }
+            }
+        }
+        let image = HostImage(rgba: rgba, width: width, height: height, contentHeadroom: 1)
+        var saved = edit
+        if let stock { saved["stock"] = stock }
+        let body: [String: Any] = ["handle": service.register(image), "edit": saved,
+                                   "profileRequest": ["controls": [String: Any]()]]
+        let prepared = try service.prepare(JSONSerialization.data(withJSONObject: body))
+        let format = try XCTUnwrap(HostPlatform.current.videoWriter?.formats
+            .first { $0.id == road.format })
+        let chosen = try service.videoPipeline(prepared, body: body, format: format,
+                                               interpretation: .standard, processing: .full,
+                                               proceed: { true })
+        var development = chosen.development
+        let portable = HostFrameVideoPipeline(development)
+        let fullScene = try service.framedScene(prepared)
+        guard !(chosen is HostFrameVideoPipeline),
+              let developer = HostPlatform.current.videoDeveloper
+        else { return (chosen, portable, fullScene, fullScene) }
+        if road.deepSource {
+            development.road = HostVideoRoad(deepSource: true,
+                                             deepDelivery: format.takesLinearLight)
+        }
+        var scene = fullScene
+        if road == .fast {
+            (development.developWidth, development.developHeight) = (width / 2, height / 2)
+            scene = AreaResample.reduce(fullScene, width: width, height: height,
+                                        to: width / 2, height / 2)
+        }
+        let pipeline = try XCTUnwrap(developer.pipeline(for: development, proceed: { true }))
+        return (pipeline, portable, scene, fullScene)
+    }
+
+    private static func develop(_ pipeline: HostVideoPipeline, _ scene: [Float],
+                                frameIndex: UInt64) throws -> [UInt8] {
+        try pipeline.submit(scene, frameIndex: frameIndex)
+        var delivered: [UInt8] = []
+        try pipeline.receive { delivered = Array($0) }
+        return delivered
+    }
+
+    /// Mean and largest difference of the colour channels of two 8-bit RGBA frames, in codes.
+    private static func difference8(_ a: [UInt8], _ b: [UInt8]) -> (Double, Double) {
+        precondition(a.count == b.count && !a.isEmpty)
+        var sum = 0.0, largest = 0.0
+        for i in 0..<a.count where i % 4 != 3 {
+            let d = abs(Double(a[i]) - Double(b[i]))
+            sum += d
+            largest = max(largest, d)
+        }
+        return (sum / Double(a.count / 4 * 3), largest)
+    }
+
+    /// The same for linear light, relative to the reference's mean light.
+    private static func differenceLinear(_ reference: [UInt8],
+                                         _ other: [UInt8]) -> (Double, Double) {
+        let a = reference.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+        let b = other.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+        precondition(a.count == b.count && !a.isEmpty)
+        var sum = 0.0, level = 0.0, largest = 0.0
+        for i in 0..<a.count where i % 4 != 3 {
+            let d = abs(Double(a[i]) - Double(b[i]))
+            sum += d
+            level += abs(Double(a[i]))
+            largest = max(largest, d)
+        }
+        let meanLevel = max(level, 1e-9) / Double(a.count / 4 * 3)
+        return (sum / max(level, 1e-9), largest / meanLevel)
+    }
+
+    /// The frame half way through a written movie, as 8-bit RGBA.
+    private static func middleFrame(of url: URL) throws -> [UInt8] {
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
+        let image = try waitFor {
+            try await generator.image(at: CMTime(seconds: 0.5, preferredTimescale: 600)).image
+        }
+        let (width, height) = (image.width, image.height)
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.displayP3))
+        let context = try XCTUnwrap(CGContext(
+            data: &pixels, width: width, height: height, bitsPerComponent: 8,
+            bytesPerRow: width * 4, space: space,
+            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return pixels
     }
 
     // MARK: The test movie
