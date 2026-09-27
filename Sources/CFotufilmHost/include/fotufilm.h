@@ -110,6 +110,54 @@ int32_t fotufilm_host_call_progress(fotufilm_engine *engine, const char *method,
                                     size_t payload_length, fotufilm_progress_callback progress,
                                     void *context, fotufilm_answer *answer, char **error);
 
+/* Native presentation. A host that draws the editor's photograph itself, beneath its web page,
+ * lends the engine surfaces its compositor can show. A render whose request names a layer
+ * ({"present": {"slot": "preview" | "detail", "scope": ...}}) develops into a surface and hands
+ * it back with `present` instead of returning an encoded image: no image crosses to the page. The
+ * answer's "presented" names the frames ({"frame", "original", "dynamicRange", "headroom"}),
+ * which the page places by id. Slots take the developed picture; "<slot>.original" the
+ * undeveloped one. */
+enum {
+    /* Display P3 with the sRGB transfer, 8 bits a channel, RGBA: an SDR picture. */
+    FOTUFILM_SURFACE_RGBA8_DISPLAY_P3 = 0,
+    /* Extended-linear Display P3 in half floats, RGBA: 1.0 is SDR white and values above it are
+     * EDR headroom. Used only when the edit delivers light above display white and the host
+     * reports a headroom above 1. */
+    FOTUFILM_SURFACE_RGBA16F_EXTENDED_LINEAR_P3 = 1,
+};
+
+typedef struct fotufilm_surface {
+    uint32_t width;
+    uint32_t height;
+    int32_t format;
+    /* Writable by the engine from `acquire` until `present` or `discard`. */
+    void *pixels;
+    size_t row_bytes;
+    /* The platform's shareable handle for GPU access (an IOSurfaceRef on macOS), or NULL. */
+    void *native;
+    /* The host's own reference, handed back unchanged. */
+    void *host;
+} fotufilm_surface;
+
+typedef struct fotufilm_presenter {
+    void *context;
+    /* How far above SDR white the display showing the layer can go; 1 without EDR. Any thread. */
+    float (*headroom)(void *context);
+    /* Lends a surface of this size and format; FOTUFILM_OK or an error. Engine thread. */
+    int32_t (*acquire)(void *context, uint32_t width, uint32_t height, int32_t format,
+                       fotufilm_surface *surface);
+    /* Shows a written surface in `layer`; returns the frame's id, which the page names when it
+     * places the layer. `info_json` is {"scope", "dynamicRange", "headroom"}. Engine thread. */
+    uint64_t (*present)(void *context, const char *layer, const fotufilm_surface *surface,
+                        const char *info_json);
+    /* Returns a surface that was acquired and not presented. */
+    void (*discard)(void *context, const fotufilm_surface *surface);
+} fotufilm_presenter;
+
+/* Lends the engine a presenter; NULL takes it away. The struct is copied; `context` must stay
+ * valid until the presenter is replaced or the engine destroyed. */
+void fotufilm_engine_set_presenter(fotufilm_engine *engine, const fotufilm_presenter *presenter);
+
 #ifdef __cplusplus
 }
 #endif

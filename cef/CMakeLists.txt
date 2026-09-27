@@ -57,6 +57,7 @@ set(FOTUFILM_COMMON_SOURCES
 set(FOTUFILM_BROWSER_SOURCES
   src/app/client.cc
   src/bridge/dispatcher.cc
+  src/presentation/image_layer.cc
 )
 set(FOTUFILM_ENGINE_LIBRARY "${FOTUFILM_ENGINE_DIR}/libfotufilm.dylib")
 if(EXISTS "${FOTUFILM_ENGINE_LIBRARY}")
@@ -82,6 +83,7 @@ if(OS_MAC)
   set(_mac_sources
     src/platform/mac/compositor.mm
     src/platform/mac/host_window.mm
+    src/platform/mac/image_presenter.mm
     src/platform/mac/main_menu.mm
     src/platform/mac/main.mm)
   # CEF's flags cover C++ sources only; Objective-C++ needs the same standard.
@@ -92,7 +94,7 @@ if(OS_MAC)
   fotufilm_target(fotufilm_desktop)
   target_link_libraries(fotufilm_desktop
     "-framework Metal" "-framework QuartzCore" "-framework IOSurface"
-    "-framework UniformTypeIdentifiers")
+    "-framework UniformTypeIdentifiers" "-framework ImageIO")
   if(FOTUFILM_WITH_ENGINE)
     target_compile_definitions(fotufilm_desktop PRIVATE FOTUFILM_WITH_ENGINE=1)
     target_include_directories(fotufilm_desktop PRIVATE

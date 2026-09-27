@@ -4,7 +4,10 @@
 
 #import <Cocoa/Cocoa.h>
 
+#include <memory>
 #include <string>
+
+#include "presentation/presentation.h"
 
 namespace fotufilm {
 class Dispatcher;
@@ -32,5 +35,7 @@ class Dispatcher;
 - (NSString*)titleForCommand:(NSString*)command;
 // Whether focus is in one of the page's text fields, which then own Undo and the clipboard.
 @property(nonatomic, readonly) BOOL pageEditsText;
+// Where the engine presents the photograph: surfaces this window's compositor draws.
+@property(nonatomic, readonly) std::shared_ptr<fotufilm::ImagePresenter> presenter;
 
 @end

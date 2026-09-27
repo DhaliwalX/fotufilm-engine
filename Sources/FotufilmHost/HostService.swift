@@ -5,6 +5,9 @@ import FotufilmCore
 #if canImport(FotufilmEditModel)
 import FotufilmEditModel
 #endif
+#if canImport(FotufilmImaging)
+import FotufilmImaging
+#endif
 
 /// The web editor's native backend (`web/src/backend/macos/host.js`) answered in Swift: every
 /// call is a method name, JSON parameters and optional bytes, and every answer JSON plus named
@@ -19,9 +22,16 @@ public final class HostService {
     private let lock = NSLock()
     private var images: [Int: HostImage] = [:]
     private var nextHandle = 1
-    /// The last develop, kept so panning a zoomed picture only cuts new tiles from it.
-    private var developed: (key: String, width: Int, height: Int, pixels: [UInt8])?
+    /// The last develop, kept so panning a zoomed picture only cuts new tiles from it: 8-bit
+    /// Display P3, or extended-linear half floats when it was developed for an EDR layer.
+    private var developed: (key: String, width: Int, height: Int, format: HostSurfaceFormat,
+                            pixels: [UInt8])?
     private var originals: (key: String, width: Int, height: Int, pixels: [UInt8])?
+    /// Where the host draws the photograph itself, when it does (`HostPresentation.swift`).
+    public var presenter: HostPresenter?
+    /// The undeveloped frame each layer last showed, so it is presented again only when it
+    /// changes.
+    private var presentedOriginals: [String: (key: String, id: UInt64)] = [:]
     /// Movie uploads in progress (`HostService+Video.swift`).
     let videos = HostVideoLibrary()
     /// Scans open in a negative-scan session (`HostService+NegativeScan.swift`); tests keep their
@@ -98,6 +108,8 @@ public final class HostService {
             return try answer([:])
         case "render":
             return try render(params)
+        case "presentedImage":
+            return try presentedImage()
         case "beginVideo", "appendVideo", "importVideo", "exportVideo":
             return try video(method, params: params, payload: payload, progress: nil)
         case "lensPlan":
@@ -337,20 +349,41 @@ public final class HostService {
                 .following(image.sensorFrame)
         }
 
-        // Cache keys: everything but the viewport decides the developed frame.
+        // A request that names a layer is shown by the host's compositor, in extended range when
+        // the film delivers light above display white and the display has room for it.
+        let presentation = presenter.flatMap { presenter in
+            HostPresentation.Request(body).map { (presenter: presenter, request: $0) }
+        }
+        let ceiling = presentation.flatMap { presentation -> Float? in
+            let headroom = presentation.presenter.headroom
+            guard headroom > 1.01, body["stage"] as? Int == nil, plan == nil,
+                  !hasSelection(body), deliversHDR(edit) else { return nil }
+            // Rounded, so a headroom that wavers does not develop the frame again.
+            return (min(headroom, PrintEncoding.hdrDisplayCeiling) * 20).rounded() / 20
+        }
+
+        // Cache keys: everything but the viewport and where the picture goes decides the
+        // developed frame, and the range it is delivered in.
         let sceneKey = "\(request.handle)|\(image.frameKey)|\(maxEdge ?? 0)|\(request.cropMode == true)|\(geometry)"
         var keyed = body
-        for name in ["viewport", "maxEdge", "handle", "haveOriginal"] { keyed[name] = nil }
+        for name in ["viewport", "maxEdge", "handle", "haveOriginal", "present"] { keyed[name] = nil }
         let developKey = sceneKey + "|" + String(decoding: (try? JSONSerialization.data(
             withJSONObject: keyed, options: [.sortedKeys])) ?? Data(), as: UTF8.self)
+            + (ceiling.map { "|edr \($0)" } ?? "")
         let frameKey = sceneKey + "|" + String(describing: plan?.json["placement"] ?? "")
 
         let scene = try sceneFor(image, geometry: geometry, sizes: sizes)
         var renderMilliseconds = 0.0
         if developed?.key != developKey {
             var pixels = [UInt8](repeating: 0, count: width * height * 4)
+            var format = HostSurfaceFormat.rgba8DisplayP3
             let developStart = DispatchTime.now().uptimeNanoseconds
-            if let stage = body["stage"] as? Int {
+            if let ceiling {
+                pixels = HostPresentation.extendedLinear(
+                    try developLinear(scene, width: width, height: height, image: image, edit: edit),
+                    width: width, height: height, ceiling: ceiling)
+                format = .rgba16FloatExtendedLinearP3
+            } else if let stage = body["stage"] as? Int {
                 pixels = try developStage(stage, difference: body["difference"] as? Bool ?? false,
                                           scene: scene, width: width, height: height,
                                           image: image, edit: edit)
@@ -364,7 +397,7 @@ public final class HostService {
             if let plan, let framed = HostFrames.frame(pixels, width: width, height: height, plan: plan) {
                 frame = framed
             }
-            developed = (developKey, frame.width, frame.height, frame.pixels)
+            developed = (developKey, frame.width, frame.height, format, frame.pixels)
         }
         if originals?.key != frameKey {
             var frame = (pixels: image.display(scene, width: width, height: height),
@@ -376,6 +409,10 @@ public final class HostService {
             originals = (frameKey, frame.width, frame.height, frame.pixels)
         }
         let developedFrame = developed!, originalFrame = originals!
+        // A frame developed for an EDR layer is shown to the page in standard range.
+        if presentation == nil, developedFrame.format != .rgba8DisplayP3 {
+            throw HostEngine.Failure(description: "The develop is not in standard range.")
+        }
         let (frameWidth, frameHeight) = (developedFrame.width, developedFrame.height)
 
         // The region of the picture to deliver, in developed pixels.
@@ -391,6 +428,20 @@ public final class HostService {
                 .rounded(.up)))
             region = (x, y, max(1, right - x), max(1, bottom - y))
         }
+        if let presentation {
+            var presented: [String: Any] = [
+                "width": region.width, "height": region.height, "colorSpace": "display-p3",
+                "backend": engine.backendName, "renderMilliseconds": renderMilliseconds,
+                "elapsed": Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6,
+            ]
+            if let plan { presented["framePlan"] = plan.json }
+            if let subjects = subjectCount(body, cropMode: request.cropMode == true) {
+                presented["subjects"] = subjects
+            }
+            return try present(developedFrame, original: originalFrame, region: region,
+                               to: presentation.presenter, request: presentation.request,
+                               body: presented, headroom: ceiling)
+        }
         func png(_ frame: (key: String, width: Int, height: Int, pixels: [UInt8])) -> [UInt8] {
             frame.pixels.withUnsafeBytes {
                 StoredPNG.encode($0.baseAddress! + (region.y * frame.width + region.x) * 4,
@@ -405,18 +456,110 @@ public final class HostService {
             "elapsed": elapsed, "renderMilliseconds": renderMilliseconds,
         ]
         if let plan { answerBody["framePlan"] = plan.json }
-        // How many subjects a subject selection found, for the inspector's status.
-        if ((body["edit"] as? [String: Any])?["selective"] as? [String: Any])?["kind"] as? String
-            == "subject", request.cropMode != true {
-            answerBody["subjects"] = subjectCache?.subject?.count ?? 0
+        if let subjects = subjectCount(body, cropMode: request.cropMode == true) {
+            answerBody["subjects"] = subjects
         }
         // The undeveloped picture changes only with the photograph, geometry and region: the
         // page names the one it holds and it crosses again only when it differs.
         let originalKey = "\(originalFrame.key)|\(region)"
         answerBody["originalKey"] = originalKey
-        var images = ["preview": png(developedFrame)]
+        var images = ["preview": png((developedFrame.key, developedFrame.width,
+                                     developedFrame.height, developedFrame.pixels))]
         if body["haveOriginal"] as? String != originalKey { images["original"] = png(originalFrame) }
         return try answer(answerBody, images: images)
+    }
+
+    /// Hands the region of a render to the host's compositor: the developed frame into the
+    /// request's layer, and the undeveloped one into "<layer>.original" when it changed. The answer
+    /// names the frames instead of carrying pictures.
+    private func present(_ developed: (key: String, width: Int, height: Int,
+                                       format: HostSurfaceFormat, pixels: [UInt8]),
+                         original: (key: String, width: Int, height: Int, pixels: [UInt8]),
+                         region: (x: Int, y: Int, width: Int, height: Int),
+                         to presenter: HostPresenter, request: HostPresentation.Request,
+                         body: [String: Any], headroom: Float?) throws -> Answer {
+        let extended = developed.format == .rgba16FloatExtendedLinearP3
+        let info: [String: Any] = ["scope": request.scope,
+                                   "dynamicRange": extended ? "hdr" : "sdr",
+                                   "headroom": Double(headroom ?? 1)]
+        guard let frame = HostPresentation.present(
+            developed.pixels, frameWidth: developed.width, format: developed.format,
+            region: region, to: presenter, layer: request.slot, info: info) else {
+            throw HostEngine.Failure(description: "The display has no room for the picture.")
+        }
+        let layer = request.slot + ".original"
+        let originalKey = "\(original.key)|\(region)|\(request.scope)"
+        var originalFrame = presentedOriginals[layer].flatMap { $0.key == originalKey ? $0.id : nil }
+        if originalFrame == nil {
+            originalFrame = HostPresentation.present(
+                original.pixels, frameWidth: original.width, format: .rgba8DisplayP3,
+                region: region, to: presenter, layer: layer,
+                info: ["scope": request.scope, "dynamicRange": "sdr", "headroom": 1.0])
+            presentedOriginals[layer] = originalFrame.map { (originalKey, $0) }
+        }
+        var answerBody = body
+        answerBody["presented"] = HostPresentation.Presented(
+            frame: frame, original: originalFrame ?? 0, extended: extended,
+            headroom: headroom ?? 1).json
+        return try answer(answerBody)
+    }
+
+    /// The last develop, as the page's histogram reads a preview: 8-bit PNG no larger than
+    /// 1024 pixels, and an extended-range develop clipped to SDR white.
+    private func presentedImage() throws -> Answer {
+        guard let frame = developed else {
+            throw HostEngine.Failure(description: "Nothing has been presented yet.")
+        }
+        var pixels = frame.pixels
+        if frame.format == .rgba16FloatExtendedLinearP3 {
+            pixels = HostPresentation.standardRange(pixels, width: frame.width, height: frame.height)
+        }
+        let step = max(1, Int((Double(max(frame.width, frame.height)) / 1024).rounded(.up)))
+        let (width, height) = ((frame.width + step - 1) / step, (frame.height + step - 1) / step)
+        var reduced = [UInt8](repeating: 255, count: width * height * 4)
+        for y in 0..<height {
+            for x in 0..<width {
+                let from = ((y * step) * frame.width + x * step) * 4, to = (y * width + x) * 4
+                for c in 0..<4 { reduced[to + c] = pixels[from + c] }
+            }
+        }
+        let png = reduced.withUnsafeBytes {
+            StoredPNG.encode($0.baseAddress!, width: width, height: height, rowBytes: width * 4)
+        }
+        return try answer(["width": width, "height": height, "previewType": "image/png"],
+                          images: ["preview": png])
+    }
+
+    /// Whether the edit carries an active selective adjustment.
+    private func hasSelection(_ body: [String: Any]) -> Bool {
+        guard let saved = (body["edit"] as? [String: Any])?["selective"] as? [String: Any],
+              let data = try? JSONSerialization.data(withJSONObject: saved),
+              let selection = try? JSONDecoder().decode(HostSelection.self, from: data)
+        else { return false }
+        return selection.isActive
+    }
+
+    /// How many subjects a subject selection found, for the inspector's status.
+    private func subjectCount(_ body: [String: Any], cropMode: Bool) -> Int? {
+        guard ((body["edit"] as? [String: Any])?["selective"] as? [String: Any])?["kind"]
+                as? String == "subject", !cropMode else { return nil }
+        return subjectCache?.subject?.count ?? 0
+    }
+
+    /// The photograph's develop in display-linear Display P3, before any shoulder, for a layer
+    /// that shows light above display white.
+    private func developLinear(_ scene: [Float], width: Int, height: Int, image: HostImage,
+                               edit: WebNativeEdit) throws -> [Float] {
+        var linear = [Float](repeating: 0, count: width * height * 4)
+        try linear.withUnsafeMutableBytes { buffer in
+            try engine.develop(scene, width: width, height: height,
+                               contentHeadroom: image.contentHeadroom, edit: edit,
+                               frameIndex: image.pace.frameIndex, realtime: image.pace.realtime,
+                               into: .init(maxEdge: 0, format: .rgba32FloatLinearP3,
+                                           pixels: buffer.baseAddress!, rowBytes: width * 16,
+                                           capacity: buffer.count))
+        }
+        return linear
     }
 
     /// The photograph's develop, with a selective adjustment blended over it when the edit has

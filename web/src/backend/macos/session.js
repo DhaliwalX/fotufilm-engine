@@ -3,6 +3,16 @@ import { sourceIlluminant } from "../../editor-catalogue.js";
 import { imageBlob } from "./transport.js";
 import { frameRequest } from "../../print-frame.js";
 
+// Where a render goes when the host draws the photograph itself: the layer ("preview" or
+// "detail") and a scope naming what the page shows there, so the host may put a newer frame of
+// the same size and scope on screen before the page has placed it. A tile's scope is its region.
+export function presentRequest(request) {
+  if (!request.present) return undefined;
+  const scope = [request.image.handle, request.cropMode ? "crop" : "photo", request.stage ?? ""];
+  if (request.present === "detail") scope.push(JSON.stringify(request.viewport ?? null));
+  return { slot: request.present, scope: scope.join("|") };
+}
+
 export function renderRequest(request, stocks) {
   const {
     image,
@@ -54,7 +64,7 @@ export function renderRequest(request, stocks) {
   };
 }
 
-export function createSession(call, catalogue) {
+export function createSession(call, catalogue, { imageLayer = false } = {}) {
   const lifecycle = new AbortController();
   const pending = [];
   let running = false;
@@ -76,11 +86,22 @@ export function createSession(call, catalogue) {
       }
       try {
         request.onProgress?.("Developing with native Halide/Metal");
+        const present = imageLayer ? presentRequest(request) : undefined;
         const nativeRequest = {
           ...renderRequest(request, await catalogue()),
           haveOriginal: lastOriginal?.key,
+          ...(present ? { present } : {}),
         };
         const result = await call("render", nativeRequest, { signal: lifecycle.signal });
+        // Shown by the host's compositor: the answer names frames, and no picture crossed.
+        if (result.presented) {
+          resolve(
+            lifecycle.signal.aborted || request.stale?.()
+              ? null
+              : { ...result, viewport: request.viewport, sceneRequest: nativeRequest },
+          );
+          continue;
+        }
         // A host that knows the page holds this original leaves it out of the answer.
         const original = result.original != null
           ? imageBlob(result.original, result.previewType)

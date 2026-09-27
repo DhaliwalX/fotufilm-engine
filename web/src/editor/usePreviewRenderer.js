@@ -44,6 +44,8 @@ export default function usePreviewRenderer({
       stage,
       difference,
       cropMode,
+      // A host that draws the photograph itself shows the preview without a picture crossing.
+      present: backend.imageLayer ? "preview" : undefined,
       stale: () =>
         !currentFile() ||
         currentPreview.current.exporting ||
@@ -98,10 +100,11 @@ export default function usePreviewRenderer({
                 Math.min(budget.maxInteractiveEdge, Math.round(edge * 1.1)),
               );
           }
-          const url = URL.createObjectURL(next.blob),
-            originalUrl = URL.createObjectURL(next.original);
-          urls.current.add(url);
-          urls.current.add(originalUrl);
+          // A presented preview is on screen already; the page only places it.
+          const url = next.presented ? undefined : URL.createObjectURL(next.blob),
+            originalUrl = next.presented ? undefined : URL.createObjectURL(next.original);
+          if (url) urls.current.add(url);
+          if (originalUrl) urls.current.add(originalUrl);
           replaceResult({
             ...next,
             url,

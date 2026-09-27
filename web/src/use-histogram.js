@@ -23,7 +23,7 @@ export function useHistogram(result, open) {
   useEffect(() => {
     const controller = new AbortController();
     setSnapshot(null);
-    if (open && result?.blob && analyser.current) {
+    if (open && (result?.blob || result?.presented) && analyser.current) {
       setError(null);
       const instance = analyser.current;
       Promise.resolve()

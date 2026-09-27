@@ -16,6 +16,7 @@
 #include "include/cef_browser.h"
 #include "include/cef_version.h"
 #import "platform/mac/compositor.h"
+#import "platform/mac/image_presenter.h"
 #import "platform/mac/main_menu.h"
 
 @class FotufilmHostView;
@@ -76,6 +77,7 @@ double Number(CefRefPtr<CefDictionaryValue> fields, const char* key) {
 @interface FotufilmHostWindow () <FotufilmMenuActions, FotufilmEditHistory>
 - (void)browserClosed;
 - (CGRect)windowDragRegion:(NSPoint)point;
+- (void)screenChanged;
 @end
 
 // The view the browser draws into. It owns the compositor's layer and turns AppKit input into
@@ -150,6 +152,7 @@ double Number(CefRefPtr<CefDictionaryValue> fields, const char* key) {
 
 - (void)viewDidChangeBackingProperties {
   [super viewDidChangeBackingProperties];
+  [self.owner screenChanged];
   if (_browser) _browser->GetHost()->NotifyScreenInfoChanged();
   [self layoutMetrics];
 }
@@ -480,6 +483,8 @@ class MacView : public fotufilm::ViewDelegate {
   NSArray<NSString*>* _history;
   // Files to open once the editor listens for them.
   NSMutableArray<NSString*>* _pendingPaths;
+  std::shared_ptr<fotufilm::MacImagePresenter> _presenter;
+  id _screenObserver;
   BOOL _pageListening;
 }
 
@@ -509,6 +514,23 @@ class MacView : public fotufilm::ViewDelegate {
   // Its own name, so the two apps each remember their own window.
   if (![_window setFrameUsingName:@"FotufilmDesktopWindow"]) [_window center];
   [_window setFrameAutosaveName:@"FotufilmDesktopWindow"];
+
+  // The engine writes the photograph into surfaces the compositor draws beneath the page.
+  __weak FotufilmHostView* weakView = _view;
+  _presenter = std::make_shared<fotufilm::MacImagePresenter>(
+      _view.compositor.device,
+      [weakView](const std::string& layer, fotufilm::PresentedFrame frame) {
+        [weakView.compositor presentFrame:std::move(frame) layer:layer];
+      });
+  __weak FotufilmHostWindow* weakSelf = self;
+  _screenObserver = [NSNotificationCenter.defaultCenter
+      addObserverForName:NSApplicationDidChangeScreenParametersNotification
+                  object:nil
+                   queue:NSOperationQueue.mainQueue
+              usingBlock:^(NSNotification*) {
+                [weakSelf screenChanged];
+              }];
+  [self screenChanged];
 
   _delegate = std::make_unique<MacView>(_view, self);
   _client = new fotufilm::Client(dispatcher, _delegate.get());
@@ -557,6 +579,10 @@ class MacView : public fotufilm::ViewDelegate {
           info->SetInt("refreshRate",
                        static_cast<int>(strong->_window.screen.maximumFramesPerSecond));
           info->SetString("gpu", strong->_view.compositor.device.name.UTF8String);
+          NSScreen* screen = strong->_window.screen;
+          info->SetDouble("headroom", screen.maximumExtendedDynamicRangeColorComponentValue);
+          info->SetDouble("potentialHeadroom",
+                          screen.maximumPotentialExtendedDynamicRangeColorComponentValue);
         }
         reply->Resolve(Dictionary(info));
       });
@@ -586,12 +612,67 @@ class MacView : public fotufilm::ViewDelegate {
                            values.lastDrawableWaitMicroseconds);
           stats->SetDouble("compositeMicroseconds", values.lastCompositeMicroseconds);
           stats->SetBool("sharedTextures", values.sharedTextures);
+          stats->SetDouble("imageFrames", double(values.imageFrames));
+          stats->SetBool("extendedRange", values.extendedRange);
+          stats->SetDouble("headroom", strong->_presenter->Headroom());
         }
         reply->Resolve(Dictionary(stats));
       });
 
-  // Where the engine's image goes, in CSS pixels from the top left of the page; an empty or
-  // missing rectangle removes it. Without an engine the layer shows a moving test pattern.
+  // What the screen shows, page and image layer together, written to a temporary file whose
+  // path is the answer (diagnostics and checks).
+  _dispatcher->Register(
+      "compositorSnapshot", Dispatcher::Thread::kUi,
+      [weakSelf](const Call&, std::shared_ptr<Reply> reply) {
+        FotufilmHostWindow* strong = weakSelf;
+        if (!strong) return reply->Resolve(nullptr);
+        [strong->_view.compositor snapshot:^(NSString* path) {
+          CefRefPtr<CefValue> value = CefValue::Create();
+          if (path)
+            value->SetString(path.UTF8String);
+          else
+            value->SetNull();
+          reply->Resolve(value);
+        }];
+      });
+
+  // The latency probe: {x, y} in CSS pixels arms it at a point of the window ({} stops it);
+  // probeReport answers the changes seen there and the host's clock, in milliseconds.
+  _dispatcher->Register(
+      "probePixel", Dispatcher::Thread::kUi,
+      [weakSelf](const Call& call, std::shared_ptr<Reply> reply) {
+        FotufilmHostWindow* strong = weakSelf;
+        CefRefPtr<CefDictionaryValue> fields =
+            call.params && call.params->GetType() == VTYPE_DICTIONARY
+                ? call.params->GetDictionary()
+                : nullptr;
+        const bool armed = fields && fields->HasKey("x");
+        if (strong)
+          [strong->_view.compositor
+              probePoint:armed ? CGPointMake(Number(fields, "x"), Number(fields, "y"))
+                               : CGPointMake(NAN, NAN)];
+        reply->Resolve(nullptr);
+      });
+  _dispatcher->Register(
+      "probeReport", Dispatcher::Thread::kUi,
+      [weakSelf](const Call&, std::shared_ptr<Reply> reply) {
+        FotufilmHostWindow* strong = weakSelf;
+        CefRefPtr<CefDictionaryValue> report = CefDictionaryValue::Create();
+        report->SetDouble("now", CACurrentMediaTime() * 1000);
+        CefRefPtr<CefListValue> changes = CefListValue::Create();
+        for (NSDictionary* change in strong ? [strong->_view.compositor probeChanges] : @[]) {
+          CefRefPtr<CefDictionaryValue> entry = CefDictionaryValue::Create();
+          entry->SetDouble("time", [change[@"time"] doubleValue]);
+          entry->SetString("value", [change[@"value"] UTF8String]);
+          changes->SetDictionary(changes->GetSize(), entry);
+        }
+        report->SetList("changes", changes);
+        reply->Resolve(Dictionary(report));
+      });
+
+  // Where the page shows the engine's image layer (presentation/image_layer.h): the canvas's
+  // clip, which frames go where and whether the original shows, in CSS pixels from the top left.
+  // The diagnostics page's {x, y, width, height} asks for the moving test pattern instead.
   _dispatcher->Register(
       "setImageLayer", Dispatcher::Thread::kUi,
       [weakSelf](const Call& call, std::shared_ptr<Reply> reply) {
@@ -601,15 +682,14 @@ class MacView : public fotufilm::ViewDelegate {
             call.params && call.params->GetType() == VTYPE_DICTIONARY
                 ? call.params->GetDictionary()
                 : nullptr;
-        const CGRect rect = CGRectMake(Number(fields, "x"), Number(fields, "y"),
-                                       Number(fields, "width"),
-                                       Number(fields, "height"));
-        if (CGRectIsEmpty(rect))
-          [strong->_view.compositor clearImage];
-        else
-          [strong->_view.compositor setImageTexture:nil rect:rect];
-        [strong->_view setAnimating:!CGRectIsEmpty(rect)];
-        [strong->_view setNeedsRender];
+        fotufilm::LayerRect pattern;
+        fotufilm::ImageLayerGeometry geometry =
+            fotufilm::ParseImageLayerGeometry(fields, &pattern);
+        FotufilmCompositor* compositor = strong->_view.compositor;
+        const CGRect test = CGRectMake(pattern.x, pattern.y, pattern.width, pattern.height);
+        [compositor showTestPattern:test];
+        [strong->_view setAnimating:!CGRectIsEmpty(test)];
+        [compositor placeImageLayer:std::move(geometry)];
         reply->Resolve(nullptr);
       });
 
@@ -792,6 +872,8 @@ class MacView : public fotufilm::ViewDelegate {
 
 - (void)browserClosed {
   _closed = YES;
+  if (_screenObserver) [NSNotificationCenter.defaultCenter removeObserver:_screenObserver];
+  _screenObserver = nil;
   _client->DetachView();
   _view.browser = nullptr;
   [_view setAnimating:NO];
@@ -804,6 +886,23 @@ class MacView : public fotufilm::ViewDelegate {
   if (_closed) return YES;
   [self requestClose];
   return NO;
+}
+
+- (std::shared_ptr<fotufilm::ImagePresenter>)presenter {
+  return _presenter;
+}
+
+// How far above SDR white the window's screen can show light: the potential headroom, which the
+// system grants once the layer asks for EDR. 1 on a screen without EDR.
+- (void)screenChanged {
+  if (!_presenter) return;
+  NSScreen* screen = _window.screen ?: NSScreen.mainScreen;
+  _presenter->SetHeadroom(
+      static_cast<float>(MAX(1.0, screen.maximumPotentialExtendedDynamicRangeColorComponentValue)));
+}
+
+- (void)windowDidChangeScreen:(NSNotification*)notification {
+  [self screenChanged];
 }
 
 - (void)windowDidBecomeKey:(NSNotification*)notification {

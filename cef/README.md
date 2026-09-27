@@ -53,11 +53,12 @@ Switches:
 
 Latency is decided by what never crosses a boundary:
 
-- **The image never passes through the page.** The engine renders into a GPU texture that the
-  host's compositor draws beneath the page, which is transparent over the photograph. There is no
-  readback, no encoding, no IPC of pixels and no Chromium composite in the path from a finished
-  render to the glass. Measured: sending a 4K RGBA8 frame to the page and back costs about 10 ms
-  even over shared memory, which is why it is kept for thumbnails and histograms only.
+- **The image never passes through the page.** The engine writes a finished render into a
+  shared surface (an IOSurface on macOS) that the host's compositor draws beneath the page, which
+  is transparent over the photograph ([Image layer](#image-layer)). There is no encoding, no IPC
+  of pixels and no Chromium composite between a finished render and the glass. Measured: sending
+  a 4K RGBA8 frame to the page and back costs about 10 ms even over shared memory, which is why
+  it is kept for thumbnails and histograms only.
 - **The page is off-screen and shared as a texture.** Chromium paints the UI into an IOSurface
   (D3D11 shared handle on Windows, dmabuf planes on Linux). The compositor copies it on the GPU
   (0.3–0.5 ms at 2880×1864) without waiting on the main thread, and blends it premultiplied over
@@ -87,9 +88,47 @@ The transport keeps the contract in `web/src/backend/README.md` and the call sha
 | `src/bridge/dispatcher.*` | Routes calls to UI-thread or engine-thread handlers; replies; cancellation. |
 | `src/renderer/bridge.js` | The page-side transport, compiled into the renderer. |
 | `src/renderer/renderer_bridge.*` | Installs the transport in trusted pages; returns replies to their context. |
+| `src/presentation/presentation.h` | The image presenter and its surfaces: the interface every platform implements. |
+| `src/presentation/image_layer.*` | Which presented frame each layer draws, and where the page shows them. |
+| `src/engine/engine_bridge.*` | Loads `libfotufilm`, runs it on the engine thread, lends it the presenter. |
 | `src/platform/mac/` | Window, input forwarding, Metal compositor, app and helper entry points. |
+| `src/platform/mac/image_presenter.*` | The presenter on macOS: a pool of IOSurfaces shared with Metal. |
 | `src/platform/mac/main_menu.*` | The Mac app's menu bar, Open Recent and the Plugins menu. |
 | `resources/diagnostics/` | Bridge diagnostics: round trips, payloads, native-layer alignment. |
+
+### Image layer
+
+The engine reports `imageLayer` in its capabilities when the host lends it a presenter
+(`fotufilm_engine_set_presenter` in `fotufilm.h`). The editor then leaves the photograph's area
+transparent and sends its geometry with `setImageLayer` whenever layout, zoom or pan change:
+the viewer's clip, and for each layer (`preview`, `detail`) its rectangle in CSS pixels and the
+frame it should show. A render that names a slot (`present: {slot, scope}`) develops as before
+but copies the region into a surface the presenter lends (`acquire`), hands it over
+(`present`), and answers `presented: {frame, original, dynamicRange, headroom}` with no pictures.
+The undeveloped frame goes to `<slot>.original` only when it changes, so Compare swaps layers
+without a render. `presentedImage` returns the last develop as a small PNG for the histogram.
+
+On macOS a surface is an IOSurface, written by the engine and read by Metal without a copy. The
+compositor keeps the last frames of each layer and draws, inside the viewer's clip, the one the
+page placed, or a newer frame of the same size and scope as soon as it arrives. That frame goes
+on screen at the next refresh, with no wait for the page to lay out. A placement takes effect
+with the next browser frame, the one that carries the matching layout, or after 50 ms if none
+comes. Crop handles, masks, the zoom readout and every other overlay are page content drawn over
+the layer. Selection sampling reads the scene through `sampleScene`, not the picture.
+
+Colour: the drawable is Display P3, and the page is converted from sRGB as it is blended. While a
+frame on show was delivered in extended range and the screen reports headroom (the window's
+screen `maximumPotentialExtendedDynamicRangeColorComponentValue`, re-read when the window moves
+or the display changes), the drawable is RGBA16F extended-linear Display P3 with EDR requested.
+The engine develops such a frame in display-linear P3 and maps it with
+`HLGTransfer.previewDisplayLight` up to the smaller of the headroom and the film's HDR display
+ceiling, so below SDR white it matches the 8-bit frame. It delivers extended range only when the
+film does (`supportsHDRDelivery`), and not for pipeline stages, print frames or selective
+edits, which stay 8-bit.
+
+A Linux or Windows port implements `ImagePresenter` (dmabuf or a D3D11 shared handle) and draws
+the `ImageLayer`'s frames in its compositor. The engine side is platform-neutral: surfaces are
+pixels plus a row stride.
 
 ### Menu bar and files
 
@@ -213,12 +252,12 @@ no film, as the Mac app's importer does. Light frames live in
    upload in 8 MB binary chunks or open in place, render the frame at `videoTime` through the
    same geometry and film, and export (`exportVideo`, with progress and cancel) as H.264, 10-bit
    HEVC or Apple ProRes 422/4444 with the sound carried across; HEVC and ProRes write BT.2100 HLG when HDR is on and the film delivers it.
-2. **Native presentation in the editor.** A backend capability that lets `ImageCanvas` leave the
-   photograph's area transparent and report its rectangle, zoom and pan to the host (as
-   `setImageLayer` does in the diagnostics page); renders then go to the image layer instead of
-   returning blobs. The browser engine keeps today's path.
-3. **Colour.** A wide-gamut, extended-range drawable (Display P3, EDR) for the image layer, with
-   the page converted from sRGB in the compositor.
+2. **Native presentation in the editor.** Done ([Image layer](#image-layer)). Still to do: the
+   engine's Metal develop writes into the surface directly instead of into memory it then copies,
+   and the layer follows the viewer's fades.
+3. **Colour.** Done: Display P3, and EDR where the film and the screen allow. Still to do:
+   extended range for selective edits, stages and print frames, and a new render when only the
+   headroom changes (a brightness change applies at the next render).
 4. **Windows and Linux.** The same host with a D3D11 compositor (shared handles) and a Vulkan
    compositor (dmabuf), and Halide GPU targets for each; Swift is shipped with the app there.
 5. **Host completeness.** IME composition, native `<select>` popups,
@@ -231,3 +270,16 @@ The diagnostics page (`--fotufilm-diagnostics`) measures round trips on both thr
 64 KB to 4K RGBA16F payloads and verifies their bytes, and draws a moving pattern in the native
 layer behind a hole in the page: the pattern must stay inside the orange frame while the frame is
 resized.
+
+The bridge answers these calls for tests driven over the DevTools protocol:
+
+| Call | Answer |
+| --- | --- |
+| `compositorStats` | Frame counts, copy and composite times, `extendedRange` and `headroom`. |
+| `compositorSnapshot` | Path of a composite of page and image layer: PNG, or half-float TIFF while extended. |
+| `probePixel` {x, y} | Watches one point: every change is composited at once and read back (an empty object stops it). |
+| `probeReport` | `now` and each change's commit time (ms, `CACurrentMediaTime`) and pixel value. |
+
+Latency from input to pixels: arm `probePixel` on the photograph, read `probeReport`'s `now`,
+send a key to a slider, and take the first change whose value moved by the step. Changes are
+timed at commit, at most one refresh before the glass.

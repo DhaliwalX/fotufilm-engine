@@ -158,6 +158,30 @@ and its tests: these counts describe the encoded display preview and its colour
 space, not unbounded scene-linear pixels. This keeps graph modes and clipping
 readouts identical between backends.
 
+### Native presentation
+
+A backend with `imageLayer: true` shows the photograph itself, under the page, and never hands
+the editor its pixels (`cef/README.md`, Image layer). The editor then:
+
+- passes `present: "preview"` or `present: "detail"` in `render` requests; a result carries
+  `presented: {frame, original, dynamicRange, headroom}` in place of `blob`/`original`, and its
+  other fields as before (`sceneRequest` for `sampleScene`, `framePlan`, `subjects`);
+- adds the `native-image-layer` class to the root element and leaves the photograph's area
+  transparent: `useImageLayer.js` cuts it out of the page backgrounds with the
+  `--image-hole-*` variables, and the photo plane holds a `.presented-photo` placeholder
+  instead of an `<img>`;
+- calls `placeImageLayer(geometry)` after every layout or result that moves or changes the
+  photograph. The geometry is `{clip, source, layers}`, rectangles as `[x, y, width, height]`
+  in CSS pixels: `clip` is the viewer's box, `source` is `"developed"` or `"original"`
+  (Compare, Show Original), and each layer is `{slot, frame, original, rect}`: the result's
+  two frame ids and where the frame's pixels go, which may run past the clip when zoomed. With
+  nothing on show, `layers` is empty.
+
+`createHistogram()` reads presented results through the host's `presentedImage` call, a small
+8-bit picture of the last develop (extended range clipped to SDR white), so the histogram keeps
+describing what an SDR display shows. The browser backend has no `imageLayer`; its results keep
+their blobs.
+
 ## Verification
 
 `backend.test.js` checks versioning, binding, resource ownership and the static UI

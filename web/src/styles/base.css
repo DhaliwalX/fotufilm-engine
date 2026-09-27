@@ -6,7 +6,8 @@
       "Segoe UI",
       sans-serif;
     color: #242628;
-    background: #e8e9eb;
+    --page: #e8e9eb;
+    background: var(--page);
     --panel: #f4f4f5;
     --border: #d6d7da;
     --muted: #73767b;

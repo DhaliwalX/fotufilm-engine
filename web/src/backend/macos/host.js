@@ -11,6 +11,7 @@ import { createNegativeScans } from "./negative-scans.js";
 import {
   createTransport,
   fileBase64,
+  imageBlob,
   importedImage,
 } from "./transport.js";
 
@@ -51,7 +52,14 @@ export function createMacBackend(channel) {
   const lenses = createLenses(call);
   return {
     version: BACKEND_VERSION,
-    createSession: () => createSession(call, catalogue),
+    createSession: () =>
+      createSession(call, catalogue, { imageLayer: can.imageLayer === true }),
+    // The host draws the photograph beneath the page: the canvas leaves its area transparent and
+    // says where it is (web/src/backend/README.md, Native presentation).
+    imageLayer: can.imageLayer === true,
+    placeImageLayer: can.imageLayer
+      ? (geometry) => call("setImageLayer", geometry).catch(() => {})
+      : undefined,
     async prepare(session, report) {
       report({
         value: 10,
@@ -142,7 +150,21 @@ export function createMacBackend(channel) {
       Object.assign(image, preview.image);
       return { image, url: preview.url };
     },
-    createHistogram,
+    // A picture the host presented never reached the page; the histogram asks for it.
+    createHistogram: () => {
+      const histogram = createHistogram();
+      return {
+        async analyse(result, options) {
+          if (result.blob || !result.presented) return histogram.analyse(result, options);
+          const answer = await call("presentedImage", {}, { signal: options?.signal });
+          return histogram.analyse(
+            { ...result, blob: imageBlob(answer.preview, answer.previewType) },
+            options,
+          );
+        },
+        dispose: () => histogram.dispose(),
+      };
+    },
     autoAdjust: async ({ image, edit, signal }) =>
       call("autoAdjust", { handle: image.handle, edit }, { signal }),
     planPrintFrame: (edit, width, height) => call("printFrame", frameRequest(edit, width, height)),
