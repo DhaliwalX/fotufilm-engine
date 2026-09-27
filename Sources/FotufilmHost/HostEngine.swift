@@ -105,7 +105,39 @@ public final class HostEngine {
         }
         stocks = FilmStock.presets
         guard !stocks.isEmpty else { throw Failure(description: "No film stocks are installed.") }
+        warmUp()
     }
+
+    /// Builds every film's spectral tables and compiles each distinct kernel schedule in the
+    /// background, as the Mac app's `StockTableWarmup` does, so the first develop on a film costs
+    /// what later ones do rather than seconds.
+    private func warmUp() {
+        let stocks = FilmStock.presetIDs.compactMap { id in self.stocks[id].map { (id, $0) } }
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            var seen = Set<Int32>()
+            for (id, stock) in stocks {
+                guard let self,
+                      let request = try? JSONSerialization.data(withJSONObject: [
+                        "edit": ["stock": id], "profileRequest": ["controls": [String: Any]()],
+                      ]),
+                      let edit = try? JSONDecoder().decode(WebNativeEdit.self, from: request),
+                      let options = try? self.options(edit, stock: stock, contentHeadroom: 1),
+                      let invocation = try? FilmEngineInvocation(
+                        validating: stock, options: options, width: Self.warmWidth,
+                        height: Self.warmHeight)
+                else { continue }
+                #if canImport(Metal)
+                if let metal = Self.metal, seen.insert(invocation.featureMask).inserted {
+                    metal.prepare(stock: stock, options: options, frameWidth: Self.warmWidth,
+                                  frameHeight: Self.warmHeight)
+                }
+                #endif
+            }
+        }
+    }
+
+    private static let warmWidth = 192
+    private static let warmHeight = 128
 
     #if canImport(Metal)
     static var metal: HalideMetalFilmRenderer? { HalideMetalFilmRenderer.shared }
