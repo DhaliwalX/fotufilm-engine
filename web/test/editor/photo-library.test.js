@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ALL_FOLDERS,
+  folderTree,
   nextSelection,
   steppedKey,
   visiblePhotos,
@@ -68,6 +69,43 @@ test("library views filter by folder, name, rating and edits and sort naturally"
   assert.equal(
     visiblePhotos(folders, records, { folderId: ALL_FOLDERS }).length,
     3,
+  );
+});
+
+test("subfolders form a tree with nested counts and narrow the view", () => {
+  const photos = [
+    "top.jpg",
+    "Day 10/a.jpg",
+    "Day 2/b.jpg",
+    "Day 2/scans/c.tif",
+    "Day 2/scans/d.tif",
+  ].map((path) => photo("r", path));
+  const tree = folderTree(photos);
+  assert.equal(folderTree(photos), tree);
+  const root = tree.get("");
+  assert.equal(root.count, 5);
+  assert.deepEqual(
+    root.children.map((node) => [node.name, node.count]),
+    [
+      ["Day 2", 3],
+      ["Day 10", 1],
+    ],
+  );
+  assert.deepEqual(tree.get("Day 2/scans"), {
+    name: "scans",
+    path: "Day 2/scans",
+    count: 2,
+    children: [],
+  });
+  const roll = [{ id: "r", photos }];
+  assert.deepEqual(
+    keys(visiblePhotos(roll, new Map(), { folderId: "r", path: "Day 2" })),
+    ["r/Day 2/b.jpg", "r/Day 2/scans/c.tif", "r/Day 2/scans/d.tif"],
+  );
+  // "Day 2" does not take in a sibling that merely starts with its name.
+  assert.equal(
+    visiblePhotos(roll, new Map(), { folderId: "r", path: "Day 1" }).length,
+    0,
   );
 });
 

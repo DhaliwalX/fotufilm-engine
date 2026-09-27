@@ -151,6 +151,22 @@ test("library folders persist, thumbnail through Halide, rate and reopen edits",
   expect(rotated.left[2]).toBeGreaterThan(rotated.left[0] + 80);
   await page.screenshot({ path: testInfo.outputPath("library-grid.png") });
 
+  // The new folder opens to its subfolders; one narrows the grid to itself.
+  const folderRow = (name) =>
+    library.locator(".library-folder", { hasText: name });
+  await folderRow("Day 2").click();
+  await expect(tiles).toHaveCount(1);
+  await expect(tiles.nth(0)).toHaveAttribute("aria-label", "IMG_0003.png");
+  await expect(library.getByRole("heading", { name: "Day 2" })).toBeVisible();
+  await expect(folderRow("Day 2")).toHaveAttribute("aria-current", "true");
+  await page.screenshot({ path: testInfo.outputPath("library-subfolder.png") });
+  await folderRow("Roll 1").click();
+  await expect(tiles).toHaveCount(3);
+  await library
+    .getByRole("button", { name: "Hide subfolders of Roll 1" })
+    .click();
+  await expect(folderRow("Day 2")).toHaveCount(0);
+
   // Rate from the keyboard and filter by rating.
   await tiles.nth(2).click();
   await page.keyboard.press("4");
@@ -187,7 +203,7 @@ test("library folders persist, thumbnail through Halide, rate and reopen edits",
 
   // Removing the folder forgets it; the files stay.
   await page.keyboard.press("l");
-  await library.locator(".library-folder-row").hover();
+  await library.locator(".library-folder-row").first().hover();
   await library.getByRole("button", { name: "Roll 1 options" }).click();
   await page.getByRole("menuitem", { name: "Remove from Library…" }).click();
   await page.getByRole("button", { name: "Remove" }).click();

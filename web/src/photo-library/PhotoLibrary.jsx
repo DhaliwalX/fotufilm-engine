@@ -18,6 +18,7 @@ import { currentFile } from "./library-scan.js";
 import {
   ALL_FOLDERS,
   filteredPhotos,
+  folderTree,
   nextSelection,
   sortedPhotos,
   steppedKey,
@@ -29,6 +30,7 @@ import "./photo-library.css";
 const EASE = [0.2, 0.8, 0.2, 1];
 const TILE_SIZE_KEY = "fotufilm.library.tileSize";
 const noFilters = { search: "", sort: "name", minRating: 0, editedOnly: false };
+const allPhotos = { folderId: ALL_FOLDERS, path: "" };
 
 // The same array while its items are the same, so a folder's status changing
 // does not re-sort its photos.
@@ -81,7 +83,7 @@ function EmptyState({ folders, filtered, onAdd, onClear }) {
 export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
   const library = usePhotoLibrary(open);
   const [thumbnails, setThumbnails] = useState(null);
-  const [folderId, setFolderId] = useState(ALL_FOLDERS);
+  const [scope, setScope] = useState(allPhotos);
   const [filters, setFilters] = useState(noFilters);
   const [tileSize, setTileSize] = useState(
     () => Number(localStorage.getItem(TILE_SIZE_KEY)) || 168,
@@ -111,8 +113,12 @@ export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
       );
   }, [open]);
 
-  const folder = library.folders.find((item) => item.id === folderId);
-  if (folderId !== ALL_FOLDERS && !folder) setFolderId(ALL_FOLDERS);
+  // A folder or subfolder that disappears, removed or emptied on a rescan,
+  // leaves its parent in view.
+  const folder = library.folders.find((item) => item.id === scope.folderId);
+  const subfolder = folder && folderTree(folder.photos).get(scope.path);
+  if (scope.folderId !== ALL_FOLDERS && !folder) setScope(allPhotos);
+  else if (folder && !subfolder) setScope({ folderId: folder.id, path: "" });
   const scopeFolders = folder ? [folder] : library.folders;
 
   const search = useDeferredValue(filters.search);
@@ -123,8 +129,13 @@ export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
     [lists, sortRecords, filters.sort],
   );
   const photos = useMemo(
-    () => filteredPhotos(sorted, library.records, { ...filters, search }),
-    [sorted, library.records, filters, search],
+    () =>
+      filteredPhotos(sorted, library.records, {
+        ...filters,
+        search,
+        path: scope.path,
+      }),
+    [sorted, library.records, filters, search, scope.path],
   );
   const total = library.folders.reduce(
     (sum, folder) => sum + folder.photos.length,
@@ -141,7 +152,7 @@ export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
   const addFolder = async () => {
     if (!supportsFolderAccess()) return upload.current.click();
     const id = await library.addFolder();
-    if (id) setFolderId(id);
+    if (id) setScope({ folderId: id, path: "" });
   };
 
   const openPhotos = async (list) => {
@@ -269,10 +280,10 @@ export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
     >
       <LibraryFolders
         folders={library.folders}
-        folderId={folderId}
+        scope={scope}
         total={total}
-        onSelect={(id) => {
-          setFolderId(id);
+        onSelect={(folderId, path) => {
+          setScope({ folderId, path });
           setSelection({ selected: new Set(), anchor: null });
         }}
         onAdd={addFolder}
@@ -286,7 +297,7 @@ export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
         transition={{ duration: 0.26, ease: EASE }}
       >
         <LibraryBar
-          title={folder?.name ?? "All Photos"}
+          title={subfolder?.name || folder?.name || "All Photos"}
           shown={photos.length}
           selected={selectedPhotos.length}
           filters={filters}
@@ -314,7 +325,7 @@ export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
           onOpen={openKey}
           onRate={rate}
           onKeyDown={keyDown}
-          contentKey={folderId}
+          contentKey={`${scope.folderId}/${scope.path}`}
           reflowKey={`${filters.sort}|${filters.minRating}|${filters.editedOnly}|${search}`}
         >
           {!photos.length &&
@@ -341,7 +352,7 @@ export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
         onChange={async (event) => {
           const id = await library.addUploadedFiles(event.target.files);
           event.target.value = "";
-          if (id) setFolderId(id);
+          if (id) setScope({ folderId: id, path: "" });
         }}
       />
       <DialogContainer onDismiss={() => setRemoving(null)}>

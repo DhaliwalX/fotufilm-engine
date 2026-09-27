@@ -25,16 +25,19 @@ const COMPARE = {
 export const sortedPhotos = (lists, records, sort = "name") =>
   lists.flat().sort(COMPARE[sort](records));
 
+// `path` narrows a folder to one of its subfolders and everything below it.
 export function filteredPhotos(
   photos,
   records,
-  { search = "", minRating = 0, editedOnly = false } = {},
+  { path = "", search = "", minRating = 0, editedOnly = false } = {},
 ) {
-  const query = search.trim().toLowerCase();
-  if (!query && !minRating && !editedOnly) return photos;
+  const query = search.trim().toLowerCase(),
+    prefix = path && `${path}/`;
+  if (!prefix && !query && !minRating && !editedOnly) return photos;
   return photos.filter((photo) => {
     const record = records.get(photo.key);
     return (
+      (!prefix || photo.path.startsWith(prefix)) &&
       (!query || photo.path.toLowerCase().includes(query)) &&
       (record?.rating || 0) >= minRating &&
       (!editedOnly || !!record?.edit)
@@ -42,7 +45,47 @@ export function filteredPhotos(
   });
 }
 
-// The grid's contents: one folder or all of them, filtered and sorted.
+const byFolderName = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base",
+}).compare;
+const trees = new WeakMap();
+
+// A folder's subfolders that hold photos, by path, each counting the photos
+// in it and below it. The root is "". Built once per photo list.
+export function folderTree(photos) {
+  let tree = trees.get(photos);
+  if (tree) return tree;
+  const root = { name: "", path: "", count: photos.length, children: [] };
+  tree = new Map([["", root]]);
+  for (const photo of photos) {
+    let parent = root;
+    for (let end = photo.path.indexOf("/"); end >= 0; ) {
+      const path = photo.path.slice(0, end);
+      let node = tree.get(path);
+      if (!node) {
+        node = {
+          name: path.slice(parent.path ? parent.path.length + 1 : 0),
+          path,
+          count: 0,
+          children: [],
+        };
+        tree.set(path, node);
+        parent.children.push(node);
+      }
+      node.count++;
+      parent = node;
+      end = photo.path.indexOf("/", end + 1);
+    }
+  }
+  for (const node of tree.values())
+    node.children.sort((a, b) => byFolderName(a.name, b.name));
+  trees.set(photos, tree);
+  return tree;
+}
+
+// The grid's contents: one folder (or one of its subfolders) or all of them,
+// filtered and sorted.
 export function visiblePhotos(
   folders,
   records,
