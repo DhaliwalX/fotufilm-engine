@@ -8,6 +8,7 @@ import EditorInspector from "./EditorInspector.jsx";
 import { IMAGE_ACCEPT } from "../media-types.js";
 import { VIDEO_ACCEPT } from "../media-types.js";
 import NegativeImportDialog from "../NegativeImportDialog.jsx";
+import NegativeScanDialog from "../negative-scan/NegativeScanDialog.jsx";
 import { useNegativeImportDialog } from "./useNegativeImportDialog.js";
 import ExportDialog from "./ExportDialog.jsx";
 import { VIDEO_LABELS } from "../generated/controls.js";
@@ -93,7 +94,14 @@ export default function Workspace() {
         />
       )}
       <DialogContainer onDismiss={() => setDialog(null)}>
-        {dialog === "negative" ? (
+        {dialog === "negative" && negative.scans ? (
+          <NegativeScanDialog
+            session={negative.scan}
+            scans={negative.scans}
+            onClose={() => setDialog(null)}
+            onImport={negative.importScan}
+          />
+        ) : dialog === "negative" ? (
           <NegativeImportDialog
             onClose={() => setDialog(null)}
             model={negative}

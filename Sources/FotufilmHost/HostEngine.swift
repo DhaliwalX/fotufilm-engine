@@ -324,6 +324,22 @@ public final class HostEngine {
             })
     }
 
+    /// Prints a scanned negative's rows through the developer's print stage, one print or develop
+    /// at a time, stopped by `cancel` (`HostDeveloper.printScan`).
+    func printScan(width: Int, height: Int, stock: FilmStock, options: FotufilmEngine.Options,
+                   calibration: ApproximateNegativeScan,
+                   readScan: (Range<Int>, UnsafeMutableBufferPointer<Float>) -> Void,
+                   writeRows: (Range<Int>, UnsafeBufferPointer<Float>) -> Void) throws {
+        let started = currentGeneration
+        let shouldContinue = { self.currentGeneration == started }
+        renderLock.lock()
+        defer { renderLock.unlock() }
+        guard shouldContinue() else { throw Failure(description: "Cancelled.", cancelled: true) }
+        try developer.printScan(width: width, height: height, stock: stock, options: options,
+                                calibration: calibration, shouldContinue: shouldContinue,
+                                readScan: readScan, writeRows: writeRows)
+    }
+
     private func deliver(_ rows: UnsafeBufferPointer<Float>, rows range: Range<Int>, width: Int,
                          encoded: Bool, knee: Float, seed: UInt32, target: Target) {
         switch target.format {

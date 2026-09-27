@@ -24,6 +24,10 @@ public final class HostService {
     private var originals: (key: String, width: Int, height: Int, pixels: [UInt8])?
     /// Movie uploads in progress (`HostService+Video.swift`).
     let videos = HostVideoLibrary()
+    /// Scans open in a negative-scan session (`HostService+NegativeScan.swift`); tests keep their
+    /// light frames apart.
+    var negativeScans = HostNegativeScans(lights: HostNegativeLightFrames(
+        directory: HostNegativeLightFrames.defaultDirectory))
 
     /// Where Copy Photo puts the picture, when the platform has a clipboard; tests use a private
     /// one.
@@ -90,6 +94,7 @@ public final class HostService {
                 lock.unlock()
             }
             videos.release(parameters["handle"])
+            negativeScans.release(parameters["handle"])
             return try answer([:])
         case "render":
             return try render(params)
@@ -111,14 +116,9 @@ public final class HostService {
         case "convertNegative":
             return try convertNegative(parameters)
         case "suggestNegativeFilms":
-            let image = try self.image(parameters["handle"])
-            let catalogue = NegativeFilmSuggestions(stocks: FilmStock.presets)
-            let reading = NegativeFilmSuggestions.read(preview: negativePreview(image, rec2020: true))
-            let suggestions = reading.map { catalogue.suggest($0, limit: 3) } ?? []
-            return try answer(value: suggestions.map { suggestion -> [String: Any] in
-                ["films": suggestion.films.map { ["id": $0.id, "name": $0.name] },
-                 "likelihood": suggestion.likelihood]
-            })
+            return try answer(value: negativeFilmSuggestions(self.image(parameters["handle"])))
+        case let method where Self.negativeScanMethods.contains(method):
+            return try negativeScan(method, parameters: parameters, payload: payload)
         case "stages":
             return try answer(value: stages(parameters))
         case "printFrame":

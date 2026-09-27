@@ -33,6 +33,14 @@ protocol HostDeveloper {
                  options: FotufilmEngine.Options, pace: HostDevelopPace, encode: Bool, knee: Float?,
                  shouldContinue: @escaping () -> Bool,
                  deliver: (UnsafeBufferPointer<Float>, Range<Int>, Bool) -> Void) throws
+
+    /// Prints a scanned negative through the print stage: `readScan` fills rows of linear scan
+    /// RGBA, the border calibration reads them as the film's record densities, and `writeRows`
+    /// receives display-linear Display P3. Samples outside the film's densities print black.
+    func printScan(width: Int, height: Int, stock: FilmStock, options: FotufilmEngine.Options,
+                   calibration: ApproximateNegativeScan, shouldContinue: @escaping () -> Bool,
+                   readScan: (Range<Int>, UnsafeMutableBufferPointer<Float>) -> Void,
+                   writeRows: (Range<Int>, UnsafeBufferPointer<Float>) -> Void) throws
 }
 
 /// The portable developer: the Halide CPU pipeline, whole frame at once.
@@ -69,5 +77,39 @@ struct HalideCPUDeveloper: HostDeveloper {
             developed[i * 4 + 2] = out.planes[2][i]
         }
         developed.withUnsafeBufferPointer { deliver($0, 0..<height, false) }
+    }
+
+    /// The whole frame at once through the CPU print stage, as the GPU's banded print does it.
+    func printScan(width: Int, height: Int, stock: FilmStock, options: FotufilmEngine.Options,
+                   calibration: ApproximateNegativeScan, shouldContinue: @escaping () -> Bool,
+                   readScan: (Range<Int>, UnsafeMutableBufferPointer<Float>) -> Void,
+                   writeRows: (Range<Int>, UnsafeBufferPointer<Float>) -> Void) throws {
+        var film = stock
+        film.layeredTransport = nil
+        var options = options
+        options.stage = .print
+        let count = width * height
+        var rgba = [Float](repeating: 0, count: count * 4)
+        rgba.withUnsafeMutableBufferPointer { readScan(0..<height, $0) }
+        let base = SIMD3(calibration.baseDensity[0], calibration.baseDensity[1],
+                         calibration.baseDensity[2])
+        var density = ImageBuffer(width: width, height: height)
+        var invalid = [Bool](repeating: false, count: count)
+        for i in 0..<count {
+            let sample = SIMD3(rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2])
+            let d = calibration.density(of: sample)
+            invalid[i] = d == nil
+            for c in 0..<3 { density.planes[c][i] = (d ?? base)[c] }
+        }
+        let positive = try FotufilmEngine(stock: film, options: options)
+            .printPositiveChecked(negativeDensity: density)
+        guard shouldContinue() else {
+            throw HostEngine.Failure(description: "Cancelled.", cancelled: true)
+        }
+        for i in 0..<count {
+            for c in 0..<3 { rgba[i * 4 + c] = invalid[i] ? 0 : positive.planes[c][i] }
+            rgba[i * 4 + 3] = 1
+        }
+        rgba.withUnsafeBufferPointer { writeRows(0..<height, $0) }
     }
 }

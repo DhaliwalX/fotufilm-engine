@@ -10,6 +10,7 @@ extension HostPlatform {
     /// app's film packs and, on the Mac, the Resolve and Final Cut plug-ins.
     static var apple: HostPlatform {
         var platform = HostPlatform(decoder: CoreImageDecoder(), encoder: ImageIOStillEncoder())
+        platform.scans = CoreImageScanDecoder()
         #if canImport(AppKit)
         platform.clipboard = PasteboardClipboard()
         #endif

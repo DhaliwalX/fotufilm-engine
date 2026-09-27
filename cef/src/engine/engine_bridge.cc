@@ -19,6 +19,11 @@ constexpr const char* kMethods[] = {
     "plugins",          "installPlugin",    "revealPlugin",
     // Community film packs, installed where the Mac app keeps them.
     "filmPacks",        "importFilmPack", "removeFilmPack",
+    // The negative-scan session (web/src/negative-scan/): a scan opens once and every preview,
+    // border sample and the imported positive is a print of it to the page's recipe.
+    "negativeScanOpen", "negativeScanRender", "negativeScanSampleBorder",
+    "negativeScanDetectFrame", "negativeScanCommit", "negativeLightFrames",
+    "negativeAddLightFrame", "negativeRemoveLightFrame",
 };
 
 }  // namespace
