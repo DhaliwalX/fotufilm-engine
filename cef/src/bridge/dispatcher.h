@@ -79,6 +79,9 @@ class Dispatcher {
   // engine can stop mid-develop rather than finish work nobody wants.
   void SetCancelHook(std::function<void()> hook) { cancel_hook_ = std::move(hook); }
 
+  // Queues work behind the engine thread's calls, for a UI handler that has finished its part.
+  void PostEngine(std::function<void()> task);
+
   // Stops the engine thread after the work already queued.
   void Shutdown();
 

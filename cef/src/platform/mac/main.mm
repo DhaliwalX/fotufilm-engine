@@ -5,6 +5,8 @@
 
 #include "app/browser_app.h"
 #include "app/scheme.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+
 #include "bridge/dispatcher.h"
 #if defined(FOTUFILM_WITH_ENGINE)
 #include "engine/engine_bridge.h"
@@ -148,6 +150,20 @@ int main(int argc, char* argv[]) {
     g_dispatcher = std::make_unique<fotufilm::Dispatcher>();
 #if defined(FOTUFILM_WITH_ENGINE)
     g_engine = std::make_unique<fotufilm::EngineBridge>(*g_dispatcher);
+    g_engine->SetDestinationPicker([](const std::string& filename, const std::string& type,
+                                      std::function<void(const std::string&)> done) {
+      NSSavePanel* panel = [NSSavePanel savePanel];
+      panel.nameFieldStringValue = @(filename.c_str());
+      if (UTType* uti = [UTType typeWithMIMEType:@(type.c_str())])
+        panel.allowedContentTypes = @[ uti ];
+      auto finish = ^(NSModalResponse response) {
+        done(response == NSModalResponseOK && panel.URL ? panel.URL.path.UTF8String : "");
+      };
+      if (NSWindow* window = NSApp.mainWindow)
+        [panel beginSheetModalForWindow:window completionHandler:finish];
+      else
+        finish([panel runModal]);
+    });
 #endif
     CefRefPtr<fotufilm::BrowserApp> app =
         new fotufilm::BrowserApp(options, [url] {

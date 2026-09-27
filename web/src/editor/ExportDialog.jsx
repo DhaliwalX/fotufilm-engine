@@ -6,6 +6,15 @@ import { videoDimensions } from "../video-settings.js";
 import { colorSpaceLabel } from "../canvas-color.js";
 import { Button } from "@react-spectrum/s2/Button";
 import { useEditor } from "./EditorContext.jsx";
+
+const IMAGE_TYPES = [
+  { id: "image/png", label: "PNG" },
+  { id: "image/tiff", label: "TIFF · 16-bit" },
+  { id: "image/jpeg", label: "JPEG" },
+  { id: "image/webp", label: "WebP" },
+];
+const LOSSY = ["image/jpeg", "image/webp", "image/heic"];
+
 export default function ExportDialog() {
   const {
     backend,
@@ -54,12 +63,11 @@ export default function ExportDialog() {
                   <PickerItem id="webm">{VIDEO_LABELS.webm}</PickerItem>
                 </>
               ) : (
-                <>
-                  <PickerItem id="image/png">PNG</PickerItem>
-                  <PickerItem id="image/tiff">TIFF · 16-bit</PickerItem>
-                  <PickerItem id="image/jpeg">JPEG</PickerItem>
-                  <PickerItem id="image/webp">WebP</PickerItem>
-                </>
+                (backend.imageExportTypes ?? IMAGE_TYPES).map(({ id, label }) => (
+                  <PickerItem key={id} id={id}>
+                    {label}
+                  </PickerItem>
+                ))
               )}
             </Picker>
           </div>
@@ -78,7 +86,7 @@ export default function ExportDialog() {
             </Picker>
           </div>
           {!active?.image.video &&
-            ["image/jpeg", "image/webp"].includes(exportType) && (
+            LOSSY.includes(exportType) && (
               <Adjustment
                 slider={{
                   key: "quality",

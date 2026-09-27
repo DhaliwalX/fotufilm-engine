@@ -10,19 +10,24 @@ constexpr const char* kMethods[] = {
     "prepare",          "import",         "preview",          "release",
     "render",           "stages",         "analyseNegative",  "convertNegative",
     "suggestNegativeFilms", "autoAdjust", "printFrame",       "lensPlan",
-    "sampleScene",      "export",         "exportVideo",      "beginVideo",
+    "sampleScene",      "exportVideo",    "beginVideo",
     "appendVideo",      "importVideo",    "lensCatalogue",    "importLensCatalogue",
     "removeLensCatalogue",
 };
 
 }  // namespace
 
-EngineBridge::EngineBridge(Dispatcher& dispatcher) {
+EngineBridge::EngineBridge(Dispatcher& dispatcher) : dispatcher_(dispatcher) {
   for (const char* method : kMethods)
     dispatcher.Register(method, Dispatcher::Thread::kEngine,
                         [this](const Call& call, std::shared_ptr<Reply> reply) {
                           Handle(call, std::move(reply));
                         });
+  // Choosing the destination is the host's; encoding and writing are the engine's.
+  dispatcher.Register("export", Dispatcher::Thread::kUi,
+                      [this](const Call& call, std::shared_ptr<Reply> reply) {
+                        Export(call, std::move(reply));
+                      });
   // A cancel for the call being answered stops the develop inside the engine; calls still
   // queued see their own flag before they start.
   dispatcher.SetCancelHook([this] {
@@ -45,6 +50,24 @@ fotufilm_engine* EngineBridge::Engine(std::string& error) {
   fotufilm_free(message);
   error = failure_;
   return engine_;
+}
+
+void EngineBridge::Export(const Call& call, std::shared_ptr<Reply> reply) {
+  if (!picker_) return reply->Reject("This host cannot choose where to save.");
+  CefRefPtr<CefDictionaryValue> fields =
+      call.params && call.params->GetType() == VTYPE_DICTIONARY
+          ? call.params->GetDictionary()->Copy(false)
+          : CefDictionaryValue::Create();
+  const std::string filename = fields->GetString("filename").ToString();
+  const std::string type = fields->GetString("type").ToString();
+  auto pending = std::make_shared<Call>(call);
+  picker_(filename, type, [this, pending, fields, reply](const std::string& path) {
+    if (path.empty()) return reply->Reject("The export was cancelled.", "AbortError");
+    fields->SetString("path", path);
+    pending->params = CefValue::Create();
+    pending->params->SetDictionary(fields);
+    dispatcher_.PostEngine([this, pending, reply] { Handle(*pending, reply); });
+  });
 }
 
 void EngineBridge::Handle(const Call& call, std::shared_ptr<Reply> reply) {

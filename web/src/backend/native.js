@@ -18,6 +18,8 @@ export function createNativeBackend(host) {
     lenses: Object.freeze(lenses),
   };
   for (const name of BACKEND_METHODS) backend[name] = host[name].bind(host);
+  // Optional: the still formats this host writes, when they are not the browser's.
+  if (host.imageExportTypes) backend.imageExportTypes = Object.freeze([...host.imageExportTypes]);
   backend.createSession = () => {
     const session = host.createSession();
     return requireMethods(

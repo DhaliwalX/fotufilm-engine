@@ -51,6 +51,12 @@ public final class HostService {
             return try answer([:])
         case "render":
             return try render(params)
+        case "autoAdjust":
+            return try answer(autoAdjust(params))
+        case "sampleScene":
+            return try answer(value: sampleScene(parameters))
+        case "export":
+            return try answer(export(params, parameters: parameters))
         case "lensCatalogue":
             let data = Self.lensCatalogueURL.flatMap { try? Data(contentsOf: $0) }
             let profiles = data.flatMap { try? JSONSerialization.jsonObject(with: $0) } ?? []
@@ -141,8 +147,18 @@ public final class HostService {
         var edit: SceneGeometry
     }
 
-    private func render(_ params: Data) throws -> Answer {
-        let started = DispatchTime.now().uptimeNanoseconds
+    /// A render request resolved against its photograph: the geometry, the sizes it delivers at,
+    /// and the edit as the engine reads it.
+    private struct Prepared {
+        var request: RenderRequest
+        var edit: WebNativeEdit
+        var image: HostImage
+        var geometry: SceneGeometry
+        var maxEdge: Int?
+        var sizes: (frame: (Int, Int), output: (Int, Int))
+    }
+
+    private func prepare(_ params: Data) throws -> Prepared {
         let request: RenderRequest, edit: WebNativeEdit
         do {
             request = try JSONDecoder().decode(RenderRequest.self, from: params)
@@ -155,26 +171,26 @@ public final class HostService {
         // A viewport asks for part of a larger virtual picture: develop the whole frame at that
         // size, bounded by the photograph's own pixels, and cut the region out of it.
         var maxEdge = request.maxEdge
+        let full = geometry.sizes(width: image.width, height: image.height, maxEdge: nil)
         if let viewport = request.viewport {
-            let native = geometry.sizes(width: image.width, height: image.height, maxEdge: nil).output
-            let scale = min(1, Double(max(native.0, native.1))
-                                / Double(max(viewport.width, viewport.height)))
-            maxEdge = nil
-            if scale < 1 {
-                let full = geometry.sizes(width: image.width, height: image.height, maxEdge: nil)
-                maxEdge = max(full.frame.0, full.frame.1)
-            } else {
-                // The frame whose cropped output is the viewport's virtual size.
-                let full = geometry.sizes(width: image.width, height: image.height, maxEdge: nil)
-                let ratio = Double(max(viewport.width, viewport.height))
-                    / Double(max(full.output.0, full.output.1))
-                maxEdge = max(1, Int((Double(max(full.frame.0, full.frame.1)) * ratio).rounded()))
-            }
+            let ratio = Double(max(viewport.width, viewport.height))
+                / Double(max(full.output.0, full.output.1))
+            maxEdge = ratio >= 1 ? nil
+                : max(1, Int((Double(max(full.frame.0, full.frame.1)) * ratio).rounded()))
         }
         // A limit at or past the photograph's own size is no limit, and keys the same develop.
-        let fullFrame = geometry.sizes(width: image.width, height: image.height, maxEdge: nil).frame
-        if let limit = maxEdge, limit <= 0 || limit >= max(fullFrame.0, fullFrame.1) { maxEdge = nil }
+        if let limit = maxEdge, limit <= 0 || limit >= max(full.frame.0, full.frame.1) { maxEdge = nil }
         let sizes = geometry.sizes(width: image.width, height: image.height, maxEdge: maxEdge)
+        return Prepared(request: request, edit: edit, image: image, geometry: geometry,
+                        maxEdge: maxEdge, sizes: sizes)
+    }
+
+    private func render(_ params: Data) throws -> Answer {
+        let started = DispatchTime.now().uptimeNanoseconds
+        let prepared = try prepare(params)
+        let (request, edit, image, geometry) = (prepared.request, prepared.edit, prepared.image,
+                                                prepared.geometry)
+        let (maxEdge, sizes) = (prepared.maxEdge, prepared.sizes)
         let (width, height) = sizes.output
 
         // Cache keys: everything but the viewport decides the developed frame.
@@ -229,6 +245,95 @@ public final class HostService {
             "previewType": "image/png", "backend": engine.backendName,
             "elapsed": elapsed, "renderMilliseconds": renderMilliseconds,
         ], images: ["preview": png(developedFrame.pixels), "original": png(originalFrame.pixels)])
+    }
+
+    // MARK: Measuring and exporting
+
+    /// Exposure, highlights and shadows solved against the film's latitude from the framed
+    /// scene's regional stops, as the Mac app's Auto does (`DesktopEditorModel`).
+    private func autoAdjust(_ params: Data) throws -> [String: Any] {
+        var body = (try? JSONSerialization.jsonObject(with: params)) as? [String: Any] ?? [:]
+        let edit = body["edit"] as? [String: Any] ?? [:]
+        body["maxEdge"] = 1024
+        body["profileRequest"] = body["profileRequest"] ?? [:]
+        let prepared = try prepare(JSONSerialization.data(withJSONObject: body))
+        let scene = try sceneFor(prepared.image, geometry: prepared.geometry, sizes: prepared.sizes)
+        let (width, height) = prepared.sizes.output
+        var measurement = ToneBaseMeasurement(frameWidth: width, frameHeight: height,
+                                              balance: SIMD3(1, 1, 1), exposureGain: 1)
+        scene.withUnsafeBufferPointer { measurement.add(linearRGBA: $0.baseAddress!, rows: 0..<height) }
+        let window: (shadows: Float, highlights: Float)
+        if let id = edit["stock"] as? String {
+            guard let stock = FilmStock.presets[id] else {
+                throw HostEngine.Failure(description: "Film \(id) is not installed.")
+            }
+            let correction = ((edit["profile"] as? [String: Any])?["printCorrection"] as? Double) ?? 0
+            window = AutoAdjustment.latitude(stock: stock, printCorrection: Float(correction))
+        } else {
+            window = PlainDevelop.latitude
+        }
+        guard let stops = AutoAdjustment.SceneStops(regionStops: measurement.regionStops()) else {
+            return ["ev": 0, "highlights": 0, "shadows": 0]
+        }
+        let solution = AutoAdjustment.solve(scene: stops, window: window)
+        return ["ev": Double(min(max(solution.exposureEV, -3), 3)),
+                "highlights": Double(min(max(solution.highlights, -1), 1)),
+                "shadows": Double(min(max(solution.shadows, -1), 1))]
+    }
+
+    /// Scene-linear Rec.2020 at a point of the framed photograph, in unit coordinates.
+    private func sampleScene(_ parameters: [String: Any]) throws -> Any {
+        guard var render = parameters["render"] as? [String: Any],
+              let point = parameters["point"] as? [Double], point.count == 2,
+              (0...1).contains(point[0]), (0...1).contains(point[1]) else { return NSNull() }
+        render["viewport"] = nil
+        let prepared = try prepare(JSONSerialization.data(withJSONObject: render))
+        let scene = try sceneFor(prepared.image, geometry: prepared.geometry, sizes: prepared.sizes)
+        let (width, height) = prepared.sizes.output
+        let x = min(width - 1, Int(point[0] * Double(width)))
+        let y = min(height - 1, Int(point[1] * Double(height)))
+        // A 5 x 5 mean, so a sample is the colour there rather than one grain of noise.
+        var sum = SIMD3<Double>(repeating: 0), count = 0.0
+        for sy in max(0, y - 2)...min(height - 1, y + 2) {
+            for sx in max(0, x - 2)...min(width - 1, x + 2) {
+                let i = (sy * width + sx) * 4
+                sum += SIMD3(Double(scene[i]), Double(scene[i + 1]), Double(scene[i + 2]))
+                count += 1
+            }
+        }
+        return [sum.x / count, sum.y / count, sum.z / count]
+    }
+
+    /// Develops the whole frame at the export size and writes it where the host's save panel said.
+    private func export(_ params: Data, parameters: [String: Any]) throws -> [String: Any] {
+        guard let path = parameters["path"] as? String else {
+            throw HostEngine.Failure(description: "No destination was chosen.")
+        }
+        var body = parameters
+        body["viewport"] = nil
+        let prepared = try prepare(JSONSerialization.data(withJSONObject: body))
+        let scene = try sceneFor(prepared.image, geometry: prepared.geometry, sizes: prepared.sizes)
+        let (width, height) = prepared.sizes.output
+        let type = parameters["type"] as? String ?? "image/png"
+        let quality = (parameters["quality"] as? Double).map { min(max($0, 0.01), 1) } ?? 0.95
+        let deep = type == "image/tiff"
+        var pixels = [UInt8](repeating: 0, count: width * height * (deep ? 16 : 4))
+        try pixels.withUnsafeMutableBytes { buffer in
+            try engine.develop(scene, width: width, height: height,
+                               contentHeadroom: prepared.image.contentHeadroom, edit: prepared.edit,
+                               into: .init(maxEdge: 0, format: deep ? .rgba32FloatLinearP3 : .rgba8DisplayP3,
+                                           pixels: buffer.baseAddress!, rowBytes: width * (deep ? 16 : 4),
+                                           capacity: buffer.count))
+        }
+        let knee = prepared.edit.edit.stock.flatMap { id in
+            FilmStock.presets[id].flatMap { stock in
+                try? prepared.edit.document.options(for: stock).sdrShoulderKnee(for: stock)
+            }
+        } ?? FilmSDRDelivery.boundedShoulderKnee
+        try HostExport.write(pixels, width: width, height: height, deep: deep, knee: knee,
+                             type: type, quality: quality, to: URL(fileURLWithPath: path))
+        return ["filename": URL(fileURLWithPath: path).lastPathComponent, "width": width,
+                "height": height]
     }
 
     private var sceneCache: (key: String, scene: [Float])?

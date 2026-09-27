@@ -87,9 +87,10 @@ The transport keeps the contract in `web/src/backend/README.md` and the call sha
 ## Roadmap
 
 1. **Engine methods.** `prepare` (with the film library), `import`, `preview`, `release`,
-   `render` (geometry, viewport tiles cut from one develop) and the lens catalogue answer today.
-   Still to come: `stages`, `autoAdjust`, `analyseNegative`/`convertNegative`, `printFrame`,
-   `lensPlan` and lens correction, `sampleScene`, selective edits, `export` and video.
+   `render` (geometry, viewport tiles cut from one develop), `autoAdjust`, `sampleScene`,
+   `export` (PNG, 16-bit TIFF, JPEG, HEIC, to a native save panel) and the lens catalogue answer
+   today. Still to come: `stages`, `analyseNegative`/`convertNegative`, `printFrame`,
+   `lensPlan` and lens correction, selective edits and video.
 2. **Native presentation in the editor.** A backend capability that lets `ImageCanvas` leave the
    photograph's area transparent and report its rectangle, zoom and pan to the host (as
    `setImageLayer` does in the diagnostics page); renders then go to the image layer instead of

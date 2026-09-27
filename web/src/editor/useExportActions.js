@@ -89,7 +89,8 @@ export default function useExportActions({
       });
       setDialog(null);
     } catch (e) {
-      setError(e.message);
+      // Dismissing a native save panel is a choice, not a failure.
+      if (e.name !== "AbortError") setError(e.message);
     } finally {
       setExporting(false);
       setStatus(null);

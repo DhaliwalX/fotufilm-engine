@@ -95,6 +95,13 @@ export function createMacBackend(channel) {
     planPrintFrame: (edit, width, height) => call("printFrame", frameRequest(edit, width, height)),
     resolveLensPlan: (image, lens) => call("lensPlan", { handle: image.handle, lens }),
     outputColorSpace: ({ type } = {}) => type === "image/webp" ? "srgb" : "display-p3",
+    // ImageIO writes HEIC and has no WebP encoder.
+    imageExportTypes: [
+      { id: "image/png", label: "PNG" },
+      { id: "image/tiff", label: "TIFF · 16-bit" },
+      { id: "image/jpeg", label: "JPEG" },
+      { id: "image/heic", label: "HEIC" },
+    ],
     sampleScene: (result, point) => call("sampleScene", { render: result.sceneRequest, point }),
     async exportImage(request) {
       request.onProgress?.("Rendering native export");

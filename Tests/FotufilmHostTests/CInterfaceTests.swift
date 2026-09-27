@@ -176,6 +176,17 @@ extension CInterfaceTests {
                 ?? Data())
         }
 
+        func callRaw(_ method: String, _ params: String) throws -> String {
+            var answer = fotufilm_answer()
+            var error: UnsafeMutablePointer<CChar>?
+            defer { fotufilm_answer_free(&answer); fotufilm_free(error) }
+            guard fotufilm_host_call(engine, method, params, nil, 0, &answer, &error)
+                    == Int32(FOTUFILM_OK) else {
+                throw XCTSkip(error.map { String(cString: $0) } ?? method)
+            }
+            return String(cString: answer.json)
+        }
+
         let prepared = try call("prepare", "{}")
         XCTAssertTrue((prepared.json["stocks"] as? [String])?.contains("gold200") ?? false)
 
@@ -212,6 +223,31 @@ extension CInterfaceTests {
         """)
         XCTAssertEqual(tile.json["width"] as? Int, 40)
         XCTAssertEqual(tile.json["renderMilliseconds"] as? Double, 0)
+
+        // Auto solves exposure for the film; a sample reads the scene under a point.
+        let auto = try call("autoAdjust", """
+        {"handle": \(handle), "edit": {"stock": "gold200", "params": {}}}
+        """)
+        XCTAssertNotNil(auto.json["ev"] as? Double)
+        let sample = try JSONSerialization.jsonObject(with: Data(try callRaw("sampleScene", """
+        {"render": {"handle": \(handle), "maxEdge": 64, "edit": {"stock": "gold200", "params": {}},
+                    "profileRequest": {"controls": {}}},
+         "point": [0.9, 0.5]}
+        """).utf8)) as? [Double]
+        XCTAssertEqual(sample?.count, 3)
+
+        // Export writes a 16-bit TIFF where the host's save panel pointed.
+        let target = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fotufilm-export-\(UUID().uuidString).tiff")
+        defer { try? FileManager.default.removeItem(at: target) }
+        let exported = try call("export", """
+        {"handle": \(handle), "maxEdge": null, "type": "image/tiff", "path": "\(target.path)",
+         "edit": {"stock": "gold200", "params": {}}, "profileRequest": {"controls": {}}}
+        """)
+        XCTAssertEqual(exported.json["width"] as? Int, 120)
+        let written = try XCTUnwrap(CGImageSourceCreateWithURL(target as CFURL, nil)
+            .flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) })
+        XCTAssertEqual(written.bitsPerComponent, 16)
 
         _ = try call("release", #"{"handle": \#(handle)}"#)
         XCTAssertThrowsError(try call("preview", #"{"handle": \#(handle)}"#))

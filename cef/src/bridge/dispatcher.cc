@@ -109,6 +109,15 @@ void Dispatcher::Register(const std::string& method, Thread thread,
   routes_[method] = {thread, std::move(handler)};
 }
 
+void Dispatcher::PostEngine(std::function<void()> task) {
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (stopping_) return;
+    queue_.emplace_back(std::move(task));
+  }
+  wake_.notify_one();
+}
+
 void Dispatcher::RunEngine() {
   for (;;) {
     std::function<void()> task;

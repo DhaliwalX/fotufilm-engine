@@ -88,7 +88,8 @@ if(OS_MAC)
     ${FOTUFILM_COMMON_SOURCES} ${FOTUFILM_BROWSER_SOURCES} ${_mac_sources})
   fotufilm_target(fotufilm_desktop)
   target_link_libraries(fotufilm_desktop
-    "-framework Metal" "-framework QuartzCore" "-framework IOSurface")
+    "-framework Metal" "-framework QuartzCore" "-framework IOSurface"
+    "-framework UniformTypeIdentifiers")
   if(FOTUFILM_WITH_ENGINE)
     target_compile_definitions(fotufilm_desktop PRIVATE FOTUFILM_WITH_ENGINE=1)
     target_include_directories(fotufilm_desktop PRIVATE
