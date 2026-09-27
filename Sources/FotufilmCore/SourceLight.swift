@@ -54,6 +54,74 @@ public struct CameraIdentity: Equatable, Codable, Sendable {
     }
 }
 
+/// The body and white balance a Sony XAVC movie records in its embedded NonRealTimeMeta XML, the
+/// record that names the camera even when the QuickTime atoms say nothing.
+public struct SonyNonRealTimeMeta: Equatable, Sendable {
+    public var make: String?
+    public var model: String?
+    /// The white balance in kelvin, when it is a plausible temperature rather than a mode name.
+    public var cct: Float?
+
+    public init(make: String? = nil, model: String? = nil, cct: Float? = nil) {
+        self.make = make
+        self.model = model
+        self.cct = cct
+    }
+
+    /// The record from the last 4 MB of the file, where Sony writes it, or else the first.
+    public static func read(at url: URL) -> SonyNonRealTimeMeta? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        let window = 4 << 20
+        guard let size = try? handle.seekToEnd(), size > 0 else { return nil }
+        var data = Data()
+        let tailStart = size > UInt64(window) ? size - UInt64(window) : 0
+        if (try? handle.seek(toOffset: tailStart)) != nil {
+            data = (try? handle.read(upToCount: window)) ?? Data()
+        }
+        if tailStart > 0, data.range(of: Data("<NonRealTimeMeta".utf8)) == nil,
+           (try? handle.seek(toOffset: 0)) != nil {
+            data = (try? handle.read(upToCount: window)) ?? Data()
+        }
+        return parse(data)
+    }
+
+    /// The record inside `data`, nil when there is none or it names nothing.
+    public static func parse(_ data: Data) -> SonyNonRealTimeMeta? {
+        guard let open = data.range(of: Data("<NonRealTimeMeta".utf8)),
+              let close = data.range(of: Data("</NonRealTimeMeta>".utf8),
+                                     in: open.upperBound..<data.endIndex),
+              let xml = String(data: data[open.lowerBound..<close.upperBound], encoding: .utf8)
+        else { return nil }
+
+        func attribute(_ name: String, inTag tag: String) -> String? {
+            guard let element = xml.range(of: "<" + tag),
+                  let end = xml[element.upperBound...].firstIndex(of: ">")
+            else { return nil }
+            let inside = xml[element.upperBound..<end]
+            guard let mark = inside.range(of: name + "=\""),
+                  let quote = inside[mark.upperBound...].firstIndex(of: "\"")
+            else { return nil }
+            let value = String(inside[mark.upperBound..<quote])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return value.isEmpty ? nil : value
+        }
+
+        var meta = SonyNonRealTimeMeta(make: attribute("manufacturer", inTag: "Device"),
+                                       model: attribute("modelName", inTag: "Device"))
+        // A white balance only counts when it is a plausible kelvin number: Sony also writes
+        // mode names here on some bodies, and a mode is not a temperature.
+        if let mark = xml.range(of: "name=\"WhiteBalance\""),
+           let tail = xml[mark.upperBound...].range(of: "value=\""),
+           let quote = xml[tail.upperBound...].firstIndex(of: "\""),
+           let kelvin = Float(xml[tail.upperBound..<quote]),
+           kelvin >= 1000, kelvin <= 20000 {
+            meta.cct = kelvin
+        }
+        return meta.make != nil || meta.model != nil || meta.cct != nil ? meta : nil
+    }
+}
+
 /// Capture exposure, as far as the file says. All optional: RAW and log carry some of these, a
 /// bare still often none.
 public struct ExposureMetadata: Equatable, Codable, Sendable {

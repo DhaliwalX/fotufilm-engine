@@ -42,6 +42,7 @@ final class AVFoundationVideoSource: HostVideoSource {
     private let deepStorage: Bool
     /// The body and white balance the file names, for the camera profile a log decode composes.
     private let camera: CameraIdentity?
+    private let sceneCCT: Float?
     private var cursor: Cursor?
     private var exposureGain: Float?
 
@@ -51,7 +52,7 @@ final class AVFoundationVideoSource: HostVideoSource {
         asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
         let asset = self.asset
         let loaded: (AVAssetTrack, AVAssetTrack?, CGSize, CGAffineTransform, Float,
-                     [CMFormatDescription], CMTimeRange, CMTime, CameraIdentity?)
+                     [CMFormatDescription], CMTimeRange, CMTime, (CameraIdentity?, Float?))
         do {
             loaded = try waitFor {
                 guard let track = try await asset.loadTracks(withMediaType: .video).first else {
@@ -63,7 +64,7 @@ final class AVFoundationVideoSource: HostVideoSource {
                     .timeRange)
                 let duration = try await asset.load(.duration)
                 return (track, audio, size, transform, rate, formats, range, duration,
-                        await Self.camera(of: asset))
+                        await Self.capture(of: asset, at: url))
             }
         } catch let failure as HostEngine.Failure {
             throw failure
@@ -87,7 +88,7 @@ final class AVFoundationVideoSource: HostVideoSource {
         start = max(0, loaded.6.start.seconds.isFinite ? loaded.6.start.seconds : 0)
         let end = loaded.6.end.seconds
         duration = end.isFinite && end > start ? end : max(start, loaded.7.seconds)
-        camera = loaded.8
+        (camera, sceneCCT) = loaded.8
     }
 
     // MARK: Frames
@@ -335,7 +336,7 @@ final class AVFoundationVideoSource: HostVideoSource {
             // camera's profile composed in, and diffuse white (0.9) placed at 1.
             let curve = encoding.curve
             let m = CameraProfileCorrection.composedGamut(
-                base: encoding.gamut.toRec2020.map { Float($0) }, camera: camera, cct: nil)
+                base: encoding.gamut.toRec2020.map { Float($0) }, camera: camera, cct: sceneCCT)
                 .map { $0 / 0.9 }
             let r = SIMD3(m[0], m[1], m[2]), g = SIMD3(m[3], m[4], m[5]), b = SIMD3(m[6], m[7], m[8])
             return { code in
@@ -434,9 +435,11 @@ final class AVFoundationVideoSource: HostVideoSource {
         return .up
     }
 
-    /// Make and model from the common metadata, as the Mac app reads them; both or nothing.
-    private static func camera(of asset: AVAsset) async -> CameraIdentity? {
-        var make: String?, model: String?
+    /// Make, model and white balance as the Mac app reads them (`VideoPipeline.captureMetadata`):
+    /// the common metadata first, then Sony's embedded NonRealTimeMeta. A camera is both make and
+    /// model or nothing.
+    private static func capture(of asset: AVAsset, at url: URL) async -> (CameraIdentity?, Float?) {
+        var make: String?, model: String?, cct: Float?
         let items = ((try? await asset.load(.commonMetadata)) ?? [])
             + ((try? await asset.load(.metadata)) ?? [])
         for item in items {
@@ -448,7 +451,12 @@ final class AVFoundationVideoSource: HostVideoSource {
                 else if id.hasSuffix(".model") || id.hasSuffix("/model") { model = model ?? value }
             }
         }
-        return make != nil && model != nil ? CameraIdentity(make: make, model: model) : nil
+        if make == nil || model == nil || cct == nil, let sony = SonyNonRealTimeMeta.read(at: url) {
+            make = make ?? sony.make
+            model = model ?? sony.model
+            cct = sony.cct
+        }
+        return (make != nil && model != nil ? CameraIdentity(make: make, model: model) : nil, cct)
     }
 }
 

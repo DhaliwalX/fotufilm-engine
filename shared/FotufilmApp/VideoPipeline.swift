@@ -238,7 +238,7 @@ enum VideoPipeline {
 
         if (make == nil || model == nil || cct == nil),
            let url = (asset as? AVURLAsset)?.url, url.isFileURL,
-           let sony = sonyNonRealTimeMeta(at: url) {
+           let sony = SonyNonRealTimeMeta.read(at: url) {
             make = make ?? sony.make
             model = model ?? sony.model
             cct = cct ?? sony.cct
@@ -248,58 +248,6 @@ enum VideoPipeline {
         let camera = (make != nil && model != nil)
             ? CameraIdentity(make: make, model: model) : nil
         return VideoCaptureMetadata(camera: camera, sceneCCT: cct)
-    }
-
-    private static func sonyNonRealTimeMeta(
-        at url: URL
-    ) -> (make: String?, model: String?, cct: Float?)? {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
-        defer { try? handle.close() }
-        let window = 4 << 20
-        guard let size = try? handle.seekToEnd(), size > 0 else { return nil }
-        var data = Data()
-        let tailStart = size > UInt64(window) ? size - UInt64(window) : 0
-        if (try? handle.seek(toOffset: tailStart)) != nil {
-            data = (try? handle.read(upToCount: window)) ?? Data()
-        }
-        if tailStart > 0, data.range(of: Data("<NonRealTimeMeta".utf8)) == nil,
-           (try? handle.seek(toOffset: 0)) != nil {
-            data = (try? handle.read(upToCount: window)) ?? Data()
-        }
-        guard let open = data.range(of: Data("<NonRealTimeMeta".utf8)),
-              let close = data.range(of: Data("</NonRealTimeMeta>".utf8),
-                                     in: open.upperBound..<data.endIndex),
-              let xml = String(data: data[open.lowerBound..<close.upperBound],
-                               encoding: .utf8)
-        else { return nil }
-
-        func attribute(_ name: String, inTag tag: String) -> String? {
-            guard let element = xml.range(of: "<" + tag),
-                  let end = xml[element.upperBound...].firstIndex(of: ">")
-            else { return nil }
-            let inside = xml[element.upperBound..<end]
-            guard let mark = inside.range(of: name + "=\""),
-                  let quote = inside[mark.upperBound...].firstIndex(of: "\"")
-            else { return nil }
-            let value = String(inside[mark.upperBound..<quote])
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            return value.isEmpty ? nil : value
-        }
-
-        let make = attribute("manufacturer", inTag: "Device")
-        let model = attribute("modelName", inTag: "Device")
-        // A white balance only counts when it is a plausible kelvin number — Sony also writes
-        // mode names here on some bodies, and a mode is not a temperature.
-        var cct: Float?
-        if let mark = xml.range(of: "name=\"WhiteBalance\""),
-           let tail = xml[mark.upperBound...].range(of: "value=\""),
-           let quote = xml[tail.upperBound...].firstIndex(of: "\""),
-           let kelvin = Float(xml[tail.upperBound..<quote]),
-           kelvin >= 1000, kelvin <= 20000 {
-            cct = kelvin
-        }
-        guard make != nil || model != nil || cct != nil else { return nil }
-        return (make, model, cct)
     }
 
     /// A single still for the on-screen preview, taken from early in the clip; display-oriented.
