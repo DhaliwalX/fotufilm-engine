@@ -32,7 +32,8 @@ export function createNativeBackend(host) {
   if (typeof host.suggestNegativeFilms === "function")
     backend.suggestNegativeFilms = host.suggestNegativeFilms.bind(host);
   // Optional: opening files by path, copying the picture and the still-export options, for hosts
-  // with a file system, a pasteboard and an encoder of their own.
+  // with a file system, a pasteboard and an encoder of their own, and a host's own store for
+  // the edits photographs are left with.
   for (const name of [
     "importPath",
     "copyImage",
@@ -41,6 +42,8 @@ export function createNativeBackend(host) {
     "suggestFilm",
     "recordFilmChoice",
     "forgetFilmChoices",
+    "loadEdit",
+    "saveEdit",
   ])
     if (typeof host[name] === "function") backend[name] = host[name].bind(host);
   // Optional: plug-ins for other editors the host installs, `{id, name}`, with their calls.

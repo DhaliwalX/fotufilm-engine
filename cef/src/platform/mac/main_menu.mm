@@ -114,6 +114,27 @@ static const NSUInteger kRecentLimit = 10;
 
 @end
 
+// Builds Edit History as it is pulled down, as the Mac app's EditHistoryMenuDelegate does: every
+// step of the shown photograph, the one standing ticked (validated with the editor's commands).
+@interface FotufilmEditHistoryMenu : NSObject <NSMenuDelegate>
+@end
+
+@implementation FotufilmEditHistoryMenu
+
+- (void)menuNeedsUpdate:(NSMenu*)menu {
+  [menu removeAllItems];
+  id source = [NSApp targetForAction:@selector(editHistoryTitles) to:nil from:nil];
+  NSArray<NSString*>* titles =
+      [source conformsToProtocol:@protocol(FotufilmEditHistory)] ? [source editHistoryTitles] : @[];
+  [titles enumerateObjectsUsingBlock:^(NSString* title, NSUInteger step, BOOL*) {
+    Command(menu, title, [NSString stringWithFormat:@"history:%lu", (unsigned long)step]);
+  }];
+  if (!titles.count)
+    [menu addItemWithTitle:@"No Open Edit" action:nil keyEquivalent:@""].enabled = NO;
+}
+
+@end
+
 NSMenu* FotufilmMainMenu(NSArray<NSDictionary*>* plugins) {
   static FotufilmRecentMenu* recent = [FotufilmRecentMenu new];
   static FotufilmEditorListMenu* films = [] {
@@ -121,6 +142,7 @@ NSMenu* FotufilmMainMenu(NSArray<NSDictionary*>* plugins) {
     menu.list = @"films";
     return menu;
   }();
+  static FotufilmEditHistoryMenu* history = [FotufilmEditHistoryMenu new];
   NSMenu* bar = [NSMenu new];
 
   NSMenu* app = Submenu(bar, @"Fotufilm");
@@ -149,10 +171,11 @@ NSMenu* FotufilmMainMenu(NSArray<NSDictionary*>* plugins) {
   Add(file, @"Close Window", @selector(performClose:), @"w");
 
   // Undo, Redo and the clipboard go to the host view, which gives them to a focused text field
-  // or, for Undo and Redo, to the editor's history.
+  // or, for Undo and Redo, to the editor's history, and names them after the step they change.
   NSMenu* edit = Submenu(bar, @"Edit");
   Add(edit, @"Undo", @selector(undo:), @"z");
   Add(edit, @"Redo", @selector(redo:), @"z", kCommand | kShift);
+  Submenu(edit, @"Edit History").delegate = history;
   [edit addItem:[NSMenuItem separatorItem]];
   Command(edit, @"Auto Adjust", @"autoAdjust", @"a", kCommand | kShift);
   Command(edit, @"Sample a Selection", @"sampleSelection", @"s", kCommand | kShift);

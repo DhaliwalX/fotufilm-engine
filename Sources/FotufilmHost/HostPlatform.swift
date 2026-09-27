@@ -29,6 +29,9 @@ struct HostPlatform {
     var videoWriter: HostVideoWriterFactory?
     /// Installs the plug-ins for other editors (`HostPlugins.swift`).
     var plugins: HostPluginInstaller?
+    /// Hashes stills for the identity their edit is kept under (`HostFileIdentity.swift`);
+    /// without it a file is known by its name, size and date.
+    var fileDigest: HostFileDigest?
 
     static let current: HostPlatform = {
         #if canImport(ImageIO) && canImport(CoreImage)

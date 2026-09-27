@@ -76,3 +76,25 @@ test("the plug-ins a host installs are named up front and read through the engin
   assert.equal(bare.plugins, undefined);
   assert.equal(bare.installPlugin, undefined);
 });
+
+test("a file the host opens carries the identity its edit is kept under", async () => {
+  const backend = createMacBackend({
+    binary: true,
+    capabilities: { importPath: true },
+    async postMessage({ method }) {
+      assert.equal(method, "importPath");
+      return {
+        handle: 4,
+        naturalWidth: 2,
+        naturalHeight: 1,
+        preview: new Uint8Array([1]),
+        identity: "sha256:ab",
+      };
+    },
+  });
+  const opened = await backend.importPath("/photos/a.jpg");
+  assert.equal(opened.identity, "sha256:ab");
+  assert.equal(opened.image.identity, undefined);
+  assert.equal(opened.image.handle, 4);
+  URL.revokeObjectURL(opened.url);
+});

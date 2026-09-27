@@ -187,3 +187,30 @@ test("a plug-in this build lacks cannot be installed, and one install runs at a 
   assert.equal(menuState(editor()).enabled.plugins, false);
   assert.equal(runCommand(editor(), "installPlugin:resolve"), false);
 });
+
+test("Undo and Redo are named and the Edit History lists every step", () => {
+  const opened = { stock: "gold200", rotation: 0 };
+  const turned = { ...opened, rotation: 1 };
+  const film = { ...turned, stock: "portra400" };
+  const e = editor({
+    stocks: [{ id: "gold200" }, { id: "portra400", name: "Portra 400" }],
+    history: { past: [opened], present: turned, future: [film] },
+  });
+  const state = menuState(e);
+  assert.deepEqual(state.titles, {
+    undo: "Undo Crop & Rotate",
+    redo: "Redo Portra 400",
+  });
+  assert.deepEqual(state.history, ["Opened", "Crop & Rotate", "Portra 400"]);
+  assert.equal(state.checked["history:1"], true);
+  assert.equal(state.enabled["history:2"], true);
+  assert.equal(state.enabled["history:3"], undefined);
+  assert.ok(runCommand(e, "history:0"));
+  assert.deepEqual(e.calls, [["dispatch", { type: "goTo", index: 0 }]]);
+  assert.equal(runCommand(e, "history:3"), false);
+  // With no photograph there is no history, and a covered photo's steps are greyed.
+  assert.deepEqual(menuState(editor({ active: null })).history, []);
+  assert.equal(menuState({ ...e, dialog: "export" }).enabled["history:0"], false);
+  const untouched = { past: [], present: opened, future: [] };
+  assert.equal(menuState(editor({ history: untouched })).titles.undo, "Undo");
+});

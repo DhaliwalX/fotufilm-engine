@@ -99,9 +99,19 @@ apply and which are ticked with `menuState`, which the menus validate against. A
 the menu bar before the page, so a key an item takes never also reaches the page's bindings; Undo,
 Redo and the clipboard belong to a focused text field when there is one.
 
+Edit › Undo and Redo are named after the step they change ("Undo Lens Correction"), and Edit ›
+Edit History lists every step of the shown photograph, the current one ticked, as the Mac app's
+does; choosing one runs `history:<step>`. The editor reports the names with `menuState`
+(`titles`, `history`); a focused text field keeps plain Undo and Redo.
+
 Files from File > Open, Open Recent, the Finder (double-click, Open With, the Dock icon) arrive as
 `fotufilm-native-open` {paths}, held until the editor listens, and the engine opens them in place
-with `importPath`: no bytes cross the bridge. Files dropped on the window become a CEF drag, so
+with `importPath`: no bytes cross the bridge. Its answer carries the file's `identity` (the
+SHA-256 of a still's bytes, from the platform's `HostPlatform.fileDigest`; name, size and date for
+a movie or where there is no digest), under which the editor keeps the photograph's last edit, so
+reopening it starts where it was left. The edits live in the editor's IndexedDB in the profile
+(`Application Support/Fotufilm Desktop`); a host may keep them itself with `loadEdit`/`saveEdit`
+(`web/src/backend/README.md`). Files dropped on the window become a CEF drag, so
 the page's own drop handling takes them. Copy Photo develops the frame and the engine puts it on
 the pasteboard (`copyImage`).
 

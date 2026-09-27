@@ -3,10 +3,13 @@ import { inspectorPanels } from "../editor-catalogue.js";
 import { appSetting, setAppSetting } from "../app-settings.js";
 import { canShowNegative } from "../negative-view.js";
 import { PLAYBACK_TOGGLE } from "../video-player/usePlayerShortcuts.js";
+import { editHistory, filmNamer, redoTitle, undoTitle } from "../edit-history.js";
 
 // The native menu bar (cef/src/platform/mac) runs the editor's own handlers: the host sends
 // "fotufilm-native-command" {command} and "fotufilm-native-open" {paths}, and the editor reports
-// which commands apply now ("menuState") so the menus grey out and tick as its toolbars do.
+// which commands apply now ("menuState") so the menus grey out and tick as its toolbars do, what
+// Undo and Redo would undo ("titles") and the Edit History ("history", one title per step; the
+// command "history:<step>" goes to a step).
 
 // The inspector tabs in the order ⌘1…⌘6 choose them.
 export const MENU_PANELS = [
@@ -84,10 +87,14 @@ const COMMANDS = {
   ),
 };
 
-// Commands with an argument: Film › Choose Film ("film:<id>", "film:none") and Film › Grain Model
-// ("grainModel:<id>").
+const HISTORY = /^history:(\d+)$/;
+
+// Commands with an argument: Film › Choose Film ("film:<id>", "film:none"), Film › Grain Model
+// ("grainModel:<id>") and Edit › Edit History ("history:<step>").
 function commandFor(command) {
-  if (Object.hasOwn(COMMANDS, command)) return COMMANDS[command];
+  if (Object.hasOwn(COMMANDS, command ?? "")) return COMMANDS[command];
+  const step = HISTORY.exec(command ?? "");
+  if (step) return (e) => e.dispatch({ type: "goTo", index: Number(step[1]) });
   const [kind, value] = String(command).split(":");
   if (kind === "film" && value)
     return (e) => e.selectStock(value === "none" ? null : value);
@@ -155,10 +162,19 @@ export function menuState(e) {
   }
   enabled.estimatedHalation = modelled && e.edit.halationModel !== "layered";
   checked.estimatedHalation = modelled && e.edit.profile?.estimatedHalation === true;
-  const titles = {},
+
+  // The Edit History of the photograph shown, as the Mac app's Edit menu lists it.
+  const filmName = filmNamer(e.stocks);
+  const history = e.active ? editHistory(e.history, filmName) : { titles: [], index: -1 };
+  history.titles.forEach((_, step) => (enabled[`history:${step}`] = free));
+  if (history.titles.length) checked[`history:${history.index}`] = true;
+  const titles = {
+      undo: undoTitle(e.history, filmName),
+      redo: redoTitle(e.history, filmName),
+    },
     toolTips = {};
   pluginMenuState(e, enabled, titles, toolTips);
-  return { enabled, checked, titles, toolTips, menus: { films } };
+  return { enabled, checked, titles, toolTips, history: history.titles, menus: { films } };
 }
 
 // Runs a menu command if it still applies; the host's copy of the state may be a frame old.

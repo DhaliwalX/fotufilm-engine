@@ -63,6 +63,8 @@ export const loadIndex = (id) =>
   );
 export const saveIndex = (id, rows) =>
   transact("indexes", "readwrite", (store) => store.put({ id, rows }));
+export const loadPhotoRecord = (key) =>
+  transact("photos", "readonly", (store) => store.get(key));
 export const loadPhotoRecords = (folderId) =>
   transact("photos", "readonly", (store) =>
     store.getAll(folderRange(folderId)),

@@ -4,6 +4,7 @@ import { Tooltip, TooltipTrigger } from "@react-spectrum/s2/Tooltip";
 import { ToggleButton } from "@react-spectrum/s2/ToggleButton";
 import { useEditor } from "./EditorContext.jsx";
 import OptionsMenu from "./OptionsMenu.jsx";
+import { filmNamer, redoTitle, undoTitle } from "../edit-history.js";
 export default function EditToolbar() {
   const {
     toggleInspector,
@@ -18,6 +19,8 @@ export default function EditToolbar() {
     setDialog,
     stocks,
   } = useEditor();
+  // What Undo and Redo will change, as the Edit menu names it.
+  const filmName = filmNamer(stocks);
   return (
     <div className="toolbar-trailing">
       <TooltipTrigger>
@@ -48,7 +51,7 @@ export default function EditToolbar() {
         >
           <Icon name={"undo"} />
         </ActionButton>
-        <Tooltip>{"Undo (⌘Z)"}</Tooltip>
+        <Tooltip>{`${undoTitle(history, filmName)} (⌘Z)`}</Tooltip>
       </TooltipTrigger>
       <TooltipTrigger>
         <ActionButton
@@ -64,7 +67,7 @@ export default function EditToolbar() {
         >
           <Icon name={"redo"} />
         </ActionButton>
-        <Tooltip>{"Redo (⇧⌘Z)"}</Tooltip>
+        <Tooltip>{`${redoTitle(history, filmName)} (⇧⌘Z)`}</Tooltip>
       </TooltipTrigger>
       <TooltipTrigger>
         <ActionButton

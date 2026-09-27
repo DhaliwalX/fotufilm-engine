@@ -5,11 +5,13 @@ import {
   MenuItem,
   MenuSection,
   MenuTrigger,
+  SubmenuTrigger,
 } from "@react-spectrum/s2/Menu";
 import { Icon } from "../icons.jsx";
 import { editorControl } from "../editor-catalogue.js";
 import { LEGAL_MENU } from "../generated/controls.js";
 import { useEditor } from "./EditorContext.jsx";
+import { editHistory, filmNamer } from "../edit-history.js";
 
 export default function OptionsMenu() {
   const {
@@ -21,8 +23,13 @@ export default function OptionsMenu() {
     editInput,
     setInspector,
     plugins,
+    history,
+    dispatch,
+    stocks,
   } = useEditor();
   const imageOnlyDisabled = !active || !!active.image.video || exporting;
+  // The Edit History, as the Mac app's Edit menu lists it: every step, the one shown ticked.
+  const steps = editHistory(history, filmNamer(stocks));
   return (
     <MenuTrigger align="end">
       <ActionButton aria-label="More options" size="S" isQuiet>
@@ -53,6 +60,31 @@ export default function OptionsMenu() {
                 : editorControl("autoAdjustment").title}
             </Text>
           </MenuItem>
+        </MenuSection>
+        <MenuSection aria-label="Edit history">
+          <SubmenuTrigger>
+            <MenuItem id="history" isDisabled={!active || exporting}>
+              <Icon slot="icon" name="undo" />
+              <Text>Edit History</Text>
+            </MenuItem>
+            <Menu
+              aria-label="Edit History"
+              selectionMode="single"
+              disallowEmptySelection
+              selectedKeys={[`step-${steps.index}`]}
+              onSelectionChange={(keys) => {
+                const [key] = keys;
+                if (key)
+                  dispatch({ type: "goTo", index: Number(String(key).replace("step-", "")) });
+              }}
+            >
+              {steps.titles.map((title, index) => (
+                <MenuItem key={index} id={`step-${index}`} textValue={title}>
+                  <Text>{title}</Text>
+                </MenuItem>
+              ))}
+            </Menu>
+          </SubmenuTrigger>
         </MenuSection>
         <MenuSection aria-label="Saved edits">
           <MenuItem

@@ -73,7 +73,7 @@ double Number(CefRefPtr<CefDictionaryValue> fields, const char* key) {
 
 }  // namespace
 
-@interface FotufilmHostWindow () <FotufilmMenuActions>
+@interface FotufilmHostWindow () <FotufilmMenuActions, FotufilmEditHistory>
 - (void)browserClosed;
 - (CGRect)windowDragRegion:(NSPoint)point;
 @end
@@ -332,8 +332,14 @@ double Number(CefRefPtr<CefDictionaryValue> fields, const char* key) {
 - (BOOL)validateMenuItem:(NSMenuItem*)item {
   const SEL action = item.action;
   const BOOL text = _owner.pageEditsText;
-  if (action == @selector(undo:)) return text || [_owner commandEnabled:@"undo"];
-  if (action == @selector(redo:)) return text || [_owner commandEnabled:@"redo"];
+  // A text field's Undo is plain; the photograph's says which step it changes.
+  if (action == @selector(undo:) || action == @selector(redo:)) {
+    const BOOL undo = action == @selector(undo:);
+    NSString* command = undo ? @"undo" : @"redo";
+    NSString* named = text ? nil : [_owner titleForCommand:command];
+    item.title = named ?: (undo ? @"Undo" : @"Redo");
+    return text || [_owner commandEnabled:command];
+  }
   if (action == @selector(cut:) || action == @selector(copy:) || action == @selector(paste:) ||
       action == @selector(selectAll:))
     return text;
@@ -470,6 +476,8 @@ class MacView : public fotufilm::ViewDelegate {
   // Titles and tool tips for items whose wording follows the state (Install → Reinstall).
   std::map<std::string, std::string> _titles;
   std::map<std::string, std::string> _toolTips;
+  // The Edit History's steps, as the editor last reported them.
+  NSArray<NSString*>* _history;
   // Files to open once the editor listens for them.
   NSMutableArray<NSString*>* _pendingPaths;
   BOOL _pageListening;
@@ -652,6 +660,11 @@ class MacView : public fotufilm::ViewDelegate {
             }
           }
           strong->_menuLists = lists;
+          NSMutableArray<NSString*>* history = [NSMutableArray array];
+          if (CefRefPtr<CefListValue> steps = fields->GetList("history"))
+            for (size_t index = 0; index < steps->GetSize(); ++index)
+              [history addObject:@(steps->GetString(index).ToString().c_str())];
+          strong->_history = history;
         }
         reply->Resolve(nullptr);
       });
@@ -730,6 +743,16 @@ class MacView : public fotufilm::ViewDelegate {
 
 - (NSArray<NSArray<NSString*>*>*)editorMenuItems:(NSString*)menu {
   return _menuLists[menu] ?: @[];
+}
+
+// Undo and Redo named for the step they change ("titles" carries "undo" and "redo" too).
+- (NSString*)titleForCommand:(NSString*)command {
+  auto title = _titles.find(command.UTF8String);
+  return title == _titles.end() ? nil : @(title->second.c_str());
+}
+
+- (NSArray<NSString*>*)editHistoryTitles {
+  return _history ?: @[];
 }
 
 - (void)performEditorCommand:(id)sender {

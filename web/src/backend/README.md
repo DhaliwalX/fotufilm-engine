@@ -59,6 +59,8 @@ events and cancellation messages, rather than attempting to serialize functions.
 | `plugins` | Optional. The plug-ins for other editors the host installs, `[{id, name}]` (Fotufilm Desktop on macOS: `resolve` DaVinci Resolve, `finalCut` Final Cut Pro), from its capabilities. With it come `pluginStatus()`, `installPlugin(id)` and `revealPlugin(id)`; the editor shows a Plug-ins dialog and the host's Plugins menu runs `installPlugin:<id>` / `revealPlugin:<id>` through `useNativeCommands.js`. |
 | `pluginStatus()` | Beside `plugins`. `[{id, name, state, bundledVersion?, installedVersion?, hostInstalled, location, note?}]`: `state` is `notBundled` (this build lacks it), `notInstalled`, `outdated` (installed from another build, newer or older) or `installed`; `hostInstalled` whether the editor it is for is on the computer; `note` what to know before installing. |
 | `installPlugin(id)` / `revealPlugin(id)` | Beside `plugins`. Install (or reinstall) this build's plug-in, resolving `{message, plugins}` — what to tell the person and every plug-in's new state — after the copy and any registration; reject with a readable message. Reveal shows the installed plug-in in the platform's file manager and rejects when it is not installed. |
+| `importPath(path, options)` | Optional, for hosts with a file system. Opens a file the host chose (open panel, Finder, menu) in place; options as `importMedia`. Resolve `{image, url, identity?}`: `identity` is what the file's last edit is kept under (below). |
+| `loadEdit(key)` / `saveEdit(key, text)` | Optional pair, for a host that keeps edits itself. Load resolves the text kept under `key` or `null`; save keeps `text`, or forgets the key when it is `null`. Without them the editor keeps edits in the photo library's IndexedDB records on the device (a desktop host's persistent profile). |
 | `exportVideo(request)` | Same image/edit/session fields plus `{format,quality,filename,signal,onProgress({progress,frames,finalizing})}`. Return `{filename,url?,dispose()}`; `dispose` releases temporary download resources, never deletes the accepted saved file. |
 | `videoExportTypes` | Optional. The movie formats a native encoder writes, `[{id, label, extension, type, quality, bits, colorSpace}]`, replacing the browser's MP4/WebM list; `quality: false` hides the quality choice (ProRes). `format` in `exportVideo` is one of the ids. |
 | `lenses` | `{snapshot(),subscribe(listener),load(),import(file,onProgress?),remove()}`. Snapshot is a stable object `{profiles,revision,loaded,error?}` until changed. Subscribe returns an unsubscribe function. Import resolves the installed profile count; remove clears the installed catalogue. Publish a new snapshot on changes or load failure. |
@@ -86,6 +88,21 @@ A completed positive transfers its lease to the library. `url`/`src` are blob UR
 created by the JavaScript facade and revoked by the UI. Sessions retain any native
 input references needed by in-flight work even after the caller releases its lease.
 The backend releases its own caches and GPU allocations when the session closes.
+
+### Kept edits and the Edit History
+
+A photograph opened again starts from the edit it was left with, as the Mac app's shelf does
+(`web/src/saved-edits.js`, `web/src/editor/useSavedEdits.js`). Each is kept as the text Save
+Edits writes, under a key: a photo-library photo's library key, otherwise the file's identity. A
+still is known by the SHA-256 of its bytes (`sha256:<hex>`, the Mac app's key), a movie — or any
+file on a host without a digest — by `file:<name>|<size>|<modified ms>`. The editor computes the
+identity of a `File` it was handed; a host that opens paths answers it with `importPath`, in the
+same form, so a photograph dropped on the window and the same one opened from a menu share their
+edit. A second open of a photograph already open shows it rather than opening a copy.
+
+Undo, Redo and the Edit History name each step after what it changed, with the Mac app's names
+(`web/src/edit-history.js`): "Undo Lens Correction", a film's name for a change of film. The
+history reducer's `goTo` action jumps to any step and keeps the timeline whole.
 
 ### Rendering and analysis
 

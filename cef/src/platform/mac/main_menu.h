@@ -18,6 +18,15 @@
 - (NSArray<NSArray<NSString*>*>*)editorMenuItems:(NSString*)menu;
 @end
 
+// What the Edit menu shows of the editor's history, answered by the object that runs its
+// commands. Edit History lists the steps and runs "history:<step>" to go to one.
+@protocol FotufilmEditHistory
+// Every step of the shown photograph's history, oldest first, named as the Mac app names them;
+// empty when no photograph is open.
+- (NSArray<NSString*>*)editHistoryTitles;
+@end
+
+
 // `plugins` are the engine's `capabilities.plugins`, `{id, name}` each: a Plugins menu lists them
 // as the Mac app's does, and there is none without them.
 NSMenu* FotufilmMainMenu(NSArray<NSDictionary*>* plugins);
