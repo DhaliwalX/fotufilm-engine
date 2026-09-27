@@ -46,6 +46,7 @@
   }
   .library-folder-row {
     position: relative;
+    --indent: calc(var(--depth, 0) * 14px);
   }
   .library-folder {
     display: flex;
@@ -61,6 +62,11 @@
     font: inherit;
     text-align: left;
     transition: background-color 120ms ease;
+  }
+  /* With subfolders, every row leaves room for the disclosure so the icons
+     line up. */
+  .library-folder-list.nested .library-folder {
+    padding-left: calc(30px + var(--indent, 0px));
   }
   .library-folder:hover {
     background: var(--library-hover);
@@ -91,6 +97,39 @@
     font-variant-numeric: tabular-nums;
     transition: opacity 120ms ease;
   }
+  .library-disclosure {
+    position: absolute;
+    top: 50%;
+    left: calc(6px + var(--indent));
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: none;
+    color: var(--muted);
+    transform: translateY(-50%);
+  }
+  .library-disclosure:hover {
+    background: var(--library-hover);
+    color: inherit;
+  }
+  .library-disclosure:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .library-disclosure svg {
+    transition: transform 160ms var(--library-ease);
+  }
+  .library-disclosure[aria-expanded="true"] svg {
+    transform: rotate(90deg);
+  }
+  .library-subfolder {
+    animation: content-enter 160ms ease-out;
+  }
   .library-folder-error {
     display: flex;
     color: #c2410c;
@@ -114,8 +153,9 @@
   .library-folder-actions:focus-within {
     opacity: 1;
   }
-  .library-folder-row:hover .library-folder-count,
-  .library-folder-row:focus-within .library-folder-count {
+  .library-folder-row:not(.library-subfolder):hover .library-folder-count,
+  .library-folder-row:not(.library-subfolder):focus-within
+    .library-folder-count {
     opacity: 0;
   }
 
@@ -386,6 +426,10 @@
     .library-thumb img {
       transition: none;
     }
+    .library-disclosure svg {
+      transition: none;
+    }
+    .library-subfolder,
     .library-grid-content,
     .library-empty {
       animation: none;
@@ -417,6 +461,10 @@
     .library-folder {
       width: auto;
       white-space: nowrap;
+    }
+    /* The strip keeps the tree's order but not its indents. */
+    .library-folder-row {
+      --indent: 0px;
     }
     .library-folder-actions {
       display: none;
