@@ -59,6 +59,10 @@ typedef struct fotufilm_render_info {
 
 int32_t fotufilm_api_version(void);
 void fotufilm_free(char *string);
+/* JSON: what this build's platform services let the editor offer, known without an engine
+   ({"importPath", "subjectSelection", "copyImage", "printFrames", "imageExportTypes",
+   "hdrExport", ...}). Free with fotufilm_free. */
+char *fotufilm_capabilities(void);
 
 fotufilm_engine *fotufilm_engine_create(char **error);
 void fotufilm_engine_destroy(fotufilm_engine *engine);

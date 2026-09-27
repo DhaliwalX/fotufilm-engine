@@ -41,7 +41,7 @@ struct HostStill {
     var metadata: HostMetadataPolicy = .default
 }
 
-/// Writes stills to files. Each platform supplies one; the host asks `HostExport.encoder`.
+/// Writes stills to files; the platform supplies one (`HostPlatform.encoder`).
 protocol HostStillEncoder {
     /// The MIME types this encoder writes.
     var types: [String] { get }
@@ -53,15 +53,6 @@ protocol HostStillEncoder {
 }
 
 enum HostExport {
-    /// The platform's encoder, or nil where this build has none.
-    static let encoder: HostStillEncoder? = {
-        #if canImport(ImageIO)
-        return ImageIOStillEncoder()
-        #else
-        return nil
-        #endif
-    }()
-
     /// 16-bit Display P3 from display-linear light, through the same shoulder and transfer as the
     /// preview.
     static func display16(linear: [Float], width: Int, height: Int, knee: Float) -> [UInt16] {

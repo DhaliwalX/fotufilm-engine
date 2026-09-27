@@ -5,9 +5,6 @@ import FotufilmCore
 #if canImport(FotufilmEditModel)
 import FotufilmEditModel
 #endif
-#if canImport(FotufilmMetal)
-import FotufilmMetal
-#endif
 
 /// A decoded photograph and the reduced copies previews have asked for.
 public final class HostImage {
@@ -102,8 +99,15 @@ public final class HostEngine {
     private var generation: UInt64 = 0
     private var stocks: [String: FilmStock] = [:]
 
+    /// The platform's GPU developer, or the portable Halide CPU one.
+    let developer: HostDeveloper
+
     public init() throws {
-        guard FotufilmEngine.isHalideBackendAvailable || Self.metal != nil else {
+        if let gpu = HostPlatform.current.developer {
+            developer = gpu
+        } else if FotufilmEngine.isHalideBackendAvailable {
+            developer = HalideCPUDeveloper()
+        } else {
             throw Failure(description: "The Halide engine is not linked into this build.")
         }
         stocks = FilmStock.presets
@@ -129,12 +133,10 @@ public final class HostEngine {
                         validating: stock, options: options, width: Self.warmWidth,
                         height: Self.warmHeight)
                 else { continue }
-                #if canImport(Metal)
-                if let metal = Self.metal, seen.insert(invocation.featureMask).inserted {
-                    metal.prepare(stock: stock, options: options, frameWidth: Self.warmWidth,
-                                  frameHeight: Self.warmHeight)
+                if seen.insert(invocation.featureMask).inserted {
+                    self.developer.prepare(stock: stock, options: options, width: Self.warmWidth,
+                                           height: Self.warmHeight)
                 }
-                #endif
             }
         }
     }
@@ -142,15 +144,9 @@ public final class HostEngine {
     private static let warmWidth = 192
     private static let warmHeight = 128
 
-    #if canImport(Metal)
-    static var metal: HalideMetalFilmRenderer? { HalideMetalFilmRenderer.shared }
-    #else
-    static var metal: Void? { nil }
-    #endif
-
-    public var backend: String { Self.metal != nil ? "metal" : "cpu" }
+    public var backend: String { developer.kind }
     /// The name the editor shows (`web/src/editor/ViewerStatus.jsx`).
-    public var backendName: String { Self.metal != nil ? "Halide/Metal" : "Halide/CPU" }
+    public var backendName: String { developer.name }
     public var stockIDs: [String] { FilmStock.presetIDs.filter { stocks[$0] != nil } }
 
     public func describe() -> String {
@@ -237,78 +233,15 @@ public final class HostEngine {
 
         let knee = film.map { options.sdrShoulderKnee(for: $0) } ?? FilmSDRDelivery.boundedShoulderKnee
         let seed = UInt32(truncatingIfNeeded: options.seed)
-        #if canImport(Metal)
-        if let metal = Self.metal {
-            try developOnMetal(metal, scene: scene, width: width, height: height, stock: stock,
-                               noFilm: film == nil, options: options, knee: knee, seed: seed,
-                               target: target, shouldContinue: shouldContinue)
-            return
-        }
-        #endif
-        guard let film else { throw Failure(description: "Developing with no film needs Metal.") }
-        var linear = ImageBuffer(width: width, height: height)
-        for i in 0..<(width * height) {
-            for channel in 0..<3 {
-                let value = scene[i * 4 + channel]
-                linear.planes[channel][i] = value.isFinite ? value : 0
-            }
-        }
-        let out = try FotufilmEngine(stock: film, options: options).processChecked(linearRGB: linear)
-        guard shouldContinue() else { throw Failure(description: "Cancelled.", cancelled: true) }
-        var developed = [Float](repeating: 1, count: width * height * 4)
-        for i in 0..<(width * height) {
-            developed[i * 4] = out.planes[0][i]
-            developed[i * 4 + 1] = out.planes[1][i]
-            developed[i * 4 + 2] = out.planes[2][i]
-        }
-        developed.withUnsafeBufferPointer { rows in
-            deliver(rows, rows: 0..<height, width: width, encoded: false, knee: knee, seed: seed,
-                    target: target)
-        }
+        try developer.develop(
+            scene, width: width, height: height, stock: stock, noFilm: film == nil,
+            options: options, encode: target.format == .rgba8DisplayP3,
+            knee: film == nil ? nil : knee, shouldContinue: shouldContinue,
+            deliver: { rows, range, encoded in
+                self.deliver(rows, rows: range, width: width, encoded: encoded, knee: knee,
+                             seed: seed, target: target)
+            })
     }
-
-    #if canImport(Metal)
-    private func developOnMetal(
-        _ metal: HalideMetalFilmRenderer, scene: [Float], width: Int, height: Int,
-        stock: FilmStock, noFilm: Bool, options: FotufilmEngine.Options, knee: Float,
-        seed: UInt32, target: Target, shouldContinue: @escaping () -> Bool
-    ) throws {
-        // The shoulder and transfer ride in the producing kernel when a variant carries them,
-        // which leaves only the quantization to the host.
-        let requested: FilmOutputTransform? = target.format == .rgba8DisplayP3
-            && metal.carriesOutputTransform(stock: stock, options: options, width: width,
-                                            height: height, exactMath: false, noFilm: noFilm)
-            ? .displayP3(shoulderKnee: noFilm ? nil : knee) : nil
-        func develop(_ requested: FilmOutputTransform?) -> (ok: Bool, kept: Bool) {
-            var transform = requested
-            let encoded = requested != nil
-            let ok = scene.withUnsafeBufferPointer { source in
-                metal.developStreaming(
-                    width: width, height: height, stock: stock, options: options,
-                    outputTransform: &transform, noFilm: noFilm, shouldContinue: shouldContinue,
-                    readRows: { rows, into in
-                        into.baseAddress!.update(
-                            from: source.baseAddress! + rows.lowerBound * width * 4,
-                            count: rows.count * width * 4)
-                    },
-                    writeRows: { rows, from in
-                        self.deliver(from, rows: rows, width: width, encoded: encoded, knee: knee,
-                                     seed: seed, target: target)
-                    })
-            }
-            return (ok, (transform != nil) == encoded)
-        }
-        var result = develop(requested)
-        // The engine refused the transform after all and handed back light: develop again,
-        // encoding on the host.
-        if result.ok, !result.kept { result = develop(nil) }
-        guard result.ok else {
-            let cancelled = !shouldContinue()
-            throw Failure(description: cancelled ? "Cancelled." : "The Metal develop failed.",
-                          cancelled: cancelled)
-        }
-    }
-    #endif
 
     private func deliver(_ rows: UnsafeBufferPointer<Float>, rows range: Range<Int>, width: Int,
                          encoded: Bool, knee: Float, seed: UInt32, target: Target) {

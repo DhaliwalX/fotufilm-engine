@@ -18,6 +18,9 @@ class EngineBridge {
       std::function<void(const std::string& filename, const std::string& type,
                          std::function<void(const std::string& path)> done)>;
 
+  // What this build's engine can offer the editor, as JSON; known without creating an engine.
+  static std::string Capabilities();
+
   explicit EngineBridge(Dispatcher& dispatcher);
   ~EngineBridge();
   EngineBridge(const EngineBridge&) = delete;

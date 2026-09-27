@@ -8,10 +8,6 @@ import FotufilmEditModel
 #if canImport(FotufilmImaging)
 import FotufilmImaging
 #endif
-#if canImport(CoreGraphics)
-import CoreGraphics
-#endif
-
 /// Print frames for the web editor's native renders: the plan the browser's reactor answers
 /// (`WebPrintFrameRequest`), the develop settings a frame implies (`frameRenderEdit` in
 /// web/src/print-frame.js), and the finished frame drawn by the renderer the Mac app uses.
@@ -59,38 +55,11 @@ enum HostFrames {
         params["profileRequest"] = profile
     }
 
-    /// Draws the frame around 8-bit Display P3 pixels and returns the framed picture.
+    /// Draws the frame around 8-bit Display P3 pixels and returns the framed picture, or nil
+    /// where the platform draws no frames.
     static func frame(_ pixels: [UInt8], width: Int, height: Int,
                       plan: Plan) -> (pixels: [UInt8], width: Int, height: Int)? {
-        #if canImport(CoreGraphics)
-        let space = CGColorSpace(name: CGColorSpace.displayP3)!
-        guard let provider = CGDataProvider(data: Data(pixels) as CFData),
-              let image = CGImage(width: width, height: height, bitsPerComponent: 8,
-                                  bitsPerPixel: 32, bytesPerRow: width * 4, space: space,
-                                  bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
-                                  provider: provider, decode: nil, shouldInterpolate: false,
-                                  intent: .defaultIntent),
-              let framed = PrintFrameRenderer.render(image, configuration: plan.configuration)
-        else { return nil }
-        return flatten(framed, space: space)
-        #else
-        return nil
-        #endif
+        HostPlatform.current.frames?.frame(pixels, width: width, height: height,
+                                           configuration: plan.configuration)
     }
-
-    #if canImport(CoreGraphics)
-    static func flatten(_ image: CGImage, space: CGColorSpace) -> (pixels: [UInt8], width: Int, height: Int)? {
-        let (width, height) = (image.width, image.height)
-        var pixels = [UInt8](repeating: 255, count: width * height * 4)
-        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
-            guard let context = CGContext(data: buffer.baseAddress, width: width, height: height,
-                                          bitsPerComponent: 8, bytesPerRow: width * 4, space: space,
-                                          bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
-            else { return false }
-            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-            return true
-        }
-        return drawn ? (pixels, width, height) : nil
-    }
-    #endif
 }

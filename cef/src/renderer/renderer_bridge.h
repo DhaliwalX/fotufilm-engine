@@ -44,6 +44,7 @@ class RendererBridge : public CefRenderProcessHandler {
 
   std::string dev_origin_;
   std::string global_name_;
+  std::string capabilities_;
   int next_context_ = 0;
   int next_seq_ = 0;
   std::map<int, Listener> listeners_;

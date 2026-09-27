@@ -18,6 +18,9 @@ inline constexpr char kProfile[] = "fotufilm-profile";
 inline constexpr char kDevOrigin[] = "fotufilm-dev-origin";
 // Passed to renderers: the window property the transport is installed as.
 inline constexpr char kTransportGlobal[] = "fotufilm-transport-global";
+// Passed to renderers: the engine's capabilities JSON, exposed as the transport's
+// `capabilities`.
+inline constexpr char kCapabilities[] = "fotufilm-capabilities";
 
 // With the engine linked the transport is the one the editor looks for
 // (web/src/backend/macos/host.js). Without it the transport is installed under a name the editor

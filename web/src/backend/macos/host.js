@@ -12,8 +12,18 @@ import {
   importedImage,
 } from "./transport.js";
 
+const EXPORT_LABELS = {
+  "image/png": "PNG",
+  "image/tiff": "TIFF · 16-bit",
+  "image/jpeg": "JPEG",
+  "image/heic": "HEIC",
+};
+
 export function createMacBackend(channel) {
   const call = createTransport(channel);
+  // What the engine's platform services offer (fotufilm_capabilities); a host that does not say
+  // offers only the contract's required methods.
+  const can = channel.capabilities ?? {};
   let ready, stocks;
   const prepare = () => (ready ??= call("prepare"));
   const catalogue = () =>
@@ -61,17 +71,19 @@ export function createMacBackend(channel) {
       return importedImage(await call("import", { ...params, data }, { signal }));
     },
     // A file the host chose (open panel, Finder, a drop) is read in place: no bytes cross.
-    async importPath(path, { signal, negative, onProgress } = {}) {
-      onProgress?.("Opening with the native image decoder");
-      return importedImage(
-        await call("importPath", { path, negative: !!negative }, { signal }),
-      );
-    },
+    importPath: can.importPath
+      ? async (path, { signal, negative, onProgress } = {}) => {
+          onProgress?.("Opening with the native image decoder");
+          return importedImage(
+            await call("importPath", { path, negative: !!negative }, { signal }),
+          );
+        }
+      : undefined,
     releaseImage,
     analyseNegative: (image, monochrome) =>
       call("analyseNegative", { handle: image.handle, monochrome }),
-    negativeContrast: channel.binary === true,
-    subjectSelection: channel.binary === true,
+    negativeContrast: can.negativeContrast === true,
+    subjectSelection: can.subjectSelection === true,
     suggestNegativeFilms: (image) =>
       call("suggestNegativeFilms", { handle: image.handle }),
     async convertNegative(image, plan, { signal, maxEdge, contrast = 0, onProgress } = {}) {
@@ -107,13 +119,11 @@ export function createMacBackend(channel) {
     planPrintFrame: (edit, width, height) => call("printFrame", frameRequest(edit, width, height)),
     resolveLensPlan: (image, lens) => call("lensPlan", { handle: image.handle, lens }),
     outputColorSpace: ({ type } = {}) => type === "image/webp" ? "srgb" : "display-p3",
-    // ImageIO writes HEIC and has no WebP encoder.
-    imageExportTypes: [
-      { id: "image/png", label: "PNG" },
-      { id: "image/tiff", label: "TIFF · 16-bit" },
-      { id: "image/jpeg", label: "JPEG" },
-      { id: "image/heic", label: "HEIC" },
-    ],
+    // The formats the engine's encoder writes; ImageIO has HEIC and no WebP encoder.
+    imageExportTypes: (can.imageExportTypes ?? Object.keys(EXPORT_LABELS))
+      .filter((id) => EXPORT_LABELS[id])
+      .sort((a, b) => Object.keys(EXPORT_LABELS).indexOf(a) - Object.keys(EXPORT_LABELS).indexOf(b))
+      .map((id) => ({ id, label: EXPORT_LABELS[id] })),
     sampleScene: (result, point) => call("sampleScene", { render: result.sceneRequest, point }),
     async exportImage(request) {
       request.onProgress?.("Rendering native export");
@@ -127,13 +137,13 @@ export function createMacBackend(channel) {
       });
     },
     // What the native engine can write for this edit: metadata policies and HDR HEIC.
-    exportOptions: channel.binary
+    exportOptions: can.imageExportTypes?.length
       ? async (request) => call("exportOptions", renderRequest(request, await catalogue()))
       : undefined,
-    // The developed frame on the system pasteboard, written by the engine.
-    async copyImage(request) {
-      return call("copyImage", renderRequest(request, await catalogue()));
-    },
+    // The developed frame on the system clipboard, written by the engine.
+    copyImage: can.copyImage
+      ? async (request) => call("copyImage", renderRequest(request, await catalogue()))
+      : undefined,
     async exportVideo(request) {
       const saved = await call("exportVideo", {
         ...renderRequest(request, await catalogue()),

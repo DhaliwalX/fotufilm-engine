@@ -2,7 +2,7 @@
 // object; it never reaches the page. The transport matches web/src/backend/macos/transport.js:
 // postMessage({id, method, params}, payload?) resolves with the host's result, and progress
 // arrives as "fotufilm-native-progress" events.
-(function install(host, globalName) {
+(function install(host, globalName, capabilities) {
   "use strict";
   const pending = new Map();
   let sequence = 0;
@@ -46,6 +46,8 @@
   const transport = Object.freeze({
     // postMessage takes a second argument of bytes, carried in shared memory.
     binary: true,
+    // What the engine's platform services let the editor offer (fotufilm_capabilities).
+    capabilities: Object.freeze(JSON.parse(capabilities || "{}")),
     postMessage(message, payload) {
       return new Promise((resolve, reject) => {
         const key = ++sequence;

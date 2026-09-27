@@ -35,6 +35,14 @@ EngineBridge::EngineBridge(Dispatcher& dispatcher) : dispatcher_(dispatcher) {
   });
 }
 
+std::string EngineBridge::Capabilities() {
+  char* json = fotufilm_capabilities();
+  if (!json) return {};
+  std::string capabilities(json);
+  fotufilm_free(json);
+  return capabilities;
+}
+
 EngineBridge::~EngineBridge() {
   if (engine_) fotufilm_engine_destroy(engine_);
 }

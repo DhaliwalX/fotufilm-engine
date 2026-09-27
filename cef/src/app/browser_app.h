@@ -15,6 +15,7 @@ class BrowserApp : public CefApp, public CefBrowserProcessHandler {
     std::string web_root;          // The bundled web build, served as fotufilm://app/.
     std::string dev_origin;        // A trusted development server, or empty.
     std::string transport_global;  // The window property the transport is installed as.
+    std::string capabilities;      // The engine's capabilities JSON, or empty without one.
   };
 
   BrowserApp(Options options, std::function<void()> on_ready);

@@ -119,6 +119,8 @@ void RendererBridge::OnWebKitInitialized() {
   global_name_ =
       command_line->GetSwitchValue(switches::kTransportGlobal).ToString();
   if (global_name_.empty()) global_name_ = switches::kDefaultTransportGlobal;
+  capabilities_ =
+      command_line->GetSwitchValue(switches::kCapabilities).ToString();
 }
 
 bool RendererBridge::Trusted(const std::string& url) const {
@@ -160,7 +162,8 @@ void RendererBridge::OnContextCreated(CefRefPtr<CefBrowser>,
       !install->IsFunction())
     return;
   install->ExecuteFunction(
-      nullptr, {host, CefV8Value::CreateString(global_name_)});
+      nullptr, {host, CefV8Value::CreateString(global_name_),
+                CefV8Value::CreateString(capabilities_)});
 }
 
 void RendererBridge::OnContextReleased(CefRefPtr<CefBrowser>,

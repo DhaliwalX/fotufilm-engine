@@ -44,6 +44,9 @@ void BrowserApp::OnBeforeChildProcessLaunch(
                                         options_.dev_origin);
   command_line->AppendSwitchWithValue(switches::kTransportGlobal,
                                       options_.transport_global);
+  if (!options_.capabilities.empty())
+    command_line->AppendSwitchWithValue(switches::kCapabilities,
+                                        options_.capabilities);
 }
 
 ChildApp::ChildApp() : renderer_(new RendererBridge()) {}

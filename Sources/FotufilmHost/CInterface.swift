@@ -42,6 +42,13 @@ public func cdecl_fotufilm_engine_destroy(_ handle: OpaquePointer?) {
     Unmanaged<HostEngine>.fromOpaque(UnsafeRawPointer(handle)).release()
 }
 
+@_cdecl("fotufilm_capabilities")
+public func cdecl_fotufilm_capabilities() -> UnsafeMutablePointer<CChar>? {
+    (try? JSONSerialization.data(withJSONObject: HostPlatform.current.capabilities,
+                                 options: [.sortedKeys]))
+        .flatMap { duplicate(String(decoding: $0, as: UTF8.self)) }
+}
+
 @_cdecl("fotufilm_engine_describe")
 public func cdecl_fotufilm_engine_describe(_ handle: OpaquePointer?) -> UnsafeMutablePointer<CChar>? {
     engine(handle).flatMap { duplicate($0.describe()) }
@@ -60,7 +67,7 @@ public func cdecl_fotufilm_image_open(
         return nil
     }
     do {
-        let image = try HostImage(opening: URL(fileURLWithPath: String(cString: path)))
+        let image = try HostImage.open(URL(fileURLWithPath: String(cString: path)))
         return OpaquePointer(Unmanaged.passRetained(image).toOpaque())
     } catch let failure {
         report(failure, into: error)

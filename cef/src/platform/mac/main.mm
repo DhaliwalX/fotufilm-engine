@@ -171,6 +171,9 @@ int main(int argc, char* argv[]) {
                            (dev.port ? ":" + std::string(dev.port.stringValue.UTF8String) : "");
     }
     options.transport_global = fotufilm::switches::kDefaultTransportGlobal;
+#if defined(FOTUFILM_WITH_ENGINE)
+    options.capabilities = fotufilm::EngineBridge::Capabilities();
+#endif
 
     g_dispatcher = std::make_unique<fotufilm::Dispatcher>();
 #if defined(FOTUFILM_WITH_ENGINE)

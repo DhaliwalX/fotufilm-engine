@@ -1,7 +1,4 @@
 import Foundation
-#if canImport(AppKit)
-import AppKit
-#endif
 #if canImport(FotufilmCore)
 import FotufilmCore
 #endif
@@ -28,7 +25,7 @@ public final class HostService {
 
     /// Where Copy Photo puts the picture, when the platform has a clipboard; tests use a private
     /// one.
-    var clipboard: HostClipboard? = HostExport.clipboard
+    var clipboard: HostClipboard? = HostPlatform.current.clipboard
 
     public init(engine: HostEngine) {
         self.engine = engine
@@ -56,7 +53,7 @@ public final class HostService {
                 throw HostEngine.Failure(
                     description: "\(URL(fileURLWithPath: path).lastPathComponent) cannot be read.")
             }
-            return try imported(HostImage(opening: URL(fileURLWithPath: path)))
+            return try imported(HostImage.open(URL(fileURLWithPath: path)))
         case "preview":
             let image = try self.image(parameters["handle"])
             return try answer(image.descriptor, images: ["preview": previewPNG(image)])
@@ -159,7 +156,7 @@ public final class HostService {
             UUID().uuidString + "." + (URL(fileURLWithPath: name).pathExtension))
         try Data(bytes: bytes.baseAddress!, count: bytes.count).write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
-        return try imported(HostImage(opening: file))
+        return try imported(HostImage.open(file))
     }
 
     /// Keeps a decoded photograph under a new handle and describes it to the editor.
@@ -387,7 +384,8 @@ public final class HostService {
         let (w, h) = (max(1, Int(Double(width) * scale)), max(1, Int(Double(height) * scale)))
         let reduced = scale < 1 ? AreaResample.reduce(scene, width: width, height: height, to: w, h)
                                 : scene
-        let subject = HostSubject.detect(image.display(reduced, width: w, height: h), width: w, height: h)
+        let subject = HostPlatform.current.subjects?.detect(
+            image.display(reduced, width: w, height: h), width: w, height: h)
         subjectCache = (key, subject)
         return subject
     }
@@ -558,7 +556,7 @@ public final class HostService {
         guard let path = parameters["path"] as? String else {
             throw HostEngine.Failure(description: "No destination was chosen.")
         }
-        guard let encoder = HostExport.encoder else {
+        guard let encoder = HostPlatform.current.encoder else {
             throw HostEngine.Failure(description: "This build has no image encoder.")
         }
         let type = parameters["type"] as? String ?? "image/png"
@@ -593,7 +591,7 @@ public final class HostService {
         let prepared = try prepare(JSONSerialization.data(withJSONObject: parameters))
         return [
             "metadata": HostMetadataPolicy.allCases.map(\.rawValue),
-            "hdr": (HostExport.encoder?.writesHDR ?? false)
+            "hdr": (HostPlatform.current.encoder?.writesHDR ?? false)
                 && parameters["printFrame"] as? [String: Any] == nil
                 && deliversHDR(prepared.edit),
         ]

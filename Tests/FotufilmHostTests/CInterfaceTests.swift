@@ -37,6 +37,26 @@ final class CInterfaceTests: XCTestCase {
         XCTAssertTrue(stocks.contains { $0["id"] as? String == "gold200" })
     }
 
+    /// The editor learns what this build offers from the platform's services, before any engine.
+    func testCapabilitiesFollowThePlatform() throws {
+        let json = try XCTUnwrap(fotufilm_capabilities())
+        defer { fotufilm_free(json) }
+        let capabilities = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: Data(String(cString: json).utf8)) as? [String: Any])
+        let platform = HostPlatform.current
+        XCTAssertEqual(capabilities["subjectSelection"] as? Bool, platform.subjects != nil)
+        XCTAssertEqual(capabilities["copyImage"] as? Bool, platform.clipboard != nil)
+        XCTAssertEqual(capabilities["imageExportTypes"] as? [String],
+                       platform.encoder?.types.sorted() ?? [])
+        #if canImport(ImageIO)
+        XCTAssertEqual(capabilities["hdrExport"] as? Bool, true)
+        #endif
+        // Without a platform the portable parts still stand: no feature claims a missing service.
+        let bare = HostPlatform().capabilities
+        XCTAssertEqual(bare["subjectSelection"] as? Bool, false)
+        XCTAssertEqual(bare["imageExportTypes"] as? [String], [])
+    }
+
     func testRenderSizeFollowsTheLongEdge() {
         let image = HostImage(rgba: [Float](repeating: 0.18, count: 300 * 200 * 4),
                               width: 300, height: 200, contentHeadroom: 1)
