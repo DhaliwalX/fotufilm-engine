@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { inspectorPanels } from "../editor-catalogue.js";
 import { appSetting, setAppSetting } from "../app-settings.js";
 import { canShowNegative } from "../negative-view.js";
+import { PLAYBACK_TOGGLE } from "../video-player/usePlayerShortcuts.js";
 
 // The native menu bar (cef/src/platform/mac) runs the editor's own handlers: the host sends
 // "fotufilm-native-command" {command} and "fotufilm-native-open" {paths}, and the editor reports
@@ -37,6 +38,7 @@ const COMMANDS = {
   showOriginal: (e) => e.setCompare((shown) => !shown),
   histogram: (e) => e.setHistogram((shown) => !shown),
   showNegative: (e) => e.setShowNegative((shown) => !shown),
+  play: () => window.dispatchEvent(new CustomEvent(PLAYBACK_TOGGLE)),
   estimatedHalation: (e) =>
     e.setProfile("estimatedHalation", e.edit.profile?.estimatedHalation !== true),
   filmSidebar: (e) => e.toggleFilms(),
@@ -84,6 +86,7 @@ export function menuState(e) {
     zoomToFit: photo && e.zoom !== 1,
     showOriginal: photo,
     histogram: photo,
+    play: photo && !!e.active.image.video,
     showNegative:
       photo && canShowNegative(e.edit, e.stocks?.find(({ id }) => id === e.edit?.stock)),
     filmSidebar: !e.libraryOpen,

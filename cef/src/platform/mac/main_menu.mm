@@ -187,6 +187,7 @@ NSMenu* FotufilmMainMenu() {
   Command(view, @"Show Original", @"showOriginal", @"\\");
   Command(view, @"Show Negative", @"showNegative", @"n", kCommand | kOption);
   Command(view, @"Show Histogram", @"histogram", @"h", kCommand | kControl);
+  Command(view, @"Play", @"play");
   [view addItem:[NSMenuItem separatorItem]];
   Command(view, @"Film Stocks", @"filmSidebar", @"s", kCommand | kControl);
   Command(view, @"Inspector", @"inspector", @"i", kCommand | kOption);
