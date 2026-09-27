@@ -60,3 +60,15 @@ test("an object setting reads back as the same object until it changes", () =>
     assert.notEqual(appSetting("lastVideoExport"), first);
     assert.equal(appSetting("lastVideoExport").frameRate, 30);
   }));
+
+test("Color Separation settings seed a new photograph's film profile", () =>
+  withStorage(() => {
+    const films = ["portra400"];
+    const plain = newPhotoEdit(defaultEdit("portra400"), films);
+    assert.equal(plain.profile.couplerReach, undefined);
+    setAppSetting("couplerReach", 1.5);
+    setAppSetting("couplerSelf", 0);
+    const seeded = newPhotoEdit(defaultEdit("portra400"), films);
+    assert.equal(seeded.profile.couplerReach, 1.5);
+    assert.equal(seeded.profile.couplerSelf, 0);
+  }));

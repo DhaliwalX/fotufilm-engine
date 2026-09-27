@@ -13,6 +13,10 @@ export const APP_SETTINGS = Object.freeze({
   grainModel: "clump",
   halationModel: "legacy",
   estimatedHalation: false,
+  // Color Separation (Settings › Film Model on the Mac): how far the inhibitor reaches between
+  // layers and within one, as multiples of each film's own geometry.
+  couplerReach: 1,
+  couplerSelf: 1,
   // Whether a HEIC export starts as HDR where the edit allows it.
   photoHDR: false,
   // Whether an HEVC or ProRes movie exports as HDR (HLG) where the film delivers it.
@@ -94,5 +98,7 @@ export function newPhotoEdit(base, stockIDs) {
   if (appSetting("grainModel") !== APP_SETTINGS.grainModel)
     edit.profile.grainModel = appSetting("grainModel");
   if (appSetting("estimatedHalation")) edit.profile.estimatedHalation = true;
+  for (const key of ["couplerReach", "couplerSelf"])
+    if (appSetting(key) !== APP_SETTINGS[key]) edit.profile[key] = appSetting(key);
   return edit;
 }

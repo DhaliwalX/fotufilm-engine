@@ -124,6 +124,10 @@
     gap: 6px;
     margin-top: 14px;
   }
+  .settings-pane .adjustment {
+    align-self: stretch;
+    margin-top: 6px;
+  }
   .settings-pane h3 {
     margin: 12px 0 0;
     font-size: 12px;

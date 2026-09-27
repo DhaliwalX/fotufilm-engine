@@ -16,6 +16,7 @@ import {
   useAppSetting,
 } from "../app-settings.js";
 import { useEditor } from "./EditorContext.jsx";
+import { Adjustment } from "../Adjustment.jsx";
 import { FILM_PACK_EXTENSION, packNotice } from "./useFilmPacks.js";
 
 // The Mac app's Settings window: what new photographs start on, how photos export, and the film
@@ -25,7 +26,24 @@ const PANES = [
   { id: "output", title: "Output" },
   { id: "filmModel", title: "Film Model" },
 ];
-const FILM_MODEL = ["grainModel", "halationModel", "estimatedHalation"];
+const FILM_MODEL = [
+  "grainModel",
+  "halationModel",
+  "estimatedHalation",
+  "couplerReach",
+  "couplerSelf",
+];
+
+function SettingSlider({ label, setting }) {
+  const value = useAppSetting(setting);
+  return (
+    <Adjustment
+      slider={{ key: setting, label, min: 0, max: 3, step: 0.1 }}
+      value={value}
+      onChange={(next) => setAppSetting(setting, Math.round(next * 10) / 10)}
+    />
+  );
+}
 
 function SettingPicker({ label, setting, options }) {
   const value = useAppSetting(setting);
@@ -263,13 +281,14 @@ function Output({ backend }) {
 }
 
 function FilmModel() {
-  const grain = useAppSetting("grainModel"),
-    halation = useAppSetting("halationModel"),
-    estimated = useAppSetting("estimatedHalation");
-  const adjusted =
-    grain !== APP_SETTINGS.grainModel ||
-    halation !== APP_SETTINGS.halationModel ||
-    estimated !== APP_SETTINGS.estimatedHalation;
+  const values = {
+    grainModel: useAppSetting("grainModel"),
+    halationModel: useAppSetting("halationModel"),
+    estimatedHalation: useAppSetting("estimatedHalation"),
+    couplerReach: useAppSetting("couplerReach"),
+    couplerSelf: useAppSetting("couplerSelf"),
+  };
+  const adjusted = FILM_MODEL.some((key) => values[key] !== APP_SETTINGS[key]);
   return (
     <>
       <h3>Grain</h3>
@@ -296,6 +315,20 @@ function FilmModel() {
         Layered Transport simulates light moving through the film layers.
         Films with donor layers and custom film settings use Legacy. Estimated
         Halation Shape only affects Legacy.
+      </p>
+      <h3>Color Separation</h3>
+      <SettingSlider
+        label={editorControl("couplerReach").title}
+        setting="couplerReach"
+      />
+      <SettingSlider
+        label={editorControl("couplerSelf").title}
+        setting="couplerSelf"
+      />
+      <p className="medium-detail">
+        Separation sets how strongly neighboring film layers affect each other
+        during development. Edge Contrast controls sharpening caused by
+        development.
       </p>
       <p className="medium-detail">
         These apply to photos you open from now on; each open photo keeps its
