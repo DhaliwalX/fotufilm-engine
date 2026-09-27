@@ -419,19 +419,23 @@ final class HostNegativeScan {
     /// print's shoulder applied, so it reads as the apps' delivered file does.
     static func positive(_ print: Framed) -> [Float] {
         var rgba = print.rgba
-        concurrentRows(print.height) { rows in
-            for i in rows.lowerBound * print.width..<rows.upperBound * print.width {
-                var p3 = SIMD3<Float>()
-                for c in 0..<3 {
-                    let value = rgba[i * 4 + c]
-                    p3[c] = ColorScience.displayShoulder(value.isFinite ? max(value, 0) : 0,
-                                                         knee: FilmSDRDelivery.boundedShoulderKnee)
+        // Bands write disjoint rows through one buffer; the array itself is never shared.
+        rgba.withUnsafeMutableBufferPointer { rgba in
+            concurrentRows(print.height) { rows in
+                for i in rows.lowerBound * print.width..<rows.upperBound * print.width {
+                    var p3 = SIMD3<Float>()
+                    for c in 0..<3 {
+                        let value = rgba[i * 4 + c]
+                        p3[c] = ColorScience.displayShoulder(
+                            value.isFinite ? max(value, 0) : 0,
+                            knee: FilmSDRDelivery.boundedShoulderKnee)
+                    }
+                    let rec2020 = ColorScience.linearDisplayP3ToRec2020(p3)
+                    rgba[i * 4] = rec2020.x
+                    rgba[i * 4 + 1] = rec2020.y
+                    rgba[i * 4 + 2] = rec2020.z
+                    rgba[i * 4 + 3] = 1
                 }
-                let rec2020 = ColorScience.linearDisplayP3ToRec2020(p3)
-                rgba[i * 4] = rec2020.x
-                rgba[i * 4 + 1] = rec2020.y
-                rgba[i * 4 + 2] = rec2020.z
-                rgba[i * 4 + 3] = 1
             }
         }
         return rgba

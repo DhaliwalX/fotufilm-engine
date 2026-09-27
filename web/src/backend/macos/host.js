@@ -7,6 +7,7 @@ import { BACKEND_VERSION } from "../contract.js";
 import { loadStockIndex } from "../../stock-index.js";
 import { createHistogram } from "../../histogram-analyser.js";
 import { createSession, renderRequest } from "./session.js";
+import { createNegativeScans } from "./negative-scans.js";
 import {
   createTransport,
   fileBase64,
@@ -103,6 +104,13 @@ export function createMacBackend(channel) {
     analyseNegative: (image, monochrome) =>
       call("analyseNegative", { handle: image.handle, monochrome }),
     negativeContrast: can.negativeContrast === true,
+    // The negative-scan session: film and automatic readings printed by the engine.
+    negativeScans: can.negativeScans
+      ? createNegativeScans(call, {
+          binary: channel.binary === true,
+          encoding: can.negativeScanEncoding,
+        })
+      : undefined,
     subjectSelection: can.subjectSelection === true,
     previewBudget: can.previewBudget,
     suggestNegativeFilms: (image) =>

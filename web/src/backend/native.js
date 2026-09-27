@@ -46,6 +46,17 @@ export function createNativeBackend(host) {
     "saveEdit",
   ])
     if (typeof host[name] === "function") backend[name] = host[name].bind(host);
+  // Optional: the negative-scan session, printed by the engine (backend/README.md). Without it
+  // the editor keeps the automatic negative import.
+  const scans = host.negativeScans;
+  if (
+    scans &&
+    ["open", "render", "sampleBorder", "detectFrame", "commit", "lightFrames",
+      "addLightFrame", "removeLightFrame", "release"].every(
+      (name) => typeof scans[name] === "function",
+    )
+  )
+    backend.negativeScans = scans;
   // Optional: plug-ins for other editors the host installs, `{id, name}`, with their calls.
   if (
     host.plugins?.length &&

@@ -177,7 +177,13 @@ extension HostService {
             }
             return try body(URL(fileURLWithPath: path))
         }
-        guard let payload, payload.count > 0, let base = payload.baseAddress else {
+        // A binary channel sends the bytes beside the message; WebKit's sends base64.
+        let bytes: Data
+        if let payload, payload.count > 0, let base = payload.baseAddress {
+            bytes = Data(bytes: base, count: payload.count)
+        } else if let text = parameters["data"] as? String, let data = Data(base64Encoded: text) {
+            bytes = data
+        } else {
             throw HostEngine.Failure(description: "The scan's bytes did not arrive.")
         }
         let directory = FileManager.default.temporaryDirectory
@@ -186,7 +192,7 @@ extension HostService {
         let name = parameters["name"] as? String ?? "scan"
         let file = directory.appendingPathComponent(
             UUID().uuidString + "." + URL(fileURLWithPath: name).pathExtension)
-        try Data(bytes: base, count: payload.count).write(to: file)
+        try bytes.write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
         return try body(file)
     }

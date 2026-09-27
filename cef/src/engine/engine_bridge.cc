@@ -17,6 +17,11 @@ constexpr const char* kMethods[] = {
     // The Resolve and Final Cut plug-ins. An install holds the engine thread until the copy is
     // done and macOS has registered it, as the Mac app's menu item holds its own.
     "plugins",          "installPlugin",    "revealPlugin",
+    // The negative-scan session (web/src/negative-scan/): a scan opens once and every preview,
+    // border sample and the imported positive is a print of it to the page's recipe.
+    "negativeScanOpen", "negativeScanRender", "negativeScanSampleBorder",
+    "negativeScanDetectFrame", "negativeScanCommit", "negativeLightFrames",
+    "negativeAddLightFrame", "negativeRemoveLightFrame",
 };
 
 }  // namespace

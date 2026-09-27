@@ -41,6 +41,7 @@ events and cancellation messages, rather than attempting to serialize functions.
 | `analyseNegative(image, monochrome, onProgress?)` | Return the negative-conversion plan, including `weak`. The plan is otherwise opaque to the UI. |
 | `convertNegative(image, plan, options)` | Options `{signal, maxEdge?, contrast?, onProgress({progress})}`. Return `{image, backend}` with a **new owned image**, preserving full source precision. `contrast` is stops of mid-grey slope from the plan's automatic contrast (0 keeps it); honour it only when the backend sets `negativeContrast: true`. |
 | `suggestNegativeFilms(image)` | Optional. Return up to three `{films: [{id, name}], likelihood}` for the installed films whose clear base the scan's looks like, most likely first; films a scan cannot tell apart share one entry. Suggestions, not an identification. |
+| `negativeScans` | Optional. The negative-scan session the apps have (below); without it the editor keeps the automatic import above. |
 | `subjectSelection` | Optional `true` when the backend detects subjects: an edit's `selective.kind` may then be `"subject"`, selecting the subject under `selective.point` (every subject when the point is on the background), feathered by `softness`. |
 | `previewBudget` | Optional `{settleMs?, initialInteractiveEdge?, minInteractiveEdge?, maxInteractiveEdge?, detailDelayMs?}`: how the editor paces previews while an edit moves (`web/src/preview-budget.js` holds the browser defaults). A backend that develops a full preview within a frame or two raises the edge and shortens the settle. |
 | `makePreview(image, options)` | Decorate that same owned image with `src`; return `{image, url}`. Do not create a second image lease. |
@@ -88,6 +89,27 @@ A completed positive transfers its lease to the library. `url`/`src` are blob UR
 created by the JavaScript facade and revoked by the UI. Sessions retain any native
 input references needed by in-flight work even after the caller releases its lease.
 The backend releases its own caches and GPU allocations when the session closes.
+
+### Negative scans
+
+A backend with `negativeScans` prints scanned negatives itself, as the Mac and iPad apps'
+session does (`web/src/negative-scan/`). The scan opens once and stays unchanged; everything the
+person sets is a `NegativeScanRecipe` (`Sources/FotufilmEditModel/NegativeScanRecipe.swift`), sent
+whole with each call in the recipe's own JSON form: `conversion` (`automatic` or `film`),
+`monochrome`, `stockID`, `border` and `borderArea`, `paperID`, `exposure`, `warmth`, `tint`,
+`contrast`, `highlights`, `shadows`, `lightFrameID`, `quarterTurns`, `mirrored`, `straighten` and
+`crop` (`{x, y, width, height}`, unit, top left, in the oriented and straightened picture).
+
+| Member | Input and result |
+| --- | --- |
+| `encoding` | `true` when a scan's samples may be read as linear light instead of through its file's colour profile (never for camera RAW). |
+| `open(file, {linearSamples?, signal?})` | A `File` (or `{path}` the host chose). Resolves `{handle, naturalWidth, naturalHeight, raw, films: [{id, name, monochrome, papers: [{id, name}]}], suggestions, lightFrames: [{id, name}], recipe}`: the films a scan can be read as (no slides) with the receivers each prints on, `suggestNegativeFilms`' readings, and the starting recipe. |
+| `render(handle, recipe, {maxEdge, cropped?, negative?, signal?})` | The print, or with `negative` the scan as the recipe frames it; cropped unless `cropped` is false. Resolves `{blob, width, height, colorSpace, renderMilliseconds}`. |
+| `sampleBorder(handle, recipe, area)` | `area` a unit rectangle of the whole oriented negative (as `render` shows it uncropped). Resolves `{border, borderArea}` for the recipe, or rejects when the area is not clear film. |
+| `detectFrame(handle, recipe)` | The picture between rebate and holder as a crop, or `null`. |
+| `commit(handle, recipe, {signal?})` | The full-resolution print as a **new owned image** `{image, url}`, which the editor opens with no film. |
+| `lightFrames()` / `addLightFrame(file)` / `removeLightFrame(id)` | Photographs of the bare light source, kept on the device, that a recipe's `lightFrameID` divides out. |
+| `release(handle)` | Closes the scan. |
 
 ### Kept edits and the Edit History
 
