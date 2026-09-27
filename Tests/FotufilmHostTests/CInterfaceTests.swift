@@ -145,3 +145,76 @@ final class CInterfaceTests: XCTestCase {
     }
     #endif
 }
+
+#if canImport(ImageIO)
+extension CInterfaceTests {
+    /// The editor's own calls: import a photograph's bytes, develop a cropped render of it.
+    func testHostCallsImportAndRender() throws {
+        let engine = try makeEngine()
+        defer { fotufilm_engine_destroy(engine) }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fotufilm-host-\(UUID().uuidString).png")
+        try writeRamp(to: url, width: 120, height: 80)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let bytes = try Data(contentsOf: url)
+
+        func call(_ method: String, _ params: String, _ payload: Data? = nil) throws
+            -> (json: [String: Any], payload: Data) {
+            var answer = fotufilm_answer()
+            var error: UnsafeMutablePointer<CChar>?
+            let status = (payload ?? Data()).withUnsafeBytes { buffer in
+                fotufilm_host_call(engine, method, params, buffer.baseAddress, buffer.count,
+                                   &answer, &error)
+            }
+            defer { fotufilm_answer_free(&answer); fotufilm_free(error) }
+            guard status == Int32(FOTUFILM_OK) else {
+                throw XCTSkip(error.map { String(cString: $0) } ?? "status \(status)")
+            }
+            let json = try JSONSerialization.jsonObject(
+                with: Data(String(cString: answer.json).utf8)) as? [String: Any] ?? [:]
+            return (json, answer.payload.map { Data(bytes: $0, count: answer.payload_length) }
+                ?? Data())
+        }
+
+        let prepared = try call("prepare", "{}")
+        XCTAssertTrue((prepared.json["stocks"] as? [String])?.contains("gold200") ?? false)
+
+        let imported = try call("import", #"{"name": "ramp.png"}"#, bytes)
+        let handle = try XCTUnwrap(imported.json["handle"] as? Int)
+        XCTAssertEqual(imported.json["naturalWidth"] as? Int, 120)
+        let preview = try XCTUnwrap((imported.json["payloads"] as? [String: [Int]])?["preview"])
+        XCTAssertEqual(imported.payload.subdata(in: preview[0]..<(preview[0] + 8)),
+                       Data([137, 80, 78, 71, 13, 10, 26, 10]))
+
+        // A quarter turn makes the 120 x 80 photograph 80 x 120; the crop keeps its top half.
+        let rendered = try call("render", """
+        {"handle": \(handle), "maxEdge": null,
+         "edit": {"stock": "gold200", "rotation": 1, "params": {},
+                  "crop": [[0, 0], [1, 0], [1, 0.5], [0, 0.5]]},
+         "profileRequest": {"controls": {}}}
+        """)
+        XCTAssertEqual(rendered.json["width"] as? Int, 80)
+        XCTAssertEqual(rendered.json["height"] as? Int, 60)
+        let ranges = try XCTUnwrap(rendered.json["payloads"] as? [String: [Int]])
+        XCTAssertNotNil(ranges["original"])
+        let png = rendered.payload.subdata(in: ranges["preview"]![0]..<(ranges["preview"]![0] + ranges["preview"]![1]))
+        let decoded = try XCTUnwrap(CGImageSourceCreateWithData(png as CFData, nil)
+            .flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) })
+        XCTAssertEqual([decoded.width, decoded.height], [80, 60])
+
+        // A tile of a viewport twice the frame's size is cut from the same develop.
+        let tile = try call("render", """
+        {"handle": \(handle), "maxEdge": null,
+         "viewport": {"width": 160, "height": 120, "region": {"x": 80, "y": 0, "width": 80, "height": 60}},
+         "edit": {"stock": "gold200", "rotation": 1, "params": {},
+                  "crop": [[0, 0], [1, 0], [1, 0.5], [0, 0.5]]},
+         "profileRequest": {"controls": {}}}
+        """)
+        XCTAssertEqual(tile.json["width"] as? Int, 40)
+        XCTAssertEqual(tile.json["renderMilliseconds"] as? Double, 0)
+
+        _ = try call("release", #"{"handle": \#(handle)}"#)
+        XCTAssertThrowsError(try call("preview", #"{"handle": \#(handle)}"#))
+    }
+}
+#endif

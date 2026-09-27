@@ -1,5 +1,6 @@
 #!/bin/bash
-# Builds Fotufilm Desktop: fetches the pinned CEF, builds the web editor, then the host.
+# Builds Fotufilm Desktop: fetches the pinned CEF, builds the engine library and the web editor,
+# then the host.
 #   cef/build.sh           build build/cef-host/Release/Fotufilm Desktop.app
 #   cef/build.sh --run     build, then open the bridge diagnostics page
 set -euo pipefail
@@ -11,6 +12,7 @@ if [[ "$(uname -s)" == Darwin ]]; then
   # Host links fail against some Command Line Tools SDKs; use Xcode's.
   export SDKROOT="${SDKROOT:-$(xcrun --sdk macosx --show-sdk-path)}"
   extra=(-DCMAKE_OSX_SYSROOT="$SDKROOT")
+  cef/build-engine.sh
 fi
 cmake -S cef -B build/cef-host -G Ninja -DCEF_ROOT="$cef_root" "${extra[@]}"
 cmake --build build/cef-host

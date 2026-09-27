@@ -62,3 +62,23 @@ test("already cancelled requests never cross IPC", async () => {
     name: "AbortError",
   });
 });
+
+test("a binary channel carries bytes beside the message and returns image views", async () => {
+  const { imageBlob } = await import("../../src/backend/macos/transport.js");
+  const seen = [];
+  const call = createTransport({
+    binary: true,
+    async postMessage(message, payload) {
+      seen.push([message.method, payload]);
+      return { preview: new Uint8Array([137, 80, 78, 71]) };
+    },
+  });
+  const bytes = new ArrayBuffer(8);
+  const result = await call("import", { name: "a.jpg" }, { payload: bytes });
+  assert.equal(seen[0][1], bytes);
+  const blob = imageBlob(result.preview);
+  assert.equal(blob.size, 4);
+  assert.equal(blob.type, "image/png");
+  await call("prepare");
+  assert.equal(seen[1][1], undefined);
+});

@@ -81,6 +81,21 @@ int32_t fotufilm_render(fotufilm_engine *engine, fotufilm_image *image, const ch
                         const fotufilm_render_target *target, fotufilm_render_info *info,
                         char **error);
 
+/* The web editor's backend calls (web/src/backend/macos/host.js), answered in the engine:
+ * `method` with JSON `params` and optional bytes. The answer is JSON; images it returns are
+ * named byte ranges of `payload`, listed in the JSON as "payloads": {"name": [offset, length]},
+ * each range starting on a 64-byte boundary. Free the answer with fotufilm_answer_free. */
+typedef struct fotufilm_answer {
+    char *json;
+    uint8_t *payload;
+    size_t payload_length;
+} fotufilm_answer;
+
+int32_t fotufilm_host_call(fotufilm_engine *engine, const char *method, const char *params_json,
+                           const void *payload, size_t payload_length, fotufilm_answer *answer,
+                           char **error);
+void fotufilm_answer_free(fotufilm_answer *answer);
+
 #ifdef __cplusplus
 }
 #endif

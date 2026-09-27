@@ -4,22 +4,27 @@ One editor on every desktop: the React editor in `web/` is the presentation laye
 Chromium Embedded Framework, and the native engine (Swift and Halide) does the work. The host is
 C++ with a thin platform layer per operating system.
 
-Status: the host runs on macOS. The editor loads from the app bundle, talks to the host over the
-bridge below, and composites over a native image layer. The engine methods come next (see
-[Roadmap](#roadmap)); until then the transport is installed as `window.fotufilmDesktop`, a name
-the editor does not look for, so the editor keeps its browser engine.
+Status: the host runs on macOS. The editor loads from the app bundle and develops through the
+native engine: `libfotufilm` (`fotufilm.h`, built from `Sources/FotufilmHost` with the Mac app's
+ahead-of-time Halide Metal kernels) answers the transport's methods, which is installed as
+`window.fotufilmNativeTransport`. Methods the engine does not answer yet reject with a message
+(see [Roadmap](#roadmap)). A host built without the library installs the transport as
+`window.fotufilmDesktop`, a name the editor does not look for, and the editor keeps its browser
+engine.
 
 ## Build and run
 
 You need CMake, Ninja, Node and, on macOS, Xcode.
 
 ```sh
-cef/build.sh          # fetch CEF, build web/, build the host
+cef/build.sh          # fetch CEF, build the engine library and web/, build the host
 cef/build.sh --run    # …then open the bridge diagnostics page
 ```
 
 `cef/fetch-cef.sh` downloads the CEF version pinned in `cef-version.env` into `build/cef/` and
-checks its SHA-1. The app is `build/cef-host/Release/Fotufilm Desktop.app`. Switches:
+checks its SHA-1. `cef/build-engine.sh` builds `build/cef-engine/libfotufilm.dylib` and the
+films and camera profiles it reads, which the app carries in `Frameworks` and `Resources`. The app
+is `build/cef-host/Release/Fotufilm Desktop.app`. Switches:
 
 | Switch | Effect |
 | --- | --- |
@@ -81,10 +86,10 @@ The transport keeps the contract in `web/src/backend/README.md` and the call sha
 
 ## Roadmap
 
-1. **Engine ABI.** A C header over the engine, answering the transport's methods (`prepare`,
-   `import`, `render`, `stages`, `autoAdjust`, `export`…) from Swift through `EditDocument`, so
-   the desktop host translates edits the same way as every other surface. Imports take file
-   paths, not bytes. Once it answers, the transport is installed as `fotufilmNativeTransport`.
+1. **Engine methods.** `prepare` (with the film library), `import`, `preview`, `release`,
+   `render` (geometry, viewport tiles cut from one develop) and the lens catalogue answer today.
+   Still to come: `stages`, `autoAdjust`, `analyseNegative`/`convertNegative`, `printFrame`,
+   `lensPlan` and lens correction, `sampleScene`, selective edits, `export` and video.
 2. **Native presentation in the editor.** A backend capability that lets `ImageCanvas` leave the
    photograph's area transparent and report its rectangle, zoom and pan to the host (as
    `setImageLayer` does in the diagnostics page); renders then go to the image layer instead of

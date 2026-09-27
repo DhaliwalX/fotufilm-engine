@@ -16,8 +16,13 @@ inline constexpr char kDevOrigin[] = "fotufilm-dev-origin";
 // Passed to renderers: the window property the transport is installed as.
 inline constexpr char kTransportGlobal[] = "fotufilm-transport-global";
 
-// Until the engine answers the editor's methods, the transport is installed under a name the
-// editor does not look for, and the editor keeps its browser engine.
+// With the engine linked the transport is the one the editor looks for
+// (web/src/backend/macos/host.js). Without it the transport is installed under a name the editor
+// does not look for, and the editor keeps its browser engine.
+#if defined(FOTUFILM_WITH_ENGINE)
+inline constexpr char kDefaultTransportGlobal[] = "fotufilmNativeTransport";
+#else
 inline constexpr char kDefaultTransportGlobal[] = "fotufilmDesktop";
+#endif
 
 }  // namespace fotufilm::switches

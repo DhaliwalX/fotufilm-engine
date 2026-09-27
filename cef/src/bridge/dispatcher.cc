@@ -157,6 +157,7 @@ bool Dispatcher::OnProcessMessage(CefRefPtr<CefFrame> frame,
     const auto [first, last] = running_.equal_range(call->id);
     for (auto entry = first; entry != last; ++entry)
       if (auto flag = entry->second.lock()) *flag = true;
+    if (cancel_hook_ && !call->id.empty() && call->id == current_) cancel_hook_();
     reply->Resolve(nullptr);
     return true;
   }
@@ -175,8 +176,13 @@ bool Dispatcher::OnProcessMessage(CefRefPtr<CefFrame> frame,
   if (stopping_) return true;
   running_.emplace(call->id, call->cancelled);
   queue_.emplace_back([this, handler, call, reply] {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      current_ = call->id;
+    }
     handler(*call, reply);
     std::lock_guard<std::mutex> lock(mutex_);
+    current_.clear();
     const auto [first, last] = running_.equal_range(call->id);
     for (auto entry = first; entry != last; ++entry)
       if (entry->second.lock() == call->cancelled) {

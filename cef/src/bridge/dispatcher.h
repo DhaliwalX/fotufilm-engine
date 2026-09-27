@@ -75,6 +75,10 @@ class Dispatcher {
   static void Emit(CefRefPtr<CefFrame> frame, const std::string& name,
                    CefRefPtr<CefValue> detail);
 
+  // Runs on the UI thread when a "cancel" names the call the engine thread is answering, so the
+  // engine can stop mid-develop rather than finish work nobody wants.
+  void SetCancelHook(std::function<void()> hook) { cancel_hook_ = std::move(hook); }
+
   // Stops the engine thread after the work already queued.
   void Shutdown();
 
@@ -92,6 +96,9 @@ class Dispatcher {
   // Calls still running, by message id, so "cancel" can reach them.
   std::multimap<std::string, std::weak_ptr<std::atomic<bool>>> running_;
   bool stopping_ = false;
+  // The id of the call the engine thread is answering, if any.
+  std::string current_;
+  std::function<void()> cancel_hook_;
   std::thread engine_;
 };
 

@@ -20,6 +20,26 @@ public final class HostImage {
     /// The most recent reductions, newest last: an editor asks for one or two sizes at a time.
     private var reductions: [(width: Int, height: Int, rgba: [Float])] = []
 
+    /// What the editor's image descriptor says about the source (`web/src/backend/README.md`).
+    var descriptor: [String: Any] {
+        var descriptor: [String: Any] = ["naturalWidth": width, "naturalHeight": height]
+        if contentHeadroom > 1 { descriptor["hdr"] = ["headroom": contentHeadroom] }
+        return descriptor
+    }
+
+    /// Scene light as the screen shows the photograph before any film: Display P3, clipped.
+    func display(_ scene: [Float], width: Int, height: Int) -> [UInt8] {
+        var display = [Float](repeating: 1, count: width * height * 4)
+        for i in 0..<(width * height) {
+            let p3 = ColorScience.linearRec2020ToDisplayP3(
+                SIMD3(scene[i * 4], scene[i * 4 + 1], scene[i * 4 + 2]))
+            display[i * 4] = p3.x
+            display[i * 4 + 1] = p3.y
+            display[i * 4 + 2] = p3.z
+        }
+        return DisplayEncoding.encode8(display, width: width, height: height, knee: 1, seed: 0)
+    }
+
     public init(rgba: [Float], width: Int, height: Int, contentHeadroom: Float) {
         precondition(rgba.count >= width * height * 4)
         var scene = rgba
@@ -69,6 +89,9 @@ public final class HostEngine {
         public var capacity: Int
     }
 
+    /// The web editor's backend calls, answered against this engine.
+    public private(set) lazy var service = HostService(engine: self)
+
     private let renderLock = NSLock()
     private let stateLock = NSLock()
     private var generation: UInt64 = 0
@@ -82,13 +105,16 @@ public final class HostEngine {
         guard !stocks.isEmpty else { throw Failure(description: "No film stocks are installed.") }
     }
 
-    #if canImport(FotufilmMetal)
+    #if canImport(Metal)
     static var metal: HalideMetalFilmRenderer? { HalideMetalFilmRenderer.shared }
     #else
     static var metal: Void? { nil }
     #endif
 
     public var backend: String { Self.metal != nil ? "metal" : "cpu" }
+    /// The name the editor shows (`web/src/editor/ViewerStatus.jsx`).
+    public var backendName: String { Self.metal != nil ? "Halide/Metal" : "Halide/CPU" }
+    public var stockIDs: [String] { FilmStock.presetIDs.filter { stocks[$0] != nil } }
 
     public func describe() -> String {
         let definitions = FilmStock.presetDefinitions
@@ -121,19 +147,34 @@ public final class HostEngine {
         let edit: WebNativeEdit
         do { edit = try JSONDecoder().decode(WebNativeEdit.self, from: request) }
         catch { throw Failure(description: "Unreadable render request: \(error)") }
-        guard let stockID = edit.edit.stock, let stock = stocks[stockID] else {
-            throw Failure(description: "Film \(edit.edit.stock ?? "(none)") is not installed.")
-        }
-        var options = try edit.document.options(
-            for: stock, nativeFormatID: FilmStock.presetDefinitions[stockID]?.nativeFormatID)
-        options.sceneHeadroom = image.contentHeadroom
-
         let (width, height) = image.renderSize(maxEdge: target.maxEdge)
         let bytesPerPixel = target.format == .rgba8DisplayP3 ? 4 : 16
         guard target.rowBytes >= width * bytesPerPixel,
               target.capacity >= target.rowBytes * (height - 1) + width * bytesPerPixel else {
             throw Failure(description: "The target holds less than \(width)x\(height).")
         }
+        try develop(image.scene(width: width, height: height), width: width, height: height,
+                    contentHeadroom: image.contentHeadroom, edit: edit, into: target)
+        return (width, height)
+    }
+
+    /// Develops a scene already cut to the delivered size: scene-linear Rec.2020 RGBA.
+    public func develop(_ scene: [Float], width: Int, height: Int, contentHeadroom: Float,
+                        edit: WebNativeEdit, into target: Target) throws {
+        let film: FilmStock?
+        if let stockID = edit.edit.stock {
+            guard let stock = stocks[stockID] else {
+                throw Failure(description: "Film \(stockID) is not installed.")
+            }
+            film = stock
+        } else {
+            film = nil
+        }
+        let stock = film ?? .noFilm
+        var options = try edit.document.options(
+            for: stock,
+            nativeFormatID: edit.edit.stock.flatMap { FilmStock.presetDefinitions[$0]?.nativeFormatID })
+        options.sceneHeadroom = contentHeadroom
 
         let started = currentGeneration
         let shouldContinue = { self.currentGeneration == started }
@@ -141,17 +182,17 @@ public final class HostEngine {
         defer { renderLock.unlock() }
         guard shouldContinue() else { throw Failure(description: "Cancelled.", cancelled: true) }
 
-        let scene = image.scene(width: width, height: height)
-        let knee = options.sdrShoulderKnee(for: stock)
+        let knee = film.map { options.sdrShoulderKnee(for: $0) } ?? FilmSDRDelivery.boundedShoulderKnee
         let seed = UInt32(truncatingIfNeeded: options.seed)
-        #if canImport(FotufilmMetal)
+        #if canImport(Metal)
         if let metal = Self.metal {
             try developOnMetal(metal, scene: scene, width: width, height: height, stock: stock,
-                               options: options, knee: knee, seed: seed, target: target,
-                               shouldContinue: shouldContinue)
-            return (width, height)
+                               noFilm: film == nil, options: options, knee: knee, seed: seed,
+                               target: target, shouldContinue: shouldContinue)
+            return
         }
         #endif
+        guard let film else { throw Failure(description: "Developing with no film needs Metal.") }
         var linear = ImageBuffer(width: width, height: height)
         for i in 0..<(width * height) {
             for channel in 0..<3 {
@@ -159,7 +200,7 @@ public final class HostEngine {
                 linear.planes[channel][i] = value.isFinite ? value : 0
             }
         }
-        let out = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: linear)
+        let out = try FotufilmEngine(stock: film, options: options).processChecked(linearRGB: linear)
         guard shouldContinue() else { throw Failure(description: "Cancelled.", cancelled: true) }
         var developed = [Float](repeating: 1, count: width * height * 4)
         for i in 0..<(width * height) {
@@ -171,28 +212,27 @@ public final class HostEngine {
             deliver(rows, rows: 0..<height, width: width, encoded: false, knee: knee, seed: seed,
                     target: target)
         }
-        return (width, height)
     }
 
-    #if canImport(FotufilmMetal)
+    #if canImport(Metal)
     private func developOnMetal(
         _ metal: HalideMetalFilmRenderer, scene: [Float], width: Int, height: Int,
-        stock: FilmStock, options: FotufilmEngine.Options, knee: Float, seed: UInt32,
-        target: Target, shouldContinue: @escaping () -> Bool
+        stock: FilmStock, noFilm: Bool, options: FotufilmEngine.Options, knee: Float,
+        seed: UInt32, target: Target, shouldContinue: @escaping () -> Bool
     ) throws {
         // The shoulder and transfer ride in the producing kernel when a variant carries them,
         // which leaves only the quantization to the host.
         let requested: FilmOutputTransform? = target.format == .rgba8DisplayP3
             && metal.carriesOutputTransform(stock: stock, options: options, width: width,
-                                            height: height, exactMath: false)
-            ? .displayP3(shoulderKnee: knee) : nil
+                                            height: height, exactMath: false, noFilm: noFilm)
+            ? .displayP3(shoulderKnee: noFilm ? nil : knee) : nil
         func develop(_ requested: FilmOutputTransform?) -> (ok: Bool, kept: Bool) {
             var transform = requested
             let encoded = requested != nil
             let ok = scene.withUnsafeBufferPointer { source in
                 metal.developStreaming(
                     width: width, height: height, stock: stock, options: options,
-                    outputTransform: &transform, shouldContinue: shouldContinue,
+                    outputTransform: &transform, noFilm: noFilm, shouldContinue: shouldContinue,
                     readRows: { rows, into in
                         into.baseAddress!.update(
                             from: source.baseAddress! + rows.lowerBound * width * 4,

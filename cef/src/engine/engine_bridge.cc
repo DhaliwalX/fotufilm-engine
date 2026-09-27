@@ -1,0 +1,78 @@
+#include "engine/engine_bridge.h"
+
+#include "include/cef_parser.h"
+
+namespace fotufilm {
+namespace {
+
+// web/src/backend/macos/host.js and lenses.js; the engine answers the ones it implements.
+constexpr const char* kMethods[] = {
+    "prepare",          "import",         "preview",          "release",
+    "render",           "stages",         "analyseNegative",  "convertNegative",
+    "suggestNegativeFilms", "autoAdjust", "printFrame",       "lensPlan",
+    "sampleScene",      "export",         "exportVideo",      "beginVideo",
+    "appendVideo",      "importVideo",    "lensCatalogue",    "importLensCatalogue",
+    "removeLensCatalogue",
+};
+
+}  // namespace
+
+EngineBridge::EngineBridge(Dispatcher& dispatcher) {
+  for (const char* method : kMethods)
+    dispatcher.Register(method, Dispatcher::Thread::kEngine,
+                        [this](const Call& call, std::shared_ptr<Reply> reply) {
+                          Handle(call, std::move(reply));
+                        });
+  // A cancel for the call being answered stops the develop inside the engine; calls still
+  // queued see their own flag before they start.
+  dispatcher.SetCancelHook([this] {
+    if (engine_) fotufilm_engine_cancel(engine_);
+  });
+}
+
+EngineBridge::~EngineBridge() {
+  if (engine_) fotufilm_engine_destroy(engine_);
+}
+
+fotufilm_engine* EngineBridge::Engine(std::string& error) {
+  if (engine_ || !failure_.empty()) {
+    error = failure_;
+    return engine_;
+  }
+  char* message = nullptr;
+  engine_ = fotufilm_engine_create(&message);
+  if (!engine_) failure_ = message ? message : "The engine could not start.";
+  fotufilm_free(message);
+  error = failure_;
+  return engine_;
+}
+
+void EngineBridge::Handle(const Call& call, std::shared_ptr<Reply> reply) {
+  if (*call.cancelled) return reply->Reject("The request was cancelled.", "AbortError");
+  std::string failure;
+  fotufilm_engine* engine = Engine(failure);
+  if (!engine) return reply->Reject(failure);
+
+  const std::string params = ToJson(call.params);
+  fotufilm_answer answer = {};
+  char* error = nullptr;
+  const int32_t status =
+      fotufilm_host_call(engine, call.method.c_str(), params.c_str(), call.payload,
+                         call.payload_length, &answer, &error);
+  if (status == FOTUFILM_CANCELLED || *call.cancelled) {
+    reply->Reject("The request was cancelled.", "AbortError");
+  } else if (status != FOTUFILM_OK) {
+    reply->Reject(error ? error : "The engine failed.");
+  } else {
+    CefRefPtr<CefValue> value = CefParseJSON(answer.json ? answer.json : "null",
+                                             JSON_PARSER_RFC);
+    if (answer.payload_length)
+      reply->Resolve(value, answer.payload, answer.payload_length);
+    else
+      reply->Resolve(value);
+  }
+  fotufilm_answer_free(&answer);
+  fotufilm_free(error);
+}
+
+}  // namespace fotufilm

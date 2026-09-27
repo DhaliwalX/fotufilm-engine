@@ -5,6 +5,8 @@
 #
 # cef/build.sh does both and bundles the web build.
 cmake_minimum_required(VERSION 3.21)
+# The engine library, like the Mac app, targets macOS 14.
+set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "Minimum macOS")
 project(FotufilmDesktop LANGUAGES C CXX)
 if(APPLE)
   enable_language(OBJC OBJCXX)
@@ -16,6 +18,8 @@ if(NOT EXISTS "${CEF_ROOT}/cmake/FindCEF.cmake")
 endif()
 set(FOTUFILM_WEB_DIST "${CMAKE_CURRENT_SOURCE_DIR}/../web/dist" CACHE PATH
     "The built web editor bundled as fotufilm://app/")
+set(FOTUFILM_ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../build/cef-engine" CACHE PATH
+    "libfotufilm and its resources (cef/build-engine.sh); without it the editor keeps its browser engine")
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -52,6 +56,14 @@ set(FOTUFILM_BROWSER_SOURCES
   src/app/client.cc
   src/bridge/dispatcher.cc
 )
+set(FOTUFILM_ENGINE_LIBRARY "${FOTUFILM_ENGINE_DIR}/libfotufilm.dylib")
+if(EXISTS "${FOTUFILM_ENGINE_LIBRARY}")
+  set(FOTUFILM_WITH_ENGINE ON)
+  list(APPEND FOTUFILM_BROWSER_SOURCES src/engine/engine_bridge.cc)
+else()
+  message(WARNING "No engine at ${FOTUFILM_ENGINE_LIBRARY}; run cef/build-engine.sh. "
+                  "The editor will use its browser engine.")
+endif()
 
 function(fotufilm_target target)
   SET_EXECUTABLE_TARGET_PROPERTIES(${target})
@@ -77,6 +89,14 @@ if(OS_MAC)
   fotufilm_target(fotufilm_desktop)
   target_link_libraries(fotufilm_desktop
     "-framework Metal" "-framework QuartzCore" "-framework IOSurface")
+  if(FOTUFILM_WITH_ENGINE)
+    target_compile_definitions(fotufilm_desktop PRIVATE FOTUFILM_WITH_ENGINE=1)
+    target_include_directories(fotufilm_desktop PRIVATE
+      "${CMAKE_CURRENT_SOURCE_DIR}/../Sources/CFotufilmHost/include")
+    target_link_libraries(fotufilm_desktop "${FOTUFILM_ENGINE_LIBRARY}")
+    set_target_properties(fotufilm_desktop PROPERTIES
+      BUILD_RPATH "@executable_path/../Frameworks" INSTALL_RPATH "@executable_path/../Frameworks")
+  endif()
   set(EXECUTABLE_NAME "${FOTUFILM_APP_NAME}")
   set(PRODUCT_NAME "${FOTUFILM_APP_NAME}")
   configure_file(mac/Info.plist.in "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
@@ -93,14 +113,29 @@ if(OS_MAC)
             "${CMAKE_CURRENT_SOURCE_DIR}/resources/diagnostics"
             "${_app}/Contents/Resources/diagnostics"
     VERBATIM)
+  # The web build and the engine change without the host relinking, so they are copied into the
+  # bundle on every build rather than after a link.
+  set(_bundle_commands)
+  if(FOTUFILM_WITH_ENGINE)
+    # The engine reads its films, camera profiles and priors from the main bundle.
+    list(APPEND _bundle_commands
+      COMMAND ${CMAKE_COMMAND} -E copy "${FOTUFILM_ENGINE_LIBRARY}"
+              "${_app}/Contents/Frameworks/libfotufilm.dylib"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${FOTUFILM_ENGINE_DIR}/Resources"
+              "${_app}/Contents/Resources"
+      COMMAND ${CMAKE_COMMAND} -E rm -f "${_app}/Contents/Resources/fotufilm-bench")
+  endif()
   if(EXISTS "${FOTUFILM_WEB_DIST}/index.html")
-    add_custom_command(TARGET fotufilm_desktop POST_BUILD
+    list(APPEND _bundle_commands
       COMMAND ${CMAKE_COMMAND} -E rm -rf "${_app}/Contents/Resources/web"
       COMMAND ${CMAKE_COMMAND} -E copy_directory "${FOTUFILM_WEB_DIST}"
-              "${_app}/Contents/Resources/web"
-      VERBATIM)
+              "${_app}/Contents/Resources/web")
   else()
     message(WARNING "No web build at ${FOTUFILM_WEB_DIST}; run npm run build in web/.")
+  endif()
+  if(_bundle_commands)
+    add_custom_target(fotufilm_bundle ALL ${_bundle_commands} VERBATIM)
+    add_dependencies(fotufilm_bundle fotufilm_desktop)
   endif()
 
   # Chromium launches each process type from its own helper bundle.

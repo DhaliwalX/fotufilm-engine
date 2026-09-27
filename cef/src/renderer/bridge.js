@@ -20,8 +20,13 @@
       if (!call) return;
       pending.delete(key);
       if (!ok) return call.reject(failure(value));
-      if (payload) call.resolve({ ...(value ?? {}), payload });
-      else call.resolve(value);
+      if (!payload) return call.resolve(value);
+      // Named ranges of one payload become views of it, without a copy.
+      const { payloads, ...rest } = value ?? {};
+      if (!payloads) return call.resolve({ ...rest, payload });
+      for (const [name, [offset, length]] of Object.entries(payloads))
+        rest[name] = new Uint8Array(payload, offset, length);
+      call.resolve(rest);
     } else if (kind === "event") {
       const type =
         key === "progress" ? "fotufilm-native-progress" : `fotufilm-native-${key}`;
@@ -39,6 +44,8 @@
   }
 
   const transport = Object.freeze({
+    // postMessage takes a second argument of bytes, carried in shared memory.
+    binary: true,
     postMessage(message, payload) {
       return new Promise((resolve, reject) => {
         const key = ++sequence;

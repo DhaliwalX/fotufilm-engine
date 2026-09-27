@@ -6,6 +6,9 @@
 #include "app/browser_app.h"
 #include "app/scheme.h"
 #include "bridge/dispatcher.h"
+#if defined(FOTUFILM_WITH_ENGINE)
+#include "engine/engine_bridge.h"
+#endif
 #include "include/cef_application_mac.h"
 #include "include/cef_command_line.h"
 #include "include/wrapper/cef_library_loader.h"
@@ -15,6 +18,9 @@
 namespace {
 
 std::unique_ptr<fotufilm::Dispatcher> g_dispatcher;
+#if defined(FOTUFILM_WITH_ENGINE)
+std::unique_ptr<fotufilm::EngineBridge> g_engine;
+#endif
 FotufilmHostWindow* g_window = nil;
 
 std::string ResourcePath(NSString* name) {
@@ -140,6 +146,9 @@ int main(int argc, char* argv[]) {
     options.transport_global = fotufilm::switches::kDefaultTransportGlobal;
 
     g_dispatcher = std::make_unique<fotufilm::Dispatcher>();
+#if defined(FOTUFILM_WITH_ENGINE)
+    g_engine = std::make_unique<fotufilm::EngineBridge>(*g_dispatcher);
+#endif
     CefRefPtr<fotufilm::BrowserApp> app =
         new fotufilm::BrowserApp(options, [url] {
           g_window = [[FotufilmHostWindow alloc] initWithURL:url
@@ -162,6 +171,9 @@ int main(int argc, char* argv[]) {
     g_window = nil;
     g_dispatcher->Shutdown();
     CefShutdown();
+#if defined(FOTUFILM_WITH_ENGINE)
+    g_engine.reset();
+#endif
     g_dispatcher.reset();
   }
   return 0;

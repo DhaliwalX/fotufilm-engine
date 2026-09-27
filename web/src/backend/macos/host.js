@@ -17,16 +17,15 @@ export function createMacBackend(channel) {
   let ready, stocks;
   const prepare = () => (ready ??= call("prepare"));
   const catalogue = () =>
-    (stocks ??= Promise.all([prepare(), loadStockIndex()]).then(
-      ([native, entries]) => {
-        const available = entries.filter((stock) =>
-          native.stocks.includes(stock.id),
-        );
-        if (!available.length)
-          throw new Error("No matching native film definitions are installed.");
-        return available;
-      },
-    ));
+    (stocks ??= prepare().then(async (native) => {
+      // A host that answers the film library itself needs none of the browser engine's files.
+      if (native.catalogue?.length) return native.catalogue;
+      const entries = await loadStockIndex();
+      const available = entries.filter((stock) => native.stocks.includes(stock.id));
+      if (!available.length)
+        throw new Error("No matching native film definitions are installed.");
+      return available;
+    }));
   const releaseImage = (image) => {
     if (image?.video?.playbackUrl) URL.revokeObjectURL(image.video.playbackUrl);
     if (image?.handle)
@@ -53,14 +52,13 @@ export function createMacBackend(channel) {
       if (!negative && isVideoFile(file))
         return importVideo(call, file, { signal, onProgress });
       onProgress?.("Opening with the native image decoder");
+      const params = { name: file.name, negative: !!negative };
+      if (channel.binary)
+        return importedImage(
+          await call("import", params, { signal, payload: await file.arrayBuffer() }),
+        );
       const data = await fileBase64(file);
-      return importedImage(
-        await call(
-          "import",
-          { data, name: file.name, negative: !!negative },
-          { signal },
-        ),
-      );
+      return importedImage(await call("import", { ...params, data }, { signal }));
     },
     releaseImage,
     analyseNegative: (image, monochrome) =>

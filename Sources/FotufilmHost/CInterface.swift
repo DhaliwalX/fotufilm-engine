@@ -129,3 +129,48 @@ public func cdecl_fotufilm_render(
         return Int32(FOTUFILM_ERROR)
     }
 }
+
+@_cdecl("fotufilm_host_call")
+public func cdecl_fotufilm_host_call(
+    _ engineHandle: OpaquePointer?, _ method: UnsafePointer<CChar>?,
+    _ paramsJSON: UnsafePointer<CChar>?, _ payload: UnsafeRawPointer?, _ payloadLength: Int,
+    _ answer: UnsafeMutablePointer<fotufilm_answer>?,
+    _ error: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
+    guard let engine = engine(engineHandle), let method, let answer else {
+        error?.pointee = duplicate("An engine, a method and an answer are required.")
+        return Int32(FOTUFILM_ERROR)
+    }
+    let params = paramsJSON.map { Data(bytes: $0, count: strlen($0)) } ?? Data("{}".utf8)
+    let bytes = payload.map { UnsafeRawBufferPointer(start: $0, count: payloadLength) }
+    do {
+        let result = try engine.service.call(String(cString: method), params: params,
+                                             payload: bytes)
+        answer.pointee.json = duplicate(String(decoding: result.json, as: UTF8.self))
+        if result.payload.isEmpty {
+            answer.pointee.payload = nil
+            answer.pointee.payload_length = 0
+        } else {
+            let copy = malloc(result.payload.count)!.assumingMemoryBound(to: UInt8.self)
+            result.payload.withUnsafeBufferPointer {
+                copy.update(from: $0.baseAddress!, count: $0.count)
+            }
+            answer.pointee.payload = copy
+            answer.pointee.payload_length = result.payload.count
+        }
+        return Int32(FOTUFILM_OK)
+    } catch let failure as HostEngine.Failure where failure.cancelled {
+        return Int32(FOTUFILM_CANCELLED)
+    } catch let failure {
+        report(failure, into: error)
+        return Int32(FOTUFILM_ERROR)
+    }
+}
+
+@_cdecl("fotufilm_answer_free")
+public func cdecl_fotufilm_answer_free(_ answer: UnsafeMutablePointer<fotufilm_answer>?) {
+    guard let answer else { return }
+    free(answer.pointee.json)
+    free(answer.pointee.payload)
+    answer.pointee = fotufilm_answer()
+}
