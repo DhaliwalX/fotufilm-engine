@@ -27,6 +27,12 @@ export function createNativeBackend(host) {
   if (host.negativeContrast === true) backend.negativeContrast = true;
   if (host.subjectSelection === true) backend.subjectSelection = true;
   if (host.exportImageCancels === true) backend.exportImageCancels = true;
+  // Optional: the host draws the photograph itself beneath the page; renders asked to `present`
+  // answer `presented` frames, which the canvas places with `placeImageLayer(geometry)`.
+  if (host.imageLayer === true && typeof host.placeImageLayer === "function") {
+    backend.imageLayer = true;
+    backend.placeImageLayer = host.placeImageLayer.bind(host);
+  }
   // Optional: how fast this host develops previews while an edit moves (preview-budget.js).
   if (host.previewBudget) backend.previewBudget = Object.freeze({ ...host.previewBudget });
   if (typeof host.suggestNegativeFilms === "function")

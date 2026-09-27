@@ -14,7 +14,9 @@ export function useViewportDetail({
   onError,
   onBackend,
 }) {
-  const delay = previewBudget(useBackend()).detailDelayMs;
+  const backend = useBackend();
+  const delay = previewBudget(backend).detailDelayMs;
+  const present = backend.imageLayer === true;
   const [detail, setDetail] = useState(null);
   const work = useRef(null);
   const surfaces = useRef(new Set());
@@ -49,6 +51,7 @@ export function useViewportDetail({
             request,
             JSON.parse(viewportKey),
             () => current.cancelled || current.latest !== viewportKey,
+            present,
           );
           if (!next) return;
           surfaces.current.add(next);
@@ -63,7 +66,7 @@ export function useViewportDetail({
         });
     }, delay);
     return () => clearTimeout(timer);
-  }, [session, request, viewportKey, enabled, delay]);
+  }, [session, request, viewportKey, enabled, delay, present]);
 
   // Release the old surface only after React commits its decoded replacement.
   useEffect(() => {

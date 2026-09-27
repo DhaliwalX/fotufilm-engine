@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createMacBackend } from "../../src/backend/macos/host.js";
+import { createSession } from "../../src/backend/macos/session.js";
+import { defaultEdit } from "../../src/editor-state.js";
 
 const channel = (capabilities) => ({
   binary: true,
@@ -97,4 +99,42 @@ test("a file the host opens carries the identity its edit is kept under", async 
   assert.equal(opened.image.identity, undefined);
   assert.equal(opened.image.handle, 4);
   URL.revokeObjectURL(opened.url);
+});
+
+test("a host that draws the photograph itself gets frames placed instead of pictures", async () => {
+  const calls = [];
+  const call = async (method, params) => {
+    calls.push([method, params]);
+    if (method === "render")
+      return {
+        width: 4,
+        height: 2,
+        presented: { frame: 7, original: 3, dynamicRange: "hdr", headroom: 4 },
+      };
+    return [];
+  };
+  const backend = createMacBackend({
+    binary: true,
+    capabilities: { imageLayer: true },
+    postMessage: ({ method, params }) => call(method, params),
+  });
+  assert.equal(backend.imageLayer, true);
+  const session = createSession(call, async () => [], { imageLayer: true });
+  const image = { handle: 5 };
+  const result = await session.render({ image, edit: defaultEdit(), maxEdge: 64, present: "preview" });
+  assert.equal(result.presented.frame, 7);
+  assert.equal(result.blob, undefined);
+  assert.deepEqual(calls.at(-1)[1].present, { slot: "preview", scope: "5|photo|" });
+  assert.equal(result.sceneRequest, calls.at(-1)[1]);
+  // A tile's scope is its region, so an older tile is never shown for a newer one.
+  const viewport = { width: 8, height: 4, region: { x: 4, y: 0, width: 4, height: 2 } };
+  await session.render({ image, edit: defaultEdit(), maxEdge: 64, present: "detail", viewport });
+  assert.equal(calls.at(-1)[1].present.scope, `5|photo||${JSON.stringify(viewport)}`);
+  await backend.placeImageLayer({ clip: [0, 0, 1, 1], source: "developed", layers: [] });
+  assert.equal(calls.at(-1)[0], "setImageLayer");
+  session.dispose();
+
+  const plain = createMacBackend(channel({}));
+  assert.equal(plain.imageLayer, false);
+  assert.equal(plain.placeImageLayer, undefined);
 });
