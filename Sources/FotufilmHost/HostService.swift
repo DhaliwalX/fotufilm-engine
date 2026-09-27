@@ -266,7 +266,7 @@ public final class HostService {
         // Cache keys: everything but the viewport decides the developed frame.
         let sceneKey = "\(request.handle)|\(maxEdge ?? 0)|\(request.cropMode == true)|\(geometry)"
         var keyed = body
-        for name in ["viewport", "maxEdge", "handle"] { keyed[name] = nil }
+        for name in ["viewport", "maxEdge", "handle", "haveOriginal"] { keyed[name] = nil }
         let developKey = sceneKey + "|" + String(decoding: (try? JSONSerialization.data(
             withJSONObject: keyed, options: [.sortedKeys])) ?? Data(), as: UTF8.self)
         let frameKey = sceneKey + "|" + String(describing: plan?.json["placement"] ?? "")
@@ -331,8 +331,13 @@ public final class HostService {
             "elapsed": elapsed, "renderMilliseconds": renderMilliseconds,
         ]
         if let plan { answerBody["framePlan"] = plan.json }
-        return try answer(answerBody, images: ["preview": png(developedFrame),
-                                               "original": png(originalFrame)])
+        // The undeveloped picture changes only with the photograph, geometry and region: the
+        // page names the one it holds and it crosses again only when it differs.
+        let originalKey = "\(originalFrame.key)|\(region)"
+        answerBody["originalKey"] = originalKey
+        var images = ["preview": png(developedFrame)]
+        if body["haveOriginal"] as? String != originalKey { images["original"] = png(originalFrame) }
+        return try answer(answerBody, images: images)
     }
 
     /// The photograph's develop, with a selective adjustment blended over it when the edit has

@@ -58,6 +58,7 @@ export function createSession(call, catalogue) {
   const lifecycle = new AbortController();
   const pending = [];
   let running = false;
+  let lastOriginal = null;
   async function drain() {
     if (running) return;
     running = true;
@@ -75,12 +76,19 @@ export function createSession(call, catalogue) {
       }
       try {
         request.onProgress?.("Developing with native Halide/Metal");
-        const nativeRequest = renderRequest(request, await catalogue());
-        const result = await call(
-          "render",
-          nativeRequest,
-          { signal: lifecycle.signal },
-        );
+        const nativeRequest = {
+          ...renderRequest(request, await catalogue()),
+          haveOriginal: lastOriginal?.key,
+        };
+        const result = await call("render", nativeRequest, { signal: lifecycle.signal });
+        // A host that knows the page holds this original leaves it out of the answer.
+        const original = result.original != null
+          ? imageBlob(result.original, result.previewType)
+          : lastOriginal?.key === result.originalKey
+            ? lastOriginal.blob
+            : null;
+        if (!original) throw new Error("The native host sent no original picture.");
+        if (result.originalKey) lastOriginal = { key: result.originalKey, blob: original };
         if (lifecycle.signal.aborted || request.stale?.()) {
           resolve(null);
           continue;
@@ -89,7 +97,7 @@ export function createSession(call, catalogue) {
           ...result,
           preview: undefined,
           blob: imageBlob(result.preview, result.previewType),
-          original: imageBlob(result.original, result.previewType),
+          original,
           viewport: request.viewport,
           sceneRequest: nativeRequest,
         });

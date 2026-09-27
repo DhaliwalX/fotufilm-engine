@@ -8,6 +8,8 @@ export const BROWSER_PREVIEW_BUDGET = Object.freeze({
   initialInteractiveEdge: 512,
   minInteractiveEdge: 256,
   maxInteractiveEdge: 800,
+  // Quiet time after the view stops moving before the visible area is refined at full detail.
+  detailDelayMs: 300,
 });
 
 export function previewBudget(backend) {

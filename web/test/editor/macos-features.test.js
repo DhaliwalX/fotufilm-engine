@@ -59,3 +59,20 @@ test('moving video uses compact previews while paused frames and photos stay los
   assert.deepEqual(calls.map(request => request.previewQuality), ['playback', 'still', 'still']);
   session.dispose();
 });
+
+test('an unchanged original crosses the bridge once and is reused', async () => {
+  const calls = [];
+  const session = createSession(async (_, request) => {
+    calls.push(request);
+    const answer = { preview: 'AA==', previewType: 'image/png', originalKey: 'photo|frame' };
+    if (request.haveOriginal !== 'photo|frame') answer.original = 'AA==';
+    return answer;
+  }, async () => []);
+  const request = { image: { handle: 'photo' }, edit: defaultEdit() };
+  const first = await session.render(request);
+  const second = await session.render({ ...request, maxEdge: 64 });
+  assert.equal(calls[0].haveOriginal, undefined);
+  assert.equal(calls[1].haveOriginal, 'photo|frame');
+  assert.equal(second.original, first.original);
+  session.dispose();
+});
