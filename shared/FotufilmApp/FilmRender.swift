@@ -1957,27 +1957,7 @@ struct PhotoSource: @unchecked Sendable {
     }
 
     private static func lensShot(from metadata: [String: Any]?) -> LensShot? {
-        guard let metadata,
-              let exif = metadata[kCGImagePropertyExifDictionary as String]
-                as? [String: Any] else { return nil }
-        let auxiliary = metadata[kCGImagePropertyExifAuxDictionary as String]
-            as? [String: Any]
-        let tiff = metadata[kCGImagePropertyTIFFDictionary as String]
-            as? [String: Any]
-        // Apple writes the lens name into the auxiliary dictionary rather than the Exif one, so both
-        // are asked before giving up.
-        let model = (exif[kCGImagePropertyExifLensModel as String] as? String)
-            ?? (auxiliary?["LensModel"] as? String)
-        guard let model, !model.trimmingCharacters(in: .whitespaces).isEmpty
-        else { return nil }
-        return LensShot(
-            lensModel: model,
-            lensMaker: exif[kCGImagePropertyExifLensMake as String] as? String,
-            cameraModel: tiff?[kCGImagePropertyTIFFModel as String] as? String,
-            focalLength: (exif[kCGImagePropertyExifFocalLength as String]
-                as? NSNumber)?.floatValue,
-            aperture: (exif[kCGImagePropertyExifFNumber as String]
-                as? NSNumber)?.floatValue)
+        LensShot(capture: metadata)
     }
 
     /// Decodes to scene-linear, optionally capped at `longEdge` pixels. `neutralKelvin` names the

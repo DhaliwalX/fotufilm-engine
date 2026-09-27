@@ -14,6 +14,8 @@ public final class HostImage {
     public let width: Int
     public let height: Int
     let contentHeadroom: Float
+    /// The lens the file records, for matching a correction profile.
+    var lensShot: LensShot?
     /// Scene-linear RGBA in the engine's working space, alpha flattened over black.
     private let scene: [Float]
     private let lock = NSLock()

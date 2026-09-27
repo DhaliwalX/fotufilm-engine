@@ -236,6 +236,28 @@ extension CInterfaceTests {
         """).utf8)) as? [Double]
         XCTAssertEqual(sample?.count, 3)
 
+        // A film border frames the develop and says where the photograph sits in it.
+        let framed = try call("render", """
+        {"handle": \(handle), "maxEdge": null,
+         "printFrame": {"kind": "print-frame", "stock": "gold200", "frame": "film", "width": 1, "height": 1},
+         "edit": {"stock": "gold200", "params": {}}, "profileRequest": {"controls": {}}}
+        """)
+        let placement = try XCTUnwrap((framed.json["framePlan"] as? [String: Any])?["placement"]
+            as? [String: Any])
+        XCTAssertGreaterThan(framed.json["width"] as? Int ?? 0, 120)
+        XCTAssertEqual(((placement["size"] as? [String: Any])?["width"] as? Int), framed.json["width"] as? Int)
+
+        // Lens sliders plan a correction without a profile, and it reaches the develop.
+        let lens = #""lens": {"enabled": true, "amount": 1, "profileID": null, "distortion": -0.5, "vignetting": 0.5, "redCyan": 0, "blueYellow": 0}"#
+        let plan = try call("lensPlan", #"{"handle": \#(handle), \#(lens)}"#)
+        XCTAssertEqual(plan.json["identity"] as? Bool, false)
+        XCTAssertEqual((plan.json["table"] as? [Double])?.count, 4096)
+        let corrected = try call("render", """
+        {"handle": \(handle), "maxEdge": null, "edit": {"stock": "gold200", "params": {}, \(lens)},
+         "profileRequest": {"controls": {}}}
+        """)
+        XCTAssertEqual(corrected.json["width"] as? Int, 120)
+
         // Export writes a 16-bit TIFF where the host's save panel pointed.
         let target = FileManager.default.temporaryDirectory
             .appendingPathComponent("fotufilm-export-\(UUID().uuidString).tiff")

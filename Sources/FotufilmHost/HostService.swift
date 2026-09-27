@@ -51,6 +51,14 @@ public final class HostService {
             return try answer([:])
         case "render":
             return try render(params)
+        case "lensPlan":
+            let image = try self.image(parameters["handle"])
+            let lens = try JSONDecoder().decode(
+                SceneGeometry.Lens.self,
+                from: JSONSerialization.data(withJSONObject: parameters["lens"] ?? [:]))
+            return Answer(json: try JSONEncoder().encode(lensPlan(image, lens)), payload: [])
+        case "printFrame":
+            return Answer(json: try HostFrames.answer(parameters), payload: [])
         case "autoAdjust":
             return try answer(autoAdjust(params))
         case "sampleScene":
@@ -188,17 +196,31 @@ public final class HostService {
     private func render(_ params: Data) throws -> Answer {
         let started = DispatchTime.now().uptimeNanoseconds
         let prepared = try prepare(params)
-        let (request, edit, image, geometry) = (prepared.request, prepared.edit, prepared.image,
-                                                prepared.geometry)
+        let (request, image, geometry) = (prepared.request, prepared.image, prepared.geometry)
         let (maxEdge, sizes) = (prepared.maxEdge, prepared.sizes)
         let (width, height) = sizes.output
+        var body = (try? JSONSerialization.jsonObject(with: params)) as? [String: Any] ?? [:]
+
+        // A frame surrounds the whole picture, never a tile of it, and changes how it develops.
+        let plan = request.viewport == nil
+            ? try (body["printFrame"] as? [String: Any]).flatMap {
+                try HostFrames.plan($0, width: width, height: height)
+            }
+            : nil
+        var edit = prepared.edit
+        if let plan {
+            HostFrames.settings(&body, for: plan)
+            edit = try JSONDecoder().decode(WebNativeEdit.self,
+                                            from: JSONSerialization.data(withJSONObject: body))
+        }
 
         // Cache keys: everything but the viewport decides the developed frame.
         let sceneKey = "\(request.handle)|\(maxEdge ?? 0)|\(request.cropMode == true)|\(geometry)"
-        var keyed = (try? JSONSerialization.jsonObject(with: params)) as? [String: Any] ?? [:]
+        var keyed = body
         for name in ["viewport", "maxEdge", "handle"] { keyed[name] = nil }
         let developKey = sceneKey + "|" + String(decoding: (try? JSONSerialization.data(
             withJSONObject: keyed, options: [.sortedKeys])) ?? Data(), as: UTF8.self)
+        let frameKey = sceneKey + "|" + String(describing: plan?.json["placement"] ?? "")
 
         let scene = try sceneFor(image, geometry: geometry, sizes: sizes)
         var renderMilliseconds = 0.0
@@ -213,15 +235,26 @@ public final class HostService {
                                                capacity: buffer.count))
             }
             renderMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - developStart) / 1e6
-            developed = (developKey, width, height, pixels)
+            var frame = (pixels: pixels, width: width, height: height)
+            if let plan, let framed = HostFrames.frame(pixels, width: width, height: height, plan: plan) {
+                frame = framed
+            }
+            developed = (developKey, frame.width, frame.height, frame.pixels)
         }
-        if originals?.key != sceneKey {
-            originals = (sceneKey, width, height, image.display(scene, width: width, height: height))
+        if originals?.key != frameKey {
+            var frame = (pixels: image.display(scene, width: width, height: height),
+                         width: width, height: height)
+            if let plan, let framed = HostFrames.frame(frame.pixels, width: width, height: height,
+                                                       plan: plan) {
+                frame = framed
+            }
+            originals = (frameKey, frame.width, frame.height, frame.pixels)
         }
         let developedFrame = developed!, originalFrame = originals!
+        let (frameWidth, frameHeight) = (developedFrame.width, developedFrame.height)
 
-        // The region of the frame to deliver, in developed pixels.
-        var region = (x: 0, y: 0, width: width, height: height)
+        // The region of the picture to deliver, in developed pixels.
+        var region = (x: 0, y: 0, width: frameWidth, height: frameHeight)
         if let viewport = request.viewport {
             let sx = Double(width) / Double(viewport.width)
             let sy = Double(height) / Double(viewport.height)
@@ -233,18 +266,22 @@ public final class HostService {
                 .rounded(.up)))
             region = (x, y, max(1, right - x), max(1, bottom - y))
         }
-        func png(_ pixels: [UInt8]) -> [UInt8] {
-            pixels.withUnsafeBytes {
-                StoredPNG.encode($0.baseAddress! + (region.y * width + region.x) * 4,
-                                 width: region.width, height: region.height, rowBytes: width * 4)
+        func png(_ frame: (key: String, width: Int, height: Int, pixels: [UInt8])) -> [UInt8] {
+            frame.pixels.withUnsafeBytes {
+                StoredPNG.encode($0.baseAddress! + (region.y * frame.width + region.x) * 4,
+                                 width: region.width, height: region.height,
+                                 rowBytes: frame.width * 4)
             }
         }
         let elapsed = Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6
-        return try answer([
+        var answerBody: [String: Any] = [
             "width": region.width, "height": region.height, "colorSpace": "display-p3",
             "previewType": "image/png", "backend": engine.backendName,
             "elapsed": elapsed, "renderMilliseconds": renderMilliseconds,
-        ], images: ["preview": png(developedFrame.pixels), "original": png(originalFrame.pixels)])
+        ]
+        if let plan { answerBody["framePlan"] = plan.json }
+        return try answer(answerBody, images: ["preview": png(developedFrame),
+                                               "original": png(originalFrame)])
     }
 
     // MARK: Measuring and exporting
@@ -311,9 +348,17 @@ public final class HostService {
         }
         var body = parameters
         body["viewport"] = nil
-        let prepared = try prepare(JSONSerialization.data(withJSONObject: body))
+        var prepared = try prepare(JSONSerialization.data(withJSONObject: body))
         let scene = try sceneFor(prepared.image, geometry: prepared.geometry, sizes: prepared.sizes)
         let (width, height) = prepared.sizes.output
+        let plan = try (body["printFrame"] as? [String: Any]).flatMap {
+            try HostFrames.plan($0, width: width, height: height)
+        }
+        if let plan {
+            HostFrames.settings(&body, for: plan)
+            prepared.edit = try JSONDecoder().decode(
+                WebNativeEdit.self, from: JSONSerialization.data(withJSONObject: body))
+        }
         let type = parameters["type"] as? String ?? "image/png"
         let quality = (parameters["quality"] as? Double).map { min(max($0, 0.01), 1) } ?? 0.95
         let deep = type == "image/tiff"
@@ -330,10 +375,33 @@ public final class HostService {
                 try? prepared.edit.document.options(for: stock).sdrShoulderKnee(for: stock)
             }
         } ?? FilmSDRDelivery.boundedShoulderKnee
-        try HostExport.write(pixels, width: width, height: height, deep: deep, knee: knee,
-                             type: type, quality: quality, to: URL(fileURLWithPath: path))
-        return ["filename": URL(fileURLWithPath: path).lastPathComponent, "width": width,
-                "height": height]
+        let written = try HostExport.write(pixels, width: width, height: height, deep: deep,
+                                           knee: knee, frame: plan?.configuration, type: type,
+                                           quality: quality, to: URL(fileURLWithPath: path))
+        return ["filename": URL(fileURLWithPath: path).lastPathComponent, "width": written.width,
+                "height": written.height]
+    }
+
+    /// The correction for a lens setting on this photograph: the chosen or matched profile from
+    /// the imported catalogue, then the sliders (`WebLensRequest`, as the browser plans it).
+    private func lensPlan(_ image: HostImage, _ lens: SceneGeometry.Lens) throws -> WebLensRequest.Plan {
+        let catalogue = Self.lensCatalogueURL.flatMap { try? Data(contentsOf: $0) }
+            .flatMap { try? LensCatalogue.load(from: $0) } ?? LensCatalogue()
+        let profile = lens.profileID.flatMap { id in catalogue.profiles.first { $0.id == id } }
+            ?? image.lensShot.flatMap(catalogue.match)
+        var request: [String: Any] = [
+            "adjustment": ["distortion": lens.distortion, "vignetting": lens.vignetting,
+                           "redCyan": lens.redCyan, "blueYellow": lens.blueYellow],
+            "amount": lens.amount ?? 1,
+        ]
+        if let profile {
+            request["profile"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(profile))
+        }
+        if let shot = image.lensShot {
+            request["shot"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(shot))
+        }
+        return try JSONDecoder().decode(WebLensRequest.self,
+                                        from: JSONSerialization.data(withJSONObject: request)).plan()
     }
 
     private var sceneCache: (key: String, scene: [Float])?
@@ -349,12 +417,14 @@ public final class HostService {
         let frameWidth = swapped ? sizes.frame.1 : sizes.frame.0
         let frameHeight = swapped ? sizes.frame.0 : sizes.frame.1
         let reduced = image.scene(width: frameWidth, height: frameHeight)
+        let table = try geometry.lens.map { try lensPlan(image, $0) }
+            .flatMap { $0.identity ? nil : $0.table }
         let scene = geometry.isIdentity && (frameWidth, frameHeight) == sizes.output
             ? reduced
             : geometry.apply(reduced, width: frameWidth, height: frameHeight,
                              orientedSize: (swapped ? image.height : image.width,
                                             swapped ? image.width : image.height),
-                             output: sizes.output)
+                             output: sizes.output, lensTable: table)
         sceneCache = (key, scene)
         return scene
     }

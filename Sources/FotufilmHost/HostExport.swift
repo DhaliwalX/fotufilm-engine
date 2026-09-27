@@ -2,6 +2,9 @@ import Foundation
 #if canImport(FotufilmCore)
 import FotufilmCore
 #endif
+#if canImport(FotufilmImaging)
+import FotufilmImaging
+#endif
 #if canImport(ImageIO)
 import ImageIO
 import UniformTypeIdentifiers
@@ -11,8 +14,11 @@ import UniformTypeIdentifiers
 /// dithered Display P3 picture; TIFF is 16-bit Display P3 from display-linear light, encoded with
 /// the same shoulder and transfer as the preview.
 enum HostExport {
+    /// Returns the size written, which a print frame makes larger than the develop.
+    @discardableResult
     static func write(_ pixels: [UInt8], width: Int, height: Int, deep: Bool, knee: Float,
-                      type: String, quality: Double, to url: URL) throws {
+                      frame: PrintFrameConfiguration? = nil, type: String, quality: Double,
+                      to url: URL) throws -> (width: Int, height: Int) {
         #if canImport(ImageIO)
         let identifiers: [String: UTType] = [
             "image/png": .png, "image/jpeg": .jpeg, "image/tiff": .tiff, "image/heic": .heic,
@@ -46,12 +52,14 @@ enum HostExport {
             bits = 8
         }
         guard let provider = CGDataProvider(data: data as CFData),
-              let image = CGImage(
+              let developed = CGImage(
                 width: width, height: height, bitsPerComponent: bits, bitsPerPixel: bits * 4,
                 bytesPerRow: width * bits / 2, space: space,
                 bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue
                     | (bits == 16 ? CGBitmapInfo.byteOrder16Little.rawValue : 0)),
                 provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent),
+              let image = frame.map({ PrintFrameRenderer.render(developed, configuration: $0) })
+                ?? developed,
               let destination = CGImageDestinationCreateWithURL(
                 url as CFURL, uti.identifier as CFString, 1, nil) else {
             throw HostEngine.Failure(description: "The image could not be encoded.")
@@ -62,6 +70,7 @@ enum HostExport {
         guard CGImageDestinationFinalize(destination) else {
             throw HostEngine.Failure(description: "The image could not be written to \(url.path).")
         }
+        return (image.width, image.height)
         #else
         throw HostEngine.Failure(description: "This build has no image encoder.")
         #endif

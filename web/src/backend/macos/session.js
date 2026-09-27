@@ -1,6 +1,7 @@
 import { profileRequestControls } from "../../profile-settings.js";
 import { sourceIlluminant } from "../../editor-catalogue.js";
 import { imageBlob } from "./transport.js";
+import { frameRequest } from "../../print-frame.js";
 
 export function renderRequest(request, stocks) {
   const {
@@ -17,6 +18,15 @@ export function renderRequest(request, stocks) {
     showMask,
   } = request;
   const entry = stocks.find((item) => item.id === stock);
+  // Framed as the browser engine frames: the finished picture, not the crop tool, a pipeline
+  // stage, a video frame or a film-strip thumbnail.
+  const framed =
+    edit.printFrame &&
+    edit.printFrame !== "none" &&
+    !cropMode &&
+    stage == null &&
+    !image.video &&
+    !request.background;
   return {
     handle: image.handle,
     previewQuality: image.video && request.interactive ? "playback" : "still",
@@ -29,6 +39,7 @@ export function renderRequest(request, stocks) {
     stage,
     difference,
     showMask,
+    printFrame: framed ? frameRequest(edit) : null,
     profileRequest: {
       controls: {
         ...profileRequestControls(edit, entry),

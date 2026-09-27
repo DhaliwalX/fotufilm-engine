@@ -8,19 +8,29 @@ import Dispatch
 
 /// The saved edit's geometry, as the web editor writes it (`web/src/editor-state.js`), and the
 /// single resample that applies it: the same inverse mapping as `web/src/raw-source.js`, so a
-/// crop drawn in the editor lands on the same pixels natively. Lens correction is not yet here.
+/// crop drawn in the editor lands on the same pixels natively.
 struct SceneGeometry: Decodable, Equatable {
+    /// `edit.lens` (web/src/lens-correction.js); the correction itself is a table the lens plan
+    /// resolves, sampled here first in the chain, as the Mac app corrects before it orients.
+    struct Lens: Decodable, Equatable {
+        var enabled = false
+        var amount: Double?
+        var profileID: String?
+        var distortion = 0.0, vignetting = 0.0, redCyan = 0.0, blueYellow = 0.0
+    }
+
     var rotation = 0
     var flip = false
     var straighten = 0.0
     var perspectiveV = 0.0
     var perspectiveH = 0.0
     var crop: [[Double]] = SceneGeometry.fullCrop
+    var lens: Lens?
 
     static let fullCrop: [[Double]] = [[0, 0], [1, 0], [1, 1], [0, 1]]
 
     private enum CodingKeys: String, CodingKey {
-        case rotation, flip, straighten, perspectiveV, perspectiveH, crop
+        case rotation, flip, straighten, perspectiveV, perspectiveH, crop, lens
     }
 
     init() {}
@@ -33,6 +43,7 @@ struct SceneGeometry: Decodable, Equatable {
         perspectiveV = try values.decodeIfPresent(Double.self, forKey: .perspectiveV) ?? 0
         perspectiveH = try values.decodeIfPresent(Double.self, forKey: .perspectiveH) ?? 0
         crop = try values.decodeIfPresent([[Double]].self, forKey: .crop) ?? Self.fullCrop
+        lens = try values.decodeIfPresent(Lens.self, forKey: .lens).flatMap { $0.enabled ? $0 : nil }
         guard (0...3).contains(rotation), abs(straighten) <= 15, crop.count == 4,
               crop.allSatisfy({ $0.count == 2 && $0.allSatisfy(\.isFinite) }) else {
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
@@ -51,6 +62,7 @@ struct SceneGeometry: Decodable, Equatable {
     var straightenActive: Bool { abs(straighten) > 0.001 }
     var isIdentity: Bool {
         rotation == 0 && !flip && !straightenActive && !perspectiveActive && crop == Self.fullCrop
+            && lens == nil
     }
 
     /// The oriented frame at `maxEdge` (0 or nil: full size) and the delivered size after the crop.
@@ -92,8 +104,11 @@ struct SceneGeometry: Decodable, Equatable {
 
     /// Resamples `source` (RGBA float, `width` x `height`, the photograph as decoded) through the
     /// geometry into `output` pixels. `source` may already be reduced; coordinates are unit ones.
+    ///
+    /// `lensTable` is the correction's radial resampling table (`WebLensRequest.Plan.table`):
+    /// 1024 rows of a per-channel radius ratio and a gain, over the half diagonal.
     func apply(_ source: [Float], width: Int, height: Int,
-               orientedSize: (Int, Int), output: (Int, Int)) -> [Float] {
+               orientedSize: (Int, Int), output: (Int, Int), lensTable: [Float]? = nil) -> [Float] {
         let (outputWidth, outputHeight) = output
         let (orientedWidth, orientedHeight) = (Double(orientedSize.0), Double(orientedSize.1))
         let matrix = Self.homography(crop)
@@ -126,24 +141,50 @@ struct SceneGeometry: Decodable, Equatable {
                         case 3: (u, v) = (v, 1 - u)
                         default: break
                         }
-                        let sx = min(max(u * Double(width) - 0.5, 0), Double(width - 1))
-                        let sy = min(max(v * Double(height) - 0.5, 0), Double(height - 1))
-                        let ix = Int(sx), iy = Int(sy)
-                        let fx = Float(sx - Double(ix)), fy = Float(sy - Double(iy))
-                        let nx = min(ix + 1, width - 1), ny = min(iy + 1, height - 1)
                         let o = (y * outputWidth + x) * 4
-                        for c in 0..<4 {
-                            let a = source[(iy * width + ix) * 4 + c]
-                            let b = source[(iy * width + nx) * 4 + c]
-                            let d = source[(ny * width + ix) * 4 + c]
-                            let e = source[(ny * width + nx) * 4 + c]
-                            target[o + c] = (a + (b - a) * fx) * (1 - fy) + (d + (e - d) * fx) * fy
+                        guard let lensTable else {
+                            for c in 0..<4 {
+                                target[o + c] = Self.bilinear(source, width, height, c,
+                                                              u * Double(width) - 0.5,
+                                                              v * Double(height) - 0.5)
+                            }
+                            continue
                         }
+                        // Each channel from its own radius: lateral chroma is a per-channel scale.
+                        let lx = (u - 0.5) * Double(width), ly = (v - 0.5) * Double(height)
+                        let rows = lensTable.count / 4
+                        let t = min(1, hypot(lx, ly) / (hypot(Double(width), Double(height)) / 2))
+                            * Double(rows - 1)
+                        let lo = Int(t), hi = min(lo + 1, rows - 1), f = Float(t - Double(lo))
+                        func at(_ c: Int) -> Double {
+                            Double(lensTable[lo * 4 + c] * (1 - f) + lensTable[hi * 4 + c] * f)
+                        }
+                        let gain = Float(at(3))
+                        for c in 0..<3 {
+                            let ratio = at(c)
+                            target[o + c] = Self.bilinear(
+                                source, width, height, c,
+                                Double(width) / 2 + lx * ratio - 0.5,
+                                Double(height) / 2 + ly * ratio - 0.5) * gain
+                        }
+                        target[o + 3] = 1
                     }
                 }
             }
         }
         return result
+    }
+
+    @inline(__always)
+    static func bilinear(_ source: UnsafeBufferPointer<Float>, _ width: Int, _ height: Int,
+                         _ c: Int, _ x: Double, _ y: Double) -> Float {
+        let sx = min(max(x, 0), Double(width - 1)), sy = min(max(y, 0), Double(height - 1))
+        let ix = Int(sx), iy = Int(sy)
+        let fx = Float(sx - Double(ix)), fy = Float(sy - Double(iy))
+        let nx = min(ix + 1, width - 1), ny = min(iy + 1, height - 1)
+        let a = source[(iy * width + ix) * 4 + c], b = source[(iy * width + nx) * 4 + c]
+        let d = source[(ny * width + ix) * 4 + c], e = source[(ny * width + nx) * 4 + c]
+        return (a + (b - a) * fx) * (1 - fy) + (d + (e - d) * fx) * fy
     }
 
     static func concurrent(_ iterations: Int, _ body: (Int) -> Void) {

@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FotufilmCore)
+import FotufilmCore
+#endif
 #if canImport(FotufilmImaging)
 import FotufilmImaging
 #endif
@@ -11,6 +14,7 @@ extension HostImage {
         let scene = try SceneImage.decode(url: url)
         self.init(rgba: scene.rgba, width: scene.width, height: scene.height,
                   contentHeadroom: scene.contentHeadroom)
+        lensShot = LensShot(contentsOf: url)
         #else
         throw HostEngine.Failure(description: "This build has no image decoder.")
         #endif
