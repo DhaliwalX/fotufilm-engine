@@ -55,6 +55,7 @@ events and cancellation messages, rather than attempting to serialize functions.
 | `suggestFilm(request)` | Optional (Choose Film Per Photo). `{image,edit,photoID,films?}` → `{best,ordered:[{id,name,score}],summary}`: every installed film (or the named `films`) developed at the scoring size and ranked for the photograph, weighted by what this person has chosen before. The editor applies `best` to a newly opened photograph when the `autoFilm` setting is on. |
 | `recordFilmChoice(photoID, film)` / `forgetFilmChoices()` | Optional, beside `suggestFilm`. Record the film a photograph settled on, against its last ranking, so later rankings learn; forget returns to the hand-set weights. The backend keeps the history on the device. |
 | `exportVideo(request)` | Same image/edit/session fields plus `{format,quality,filename,signal,onProgress({progress,frames,finalizing})}`. Return `{filename,url?,dispose()}`; `dispose` releases temporary download resources, never deletes the accepted saved file. |
+| `videoExportTypes` | Optional. The movie formats a native encoder writes, `[{id, label, extension, type, quality, bits, colorSpace}]`, replacing the browser's MP4/WebM list; `quality: false` hides the quality choice (ProRes). `format` in `exportVideo` is one of the ids. |
 | `lenses` | `{snapshot(),subscribe(listener),load(),import(file,onProgress?),remove()}`. Snapshot is a stable object `{profiles,revision,loaded,error?}` until changed. Subscribe returns an unsubscribe function. Import resolves the installed profile count; remove clears the installed catalogue. Publish a new snapshot on changes or load failure. |
 
 ### Images, previews and ownership
@@ -67,7 +68,11 @@ Optional source metadata uses the existing shape: `raw: {profile?}`, `linear`,
 control availability; native descriptors must not expose huge pixel buffers here.
 Video descriptors also include `video: {start,duration,playbackUrl}` for the shared
 transport controls. Provide a webview-playable proxy URL if the original codec
-cannot be played by its media element; processing and export remain native.
+cannot be played by its media element; processing and export remain native. The
+media element is only the clock and the sound: every frame shown is a render at
+`videoTime`. A native host whose web view lacks the movie's codecs (Fotufilm
+Desktop's Chromium) answers `importVideo`/`importPath` with the sound as a WAV
+(`playback`, `playbackType`), silent when the movie is, and the page plays that.
 
 Each successful import/conversion grants one image lease. The library releases it
 on removal/unmount; a negative dialog releases cancelled, failed and superseded

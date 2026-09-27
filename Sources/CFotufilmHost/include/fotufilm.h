@@ -100,6 +100,16 @@ int32_t fotufilm_host_call(fotufilm_engine *engine, const char *method, const ch
                            char **error);
 void fotufilm_answer_free(fotufilm_answer *answer);
 
+/* Progress of a long call, such as a video export: JSON like {"progress": 0.5, "frames": 12},
+ * reported on the calling thread while the call runs. The string is only valid during the call. */
+typedef void (*fotufilm_progress_callback)(void *context, const char *progress_json);
+
+/* fotufilm_host_call, reporting progress to `progress` (which may be NULL). */
+int32_t fotufilm_host_call_progress(fotufilm_engine *engine, const char *method,
+                                    const char *params_json, const void *payload,
+                                    size_t payload_length, fotufilm_progress_callback progress,
+                                    void *context, fotufilm_answer *answer, char **error);
+
 #ifdef __cplusplus
 }
 #endif

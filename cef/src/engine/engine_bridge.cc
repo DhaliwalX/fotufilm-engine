@@ -10,7 +10,7 @@ constexpr const char* kMethods[] = {
     "prepare",          "import",         "preview",          "release",
     "render",           "stages",         "analyseNegative",  "convertNegative",
     "suggestNegativeFilms", "autoAdjust", "printFrame",       "lensPlan",
-    "sampleScene",      "exportVideo",    "beginVideo",
+    "sampleScene",      "beginVideo",
     "appendVideo",      "importVideo",    "lensCatalogue",    "importLensCatalogue",
     "removeLensCatalogue", "importPath",   "copyImage",        "exportOptions",
     "suggestFilm",      "recordFilmChoice", "forgetFilmChoices",
@@ -25,10 +25,11 @@ EngineBridge::EngineBridge(Dispatcher& dispatcher) : dispatcher_(dispatcher) {
                           Handle(call, std::move(reply));
                         });
   // Choosing the destination is the host's; encoding and writing are the engine's.
-  dispatcher.Register("export", Dispatcher::Thread::kUi,
-                      [this](const Call& call, std::shared_ptr<Reply> reply) {
-                        Export(call, std::move(reply));
-                      });
+  for (const char* method : {"export", "exportVideo"})
+    dispatcher.Register(method, Dispatcher::Thread::kUi,
+                        [this](const Call& call, std::shared_ptr<Reply> reply) {
+                          Export(call, std::move(reply));
+                        });
   // A cancel for the call being answered stops the develop inside the engine; calls still
   // queued see their own flag before they start.
   dispatcher.SetCancelHook([this] {
@@ -75,9 +76,30 @@ void EngineBridge::Export(const Call& call, std::shared_ptr<Reply> reply) {
     fields->SetString("path", path);
     pending->params = CefValue::Create();
     pending->params->SetDictionary(fields);
-    dispatcher_.PostEngine([this, pending, reply] { Handle(*pending, reply); });
+    dispatcher_.PostCall(pending, [this, pending, reply] { Handle(*pending, reply); });
   });
 }
+
+namespace {
+
+// Where a call's progress goes: the page that made it, under the call's own id, as the
+// transport's "fotufilm-native-progress" event.
+struct ProgressTarget {
+  std::shared_ptr<Reply> reply;
+  std::string id;
+};
+
+void ReportProgress(void* context, const char* json) {
+  const auto* target = static_cast<const ProgressTarget*>(context);
+  CefRefPtr<CefDictionaryValue> detail = CefDictionaryValue::Create();
+  detail->SetString("id", target->id);
+  detail->SetValue("progress", CefParseJSON(json ? json : "null", JSON_PARSER_RFC));
+  CefRefPtr<CefValue> value = CefValue::Create();
+  value->SetDictionary(detail);
+  Dispatcher::Emit(target->reply->frame(), "progress", value);
+}
+
+}  // namespace
 
 void EngineBridge::Handle(const Call& call, std::shared_ptr<Reply> reply) {
   if (*call.cancelled) return reply->Reject("The request was cancelled.", "AbortError");
@@ -88,9 +110,10 @@ void EngineBridge::Handle(const Call& call, std::shared_ptr<Reply> reply) {
   const std::string params = ToJson(call.params);
   fotufilm_answer answer = {};
   char* error = nullptr;
-  const int32_t status =
-      fotufilm_host_call(engine, call.method.c_str(), params.c_str(), call.payload,
-                         call.payload_length, &answer, &error);
+  ProgressTarget progress{reply, call.id};
+  const int32_t status = fotufilm_host_call_progress(
+      engine, call.method.c_str(), params.c_str(), call.payload, call.payload_length,
+      ReportProgress, &progress, &answer, &error);
   if (status == FOTUFILM_CANCELLED || *call.cancelled) {
     reply->Reject("The request was cancelled.", "AbortError");
   } else if (status != FOTUFILM_OK) {

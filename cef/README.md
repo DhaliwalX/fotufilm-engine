@@ -106,6 +106,20 @@ does (`suggestFilm`, from `FotufilmStockMatch`) and applies the best; the film a
 is recorded (`recordFilmChoice`) in `Application Support/Fotufilm Desktop/StockPreference.json`,
 and Forget What I've Taught It clears it (`forgetFilmChoices`).
 
+### Video
+
+Movies decode and encode through the platform's `HostPlatform.videoSource` and `.videoWriter`
+(`Sources/FotufilmHost/HostVideo.swift`); on macOS these are AVFoundation, reading Apple Log,
+S-Log, F-Log, HLG and PQ as untouched code values into scene-linear Rec. 2020 as the Mac app
+does. The engine reports `video` and `videoExportTypes` in its capabilities only when a
+platform supplies both. CEF's Chromium carries no H.264, HEVC or ProRes decoder, so the page
+never plays the movie itself: the import answers with its sound as a WAV (silent when the
+movie is), which the editor's media element plays as the clock, and every frame on screen is a
+native render at that time. Playback reads the movie forward with one open decoder and asks for
+the engine's realtime schedule; a scrub opens the decoder at the new time. An export's save
+panel goes through the same `DestinationPicker` as a still's, and its progress arrives as
+`fotufilm-native-progress` events for the call.
+
 ## Roadmap
 
 1. **Engine methods.** `prepare` (with the film library), `import`, `preview`, `release`,
@@ -115,7 +129,10 @@ and Forget What I've Taught It clears it (`forgetFilmChoices`).
    catalogue, and the correction in the geometry resample), negatives (`analyseNegative`,
    `convertNegative` with contrast, `suggestNegativeFilms`), the pipeline inspector (`stages`,
    stage and difference renders), selective edits by colour, light or subject (Vision's
-   foreground instances, as the Mac app selects) and film suggestion answer today. Still to come: video.
+   foreground instances, as the Mac app selects), film suggestion and video answer today: movies
+   upload in 8 MB binary chunks or open in place, render the frame at `videoTime` through the
+   same geometry and film, and export (`exportVideo`, with progress and cancel) as H.264, 10-bit
+   HEVC or Apple ProRes 422/4444 with the sound carried across.
 2. **Native presentation in the editor.** A backend capability that lets `ImageCanvas` leave the
    photograph's area transparent and report its rectangle, zoom and pan to the host (as
    `setImageLayer` does in the diagnostics page); renders then go to the image layer instead of

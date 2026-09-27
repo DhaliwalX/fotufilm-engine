@@ -1,7 +1,7 @@
 import { createLenses } from "./lenses.js";
 import { frameRequest } from "../../print-frame.js";
 import { isVideoFile } from "../../media-types.js";
-import { importVideo } from "./video-import.js";
+import { importVideo, importedVideo } from "./video-import.js";
 import { BACKEND_VERSION } from "../contract.js";
 import { loadStockIndex } from "../../stock-index.js";
 import { createHistogram } from "../../histogram-analyser.js";
@@ -24,6 +24,11 @@ export function createMacBackend(channel) {
   // What the engine's platform services offer (fotufilm_capabilities); a host that does not say
   // offers only the contract's required methods.
   const can = channel.capabilities ?? {};
+  // A host that states capabilities opens movies only when its engine has a video platform, and
+  // its web view may not play their codecs, so the engine supplies the playback clock. One that
+  // states none (WebKit's) answers the video calls itself and plays the file.
+  const video = channel.capabilities ? can.video === true : true;
+  const nativePlayback = channel.capabilities !== undefined;
   let ready, stocks;
   const prepare = () => (ready ??= call("prepare"));
   const catalogue = () =>
@@ -59,8 +64,15 @@ export function createMacBackend(channel) {
     },
     loadStocks: catalogue,
     async importMedia(file, { signal, negative, onProgress } = {}) {
-      if (!negative && isVideoFile(file))
-        return importVideo(call, file, { signal, onProgress });
+      if (!negative && isVideoFile(file)) {
+        if (!video) throw new Error("This host cannot open videos.");
+        return importVideo(call, file, {
+          signal,
+          onProgress,
+          binary: channel.binary === true,
+          nativePlayback,
+        });
+      }
       onProgress?.("Opening with the native image decoder");
       const params = { name: file.name, negative: !!negative };
       if (channel.binary)
@@ -73,10 +85,14 @@ export function createMacBackend(channel) {
     // A file the host chose (open panel, Finder, a drop) is read in place: no bytes cross.
     importPath: can.importPath
       ? async (path, { signal, negative, onProgress } = {}) => {
-          onProgress?.("Opening with the native image decoder");
-          return importedImage(
-            await call("importPath", { path, negative: !!negative }, { signal }),
+          onProgress?.("Opening with the native decoder");
+          const result = await call(
+            "importPath",
+            { path, negative: !!negative, playback: nativePlayback },
+            { signal },
           );
+          // A movie opens in place too; its answer carries the playback clock.
+          return result.video ? importedVideo(result) : importedImage(result);
         }
       : undefined,
     releaseImage,
@@ -157,10 +173,15 @@ export function createMacBackend(channel) {
     copyImage: can.copyImage
       ? async (request) => call("copyImage", renderRequest(request, await catalogue()))
       : undefined,
+    // The movie formats the engine's platform writes (the Mac app's list); the editor's own
+    // otherwise.
+    videoExportTypes: video && can.videoExportTypes?.length ? can.videoExportTypes : undefined,
     async exportVideo(request) {
+      const format = can.videoExportTypes?.find(({ id }) => id === request.format);
       const saved = await call("exportVideo", {
         ...renderRequest(request, await catalogue()),
         format: request.format, quality: request.quality, filename: request.filename,
+        type: format?.type ?? "video/mp4",
       }, { signal: request.signal, onProgress: request.onProgress });
       return { ...saved, dispose() {} };
     },

@@ -3,7 +3,7 @@ import Foundation
 
 extension HostPlatform {
     /// macOS (and iOS): Core Image and ImageIO for files, the pasteboard, Vision subjects, Core
-    /// Graphics frames and the Metal developer.
+    /// Graphics frames, the Metal developer and AVFoundation movies.
     static var apple: HostPlatform {
         var platform = HostPlatform(decoder: CoreImageDecoder(), encoder: ImageIOStillEncoder())
         #if canImport(AppKit)
@@ -17,6 +17,10 @@ extension HostPlatform {
         #endif
         #if canImport(Metal)
         platform.developer = MetalDeveloper()
+        #endif
+        #if canImport(AVFoundation)
+        platform.videoSource = AVFoundationVideoSources()
+        platform.videoWriter = AVFoundationVideoWriters()
         #endif
         return platform
     }

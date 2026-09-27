@@ -10,7 +10,9 @@ import FotufilmEditModel
 public final class HostImage {
     public let width: Int
     public let height: Int
-    let contentHeadroom: Float
+    /// The range above diffuse white the source records. A video's follows the interpretation
+    /// its edit chooses.
+    var contentHeadroom: Float
     /// The lens the file records, for matching a correction profile.
     var lensShot: LensShot?
     /// The file's capture records (camera, exposure, lens, place) in the decoder's own form, for
@@ -18,6 +20,15 @@ public final class HostImage {
     var captureMetadata: [String: Any]?
     /// Scene-linear RGBA in the engine's working space, alpha flattened over black.
     private let scene: [Float]
+    /// A video's pixels: the frame the current request selected, decoded at the size asked for.
+    private let frames: ((_ width: Int, _ height: Int) -> [Float])?
+    /// Names the pixels `frames` delivers now, so caches keyed on the image see a new frame.
+    var frameKey = ""
+    /// How the selected frame develops: its number, which moves the grain, and whether
+    /// interactive playback asked for the realtime schedule.
+    var pace: (frameIndex: UInt64, realtime: Bool) = (0, false)
+    /// The movie a video's image shows, kept alive by it.
+    var video: HostVideo?
     private let lock = NSLock()
     /// The most recent reductions, newest last: an editor asks for one or two sizes at a time.
     private var reductions: [(width: Int, height: Int, rgba: [Float])] = []
@@ -26,6 +37,7 @@ public final class HostImage {
     var descriptor: [String: Any] {
         var descriptor: [String: Any] = ["naturalWidth": width, "naturalHeight": height]
         if contentHeadroom > 1 { descriptor["hdr"] = ["headroom": contentHeadroom] }
+        if let video { descriptor["video"] = video.descriptor }
         return descriptor
     }
 
@@ -50,6 +62,17 @@ public final class HostImage {
         self.width = width
         self.height = height
         self.contentHeadroom = contentHeadroom
+        frames = nil
+    }
+
+    /// An image whose pixels are produced on demand at the size asked for, as a video's frames.
+    init(width: Int, height: Int, contentHeadroom: Float,
+         frames: @escaping (_ width: Int, _ height: Int) -> [Float]) {
+        scene = []
+        self.width = width
+        self.height = height
+        self.contentHeadroom = contentHeadroom
+        self.frames = frames
     }
 
     public func renderSize(maxEdge: Int) -> (width: Int, height: Int) {
@@ -57,6 +80,7 @@ public final class HostImage {
     }
 
     func scene(width targetWidth: Int, height targetHeight: Int) -> [Float] {
+        if let frames { return frames(targetWidth, targetHeight) }
         if targetWidth == width && targetHeight == height { return scene }
         lock.lock()
         defer { lock.unlock() }
@@ -174,6 +198,13 @@ public final class HostEngine {
         return generation
     }
 
+    /// True until `cancel` is next called: how a long call, a video export, sees a cancel
+    /// between its develops.
+    func continuation() -> () -> Bool {
+        let started = currentGeneration
+        return { self.currentGeneration == started }
+    }
+
     /// Develops `image` with a web render request into `target`; returns the delivered size.
     public func render(_ image: HostImage, request: Data, into target: Target) throws
         -> (width: Int, height: Int) {
@@ -191,9 +222,12 @@ public final class HostEngine {
         return (width, height)
     }
 
-    /// Develops a scene already cut to the delivered size: scene-linear Rec.2020 RGBA.
+    /// Develops a scene already cut to the delivered size: scene-linear Rec.2020 RGBA. A video
+    /// frame names its `frameIndex`, which moves the grain from frame to frame, and interactive
+    /// playback may ask for the engine's `realtime` schedule.
     public func develop(_ scene: [Float], width: Int, height: Int, contentHeadroom: Float,
-                        edit: WebNativeEdit, into target: Target) throws {
+                        edit: WebNativeEdit, frameIndex: UInt64 = 0, realtime: Bool = false,
+                        into target: Target) throws {
         let film: FilmStock?
         if let stockID = edit.edit.stock {
             guard let stock = stocks[stockID] else {
@@ -205,7 +239,7 @@ public final class HostEngine {
         }
         try develop(scene, width: width, height: height, film: film,
                     options: options(edit, stock: film ?? .noFilm, contentHeadroom: contentHeadroom),
-                    into: target)
+                    frameIndex: frameIndex, realtime: realtime, into: target)
     }
 
     /// The options an edit develops with on `stock`, the scene's recorded range included.
@@ -223,7 +257,8 @@ public final class HostEngine {
     /// Develops with an explicit film and options: a step of the pipeline walk, for instance.
     /// `film` nil develops with no film.
     public func develop(_ scene: [Float], width: Int, height: Int, film: FilmStock?,
-                        options: FotufilmEngine.Options, into target: Target) throws {
+                        options: FotufilmEngine.Options, frameIndex: UInt64 = 0,
+                        realtime: Bool = false, into target: Target) throws {
         let stock = film ?? .noFilm
         let started = currentGeneration
         let shouldContinue = { self.currentGeneration == started }
@@ -235,7 +270,8 @@ public final class HostEngine {
         let seed = UInt32(truncatingIfNeeded: options.seed)
         try developer.develop(
             scene, width: width, height: height, stock: stock, noFilm: film == nil,
-            options: options, encode: target.format == .rgba8DisplayP3,
+            options: options, pace: HostDevelopPace(frameIndex: frameIndex, realtime: realtime),
+            encode: target.format == .rgba8DisplayP3,
             knee: film == nil ? nil : knee, shouldContinue: shouldContinue,
             deliver: { rows, range, encoded in
                 self.deliver(rows, rows: range, width: width, encoded: encoded, knee: knee,

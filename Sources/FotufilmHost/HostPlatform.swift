@@ -23,6 +23,10 @@ struct HostPlatform {
     var frames: HostFrameCompositor?
     /// Develops on a GPU; the portable Halide CPU developer is used without one.
     var developer: HostDeveloper?
+    /// Opens movies (`HostVideo.swift`); without it the editor declines them.
+    var videoSource: HostVideoSourceFactory?
+    /// Writes movies.
+    var videoWriter: HostVideoWriterFactory?
 
     static let current: HostPlatform = {
         #if canImport(ImageIO) && canImport(CoreImage)
@@ -44,6 +48,8 @@ struct HostPlatform {
             "imageExportTypes": encoder?.types.sorted() ?? [],
             "hdrExport": encoder?.writesHDR ?? false,
             "filmSuggestion": true,
+            "video": videoSource != nil && videoWriter != nil,
+            "videoExportTypes": videoWriter?.formats.map(\.json) ?? [],
         ].merging(developer == nil ? [:] : [
             // A GPU developer answers a full preview within a frame or two: the editor may keep
             // full-size previews while an edit moves and refine sooner (web/src/preview-budget.js).
