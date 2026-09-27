@@ -55,6 +55,22 @@ NSArray<NSDictionary*>* Plugins(const std::string& capabilities) {
   return [plugins isKindOfClass:NSArray.class] ? plugins : @[];
 }
 
+// The engine's capabilities with the host's own: this host draws the photograph itself, beneath
+// the page (`imageLayer`, web/src/backend/README.md).
+std::string WithImageLayer(const std::string& capabilities) {
+  NSData* json = [NSData dataWithBytes:capabilities.data() length:capabilities.size()];
+  NSDictionary* fields = capabilities.empty()
+                             ? nil
+                             : [NSJSONSerialization JSONObjectWithData:json options:0 error:nil];
+  if (![fields isKindOfClass:NSDictionary.class]) return capabilities;
+  NSMutableDictionary* merged = [fields mutableCopy];
+  merged[@"imageLayer"] = @YES;
+  NSData* out = [NSJSONSerialization dataWithJSONObject:merged
+                                                options:NSJSONWritingSortedKeys
+                                                  error:nil];
+  return out ? std::string(static_cast<const char*>(out.bytes), out.length) : capabilities;
+}
+
 // Files the system asked to open before the window existed.
 NSMutableArray<NSURL*>* g_pending_urls = [NSMutableArray array];
 
@@ -186,7 +202,11 @@ int main(int argc, char* argv[]) {
                            (dev.port ? ":" + std::string(dev.port.stringValue.UTF8String) : "");
     }
     options.transport_global = fotufilm::switches::kDefaultTransportGlobal;
+#if defined(FOTUFILM_WITH_ENGINE)
+    options.capabilities = WithImageLayer(capabilities);
+#else
     options.capabilities = capabilities;
+#endif
 
     g_dispatcher = std::make_unique<fotufilm::Dispatcher>();
 #if defined(FOTUFILM_WITH_ENGINE)
@@ -210,6 +230,9 @@ int main(int argc, char* argv[]) {
         new fotufilm::BrowserApp(options, [url] {
           g_window = [[FotufilmHostWindow alloc] initWithURL:url
                                                   dispatcher:g_dispatcher.get()];
+#if defined(FOTUFILM_WITH_ENGINE)
+          g_engine->SetPresenter(g_window.presenter);
+#endif
           [g_window openURLs:g_pending_urls];
           [g_pending_urls removeAllObjects];
         });

@@ -7,6 +7,7 @@
 
 #include "bridge/dispatcher.h"
 #include "fotufilm.h"
+#include "presentation/presentation.h"
 
 namespace fotufilm {
 
@@ -28,6 +29,10 @@ class EngineBridge {
 
   void SetDestinationPicker(DestinationPicker picker) { picker_ = std::move(picker); }
 
+  // Lends the engine the platform compositor's surfaces, so renders that name a layer go
+  // straight to the screen (presentation/presentation.h); null takes them away.
+  void SetPresenter(std::shared_ptr<ImagePresenter> presenter);
+
  private:
   // Created on first use, on the engine thread, so launch never waits on the film tables.
   fotufilm_engine* Engine(std::string& error);
@@ -39,6 +44,9 @@ class EngineBridge {
   DestinationPicker picker_;
   fotufilm_engine* engine_ = nullptr;
   std::string failure_;
+  // Engine thread.
+  std::shared_ptr<ImagePresenter> presenter_;
+  fotufilm_presenter callbacks_{};
 };
 
 }  // namespace fotufilm

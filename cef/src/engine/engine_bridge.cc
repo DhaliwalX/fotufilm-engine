@@ -17,6 +17,8 @@ constexpr const char* kMethods[] = {
     // The Resolve and Final Cut plug-ins. An install holds the engine thread until the copy is
     // done and macOS has registered it, as the Mac app's menu item holds its own.
     "plugins",          "installPlugin",    "revealPlugin",
+    // The picture the compositor shows, for the histogram (presentation/presentation.h).
+    "presentedImage",
 };
 
 }  // namespace
@@ -52,6 +54,69 @@ EngineBridge::~EngineBridge() {
   if (engine_) fotufilm_engine_destroy(engine_);
 }
 
+namespace {
+
+// fotufilm_presenter's callbacks, onto an ImagePresenter. A lent surface travels as a heap-held
+// reference in `fotufilm_surface.host` until it is presented or discarded.
+ImagePresenter* PresenterOf(void* context) {
+  return static_cast<std::shared_ptr<ImagePresenter>*>(context)->get();
+}
+
+float PresenterHeadroom(void* context) { return PresenterOf(context)->Headroom(); }
+
+int32_t PresenterAcquire(void* context, uint32_t width, uint32_t height, int32_t format,
+                         fotufilm_surface* surface) {
+  if (format != FOTUFILM_SURFACE_RGBA8_DISPLAY_P3 &&
+      format != FOTUFILM_SURFACE_RGBA16F_EXTENDED_LINEAR_P3)
+    return FOTUFILM_ERROR;
+  auto lent = PresenterOf(context)->Acquire(static_cast<int>(width), static_cast<int>(height),
+                                            static_cast<SurfaceFormat>(format));
+  if (!lent || !lent->pixels()) return FOTUFILM_ERROR;
+  surface->width = static_cast<uint32_t>(lent->width());
+  surface->height = static_cast<uint32_t>(lent->height());
+  surface->format = static_cast<int32_t>(lent->format());
+  surface->pixels = lent->pixels();
+  surface->row_bytes = lent->row_bytes();
+  surface->native = lent->native_handle();
+  surface->host = new std::shared_ptr<PresentationSurface>(std::move(lent));
+  return FOTUFILM_OK;
+}
+
+uint64_t PresenterPresent(void* context, const char* layer, const fotufilm_surface* surface,
+                          const char* info_json) {
+  if (!surface || !surface->host) return 0;
+  std::unique_ptr<std::shared_ptr<PresentationSurface>> lent(
+      static_cast<std::shared_ptr<PresentationSurface>*>(surface->host));
+  PresentedFrame frame;
+  frame.surface = std::move(*lent);
+  frame.extended = frame.surface->format() == SurfaceFormat::kRgba16FloatExtendedLinearP3;
+  CefRefPtr<CefValue> info = CefParseJSON(info_json ? info_json : "{}", JSON_PARSER_RFC);
+  if (info && info->GetType() == VTYPE_DICTIONARY)
+    frame.scope = info->GetDictionary()->GetString("scope").ToString();
+  return PresenterOf(context)->Present(layer ? layer : "", std::move(frame));
+}
+
+void PresenterDiscard(void*, const fotufilm_surface* surface) {
+  if (surface) delete static_cast<std::shared_ptr<PresentationSurface>*>(surface->host);
+}
+
+}  // namespace
+
+void EngineBridge::SetPresenter(std::shared_ptr<ImagePresenter> presenter) {
+  dispatcher_.PostEngine([this, presenter = std::move(presenter)]() mutable {
+    presenter_ = std::move(presenter);
+    callbacks_ = {};
+    if (presenter_) {
+      callbacks_.context = &presenter_;
+      callbacks_.headroom = PresenterHeadroom;
+      callbacks_.acquire = PresenterAcquire;
+      callbacks_.present = PresenterPresent;
+      callbacks_.discard = PresenterDiscard;
+    }
+    if (engine_) fotufilm_engine_set_presenter(engine_, presenter_ ? &callbacks_ : nullptr);
+  });
+}
+
 fotufilm_engine* EngineBridge::Engine(std::string& error) {
   if (engine_ || !failure_.empty()) {
     error = failure_;
@@ -60,6 +125,7 @@ fotufilm_engine* EngineBridge::Engine(std::string& error) {
   char* message = nullptr;
   engine_ = fotufilm_engine_create(&message);
   if (!engine_) failure_ = message ? message : "The engine could not start.";
+  if (engine_ && presenter_) fotufilm_engine_set_presenter(engine_, &callbacks_);
   fotufilm_free(message);
   error = failure_;
   return engine_;
