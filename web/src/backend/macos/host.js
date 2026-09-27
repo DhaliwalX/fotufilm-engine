@@ -200,11 +200,15 @@ export function createMacBackend(channel) {
     // The movie formats the engine's platform writes (the Mac app's list); the editor's own
     // otherwise.
     videoExportTypes: video && can.videoExportTypes?.length ? can.videoExportTypes : undefined,
+    // Video File Size choices, `{id, label}`, and the frame rates an export may retime to.
+    videoBitrates: video && can.videoBitrates?.length ? can.videoBitrates : undefined,
+    videoFrameRates: video && can.videoFrameRates?.length ? can.videoFrameRates : undefined,
     async exportVideo(request) {
       const format = can.videoExportTypes?.find(({ id }) => id === request.format);
       const saved = await call("exportVideo", {
         ...renderRequest(request, await catalogue()),
-        format: request.format, quality: request.quality, filename: request.filename,
+        format: request.format, bitrate: request.bitrate, frameRate: request.frameRate,
+        filename: request.filename,
         type: format?.type ?? "video/mp4", hdr: request.hdr === true,
       }, { signal: request.signal, onProgress: request.onProgress });
       return { ...saved, dispose() {} };

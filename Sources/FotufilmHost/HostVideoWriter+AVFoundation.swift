@@ -102,9 +102,8 @@ final class AVFoundationVideoWriter: HostVideoWriter {
             let rate = Int(delivery.frameRate.rounded())
             var compression: [String: Any] = [AVVideoExpectedSourceFrameRateKey: rate,
                                               AVVideoMaxKeyFrameIntervalKey: rate * 2]
-            // "high" is the Mac app's house choice: VideoToolbox derives its own rate.
-            let bitsPerPixel: Double? = ["medium": 0.08, "very-high": 0.3][delivery.quality]
-            if let bitsPerPixel {
+            // Automatic leaves VideoToolbox to derive its own rate, as the Mac app does.
+            if let bitsPerPixel = delivery.bitrate.bitsPerPixel(hdr: hdr) {
                 compression[AVVideoAverageBitRateKey] =
                     Int(Double(delivery.width * delivery.height) * delivery.frameRate * bitsPerPixel)
             }

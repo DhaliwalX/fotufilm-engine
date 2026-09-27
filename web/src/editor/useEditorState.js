@@ -58,6 +58,8 @@ export default function useEditorState({}) {
   const [videoTime, setVideoTime] = useState(0),
     [videoFormat, setVideoFormat] = useState("mp4"),
     [videoQuality, setVideoQuality] = useState("high"),
+    // The frame rate a native export retimes to; null keeps the source's.
+    [videoFrameRate, setVideoFrameRate] = useState(null),
     [videoDownload, setVideoDownload] = useState(null);
   const videoExportController = useRef(null),
     imageResources = useRef(new Set()),
@@ -147,6 +149,8 @@ export default function useEditorState({}) {
     setVideoFormat,
     videoQuality,
     setVideoQuality,
+    videoFrameRate,
+    setVideoFrameRate,
     videoDownload,
     setVideoDownload,
     videoExportController,

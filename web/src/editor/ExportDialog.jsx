@@ -48,6 +48,8 @@ export default function ExportDialog() {
     setQuality,
     videoQuality,
     setVideoQuality,
+    videoFrameRate,
+    setVideoFrameRate,
     edit,
     framedSize,
     cropSize,
@@ -79,13 +81,22 @@ export default function ExportDialog() {
   const last = useAppSetting(video ? "lastVideoExport" : "lastPhotoExport");
   const videoHDR = useAppSetting("videoHDR") === true;
   const setVideoHDR = (value) => setAppSetting("videoHDR", value);
+  const videoBitrate = useAppSetting("videoBitrate");
   const current = video
-    ? { format: videoFormat, quality: videoQuality, size: exportSize }
+    ? {
+        format: videoFormat,
+        quality: videoQuality,
+        bitrate: videoBitrate,
+        frameRate: videoFrameRate,
+        size: exportSize,
+      }
     : { type: exportType, size: exportSize, quality, metadata: exportMetadata };
   const applyLast = () => {
     if (video) {
       setVideoFormat(last.format);
       setVideoQuality(last.quality);
+      if (last.bitrate) setAppSetting("videoBitrate", last.bitrate);
+      setVideoFrameRate(last.frameRate ?? null);
     } else {
       setExportType(last.type);
       setQuality(last.quality);
@@ -205,7 +216,42 @@ export default function ExportDialog() {
               HDR
             </Switch>
           )}
-          {active?.image.video && videoType?.quality !== false && (
+          {video && backend.videoFrameRates && (
+            <div className="select-row">
+              Frame Rate
+              <Picker
+                aria-label="Frame Rate"
+                value={videoFrameRate == null ? "source" : String(videoFrameRate)}
+                onChange={(id) => setVideoFrameRate(id === "source" ? null : Number(id))}
+                size={"S"}
+              >
+                <PickerItem id="source">Source</PickerItem>
+                {backend.videoFrameRates.map((rate) => (
+                  <PickerItem key={rate} id={String(rate)}>
+                    {`${rate} fps`}
+                  </PickerItem>
+                ))}
+              </Picker>
+            </div>
+          )}
+          {video && videoType?.quality !== false && backend.videoBitrates && (
+            <div className="select-row">
+              File Size
+              <Picker
+                aria-label="File Size"
+                value={videoBitrate}
+                onChange={(id) => setAppSetting("videoBitrate", id)}
+                size={"S"}
+              >
+                {backend.videoBitrates.map(({ id, label }) => (
+                  <PickerItem key={id} id={id}>
+                    {label}
+                  </PickerItem>
+                ))}
+              </Picker>
+            </div>
+          )}
+          {video && videoType?.quality !== false && !backend.videoBitrates && (
             <div className="select-row">
               Quality
               <Picker

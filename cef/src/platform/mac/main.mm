@@ -191,8 +191,12 @@ int main(int argc, char* argv[]) {
     g_dispatcher = std::make_unique<fotufilm::Dispatcher>();
 #if defined(FOTUFILM_WITH_ENGINE)
     g_engine = std::make_unique<fotufilm::EngineBridge>(*g_dispatcher);
-    g_engine->SetDestinationPicker([](const std::string& filename, const std::string& type,
-                                      std::function<void(const std::string&)> done) {
+    const std::string export_dir =
+        command_line->GetSwitchValue(fotufilm::switches::kExportDir).ToString();
+    g_engine->SetDestinationPicker([export_dir](const std::string& filename,
+                                                const std::string& type,
+                                                std::function<void(const std::string&)> done) {
+      if (!export_dir.empty()) return done(export_dir + "/" + filename);
       NSSavePanel* panel = [NSSavePanel savePanel];
       panel.nameFieldStringValue = @(filename.c_str());
       if (UTType* uti = [UTType typeWithMIMEType:@(type.c_str())])

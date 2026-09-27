@@ -36,6 +36,7 @@ Switches:
 | `--fotufilm-dev-url=http://127.0.0.1:5173` | Loads the editor from the Vite dev server, with hot reload; that origin gets the transport. |
 | `--fotufilm-web-root=<dir>` | Serves another web build as `fotufilm://app/`. |
 | `--fotufilm-profile=<dir>` | Keeps the browser profile there, so a second copy can run beside the first. |
+| `--fotufilm-export-dir=<dir>` | Writes exports there under their suggested names, without a save panel, for scripted runs. |
 | `--remote-debugging-port=9333` | Chromium's DevTools protocol, for DevTools and Playwright. |
 
 ## Design

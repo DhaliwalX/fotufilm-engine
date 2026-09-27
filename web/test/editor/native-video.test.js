@@ -45,7 +45,14 @@ const movie = (size) =>
   new File([new Uint8Array(size)], "clip.mov", { type: "video/quicktime" });
 
 test("an engine host uploads a movie in binary chunks and plays the host's clock", async () => {
-  const { backend, calls } = host({ capabilities: { video: true, videoExportTypes: FORMATS } });
+  const { backend, calls } = host({
+    capabilities: {
+      video: true,
+      videoExportTypes: FORMATS,
+      videoBitrates: [{ id: "automatic", label: "Automatic" }],
+      videoFrameRates: [24, 30],
+    },
+  });
   const { image } = await backend.importMedia(movie(9 * 1024 * 1024));
   const appends = calls.filter(({ method }) => method === "appendVideo");
   assert.equal(appends.length, 2);
@@ -59,6 +66,8 @@ test("an engine host uploads a movie in binary chunks and plays the host's clock
   assert.equal(image.handle, 7);
   assert.equal((await fetch(image.video.playbackUrl).then((r) => r.blob())).type, "audio/wav");
   assert.deepEqual(backend.videoExportTypes.map(({ id }) => id), ["mp4", "prores422"]);
+  assert.deepEqual(backend.videoBitrates.map(({ id }) => id), ["automatic"]);
+  assert.deepEqual(backend.videoFrameRates, [24, 30]);
 });
 
 test("a host without capabilities keeps base64 chunks and plays the original file", async () => {

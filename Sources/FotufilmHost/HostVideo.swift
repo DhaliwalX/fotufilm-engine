@@ -92,6 +92,36 @@ struct HostVideoFormat {
     }
 }
 
+/// The Mac app's Video File Size (`AppSettings.VideoExportBitrate`): what a compressed movie may
+/// spend per pixel of each frame.
+enum HostVideoBitrate: String, CaseIterable {
+    case automatic, smaller, higher, maximum
+
+    var label: String {
+        switch self {
+        case .automatic: return "Automatic"
+        case .smaller: return "Smaller Files"
+        case .higher: return "Higher Quality"
+        case .maximum: return "Maximum"
+        }
+    }
+
+    /// Bits per pixel per frame, nil to leave the rate to the encoder. HLG spends half as much
+    /// again, as the Mac app's HDR exports do.
+    func bitsPerPixel(hdr: Bool) -> Double? {
+        switch self {
+        case .automatic: return nil
+        case .smaller: return hdr ? 0.18 : 0.12
+        case .higher: return hdr ? 0.36 : 0.24
+        case .maximum: return hdr ? 0.54 : 0.36
+        }
+    }
+}
+
+/// The frame rates an export may retime to, as the Mac app's export sheet offers them; the
+/// source's own rate is the default.
+let hostVideoFrameRates = [16, 18, 24, 25, 30, 60]
+
 /// What an export writes: the size, cadence and look of the movie, and where its sound comes from.
 struct HostVideoDelivery {
     var url: URL
@@ -99,8 +129,8 @@ struct HostVideoDelivery {
     var width: Int
     var height: Int
     var frameRate: Double
-    /// "medium", "high" or "very-high" (`web/src/editor/ExportDialog.jsx`).
-    var quality: String
+    /// What a compressed format may spend per pixel; ProRes ignores it.
+    var bitrate: HostVideoBitrate
     /// The SDR shoulder the film delivers through, for writers that encode linear light.
     var shoulderKnee: Float
     /// The source timeline range the movie covers; its first frame is at `range.lowerBound`.

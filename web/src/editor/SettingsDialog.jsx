@@ -118,6 +118,7 @@ function General({ backend, stocks }) {
 }
 
 function Output({ backend }) {
+  const videoHDR = backend.videoExportTypes?.some(({ hdr }) => hdr);
   return (
     <>
       <h3>Photos</h3>
@@ -151,13 +152,25 @@ function Output({ backend }) {
           </p>
         </>
       )}
-      {backend.videoExportTypes?.some(({ hdr }) => hdr) && (
+      {(backend.videoBitrates || videoHDR) && <h3>Video</h3>}
+      {videoHDR && (
         <>
-          <h3>Video</h3>
           <SettingSwitch label="HDR" setting="videoHDR" />
           <p className="medium-detail">
             HEVC and ProRes movies of films that deliver HDR are written as
             HLG; H.264 stays standard.
+          </p>
+        </>
+      )}
+      {backend.videoBitrates && (
+        <>
+          <SettingPicker
+            label="Video File Size"
+            setting="videoBitrate"
+            options={backend.videoBitrates}
+          />
+          <p className="medium-detail">
+            Automatic lets the encoder choose. ProRes keeps its own rate.
           </p>
         </>
       )}

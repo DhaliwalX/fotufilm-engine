@@ -55,6 +55,8 @@ struct HostPlatform {
             "filmSuggestion": true,
             "video": videoSource != nil && videoWriter != nil,
             "videoExportTypes": videoWriter?.formats.map(\.json) ?? [],
+            "videoBitrates": HostVideoBitrate.allCases.map { ["id": $0.rawValue, "label": $0.label] },
+            "videoFrameRates": hostVideoFrameRates,
             // The plug-ins this platform installs, `{id, name}`, for the native menu and the
             // editor's plug-ins dialog; their state is asked for with `plugins`.
             "plugins": plugins?.catalogue.map { ["id": $0.id, "name": $0.name] } ?? [],

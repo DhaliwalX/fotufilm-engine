@@ -200,7 +200,7 @@ final class HostVideoTests: XCTestCase {
         var request = renderRequest(handle, time: 0, video: ["trimStart": 0.2, "trimEnd": 0.7, "audio": true])
         request["maxEdge"] = 45
         request["format"] = "hevc10"
-        request["quality"] = "high"
+        request["bitrate"] = "higher"
         request["path"] = output.path
         var reports: [[String: Any]] = []
         let saved = try json(service.call("exportVideo", params: JSONSerialization.data(
@@ -248,6 +248,35 @@ final class HostVideoTests: XCTestCase {
         }
         XCTAssertTrue(cancelled)
         XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+    }
+
+    func testRetimesToTheChosenFrameRate() throws {
+        let engine = try makeEngine()
+        let service = engine.service
+        let (handle, _) = try importMovie(service)
+        XCTAssertEqual(HostPlatform.current.capabilities["videoFrameRates"] as? [Int],
+                       [16, 18, 24, 25, 30, 60])
+        // A lower rate drops source frames without developing them; a higher one keeps the
+        // source's, as the Mac app does.
+        for (rate, frames) in [(24.0, 24), (60.0, 30)] {
+            let output = FileManager.default.temporaryDirectory
+                .appendingPathComponent("fotufilm-export-\(UUID().uuidString).mp4")
+            defer { try? FileManager.default.removeItem(at: output) }
+            var request = renderRequest(handle, time: 0, video: ["audio": false])
+            request["maxEdge"] = 32
+            request["format"] = "mp4"
+            request["bitrate"] = "smaller"
+            request["frameRate"] = rate
+            request["path"] = output.path
+            let saved = try json(service.call("exportVideo", params: JSONSerialization.data(
+                withJSONObject: request), payload: nil) { _ in })
+            XCTAssertEqual(saved["frames"] as? Int, frames)
+            let track = try XCTUnwrap(waitFor {
+                try await AVURLAsset(url: output).loadTracks(withMediaType: .video).first
+            })
+            let nominal = try waitFor { try await track.load(.nominalFrameRate) }
+            XCTAssertEqual(Double(nominal), Double(frames), accuracy: 0.5)
+        }
     }
 
     // MARK: The test movie

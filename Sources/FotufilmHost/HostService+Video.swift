@@ -112,11 +112,17 @@ extension HostService {
                 try? prepared.edit.document.options(for: stock).sdrShoulderKnee(for: stock)
             }
         } ?? FilmSDRDelivery.boundedShoulderKnee
+        // A lower frame rate retimes the movie as the Mac app's export sheet does: each output
+        // frame shows the source frame on screen at its time. A rate at or above the source's
+        // keeps every frame at its own time.
+        let retime = (parameters["frameRate"] as? Double)
+            .flatMap { $0 > 0 && $0 < source.frameRate - 0.01 ? $0 : nil }
         let url = URL(fileURLWithPath: path)
         let writer = try writers.writer(for: format)
         try writer.begin(HostVideoDelivery(
             url: url, format: format, width: paddedWidth, height: paddedHeight,
-            frameRate: source.frameRate, quality: parameters["quality"] as? String ?? "high",
+            frameRate: retime ?? source.frameRate,
+            bitrate: (parameters["bitrate"] as? String).flatMap(HostVideoBitrate.init) ?? .automatic,
             shoulderKnee: knee, range: start...end,
             audio: settings["audio"] as? Bool == false ? nil : source,
             // HDR where the page asks, the format carries it and the film delivers it.
@@ -126,7 +132,7 @@ extension HostService {
         let proceed = engine.continuation()
         let bytesPerPixel = format.takesLinearLight ? 16 : 4
         var pixels = [UInt8](repeating: 0, count: paddedWidth * paddedHeight * bytesPerPixel)
-        var count = 0
+        var count = 0, next = 0
         do {
             let frames = Prefetch(try source.frames(from: start, to: end, width: frameSize.0,
                                                     height: frameSize.1,
@@ -137,6 +143,17 @@ extension HostService {
                 // A frame showing at the trim's start begins the movie there.
                 let time = max(start, frame.time)
                 guard frame.time + frame.duration > start + 1e-6, time > last + 1e-6 else { continue }
+                var times = [time]
+                if let retime {
+                    // The output frames that fall while this one shows; none skips its develop.
+                    times = []
+                    let shownUntil = min(end, frame.time + frame.duration) - 1e-6
+                    while start + Double(next) / retime < shownUntil {
+                        times.append(start + Double(next) / retime)
+                        next += 1
+                    }
+                    if times.isEmpty { continue }
+                }
                 video.hold(frame, interpretation: interpretation)
                 let scene = try sceneFor(prepared.image, geometry: prepared.geometry, sizes: prepared.sizes)
                 try pixels.withUnsafeMutableBytes { buffer in
@@ -150,10 +167,10 @@ extension HostService {
                                     rowBytes: paddedWidth * bytesPerPixel, capacity: buffer.count))
                     Self.pad(buffer, width: width, height: height, paddedWidth: paddedWidth,
                              paddedHeight: paddedHeight, bytesPerPixel: bytesPerPixel)
-                    try writer.append(UnsafeRawBufferPointer(buffer), at: time)
+                    for shown in times { try writer.append(UnsafeRawBufferPointer(buffer), at: shown) }
                 }
                 last = time
-                count += 1
+                count += times.count
                 let now = DispatchTime.now().uptimeNanoseconds
                 if now - reported > 100_000_000 {
                     reported = now

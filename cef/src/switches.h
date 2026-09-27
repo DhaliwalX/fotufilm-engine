@@ -13,6 +13,9 @@ inline constexpr char kDiagnostics[] = "fotufilm-diagnostics";
 // Keep the browser profile (library, settings) in this directory, so a second copy of the app can
 // run beside the first rather than hand its launch over to it.
 inline constexpr char kProfile[] = "fotufilm-profile";
+// Write exports into this directory under their suggested names instead of asking with a save
+// panel, for scripted runs.
+inline constexpr char kExportDir[] = "fotufilm-export-dir";
 
 // Passed to renderers: the extra origin that may use the transport.
 inline constexpr char kDevOrigin[] = "fotufilm-dev-origin";

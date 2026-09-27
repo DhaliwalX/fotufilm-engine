@@ -24,6 +24,10 @@ export function createNativeBackend(host) {
   // Optional: the movie formats a native encoder writes, `{id, label, extension, type, quality}`.
   if (host.videoExportTypes)
     backend.videoExportTypes = Object.freeze(host.videoExportTypes.map((type) => Object.freeze({ ...type })));
+  // Optional: its Video File Size choices, `{id, label}`, and the frame rates it retimes to.
+  if (host.videoBitrates)
+    backend.videoBitrates = Object.freeze(host.videoBitrates.map((choice) => Object.freeze({ ...choice })));
+  if (host.videoFrameRates) backend.videoFrameRates = Object.freeze([...host.videoFrameRates]);
   if (host.negativeContrast === true) backend.negativeContrast = true;
   if (host.subjectSelection === true) backend.subjectSelection = true;
   if (host.exportImageCancels === true) backend.exportImageCancels = true;
