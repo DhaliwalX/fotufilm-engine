@@ -398,12 +398,6 @@ final class InspectorViewController: SessionViewController {
 
     private func bespokeRows(for control: EditorControl) -> [FormRowView] {
         switch control.field {
-        case .autoAdjustment:
-            return [ToggleRow(control.title,
-                              get: { [model] in model.autoAdjustActive },
-                              set: { [model] on in
-                                  if on != model.autoAdjustActive { model.toggleAutoAdjust() }
-                              })]
         case .shutter:
             let times = EditorControlCatalogue.shutterTimes(for: activeStock)
             guard !times.isEmpty else { return [] }
