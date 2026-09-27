@@ -5,7 +5,7 @@ import {
   DisclosurePanel,
 } from "@react-spectrum/s2/Disclosure";
 import { Picker, PickerItem } from "@react-spectrum/s2/Picker";
-import { FILM_FORMATS } from "../generated/controls.js";
+import FormatPicker from "./FormatPicker.jsx";
 import { hasProfileSettings } from "../profile-settings.js";
 import { useEditor } from "./EditorContext.jsx";
 export default function FilmInspector() {
@@ -75,44 +75,17 @@ export default function FilmInspector() {
             <DisclosureTitle>{"Film Format"}</DisclosureTitle>
             <DisclosurePanel>
               <div className="control-stack">
-                <Picker
-                  label="Format"
-                  size="S"
-                  isDisabled={
+                <FormatPicker
+                  disabled={
                     exporting || !active || edit.halationModel === "layered"
                   }
-                  value={edit.format || "film"}
                   onChange={(format) => {
                     endEdit();
-                    patch({
-                      format: format === "film" ? null : format,
-                    });
+                    patch({ format });
                     setStage(null);
                     setDifference(false);
                   }}
-                  UNSAFE_style={{
-                    width: "100%",
-                  }}
-                >
-                  {[
-                    {
-                      value: "film",
-                      label: "Match Film",
-                    },
-                    ...FILM_FORMATS.map((f) => ({
-                      value: f.id,
-                      label: f.name,
-                    })),
-                  ].map((option) => (
-                    <PickerItem
-                      id={option.value}
-                      key={option.value}
-                      isDisabled={option.disabled}
-                    >
-                      {option.label}
-                    </PickerItem>
-                  ))}
-                </Picker>
+                />
               </div>
             </DisclosurePanel>
           </Disclosure>
