@@ -88,6 +88,8 @@ let package = Package(
         .library(name: "FotufilmImaging", targets: ["FotufilmImaging"]),
         .library(name: "FotufilmStockMatch", targets: ["FotufilmStockMatch"]),
         .library(name: "FotufilmEditModel", targets: ["FotufilmEditModel"]),
+        // The engine behind `fotufilm.h`, for hosts in other languages.
+        .library(name: "FotufilmHost", type: .dynamic, targets: ["FotufilmHost"]),
         .executable(name: "fotufilm", targets: ["fotufilm"]),
         .executable(name: "fotufilm-controls", targets: ["fotufilm-controls"]),
         .executable(name: "fotufilm-web-profile", targets: ["fotufilm-web-profile"]),
@@ -120,6 +122,12 @@ let package = Package(
         .target(name: "FotufilmStockMatch", dependencies: ["FotufilmCore"]),
         // Shared editor controls and their engine options.
         .target(name: "FotufilmEditModel", dependencies: ["FotufilmCore"]),
+        .target(name: "CFotufilmHost"),
+        .target(name: "FotufilmHost",
+                dependencies: ["CFotufilmHost", "FotufilmCore", "FotufilmImaging",
+                               "FotufilmEditModel",
+                               .target(name: "FotufilmMetal",
+                                       condition: .when(platforms: [.macOS, .iOS]))]),
         .executableTarget(name: "fotufilm",
                           dependencies: ["FotufilmCore", "FotufilmImaging", "FotufilmEditModel"]),
         .executableTarget(name: "fotufilm-controls", dependencies: ["FotufilmEditModel"]),
@@ -136,6 +144,10 @@ let package = Package(
         .testTarget(
             name: "FotufilmEditModelTests",
             dependencies: ["FotufilmEditModel", "FotufilmCore"]
+        ),
+        .testTarget(
+            name: "FotufilmHostTests",
+            dependencies: ["FotufilmHost", "CFotufilmHost"]
         ),
         .testTarget(
             name: "FotufilmUpdateTests",

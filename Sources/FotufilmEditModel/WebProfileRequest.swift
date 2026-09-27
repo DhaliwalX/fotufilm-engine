@@ -39,25 +39,8 @@ public struct WebProfileRequest: Decodable {
 
     /// The request's edit as one document: top-level choices become the controls they stand for.
     public var document: EditDocument {
-        var document = EditDocument()
-        for (name, input) in controls {
-            guard let field = EditorControlField(rawValue: name) else { continue }
-            switch input {
-            case .number(let number): document[field] = .number(number)
-            case .flag(let flag): document[field] = .flag(flag)
-            case .choice(let id): document[field] = .choice(id)
-            case .curve(let points): document[field] = .curve(points)
-            }
-        }
-        if let format { document[.gauge] = .choice(format) }
-        if let medium { document[.paper] = .choice(medium) }
-        if let filters { document[.lensFilterStack] = .choices(filters) }
-        if let filterMetering { document[.metering] = .choice(filterMetering) }
-        if let sceneKelvin {
-            document[.sceneLight] = .choice("custom")
-            document[.sceneLightKelvin] = .number(Double(sceneKelvin))
-        }
-        return document
+        EditDocument(webControls: controls, format: format, medium: medium, filters: filters,
+                     filterMetering: filterMetering, sceneKelvin: sceneKelvin)
     }
 
     public func configured() throws -> (FilmStock, FotufilmEngine.Options) {

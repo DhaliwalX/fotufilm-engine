@@ -508,127 +508,17 @@ if let path = flags["--open-pack"] {
 /// Image cannot represent that color internally because its working images are premultiplied, so
 /// expose the same provider once with the alpha sample marked as padding. The ordinary decode still
 /// supplies alpha; this image supplies only the RGB that must survive until scene compositing.
-func associatedOpenEXRColor(url: URL) -> CIImage? {
-    guard url.pathExtension.lowercased() == "exr",
-          let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-          CGImageSourceGetType(source) as String? == "com.ilm.openexr-image" else {
-        return nil
-    }
-    let options = [
-        kCGImageSourceShouldCache: false,
-        kCGImageSourceShouldAllowFloat: true,
-    ] as CFDictionary
-    guard let decoded = CGImageSourceCreateImageAtIndex(source, 0, options),
-          let color = AssociatedAlphaImage.colorSamples(from: decoded) else {
-        return nil
-    }
-    return CIImage(cgImage: color)
-}
-
-/// Loads any supported image as associated scene-referred linear Rec.2020 RGBA, preserving values
-/// above 1 for HDR/raw sources. Association is retained until the caller composites the scene.
-func loadLinear(path: String)
-    -> (rgba: [Float], width: Int, height: Int, sceneKelvin: Float?, sceneChromaticity: SIMD2<Float>?, contentHeadroom: Float) {
-    let url = URL(fileURLWithPath: path)
-    let isRaw = RawDecode.isRaw(url: url)
-    let declaredHeadroom = isRaw ? nil : GainMapHeadroom.declared(url: url)
-    let context = CIContext(options: [.useSoftwareRenderer: true, .cacheIntermediates: false])
-    var image: CIImage?
-    var sceneKelvin: Float?
-    var sceneChromaticity: SIMD2<Float>?
-    var contentHeadroom: Float = 1
-    var profileCorrection: CameraProfileCorrection.Resolved?
-    var associatedEXRColor: CIImage?
-    if isRaw {
-        guard let raw = CIRAWFilter(imageURL: url) else {
-            fail("Could not read raw file: \(path)")
-        }
-        // Decode at the file's complete as-shot white once. Edits change the spectral lamp.
-        let white = raw.neutralChromaticity
-        let xy = SIMD2<Float>(Float(white.x), Float(white.y))
-        if xy.x > 0 && xy.y > 0 && xy.x + xy.y < 1 {
-            sceneChromaticity = xy
-        }
-        sceneKelvin = raw.neutralTemperature > 0 ? raw.neutralTemperature : nil
-        RawDecode.configure(raw, recipe: RawDecode.Recipe())
-        profileCorrection = CameraProfileCorrection.resolve(
-            camera: RawDecode.cameraIdentity(url: url),
-            sceneKelvin: sceneKelvin)
-        image = raw.outputImage
-    } else {
-        associatedEXRColor = associatedOpenEXRColor(url: url)
-        if #available(macOS 14.0, *) {
-            image = CIImage(contentsOf: url, options: [.expandToHDR: true])
-        }
-        if image == nil {
-            image = CIImage(contentsOf: url)
-        }
-        // The declared range, the app's rule exactly (`FilmRender`): the decoded image's own
-        // statement when the platform reports one, and the file's own — a gain map's stated
-        // ceiling, or the fixed one an HLG/PQ container stands for — when a declaring file
-        // decodes to a neutral report. Raw never declares: its above-white light is the
-        // negative's own path and is not rolled.
-        if #available(macOS 15.0, *), let decoded = image {
-            contentHeadroom = max(1, decoded.contentHeadroom)
-        }
-        if contentHeadroom <= 1, let declaredHeadroom {
-            contentHeadroom = declaredHeadroom
-        }
-    }
-    // An HLG or PQ file decodes as display light; its range is the scene's, stated by its transfer.
-    let hdrTransfer = isRaw ? nil : GainMapHeadroom.transfer(url: url)
-    if let hdrTransfer { contentHeadroom = hdrTransfer.sceneHeadroom }
-    // Share the apps' eligibility rule and compare full-source renditions before crop or resize.
-    if #available(macOS 14.0, *),
-       ProcessedHDRExposure.isEligible(isRaw: isRaw, declaredHeadroom: declaredHeadroom),
-       let hdr = image,
-       let reference = CIImage(contentsOf: url, options: [.toneMapHDRtoSDR: true]) {
-        let gain = ProcessedHDRExposure.referenceGain(
-            expandedHDR: hdr, sdrReference: reference, context: context)
-        image = ProcessedHDRExposure.applying(gain, to: hdr)
-    }
-    guard let ci = image else {
-        fail("Could not read image: \(path)")
-    }
-    let width = Int(ci.extent.width.rounded()), height = Int(ci.extent.height.rounded())
-    guard width > 0, height > 0, ci.extent.isInfinite == false else {
-        fail("Image has no finite extent: \(path)")
-    }
-    guard let space = CGColorSpace(name: CGColorSpace.extendedLinearITUR_2020) else {
-        fail("No extended linear Rec.2020 color space available")
-    }
-    var rgba = [Float](repeating: 0, count: width * height * 4)
-    rgba.withUnsafeMutableBytes { buffer in
-        context.render(ci, toBitmap: buffer.baseAddress!, rowBytes: width * 16,
-                       bounds: ci.extent, format: .RGBAf, colorSpace: space)
-    }
-    if let associatedEXRColor,
-       Int(associatedEXRColor.extent.width.rounded()) == width,
-       Int(associatedEXRColor.extent.height.rounded()) == height {
-        var alpha = [Float](repeating: 1, count: width * height)
-        for pixel in 0..<(width * height) { alpha[pixel] = rgba[pixel * 4 + 3] }
-        rgba.withUnsafeMutableBytes { buffer in
-            context.render(associatedEXRColor, toBitmap: buffer.baseAddress!,
-                           rowBytes: width * 16, bounds: associatedEXRColor.extent,
-                           format: .RGBAf, colorSpace: space)
-        }
-        for pixel in 0..<(width * height) { rgba[pixel * 4 + 3] = alpha[pixel] }
-    }
-    if hdrTransfer != nil {
-        for pixel in 0..<(width * height) {
-            let scene = GainMapHeadroom.Transfer.sceneLight(SIMD3(
-                rgba[pixel * 4], rgba[pixel * 4 + 1], rgba[pixel * 4 + 2]))
-            rgba[pixel * 4] = scene.x
-            rgba[pixel * 4 + 1] = scene.y
-            rgba[pixel * 4 + 2] = scene.z
-        }
-    }
-    if let corrected = profileCorrection {
-        CameraProfileCorrection.apply(corrected.matrix, toRGBA: &rgba)
+/// Loads any supported image as associated scene-referred linear Rec.2020 RGBA (`SceneImage`),
+/// reporting a camera profile match.
+func loadLinear(path: String) -> SceneImage {
+    let image: SceneImage
+    do { image = try SceneImage.decode(url: URL(fileURLWithPath: path)) }
+    catch { fail(String(describing: error)) }
+    if let profile = image.cameraProfile {
         print(String(format: "Camera profile: %@ at %.0f K, max deviation %.4f",
-                     corrected.profileID, corrected.cct, corrected.maxDeviation))
+                     profile.profileID, profile.cct, profile.maxDeviation))
     }
-    return (rgba, width, height, sceneKelvin, sceneChromaticity, contentHeadroom)
+    return image
 }
 
 func parseLinearBackground(_ value: String?) -> SIMD3<Float> {
@@ -744,17 +634,8 @@ func saveReflectance(_ rgba: [Float], width: Int, height: Int, path: String,
                      depth: Int, seed: UInt64, shoulderKnee: Float) {
     let n = width * height
     if depth <= 8 {
-        var pixels = [UInt8](repeating: 255, count: n * 4)
-        let ditherSeed = UInt32(truncatingIfNeeded: seed)
-        for i in 0..<n {
-            for c in 0..<3 {
-                let v = ColorScience.linearToSrgb(ColorScience.displayShoulder(
-                    rgba[i * 4 + c], knee: shoulderKnee))
-                let dither = triangularDither(index: UInt32(i), channel: UInt32(c), seed: ditherSeed)
-                pixels[i * 4 + c] = UInt8(clamp(v * 255 + 0.5 + dither, 0, 255))
-            }
-            pixels[i * 4 + 3] = UInt8(clamp(rgba[i * 4 + 3] * 255 + 0.5, 0, 255))
-        }
+        let pixels = DisplayEncoding.encode8(rgba, width: width, height: height, knee: shoulderKnee,
+                                             seed: UInt32(truncatingIfNeeded: seed))
         saveRGBA8(pixels, width: width, height: height, path: path)
         return
     }
@@ -1643,8 +1524,9 @@ let balance = WhiteBalance(
     tint: flags["--tint"].flatMap { Float($0) } ?? 0)
 let background = parseLinearBackground(flags["--background"])
 
-var (rgba, width, height, _, _, contentHeadroom) =
-    loadLinear(path: positional[0])
+let scene = loadLinear(path: positional[0])
+var rgba = scene.rgba
+let width = scene.width, height = scene.height, contentHeadroom = scene.contentHeadroom
 PremultipliedAlpha.flatten(&rgba, over: background)
 // RAW decoding keeps its as-shot white. All inputs then use the stock's native light unless
 // --scene-kelvin explicitly names a different source. --wb is the same relative edit on both.
