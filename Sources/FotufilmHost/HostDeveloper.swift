@@ -8,6 +8,9 @@ import FotufilmCore
 struct HostDevelopPace {
     var frameIndex: UInt64 = 0
     var realtime = false
+    /// The film's transcendentals evaluated exactly rather than approximated: the Mac app's
+    /// Accurate photo quality, which its exports use by default.
+    var exactMath = false
 }
 
 /// Develops scene light through a film. The platform may supply a GPU developer

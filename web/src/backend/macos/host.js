@@ -1,3 +1,4 @@
+import { appSetting } from "../../app-settings.js";
 import { createLenses } from "./lenses.js";
 import { frameRequest } from "../../print-frame.js";
 import { isVideoFile } from "../../media-types.js";
@@ -150,6 +151,7 @@ export function createMacBackend(channel) {
         quality: request.quality,
         metadata: request.metadata,
         hdr: request.hdr === true,
+        photoQuality: appSetting("photoQuality"),
         filename: request.filename,
       }, { signal: request.signal });
     },
@@ -176,7 +178,11 @@ export function createMacBackend(channel) {
     forgetFilmChoices: can.filmSuggestion ? () => call("forgetFilmChoices") : undefined,
     // The developed frame on the system clipboard, written by the engine.
     copyImage: can.copyImage
-      ? async (request) => call("copyImage", renderRequest(request, await catalogue()))
+      ? async (request) =>
+          call("copyImage", {
+            ...renderRequest(request, await catalogue()),
+            photoQuality: appSetting("photoQuality"),
+          })
       : undefined,
     // The movie formats the engine's platform writes (the Mac app's list); the editor's own
     // otherwise.

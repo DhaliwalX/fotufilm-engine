@@ -30,16 +30,18 @@ struct MetalDeveloper: HostDeveloper {
                  deliver: (UnsafeBufferPointer<Float>, Range<Int>, Bool) -> Void) throws {
         let requested: FilmOutputTransform? = encode
             && metal.carriesOutputTransform(stock: stock, options: options, width: width,
-                                            height: height, exactMath: false, noFilm: noFilm)
+                                            height: height, exactMath: pace.exactMath,
+                                            noFilm: noFilm)
             ? .displayP3(shoulderKnee: knee) : nil
-        func run(_ requested: FilmOutputTransform?, realtime: Bool) -> (ok: Bool, kept: Bool) {
+        func run(_ requested: FilmOutputTransform?, realtime: Bool,
+                 exactMath: Bool = pace.exactMath) -> (ok: Bool, kept: Bool) {
             var transform = requested
             let encoded = requested != nil
             let ok = scene.withUnsafeBufferPointer { source in
                 metal.developStreaming(
                     width: width, height: height, stock: stock, options: options,
                     outputTransform: &transform, frameIndex: pace.frameIndex, realtime: realtime,
-                    noFilm: noFilm, shouldContinue: shouldContinue,
+                    exactMath: exactMath, noFilm: noFilm, shouldContinue: shouldContinue,
                     readRows: { rows, into in
                         into.baseAddress!.update(
                             from: source.baseAddress! + rows.lowerBound * width * 4,
@@ -52,6 +54,10 @@ struct MetalDeveloper: HostDeveloper {
         var result = run(requested, realtime: pace.realtime)
         // A film whose realtime schedule this build does not carry develops on the reference one.
         if !result.ok, pace.realtime, shouldContinue() { result = run(requested, realtime: false) }
+        // A film whose exact variant this build does not carry develops on the approximation.
+        if !result.ok, pace.exactMath, shouldContinue() {
+            result = run(requested, realtime: false, exactMath: false)
+        }
         // The engine refused the transform after all and handed back light: develop again,
         // encoding on the host.
         if result.ok, !result.kept { result = run(nil, realtime: false) }

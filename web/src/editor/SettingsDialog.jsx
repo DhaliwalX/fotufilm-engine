@@ -135,6 +135,22 @@ function Output({ backend }) {
           This engine exports photos in standard dynamic range.
         </p>
       )}
+      {backend.exportOptions && (
+        <>
+          <SettingPicker
+            label="Photo Quality"
+            setting="photoQuality"
+            options={[
+              { id: "accurate", label: "Accurate" },
+              { id: "fast", label: "Fast" },
+            ]}
+          />
+          <p className="medium-detail">
+            Accurate uses exact film curves. Fast uses an approximation to
+            reduce processing time.
+          </p>
+        </>
+      )}
     </>
   );
 }

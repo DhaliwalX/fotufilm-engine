@@ -683,13 +683,15 @@ public final class HostService {
             prepared.edit = try JSONDecoder().decode(
                 WebNativeEdit.self, from: JSONSerialization.data(withJSONObject: body))
         }
+        // Photo Quality: exact film math unless the page asks for Fast, as the Mac app exports.
+        let exact = parameters["photoQuality"] as? String != "fast"
         func develop(_ format: HostEngine.PixelFormat) throws -> [UInt8] {
             let stride = format == .rgba8DisplayP3 ? 4 : 16
             var pixels = [UInt8](repeating: 0, count: width * height * stride)
             try pixels.withUnsafeMutableBytes { buffer in
                 try engine.develop(scene, width: width, height: height,
                                    contentHeadroom: prepared.image.contentHeadroom,
-                                   edit: prepared.edit,
+                                   edit: prepared.edit, exactMath: exact,
                                    into: .init(maxEdge: 0, format: format,
                                                pixels: buffer.baseAddress!,
                                                rowBytes: width * stride, capacity: buffer.count))

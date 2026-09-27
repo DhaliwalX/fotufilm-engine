@@ -232,7 +232,7 @@ public final class HostEngine {
     /// playback may ask for the engine's `realtime` schedule.
     public func develop(_ scene: [Float], width: Int, height: Int, contentHeadroom: Float,
                         edit: WebNativeEdit, frameIndex: UInt64 = 0, realtime: Bool = false,
-                        into target: Target) throws {
+                        exactMath: Bool = false, into target: Target) throws {
         let film: FilmStock?
         if let stockID = edit.edit.stock {
             guard let stock = stocks[stockID] else {
@@ -244,7 +244,8 @@ public final class HostEngine {
         }
         try develop(scene, width: width, height: height, film: film,
                     options: options(edit, stock: film ?? .noFilm, contentHeadroom: contentHeadroom),
-                    frameIndex: frameIndex, realtime: realtime, into: target)
+                    frameIndex: frameIndex, realtime: realtime, exactMath: exactMath,
+                    into: target)
     }
 
     /// The options an edit develops with on `stock`, the scene's recorded range included.
@@ -263,7 +264,8 @@ public final class HostEngine {
     /// `film` nil develops with no film.
     public func develop(_ scene: [Float], width: Int, height: Int, film: FilmStock?,
                         options: FotufilmEngine.Options, frameIndex: UInt64 = 0,
-                        realtime: Bool = false, into target: Target) throws {
+                        realtime: Bool = false, exactMath: Bool = false,
+                        into target: Target) throws {
         let stock = film ?? .noFilm
         let started = currentGeneration
         let shouldContinue = { self.currentGeneration == started }
@@ -275,7 +277,8 @@ public final class HostEngine {
         let seed = UInt32(truncatingIfNeeded: options.seed)
         try developer.develop(
             scene, width: width, height: height, stock: stock, noFilm: film == nil,
-            options: options, pace: HostDevelopPace(frameIndex: frameIndex, realtime: realtime),
+            options: options, pace: HostDevelopPace(frameIndex: frameIndex, realtime: realtime,
+                                                    exactMath: exactMath),
             encode: target.format == .rgba8DisplayP3,
             knee: film == nil ? nil : knee, shouldContinue: shouldContinue,
             deliver: { rows, range, encoded in
