@@ -106,6 +106,10 @@ does (`suggestFilm`, from `FotufilmStockMatch`) and applies the best; the film a
 is recorded (`recordFilmChoice`) in `Application Support/Fotufilm Desktop/StockPreference.json`,
 and Forget What I've Taught It clears it (`forgetFilmChoices`).
 
+Fotufilm › Settings… (⌘,) opens the editor's Settings dialog (`web/src/editor/SettingsDialog.jsx`),
+which every backend shares: the starting film, format and film model of new photographs, film
+suggestions, and HDR photo export, kept on the device in `web/src/app-settings.js`.
+
 ### Video
 
 Movies decode and encode through the platform's `HostPlatform.videoSource` and `.videoWriter`

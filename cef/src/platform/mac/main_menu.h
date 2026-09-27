@@ -14,8 +14,6 @@
 - (void)clearRecentFiles:(id)sender;
 // Opens the fotufilm.com page named by the item's representedObject.
 - (void)openHelpPage:(id)sender;
-// No settings window yet; nothing answers it, so the item stays grey.
-- (void)openSettings:(id)sender;
 @end
 
 NSMenu* FotufilmMainMenu();

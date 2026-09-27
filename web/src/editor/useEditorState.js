@@ -2,6 +2,7 @@ import useCompactLayout from "../useCompactLayout.js";
 import { useReducer, useState, useRef, useEffect } from "react";
 import { historyReducer, initialHistory } from "../editor-state.js";
 import { sourceIlluminant } from "../editor-catalogue.js";
+import { setAppSetting, useAppSetting } from "../app-settings.js";
 export default function useEditorState({}) {
   const compactLayout = useCompactLayout();
   const [history, historyDispatch] = useReducer(historyReducer, initialHistory);
@@ -36,9 +37,11 @@ export default function useEditorState({}) {
     [exportType, setExportType] = useState("image/png"),
     [exportSize, setExportSize] = useState("full"),
     [quality, setQuality] = useState(95),
-    // The Mac app's defaults: capture details without location, SDR.
-    [exportMetadata, setExportMetadata] = useState("preserveWithoutLocation"),
-    [exportHDR, setExportHDR] = useState(false);
+    // The Mac app's default: capture details without location.
+    [exportMetadata, setExportMetadata] = useState("preserveWithoutLocation");
+  // HDR is the Photos output setting, kept on this device.
+  const exportHDR = useAppSetting("photoHDR"),
+    setExportHDR = (value) => setAppSetting("photoHDR", value);
   const [stage, setStage] = useState(null),
     [stages, setStages] = useState([]),
     [difference, setDifference] = useState(false);

@@ -94,6 +94,10 @@ export default function OptionsMenu() {
           </MenuItem>
         </MenuSection>
         <MenuSection aria-label="Help">
+          <MenuItem id="settings" onAction={() => setDialog("settings")}>
+            <Icon slot="icon" name="adjustments" />
+            <Text>Settings…</Text>
+          </MenuItem>
           <MenuItem id="shortcuts" onAction={() => setDialog("shortcuts")}>
             <Icon slot="icon" name="shortcuts" />
             <Text>Keyboard shortcuts</Text>

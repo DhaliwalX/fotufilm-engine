@@ -101,7 +101,7 @@ NSMenu* FotufilmMainMenu() {
   NSMenu* app = Submenu(bar, @"Fotufilm");
   Add(app, @"About Fotufilm", @selector(orderFrontStandardAboutPanel:));
   [app addItem:[NSMenuItem separatorItem]];
-  Add(app, @"Settings…", @selector(openSettings:), @",");
+  Command(app, @"Settings…", @"settings", @",");
   [app addItem:[NSMenuItem separatorItem]];
   NSMenu* services = Submenu(app, @"Services");
   NSApp.servicesMenu = services;

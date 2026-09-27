@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { VIDEO_ACCEPT } from "../media-types.js";
 import { IMAGE_ACCEPT } from "../media-types.js";
 import { defaultEdit, initialHistory } from "../editor-state.js";
+import { newPhotoEdit } from "../app-settings.js";
 export default function useDocumentActions({
   backend,
   exporting,
@@ -24,6 +25,7 @@ export default function useDocumentActions({
   setDifference,
   setError,
   files,
+  stocks,
 }) {
   const openFiles = useCallback(
     (kind = "all") => {
@@ -39,8 +41,11 @@ export default function useDocumentActions({
     [exporting, input],
   );
 
-  // A new document starts from its library edit, or from the current film.
-  const startingEdit = (file) => file?.libraryEdit || defaultEdit(edit.stock);
+  // A new document starts from its library edit, or from the settings' starting film and film
+  // model (the current film unless one is chosen).
+  const startingEdit = (file) =>
+    file?.libraryEdit ||
+    newPhotoEdit(defaultEdit(edit.stock), stocks?.length ? stocks.map((s) => s.id) : null);
   // `incoming` holds Files, library items {file, libraryKey, edit}, or files a native host
   // chose {path, name}, which it opens in place.
   async function acceptFiles(incoming) {

@@ -13,6 +13,7 @@ import ExportDialog from "./ExportDialog.jsx";
 import { VIDEO_LABELS } from "../generated/controls.js";
 import ShortcutsDialog from "./ShortcutsDialog.jsx";
 import SupportDialog from "./SupportDialog.jsx";
+import SettingsDialog from "./SettingsDialog.jsx";
 import { useEditor } from "./EditorContext.jsx";
 import { PhotoLibrary } from "../photo-library/index.js";
 import LibraryHandoff from "./LibraryHandoff.jsx";
@@ -84,6 +85,8 @@ export default function Workspace() {
           <ShortcutsDialog />
         ) : dialog === "support" ? (
           <SupportDialog />
+        ) : dialog === "settings" ? (
+          <SettingsDialog />
         ) : null}
       </DialogContainer>
       {videoDownload && (

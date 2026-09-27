@@ -18,6 +18,7 @@ const COMMANDS = {
   redo: (e) => e.dispatch({ type: "redo" }),
   importNegative: (e) => e.setDialog("negative"),
   export: (e) => e.setDialog("export"),
+  settings: (e) => e.setDialog("settings"),
   closePhoto: (e) => e.removeFile(e.active),
   autoAdjust: (e) => e.auto.toggle(),
   sampleSelection: (e) => {
@@ -59,6 +60,7 @@ export function menuState(e) {
     copyPhoto: still && !!e.backend.copyImage && !!e.session,
     resetEdits: photo,
     newGrainPattern: photo && !!e.edit?.stock,
+    settings: true,
     autoFilm: !!e.backend?.suggestFilm,
     forgetFilms: !!e.backend?.forgetFilmChoices,
     zoomIn: photo && !e.cropMode && e.zoom < 8,
