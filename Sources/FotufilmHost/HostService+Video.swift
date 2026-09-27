@@ -40,7 +40,9 @@ extension HostService {
         case "importVideo":
             return try importVideo(parameters)
         default:
-            return try answer(exportVideo(parameters, progress: progress ?? { _ in }))
+            return try answer(HostActivity.during("Exporting a movie") {
+                try exportVideo(parameters, progress: progress ?? { _ in })
+            })
         }
     }
 
@@ -75,7 +77,9 @@ extension HostService {
     }
 
     /// Develops every frame of the edit's trim through the render path's geometry and film,
-    /// and encodes them where the host's save panel said, with the movie's sound.
+    /// and encodes them where the host's save panel said, with the movie's sound. Frames develop
+    /// on the platform's video pipeline where it takes the edit (several in flight, as the Mac
+    /// app exports), and one at a time through `HostEngine.develop` otherwise.
     private func exportVideo(_ parameters: [String: Any],
                              progress: ([String: Any]) -> Void) throws -> [String: Any] {
         guard let path = parameters["path"] as? String else {
@@ -105,8 +109,6 @@ extension HostService {
         // 4:2:0 codecs need even sizes: the last column or row is repeated, never the aspect changed.
         let (width, height) = prepared.sizes.output
         let (paddedWidth, paddedHeight) = (width + width % 2, height + height % 2)
-        let swapped = prepared.geometry.rotation % 2 != 0
-        let frameSize = swapped ? (prepared.sizes.frame.1, prepared.sizes.frame.0) : prepared.sizes.frame
         let knee = prepared.edit.edit.stock.flatMap { id in
             FilmStock.presets[id].flatMap { stock in
                 try? prepared.edit.document.options(for: stock).sdrShoulderKnee(for: stock)
@@ -118,6 +120,19 @@ extension HostService {
         let retime = (settings["frameRate"] as? Double)
             .flatMap { $0 > 0 && $0 < source.frameRate - 0.01 ? $0 : nil }
         let url = URL(fileURLWithPath: path)
+        let proceed = engine.continuation()
+        let pipeline = try videoPipeline(
+            prepared, body: body, format: format, interpretation: interpretation,
+            processing: HostVideoProcessing(parameters["videoProcessing"] as? String),
+            proceed: proceed)
+        // Frames decode at the size the film develops at: the delivered one, or Fast's.
+        let developSizes = pipeline.development.hybrid
+            ? prepared.geometry.sizes(width: prepared.image.width, height: prepared.image.height,
+                                      maxEdge: HostVideoProcessing.fast.developLongEdge)
+            : prepared.sizes
+        let swapped = prepared.geometry.rotation % 2 != 0
+        let frameSize = swapped ? (developSizes.frame.1, developSizes.frame.0) : developSizes.frame
+
         let writer = try writers.writer(for: format)
         try writer.begin(HostVideoDelivery(
             url: url, format: format, width: paddedWidth, height: paddedHeight,
@@ -129,16 +144,36 @@ extension HostService {
             hdr: parameters["hdr"] as? Bool == true && format.carriesHDR
                 && deliversHDR(prepared.edit)))
 
-        let proceed = engine.continuation()
-        let bytesPerPixel = format.takesLinearLight ? 16 : 4
-        var pixels = [UInt8](repeating: 0, count: paddedWidth * paddedHeight * bytesPerPixel)
+        let clock = pipeline.clock
+        let began = DispatchTime.now().uptimeNanoseconds
         var count = 0, next = 0
+        // Frames developing and not yet written, oldest first: when each shows, and how far into
+        // the trim it reaches.
+        var pending: [(times: [Double], reaches: Double)] = []
+        var reported = DispatchTime.now().uptimeNanoseconds
+        func write() throws {
+            let frame = pending.removeFirst()
+            try pipeline.receive { pixels in
+                let started = clock.mark()
+                for shown in frame.times { try writer.append(pixels, at: shown) }
+                clock.charge("append", since: started)
+            }
+            count += frame.times.count
+            let now = DispatchTime.now().uptimeNanoseconds
+            if now - reported > 100_000_000 {
+                reported = now
+                progress(["progress": min(0.999, frame.reaches / (end - start)), "frames": count])
+            }
+        }
         do {
             let frames = Prefetch(try source.frames(from: start, to: end, width: frameSize.0,
                                                     height: frameSize.1,
                                                     interpretation: interpretation))
-            var last = -Double.infinity, reported = DispatchTime.now().uptimeNanoseconds
-            while let frame = try frames.next() {
+            var last = -Double.infinity
+            while true {
+                var started = clock.mark()
+                guard let frame = try frames.next() else { break }
+                clock.charge("decode wait", since: started)
                 guard proceed() else { throw HostEngine.Failure(description: "Cancelled.", cancelled: true) }
                 // A frame showing at the trim's start begins the movie there.
                 let time = max(start, frame.time)
@@ -154,30 +189,21 @@ extension HostService {
                     }
                     if times.isEmpty { continue }
                 }
+                started = clock.mark()
                 video.hold(frame, interpretation: interpretation)
-                let scene = try sceneFor(prepared.image, geometry: prepared.geometry, sizes: prepared.sizes)
-                try pixels.withUnsafeMutableBytes { buffer in
-                    try engine.develop(
-                        scene, width: width, height: height,
-                        contentHeadroom: prepared.image.contentHeadroom, edit: prepared.edit,
-                        frameIndex: prepared.image.pace.frameIndex,
-                        into: .init(maxEdge: 0,
-                                    format: format.takesLinearLight ? .rgba32FloatLinearP3 : .rgba8DisplayP3,
-                                    pixels: buffer.baseAddress!,
-                                    rowBytes: paddedWidth * bytesPerPixel, capacity: buffer.count))
-                    Self.pad(buffer, width: width, height: height, paddedWidth: paddedWidth,
-                             paddedHeight: paddedHeight, bytesPerPixel: bytesPerPixel)
-                    for shown in times { try writer.append(UnsafeRawBufferPointer(buffer), at: shown) }
-                }
+                let scene = try sceneFor(prepared.image, geometry: prepared.geometry,
+                                         sizes: developSizes)
+                clock.charge("scene", since: started)
+                started = clock.mark()
+                try pipeline.submit(scene, frameIndex: prepared.image.pace.frameIndex)
+                clock.charge("submit", since: started)
+                pending.append((times, time + frame.duration - start))
                 last = time
-                count += times.count
-                let now = DispatchTime.now().uptimeNanoseconds
-                if now - reported > 100_000_000 {
-                    reported = now
-                    progress(["progress": min(0.999, (time + frame.duration - start) / (end - start)),
-                              "frames": count])
-                }
+                // One frame fewer than the pipeline holds stays in flight, so the next submit
+                // finds its buffers free.
+                while pending.count > pipeline.depth - 1 { try write() }
             }
+            while !pending.isEmpty { try write() }
             guard count > 0 else {
                 throw HostEngine.Failure(description: "The selected range has no video frames.")
             }
@@ -186,11 +212,143 @@ extension HostService {
             guard proceed() else { throw HostEngine.Failure(description: "Cancelled.", cancelled: true) }
             try writer.finish()
         } catch {
+            pipeline.drain()
             writer.cancel()
             throw error
         }
+        clock.report("\(pipeline.name), \(width)x\(height) \(format.id)", frames: count,
+                     wall: Double(DispatchTime.now().uptimeNanoseconds - began) / 1e9)
         return ["filename": url.lastPathComponent, "width": paddedWidth, "height": paddedHeight,
                 "frames": count]
+    }
+
+    /// The pipeline an export's frames develop on, with the road through the engine the Mac
+    /// app's exporter would take (`HostVideoRoad`).
+    func videoPipeline(_ prepared: Prepared, body: [String: Any], format: HostVideoFormat,
+                       interpretation: HostVideoInterpretation, processing: HostVideoProcessing,
+                       proceed: @escaping () -> Bool) throws -> HostVideoPipeline {
+        let (width, height) = prepared.sizes.output
+        let film = engine.stock(prepared.edit.edit.stock)
+        if let id = prepared.edit.edit.stock, film == nil {
+            throw HostEngine.Failure(description: "Film \(id) is not installed.")
+        }
+        let image = prepared.image
+        let contentHeadroom = image.contentHeadroom
+        func options(_ edit: WebNativeEdit) throws -> FotufilmEngine.Options {
+            var options = try engine.options(edit, stock: film ?? .noFilm,
+                                             contentHeadroom: contentHeadroom)
+            // An explicit mottle share takes the delivery ratio, as the Mac app's exports do.
+            options.completeDeliveryMottle()
+            return options
+        }
+        let ground = try options(prepared.edit)
+        let selection = activeSelection(body, cropMode: prepared.request.cropMode == true)
+        let selected = try selection.map { try options($0.develop(prepared.edit)) }
+
+        var log = false
+        if case .camera = interpretation { log = true }
+        let road = HostVideoRoad(deepSource: image.video?.source.isDeep == true || log,
+                                 deepDelivery: format.takesLinearLight)
+        let pixelFormat: HostEngine.PixelFormat = format.takesLinearLight
+            ? .rgba32FloatLinearP3 : .rgba8DisplayP3
+        let bytesPerPixel = format.takesLinearLight ? 16 : 4
+        let (paddedWidth, paddedHeight) = (width + width % 2, height + height % 2)
+
+        // The portable develop: `HostEngine.develop`, with the selection blended over it.
+        let developFrame: HostVideoFrameDevelop = { [unowned self] scene, sceneWidth, sceneHeight,
+                                                    frameIndex, into in
+            let scene = HostVideoPixels.resample(scene, width: sceneWidth, height: sceneHeight,
+                                                 to: width, height)
+            func develop(_ options: FotufilmEngine.Options, into pixels: UnsafeMutableRawPointer,
+                         rowBytes: Int, capacity: Int) throws {
+                try engine.develop(scene, width: width, height: height, film: film,
+                                   options: options, frameIndex: frameIndex,
+                                   into: .init(maxEdge: 0, format: pixelFormat, pixels: pixels,
+                                               rowBytes: rowBytes, capacity: capacity))
+            }
+            guard let selection, let selected else {
+                try develop(ground, into: into.baseAddress!, rowBytes: paddedWidth * bytesPerPixel,
+                            capacity: into.count)
+                HostVideoPixels.pad(into.baseAddress!, width: width, height: height,
+                                    paddedWidth: paddedWidth, paddedHeight: paddedHeight,
+                                    bytesPerPixel: bytesPerPixel)
+                return
+            }
+            func developed(_ options: FotufilmEngine.Options) throws -> [UInt8] {
+                var pixels = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
+                try pixels.withUnsafeMutableBytes {
+                    try develop(options, into: $0.baseAddress!, rowBytes: width * bytesPerPixel,
+                                capacity: $0.count)
+                }
+                return pixels
+            }
+            var pixels = try developed(ground)
+            var subject: [Float]?
+            // With nobody found a subject selection leaves the frame as it is, as the preview does.
+            if selection.isSubject,
+               let found = subjects(scene, width: width, height: height, image: image),
+               found.count > 0 {
+                subject = found.weights(at: selection.point, width: width, height: height,
+                                        edge: selection.subjectEdge,
+                                        feather: selection.subjectFeather)
+            }
+            if !selection.isSubject || subject != nil {
+                let local = try developed(selected)
+                if format.takesLinearLight {
+                    var light = pixels.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+                    selection.composite(
+                        ground: &light,
+                        selected: local.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) },
+                        scene: scene, width: width, height: height, subject: subject)
+                    pixels = light.withUnsafeBytes { Array($0) }
+                } else {
+                    pixels = selection.composite(ground: pixels, selected: local, scene: scene,
+                                                 width: width, height: height, showMask: false,
+                                                 subject: subject)
+                }
+            }
+            pixels.withUnsafeBytes {
+                HostVideoPixels.deliver($0.baseAddress!, width: width, height: height,
+                                        bytesPerPixel: bytesPerPixel, into: into.baseAddress!,
+                                        paddedWidth: paddedWidth, paddedHeight: paddedHeight)
+            }
+        }
+
+        var development = HostVideoDevelopment(
+            stock: film ?? .noFilm, options: ground, road: road, width: width, height: height,
+            paddedWidth: paddedWidth, paddedHeight: paddedHeight, developWidth: width,
+            developHeight: height, linearOutput: format.takesLinearLight,
+            knee: film.map { ground.sdrShoulderKnee(for: $0) } ?? FilmSDRDelivery.boundedShoulderKnee,
+            seed: UInt32(truncatingIfNeeded: ground.seed), developFrame: developFrame)
+        // The platform's pipeline takes a film with no selection over it; a selection develops
+        // twice and blends, which the portable develop does. `FOTUFILM_VIDEO_PORTABLE=1` holds
+        // every export to the portable develop: the seam the two are compared across.
+        guard film != nil, selection == nil,
+              ProcessInfo.processInfo.environment["FOTUFILM_VIDEO_PORTABLE"] != "1",
+              let developer = HostPlatform.current.videoDeveloper
+        else { return HostFrameVideoPipeline(development) }
+        // Fast develops the 8-bit road's film at no more than its long edge and prints it at the
+        // delivered size, where that is larger.
+        if !road.deep, let edge = processing.developLongEdge {
+            let small = prepared.geometry.sizes(width: image.width, height: image.height,
+                                                maxEdge: edge).output
+            if small.0 < width || small.1 < height {
+                (development.developWidth, development.developHeight) = small
+            }
+        }
+        return developer.pipeline(for: development, proceed: proceed)
+            ?? HostFrameVideoPipeline(development)
+    }
+
+    /// The edit's selective adjustment, when it changes the picture.
+    private func activeSelection(_ body: [String: Any], cropMode: Bool) -> HostSelection? {
+        guard !cropMode,
+              let saved = (body["edit"] as? [String: Any])?["selective"] as? [String: Any],
+              let data = try? JSONSerialization.data(withJSONObject: saved),
+              let selection = try? JSONDecoder().decode(HostSelection.self, from: data),
+              selection.isActive
+        else { return nil }
+        return selection
     }
 
     /// Decodes the next frame while the current one develops.
@@ -218,22 +376,5 @@ extension HostService {
         }
 
         deinit { pending?.wait() }
-    }
-
-    /// Repeats the last column and row into the one-pixel margin an odd size leaves.
-    private static func pad(_ buffer: UnsafeMutableRawBufferPointer, width: Int, height: Int,
-                            paddedWidth: Int, paddedHeight: Int, bytesPerPixel: Int) {
-        let rowBytes = paddedWidth * bytesPerPixel
-        if paddedWidth > width {
-            for y in 0..<height {
-                let row = buffer.baseAddress! + y * rowBytes
-                (row + width * bytesPerPixel).copyMemory(from: row + (width - 1) * bytesPerPixel,
-                                                         byteCount: bytesPerPixel)
-            }
-        }
-        if paddedHeight > height {
-            (buffer.baseAddress! + height * rowBytes).copyMemory(
-                from: buffer.baseAddress! + (height - 1) * rowBytes, byteCount: rowBytes)
-        }
     }
 }

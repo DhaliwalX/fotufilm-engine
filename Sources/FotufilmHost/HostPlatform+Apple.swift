@@ -22,6 +22,7 @@ extension HostPlatform {
         #endif
         #if canImport(Metal)
         platform.developer = MetalDeveloper()
+        platform.videoDeveloper = MetalVideoDeveloper()
         #endif
         #if canImport(CryptoKit)
         platform.fileDigest = CryptoKitFileDigest()

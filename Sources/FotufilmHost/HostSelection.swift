@@ -111,4 +111,24 @@ struct HostSelection: Decodable {
         }
         return result
     }
+
+    /// The same blend over developed linear light, RGBA floats, as a deep movie export delivers
+    /// it: every channel, the HDR relight in alpha too, mixed by the selection's weight.
+    func composite(ground: inout [Float], selected: [Float], scene: [Float], width: Int,
+                   height: Int, subject: [Float]? = nil) {
+        ground.withUnsafeMutableBufferPointer { out in
+            let out = out
+            SceneGeometry.concurrent(height) { y in
+                for i in (y * width)..<((y + 1) * width) {
+                    let weight = Float(subject.map { Double($0[i]) }
+                        ?? self.weight(SIMD3(Double(scene[i * 4]), Double(scene[i * 4 + 1]),
+                                             Double(scene[i * 4 + 2]))))
+                    guard weight > 0 else { continue }
+                    for c in 0..<4 {
+                        out[i * 4 + c] = out[i * 4 + c] * (1 - weight) + selected[i * 4 + c] * weight
+                    }
+                }
+            }
+        }
+    }
 }

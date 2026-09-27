@@ -140,7 +140,9 @@ public final class HostService {
         case "sampleScene":
             return try answer(value: sampleScene(parameters))
         case "export":
-            return try answer(export(params, parameters: parameters))
+            return try answer(HostActivity.during("Exporting a photograph") {
+                try export(params, parameters: parameters)
+            })
         case "exportOptions":
             return try answer(exportOptions(parameters))
         case "suggestFilm":

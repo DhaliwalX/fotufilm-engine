@@ -49,6 +49,9 @@ protocol HostVideoSource: AnyObject {
     var hasAudio: Bool { get }
     /// The range above diffuse white the file's colour tags declare: 1 for SDR.
     var taggedHeadroom: Float { get }
+    /// Whether the file stores more than eight bits a component or HDR light: what sends an
+    /// export down the deep road on the engine's reference schedule (`HostVideoRoad`).
+    var isDeep: Bool { get }
 
     /// The frame showing at `seconds`, decoded at `width` x `height`. Successive calls moving
     /// forward in small steps, as playback makes them, should read on rather than seek.

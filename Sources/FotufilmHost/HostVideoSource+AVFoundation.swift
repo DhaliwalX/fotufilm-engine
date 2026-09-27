@@ -33,6 +33,8 @@ final class AVFoundationVideoSource: HostVideoSource {
     let frameRate: Double
     var hasAudio: Bool { audioTrack != nil }
     var taggedHeadroom: Float { tagged.sceneHeadroom }
+    /// `VideoDecodeDepth.road`'s source half: deep storage or an HDR transfer.
+    var isDeep: Bool { deepStorage || tagged.isHDR }
 
     /// The stored frame's size and how the track turns it upright.
     private let storedWidth: Int

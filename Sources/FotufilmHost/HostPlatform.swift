@@ -30,6 +30,9 @@ struct HostPlatform {
     var videoSource: HostVideoSourceFactory?
     /// Writes movies.
     var videoWriter: HostVideoWriterFactory?
+    /// Develops a movie's frames several at a time on the GPU (`HostVideoDevelop.swift`);
+    /// without it an export develops frame by frame through `developer`.
+    var videoDeveloper: HostVideoDeveloper?
     /// Installs the plug-ins for other editors (`HostPlugins.swift`).
     var plugins: HostPluginInstaller?
     /// Hashes stills for the identity their edit is kept under (`HostFileIdentity.swift`);
@@ -70,6 +73,9 @@ struct HostPlatform {
             "videoExportTypes": videoWriter?.formats.map(\.json) ?? [],
             "videoBitrates": HostVideoBitrate.allCases.map { ["id": $0.rawValue, "label": $0.label] },
             "videoFrameRates": hostVideoFrameRates,
+            // Video Quality, Full or Fast (`HostVideoProcessing`): Fast needs the pipelined
+            // develop's hybrid road.
+            "videoProcessing": videoSource != nil && videoWriter != nil && videoDeveloper != nil,
             // The plug-ins this platform installs, `{id, name}`, for the native menu and the
             // editor's plug-ins dialog; their state is asked for with `plugins`.
             "plugins": plugins?.catalogue.map { ["id": $0.id, "name": $0.name] } ?? [],
