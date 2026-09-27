@@ -8,7 +8,7 @@ import {
 import { Button } from "@react-spectrum/s2/Button";
 import { useEditor } from "./EditorContext.jsx";
 export default function DevelopInspector() {
-  const { edit, fixedSettings, patch, selectedStock } = useEditor();
+  const { edit, fixedSettings, selectedStock, newGrainPattern } = useEditor();
   return edit.stock ? (
     <>
       {!fixedSettings && (
@@ -55,11 +55,7 @@ export default function DevelopInspector() {
             <Button
               size="S"
               UNSAFE_className="secondary full-width"
-              onPress={() =>
-                patch({
-                  seed: crypto.getRandomValues(new Uint32Array(1))[0],
-                })
-              }
+              onPress={newGrainPattern}
               variant={"secondary"}
             >
               {"New Grain Pattern"}

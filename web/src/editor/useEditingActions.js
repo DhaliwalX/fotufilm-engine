@@ -114,6 +114,11 @@ export default function useEditingActions({
     () => setZoom((z) => Math.max(1, z - 0.25)),
     [setZoom],
   );
+  // A fresh grain pattern: the film's own seed offset by a random one (0 is the film's own).
+  const newGrainPattern = useCallback(
+    () => patch({ seed: crypto.getRandomValues(new Uint32Array(1))[0] || 1 }),
+    [patch],
+  );
   return {
     auto,
     dispatch,
@@ -127,5 +132,6 @@ export default function useEditingActions({
     toggleFilms,
     zoomIn,
     zoomOut,
+    newGrainPattern,
   };
 }

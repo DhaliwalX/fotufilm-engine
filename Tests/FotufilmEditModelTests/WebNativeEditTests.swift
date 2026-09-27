@@ -65,6 +65,15 @@ final class WebNativeEditTests: XCTestCase {
         XCTAssertNotEqual(flagged.gradeSpace, try EditDocument().options(for: try stock()).gradeSpace)
     }
 
+    func testNewGrainPatternReseedsTheGrain() throws {
+        let rest = try request().options(for: try stock())
+        var film = try request()
+        film.edit.seed = 0
+        XCTAssertEqual(try film.options(for: try stock()).seed, rest.seed)
+        film.edit.seed = 123_456
+        XCTAssertEqual(try film.options(for: try stock()).seed, rest.seed &+ 123_456)
+    }
+
     func testFilmSettingsAreReadAsAProfileRequestReadsThem() throws {
         let edit = try request(controls: #"{"push": 0}"#,
                                extra: #", "format": "35mm", "sceneKelvin": 3200"#)

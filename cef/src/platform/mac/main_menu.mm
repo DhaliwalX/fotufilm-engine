@@ -139,9 +139,10 @@ NSMenu* FotufilmMainMenu() {
   [edit addItem:[NSMenuItem separatorItem]];
   Command(edit, @"Copy Photo", @"copyPhoto", @"c", kCommand | kShift);
 
-  // The Mac app's grain pattern, grain model, halation and film-list items have no editor
-  // action yet.
+  // The Mac app's grain model, halation and film-list items have no editor action yet.
   NSMenu* film = Submenu(bar, @"Film");
+  Command(film, @"New Grain Pattern", @"newGrainPattern", @"g", kCommand | kShift);
+  [film addItem:[NSMenuItem separatorItem]];
   Command(film, @"Reset All Edits", @"resetEdits", @"r", kCommand | kShift);
 
   NSMenu* view = Submenu(bar, @"View");

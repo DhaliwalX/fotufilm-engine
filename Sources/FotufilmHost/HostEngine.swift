@@ -211,7 +211,7 @@ public final class HostEngine {
     /// The options an edit develops with on `stock`, the scene's recorded range included.
     public func options(_ edit: WebNativeEdit, stock: FilmStock,
                         contentHeadroom: Float) throws -> FotufilmEngine.Options {
-        var options = try edit.document.options(
+        var options = try edit.options(
             for: stock,
             nativeFormatID: edit.edit.stock.flatMap { FilmStock.presetDefinitions[$0]?.nativeFormatID })
         options.sceneHeadroom = contentHeadroom

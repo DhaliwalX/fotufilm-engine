@@ -27,6 +27,8 @@ public struct WebNativeEdit: Decodable {
         public var params: [String: Double]?
         public var gradeSpace: Bool?
         public var localTone: Bool?
+        /// New Grain Pattern: 0 keeps the film's own pattern.
+        public var seed: UInt32?
     }
 
     public var edit: Edit
@@ -69,6 +71,15 @@ public struct WebNativeEdit: Decodable {
         if let gradeSpace = edit.gradeSpace { document[.gradeSpace] = .flag(gradeSpace) }
         if let localTone = edit.localTone { document[.localTone] = .flag(localTone) }
         return document
+    }
+
+    /// The engine options for this edit on a film: the document's, with New Grain Pattern's seed
+    /// added to the film's own as the browser engine adds it (0 keeps the film's pattern).
+    public func options(for stock: FilmStock, nativeFormatID: String? = nil) throws
+        -> FotufilmEngine.Options {
+        var options = try document.options(for: stock, nativeFormatID: nativeFormatID)
+        if let seed = edit.seed, seed != 0 { options.seed &+= UInt64(seed) }
+        return options
     }
 }
 
