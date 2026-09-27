@@ -13,12 +13,48 @@ export const MENU_PANELS = [
   "crop",
 ];
 
+// The Plugins menu's two items per editor (cef/src/platform/mac/main_menu.mm), by plug-in id.
+const PLUGIN_COMMAND = /^(installPlugin|revealPlugin):(.+)$/;
+
+function pluginCommand(e, command) {
+  const [, action, id] = PLUGIN_COMMAND.exec(command ?? "") ?? [];
+  if (!action || !e.plugins) return undefined;
+  // An install shows its progress and its answer in the plug-ins dialog.
+  if (action === "installPlugin")
+    return () => {
+      e.setDialog("plugins");
+      e.plugins.install(id);
+    };
+  return () => e.plugins.reveal(id);
+}
+
+// Install reads Reinstall once the plug-in is there, and each item says why it is grey, as the
+// Mac app's Plugins menu does.
+function pluginMenuState(e, enabled, titles, toolTips) {
+  for (const { id, name } of e.plugins?.catalogue ?? []) {
+    const status = e.plugins.list?.find((plugin) => plugin.id === id);
+    const installed =
+      !!status && status.state !== "notInstalled" && status.state !== "notBundled";
+    const bundled = !!status?.bundledVersion;
+    enabled[`installPlugin:${id}`] = bundled && !e.plugins.busy && !e.exporting;
+    enabled[`revealPlugin:${id}`] = installed;
+    titles[`installPlugin:${id}`] = `${installed ? "Reinstall" : "Install"} ${name} Plug-in…`;
+    if (status && !bundled)
+      toolTips[`installPlugin:${id}`] =
+        `This copy of Fotufilm does not contain the ${name} plug-in.`;
+    toolTips[`revealPlugin:${id}`] = installed
+      ? status.location
+      : `The ${name} plug-in is not installed yet. Choose Install ${name} Plug-in… first.`;
+  }
+}
+
 const COMMANDS = {
   undo: (e) => e.dispatch({ type: "undo" }),
   redo: (e) => e.dispatch({ type: "redo" }),
   importNegative: (e) => e.setDialog("negative"),
   export: (e) => e.setDialog("export"),
   settings: (e) => e.setDialog("settings"),
+  plugins: (e) => e.setDialog("plugins"),
   closePhoto: (e) => e.removeFile(e.active),
   autoAdjust: (e) => e.auto.toggle(),
   sampleSelection: (e) => {
@@ -61,6 +97,7 @@ export function menuState(e) {
     resetEdits: photo,
     newGrainPattern: photo && !!e.edit?.stock,
     settings: true,
+    plugins: !!e.plugins && !e.exporting,
     autoFilm: !!e.backend?.suggestFilm,
     forgetFilms: !!e.backend?.forgetFilmChoices,
     zoomIn: photo && !e.cropMode && e.zoom < 8,
@@ -83,12 +120,18 @@ export function menuState(e) {
     inspector: !!e.inspectorOpen,
   };
   if (e.inspectorOpen) checked[`panel:${e.panel}`] = true;
-  return { enabled, checked };
+  const titles = {},
+    toolTips = {};
+  pluginMenuState(e, enabled, titles, toolTips);
+  return { enabled, checked, titles, toolTips };
 }
 
 // Runs a menu command if it still applies; the host's copy of the state may be a frame old.
+// Plug-in commands name their plug-in: "installPlugin:resolve", "revealPlugin:finalCut".
 export function runCommand(editor, command) {
-  const run = COMMANDS[command];
+  const run = Object.hasOwn(COMMANDS, command)
+    ? COMMANDS[command]
+    : pluginCommand(editor, command);
   if (!run || !menuState(editor).enabled[command]) return false;
   run(editor);
   return true;

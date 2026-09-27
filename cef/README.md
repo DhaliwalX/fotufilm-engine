@@ -17,14 +17,18 @@ engine.
 You need CMake, Ninja, Node and, on macOS, Xcode.
 
 ```sh
-cef/build.sh          # fetch CEF, build the engine library and web/, build the host
-cef/build.sh --run    # …then open the bridge diagnostics page
+cef/build.sh               # fetch CEF, build the engine library, plug-ins and web/, build the host
+cef/build.sh --run         # …then open the bridge diagnostics page
+cef/build.sh --no-plugins  # …without the Resolve and Final Cut plug-ins
 ```
 
 `cef/fetch-cef.sh` downloads the CEF version pinned in `cef-version.env` into `build/cef/` and
 checks its SHA-1. `cef/build-engine.sh` builds `build/cef-engine/libfotufilm.dylib` and the
-films and camera profiles it reads, which the app carries in `Frameworks` and `Resources`. The app
-is `build/cef-host/Release/Fotufilm Desktop.app`. Switches:
+films and camera profiles it reads, which the app carries in `Frameworks` and `Resources`.
+`tools/build-editor-plugins.sh`, which `macos/build.sh` runs too, builds the DaVinci Resolve OFX
+bundle and, where Apple's FxPlug SDK is installed, the Final Cut Pro wrapper; the app carries them
+in `Resources` as the Mac app does. The app is `build/cef-host/Release/Fotufilm Desktop.app`.
+Switches:
 
 | Switch | Effect |
 | --- | --- |
@@ -83,7 +87,7 @@ The transport keeps the contract in `web/src/backend/README.md` and the call sha
 | `src/renderer/bridge.js` | The page-side transport, compiled into the renderer. |
 | `src/renderer/renderer_bridge.*` | Installs the transport in trusted pages; returns replies to their context. |
 | `src/platform/mac/` | Window, input forwarding, Metal compositor, app and helper entry points. |
-| `src/platform/mac/main_menu.*` | The Mac app's menu bar and Open Recent. |
+| `src/platform/mac/main_menu.*` | The Mac app's menu bar, Open Recent and the Plugins menu. |
 | `resources/diagnostics/` | Bridge diagnostics: round trips, payloads, native-layer alignment. |
 
 ### Menu bar and files
@@ -110,6 +114,23 @@ Fotufilm › Settings… (⌘,) opens the editor's Settings dialog (`web/src/edi
 which every backend shares: the starting film, format and film model of new photographs, film
 suggestions, and HDR photo export, kept on the device in `web/src/app-settings.js`.
 
+### Plug-ins
+
+The Plugins menu is the Mac app's: Install (Reinstall once there) and Show in Finder for DaVinci
+Resolve and Final Cut Pro. The engine installs them with the Mac app's own installers
+(`Sources/FotufilmPlugins`, compiled into both): the OFX bundle into `/Library/OFX/Plugins`, asking
+for an administrator password only when that folder is not writable, and the FxPlug wrapper into
+`/Applications` with its Motion template, launched once so macOS registers the extension. The
+platform's `HostPluginInstaller` (`HostPlatform.plugins`) lists its plug-ins in the capabilities
+(`plugins: [{id, name}]`), from which the menu is built, and answers `plugins` (each one's state:
+`notBundled`, `notInstalled`, `outdated` — installed from another build — or `installed`, with
+both versions), `installPlugin` and `revealPlugin`. The editor's Plug-ins dialog
+(`web/src/editor/PluginsDialog.jsx`, also under the options menu) shows the state and the answer
+of an install; at launch it offers this build's plug-ins for the editors on the computer, as the
+Mac app's alert does, and remembers a Not Now against the build. A Linux or Windows port adds its
+own installer for the folders its editors read, and the menu and dialog follow. An install holds
+the engine thread until it is done, as the Mac app's menu item holds its own.
+
 ### Video
 
 Movies decode and encode through the platform's `HostPlatform.videoSource` and `.videoWriter`
@@ -133,7 +154,8 @@ panel goes through the same `DestinationPicker` as a still's, and its progress a
    catalogue, and the correction in the geometry resample), negatives (`analyseNegative`,
    `convertNegative` with contrast, `suggestNegativeFilms`), the pipeline inspector (`stages`,
    stage and difference renders), selective edits by colour, light or subject (Vision's
-   foreground instances, as the Mac app selects), film suggestion and video answer today: movies
+   foreground instances, as the Mac app selects), film suggestion, the Resolve and Final Cut
+   plug-ins (`plugins`, `installPlugin`, `revealPlugin`) and video answer today: movies
    upload in 8 MB binary chunks or open in place, render the frame at `videoTime` through the
    same geometry and film, and export (`exportVideo`, with progress and cancel) as H.264, 10-bit
    HEVC or Apple ProRes 422/4444 with the sound carried across.

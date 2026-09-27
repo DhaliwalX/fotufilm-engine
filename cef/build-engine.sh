@@ -45,6 +45,7 @@ python3 tools/compile-if-needed.py xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURC
   Sources/FotufilmImaging/*.swift \
   Sources/FotufilmEditModel/*.swift \
   Sources/FotufilmStockMatch/*.swift \
+  Sources/FotufilmPlugins/*.swift \
   Sources/FotufilmHost/*.swift \
   -o "$OBJ/FotufilmHost.o"
 

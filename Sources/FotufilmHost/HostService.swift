@@ -28,6 +28,9 @@ public final class HostService {
     /// Where Copy Photo puts the picture, when the platform has a clipboard; tests use a private
     /// one.
     var clipboard: HostClipboard? = HostPlatform.current.clipboard
+    /// Installs the plug-ins for other editors, when the platform has them; tests install into a
+    /// temporary directory.
+    var plugins: HostPluginInstaller? = HostPlatform.current.plugins
     /// What this person has chosen before, for Choose Film Per Photo; tests use their own file.
     var filmPreferences = HostFilmPreferences(file: HostFilmPreferences.defaultFile)
 
@@ -129,6 +132,8 @@ public final class HostService {
             return try answer([:])
         case "copyImage":
             return try answer(copyImage(parameters))
+        case "plugins", "installPlugin", "revealPlugin":
+            return try plugin(method, parameters)
         case "lensCatalogue":
             let data = Self.lensCatalogueURL.flatMap { try? Data(contentsOf: $0) }
             let profiles = data.flatMap { try? JSONSerialization.jsonObject(with: $0) } ?? []

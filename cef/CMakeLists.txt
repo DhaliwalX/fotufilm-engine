@@ -20,6 +20,8 @@ set(FOTUFILM_WEB_DIST "${CMAKE_CURRENT_SOURCE_DIR}/../web/dist" CACHE PATH
     "The built web editor bundled as fotufilm://app/")
 set(FOTUFILM_ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../build/cef-engine" CACHE PATH
     "libfotufilm and its resources (cef/build-engine.sh); without it the editor keeps its browser engine")
+set(FOTUFILM_PLUGINS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../build" CACHE PATH
+    "Where tools/build-editor-plugins.sh leaves resolve/ and finalcut/; the engine installs them")
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -127,6 +129,19 @@ if(OS_MAC)
               "${_app}/Contents/Resources"
       COMMAND ${CMAKE_COMMAND} -E rm -f "${_app}/Contents/Resources/fotufilm-bench")
   endif()
+  # The Resolve and Final Cut plug-ins, where tools/build-editor-plugins.sh built them, go where
+  # the Mac app keeps its own: the engine installs them from the bundle's resources. ditto keeps the
+  # signatures of the nested bundles intact; a plug-in no longer built is taken out.
+  foreach(_plugin "resolve/Fotufilm.ofx.bundle" "finalcut/Fotufilm for Final Cut Pro.app")
+    get_filename_component(_plugin_name "${_plugin}" NAME)
+    list(APPEND _bundle_commands
+      COMMAND ${CMAKE_COMMAND} -E rm -rf "${_app}/Contents/Resources/${_plugin_name}")
+    if(FOTUFILM_WITH_ENGINE AND EXISTS "${FOTUFILM_PLUGINS_DIR}/${_plugin}")
+      list(APPEND _bundle_commands
+        COMMAND ditto "${FOTUFILM_PLUGINS_DIR}/${_plugin}"
+                "${_app}/Contents/Resources/${_plugin_name}")
+    endif()
+  endforeach()
   if(EXISTS "${FOTUFILM_WEB_DIST}/index.html")
     list(APPEND _bundle_commands
       COMMAND ${CMAKE_COMMAND} -E rm -rf "${_app}/Contents/Resources/web"

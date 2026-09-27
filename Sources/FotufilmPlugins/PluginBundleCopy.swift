@@ -1,8 +1,9 @@
+#if os(macOS)
 import Foundation
 
 /// Stages signed bundles and Motion templates with ditto before replacing an installation.
-enum PluginBundleCopy {
-    static func install(from source: URL, to destination: URL) throws {
+public enum PluginBundleCopy {
+    public static func install(from source: URL, to destination: URL) throws {
         let manager = FileManager.default
         let parent = destination.deletingLastPathComponent()
         let staged = parent.appendingPathComponent(".fotufilm-install-\(UUID().uuidString)")
@@ -36,7 +37,7 @@ enum PluginBundleCopy {
         }
     }
 
-    static func run(_ tool: String, _ arguments: [String]) throws {
+    public static func run(_ tool: String, _ arguments: [String]) throws {
         let process = Process()
         let errors = Pipe()
         process.executableURL = URL(fileURLWithPath: tool)
@@ -50,10 +51,11 @@ enum PluginBundleCopy {
             .trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    struct Failure: LocalizedError {
-        let detail: String
-        var errorDescription: String? {
+    public struct Failure: LocalizedError {
+        public let detail: String
+        public var errorDescription: String? {
             detail.isEmpty ? "The plug-in could not be installed." : detail
         }
     }
 }
+#endif

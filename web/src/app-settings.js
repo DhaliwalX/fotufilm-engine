@@ -15,6 +15,8 @@ export const APP_SETTINGS = Object.freeze({
   estimatedHalation: false,
   // Whether a HEIC export starts as HDR where the edit allows it.
   photoHDR: false,
+  // The plug-in build whose launch offer was declined ("Not Now"); a later build asks again.
+  pluginOfferDeclined: null,
 });
 
 const PREFIX = "fotufilm.setting.";

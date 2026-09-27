@@ -173,6 +173,16 @@ export function createMacBackend(channel) {
     copyImage: can.copyImage
       ? async (request) => call("copyImage", renderRequest(request, await catalogue()))
       : undefined,
+    // The plug-ins for other editors the engine's platform installs (DaVinci Resolve and Final
+    // Cut Pro on the Mac), named up front; their state is read when asked.
+    ...(can.plugins?.length
+      ? {
+          plugins: can.plugins.map(({ id, name }) => ({ id, name })),
+          pluginStatus: () => call("plugins"),
+          installPlugin: (id) => call("installPlugin", { id }),
+          revealPlugin: (id) => call("revealPlugin", { id }),
+        }
+      : {}),
     // The movie formats the engine's platform writes (the Mac app's list); the editor's own
     // otherwise.
     videoExportTypes: video && can.videoExportTypes?.length ? can.videoExportTypes : undefined,
