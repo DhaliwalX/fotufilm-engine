@@ -136,7 +136,7 @@ panel goes through the same `DestinationPicker` as a still's, and its progress a
    foreground instances, as the Mac app selects), film suggestion and video answer today: movies
    upload in 8 MB binary chunks or open in place, render the frame at `videoTime` through the
    same geometry and film, and export (`exportVideo`, with progress and cancel) as H.264, 10-bit
-   HEVC or Apple ProRes 422/4444 with the sound carried across.
+   HEVC or Apple ProRes 422/4444 with the sound carried across; HEVC and ProRes write BT.2100 HLG when HDR is on and the film delivers it.
 2. **Native presentation in the editor.** A backend capability that lets `ImageCanvas` leave the
    photograph's area transparent and report its rectangle, zoom and pan to the host (as
    `setImageLayer` does in the diagnostics page); renders then go to the image layer instead of

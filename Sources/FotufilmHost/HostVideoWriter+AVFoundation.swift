@@ -81,13 +81,24 @@ final class AVFoundationVideoWriter: HostVideoWriter {
 
         var settings: [String: Any] = [AVVideoCodecKey: codec, AVVideoWidthKey: delivery.width,
                                        AVVideoHeightKey: delivery.height]
+        let hdr = delivery.hdr && delivery.format.carriesHDR
+        if hdr {
+            // The Mac app's HDR colorimetry: BT.2020 primaries, HLG, BT.2020 matrix.
+            settings[AVVideoColorPropertiesKey] = [
+                AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_2020,
+                AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_2100_HLG,
+                AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_2020,
+            ]
+        }
         if !isProRes {
             // The Mac app's SDR colorimetry: Display P3 primaries, the sRGB transfer, BT.709 matrix.
-            settings[AVVideoColorPropertiesKey] = [
-                AVVideoColorPrimariesKey: AVVideoColorPrimaries_P3_D65,
-                AVVideoTransferFunctionKey: kCVImageBufferTransferFunction_sRGB as String,
-                AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2,
-            ]
+            if !hdr {
+                settings[AVVideoColorPropertiesKey] = [
+                    AVVideoColorPrimariesKey: AVVideoColorPrimaries_P3_D65,
+                    AVVideoTransferFunctionKey: kCVImageBufferTransferFunction_sRGB as String,
+                    AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2,
+                ]
+            }
             let rate = Int(delivery.frameRate.rounded())
             var compression: [String: Any] = [AVVideoExpectedSourceFrameRateKey: rate,
                                               AVVideoMaxKeyFrameIntervalKey: rate * 2]
@@ -217,10 +228,10 @@ final class AVFoundationVideoWriter: HostVideoWriter {
             Self.fillBGRA(buffer, from: pixels, width: delivery.width, height: delivery.height)
         case kCVPixelFormatType_64ARGB:
             Self.fillProRes(buffer, from: pixels, width: delivery.width, height: delivery.height,
-                            knee: delivery.shoulderKnee)
+                            knee: delivery.shoulderKnee, hdr: delivery.hdr)
         default:
             Self.fill420(buffer, from: pixels, width: delivery.width, height: delivery.height,
-                         knee: delivery.shoulderKnee)
+                         knee: delivery.shoulderKnee, hdr: delivery.hdr)
         }
         CVPixelBufferUnlockBaseAddress(buffer, [])
         guard adaptor.append(buffer, withPresentationTime: CMTime(seconds: seconds,
@@ -270,11 +281,29 @@ final class AVFoundationVideoWriter: HostVideoWriter {
     /// Linear light through the film's SDR shoulder and the sRGB transfer, 16-bit big-endian
     /// ARGB: Apple's recommended ProRes input, as the Mac app's `ProResRecording` writes it.
     private static func fillProRes(_ buffer: CVPixelBuffer, from pixels: UnsafeRawBufferPointer,
-                                   width: Int, height: Int, knee: Float) {
+                                   width: Int, height: Int, knee: Float, hdr: Bool) {
         let base = CVPixelBufferGetBaseAddress(buffer)!
         let rowBytes = CVPixelBufferGetBytesPerRow(buffer)
         let developed = UnsafeBufferPointer(start: pixels.baseAddress!.assumingMemoryBound(to: Float.self),
                                             count: width * height * 4)
+        if hdr {
+            // HLG BT.2020 RGB, the relight alpha folded in as the Mac app's HLG recording does.
+            DispatchQueue.concurrentPerform(iterations: height) { y in
+                let row = (base + y * rowBytes).assumingMemoryBound(to: UInt16.self)
+                for x in 0..<width {
+                    let i = (y * width + x) * 4
+                    let gain = max(developed[i + 3], 1)
+                    let signal = HLGTransfer.encodeRGB(r: developed[i] * gain, g: developed[i + 1] * gain,
+                                                       b: developed[i + 2] * gain)
+                    row[x * 4] = UInt16.max.bigEndian
+                    row[x * 4 + 1] = code16(signal.r).bigEndian
+                    row[x * 4 + 2] = code16(signal.g).bigEndian
+                    row[x * 4 + 3] = code16(signal.b).bigEndian
+                }
+            }
+            attachHDRColor(buffer)
+            return
+        }
         let converter = FilmDisplayP3SDRConversion(shoulderKnee: knee)
         DispatchQueue.concurrentPerform(iterations: height) { y in
             let encoded = UnsafeMutableBufferPointer<Float>.allocate(capacity: width * 4)
@@ -291,7 +320,8 @@ final class AVFoundationVideoWriter: HostVideoWriter {
 
     /// The same light as 10-bit 4:2:0 video-range BT.709 Y′CbCr, as `SDR10Recording` writes it.
     private static func fill420(_ buffer: CVPixelBuffer, from pixels: UnsafeRawBufferPointer,
-                                width: Int, height: Int, knee: Float) {
+                                width: Int, height: Int, knee: Float, hdr: Bool) {
+        if hdr { return fillHLG420(buffer, from: pixels, width: width, height: height) }
         let luma = CVPixelBufferGetBaseAddressOfPlane(buffer, 0)!.assumingMemoryBound(to: UInt16.self)
         let chroma = CVPixelBufferGetBaseAddressOfPlane(buffer, 1)!.assumingMemoryBound(to: UInt16.self)
         let lumaStride = CVPixelBufferGetBytesPerRowOfPlane(buffer, 0) / 2
@@ -330,6 +360,45 @@ final class AVFoundationVideoWriter: HostVideoWriter {
 
     private static func code16(_ value: Float) -> UInt16 {
         UInt16((min(max(value, 0), 1) * Float(UInt16.max)).rounded())
+    }
+
+    /// The light as 10-bit 4:2:0 video-range BT.2020 HLG Y′CbCr, as the Mac app's
+    /// `HLGRecording` writes it, the relight alpha folded in.
+    private static func fillHLG420(_ buffer: CVPixelBuffer, from pixels: UnsafeRawBufferPointer,
+                                   width: Int, height: Int) {
+        let luma = CVPixelBufferGetBaseAddressOfPlane(buffer, 0)!.assumingMemoryBound(to: UInt16.self)
+        let chroma = CVPixelBufferGetBaseAddressOfPlane(buffer, 1)!.assumingMemoryBound(to: UInt16.self)
+        let lumaStride = CVPixelBufferGetBytesPerRowOfPlane(buffer, 0) / 2
+        let chromaStride = CVPixelBufferGetBytesPerRowOfPlane(buffer, 1) / 2
+        let developed = pixels.baseAddress!.assumingMemoryBound(to: Float.self)
+        func code(_ value: Float) -> UInt16 { UInt16(min(max(value.rounded(), 0), 1023)) << 6 }
+        func light(_ p: UnsafePointer<Float>) -> SIMD3<Float> { SIMD3(p[0], p[1], p[2]) * max(p[3], 1) }
+        DispatchQueue.concurrentPerform(iterations: height / 2) { cy in
+            let top = developed + cy * 2 * width * 4, bottom = top + width * 4
+            let topLuma = luma + cy * 2 * lumaStride, bottomLuma = topLuma + lumaStride
+            let chromaRow = chroma + cy * chromaStride
+            for x in stride(from: 0, to: width, by: 2) {
+                let encoded = HLGTransfer.encode420(
+                    topLeft: light(top + x * 4), topRight: light(top + x * 4 + 4),
+                    bottomLeft: light(bottom + x * 4), bottomRight: light(bottom + x * 4 + 4))
+                topLuma[x] = code(encoded.luma.x * 876 + 64)
+                topLuma[x + 1] = code(encoded.luma.y * 876 + 64)
+                bottomLuma[x] = code(encoded.luma.z * 876 + 64)
+                bottomLuma[x + 1] = code(encoded.luma.w * 876 + 64)
+                chromaRow[x] = code(encoded.u * 896 + 512)
+                chromaRow[x + 1] = code(encoded.v * 896 + 512)
+            }
+        }
+        attachHDRColor(buffer)
+    }
+
+    private static func attachHDRColor(_ buffer: CVPixelBuffer) {
+        CVBufferSetAttachment(buffer, kCVImageBufferColorPrimariesKey,
+                              kCVImageBufferColorPrimaries_ITU_R_2020, .shouldPropagate)
+        CVBufferSetAttachment(buffer, kCVImageBufferTransferFunctionKey,
+                              kCVImageBufferTransferFunction_ITU_R_2100_HLG, .shouldPropagate)
+        CVBufferSetAttachment(buffer, kCVImageBufferYCbCrMatrixKey,
+                              kCVImageBufferYCbCrMatrix_ITU_R_2020, .shouldPropagate)
     }
 
     private static func attachSDRColor(_ buffer: CVPixelBuffer) {

@@ -10,7 +10,7 @@ import { Switch } from "@react-spectrum/s2/Switch";
 import { useEditor } from "./EditorContext.jsx";
 import { METADATA_LABELS, useExportOptions } from "./useExportOptions.js";
 import { exportMaxEdge, exportSizeOptions } from "../export-sizes.js";
-import { useAppSetting } from "../app-settings.js";
+import { setAppSetting, useAppSetting } from "../app-settings.js";
 
 const IMAGE_TYPES = [
   { id: "image/png", label: "PNG" },
@@ -77,6 +77,8 @@ export default function ExportDialog() {
   const sizes = exportSizeOptions(width, height, video, cropSize);
   // The settings of the last export of this kind, offered back as the Mac app offers them.
   const last = useAppSetting(video ? "lastVideoExport" : "lastPhotoExport");
+  const videoHDR = useAppSetting("videoHDR") === true;
+  const setVideoHDR = (value) => setAppSetting("videoHDR", value);
   const current = video
     ? { format: videoFormat, quality: videoQuality, size: exportSize }
     : { type: exportType, size: exportSize, quality, metadata: exportMetadata };
@@ -198,6 +200,11 @@ export default function ExportDialog() {
                 HDR
               </Switch>
             )}
+          {active?.image.video && videoType?.hdr && (
+            <Switch isSelected={videoHDR} onChange={setVideoHDR} size="S">
+              HDR
+            </Switch>
+          )}
           {active?.image.video && videoType?.quality !== false && (
             <div className="select-row">
               Quality
@@ -241,7 +248,7 @@ export default function ExportDialog() {
             )}{" "}
             ·{" "}
             {active?.image.video
-              ? `${videoType?.bits ?? 8}-bit`
+              ? `${videoType?.bits ?? 8}-bit${videoType?.hdr && videoHDR ? " HLG" : ""}`
               : exportType === "image/tiff"
                 ? "16-bit"
                 : hdr

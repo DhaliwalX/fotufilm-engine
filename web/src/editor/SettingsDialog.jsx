@@ -151,6 +151,16 @@ function Output({ backend }) {
           </p>
         </>
       )}
+      {backend.videoExportTypes?.some(({ hdr }) => hdr) && (
+        <>
+          <h3>Video</h3>
+          <SettingSwitch label="HDR" setting="videoHDR" />
+          <p className="medium-detail">
+            HEVC and ProRes movies of films that deliver HDR are written as
+            HLG; H.264 stays standard.
+          </p>
+        </>
+      )}
     </>
   );
 }

@@ -15,6 +15,8 @@ export const APP_SETTINGS = Object.freeze({
   estimatedHalation: false,
   // Whether a HEIC export starts as HDR where the edit allows it.
   photoHDR: false,
+  // Whether an HEVC or ProRes movie exports as HDR (HLG) where the film delivers it.
+  videoHDR: false,
   // Photo Quality: exports evaluate the film exactly ("accurate") or approximately ("fast").
   photoQuality: "accurate",
   // The settings of the last photo and movie exported, for Use Last Export Settings.

@@ -118,7 +118,10 @@ extension HostService {
             url: url, format: format, width: paddedWidth, height: paddedHeight,
             frameRate: source.frameRate, quality: parameters["quality"] as? String ?? "high",
             shoulderKnee: knee, range: start...end,
-            audio: settings["audio"] as? Bool == false ? nil : source))
+            audio: settings["audio"] as? Bool == false ? nil : source,
+            // HDR where the page asks, the format carries it and the film delivers it.
+            hdr: parameters["hdr"] as? Bool == true && format.carriesHDR
+                && deliversHDR(prepared.edit)))
 
         let proceed = engine.continuation()
         let bytesPerPixel = format.takesLinearLight ? 16 : 4

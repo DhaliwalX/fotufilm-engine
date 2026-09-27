@@ -192,7 +192,7 @@ export function createMacBackend(channel) {
       const saved = await call("exportVideo", {
         ...renderRequest(request, await catalogue()),
         format: request.format, quality: request.quality, filename: request.filename,
-        type: format?.type ?? "video/mp4",
+        type: format?.type ?? "video/mp4", hdr: request.hdr === true,
       }, { signal: request.signal, onProgress: request.onProgress });
       return { ...saved, dispose() {} };
     },

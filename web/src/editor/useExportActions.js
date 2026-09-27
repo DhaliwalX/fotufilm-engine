@@ -1,6 +1,6 @@
 import { exportMaxEdge } from "../export-sizes.js";
 import { cleanName } from "./file-download.js";
-import { setAppSetting } from "../app-settings.js";
+import { appSetting, setAppSetting } from "../app-settings.js";
 export default function useExportActions({
   backend,
   active,
@@ -50,6 +50,7 @@ export default function useExportActions({
         format: videoFormat,
         quality: videoQuality,
         maxEdge: exportMaxEdge(exportSize, ...upright()),
+        hdr: appSetting("videoHDR") === true,
         signal: controller.signal,
         onProgress: ({ progress, frames, finalizing }) =>
           setStatus(

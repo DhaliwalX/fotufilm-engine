@@ -73,7 +73,7 @@ public enum HLGTransfer {
     }
 
     /// One display-linear P3 print pixel to HLG-encoded BT.2020 RGB.
-    static func encodeRGB(r: Float, g: Float, b: Float)
+    public static func encodeRGB(r: Float, g: Float, b: Float)
         -> (r: Float, g: Float, b: Float) {
         let rolled = PrintEncoding.hdrShoulderPreservingHue(SIMD3(r, g, b))
         let m = displayP3ToRec2020

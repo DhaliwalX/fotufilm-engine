@@ -83,9 +83,12 @@ struct HostVideoFormat {
     /// Bits per component the file stores.
     var bits: Int
 
+    /// Whether the format can carry HDR (HLG): the deep formats, as in the Mac app.
+    var carriesHDR: Bool { takesLinearLight }
+
     var json: [String: Any] {
         ["id": id, "label": label, "extension": fileExtension, "type": mimeType,
-         "quality": compresses, "bits": bits, "colorSpace": "display-p3"]
+         "quality": compresses, "bits": bits, "colorSpace": "display-p3", "hdr": carriesHDR]
     }
 }
 
@@ -105,6 +108,8 @@ struct HostVideoDelivery {
     /// The movie whose sound is carried across, when the edit keeps it. A writer carries the
     /// audio of sources its platform reads and leaves others silent.
     var audio: HostVideoSource?
+    /// BT.2100 HLG in BT.2020 rather than SDR Display P3, for formats that carry it.
+    var hdr = false
 }
 
 /// Encodes developed frames into a movie file.

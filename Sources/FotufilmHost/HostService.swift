@@ -659,7 +659,7 @@ public final class HostService {
         ]
     }
 
-    private func deliversHDR(_ edit: WebNativeEdit) -> Bool {
+    func deliversHDR(_ edit: WebNativeEdit) -> Bool {
         guard let stock = engine.stock(edit.edit.stock) else { return true }
         return (try? engine.options(edit, stock: stock, contentHeadroom: 1))?
             .supportsHDRDelivery(for: stock) ?? false
