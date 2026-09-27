@@ -45,6 +45,14 @@ struct FotufilmCompositorStats {
 - (void)setImageTexture:(id<MTLTexture>)texture rect:(CGRect)rect;
 - (void)clearImage;
 
+// Watches one point of the window: every change is composited at once and the pixel there read
+// back, and the time a changed pixel's composite was committed is recorded, so latency is
+// measured on the pixels themselves (cef/README.md, Checks). A NaN point stops watching.
+- (void)probePoint:(CGPoint)point;
+// The value when the probe was armed, then each change: {time (ms, CACurrentMediaTime), value
+// (the pixel's bytes in hex, BGRA8 or RGBA16F)}.
+- (NSArray<NSDictionary*>*)probeChanges;
+
 // Composites at the next refresh. Frames are drawn only when something changed.
 - (void)setNeedsDisplay;
 // Draw every refresh, for content that moves on its own (the test pattern).

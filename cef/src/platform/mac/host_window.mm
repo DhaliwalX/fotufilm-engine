@@ -587,6 +587,40 @@ class MacView : public fotufilm::ViewDelegate {
         reply->Resolve(Dictionary(stats));
       });
 
+  // The latency probe: {x, y} in CSS pixels arms it at a point of the window ({} stops it);
+  // probeReport answers the changes seen there and the host's clock, in milliseconds.
+  _dispatcher->Register(
+      "probePixel", Dispatcher::Thread::kUi,
+      [weakSelf](const Call& call, std::shared_ptr<Reply> reply) {
+        FotufilmHostWindow* strong = weakSelf;
+        CefRefPtr<CefDictionaryValue> fields =
+            call.params && call.params->GetType() == VTYPE_DICTIONARY
+                ? call.params->GetDictionary()
+                : nullptr;
+        const bool armed = fields && fields->HasKey("x");
+        if (strong)
+          [strong->_view.compositor
+              probePoint:armed ? CGPointMake(Number(fields, "x"), Number(fields, "y"))
+                               : CGPointMake(NAN, NAN)];
+        reply->Resolve(nullptr);
+      });
+  _dispatcher->Register(
+      "probeReport", Dispatcher::Thread::kUi,
+      [weakSelf](const Call&, std::shared_ptr<Reply> reply) {
+        FotufilmHostWindow* strong = weakSelf;
+        CefRefPtr<CefDictionaryValue> report = CefDictionaryValue::Create();
+        report->SetDouble("now", CACurrentMediaTime() * 1000);
+        CefRefPtr<CefListValue> changes = CefListValue::Create();
+        for (NSDictionary* change in strong ? [strong->_view.compositor probeChanges] : @[]) {
+          CefRefPtr<CefDictionaryValue> entry = CefDictionaryValue::Create();
+          entry->SetDouble("time", [change[@"time"] doubleValue]);
+          entry->SetString("value", [change[@"value"] UTF8String]);
+          changes->SetDictionary(changes->GetSize(), entry);
+        }
+        report->SetList("changes", changes);
+        reply->Resolve(Dictionary(report));
+      });
+
   // Where the engine's image goes, in CSS pixels from the top left of the page; an empty or
   // missing rectangle removes it. Without an engine the layer shows a moving test pattern.
   _dispatcher->Register(

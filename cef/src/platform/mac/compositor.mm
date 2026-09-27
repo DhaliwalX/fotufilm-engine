@@ -76,6 +76,13 @@ double Microseconds(uint64_t start, uint64_t end) {
   struct FotufilmCompositorStats _stats;
   CAMetalDisplayLink* _link API_AVAILABLE(macos(14.0));
   BOOL _dirty;
+  // The pixel probe: the point in view points, the last value seen and the changes since arming.
+  CGPoint _probe;
+  BOOL _probing;
+  NSString* _probeValue;
+  NSMutableArray<NSDictionary*>* _probeChanges;
+  id<MTLTexture> _probeTarget;
+  BOOL _probeScheduled;
 }
 
 - (instancetype)initWithLayer:(CAMetalLayer*)layer {
@@ -236,8 +243,84 @@ double Microseconds(uint64_t start, uint64_t end) {
                           1 - CGRectGetMaxY(rect) / height * 2);
 }
 
+- (void)probePoint:(CGPoint)point {
+  _probing = !isnan(point.x) && !isnan(point.y);
+  _probe = point;
+  _probeValue = nil;
+  _probeChanges = [NSMutableArray array];
+  _probeTarget = nil;
+  [self setNeedsDisplay];
+}
+
+- (NSArray<NSDictionary*>*)probeChanges {
+  return [_probeChanges copy] ?: @[];
+}
+
+// While probing, every change is also composited at once into a texture of the drawable's size
+// and the probed pixel read back from it, timed when that composite is committed. The display
+// link's own composite follows at the next refresh, so what this measures is the path up to the
+// frame the screen will show, less at most one refresh; and it holds while the window is covered
+// or the screen is locked, when the system slows the display link down.
+- (void)probeComposite {
+  _probeScheduled = NO;
+  if (!_probing || _points.width < 1 || _points.height < 1) return;
+  const NSUInteger width = NSUInteger(_points.width * _scale),
+                   height = NSUInteger(_points.height * _scale);
+  if (_probeTarget.width != width || _probeTarget.height != height ||
+      _probeTarget.pixelFormat != _layer.pixelFormat) {
+    MTLTextureDescriptor* descriptor = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:_layer.pixelFormat
+                                     width:width
+                                    height:height
+                                 mipmapped:NO];
+    descriptor.usage = MTLTextureUsageRenderTarget;
+    descriptor.storageMode = MTLStorageModePrivate;
+    _probeTarget = [_device newTextureWithDescriptor:descriptor];
+  }
+  id<MTLCommandBuffer> commands = [_queue commandBuffer];
+  [self encodeInto:_probeTarget commands:commands];
+  const NSUInteger x = MIN(width - 1, NSUInteger(MAX(0, _probe.x * _scale)));
+  const NSUInteger y = MIN(height - 1, NSUInteger(MAX(0, _probe.y * _scale)));
+  const NSUInteger bytes = _probeTarget.pixelFormat == MTLPixelFormatRGBA16Float ? 8 : 4;
+  id<MTLBuffer> buffer = [_device newBufferWithLength:bytes options:MTLResourceStorageModeShared];
+  id<MTLBlitCommandEncoder> blit = [commands blitCommandEncoder];
+  [blit copyFromTexture:_probeTarget
+               sourceSlice:0
+               sourceLevel:0
+              sourceOrigin:MTLOriginMake(x, y, 0)
+                sourceSize:MTLSizeMake(1, 1, 1)
+                  toBuffer:buffer
+         destinationOffset:0
+    destinationBytesPerRow:bytes
+  destinationBytesPerImage:bytes];
+  [blit endEncoding];
+  // Command buffers complete in order, so changes are recorded in order.
+  const CFTimeInterval committed = CACurrentMediaTime();
+  __weak FotufilmCompositor* weakSelf = self;
+  [commands addCompletedHandler:^(id<MTLCommandBuffer>) {
+    const uint8_t* read = static_cast<const uint8_t*>(buffer.contents);
+    NSMutableString* hex = [NSMutableString string];
+    for (NSUInteger i = 0; i < bytes; ++i) [hex appendFormat:@"%02x", read[i]];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      FotufilmCompositor* strong = weakSelf;
+      if (!strong || !strong->_probing) return;
+      // The first value is recorded too: it is what the changes are measured against.
+      if (![strong->_probeValue isEqualToString:hex])
+        [strong->_probeChanges addObject:@{@"time" : @(committed * 1000), @"value" : hex}];
+      strong->_probeValue = hex;
+    });
+  }];
+  [commands commit];
+}
+
 - (void)setNeedsDisplay {
   _dirty = YES;
+  if (_probing && !_probeScheduled) {
+    _probeScheduled = YES;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self probeComposite];
+    });
+  }
   if (@available(macOS 14.0, *)) {
     if (_link) {
       _link.paused = NO;
@@ -268,27 +351,18 @@ double Microseconds(uint64_t start, uint64_t end) {
   [self drawInto:update.drawable];
 }
 
-// Draws the image layer and the page into `drawable`, or into the layer's next drawable where no
-// display link hands one over.
-- (void)drawInto:(id<CAMetalDrawable>)drawable {
-  if (_points.width < 1 || _points.height < 1) return;
-  _dirty = NO;
-  const uint64_t start = mach_absolute_time();
-  if (!drawable) drawable = [_layer nextDrawable];
-  if (!drawable) return;
-  const uint64_t acquired = mach_absolute_time();
-  _stats.lastDrawableWaitMicroseconds = Microseconds(start, acquired);
+// Draws the image layer and the page into `target`.
+- (void)encodeInto:(id<MTLTexture>)target commands:(id<MTLCommandBuffer>)commands {
   MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor renderPassDescriptor];
-  pass.colorAttachments[0].texture = drawable.texture;
+  pass.colorAttachments[0].texture = target;
   pass.colorAttachments[0].loadAction = MTLLoadActionClear;
   pass.colorAttachments[0].storeAction = MTLStoreActionStore;
   pass.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1);
-  id<MTLCommandBuffer> commands = [_queue commandBuffer];
   id<MTLRenderCommandEncoder> encoder =
       [commands renderCommandEncoderWithDescriptor:pass];
 
   Quad quad{};
-  quad.time = float(Microseconds(_start, start) / 1e6);
+  quad.time = float(Microseconds(_start, mach_absolute_time()) / 1e6);
   if (!CGRectIsNull(_imageRect) && !CGRectIsEmpty(_imageRect)) {
     quad.rect = [self deviceRect:_imageRect];
     quad.uv = simd_make_float4(0, 0, 1, 1);
@@ -312,6 +386,20 @@ double Microseconds(uint64_t start, uint64_t end) {
     [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
   }
   [encoder endEncoding];
+}
+
+// Draws the image layer and the page into `drawable`, or into the layer's next drawable where no
+// display link hands one over.
+- (void)drawInto:(id<CAMetalDrawable>)drawable {
+  if (_points.width < 1 || _points.height < 1) return;
+  _dirty = NO;
+  const uint64_t start = mach_absolute_time();
+  if (!drawable) drawable = [_layer nextDrawable];
+  if (!drawable) return;
+  const uint64_t acquired = mach_absolute_time();
+  _stats.lastDrawableWaitMicroseconds = Microseconds(start, acquired);
+  id<MTLCommandBuffer> commands = [_queue commandBuffer];
+  [self encodeInto:drawable.texture commands:commands];
   [commands presentDrawable:drawable];
   [commands commit];
   _stats.frames++;
