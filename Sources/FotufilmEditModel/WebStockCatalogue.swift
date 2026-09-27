@@ -33,7 +33,10 @@ public enum WebStockCatalogue {
          }]
     }
 
-    /// Every loaded film as one merged `loadStockIndex` entry, in id order.
+    /// Every loaded film as one merged `loadStockIndex` entry, in id order, for a native host. Its
+    /// default medium is an editor edit's, Digital Reference as the Mac app's editor opens a film
+    /// on it, which is what a host develops when the edit names none (`WebNativeEdit.document`).
+    /// The browser's own catalogue keeps the medium its base pack was built on.
     public static func entries() throws -> [[String: Any]] {
         let stocks = FilmStock.presets
         let definitions = FilmStock.presetDefinitions
@@ -45,7 +48,8 @@ public enum WebStockCatalogue {
             var entry: [String: Any] = [
                 "id": id, "name": stock.name, "layeredTransport": stock.donorLayers.isEmpty,
                 "profile": profile, "available": profile["available"] ?? [],
-                "media": media["choices"]!, "defaultMedium": media["default"]!,
+                "media": media["choices"]!,
+                "defaultMedium": PrintPaper.editorDefault.resolved(for: stock).id,
             ]
             if let format = profile["nativeFormat"] { entry["nativeFormat"] = format }
             return entry

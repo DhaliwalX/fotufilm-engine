@@ -29,10 +29,24 @@ public struct WebNativeEdit: Decodable {
         public var localTone: Bool?
         /// New Grain Pattern: 0 keeps the film's own pattern.
         public var seed: UInt32?
+        /// Legacy or Layered Transport, which the editor keeps beside the film settings.
+        public var halationModel: String?
+        /// How a still's dynamic range is read (`FilmSourceInterpretation`); the host decodes the
+        /// photograph to match before it develops.
+        public var sourceInterpretation: String?
     }
 
     public var edit: Edit
     public var profileRequest: Settings
+    /// How much of the frame's short edge the edit's geometry keeps, measured by the host that
+    /// cut the scene: a crop is an enlargement, as the Mac app develops it. Nil is the whole frame.
+    public var frameCoverage: Float?
+
+    private enum CodingKeys: String, CodingKey { case edit, profileRequest }
+
+    /// Whether the edit reads a processed photograph as Standard Range: tone-mapped to SDR before
+    /// the film is exposed, where Automatic and Full Range keep the decoded highlight range.
+    public var readsStandardRange: Bool { edit.sourceInterpretation == "standardRange" }
 
     /// Web slider keys and the controls they stand for, with the web's unit converted to the
     /// catalogue's. Temperature and tint use the conversions the plug-ins' Kelvin and Δuv
@@ -58,10 +72,14 @@ public struct WebNativeEdit: Decodable {
         ("gradeHighlightsLevel", .gradeHighlightsLevel, { $0 }),
     ]
 
+    /// The edit as one document. A medium the editor leaves unstated is the one an editor's edit
+    /// starts on, Digital Reference, which the host's film library names as each film's default
+    /// (`WebStockCatalogue.entries`) — not the engine's physically matched print.
     public var document: EditDocument {
         let settings = profileRequest
         var document = EditDocument(webControls: settings.controls ?? [:], format: settings.format,
-                                    medium: settings.medium, filters: settings.filters,
+                                    medium: settings.medium ?? PrintPaper.editorDefault.id,
+                                    filters: settings.filters,
                                     filterMetering: settings.filterMetering,
                                     sceneKelvin: settings.sceneKelvin)
         for (key, field, canonical) in Self.sliders {
@@ -70,6 +88,7 @@ public struct WebNativeEdit: Decodable {
         }
         if let gradeSpace = edit.gradeSpace { document[.gradeSpace] = .flag(gradeSpace) }
         if let localTone = edit.localTone { document[.localTone] = .flag(localTone) }
+        if let halationModel = edit.halationModel { document[.halationModel] = .choice(halationModel) }
         return document
     }
 
@@ -79,6 +98,7 @@ public struct WebNativeEdit: Decodable {
         -> FotufilmEngine.Options {
         var options = try document.options(for: stock, nativeFormatID: nativeFormatID)
         if let seed = edit.seed, seed != 0 { options.seed &+= UInt64(seed) }
+        if let frameCoverage { options.frameCoverage = frameCoverage }
         return options
     }
 }

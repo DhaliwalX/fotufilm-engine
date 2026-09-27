@@ -220,10 +220,21 @@ public final class HostService {
             .appendingPathComponent("fotufilm-import", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let file = directory.appendingPathComponent(
-            UUID().uuidString + "." + (URL(fileURLWithPath: name).pathExtension))
-        try Data(bytes: bytes.baseAddress!, count: bytes.count).write(to: file)
+            UUID().uuidString + "." + URL(fileURLWithPath: name).pathExtension)
+        let data = Data(bytes: bytes.baseAddress!, count: bytes.count)
+        try data.write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
-        return try imported(HostImage.open(file))
+        let image = try HostImage.open(file)
+        // Keep uploaded bytes for a later source-interpretation change. Restore the decoder's
+        // private URL only while it reads; do not decode the full-range image a second time.
+        if let decode = image.decodeStandardRange {
+            image.decodeStandardRange = {
+                try data.write(to: file, options: .atomic)
+                defer { try? FileManager.default.removeItem(at: file) }
+                return try decode()
+            }
+        }
+        return try imported(image)
     }
 
     /// Export Original: the camera RAW file itself, copied where the save panel chose. No edit
@@ -298,6 +309,23 @@ public final class HostService {
         var geometry: SceneGeometry
         var maxEdge: Int?
         var sizes: (frame: (Int, Int), output: (Int, Int))
+
+        /// The edit with what the photograph and its framing decide, as the Mac app's develop
+        /// reads them off the scene (`FilmRender.develop`): a gauge nobody picked follows the
+        /// frame the camera exposed (`EditState.resolvedFormat(sensor:)`), and a crop is an
+        /// enlargement of the film it keeps.
+        func developing(_ decoded: WebNativeEdit) -> WebNativeEdit {
+            var edit = decoded.following(image.sensorFrame)
+            edit.frameCoverage = geometry.frameCoverage(width: image.width, height: image.height)
+            return edit
+        }
+
+        /// A render request's body read again after the host changed it (a print frame's
+        /// settings), developed on this photograph and framing.
+        func edit(_ body: [String: Any]) throws -> WebNativeEdit {
+            developing(try JSONDecoder().decode(WebNativeEdit.self,
+                                                from: JSONSerialization.data(withJSONObject: body)))
+        }
     }
 
     func prepare(_ params: Data) throws -> Prepared {
@@ -308,9 +336,9 @@ public final class HostService {
         } catch {
             throw HostEngine.Failure(description: "Unreadable render request: \(error)")
         }
-        let image = try self.image(request.handle)
-        let edit = decoded.following(image.sensorFrame)
-        image.video?.select(params)
+        let opened = try self.image(request.handle)
+        opened.video?.select(params)
+        let image = try opened.interpreted(standardRange: decoded.readsStandardRange)
         let geometry = request.cropMode == true ? request.edit.uncropped() : request.edit
         // A viewport asks for part of a larger virtual picture: develop the whole frame at that
         // size, bounded by the photograph's own pixels, and cut the region out of it.
@@ -325,8 +353,10 @@ public final class HostService {
         // A limit at or past the photograph's own size is no limit, and keys the same develop.
         if let limit = maxEdge, limit <= 0 || limit >= max(full.frame.0, full.frame.1) { maxEdge = nil }
         let sizes = geometry.sizes(width: image.width, height: image.height, maxEdge: maxEdge)
-        return Prepared(request: request, edit: edit, image: image, geometry: geometry,
-                        maxEdge: maxEdge, sizes: sizes)
+        var prepared = Prepared(request: request, edit: decoded, image: image, geometry: geometry,
+                                maxEdge: maxEdge, sizes: sizes)
+        prepared.edit = prepared.developing(decoded)
+        return prepared
     }
 
     private func render(_ params: Data) throws -> Answer {
@@ -346,9 +376,7 @@ public final class HostService {
         var edit = prepared.edit
         if let plan {
             HostFrames.settings(&body, for: plan)
-            edit = try JSONDecoder().decode(WebNativeEdit.self,
-                                            from: JSONSerialization.data(withJSONObject: body))
-                .following(image.sensorFrame)
+            edit = try prepared.edit(body)
         }
 
         // A request that names a layer is shown by the host's compositor, in extended range when
@@ -850,8 +878,7 @@ public final class HostService {
         }
         if let plan {
             HostFrames.settings(&body, for: plan)
-            prepared.edit = try JSONDecoder().decode(
-                WebNativeEdit.self, from: JSONSerialization.data(withJSONObject: body))
+            prepared.edit = try prepared.edit(body)
         }
         // Photo Quality: exact film math unless the page asks for Fast, as the Mac app exports.
         let exact = parameters["photoQuality"] as? String != "fast"

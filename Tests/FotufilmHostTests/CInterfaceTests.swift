@@ -377,6 +377,31 @@ extension CInterfaceTests {
         XCTAssertNotEqual(try render(nil), try render("35mm"))
     }
 
+    func testUploadedPhotoCanSwitchSourceInterpretationAfterImport() throws {
+        let engine = try makeEngine()
+        defer { fotufilm_engine_destroy(engine) }
+        let service = Unmanaged<HostEngine>.fromOpaque(UnsafeRawPointer(engine))
+            .takeUnretainedValue().service
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fotufilm-upload-\(UUID().uuidString).png")
+        try writeRamp(to: url, width: 32, height: 16)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let bytes = try Data(contentsOf: url)
+        let imported = try bytes.withUnsafeBytes {
+            try service.call("import", params: Data(#"{"name":"ramp.png"}"#.utf8), payload: $0)
+        }
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: imported.json) as? [String: Any])
+        let handle = try XCTUnwrap(body["handle"] as? Int)
+        // The import's temporary file has already been deleted by this point.
+        let prepared = try service.prepare(Data("""
+        {"handle":\(handle),"edit":{"params":{},"sourceInterpretation":"standardRange"},
+         "profileRequest":{"controls":{}}}
+        """.utf8))
+        XCTAssertEqual(prepared.image.width, 32)
+        XCTAssertEqual(prepared.image.height, 16)
+        XCTAssertEqual(prepared.image.contentHeadroom, 1)
+    }
+
     /// The editor's own calls: import a photograph's bytes, develop a cropped render of it.
     func testHostCallsImportAndRender() throws {
         let engine = try makeEngine()

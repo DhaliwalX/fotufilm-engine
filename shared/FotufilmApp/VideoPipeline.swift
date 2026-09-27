@@ -1388,20 +1388,11 @@ enum VideoPipeline {
                                 return
                             }
                             if let densitySmall {
-                                job.ok = engine.processRGBA8Head(
-                                    input: gpuInputs[slot],
-                                    density: densitySmall,
-                                    width: developWidth, height: developHeight,
-                                    stock: stock, options: options,
-                                    frameIndex: index)
-                                && engine.processRGBA8Tail(
-                                    density: densitySmall,
-                                    output: gpuOutputs[slot],
-                                    width: outputWidth, height: outputHeight,
-                                    densityWidth: developWidth,
-                                    densityHeight: developHeight,
-                                    stock: stock, options: options,
-                                    frameIndex: index)
+                                job.ok = engine.processRGBA8Hybrid(
+                                    input: gpuInputs[slot], density: densitySmall,
+                                    output: gpuOutputs[slot], width: outputWidth, height: outputHeight,
+                                    densityWidth: developWidth, densityHeight: developHeight,
+                                    stock: stock, options: options, frameIndex: index)
                                 return
                             }
                             job.ok = deepInput

@@ -17,8 +17,11 @@ extension SensorFrame {
     /// The frame these bytes were exposed on, or nil when the file says nothing that settles it —
     /// a scan, a screenshot, a render, and anything that has been through an editor that dropped
     /// the camera's own record.
-    public static func read(data: Data) -> SensorFrame? {
-        read(source: CGImageSourceCreateWithData(data as CFData, nil))
+    public static func read(data: Data, identifierHint: String? = nil) -> SensorFrame? {
+        // Some RAW containers open from a named URL but need their known type when ImageIO
+        // reads bytes. Preserve that acquisition hint so automatic gauge agrees in both paths.
+        let options = identifierHint.map { [kCGImageSourceTypeIdentifierHint: $0] as CFDictionary }
+        return read(source: CGImageSourceCreateWithData(data as CFData, options))
     }
 
     /// The same read off a file on disk, for the CLI path.

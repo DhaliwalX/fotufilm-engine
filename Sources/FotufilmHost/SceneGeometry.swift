@@ -82,6 +82,18 @@ struct SceneGeometry: Decodable, Equatable {
         return (frame, output)
     }
 
+    /// Physical film coverage, before preview dimensions are rounded to whole pixels.
+    func frameCoverage(width: Int, height: Int) -> Float {
+        let w = Double(rotation % 2 == 0 ? width : height)
+        let h = Double(rotation % 2 == 0 ? height : width)
+        func distance(_ a: [Double], _ b: [Double]) -> Double {
+            hypot((a[0] - b[0]) * w, (a[1] - b[1]) * h)
+        }
+        let croppedWidth = (distance(crop[0], crop[1]) + distance(crop[3], crop[2])) / 2
+        let croppedHeight = (distance(crop[0], crop[3]) + distance(crop[1], crop[2])) / 2
+        return Float(min(croppedWidth, croppedHeight) / max(1, min(w, h)))
+    }
+
     /// Unit square to the crop quadrilateral (`homography` in web/src/geometry.js).
     static func homography(_ p: [[Double]]) -> [Double] {
         let (x0, y0, x1, y1) = (p[0][0], p[0][1], p[1][0], p[1][1])

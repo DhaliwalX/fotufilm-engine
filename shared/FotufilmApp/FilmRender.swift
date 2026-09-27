@@ -1850,7 +1850,8 @@ struct PhotoSource: @unchecked Sendable {
                 asShotKelvin: raw.asShotKelvin, asShotChromaticity: raw.asShotChromaticity,
                 camera: raw.camera,
                 captureMetadata: capture, lensShot: lensShot(from: capture),
-                sensorFrame: SensorFrame.read(data: data), declaredHeadroom: nil,
+                sensorFrame: SensorFrame.read(data: data, identifierHint: contentType?.identifier ?? hint),
+                declaredHeadroom: nil,
                 sourceColorProfile: properties?[kCGImagePropertyProfileName as String]
                     as? String),
             rawHint: contentType?.identifier ?? hint)

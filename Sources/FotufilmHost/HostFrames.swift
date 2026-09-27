@@ -23,6 +23,8 @@ enum HostFrames {
     static func answer(_ request: [String: Any]) throws -> Data {
         var body = request
         body["stock"] = nil
+        // An unstated medium is the editor's, as the develop reads it (`WebNativeEdit.document`).
+        if body["medium"] as? String == nil { body["medium"] = PrintPaper.editorDefault.id }
         if let id = request["stock"] as? String, let definition = FilmStock.presetDefinitions[id] {
             body["stock"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(definition))
         }

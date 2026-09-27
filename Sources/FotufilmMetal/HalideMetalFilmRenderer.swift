@@ -1976,20 +1976,45 @@ public final class HalideMetalFilmRenderer {
         }
     }
 
+    /// Develops density at a reduced resolution and prints it at the delivered resolution,
+    /// sharing the same scene measurements between both stages.
+    @discardableResult
+    public func processRGBA8Hybrid(
+        input: MTLBuffer, density: MTLBuffer, output: MTLBuffer,
+        width: Int, height: Int, densityWidth: Int, densityHeight: Int,
+        stock: FilmStock, options: FotufilmEngine.Options, frameIndex: UInt64 = 0
+    ) -> Bool {
+        guard options.transportConstruction(for: stock) == nil,
+              let measurements = makeRGBA8FrameContext(
+                input: input, width: densityWidth, height: densityHeight,
+                stock: stock, options: options, frameIndex: frameIndex)
+        else { return false }
+        return processRGBA8Head(input: input, density: density,
+                                width: densityWidth, height: densityHeight,
+                                stock: stock, options: options, frameIndex: frameIndex,
+                                measurements: measurements)
+            && processRGBA8Tail(density: density, output: output, width: width, height: height,
+                                densityWidth: densityWidth, densityHeight: densityHeight,
+                                stock: stock, options: options, frameIndex: frameIndex,
+                                measurements: measurements)
+    }
+
     @discardableResult
     public func processRGBA8Head(
         input: MTLBuffer, density: MTLBuffer,
         width: Int, height: Int,
         stock: FilmStock, options: FotufilmEngine.Options,
-        frameIndex: UInt64 = 0
+        frameIndex: UInt64 = 0, measurements: FilmFrameContext? = nil
     ) -> Bool {
         guard options.transportConstruction(for: stock) == nil else { return false }
         precondition(width > 0 && height > 0)
         precondition(input.length >= width * height * 4)
         precondition(density.length >= width * height * 8)
-        guard let context = makeRGBA8FrameContext(
+        guard let context = measurements ?? makeRGBA8FrameContext(
             input: input, width: width, height: height,
-            stock: stock, options: options, frameIndex: frameIndex)
+            stock: stock, options: options, frameIndex: frameIndex),
+              context.encoding == .encodedDisplayP3,
+              context.width == width, context.height == height
         else { return false }
         let invocation = context.invocation
         let inputHandle = UInt64(UInt(bitPattern:
@@ -2015,17 +2040,25 @@ public final class HalideMetalFilmRenderer {
         width: Int, height: Int,
         densityWidth: Int = 0, densityHeight: Int = 0,
         stock: FilmStock, options: FotufilmEngine.Options,
-        frameIndex: UInt64 = 0
+        frameIndex: UInt64 = 0, measurements: FilmFrameContext? = nil
     ) -> Bool {
         let inWidth = densityWidth > 0 ? densityWidth : width
         let inHeight = densityHeight > 0 ? densityHeight : height
         precondition(width > 0 && height > 0)
         precondition(density.length >= inWidth * inHeight * 8)
         precondition(output.length >= width * height * 4)
-        guard let invocation = try? FilmEngineInvocation(
+        guard var invocation = try? FilmEngineInvocation(
             validating: stock, options: options, width: width,
             height: height, frameIndex: frameIndex)
         else { return false }
+        if let measurements {
+            guard measurements.encoding == .encodedDisplayP3,
+                  measurements.width == inWidth, measurements.height == inHeight
+            else { return false }
+            // The head meters the scene before developing density. The print must retain those
+            // screen levels even when its output raster has a different size.
+            invocation.copyScreenLevels(from: measurements.invocation)
+        }
         let densityHandle = UInt64(UInt(bitPattern:
             Unmanaged.passUnretained(density as AnyObject).toOpaque()))
         let outputHandle = UInt64(UInt(bitPattern:

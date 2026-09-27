@@ -56,10 +56,15 @@ public struct SceneImage {
         return CGImagePropertyOrientation(rawValue: value.uint32Value)
     }
 
-    public static func decode(url: URL) throws -> SceneImage {
+    /// `standardRange` reads a processed photograph as the apps' Standard Range source
+    /// interpretation does (`FilmSourceInterpretation.standardRange`): the platform's SDR
+    /// rendition, with nothing above diffuse white for the film to meter. Camera RAW always keeps
+    /// its scene-linear latitude.
+    public static func decode(url: URL, standardRange: Bool = false) throws -> SceneImage {
         let path = url.path
         let isRaw = RawDecode.isRaw(url: url)
-        let declaredHeadroom = isRaw ? nil : GainMapHeadroom.declared(url: url)
+        let toneMapped = standardRange && !isRaw
+        let declaredHeadroom = isRaw || toneMapped ? nil : GainMapHeadroom.declared(url: url)
         let context = CIContext(options: [.useSoftwareRenderer: true, .cacheIntermediates: false])
         var image: CIImage?
         var sceneKelvin: Float?
@@ -83,6 +88,9 @@ public struct SceneImage {
                 camera: RawDecode.cameraIdentity(url: url),
                 sceneKelvin: sceneKelvin)
             image = raw.outputImage
+        } else if toneMapped {
+            associatedEXRColor = associatedOpenEXRColor(url: url)
+            image = CIImage(contentsOf: url, options: [.toneMapHDRtoSDR: true])
         } else {
             associatedEXRColor = associatedOpenEXRColor(url: url)
             if #available(macOS 14.0, *) {
@@ -91,11 +99,22 @@ public struct SceneImage {
             if image == nil {
                 image = CIImage(contentsOf: url)
             }
-            // The declared range, the app's rule exactly (`FilmRender`): the decoded image's own
-            // statement when the platform reports one, and the file's own — a gain map's stated
-            // ceiling, or the fixed one an HLG/PQ container stands for — when a declaring file
-            // decodes to a neutral report. Raw never declares: its above-white light is the
-            // negative's own path and is not rolled.
+            // Share the apps' eligibility rule and compare full-source renditions before crop or
+            // resize.
+            if #available(macOS 14.0, *),
+               ProcessedHDRExposure.isEligible(isRaw: isRaw, declaredHeadroom: declaredHeadroom),
+               let hdr = image,
+               let reference = CIImage(contentsOf: url, options: [.toneMapHDRtoSDR: true]) {
+                let gain = ProcessedHDRExposure.referenceGain(
+                    expandedHDR: hdr, sdrReference: reference, context: context)
+                image = ProcessedHDRExposure.applying(gain, to: hdr)
+            }
+            // The declared range, the app's rule exactly (`FilmRender.scene`): the decoded image's
+            // own statement once the processed-HDR exposure is taken out of it, when the platform
+            // reports one, and the file's own — a gain map's stated ceiling, or the fixed one an
+            // HLG/PQ container stands for — when a declaring file decodes to a neutral report.
+            // Raw never declares: its above-white light is the negative's own path and is not
+            // rolled.
             if #available(macOS 15.0, *), let decoded = image {
                 contentHeadroom = max(1, decoded.contentHeadroom)
             }
@@ -104,17 +123,8 @@ public struct SceneImage {
             }
         }
         // An HLG or PQ file decodes as display light; its range is the scene's, stated by its transfer.
-        let hdrTransfer = isRaw ? nil : GainMapHeadroom.transfer(url: url)
+        let hdrTransfer = isRaw || toneMapped ? nil : GainMapHeadroom.transfer(url: url)
         if let hdrTransfer { contentHeadroom = hdrTransfer.sceneHeadroom }
-        // Share the apps' eligibility rule and compare full-source renditions before crop or resize.
-        if #available(macOS 14.0, *),
-           ProcessedHDRExposure.isEligible(isRaw: isRaw, declaredHeadroom: declaredHeadroom),
-           let hdr = image,
-           let reference = CIImage(contentsOf: url, options: [.toneMapHDRtoSDR: true]) {
-            let gain = ProcessedHDRExposure.referenceGain(
-                expandedHDR: hdr, sdrReference: reference, context: context)
-            image = ProcessedHDRExposure.applying(gain, to: hdr)
-        }
         guard var ci = image else {
             throw Failure(description: "Could not read image: \(path)")
         }

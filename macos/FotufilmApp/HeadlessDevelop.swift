@@ -231,6 +231,28 @@ enum HeadlessDevelop {
         let correctsLens = !lens.isNeutral
             || arguments.contains("--still-lens-profile")
 
+        // `--still-edit=edit.json` develops a saved edit (the editor's own `EditState` coding) on
+        // each stock, medium included, so a still can be checked against another surface's develop
+        // of the same edit. `--still-exact` takes the accurate export's arithmetic, and
+        // `--still-type=tiff|png` writes the print losslessly.
+        var savedEdit: EditState?
+        if let editArgument = value("--still-edit=") {
+            do {
+                savedEdit = try JSONDecoder().decode(
+                    EditState.self, from: Data(contentsOf: URL(fileURLWithPath: editArgument)))
+            } catch {
+                print("DevelopStill failed: unreadable edit \(editArgument): \(error)")
+                exit(1)
+            }
+        }
+        let exact = arguments.contains("--still-exact")
+        let typeArgument = value("--still-type=") ?? "jpeg"
+        guard let outputType = PhotoExportFormat(rawValue: typeArgument), outputType != .heic else {
+            print("DevelopStill failed: unknown type '\(typeArgument)'. Choices: jpeg, png, tiff")
+            exit(1)
+        }
+        let outputExtension = outputType == .jpeg ? "jpg" : outputType.rawValue
+
         let stockArgument = value("--still-stock=") ?? "all"
         let stockIDs = stockArgument == "all"
             ? FilmStock.presetIDs
@@ -249,17 +271,21 @@ enum HeadlessDevelop {
                 at: outDirectory, withIntermediateDirectories: true)
             let stem = input.deletingPathExtension().lastPathComponent
             for stockID in stockIDs {
-                var state = EditState()
+                var state = savedEdit ?? EditState()
                 state.stockID = stockID
                 // `EditState` always holds a medium, so an unstated one is resolved against the
-                // stock here rather than left for the engine.
-                state.paper = paper
-                    ?? StockPreset.preset(id: stockID).map {
+                // stock here rather than left for the engine. A saved edit states its own.
+                if let paper {
+                    state.paper = paper
+                } else if savedEdit == nil {
+                    state.paper = StockPreset.preset(id: stockID).map {
                         PrintPaper.default(for: $0.stock)
-                    }
-                    ?? PrintPaper.default
-                state.lensCorrectionEnabled = correctsLens
-                state.lensAdjustment = lens
+                    } ?? PrintPaper.default
+                }
+                if savedEdit == nil || correctsLens {
+                    state.lensCorrectionEnabled = correctsLens
+                    state.lensAdjustment = lens
+                }
                 if let formatArgument {
                     state.selectFormat(formatArgument)
                 }
@@ -280,16 +306,16 @@ enum HeadlessDevelop {
                 let balance = state.whiteBalance
                 guard let developed = FilmRender.develop(
                     scene, state: state, hdr: hdr,
-                    dynamicRange: hdr ? .hdr : .sdr, report: timings) else {
+                    dynamicRange: hdr ? .hdr : .sdr, exact: exact, report: timings) else {
                     print("DevelopStill \(stockID): develop failed")
                     exit(1)
                 }
                 let output = outDirectory
-                    .appendingPathComponent("\(stem).\(stockID).jpg")
+                    .appendingPathComponent("\(stem).\(stockID).\(outputExtension)")
                 guard developed.image.write(
-                    to: output, format: .jpeg,
+                    to: output, format: outputType,
                     metadata: .preserveWithoutLocation) else {
-                    print("DevelopStill \(stockID): JPEG write failed")
+                    print("DevelopStill \(stockID): \(outputType.title) write failed")
                     exit(1)
                 }
                 if hdr && state.supportsHDROutput {
@@ -310,6 +336,7 @@ enum HeadlessDevelop {
                     String(format: "[%.4f %.4f %.4f]", v.x, v.y, v.z)
                 }
                 print("DevelopStill \(stockID): headroom=\(scene.contentHeadroom)"
+                      + " format=\(state.resolvedFormat(sensor: scene.sensorFrame).name)"
                       + " balanceK=\(balance.kelvin) tint=\(balance.tint)"
                       + " scene=\(triple(sceneMean))"
                       + " film=\(triple(sceneMean))"

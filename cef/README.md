@@ -214,6 +214,22 @@ the engine's realtime schedule; a scrub opens the decoder at the new time. An ex
 panel goes through the same `DestinationPicker` as a still's, and its progress arrives as
 `fotufilm-native-progress` events for the call.
 
+Video Quality is shared by Settings and the export dialog. Full develops at the chosen delivery
+size. Fast uses a reduced film develop, up to a 1920-pixel long edge, followed by a full-size
+print for compatible 8-bit sources and outputs. Deep sources and deliveries retain their
+float pipeline. Selective edits and unsupported film models use the ordinary full-resolution
+develop. Both stages of a Fast print share the scene's measured Digital Reference levels.
+Several independent frames develop in flight and are written in presentation order; trim,
+audio, cancellation, grain animation and lower frame-rate delivery are retained.
+
+### Matching the native editor
+
+An unspecified output medium starts on Digital Reference, matching the Mac editor. Explicit
+paper choices are retained. The native backend applies the edit's halation model and measures
+crop coverage before rounding the preview raster, so film-scale effects retain their physical
+size across preview resolutions. Standard Range uses the platform's SDR rendition for processed
+photos; Automatic and Full Range keep the decoded highlights. RAW remains scene-linear.
+
 ### Negative scans
 
 File › Import Scanned Negative… opens the apps' negative-scan session

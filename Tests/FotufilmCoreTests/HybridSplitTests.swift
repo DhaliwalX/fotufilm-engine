@@ -46,14 +46,14 @@ final class HybridSplitTests: XCTestCase {
     }
 
     func runSplit(stock: FilmStock, options: FotufilmEngine.Options,
-                  grainTolerance: Bool, label: String) throws {
+                  grainTolerance: Bool, label: String, measureScene: Bool = false) throws {
         guard let gpu = HalideMetalFilmRenderer.shared else {
             throw XCTSkip("Halide Metal unavailable")
         }
         // The tail is handed densities, never the scene, so Auto Levels' measurement comes from
         // the host on a split pipeline — as it does here.
         var options = options
-        options.sceneHighlightStops = 3
+        if !measureScene { options.sceneHighlightStops = 3 }
         let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
         let width = 320, height = 192
         let input = patternedSRGB(width: width, height: height)
@@ -67,12 +67,19 @@ final class HybridSplitTests: XCTestCase {
         XCTAssertTrue(gpu.processRGBA8(
             input: inputBuffer, output: fused, width: width, height: height,
             stock: stock, options: options, frameIndex: 3), "\(label): fused failed")
-        XCTAssertTrue(gpu.processRGBA8Head(
-            input: inputBuffer, density: density, width: width, height: height,
-            stock: stock, options: options, frameIndex: 3), "\(label): head failed")
-        XCTAssertTrue(gpu.processRGBA8Tail(
-            density: density, output: split, width: width, height: height,
-            stock: stock, options: options, frameIndex: 3), "\(label): tail failed")
+        if measureScene {
+            XCTAssertTrue(gpu.processRGBA8Hybrid(
+                input: inputBuffer, density: density, output: split,
+                width: width, height: height, densityWidth: width, densityHeight: height,
+                stock: stock, options: options, frameIndex: 3), "\(label): hybrid failed")
+        } else {
+            XCTAssertTrue(gpu.processRGBA8Head(
+                input: inputBuffer, density: density, width: width, height: height,
+                stock: stock, options: options, frameIndex: 3), "\(label): head failed")
+            XCTAssertTrue(gpu.processRGBA8Tail(
+                density: density, output: split, width: width, height: height,
+                stock: stock, options: options, frameIndex: 3), "\(label): tail failed")
+        }
 
         let difference = compare(fused, split, count: byteCount)
         XCTAssertLessThan(difference.mean, 0.35, "\(label): mean drift")
@@ -82,6 +89,18 @@ final class HybridSplitTests: XCTestCase {
         let split8 = split.contents().assumingMemoryBound(to: UInt8.self)
         for i in stride(from: 3, to: byteCount, by: 4 * 977) {
             XCTAssertEqual(split8[i], 255, "\(label): alpha at byte \(i)")
+        }
+    }
+
+    func testHybridKeepsMeasuredDigitalReferenceLevels() throws {
+        var options = FotufilmEngine.Options()
+        options.paper = .screen
+        options.grainScale = 0
+        options.digitalReference = .autoLevels
+        for exposure: Float in [-2, 0, 2] {
+            options.exposureEV = exposure
+            try runSplit(stock: TestStocks.negative, options: options, grainTolerance: false,
+                         label: "Auto Levels \(exposure)", measureScene: true)
         }
     }
 

@@ -336,8 +336,12 @@ extension HostService {
                 (development.developWidth, development.developHeight) = small
             }
         }
-        return developer.pipeline(for: development, proceed: proceed)
-            ?? HostFrameVideoPipeline(development)
+        if let pipeline = developer.pipeline(for: development, proceed: proceed) { return pipeline }
+        // A rejected hybrid cannot print its reduced density through this platform. Keep the
+        // original scene resolution for the ordinary develop instead of enlarging blurred input.
+        development.developWidth = width
+        development.developHeight = height
+        return HostFrameVideoPipeline(development)
     }
 
     /// The edit's selective adjustment, when it changes the picture.

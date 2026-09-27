@@ -216,14 +216,11 @@ final class MetalVideoPipeline: HostVideoPipeline {
             if !ok, d.road.realtime, context.proceed() { ok = run(realtime: false) }
         } else if let input = slot.input, let output = slot.output {
             if let density = slot.density {
-                ok = metal.processRGBA8Head(
-                    input: input, density: density, width: d.developWidth,
-                    height: d.developHeight, stock: d.stock, options: d.options,
-                    frameIndex: frameIndex)
-                    && metal.processRGBA8Tail(
-                        density: density, output: output, width: d.width, height: d.height,
-                        densityWidth: d.developWidth, densityHeight: d.developHeight,
-                        stock: d.stock, options: d.options, frameIndex: frameIndex)
+                ok = metal.processRGBA8Hybrid(
+                    input: input, density: density, output: output,
+                    width: d.width, height: d.height,
+                    densityWidth: d.developWidth, densityHeight: d.developHeight,
+                    stock: d.stock, options: d.options, frameIndex: frameIndex)
             } else {
                 ok = metal.processRGBA8(
                     input: input, output: output, width: d.width, height: d.height,
