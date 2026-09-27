@@ -1,12 +1,30 @@
 import FilmSidebarToggle from "./FilmSidebarToggle.jsx";
 import { ActionButton } from "@react-spectrum/s2/ActionButton";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
 import StockButton from "./StockButton.jsx";
 import { SearchField } from "@react-spectrum/s2/SearchField";
 import { Icon } from "../icons.jsx";
 import { StockRow } from "./StockRow.jsx";
 import { useEditor } from "./EditorContext.jsx";
+// `value` once it has held for `delay` ms; a new `image` passes at once.
+function useSettled(value, delay) {
+  const [settled, setSettled] = useState(value);
+  const key = JSON.stringify({ edit: value.edit, videoTime: value.videoTime });
+  const latest = useRef(value);
+  latest.current = value;
+  const imageChanged = settled.image !== value.image;
+  useEffect(() => {
+    if (imageChanged) {
+      setSettled(latest.current);
+      return;
+    }
+    const timer = setTimeout(() => setSettled(latest.current), delay);
+    return () => clearTimeout(timer);
+  }, [key, imageChanged, delay]);
+  return imageChanged ? value : settled;
+}
+
 export default function FilmLibrary() {
   const {
     compactLayout,
@@ -23,7 +41,23 @@ export default function FilmLibrary() {
     setPanel,
     setFilmOpen,
     setInspectorOpen,
+    backend,
+    videoTime,
   } = useEditor();
+  // Films show the edit as it settles, as the Mac app's column does: at once for a new
+  // photograph, 650 ms after the last change otherwise. A clip shows its paused frame where the
+  // engine develops video natively.
+  const nativeVideo = backend.kind === "native";
+  const thumbnailImage =
+    active?.image.video && !nativeVideo ? null : active?.image;
+  const settled = useSettled(
+    {
+      image: thumbnailImage,
+      edit,
+      videoTime: active?.image.video ? videoTime : undefined,
+    },
+    650,
+  );
   const list = useRef(null);
   const reducedMotion = useReducedMotion();
   const displayedStocks = compactLayout ? stocks : visibleStocks;
@@ -105,7 +139,9 @@ export default function FilmLibrary() {
             key={stock.id}
             stock={stock}
             active={edit.stock === stock.id}
-            image={active?.image.video ? null : active?.image}
+            image={settled.image}
+            edit={settled.edit}
+            videoTime={settled.videoTime}
             session={session}
             previewSize={previewSize}
             onSelect={() => selectStock(stock.id)}
