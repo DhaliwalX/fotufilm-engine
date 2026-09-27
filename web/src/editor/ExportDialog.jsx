@@ -48,8 +48,7 @@ export default function ExportDialog() {
     setQuality,
     videoQuality,
     setVideoQuality,
-    videoFrameRate,
-    setVideoFrameRate,
+    patch,
     edit,
     framedSize,
     cropSize,
@@ -82,6 +81,10 @@ export default function ExportDialog() {
   const videoHDR = useAppSetting("videoHDR") === true;
   const setVideoHDR = (value) => setAppSetting("videoHDR", value);
   const videoBitrate = useAppSetting("videoBitrate");
+  // The clip's cadence, kept with its edit as the Mac app keeps it: choosing a rate here sets it.
+  const videoFrameRate = edit.video?.frameRate ?? null;
+  const setVideoFrameRate = (frameRate) =>
+    patch({ video: { ...edit.video, frameRate } });
   const current = video
     ? {
         format: videoFormat,
@@ -218,14 +221,14 @@ export default function ExportDialog() {
           )}
           {video && backend.videoFrameRates && (
             <div className="select-row">
-              Frame Rate
+              {VIDEO_LABELS.frameRate}
               <Picker
-                aria-label="Frame Rate"
+                aria-label={VIDEO_LABELS.frameRate}
                 value={videoFrameRate == null ? "source" : String(videoFrameRate)}
                 onChange={(id) => setVideoFrameRate(id === "source" ? null : Number(id))}
                 size={"S"}
               >
-                <PickerItem id="source">Source</PickerItem>
+                <PickerItem id="source">{VIDEO_LABELS.frameRateSource}</PickerItem>
                 {backend.videoFrameRates.map((rate) => (
                   <PickerItem key={rate} id={String(rate)}>
                     {`${rate} fps`}

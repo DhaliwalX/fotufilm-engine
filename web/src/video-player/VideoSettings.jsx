@@ -7,6 +7,14 @@ import { VIDEO_LABELS as labels } from "../generated/controls.js";
 import { VIDEO_ENCODINGS } from "../video-color.js";
 import { Icon } from "../icons.jsx";
 
+// The Mac app's Cadence choices; Native keeps the source's rate.
+const CADENCES = [
+  ["native", "cadenceNative"],
+  ["16", "cadence16"],
+  ["18", "cadence18"],
+  ["24", "cadence24"],
+];
+
 export default function VideoSettings({
   clip,
   start,
@@ -15,6 +23,7 @@ export default function VideoSettings({
   settings,
   onChange,
   disabled,
+  cadence,
 }) {
   const patch = (change) => onChange({ ...settings, ...change });
   const setStart = (value) => {
@@ -104,6 +113,27 @@ export default function VideoSettings({
           >
             {labels.resetTrim}
           </ActionButton>
+          {cadence && (
+            <>
+              <Picker
+                label={labels.cadence}
+                value={String(settings.frameRate ?? "native")}
+                isDisabled={disabled}
+                onChange={(id) =>
+                  patch({ frameRate: id === "native" ? null : Number(id) })
+                }
+                size="S"
+                UNSAFE_style={{ width: "100%" }}
+              >
+                {CADENCES.map(([id, label]) => (
+                  <PickerItem key={id} id={id}>
+                    {labels[label]}
+                  </PickerItem>
+                ))}
+              </Picker>
+              <p className="video-settings-note">{labels.cadenceNote}</p>
+            </>
+          )}
           <Switch
             isSelected={settings.audio}
             isDisabled={disabled}

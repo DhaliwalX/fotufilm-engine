@@ -112,10 +112,10 @@ extension HostService {
                 try? prepared.edit.document.options(for: stock).sdrShoulderKnee(for: stock)
             }
         } ?? FilmSDRDelivery.boundedShoulderKnee
-        // A lower frame rate retimes the movie as the Mac app's export sheet does: each output
+        // A lower cadence retimes the movie as the Mac app's export does: each output
         // frame shows the source frame on screen at its time. A rate at or above the source's
         // keeps every frame at its own time.
-        let retime = (parameters["frameRate"] as? Double)
+        let retime = (settings["frameRate"] as? Double)
             .flatMap { $0 > 0 && $0 < source.frameRate - 0.01 ? $0 : nil }
         let url = URL(fileURLWithPath: path)
         let writer = try writers.writer(for: format)

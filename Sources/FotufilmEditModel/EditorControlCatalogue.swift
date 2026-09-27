@@ -82,6 +82,11 @@ public enum EditorControlCatalogue {
         "audio": "Include audio", "export": "Export video", "quality": "Video quality",
         "medium": "Medium", "high": "High", "veryHigh": "Very high",
         "mp4": "MP4 · H.264", "webm": "WebM · VP9", "dismiss": "Dismiss",
+        // The Mac app's Cadence: the rate a clip exports at, kept with its edit.
+        "cadence": "Cadence", "cadenceNative": "Native", "cadence16": "16 fps · silent era",
+        "cadence18": "18 fps · Super 8", "cadence24": "24 fps · cine",
+        "cadenceNote": "Choose the export frame rate. Lower rates hold each frame longer.",
+        "frameRate": "Frame Rate", "frameRateSource": "Source",
     ]
 
     public static let webSelection: [String: Any] = [

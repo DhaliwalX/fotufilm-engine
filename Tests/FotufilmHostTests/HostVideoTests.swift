@@ -262,11 +262,10 @@ final class HostVideoTests: XCTestCase {
             let output = FileManager.default.temporaryDirectory
                 .appendingPathComponent("fotufilm-export-\(UUID().uuidString).mp4")
             defer { try? FileManager.default.removeItem(at: output) }
-            var request = renderRequest(handle, time: 0, video: ["audio": false])
+            var request = renderRequest(handle, time: 0, video: ["audio": false, "frameRate": rate])
             request["maxEdge"] = 32
             request["format"] = "mp4"
             request["bitrate"] = "smaller"
-            request["frameRate"] = rate
             request["path"] = output.path
             let saved = try json(service.call("exportVideo", params: JSONSerialization.data(
                 withJSONObject: request), payload: nil) { _ in })

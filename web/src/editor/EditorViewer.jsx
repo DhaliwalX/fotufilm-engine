@@ -21,6 +21,7 @@ export default function EditorViewer() {
     shownResult,
     edit,
     patch,
+    backend,
     setSampling,
     setError,
     setDetailBackend,
@@ -161,6 +162,8 @@ export default function EditorViewer() {
                     })
                   }
                   disabled={exporting || cropMode}
+                  // Retiming is the native exporter's; the browser's keeps the source's rate.
+                  cadence={!!backend.videoFrameRates}
                 />
               )}
             </>

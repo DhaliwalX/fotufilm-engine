@@ -14,7 +14,6 @@ export default function useExportActions({
   videoFormat,
   stockId,
   videoQuality,
-  videoFrameRate,
   exportSize,
   alive,
   videoDownloadRef,
@@ -51,7 +50,6 @@ export default function useExportActions({
         format: videoFormat,
         quality: videoQuality,
         bitrate: appSetting("videoBitrate"),
-        frameRate: videoFrameRate,
         maxEdge: exportMaxEdge(exportSize, ...upright()),
         hdr: appSetting("videoHDR") === true,
         signal: controller.signal,
@@ -70,7 +68,7 @@ export default function useExportActions({
         format: videoFormat,
         quality: videoQuality,
         bitrate: appSetting("videoBitrate"),
-        frameRate: videoFrameRate,
+        frameRate: edit.video.frameRate,
         size: exportSize,
       });
       await videoDownloadRef.current?.dispose();

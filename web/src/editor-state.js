@@ -114,7 +114,8 @@ export const defaultEdit = (stock = null) => ({
   medium: null,
   printFrame: "none",
   digitalReference: "auto-levels",
-  video: { encoding: "standard", trimStart: 0, trimEnd: null, audio: true },
+  // `frameRate` is the clip's cadence, the rate it exports at; null keeps the source's.
+  video: { encoding: "standard", trimStart: 0, trimEnd: null, audio: true, frameRate: null },
   halationModel: "legacy",
   sceneLight: "unspecified",
   selective: null,
@@ -303,7 +304,11 @@ export function parseEdit(json, stockIDs) {
       (edit.video.trimEnd !== null &&
         (!Number.isFinite(edit.video.trimEnd) ||
           edit.video.trimEnd <= edit.video.trimStart)) ||
-      typeof edit.video.audio !== "boolean")
+      typeof edit.video.audio !== "boolean" ||
+      (edit.video.frameRate != null &&
+        (!Number.isFinite(edit.video.frameRate) ||
+          edit.video.frameRate <= 0 ||
+          edit.video.frameRate > 240)))
   )
     throw new Error("Invalid video settings.");
   if (
@@ -377,7 +382,7 @@ export function parseEdit(json, stockIDs) {
     medium: edit.medium ?? null,
     printFrame: parsePrintFrame(edit.printFrame),
     digitalReference: edit.digitalReference ?? "auto-levels",
-    video: edit.video ?? base.video,
+    video: edit.video ? { ...base.video, ...edit.video } : base.video,
     halationModel: edit.halationModel ?? "legacy",
     sceneLight: edit.sceneLight ?? "unspecified",
     selective: edit.selective

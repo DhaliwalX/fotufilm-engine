@@ -14,6 +14,7 @@ export default function VideoControls({
   settings,
   onChange,
   disabled,
+  cadence,
 }) {
   const root = useRef(null);
   const start = Math.max(clip.start, settings.trimStart);
@@ -51,6 +52,7 @@ export default function VideoControls({
           settings={settings}
           onChange={onChange}
           disabled={disabled}
+          cadence={cadence}
         />
       </VideoTransport>
       <Presence
