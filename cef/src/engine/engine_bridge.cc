@@ -14,6 +14,9 @@ constexpr const char* kMethods[] = {
     "appendVideo",      "importVideo",    "lensCatalogue",    "importLensCatalogue",
     "removeLensCatalogue", "importPath",   "copyImage",        "exportOptions",
     "suggestFilm",      "recordFilmChoice", "forgetFilmChoices",
+    // The Resolve and Final Cut plug-ins. An install holds the engine thread until the copy is
+    // done and macOS has registered it, as the Mac app's menu item holds its own.
+    "plugins",          "installPlugin",    "revealPlugin",
 };
 
 }  // namespace

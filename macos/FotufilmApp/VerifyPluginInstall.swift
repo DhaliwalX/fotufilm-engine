@@ -45,8 +45,8 @@ enum VerifyPluginInstall {
         expect(appVersion != nil, "the app knows its own version")
 
         for (name, bundled, installed) in [
-            ("DaVinci Resolve", OFXPluginInstaller.bundledURL, OFXPluginInstaller.installedURL),
-            ("Final Cut Pro", FxPlugInstaller.bundledURL, FxPlugInstaller.installedURL),
+            ("DaVinci Resolve", OFXPluginInstaller().bundledURL, OFXPluginInstaller().installedURL),
+            ("Final Cut Pro", FxPlugInstaller().bundledURL, FxPlugInstaller().installedURL),
         ] {
             guard let bundled else {
                 // Not a failure. A build made without the FxPlug SDK carries no Final Cut plug-in
@@ -64,7 +64,7 @@ enum VerifyPluginInstall {
 
         // Resolve's system directory is normally writable by administrator accounts. This is the
         // no-prompt path: replace an existing copy and preserve the bundle.
-        if let source = OFXPluginInstaller.bundledURL {
+        if let source = OFXPluginInstaller().bundledURL {
             print("installing Resolve plug-in")
             let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
                 .appendingPathComponent("fotufilm-ofx-install-\(UUID().uuidString)",
@@ -79,7 +79,7 @@ enum VerifyPluginInstall {
                 let stale = destination.appendingPathComponent("stale-file")
                 try Data("old installation".utf8).write(to: stale)
                 try OFXPluginInstaller.install(from: source, to: destination)
-                expect(Bundle(url: destination)?.bundleIdentifier
+                expect(PluginVersion.identifier(of: destination)
                            == OFXPluginInstaller.bundleIdentifier,
                        "the Resolve plug-in arrived intact")
                 expect(PluginVersion.of(destination) == PluginVersion.of(source),
@@ -114,18 +114,14 @@ enum VerifyPluginInstall {
                 try FxPlugInstaller.install(from: source, to: destination)
                 expect(FileManager.default.fileExists(atPath: destination.path),
                        "the wrapper arrived at the destination")
-                expect(Bundle(url: destination)?.bundleIdentifier
+                expect(PluginVersion.identifier(of: destination)
                            == FxPlugInstaller.bundleIdentifier,
                        "the installed wrapper reads back as the wrapper")
                 expect(PluginVersion.of(destination) == PluginVersion.of(source),
                        "the installed wrapper carries the version it was built with")
                 if let bundledTemplate = FxPlugInstaller.motionTemplateURL(in: destination) {
-                    let templateDestination = root
-                        .appendingPathComponent("Movies", isDirectory: true)
-                        .appendingPathComponent("Motion Templates.localized", isDirectory: true)
-                        .appendingPathComponent("Effects.localized", isDirectory: true)
-                        .appendingPathComponent("Fotufilm.localized", isDirectory: true)
-                        .appendingPathComponent("Fotufilm.localized", isDirectory: true)
+                    let templateDestination = PluginLocations.motionTemplate(
+                        in: root.appendingPathComponent("Movies", isDirectory: true))
                     try FxPlugInstaller.installMotionTemplate(
                         from: bundledTemplate, to: templateDestination)
                     expect(FileManager.default.fileExists(atPath: templateDestination

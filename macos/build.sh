@@ -33,20 +33,10 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$OBJ"
 SDK="$(xcrun --sdk macosx --show-sdk-path)"
 
 KERNELS="build/halide-macos"
-# The copy inside the app is the same signed, stripped bundle distributed on its own. The Mac app
-# installs this resource into the user's OFX directory on request.
-resolve/build.sh ${OFX_TEST:+$OFX_TEST}
-
-# The Final Cut plug-in needs Apple's FxPlug SDK, which is a separate download and is not vendored
-# here. A machine without it builds an app that says so — FxPlugInstaller.bundledURL comes back nil
-# and the menu item is disabled — rather than failing a build that has nothing to do with Final Cut.
+# The copies inside the app are the same signed, stripped bundles distributed on their own. The
+# Mac app installs them into the Resolve and Final Cut locations on request.
+tools/build-editor-plugins.sh ${OFX_TEST:+$OFX_TEST}
 FXPLUG_APP="build/finalcut/Fotufilm for Final Cut Pro.app"
-if [[ -d "${FXPLUG_SDK:-/Library/Developer/SDKs/FxPlug.sdk}" ]]; then
-  finalcut/build.sh
-else
-  rm -rf "$FXPLUG_APP"
-  echo "note: the FxPlug SDK is not installed; this build carries no Final Cut Pro plug-in." >&2
-fi
 
 tools/generate-halide-aot.sh macos "$KERNELS"
 
@@ -84,6 +74,7 @@ python3 tools/compile-if-needed.py xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURC
   Sources/FotufilmImaging/*.swift \
   Sources/FotufilmStockMatch/*.swift \
   Sources/FotufilmEditModel/*.swift \
+  Sources/FotufilmPlugins/*.swift \
   "${SHARED_SOURCES[@]}" "$FOTUFILM_PACK_KEY_SOURCE" \
   desktop/FotufilmApp/*.swift \
   macos/FotufilmApp/*.swift \

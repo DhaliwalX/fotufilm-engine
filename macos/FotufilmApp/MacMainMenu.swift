@@ -389,13 +389,16 @@ enum PluginHost: CaseIterable {
     case resolve
     case finalCut
 
-    /// The name as the menu shows it — the product the user knows, not the plug-in format.
-    var name: String {
+    /// The plug-in behind the items (`Sources/FotufilmPlugins`).
+    var plugin: EditorPlugin {
         switch self {
-        case .resolve: return "DaVinci Resolve"
-        case .finalCut: return "Final Cut Pro"
+        case .resolve: return .resolve
+        case .finalCut: return .finalCut
         }
     }
+
+    /// The name as the menu shows it — the product the user knows, not the plug-in format.
+    var name: String { plugin.hostName }
 
     var installAction: Selector {
         switch self {
@@ -419,26 +422,11 @@ enum PluginHost: CaseIterable {
         return nil
     }
 
-    var isBundled: Bool {
-        switch self {
-        case .resolve: return OFXPluginInstaller.bundledURL != nil
-        case .finalCut: return FxPlugInstaller.bundledURL != nil
-        }
-    }
+    var isBundled: Bool { plugin.isBundled() }
 
-    var isInstalled: Bool {
-        switch self {
-        case .resolve: return OFXPluginInstaller.isInstalled
-        case .finalCut: return FxPlugInstaller.isInstalled
-        }
-    }
+    var isInstalled: Bool { plugin.isInstalled() }
 
-    var installedPath: String {
-        switch self {
-        case .resolve: return OFXPluginInstaller.installedURL.path
-        case .finalCut: return FxPlugInstaller.installedURL.path
-        }
-    }
+    var installedPath: String { plugin.installedURL().path }
 
     func installTitle(reinstall: Bool) -> String {
         (reinstall ? "Reinstall " : "Install ") + name + " Plug-in…"

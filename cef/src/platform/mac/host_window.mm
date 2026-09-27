@@ -3,8 +3,10 @@
 #import <QuartzCore/QuartzCore.h>
 
 #include <cstring>
+#include <map>
 #include <memory>
 #include <set>
+#include <string>
 #include <vector>
 
 #include "app/client.h"
@@ -465,6 +467,9 @@ class MacView : public fotufilm::ViewDelegate {
   std::set<std::string> _enabled;
   std::set<std::string> _checked;
   NSDictionary<NSString*, NSArray<NSArray<NSString*>*>*>* _menuLists;
+  // Titles and tool tips for items whose wording follows the state (Install → Reinstall).
+  std::map<std::string, std::string> _titles;
+  std::map<std::string, std::string> _toolTips;
   // Files to open once the editor listens for them.
   NSMutableArray<NSString*>* _pendingPaths;
   BOOL _pageListening;
@@ -613,9 +618,20 @@ class MacView : public fotufilm::ViewDelegate {
                   names.insert(key.ToString());
             return names;
           };
+          auto strings = [](CefRefPtr<CefDictionaryValue> values) {
+            std::map<std::string, std::string> strings;
+            CefDictionaryValue::KeyList keys;
+            if (values && values->GetKeys(keys))
+              for (const CefString& key : keys)
+                if (values->GetType(key) == VTYPE_STRING)
+                  strings[key.ToString()] = values->GetString(key).ToString();
+            return strings;
+          };
           CefRefPtr<CefDictionaryValue> fields = call.params->GetDictionary();
           strong->_enabled = names(fields->GetDictionary("enabled"));
           strong->_checked = names(fields->GetDictionary("checked"));
+          strong->_titles = strings(fields->GetDictionary("titles"));
+          strong->_toolTips = strings(fields->GetDictionary("toolTips"));
           strong->_pageEditsText = fields->GetBool("textInput");
           // Submenus the editor fills: {"films": [[command, title], …]}.
           NSMutableDictionary* lists = [NSMutableDictionary dictionary];
@@ -725,6 +741,10 @@ class MacView : public fotufilm::ViewDelegate {
   if (item.action != @selector(performEditorCommand:)) return YES;
   NSString* command = item.representedObject;
   item.state = _checked.count(command.UTF8String) ? NSControlStateValueOn : NSControlStateValueOff;
+  if (auto title = _titles.find(command.UTF8String); title != _titles.end())
+    item.title = @(title->second.c_str());
+  auto toolTip = _toolTips.find(command.UTF8String);
+  item.toolTip = toolTip == _toolTips.end() ? nil : @(toolTip->second.c_str());
   return [self commandEnabled:command];
 }
 

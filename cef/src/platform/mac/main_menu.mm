@@ -114,7 +114,7 @@ static const NSUInteger kRecentLimit = 10;
 
 @end
 
-NSMenu* FotufilmMainMenu() {
+NSMenu* FotufilmMainMenu(NSArray<NSDictionary*>* plugins) {
   static FotufilmRecentMenu* recent = [FotufilmRecentMenu new];
   static FotufilmEditorListMenu* films = [] {
     FotufilmEditorListMenu* menu = [FotufilmEditorListMenu new];
@@ -203,6 +203,23 @@ NSMenu* FotufilmMainMenu() {
   }];
   [view addItem:[NSMenuItem separatorItem]];
   Add(view, @"Enter Full Screen", @selector(toggleFullScreen:), @"f", kCommand | kControl);
+
+  // Two items per editor, named after it. The editor greys them, and words Install as Reinstall
+  // once the plug-in is there (menuState's titles), as the Mac app's validateMenuItem does.
+  if (plugins.count) {
+    NSMenu* menu = Submenu(bar, @"Plugins");
+    for (NSDictionary* plugin in plugins) {
+      NSString* plugin_id = plugin[@"id"];
+      NSString* name = plugin[@"name"];
+      if (![plugin_id isKindOfClass:NSString.class] || ![name isKindOfClass:NSString.class])
+        continue;
+      if (menu.numberOfItems) [menu addItem:[NSMenuItem separatorItem]];
+      Command(menu, [NSString stringWithFormat:@"Install %@ Plug-in…", name],
+              [@"installPlugin:" stringByAppendingString:plugin_id]);
+      Command(menu, [NSString stringWithFormat:@"Show %@ Plug-in in Finder", name],
+              [@"revealPlugin:" stringByAppendingString:plugin_id]);
+    }
+  }
 
   NSMenu* window = Submenu(bar, @"Window");
   Add(window, @"Minimize", @selector(performMiniaturize:), @"m");

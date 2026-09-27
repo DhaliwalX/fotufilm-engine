@@ -44,6 +44,17 @@ std::string ProfilePath() {
   return profile.path.UTF8String;
 }
 
+// The plug-ins the engine installs (`capabilities.plugins`), for the Plugins menu.
+NSArray<NSDictionary*>* Plugins(const std::string& capabilities) {
+  NSData* json = [NSData dataWithBytes:capabilities.data() length:capabilities.size()];
+  NSDictionary* fields = capabilities.empty()
+                             ? nil
+                             : [NSJSONSerialization JSONObjectWithData:json options:0 error:nil];
+  if (![fields isKindOfClass:NSDictionary.class]) return @[];
+  NSArray* plugins = fields[@"plugins"];
+  return [plugins isKindOfClass:NSArray.class] ? plugins : @[];
+}
+
 // Files the system asked to open before the window existed.
 NSMutableArray<NSURL*>* g_pending_urls = [NSMutableArray array];
 
@@ -148,7 +159,11 @@ int main(int argc, char* argv[]) {
     NSApp.delegate = delegate;
     // The View menu carries Enter Full Screen itself; AppKit would add a second.
     [NSUserDefaults.standardUserDefaults registerDefaults:@{@"NSFullScreenMenuItemEverywhere" : @NO}];
-    NSApp.mainMenu = FotufilmMainMenu();
+    std::string capabilities;
+#if defined(FOTUFILM_WITH_ENGINE)
+    capabilities = fotufilm::EngineBridge::Capabilities();
+#endif
+    NSApp.mainMenu = FotufilmMainMenu(Plugins(capabilities));
 
     CefMainArgs arguments(argc, argv);
     CefRefPtr<CefCommandLine> command_line = CefCommandLine::CreateCommandLine();
@@ -171,9 +186,7 @@ int main(int argc, char* argv[]) {
                            (dev.port ? ":" + std::string(dev.port.stringValue.UTF8String) : "");
     }
     options.transport_global = fotufilm::switches::kDefaultTransportGlobal;
-#if defined(FOTUFILM_WITH_ENGINE)
-    options.capabilities = fotufilm::EngineBridge::Capabilities();
-#endif
+    options.capabilities = capabilities;
 
     g_dispatcher = std::make_unique<fotufilm::Dispatcher>();
 #if defined(FOTUFILM_WITH_ENGINE)

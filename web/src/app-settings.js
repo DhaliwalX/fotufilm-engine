@@ -22,6 +22,8 @@ export const APP_SETTINGS = Object.freeze({
   // The settings of the last photo and movie exported, for Use Last Export Settings.
   lastPhotoExport: null,
   lastVideoExport: null,
+  // The plug-in build whose launch offer was declined ("Not Now"); a later build asks again.
+  pluginOfferDeclined: null,
 });
 
 const PREFIX = "fotufilm.setting.";

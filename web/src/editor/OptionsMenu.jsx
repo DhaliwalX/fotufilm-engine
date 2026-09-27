@@ -20,6 +20,7 @@ export default function OptionsMenu() {
     active,
     editInput,
     setInspector,
+    plugins,
   } = useEditor();
   const imageOnlyDisabled = !active || !!active.image.video || exporting;
   return (
@@ -98,6 +99,16 @@ export default function OptionsMenu() {
             <Icon slot="icon" name="adjustments" />
             <Text>Settings…</Text>
           </MenuItem>
+          {plugins && (
+            <MenuItem
+              id="plugins"
+              isDisabled={exporting}
+              onAction={() => setDialog("plugins")}
+            >
+              <Icon slot="icon" name="export" />
+              <Text>Plug-ins…</Text>
+            </MenuItem>
+          )}
           <MenuItem id="shortcuts" onAction={() => setDialog("shortcuts")}>
             <Icon slot="icon" name="shortcuts" />
             <Text>Keyboard shortcuts</Text>

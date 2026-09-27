@@ -27,6 +27,8 @@ struct HostPlatform {
     var videoSource: HostVideoSourceFactory?
     /// Writes movies.
     var videoWriter: HostVideoWriterFactory?
+    /// Installs the plug-ins for other editors (`HostPlugins.swift`).
+    var plugins: HostPluginInstaller?
 
     static let current: HostPlatform = {
         #if canImport(ImageIO) && canImport(CoreImage)
@@ -50,6 +52,9 @@ struct HostPlatform {
             "filmSuggestion": true,
             "video": videoSource != nil && videoWriter != nil,
             "videoExportTypes": videoWriter?.formats.map(\.json) ?? [],
+            // The plug-ins this platform installs, `{id, name}`, for the native menu and the
+            // editor's plug-ins dialog; their state is asked for with `plugins`.
+            "plugins": plugins?.catalogue.map { ["id": $0.id, "name": $0.name] } ?? [],
         ].merging(developer == nil ? [:] : [
             // A GPU developer answers a full preview within a frame or two: the editor may keep
             // full-size previews while an edit moves and refine sooner (web/src/preview-budget.js).

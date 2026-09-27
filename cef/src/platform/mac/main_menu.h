@@ -18,7 +18,9 @@
 - (NSArray<NSArray<NSString*>*>*)editorMenuItems:(NSString*)menu;
 @end
 
-NSMenu* FotufilmMainMenu();
+// `plugins` are the engine's `capabilities.plugins`, `{id, name}` each: a Plugins menu lists them
+// as the Mac app's does, and there is none without them.
+NSMenu* FotufilmMainMenu(NSArray<NSDictionary*>* plugins);
 
 // Files opened lately, kept by the app itself as the Mac app keeps them (`RecentFiles`).
 @interface FotufilmRecentFiles : NSObject

@@ -1,33 +1,5 @@
 import AppKit
 
-/// The version stamped into a plug-in bundle. `resolve/build.sh` and `finalcut/build.sh` both write
-/// it from `version.env` before signing, so the copy inside the app and the copy on disk carry the
-/// same number when they came from the same build — and differ when they did not.
-///
-/// `CFBundleVersion` rather than the marketing string: it is the one that moves every build.
-enum PluginVersion {
-    static func of(_ bundle: URL) -> String? {
-        guard let values = NSDictionary(
-            contentsOf: bundle.appendingPathComponent("Contents/Info.plist")) else { return nil }
-        return values["CFBundleVersion"] as? String
-    }
-
-    /// Whether a plug-in stamped `installed` should be replaced by one stamped `bundled`.
-    ///
-    /// Not a comparison of which is newer. Any difference is a reason to install: the plug-in that
-    /// belongs with this app is the one inside it, and a *newer* plug-in under an older app is as
-    /// wrong as the other way round — the same photograph would develop two ways depending on
-    /// which door it came through. Downgrading is the right answer there.
-    ///
-    /// `bundled == nil` means this build carries no such plug-in, and there is nothing to install.
-    /// `installed == nil` means nothing is there, or what is there has no version to read, and
-    /// both of those want installing over.
-    static func needsInstall(bundled: String?, installed: String?) -> Bool {
-        guard let bundled else { return false }
-        return installed != bundled
-    }
-}
-
 /// Checks bundled OFX and FxPlug versions at launch and offers installation when they differ from
 /// installed versions. Installation requires confirmation because OFX writes to `/Library`.
 /// Declines are remembered per build version.
@@ -35,31 +7,23 @@ enum PluginInstallation {
     private static let declinedKey = "PluginInstallationDeclinedVersion"
 
     private struct Candidate {
-        let host: String
-        let needsInstall: Bool
-        let isInstalled: Bool
-        let install: () throws -> Void
+        let plugin: EditorPlugin
+        let status: EditorPluginStatus
+        var host: String { plugin.hostName }
+        var isInstalled: Bool { status.isInstalled }
+        /// Offered at launch only when this build carries it, it differs from what is installed,
+        /// and the editor it is for is on this Mac.
+        var needsInstall: Bool { status.isBundled && status.needsInstall && status.hasHost }
+        func install() throws { try plugin.install() }
     }
 
+    /// Final Cut first, as the alert has always named them.
     private static var candidates: [Candidate] {
-        [
-            Candidate(host: "Final Cut Pro",
-                      needsInstall: FxPlugInstaller.bundledURL != nil
-                          && FxPlugInstaller.needsInstall
-                          && FxPlugInstaller.hasHost,
-                      isInstalled: FxPlugInstaller.isInstalled,
-                      install: FxPlugInstaller.install),
-            Candidate(host: "DaVinci Resolve",
-                      needsInstall: OFXPluginInstaller.bundledURL != nil
-                          && OFXPluginInstaller.needsInstall
-                          && OFXPluginInstaller.hasHost,
-                      isInstalled: OFXPluginInstaller.isInstalled,
-                      install: OFXPluginInstaller.install),
-        ]
+        [EditorPlugin.finalCut, .resolve].map { Candidate(plugin: $0, status: $0.status()) }
     }
 
     private static var version: String? {
-        FxPlugInstaller.bundledVersion ?? OFXPluginInstaller.bundledVersion
+        FxPlugInstaller().bundledVersion ?? OFXPluginInstaller().bundledVersion
     }
 
     /// Called once from `applicationDidFinishLaunching`. Returns immediately: the check is a few
@@ -98,9 +62,8 @@ enum PluginInstallation {
             ? "The installed plug-ins are from an older version of Fotufilm. Updating them keeps "
                 + "them developing the same film this app does."
             : "Fotufilm can develop film inside \(list) using the same engine this app uses."
-        if pending.contains(where: { $0.host == "DaVinci Resolve" }) {
-            informative += "\n\nThe DaVinci Resolve plug-in is installed for every user on this "
-                + "Mac, so macOS will ask for your administrator password."
+        for note in pending.compactMap(\.plugin.installNote) {
+            informative += "\n\n" + note
         }
         alert.informativeText = informative
         alert.addButton(withTitle: updating ? "Update" : "Install")

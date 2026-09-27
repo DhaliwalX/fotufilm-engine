@@ -122,10 +122,12 @@ let package = Package(
         .target(name: "FotufilmStockMatch", dependencies: ["FotufilmCore"]),
         // Shared editor controls and their engine options.
         .target(name: "FotufilmEditModel", dependencies: ["FotufilmCore"]),
+        // Installing the Resolve and Final Cut plug-ins, shared by the Mac app and Fotufilm Desktop.
+        .target(name: "FotufilmPlugins"),
         .target(name: "CFotufilmHost"),
         .target(name: "FotufilmHost",
                 dependencies: ["CFotufilmHost", "FotufilmCore", "FotufilmImaging",
-                               "FotufilmEditModel", "FotufilmStockMatch",
+                               "FotufilmEditModel", "FotufilmStockMatch", "FotufilmPlugins",
                                .target(name: "FotufilmMetal",
                                        condition: .when(platforms: [.macOS, .iOS]))]),
         .executableTarget(name: "fotufilm",
@@ -147,7 +149,7 @@ let package = Package(
         ),
         .testTarget(
             name: "FotufilmHostTests",
-            dependencies: ["FotufilmHost", "CFotufilmHost"]
+            dependencies: ["FotufilmHost", "CFotufilmHost", "FotufilmPlugins"]
         ),
         .testTarget(
             name: "FotufilmUpdateTests",

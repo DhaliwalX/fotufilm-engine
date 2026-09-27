@@ -43,3 +43,36 @@ test("the engine's platform services decide what the editor offers", () => {
     ["image/png", "image/tiff"],
   );
 });
+
+test("the plug-ins a host installs are named up front and read through the engine", async () => {
+  const calls = [];
+  const backend = createMacBackend({
+    binary: true,
+    capabilities: {
+      plugins: [
+        { id: "resolve", name: "DaVinci Resolve" },
+        { id: "finalCut", name: "Final Cut Pro" },
+      ],
+    },
+    async postMessage(message) {
+      calls.push([message.method, message.params]);
+      return [];
+    },
+  });
+  assert.deepEqual(
+    backend.plugins.map(({ id }) => id),
+    ["resolve", "finalCut"],
+  );
+  await backend.pluginStatus();
+  await backend.installPlugin("resolve");
+  await backend.revealPlugin("finalCut");
+  assert.deepEqual(
+    calls.map(([method]) => method),
+    ["plugins", "installPlugin", "revealPlugin"],
+  );
+  assert.deepEqual(calls[1][1], { id: "resolve" });
+  // A host that installs none offers no plug-in calls at all.
+  const bare = createMacBackend(channel({ plugins: [] }));
+  assert.equal(bare.plugins, undefined);
+  assert.equal(bare.installPlugin, undefined);
+});

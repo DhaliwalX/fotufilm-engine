@@ -43,6 +43,17 @@ export function createNativeBackend(host) {
     "forgetFilmChoices",
   ])
     if (typeof host[name] === "function") backend[name] = host[name].bind(host);
+  // Optional: plug-ins for other editors the host installs, `{id, name}`, with their calls.
+  if (
+    host.plugins?.length &&
+    ["pluginStatus", "installPlugin", "revealPlugin"].every(
+      (name) => typeof host[name] === "function",
+    )
+  ) {
+    backend.plugins = Object.freeze(host.plugins.map((plugin) => Object.freeze({ ...plugin })));
+    for (const name of ["pluginStatus", "installPlugin", "revealPlugin"])
+      backend[name] = host[name].bind(host);
+  }
   backend.createSession = () => {
     const session = host.createSession();
     return requireMethods(
