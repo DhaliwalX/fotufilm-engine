@@ -163,6 +163,21 @@ export function historyReducer(state, action) {
       group: null,
     };
   }
+  // A step of the Edit History (web/src/edit-history.js): the timeline stays whole, as a run of
+  // undos or redos would leave it.
+  if (action.type === "goTo") {
+    const states = [...state.past, state.present, ...state.future];
+    const index = action.index;
+    if (!Number.isInteger(index) || index < 0 || index >= states.length)
+      return state;
+    if (index === state.past.length) return state;
+    return {
+      past: states.slice(0, index),
+      present: states[index],
+      future: states.slice(index + 1),
+      group: null,
+    };
+  }
   if (action.type === "edit") {
     const next = { ...state.present, ...action.patch };
     if (JSON.stringify(next) === JSON.stringify(state.present)) return state;

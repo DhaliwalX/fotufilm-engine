@@ -58,12 +58,18 @@ public final class HostService {
                     description: "\(URL(fileURLWithPath: path).lastPathComponent) cannot be read.")
             }
             let url = URL(fileURLWithPath: path)
-            if HostPlatform.current.videoSource?.isMovie(url) == true,
-               parameters["negative"] as? Bool != true {
-                return try importMovie(at: url, owned: false,
-                                       playback: parameters["playback"] as? Bool == true)
+            let isMovie = HostPlatform.current.videoSource?.isMovie(url) == true
+            var opened = isMovie && parameters["negative"] as? Bool != true
+                ? try importMovie(at: url, owned: false,
+                                  playback: parameters["playback"] as? Bool == true)
+                : try imported(HostImage.open(url))
+            // What the editor keeps this file's last edit under.
+            if let identity = HostFileIdentity.identity(of: url, isMovie: isMovie),
+               var body = try JSONSerialization.jsonObject(with: opened.json) as? [String: Any] {
+                body["identity"] = identity
+                opened.json = try JSONSerialization.data(withJSONObject: body)
             }
-            return try imported(HostImage.open(url))
+            return opened
         case "preview":
             let image = try self.image(parameters["handle"])
             return try answer(image.descriptor, images: ["preview": previewPNG(image)])

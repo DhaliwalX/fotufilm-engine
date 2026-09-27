@@ -462,6 +462,10 @@ extension CInterfaceTests {
         let opened = try call("importPath", #"{"path": "\#(url.path)"}"#)
         let path = try XCTUnwrap(opened.json["handle"] as? Int)
         XCTAssertEqual(opened.json["naturalHeight"] as? Int, 80)
+        // It carries the identity its edit is kept under: its bytes' digest, as the Mac app's.
+        XCTAssertEqual(opened.json["identity"] as? String,
+                       HostFileIdentity.identity(of: url, isMovie: false))
+        XCTAssertTrue((opened.json["identity"] as? String)?.hasPrefix("sha256:") == true)
         XCTAssertThrowsError(try call("importPath", #"{"path": "/nonexistent/photo.png"}"#))
 
         #if canImport(AppKit)

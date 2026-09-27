@@ -91,8 +91,11 @@ export function createMacBackend(channel) {
             { path, negative: !!negative, playback: nativePlayback },
             { signal },
           );
-          // A movie opens in place too; its answer carries the playback clock.
-          return result.video ? importedVideo(result) : importedImage(result);
+          // A movie opens in place too; its answer carries the playback clock. The identity is
+          // what the file's edit is kept under (web/src/saved-edits.js).
+          const { identity, ...answer } = result;
+          const opened = answer.video ? importedVideo(answer) : importedImage(answer);
+          return identity ? { ...opened, identity } : opened;
         }
       : undefined,
     releaseImage,

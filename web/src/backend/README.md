@@ -54,6 +54,8 @@ events and cancellation messages, rather than attempting to serialize functions.
 | `exportOptions(request)` | Optional. `{image,edit,stock,maxEdge}` → `{metadata: [policy], hdr}`: the source-metadata policies the backend writes (`preserve`, `preserveWithoutLocation`, `strip`) and whether a HEIC of this edit can be HDR (the film delivers light above display white and no print frame is set). |
 | `suggestFilm(request)` | Optional (Choose Film Per Photo). `{image,edit,photoID,films?}` → `{best,ordered:[{id,name,score}],summary}`: every installed film (or the named `films`) developed at the scoring size and ranked for the photograph, weighted by what this person has chosen before. The editor applies `best` to a newly opened photograph when the `autoFilm` setting is on. |
 | `recordFilmChoice(photoID, film)` / `forgetFilmChoices()` | Optional, beside `suggestFilm`. Record the film a photograph settled on, against its last ranking, so later rankings learn; forget returns to the hand-set weights. The backend keeps the history on the device. |
+| `importPath(path, options)` | Optional, for hosts with a file system. Opens a file the host chose (open panel, Finder, menu) in place; options as `importMedia`. Resolve `{image, url, identity?}`: `identity` is what the file's last edit is kept under (below). |
+| `loadEdit(key)` / `saveEdit(key, text)` | Optional pair, for a host that keeps edits itself. Load resolves the text kept under `key` or `null`; save keeps `text`, or forgets the key when it is `null`. Without them the editor keeps edits in the photo library's IndexedDB records on the device (a desktop host's persistent profile). |
 | `exportVideo(request)` | Same image/edit/session fields plus `{format,quality,filename,signal,onProgress({progress,frames,finalizing})}`. Return `{filename,url?,dispose()}`; `dispose` releases temporary download resources, never deletes the accepted saved file. |
 | `videoExportTypes` | Optional. The movie formats a native encoder writes, `[{id, label, extension, type, quality, bits, colorSpace}]`, replacing the browser's MP4/WebM list; `quality: false` hides the quality choice (ProRes). `format` in `exportVideo` is one of the ids. |
 | `lenses` | `{snapshot(),subscribe(listener),load(),import(file,onProgress?),remove()}`. Snapshot is a stable object `{profiles,revision,loaded,error?}` until changed. Subscribe returns an unsubscribe function. Import resolves the installed profile count; remove clears the installed catalogue. Publish a new snapshot on changes or load failure. |
@@ -81,6 +83,21 @@ A completed positive transfers its lease to the library. `url`/`src` are blob UR
 created by the JavaScript facade and revoked by the UI. Sessions retain any native
 input references needed by in-flight work even after the caller releases its lease.
 The backend releases its own caches and GPU allocations when the session closes.
+
+### Kept edits and the Edit History
+
+A photograph opened again starts from the edit it was left with, as the Mac app's shelf does
+(`web/src/saved-edits.js`, `web/src/editor/useSavedEdits.js`). Each is kept as the text Save
+Edits writes, under a key: a photo-library photo's library key, otherwise the file's identity. A
+still is known by the SHA-256 of its bytes (`sha256:<hex>`, the Mac app's key), a movie — or any
+file on a host without a digest — by `file:<name>|<size>|<modified ms>`. The editor computes the
+identity of a `File` it was handed; a host that opens paths answers it with `importPath`, in the
+same form, so a photograph dropped on the window and the same one opened from a menu share their
+edit. A second open of a photograph already open shows it rather than opening a copy.
+
+Undo, Redo and the Edit History name each step after what it changed, with the Mac app's names
+(`web/src/edit-history.js`): "Undo Lens Correction", a film's name for a change of film. The
+history reducer's `goTo` action jumps to any step and keeps the timeline whole.
 
 ### Rendering and analysis
 

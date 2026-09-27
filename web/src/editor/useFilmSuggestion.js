@@ -8,11 +8,11 @@ export default function useFilmSuggestion({ backend, active, edit, dispatch }) {
   const autoFilm = useAppSetting("autoFilm");
   const current = useRef({});
   current.current = { active, edit };
-  const photoID = active ? (active.libraryKey ?? active.id) : null;
+  const photoID = active ? (active.editKey ?? active.id) : null;
 
   useEffect(() => {
     if (!backend.suggestFilm || !appSetting("autoFilm") || !active) return;
-    if (active.image.video || active.libraryEdit || active.filmSuggested) return;
+    if (active.image.video || active.savedEdit || active.filmSuggested) return;
     active.filmSuggested = true;
     const startingFilm = edit.stock;
     let live = true;

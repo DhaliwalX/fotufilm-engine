@@ -26,6 +26,7 @@ export default function useDocumentActions({
   setError,
   files,
   stocks,
+  savedEditFor,
 }) {
   const openFiles = useCallback(
     (kind = "all") => {
@@ -41,13 +42,14 @@ export default function useDocumentActions({
     [exporting, input],
   );
 
-  // A new document starts from its library edit, or from the settings' starting film and film
-  // model (the current film unless one is chosen).
+  // A new document starts from its kept edit (useSavedEdits), or from the settings' starting film
+  // and film model (the current film unless one is chosen).
   const startingEdit = (file) =>
-    file?.libraryEdit ||
+    file?.savedEdit ||
     newPhotoEdit(defaultEdit(edit.stock), stocks?.length ? stocks.map((s) => s.id) : null);
-  // `incoming` holds Files, library items {file, libraryKey, edit}, or files a native host
-  // chose {path, name}, which it opens in place.
+  // `incoming` holds Files, library items {file, editKey}, or files a native host chose
+  // {path, name}, which it opens in place. Each opens with the edit kept for it; one already open
+  // is shown instead of opened twice.
   async function acceptFiles(incoming) {
     if (exporting) return;
     const generation = ++loadGeneration.current;
@@ -56,13 +58,13 @@ export default function useDocumentActions({
     importController.current = controller;
     const loaded = [],
       errors = [];
+    let shown = null;
     for (const item of Array.from(incoming || [])) {
       const {
         file,
         path,
         name = file?.name,
-        libraryKey = null,
-        edit: libraryEdit = null,
+        editKey = null,
       } = item instanceof Blob ? { file: item } : item;
       if (controller.signal.aborted) break;
       try {
@@ -72,19 +74,34 @@ export default function useDocumentActions({
             if (!controller.signal.aborted) setImportStatus(`${text}: ${name}`);
           },
         };
-        const decoded = path
+        // A file handed over is known while it decodes; one the host opens, by its answer.
+        const known = path ? null : savedEditFor({ editKey, file });
+        const { identity, ...decoded } = path
           ? await backend.importPath(path, options)
           : await backend.importMedia(file, options);
-        if (controller.signal.aborted) {
+        const saved = await (known ?? savedEditFor({ editKey, identity }));
+        const release = () => {
           backend.releaseImage(decoded.image);
           URL.revokeObjectURL(decoded.url);
+        };
+        if (controller.signal.aborted) {
+          release();
           break;
         }
+        const open =
+          saved.editKey &&
+          [...files, ...loaded].find((doc) => doc.editKey === saved.editKey);
+        if (open) {
+          release();
+          shown ??= open;
+          continue;
+        }
+        if (saved.problem) errors.push(`${name}: ${saved.problem}`);
         loaded.push({
           id: crypto.randomUUID(),
           name,
-          libraryKey,
-          libraryEdit,
+          editKey: saved.editKey,
+          savedEdit: saved.savedEdit,
           ...decoded,
         });
       } catch (e) {
@@ -119,7 +136,7 @@ export default function useDocumentActions({
       replaceResult(null);
       setStage(null);
       setDifference(false);
-    }
+    } else if (shown && files.includes(shown)) selectFile(shown);
     setError(errors.length ? errors.join(" ") : null);
   }
   function selectFile(file) {

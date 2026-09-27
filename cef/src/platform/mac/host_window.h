@@ -27,6 +27,8 @@ class Dispatcher;
 - (BOOL)commandEnabled:(NSString*)command;
 // Runs one of the editor's commands (web/src/editor/useNativeCommands.js).
 - (void)sendCommand:(NSString*)command;
+// The title the editor gave a command ("Undo Lens Correction"), or nil when it gave none.
+- (NSString*)titleForCommand:(NSString*)command;
 // Whether focus is in one of the page's text fields, which then own Undo and the clipboard.
 @property(nonatomic, readonly) BOOL pageEditsText;
 

@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { inspectorPanels } from "../editor-catalogue.js";
 import { appSetting, setAppSetting } from "../app-settings.js";
+import { editHistory, filmNamer, redoTitle, undoTitle } from "../edit-history.js";
 
 // The native menu bar (cef/src/platform/mac) runs the editor's own handlers: the host sends
 // "fotufilm-native-command" {command} and "fotufilm-native-open" {paths}, and the editor reports
-// which commands apply now ("menuState") so the menus grey out and tick as its toolbars do.
+// which commands apply now ("menuState") so the menus grey out and tick as its toolbars do, what
+// Undo and Redo would undo ("titles") and the Edit History ("history", one title per step; the
+// command "history:<step>" goes to a step).
 
 // The inspector tabs in the order ⌘1…⌘6 choose them.
 export const MENU_PANELS = [
@@ -40,6 +43,13 @@ const COMMANDS = {
   ...Object.fromEntries(
     MENU_PANELS.map((id) => [`panel:${id}`, (e) => e.setInspector(id)]),
   ),
+};
+
+const HISTORY = /^history:(\d+)$/;
+const handler = (command) => {
+  const step = HISTORY.exec(command ?? "");
+  if (step) return (e) => e.dispatch({ type: "goTo", index: Number(step[1]) });
+  return Object.hasOwn(COMMANDS, command ?? "") ? COMMANDS[command] : null;
 };
 
 // Which commands apply now and which are ticked, by the rules the toolbars use.
@@ -83,12 +93,21 @@ export function menuState(e) {
     inspector: !!e.inspectorOpen,
   };
   if (e.inspectorOpen) checked[`panel:${e.panel}`] = true;
-  return { enabled, checked };
+  // The Edit History of the photograph shown, as the Mac app's Edit menu lists it.
+  const filmName = filmNamer(e.stocks);
+  const history = e.active ? editHistory(e.history, filmName) : { titles: [], index: -1 };
+  history.titles.forEach((_, step) => (enabled[`history:${step}`] = free));
+  if (history.titles.length) checked[`history:${history.index}`] = true;
+  const titles = {
+    undo: undoTitle(e.history, filmName),
+    redo: redoTitle(e.history, filmName),
+  };
+  return { enabled, checked, titles, history: history.titles };
 }
 
 // Runs a menu command if it still applies; the host's copy of the state may be a frame old.
 export function runCommand(editor, command) {
-  const run = COMMANDS[command];
+  const run = handler(command);
   if (!run || !menuState(editor).enabled[command]) return false;
   run(editor);
   return true;

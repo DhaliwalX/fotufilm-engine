@@ -45,7 +45,7 @@ export default function LibraryHandoff() {
   }, [handoff, endLibraryHandoff]);
   const ready =
     landed &&
-    ((active?.libraryKey === handoff?.key && shownResult) || visibleError);
+    ((active?.editKey === handoff?.key && shownResult) || visibleError);
   if (!handoff || !target) return null;
   const { rect } = handoff;
   return (
