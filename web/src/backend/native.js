@@ -29,7 +29,14 @@ export function createNativeBackend(host) {
     backend.suggestNegativeFilms = host.suggestNegativeFilms.bind(host);
   // Optional: opening files by path, copying the picture and the still-export options, for hosts
   // with a file system, a pasteboard and an encoder of their own.
-  for (const name of ["importPath", "copyImage", "exportOptions"])
+  for (const name of [
+    "importPath",
+    "copyImage",
+    "exportOptions",
+    "suggestFilm",
+    "recordFilmChoice",
+    "forgetFilmChoices",
+  ])
     if (typeof host[name] === "function") backend[name] = host[name].bind(host);
   backend.createSession = () => {
     const session = host.createSession();

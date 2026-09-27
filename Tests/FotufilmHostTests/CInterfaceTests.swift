@@ -264,6 +264,42 @@ extension CInterfaceTests {
         XCTAssertEqual(make(properties(hdr)), "Fotufilm Test")
     }
 
+    /// Choose Film Per Photo: every film ranked for the photograph, the choice learned, and
+    /// forgotten on request.
+    func testFilmSuggestionRanksRecordsAndForgets() throws {
+        let engine = try makeEngine()
+        defer { fotufilm_engine_destroy(engine) }
+        let service = Unmanaged<HostEngine>.fromOpaque(UnsafeRawPointer(engine))
+            .takeUnretainedValue().service
+        service.filmPreferences = HostFilmPreferences(file: nil)
+        func call(_ method: String, _ params: String) throws -> [String: Any] {
+            let answer = try service.call(method, params: Data(params.utf8), payload: nil)
+            return try JSONSerialization.jsonObject(with: answer.json) as? [String: Any] ?? [:]
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fotufilm-suggest-\(UUID().uuidString).png")
+        try writeRamp(to: url, width: 96, height: 64)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let handle = try XCTUnwrap(call("importPath", #"{"path": "\#(url.path)"}"#)["handle"])
+
+        // Two films keep the develops few; the page may name any subset.
+        let films = Array(service.engine.stockIDs.prefix(2))
+        let named = films.map { "\"\($0)\"" }.joined(separator: ", ")
+        let suggested = try call("suggestFilm", """
+        {"handle": \(handle), "photoID": "ramp", "edit": {"params": {}},
+         "films": [\(named)], "profileRequest": {"controls": {}}}
+        """)
+        let ordered = try XCTUnwrap(suggested["ordered"] as? [[String: Any]])
+        XCTAssertEqual(Set(ordered.compactMap { $0["id"] as? String }), Set(films))
+        let best = try XCTUnwrap(suggested["best"] as? String)
+        XCTAssertEqual(ordered.first?["id"] as? String, best)
+        let other = try XCTUnwrap(ordered.last?["id"] as? String)
+        let recorded = try call("recordFilmChoice", #"{"photoID": "ramp", "film": "\#(other)"}"#)
+        XCTAssertEqual(recorded["observations"] as? Int, 1)
+        _ = try call("forgetFilmChoices", "{}")
+        XCTAssertEqual(service.filmPreferences.observationCount, 0)
+    }
+
     /// The editor's own calls: import a photograph's bytes, develop a cropped render of it.
     func testHostCallsImportAndRender() throws {
         let engine = try makeEngine()

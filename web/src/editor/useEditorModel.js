@@ -12,6 +12,7 @@ import useExportActions from "./useExportActions.js";
 import useEditorShortcuts from "./useEditorShortcuts.js";
 import useOutputState from "./useOutputState.js";
 import useNativeCommands from "./useNativeCommands.js";
+import useFilmSuggestion from "./useFilmSuggestion.js";
 export default function useEditorModel() {
   let editor = { backend: useBackend() };
   editor = {
@@ -62,6 +63,7 @@ export default function useEditorModel() {
     ...editor,
     ...useOutputState(editor),
   };
+  useFilmSuggestion(editor);
   useNativeCommands(editor);
   return editor;
 }

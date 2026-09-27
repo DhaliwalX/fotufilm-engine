@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { inspectorPanels } from "../editor-catalogue.js";
+import { appSetting, setAppSetting } from "../app-settings.js";
 
 // The native menu bar (cef/src/platform/mac) runs the editor's own handlers: the host sends
 // "fotufilm-native-command" {command} and "fotufilm-native-open" {paths}, and the editor reports
@@ -26,6 +27,8 @@ const COMMANDS = {
   copyPhoto: (e) => e.copyPhoto(),
   resetEdits: (e) => e.resetEdits(),
   newGrainPattern: (e) => e.newGrainPattern(),
+  autoFilm: () => setAppSetting("autoFilm", !appSetting("autoFilm")),
+  forgetFilms: (e) => e.backend.forgetFilmChoices().catch(console.error),
   zoomIn: (e) => e.zoomIn(),
   zoomOut: (e) => e.zoomOut(),
   zoomToFit: (e) => e.setZoom(1),
@@ -56,6 +59,8 @@ export function menuState(e) {
     copyPhoto: still && !!e.backend.copyImage && !!e.session,
     resetEdits: photo,
     newGrainPattern: photo && !!e.edit?.stock,
+    autoFilm: !!e.backend?.suggestFilm,
+    forgetFilms: !!e.backend?.forgetFilmChoices,
     zoomIn: photo && !e.cropMode && e.zoom < 8,
     zoomOut: photo && !e.cropMode && e.zoom > 1,
     zoomToFit: photo && e.zoom !== 1,
@@ -68,6 +73,7 @@ export function menuState(e) {
     enabled[`panel:${id}`] =
       id === "selective" ? still : id === "crop" ? photo : !e.libraryOpen;
   const checked = {
+    autoFilm: !!e.backend?.suggestFilm && appSetting("autoFilm") === true,
     autoAdjust: !!e.auto.active,
     showOriginal: !!e.compare,
     histogram: !!e.histogram,

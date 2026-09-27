@@ -13,6 +13,7 @@ constexpr const char* kMethods[] = {
     "sampleScene",      "exportVideo",    "beginVideo",
     "appendVideo",      "importVideo",    "lensCatalogue",    "importLensCatalogue",
     "removeLensCatalogue", "importPath",   "copyImage",        "exportOptions",
+    "suggestFilm",      "recordFilmChoice", "forgetFilmChoices",
 };
 
 }  // namespace

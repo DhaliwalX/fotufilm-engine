@@ -26,6 +26,8 @@ public final class HostService {
     /// Where Copy Photo puts the picture, when the platform has a clipboard; tests use a private
     /// one.
     var clipboard: HostClipboard? = HostPlatform.current.clipboard
+    /// What this person has chosen before, for Choose Film Per Photo; tests use their own file.
+    var filmPreferences = HostFilmPreferences(file: HostFilmPreferences.defaultFile)
 
     public init(engine: HostEngine) {
         self.engine = engine
@@ -102,6 +104,18 @@ public final class HostService {
             return try answer(export(params, parameters: parameters))
         case "exportOptions":
             return try answer(exportOptions(parameters))
+        case "suggestFilm":
+            return try answer(suggestFilm(parameters))
+        case "recordFilmChoice":
+            guard let photoID = parameters["photoID"] as? String,
+                  let film = parameters["film"] as? String else {
+                throw HostEngine.Failure(description: "A film choice needs a photograph and a film.")
+            }
+            filmPreferences.record(photoID: photoID, chosenFilmID: film)
+            return try answer(["observations": filmPreferences.observationCount])
+        case "forgetFilmChoices":
+            filmPreferences.forget()
+            return try answer([:])
         case "copyImage":
             return try answer(copyImage(parameters))
         case "lensCatalogue":
@@ -190,7 +204,7 @@ public final class HostService {
 
     // MARK: Rendering
 
-    private struct RenderRequest: Decodable {
+    struct RenderRequest: Decodable {
         struct Viewport: Decodable {
             struct Region: Decodable { var x, y, width, height: Int }
             var width: Int
@@ -206,7 +220,7 @@ public final class HostService {
 
     /// A render request resolved against its photograph: the geometry, the sizes it delivers at,
     /// and the edit as the engine reads it.
-    private struct Prepared {
+    struct Prepared {
         var request: RenderRequest
         var edit: WebNativeEdit
         var image: HostImage
@@ -215,7 +229,7 @@ public final class HostService {
         var sizes: (frame: (Int, Int), output: (Int, Int))
     }
 
-    private func prepare(_ params: Data) throws -> Prepared {
+    func prepare(_ params: Data) throws -> Prepared {
         let request: RenderRequest, edit: WebNativeEdit
         do {
             request = try JSONDecoder().decode(RenderRequest.self, from: params)
@@ -381,7 +395,7 @@ public final class HostService {
 
     /// Subject detection over the framed photograph, kept per photograph and geometry: the model
     /// sees the picture at no more than 1024 pixels, so a preview and an export share a reading.
-    private func subjects(_ scene: [Float], width: Int, height: Int, image: HostImage) -> HostSubject? {
+    func subjects(_ scene: [Float], width: Int, height: Int, image: HostImage) -> HostSubject? {
         let key = sceneCache.map { $0.key.split(separator: "|").prefix(2).joined(separator: "|") }
             ?? "\(ObjectIdentifier(image))"
         if let subjectCache, subjectCache.key == key { return subjectCache.subject }
@@ -686,6 +700,11 @@ public final class HostService {
     private var sceneCache: (key: String, scene: [Float])?
 
     /// The photograph through the edit's geometry at the frame's size, scene-linear.
+    /// The prepared request's picture through its geometry, scene-linear.
+    func framedScene(_ prepared: Prepared) throws -> [Float] {
+        try sceneFor(prepared.image, geometry: prepared.geometry, sizes: prepared.sizes)
+    }
+
     private func sceneFor(_ image: HostImage, geometry: SceneGeometry,
                           sizes: (frame: (Int, Int), output: (Int, Int))) throws -> [Float] {
         let key = "\(ObjectIdentifier(image))|\(geometry)|\(sizes.frame)|\(sizes.output)"

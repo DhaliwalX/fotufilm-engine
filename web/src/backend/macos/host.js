@@ -141,6 +141,18 @@ export function createMacBackend(channel) {
     exportOptions: can.imageExportTypes?.length
       ? async (request) => call("exportOptions", renderRequest(request, await catalogue()))
       : undefined,
+    // Choose Film Per Photo: the engine ranks every film and learns the choices made.
+    suggestFilm: can.filmSuggestion
+      ? async (request) =>
+          call("suggestFilm", {
+            ...renderRequest(request, await catalogue()),
+            photoID: request.photoID,
+          })
+      : undefined,
+    recordFilmChoice: can.filmSuggestion
+      ? (photoID, film) => call("recordFilmChoice", { photoID, film })
+      : undefined,
+    forgetFilmChoices: can.filmSuggestion ? () => call("forgetFilmChoices") : undefined,
     // The developed frame on the system clipboard, written by the engine.
     copyImage: can.copyImage
       ? async (request) => call("copyImage", renderRequest(request, await catalogue()))

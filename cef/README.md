@@ -101,6 +101,11 @@ with `importPath`: no bytes cross the bridge. Files dropped on the window become
 the page's own drop handling takes them. Copy Photo develops the frame and the engine puts it on
 the pasteboard (`copyImage`).
 
+Film › Choose Film Per Photo ranks every film for each newly opened photograph as the Mac app
+does (`suggestFilm`, from `FotufilmStockMatch`) and applies the best; the film a photograph keeps
+is recorded (`recordFilmChoice`) in `Application Support/Fotufilm Desktop/StockPreference.json`,
+and Forget What I've Taught It clears it (`forgetFilmChoices`).
+
 ## Roadmap
 
 1. **Engine methods.** `prepare` (with the film library), `import`, `preview`, `release`,
@@ -109,8 +114,8 @@ the pasteboard (`copyImage`).
    print frames (`printFrame`, framed renders and exports), lens correction (`lensPlan`, the
    catalogue, and the correction in the geometry resample), negatives (`analyseNegative`,
    `convertNegative` with contrast, `suggestNegativeFilms`), the pipeline inspector (`stages`,
-   stage and difference renders) and selective edits by colour, light or subject (Vision's
-   foreground instances, as the Mac app selects) answer today. Still to come: video.
+   stage and difference renders), selective edits by colour, light or subject (Vision's
+   foreground instances, as the Mac app selects) and film suggestion answer today. Still to come: video.
 2. **Native presentation in the editor.** A backend capability that lets `ImageCanvas` leave the
    photograph's area transparent and report its rectangle, zoom and pan to the host (as
    `setImageLayer` does in the diagnostics page); renders then go to the image layer instead of

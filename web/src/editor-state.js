@@ -142,6 +142,9 @@ export function historyReducer(state, action) {
   if (action.type === "load")
     return { past: [], present: action.edit, future: [], group: null };
   if (action.type === "end") return { ...state, group: null };
+  // A change the app made for the photograph (a suggested film), not a step to undo.
+  if (action.type === "replace")
+    return { ...state, present: { ...state.present, ...action.patch } };
   if (action.type === "undo") {
     if (!state.past.length) return state;
     return {

@@ -43,6 +43,7 @@ struct HostPlatform {
             "printFrames": frames != nil,
             "imageExportTypes": encoder?.types.sorted() ?? [],
             "hdrExport": encoder?.writesHDR ?? false,
+            "filmSuggestion": true,
         ].merging(developer == nil ? [:] : [
             // A GPU developer answers a full preview within a frame or two: the editor may keep
             // full-size previews while an edit moves and refine sooner (web/src/preview-budget.js).

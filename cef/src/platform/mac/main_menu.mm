@@ -143,6 +143,9 @@ NSMenu* FotufilmMainMenu() {
   NSMenu* film = Submenu(bar, @"Film");
   Command(film, @"New Grain Pattern", @"newGrainPattern", @"g", kCommand | kShift);
   [film addItem:[NSMenuItem separatorItem]];
+  Command(film, @"Choose Film Per Photo", @"autoFilm", @"");
+  Command(film, @"Forget What I've Taught It", @"forgetFilms", @"");
+  [film addItem:[NSMenuItem separatorItem]];
   Command(film, @"Reset All Edits", @"resetEdits", @"r", kCommand | kShift);
 
   NSMenu* view = Submenu(bar, @"View");

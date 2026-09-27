@@ -125,7 +125,7 @@ let package = Package(
         .target(name: "CFotufilmHost"),
         .target(name: "FotufilmHost",
                 dependencies: ["CFotufilmHost", "FotufilmCore", "FotufilmImaging",
-                               "FotufilmEditModel",
+                               "FotufilmEditModel", "FotufilmStockMatch",
                                .target(name: "FotufilmMetal",
                                        condition: .when(platforms: [.macOS, .iOS]))]),
         .executableTarget(name: "fotufilm",
