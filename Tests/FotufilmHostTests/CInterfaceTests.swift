@@ -81,13 +81,32 @@ final class CInterfaceTests: XCTestCase {
         let labels: [UInt8] = [1, 1, 0, 2, 2,
                                1, 1, 0, 2, 2]
         let subject = HostSubject(labels: labels, width: 5, height: 2)
-        let left = subject.weights(at: [0.1, 0.5], width: 10, height: 4, softness: 0)
+        let left = subject.weights(at: [0.1, 0.5], width: 10, height: 4, feather: 0)
         XCTAssertEqual(left[1 * 10 + 0], 1, accuracy: 1e-6)
         XCTAssertEqual(left[1 * 10 + 9], 0, accuracy: 1e-6)
-        let every = subject.weights(at: [0.5, 0.5], width: 10, height: 4, softness: 0)
+        let every = subject.weights(at: [0.5, 0.5], width: 10, height: 4, feather: 0)
         XCTAssertEqual(every[1 * 10 + 0], 1, accuracy: 1e-6)
         XCTAssertEqual(every[1 * 10 + 9], 1, accuracy: 1e-6)
         XCTAssertEqual(every[1 * 10 + 5], 0, accuracy: 0.5)
+    }
+
+    /// Edge moves the subject's rim as the Mac app's morphology does: out by 0.8% of the long
+    /// side at +1, in at -1, and the rest of the picture untouched.
+    func testSubjectEdgeGrowsAndShrinksTheRim() {
+        // One subject, columns 40..<60 of a 100-pixel line.
+        let labels = (0..<100).map { $0 >= 40 && $0 < 60 ? UInt8(1) : 0 }
+        let subject = HostSubject(labels: labels, width: 100, height: 1)
+        XCTAssertEqual(subject.count, 1)
+        func span(_ edge: Double) -> Range<Int> {
+            let row = subject.weights(at: nil, width: 1000, height: 1, edge: edge, feather: 0)
+            let inside = row.indices.filter { row[$0] > 0.5 }
+            return inside.first!..<(inside.last! + 1)
+        }
+        let plain = span(0), grown = span(1), shrunk = span(-1)
+        XCTAssertEqual(grown.lowerBound, plain.lowerBound - 8)
+        XCTAssertEqual(grown.upperBound, plain.upperBound + 8)
+        XCTAssertEqual(shrunk.lowerBound, plain.lowerBound + 8)
+        XCTAssertEqual(shrunk.upperBound, plain.upperBound - 8)
     }
 
     func testOpenAndRenderThroughTheCInterface() throws {

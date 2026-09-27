@@ -8,10 +8,15 @@ struct HostSubject {
     let width: Int
     let height: Int
 
+    /// How many subjects the detector found.
+    var count: Int { Int(labels.max() ?? 0) }
+
     /// The subject under a unit point, or every subject when the point is on the background or
-    /// there is none, as a 0…1 weight per pixel of a `width` x `height` picture, feathered by
-    /// `softness` as the Mac app feathers its fitted mask.
-    func weights(at point: [Double]?, width: Int, height: Int, softness: Double) -> [Float] {
+    /// there is none, as a 0…1 weight per pixel of a `width` x `height` picture, fitted as the
+    /// Mac app's `SubjectMask.fitted` does: the rim moved out (`edge` > 0) or in by up to 0.8% of
+    /// the long side, then feathered by up to 0.6% of it.
+    func weights(at point: [Double]?, width: Int, height: Int, edge: Double = 0,
+                 feather: Double) -> [Float] {
         var chosen: UInt8?
         if let point, point.count == 2 {
             let x = min(max(Int(point[0] * Double(self.width)), 0), self.width - 1)
@@ -42,8 +47,52 @@ struct HostSubject {
                 }
             }
         }
-        let radius = Int((softness * Double(max(width, height)) * 0.006).rounded())
+        let long = Double(max(width, height))
+        let shift = Int((abs(edge) * long * 0.008).rounded())
+        if shift > 0 {
+            weights = Self.morphed(weights, width: width, height: height, radius: shift,
+                                   grow: edge > 0)
+        }
+        let radius = Int((feather * long * 0.006).rounded())
         return radius > 0 ? Self.blurred(weights, width: width, height: height, radius: radius) : weights
+    }
+
+    /// A square maximum (`grow`) or minimum over `radius`, separable and in constant time per
+    /// pixel whatever the radius (van Herk / Gil–Werman), so a full-size export pays no more
+    /// than a preview does per pixel.
+    private static func morphed(_ values: [Float], width: Int, height: Int, radius: Int,
+                                grow: Bool) -> [Float] {
+        let pick: (Float, Float) -> Float = grow ? { max($0, $1) } : { min($0, $1) }
+        let window = 2 * radius + 1
+        func pass(_ input: [Float], horizontal: Bool) -> [Float] {
+            var output = input
+            let lines = horizontal ? height : width, length = horizontal ? width : height
+            input.withUnsafeBufferPointer { input in
+                output.withUnsafeMutableBufferPointer { out in
+                    let out = out
+                    SceneGeometry.concurrent(lines) { line in
+                        func at(_ i: Int) -> Int { horizontal ? line * width + i : i * width + line }
+                        // The line padded by the radius with its end values, then running
+                        // extremes forward and backward within blocks of the window's size.
+                        let padded = length + 2 * radius
+                        var source = [Float](repeating: 0, count: padded)
+                        for i in 0..<padded { source[i] = input[at(min(max(i - radius, 0), length - 1))] }
+                        var forward = source, backward = source
+                        for i in 1..<padded where i % window != 0 {
+                            forward[i] = pick(forward[i - 1], source[i])
+                        }
+                        for i in stride(from: padded - 2, through: 0, by: -1) where (i + 1) % window != 0 {
+                            backward[i] = pick(backward[i + 1], source[i])
+                        }
+                        for i in 0..<length {
+                            out[at(i)] = pick(backward[i], forward[i + 2 * radius])
+                        }
+                    }
+                }
+            }
+            return output
+        }
+        return pass(pass(values, horizontal: true), horizontal: false)
     }
 
     /// Two passes of a separable box, close enough to the Mac app's Gaussian for a feather.

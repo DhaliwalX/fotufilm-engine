@@ -357,6 +357,11 @@ public final class HostService {
             "elapsed": elapsed, "renderMilliseconds": renderMilliseconds,
         ]
         if let plan { answerBody["framePlan"] = plan.json }
+        // How many subjects a subject selection found, for the inspector's status.
+        if ((body["edit"] as? [String: Any])?["selective"] as? [String: Any])?["kind"] as? String
+            == "subject", request.cropMode != true {
+            answerBody["subjects"] = subjectCache?.subject?.count ?? 0
+        }
         // The undeveloped picture changes only with the photograph, geometry and region: the
         // page names the one it holds and it crosses again only when it differs.
         let originalKey = "\(originalFrame.key)|\(region)"
@@ -394,11 +399,12 @@ public final class HostService {
         let showMask = body["showMask"] as? Bool ?? false
         var subject: [Float]?
         if selection.isSubject {
-            guard let found = subjects(scene, width: width, height: height, image: image) else {
-                throw HostEngine.Failure(description: "No subject was found in this photograph.")
-            }
+            // With nobody found the photograph stays as it is and the inspector says so.
+            guard let found = subjects(scene, width: width, height: height, image: image),
+                  found.count > 0 else { return ground }
             subject = found.weights(at: selection.point, width: width, height: height,
-                                    softness: selection.softness)
+                                    edge: selection.subjectEdge,
+                                    feather: selection.subjectFeather)
         }
         let selected = showMask ? nil : try develop(selection.develop(edit))
         return selection.composite(ground: ground, selected: selected, scene: scene, width: width,

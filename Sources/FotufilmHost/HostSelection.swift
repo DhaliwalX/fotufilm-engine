@@ -18,9 +18,14 @@ struct HostSelection: Decodable {
     var params: [String: Double]?
     var localTone: Bool?
     var gradeSpace: Bool?
+    /// A subject's rim against the detector's, -1…1 (negative eats in), and its softness, 0…1:
+    /// the Mac app's `subjectEdge` and `subjectFeather`.
+    var subjectEdge = 0.0
+    var subjectFeather = 0.35
 
     private enum CodingKeys: String, CodingKey {
         case kind, point, sample, range, softness, params, localTone, gradeSpace
+        case subjectEdge, subjectFeather
     }
 
     init(from decoder: Decoder) throws {
@@ -33,9 +38,12 @@ struct HostSelection: Decodable {
         params = try values.decodeIfPresent([String: Double].self, forKey: .params)
         localTone = try values.decodeIfPresent(Bool.self, forKey: .localTone)
         gradeSpace = try values.decodeIfPresent(Bool.self, forKey: .gradeSpace)
+        subjectEdge = try values.decodeIfPresent(Double.self, forKey: .subjectEdge) ?? 0
+        subjectFeather = try values.decodeIfPresent(Double.self, forKey: .subjectFeather) ?? 0.35
     }
 
-    var isActive: Bool { kind == "subject" ? point?.count == 2 : sample?.count == 3 }
+    /// A subject selection takes every subject until one is clicked, as the Mac app's does.
+    var isActive: Bool { kind == "subject" || sample?.count == 3 }
     var isSubject: Bool { kind == "subject" }
 
     /// The edit the selected area develops with: the photograph's, with the selection's own

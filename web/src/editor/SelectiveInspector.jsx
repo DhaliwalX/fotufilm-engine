@@ -24,6 +24,7 @@ export default function SelectiveInspector() {
       showMask={showMask}
       setShowMask={setShowMask}
       canSample={!!shownResult}
+      subjects={shownResult?.subjects}
     />
   );
 }

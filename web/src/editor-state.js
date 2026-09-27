@@ -256,6 +256,10 @@ export function parseEdit(json, stockIDs) {
       !Number.isFinite(local.softness) ||
       local.softness < 0.05 ||
       local.softness > 1 ||
+      (local.subjectEdge != null &&
+        !(Math.abs(local.subjectEdge) <= 1)) ||
+      (local.subjectFeather != null &&
+        !(local.subjectFeather >= 0 && local.subjectFeather <= 1)) ||
       (local.point !== null &&
         (!Array.isArray(local.point) ||
           local.point.length !== 2 ||

@@ -21,6 +21,7 @@ export default function SelectiveControls({
   setShowMask,
   canSample,
   disabled,
+  subjects,
 }) {
   const backend = useBackend();
   const selection = edit.selective || newSelection(edit);
@@ -28,6 +29,18 @@ export default function SelectiveControls({
   const choices = SELECTION.choices.filter(
     (option) => !option.native || backend.subjectSelection,
   );
+  const subject = selection.kind === "subject";
+  // A subject selection's rim, or a colour or light selection's reach.
+  const sliders = subject ? SELECTION.subjectSliders : SELECTION.sliders;
+  const [finding, none, one, many] = SELECTION.subjectsFound;
+  const found =
+    subjects == null
+      ? finding
+      : subjects === 0
+        ? none
+        : subjects === 1
+          ? one
+          : many.replace("%d", subjects);
   const change = (value, group) =>
     patch(
       {
@@ -81,12 +94,17 @@ export default function SelectiveControls({
             >
               {sampling ? SELECTION.sampling : SELECTION.sample}
             </Button>
-            {SELECTION.sliders.map((slider) => (
+            {subject && (
+              <p className="medium-detail" role="status">
+                {found}
+              </p>
+            )}
+            {sliders.map((slider) => (
               <Adjustment
                 key={slider.key}
                 disabled={disabled}
                 slider={slider}
-                value={selection[slider.key]}
+                value={selection[slider.key] ?? slider.def}
                 onChange={(value) =>
                   change(
                     {
@@ -100,7 +118,7 @@ export default function SelectiveControls({
             ))}
             <Switch
               isSelected={showMask}
-              isDisabled={disabled || !selection.sample}
+              isDisabled={disabled || (!subject && !selection.sample)}
               size="S"
               onChange={setShowMask}
             >

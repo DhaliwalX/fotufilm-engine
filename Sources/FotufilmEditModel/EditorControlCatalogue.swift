@@ -95,6 +95,13 @@ public enum EditorControlCatalogue {
             ["key": "range", "label": "Range", "min": 0.05, "max": 0.6, "def": 0.25, "step": 0.01],
             ["key": "softness", "label": "Softness", "min": 0.05, "max": 1.0, "def": 0.5, "step": 0.01],
         ],
+        // A subject's rim against the detector's (negative eats in) and how soft it is.
+        "subjectSliders": [
+            ["key": "subjectEdge", "label": "Edge", "min": -1.0, "max": 1.0, "def": 0.0, "step": 0.01],
+            ["key": "subjectFeather", "label": "Feather", "min": 0.0, "max": 1.0, "def": 0.35, "step": 0.01],
+        ],
+        "subjectsFound": ["Finding subjects…", "No subjects found.", "One subject found.",
+                          "%d subjects found."],
     ]
 
     // Browser inspection controls affect the viewer, not film-engine parameters.

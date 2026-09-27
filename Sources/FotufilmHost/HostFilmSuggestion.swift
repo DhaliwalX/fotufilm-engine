@@ -185,6 +185,6 @@ extension HostService {
               let subject = subjects(scene, width: prepared.sizes.output.0,
                                      height: prepared.sizes.output.1, image: prepared.image)
         else { return nil }
-        return subject.weights(at: nil, width: width, height: height, softness: 0)
+        return subject.weights(at: nil, width: width, height: height, feather: 0)
     }
 }
