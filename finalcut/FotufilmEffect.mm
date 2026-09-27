@@ -1524,7 +1524,8 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
     for (UInt32 absorbing : {(UInt32)kFotufilmParam_LensFilter1,
                              (UInt32)kFotufilmParam_LensFilter2,
                              (UInt32)kFotufilmParam_LensFilter3,
-                             (UInt32)kFotufilmParam_Metering}) {
+                             (UInt32)kFotufilmParam_Metering,
+                             (UInt32)kFotufilmParam_Flare}) {
         [setting setParameterFlags:exposesFilm ? kFxParameterFlag_DEFAULT
                                                : kFxParameterFlag_DISABLED
                        toParameter:absorbing];
@@ -1602,6 +1603,8 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
     FotufilmState state{};
     state.version = kFotufilmStateVersion;
     state.quality = (uint32_t)qualityLevel;
+    // Slots Final Cut offers no control for render at rest, not at zero.
+    fotufilm_bridge_resting_parameters(state.parameters, FOTUFILM_BRIDGE_PARAMETER_COUNT);
 
     const int32_t count = fotufilm_bridge_host_parameter_count(FOTUFILM_HOST_FINALCUT);
     for (int32_t i = 0; i < count; ++i) {
@@ -1757,6 +1760,7 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
         state.parameters[FOTUFILM_BRIDGE_LENS_FILTER_2] = 0;
         state.parameters[FOTUFILM_BRIDGE_LENS_FILTER_3] = 0;
         state.parameters[FOTUFILM_BRIDGE_LENS_METERING] = 0;
+        state.parameters[FOTUFILM_BRIDGE_FLARE_SCALE] = 0;
     }
     // The scattering half survives wherever the film is exposed or the spatial stages are being
     // differenced. Print Only is the one span that is neither: it starts at a developed negative,

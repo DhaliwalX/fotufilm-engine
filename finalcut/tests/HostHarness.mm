@@ -884,6 +884,17 @@ int main(int argc, const char *argv[]) {
                    "Stock Native clears custom source illuminant");
             host.values[@(kFotufilmParam_SceneLightKelvin)] = @6504.0;
 
+            // Final Cut offers no Film grain controls, so their slots reach the engine at rest.
+            {
+                NSData *restingState = nil;
+                [effect pluginState:&restingState atTime:kCMTimeZero quality:2 error:&error];
+                FotufilmState resting{};
+                [restingState getBytes:&resting length:sizeof(resting)];
+                expect(resting.parameters[FOTUFILM_BRIDGE_FILM_GRAIN_SIZE] == 1.0f &&
+                           resting.parameters[FOTUFILM_BRIDGE_FILM_COLOUR_GRAIN] == 1.0f,
+                       "controls Final Cut does not offer reach the engine at rest");
+            }
+
             // The seed is not in the block; it is its own argument, and grain is seeded on it.
             host.values[@(kFotufilmParam_Seed)] = @12345;
             NSData *state = nil;
@@ -1408,7 +1419,8 @@ int main(int argc, const char *argv[]) {
                     for (UInt32 parmId : {(UInt32)kFotufilmParam_LensFilter1,
                                           (UInt32)kFotufilmParam_LensFilter2,
                                           (UInt32)kFotufilmParam_LensFilter3,
-                                          (UInt32)kFotufilmParam_Metering}) {
+                                          (UInt32)kFotufilmParam_Metering,
+                                          (UInt32)kFotufilmParam_Flare}) {
                         if (dimmed(host, parmId) == exposesFilm) greyedRight = false;
                     }
                     for (UInt32 parmId : {(UInt32)kFotufilmParam_Diffusion,
@@ -1524,6 +1536,19 @@ int main(int argc, const char *argv[]) {
                                ? "and develops the frame it would have with the thread empty"
                                : "and Texture Only likewise");
                 }
+
+                // Lens Flare raises the same veiling-glare bit, so it is cleared the same way.
+                id flare = host.values[@(kFotufilmParam_Flare)];
+                host.values[@(kFotufilmParam_Flare)] = @1.25;
+                for (int32_t span : {FOTUFILM_BRIDGE_STAGE_NEGATIVE,
+                                     FOTUFILM_BRIDGE_STAGE_TEXTURE}) {
+                    std::vector<float> flared;
+                    expect(developInSpan(span, 0, flared),
+                           span == FOTUFILM_BRIDGE_STAGE_NEGATIVE
+                               ? "Negative Only develops with Lens Flare left up"
+                               : "Texture Only develops with Lens Flare left up");
+                }
+                host.values[@(kFotufilmParam_Flare)] = flare;
 
                 // The other half, or the check above would pass on a plugin that had thrown the
                 // filter away everywhere.

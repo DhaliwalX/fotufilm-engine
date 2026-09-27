@@ -349,6 +349,24 @@ func fotufilm_bridge_control_capabilities_mask_for(_ surface: Int32, _ index: In
     return control.availability.capabilityBit ?? 0
 }
 
+@_cdecl("fotufilm_bridge_resting_parameters")
+func fotufilm_bridge_resting_parameters(_ parameters: UnsafeMutablePointer<Float>?, _ count: Int32) {
+    guard let parameters, count > 0 else { return }
+    for index in 0..<Int(count) { parameters[index] = 0 }
+    for control in EditorControlCatalogue.all {
+        guard let host = control.host else { continue }
+        for entry in HostLayout.controlEntries(control, host: host, surface: .resolve)
+        where entry.slot >= 0 && entry.slot < count {
+            // The same reading a host makes of a control left where it starts.
+            var raw = entry.value
+            if entry.kind == .choice, entry.choiceValues.indices.contains(Int(raw)) {
+                raw = max(entry.choiceValues[Int(raw)], 0)
+            }
+            parameters[Int(entry.slot)] = Float(raw * entry.scale + entry.offset)
+        }
+    }
+}
+
 enum BridgeOptions {
     static func apply(_ parameters: UnsafePointer<Float>, to options: inout FotufilmEngine.Options) {
         for control in EditorControlCatalogue.all {
