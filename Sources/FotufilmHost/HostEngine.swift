@@ -16,6 +16,9 @@ public final class HostImage {
     let contentHeadroom: Float
     /// The lens the file records, for matching a correction profile.
     var lensShot: LensShot?
+    /// The file's capture records (camera, exposure, lens, place) in the decoder's own form, for
+    /// the encoder to carry into exports.
+    var captureMetadata: [String: Any]?
     /// Scene-linear RGBA in the engine's working space, alpha flattened over black.
     private let scene: [Float]
     private let lock = NSLock()

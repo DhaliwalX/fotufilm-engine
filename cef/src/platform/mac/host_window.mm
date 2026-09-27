@@ -4,6 +4,7 @@
 
 #include <cstring>
 #include <memory>
+#include <set>
 #include <vector>
 
 #include "app/client.h"
@@ -13,6 +14,7 @@
 #include "include/cef_browser.h"
 #include "include/cef_version.h"
 #import "platform/mac/compositor.h"
+#import "platform/mac/main_menu.h"
 
 @class FotufilmHostView;
 
@@ -69,19 +71,21 @@ double Number(CefRefPtr<CefDictionaryValue> fields, const char* key) {
 
 }  // namespace
 
-@interface FotufilmHostWindow ()
+@interface FotufilmHostWindow () <FotufilmMenuActions>
 - (void)browserClosed;
 - (CGRect)windowDragRegion:(NSPoint)point;
 @end
 
 // The view the browser draws into. It owns the compositor's layer and turns AppKit input into
 // CEF events.
-@interface FotufilmHostView : NSView
+@interface FotufilmHostView : NSView <NSMenuItemValidation>
 @property(nonatomic, weak) FotufilmHostWindow* owner;
 @property(nonatomic, readonly) FotufilmCompositor* compositor;
 @property(nonatomic) CefRefPtr<CefBrowser> browser;
 // The last key sent down, offered to the menu bar if the page leaves it unhandled.
 @property(nonatomic, strong) NSEvent* lastKeyDown;
+// What the page last said it would do with the files dragged over it.
+@property(nonatomic) cef_drag_operations_mask_t dragOperation;
 // Sizes the compositor to the view and tells the browser.
 - (void)layoutMetrics;
 // A moving test layer needs a frame every refresh; a still one does not.
@@ -100,6 +104,7 @@ double Number(CefRefPtr<CefDictionaryValue> fields, const char* key) {
   self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawNever;
   CAMetalLayer* layer = (CAMetalLayer*)self.layer;
   _compositor = [[FotufilmCompositor alloc] initWithLayer:layer];
+  [self registerForDraggedTypes:@[ NSPasteboardTypeFileURL ]];
   return self;
 }
 
@@ -290,10 +295,15 @@ double Number(CefRefPtr<CefDictionaryValue> fields, const char* key) {
       KeyEvent(event, down ? KEYEVENT_RAWKEYDOWN : KEYEVENT_KEYUP));
 }
 
-// Command shortcuts reach the page before the menu bar, as in a browser tab.
+// The menu bar answers its own shortcuts before the page, so a key a menu item takes never also
+// reaches the page's bindings; one whose item is disabled goes nowhere. Other Command keys reach
+// the page, as in a browser tab.
 - (BOOL)performKeyEquivalent:(NSEvent*)event {
   if (self.window.firstResponder != self || event.type != NSEventTypeKeyDown)
     return NO;
+  if ([NSApp.mainMenu performKeyEquivalent:event] ||
+      FotufilmMenuHasKeyEquivalent(NSApp.mainMenu, event))
+    return YES;
   [self keyDown:event];
   return YES;
 }
@@ -303,12 +313,87 @@ double Number(CefRefPtr<CefDictionaryValue> fields, const char* key) {
 - (CefRefPtr<CefFrame>)focusedFrame {
   return _browser ? _browser->GetFocusedFrame() : nullptr;
 }
-- (void)undo:(id)sender { if (auto f = [self focusedFrame]) f->Undo(); }
-- (void)redo:(id)sender { if (auto f = [self focusedFrame]) f->Redo(); }
+// Undo and Redo edit a focused text field, and otherwise the photograph's history.
+- (void)undo:(id)sender {
+  if (!_owner.pageEditsText) return [_owner sendCommand:@"undo"];
+  if (auto f = [self focusedFrame]) f->Undo();
+}
+- (void)redo:(id)sender {
+  if (!_owner.pageEditsText) return [_owner sendCommand:@"redo"];
+  if (auto f = [self focusedFrame]) f->Redo();
+}
 - (void)cut:(id)sender { if (auto f = [self focusedFrame]) f->Cut(); }
 - (void)copy:(id)sender { if (auto f = [self focusedFrame]) f->Copy(); }
 - (void)paste:(id)sender { if (auto f = [self focusedFrame]) f->Paste(); }
 - (void)selectAll:(id)sender { if (auto f = [self focusedFrame]) f->SelectAll(); }
+
+- (BOOL)validateMenuItem:(NSMenuItem*)item {
+  const SEL action = item.action;
+  const BOOL text = _owner.pageEditsText;
+  if (action == @selector(undo:)) return text || [_owner commandEnabled:@"undo"];
+  if (action == @selector(redo:)) return text || [_owner commandEnabled:@"redo"];
+  if (action == @selector(cut:) || action == @selector(copy:) || action == @selector(paste:) ||
+      action == @selector(selectAll:))
+    return text;
+  return YES;
+}
+
+#pragma mark Dropping files
+
+// Files dragged in from the Finder become a CEF drag, so the page's own drop handling (the
+// viewer's highlight, the import) takes them as it would in a browser.
+- (CefMouseEvent)dragEvent:(id<NSDraggingInfo>)info {
+  const NSPoint point = [self convertPoint:info.draggingLocation fromView:nil];
+  CefMouseEvent mouse;
+  mouse.x = static_cast<int>(point.x);
+  mouse.y = static_cast<int>(point.y);
+  mouse.modifiers = Modifiers(NSEvent.modifierFlags);
+  return mouse;
+}
+
+// AppKit's and CEF's drag operation bits have the same values.
+- (NSDragOperation)dragOver:(id<NSDraggingInfo>)info {
+  _browser->GetHost()->DragTargetDragOver(
+      [self dragEvent:info],
+      static_cast<cef_drag_operations_mask_t>(info.draggingSourceOperationMask));
+  return static_cast<NSDragOperation>(_dragOperation);
+}
+
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)info {
+  if (!_browser) return NSDragOperationNone;
+  NSArray<NSURL*>* urls =
+      [info.draggingPasteboard readObjectsForClasses:@[ NSURL.class ]
+                                             options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+  if (!urls.count) return NSDragOperationNone;
+  CefRefPtr<CefDragData> data = CefDragData::Create();
+  for (NSURL* url in urls) data->AddFile(url.path.UTF8String, url.lastPathComponent.UTF8String);
+  _dragOperation = DRAG_OPERATION_NONE;
+  _browser->GetHost()->DragTargetDragEnter(
+      data, [self dragEvent:info],
+      static_cast<cef_drag_operations_mask_t>(info.draggingSourceOperationMask));
+  return [self dragOver:info];
+}
+
+- (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)info {
+  return _browser ? [self dragOver:info] : NSDragOperationNone;
+}
+
+- (void)draggingExited:(id<NSDraggingInfo>)info {
+  if (_browser) _browser->GetHost()->DragTargetDragLeave();
+}
+
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)info {
+  if (!_browser) return NO;
+  const bool taken = _dragOperation != DRAG_OPERATION_NONE;
+  _browser->GetHost()->DragTargetDrop([self dragEvent:info]);
+  // A file the editor took is one it opened, as from File > Open.
+  if (taken)
+    for (NSURL* url in [info.draggingPasteboard
+             readObjectsForClasses:@[ NSURL.class ]
+                           options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}])
+      [FotufilmRecentFiles note:url];
+  return taken;
+}
 
 @end
 
@@ -355,6 +440,9 @@ class MacView : public fotufilm::ViewDelegate {
   void SetTitle(const std::string& title) override {
     view_.window.title = [NSString stringWithUTF8String:title.c_str()];
   }
+  void UpdateDragOperation(cef_drag_operations_mask_t operation) override {
+    view_.dragOperation = operation;
+  }
   void BrowserClosed() override { [owner_ browserClosed]; }
 
  private:
@@ -373,6 +461,12 @@ class MacView : public fotufilm::ViewDelegate {
   // The page's toolbar and the controls on it, in view points, for window dragging.
   CGRect _toolbar;
   std::vector<CGRect> _controls;
+  // The editor's commands that apply now and those ticked, as it last reported them.
+  std::set<std::string> _enabled;
+  std::set<std::string> _checked;
+  // Files to open once the editor listens for them.
+  NSMutableArray<NSString*>* _pendingPaths;
+  BOOL _pageListening;
 }
 
 - (instancetype)initWithURL:(const std::string&)url
@@ -392,6 +486,8 @@ class MacView : public fotufilm::ViewDelegate {
   _window.delegate = self;
   _window.minSize = NSMakeSize(720, 480);
   _window.tabbingMode = NSWindowTabbingModeDisallowed;
+  _window.collectionBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
+  _pendingPaths = [NSMutableArray array];
   _view = [[FotufilmHostView alloc] initWithFrame:frame];
   _view.owner = self;
   _window.contentView = _view;
@@ -500,6 +596,42 @@ class MacView : public fotufilm::ViewDelegate {
         reply->Resolve(nullptr);
       });
 
+  // Which of the editor's commands apply and which are ticked, and whether a text field has
+  // focus (web/src/editor/useNativeCommands.js). Menus read it when they validate.
+  _dispatcher->Register(
+      "menuState", Dispatcher::Thread::kUi,
+      [weakSelf](const Call& call, std::shared_ptr<Reply> reply) {
+        FotufilmHostWindow* strong = weakSelf;
+        if (strong && call.params && call.params->GetType() == VTYPE_DICTIONARY) {
+          auto names = [](CefRefPtr<CefDictionaryValue> flags) {
+            std::set<std::string> names;
+            CefDictionaryValue::KeyList keys;
+            if (flags && flags->GetKeys(keys))
+              for (const CefString& key : keys)
+                if (flags->GetType(key) == VTYPE_BOOL && flags->GetBool(key))
+                  names.insert(key.ToString());
+            return names;
+          };
+          CefRefPtr<CefDictionaryValue> fields = call.params->GetDictionary();
+          strong->_enabled = names(fields->GetDictionary("enabled"));
+          strong->_checked = names(fields->GetDictionary("checked"));
+          strong->_pageEditsText = fields->GetBool("textInput");
+        }
+        reply->Resolve(nullptr);
+      });
+
+  // The editor listens for commands and files; those opened before it did (a Finder double-click
+  // at launch) go to it now.
+  _dispatcher->Register(
+      "commandsReady", Dispatcher::Thread::kUi,
+      [weakSelf](const Call&, std::shared_ptr<Reply> reply) {
+        if (FotufilmHostWindow* strong = weakSelf) {
+          strong->_pageListening = YES;
+          [strong deliverOpens];
+        }
+        reply->Resolve(nullptr);
+      });
+
   // The editor reports its toolbar and the controls on it (web/src/backend/macos/window-chrome.js).
   _dispatcher->Register(
       "windowChrome", Dispatcher::Thread::kUi,
@@ -523,6 +655,53 @@ class MacView : public fotufilm::ViewDelegate {
             strong->_controls.push_back(rect(controls->GetList(index)));
         reply->Resolve(nullptr);
       });
+}
+
+#pragma mark Editor commands
+
+- (void)openURLs:(NSArray<NSURL*>*)urls {
+  for (NSURL* url in urls) {
+    if (!url.isFileURL) continue;
+    [FotufilmRecentFiles note:url];
+    [_pendingPaths addObject:url.path];
+  }
+  [self deliverOpens];
+}
+
+- (void)deliverOpens {
+  CefRefPtr<CefBrowser> browser = _client->browser();
+  if (!_pageListening || !_pendingPaths.count || !browser) return;
+  CefRefPtr<CefListValue> paths = CefListValue::Create();
+  for (NSString* path in _pendingPaths) paths->SetString(paths->GetSize(), path.UTF8String);
+  [_pendingPaths removeAllObjects];
+  CefRefPtr<CefDictionaryValue> detail = CefDictionaryValue::Create();
+  detail->SetList("paths", paths);
+  fotufilm::Dispatcher::Emit(browser->GetMainFrame(), "open", Dictionary(detail));
+  [_window makeKeyAndOrderFront:nil];
+}
+
+- (void)sendCommand:(NSString*)command {
+  CefRefPtr<CefBrowser> browser = _client->browser();
+  if (!browser) return;
+  CefRefPtr<CefDictionaryValue> detail = CefDictionaryValue::Create();
+  detail->SetString("command", command.UTF8String);
+  fotufilm::Dispatcher::Emit(browser->GetMainFrame(), "command", Dictionary(detail));
+}
+
+- (BOOL)commandEnabled:(NSString*)command {
+  return _enabled.count(command.UTF8String) > 0;
+}
+
+- (void)performEditorCommand:(id)sender {
+  id command = [sender representedObject];
+  if ([command isKindOfClass:NSString.class]) [self sendCommand:command];
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem*)item {
+  if (item.action != @selector(performEditorCommand:)) return YES;
+  NSString* command = item.representedObject;
+  item.state = _checked.count(command.UTF8String) ? NSControlStateValueOn : NSControlStateValueOff;
+  return [self commandEnabled:command];
 }
 
 - (CGRect)windowDragRegion:(NSPoint)point {

@@ -10,6 +10,9 @@ inline constexpr char kDevUrl[] = "fotufilm-dev-url";
 inline constexpr char kWebRoot[] = "fotufilm-web-root";
 // Open the bridge diagnostics page instead of the editor.
 inline constexpr char kDiagnostics[] = "fotufilm-diagnostics";
+// Keep the browser profile (library, settings) in this directory, so a second copy of the app can
+// run beside the first rather than hand its launch over to it.
+inline constexpr char kProfile[] = "fotufilm-profile";
 
 // Passed to renderers: the extra origin that may use the transport.
 inline constexpr char kDevOrigin[] = "fotufilm-dev-origin";

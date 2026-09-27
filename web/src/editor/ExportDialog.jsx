@@ -5,7 +5,9 @@ import { VIDEO_LABELS } from "../generated/controls.js";
 import { videoDimensions } from "../video-settings.js";
 import { colorSpaceLabel } from "../canvas-color.js";
 import { Button } from "@react-spectrum/s2/Button";
+import { Switch } from "@react-spectrum/s2/Switch";
 import { useEditor } from "./EditorContext.jsx";
+import { METADATA_LABELS, useExportOptions } from "./useExportOptions.js";
 
 const IMAGE_TYPES = [
   { id: "image/png", label: "PNG" },
@@ -39,7 +41,14 @@ export default function ExportDialog() {
     videoExportController,
     exportClip,
     exportImage,
+    exportMetadata,
+    setExportMetadata,
+    exportHDR,
+    setExportHDR,
+    stockId,
   } = useEditor();
+  const options = useExportOptions({ backend, active, edit, stockId });
+  const hdr = exportType === "image/heic" && options?.hdr === true && exportHDR;
   return (
     <Dialog aria-label="Export image" isDismissible size={"M"}>
       <Heading>
@@ -102,6 +111,30 @@ export default function ExportDialog() {
                 onChange={setQuality}
               />
             )}
+          {!active?.image.video && options?.metadata && (
+            <div className="select-row">
+              Metadata
+              <Picker
+                aria-label="Metadata"
+                value={exportMetadata}
+                onChange={(e) => setExportMetadata(e)}
+                size={"S"}
+              >
+                {options.metadata.map((id) => (
+                  <PickerItem key={id} id={id}>
+                    {METADATA_LABELS[id] ?? id}
+                  </PickerItem>
+                ))}
+              </Picker>
+            </div>
+          )}
+          {!active?.image.video &&
+            exportType === "image/heic" &&
+            options?.hdr && (
+              <Switch isSelected={exportHDR} onChange={setExportHDR} size="S">
+                HDR
+              </Switch>
+            )}
           {active?.image.video && (
             <div className="select-row">
               Quality
@@ -146,7 +179,9 @@ export default function ExportDialog() {
             ·{" "}
             {exportType === "image/tiff" && !active?.image.video
               ? "16-bit"
-              : "8-bit"}
+              : hdr
+                ? "HDR"
+                : "8-bit"}
           </p>
           <p className="export-detail">
             {active?.image.video

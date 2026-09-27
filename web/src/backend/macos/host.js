@@ -60,6 +60,13 @@ export function createMacBackend(channel) {
       const data = await fileBase64(file);
       return importedImage(await call("import", { ...params, data }, { signal }));
     },
+    // A file the host chose (open panel, Finder, a drop) is read in place: no bytes cross.
+    async importPath(path, { signal, negative, onProgress } = {}) {
+      onProgress?.("Opening with the native image decoder");
+      return importedImage(
+        await call("importPath", { path, negative: !!negative }, { signal }),
+      );
+    },
     releaseImage,
     analyseNegative: (image, monochrome) =>
       call("analyseNegative", { handle: image.handle, monochrome }),
@@ -114,8 +121,18 @@ export function createMacBackend(channel) {
         ...renderRequest(request, await catalogue()),
         type: request.type,
         quality: request.quality,
+        metadata: request.metadata,
+        hdr: request.hdr === true,
         filename: request.filename,
       });
+    },
+    // What the native engine can write for this edit: metadata policies and HDR HEIC.
+    exportOptions: channel.binary
+      ? async (request) => call("exportOptions", renderRequest(request, await catalogue()))
+      : undefined,
+    // The developed frame on the system pasteboard, written by the engine.
+    async copyImage(request) {
+      return call("copyImage", renderRequest(request, await catalogue()));
     },
     async exportVideo(request) {
       const saved = await call("exportVideo", {

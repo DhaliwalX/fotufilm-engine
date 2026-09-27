@@ -1,4 +1,7 @@
 import XCTest
+#if canImport(AppKit)
+import AppKit
+#endif
 import CFotufilmHost
 @testable import FotufilmHost
 #if canImport(ImageIO)
@@ -162,6 +165,85 @@ final class CInterfaceTests: XCTestCase {
 
 #if canImport(ImageIO)
 extension CInterfaceTests {
+    /// Exports carry the source's capture records by the chosen policy, and a HEIC can be HDR
+    /// where the film delivers light above display white.
+    func testExportCarriesMetadataAndHDR() throws {
+        let engine = try makeEngine()
+        defer { fotufilm_engine_destroy(engine) }
+        func call(_ method: String, _ params: String) throws -> [String: Any] {
+            var answer = fotufilm_answer()
+            var error: UnsafeMutablePointer<CChar>?
+            defer { fotufilm_answer_free(&answer); fotufilm_free(error) }
+            guard fotufilm_host_call(engine, method, params, nil, 0, &answer, &error)
+                    == Int32(FOTUFILM_OK) else {
+                throw XCTSkip(error.map { String(cString: $0) } ?? method)
+            }
+            return try JSONSerialization.jsonObject(
+                with: Data(String(cString: answer.json).utf8)) as? [String: Any] ?? [:]
+        }
+        let ramp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fotufilm-meta-\(UUID().uuidString).png")
+        try writeRamp(to: ramp, width: 96, height: 64)
+        let source = ramp.deletingPathExtension().appendingPathExtension("jpg")
+        defer {
+            try? FileManager.default.removeItem(at: ramp)
+            try? FileManager.default.removeItem(at: source)
+        }
+        let picture = try XCTUnwrap(CGImageSourceCreateWithURL(ramp as CFURL, nil)
+            .flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) })
+        let writer = try XCTUnwrap(CGImageDestinationCreateWithURL(
+            source as CFURL, UTType.jpeg.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(writer, picture, [
+            kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFMake: "Fotufilm Test"],
+            kCGImagePropertyExifDictionary: [kCGImagePropertyExifLensModel: "Test 50mm"],
+            kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 43.6,
+                                            kCGImagePropertyGPSLatitudeRef: "N"],
+        ] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(writer))
+        let handle = try XCTUnwrap(call("importPath", #"{"path": "\#(source.path)"}"#)["handle"])
+
+        func export(_ type: String, _ extra: String) throws -> (URL, [String: Any]) {
+            let target = FileManager.default.temporaryDirectory
+                .appendingPathComponent("fotufilm-meta-out-\(UUID().uuidString)")
+                .appendingPathExtension(type == "image/heic" ? "heic" : "jpg")
+            let answer = try call("export", """
+            {"handle": \(handle), "maxEdge": null, "type": "\(type)", "path": "\(target.path)",
+             "edit": {"params": {}}, "profileRequest": {"controls": {}}\(extra)}
+            """)
+            return (target, answer)
+        }
+        func properties(_ url: URL) -> [String: Any] {
+            CGImageSourceCreateWithURL(url as CFURL, nil)
+                .flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) } as? [String: Any] ?? [:]
+        }
+        func make(_ p: [String: Any]) -> String? {
+            (p[kCGImagePropertyTIFFDictionary as String] as? [String: Any])?[
+                kCGImagePropertyTIFFMake as String] as? String
+        }
+
+        let (kept, _) = try export("image/jpeg", "")
+        defer { try? FileManager.default.removeItem(at: kept) }
+        XCTAssertEqual(make(properties(kept)), "Fotufilm Test")
+        XCTAssertNil(properties(kept)[kCGImagePropertyGPSDictionary as String])
+        let (located, _) = try export("image/jpeg", #", "metadata": "preserve""#)
+        defer { try? FileManager.default.removeItem(at: located) }
+        XCTAssertNotNil(properties(located)[kCGImagePropertyGPSDictionary as String])
+        let (stripped, _) = try export("image/jpeg", #", "metadata": "strip""#)
+        defer { try? FileManager.default.removeItem(at: stripped) }
+        XCTAssertNil(make(properties(stripped)))
+
+        // Without a film the picture may reach past display white; a print may not.
+        let options = try call("exportOptions", """
+        {"handle": \(handle), "maxEdge": 256, "edit": {"params": {}}, "profileRequest": {"controls": {}}}
+        """)
+        XCTAssertEqual(options["hdr"] as? Bool, true)
+        XCTAssertEqual((options["metadata"] as? [String])?.count, 3)
+        let (hdr, answer) = try export("image/heic", #", "hdr": true"#)
+        defer { try? FileManager.default.removeItem(at: hdr) }
+        XCTAssertEqual(answer["hdr"] as? Bool, true)
+        XCTAssertEqual(make(properties(hdr)), "Fotufilm Test")
+    }
+
     /// The editor's own calls: import a photograph's bytes, develop a cropped render of it.
     func testHostCallsImportAndRender() throws {
         let engine = try makeEngine()
@@ -319,6 +401,29 @@ extension CInterfaceTests {
 
         _ = try call("release", #"{"handle": \#(handle)}"#)
         XCTAssertThrowsError(try call("preview", #"{"handle": \#(handle)}"#))
+
+        // A file the host chose opens in place, without its bytes.
+        let opened = try call("importPath", #"{"path": "\#(url.path)"}"#)
+        let path = try XCTUnwrap(opened.json["handle"] as? Int)
+        XCTAssertEqual(opened.json["naturalHeight"] as? Int, 80)
+        XCTAssertThrowsError(try call("importPath", #"{"path": "/nonexistent/photo.png"}"#))
+
+        #if canImport(AppKit)
+        // Copy Photo puts the developed frame on the pasteboard at its full size.
+        let pasteboard = NSPasteboard(name: .init("fotufilm-test-\(UUID().uuidString)"))
+        defer { pasteboard.releaseGlobally() }
+        Unmanaged<HostEngine>.fromOpaque(UnsafeRawPointer(engine)).takeUnretainedValue()
+            .service.clipboard = PasteboardClipboard(pasteboard: pasteboard)
+        let copied = try call("copyImage", """
+        {"handle": \(path), "maxEdge": null, "edit": {"stock": "gold200", "params": {}},
+         "profileRequest": {"controls": {}}}
+        """)
+        XCTAssertEqual(copied.json["width"] as? Int, 120)
+        for type in [NSPasteboard.PasteboardType.png, .tiff] {
+            let pasted = try XCTUnwrap(pasteboard.data(forType: type).flatMap(NSBitmapImageRep.init))
+            XCTAssertEqual([pasted.pixelsWide, pasted.pixelsHigh], [120, 80])
+        }
+        #endif
     }
 }
 #endif

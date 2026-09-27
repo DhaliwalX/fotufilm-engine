@@ -19,6 +19,8 @@ export default function useExportActions({
   setDialog,
   exportType,
   quality,
+  exportMetadata,
+  exportHDR,
 }) {
   async function exportClip() {
     if (!active?.image.video || !session || exporting) return;
@@ -84,6 +86,8 @@ export default function useExportActions({
         maxEdge: exportSize === "full" ? Infinity : Number(exportSize),
         type: exportType,
         quality: quality / 100,
+        metadata: exportMetadata,
+        hdr: exportHDR,
         onProgress: setStatus,
         filename: `${cleanName(active.name)}-${edit.stock || "normal"}${edit.medium ? `-${edit.medium}` : ""}.${extension}`,
       });
@@ -96,8 +100,29 @@ export default function useExportActions({
       setStatus(null);
     }
   }
+  // Only a host with a pasteboard of its own copies the developed picture (Copy Photo).
+  async function copyPhoto() {
+    if (!backend.copyImage || !active || active.image.video || !session || exporting)
+      return;
+    setError(null);
+    setStatus("Copying the photo");
+    try {
+      await backend.copyImage({
+        session,
+        image: active.image,
+        edit,
+        stock: stockId,
+        maxEdge: Infinity,
+      });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setStatus(null);
+    }
+  }
   return {
     exportClip,
     exportImage,
+    copyPhoto,
   };
 }

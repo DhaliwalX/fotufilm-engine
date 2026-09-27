@@ -28,6 +28,9 @@ class ViewDelegate {
   // return the system event, so the window matches it to the key it last sent.
   virtual bool UnhandledKey(const CefKeyEvent& event) = 0;
   virtual void SetTitle(const std::string& title) = 0;
+  // What the page would do with the files being dragged over it (none, copy, link…), for the
+  // platform's drag cursor and to know whether a drop was taken.
+  virtual void UpdateDragOperation(cef_drag_operations_mask_t operation) = 0;
   virtual void BrowserClosed() = 0;
 };
 

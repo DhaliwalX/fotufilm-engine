@@ -4,7 +4,7 @@ import { Icon } from "../icons.jsx";
 import { useEditor } from "./EditorContext.jsx";
 
 export default function FilmSidebarToggle() {
-  const { filmOpen, setFilmOpen, compactLayout, endEdit } = useEditor();
+  const { filmOpen, compactLayout, toggleFilms } = useEditor();
   return (
     <TooltipTrigger>
       <ToggleButton
@@ -15,8 +15,7 @@ export default function FilmSidebarToggle() {
         isQuiet
         size="S"
         onPress={(event) => {
-          endEdit();
-          setFilmOpen((open) => !open);
+          toggleFilms();
           if (compactLayout && filmOpen)
             event.target.closest(".editor")
               ?.querySelector('[data-panel-toggle="film"]')

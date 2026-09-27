@@ -1,5 +1,6 @@
 import { useAutoAdjustment } from "../useAutoAdjustment.js";
 import { useCallback } from "react";
+import { defaultEdit } from "../editor-state.js";
 export default function useEditingActions({
   compactLayout,
   active,
@@ -19,6 +20,7 @@ export default function useEditingActions({
   setInspectorOpen,
   setFilmOpen,
   setCompare,
+  setZoom,
 }) {
   const auto = useAutoAdjustment({
     image: active?.image,
@@ -86,6 +88,32 @@ export default function useEditingActions({
     if (compactLayout) setFilmOpen(showFilms);
     setCompare(false);
   };
+  // Shared by the toolbars, the keyboard and the native menu bar.
+  const resetEdits = () => {
+    dispatch({
+      type: "edit",
+      patch: defaultEdit(edit.stock),
+      restoring: true,
+    });
+    setStage(null);
+    setDifference(false);
+  };
+  const toggleInspector = () => {
+    setInspectorOpen((v) => !v);
+    if (compactLayout) setFilmOpen(false);
+  };
+  const toggleFilms = () => {
+    endEdit();
+    setFilmOpen((open) => !open);
+  };
+  const zoomIn = useCallback(
+    () => setZoom((z) => Math.min(8, z + 0.25)),
+    [setZoom],
+  );
+  const zoomOut = useCallback(
+    () => setZoom((z) => Math.max(1, z - 0.25)),
+    [setZoom],
+  );
   return {
     auto,
     dispatch,
@@ -94,5 +122,10 @@ export default function useEditingActions({
     setProfile,
     setParam,
     setInspector,
+    resetEdits,
+    toggleInspector,
+    toggleFilms,
+    zoomIn,
+    zoomOut,
   };
 }

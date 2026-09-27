@@ -12,7 +12,7 @@ constexpr const char* kMethods[] = {
     "suggestNegativeFilms", "autoAdjust", "printFrame",       "lensPlan",
     "sampleScene",      "exportVideo",    "beginVideo",
     "appendVideo",      "importVideo",    "lensCatalogue",    "importLensCatalogue",
-    "removeLensCatalogue",
+    "removeLensCatalogue", "importPath",   "copyImage",        "exportOptions",
 };
 
 }  // namespace

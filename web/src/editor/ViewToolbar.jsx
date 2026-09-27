@@ -7,6 +7,8 @@ export default function ViewToolbar() {
   const {
     exporting,
     setZoom,
+    zoomIn,
+    zoomOut,
     active,
     zoom,
     cropMode,
@@ -21,7 +23,7 @@ export default function ViewToolbar() {
     <div className="toolbar-zoom">
       <TooltipTrigger>
         <ActionButton
-          onPress={() => setZoom((z) => Math.max(1, z - 0.25))}
+          onPress={zoomOut}
           isDisabled={!active || zoom === 1 || cropMode}
           aria-label={"Zoom out"}
           size={"S"}
@@ -36,7 +38,7 @@ export default function ViewToolbar() {
       </span>
       <TooltipTrigger>
         <ActionButton
-          onPress={() => setZoom((z) => Math.min(8, z + 0.25))}
+          onPress={zoomIn}
           isDisabled={!active || zoom === 8 || cropMode}
           aria-label={"Zoom in"}
           size={"S"}

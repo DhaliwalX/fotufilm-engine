@@ -15,6 +15,7 @@ extension HostImage {
         self.init(rgba: scene.rgba, width: scene.width, height: scene.height,
                   contentHeadroom: scene.contentHeadroom)
         lensShot = LensShot(contentsOf: url)
+        captureMetadata = HostCaptureMetadata.read(url)
         #else
         throw HostEngine.Failure(description: "This build has no image decoder.")
         #endif

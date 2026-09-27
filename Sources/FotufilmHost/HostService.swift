@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(AppKit)
+import AppKit
+#endif
 #if canImport(FotufilmCore)
 import FotufilmCore
 #endif
@@ -23,6 +26,10 @@ public final class HostService {
     private var developed: (key: String, width: Int, height: Int, pixels: [UInt8])?
     private var originals: (key: String, width: Int, height: Int, pixels: [UInt8])?
 
+    /// Where Copy Photo puts the picture, when the platform has a clipboard; tests use a private
+    /// one.
+    var clipboard: HostClipboard? = HostExport.clipboard
+
     public init(engine: HostEngine) {
         self.engine = engine
     }
@@ -39,6 +46,17 @@ public final class HostService {
             }
             return try importImage(name: parameters["name"] as? String ?? "photo",
                                    bytes: payload)
+        case "importPath":
+            // A file the host chose (open panel, Finder, a drop): read in place, so its bytes
+            // never cross the bridge.
+            guard let path = parameters["path"] as? String, !path.isEmpty else {
+                throw HostEngine.Failure(description: "No file was named.")
+            }
+            guard FileManager.default.isReadableFile(atPath: path) else {
+                throw HostEngine.Failure(
+                    description: "\(URL(fileURLWithPath: path).lastPathComponent) cannot be read.")
+            }
+            return try imported(HostImage(opening: URL(fileURLWithPath: path)))
         case "preview":
             let image = try self.image(parameters["handle"])
             return try answer(image.descriptor, images: ["preview": previewPNG(image)])
@@ -85,6 +103,10 @@ public final class HostService {
             return try answer(value: sampleScene(parameters))
         case "export":
             return try answer(export(params, parameters: parameters))
+        case "exportOptions":
+            return try answer(exportOptions(parameters))
+        case "copyImage":
+            return try answer(copyImage(parameters))
         case "lensCatalogue":
             let data = Self.lensCatalogueURL.flatMap { try? Data(contentsOf: $0) }
             let profiles = data.flatMap { try? JSONSerialization.jsonObject(with: $0) } ?? []
@@ -137,7 +159,11 @@ public final class HostService {
             UUID().uuidString + "." + (URL(fileURLWithPath: name).pathExtension))
         try Data(bytes: bytes.baseAddress!, count: bytes.count).write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
-        let image = try HostImage(opening: file)
+        return try imported(HostImage(opening: file))
+    }
+
+    /// Keeps a decoded photograph under a new handle and describes it to the editor.
+    private func imported(_ image: HostImage) throws -> Answer {
         var descriptor = image.descriptor
         descriptor["handle"] = register(image)
         return try answer(descriptor, images: ["preview": previewPNG(image)])
@@ -532,6 +558,58 @@ public final class HostService {
         guard let path = parameters["path"] as? String else {
             throw HostEngine.Failure(description: "No destination was chosen.")
         }
+        guard let encoder = HostExport.encoder else {
+            throw HostEngine.Failure(description: "This build has no image encoder.")
+        }
+        let type = parameters["type"] as? String ?? "image/png"
+        let quality = (parameters["quality"] as? Double).map { min(max($0, 0.01), 1) } ?? 0.95
+        var still = try developStill(parameters, deep: type == "image/tiff",
+                                     hdr: type == "image/heic" && parameters["hdr"] as? Bool == true
+                                        && encoder.writesHDR)
+        still.metadata = (parameters["metadata"] as? String).flatMap(HostMetadataPolicy.init)
+            ?? .default
+        let written = try encoder.write(still, type: type, quality: quality,
+                                        to: URL(fileURLWithPath: path))
+        return ["filename": URL(fileURLWithPath: path).lastPathComponent, "width": written.width,
+                "height": written.height, "hdr": still.hlg != nil]
+    }
+
+    /// The developed picture on the clipboard, as the Mac app's Copy Photo puts it: the print as
+    /// it stands, in 8-bit Display P3.
+    private func copyImage(_ parameters: [String: Any]) throws -> [String: Any] {
+        guard let clipboard else {
+            throw HostEngine.Failure(description: "This host has no clipboard.")
+        }
+        var still = try developStill(parameters, deep: false, hdr: false)
+        still.metadata = .strip
+        let copied = try clipboard.copy(still)
+        return ["width": copied.width, "height": copied.height]
+    }
+
+    /// What the export dialog may offer for this edit: HDR only where the platform writes it and
+    /// the film delivers light above display white (`supportsHDRDelivery`), as the Mac app's
+    /// export sheet decides.
+    private func exportOptions(_ parameters: [String: Any]) throws -> [String: Any] {
+        let prepared = try prepare(JSONSerialization.data(withJSONObject: parameters))
+        return [
+            "metadata": HostMetadataPolicy.allCases.map(\.rawValue),
+            "hdr": (HostExport.encoder?.writesHDR ?? false)
+                && parameters["printFrame"] as? [String: Any] == nil
+                && deliversHDR(prepared.edit),
+        ]
+    }
+
+    private func deliversHDR(_ edit: WebNativeEdit) -> Bool {
+        guard let stock = engine.stock(edit.edit.stock) else { return true }
+        return (try? engine.options(edit, stock: stock, contentHeadroom: 1))?
+            .supportsHDRDelivery(for: stock) ?? false
+    }
+
+    /// The whole frame of a render request at its delivered size, print frame included: 8-bit
+    /// Display P3, or 16-bit when `deep`, and the HLG picture beside it when `hdr` and the film
+    /// delivers one.
+    private func developStill(_ parameters: [String: Any], deep: Bool, hdr: Bool) throws
+        -> HostStill {
         var body = parameters
         body["viewport"] = nil
         var prepared = try prepare(JSONSerialization.data(withJSONObject: body))
@@ -545,27 +623,39 @@ public final class HostService {
             prepared.edit = try JSONDecoder().decode(
                 WebNativeEdit.self, from: JSONSerialization.data(withJSONObject: body))
         }
-        let type = parameters["type"] as? String ?? "image/png"
-        let quality = (parameters["quality"] as? Double).map { min(max($0, 0.01), 1) } ?? 0.95
-        let deep = type == "image/tiff"
-        var pixels = [UInt8](repeating: 0, count: width * height * (deep ? 16 : 4))
-        try pixels.withUnsafeMutableBytes { buffer in
-            try engine.develop(scene, width: width, height: height,
-                               contentHeadroom: prepared.image.contentHeadroom, edit: prepared.edit,
-                               into: .init(maxEdge: 0, format: deep ? .rgba32FloatLinearP3 : .rgba8DisplayP3,
-                                           pixels: buffer.baseAddress!, rowBytes: width * (deep ? 16 : 4),
-                                           capacity: buffer.count))
-        }
-        let knee = prepared.edit.edit.stock.flatMap { id in
-            FilmStock.presets[id].flatMap { stock in
-                try? prepared.edit.document.options(for: stock).sdrShoulderKnee(for: stock)
+        func develop(_ format: HostEngine.PixelFormat) throws -> [UInt8] {
+            let stride = format == .rgba8DisplayP3 ? 4 : 16
+            var pixels = [UInt8](repeating: 0, count: width * height * stride)
+            try pixels.withUnsafeMutableBytes { buffer in
+                try engine.develop(scene, width: width, height: height,
+                                   contentHeadroom: prepared.image.contentHeadroom,
+                                   edit: prepared.edit,
+                                   into: .init(maxEdge: 0, format: format,
+                                               pixels: buffer.baseAddress!,
+                                               rowBytes: width * stride, capacity: buffer.count))
             }
+            return pixels
+        }
+        let stock = engine.stock(prepared.edit.edit.stock)
+        let knee = stock.flatMap { stock in
+            try? engine.options(prepared.edit, stock: stock, contentHeadroom: 1)
+                .sdrShoulderKnee(for: stock)
         } ?? FilmSDRDelivery.boundedShoulderKnee
-        let written = try HostExport.write(pixels, width: width, height: height, deep: deep,
-                                           knee: knee, frame: plan?.configuration, type: type,
-                                           quality: quality, to: URL(fileURLWithPath: path))
-        return ["filename": URL(fileURLWithPath: path).lastPathComponent, "width": written.width,
-                "height": written.height]
+        let wantsHDR = hdr && plan == nil && deliversHDR(prepared.edit)
+        // One develop in linear light serves both a deep file and the HDR picture.
+        let linear = deep || wantsHDR
+            ? try develop(.rgba32FloatLinearP3).withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+            : nil
+        var still = HostStill(
+            pixels: deep ? .display16(HostExport.display16(linear: linear!, width: width,
+                                                           height: height, knee: knee))
+                         : .display8(try develop(.rgba8DisplayP3)),
+            width: width, height: height, frame: plan?.configuration,
+            capture: prepared.image.captureMetadata)
+        if wantsHDR, let linear {
+            still.hlg = HostExport.hlg16(linear: linear, width: width, height: height)
+        }
+        return still
     }
 
     /// The correction for a lens setting on this photograph: the chosen or matched profile from

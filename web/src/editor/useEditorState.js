@@ -35,7 +35,10 @@ export default function useEditorState({}) {
     [exporting, setExporting] = useState(false),
     [exportType, setExportType] = useState("image/png"),
     [exportSize, setExportSize] = useState("full"),
-    [quality, setQuality] = useState(95);
+    [quality, setQuality] = useState(95),
+    // The Mac app's defaults: capture details without location, SDR.
+    [exportMetadata, setExportMetadata] = useState("preserveWithoutLocation"),
+    [exportHDR, setExportHDR] = useState(false);
   const [stage, setStage] = useState(null),
     [stages, setStages] = useState([]),
     [difference, setDifference] = useState(false);
@@ -111,6 +114,10 @@ export default function useEditorState({}) {
     setExportSize,
     quality,
     setQuality,
+    exportMetadata,
+    setExportMetadata,
+    exportHDR,
+    setExportHDR,
     stage,
     setStage,
     stages,

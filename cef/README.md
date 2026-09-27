@@ -31,6 +31,7 @@ is `build/cef-host/Release/Fotufilm Desktop.app`. Switches:
 | `--fotufilm-diagnostics` | Opens the bridge diagnostics page instead of the editor. |
 | `--fotufilm-dev-url=http://127.0.0.1:5173` | Loads the editor from the Vite dev server, with hot reload; that origin gets the transport. |
 | `--fotufilm-web-root=<dir>` | Serves another web build as `fotufilm://app/`. |
+| `--fotufilm-profile=<dir>` | Keeps the browser profile there, so a second copy can run beside the first. |
 | `--remote-debugging-port=9333` | Chromium's DevTools protocol, for DevTools and Playwright. |
 
 ## Design
@@ -82,18 +83,34 @@ The transport keeps the contract in `web/src/backend/README.md` and the call sha
 | `src/renderer/bridge.js` | The page-side transport, compiled into the renderer. |
 | `src/renderer/renderer_bridge.*` | Installs the transport in trusted pages; returns replies to their context. |
 | `src/platform/mac/` | Window, input forwarding, Metal compositor, app and helper entry points. |
+| `src/platform/mac/main_menu.*` | The Mac app's menu bar and Open Recent. |
 | `resources/diagnostics/` | Bridge diagnostics: round trips, payloads, native-layer alignment. |
+
+### Menu bar and files
+
+The menu bar is the Mac app's (`macos/FotufilmApp/MacMainMenu.swift`) wherever the editor has the
+action. An item sends `fotufilm-native-command` {command}, and the editor runs the handler its own
+toolbar or shortcut uses (`web/src/editor/useNativeCommands.js`); the editor reports which commands
+apply and which are ticked with `menuState`, which the menus validate against. A shortcut goes to
+the menu bar before the page, so a key an item takes never also reaches the page's bindings; Undo,
+Redo and the clipboard belong to a focused text field when there is one.
+
+Files from File > Open, Open Recent, the Finder (double-click, Open With, the Dock icon) arrive as
+`fotufilm-native-open` {paths}, held until the editor listens, and the engine opens them in place
+with `importPath`: no bytes cross the bridge. Files dropped on the window become a CEF drag, so
+the page's own drop handling takes them. Copy Photo develops the frame and the engine puts it on
+the pasteboard (`copyImage`).
 
 ## Roadmap
 
 1. **Engine methods.** `prepare` (with the film library), `import`, `preview`, `release`,
    `render` (geometry, viewport tiles cut from one develop), `autoAdjust`, `sampleScene`,
-   `export` (PNG, 16-bit TIFF, JPEG, HEIC, to a native save panel), print frames (`printFrame`,
-   framed renders and exports), lens correction (`lensPlan`, the catalogue, and the correction in
-   the geometry resample), negatives (`analyseNegative`, `convertNegative` with contrast,
-   `suggestNegativeFilms`), the pipeline inspector (`stages`, stage and difference renders) and
-   selective edits by colour, light or subject (Vision's foreground instances, as the Mac app
-   selects) answer today. Still to come: video.
+   `export` (PNG, 16-bit TIFF, JPEG, HEIC, to a native save panel), `importPath`, `copyImage`,
+   print frames (`printFrame`, framed renders and exports), lens correction (`lensPlan`, the
+   catalogue, and the correction in the geometry resample), negatives (`analyseNegative`,
+   `convertNegative` with contrast, `suggestNegativeFilms`), the pipeline inspector (`stages`,
+   stage and difference renders) and selective edits by colour, light or subject (Vision's
+   foreground instances, as the Mac app selects) answer today. Still to come: video.
 2. **Native presentation in the editor.** A backend capability that lets `ImageCanvas` leave the
    photograph's area transparent and report its rectangle, zoom and pan to the host (as
    `setImageLayer` does in the diagnostics page); renders then go to the image layer instead of
@@ -102,7 +119,7 @@ The transport keeps the contract in `web/src/backend/README.md` and the call sha
    the page converted from sRGB in the compositor.
 4. **Windows and Linux.** The same host with a D3D11 compositor (shared handles) and a Vulkan
    compositor (dmabuf), and Halide GPU targets for each; Swift is shipped with the app there.
-5. **Host completeness.** IME composition, drag and drop of files, native `<select>` popups,
+5. **Host completeness.** IME composition, native `<select>` popups,
    accessibility, window chrome from `window-chrome.js`, and signing and notarisation of the app
    and its helpers.
 
