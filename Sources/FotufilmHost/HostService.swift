@@ -22,6 +22,8 @@ public final class HostService {
     /// The last develop, kept so panning a zoomed picture only cuts new tiles from it.
     private var developed: (key: String, width: Int, height: Int, pixels: [UInt8])?
     private var originals: (key: String, width: Int, height: Int, pixels: [UInt8])?
+    /// Movie uploads in progress (`HostService+Video.swift`).
+    let videos = HostVideoLibrary()
 
     /// Where Copy Photo puts the picture, when the platform has a clipboard; tests use a private
     /// one.
@@ -53,7 +55,13 @@ public final class HostService {
                 throw HostEngine.Failure(
                     description: "\(URL(fileURLWithPath: path).lastPathComponent) cannot be read.")
             }
-            return try imported(HostImage.open(URL(fileURLWithPath: path)))
+            let url = URL(fileURLWithPath: path)
+            if HostPlatform.current.videoSource?.isMovie(url) == true,
+               parameters["negative"] as? Bool != true {
+                return try importMovie(at: url, owned: false,
+                                       playback: parameters["playback"] as? Bool == true)
+            }
+            return try imported(HostImage.open(url))
         case "preview":
             let image = try self.image(parameters["handle"])
             return try answer(image.descriptor, images: ["preview": previewPNG(image)])
@@ -63,9 +71,12 @@ public final class HostService {
                 images[handle] = nil
                 lock.unlock()
             }
+            videos.release(parameters["handle"])
             return try answer([:])
         case "render":
             return try render(params)
+        case "beginVideo", "appendVideo", "importVideo", "exportVideo":
+            return try video(method, params: params, payload: payload, progress: nil)
         case "lensPlan":
             let image = try self.image(parameters["handle"])
             let lens = try JSONDecoder().decode(
@@ -138,7 +149,7 @@ public final class HostService {
 
     // MARK: Images
 
-    private func image(_ handle: Any?) throws -> HostImage {
+    func image(_ handle: Any?) throws -> HostImage {
         lock.lock()
         defer { lock.unlock() }
         guard let handle = handle as? Int, let image = images[handle] else {
@@ -178,7 +189,7 @@ public final class HostService {
     }
 
     /// The photograph as decoded, bounded for the library and the strip.
-    private func previewPNG(_ image: HostImage) -> [UInt8] {
+    func previewPNG(_ image: HostImage) -> [UInt8] {
         let size = image.renderSize(maxEdge: 2048)
         let pixels = image.display(image.scene(width: size.width, height: size.height),
                                    width: size.width, height: size.height)
@@ -190,7 +201,7 @@ public final class HostService {
 
     // MARK: Rendering
 
-    private struct RenderRequest: Decodable {
+    struct RenderRequest: Decodable {
         struct Viewport: Decodable {
             struct Region: Decodable { var x, y, width, height: Int }
             var width: Int
@@ -206,7 +217,7 @@ public final class HostService {
 
     /// A render request resolved against its photograph: the geometry, the sizes it delivers at,
     /// and the edit as the engine reads it.
-    private struct Prepared {
+    struct Prepared {
         var request: RenderRequest
         var edit: WebNativeEdit
         var image: HostImage
@@ -215,7 +226,7 @@ public final class HostService {
         var sizes: (frame: (Int, Int), output: (Int, Int))
     }
 
-    private func prepare(_ params: Data) throws -> Prepared {
+    func prepare(_ params: Data) throws -> Prepared {
         let request: RenderRequest, edit: WebNativeEdit
         do {
             request = try JSONDecoder().decode(RenderRequest.self, from: params)
@@ -224,6 +235,7 @@ public final class HostService {
             throw HostEngine.Failure(description: "Unreadable render request: \(error)")
         }
         let image = try self.image(request.handle)
+        image.video?.select(params)
         let geometry = request.cropMode == true ? request.edit.uncropped() : request.edit
         // A viewport asks for part of a larger virtual picture: develop the whole frame at that
         // size, bounded by the photograph's own pixels, and cut the region out of it.
@@ -264,7 +276,7 @@ public final class HostService {
         }
 
         // Cache keys: everything but the viewport decides the developed frame.
-        let sceneKey = "\(request.handle)|\(maxEdge ?? 0)|\(request.cropMode == true)|\(geometry)"
+        let sceneKey = "\(request.handle)|\(image.frameKey)|\(maxEdge ?? 0)|\(request.cropMode == true)|\(geometry)"
         var keyed = body
         for name in ["viewport", "maxEdge", "handle"] { keyed[name] = nil }
         let developKey = sceneKey + "|" + String(decoding: (try? JSONSerialization.data(
@@ -345,6 +357,8 @@ public final class HostService {
             try pixels.withUnsafeMutableBytes { buffer in
                 try engine.develop(scene, width: width, height: height,
                                    contentHeadroom: image.contentHeadroom, edit: edit,
+                                   frameIndex: image.pace.frameIndex,
+                                   realtime: image.pace.realtime,
                                    into: .init(maxEdge: 0, format: .rgba8DisplayP3,
                                                pixels: buffer.baseAddress!, rowBytes: width * 4,
                                                capacity: buffer.count))
@@ -681,9 +695,9 @@ public final class HostService {
     private var sceneCache: (key: String, scene: [Float])?
 
     /// The photograph through the edit's geometry at the frame's size, scene-linear.
-    private func sceneFor(_ image: HostImage, geometry: SceneGeometry,
+    func sceneFor(_ image: HostImage, geometry: SceneGeometry,
                           sizes: (frame: (Int, Int), output: (Int, Int))) throws -> [Float] {
-        let key = "\(ObjectIdentifier(image))|\(geometry)|\(sizes.frame)|\(sizes.output)"
+        let key = "\(ObjectIdentifier(image))|\(image.frameKey)|\(geometry)|\(sizes.frame)|\(sizes.output)"
         if let sceneCache, sceneCache.key == key { return sceneCache.scene }
         // Reduce the unrotated photograph to the frame's scale first, so the one bilinear
         // resample never skips pixels.
@@ -712,12 +726,12 @@ public final class HostService {
     // MARK: Answers
 
     /// An answer that is a bare JSON value rather than an object.
-    private func answer(value: Any) throws -> Answer {
+    func answer(value: Any) throws -> Answer {
         Answer(json: try JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed]),
                payload: [])
     }
 
-    private func answer(_ body: [String: Any], images: [String: [UInt8]] = [:]) throws -> Answer {
+    func answer(_ body: [String: Any], images: [String: [UInt8]] = [:]) throws -> Answer {
         var body = body
         var payload: [UInt8] = []
         var ranges: [String: [Int]] = [:]

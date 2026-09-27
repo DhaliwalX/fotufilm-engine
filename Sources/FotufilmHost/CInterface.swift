@@ -144,6 +144,18 @@ public func cdecl_fotufilm_host_call(
     _ answer: UnsafeMutablePointer<fotufilm_answer>?,
     _ error: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32 {
+    cdecl_fotufilm_host_call_progress(engineHandle, method, paramsJSON, payload, payloadLength,
+                                      nil, nil, answer, error)
+}
+
+@_cdecl("fotufilm_host_call_progress")
+public func cdecl_fotufilm_host_call_progress(
+    _ engineHandle: OpaquePointer?, _ method: UnsafePointer<CChar>?,
+    _ paramsJSON: UnsafePointer<CChar>?, _ payload: UnsafeRawPointer?, _ payloadLength: Int,
+    _ progress: fotufilm_progress_callback?, _ context: UnsafeMutableRawPointer?,
+    _ answer: UnsafeMutablePointer<fotufilm_answer>?,
+    _ error: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+) -> Int32 {
     guard let engine = engine(engineHandle), let method, let answer else {
         error?.pointee = duplicate("An engine, a method and an answer are required.")
         return Int32(FOTUFILM_ERROR)
@@ -152,7 +164,11 @@ public func cdecl_fotufilm_host_call(
     let bytes = payload.map { UnsafeRawBufferPointer(start: $0, count: payloadLength) }
     do {
         let result = try engine.service.call(String(cString: method), params: params,
-                                             payload: bytes)
+                                             payload: bytes) { report in
+            guard let progress,
+                  let json = try? JSONSerialization.data(withJSONObject: report) else { return }
+            String(decoding: json, as: UTF8.self).withCString { progress(context, $0) }
+        }
         answer.pointee.json = duplicate(String(decoding: result.json, as: UTF8.self))
         if result.payload.isEmpty {
             answer.pointee.payload = nil

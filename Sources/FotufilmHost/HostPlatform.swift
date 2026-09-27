@@ -23,6 +23,10 @@ struct HostPlatform {
     var frames: HostFrameCompositor?
     /// Develops on a GPU; the portable Halide CPU developer is used without one.
     var developer: HostDeveloper?
+    /// Opens movies (`HostVideo.swift`); without it the editor declines them.
+    var videoSource: HostVideoSourceFactory?
+    /// Writes movies.
+    var videoWriter: HostVideoWriterFactory?
 
     static let current: HostPlatform = {
         #if canImport(ImageIO) && canImport(CoreImage)
@@ -43,6 +47,8 @@ struct HostPlatform {
             "printFrames": frames != nil,
             "imageExportTypes": encoder?.types.sorted() ?? [],
             "hdrExport": encoder?.writesHDR ?? false,
+            "video": videoSource != nil && videoWriter != nil,
+            "videoExportTypes": videoWriter?.formats.map(\.json) ?? [],
         ]
     }
 }

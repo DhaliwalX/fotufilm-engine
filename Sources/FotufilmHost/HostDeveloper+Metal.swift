@@ -25,20 +25,21 @@ struct MetalDeveloper: HostDeveloper {
     }
 
     func develop(_ scene: [Float], width: Int, height: Int, stock: FilmStock, noFilm: Bool,
-                 options: FotufilmEngine.Options, encode: Bool, knee: Float?,
+                 options: FotufilmEngine.Options, pace: HostDevelopPace, encode: Bool, knee: Float?,
                  shouldContinue: @escaping () -> Bool,
                  deliver: (UnsafeBufferPointer<Float>, Range<Int>, Bool) -> Void) throws {
         let requested: FilmOutputTransform? = encode
             && metal.carriesOutputTransform(stock: stock, options: options, width: width,
                                             height: height, exactMath: false, noFilm: noFilm)
             ? .displayP3(shoulderKnee: knee) : nil
-        func run(_ requested: FilmOutputTransform?) -> (ok: Bool, kept: Bool) {
+        func run(_ requested: FilmOutputTransform?, realtime: Bool) -> (ok: Bool, kept: Bool) {
             var transform = requested
             let encoded = requested != nil
             let ok = scene.withUnsafeBufferPointer { source in
                 metal.developStreaming(
                     width: width, height: height, stock: stock, options: options,
-                    outputTransform: &transform, noFilm: noFilm, shouldContinue: shouldContinue,
+                    outputTransform: &transform, frameIndex: pace.frameIndex, realtime: realtime,
+                    noFilm: noFilm, shouldContinue: shouldContinue,
                     readRows: { rows, into in
                         into.baseAddress!.update(
                             from: source.baseAddress! + rows.lowerBound * width * 4,
@@ -48,10 +49,12 @@ struct MetalDeveloper: HostDeveloper {
             }
             return (ok, (transform != nil) == encoded)
         }
-        var result = run(requested)
+        var result = run(requested, realtime: pace.realtime)
+        // A film whose realtime schedule this build does not carry develops on the reference one.
+        if !result.ok, pace.realtime, shouldContinue() { result = run(requested, realtime: false) }
         // The engine refused the transform after all and handed back light: develop again,
         // encoding on the host.
-        if result.ok, !result.kept { result = run(nil) }
+        if result.ok, !result.kept { result = run(nil, realtime: false) }
         guard result.ok else {
             let cancelled = !shouldContinue()
             throw HostEngine.Failure(description: cancelled ? "Cancelled." : "The Metal develop failed.",

@@ -3,6 +3,13 @@ import Foundation
 import FotufilmCore
 #endif
 
+/// Where a develop sits in a movie: the frame number, which moves the grain from frame to frame,
+/// and whether interactive playback asked for the engine's realtime schedule.
+struct HostDevelopPace {
+    var frameIndex: UInt64 = 0
+    var realtime = false
+}
+
 /// Develops scene light through a film. The platform may supply a GPU developer
 /// (`HostPlatform.developer`); every build has the portable Halide CPU one.
 protocol HostDeveloper {
@@ -20,7 +27,7 @@ protocol HostDeveloper {
     /// `encode` was asked for and the developer does it in its kernel. `knee` is the SDR
     /// shoulder, nil with no film.
     func develop(_ scene: [Float], width: Int, height: Int, stock: FilmStock, noFilm: Bool,
-                 options: FotufilmEngine.Options, encode: Bool, knee: Float?,
+                 options: FotufilmEngine.Options, pace: HostDevelopPace, encode: Bool, knee: Float?,
                  shouldContinue: @escaping () -> Bool,
                  deliver: (UnsafeBufferPointer<Float>, Range<Int>, Bool) -> Void) throws
 }
@@ -34,7 +41,7 @@ struct HalideCPUDeveloper: HostDeveloper {
     func prepare(stock: FilmStock, options: FotufilmEngine.Options, width: Int, height: Int) {}
 
     func develop(_ scene: [Float], width: Int, height: Int, stock: FilmStock, noFilm: Bool,
-                 options: FotufilmEngine.Options, encode: Bool, knee: Float?,
+                 options: FotufilmEngine.Options, pace: HostDevelopPace, encode: Bool, knee: Float?,
                  shouldContinue: @escaping () -> Bool,
                  deliver: (UnsafeBufferPointer<Float>, Range<Int>, Bool) -> Void) throws {
         guard !noFilm else {
@@ -47,6 +54,9 @@ struct HalideCPUDeveloper: HostDeveloper {
                 linear.planes[channel][i] = value.isFinite ? value : 0
             }
         }
+        // The CPU pipeline has no frame index; a movie's grain moves with the seed instead.
+        var options = options
+        options.seed &+= pace.frameIndex
         let out = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: linear)
         guard shouldContinue() else { throw HostEngine.Failure(description: "Cancelled.", cancelled: true) }
         var developed = [Float](repeating: 1, count: width * height * 4)
