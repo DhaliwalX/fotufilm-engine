@@ -67,5 +67,18 @@ struct MetalDeveloper: HostDeveloper {
                                      cancelled: cancelled)
         }
     }
+
+    func printScan(width: Int, height: Int, stock: FilmStock, options: FotufilmEngine.Options,
+                   calibration: ApproximateNegativeScan, shouldContinue: @escaping () -> Bool,
+                   readScan: (Range<Int>, UnsafeMutableBufferPointer<Float>) -> Void,
+                   writeRows: (Range<Int>, UnsafeBufferPointer<Float>) -> Void) throws {
+        guard metal.printScan(width: width, height: height, stock: stock, options: options,
+                              calibration: calibration, shouldContinue: shouldContinue,
+                              readScan: readScan, writeRows: writeRows) else {
+            let cancelled = !shouldContinue()
+            throw HostEngine.Failure(description: cancelled ? "Cancelled." : "The Metal print failed.",
+                                     cancelled: cancelled)
+        }
+    }
 }
 #endif

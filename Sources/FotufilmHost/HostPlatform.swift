@@ -2,6 +2,9 @@ import Foundation
 #if canImport(FotufilmCore)
 import FotufilmCore
 #endif
+#if canImport(FotufilmImaging)
+import FotufilmImaging
+#endif
 
 /// Everything the host asks of the operating system, gathered in one place so a port supplies
 /// its own services and the rest of the host stays the same. A missing service turns its feature
@@ -32,6 +35,9 @@ struct HostPlatform {
     /// Hashes stills for the identity their edit is kept under (`HostFileIdentity.swift`);
     /// without it a file is known by its name, size and date.
     var fileDigest: HostFileDigest?
+    /// Reads scanned negatives as the apps do (`HostNegativeScan`); without it a scan opens
+    /// through `decoder`, with its file's colour profile.
+    var scans: HostScanDecoder?
 
     static let current: HostPlatform = {
         #if canImport(ImageIO) && canImport(CoreImage)
@@ -47,6 +53,10 @@ struct HostPlatform {
         [
             "importPath": decoder != nil,
             "negativeContrast": true,
+            // The negative-scan session: a recipe printed from the scan, film or automatic.
+            "negativeScans": decoder != nil || scans != nil,
+            // Whether a scan's samples may be read as linear light rather than through its profile.
+            "negativeScanEncoding": scans != nil,
             "subjectSelection": subjects != nil,
             "copyImage": clipboard != nil,
             "printFrames": frames != nil,
@@ -71,6 +81,22 @@ struct HostPlatform {
 /// sources with the range they recorded, upright.
 protocol HostImageDecoder {
     func decode(_ url: URL) throws -> HostImage
+}
+
+/// A scanned negative as decoded: linear Rec. 2020 light, and whether it came from camera RAW.
+struct HostScanFile {
+    var image: HostImage
+    var isRAW: Bool
+}
+
+/// Decodes scanned negatives with no rendering choices of its own, as the apps'
+/// `NegativeScanImport` does, and measures photographs of a bare light source.
+protocol HostScanDecoder {
+    /// The scan in linear Rec. 2020: through the file's colour profile, or with its samples read
+    /// as linear light when `linearSamples` (ignored for camera RAW).
+    func decodeScan(_ url: URL, linearSamples: Bool) throws -> HostScanFile
+    /// The unevenness of the light a photograph of the bare light source shows.
+    func measureLight(_ url: URL) throws -> NegativeLightFrame
 }
 
 /// Finds the subjects standing in front of a picture.

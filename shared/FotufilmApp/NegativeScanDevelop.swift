@@ -57,21 +57,20 @@ final class NegativeScan: @unchecked Sendable {
 
     /// The films a scan can be read as: every installed negative.
     static var films: [StockPreset] {
-        StockPreset.all.filter { !$0.stock.isReversal && !$0.stock.isReflectionPrint }
+        StockPreset.all.filter { NegativeScanPrint.reads($0.stock) }
     }
 
     static func film(_ id: String) throws -> FilmStock {
         guard let stock = StockPreset.all.first(where: { $0.id == id })?.stock else {
             throw Failure.noFilm
         }
-        guard !stock.isReversal, !stock.isReflectionPrint else { throw Failure.reversalFilm }
+        guard NegativeScanPrint.reads(stock) else { throw Failure.reversalFilm }
         return stock
     }
 
     /// Whether a reading's positive carries colour: a reading on a colour negative.
     static func carriesColour(_ recipe: NegativeScanRecipe) -> Bool {
-        recipe.conversion == .automatic ? !recipe.monochrome
-            : (try? film(recipe.stockID))?.isMonochrome != true
+        NegativeScanPrint.carriesColour(recipe, film: film)
     }
 
     // MARK: - Light
@@ -318,8 +317,8 @@ final class NegativeScan: @unchecked Sendable {
         let key = FrameKey(framing: Framing(self, recipe), cropped: cropped, longEdge: longEdge,
                            film: recipe.conversion == .film)
         // The automatic stage is defined on linear sRGB; a film reading wants every dye positive.
-        let space = recipe.conversion == .film ? NegativeScanImport.filmSpace
-                                               : NegativeScanImport.linearSpace
+        let space = NegativeScanPrint.readsWideGamut(recipe) ? NegativeScanImport.filmSpace
+                                                             : NegativeScanImport.linearSpace
         let kept = longEdge == nil ? nil : previewSamples(picture, key: key, space: space)
         let readScan: (Range<Int>, UnsafeMutableBufferPointer<Float>) -> Void = { rows, into in
             if let kept {
@@ -378,26 +377,15 @@ final class NegativeScan: @unchecked Sendable {
         into output: UnsafeMutableBufferPointer<UInt16>, shouldContinue: (() -> Bool)?
     ) throws -> Bool {
         let plan = try automaticPlan(recipe)
-        let gains = recipe.displayGains(printingOn: nil)
-        let tone = recipe.tone
         let band = 256
         var rgba = [Float](repeating: 0, count: band * width * 4)
         for top in stride(from: 0, to: height, by: band) {
             if shouldContinue?() == false { return false }
             let rows = top..<min(height, top + band)
-            let count = rows.count * width
-            rgba.withUnsafeMutableBufferPointer { readScan(rows, $0) }
-            var scan = ImageBuffer(width: width, height: rows.count)
-            for i in 0..<count { for c in 0..<3 { scan.planes[c][i] = rgba[i * 4 + c] } }
-            let positive = try plan.convert(scan)
-            for i in 0..<count {
-                // The automatic stage delivers display sRGB primaries; the print is tagged P3.
-                let rgb = ColorScience.linearSRGBToDisplayP3(tone.apply(SIMD3(
-                    positive.planes[0][i], positive.planes[1][i], positive.planes[2][i]) * gains))
-                rgba[i * 4] = rgb.x
-                rgba[i * 4 + 1] = rgb.y
-                rgba[i * 4 + 2] = rgb.z
-                rgba[i * 4 + 3] = 1
+            try rgba.withUnsafeMutableBufferPointer {
+                readScan(rows, $0)
+                try NegativeScanPrint.printAutomatic($0, width: width, rows: rows.count,
+                                                     plan: plan, recipe: recipe)
             }
             rgba.withUnsafeBufferPointer {
                 PrintEncoding.encodeRows($0, rows: rows, width: width, into: output)
@@ -413,32 +401,23 @@ final class NegativeScan: @unchecked Sendable {
     ) throws -> Bool {
         let stock = try Self.film(recipe.stockID)
         let sampled = try border(for: recipe)
-        let balance = try balance(recipe, stock: stock, border: sampled)
-        let calibration = try ApproximateNegativeScan(
-            stock: stock, border: SIMD3(sampled[0], sampled[1], sampled[2]), gains: balance.gains)
-        let options = recipe.printOptions(for: stock, highlightStops: balance.highlightStops)
+        let film = try NegativeScanPrint.film(
+            recipe, stock: stock, border: sampled,
+            balance: balance(recipe, stock: stock, border: sampled))
         guard let gpu = HalideMetalFilmRenderer.shared else { throw Failure.render }
-        let gains = recipe.displayGains(printingOn: stock)
-        let tone = recipe.tone
-        let neutral = gains == SIMD3(repeating: 1) && tone.isNeutral
         var graded = [Float]()
         return gpu.printScan(
             width: width, height: height, stock: stock,
-            options: options, calibration: calibration,
+            options: film.options, calibration: film.calibration,
             shouldContinue: shouldContinue, readScan: readScan,
             writeRows: { rows, from in
-                guard !neutral else {
+                guard !film.isNeutral else {
                     return PrintEncoding.encodeRows(from, rows: rows, width: width, into: output,
                                                     transfer: .shoulderedSRGB)
                 }
                 graded.removeAll(keepingCapacity: true)
                 graded.append(contentsOf: from)
-                for i in stride(from: 0, to: graded.count, by: 4) {
-                    graded[i] *= gains.x
-                    graded[i + 1] *= gains.y
-                    graded[i + 2] *= gains.z
-                }
-                tone.apply(rgba: &graded)
+                film.grade(&graded)
                 graded.withUnsafeBufferPointer {
                     PrintEncoding.encodeRows($0, rows: rows, width: width, into: output,
                                              transfer: .shoulderedSRGB)
