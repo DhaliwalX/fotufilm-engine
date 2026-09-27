@@ -88,6 +88,9 @@ export default function useExportActions({
   }
   async function exportImage() {
     if (!active || !session || !stockId || exporting) return;
+    // Cancel reaches the export where the backend stops on a signal (exportImageCancels).
+    const controller = new AbortController();
+    videoExportController.current = controller;
     setExporting(true);
     setError(null);
     try {
@@ -109,6 +112,7 @@ export default function useExportActions({
         quality: quality / 100,
         metadata: exportMetadata,
         hdr: exportHDR,
+        signal: controller.signal,
         onProgress: setStatus,
         filename: `${cleanName(active.name)}-${edit.stock || "normal"}${edit.medium ? `-${edit.medium}` : ""}.${extension}`,
       });
@@ -123,6 +127,7 @@ export default function useExportActions({
       // Dismissing a native save panel is a choice, not a failure.
       if (e.name !== "AbortError") setError(e.message);
     } finally {
+      videoExportController.current = null;
       setExporting(false);
       setStatus(null);
     }

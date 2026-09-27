@@ -269,7 +269,7 @@ export default function ExportDialog() {
                 ? videoExportController.current?.abort()
                 : setDialog(null)
             }
-            isDisabled={exporting && !active?.image.video}
+            isDisabled={exporting && !active?.image.video && !backend.exportImageCancels}
             variant={"secondary"}
           >
             {"Cancel"}

@@ -26,6 +26,7 @@ export function createNativeBackend(host) {
     backend.videoExportTypes = Object.freeze(host.videoExportTypes.map((type) => Object.freeze({ ...type })));
   if (host.negativeContrast === true) backend.negativeContrast = true;
   if (host.subjectSelection === true) backend.subjectSelection = true;
+  if (host.exportImageCancels === true) backend.exportImageCancels = true;
   // Optional: how fast this host develops previews while an edit moves (preview-budget.js).
   if (host.previewBudget) backend.previewBudget = Object.freeze({ ...host.previewBudget });
   if (typeof host.suggestNegativeFilms === "function")

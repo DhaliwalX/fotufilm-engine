@@ -151,8 +151,10 @@ export function createMacBackend(channel) {
         metadata: request.metadata,
         hdr: request.hdr === true,
         filename: request.filename,
-      });
+      }, { signal: request.signal });
     },
+    // A still export stops inside the engine when its signal aborts.
+    exportImageCancels: true,
     // Export Original: a camera RAW opened from a file, copied as it is.
     exportOriginal: (image) =>
       call("exportOriginal", { handle: image.handle, filename: image.original.name, type: "" }),
