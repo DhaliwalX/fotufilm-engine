@@ -505,7 +505,10 @@ class MacView : public fotufilm::ViewDelegate {
   _view = [[FotufilmHostView alloc] initWithFrame:frame];
   _view.owner = self;
   _window.contentView = _view;
-  [_window center];
+  // The frame last left behind, as the Mac app's editor window reopens; centred the first time.
+  // Its own name, so the two apps each remember their own window.
+  if (![_window setFrameUsingName:@"FotufilmDesktopWindow"]) [_window center];
+  [_window setFrameAutosaveName:@"FotufilmDesktopWindow"];
 
   _delegate = std::make_unique<MacView>(_view, self);
   _client = new fotufilm::Client(dispatcher, _delegate.get());
