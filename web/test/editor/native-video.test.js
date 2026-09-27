@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createMacBackend } from "../../src/backend/macos/host.js";
+import { createNativeBackend } from "../../src/backend/native.js";
+import { APP_SETTINGS } from "../../src/app-settings.js";
 import { defaultEdit } from "../../src/editor-state.js";
 
 const FORMATS = [
@@ -109,4 +111,30 @@ test("a video export names the chosen format's container for the save panel", as
   const exported = calls.find(({ method }) => method === "exportVideo");
   assert.equal(exported.params.type, "video/quicktime");
   assert.equal(exported.params.format, "prores422");
+});
+
+test("Video Quality reaches the engine where it develops movies on a pipeline", async () => {
+  assert.equal(APP_SETTINGS.videoProcessing, "full");
+  assert.equal(host({ capabilities: { video: true } }).backend.videoProcessing, false);
+  assert.equal(
+    host({ capabilities: { video: false, videoProcessing: true } }).backend.videoProcessing,
+    false,
+  );
+  const { backend, calls } = host({
+    capabilities: { video: true, videoExportTypes: FORMATS, videoProcessing: true },
+  });
+  assert.equal(backend.videoProcessing, true);
+  // The native binding carries the capability through.
+  assert.equal(createNativeBackend(backend).videoProcessing, true);
+  const request = {
+    image: { handle: 7, video: { start: 0, duration: 1 } },
+    edit: defaultEdit("gold200"),
+    stock: "gold200",
+    format: "mp4",
+    filename: "clip-gold200.mp4",
+  };
+  await backend.exportVideo({ ...request, videoProcessing: "fast" });
+  await backend.exportVideo(request);
+  const exports = calls.filter(({ method }) => method === "exportVideo");
+  assert.deepEqual(exports.map(({ params }) => params.videoProcessing), ["fast", "full"]);
 });
