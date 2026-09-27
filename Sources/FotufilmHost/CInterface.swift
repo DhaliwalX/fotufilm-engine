@@ -197,3 +197,45 @@ public func cdecl_fotufilm_answer_free(_ answer: UnsafeMutablePointer<fotufilm_a
     free(answer.pointee.payload)
     answer.pointee = fotufilm_answer()
 }
+
+/// A host's `fotufilm_presenter`, reached through its callbacks.
+final class CallbackPresenter: HostPresenter {
+    private let callbacks: fotufilm_presenter
+
+    init(_ callbacks: fotufilm_presenter) { self.callbacks = callbacks }
+
+    var headroom: Float { callbacks.headroom.map { $0(callbacks.context) } ?? 1 }
+
+    func acquire(width: Int, height: Int, format: HostSurfaceFormat) -> HostSurface? {
+        guard let acquire = callbacks.acquire else { return nil }
+        var surface = fotufilm_surface()
+        guard acquire(callbacks.context, UInt32(width), UInt32(height), format.rawValue, &surface)
+                == Int32(FOTUFILM_OK),
+              let pixels = surface.pixels,
+              let delivered = HostSurfaceFormat(rawValue: surface.format) else { return nil }
+        return HostSurface(width: Int(surface.width), height: Int(surface.height),
+                           format: delivered, pixels: pixels, rowBytes: surface.row_bytes,
+                           handle: surface)
+    }
+
+    func present(_ surface: HostSurface, layer: String, info: [String: Any]) -> UInt64 {
+        guard var lent = surface.handle as? fotufilm_surface, let present = callbacks.present
+        else { return 0 }
+        let json = (try? JSONSerialization.data(withJSONObject: info))
+            .map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+        return layer.withCString { name in
+            json.withCString { present(callbacks.context, name, &lent, $0) }
+        }
+    }
+
+    func discard(_ surface: HostSurface) {
+        guard var lent = surface.handle as? fotufilm_surface else { return }
+        callbacks.discard?(callbacks.context, &lent)
+    }
+}
+
+@_cdecl("fotufilm_engine_set_presenter")
+public func cdecl_fotufilm_engine_set_presenter(_ handle: OpaquePointer?,
+                                                _ presenter: UnsafePointer<fotufilm_presenter>?) {
+    engine(handle)?.service.presenter = presenter.map { CallbackPresenter($0.pointee) }
+}
