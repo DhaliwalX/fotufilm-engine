@@ -64,6 +64,7 @@ final class MetalVideoPipeline: HostVideoPipeline {
     private final class Slot {
         /// The 8-bit road's frame in and out, and Fast's film density at the develop size.
         var input: MTLBuffer?
+        var sceneInput: MTLBuffer?
         var output: MTLBuffer?
         var density: MTLBuffer?
         /// The deep road's scene-linear frame in and developed frame out.
@@ -92,6 +93,7 @@ final class MetalVideoPipeline: HostVideoPipeline {
         let development: HostVideoDevelopment
         let proceed: () -> Bool
         let clock: HostVideoClock
+        let displayEncoder: MetalVideoDisplayEncoder?
     }
 
     private let context: Context
@@ -102,6 +104,8 @@ final class MetalVideoPipeline: HostVideoPipeline {
 
     init?(metal: HalideMetalFilmRenderer, device: MTLDevice, development d: HostVideoDevelopment,
           depth: Int, proceed: @escaping () -> Bool) {
+        let cpuInput = ProcessInfo.processInfo.environment["FOTUFILM_VIDEO_CPU_INPUT"] == "1"
+        let displayEncoder = d.road.deep || cpuInput ? nil : MetalVideoDisplayEncoder(device: device)
         for _ in 0..<depth {
             let slot = Slot()
             if d.road.deep {
@@ -117,6 +121,10 @@ final class MetalVideoPipeline: HostVideoPipeline {
                 else { return nil }
                 slot.input = input
                 slot.output = output
+                if displayEncoder != nil {
+                    slot.sceneInput = device.makeBuffer(length: d.developWidth * d.developHeight * 16,
+                                                        options: .storageModeShared)
+                }
                 if d.hybrid {
                     guard let density = device.makeBuffer(
                         length: d.developWidth * d.developHeight * 8, options: .storageModeShared)
@@ -128,7 +136,8 @@ final class MetalVideoPipeline: HostVideoPipeline {
         }
         development = d
         self.depth = depth
-        context = Context(metal: metal, development: d, proceed: proceed, clock: clock)
+        context = Context(metal: metal, development: d, proceed: proceed, clock: clock,
+                          displayEncoder: displayEncoder)
         // Frames are independent — their own buffers and frame index, and the engine keeps its
         // execution state per thread — so overlapping them changes when a pixel is computed and
         // never what it is.
@@ -192,8 +201,14 @@ final class MetalVideoPipeline: HostVideoPipeline {
             if let staging = slot.staging {
                 staging.scenePixels.update(from: scene.baseAddress!, count: d.width * d.height * 4)
             } else if let input = slot.input {
-                HostVideoPixels.encodeDisplay8(scene.baseAddress!, width: d.developWidth,
-                                               height: d.developHeight, into: input.contents())
+                let encoded = slot.sceneInput.map { staging in
+                    context.displayEncoder?.encode(scene, staging: staging, output: input,
+                        pixels: d.developWidth * d.developHeight) == true
+                } ?? false
+                if !encoded {
+                    HostVideoPixels.encodeDisplay8(scene.baseAddress!, width: d.developWidth,
+                                                   height: d.developHeight, into: input.contents())
+                }
             }
         }
         clock.charge("fill", since: started)

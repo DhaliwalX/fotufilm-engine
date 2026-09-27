@@ -222,6 +222,11 @@ develop. Both stages of a Fast print share the scene's measured Digital Referenc
 Several independent frames develop in flight and are written in presentation order; trim,
 audio, cancellation, grain animation and lower frame-rate delivery are retained.
 
+On Metal, the 8-bit path converts the decoded scene into Display P3 codes on the GPU before
+developing it. The CPU conversion remains the fallback if the GPU conversion or its buffers
+are unavailable. For profiling, `FOTUFILM_VIDEO_TIMINGS=1` reports export stages and
+`FOTUFILM_VIDEO_CPU_INPUT=1` selects the CPU input conversion for comparison.
+
 ### Matching the native editor
 
 An unspecified output medium starts on Digital Reference, matching the Mac editor. Explicit

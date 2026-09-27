@@ -415,9 +415,9 @@ final class HostVideoTests: XCTestCase {
 
         var format: String { self == .deepRealtime || self == .deepReference ? "prores422" : "mp4" }
         var deepSource: Bool { self == .deepReference8 || self == .deepReference }
-        /// Measured on an M4 Pro: 0.61 and 0.64 codes mean, 6 at most, on the 8-bit roads;
-        /// 0.4% of the mean light, 4% at most, on the realtime float schedule; nothing at all on
-        /// the reference, which is the develop the frame-by-frame road makes.
+        /// The realtime and reduced-density roads approximate the full-frame float develop.
+        /// Bound their mean and tail separately; the reference float road uses the same develop
+        /// as the frame-by-frame path and should agree to floating-point precision.
         var meanTolerance: Double {
             switch self {
             case .eightBit, .fast: return 1.5
