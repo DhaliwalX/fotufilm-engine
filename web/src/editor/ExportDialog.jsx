@@ -17,6 +17,16 @@ const IMAGE_TYPES = [
 ];
 const LOSSY = ["image/jpeg", "image/webp", "image/heic"];
 
+/** The browser encoder's movie formats; a native backend lists its own. */
+export function videoExportTypes(backend) {
+  return (
+    backend.videoExportTypes ?? [
+      { id: "mp4", label: VIDEO_LABELS.mp4, quality: true },
+      { id: "webm", label: VIDEO_LABELS.webm, quality: true },
+    ]
+  );
+}
+
 export default function ExportDialog() {
   const {
     backend,
@@ -49,6 +59,9 @@ export default function ExportDialog() {
   } = useEditor();
   const options = useExportOptions({ backend, active, edit, stockId });
   const hdr = exportType === "image/heic" && options?.hdr === true && exportHDR;
+  const videoType = active?.image.video
+    ? videoExportTypes(backend).find(({ id }) => id === videoFormat)
+    : null;
   return (
     <Dialog aria-label="Export image" isDismissible size={"M"}>
       <Heading>
@@ -67,10 +80,11 @@ export default function ExportDialog() {
               size={"S"}
             >
               {active?.image.video ? (
-                <>
-                  <PickerItem id="mp4">{VIDEO_LABELS.mp4}</PickerItem>
-                  <PickerItem id="webm">{VIDEO_LABELS.webm}</PickerItem>
-                </>
+                videoExportTypes(backend).map(({ id, label }) => (
+                  <PickerItem key={id} id={id}>
+                    {label}
+                  </PickerItem>
+                ))
               ) : (
                 (backend.imageExportTypes ?? IMAGE_TYPES).map(({ id, label }) => (
                   <PickerItem key={id} id={id}>
@@ -135,7 +149,7 @@ export default function ExportDialog() {
                 HDR
               </Switch>
             )}
-          {active?.image.video && (
+          {active?.image.video && videoType?.quality !== false && (
             <div className="select-row">
               Quality
               <Picker
@@ -171,17 +185,19 @@ export default function ExportDialog() {
             pixels ·{" "}
             {colorSpaceLabel(
               active?.image.video
-                ? "srgb"
+                ? (videoType?.colorSpace ?? "srgb")
                 : exportType === "image/tiff"
                   ? "display-p3"
                   : backend.outputColorSpace({ type: exportType }),
             )}{" "}
             ·{" "}
-            {exportType === "image/tiff" && !active?.image.video
-              ? "16-bit"
-              : hdr
-                ? "HDR"
-                : "8-bit"}
+            {active?.image.video
+              ? `${videoType?.bits ?? 8}-bit`
+              : exportType === "image/tiff"
+                ? "16-bit"
+                : hdr
+                  ? "HDR"
+                  : "8-bit"}
           </p>
           <p className="export-detail">
             {active?.image.video

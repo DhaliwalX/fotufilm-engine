@@ -30,7 +30,10 @@ export default function useExportActions({
     setError(null);
     setStatus("Choose an export destination");
     try {
-      const filename = `${cleanName(active.name)}-${edit.stock || "normal"}.${videoFormat}`;
+      // A native format names its container, which is not always its id (HEVC, ProRes).
+      const extension =
+        backend.videoExportTypes?.find(({ id }) => id === videoFormat)?.extension ?? videoFormat;
+      const filename = `${cleanName(active.name)}-${edit.stock || "normal"}.${extension}`;
       const saved = await backend.exportVideo({
         image: active.image,
         edit,
