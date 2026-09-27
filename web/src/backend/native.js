@@ -28,6 +28,8 @@ export function createNativeBackend(host) {
   if (host.videoBitrates)
     backend.videoBitrates = Object.freeze(host.videoBitrates.map((choice) => Object.freeze({ ...choice })));
   if (host.videoFrameRates) backend.videoFrameRates = Object.freeze([...host.videoFrameRates]);
+  // Optional: Video Quality, whether its movie exports develop Full or Fast (`videoProcessing`).
+  if (host.videoProcessing === true) backend.videoProcessing = true;
   if (host.negativeContrast === true) backend.negativeContrast = true;
   if (host.subjectSelection === true) backend.subjectSelection = true;
   if (host.exportImageCancels === true) backend.exportImageCancels = true;

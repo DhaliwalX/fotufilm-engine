@@ -24,6 +24,9 @@ export const APP_SETTINGS = Object.freeze({
   // Video File Size: what a native movie export may spend per pixel (the backend's
   // `videoBitrates`; "automatic" leaves it to the encoder).
   videoBitrate: "automatic",
+  // Video Quality: a native movie export develops the film at the delivered size ("full") or at
+  // no more than 1080p ("fast"), where the backend offers the choice (`videoProcessing`).
+  videoProcessing: "full",
   // Photo Quality: exports evaluate the film exactly ("accurate") or approximately ("fast").
   photoQuality: "accurate",
   // The settings of the last photo and movie exported, for Use Last Export Settings.

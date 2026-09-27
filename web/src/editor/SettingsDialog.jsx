@@ -254,7 +254,25 @@ function Output({ backend }) {
           </p>
         </>
       )}
-      {(backend.videoBitrates || videoHDR) && <h3>Video</h3>}
+      {(backend.videoBitrates || videoHDR || backend.videoProcessing) && (
+        <h3>Video</h3>
+      )}
+      {backend.videoProcessing && (
+        <>
+          <SettingPicker
+            label="Video Quality"
+            setting="videoProcessing"
+            options={[
+              { id: "full", label: "Full" },
+              { id: "fast", label: "Fast" },
+            ]}
+          />
+          <p className="medium-detail">
+            Video quality sets the processing resolution. Full uses the source
+            resolution; Fast processes at up to 1080p.
+          </p>
+        </>
+      )}
       {videoHDR && (
         <>
           <SettingSwitch label="HDR" setting="videoHDR" />

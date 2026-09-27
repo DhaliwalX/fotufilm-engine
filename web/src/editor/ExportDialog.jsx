@@ -85,12 +85,14 @@ export default function ExportDialog() {
   const videoFrameRate = edit.video?.frameRate ?? null;
   const setVideoFrameRate = (frameRate) =>
     patch({ video: { ...edit.video, frameRate } });
+  const videoProcessing = useAppSetting("videoProcessing");
   const current = video
     ? {
         format: videoFormat,
         quality: videoQuality,
         bitrate: videoBitrate,
         frameRate: videoFrameRate,
+        ...(backend.videoProcessing ? { processing: videoProcessing } : {}),
         size: exportSize,
       }
     : { type: exportType, size: exportSize, quality, metadata: exportMetadata };
@@ -99,6 +101,7 @@ export default function ExportDialog() {
       setVideoFormat(last.format);
       setVideoQuality(last.quality);
       if (last.bitrate) setAppSetting("videoBitrate", last.bitrate);
+      if (last.processing) setAppSetting("videoProcessing", last.processing);
       setVideoFrameRate(last.frameRate ?? null);
     } else {
       setExportType(last.type);
@@ -234,6 +237,20 @@ export default function ExportDialog() {
                     {`${rate} fps`}
                   </PickerItem>
                 ))}
+              </Picker>
+            </div>
+          )}
+          {video && backend.videoProcessing && (
+            <div className="select-row">
+              Processing
+              <Picker
+                aria-label="Processing"
+                value={videoProcessing}
+                onChange={(id) => setAppSetting("videoProcessing", id)}
+                size={"S"}
+              >
+                <PickerItem id="full">Full</PickerItem>
+                <PickerItem id="fast">Fast</PickerItem>
               </Picker>
             </div>
           )}

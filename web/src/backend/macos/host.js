@@ -233,11 +233,15 @@ export function createMacBackend(channel) {
     // Video File Size choices, `{id, label}`, and the frame rates an export may retime to.
     videoBitrates: video && can.videoBitrates?.length ? can.videoBitrates : undefined,
     videoFrameRates: video && can.videoFrameRates?.length ? can.videoFrameRates : undefined,
+    // Video Quality, Full or Fast: offered where the engine's platform develops movies on a
+    // pipeline with a reduced-size road.
+    videoProcessing: video && can.videoProcessing === true,
     async exportVideo(request) {
       const format = can.videoExportTypes?.find(({ id }) => id === request.format);
       const saved = await call("exportVideo", {
         ...renderRequest(request, await catalogue()),
         format: request.format, bitrate: request.bitrate, filename: request.filename,
+        videoProcessing: request.videoProcessing === "fast" ? "fast" : "full",
         type: format?.type ?? "video/mp4", hdr: request.hdr === true,
       }, { signal: request.signal, onProgress: request.onProgress });
       return { ...saved, dispose() {} };
