@@ -823,6 +823,25 @@ public:
         return target;
     }
 
+    /// Linux on x86-64: CUDA for NVIDIA cards, Vulkan for the rest (and with the Android
+    /// target's device features).
+    static Target linux_aot_target(DeviceAPI device) {
+        Target target;
+        target.os = Target::Linux;
+        target.arch = Target::X86;
+        target.bits = 64;
+        target.set_feature(Target::SSE41);
+        if (device == DeviceAPI::Vulkan) {
+            for (auto feature : {Target::Vulkan, Target::VulkanV12, Target::VulkanFloat16,
+                                 Target::VulkanInt8, Target::VulkanInt16, Target::VulkanInt64})
+                target.set_feature(feature);
+        } else {
+            // PTX for Maxwell and later: the driver compiles it for the card it finds.
+            target.set_features({Target::CUDA, Target::CUDACapability50});
+        }
+        return target;
+    }
+
     /// The Android equivalent.
     static Target android_vulkan_aot_target() {
         Target target;
@@ -1053,31 +1072,38 @@ public:
     }
 
 private:
+    static void padded_copy(const float *values, float *into, int bound) {
+        std::memcpy(into, values, kLutValueCount * sizeof(float));
+        std::fill(into + kLutValueCount, into + bound, 0.0f);
+    }
+
     void ensure_luts(const float *exposure, const float *film, const float *paper,
                      int32_t dimension, uint64_t cache_id) {
         if (dimension != kLutDimension) {
             throw Halide::RuntimeError("Fotufilm spectral LUT dimension must be 33");
         }
         if (lut_cache_id_ == cache_id && exposure_buffer_.defined()) return;
+        // Vulkan's graph reads the tables padded to `lut_bound()` entries; the padding is zero.
+        const int bound = lut_bound();
         if (exposure_lut_.type() == Float(16)) {
             // Float(16) and not halide_type_t(halide_type_float, 16): the runtime type converts
             // to both Buffer<> constructors on some Halide versions, and the language Type — the
             // same one the line above compares against — picks the intended one everywhere.
-            exposure_buffer_ = Buffer<>(Float(16), kLutValueCount);
+            exposure_buffer_ = Buffer<>(Float(16), bound);
             uint16_t *half_values =
                 reinterpret_cast<uint16_t *>(exposure_buffer_.data());
-            for (int index = 0; index < kLutValueCount; ++index) {
-                half_values[index] = fotufilm_float_to_half(exposure[index]);
+            for (int index = 0; index < bound; ++index) {
+                half_values[index] =
+                    index < kLutValueCount ? fotufilm_float_to_half(exposure[index]) : 0;
             }
         } else {
-            exposure_buffer_ = Buffer<float>(kLutValueCount);
-            std::memcpy(exposure_buffer_.data(), exposure,
-                        kLutValueCount * sizeof(float));
+            exposure_buffer_ = Buffer<float>(bound);
+            padded_copy(exposure, static_cast<float *>(exposure_buffer_.data()), bound);
         }
-        film_buffer_ = Buffer<float>(kLutValueCount);
-        paper_buffer_ = Buffer<float>(kLutValueCount);
-        std::memcpy(film_buffer_.data(), film, kLutValueCount * sizeof(float));
-        std::memcpy(paper_buffer_.data(), paper, kLutValueCount * sizeof(float));
+        film_buffer_ = Buffer<float>(bound);
+        paper_buffer_ = Buffer<float>(bound);
+        padded_copy(film, film_buffer_.data(), bound);
+        padded_copy(paper, paper_buffer_.data(), bound);
         exposure_buffer_.set_host_dirty();
         film_buffer_.set_host_dirty();
         paper_buffer_.set_host_dirty();

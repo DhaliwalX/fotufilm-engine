@@ -1,18 +1,14 @@
 // The macOS presenter: the engine writes into IOSurfaces, which the compositor samples as Metal
-// textures without a copy (Apple silicon shares the memory between the CPU and the GPU).
+// textures without a copy (Apple silicon shares the memory between the CPU and the GPU). Pooling,
+// numbering and the hand-over to the main thread are the shared PooledPresenter's.
 #pragma once
 
 #import <IOSurface/IOSurface.h>
 #import <Metal/Metal.h>
 
-#include <atomic>
-#include <functional>
 #include <memory>
-#include <mutex>
-#include <string>
-#include <vector>
 
-#include "presentation/presentation.h"
+#include "presentation/pooled_presenter.h"
 
 namespace fotufilm {
 
@@ -27,10 +23,10 @@ class MacSurface : public PresentationSurface {
   void* pixels() override;
   size_t row_bytes() const override;
   void* native_handle() override { return surface_; }
+  // Locks the surface for the engine's writes, and unlocks it.
+  void BeginWriting() override;
   void EndWriting() override;
 
-  // Locks the surface for the engine's writes.
-  void BeginWriting();
   id<MTLTexture> texture() const { return texture_; }
 
  private:
@@ -40,36 +36,17 @@ class MacSurface : public PresentationSurface {
   bool locked_ = false;
 };
 
-class MacImagePresenter : public ImagePresenter {
+class MacImagePresenter : public PooledPresenter {
  public:
   // `show` runs on the main thread with each presented frame.
-  using Sink = std::function<void(const std::string& layer, PresentedFrame frame)>;
-
   MacImagePresenter(id<MTLDevice> device, Sink show);
 
-  std::shared_ptr<PresentationSurface> Acquire(int width, int height,
-                                               SurfaceFormat format) override;
-  uint64_t Present(const std::string& layer, PresentedFrame frame) override;
-  float Headroom() override { return headroom_.load(); }
-
-  // The window's screen's EDR headroom, set on the main thread when the screen changes.
-  void SetHeadroom(float headroom) { headroom_.store(headroom); }
+ protected:
+  std::unique_ptr<PresentationSurface> CreateSurface(int width, int height,
+                                                     SurfaceFormat format) override;
 
  private:
-  // Surfaces whose frames have left the screen and whose GPU reads have finished, for reuse.
-  struct Pool {
-    ~Pool() {
-      for (MacSurface* surface : free) delete surface;
-    }
-    std::mutex mutex;
-    std::vector<MacSurface*> free;
-  };
-
   id<MTLDevice> device_;
-  Sink show_;
-  std::shared_ptr<Pool> pool_ = std::make_shared<Pool>();
-  std::atomic<uint64_t> next_id_{0};
-  std::atomic<float> headroom_{1.f};
 };
 
 }  // namespace fotufilm

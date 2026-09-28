@@ -176,9 +176,15 @@ int32_t fotufilm_bridge_effective_realtime(const float *parameters);
 /// Point the engine at the resources it ships with, before anything else is called.
 int32_t fotufilm_bridge_initialize(const char *resources);
 
-/// Whether a usable Halide Metal device was found. The host-facing OFX path uses CPU image
-/// pointers; this describes the internal compute backend, not an OFX GPU-render capability.
+/// Whether a usable Halide device was found: Metal on the Mac, CUDA or Vulkan on Linux. The
+/// host-facing OFX path uses CPU image pointers; this describes the internal compute backend, not
+/// an OFX GPU-render capability.
 int32_t fotufilm_bridge_available(void);
+
+/// Whether the host's colour encoding is decoded and encoded on the device
+/// (`fotufilm_bridge_decode_rows`, `_decode_staged`, `_encodes_output`). Where it is not (Linux),
+/// the host decodes and encodes every frame itself and never asks.
+int32_t fotufilm_bridge_transforms_on_device(void);
 
 /// Whether Resolve renders with the default realtime schedule. Set `FOTUFILM_REALTIME=0` in the
 /// host's environment before launch to restore the reference path for comparison.

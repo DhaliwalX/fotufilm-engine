@@ -19,7 +19,7 @@ import {
 } from "../../src/negative-scan/recipe.js";
 import { cropDrag, hitCrop } from "../../src/negative-scan/crop-drag.js";
 import { previewRequest } from "../../src/negative-scan/useNegativeScanSession.js";
-import { createMacBackend } from "../../src/backend/macos/host.js";
+import { createDesktopBackend } from "../../src/backend/desktop/host.js";
 import { createNativeBackend } from "../../src/backend/native.js";
 
 const recipe = (fields = {}) => ({
@@ -146,8 +146,8 @@ test("a host offers the negative-scan session only when its engine says so", asy
       return { handle: 7 };
     },
   });
-  assert.equal(createMacBackend(channel({})).negativeScans, undefined);
-  const host = createMacBackend(channel({ negativeScans: true, negativeScanEncoding: true }));
+  assert.equal(createDesktopBackend(channel({})).negativeScans, undefined);
+  const host = createDesktopBackend(channel({ negativeScans: true, negativeScanEncoding: true }));
   assert.equal(host.negativeScans.encoding, true);
   const file = { name: "scan.tif", arrayBuffer: async () => new ArrayBuffer(3) };
   await host.negativeScans.open(file, { linearSamples: true });

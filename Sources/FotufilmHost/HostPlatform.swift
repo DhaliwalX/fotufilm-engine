@@ -10,9 +10,9 @@ import FotufilmImaging
 /// its own services and the rest of the host stays the same. A missing service turns its feature
 /// off: `capabilities` tells the editor what this build can do.
 ///
-/// macOS fills it in `HostPlatform+Apple.swift`. A Linux or Windows port adds its own file that
-/// sets `HostPlatform.current` from the services it has (for example libraw/libheif decoding, a
-/// Vulkan or D3D developer, the desktop clipboard).
+/// macOS fills it in `HostPlatform+Apple.swift` and Linux in `HostPlatform+Linux.swift`; a
+/// Windows port adds its own file that sets `HostPlatform.current` from the services it has (for
+/// example libraw/libheif decoding, a D3D developer, the desktop clipboard).
 struct HostPlatform {
     /// Turns a photograph file into scene-linear light.
     var decoder: HostImageDecoder?
@@ -54,6 +54,8 @@ struct HostPlatform {
     static let current: HostPlatform = {
         #if canImport(ImageIO) && canImport(CoreImage)
         return .apple
+        #elseif os(Linux)
+        return .linux
         #else
         return HostPlatform()
         #endif

@@ -28,6 +28,34 @@ films and camera profiles it reads, which the app carries in `Frameworks` and `R
 `tools/build-editor-plugins.sh` builds the DaVinci Resolve OFX
 bundle and, where Apple's FxPlug SDK is installed, the Final Cut Pro wrapper; the app carries them
 in `Resources`. The app is `build/cef-host/Release/Fotufilm.app`.
+
+### Linux
+
+The same `cef/build.sh` builds `build/cef-host/Release/fotufilm`, with CEF, the web build and the
+engine beside it, and `cef/package-appimage.sh` packs that folder into
+`build/appimage/Fotufilm-<version>-x86_64.AppImage`. The engine library comes from
+`cef/build-engine-linux.sh`: the Swift engine with its runtime linked in, and the desktop graph
+compiled ahead of time for CUDA and for Vulkan (`tools/generate-halide-aot-linux.sh`, which needs
+a Halide build with both backends in `HALIDE_ROOT` and the patches in `tools/vulkan-parity/`).
+When the app starts the engine develops on CUDA where an NVIDIA driver answers and on Vulkan on
+any other GPU; `FOTUFILM_GPU_DEVICE=cuda`, `vulkan` or `cpu` chooses instead. The window is CEF
+Views' (`app/windowed_host.h`), painted by Chromium, so the page draws the photograph itself.
+The Linux build runs without Chromium's sandbox, as an AppImage cannot carry its setuid helper;
+the editor only loads its own bundled pages.
+
+The engine opens, scans and exports stills through the system's codec libraries
+(`Sources/CFotufilmCodecs`: JPEG, PNG, TIFF, HEIF/AVIF, OpenEXR and camera RAW in; PNG, 16-bit
+TIFF, JPEG and HEIC out, SDR). On Ubuntu: `apt install libjpeg-turbo8-dev libpng-dev libtiff-dev
+libraw-dev liblcms2-dev libopenexr-dev libheif-dev`, with `libheif-plugin-libde265` and
+`libheif-plugin-x265` for HEIC at run time.
+
+Movies go through the system's FFmpeg (`Sources/CFotufilmVideo`), opened at run time rather than
+linked or bundled: the build needs `libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
+libswresample-dev`, and a machine without FFmpeg 6 runs with video off. Frames develop on the
+same CUDA or Vulkan kernels as stills, three in flight (`HostVideoDevelop+HalideGPU.swift`), and
+encode through NVENC where the driver has it and FFmpeg's software encoders otherwise
+(`FOTUFILM_VIDEO_ENCODER=software`, or an encoder's name, chooses).
+
 Switches:
 
 | Switch | Effect |
@@ -75,7 +103,7 @@ Latency is decided by what never crosses a boundary:
   never wait for a render.
 
 The transport keeps the contract in `web/src/backend/README.md` and the call shape of
-`web/src/backend/macos/transport.js`, so the editor's native backend needs no second transport.
+`web/src/backend/desktop/transport.js`, so the editor's native backend needs no second transport.
 
 ### Files
 
@@ -84,17 +112,23 @@ The transport keeps the contract in `web/src/backend/README.md` and the call sha
 | `src/app/scheme.*` | `fotufilm://app/` serves the bundled web build: no local server or port. |
 | `src/app/library_folders.*`, `library_methods.*` | The photo library's folders: the host's panel, listing, and the files at `fotufilm://app/.library`. |
 | `src/app/browser_app.*` | CefApp for the browser and child processes; passes switches to renderers. |
-| `src/app/client.*` | One off-screen browser: paint, cursor, keys, context menu, bridge messages. |
+| `src/app/client.*` | One browser, off screen or windowed: paint, cursor, keys, context menu, bridge messages. |
+| `src/app/windowed_host.*` | The editor in a CEF Views window Chromium paints: Linux, and Windows to come. |
+| `src/app/file_panels.*` | Open and save panels through CEF's file dialogs, and `openExport`, for windowed hosts. |
 | `src/bridge/protocol.h` | Message names and the shared-memory frame layout. |
 | `src/bridge/dispatcher.*` | Routes calls to UI-thread or engine-thread handlers; replies; cancellation. |
 | `src/renderer/bridge.js` | The page-side transport, compiled into the renderer. |
 | `src/renderer/renderer_bridge.*` | Installs the transport in trusted pages; returns replies to their context. |
 | `src/presentation/presentation.h` | The image presenter and its surfaces: the interface every platform implements. |
 | `src/presentation/image_layer.*` | Which presented frame each layer draws, and where the page shows them. |
+| `src/presentation/compositor_core.*` | Every compositor's decisions: when to draw, the plan of quads, EDR, frame pacing, the latency probe. |
+| `src/presentation/pooled_presenter.*` | Surface reuse and the hand-over of presented frames; a platform supplies only its surfaces. |
+| `src/presentation/presentation_methods.*` | The page's `setImageLayer`, compositor stats, snapshot and probe calls, for every platform. |
 | `src/engine/engine_bridge.*` | Loads `libfotufilm`, runs it on the engine thread, lends it the presenter. |
-| `src/platform/mac/` | Window, input forwarding, Metal compositor, app and helper entry points. |
+| `src/platform/mac/` | Window, input forwarding, the Metal half of the compositor, app and helper entry points. |
 | `src/platform/mac/image_presenter.*` | The presenter on macOS: a pool of IOSurfaces shared with Metal. |
 | `src/platform/mac/main_menu.*` | The Mac app's menu bar, Open Recent and the Plugins menu. |
+| `src/platform/linux/` | The Linux entry point (one executable for every CEF process) and the desktop opener. |
 | `resources/diagnostics/` | Bridge diagnostics: round trips, payloads, native-layer alignment. |
 
 ### Image layer
@@ -208,7 +242,9 @@ the engine thread until it is done, as the Mac app's menu item holds its own.
 Movies decode and encode through the platform's `HostPlatform.videoSource` and `.videoWriter`
 (`Sources/FotufilmHost/HostVideo.swift`); on macOS these are AVFoundation, reading Apple Log,
 S-Log, F-Log, HLG and PQ as untouched code values into scene-linear Rec. 2020 as the Mac app
-does. The engine reports `video` and `videoExportTypes` in its capabilities only when a
+does, and on Linux FFmpeg (`HostVideo+FFmpeg.swift`), converting SDR video as AVFoundation does
+(its transfer, its chroma siting and its defaults for untagged movies, in
+`Sources/CFotufilmVideo/Colour.hpp`). The engine reports `video` and `videoExportTypes` in its capabilities only when a
 platform supplies both. CEF's Chromium carries no H.264, HEVC or ProRes decoder, so the page
 never plays the movie itself: the import answers with its sound as a WAV (silent when the
 movie is), which the editor's media element plays as the clock, and every frame on screen is a
@@ -284,23 +320,27 @@ no film, as the Mac app's importer does. Light frames live in
    headroom changes (a brightness change applies at the next render).
 4. **Windows and Linux.** The same host with a D3D11 compositor (shared handles) and a Vulkan
    compositor (dmabuf), and Halide GPU targets for each; Swift is shipped with the app there.
+   What such a compositor decides is already shared (`compositor_core.h`): a port supplies a
+   `PresentationSurface`, a `PooledPresenter`, a `WindowCompositor` and the draw of each
+   `CompositePlan`, and registers `RegisterPresentationMethods`. Linux runs today as a windowed
+   host (see [Linux](#linux)); its native image layer is still to come.
 5. **Host completeness.** IME composition, native `<select>` popups,
    accessibility, window chrome from `window-chrome.js`, and signing and notarisation of the app
    and its helpers.
 
 ## Checks
 
-The diagnostics page (`--fotufilm-diagnostics`) measures round trips on both threads, echoes
-64 KB to 4K RGBA16F payloads and verifies their bytes, and draws a moving pattern in the native
-layer behind a hole in the page: the pattern must stay inside the orange frame while the frame is
-resized.
-
-`cef/tests/run.sh` builds and runs the portable host checks with the system compiler, with no CEF:
-which library files the page may read and what a library folder lists.
+`cef/tests/run.sh` builds and runs the portable presentation and library folder checks with the
+system compiler, no CEF or GPU needed, so they run on every platform the host targets.
 
 The photo library's folders are picked, listed and read by the host (`app/library_methods.h`),
 since Chromium's own folder picker refuses a home, Documents, Desktop or Downloads folder as a
 whole. The page reads only folders chosen in the host's panel, which it keeps between launches.
+
+The diagnostics page (`--fotufilm-diagnostics`) measures round trips on both threads, echoes
+64 KB to 4K RGBA16F payloads and verifies their bytes, and draws a moving pattern in the native
+layer behind a hole in the page: the pattern must stay inside the orange frame while the frame is
+resized.
 
 The bridge answers these calls for tests driven over the DevTools protocol:
 
@@ -309,7 +349,7 @@ The bridge answers these calls for tests driven over the DevTools protocol:
 | `compositorStats` | Frame counts, copy and composite times, `extendedRange` and `headroom`. |
 | `compositorSnapshot` | Path of a composite of page and image layer: PNG, or half-float TIFF while extended. |
 | `probePixel` {x, y} | Watches one point: every change is composited at once and read back (an empty object stops it). |
-| `probeReport` | `now` and each change's commit time (ms, `CACurrentMediaTime`) and pixel value. |
+| `probeReport` | `now` and each change's commit time (ms, the host's clock: `CACurrentMediaTime` on macOS) and pixel value. |
 
 Latency from input to pixels: arm `probePixel` on the photograph, read `probeReport`'s `now`,
 send a key to a slider, and take the first change whose value moved by the step. Changes are

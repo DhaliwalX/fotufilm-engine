@@ -22,7 +22,7 @@ const EXPORT_LABELS = {
   "image/heic": "HEIC",
 };
 
-export function createMacBackend(channel) {
+export function createDesktopBackend(channel) {
   const call = createTransport(channel);
   // What the engine's platform services offer (fotufilm_capabilities); a host that does not say
   // offers only the contract's required methods.

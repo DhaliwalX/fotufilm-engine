@@ -150,6 +150,26 @@ struct HostVideoFormat {
     }
 }
 
+extension HostVideoFormat {
+    /// The formats the Mac app offers (`VideoExportFormat`): H.264 in an MPEG-4 or QuickTime
+    /// movie, 10-bit HEVC, and Apple ProRes. A writer offers those its platform encodes.
+    static let deliveries: [HostVideoFormat] = [
+        HostVideoFormat(id: "mp4", label: "MPEG-4 · H.264", fileExtension: "mp4",
+                        mimeType: "video/mp4", takesLinearLight: false, compresses: true, bits: 8),
+        HostVideoFormat(id: "mov", label: "QuickTime · H.264", fileExtension: "mov",
+                        mimeType: "video/quicktime", takesLinearLight: false, compresses: true,
+                        bits: 8),
+        HostVideoFormat(id: "hevc10", label: "HEVC 10-bit", fileExtension: "mp4",
+                        mimeType: "video/mp4", takesLinearLight: true, compresses: true, bits: 10),
+    ] + [("prores422proxy", "Apple ProRes 422 Proxy"), ("prores422lt", "Apple ProRes 422 LT"),
+         ("prores422", "Apple ProRes 422"), ("prores422hq", "Apple ProRes 422 HQ"),
+         ("prores4444", "Apple ProRes 4444"), ("prores4444xq", "Apple ProRes 4444 XQ")].map {
+        HostVideoFormat(id: $0.0, label: $0.1, fileExtension: "mov", mimeType: "video/quicktime",
+                        takesLinearLight: true, compresses: false,
+                        bits: $0.0.hasPrefix("prores4444") ? 12 : 10)
+    }
+}
+
 /// The Mac app's Video File Size (`AppSettings.VideoExportBitrate`): what a compressed movie may
 /// spend per pixel of each frame.
 enum HostVideoBitrate: String, CaseIterable {

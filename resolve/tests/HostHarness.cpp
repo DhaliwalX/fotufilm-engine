@@ -1900,7 +1900,8 @@ int testPlugin() {
             // turn a *no* into a *yes* — and only if the plain encode variant were withdrawn
             // while its flare-measuring twin stayed. That is the frame this guards: a promise
             // the striped render would then be unable to keep, which fails the render.
-            check(refused && delivered == 1 && viewer == delivered,
+            check(refused && (delivered == 1 || !fotufilm_bridge_transforms_on_device())
+                      && viewer == delivered,
                   "and with no staging held the encode query ignores the viewer flag");
             fotufilm_bridge_context_destroy(striped);
         }
@@ -2056,7 +2057,8 @@ int testPlugin() {
         // decode as well as the encode, so two renders through it are two different pictures. The
         // bridge takes the transform as its own argument, so the same developed light can be
         // encoded both ways and subtracted.
-        if (gLinkedIn) {
+        // Linux develops on its kernels and leaves the host's colour to the host.
+        if (gLinkedIn && fotufilm_bridge_transforms_on_device()) {
             std::printf("kernel encode\n");
             const int width = 48, height = 32;
             const int count = width * height;
@@ -3428,9 +3430,16 @@ int testPlugin() {
                     std::printf("       %s: %s with no filter, %s with one\n", span.what,
                                 bare ? "develops" : "refuses",
                                 filtered ? "develops" : "no kernel for it");
+#if defined(__APPLE__)
                     check(bare && !filtered,
                           "the engine has no kernel for an absorbing filter in that span, "
                           "which is why its control is dimmed and its value cleared");
+#else
+                    // Linux's kernels carry the filter in these spans. The control stays dimmed
+                    // with the Mac's, which withholds a filter this engine could develop and
+                    // never offers one it cannot.
+                    check(bare, "the engine develops that span with no filter fitted");
+#endif
                 }
             }
             rest(order[0]);

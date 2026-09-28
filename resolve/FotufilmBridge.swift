@@ -27,7 +27,7 @@ func fotufilm_bridge_decode_camera(_ index: Int32, _ input: UnsafePointer<Float>
 }
 
 /// Loading mutates the process-wide stock registry once. Rendering does not take this lock: each
-/// effect instance owns its mutable Metal arguments and LUT cache in the context below.
+/// effect instance owns its mutable device arguments and LUT cache in the context below.
 private let initializationLock = NSLock()
 nonisolated(unsafe) private var initializationError = ""
 
@@ -39,33 +39,28 @@ nonisolated(unsafe) private var stockIDs: [String] = []
 /// warm-up and error reads from racing a render action.
 private final class BridgeContext {
     let lock = NSLock()
-    let metalContext: UnsafeMutableRawPointer
+    let device: BridgeDevice
     var lastError: String
-    var frameStaging: FilmFrameStaging?
+    var frameStaging: BridgeStaging?
     var outputQuery: OutputTransformQuery?
 
     init?(lastError: String) {
-        guard let metalContext = fotufilm_halide_metal_context_create() else { return nil }
-        self.metalContext = metalContext
+        guard let device = BridgeDevice() else { return nil }
+        self.device = device
         self.lastError = lastError
     }
 
     func releaseStaging() {
         guard let staging = frameStaging else { return }
         frameStaging = nil
-        HalideMetalFilmRenderer.shared?.recycleFrameStaging(staging)
+        BridgeRenderer.shared?.recycleFrameStaging(staging)
     }
 
-    func withMetalContext<Result>(_ body: () -> Result) -> Result {
-        let previous = fotufilm_halide_metal_context_bind(metalContext)
-        defer { fotufilm_halide_metal_context_restore(previous) }
-        return body()
+    func withDevice<Result>(_ body: () -> Result) -> Result {
+        device.run(body)
     }
 
-    deinit {
-        releaseStaging()
-        fotufilm_halide_metal_context_destroy(metalContext)
-    }
+    deinit { releaseStaging() }
 }
 
 /// Cache key for output-variant availability. Seed and frame number are excluded because they do
@@ -389,7 +384,12 @@ func fotufilm_bridge_initialize(_ resources: UnsafePointer<CChar>?) -> Int32 {
 
 @_cdecl("fotufilm_bridge_available")
 func fotufilm_bridge_available() -> Int32 {
-    HalideMetalFilmRenderer.shared != nil ? 1 : 0
+    BridgeRenderer.shared != nil ? 1 : 0
+}
+
+@_cdecl("fotufilm_bridge_transforms_on_device")
+func fotufilm_bridge_transforms_on_device() -> Int32 {
+    BridgeRenderer.transformsOnDevice ? 1 : 0
 }
 
 @_cdecl("fotufilm_bridge_realtime_enabled")
@@ -721,8 +721,8 @@ func fotufilm_bridge_prepare(_ opaque: UnsafeMutableRawPointer?,
     context.lock.lock()
     defer { context.lock.unlock() }
 
-    guard let renderer = HalideMetalFilmRenderer.shared else {
-        context.lastError = "no Metal device the Halide engine can use"
+    guard let renderer = BridgeRenderer.shared else {
+        context.lastError = BridgeRenderer.missingDevice
         return 0
     }
     guard let stock = stock(at: stockIndex) else {
@@ -738,7 +738,7 @@ func fotufilm_bridge_prepare(_ opaque: UnsafeMutableRawPointer?,
     let settings = options(parameters, format: format,
                            stockIndex: stockIndex, paper: paper, seed: 0)
     guard validateDevelopment(settings, stock: stock, context: context) else { return 0 }
-    return context.withMetalContext {
+    return context.withDevice {
         renderer.prepare(stock: stock, options: settings,
                          frameWidth: Int(width), frameHeight: Int(height)) ? 1 : 0
     }
@@ -769,7 +769,7 @@ func fotufilm_bridge_encodes_output(_ opaque: UnsafeMutableRawPointer?,
         interactive: interactive, staged: staged, parameters: values)
     if let cached = context.outputQuery, cached.key == key { return cached.answer }
 
-    guard let renderer = HalideMetalFilmRenderer.shared,
+    guard let renderer = BridgeRenderer.shared,
           let stock = stock(at: stockIndex), stage(of: parameters) != nil,
           width > 0, height > 0 else { return 0 }
     let settings = options(parameters, format: format,
@@ -798,8 +798,8 @@ func fotufilm_bridge_frame_staging(
     context.releaseStaging()
 
     guard let input, let output, width > 0, height > 0,
-          let renderer = HalideMetalFilmRenderer.shared,
-          HalideMetalFilmRenderer.developsInOnePass(width: Int(width),
+          let renderer = BridgeRenderer.shared,
+          BridgeRenderer.developsInOnePass(width: Int(width),
                                                     height: Int(height))
     else { return 0 }
 
@@ -833,12 +833,12 @@ func fotufilm_bridge_decode_staged(
     defer { context.lock.unlock() }
 
     guard width > 0, height > 0,
-          let renderer = HalideMetalFilmRenderer.shared,
+          let renderer = BridgeRenderer.shared,
           let transform = inputTransform(transformIn),
           let staging = context.frameStaging,
           staging.capacityPixels >= Int(width) * Int(height)
     else { return 0 }
-    guard let report = context.withMetalContext({
+    guard let report = context.withDevice({
         renderer.decodeStaged(
             staging, width: Int(width), height: Int(height), transform: transform,
             realtime: realtime != 0)
@@ -859,7 +859,7 @@ func fotufilm_bridge_decode_rows(
     _ realtime: Int32
 ) -> Int32 {
     guard width > 0, rows > 0, let input, let output,
-          let renderer = HalideMetalFilmRenderer.shared,
+          let renderer = BridgeRenderer.shared,
           let transform = inputTransform(transformIn),
           let report = renderer.decodeRows(input, into: output, width: Int(width),
                                            rows: Int(rows), transform: transform,
@@ -886,8 +886,8 @@ func fotufilm_bridge_render_staged(
     context.lock.lock()
     defer { context.lock.unlock() }
 
-    guard let renderer = HalideMetalFilmRenderer.shared else {
-        context.lastError = "no Metal device the Halide engine can use"
+    guard let renderer = BridgeRenderer.shared else {
+        context.lastError = BridgeRenderer.missingDevice
         return 0
     }
     guard let stock = stock(at: stockIndex) else {
@@ -917,7 +917,7 @@ func fotufilm_bridge_render_staged(
     }
     let wanted = outputTransformIn != nil
     var transform = outputTransform(outputTransformIn)
-    let ok = context.withMetalContext {
+    let ok = context.withDevice {
         renderer.developStaged(
             staging, width: Int(width), height: Int(height), stock: stock,
             options: settings,
@@ -971,8 +971,8 @@ func fotufilm_bridge_render(_ opaque: UnsafeMutableRawPointer?,
     context.lock.lock()
     defer { context.lock.unlock() }
 
-    guard let renderer = HalideMetalFilmRenderer.shared else {
-        context.lastError = "no Metal device the Halide engine can use"
+    guard let renderer = BridgeRenderer.shared else {
+        context.lastError = BridgeRenderer.missingDevice
         return 0
     }
     guard let stock = stock(at: stockIndex) else {
@@ -1003,7 +1003,7 @@ func fotufilm_bridge_render(_ opaque: UnsafeMutableRawPointer?,
     }
     let wanted = outputTransformIn != nil
     var transform = outputTransform(outputTransformIn)
-    let ok = context.withMetalContext {
+    let ok = context.withDevice {
         renderer.developStreaming(
             width: Int(width), height: Int(height), stock: stock, options: settings,
             outputTransform: &transform,

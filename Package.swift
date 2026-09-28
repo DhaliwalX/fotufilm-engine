@@ -93,6 +93,7 @@ let package = Package(
         .executable(name: "fotufilm", targets: ["fotufilm"]),
         .executable(name: "fotufilm-controls", targets: ["fotufilm-controls"]),
         .executable(name: "fotufilm-web-profile", targets: ["fotufilm-web-profile"]),
+        .executable(name: "fotufilm-parity", targets: ["fotufilm-parity"]),
     ] + benchmarkProducts,
     targets: [
         .target(name: "FotufilmUpdate"),
@@ -125,16 +126,42 @@ let package = Package(
         // Installing the Resolve and Final Cut plug-ins, shared by the Mac app and Fotufilm Desktop.
         .target(name: "FotufilmPlugins"),
         .target(name: "CFotufilmHost"),
+        // Still images where there is no ImageIO (Linux), through the system's libraries.
+        .systemLibrary(name: "COpenEXR", pkgConfig: "OpenEXR",
+                       providers: [.apt(["libopenexr-dev"])]),
+        .target(name: "CFotufilmCodecs",
+                dependencies: [.target(name: "COpenEXR", condition: .when(platforms: [.linux]))],
+                cxxSettings: [.unsafeFlags(["-std=c++17"])],
+                linkerSettings: ["raw_r", "lcms2", "jpeg", "png", "tiff", "heif"].map {
+                    .linkedLibrary($0, .when(platforms: [.linux]))
+                }),
+        // Movies where there is no AVFoundation (Linux), through the system's FFmpeg, loaded
+        // when first asked for.
+        .target(name: "CFotufilmVideo",
+                cxxSettings: [.unsafeFlags(["-std=c++17"])],
+                linkerSettings: [.linkedLibrary("dl", .when(platforms: [.linux]))]),
         .target(name: "FotufilmHost",
                 dependencies: ["CFotufilmHost", "FotufilmCore", "FotufilmImaging",
                                "FotufilmEditModel", "FotufilmStockMatch", "FotufilmPlugins",
                                "FotufilmUpdate",
                                .target(name: "FotufilmMetal",
-                                       condition: .when(platforms: [.macOS, .iOS]))]),
+                                       condition: .when(platforms: [.macOS, .iOS])),
+                               // Linux develops through the graph's CUDA and Vulkan entry points.
+                               .target(name: "FotufilmHalide",
+                                       condition: .when(platforms: [.linux])),
+                               .target(name: "CFotufilmCodecs",
+                                       condition: .when(platforms: [.linux])),
+                               .target(name: "CFotufilmVideo",
+                                       condition: .when(platforms: [.linux]))]),
         .executableTarget(name: "fotufilm",
                           dependencies: ["FotufilmCore", "FotufilmImaging", "FotufilmEditModel"]),
         .executableTarget(name: "fotufilm-controls", dependencies: ["FotufilmEditModel"]),
         .executableTarget(name: "fotufilm-web-profile", dependencies: ["FotufilmEditModel"]),
+        // Develops one scene on the CPU and the GPU (Metal, CUDA or Vulkan) for cross-machine parity.
+        .executableTarget(name: "fotufilm-parity",
+                          dependencies: ["FotufilmCore", "FotufilmHalide",
+                                         .target(name: "FotufilmImaging",
+                                                 condition: .when(platforms: [.macOS]))]),
         .testTarget(
             name: "FotufilmCoreTests",
             dependencies: ["FotufilmCore", "FotufilmMetal", "FotufilmImaging",

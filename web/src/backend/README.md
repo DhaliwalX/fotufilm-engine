@@ -1,12 +1,15 @@
 # Editor backends
 
 The Spectrum editor uses one React tree and one versioned image-backend contract.
-Browser processing lives behind `browser.js`; a Mac host can provide native
+Browser processing lives behind `browser.js`; a native host can provide native
 services through `window.fotufilmNative` **before `main.jsx` executes**. Selection
 happens once per editor mount, not per operation. Reload to change backends.
 
-The browser adapter is implemented. The `macos/` JavaScript facade defines the
-transport boundary for a native host; host packaging is developed separately.
+The browser adapter is implemented. The `desktop/` JavaScript facade defines the
+transport boundary for a native host (Fotufilm Desktop, the same on every platform); host
+packaging is developed separately. The transport's `capabilities.platform` (`macos`, `linux`,
+`windows`) names the host's platform, which `main.jsx` sets as `data-native-host` for its window
+chrome.
 `native.js` validates and binds host-supplied services. Missing/incompatible bridges
 fail visibly and never silently initialize the browser engine.
 

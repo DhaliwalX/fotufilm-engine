@@ -1,6 +1,7 @@
 // What the compositor draws beneath the page: the frames the engine presented, placed where the
-// page last said the photograph is. Platform-neutral; every compositor keeps one and draws its
-// Draws() in order, clipped to clip(). UI thread only.
+// page last said the photograph is. Platform-neutral and free of CEF; every compositor keeps one
+// (in CompositorCore, compositor_core.h) and draws its Draws() in order, clipped to clip(). UI
+// thread only.
 #pragma once
 
 #include <cstdint>
@@ -10,7 +11,6 @@
 #include <string>
 #include <vector>
 
-#include "include/cef_values.h"
 #include "presentation/presentation.h"
 
 namespace fotufilm {
@@ -36,11 +36,6 @@ struct ImageLayerGeometry {
   bool original = false;
   std::vector<LayerPlacement> layers;
 };
-
-// Reads the page's geometry. The diagnostics page's older form, {x, y, width, height}, asks for
-// the test pattern in that rectangle instead: `pattern` is set and the geometry left empty.
-ImageLayerGeometry ParseImageLayerGeometry(CefRefPtr<CefDictionaryValue> fields,
-                                           LayerRect* pattern);
 
 class ImageLayer {
  public:

@@ -26,7 +26,7 @@ inline constexpr char kTransportGlobal[] = "fotufilm-transport-global";
 inline constexpr char kCapabilities[] = "fotufilm-capabilities";
 
 // With the engine linked the transport is the one the editor looks for
-// (web/src/backend/macos/host.js). Without it the transport is installed under a name the editor
+// (web/src/backend/desktop/host.js). Without it the transport is installed under a name the editor
 // does not look for, and the editor keeps its browser engine.
 #if defined(FOTUFILM_WITH_ENGINE)
 inline constexpr char kDefaultTransportGlobal[] = "fotufilmNativeTransport";

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { defaultEdit } from "../../src/editor-state.js";
-import { createLenses } from '../../src/backend/macos/lenses.js';
-import { createSession } from '../../src/backend/macos/session.js';
+import { createLenses } from '../../src/backend/desktop/lenses.js';
+import { createSession } from '../../src/backend/desktop/session.js';
 
 test('native lens catalogue publishes imported and removed profiles to subscribers', async () => {
   let profiles = [], notifications = 0;

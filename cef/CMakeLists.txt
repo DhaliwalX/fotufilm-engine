@@ -27,6 +27,11 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
+# Linux ships as an AppImage, which cannot carry Chromium's setuid sandbox helper. The editor only
+# loads its own bundled pages (or a trusted development server), as on the Mac.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(USE_SANDBOX OFF CACHE BOOL "Chromium's sandbox" FORCE)
+endif()
 find_package(CEF REQUIRED)
 SET_CEF_TARGET_OUT_DIR()
 # No path of the machine that built it goes into the app: source paths in assertions are written
@@ -64,17 +69,22 @@ set(FOTUFILM_COMMON_SOURCES
 )
 set(FOTUFILM_BROWSER_SOURCES
   src/app/client.cc
+  src/app/host_capabilities.cc
   src/app/library_folders.cc
   src/app/library_methods.cc
   src/bridge/dispatcher.cc
+  src/presentation/compositor_core.cc
   src/presentation/image_layer.cc
+  src/presentation/pooled_presenter.cc
+  src/presentation/presentation_methods.cc
 )
-set(FOTUFILM_ENGINE_LIBRARY "${FOTUFILM_ENGINE_DIR}/libfotufilm.dylib")
+set(FOTUFILM_ENGINE_LIBRARY "${FOTUFILM_ENGINE_DIR}/libfotufilm${CMAKE_SHARED_LIBRARY_SUFFIX}")
 if(EXISTS "${FOTUFILM_ENGINE_LIBRARY}")
   set(FOTUFILM_WITH_ENGINE ON)
   list(APPEND FOTUFILM_BROWSER_SOURCES src/engine/engine_bridge.cc)
 else()
-  message(WARNING "No engine at ${FOTUFILM_ENGINE_LIBRARY}; run cef/build-engine.sh. "
+  message(WARNING "No engine at ${FOTUFILM_ENGINE_LIBRARY}; run cef/build-engine.sh "
+                  "(cef/build-engine-linux.sh on Linux). "
                   "The editor will use its browser engine.")
 endif()
 
@@ -101,8 +111,10 @@ if(OS_MAC)
     src/platform/mac/image_presenter.mm
     src/platform/mac/main_menu.mm
     src/platform/mac/main.mm)
-  # CEF's flags cover C++ sources only; Objective-C++ needs the same standard.
-  set_source_files_properties(${_mac_sources} PROPERTIES COMPILE_OPTIONS "-fobjc-arc;-std=c++20")
+  # CEF's flags cover C++ sources only; Objective-C++ needs the same standard, and no RTTI, so
+  # its classes can derive from the portable ones compiled as C++.
+  set_source_files_properties(${_mac_sources} PROPERTIES
+    COMPILE_OPTIONS "-fobjc-arc;-std=c++20;-fno-rtti")
 
   add_executable(fotufilm_desktop MACOSX_BUNDLE
     ${FOTUFILM_COMMON_SOURCES} ${FOTUFILM_BROWSER_SOURCES} ${_mac_sources})
@@ -205,8 +217,53 @@ if(OS_MAC)
               "${_app}/Contents/Frameworks/${_helper_name}.app"
       VERBATIM)
   endforeach()
+elseif(OS_LINUX)
+  # One executable for every CEF process, in an ordinary window Chromium paints
+  # (app/windowed_host.h); CEF's libraries and data, the web build and the engine sit beside it.
+  add_executable(fotufilm_desktop
+    ${FOTUFILM_COMMON_SOURCES} ${FOTUFILM_BROWSER_SOURCES}
+    src/app/file_panels.cc
+    src/app/windowed_host.cc
+    src/platform/linux/main.cc
+    src/platform/linux/system_open.cc)
+  fotufilm_target(fotufilm_desktop)
+  # The Mac loads CEF's framework at run time; Linux links libcef.so beside the executable.
+  ADD_LOGICAL_TARGET("libcef_lib" "${CEF_LIB_DEBUG}" "${CEF_LIB_RELEASE}")
+  target_link_libraries(fotufilm_desktop libcef_lib)
+  set_target_properties(fotufilm_desktop PROPERTIES
+    OUTPUT_NAME fotufilm BUILD_WITH_INSTALL_RPATH ON INSTALL_RPATH "$ORIGIN")
+  if(FOTUFILM_WITH_ENGINE)
+    target_compile_definitions(fotufilm_desktop PRIVATE FOTUFILM_WITH_ENGINE=1)
+    target_include_directories(fotufilm_desktop PRIVATE
+      "${CMAKE_CURRENT_SOURCE_DIR}/../Sources/CFotufilmHost/include")
+    target_link_libraries(fotufilm_desktop "${FOTUFILM_ENGINE_LIBRARY}")
+  endif()
+  COPY_FILES(fotufilm_desktop "${CEF_BINARY_FILES}" "${CEF_BINARY_DIR}" "${CEF_TARGET_OUT_DIR}")
+  COPY_FILES(fotufilm_desktop "${CEF_RESOURCE_FILES}" "${CEF_RESOURCE_DIR}" "${CEF_TARGET_OUT_DIR}")
+
+  set(_out "${CEF_TARGET_OUT_DIR}")
+  set(_bundle_commands
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/resources/diagnostics" "${_out}/diagnostics")
+  if(FOTUFILM_WITH_ENGINE)
+    list(APPEND _bundle_commands
+      COMMAND ${CMAKE_COMMAND} -E copy "${FOTUFILM_ENGINE_LIBRARY}" "${_out}/"
+      COMMAND ${CMAKE_COMMAND} -E rm -rf "${_out}/resources"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${FOTUFILM_ENGINE_DIR}/Resources"
+              "${_out}/resources")
+  endif()
+  if(EXISTS "${FOTUFILM_WEB_DIST}/index.html")
+    list(APPEND _bundle_commands
+      COMMAND ${CMAKE_COMMAND} -E rm -rf "${_out}/web"
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${FOTUFILM_WEB_DIST}" "${_out}/web"
+      COMMAND ${CMAKE_COMMAND} -E copy "${FOTUFILM_WEB_DIST}/app-icon.png" "${_out}/fotufilm.png")
+  else()
+    message(WARNING "No web build at ${FOTUFILM_WEB_DIST}; run npm run build in web/.")
+  endif()
+  add_custom_target(fotufilm_bundle ALL ${_bundle_commands} VERBATIM)
+  add_dependencies(fotufilm_bundle fotufilm_desktop)
 else()
-  message(FATAL_ERROR "Fotufilm Desktop builds on macOS so far; Windows and Linux follow cef/README.md.")
+  message(FATAL_ERROR "Fotufilm Desktop builds on macOS and Linux so far; Windows follows cef/README.md.")
 endif()
 
 PRINT_CEF_CONFIG()

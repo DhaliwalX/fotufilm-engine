@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createMacBackend } from "../../src/backend/macos/host.js";
+import { createDesktopBackend } from "../../src/backend/desktop/host.js";
 import { createNativeBackend } from "../../src/backend/native.js";
 import { APP_SETTINGS } from "../../src/app-settings.js";
 import { defaultEdit } from "../../src/editor-state.js";
@@ -40,7 +40,7 @@ function host({ capabilities, binary = true } = {}) {
       }
     },
   };
-  return { backend: createMacBackend(channel), calls };
+  return { backend: createDesktopBackend(channel), calls };
 }
 
 const movie = (size) =>

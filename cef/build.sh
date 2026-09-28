@@ -4,6 +4,8 @@
 #   cef/build.sh               build build/cef-host/Release/Fotufilm.app
 #   cef/build.sh --run         build, then open the bridge diagnostics page
 #   cef/build.sh --no-plugins  leave the plug-ins out (the Plugins menu then says none are bundled)
+# On Linux it builds build/cef-host/Release/fotufilm and the engine's CUDA and Vulkan kernels
+# (HALIDE_ROOT, cef/build-engine-linux.sh); cef/package-appimage.sh then packs the AppImage.
 set -euo pipefail
 cd "$(cd "$(dirname "$0")" && pwd -P)/.."
 
@@ -21,6 +23,8 @@ if [[ "$(uname -s)" == Darwin ]]; then
     tools/build-editor-plugins.sh
     extra+=(-DFOTUFILM_PLUGINS_DIR="$PWD/build")
   fi
+elif [[ "$(uname -s)" == Linux ]]; then
+  cef/build-engine-linux.sh
 fi
 # Built with the official packs, the app is the Mac app: its identity and its release feed.
 if [[ "${FOTUFILM_SOURCE_BUILD:-1}" == 0 && "${FOTUFILM_USE_SOURCE_IDENTITY:-0}" != 1 ]]; then

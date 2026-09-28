@@ -41,7 +41,13 @@ struct GpuConfiguration {
         auto target = Halide::get_host_target();
         switch (device) {
         case Halide::DeviceAPI::CUDA: target.set_feature(Halide::Target::CUDA); break;
-        case Halide::DeviceAPI::Vulkan: target.set_feature(Halide::Target::Vulkan); break;
+        case Halide::DeviceAPI::Vulkan:
+            // The graph stores halves, bytes and shorts and indexes with 64-bit offsets.
+            for (auto feature : {Halide::Target::Vulkan, Halide::Target::VulkanV12,
+                                 Halide::Target::VulkanFloat16, Halide::Target::VulkanInt8,
+                                 Halide::Target::VulkanInt16, Halide::Target::VulkanInt64})
+                target.set_feature(feature);
+            break;
         case Halide::DeviceAPI::WebGPU: target.set_feature(Halide::Target::WebGPU); break;
         default: target.set_feature(Halide::Target::Metal); break;
         }
@@ -68,6 +74,14 @@ inline GpuConfiguration resolve_gpu_configuration(GpuConfiguration defaults = {}
         const int value = integer(name, fallback);
         return value >= low && value <= high ? value : fallback;
     };
+#if defined(FOTUFILM_HALIDE_CUDA)
+    // A Linux build develops on CUDA, or on Vulkan when FOTUFILM_GPU_DEVICE=vulkan asks for it.
+    if (const char *device = std::getenv("FOTUFILM_GPU_DEVICE")) {
+        const std::string name = device;
+        if (name == "vulkan") defaults.device = Halide::DeviceAPI::Vulkan;
+        else if (name == "cuda") defaults.device = Halide::DeviceAPI::CUDA;
+    }
+#endif
     // Preserve the existing platform defaults and override ranges.
     const int square = bounded("FOTUFILM_GPU_TILE", kTileSize, 2, 32);
     const bool vulkan = defaults.device == Halide::DeviceAPI::Vulkan;

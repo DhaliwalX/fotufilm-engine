@@ -71,6 +71,14 @@ public:
         return stand_in_;
     }
 
+    /// Frees the device copies, keeping the tiles; the next frame uploads them again.
+    void device_free() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (auto &entry : tiles_) entry.second.device_free();
+        stand_in_.device_free();
+        stand_in_ready_ = false;
+    }
+
 private:
     std::mutex mutex_;
     std::unordered_map<int32_t, Tiles> tiles_;

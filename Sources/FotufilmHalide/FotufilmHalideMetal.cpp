@@ -708,6 +708,11 @@ extern "C" int32_t fotufilm_halide_cuda_available(void) {
     return Halide::host_supports_target_device(default_gpu_configuration().target()) ? 1 : 0;
 }
 
+extern "C" int32_t fotufilm_halide_gpu_device(void) {
+    if (!fotufilm_halide_cuda_available()) return 0;
+    return default_gpu_configuration().device == Halide::DeviceAPI::Vulkan ? 2 : 1;
+}
+
 extern "C" int32_t fotufilm_halide_cuda_prepare(
     int32_t feature_mask, const float *exposure_lut, const float *film_output_lut,
     const float *paper_output_lut, int32_t lut_dimension,

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createMacBackend } from "../../src/backend/macos/host.js";
-import { createSession } from "../../src/backend/macos/session.js";
+import { createDesktopBackend } from "../../src/backend/desktop/host.js";
+import { createSession } from "../../src/backend/desktop/session.js";
 import { defaultEdit } from "../../src/editor-state.js";
 
 const channel = (capabilities) => ({
@@ -13,7 +13,7 @@ const channel = (capabilities) => ({
 });
 
 test("a host without capabilities offers only the required methods", () => {
-  const backend = createMacBackend(channel(undefined));
+  const backend = createDesktopBackend(channel(undefined));
   assert.equal(backend.subjectSelection, false);
   assert.equal(backend.negativeContrast, false);
   assert.equal(backend.importPath, undefined);
@@ -26,7 +26,7 @@ test("a host without capabilities offers only the required methods", () => {
 });
 
 test("the engine's platform services decide what the editor offers", () => {
-  const backend = createMacBackend(
+  const backend = createDesktopBackend(
     channel({
       importPath: true,
       negativeContrast: true,
@@ -48,7 +48,7 @@ test("the engine's platform services decide what the editor offers", () => {
 
 test("the plug-ins a host installs are named up front and read through the engine", async () => {
   const calls = [];
-  const backend = createMacBackend({
+  const backend = createDesktopBackend({
     binary: true,
     capabilities: {
       plugins: [
@@ -74,13 +74,13 @@ test("the plug-ins a host installs are named up front and read through the engin
   );
   assert.deepEqual(calls[1][1], { id: "resolve" });
   // A host that installs none offers no plug-in calls at all.
-  const bare = createMacBackend(channel({ plugins: [] }));
+  const bare = createDesktopBackend(channel({ plugins: [] }));
   assert.equal(bare.plugins, undefined);
   assert.equal(bare.installPlugin, undefined);
 });
 
 test("a file the host opens carries the identity its edit is kept under", async () => {
-  const backend = createMacBackend({
+  const backend = createDesktopBackend({
     binary: true,
     capabilities: { importPath: true },
     async postMessage({ method }) {
@@ -113,7 +113,7 @@ test("a host that draws the photograph itself gets frames placed instead of pict
       };
     return [];
   };
-  const backend = createMacBackend({
+  const backend = createDesktopBackend({
     binary: true,
     capabilities: { imageLayer: true },
     postMessage: ({ method, params }) => call(method, params),
@@ -134,7 +134,7 @@ test("a host that draws the photograph itself gets frames placed instead of pict
   assert.equal(calls.at(-1)[0], "setImageLayer");
   session.dispose();
 
-  const plain = createMacBackend(channel({}));
+  const plain = createDesktopBackend(channel({}));
   assert.equal(plain.imageLayer, false);
   assert.equal(plain.placeImageLayer, undefined);
 });

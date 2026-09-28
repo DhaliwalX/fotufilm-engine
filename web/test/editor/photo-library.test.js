@@ -364,7 +364,7 @@ test("a desktop host picks, lists and serves library folders itself", async () =
     "../../src/photo-library/folder-access.js"
   );
   const { installLibraryFolders } = await import(
-    "../../src/backend/macos/library-folders.js"
+    "../../src/backend/desktop/library-folders.js"
   );
   const calls = [];
   const channel = {

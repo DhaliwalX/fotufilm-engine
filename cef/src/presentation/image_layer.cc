@@ -5,32 +5,6 @@
 namespace fotufilm {
 namespace {
 
-// JSON numbers arrive as integers when they are whole.
-double Number(CefRefPtr<CefValue> value) {
-  if (!value) return 0;
-  switch (value->GetType()) {
-    case VTYPE_INT: return value->GetInt();
-    case VTYPE_DOUBLE: return value->GetDouble();
-    default: return 0;
-  }
-}
-
-double Field(CefRefPtr<CefDictionaryValue> fields, const char* key) {
-  return fields && fields->HasKey(key) ? Number(fields->GetValue(key)) : 0;
-}
-
-LayerRect Rect(CefRefPtr<CefListValue> list) {
-  if (!list || list->GetSize() != 4) return {};
-  return {Number(list->GetValue(0)), Number(list->GetValue(1)), Number(list->GetValue(2)),
-          Number(list->GetValue(3))};
-}
-
-// Frame ids travel as JSON numbers; ids stay far below 2^53.
-uint64_t Id(CefRefPtr<CefDictionaryValue> fields, const char* key) {
-  const double id = Field(fields, key);
-  return id > 0 ? static_cast<uint64_t>(id) : 0;
-}
-
 // Frames of a layer kept beyond the ones the page names: enough for a playing movie's queue.
 constexpr size_t kKeptFrames = 4;
 
@@ -57,34 +31,6 @@ double Smooth(double t) {
 }
 
 }  // namespace
-
-ImageLayerGeometry ParseImageLayerGeometry(CefRefPtr<CefDictionaryValue> fields,
-                                           LayerRect* pattern) {
-  ImageLayerGeometry geometry;
-  if (!fields) return geometry;
-  if (!fields->HasKey("layers")) {
-    if (pattern)
-      *pattern = {Field(fields, "x"), Field(fields, "y"), Field(fields, "width"),
-                  Field(fields, "height")};
-    return geometry;
-  }
-  geometry.clip = Rect(fields->GetList("clip"));
-  geometry.original = fields->GetString("source") == "original";
-  if (CefRefPtr<CefListValue> layers = fields->GetList("layers")) {
-    for (size_t index = 0; index < layers->GetSize(); ++index) {
-      CefRefPtr<CefDictionaryValue> layer = layers->GetDictionary(index);
-      if (!layer) continue;
-      LayerPlacement placement;
-      placement.slot = layer->GetString("slot").ToString();
-      placement.frame = Id(layer, "frame");
-      placement.original = Id(layer, "original");
-      placement.rect = Rect(layer->GetList("rect"));
-      if (!placement.slot.empty() && !placement.rect.Empty())
-        geometry.layers.push_back(std::move(placement));
-    }
-  }
-  return geometry;
-}
 
 void ImageLayer::Present(const std::string& layer, PresentedFrame frame) {
   if (!frame.surface) return;
@@ -172,7 +118,7 @@ std::vector<ImageLayer::Draw> ImageLayer::Draws(double now) {
     if (!frame) continue;
     Draw draw{frame->surface, placement.rect, frame->extended};
     auto found = shown_.find(placement.slot);
-    Shown slot = found == shown_.end() ? Shown{draw} : found->second;
+    Shown slot = found == shown_.end() ? Shown{draw, {}, -1} : found->second;
     // A new picture where one was showing fades in over it; the first one simply appears, and
     // a movie's next frame cuts in.
     if (slot.current.surface != draw.surface) {

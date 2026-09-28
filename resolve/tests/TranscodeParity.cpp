@@ -19,11 +19,20 @@
 #include <string>
 #include <vector>
 
+#if defined(__APPLE__)
 extern "C" int32_t fotufilm_halide_metal_decode_rows(
     uint64_t input_mtl_buffer, const float *input_rows,
     uint64_t output_mtl_buffer, float *output_rows, float *report_out,
     int32_t width, int32_t rows, const float *parameters);
 extern "C" int32_t fotufilm_halide_metal_available(void);
+#else
+// Linux decodes on the host (`fotufilm_bridge_transforms_on_device`): no device decode to compare.
+static int32_t fotufilm_halide_metal_decode_rows(uint64_t, const float *, uint64_t, float *,
+                                                 float *, int32_t, int32_t, const float *) {
+    return -1;
+}
+static int32_t fotufilm_halide_metal_available(void) { return 0; }
+#endif
 
 namespace fotufilm_test {
 namespace {
@@ -405,7 +414,7 @@ struct DecodeGap {
 
 void testDeviceDecodeParity(void (*check)(bool, const char *)) {
     if (!fotufilm_halide_metal_available()) {
-        std::printf("       no Metal device; the device decode is not measured here\n");
+        std::printf("       no device decode; it is not measured here\n");
         return;
     }
 
