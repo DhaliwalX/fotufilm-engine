@@ -121,3 +121,16 @@ export function parseProfileSettings(edit) {
   }
   return { format: edit.format ?? null, profile };
 }
+
+// A photo's film settings with `field` set. Separation sets both colour pairs' reach, as the Mac
+// app's does, so a pair set on its own gives way to it.
+export function withProfileField(profile, field, value) {
+  const next = { ...profile };
+  if (value === undefined) delete next[field];
+  else next[field] = value;
+  if (field === "couplerReach") {
+    delete next.couplerRedGreen;
+    delete next.couplerGreenBlue;
+  }
+  return next;
+}

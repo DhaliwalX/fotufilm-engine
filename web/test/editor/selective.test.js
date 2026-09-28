@@ -134,3 +134,15 @@ test('sampling a decoded ordinary photo retains its alpha and color', () => {
   assert.ok(sample[0] > sample[1])
   assert.ok(sample[1] > 0)
 })
+
+test('a subject selection keeps its edge and feather, within the Mac app ranges', () => {
+  const edit = defaultEdit('gold200')
+  const selective = { ...newSelection(edit), kind: 'subject', subjectEdge: -0.4, subjectFeather: 0.8 }
+  const parsed = parseEdit(JSON.stringify({ version: 1, edit: { ...edit, selective } }), ['gold200'])
+  assert.equal(parsed.selective.subjectEdge, -0.4)
+  assert.equal(parsed.selective.subjectFeather, 0.8)
+  assert.throws(
+    () => parseEdit(JSON.stringify({ version: 1, edit: { ...edit, selective: { ...selective, subjectEdge: 2 } } }), ['gold200']),
+    /Invalid selective/,
+  )
+})

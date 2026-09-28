@@ -32,14 +32,18 @@ export function previewLabel(current, previous) {
 }
 
 // Finish the visible frame, then take only the newest edit. Continuous input must
-// not keep cancelling every render or build a queue of obsolete slider positions.
+// not keep cancelling every render or build a queue of obsolete slider positions. A playing
+// movie's frames (`pipelined`) keep one more waiting at the backend while the last is shown.
 export class PreviewQueue {
   constructor(onStatus = () => {}) {
     this.pending = null
-    this.running = false
+    this.inflight = 0
     this.closed = false
     this.active = null
     this.onStatus = onStatus
+  }
+  get running() {
+    return this.inflight > 0
   }
   publish() {
     if (this.closed) return
@@ -47,37 +51,44 @@ export class PreviewQueue {
       ? `${this.active.stage}${this.pending ? ` · Next: ${this.pending.label}` : ''}`
       : null)
   }
-  submit(run, label = 'Preview') {
+  submit(run, label = 'Preview', { pipelined = false } = {}) {
     if (this.closed) return Promise.resolve(null)
     this.pending?.resolve(null)
     return new Promise((resolve, reject) => {
-      this.pending = { run, label, resolve, reject }
+      this.pending = { run, label, resolve, reject, pipelined }
       if (this.running) this.publish()
       this.drain()
     })
   }
-  async drain() {
-    if (this.running) return
-    this.running = true
+  drain() {
     while (this.pending && !this.closed) {
+      const overlaps = this.inflight === 1 && this.pending.pipelined && this.active?.pipelined
+      if (this.inflight && !overlaps) return
       const next = this.pending
       this.pending = null
-      this.active = { ...next, stage: `Preparing ${next.label}` }
-      const active = this.active
-      this.publish()
-      try {
-        next.resolve(await next.run((stage) => {
-          if (this.active !== active || this.closed) return
-          active.stage = stage
-          this.publish()
-        }))
-      } catch (error) {
-        next.reject(error)
-      }
+      this.start(next)
     }
-    this.active = null
-    this.running = false
+    if (!this.inflight) {
+      this.active = null
+      this.publish()
+    }
+  }
+  async start(next) {
+    this.inflight++
+    const active = { ...next, stage: `Preparing ${next.label}` }
+    this.active = active
     this.publish()
+    try {
+      next.resolve(await next.run((stage) => {
+        if (this.active !== active || this.closed) return
+        active.stage = stage
+        this.publish()
+      }))
+    } catch (error) {
+      next.reject(error)
+    }
+    this.inflight--
+    this.drain()
   }
   close() {
     this.closed = true

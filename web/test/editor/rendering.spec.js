@@ -111,12 +111,12 @@ test("four crop corners move independently; rotate and flip undo cleanly", async
   expect(edited.split(" ")[0]).not.toBe(original.split(" ")[0]);
   expect(edited.split(" ").slice(1)).toEqual(original.split(" ").slice(1));
   await page.getByRole("button", { name: "Rotate Left", exact: true }).click();
-  await page.getByRole("button", { name: "Undo (⌘Z)", exact: true }).click();
+  await page.getByRole("button", { name: /^Undo \(/ }).click();
   expect(
     await page.locator(".crop-overlay polygon").getAttribute("points"),
   ).toBe(edited);
   await page.getByRole("button", { name: "Flip", exact: true }).click();
-  await page.getByRole("button", { name: "Undo (⌘Z)", exact: true }).click();
+  await page.getByRole("button", { name: /^Undo \(/ }).click();
   expect(
     await page.locator(".crop-overlay polygon").getAttribute("points"),
   ).toBe(edited);
@@ -148,7 +148,7 @@ test("export retains original dimensions above the preview limit", async ({
   await expect(page.locator(".viewer-status > [role=status]")).toContainText(
     "1600 × 1200",
   );
-  await page.getByRole("button", { name: "Export (⌘S)", exact: true }).click();
+  await page.getByRole("button", { name: /^Export \(/ }).click();
   const downloaded = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export", exact: true }).click();
   const file = await downloaded;

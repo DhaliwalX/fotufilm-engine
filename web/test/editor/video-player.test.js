@@ -70,14 +70,20 @@ test("scrubbing pauses playback and stays inside the trimmed range", () => {
   assert.equal(f.media.currentTime, 2);
   f.player.dispose();
 });
-test("playback supplies roughly 30 previews per second and pause commits the final time", () => {
+test("playback asks for a preview each display frame the playhead moves and pause commits the final time", () => {
   const f = fixture();
   f.player.toggle();
-  for (let t = 0; t < 1000; t += 16) {
+  // A 30 fps movie on a 60 Hz display: every other display frame shows a new movie frame.
+  for (let t = 0; t < 1000; t += 1000 / 60) {
+    f.media.currentTime = Math.floor(t / (1000 / 30)) / 30;
+    f.tick(t);
+  }
+  assert.equal(f.renders.length, 30);
+  for (let t = 1000; t < 2000; t += 1000 / 60) {
     f.media.currentTime = t / 1000;
     f.tick(t);
   }
-  assert.ok(f.renders.length >= 29 && f.renders.length <= 32);
+  assert.equal(f.renders.length, 90);
   f.media.currentTime = 1.01;
   f.player.pause();
   assert.equal(f.renders.at(-1), 1.01);

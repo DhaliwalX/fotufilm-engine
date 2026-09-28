@@ -1,3 +1,4 @@
+import { controlHelp } from "./editor/ControlHelp.jsx";
 import {
   Disclosure,
   DisclosureTitle,
@@ -31,6 +32,7 @@ export default function SourceInterpretationControls({
         <div className="control-stack">
           <Picker
             label={control.title}
+            contextualHelp={controlHelp(control.title, control.detail)}
             size="S"
             value={value}
             isDisabled={disabled}
@@ -54,9 +56,6 @@ export default function SourceInterpretationControls({
                 </PickerItem>
               ))}
           </Picker>
-          <p className="medium-detail">
-            {control.choices.find((choice) => choice.id === value)?.detail}
-          </p>
           {image.hdr && (
             <p className="medium-detail">
               HDR JPEG ·{" "}

@@ -13,7 +13,7 @@ export default function useRendererLifecycle({
   setStatus,
   setSession,
   videoExportController,
-  videoDownloadRef,
+  savedExportRef,
   imageResources,
   importController,
   loadGeneration,
@@ -79,7 +79,7 @@ export default function useRendererLifecycle({
       previewQueue.current.close();
       renderer.dispose();
       videoExportController.current?.abort();
-      videoDownloadRef.current?.dispose();
+      savedExportRef.current?.dispose();
       for (const image of imageResources.current) backend.releaseImage(image);
       imageResources.current.clear();
       importController.current?.abort();
@@ -115,11 +115,17 @@ export default function useRendererLifecycle({
   }, [history, activeId]);
   const replaceResult = useCallback((next) => {
     setResult((previous) => {
+      const release = (url) => {
+        URL.revokeObjectURL(url);
+        urls.current.delete(url);
+      };
+      // An unchanged original keeps its URL, so the page does not decode it again.
+      if (next?.original && next.original === previous?.original && previous.originalUrl) {
+        if (next.originalUrl !== previous.originalUrl) release(next.originalUrl);
+        next = { ...next, originalUrl: previous.originalUrl };
+      }
       for (const url of [previous?.url, previous?.originalUrl])
-        if (url) {
-          URL.revokeObjectURL(url);
-          urls.current.delete(url);
-        }
+        if (url && url !== next?.originalUrl) release(url);
       return next;
     });
   }, []);

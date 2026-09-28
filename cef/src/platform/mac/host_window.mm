@@ -1,9 +1,13 @@
 #import "platform/mac/host_window.h"
 
 #import <QuartzCore/QuartzCore.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #include <cstring>
+#include <map>
 #include <memory>
+#include <set>
+#include <string>
 #include <vector>
 
 #include "app/client.h"
@@ -13,6 +17,8 @@
 #include "include/cef_browser.h"
 #include "include/cef_version.h"
 #import "platform/mac/compositor.h"
+#import "platform/mac/image_presenter.h"
+#import "platform/mac/main_menu.h"
 
 @class FotufilmHostView;
 
@@ -69,19 +75,28 @@ double Number(CefRefPtr<CefDictionaryValue> fields, const char* key) {
 
 }  // namespace
 
-@interface FotufilmHostWindow ()
+// The Mac app's unified toolbar: its height before the page reports its own, where the first
+// window button sits and how far apart they are.
+constexpr CGFloat kToolbarHeight = 52;
+constexpr CGFloat kWindowButtonInset = 20;
+constexpr CGFloat kWindowButtonSpacing = 20;
+
+@interface FotufilmHostWindow () <FotufilmMenuActions, FotufilmEditHistory>
 - (void)browserClosed;
 - (CGRect)windowDragRegion:(NSPoint)point;
+- (void)screenChanged;
 @end
 
 // The view the browser draws into. It owns the compositor's layer and turns AppKit input into
 // CEF events.
-@interface FotufilmHostView : NSView
+@interface FotufilmHostView : NSView <NSMenuItemValidation>
 @property(nonatomic, weak) FotufilmHostWindow* owner;
 @property(nonatomic, readonly) FotufilmCompositor* compositor;
 @property(nonatomic) CefRefPtr<CefBrowser> browser;
 // The last key sent down, offered to the menu bar if the page leaves it unhandled.
 @property(nonatomic, strong) NSEvent* lastKeyDown;
+// What the page last said it would do with the files dragged over it.
+@property(nonatomic) cef_drag_operations_mask_t dragOperation;
 // Sizes the compositor to the view and tells the browser.
 - (void)layoutMetrics;
 // A moving test layer needs a frame every refresh; a still one does not.
@@ -100,6 +115,7 @@ double Number(CefRefPtr<CefDictionaryValue> fields, const char* key) {
   self.layerContentsRedrawPolicy = NSViewLayerContentsRedrawNever;
   CAMetalLayer* layer = (CAMetalLayer*)self.layer;
   _compositor = [[FotufilmCompositor alloc] initWithLayer:layer];
+  [self registerForDraggedTypes:@[ NSPasteboardTypeFileURL ]];
   return self;
 }
 
@@ -143,6 +159,7 @@ double Number(CefRefPtr<CefDictionaryValue> fields, const char* key) {
 
 - (void)viewDidChangeBackingProperties {
   [super viewDidChangeBackingProperties];
+  [self.owner screenChanged];
   if (_browser) _browser->GetHost()->NotifyScreenInfoChanged();
   [self layoutMetrics];
 }
@@ -290,10 +307,15 @@ double Number(CefRefPtr<CefDictionaryValue> fields, const char* key) {
       KeyEvent(event, down ? KEYEVENT_RAWKEYDOWN : KEYEVENT_KEYUP));
 }
 
-// Command shortcuts reach the page before the menu bar, as in a browser tab.
+// The menu bar answers its own shortcuts before the page, so a key a menu item takes never also
+// reaches the page's bindings; one whose item is disabled goes nowhere. Other Command keys reach
+// the page, as in a browser tab.
 - (BOOL)performKeyEquivalent:(NSEvent*)event {
   if (self.window.firstResponder != self || event.type != NSEventTypeKeyDown)
     return NO;
+  if ([NSApp.mainMenu performKeyEquivalent:event] ||
+      FotufilmMenuHasKeyEquivalent(NSApp.mainMenu, event))
+    return YES;
   [self keyDown:event];
   return YES;
 }
@@ -303,12 +325,93 @@ double Number(CefRefPtr<CefDictionaryValue> fields, const char* key) {
 - (CefRefPtr<CefFrame>)focusedFrame {
   return _browser ? _browser->GetFocusedFrame() : nullptr;
 }
-- (void)undo:(id)sender { if (auto f = [self focusedFrame]) f->Undo(); }
-- (void)redo:(id)sender { if (auto f = [self focusedFrame]) f->Redo(); }
+// Undo and Redo edit a focused text field, and otherwise the photograph's history.
+- (void)undo:(id)sender {
+  if (!_owner.pageEditsText) return [_owner sendCommand:@"undo"];
+  if (auto f = [self focusedFrame]) f->Undo();
+}
+- (void)redo:(id)sender {
+  if (!_owner.pageEditsText) return [_owner sendCommand:@"redo"];
+  if (auto f = [self focusedFrame]) f->Redo();
+}
 - (void)cut:(id)sender { if (auto f = [self focusedFrame]) f->Cut(); }
 - (void)copy:(id)sender { if (auto f = [self focusedFrame]) f->Copy(); }
 - (void)paste:(id)sender { if (auto f = [self focusedFrame]) f->Paste(); }
 - (void)selectAll:(id)sender { if (auto f = [self focusedFrame]) f->SelectAll(); }
+
+- (BOOL)validateMenuItem:(NSMenuItem*)item {
+  const SEL action = item.action;
+  const BOOL text = _owner.pageEditsText;
+  // A text field's Undo is plain; the photograph's says which step it changes.
+  if (action == @selector(undo:) || action == @selector(redo:)) {
+    const BOOL undo = action == @selector(undo:);
+    NSString* command = undo ? @"undo" : @"redo";
+    NSString* named = text ? nil : [_owner titleForCommand:command];
+    item.title = named ?: (undo ? @"Undo" : @"Redo");
+    return text || [_owner commandEnabled:command];
+  }
+  if (action == @selector(cut:) || action == @selector(copy:) || action == @selector(paste:) ||
+      action == @selector(selectAll:))
+    return text;
+  return YES;
+}
+
+#pragma mark Dropping files
+
+// Files dragged in from the Finder become a CEF drag, so the page's own drop handling (the
+// viewer's highlight, the import) takes them as it would in a browser.
+- (CefMouseEvent)dragEvent:(id<NSDraggingInfo>)info {
+  const NSPoint point = [self convertPoint:info.draggingLocation fromView:nil];
+  CefMouseEvent mouse;
+  mouse.x = static_cast<int>(point.x);
+  mouse.y = static_cast<int>(point.y);
+  mouse.modifiers = Modifiers(NSEvent.modifierFlags);
+  return mouse;
+}
+
+// AppKit's and CEF's drag operation bits have the same values.
+- (NSDragOperation)dragOver:(id<NSDraggingInfo>)info {
+  _browser->GetHost()->DragTargetDragOver(
+      [self dragEvent:info],
+      static_cast<cef_drag_operations_mask_t>(info.draggingSourceOperationMask));
+  return static_cast<NSDragOperation>(_dragOperation);
+}
+
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)info {
+  if (!_browser) return NSDragOperationNone;
+  NSArray<NSURL*>* urls =
+      [info.draggingPasteboard readObjectsForClasses:@[ NSURL.class ]
+                                             options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+  if (!urls.count) return NSDragOperationNone;
+  CefRefPtr<CefDragData> data = CefDragData::Create();
+  for (NSURL* url in urls) data->AddFile(url.path.UTF8String, url.lastPathComponent.UTF8String);
+  _dragOperation = DRAG_OPERATION_NONE;
+  _browser->GetHost()->DragTargetDragEnter(
+      data, [self dragEvent:info],
+      static_cast<cef_drag_operations_mask_t>(info.draggingSourceOperationMask));
+  return [self dragOver:info];
+}
+
+- (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)info {
+  return _browser ? [self dragOver:info] : NSDragOperationNone;
+}
+
+- (void)draggingExited:(id<NSDraggingInfo>)info {
+  if (_browser) _browser->GetHost()->DragTargetDragLeave();
+}
+
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)info {
+  if (!_browser) return NO;
+  const bool taken = _dragOperation != DRAG_OPERATION_NONE;
+  _browser->GetHost()->DragTargetDrop([self dragEvent:info]);
+  // A file the editor took is one it opened, as from File > Open.
+  if (taken)
+    for (NSURL* url in [info.draggingPasteboard
+             readObjectsForClasses:@[ NSURL.class ]
+                           options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}])
+      [FotufilmRecentFiles note:url];
+  return taken;
+}
 
 @end
 
@@ -355,6 +458,9 @@ class MacView : public fotufilm::ViewDelegate {
   void SetTitle(const std::string& title) override {
     view_.window.title = [NSString stringWithUTF8String:title.c_str()];
   }
+  void UpdateDragOperation(cef_drag_operations_mask_t operation) override {
+    view_.dragOperation = operation;
+  }
   void BrowserClosed() override { [owner_ browserClosed]; }
 
  private:
@@ -373,6 +479,20 @@ class MacView : public fotufilm::ViewDelegate {
   // The page's toolbar and the controls on it, in view points, for window dragging.
   CGRect _toolbar;
   std::vector<CGRect> _controls;
+  // The editor's commands that apply now and those ticked, as it last reported them.
+  std::set<std::string> _enabled;
+  std::set<std::string> _checked;
+  NSDictionary<NSString*, NSArray<NSArray<NSString*>*>*>* _menuLists;
+  // Titles and tool tips for items whose wording follows the state (Install → Reinstall).
+  std::map<std::string, std::string> _titles;
+  std::map<std::string, std::string> _toolTips;
+  // The Edit History's steps, as the editor last reported them.
+  NSArray<NSString*>* _history;
+  // Files to open once the editor listens for them.
+  NSMutableArray<NSString*>* _pendingPaths;
+  std::shared_ptr<fotufilm::MacImagePresenter> _presenter;
+  id _screenObserver;
+  BOOL _pageListening;
 }
 
 - (instancetype)initWithURL:(const std::string&)url
@@ -384,18 +504,47 @@ class MacView : public fotufilm::ViewDelegate {
   _window = [[NSWindow alloc]
       initWithContentRect:frame
                 styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
-                          NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable
+                          NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable |
+                          NSWindowStyleMaskFullSizeContentView
                   backing:NSBackingStoreBuffered
                     defer:NO];
   _window.title = @"Fotufilm";
+  // No title bar of its own: the page runs to the top edge and its toolbar is the title bar, as
+  // the Mac app's picture runs behind its unified toolbar. The title still names the window in
+  // the Window menu and Mission Control.
+  _window.titlebarAppearsTransparent = YES;
+  _window.titleVisibility = NSWindowTitleHidden;
   _window.releasedWhenClosed = NO;
   _window.delegate = self;
-  _window.minSize = NSMakeSize(720, 480);
+  _window.minSize = NSMakeSize(720, 520);
   _window.tabbingMode = NSWindowTabbingModeDisallowed;
+  _window.collectionBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
+  _pendingPaths = [NSMutableArray array];
   _view = [[FotufilmHostView alloc] initWithFrame:frame];
   _view.owner = self;
   _window.contentView = _view;
-  [_window center];
+  // The frame last left behind, as the Mac app's editor window reopens; centred the first time.
+  // Its own name, so the two apps each remember their own window.
+  if (![_window setFrameUsingName:@"FotufilmDesktopWindow"]) [_window center];
+  [_window setFrameAutosaveName:@"FotufilmDesktopWindow"];
+  [self placeWindowButtons];
+
+  // The engine writes the photograph into surfaces the compositor draws beneath the page.
+  __weak FotufilmHostView* weakView = _view;
+  _presenter = std::make_shared<fotufilm::MacImagePresenter>(
+      _view.compositor.device,
+      [weakView](const std::string& layer, fotufilm::PresentedFrame frame) {
+        [weakView.compositor presentFrame:std::move(frame) layer:layer];
+      });
+  __weak FotufilmHostWindow* weakSelf = self;
+  _screenObserver = [NSNotificationCenter.defaultCenter
+      addObserverForName:NSApplicationDidChangeScreenParametersNotification
+                  object:nil
+                   queue:NSOperationQueue.mainQueue
+              usingBlock:^(NSNotification*) {
+                [weakSelf screenChanged];
+              }];
+  [self screenChanged];
 
   _delegate = std::make_unique<MacView>(_view, self);
   _client = new fotufilm::Client(dispatcher, _delegate.get());
@@ -444,6 +593,10 @@ class MacView : public fotufilm::ViewDelegate {
           info->SetInt("refreshRate",
                        static_cast<int>(strong->_window.screen.maximumFramesPerSecond));
           info->SetString("gpu", strong->_view.compositor.device.name.UTF8String);
+          NSScreen* screen = strong->_window.screen;
+          info->SetDouble("headroom", screen.maximumExtendedDynamicRangeColorComponentValue);
+          info->SetDouble("potentialHeadroom",
+                          screen.maximumPotentialExtendedDynamicRangeColorComponentValue);
         }
         reply->Resolve(Dictionary(info));
       });
@@ -457,6 +610,20 @@ class MacView : public fotufilm::ViewDelegate {
   };
   _dispatcher->Register("echo", Dispatcher::Thread::kEngine, echo);
   _dispatcher->Register("echoUi", Dispatcher::Thread::kUi, echo);
+
+  // The editor's own Open buttons ({kind: "image" | "video" | "all" | "filmPack"}) use the native
+  // open panel, so what they open is in Open Recent as the menu's opens are. The files arrive as
+  // any native open does; the answer is whether anything was chosen.
+  _dispatcher->Register(
+      "openPanel", Dispatcher::Thread::kUi,
+      [weakSelf](const Call& call, std::shared_ptr<Reply> reply) {
+        FotufilmHostWindow* strong = weakSelf;
+        if (!strong) return reply->Resolve(nullptr);
+        std::string kind = "all";
+        if (call.params && call.params->GetType() == VTYPE_DICTIONARY)
+          kind = call.params->GetDictionary()->GetString("kind").ToString();
+        [strong runOpenPanel:@(kind.c_str()) reply:reply];
+      });
 
   _dispatcher->Register(
       "compositorStats", Dispatcher::Thread::kUi,
@@ -473,12 +640,67 @@ class MacView : public fotufilm::ViewDelegate {
                            values.lastDrawableWaitMicroseconds);
           stats->SetDouble("compositeMicroseconds", values.lastCompositeMicroseconds);
           stats->SetBool("sharedTextures", values.sharedTextures);
+          stats->SetDouble("imageFrames", double(values.imageFrames));
+          stats->SetBool("extendedRange", values.extendedRange);
+          stats->SetDouble("headroom", strong->_presenter->Headroom());
         }
         reply->Resolve(Dictionary(stats));
       });
 
-  // Where the engine's image goes, in CSS pixels from the top left of the page; an empty or
-  // missing rectangle removes it. Without an engine the layer shows a moving test pattern.
+  // What the screen shows, page and image layer together, written to a temporary file whose
+  // path is the answer (diagnostics and checks).
+  _dispatcher->Register(
+      "compositorSnapshot", Dispatcher::Thread::kUi,
+      [weakSelf](const Call&, std::shared_ptr<Reply> reply) {
+        FotufilmHostWindow* strong = weakSelf;
+        if (!strong) return reply->Resolve(nullptr);
+        [strong->_view.compositor snapshot:^(NSString* path) {
+          CefRefPtr<CefValue> value = CefValue::Create();
+          if (path)
+            value->SetString(path.UTF8String);
+          else
+            value->SetNull();
+          reply->Resolve(value);
+        }];
+      });
+
+  // The latency probe: {x, y} in CSS pixels arms it at a point of the window ({} stops it);
+  // probeReport answers the changes seen there and the host's clock, in milliseconds.
+  _dispatcher->Register(
+      "probePixel", Dispatcher::Thread::kUi,
+      [weakSelf](const Call& call, std::shared_ptr<Reply> reply) {
+        FotufilmHostWindow* strong = weakSelf;
+        CefRefPtr<CefDictionaryValue> fields =
+            call.params && call.params->GetType() == VTYPE_DICTIONARY
+                ? call.params->GetDictionary()
+                : nullptr;
+        const bool armed = fields && fields->HasKey("x");
+        if (strong)
+          [strong->_view.compositor
+              probePoint:armed ? CGPointMake(Number(fields, "x"), Number(fields, "y"))
+                               : CGPointMake(NAN, NAN)];
+        reply->Resolve(nullptr);
+      });
+  _dispatcher->Register(
+      "probeReport", Dispatcher::Thread::kUi,
+      [weakSelf](const Call&, std::shared_ptr<Reply> reply) {
+        FotufilmHostWindow* strong = weakSelf;
+        CefRefPtr<CefDictionaryValue> report = CefDictionaryValue::Create();
+        report->SetDouble("now", CACurrentMediaTime() * 1000);
+        CefRefPtr<CefListValue> changes = CefListValue::Create();
+        for (NSDictionary* change in strong ? [strong->_view.compositor probeChanges] : @[]) {
+          CefRefPtr<CefDictionaryValue> entry = CefDictionaryValue::Create();
+          entry->SetDouble("time", [change[@"time"] doubleValue]);
+          entry->SetString("value", [change[@"value"] UTF8String]);
+          changes->SetDictionary(changes->GetSize(), entry);
+        }
+        report->SetList("changes", changes);
+        reply->Resolve(Dictionary(report));
+      });
+
+  // Where the page shows the engine's image layer (presentation/image_layer.h): the canvas's
+  // clip, which frames go where and whether the original shows, in CSS pixels from the top left.
+  // The diagnostics page's {x, y, width, height} asks for the moving test pattern instead.
   _dispatcher->Register(
       "setImageLayer", Dispatcher::Thread::kUi,
       [weakSelf](const Call& call, std::shared_ptr<Reply> reply) {
@@ -488,15 +710,85 @@ class MacView : public fotufilm::ViewDelegate {
             call.params && call.params->GetType() == VTYPE_DICTIONARY
                 ? call.params->GetDictionary()
                 : nullptr;
-        const CGRect rect = CGRectMake(Number(fields, "x"), Number(fields, "y"),
-                                       Number(fields, "width"),
-                                       Number(fields, "height"));
-        if (CGRectIsEmpty(rect))
-          [strong->_view.compositor clearImage];
-        else
-          [strong->_view.compositor setImageTexture:nil rect:rect];
-        [strong->_view setAnimating:!CGRectIsEmpty(rect)];
-        [strong->_view setNeedsRender];
+        fotufilm::LayerRect pattern;
+        fotufilm::ImageLayerGeometry geometry =
+            fotufilm::ParseImageLayerGeometry(fields, &pattern);
+        FotufilmCompositor* compositor = strong->_view.compositor;
+        const CGRect test = CGRectMake(pattern.x, pattern.y, pattern.width, pattern.height);
+        [compositor showTestPattern:test];
+        [strong->_view setAnimating:!CGRectIsEmpty(test)];
+        [compositor placeImageLayer:std::move(geometry)];
+        reply->Resolve(nullptr);
+      });
+
+  // Which of the editor's commands apply and which are ticked, and whether a text field has
+  // focus (web/src/editor/useNativeCommands.js). Menus read it when they validate.
+  _dispatcher->Register(
+      "menuState", Dispatcher::Thread::kUi,
+      [weakSelf](const Call& call, std::shared_ptr<Reply> reply) {
+        FotufilmHostWindow* strong = weakSelf;
+        if (strong && call.params && call.params->GetType() == VTYPE_DICTIONARY) {
+          auto names = [](CefRefPtr<CefDictionaryValue> flags) {
+            std::set<std::string> names;
+            CefDictionaryValue::KeyList keys;
+            if (flags && flags->GetKeys(keys))
+              for (const CefString& key : keys)
+                if (flags->GetType(key) == VTYPE_BOOL && flags->GetBool(key))
+                  names.insert(key.ToString());
+            return names;
+          };
+          auto strings = [](CefRefPtr<CefDictionaryValue> values) {
+            std::map<std::string, std::string> strings;
+            CefDictionaryValue::KeyList keys;
+            if (values && values->GetKeys(keys))
+              for (const CefString& key : keys)
+                if (values->GetType(key) == VTYPE_STRING)
+                  strings[key.ToString()] = values->GetString(key).ToString();
+            return strings;
+          };
+          CefRefPtr<CefDictionaryValue> fields = call.params->GetDictionary();
+          strong->_enabled = names(fields->GetDictionary("enabled"));
+          strong->_checked = names(fields->GetDictionary("checked"));
+          strong->_titles = strings(fields->GetDictionary("titles"));
+          strong->_toolTips = strings(fields->GetDictionary("toolTips"));
+          strong->_pageEditsText = fields->GetBool("textInput");
+          // Submenus the editor fills: {"films": [[command, title], …]}.
+          NSMutableDictionary* lists = [NSMutableDictionary dictionary];
+          if (CefRefPtr<CefDictionaryValue> menus = fields->GetDictionary("menus")) {
+            CefDictionaryValue::KeyList keys;
+            menus->GetKeys(keys);
+            for (const CefString& key : keys) {
+              CefRefPtr<CefListValue> list = menus->GetList(key);
+              NSMutableArray* items = [NSMutableArray array];
+              for (size_t i = 0; list && i < list->GetSize(); ++i) {
+                CefRefPtr<CefListValue> pair = list->GetList(i);
+                if (!pair || pair->GetSize() != 2) continue;
+                [items addObject:@[
+                  @(pair->GetString(0).ToString().c_str()), @(pair->GetString(1).ToString().c_str())
+                ]];
+              }
+              lists[@(key.ToString().c_str())] = items;
+            }
+          }
+          strong->_menuLists = lists;
+          NSMutableArray<NSString*>* history = [NSMutableArray array];
+          if (CefRefPtr<CefListValue> steps = fields->GetList("history"))
+            for (size_t index = 0; index < steps->GetSize(); ++index)
+              [history addObject:@(steps->GetString(index).ToString().c_str())];
+          strong->_history = history;
+        }
+        reply->Resolve(nullptr);
+      });
+
+  // The editor listens for commands and files; those opened before it did (a Finder double-click
+  // at launch) go to it now.
+  _dispatcher->Register(
+      "commandsReady", Dispatcher::Thread::kUi,
+      [weakSelf](const Call&, std::shared_ptr<Reply> reply) {
+        if (FotufilmHostWindow* strong = weakSelf) {
+          strong->_pageListening = YES;
+          [strong deliverOpens];
+        }
         reply->Resolve(nullptr);
       });
 
@@ -521,8 +813,108 @@ class MacView : public fotufilm::ViewDelegate {
         if (CefRefPtr<CefListValue> controls = fields->GetList("controls"))
           for (size_t index = 0; index < controls->GetSize(); ++index)
             strong->_controls.push_back(rect(controls->GetList(index)));
+        [strong placeWindowButtons];
         reply->Resolve(nullptr);
       });
+}
+
+#pragma mark Editor commands
+
+- (void)runOpenPanel:(NSString*)kind reply:(std::shared_ptr<fotufilm::Reply>)reply {
+  NSOpenPanel* panel = [NSOpenPanel openPanel];
+  if ([kind isEqualToString:@"filmPack"]) {
+    if (UTType* pack = [UTType typeWithFilenameExtension:@"fotufilmpack"])
+      panel.allowedContentTypes = @[ pack ];
+    panel.prompt = @"Add";
+    panel.message = @"Choose a Fotufilm film pack to add to your library.";
+  } else if ([kind isEqualToString:@"image"]) {
+    panel.allowedContentTypes = @[ UTTypeImage ];
+  } else if ([kind isEqualToString:@"video"]) {
+    panel.allowedContentTypes = @[ UTTypeMovie ];
+  } else {
+    panel.allowedContentTypes = @[ UTTypeImage, UTTypeMovie ];
+  }
+  panel.allowsMultipleSelection = YES;
+  panel.canChooseDirectories = NO;
+  __weak FotufilmHostWindow* weakSelf = self;
+  [panel beginSheetModalForWindow:_window
+                completionHandler:^(NSModalResponse response) {
+                  const bool chosen = response == NSModalResponseOK && panel.URLs.count;
+                  if (chosen) [weakSelf openURLs:panel.URLs];
+                  CefRefPtr<CefValue> value = CefValue::Create();
+                  value->SetBool(chosen);
+                  reply->Resolve(value);
+                }];
+}
+
+- (void)openURLs:(NSArray<NSURL*>*)urls {
+  for (NSURL* url in urls) {
+    if (!url.isFileURL) continue;
+    [FotufilmRecentFiles note:url];
+    [_pendingPaths addObject:url.path];
+  }
+  [self deliverOpens];
+}
+
+- (void)openSamplePhoto {
+  NSString* path = [NSBundle.mainBundle pathForResource:@"sample" ofType:@"png"];
+  if (!path) return;
+  [_pendingPaths addObject:path];
+  [self deliverOpens];
+}
+
+- (void)deliverOpens {
+  CefRefPtr<CefBrowser> browser = _client->browser();
+  if (!_pageListening || !_pendingPaths.count || !browser) return;
+  CefRefPtr<CefListValue> paths = CefListValue::Create();
+  for (NSString* path in _pendingPaths) paths->SetString(paths->GetSize(), path.UTF8String);
+  [_pendingPaths removeAllObjects];
+  CefRefPtr<CefDictionaryValue> detail = CefDictionaryValue::Create();
+  detail->SetList("paths", paths);
+  fotufilm::Dispatcher::Emit(browser->GetMainFrame(), "open", Dictionary(detail));
+  [_window makeKeyAndOrderFront:nil];
+}
+
+- (void)sendCommand:(NSString*)command {
+  CefRefPtr<CefBrowser> browser = _client->browser();
+  if (!browser) return;
+  CefRefPtr<CefDictionaryValue> detail = CefDictionaryValue::Create();
+  detail->SetString("command", command.UTF8String);
+  fotufilm::Dispatcher::Emit(browser->GetMainFrame(), "command", Dictionary(detail));
+}
+
+- (BOOL)commandEnabled:(NSString*)command {
+  return _enabled.count(command.UTF8String) > 0;
+}
+
+- (NSArray<NSArray<NSString*>*>*)editorMenuItems:(NSString*)menu {
+  return _menuLists[menu] ?: @[];
+}
+
+// Undo and Redo named for the step they change ("titles" carries "undo" and "redo" too).
+- (NSString*)titleForCommand:(NSString*)command {
+  auto title = _titles.find(command.UTF8String);
+  return title == _titles.end() ? nil : @(title->second.c_str());
+}
+
+- (NSArray<NSString*>*)editHistoryTitles {
+  return _history ?: @[];
+}
+
+- (void)performEditorCommand:(id)sender {
+  id command = [sender representedObject];
+  if ([command isKindOfClass:NSString.class]) [self sendCommand:command];
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem*)item {
+  if (item.action != @selector(performEditorCommand:)) return YES;
+  NSString* command = item.representedObject;
+  item.state = _checked.count(command.UTF8String) ? NSControlStateValueOn : NSControlStateValueOff;
+  if (auto title = _titles.find(command.UTF8String); title != _titles.end())
+    item.title = @(title->second.c_str());
+  auto toolTip = _toolTips.find(command.UTF8String);
+  item.toolTip = toolTip == _toolTips.end() ? nil : @(toolTip->second.c_str());
+  return [self commandEnabled:command];
 }
 
 - (CGRect)windowDragRegion:(NSPoint)point {
@@ -543,6 +935,8 @@ class MacView : public fotufilm::ViewDelegate {
 
 - (void)browserClosed {
   _closed = YES;
+  if (_screenObserver) [NSNotificationCenter.defaultCenter removeObserver:_screenObserver];
+  _screenObserver = nil;
   _client->DetachView();
   _view.browser = nullptr;
   [_view setAnimating:NO];
@@ -557,14 +951,66 @@ class MacView : public fotufilm::ViewDelegate {
   return NO;
 }
 
+- (std::shared_ptr<fotufilm::ImagePresenter>)presenter {
+  return _presenter;
+}
+
+// How far above SDR white the window's screen can show light: the potential headroom, which the
+// system grants once the layer asks for EDR. 1 on a screen without EDR.
+- (void)screenChanged {
+  if (!_presenter) return;
+  NSScreen* screen = _window.screen ?: NSScreen.mainScreen;
+  _presenter->SetHeadroom(
+      static_cast<float>(MAX(1.0, screen.maximumPotentialExtendedDynamicRangeColorComponentValue)));
+}
+
+- (void)windowDidChangeScreen:(NSNotification*)notification {
+  [self screenChanged];
+}
+
+// The close, minimise and zoom buttons, centred on the page's toolbar row and inset as they are in
+// the Mac app's unified toolbar. AppKit lays the title bar out again on a resize or a change of
+// key window, so this follows each of them.
+- (void)placeWindowButtons {
+  NSButton* close = [_window standardWindowButton:NSWindowCloseButton];
+  NSView* titlebar = close.superview;
+  NSView* container = titlebar.superview;
+  if (!container || (_window.styleMask & NSWindowStyleMaskFullScreen)) return;
+  const BOOL reported = !CGRectIsNull(_toolbar) && _toolbar.size.height > 0;
+  const CGFloat row = reported ? CGRectGetMaxY(_toolbar) : kToolbarHeight;
+  const CGFloat centre = reported ? CGRectGetMidY(_toolbar) : kToolbarHeight / 2;
+  NSRect frame = container.frame;
+  frame.size.height = row;
+  frame.origin.y = NSHeight(_window.frame) - row;
+  container.frame = frame;
+  titlebar.frame = container.bounds;
+  CGFloat x = kWindowButtonInset;
+  for (NSWindowButton kind : {NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton}) {
+    NSButton* button = [_window standardWindowButton:kind];
+    // The title bar's coordinates run up from its bottom edge.
+    [button setFrameOrigin:NSMakePoint(x, row - centre - NSHeight(button.frame) / 2)];
+    x += kWindowButtonSpacing;
+  }
+}
+
+- (void)windowDidResize:(NSNotification*)notification {
+  [self placeWindowButtons];
+}
+
+- (void)windowDidExitFullScreen:(NSNotification*)notification {
+  [self placeWindowButtons];
+}
+
 - (void)windowDidBecomeKey:(NSNotification*)notification {
   if (CefRefPtr<CefBrowser> browser = _client->browser())
     browser->GetHost()->SetFocus(_window.firstResponder == _view);
+  [self placeWindowButtons];
 }
 
 - (void)windowDidResignKey:(NSNotification*)notification {
   if (CefRefPtr<CefBrowser> browser = _client->browser())
     browser->GetHost()->SetFocus(false);
+  [self placeWindowButtons];
 }
 
 @end

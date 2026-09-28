@@ -82,17 +82,31 @@ public enum EditorControlCatalogue {
         "audio": "Include audio", "export": "Export video", "quality": "Video quality",
         "medium": "Medium", "high": "High", "veryHigh": "Very high",
         "mp4": "MP4 · H.264", "webm": "WebM · VP9", "dismiss": "Dismiss",
+        // The Mac app's Cadence: the rate a clip exports at, kept with its edit.
+        "cadence": "Cadence", "cadenceNative": "Native", "cadence16": "16 fps · silent era",
+        "cadence18": "18 fps · Super 8", "cadence24": "24 fps · cine",
+        "cadenceNote": "Choose the export frame rate. Lower rates hold each frame longer.",
+        "frameRate": "Frame Rate", "frameRateSource": "Source",
     ]
 
     public static let webSelection: [String: Any] = [
         "title": "Selective", "section": "Selection", "kind": "Select By",
         "sample": "Sample a Point", "sampling": "Click the Photo…",
         "mask": "Show Mask", "clear": "Clear Selection", "match": "Match the Photograph",
-        "choices": [["value": "color", "label": "Color"], ["value": "light", "label": "Light"]],
+        // A subject needs the native host's subject detection.
+        "choices": [["value": "color", "label": "Color"], ["value": "light", "label": "Light"],
+                    ["value": "subject", "label": "Subject", "native": true]],
         "sliders": [
             ["key": "range", "label": "Range", "min": 0.05, "max": 0.6, "def": 0.25, "step": 0.01],
             ["key": "softness", "label": "Softness", "min": 0.05, "max": 1.0, "def": 0.5, "step": 0.01],
         ],
+        // A subject's rim against the detector's (negative eats in) and how soft it is.
+        "subjectSliders": [
+            ["key": "subjectEdge", "label": "Edge", "min": -1.0, "max": 1.0, "def": 0.0, "step": 0.01],
+            ["key": "subjectFeather", "label": "Feather", "min": 0.0, "max": 1.0, "def": 0.35, "step": 0.01],
+        ],
+        "subjectsFound": ["Finding subjects…", "No subjects found.", "One subject found.",
+                          "%d subjects found."],
     ]
 
     // Browser inspection controls affect the viewer, not film-engine parameters.
@@ -771,30 +785,32 @@ public enum EditorControlCatalogue {
             section: .filmEmulsion,
             kind: .slider(EditorControlScale(0...3, neutral: 1, unit: .multiplier)),
             availability: .couplerGeometry,
-            scope: .hostOnly,
-            surfaces: [.resolve],
-            omitted: hostOnly.merging([.finalcut: "not yet offered; needs the coupler-geometry gate"]) { $1 },
+            surfaces: [.resolve, .web],
+            omitted: hostOnly.filter { $0.key != .web }
+                .merging([.finalcut: "not yet offered; needs the coupler-geometry gate"]) { $1 },
             host: HostParameter(
                 slot: 47, slotSymbol: "COUPLER_RED_GREEN", ofxName: "couplerRedGreen", group: .couplerAdvanced,
                 label: "Red–Green Reach",
                 hint: "Additional multiplier on Separation for the red–green interlayer.",
                 kind: .double(min: 0, max: 3, value: 1), paramOffset: -1, bridge: .minusOne,
-                clamp: 0...3, order: 10)),
+                clamp: 0...3, order: 10),
+            web: .profile),
         EditorControl(
             .couplerGreenBlue, title: "Green–Blue Reach",
             detail: "Adjust the separation between the green and blue layers.",
             section: .filmEmulsion,
             kind: .slider(EditorControlScale(0...3, neutral: 1, unit: .multiplier)),
             availability: .couplerGeometry,
-            scope: .hostOnly,
-            surfaces: [.resolve],
-            omitted: hostOnly.merging([.finalcut: "not yet offered; needs the coupler-geometry gate"]) { $1 },
+            surfaces: [.resolve, .web],
+            omitted: hostOnly.filter { $0.key != .web }
+                .merging([.finalcut: "not yet offered; needs the coupler-geometry gate"]) { $1 },
             host: HostParameter(
                 slot: 48, slotSymbol: "COUPLER_GREEN_BLUE", ofxName: "couplerGreenBlue", group: .couplerAdvanced,
                 label: "Green–Blue Reach",
                 hint: "Additional multiplier on Separation for the green–blue interlayer.",
                 kind: .double(min: 0, max: 3, value: 1), paramOffset: -1, bridge: .minusOne,
-                clamp: 0...3, order: 20)),
+                clamp: 0...3, order: 20),
+            web: .profile),
         EditorControl(
             .chromaticFringeAmount, title: "Fringe Amount",
             detail: "Add a broader color effect around edges.",

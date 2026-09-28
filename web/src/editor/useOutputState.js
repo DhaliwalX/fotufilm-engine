@@ -1,6 +1,16 @@
+import { useMemo } from "react";
 import { outputSize } from "../geometry.js";
 import { usePrintFrame } from "../usePrintFrame.js";
+import { exportBasis, exportMaxEdge, exportPixels } from "../export-sizes.js";
+// The same size as the last render's keeps its identity, so what reads it is not rendered again.
+function useSize(size) {
+  const { width, height } = size;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => size, [width, height]);
+}
+
 export default function useOutputState({
+  backend,
   stocks,
   search,
   active,
@@ -13,22 +23,27 @@ export default function useOutputState({
   endEdit,
   exporting,
 }) {
-  const visibleStocks = stocks.filter((stock) =>
-    stock.name.toLowerCase().includes(search.toLowerCase()),
+  const visibleStocks = useMemo(
+    () => stocks.filter((stock) => stock.name.toLowerCase().includes(search.toLowerCase())),
+    [stocks, search],
   );
   const rawWidth = active?.image.naturalWidth || 0,
     rawHeight = active?.image.naturalHeight || 0;
   const width = edit.rotation % 2 ? rawHeight : rawWidth,
     height = edit.rotation % 2 ? rawWidth : rawHeight;
-  const cropSize = outputSize(edit.crop, width, height);
-  const exportScale =
-    exportSize === "full"
-      ? 1
-      : Math.min(1, Number(exportSize) / Math.max(width, height));
-  const exportSourceSize = outputSize(
-    edit.crop,
-    Math.max(1, Math.round(width * exportScale)),
-    Math.max(1, Math.round(height * exportScale)),
+  const cropSize = useSize(outputSize(edit.crop, width, height));
+  // A native backend measures an export's long edge on the cropped picture, as the Mac app does.
+  const ofCrop = backend?.longEdgeOfCrop === true;
+  const exportEdge = exportMaxEdge(exportSize, ...exportBasis(width, height, cropSize, ofCrop));
+  const exportScale = Math.min(1, exportEdge / Math.max(width, height));
+  const exportSourceSize = useSize(
+    ofCrop
+      ? exportPixels(exportEdge, width, height, cropSize, true)
+      : outputSize(
+          edit.crop,
+          Math.max(1, Math.round(width * exportScale)),
+          Math.max(1, Math.round(height * exportScale)),
+        ),
   );
   const framedSize = usePrintFrame(
     edit,
@@ -47,7 +62,7 @@ export default function useOutputState({
     width,
     height,
     cropSize,
-    exportScale,
+    exportEdge,
     exportSourceSize,
     framedSize,
     shownResult,

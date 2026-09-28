@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { PreviewQueue } from "./preview-queue.js";
 import { renderViewportImage } from "./viewport-detail-image.js";
+import { useBackend } from "./backend/BackendContext.jsx";
+import { previewBudget } from "./preview-budget.js";
 
-// Wait for 300 ms without movement, then render only the latest viewport.
+// Wait for the backend's detail delay without movement, then render only the latest viewport.
 // Keep the last decoded surface visible and bound work to one active + one pending.
 export function useViewportDetail({
   session,
@@ -12,6 +14,9 @@ export function useViewportDetail({
   onError,
   onBackend,
 }) {
+  const backend = useBackend();
+  const delay = previewBudget(backend).detailDelayMs;
+  const present = backend.imageLayer === true;
   const [detail, setDetail] = useState(null);
   const work = useRef(null);
   const surfaces = useRef(new Set());
@@ -46,6 +51,7 @@ export function useViewportDetail({
             request,
             JSON.parse(viewportKey),
             () => current.cancelled || current.latest !== viewportKey,
+            present,
           );
           if (!next) return;
           surfaces.current.add(next);
@@ -58,9 +64,9 @@ export function useViewportDetail({
               error.message || "Visible image refinement failed.",
             );
         });
-    }, 300);
+    }, delay);
     return () => clearTimeout(timer);
-  }, [session, request, viewportKey, enabled]);
+  }, [session, request, viewportKey, enabled, delay, present]);
 
   // Release the old surface only after React commits its decoded replacement.
   useEffect(() => {

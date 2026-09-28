@@ -173,11 +173,6 @@ export default function CropControls({
                 ))}
             </Picker>
             {geometry("straighten")}
-            <p className="medium-detail">
-              Drag the frame to crop. Four-Corner Crop lets you move each corner
-              independently and straightens the selection when you leave Crop.
-              Choose an aspect ratio to return to a rectangular crop.
-            </p>
             <div className="info-row">
               <span>Crop size</span>
               <span>
@@ -198,10 +193,6 @@ export default function CropControls({
           <div className="control-stack">
             {geometry("perspectiveVertical", "perspectiveV")}
             {geometry("perspectiveHorizontal", "perspectiveH")}
-            <p className="medium-detail">
-              Straighten converging lines caused by camera angle. Strong
-              corrections crop more of the image.
-            </p>
           </div>
         </DisclosurePanel>
       </Disclosure>

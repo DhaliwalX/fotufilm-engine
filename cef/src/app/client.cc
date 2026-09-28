@@ -90,6 +90,10 @@ void Client::OnAcceleratedPaint(CefRefPtr<CefBrowser>,
   if (view_ && type == PET_VIEW) view_->AcceleratedPaint(info);
 }
 
+void Client::UpdateDragCursor(CefRefPtr<CefBrowser>, DragOperation operation) {
+  if (view_) view_->UpdateDragOperation(operation);
+}
+
 void Client::OnTitleChange(CefRefPtr<CefBrowser>, const CefString& title) {
   if (view_) view_->SetTitle(title.ToString());
 }

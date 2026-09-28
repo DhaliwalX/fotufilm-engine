@@ -25,6 +25,11 @@ void BrowserApp::OnBeforeCommandLineProcessing(
   command_line->AppendSwitch("disable-sync");
   command_line->AppendSwitchWithValue("disable-features",
                                       "MediaRouter,Translate");
+#if defined(__APPLE__)
+  // Chromium keeps its cookie key in the login keychain. The editor stores nothing secret in
+  // cookies, and a keychain that is locked, or a prompt nobody answers, stalls every request.
+  command_line->AppendSwitch("use-mock-keychain");
+#endif
 }
 
 void BrowserApp::OnContextInitialized() {
@@ -39,6 +44,9 @@ void BrowserApp::OnBeforeChildProcessLaunch(
                                         options_.dev_origin);
   command_line->AppendSwitchWithValue(switches::kTransportGlobal,
                                       options_.transport_global);
+  if (!options_.capabilities.empty())
+    command_line->AppendSwitchWithValue(switches::kCapabilities,
+                                        options_.capabilities);
 }
 
 ChildApp::ChildApp() : renderer_(new RendererBridge()) {}

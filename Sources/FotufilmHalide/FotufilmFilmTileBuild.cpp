@@ -34,8 +34,10 @@ extern "C" int32_t fotufilm_film_tile_build(int32_t texels, int32_t supersample,
         if (cells < 1 || cells > kFilmBuildMaxCells || cells != std::floor(cells)
             || float(texels * supersample) / cells < 0.75f) return -1;
     }
-    static std::mutex mutex;
-    static std::map<Key, std::unique_ptr<FilmTileBuildPipeline>> pipelines;
+    // Never destroyed, like every pipeline cache here: a warm-up thread still compiling when the
+    // process exits must not find its cache torn down by the exit-time destructors.
+    static std::mutex &mutex = *new std::mutex;
+    static auto &pipelines = *new std::map<Key, std::unique_ptr<FilmTileBuildPipeline>>;
     std::lock_guard<std::mutex> lock(mutex);
     try {
         auto target = Halide::get_host_target();

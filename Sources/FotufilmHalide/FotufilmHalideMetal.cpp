@@ -47,8 +47,10 @@ namespace {
 
 
 GpuHalationFieldsPipeline *halation_fields_pipeline() {
-    static std::unique_ptr<GpuHalationFieldsPipeline> pipeline;
-    static std::mutex pipeline_mutex;
+    // Never destroyed, like every pipeline cache here: a warm-up thread still compiling when the
+    // process exits must not find its cache torn down by the exit-time destructors.
+    static auto &pipeline = *new std::unique_ptr<GpuHalationFieldsPipeline>;
+    static std::mutex &pipeline_mutex = *new std::mutex;
     std::lock_guard<std::mutex> lock(pipeline_mutex);
     if (!pipeline) {
         pipeline = std::make_unique<GpuHalationFieldsPipeline>(
@@ -64,8 +66,8 @@ GpuMeasurePipeline *measure_pipeline_for(GpuMeasurePipeline::Quantity quantity,
                                            bool approximate) {
     const int index = (quantity == GpuMeasurePipeline::Quantity::Flare ? 2 : 0)
         + (approximate ? 1 : 0);
-    static std::unique_ptr<GpuMeasurePipeline> pipelines[4];
-    static std::mutex pipelines_mutex;
+    static auto *const pipelines = new std::unique_ptr<GpuMeasurePipeline>[4]();
+    static std::mutex &pipelines_mutex = *new std::mutex;
     std::lock_guard<std::mutex> lock(pipelines_mutex);
     if (!pipelines[index]) {
         pipelines[index] = std::make_unique<GpuMeasurePipeline>(
@@ -76,8 +78,8 @@ GpuMeasurePipeline *measure_pipeline_for(GpuMeasurePipeline::Quantity quantity,
 
 /// The colour space is coefficient-driven; only the realtime approximation selects a variant.
 GpuDecodePipeline *decode_pipeline(bool approximate) {
-    static std::unique_ptr<GpuDecodePipeline> pipelines[2];
-    static std::mutex pipeline_mutex;
+    static auto *const pipelines = new std::unique_ptr<GpuDecodePipeline>[2]();
+    static std::mutex &pipeline_mutex = *new std::mutex;
     std::lock_guard<std::mutex> lock(pipeline_mutex);
     const int index = approximate ? 1 : 0;
     if (!pipelines[index]) {
@@ -88,12 +90,12 @@ GpuDecodePipeline *decode_pipeline(bool approximate) {
 }
 
 std::unordered_map<int32_t, std::unique_ptr<GpuFramePipeline>> &pipelines_registry() {
-    static std::unordered_map<int32_t, std::unique_ptr<GpuFramePipeline>> pipelines;
+    static auto &pipelines = *new std::unordered_map<int32_t, std::unique_ptr<GpuFramePipeline>>;
     return pipelines;
 }
 
 std::mutex &pipelines_mutex() {
-    static std::mutex mutex;
+    static std::mutex &mutex = *new std::mutex;
     return mutex;
 }
 

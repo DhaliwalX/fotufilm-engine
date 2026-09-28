@@ -78,8 +78,9 @@ function EmptyState({ folders, filtered, onAdd, onClear }) {
 }
 
 // The library view. `onOpenPhotos({items, origin})` receives
-// {key, name, file, edit} per photo, `edit` being the text saved with
-// saveLibraryEdit, and the first tile's on-screen rectangle and thumbnail.
+// {key, name, file} per photo, the key its edit is kept under
+// (loadLibraryEdit/saveLibraryEdit), and the first tile's on-screen rectangle
+// and thumbnail.
 export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
   const library = usePhotoLibrary(open);
   const [thumbnails, setThumbnails] = useState(null);
@@ -165,7 +166,6 @@ export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
           key: photo.key,
           name: photo.name,
           file: await currentFile(photo),
-          edit: library.records.get(photo.key)?.edit ?? null,
         });
       } catch {
         missing.push(photo.name);

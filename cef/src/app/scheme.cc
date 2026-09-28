@@ -54,7 +54,7 @@ class AppSchemeHandlerFactory : public CefSchemeHandlerFactory {
     if (!fs::is_regular_file(file, error)) return NotFound();
 
     CefRefPtr<CefStreamReader> stream =
-        CefStreamReader::CreateForFile(file.string());
+        fs::file_size(file, error) == 0 ? nullptr : CefStreamReader::CreateForFile(file.string());
     if (!stream) return NotFound();
     CefResponse::HeaderMap headers;
     headers.emplace("Cache-Control", "no-cache");
@@ -63,11 +63,13 @@ class AppSchemeHandlerFactory : public CefSchemeHandlerFactory {
   }
 
  private:
+  // CEF gives no reader for empty data, and a handler without one crashes when it is read, so
+  // the refusal carries a body.
   static CefRefPtr<CefResourceHandler> NotFound() {
-    CefRefPtr<CefStreamReader> empty =
-        CefStreamReader::CreateForData(const_cast<char*>(""), 0);
-    return new CefStreamResourceHandler(404, "Not Found", "text/plain", {},
-                                        empty);
+    static char body[] = "Not found";
+    return new CefStreamResourceHandler(
+        404, "Not Found", "text/plain", {},
+        CefStreamReader::CreateForData(body, sizeof(body) - 1));
   }
 
   const fs::path root_;

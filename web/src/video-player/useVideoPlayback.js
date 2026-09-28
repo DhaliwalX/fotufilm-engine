@@ -1,3 +1,4 @@
+import { PLAYBACK_STATE } from "./usePlayerShortcuts.js";
 import { useEffect, useRef, useState } from "react";
 import { createPlayback } from "./playback.js";
 
@@ -30,6 +31,12 @@ export function useVideoPlayback({ start, end, time, onTime, disabled }) {
       controller.dispose();
       transport.current = null;
     };
+  }, []);
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(PLAYBACK_STATE, { detail: { playing: state.playing } }));
+  }, [state.playing]);
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(PLAYBACK_STATE, { detail: { playing: false } }));
   }, []);
   useEffect(() => {
     transport.current?.configure({ start, end, loop, muted, rate, disabled });

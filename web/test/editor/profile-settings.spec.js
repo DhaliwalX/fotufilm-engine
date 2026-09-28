@@ -45,13 +45,13 @@ test("native film settings update pixels, undo, save and full-size export", asyn
   await ready(page);
   const aged = await pixels(page);
   expect(aged).not.toEqual(before);
-  await page.getByRole("button", { name: "Undo (⌘Z)", exact: true }).click();
+  await page.getByRole("button", { name: /^Undo \(/ }).click();
   await expect(
     page.getByRole("spinbutton", { name: "Expired value", exact: true }),
   ).toHaveValue("0");
   await ready(page);
   await expect.poll(() => pixels(page)).toEqual(before);
-  await page.getByRole("button", { name: "Redo (⇧⌘Z)", exact: true }).click();
+  await page.getByRole("button", { name: /^Redo \(/ }).click();
   await ready(page);
   await expect.poll(() => pixels(page)).toEqual(aged);
   await openPanel(page, "Develop");
@@ -81,7 +81,7 @@ test("native film settings update pixels, undo, save and full-size export", asyn
     expired: 10,
     grainModel: "crystals",
   });
-  await page.getByRole("button", { name: "Export (⌘S)", exact: true }).click();
+  await page.getByRole("button", { name: /^Export \(/ }).click();
   const exportPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export", exact: true }).click();
   const png = await readFile(await (await exportPromise).path());
@@ -194,7 +194,7 @@ test("halation curves, chemistry and printer controls retain settings across med
       buffer: savedBytes,
     });
   await ready(page);
-  await page.getByRole("button", { name: "Export (⌘S)", exact: true }).click();
+  await page.getByRole("button", { name: /^Export \(/ }).click();
   const exportDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export", exact: true }).click();
   const png = await readFile(await (await exportDownload).path());

@@ -16,25 +16,8 @@ export function parseLensFilters(edit) {
   return { filters: [...filters], filterMetering };
 }
 export function filterNote(edit) {
-  const filters = edit.filters || [];
-  if (!filters.length)
-    return "Filters change the light before it reaches the film. Color filters change its color, neutral density filters reduce it, and diffusion filters soften highlights.";
-  const lines = [];
-  if (filters.filter(isDiffusion).length > 1)
-    lines.push(
-      "Only the first diffusion filter acts; the rest are ignored, because two halos compose as a convolution of their profiles and not as a product of their numbers.",
-    );
-  if (filters.some((id) => !isDiffusion(id)))
-    lines.push(
-      {
-        none: "Exposure stays fixed, so the filters make the image darker.",
-        throughTheLens:
-          "Compensates for light lost through the filters as a camera meter would. Neutral density is fully compensated; strong color filters can still underexpose.",
-        filmSpeed:
-          "Compensates using the filter factor for this film. This restores exposure in the green-sensitive layer.",
-      }[edit.filterMetering || "throughTheLens"],
-    );
-  return lines.join("\n\n");
+  const diffusion = (edit.filters || []).filter(isDiffusion).length;
+  return diffusion > 1 ? "Only the first diffusion filter acts." : "";
 }
 
 export function filterSwatch(id) {

@@ -6,6 +6,7 @@ import {
   hasProfileSettings,
   profileControlAvailable,
   profileRequestControls,
+  withProfileField,
 } from "../../src/profile-settings.js";
 
 const stock = {
@@ -117,4 +118,12 @@ test("retained controls follow the selected stock and medium without losing save
     ),
     false,
   );
+});
+
+test("a photo's Separation sets both colour pairs, as the Mac app's does", () => {
+  const profile = { couplerReach: 1, couplerRedGreen: 0.5, couplerGreenBlue: 2, couplerSelf: 2 };
+  assert.deepEqual(withProfileField(profile, "couplerReach", 1.2),
+    { couplerReach: 1.2, couplerSelf: 2 });
+  assert.deepEqual(withProfileField(profile, "couplerSelf", undefined),
+    { couplerReach: 1, couplerRedGreen: 0.5, couplerGreenBlue: 2 });
 });

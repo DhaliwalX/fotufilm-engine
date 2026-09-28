@@ -103,7 +103,7 @@ test("Lens controls retain edits on bypass, undo, save/load and export without c
   await expect.poll(() => pixels(page)).toEqual(corrected);
   await page.getByRole("button", { name: "Reset Lens", exact: true }).click();
   await expect.poll(() => pixels(page)).toEqual(before);
-  await page.getByRole("button", { name: "Undo (⌘Z)", exact: true }).click();
+  await page.getByRole("button", { name: /^Undo \(/ }).click();
   await expect(input).toHaveValue("0.8");
   await expect.poll(() => pixels(page)).toEqual(corrected);
   await input.scrollIntoViewIfNeeded();
@@ -139,7 +139,7 @@ test("Lens controls retain edits on bypass, undo, save/load and export without c
       buffer: saved,
     });
   await expect.poll(() => pixels(page)).toEqual(corrected);
-  await page.getByRole("button", { name: "Export (⌘S)", exact: true }).click();
+  await page.getByRole("button", { name: /^Export \(/ }).click();
   const exported = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export", exact: true }).click();
   const png = await readFile(await (await exported).path());

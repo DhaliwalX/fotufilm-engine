@@ -1,4 +1,6 @@
 import AdjustmentGroup from "./AdjustmentGroup.jsx";
+import { WithHelp, controlDetail, controlHelp } from "./ControlHelp.jsx";
+import GradeDeck from "./GradeDeck.jsx";
 import {
   Disclosure,
   DisclosureTitle,
@@ -22,18 +24,20 @@ export default function LightInspector() {
         <DisclosurePanel>
           <div className="control-stack">
             {<AdjustmentGroup group={"Light"} />}
-            <Switch
-              isSelected={edit.localTone}
-              onChange={(value) =>
-                patch({
-                  localTone: value,
-                })
-              }
-              isDisabled={exporting || !active}
-              size="S"
-            >
-              {"Regional"}
-            </Switch>
+            <WithHelp label="Regional" detail={controlDetail("localTone")}>
+              <Switch
+                isSelected={edit.localTone}
+                onChange={(value) =>
+                  patch({
+                    localTone: value,
+                  })
+                }
+                isDisabled={exporting || !active}
+                size="S"
+              >
+                {"Regional"}
+              </Switch>
+            </WithHelp>
           </div>
         </DisclosurePanel>
       </Disclosure>
@@ -48,6 +52,10 @@ export default function LightInspector() {
           <div className="control-stack">
             <Picker
               label={editorControl("sceneLight").title}
+              contextualHelp={controlHelp(
+                editorControl("sceneLight").title,
+                controlDetail("sceneLight"),
+              )}
               size="S"
               value={edit.sceneLight}
               onChange={(sceneLight) => {
@@ -83,9 +91,6 @@ export default function LightInspector() {
             {edit.sceneLight === "custom" && (
               <AdjustmentGroup group={"Source Illuminant"} />
             )}
-            <p className="medium-detail">
-              {editorControl("sceneLight").detail}
-            </p>
           </div>
         </DisclosurePanel>
       </Disclosure>
@@ -123,31 +128,22 @@ export default function LightInspector() {
       >
         <DisclosureTitle>{"Grade"}</DisclosureTitle>
         <DisclosurePanel>
-          <div className="control-stack">
-            <Switch
-              isSelected={edit.gradeSpace}
-              onChange={(value) =>
-                patch({
-                  gradeSpace: value,
-                })
-              }
-              isDisabled={exporting || !active}
-              size="S"
-            >
-              {"Encoded Grade"}
-            </Switch>
-            {["Shadows", "Midtones", "Highlights"].map((band) => (
-              <div
-                className="grade-band"
-                key={band}
-                role="group"
-                aria-label={band}
+          <GradeDeck>
+            <WithHelp label="Encoded Grade" detail={controlDetail("gradeSpace")}>
+              <Switch
+                isSelected={edit.gradeSpace}
+                onChange={(value) =>
+                  patch({
+                    gradeSpace: value,
+                  })
+                }
+                isDisabled={exporting || !active}
+                size="S"
               >
-                <h3>{band}</h3>
-                {<AdjustmentGroup group={band} />}
-              </div>
-            ))}
-          </div>
+                {"Encoded Grade"}
+              </Switch>
+            </WithHelp>
+          </GradeDeck>
         </DisclosurePanel>
       </Disclosure>
     </>

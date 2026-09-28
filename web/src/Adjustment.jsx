@@ -1,8 +1,12 @@
+import { useState } from "react";
+import { flushSync } from "react-dom";
 import useCompactLayout from "./useCompactLayout.js";
 import { Slider } from "@react-spectrum/s2/Slider";
 import { NumberField } from "@react-spectrum/s2/NumberField";
 import { SLIDERS } from "./editor-state.js";
 import { clamp } from "./color-controls.js";
+import { Glyph, sliderEnds } from "./glyphs.jsx";
+import { controlDetail, controlHelp } from "./editor/ControlHelp.jsx";
 export function Adjustment({
   slider,
   value,
@@ -15,11 +19,23 @@ export function Adjustment({
     ? `${slider.group} ${slider.label}`
     : slider.label;
   const temperature = slider.key === "temperature";
-  const rangeValue = temperature ? 1e6 / value : value;
+  // The knob follows the pointer on its own, drawn in the frame the pointer moved; the editor
+  // takes the value in its own time, so a large page never holds the knob back.
+  const [dragged, setDragged] = useState(null);
+  const rangeValue = dragged ?? (temperature ? 1e6 / value : value);
+  const settle = () => {
+    setDragged(null);
+    onEnd?.();
+  };
+  // What the slider's low and high ends look like, as the Mac app draws them beside the track.
+  const ends = sliderEnds(slider.key);
   return (
     <div className="adjustment">
       <div className="adjustment-label">
-        <span>{slider.label}</span>
+        <span className="adjustment-name">
+          {slider.label}
+          {controlHelp(accessibleLabel, slider.detail ?? controlDetail(slider.key))}
+        </span>
         <div className="number-field">
           <NumberField
             aria-label={`${accessibleLabel} value`}
@@ -44,25 +60,30 @@ export function Adjustment({
           />
         </div>
       </div>
-      <Slider
-        size="S"
-        UNSAFE_className="adjustment-slider"
-        aria-label={accessibleLabel}
-        isDisabled={disabled}
-        minValue={temperature ? 1e6 / slider.max : slider.min}
-        maxValue={temperature ? 1e6 / slider.min : slider.max}
-        step={temperature ? 0.1 : slider.step}
-        value={rangeValue}
-        onChange={(next) =>
-          onChange(temperature ? Math.round(1e6 / next) : next)
-        }
-        onChangeEnd={onEnd}
-        onBlur={onEnd}
-        onDoubleClick={() => {
-          onChange(slider.def);
-          onEnd?.();
-        }}
-      />
+      <div className="adjustment-track">
+        {ends && <Glyph name={ends.low} size={20} className="adjustment-end" />}
+        <Slider
+          size="S"
+          UNSAFE_className="adjustment-slider"
+          aria-label={accessibleLabel}
+          isDisabled={disabled}
+          minValue={temperature ? 1e6 / slider.max : slider.min}
+          maxValue={temperature ? 1e6 / slider.min : slider.max}
+          step={temperature ? 0.1 : slider.step}
+          value={rangeValue}
+          onChange={(next) => {
+            flushSync(() => setDragged(next));
+            onChange(temperature ? Math.round(1e6 / next) : next);
+          }}
+          onChangeEnd={settle}
+          onBlur={settle}
+          onDoubleClick={() => {
+            onChange(slider.def);
+            settle();
+          }}
+        />
+        {ends && <Glyph name={ends.high} size={20} className="adjustment-end" />}
+      </div>
     </div>
   );
 }

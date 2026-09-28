@@ -6,6 +6,7 @@ import StockButton from "./StockButton.jsx";
 import { SearchField } from "@react-spectrum/s2/SearchField";
 import { Icon } from "../icons.jsx";
 import { StockRow } from "./StockRow.jsx";
+import { useThumbnailSource } from "./useThumbnail.js";
 import { useEditor } from "./EditorContext.jsx";
 export default function FilmLibrary() {
   const {
@@ -23,7 +24,10 @@ export default function FilmLibrary() {
     setPanel,
     setFilmOpen,
     setInspectorOpen,
+    backend,
+    videoTime,
   } = useEditor();
+  const settled = useThumbnailSource({ active, edit, videoTime, backend });
   const list = useRef(null);
   const reducedMotion = useReducedMotion();
   const displayedStocks = compactLayout ? stocks : visibleStocks;
@@ -105,7 +109,9 @@ export default function FilmLibrary() {
             key={stock.id}
             stock={stock}
             active={edit.stock === stock.id}
-            image={active?.image.video ? null : active?.image}
+            image={settled.image}
+            edit={settled.edit}
+            videoTime={settled.videoTime}
             session={session}
             previewSize={previewSize}
             onSelect={() => selectStock(stock.id)}

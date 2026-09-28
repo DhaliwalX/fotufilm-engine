@@ -1,11 +1,21 @@
 import { ActionButton } from "@react-spectrum/s2/ActionButton";
 import { Menu, MenuItem, MenuTrigger } from "@react-spectrum/s2/Menu";
 import { VIDEO_LABELS as labels } from "../generated/controls.js";
+import { Tooltip, TooltipTrigger } from "@react-spectrum/s2/Tooltip";
 import PlayerButton from "./PlayerButton.jsx";
+import { setAppSetting, useAppSetting } from "../app-settings.js";
+import {
+  PLAYBACK_QUALITIES,
+  PLAYBACK_QUALITY_HELP,
+} from "./playback-quality.js";
 
-export default function VideoTransport({ playback, disabled, children }) {
+const qualityLabel = (id) =>
+  (PLAYBACK_QUALITIES.find((quality) => quality.id === id) ?? PLAYBACK_QUALITIES[2]).label;
+
+export default function VideoTransport({ playback, disabled, quality = false, children }) {
   const { playing, loop, setLoop, muted, setMuted, rate, setRate, transport } =
     playback;
+  const playbackQuality = useAppSetting("videoPlaybackQuality");
   return (
     <div className="video-transport">
       <div className="video-transport-group">
@@ -68,6 +78,33 @@ export default function VideoTransport({ playback, disabled, children }) {
             ))}
           </Menu>
         </MenuTrigger>
+        {quality && (
+          <MenuTrigger>
+            <TooltipTrigger>
+              <ActionButton
+                aria-label={`Playback quality: ${qualityLabel(playbackQuality)}`}
+                isQuiet
+                size="M"
+                isDisabled={disabled}
+              >
+                <span className="video-speed">{qualityLabel(playbackQuality)}</span>
+              </ActionButton>
+              <Tooltip>{PLAYBACK_QUALITY_HELP}</Tooltip>
+            </TooltipTrigger>
+            <Menu
+              aria-label="Playback quality"
+              selectionMode="single"
+              selectedKeys={[playbackQuality]}
+              onAction={(key) => setAppSetting("videoPlaybackQuality", String(key))}
+            >
+              {PLAYBACK_QUALITIES.map(({ id, label }) => (
+                <MenuItem key={id} id={id}>
+                  {label}
+                </MenuItem>
+              ))}
+            </Menu>
+          </MenuTrigger>
+        )}
         {children}
       </div>
     </div>

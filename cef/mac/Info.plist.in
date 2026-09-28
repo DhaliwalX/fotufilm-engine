@@ -6,10 +6,65 @@
   <string>en</string>
   <key>CFBundleDisplayName</key>
   <string>Fotufilm Desktop</string>
+  <!-- Offered in Open With and accepted on the Dock icon, without claiming any type. -->
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Photo or Video</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>public.image</string>
+        <string>public.movie</string>
+      </array>
+    </dict>
+    <!-- Installed into the Mac app's pack library; the Mac app remains the owner. -->
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Film Pack</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>com.muastudio.fotufilm.pack</string>
+      </array>
+    </dict>
+  </array>
+  <!-- The Mac app exports the pack type; this app only reads it. -->
+  <key>UTImportedTypeDeclarations</key>
+  <array>
+    <dict>
+      <key>UTTypeIdentifier</key>
+      <string>com.muastudio.fotufilm.pack</string>
+      <key>UTTypeDescription</key>
+      <string>Fotufilm Film Pack</string>
+      <key>UTTypeConformsTo</key>
+      <array>
+        <string>public.data</string>
+      </array>
+      <key>UTTypeTagSpecification</key>
+      <dict>
+        <key>public.filename-extension</key>
+        <array>
+          <string>fotufilmpack</string>
+        </array>
+      </dict>
+    </dict>
+  </array>
   <key>CFBundleExecutable</key>
   <string>${EXECUTABLE_NAME}</string>
   <key>CFBundleIdentifier</key>
   <string>com.fotufilm.desktop</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
+  <key>CFBundleIconName</key>
+  <string>AppIcon</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
@@ -20,12 +75,40 @@
   <string>${FOTUFILM_MARKETING_VERSION}</string>
   <key>CFBundleVersion</key>
   <string>${FOTUFILM_PROJECT_VERSION}</string>
+  <!-- Check for Updates reads one JSON release document (FotufilmUpdate's UpdateManifest) from
+       here. Fotufilm Desktop has a feed of its own: the Mac app's names its AppKit installer. -->
+  <key>FotufilmUpdateFeedURL</key>
+  <string>https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-Desktop-macOS-update.json</string>
   <key>LSMinimumSystemVersion</key>
   <string>12.0</string>
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key>
   <true/>
+  <!-- The native Mac app's Finder service, named for this app. -->
+  <key>NSServices</key>
+  <array>
+    <dict>
+      <key>NSMenuItem</key>
+      <dict>
+        <key>default</key>
+        <string>Open in ${PRODUCT_NAME}</string>
+      </dict>
+      <key>NSMessage</key>
+      <string>openInFotufilm</string>
+      <key>NSPortName</key>
+      <string>${PRODUCT_NAME}</string>
+      <key>NSSendFileTypes</key>
+      <array>
+        <string>public.image</string>
+        <string>public.movie</string>
+      </array>
+      <key>NSRequiredContext</key>
+      <dict/>
+      <key>NSServiceDescription</key>
+      <string>Open the selected photos or videos in ${PRODUCT_NAME}.</string>
+    </dict>
+  </array>
   <key>NSPrincipalClass</key>
   <string>FotufilmApplication</string>
 </dict>

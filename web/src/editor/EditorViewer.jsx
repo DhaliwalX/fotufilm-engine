@@ -9,7 +9,7 @@ import { Button } from "@react-spectrum/s2/Button";
 import { ActionButton } from "@react-spectrum/s2/ActionButton";
 import ViewerStatus from "./ViewerStatus.jsx";
 import PhotoStrip from "./PhotoStrip.jsx";
-import { useEditor } from "./EditorContext.jsx";
+import { useEditor, useEditorFrame } from "./EditorContext.jsx";
 export default function EditorViewer() {
   const {
     startupProgress,
@@ -18,17 +18,14 @@ export default function EditorViewer() {
     acceptFiles,
     active,
     sampling,
-    shownResult,
     edit,
     patch,
+    backend,
     setSampling,
     setError,
     setDetailBackend,
     session,
-    detailRequest,
-    previewInteracting,
     exporting,
-    previewKey,
     setViewerMoving,
     zoom,
     cropMode,
@@ -42,7 +39,6 @@ export default function EditorViewer() {
     endEdit,
     histogram,
     setHistogram,
-    videoTime,
     setVideoTime,
     openFiles,
     importStatus,
@@ -53,6 +49,8 @@ export default function EditorViewer() {
     setLibraryError,
     files,
   } = useEditor();
+  const { videoTime, shownResult, previewKey, detailRequest, previewInteracting } =
+    useEditorFrame();
   const sample = useSceneSampling({
     shownResult,
     sampling,
@@ -161,6 +159,13 @@ export default function EditorViewer() {
                     })
                   }
                   disabled={exporting || cropMode}
+                  // Retiming is the native exporter's; the browser's keeps the source's rate.
+                  cadence={!!backend.videoFrameRates}
+                  playbackQuality={!!backend.playbackQuality}
+                  frameSize={{
+                    width: active.image.naturalWidth,
+                    height: active.image.naturalHeight,
+                  }}
                 />
               )}
             </>

@@ -32,4 +32,17 @@ export function usePlayerShortcuts(root, playback, disabled) {
     viewer.addEventListener("keydown", keydown);
     return () => viewer.removeEventListener("keydown", keydown);
   }, [root, playback.transport, playback.muted, disabled]);
+
+  // View › Play from a native menu (useNativeCommands.js): the same toggle as Space.
+  useEffect(() => {
+    const toggle = () => {
+      if (!disabled) playback.transport.current?.toggle();
+    };
+    window.addEventListener(PLAYBACK_TOGGLE, toggle);
+    return () => window.removeEventListener(PLAYBACK_TOGGLE, toggle);
+  }, [playback.transport, disabled]);
 }
+
+export const PLAYBACK_TOGGLE = "fotufilm-playback-toggle";
+// Sent with {playing} whenever a clip starts or stops, for View › Play to say Pause.
+export const PLAYBACK_STATE = "fotufilm-playback-state";

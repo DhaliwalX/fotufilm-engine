@@ -112,9 +112,12 @@ export const defaultEdit = (stock = null) => ({
   sourceInterpretation: "automatic",
   filterMetering: "throughTheLens",
   medium: null,
+  // Match Film: the medium follows the film, to each film's own, as the Mac app's does.
+  mediumFollowsFilm: false,
   printFrame: "none",
   digitalReference: "auto-levels",
-  video: { encoding: "standard", trimStart: 0, trimEnd: null, audio: true },
+  // `frameRate` is the clip's cadence, the rate it exports at; null keeps the source's.
+  video: { encoding: "standard", trimStart: 0, trimEnd: null, audio: true, frameRate: null },
   halationModel: "legacy",
   sceneLight: "unspecified",
   selective: null,
@@ -142,6 +145,9 @@ export function historyReducer(state, action) {
   if (action.type === "load")
     return { past: [], present: action.edit, future: [], group: null };
   if (action.type === "end") return { ...state, group: null };
+  // A change the app made for the photograph (a suggested film), not a step to undo.
+  if (action.type === "replace")
+    return { ...state, present: { ...state.present, ...action.patch } };
   if (action.type === "undo") {
     if (!state.past.length) return state;
     return {
@@ -157,6 +163,21 @@ export function historyReducer(state, action) {
       past: [...state.past, state.present],
       present: state.future[0],
       future: state.future.slice(1),
+      group: null,
+    };
+  }
+  // A step of the Edit History (web/src/edit-history.js): the timeline stays whole, as a run of
+  // undos or redos would leave it.
+  if (action.type === "goTo") {
+    const states = [...state.past, state.present, ...state.future];
+    const index = action.index;
+    if (!Number.isInteger(index) || index < 0 || index >= states.length)
+      return state;
+    if (index === state.past.length) return state;
+    return {
+      past: states.slice(0, index),
+      present: states[index],
+      future: states.slice(index + 1),
       group: null,
     };
   }
@@ -244,7 +265,7 @@ export function parseEdit(json, stockIDs) {
   if (edit.selective != null) {
     const local = edit.selective;
     if (
-      !["color", "light"].includes(local.kind) ||
+      !["color", "light", "subject"].includes(local.kind) ||
       typeof local.localTone !== "boolean" ||
       typeof local.gradeSpace !== "boolean" ||
       !Number.isFinite(local.range) ||
@@ -253,6 +274,10 @@ export function parseEdit(json, stockIDs) {
       !Number.isFinite(local.softness) ||
       local.softness < 0.05 ||
       local.softness > 1 ||
+      (local.subjectEdge != null &&
+        !(Math.abs(local.subjectEdge) <= 1)) ||
+      (local.subjectFeather != null &&
+        !(local.subjectFeather >= 0 && local.subjectFeather <= 1)) ||
       (local.point !== null &&
         (!Array.isArray(local.point) ||
           local.point.length !== 2 ||
@@ -281,7 +306,11 @@ export function parseEdit(json, stockIDs) {
       (edit.video.trimEnd !== null &&
         (!Number.isFinite(edit.video.trimEnd) ||
           edit.video.trimEnd <= edit.video.trimStart)) ||
-      typeof edit.video.audio !== "boolean")
+      typeof edit.video.audio !== "boolean" ||
+      (edit.video.frameRate != null &&
+        (!Number.isFinite(edit.video.frameRate) ||
+          edit.video.frameRate <= 0 ||
+          edit.video.frameRate > 240)))
   )
     throw new Error("Invalid video settings.");
   if (
@@ -295,6 +324,8 @@ export function parseEdit(json, stockIDs) {
     edit.medium != null &&
     (typeof edit.medium !== "string" || !/^[a-z0-9-]+$/.test(edit.medium))
   )
+    throw new Error("Invalid output medium.");
+  if (edit.mediumFollowsFilm != null && typeof edit.mediumFollowsFilm !== "boolean")
     throw new Error("Invalid output medium.");
   if (
     edit.halationModel != null &&
@@ -353,9 +384,10 @@ export function parseEdit(json, stockIDs) {
     perspectiveH: edit.perspectiveH ?? 0,
     cropShape: edit.cropShape ?? "corners",
     medium: edit.medium ?? null,
+    mediumFollowsFilm: edit.mediumFollowsFilm === true,
     printFrame: parsePrintFrame(edit.printFrame),
     digitalReference: edit.digitalReference ?? "auto-levels",
-    video: edit.video ?? base.video,
+    video: edit.video ? { ...base.video, ...edit.video } : base.video,
     halationModel: edit.halationModel ?? "legacy",
     sceneLight: edit.sceneLight ?? "unspecified",
     selective: edit.selective

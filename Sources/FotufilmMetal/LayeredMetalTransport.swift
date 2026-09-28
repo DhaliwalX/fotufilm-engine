@@ -37,12 +37,24 @@ public enum LayeredMetalTransport {
                     linearRGBA: $0.baseAddress!, width: image.width, height: image.height)
             }
         }
-        var output = input
+        // LIGHT_OUT produces a three-channel light grid. Transport clears the legacy
+        // halation radii, so its grid has unit stride and retains every source pixel.
+        // The ordinary float entry point promises RGBA and cannot receive this AOT variant.
+        let channels = lightOnly ? 3 : 4
+        var output = [Float](repeating: 0, count: image.pixelCount * channels)
         let status = input.withUnsafeBufferPointer { source in
             output.withUnsafeMutableBufferPointer { destination in
                 invocation.configuration.withUnsafeBufferPointer { config in
                     invocation.withSpectralPointers { exposure, film, paper in
-                        fotufilm_halide_metal_process_linear_float(source.baseAddress, destination.baseAddress,
+                        if lightOnly {
+                            return fotufilm_halide_metal_process_light_grid(
+                                source.baseAddress, destination.baseAddress,
+                                Int32(image.width), Int32(image.height), 0, Int32(image.height),
+                                0, 0, config.baseAddress, exposure, film, paper,
+                                Int32(invocation.spectral.exposure.dimension),
+                                invocation.spectralCacheID, invocation.featureMask, invocation.seed)
+                        }
+                        return fotufilm_halide_metal_process_linear_float(source.baseAddress, destination.baseAddress,
                             Int32(image.width), Int32(image.height), 0, 0, config.baseAddress,
                             exposure, film, paper, Int32(invocation.spectral.exposure.dimension),
                             invocation.spectralCacheID, invocation.featureMask, invocation.seed)
@@ -52,7 +64,7 @@ public enum LayeredMetalTransport {
         }
         guard status == 0 else { throw TransportError.backend("Metal transport stage failed (\(status))") }
         var result = image
-        for c in 0..<3 { for i in 0..<image.pixelCount { result.planes[c][i] = output[4*i+c] } }
+        for c in 0..<3 { for i in 0..<image.pixelCount { result.planes[c][i] = output[channels*i+c] } }
         return result
     }
 

@@ -207,28 +207,9 @@ if let scanPath = flags["--suggest-film"] {
 
 if flags["--list-web-media"] != nil {
     let records: [[String: Any]] = FilmStock.presets.sorted(by: { $0.key < $1.key }).map { id, stock in
-        ["id": id, "default": PrintPaper.default(for: stock).id,
-         "choices": PrintPaper.choices(for: stock).map { medium -> [String: Any] in
-             var entry: [String: Any] = ["id": medium.id, "name": medium.name, "detail": medium.detail]
-             if medium == .screen && !stock.isReflectionPrint {
-                 let fixed = DigitalReferenceStyle.autoLevels.receiverLevels(for: stock)
-                 entry["screenConversions"] = DigitalReferenceStyle.allCases.map { style -> [String: Any] in
-                     var conversion: [String: Any] = ["id": style.id, "name": style.name, "detail": style.detail]
-                     if style == .autoLevels {
-                         // Native-solved affine samples; browser hosts interpolate the small table
-                         // rather than reproducing film characteristic curves in JavaScript.
-                         conversion["meter"] = ["min": 0.5, "max": 12.0,
-                             "adjustments": (0...512).map { i -> [Float] in
-                                 let levels = style.receiverLevels(for: stock,
-                                     sceneHighlightStops: 0.5 + Float(i) * 11.5 / 512)
-                                 return [levels.scale / fixed.scale, levels.shift - fixed.shift]
-                             }]
-                     }
-                     return conversion
-                 }
-             }
-             return entry
-         }]
+        var record = WebStockCatalogue.media(for: stock)
+        record["id"] = id
+        return record
     }
     do {
         let data = try JSONSerialization.data(withJSONObject: records, options: [.sortedKeys])
@@ -248,7 +229,7 @@ if let destination = flags["--dump-web-scene"] {
         let records: [(String, FilmStock)] = FilmStock.presetIDs.flatMap { id -> [(String, FilmStock)] in
             guard let stock = FilmStock.named(id) else { return [] }
             var bare = stock
-            bare.spectralProfile = idealizedCapture(stock.spectralProfile)
+            bare.spectralProfile = PipelineWalk.idealizedCapture(stock.spectralProfile)
             return [(id, stock), (id + "@bypassed", bare)]
         }
         let catalog = try JSONSerialization.data(withJSONObject: WebSceneLight.catalog(stocks: records),
@@ -508,127 +489,17 @@ if let path = flags["--open-pack"] {
 /// Image cannot represent that color internally because its working images are premultiplied, so
 /// expose the same provider once with the alpha sample marked as padding. The ordinary decode still
 /// supplies alpha; this image supplies only the RGB that must survive until scene compositing.
-func associatedOpenEXRColor(url: URL) -> CIImage? {
-    guard url.pathExtension.lowercased() == "exr",
-          let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-          CGImageSourceGetType(source) as String? == "com.ilm.openexr-image" else {
-        return nil
-    }
-    let options = [
-        kCGImageSourceShouldCache: false,
-        kCGImageSourceShouldAllowFloat: true,
-    ] as CFDictionary
-    guard let decoded = CGImageSourceCreateImageAtIndex(source, 0, options),
-          let color = AssociatedAlphaImage.colorSamples(from: decoded) else {
-        return nil
-    }
-    return CIImage(cgImage: color)
-}
-
-/// Loads any supported image as associated scene-referred linear Rec.2020 RGBA, preserving values
-/// above 1 for HDR/raw sources. Association is retained until the caller composites the scene.
-func loadLinear(path: String)
-    -> (rgba: [Float], width: Int, height: Int, sceneKelvin: Float?, sceneChromaticity: SIMD2<Float>?, contentHeadroom: Float) {
-    let url = URL(fileURLWithPath: path)
-    let isRaw = RawDecode.isRaw(url: url)
-    let declaredHeadroom = isRaw ? nil : GainMapHeadroom.declared(url: url)
-    let context = CIContext(options: [.useSoftwareRenderer: true, .cacheIntermediates: false])
-    var image: CIImage?
-    var sceneKelvin: Float?
-    var sceneChromaticity: SIMD2<Float>?
-    var contentHeadroom: Float = 1
-    var profileCorrection: CameraProfileCorrection.Resolved?
-    var associatedEXRColor: CIImage?
-    if isRaw {
-        guard let raw = CIRAWFilter(imageURL: url) else {
-            fail("Could not read raw file: \(path)")
-        }
-        // Decode at the file's complete as-shot white once. Edits change the spectral lamp.
-        let white = raw.neutralChromaticity
-        let xy = SIMD2<Float>(Float(white.x), Float(white.y))
-        if xy.x > 0 && xy.y > 0 && xy.x + xy.y < 1 {
-            sceneChromaticity = xy
-        }
-        sceneKelvin = raw.neutralTemperature > 0 ? raw.neutralTemperature : nil
-        RawDecode.configure(raw, recipe: RawDecode.Recipe())
-        profileCorrection = CameraProfileCorrection.resolve(
-            camera: RawDecode.cameraIdentity(url: url),
-            sceneKelvin: sceneKelvin)
-        image = raw.outputImage
-    } else {
-        associatedEXRColor = associatedOpenEXRColor(url: url)
-        if #available(macOS 14.0, *) {
-            image = CIImage(contentsOf: url, options: [.expandToHDR: true])
-        }
-        if image == nil {
-            image = CIImage(contentsOf: url)
-        }
-        // The declared range, the app's rule exactly (`FilmRender`): the decoded image's own
-        // statement when the platform reports one, and the file's own — a gain map's stated
-        // ceiling, or the fixed one an HLG/PQ container stands for — when a declaring file
-        // decodes to a neutral report. Raw never declares: its above-white light is the
-        // negative's own path and is not rolled.
-        if #available(macOS 15.0, *), let decoded = image {
-            contentHeadroom = max(1, decoded.contentHeadroom)
-        }
-        if contentHeadroom <= 1, let declaredHeadroom {
-            contentHeadroom = declaredHeadroom
-        }
-    }
-    // An HLG or PQ file decodes as display light; its range is the scene's, stated by its transfer.
-    let hdrTransfer = isRaw ? nil : GainMapHeadroom.transfer(url: url)
-    if let hdrTransfer { contentHeadroom = hdrTransfer.sceneHeadroom }
-    // Share the apps' eligibility rule and compare full-source renditions before crop or resize.
-    if #available(macOS 14.0, *),
-       ProcessedHDRExposure.isEligible(isRaw: isRaw, declaredHeadroom: declaredHeadroom),
-       let hdr = image,
-       let reference = CIImage(contentsOf: url, options: [.toneMapHDRtoSDR: true]) {
-        let gain = ProcessedHDRExposure.referenceGain(
-            expandedHDR: hdr, sdrReference: reference, context: context)
-        image = ProcessedHDRExposure.applying(gain, to: hdr)
-    }
-    guard let ci = image else {
-        fail("Could not read image: \(path)")
-    }
-    let width = Int(ci.extent.width.rounded()), height = Int(ci.extent.height.rounded())
-    guard width > 0, height > 0, ci.extent.isInfinite == false else {
-        fail("Image has no finite extent: \(path)")
-    }
-    guard let space = CGColorSpace(name: CGColorSpace.extendedLinearITUR_2020) else {
-        fail("No extended linear Rec.2020 color space available")
-    }
-    var rgba = [Float](repeating: 0, count: width * height * 4)
-    rgba.withUnsafeMutableBytes { buffer in
-        context.render(ci, toBitmap: buffer.baseAddress!, rowBytes: width * 16,
-                       bounds: ci.extent, format: .RGBAf, colorSpace: space)
-    }
-    if let associatedEXRColor,
-       Int(associatedEXRColor.extent.width.rounded()) == width,
-       Int(associatedEXRColor.extent.height.rounded()) == height {
-        var alpha = [Float](repeating: 1, count: width * height)
-        for pixel in 0..<(width * height) { alpha[pixel] = rgba[pixel * 4 + 3] }
-        rgba.withUnsafeMutableBytes { buffer in
-            context.render(associatedEXRColor, toBitmap: buffer.baseAddress!,
-                           rowBytes: width * 16, bounds: associatedEXRColor.extent,
-                           format: .RGBAf, colorSpace: space)
-        }
-        for pixel in 0..<(width * height) { rgba[pixel * 4 + 3] = alpha[pixel] }
-    }
-    if hdrTransfer != nil {
-        for pixel in 0..<(width * height) {
-            let scene = GainMapHeadroom.Transfer.sceneLight(SIMD3(
-                rgba[pixel * 4], rgba[pixel * 4 + 1], rgba[pixel * 4 + 2]))
-            rgba[pixel * 4] = scene.x
-            rgba[pixel * 4 + 1] = scene.y
-            rgba[pixel * 4 + 2] = scene.z
-        }
-    }
-    if let corrected = profileCorrection {
-        CameraProfileCorrection.apply(corrected.matrix, toRGBA: &rgba)
+/// Loads any supported image as associated scene-referred linear Rec.2020 RGBA (`SceneImage`),
+/// reporting a camera profile match.
+func loadLinear(path: String) -> SceneImage {
+    let image: SceneImage
+    do { image = try SceneImage.decode(url: URL(fileURLWithPath: path)) }
+    catch { fail(String(describing: error)) }
+    if let profile = image.cameraProfile {
         print(String(format: "Camera profile: %@ at %.0f K, max deviation %.4f",
-                     corrected.profileID, corrected.cct, corrected.maxDeviation))
+                     profile.profileID, profile.cct, profile.maxDeviation))
     }
-    return (rgba, width, height, sceneKelvin, sceneChromaticity, contentHeadroom)
+    return image
 }
 
 func parseLinearBackground(_ value: String?) -> SIMD3<Float> {
@@ -744,17 +615,8 @@ func saveReflectance(_ rgba: [Float], width: Int, height: Int, path: String,
                      depth: Int, seed: UInt64, shoulderKnee: Float) {
     let n = width * height
     if depth <= 8 {
-        var pixels = [UInt8](repeating: 255, count: n * 4)
-        let ditherSeed = UInt32(truncatingIfNeeded: seed)
-        for i in 0..<n {
-            for c in 0..<3 {
-                let v = ColorScience.linearToSrgb(ColorScience.displayShoulder(
-                    rgba[i * 4 + c], knee: shoulderKnee))
-                let dither = triangularDither(index: UInt32(i), channel: UInt32(c), seed: ditherSeed)
-                pixels[i * 4 + c] = UInt8(clamp(v * 255 + 0.5 + dither, 0, 255))
-            }
-            pixels[i * 4 + 3] = UInt8(clamp(rgba[i * 4 + 3] * 255 + 0.5, 0, 255))
-        }
+        let pixels = DisplayEncoding.encode8(rgba, width: width, height: height, knee: shoulderKnee,
+                                             seed: UInt32(truncatingIfNeeded: seed))
         saveRGBA8(pixels, width: width, height: height, path: path)
         return
     }
@@ -920,132 +782,6 @@ if let diffPath = flags["--diff"] {
 
 // The pack export names its own output and reads no image, so it is the one mode that resolves a
 // stock without an input/output pair.
-/// Ideal capture: narrow, non-overlapping layer sensitivities on the sRGB
-/// primaries, so each layer records exactly one primary and the emulsion has no
-/// spectral crosstalk at all. Stage 1 cannot be removed — without exposure there
-/// is no latent image — so this stands in for its off position: the difference
-/// against it is what the stock's real, broadly overlapping sensitivities do.
-func idealizedCapture(_ profile: FilmSpectralProfile) -> FilmSpectralProfile {
-    let centers: [Float] = [600, 540, 460]
-    let sigma: Float = 12
-    var ideal = profile
-    ideal.layerSensitivity = centers.map { center in
-        SpectralGrid.wavelengths.map { nm in
-            let z = (nm - center) / sigma
-            return exp(-0.5 * z * z)
-        }
-    }
-    return ideal
-}
-
-/// A characteristic curve with the toe and shoulder rolloff taken out: the same
-/// dMin, gamma, toe and shoulder positions, but hard knees instead of softplus
-/// ones, so the working range is a pure straight line. Development cannot be
-/// removed either; this is the curve with its shape removed but its calibration
-/// intact, so mid-gray stays anchored.
-func straightLine(_ curve: CharacteristicCurve) -> CharacteristicCurve {
-    CharacteristicCurve(dMin: curve.dMin, gamma: curve.gamma,
-                        toe: curve.toe, toeWidth: 1e-3,
-                        shoulder: curve.shoulder, shoulderWidth: 1e-3)
-}
-
-/// Produces cumulative pipeline-stage renders and amplified differences.
-/// Spatial stages 2, 3, 4, 5, and 7 are disabled through their source parameters. Capture and
-/// development use idealized forms because they cannot be disabled; stage 8 reads base-free density.
-/// One frame of the walkthrough: the stock and options that produce it, named.
-struct PipelineStage {
-    let id: String
-    let label: String
-    let stock: FilmStock
-    let options: FotufilmEngine.Options
-}
-
-/// The walkthrough itself — every stage at its off position, then one stage turned back on per
-/// step, in the order the light meets them.
-///
-/// This is the single definition of what "stage N off" means. The renderer developing an image
-/// and the exporter sealing packs for the browser both read it, so the two cannot drift: a browser
-/// frame and a native frame for the same step are the same stock and the same options.
-func stageSequence(stock: FilmStock, options: FotufilmEngine.Options) -> [PipelineStage] {
-    var bare = stock
-    bare.spectralProfile = idealizedCapture(stock.spectralProfile)
-    bare.curves = stock.curves.map(straightLine)
-    bare.flare = 0
-    bare.emulsionDiffusionMM = stock.emulsionDiffusionMM.map { _ in 0 }
-    bare.emulsionDiffusionSecondaryMM = stock.emulsionDiffusionSecondaryMM.map { _ in 0 }
-    bare.emulsionDiffusionPrimaryShare = stock.emulsionDiffusionPrimaryShare.map { _ in 1 }
-    bare.lumaDiffusionMM = 0
-    bare.mtfLumaShare = 0
-    bare.adjacencyStrength = 0
-
-    var quiet = options
-    // Stage 2 is off by default now, so the walkthrough has to ask for it back —
-    // otherwise the step labelled "lens flare" would render without any.
-    quiet.flareScale = 0
-    quiet.halationScale = 0
-    quiet.couplerScale = 0
-    quiet.grainScale = 0
-    // Stage 8 off: the developed negative read straight, base divided out, with
-    // no paper anywhere in the path.
-    if !stock.isReversal { quiet.negativeViewing = .scanner }
-
-    var steps: [PipelineStage] = []
-    // Turned back on in the order the light meets them, so the sequence walks
-    // the pipeline rather than the engine's switchability. Everything before
-    // stage 8 is therefore a negative: the print is the last thing to happen.
-    steps.append(PipelineStage(id: "01-bypassed", label: "Every stage at its off position",
-                                stock: bare, options: quiet))
-
-    bare.spectralProfile = stock.spectralProfile
-    steps.append(PipelineStage(id: "02-exposure", label: "Stage 1 — spectral exposure",
-                                stock: bare, options: quiet))
-
-    bare.flare = stock.flare
-    quiet.flareScale = options.flareScale > 0 ? options.flareScale : 1
-    steps.append(PipelineStage(id: "03-flare", label: "Stage 2 — lens flare",
-                                stock: bare, options: quiet))
-
-    bare.emulsionDiffusionMM = stock.emulsionDiffusionMM
-    bare.emulsionDiffusionSecondaryMM = stock.emulsionDiffusionSecondaryMM
-    bare.emulsionDiffusionPrimaryShare = stock.emulsionDiffusionPrimaryShare
-    bare.lumaDiffusionMM = stock.lumaDiffusionMM
-    bare.mtfLumaShare = stock.mtfLumaShare
-    steps.append(PipelineStage(id: "04-diffusion", label: "Stage 3 — emulsion diffusion",
-                                stock: bare, options: quiet))
-
-    quiet.halationScale = options.halationScale
-    steps.append(PipelineStage(id: "05-halation", label: "Stage 4 — halation",
-                                stock: bare, options: quiet))
-
-    quiet.couplerScale = options.couplerScale
-    bare.adjacencyStrength = stock.adjacencyStrength
-    steps.append(PipelineStage(id: "06-couplers", label: "Stage 5 — DIR couplers and adjacency",
-                                stock: bare, options: quiet))
-
-    bare.curves = stock.curves
-    steps.append(PipelineStage(id: "07-development", label: "Stage 6 — H&D development",
-                                stock: bare, options: quiet))
-
-    quiet.grainScale = options.grainScale
-    steps.append(PipelineStage(id: "08-grain", label: "Stage 7 — grain",
-                                stock: bare, options: quiet))
-
-    // The developed negative as the print stage actually sees it, base and all,
-    // before stage 8 turns it into a positive.
-    if !stock.isReversal {
-        var onLightBox = quiet
-        onLightBox.negativeViewing = .lightBox
-        steps.append(PipelineStage(id: "09-negative", label: "Stage 8 input — the developed negative",
-                                stock: bare, options: onLightBox))
-    }
-
-    quiet.negativeViewing = options.negativeViewing
-    steps.append(PipelineStage(id: "10-print", label: "Stage 8 — output medium",
-                                stock: bare, options: quiet))
-
-    return steps
-}
-
 /// Develops one image through every stage of the walkthrough, writing a frame per step and an
 /// amplified difference against the step before it.
 func writeStageSequence(linear: ImageBuffer, alpha: [Float], stock: FilmStock,
@@ -1059,7 +795,7 @@ func writeStageSequence(linear: ImageBuffer, alpha: [Float], stock: FilmStock,
     }
     let width = linear.width, height = linear.height
     let count = width * height
-    let steps = stageSequence(stock: stock, options: options)
+    let steps = PipelineWalk.steps(stock: stock, options: options)
 
     // A manifest beside the frames, so anything reading the directory back — the browser demo's
     // static fallback among them — gets the labels and the order from the run that wrote them
@@ -1543,7 +1279,7 @@ if let stagesPath = flags["--dump-wasm-stages"] {
     // As in the single-pack export: no image here means no regional exposure to measure.
     options.localTone = false
 
-    let stages = stageSequence(stock: stock, options: options)
+    let stages = PipelineWalk.steps(stock: stock, options: options)
     // The last stage is the film as it actually is, so its tables are the base every other stage is
     // written as a difference from — and it is the pack the browser starts a fresh image with.
     guard let base = stages.last.map({
@@ -1643,8 +1379,9 @@ let balance = WhiteBalance(
     tint: flags["--tint"].flatMap { Float($0) } ?? 0)
 let background = parseLinearBackground(flags["--background"])
 
-var (rgba, width, height, _, _, contentHeadroom) =
-    loadLinear(path: positional[0])
+let scene = loadLinear(path: positional[0])
+var rgba = scene.rgba
+let width = scene.width, height = scene.height, contentHeadroom = scene.contentHeadroom
 PremultipliedAlpha.flatten(&rgba, over: background)
 // RAW decoding keeps its as-shot white. All inputs then use the stock's native light unless
 // --scene-kelvin explicitly names a different source. --wb is the same relative edit on both.

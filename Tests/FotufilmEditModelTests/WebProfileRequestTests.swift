@@ -29,6 +29,17 @@ final class WebProfileRequestTests: XCTestCase {
         XCTAssertThrowsError(try request(values).configured())
     }
 
+    /// Each interlayer keeps its own reach, as the Mac app's edit does; a pair left unset follows
+    /// Separation.
+    func testPairReachesOverrideSeparationOneAtATime() throws {
+        XCTAssertEqual(try request(["couplerReach": 2]).configured().1.couplerGapReachScales, [2, 2])
+        XCTAssertEqual(try request(["couplerReach": 2, "couplerRedGreen": 0.5])
+            .configured().1.couplerGapReachScales, [0.5, 2])
+        XCTAssertEqual(try request(["couplerGreenBlue": 3]).configured().1.couplerGapReachScales,
+                       [1, 3])
+        XCTAssertThrowsError(try request(["couplerRedGreen": 4]).configured())
+    }
+
     func testViewingChoicesUseMediumAndNegativeViewingCannotLeakIntoPaper() throws {
         XCTAssertEqual(try request(["printLight": "tungsten"]).configured().1.printViewingKelvin, 2856)
         XCTAssertThrowsError(try request(["printLight": "tungsten"], medium: "screen").configured())

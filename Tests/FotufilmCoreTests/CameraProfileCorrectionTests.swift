@@ -89,4 +89,34 @@ final class CameraProfileCorrectionTests: XCTestCase {
             XCTAssertEqual(sum, 1, accuracy: 1e-5, "row \(row)")
         }
     }
+
+    // MARK: Sony's NonRealTimeMeta, where the body and white balance come from
+
+    func testSonyRecordNamesTheBodyAndAKelvinWhiteBalance() throws {
+        let xml = """
+        \u{0}\u{0}<?xml version="1.0"?><NonRealTimeMeta xmlns="urn:schemas-professionalDisc:nonRealTimeMeta:ver.2.20">
+        <Device manufacturer="Sony" modelName="ILCE-7CM2" serialNo="1"/>
+        <AcquisitionRecord><Group name="CameraUnitMetadataSet">
+        <Item name="WhiteBalance" value="3200"/></Group></AcquisitionRecord></NonRealTimeMeta>\u{0}
+        """
+        let meta = try XCTUnwrap(SonyNonRealTimeMeta.parse(Data(xml.utf8)))
+        XCTAssertEqual(meta, SonyNonRealTimeMeta(make: "Sony", model: "ILCE-7CM2", cct: 3200))
+        XCTAssertEqual(CameraIdentity(make: meta.make, model: meta.model), sonyCamera)
+
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sony-\(UUID().uuidString).mp4")
+        defer { try? FileManager.default.removeItem(at: file) }
+        try (Data(count: 5 << 20) + Data(xml.utf8)).write(to: file)
+        XCTAssertEqual(SonyNonRealTimeMeta.read(at: file), meta)
+    }
+
+    func testSonyWhiteBalanceModeIsNotATemperature() {
+        let xml = """
+        <NonRealTimeMeta><Device manufacturer="Sony" modelName="FX3"/>
+        <Item name="WhiteBalance" value="Daylight"/></NonRealTimeMeta>
+        """
+        XCTAssertEqual(SonyNonRealTimeMeta.parse(Data(xml.utf8)),
+                       SonyNonRealTimeMeta(make: "Sony", model: "FX3", cct: nil))
+        XCTAssertNil(SonyNonRealTimeMeta.parse(Data("<NonRealTimeMeta></NonRealTimeMeta>".utf8)))
+    }
 }

@@ -7,10 +7,17 @@ import usePreviewRenderer from "./usePreviewRenderer.js";
 import usePipelineStages from "./usePipelineStages.js";
 import useDocumentActions from "./useDocumentActions.js";
 import useFilmActions from "./useFilmActions.js";
+import useFilmPacks from "./useFilmPacks.js";
 import useLibraryDocuments from "./useLibraryDocuments.js";
+import useSavedEdits from "./useSavedEdits.js";
 import useExportActions from "./useExportActions.js";
 import useEditorShortcuts from "./useEditorShortcuts.js";
 import useOutputState from "./useOutputState.js";
+import useNativeCommands from "./useNativeCommands.js";
+import useFilmSuggestion from "./useFilmSuggestion.js";
+import usePlugins from "./usePlugins.js";
+import useDocumentTitle from "./useDocumentTitle.js";
+import useUpdates from "./useUpdates.js";
 export default function useEditorModel() {
   let editor = { backend: useBackend() };
   editor = {
@@ -39,11 +46,19 @@ export default function useEditorModel() {
   };
   editor = {
     ...editor,
+    ...useSavedEdits(editor),
+  };
+  editor = {
+    ...editor,
     ...useDocumentActions(editor),
   };
   editor = {
     ...editor,
     ...useFilmActions(editor),
+  };
+  editor = {
+    ...editor,
+    ...useFilmPacks(editor),
   };
   editor = {
     ...editor,
@@ -61,5 +76,16 @@ export default function useEditorModel() {
     ...editor,
     ...useOutputState(editor),
   };
+  editor = {
+    ...editor,
+    ...usePlugins(editor),
+  };
+  editor = {
+    ...editor,
+    ...useUpdates(editor),
+  };
+  useFilmSuggestion(editor);
+  useNativeCommands(editor);
+  useDocumentTitle(editor);
   return editor;
 }

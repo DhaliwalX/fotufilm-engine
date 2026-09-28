@@ -1,5 +1,4 @@
 import { DialogContainer } from "@react-spectrum/s2/Dialog";
-import { ActionButton } from "@react-spectrum/s2/ActionButton";
 import EditorToolbar from "./EditorToolbar.jsx";
 import FilmLibrary from "./FilmLibrary.jsx";
 import EditorViewer from "./EditorViewer.jsx";
@@ -8,11 +7,17 @@ import EditorInspector from "./EditorInspector.jsx";
 import { IMAGE_ACCEPT } from "../media-types.js";
 import { VIDEO_ACCEPT } from "../media-types.js";
 import NegativeImportDialog from "../NegativeImportDialog.jsx";
+import NegativeScanDialog from "../negative-scan/NegativeScanDialog.jsx";
 import { useNegativeImportDialog } from "./useNegativeImportDialog.js";
 import ExportDialog from "./ExportDialog.jsx";
-import { VIDEO_LABELS } from "../generated/controls.js";
+import SavedExportNotice from "./SavedExportNotice.jsx";
 import ShortcutsDialog from "./ShortcutsDialog.jsx";
 import SupportDialog from "./SupportDialog.jsx";
+import SettingsDialog from "./SettingsDialog.jsx";
+import PluginsDialog from "./PluginsDialog.jsx";
+import FilmPackNotice from "./FilmPackNotice.jsx";
+import UpdateDialog from "./UpdateDialog.jsx";
+import { FILM_PACK_EXTENSION } from "./useFilmPacks.js";
 import { useEditor } from "./EditorContext.jsx";
 import { PhotoLibrary } from "../photo-library/index.js";
 import LibraryHandoff from "./LibraryHandoff.jsx";
@@ -26,12 +31,12 @@ export default function Workspace() {
     restoreEdit,
     dialog,
     setDialog,
-    videoDownload,
-    videoDownloadRef,
-    setVideoDownload,
     libraryOpen,
     setLibraryOpen,
     openFromLibrary,
+    filmPacks,
+    packInput,
+    importFilmPacks,
   } = useEditor();
   const negative = useNegativeImportDialog();
   return (
@@ -72,8 +77,28 @@ export default function Workspace() {
           e.target.value = "";
         }}
       />
+      {filmPacks && (
+        <input
+          ref={packInput}
+          type="file"
+          accept={FILM_PACK_EXTENSION}
+          multiple
+          hidden
+          onChange={(e) => {
+            importFilmPacks(Array.from(e.target.files)).catch(console.error);
+            e.target.value = "";
+          }}
+        />
+      )}
       <DialogContainer onDismiss={() => setDialog(null)}>
-        {dialog === "negative" ? (
+        {dialog === "negative" && negative.scans ? (
+          <NegativeScanDialog
+            session={negative.scan}
+            scans={negative.scans}
+            onClose={() => setDialog(null)}
+            onImport={negative.importScan}
+          />
+        ) : dialog === "negative" ? (
           <NegativeImportDialog
             onClose={() => setDialog(null)}
             model={negative}
@@ -84,29 +109,17 @@ export default function Workspace() {
           <ShortcutsDialog />
         ) : dialog === "support" ? (
           <SupportDialog />
+        ) : dialog === "settings" ? (
+          <SettingsDialog />
+        ) : dialog === "plugins" ? (
+          <PluginsDialog />
+        ) : dialog === "filmPack" ? (
+          <FilmPackNotice />
+        ) : dialog === "update" ? (
+          <UpdateDialog />
         ) : null}
       </DialogContainer>
-      {videoDownload && (
-        <div className="video-download" role="status">
-          {videoDownload.url ? (
-            <a href={videoDownload.url} download={videoDownload.filename}>
-              Download {videoDownload.filename}
-            </a>
-          ) : (
-            <span>Saved {videoDownload.filename}</span>
-          )}
-          <ActionButton
-            onPress={async () => {
-              await videoDownload.dispose();
-              videoDownloadRef.current = null;
-              setVideoDownload(null);
-            }}
-            size={"S"}
-          >
-            {VIDEO_LABELS.dismiss}
-          </ActionButton>
-        </div>
-      )}
+      <SavedExportNotice />
     </div>
   );
 }

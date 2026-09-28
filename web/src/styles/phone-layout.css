@@ -118,21 +118,6 @@
       overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
     }
-    .viewer-status {
-      min-height: 44px;
-      padding: 0 10px;
-      gap: 8px;
-      font-size: 11px;
-      flex-shrink: 0;
-    }
-    .viewer-status [role="status"] {
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-    .viewer-status .document-name,
-    .backend-label {
-      display: none;
-    }
     .empty-canvas {
       padding: 20px;
     }
@@ -168,9 +153,6 @@
     }
     .toolbar-brand .fotufilm-wordmark {
       display: none;
-    }
-    .viewer-status {
-      min-height: 32px;
     }
   }
 }

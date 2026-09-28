@@ -5,6 +5,7 @@ import VideoTransport from "./video-player/VideoTransport.jsx";
 import VideoSettings from "./video-player/VideoSettings.jsx";
 import { useVideoPlayback } from "./video-player/useVideoPlayback.js";
 import { usePlayerShortcuts } from "./video-player/usePlayerShortcuts.js";
+import { clipSummary } from "./video-player/playback-quality.js";
 export { videoTimeLabel } from "./video-player/time.js";
 
 export default function VideoControls({
@@ -14,6 +15,9 @@ export default function VideoControls({
   settings,
   onChange,
   disabled,
+  cadence,
+  playbackQuality = false,
+  frameSize,
 }) {
   const root = useRef(null);
   const start = Math.max(clip.start, settings.trimStart);
@@ -42,7 +46,11 @@ export default function VideoControls({
         seek={(value) => playback.transport.current?.seek(value)}
         disabled={disabled}
       />
-      <VideoTransport playback={playback} disabled={disabled}>
+      <VideoTransport
+        playback={playback}
+        disabled={disabled}
+        quality={playbackQuality}
+      >
         <VideoSettings
           clip={clip}
           start={start}
@@ -51,8 +59,13 @@ export default function VideoControls({
           settings={settings}
           onChange={onChange}
           disabled={disabled}
+          cadence={cadence}
         />
       </VideoTransport>
+      {/* The clip at a glance, as the Mac app prints it under its transport. */}
+      <p className="video-summary">
+        {clipSummary({ ...frameSize, frameRate: clip.frameRate, audio: clip.audio })}
+      </p>
       <Presence
         show={!!playback.error}
         className="video-playback-error"

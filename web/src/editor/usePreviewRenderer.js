@@ -1,6 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { previewLabel } from "../preview-queue.js";
+import { previewBudget } from "../preview-budget.js";
 export default function usePreviewRenderer({
+  backend,
   active,
   stockId,
   session,
@@ -14,6 +16,7 @@ export default function usePreviewRenderer({
   stage,
   difference,
   cropMode,
+  compare,
   previewInteracting,
   previewKey,
   stocks,
@@ -27,6 +30,10 @@ export default function usePreviewRenderer({
   setStatus,
   retry,
 }) {
+  // Read as each frame is asked for rather than rendering again: a still keeps its original
+  // anyway, and a playing movie picks the change up with its next frame.
+  const comparing = useRef(compare);
+  comparing.current = compare;
   useEffect(() => {
     if (!active || !stockId || !session || exporting) return;
     const currentFile = () =>
@@ -42,6 +49,8 @@ export default function usePreviewRenderer({
       stage,
       difference,
       cropMode,
+      // A host that draws the photograph itself shows the preview without a picture crossing.
+      present: backend.imageLayer ? "preview" : undefined,
       stale: () =>
         !currentFile() ||
         currentPreview.current.exporting ||
@@ -50,7 +59,7 @@ export default function usePreviewRenderer({
           (currentPreview.current.previewInteracting ||
             currentPreview.current.key !== previewKey)),
     };
-    const frame = requestAnimationFrame(() => {
+    const submit = () => {
       const stock = stocks.find((item) => item.id === previewEdit.stock);
       const queued = {
         fileId: active.id,
@@ -72,9 +81,11 @@ export default function usePreviewRenderer({
           (onProgress) =>
             session.render({
               ...request,
+              compare: comparing.current,
               onProgress,
             }),
           label,
+          { pipelined: !!active.image.video && previewInteracting },
         )
         .then((next) => {
           if (
@@ -86,19 +97,21 @@ export default function usePreviewRenderer({
           )
             return;
           if (previewInteracting) {
+            const budget = previewBudget(backend);
             if (next.renderMilliseconds > 65)
               setInteractiveEdge((edge) =>
-                Math.max(256, Math.round(edge * 0.8)),
+                Math.max(budget.minInteractiveEdge, Math.round(edge * 0.8)),
               );
             else if (next.renderMilliseconds < 25)
               setInteractiveEdge((edge) =>
-                Math.min(800, Math.round(edge * 1.1)),
+                Math.min(budget.maxInteractiveEdge, Math.round(edge * 1.1)),
               );
           }
-          const url = URL.createObjectURL(next.blob),
-            originalUrl = URL.createObjectURL(next.original);
-          urls.current.add(url);
-          urls.current.add(originalUrl);
+          // A presented preview is on screen already; the page only places it.
+          const url = next.presented ? undefined : URL.createObjectURL(next.blob),
+            originalUrl = next.presented ? undefined : URL.createObjectURL(next.original);
+          if (url) urls.current.add(url);
+          if (originalUrl) urls.current.add(originalUrl);
           replaceResult({
             ...next,
             url,
@@ -117,7 +130,19 @@ export default function usePreviewRenderer({
             if (!previewQueue.current.running) setStatus(null);
           }
         });
-    });
+    };
+    // A playing movie asks for its frame at once: waiting for the next display frame as well as
+    // the clock's would leave every other frame undeveloped.
+    if (active.image.video && previewInteracting) {
+      let cancelled = false;
+      queueMicrotask(() => {
+        if (!cancelled) submit();
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    const frame = requestAnimationFrame(submit);
     return () => cancelAnimationFrame(frame);
   }, [
     active,

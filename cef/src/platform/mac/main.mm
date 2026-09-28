@@ -5,16 +5,26 @@
 
 #include "app/browser_app.h"
 #include "app/scheme.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+
 #include "bridge/dispatcher.h"
+#if defined(FOTUFILM_WITH_ENGINE)
+#include "engine/engine_bridge.h"
+#endif
 #include "include/cef_application_mac.h"
 #include "include/cef_command_line.h"
 #include "include/wrapper/cef_library_loader.h"
+#import "platform/mac/export_files.h"
 #import "platform/mac/host_window.h"
+#import "platform/mac/main_menu.h"
 #include "switches.h"
 
 namespace {
 
 std::unique_ptr<fotufilm::Dispatcher> g_dispatcher;
+#if defined(FOTUFILM_WITH_ENGINE)
+std::unique_ptr<fotufilm::EngineBridge> g_engine;
+#endif
 FotufilmHostWindow* g_window = nil;
 
 std::string ResourcePath(NSString* name) {
@@ -35,48 +45,145 @@ std::string ProfilePath() {
   return profile.path.UTF8String;
 }
 
-NSMenuItem* Item(NSString* title, SEL action, NSString* key,
-                 NSEventModifierFlags modifiers = NSEventModifierFlagCommand) {
-  NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:title action:action keyEquivalent:key];
-  item.keyEquivalentModifierMask = modifiers;
-  return item;
+// The plug-ins the engine installs (`capabilities.plugins`), for the Plugins menu.
+NSArray<NSDictionary*>* Plugins(const std::string& capabilities) {
+  NSData* json = [NSData dataWithBytes:capabilities.data() length:capabilities.size()];
+  NSDictionary* fields = capabilities.empty()
+                             ? nil
+                             : [NSJSONSerialization JSONObjectWithData:json options:0 error:nil];
+  if (![fields isKindOfClass:NSDictionary.class]) return @[];
+  NSArray* plugins = fields[@"plugins"];
+  return [plugins isKindOfClass:NSArray.class] ? plugins : @[];
 }
 
-NSMenu* MainMenu() {
-  NSMenu* bar = [NSMenu new];
-  auto submenu = [bar](NSString* title) {
-    NSMenuItem* holder = [bar addItemWithTitle:title action:nil keyEquivalent:@""];
-    NSMenu* menu = [[NSMenu alloc] initWithTitle:title];
-    holder.submenu = menu;
-    return menu;
-  };
-  NSMenu* app = submenu(@"Fotufilm");
-  [app addItem:Item(@"Hide Fotufilm", @selector(hide:), @"h")];
-  [app addItem:Item(@"Hide Others", @selector(hideOtherApplications:), @"h",
-                    NSEventModifierFlagCommand | NSEventModifierFlagOption)];
-  [app addItem:[NSMenuItem separatorItem]];
-  [app addItem:Item(@"Quit Fotufilm", @selector(terminate:), @"q")];
-
-  // Sent to the host view, which applies them to the page's focused frame.
-  NSMenu* edit = submenu(@"Edit");
-  [edit addItem:Item(@"Undo", @selector(undo:), @"z")];
-  [edit addItem:Item(@"Redo", @selector(redo:), @"z",
-                     NSEventModifierFlagCommand | NSEventModifierFlagShift)];
-  [edit addItem:[NSMenuItem separatorItem]];
-  [edit addItem:Item(@"Cut", @selector(cut:), @"x")];
-  [edit addItem:Item(@"Copy", @selector(copy:), @"c")];
-  [edit addItem:Item(@"Paste", @selector(paste:), @"v")];
-  [edit addItem:Item(@"Select All", @selector(selectAll:), @"a")];
-
-  NSMenu* window = submenu(@"Window");
-  [window addItem:Item(@"Minimize", @selector(performMiniaturize:), @"m")];
-  [window addItem:Item(@"Zoom", @selector(performZoom:), @"")];
-  [window addItem:Item(@"Close", @selector(performClose:), @"w")];
-  NSApp.windowsMenu = window;
-  return bar;
+// The engine's capabilities with the host's own: this host draws the photograph itself, beneath
+// the page (`imageLayer`), and opens what it saved (`openExport`, web/src/backend/README.md).
+std::string WithHostCapabilities(const std::string& capabilities) {
+  NSData* json = [NSData dataWithBytes:capabilities.data() length:capabilities.size()];
+  NSDictionary* fields = capabilities.empty()
+                             ? nil
+                             : [NSJSONSerialization JSONObjectWithData:json options:0 error:nil];
+  if (![fields isKindOfClass:NSDictionary.class]) return capabilities;
+  NSMutableDictionary* merged = [fields mutableCopy];
+  merged[@"imageLayer"] = @YES;
+  merged[@"openExport"] = @{@"reveal" : @"Show in Finder"};
+  NSData* out = [NSJSONSerialization dataWithJSONObject:merged
+                                                options:NSJSONWritingSortedKeys
+                                                  error:nil];
+  return out ? std::string(static_cast<const char*>(out.bytes), out.length) : capabilities;
 }
+
+// Files the system asked to open before the window existed.
+NSMutableArray<NSURL*>* g_pending_urls = [NSMutableArray array];
 
 }  // namespace
+
+// Files and help, for the whole application: Finder opens (double-click, Open With, the Dock icon),
+// File > Open and Open Recent, and the help pages. Files go to the editor by path.
+@interface FotufilmAppDelegate : NSObject <NSApplicationDelegate, NSMenuItemValidation,
+                                           FotufilmMenuActions>
+@end
+
+@implementation FotufilmAppDelegate
+
+- (void)openURLs:(NSArray<NSURL*>*)urls {
+  if (g_window && !g_window.closed)
+    [g_window openURLs:urls];
+  else
+    [g_pending_urls addObjectsFromArray:urls];
+}
+
+- (void)application:(NSApplication*)application openURLs:(NSArray<NSURL*>*)urls {
+  [self openURLs:urls];
+}
+
+// Finder › Services › Open in Fotufilm Desktop (NSServices in Info.plist), as the Mac app's
+// FinderServiceProvider answers it; several files open together here.
+- (void)openInFotufilm:(NSPasteboard*)pasteboard
+              userData:(NSString*)userData
+                 error:(NSString**)error {
+  NSArray<NSURL*>* urls = [pasteboard readObjectsForClasses:@[ NSURL.class ]
+                                                    options:@{
+                                                      NSPasteboardURLReadingFileURLsOnlyKey : @YES,
+                                                      NSPasteboardURLReadingContentsConformToTypesKey :
+                                                          @[ UTTypeImage.identifier, UTTypeMovie.identifier ],
+                                                    }];
+  if (!urls.count) {
+    if (error) *error = @"Choose a photo or video to open in Fotufilm.";
+    return;
+  }
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [self openURLs:urls];
+    [NSApp activateIgnoringOtherApps:YES];
+  });
+}
+
+- (void)openDocument:(id)sender {
+  NSOpenPanel* panel = [NSOpenPanel openPanel];
+  panel.allowedContentTypes = @[ UTTypeImage, UTTypeMovie ];
+  panel.allowsMultipleSelection = YES;
+  panel.canChooseDirectories = NO;
+  auto finish = ^(NSModalResponse response) {
+    if (response == NSModalResponseOK) [self openURLs:panel.URLs];
+  };
+  if (NSWindow* window = g_window.window)
+    [panel beginSheetModalForWindow:window completionHandler:finish];
+  else
+    finish([panel runModal]);
+}
+
+// The Mac app's File › Import Film Pack…: the chosen packs go to the editor by path, as a Finder
+// double-click on one does, and the engine installs them where the Mac app keeps its packs.
+- (void)importFilmPack:(id)sender {
+  NSOpenPanel* panel = [NSOpenPanel openPanel];
+  if (UTType* pack = [UTType typeWithFilenameExtension:@"fotufilmpack"])
+    panel.allowedContentTypes = @[ pack ];
+  panel.allowsMultipleSelection = YES;
+  panel.canChooseDirectories = NO;
+  panel.prompt = @"Add";
+  panel.message = @"Choose a Fotufilm film pack to add to your library.";
+  auto finish = ^(NSModalResponse response) {
+    if (response == NSModalResponseOK) [self openURLs:panel.URLs];
+  };
+  if (NSWindow* window = g_window.window)
+    [panel beginSheetModalForWindow:window completionHandler:finish];
+  else
+    finish([panel runModal]);
+}
+
+- (void)openRecentFile:(id)sender {
+  if (NSURL* url = [sender representedObject]) [self openURLs:@[ url ]];
+}
+
+- (void)useSamplePhoto:(id)sender {
+  [g_window openSamplePhoto];
+}
+
+- (void)clearRecentFiles:(id)sender {
+  [FotufilmRecentFiles clear];
+}
+
+// The same pages the native Mac app opens.
+- (void)openHelpPage:(id)sender {
+  NSString* page = [sender representedObject];
+  [NSWorkspace.sharedWorkspace
+      openURL:[NSURL URLWithString:[NSString stringWithFormat:@"https://fotufilm.com/%@.html", page]]];
+}
+
+- (BOOL)validateMenuItem:(NSMenuItem*)item {
+  const SEL action = item.action;
+  // Nothing opens while the editor is exporting, as its own import buttons are greyed.
+  if (action == @selector(openDocument:) || action == @selector(openRecentFile:) ||
+      action == @selector(useSamplePhoto:))
+    return !g_window || [g_window commandEnabled:@"open"];
+  // Only an engine that installs packs offers it (the `filmPacks` capability), and never while
+  // the editor exports.
+  if (action == @selector(importFilmPack:))
+    return g_window && [g_window commandEnabled:@"importFilmPack"];
+  return YES;
+}
+
+@end
 
 // CEF runs the message loop and needs to know when AppKit is dispatching an event.
 @interface FotufilmApplication : NSApplication <CefAppProtocol>
@@ -115,7 +222,16 @@ int main(int argc, char* argv[]) {
 
   @autoreleasepool {
     [FotufilmApplication sharedApplication];
-    NSApp.mainMenu = MainMenu();
+    FotufilmAppDelegate* delegate = [FotufilmAppDelegate new];
+    NSApp.delegate = delegate;
+    NSApp.servicesProvider = delegate;
+    // The View menu carries Enter Full Screen itself; AppKit would add a second.
+    [NSUserDefaults.standardUserDefaults registerDefaults:@{@"NSFullScreenMenuItemEverywhere" : @NO}];
+    std::string capabilities;
+#if defined(FOTUFILM_WITH_ENGINE)
+    capabilities = fotufilm::EngineBridge::Capabilities();
+#endif
+    NSApp.mainMenu = FotufilmMainMenu(Plugins(capabilities));
 
     CefMainArgs arguments(argc, argv);
     CefRefPtr<CefCommandLine> command_line = CefCommandLine::CreateCommandLine();
@@ -138,12 +254,33 @@ int main(int argc, char* argv[]) {
                            (dev.port ? ":" + std::string(dev.port.stringValue.UTF8String) : "");
     }
     options.transport_global = fotufilm::switches::kDefaultTransportGlobal;
+#if defined(FOTUFILM_WITH_ENGINE)
+    options.capabilities = WithHostCapabilities(capabilities);
+#else
+    options.capabilities = capabilities;
+#endif
 
     g_dispatcher = std::make_unique<fotufilm::Dispatcher>();
+#if defined(FOTUFILM_WITH_ENGINE)
+    g_engine = std::make_unique<fotufilm::EngineBridge>(*g_dispatcher);
+    const std::string export_dir =
+        command_line->GetSwitchValue(fotufilm::switches::kExportDir).ToString();
+    g_engine->SetDestinationPicker([export_dir](const std::string& filename,
+                                                const std::string& type,
+                                                std::function<void(const std::string&)> done) {
+      fotufilm::ChooseExportDestination(filename, type, export_dir, std::move(done));
+    });
+    fotufilm::RegisterExportFiles(*g_dispatcher);
+#endif
     CefRefPtr<fotufilm::BrowserApp> app =
         new fotufilm::BrowserApp(options, [url] {
           g_window = [[FotufilmHostWindow alloc] initWithURL:url
                                                   dispatcher:g_dispatcher.get()];
+#if defined(FOTUFILM_WITH_ENGINE)
+          g_engine->SetPresenter(g_window.presenter);
+#endif
+          [g_window openURLs:g_pending_urls];
+          [g_pending_urls removeAllObjects];
         });
 
     CefSettings settings;
@@ -151,7 +288,14 @@ int main(int argc, char* argv[]) {
 #if !defined(CEF_USE_SANDBOX)
     settings.no_sandbox = true;
 #endif
-    const std::string profile = ProfilePath();
+    // CEF wants the cache inside the root as spelled after symbolic links (/tmp is /private/tmp).
+    const std::string profile =
+        command_line->HasSwitch(fotufilm::switches::kProfile)
+            ? std::string(@(command_line->GetSwitchValue(fotufilm::switches::kProfile)
+                                .ToString()
+                                .c_str())
+                              .stringByResolvingSymlinksInPath.UTF8String)
+            : ProfilePath();
     CefString(&settings.root_cache_path) = profile;
     CefString(&settings.cache_path) = profile + "/Default";
     settings.log_severity = LOGSEVERITY_WARNING;
@@ -162,6 +306,9 @@ int main(int argc, char* argv[]) {
     g_window = nil;
     g_dispatcher->Shutdown();
     CefShutdown();
+#if defined(FOTUFILM_WITH_ENGINE)
+    g_engine.reset();
+#endif
     g_dispatcher.reset();
   }
   return 0;

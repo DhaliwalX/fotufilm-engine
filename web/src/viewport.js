@@ -44,12 +44,23 @@ export function visiblePhotoViewport({
   };
 }
 
-export function viewportPlacement(viewport) {
+// Where a viewport's region sits in the photo plane, as fractions of it.
+export function viewportFraction(viewport) {
   const { width, height, region, photo } = viewport;
   return {
-    left: `${100 * (photo.x + (region.x / width) * photo.width)}%`,
-    top: `${100 * (photo.y + (region.y / height) * photo.height)}%`,
-    width: `${((100 * region.width) / width) * photo.width}%`,
-    height: `${((100 * region.height) / height) * photo.height}%`,
+    left: photo.x + (region.x / width) * photo.width,
+    top: photo.y + (region.y / height) * photo.height,
+    width: (region.width / width) * photo.width,
+    height: (region.height / height) * photo.height,
+  };
+}
+
+export function viewportPlacement(viewport) {
+  const { left, top, width, height } = viewportFraction(viewport);
+  return {
+    left: `${100 * left}%`,
+    top: `${100 * top}%`,
+    width: `${100 * width}%`,
+    height: `${100 * height}%`,
   };
 }

@@ -24,9 +24,51 @@
     color: var(--muted);
     margin: 0;
   }
+  .film-pack-notice {
+    white-space: pre-line;
+  }
+  .film-packs {
+    align-self: stretch;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .film-packs li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 0;
+    font-size: 12px;
+  }
+  .film-packs li > span {
+    min-width: 0;
+  }
+  .film-packs li > :last-child {
+    flex-shrink: 0;
+  }
+  .film-packs small {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+  }
   .support-copy p {
     line-height: 1.7;
     color: var(--muted);
     font-size: 12px;
+  }
+  .plugin-row {
+    align-self: stretch;
+    padding-bottom: 10px;
+  }
+  .plugin-row + .plugin-row {
+    border-top: 1px solid var(--border);
+  }
+  .plugin-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
   }
 }

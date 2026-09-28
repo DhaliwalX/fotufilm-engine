@@ -42,3 +42,11 @@ test('saved edits preserve output media, read legacy defaults and reject unsafe 
   assert.equal(parse(legacy).medium, null)
   assert.throws(() => parse({ ...edit, medium: '../secret' }), /Invalid output medium/)
 })
+
+test('Match Film is kept with the edit, and only as a switch', () => {
+  const parse = (value) => parseEdit(JSON.stringify({ version: 1, edit: value }), ['gold200'])
+  const edit = { ...defaultEdit('gold200'), medium: 'ra4', mediumFollowsFilm: true }
+  assert.equal(parse(edit).mediumFollowsFilm, true)
+  assert.equal(parse(defaultEdit('gold200')).mediumFollowsFilm, false)
+  assert.throws(() => parse({ ...edit, mediumFollowsFilm: 'yes' }), /Invalid output medium/)
+})

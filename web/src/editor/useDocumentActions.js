@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { VIDEO_ACCEPT } from "../media-types.js";
 import { IMAGE_ACCEPT } from "../media-types.js";
 import { defaultEdit, initialHistory } from "../editor-state.js";
+import { newPhotoEdit } from "../app-settings.js";
 export default function useDocumentActions({
   backend,
   exporting,
@@ -24,10 +25,19 @@ export default function useDocumentActions({
   setDifference,
   setError,
   files,
+  stocks,
+  savedEditFor,
 }) {
   const openFiles = useCallback(
     (kind = "all") => {
-      if (exporting || !input.current) return;
+      if (exporting) return;
+      // A native host's own open panel, whose files arrive as its File › Open's do and are
+      // kept in Open Recent.
+      if (backend.openPanel) {
+        backend.openPanel(kind).catch(console.error);
+        return;
+      }
+      if (!input.current) return;
       input.current.accept =
         kind === "image"
           ? IMAGE_ACCEPT
@@ -36,12 +46,17 @@ export default function useDocumentActions({
             : `${IMAGE_ACCEPT},${VIDEO_ACCEPT}`;
       input.current.click();
     },
-    [exporting, input],
+    [backend, exporting, input],
   );
 
-  // A new document starts from its library edit, or from the current film.
-  const startingEdit = (file) => file?.libraryEdit || defaultEdit(edit.stock);
-  // `incoming` holds Files, or library items {file, libraryKey, edit}.
+  // A new document starts from its kept edit (useSavedEdits), or from the settings' starting film
+  // and film model (the current film unless one is chosen).
+  const startingEdit = (file) =>
+    file?.savedEdit ||
+    newPhotoEdit(defaultEdit(edit.stock), stocks?.length ? stocks.map((s) => s.id) : null);
+  // `incoming` holds Files, library items {file, editKey}, or files a native host chose
+  // {path, name}, which it opens in place. Each opens with the edit kept for it; one already open
+  // is shown instead of opened twice.
   async function acceptFiles(incoming) {
     if (exporting) return;
     const generation = ++loadGeneration.current;
@@ -50,37 +65,56 @@ export default function useDocumentActions({
     importController.current = controller;
     const loaded = [],
       errors = [];
+    let shown = null;
     for (const item of Array.from(incoming || [])) {
       const {
         file,
-        libraryKey = null,
-        edit: libraryEdit = null,
+        path,
+        name = file?.name,
+        editKey = null,
       } = item instanceof Blob ? { file: item } : item;
       if (controller.signal.aborted) break;
       try {
-        const decoded = await backend.importMedia(file, {
+        const options = {
           signal: controller.signal,
           onProgress: (text) => {
-            if (!controller.signal.aborted)
-              setImportStatus(`${text}: ${file.name}`);
+            if (!controller.signal.aborted) setImportStatus(`${text}: ${name}`);
           },
-        });
-        if (controller.signal.aborted) {
+        };
+        // A file handed over is known while it decodes; one the host opens, by its answer.
+        const known = path ? null : savedEditFor({ editKey, file });
+        const { identity, ...decoded } = path
+          ? await backend.importPath(path, options)
+          : await backend.importMedia(file, options);
+        const saved = await (known ?? savedEditFor({ editKey, identity }));
+        const release = () => {
           backend.releaseImage(decoded.image);
           URL.revokeObjectURL(decoded.url);
+        };
+        if (controller.signal.aborted) {
+          release();
           break;
         }
+        const open =
+          saved.editKey &&
+          [...files, ...loaded].find((doc) => doc.editKey === saved.editKey);
+        if (open) {
+          release();
+          shown ??= open;
+          continue;
+        }
+        if (saved.problem) errors.push(`${name}: ${saved.problem}`);
         loaded.push({
           id: crypto.randomUUID(),
-          name: file.name,
-          libraryKey,
-          libraryEdit,
+          name,
+          editKey: saved.editKey,
+          savedEdit: saved.savedEdit,
           ...decoded,
         });
       } catch (e) {
         if (e.name !== "AbortError")
           errors.push(
-            `${file.name}: ${e.message || "Could not decode image."}`,
+            `${name}: ${e.message || "Could not decode image."}`,
           );
       }
     }
@@ -109,7 +143,7 @@ export default function useDocumentActions({
       replaceResult(null);
       setStage(null);
       setDifference(false);
-    }
+    } else if (shown && files.includes(shown)) selectFile(shown);
     setError(errors.length ? errors.join(" ") : null);
   }
   function selectFile(file) {

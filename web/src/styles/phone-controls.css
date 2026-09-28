@@ -22,7 +22,6 @@
   }
   .inspector [role="radio"],
   .inspector-content button,
-  .compare-button,
   .empty-canvas button {
     min-height: 44px;
   }

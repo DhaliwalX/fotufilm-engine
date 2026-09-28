@@ -2,6 +2,7 @@ import useCompactLayout from "../useCompactLayout.js";
 import { useReducer, useState, useRef, useEffect } from "react";
 import { historyReducer, initialHistory } from "../editor-state.js";
 import { sourceIlluminant } from "../editor-catalogue.js";
+import { setAppSetting, useAppSetting } from "../app-settings.js";
 export default function useEditorState({}) {
   const compactLayout = useCompactLayout();
   const [history, historyDispatch] = useReducer(historyReducer, initialHistory);
@@ -35,10 +36,17 @@ export default function useEditorState({}) {
     [exporting, setExporting] = useState(false),
     [exportType, setExportType] = useState("image/png"),
     [exportSize, setExportSize] = useState("full"),
-    [quality, setQuality] = useState(95);
+    [quality, setQuality] = useState(95),
+    // The Mac app's default: capture details without location.
+    [exportMetadata, setExportMetadata] = useState("preserveWithoutLocation");
+  // HDR is the Photos output setting, kept on this device.
+  const exportHDR = useAppSetting("photoHDR"),
+    setExportHDR = (value) => setAppSetting("photoHDR", value);
   const [stage, setStage] = useState(null),
     [stages, setStages] = useState([]),
-    [difference, setDifference] = useState(false);
+    [difference, setDifference] = useState(false),
+    // View › Show Negative: a way of looking, not part of the edit.
+    [showNegative, setShowNegative] = useState(false);
   const [session, setSession] = useState(null),
     [retry, setRetry] = useState(0);
   const input = useRef(null),
@@ -50,10 +58,10 @@ export default function useEditorState({}) {
   const [videoTime, setVideoTime] = useState(0),
     [videoFormat, setVideoFormat] = useState("mp4"),
     [videoQuality, setVideoQuality] = useState("high"),
-    [videoDownload, setVideoDownload] = useState(null);
+    [savedExport, setSavedExport] = useState(null);
   const videoExportController = useRef(null),
     imageResources = useRef(new Set()),
-    videoDownloadRef = useRef(null);
+    savedExportRef = useRef(null);
   const [sampling, setSampling] = useState(false);
   const [showMask, setShowMask] = useState(false);
   useEffect(() => {
@@ -111,6 +119,12 @@ export default function useEditorState({}) {
     setExportSize,
     quality,
     setQuality,
+    exportMetadata,
+    setExportMetadata,
+    exportHDR,
+    showNegative,
+    setShowNegative,
+    setExportHDR,
     stage,
     setStage,
     stages,
@@ -133,11 +147,11 @@ export default function useEditorState({}) {
     setVideoFormat,
     videoQuality,
     setVideoQuality,
-    videoDownload,
-    setVideoDownload,
+    savedExport,
+    setSavedExport,
     videoExportController,
     imageResources,
-    videoDownloadRef,
+    savedExportRef,
     sampling,
     setSampling,
     showMask,

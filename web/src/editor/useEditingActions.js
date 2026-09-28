@@ -1,5 +1,7 @@
+import { withProfileField } from "../profile-settings.js";
 import { useAutoAdjustment } from "../useAutoAdjustment.js";
 import { useCallback } from "react";
+import { defaultEdit } from "../editor-state.js";
 export default function useEditingActions({
   compactLayout,
   active,
@@ -19,6 +21,7 @@ export default function useEditingActions({
   setInspectorOpen,
   setFilmOpen,
   setCompare,
+  setZoom,
 }) {
   const auto = useAutoAdjustment({
     image: active?.image,
@@ -50,15 +53,7 @@ export default function useEditingActions({
     [dispatch],
   );
   const setProfile = (key, value) => {
-    patch(
-      {
-        profile: {
-          ...edit.profile,
-          [key]: value,
-        },
-      },
-      `profile-${key}`,
-    );
+    patch({ profile: withProfileField(edit.profile, key, value) }, `profile-${key}`);
     setStage(null);
     setDifference(false);
   };
@@ -86,6 +81,37 @@ export default function useEditingActions({
     if (compactLayout) setFilmOpen(showFilms);
     setCompare(false);
   };
+  // Shared by the toolbars, the keyboard and the native menu bar.
+  const resetEdits = () => {
+    dispatch({
+      type: "edit",
+      patch: defaultEdit(edit.stock),
+      restoring: true,
+    });
+    setStage(null);
+    setDifference(false);
+  };
+  const toggleInspector = () => {
+    setInspectorOpen((v) => !v);
+    if (compactLayout) setFilmOpen(false);
+  };
+  const toggleFilms = () => {
+    endEdit();
+    setFilmOpen((open) => !open);
+  };
+  const zoomIn = useCallback(
+    () => setZoom((z) => Math.min(8, z + 0.25)),
+    [setZoom],
+  );
+  const zoomOut = useCallback(
+    () => setZoom((z) => Math.max(1, z - 0.25)),
+    [setZoom],
+  );
+  // A fresh grain pattern: the film's own seed offset by a random one (0 is the film's own).
+  const newGrainPattern = useCallback(
+    () => patch({ seed: crypto.getRandomValues(new Uint32Array(1))[0] || 1 }),
+    [patch],
+  );
   return {
     auto,
     dispatch,
@@ -94,5 +120,11 @@ export default function useEditingActions({
     setProfile,
     setParam,
     setInspector,
+    resetEdits,
+    toggleInspector,
+    toggleFilms,
+    zoomIn,
+    zoomOut,
+    newGrainPattern,
   };
 }

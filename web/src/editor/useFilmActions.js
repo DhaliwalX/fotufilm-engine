@@ -23,11 +23,12 @@ export default function useFilmActions({
     if (exporting) return;
     const nextStock = stocks.find((stock) => stock.id === id);
     if (fixedStockSettings(nextStock) && auto.active) auto.toggle();
-    const medium = stocks
-      .find((s) => s.id === id)
-      ?.media.some((m) => m.id === edit.medium)
-      ? edit.medium
-      : null;
+    // Match Film goes to the new film's own medium; a chosen one stays where the film offers it.
+    const medium = edit.mediumFollowsFilm
+      ? (nextStock?.filmMedium ?? null)
+      : nextStock?.media.some((m) => m.id === edit.medium)
+        ? edit.medium
+        : null;
     const halationModel =
       stocks.find((s) => s.id === id)?.layeredTransport === false
         ? "legacy"

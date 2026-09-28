@@ -6,7 +6,8 @@
       "Segoe UI",
       sans-serif;
     color: #242628;
-    background: #e8e9eb;
+    --page: #e8e9eb;
+    background: var(--page);
     --panel: #f4f4f5;
     --border: #d6d7da;
     --muted: #73767b;
@@ -78,4 +79,45 @@
       opacity: 1;
     }
   }
+}
+
+/* Quieter chrome, as the Mac app draws its controls: fields and switch tracks sit on soft fills,
+   and the selected segment and slider knobs lift on a shadow, instead of 2 px outlines. The
+   Spectrum parts are matched by structure, not by their generated class names. Focus rings are
+   outlines and stay. */
+[role="group"]:has(> input:not([type="range"])) {
+  border-color: transparent !important;
+  background-color: light-dark(rgb(0 0 0 / 0.05), rgb(255 255 255 / 0.08)) !important;
+}
+/* The selected segment's pill is its empty indicator; the label's own wrapper stays flat. */
+[role="radiogroup"] [role="radio"][data-selected] > div:empty {
+  border-color: transparent !important;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.16),
+    0 0 0 0.5px rgb(0 0 0 / 0.06);
+}
+div[data-rac]:has(> div > input[type="range"]) > div > div {
+  border-color: transparent !important;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.35),
+    0 0 0 0.5px rgb(0 0 0 / 0.12);
+}
+label:has(> span > input[role="switch"]) > div > div {
+  border-color: transparent !important;
+}
+label:has(> span > input[role="switch"]):not([data-selected]) > div > div {
+  background-color: light-dark(rgb(0 0 0 / 0.14), rgb(255 255 255 / 0.2)) !important;
+}
+
+/* The glyph set's colours for the page's appearance: its sprite defaults to the dark system
+   colours, and a light page takes the light ones. */
+:root {
+  --fotu-systemRed: light-dark(#ff3b30, #ff453a);
+  --fotu-systemOrange: light-dark(#ff9500, #ff9f0a);
+  --fotu-systemYellow: light-dark(#ffcc00, #ffd60a);
+  --fotu-systemGreen: light-dark(#34c759, #30d158);
+  --fotu-systemCyan: light-dark(#32ade6, #64d2ff);
+  --fotu-systemBlue: light-dark(#007aff, #0a84ff);
+  --fotu-systemPurple: light-dark(#af52de, #bf5af2);
+  --fotu-systemPink: light-dark(#ff2d55, #ff375f);
 }

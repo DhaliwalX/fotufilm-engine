@@ -206,7 +206,7 @@ export default function LensFilters({ edit, stock, onChange, disabled }) {
               {"Take Them All Off"}
             </ActionButton>
           )}
-          <p className="medium-detail filter-note">{filterNote(edit)}</p>
+          {filterNote(edit) && <p className="medium-detail filter-note">{filterNote(edit)}</p>}
         </div>
       </DisclosurePanel>
     </Disclosure>

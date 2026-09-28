@@ -47,6 +47,8 @@ export async function loadStockIndex() {
       nativeFormat: catalogue[stock.id]?.nativeFormat,
       media: entry.choices,
       defaultMedium: entry.default,
+      // The browser's base pack is built on the film's own medium.
+      filmMedium: entry.default,
     };
   });
 }

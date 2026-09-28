@@ -370,7 +370,7 @@ test('video UI imports, seeks, changes log encoding, undoes, trims and exports',
   await expect(page.getByRole('listbox')).toHaveCount(0)
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog', {name: 'Video settings', exact: true})).toHaveCount(0)
-  await page.getByRole('button', { name: 'Undo (⌘Z)', exact: true }).click()
+  await page.getByRole('button', { name: /^Undo \(/ }).click()
   await videoSettings.click()
   await expect(encoding).toContainText('Standard')
   await encoding.click()
@@ -399,14 +399,14 @@ test('video UI imports, seeks, changes log encoding, undoes, trims and exports',
   await page.evaluate(() => {
     window.showSaveFilePicker = undefined
   })
-  await page.getByRole('button', { name: 'Export (⌘S)', exact: true }).click()
+  await page.getByRole('button', { name: /^Export \(/ }).click()
   await expect(page.getByRole('dialog', { name: 'Export image' })).toBeVisible()
   await page.getByRole('button', { name: 'Export', exact: true }).click()
   await expect(
     page.getByRole('link', { name: /Download source-normal.mp4/ }),
   ).toBeVisible()
-  await page.locator('.video-download').getByRole('button', { name: 'Dismiss', exact: true }).click()
-  await expect(page.locator('.video-download')).toHaveCount(0)
+  await page.locator('.saved-export').getByRole('button', { name: 'Dismiss', exact: true }).click()
+  await expect(page.locator('.saved-export')).toHaveCount(0)
 })
 
 test('all log video inputs agree through CPU and WebGPU film rendering', async ({

@@ -2,7 +2,7 @@
 export function createTransport(channel) {
   if (typeof channel?.postMessage !== "function")
     throw new Error("Invalid macOS image bridge.");
-  return async function call(method, params = {}, { signal, onProgress } = {}) {
+  return async function call(method, params = {}, { signal, onProgress, payload } = {}) {
     signal?.throwIfAborted();
     const id = crypto.randomUUID();
     const report = (event) => {
@@ -14,11 +14,10 @@ export function createTransport(channel) {
     };
     signal?.addEventListener("abort", abort, { once: true });
     try {
-      const result = await channel.postMessage({
-        id,
-        method,
-        params: JSON.parse(JSON.stringify(params)),
-      });
+      const message = { id, method, params: JSON.parse(JSON.stringify(params)) };
+      const result = await (payload === undefined
+        ? channel.postMessage(message)
+        : channel.postMessage(message, payload));
       if (signal?.aborted) {
         if (result?.handle)
           await channel.postMessage({
@@ -35,7 +34,9 @@ export function createTransport(channel) {
     }
   };
 }
+// A host with a binary channel hands image bytes over directly; WebKit IPC sends base64.
 export function imageBlob(encoded, type = "image/png") {
+  if (typeof encoded !== "string") return new Blob([encoded], { type });
   const bytes = Uint8Array.from(atob(encoded), (value) => value.charCodeAt(0));
   return new Blob([bytes], { type });
 }

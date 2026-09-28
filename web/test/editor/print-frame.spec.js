@@ -240,9 +240,9 @@ test("frame picker is undoable, saves its choice, exports the displayed dimensio
     .locator(".photo-plane > img")
     .evaluate((image) => image.naturalWidth / image.naturalHeight);
   expect(previewRatio).toBeCloseTo(9 / 16, 2);
-  await page.getByRole("button", { name: "Undo (⌘Z)", exact: true }).click();
+  await page.getByRole("button", { name: /^Undo \(/ }).click();
   await expect(picker).toHaveText("None");
-  await page.getByRole("button", { name: "Redo (⇧⌘Z)", exact: true }).click();
+  await page.getByRole("button", { name: /^Redo \(/ }).click();
   await expect(picker).toHaveText("Story");
   await page.getByRole("button", { name: "More options", exact: true }).click();
   const savedDownload = page.waitForEvent("download");

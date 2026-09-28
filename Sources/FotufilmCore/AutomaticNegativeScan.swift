@@ -49,6 +49,13 @@ public struct AutomaticNegativeScan: Encodable, Sendable {
         parameters = low + high + [0.6, monochrome ? 1 : 0]
     }
 
+    /// A plan already solved, as a host hands it back to convert with.
+    public init(parameters: [Float], weak: Bool = false, sampleCount: Int = 0) {
+        self.parameters = parameters
+        self.weak = weak
+        self.sampleCount = sampleCount
+    }
+
     /// The same constant transform used for colour-managed browser ingest.
     public static func rec2020ToSRGB(_ rgb: SIMD3<Float>) -> SIMD3<Float> {
         SIMD3(1.660491 * rgb.x - 0.5876411 * rgb.y - 0.0728499 * rgb.z,

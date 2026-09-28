@@ -2,7 +2,8 @@
   @media (prefers-color-scheme: dark) {
     :root {
       color: #e2e3e6;
-      background: #202124;
+      --page: #202124;
+      background: var(--page);
       --panel: #292a2d;
       --border: #3d3f43;
       --muted: #a0a3aa;

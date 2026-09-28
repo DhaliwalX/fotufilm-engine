@@ -52,13 +52,13 @@ test("real WebGPU editor: normal, film, adjustments, history, crop and full-size
     .press("Tab");
   await ready(page);
   expect(await framePixels(page)).not.toEqual(film);
-  await page.getByRole("button", { name: "Undo (⌘Z)", exact: true }).click();
+  await page.getByRole("button", { name: /^Undo \(/ }).click();
   await expect(
     page.getByRole("spinbutton", { name: "Exposure value", exact: true }),
   ).toHaveValue("0");
   await ready(page);
   expect(await framePixels(page)).toEqual(film);
-  await page.getByRole("button", { name: "Redo (⇧⌘Z)", exact: true }).click();
+  await page.getByRole("button", { name: /^Redo \(/ }).click();
   await expect(
     page.getByRole("spinbutton", { name: "Exposure value", exact: true }),
   ).toHaveValue("0.8");
@@ -86,7 +86,7 @@ test("real WebGPU editor: normal, film, adjustments, history, crop and full-size
   await expect(page.locator(".viewer-status > [role=status]")).toContainText(
     "1000 × 1000",
   );
-  await page.getByRole("button", { name: "Export (⌘S)", exact: true }).click();
+  await page.getByRole("button", { name: /^Export \(/ }).click();
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export", exact: true }).click();
   const download = await downloadPromise;

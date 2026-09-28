@@ -1,25 +1,9 @@
-import { useViewportDetail } from "./useViewportDetail.js";
 import { viewportPlacement } from "./viewport.js";
 
-// The overview and last decoded detail stay visible while the next region renders.
-export default function ViewportDetail({
-  session,
-  request,
-  viewport,
-  enabled,
-  compare,
-  onError,
-  onBackend,
-}) {
-  const detail = useViewportDetail({
-    session,
-    request,
-    viewport,
-    enabled,
-    onError,
-    onBackend,
-  });
-  if (!detail) return null;
+// The overview and last decoded detail stay visible while the next region renders. A detail the
+// host presented is drawn in its image layer instead (ImageCanvas places it).
+export default function ViewportDetail({ detail, compare }) {
+  if (!detail || detail.presented) return null;
   return (
     <div className="viewport-detail-surface">
       <img

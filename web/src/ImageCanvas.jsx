@@ -2,6 +2,8 @@ import { usePhotoNavigation } from "./usePhotoNavigation.js";
 import { useEffect, useRef, useState } from "react";
 import HistogramPanel from "./HistogramPanel.jsx";
 import ViewportDetail from "./ViewportDetail.jsx";
+import { useViewportDetail } from "./useViewportDetail.js";
+import { useImageLayer } from "./useImageLayer.js";
 import { visiblePhotoViewport } from "./viewport.js";
 import CropOverlay from "./CropOverlay.jsx";
 import { clamp } from "./color-controls.js";
@@ -32,7 +34,8 @@ export function ImageCanvas({
   sampling = false,
   onSample,
 }) {
-  const container = useRef(null);
+  const container = useRef(null),
+    plane = useRef(null);
   const [offset, setOffset] = useState([0, 0]),
     [room, setRoom] = useState([1, 1]),
     [pixelRatio, setPixelRatio] = useState(() => window.devicePixelRatio || 1);
@@ -80,6 +83,16 @@ export function ImageCanvas({
     framePlan: cropMode ? null : result?.framePlan,
     pixelRatio,
   });
+  const detail = useViewportDetail({
+    session: detailSession,
+    request: detailRequest,
+    viewport,
+    enabled: detailEnabled,
+    onError: onDetailError,
+    onBackend: onDetailBackend,
+  });
+  // The host draws a presented photograph beneath the page; the page leaves it a hole.
+  const presented = useImageLayer({ container, plane, result, detail, compare });
   const displayUrl = compare
     ? result?.originalUrl || original?.src
     : result?.url || original?.src;
@@ -116,6 +129,7 @@ export function ImageCanvas({
     >
       {displayUrl && (
         <div
+          ref={plane}
           className={`photo-plane ${result?.framePlan && !cropMode ? "framed" : ""}`}
           style={{
             width: displayWidth,
@@ -123,20 +137,20 @@ export function ImageCanvas({
             transform: `translate(${cropMode ? 0 : offset[0]}px, ${cropMode ? 0 : offset[1]}px) scale(${cropMode ? 1 : zoom})`,
           }}
         >
-          <img
-            src={displayUrl}
-            alt={compare ? "Original photo" : "Developed photo"}
-            draggable="false"
-          />
-          <ViewportDetail
-            session={detailSession}
-            request={detailRequest}
-            viewport={viewport}
-            enabled={detailEnabled}
-            compare={compare}
-            onError={onDetailError}
-            onBackend={onDetailBackend}
-          />
+          {presented ? (
+            <div
+              className="presented-photo"
+              role="img"
+              aria-label={compare ? "Original photo" : "Developed photo"}
+            />
+          ) : (
+            <img
+              src={displayUrl}
+              alt={compare ? "Original photo" : "Developed photo"}
+              draggable="false"
+            />
+          )}
+          <ViewportDetail detail={detail} compare={compare} />
           {cropMode && (
             <CropOverlay
               crop={crop}

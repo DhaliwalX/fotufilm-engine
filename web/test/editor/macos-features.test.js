@@ -59,3 +59,78 @@ test('moving video uses compact previews while paused frames and photos stay los
   assert.deepEqual(calls.map(request => request.previewQuality), ['playback', 'still', 'still']);
   session.dispose();
 });
+
+test('background pictures wait while a movie plays and follow the paused frame', async () => {
+  const calls = [];
+  const session = createSession(async (_, request) => {
+    calls.push(request.maxEdge);
+    return { presented: { frame: calls.length, original: 0 } };
+  }, async () => []);
+  const movie = { image: { handle: 'video', video: {} }, edit: defaultEdit(), interactive: true, maxEdge: 640 };
+  await session.render(movie);
+  const thumbnail = session.render({ ...movie, interactive: false, background: true, maxEdge: 160 });
+  await session.render(movie);
+  assert.deepEqual(calls, [640, 640]);
+  await session.render({ ...movie, interactive: false, maxEdge: 1600 });
+  await thumbnail;
+  assert.deepEqual(calls, [640, 640, 1600, 160]);
+  session.dispose();
+});
+
+test('a playing movie asks for its original only while the comparison shows it', async () => {
+  const calls = [];
+  const session = createSession(async (_, request) => {
+    calls.push(request);
+    return { presented: { frame: calls.length, original: 0 } };
+  }, async () => []);
+  const request = { image: { handle: 'video', video: {} }, edit: defaultEdit(), interactive: true };
+  await session.render(request);
+  await session.render({ ...request, compare: true });
+  await session.render({ ...request, interactive: false });
+  await session.render({ ...request, image: { handle: 'photo' } });
+  assert.deepEqual(calls.map(request => request.original), [false, true, true, true]);
+  session.dispose();
+});
+
+test('a newer request cancels the stale render the host is still developing', async () => {
+  const calls = [];
+  let settled = true;
+  const session = createSession((_, request, { signal }) => {
+    calls.push(request.maxEdge);
+    return new Promise((resolve, reject) => {
+      if (request.maxEdge === 1600) signal.addEventListener('abort', () => reject(new DOMException('', 'AbortError')));
+      else resolve({ presented: { frame: 1 } });
+    });
+  }, async () => []);
+  const request = { image: { handle: 'photo' }, edit: defaultEdit(), present: 'preview' };
+  const refinement = session.render({ ...request, maxEdge: 1600, stale: () => !settled });
+  await new Promise((resolve) => setTimeout(resolve));
+  settled = false;
+  const draft = session.render({ ...request, maxEdge: 800, interactive: true });
+  assert.equal(await refinement, null);
+  assert.equal((await draft).presented.frame, 1);
+  // A request still current is never cut short.
+  const current = session.render({ ...request, maxEdge: 900 });
+  const next = session.render({ ...request, maxEdge: 700 });
+  assert.equal((await current).presented.frame, 1);
+  await next;
+  assert.deepEqual(calls, [1600, 800, 900, 700]);
+  session.dispose();
+});
+
+test('an unchanged original crosses the bridge once and is reused', async () => {
+  const calls = [];
+  const session = createSession(async (_, request) => {
+    calls.push(request);
+    const answer = { preview: 'AA==', previewType: 'image/png', originalKey: 'photo|frame' };
+    if (request.haveOriginal !== 'photo|frame') answer.original = 'AA==';
+    return answer;
+  }, async () => []);
+  const request = { image: { handle: 'photo' }, edit: defaultEdit() };
+  const first = await session.render(request);
+  const second = await session.render({ ...request, maxEdge: 64 });
+  assert.equal(calls[0].haveOriginal, undefined);
+  assert.equal(calls[1].haveOriginal, 'photo|frame');
+  assert.equal(second.original, first.original);
+  session.dispose();
+});

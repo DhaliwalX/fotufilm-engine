@@ -32,9 +32,20 @@ test('every Mac encoding is selectable and saved video settings round trip', () 
   assert.equal(VIDEO_ENCODINGS.length, 10)
   const edit = {
     ...defaultEdit(),
-    video: { encoding: 'flog2C', trimStart: 1.2, trimEnd: 2.4, audio: false },
+    video: { encoding: 'flog2C', trimStart: 1.2, trimEnd: 2.4, audio: false, frameRate: 18 },
   }
   assert.deepEqual(parseEdit(JSON.stringify({ version: 1, edit }), []), edit)
+  // An edit saved before cadence keeps the source's rate.
+  const { frameRate: _, ...older } = edit.video
+  assert.equal(
+    parseEdit(JSON.stringify({ version: 1, edit: { ...edit, video: older } }), []).video.frameRate,
+    null,
+  )
+  assert.throws(
+    () =>
+      parseEdit(JSON.stringify({ version: 1, edit: { ...edit, video: { ...older, frameRate: 0 } } }), []),
+    /video settings/,
+  )
   delete edit.video
   assert.deepEqual(
     parseEdit(JSON.stringify({ version: 1, edit }), []).video,

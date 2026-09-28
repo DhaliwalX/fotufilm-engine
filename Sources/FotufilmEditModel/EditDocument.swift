@@ -31,6 +31,7 @@ public struct EditDocument: Equatable, Sendable {
     static let composed: Set<EditorControlField> = [
         .gauge, .paper, .sceneLight, .sceneLightKelvin, .lensFilterStack, .metering,
         .printerEnabled, .printerLamp, .printerExposure, .printerMagenta, .printerYellow,
+        .couplerRedGreen, .couplerGreenBlue,
     ]
 
     /// `nativeFormatID` is the gauge the film comes in, used when the edit does not choose one.
@@ -77,6 +78,15 @@ public struct EditDocument: Equatable, Sendable {
                     "This film has no development condition at the selected stop value.")
             }
             binding.apply(value, to: &options)
+        }
+
+        // Each interlayer's reach on its own, as the Mac app keeps an edit's `couplerGapReach`; a
+        // pair left unset follows Separation.
+        let redGreen = try number(.couplerRedGreen), greenBlue = try number(.couplerGreenBlue)
+        if redGreen != nil || greenBlue != nil {
+            let linked = options.couplerGapReachScales ?? [1, 1]
+            options.couplerGapReachScales = [redGreen.map(Float.init) ?? linked[0],
+                                             greenBlue.map(Float.init) ?? linked[1]]
         }
 
         var printer = PrinterProfile.simulatedTungsten

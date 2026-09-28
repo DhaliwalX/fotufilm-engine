@@ -343,29 +343,25 @@
     "provenance": "Project-authored Motion effect template, regenerated from EditorControlCatalogue with positive print media; no photography or manufacturer artwork.",
     "sha256": "c69dee5f6af4f1d33bd07d66867974bf56fff49a52e2decb50e31adbdc5e44ef"
   },
-  "macos/AppIcon.icon/Assets/Cyan.svg": {
+  "cef/mac/AppIcon.icon/Assets/Cyan.svg": {
     "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
     "sha256": "560b433e7336324e1d70722641e1f5a4cf98898a11511d138a2912cbf1c7e91e"
   },
-  "macos/AppIcon.icon/Assets/FOTUFILM.svg": {
+  "cef/mac/AppIcon.icon/Assets/FOTUFILM.svg": {
     "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
     "sha256": "6ef69c56958f3718a6eb5c5940826902e34e8f0697de3c4830dfecd95d944fe2"
   },
-  "macos/AppIcon.icon/Assets/Lime.svg": {
+  "cef/mac/AppIcon.icon/Assets/Lime.svg": {
     "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
     "sha256": "9b054350d082a4db5cd1542e1d41787e2ef5da397532992e0b5e4d015bedd12b"
   },
-  "macos/AppIcon.icon/Assets/Red.svg": {
+  "cef/mac/AppIcon.icon/Assets/Red.svg": {
     "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
     "sha256": "338d8dffb9669a99eeaf19adb9876e20846c52718f831fd78095928de8e35188"
   },
-  "macos/AppIcon.icon/Assets/Violet.svg": {
+  "cef/mac/AppIcon.icon/Assets/Violet.svg": {
     "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
     "sha256": "9407bfe0a57eed7c37398f1bb2c02f870aefbb77d94a29b74d8bb3fbaecdbe2b"
-  },
-  "macos/Resources/FOTUFILM.svg": {
-    "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
-    "sha256": "ab8aca1bf4a81910e8087c37505cca56d8e733bd57c6774b178f891ab440611e"
   },
   "resolve/openfx/ofx-native-v1.5_aces-v1.3_ocio-v2.3.h": {
     "provenance": "OpenFX interface headers; upstream BSD-3-Clause notices retained in each header.",
@@ -1160,7 +1156,7 @@
     "sha256": "d7662e3257b1dbae90351465b633f299eb0a080baa91fd4637552c37a9229c34"
   },
   "web/src/assets/fotufilm-wordmark.svg": {
-    "provenance": "Fotufilm wordmark, copied from macos/Resources/FOTUFILM.svg in this repository.",
+    "provenance": "Project-authored Fotufilm wordmark; no photography or manufacturer artwork.",
     "sha256": "ab8aca1bf4a81910e8087c37505cca56d8e733bd57c6774b178f891ab440611e"
   },
   "shared/Glyphs/sources/fotu.deck.controls.svg": {

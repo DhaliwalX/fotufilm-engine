@@ -19,7 +19,7 @@ test("ordered filter stacks and metering round-trip with duplicate filters intac
   assert.deepEqual(restored, edit);
   assert.equal(hasProfileSettings(restored), true);
   assert.match(filterNote(restored), /Only the first diffusion filter acts/);
-  assert.match(filterNote(restored), /green-sensitive/);
+  assert.equal(filterNote({ ...restored, filters: ["w85b", "fog-1"] }), "");
   assert.equal(isDiffusion("w85b"), false);
   assert.equal(isDiffusion("blackpromist-1/2"), true);
   assert.equal(isDiffusion("unknown-1"), false);

@@ -137,7 +137,7 @@ test("Source Interpretation follows Mac placement, undo, saved edits and export"
     .getByRole("option", { name: "Standard Range", exact: true })
     .click();
   await expect(choice).toContainText("Standard Range");
-  await page.getByRole("button", { name: "Undo (⌘Z)", exact: true }).click();
+  await page.getByRole("button", { name: /^Undo \(/ }).click();
   await expect(choice).toContainText("Automatic");
   await choice.click();
   await page.getByRole("option", { name: "Full Range", exact: true }).click();
@@ -156,7 +156,7 @@ test("Source Interpretation follows Mac placement, undo, saved edits and export"
   await page.screenshot({
     path: testInfo.outputPath("source-interpretation.png"),
   });
-  await page.getByRole("button", { name: "Export (⌘S)", exact: true }).click();
+  await page.getByRole("button", { name: /^Export \(/ }).click();
   const output = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export", exact: true }).click();
   const png = await readFile(await (await output).path());

@@ -10,6 +10,7 @@ import { SELECTION } from "./generated/controls.js";
 import { SLIDERS } from "./editor-state.js";
 import { newSelection, selectionDevelop, selectionKeys } from "./selective.js";
 import { Adjustment } from "./Adjustment.jsx";
+import { useBackend } from "./backend/BackendContext.jsx";
 export default function SelectiveControls({
   edit,
   patch,
@@ -20,8 +21,26 @@ export default function SelectiveControls({
   setShowMask,
   canSample,
   disabled,
+  subjects,
 }) {
+  const backend = useBackend();
   const selection = edit.selective || newSelection(edit);
+  // Subjects come from the native host's detector; the browser selects by colour and light.
+  const choices = SELECTION.choices.filter(
+    (option) => !option.native || backend.subjectSelection,
+  );
+  const subject = selection.kind === "subject";
+  // A subject selection's rim, or a colour or light selection's reach.
+  const sliders = subject ? SELECTION.subjectSliders : SELECTION.sliders;
+  const [finding, none, one, many] = SELECTION.subjectsFound;
+  const found =
+    subjects == null
+      ? finding
+      : subjects === 0
+        ? none
+        : subjects === 1
+          ? one
+          : many.replace("%d", subjects);
   const change = (value, group) =>
     patch(
       {
@@ -57,7 +76,7 @@ export default function SelectiveControls({
                 width: "100%",
               }}
             >
-              {SELECTION.choices.map((option) => (
+              {choices.map((option) => (
                 <PickerItem
                   id={option.value}
                   key={option.value}
@@ -75,12 +94,17 @@ export default function SelectiveControls({
             >
               {sampling ? SELECTION.sampling : SELECTION.sample}
             </Button>
-            {SELECTION.sliders.map((slider) => (
+            {subject && (
+              <p className="medium-detail" role="status">
+                {found}
+              </p>
+            )}
+            {sliders.map((slider) => (
               <Adjustment
                 key={slider.key}
                 disabled={disabled}
                 slider={slider}
-                value={selection[slider.key]}
+                value={selection[slider.key] ?? slider.def}
                 onChange={(value) =>
                   change(
                     {
@@ -94,7 +118,7 @@ export default function SelectiveControls({
             ))}
             <Switch
               isSelected={showMask}
-              isDisabled={disabled || !selection.sample}
+              isDisabled={disabled || (!subject && !selection.sample)}
               size="S"
               onChange={setShowMask}
             >
@@ -114,10 +138,6 @@ export default function SelectiveControls({
             >
               {SELECTION.clear}
             </Button>
-            <p className="medium-detail">
-              Sample the photo to select similar colors or brightness, then
-              adjust the selection.
-            </p>
           </div>
         </DisclosurePanel>
       </Disclosure>

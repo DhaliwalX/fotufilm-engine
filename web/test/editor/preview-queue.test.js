@@ -47,3 +47,33 @@ test('pending preview labels distinguish exposure edits, full detail and another
   assert.equal(previewLabel({ ...brighter, edge: 1600 }, brighter), 'Full detail · 1600px preview')
   assert.equal(previewLabel({ ...initial, fileId: 'b', filename: 'second.dng' }, brighter), 'second.dng · 512px preview')
 })
+
+test('a playing movie keeps one more frame at the backend, and only then waits', async () => {
+  const queue = new PreviewQueue(),
+    started = [],
+    gates = []
+  const frame = (n) => () => {
+    started.push(n)
+    return new Promise((resolve) => gates.push(() => resolve(n)))
+  }
+  const first = queue.submit(frame(1), 'Frame 1', { pipelined: true })
+  const second = queue.submit(frame(2), 'Frame 2', { pipelined: true })
+  const third = queue.submit(frame(3), 'Frame 3', { pipelined: true })
+  assert.deepEqual(started, [1, 2])
+  gates[0]()
+  assert.equal(await first, 1)
+  assert.deepEqual(started, [1, 2, 3])
+  gates[1]()
+  gates[2]()
+  assert.deepEqual([await second, await third], [2, 3])
+  // A preview that is not a playing frame waits for the backend to be idle.
+  const moving = queue.submit(frame(4), 'Frame 4', { pipelined: true })
+  const settled = queue.submit(frame(5), 'Settled')
+  assert.deepEqual(started, [1, 2, 3, 4])
+  gates[3]()
+  assert.equal(await moving, 4)
+  assert.deepEqual(started, [1, 2, 3, 4, 5])
+  gates[4]()
+  assert.equal(await settled, 5)
+  queue.close()
+})

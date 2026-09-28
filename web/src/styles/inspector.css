@@ -65,17 +65,175 @@
     line-height: 1.6;
     margin-top: 20px;
   }
-  .grade-band {
+  /* A slider's low and high glyphs either side of its track, as the Mac app's rows draw them. */
+  .adjustment-track {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .adjustment-track .adjustment-slider {
+    flex: 1;
+    min-width: 0;
+  }
+  /* Drawn as the Material icons beside them are: the same box, at full strength. */
+  .adjustment-end {
+    width: 22px;
+  }
+  /* The knob is centred on the track's end, so it reaches half its width past it: the track
+     keeps that clear of an end glyph and the gap still shows with the knob at either end. */
+  .adjustment-track .adjustment-end + .adjustment-slider {
+    margin-left: 9px;
+  }
+  .adjustment-track .adjustment-slider:has(+ .adjustment-end) {
+    margin-right: 9px;
+  }
+  /* A control's help button after its name, as the Mac app's inspector rows carry one. */
+  .adjustment-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .control-with-help {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  /* The grade deck, drawn as the native Mac app's. */
+  .grade-deck {
     display: flex;
     flex-direction: column;
-    gap: 13px;
-    padding-top: 9px;
+    gap: 10px;
+    padding-top: 4px;
   }
-  .grade-band h3 {
-    font-weight: 500;
-    color: var(--muted);
+  .grade-caption {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 2px;
     font-size: 11px;
-    margin: 0 0 1px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .grade-reading {
+    color: var(--muted);
+    font-weight: 500;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+  }
+  .grade-reading[data-shown] {
+    opacity: 1;
+  }
+  .grade-pad {
+    --ground: rgb(26 26 26);
+    --wash: 0.62;
+    position: relative;
+    height: 168px;
+    border-radius: 22px;
+    overflow: hidden;
+    touch-action: none;
+    cursor: crosshair;
+    background:
+      linear-gradient(
+        to bottom,
+        rgb(102 191 89 / calc(var(--wash) * 0.9)),
+        rgb(102 191 89 / 0) 50%,
+        rgb(191 77 140 / 0) 50%,
+        rgb(191 77 140 / calc(var(--wash) * 0.9))
+      ),
+      linear-gradient(
+        to right,
+        rgb(89 128 191 / var(--wash)),
+        rgb(89 128 191 / 0) 50%,
+        rgb(230 140 51 / 0) 50%,
+        rgb(230 140 51 / var(--wash))
+      ),
+      var(--ground);
+  }
+  .grade-pad.grade-midtones {
+    --ground: rgb(43 43 43);
+    --wash: 0.55;
+  }
+  .grade-pad.grade-highlights {
+    --ground: rgb(66 66 66);
+    --wash: 0.46;
+  }
+  .grade-pad:focus-visible,
+  .grade-level:focus-visible {
+    outline: 2px solid var(--accent, #4b75ff);
+    outline-offset: 2px;
+  }
+  .grade-pad[aria-disabled],
+  .grade-level[aria-disabled] {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .grade-pad-marks {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    fill: white;
+    pointer-events: none;
+  }
+  .grade-pad-ring {
+    fill: none;
+    stroke: rgb(255 255 255 / 0.8);
+    stroke-width: 1.4;
+  }
+  .grade-pad-knob {
+    position: absolute;
+    width: 15px;
+    height: 15px;
+    margin: -7.5px 0 0 -7.5px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.5);
+    pointer-events: none;
+    transition:
+      transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow 0.2s ease;
+  }
+  .grade-pad:active .grade-pad-knob {
+    transform: scale(1.35);
+    box-shadow: 0 2px 6px rgb(0 0 0 / 0.55);
+  }
+  .grade-level {
+    position: relative;
+    height: 24px;
+    border-radius: 12px;
+    touch-action: none;
+    cursor: pointer;
+    box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 0.12);
+    background: linear-gradient(to right, black, rgb(97 97 97));
+  }
+  .grade-level.grade-midtones {
+    background: linear-gradient(to right, rgb(31 31 31), rgb(115 115 115), rgb(199 199 199));
+  }
+  .grade-level.grade-highlights {
+    background: linear-gradient(to right, rgb(89 89 89), white);
+  }
+  /* The well at neutral. */
+  .grade-level::before {
+    content: "";
+    position: absolute;
+    left: calc(50% - 0.5px);
+    top: 25%;
+    width: 1px;
+    height: 50%;
+    background: rgb(255 255 255 / 0.35);
+  }
+  .grade-level-knob {
+    position: absolute;
+    top: 2px;
+    left: calc(2px + var(--fraction) * (100% - 24px));
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.45);
+    pointer-events: none;
   }
   .crop-actions {
     display: flex;
@@ -116,6 +274,26 @@
   [role="dialog"] .select-row {
     margin: 15px 0;
     font-size: 12px;
+  }
+  .settings-pane {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    margin-top: 14px;
+  }
+  .settings-pane .adjustment {
+    align-self: stretch;
+    margin-top: 6px;
+  }
+  .settings-pane h3 {
+    margin: 12px 0 0;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .settings-pane .select-row {
+    align-self: stretch;
+    margin: 4px 0;
   }
   [role="dialog"] .adjustment {
     margin-top: 20px;
@@ -199,5 +377,58 @@
   }
   .darkroom-heading {
     align-items: center;
+  }
+}
+@layer editor {
+  .format-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .format-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: 10px;
+  }
+  .format-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    padding: 3px;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    font: inherit;
+    font-size: 11px;
+    color: inherit;
+    cursor: pointer;
+  }
+  .format-tile[aria-pressed="true"] {
+    box-shadow: 0 0 0 2px var(--foreground, #222);
+  }
+  .format-tile:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+  .format-tile-image {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    background: #00000007;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .format-tile-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  .format-tile-name {
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }

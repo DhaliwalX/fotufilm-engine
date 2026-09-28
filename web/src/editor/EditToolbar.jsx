@@ -2,14 +2,14 @@ import { Icon } from "../icons.jsx";
 import { ActionButton } from "@react-spectrum/s2/ActionButton";
 import { Tooltip, TooltipTrigger } from "@react-spectrum/s2/Tooltip";
 import { ToggleButton } from "@react-spectrum/s2/ToggleButton";
-import { defaultEdit } from "../editor-state.js";
 import { useEditor } from "./EditorContext.jsx";
 import OptionsMenu from "./OptionsMenu.jsx";
+import { filmNamer, redoTitle, undoTitle } from "../edit-history.js";
+import { exportShortcut, shortcutLabel } from "../shortcut-label.js";
 export default function EditToolbar() {
   const {
-    compactLayout,
-    setFilmOpen,
-    setInspectorOpen,
+    toggleInspector,
+    resetEdits,
     exporting,
     active,
     inspectorOpen,
@@ -17,12 +17,12 @@ export default function EditToolbar() {
     setHistogram,
     dispatch,
     history,
-    edit,
-    setStage,
-    setDifference,
     setDialog,
     stocks,
+    backend,
   } = useEditor();
+  // What Undo and Redo will change, as the Edit menu names it.
+  const filmName = filmNamer(stocks);
   return (
     <div className="toolbar-trailing">
       <TooltipTrigger>
@@ -47,13 +47,13 @@ export default function EditToolbar() {
             })
           }
           isDisabled={!history.past.length || exporting}
-          aria-label={"Undo (⌘Z)"}
+          aria-label={`Undo (${shortcutLabel("⌘Z")})`}
           size={"S"}
           isQuiet
         >
           <Icon name={"undo"} />
         </ActionButton>
-        <Tooltip>{"Undo (⌘Z)"}</Tooltip>
+        <Tooltip>{`${undoTitle(history, filmName)} (${shortcutLabel("⌘Z")})`}</Tooltip>
       </TooltipTrigger>
       <TooltipTrigger>
         <ActionButton
@@ -63,25 +63,17 @@ export default function EditToolbar() {
             })
           }
           isDisabled={!history.future.length || exporting}
-          aria-label={"Redo (⇧⌘Z)"}
+          aria-label={`Redo (${shortcutLabel("⇧⌘Z")})`}
           size={"S"}
           isQuiet
         >
           <Icon name={"redo"} />
         </ActionButton>
-        <Tooltip>{"Redo (⇧⌘Z)"}</Tooltip>
+        <Tooltip>{`${redoTitle(history, filmName)} (${shortcutLabel("⇧⌘Z")})`}</Tooltip>
       </TooltipTrigger>
       <TooltipTrigger>
         <ActionButton
-          onPress={() => {
-            dispatch({
-              type: "edit",
-              patch: defaultEdit(edit.stock),
-              restoring: true,
-            });
-            setStage(null);
-            setDifference(false);
-          }}
+          onPress={resetEdits}
           isDisabled={!active || exporting}
           aria-label={"Reset all edits"}
           size={"S"}
@@ -95,21 +87,18 @@ export default function EditToolbar() {
         <ActionButton
           onPress={() => setDialog("export")}
           isDisabled={!active || !stocks.length || exporting}
-          aria-label={"Export (⌘S)"}
+          aria-label={`Export (${shortcutLabel(exportShortcut(backend))})`}
           size={"S"}
           isQuiet
         >
           <Icon name={"export"} />
         </ActionButton>
-        <Tooltip>{"Export (⌘S)"}</Tooltip>
+        <Tooltip>{`Export (${shortcutLabel(exportShortcut(backend))})`}</Tooltip>
       </TooltipTrigger>
       <OptionsMenu />
       <TooltipTrigger>
         <ToggleButton
-          onPress={() => {
-            setInspectorOpen((v) => !v);
-            if (compactLayout) setFilmOpen(false);
-          }}
+          onPress={toggleInspector}
           data-panel-toggle="inspector"
           aria-expanded={inspectorOpen}
           aria-label={"Toggle adjustments"}
