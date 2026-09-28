@@ -78,8 +78,12 @@ function(fotufilm_target target)
 endfunction()
 
 if(OS_MAC)
-  set(FOTUFILM_APP_NAME "Fotufilm Desktop")
-  set(FOTUFILM_HELPER_NAME "Fotufilm Desktop Helper")
+  set(FOTUFILM_APP_NAME "Fotufilm")
+  set(FOTUFILM_HELPER_NAME "Fotufilm Helper")
+  # The Mac app's identity. An official build (cef/build.sh with the official packs) replaces the
+  # Mac app in place and reads its release feed; a source build is an app of its own, with no feed.
+  set(FOTUFILM_BUNDLE_ID "com.muastudio.fotufilm.source" CACHE STRING "The app's bundle identifier")
+  set(FOTUFILM_UPDATE_FEED "" CACHE STRING "The release feed Check for Updates reads")
   set(_mac_sources
     src/platform/mac/compositor.mm
     src/platform/mac/export_files.mm
