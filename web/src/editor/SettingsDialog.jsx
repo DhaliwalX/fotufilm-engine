@@ -10,6 +10,7 @@ import { Switch } from "@react-spectrum/s2/Switch";
 import { Button } from "@react-spectrum/s2/Button";
 import { FILM_FORMATS } from "../generated/controls.js";
 import { editorControl } from "../editor-catalogue.js";
+import { hasProfileSettings } from "../profile-settings.js";
 import {
   APP_SETTINGS,
   resetAppSettings,
@@ -52,7 +53,8 @@ function SettingSlider({ label, setting, follows }) {
   );
 }
 
-function SettingPicker({ label, setting, options }) {
+// `onSet` also runs with each new value, for a setting the open photo follows.
+function SettingPicker({ label, setting, options, onSet }) {
   const value = useAppSetting(setting);
   return (
     <div className="select-row">
@@ -60,7 +62,10 @@ function SettingPicker({ label, setting, options }) {
       <Picker
         aria-label={label}
         value={value ?? "default"}
-        onChange={(id) => setAppSetting(setting, id === "default" ? null : id)}
+        onChange={(id) => {
+          setAppSetting(setting, id === "default" ? null : id);
+          onSet?.(id === "default" ? null : id);
+        }}
         size={"S"}
       >
         {options.map(({ id, label }) => (
@@ -73,10 +78,16 @@ function SettingPicker({ label, setting, options }) {
   );
 }
 
-function SettingSwitch({ label, setting }) {
+function SettingSwitch({ label, setting, onSet }) {
   const value = useAppSetting(setting);
   return (
-    <Switch isSelected={value} onChange={(next) => setAppSetting(setting, next)}>
+    <Switch
+      isSelected={value}
+      onChange={(next) => {
+        setAppSetting(setting, next);
+        onSet?.(next);
+      }}
+    >
       {label}
     </Switch>
   );
@@ -336,6 +347,19 @@ function FilmModel() {
     couplerSelf: useAppSetting("couplerSelf"),
   };
   const adjusted = FILM_MODEL.some((key) => values[key] !== APP_SETTINGS[key]);
+  // The Mac app reads halation as a photo develops, so these reach the open photo as well.
+  const { active, edit, selectedStock, fixedSettings, sceneKelvin, patch, setProfile } =
+    useEditor();
+  const modelled = !!active && !!edit?.stock && !fixedSettings;
+  const halationModelChanged = (model) => {
+    const layered =
+      selectedStock?.layeredTransport !== false && !sceneKelvin && !hasProfileSettings(edit);
+    if (modelled && (model !== "layered" || layered))
+      patch({ halationModel: model, medium: null });
+  };
+  const estimatedHalationChanged = (on) => {
+    if (modelled) setProfile("estimatedHalation", on);
+  };
   return (
     <>
       <h3>Grain</h3>
@@ -353,10 +377,12 @@ function FilmModel() {
         label={editorControl("halationModel").title}
         setting="halationModel"
         options={choices("halationModel")}
+        onSet={halationModelChanged}
       />
       <SettingSwitch
         label={editorControl("estimatedHalation").title}
         setting="estimatedHalation"
+        onSet={estimatedHalationChanged}
       />
       <p className="medium-detail">
         Layered Transport simulates light moving through the film layers.
@@ -381,8 +407,8 @@ function FilmModel() {
         sharpening caused by development.
       </p>
       <p className="medium-detail">
-        These apply to photos you open from now on; each open photo keeps its
-        own.
+        Halation settings also change the open photo. The others apply to
+        photos you open from now on; each open photo keeps its own.
       </p>
       <Button
         size="S"
