@@ -1,0 +1,4 @@
+module CFotufilmVideo {
+  header "fotufilm_video.h"
+  export *
+}

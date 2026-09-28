@@ -47,6 +47,21 @@ for source in Sources/CFotufilmCodecs/*.cpp; do
     "$source" -o "$OBJ/codecs-$(basename "$source" .cpp).o"
 done
 
+# Movies through the system's FFmpeg (Sources/CFotufilmVideo): compiled against its headers,
+# loaded when first asked for, never linked or carried.
+VIDEO_PACKAGES=(libavformat libavcodec libavutil libswscale libswresample)
+pkg-config --exists "${VIDEO_PACKAGES[@]}" || {
+  echo "error: the FFmpeg development packages are missing (cef/README.md lists them)" >&2
+  exit 1
+}
+read -r -a VIDEO_CFLAGS <<< "$(pkg-config --cflags "${VIDEO_PACKAGES[@]}")"
+for source in Sources/CFotufilmVideo/*.cpp; do
+  "${CXX:-clang++}" -std=c++17 -O2 -g1 -fPIC \
+    -fvisibility=hidden -fvisibility-inlines-hidden -ffunction-sections -fdata-sections -c \
+    -ffile-prefix-map="$PWD"=Fotufilm ${VIDEO_CFLAGS[@]+"${VIDEO_CFLAGS[@]}"} \
+    -ISources/CFotufilmVideo/include "$source" -o "$OBJ/video-$(basename "$source" .cpp).o"
+done
+
 cat > "$OBJ/module.modulemap" <<MAP
 module CFotufilmHost {
   header "$PWD/Sources/CFotufilmHost/include/fotufilm.h"
@@ -66,6 +81,7 @@ swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
   -ISources/FotufilmHalide/include \
   -Xcc -fmodule-map-file="$OBJ/module.modulemap" \
   -Xcc -fmodule-map-file="$PWD/Sources/CFotufilmCodecs/include/module.modulemap" \
+  -Xcc -fmodule-map-file="$PWD/Sources/CFotufilmVideo/include/module.modulemap" \
   -swift-version 5 -O -whole-module-optimization -g -parse-as-library \
   -file-prefix-map "$PWD=Fotufilm" \
   -file-prefix-map "$FOTUFILM_CORE_SOURCE_DIR=Fotufilm/Sources/FotufilmCore" \
@@ -81,7 +97,8 @@ swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
   -o "$OBJ/FotufilmHost.o"
 
 swiftc -emit-library -static-stdlib \
-  "$OBJ/FotufilmHost.o" "$OBJ/FotufilmHalideLinux.o" "$OBJ"/codecs-*.o "$KERNELS"/*.a \
+  "$OBJ/FotufilmHost.o" "$OBJ/FotufilmHalideLinux.o" "$OBJ"/codecs-*.o "$OBJ"/video-*.o \
+  "$KERNELS"/*.a \
   -Xlinker --gc-sections -Xlinker --version-script="$OBJ/exports.map" \
   -Xlinker -soname -Xlinker libfotufilm.so \
   -lFoundationNetworking -l_CFURLSessionInterface -lCoreFoundation -l_FoundationCollections \

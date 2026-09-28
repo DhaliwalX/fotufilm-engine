@@ -135,6 +135,11 @@ let package = Package(
                 linkerSettings: ["raw_r", "lcms2", "jpeg", "png", "tiff", "heif"].map {
                     .linkedLibrary($0, .when(platforms: [.linux]))
                 }),
+        // Movies where there is no AVFoundation (Linux), through the system's FFmpeg, loaded
+        // when first asked for.
+        .target(name: "CFotufilmVideo",
+                cxxSettings: [.unsafeFlags(["-std=c++17"])],
+                linkerSettings: [.linkedLibrary("dl", .when(platforms: [.linux]))]),
         .target(name: "FotufilmHost",
                 dependencies: ["CFotufilmHost", "FotufilmCore", "FotufilmImaging",
                                "FotufilmEditModel", "FotufilmStockMatch", "FotufilmPlugins",
@@ -145,6 +150,8 @@ let package = Package(
                                .target(name: "FotufilmHalide",
                                        condition: .when(platforms: [.linux])),
                                .target(name: "CFotufilmCodecs",
+                                       condition: .when(platforms: [.linux])),
+                               .target(name: "CFotufilmVideo",
                                        condition: .when(platforms: [.linux]))]),
         .executableTarget(name: "fotufilm",
                           dependencies: ["FotufilmCore", "FotufilmImaging", "FotufilmEditModel"]),

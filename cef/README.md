@@ -49,6 +49,13 @@ TIFF, JPEG and HEIC out, SDR). On Ubuntu: `apt install libjpeg-turbo8-dev libpng
 libraw-dev liblcms2-dev libopenexr-dev libheif-dev`, with `libheif-plugin-libde265` and
 `libheif-plugin-x265` for HEIC at run time.
 
+Movies go through the system's FFmpeg (`Sources/CFotufilmVideo`), opened at run time rather than
+linked or bundled: the build needs `libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
+libswresample-dev`, and a machine without FFmpeg 6 runs with video off. Frames develop on the
+same CUDA or Vulkan kernels as stills, three in flight (`HostVideoDevelop+HalideGPU.swift`), and
+encode through NVENC where the driver has it and FFmpeg's software encoders otherwise
+(`FOTUFILM_VIDEO_ENCODER=software`, or an encoder's name, chooses).
+
 Switches:
 
 | Switch | Effect |
@@ -235,7 +242,9 @@ the engine thread until it is done, as the Mac app's menu item holds its own.
 Movies decode and encode through the platform's `HostPlatform.videoSource` and `.videoWriter`
 (`Sources/FotufilmHost/HostVideo.swift`); on macOS these are AVFoundation, reading Apple Log,
 S-Log, F-Log, HLG and PQ as untouched code values into scene-linear Rec. 2020 as the Mac app
-does. The engine reports `video` and `videoExportTypes` in its capabilities only when a
+does, and on Linux FFmpeg (`HostVideo+FFmpeg.swift`), converting SDR video as AVFoundation does
+(its transfer, its chroma siting and its defaults for untagged movies, in
+`Sources/CFotufilmVideo/Colour.hpp`). The engine reports `video` and `videoExportTypes` in its capabilities only when a
 platform supplies both. CEF's Chromium carries no H.264, HEVC or ProRes decoder, so the page
 never plays the movie itself: the import answers with its sound as a WAV (silent when the
 movie is), which the editor's media element plays as the clock, and every frame on screen is a

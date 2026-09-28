@@ -151,9 +151,12 @@ Device pick_device() {
 Device chosen_device() {
     static const Device device = [] {
         const Device picked = pick_device();
-        // Halide's runtime releases its device from a library destructor, after the driver may
-        // have finalised (NVIDIA's Vulkan driver crashes there); exit handlers run before that.
-        if (picked != kNone) std::atexit(release_device);
+        // Halide's runtime releases its Vulkan device from a library destructor, after the
+        // driver may have finalised (NVIDIA's crashes there); exit handlers run before that.
+        if (picked == kVulkan) std::atexit(release_device);
+        // A frame's intermediates keep their device memory for the next frame of the same size,
+        // rather than allocate and free it (a synchronising free on CUDA) every frame.
+        if (picked != kNone) halide_reuse_device_allocations(nullptr, true);
         return picked;
     }();
     return device;
