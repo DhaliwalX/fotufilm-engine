@@ -91,9 +91,6 @@ export default function LightInspector() {
             {edit.sceneLight === "custom" && (
               <AdjustmentGroup group={"Source Illuminant"} />
             )}
-            <p className="medium-detail">
-              {editorControl("sceneLight").detail}
-            </p>
           </div>
         </DisclosurePanel>
       </Disclosure>

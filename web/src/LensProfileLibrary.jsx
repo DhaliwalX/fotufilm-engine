@@ -39,11 +39,6 @@ export default function LensProfileLibrary({ disabled }) {
       </DisclosureTitle>
       <DisclosurePanel>
         <div className="lens-profile-actions motion-fade-in">
-          <p className="medium-detail">
-            Import measured profiles in Fotufilm’s JSON format. Matching
-            profiles are selected from each photo’s lens metadata and saved in
-            this browser.
-          </p>
           <input
             ref={input}
             type="file"

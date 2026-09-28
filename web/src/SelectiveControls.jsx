@@ -138,11 +138,6 @@ export default function SelectiveControls({
             >
               {SELECTION.clear}
             </Button>
-            <p className="medium-detail">
-              {selection.kind === "subject"
-                ? "Click a subject in the photo to select it, or the background to select every subject, then adjust the selection."
-                : "Sample the photo to select similar colors or brightness, then adjust the selection."}
-            </p>
           </div>
         </DisclosurePanel>
       </Disclosure>

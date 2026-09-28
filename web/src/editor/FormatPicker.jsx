@@ -88,17 +88,10 @@ export default function FormatPicker({ disabled, onChange }) {
           {sensor ? "Match the Camera" : "Match the Film"}
         </Button>
       ) : sensor ? (
-        <p className="medium-detail">
-          Following the camera. The camera’s frame size is {sensor.frameSize}.
-          Fotufilm uses the closest film format: {followed?.name}.
-        </p>
+        <p className="medium-detail">Following the camera: {followed?.name}.</p>
       ) : (
         <p className="medium-detail">Following the film.</p>
       )}
-      <p className="medium-detail">
-        Smaller film formats are enlarged more, so the same film shows coarser
-        grain and softer highlights.
-      </p>
     </div>
   );
 }

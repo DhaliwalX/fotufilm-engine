@@ -56,9 +56,6 @@ export default function SourceInterpretationControls({
                 </PickerItem>
               ))}
           </Picker>
-          <p className="medium-detail">
-            {control.choices.find((choice) => choice.id === value)?.detail}
-          </p>
           {image.hdr && (
             <p className="medium-detail">
               HDR JPEG ·{" "}

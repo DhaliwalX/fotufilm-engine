@@ -170,10 +170,6 @@ export default function GradeDeck({ children }) {
         />
       </div>
       {children}
-      <p className="grade-note">
-        Choose Shadows, Midtones, or Highlights. Use the pad to adjust color and the slider to
-        adjust brightness. Grade is applied after the film response.
-      </p>
       <Button
         size="S"
         variant="negative"

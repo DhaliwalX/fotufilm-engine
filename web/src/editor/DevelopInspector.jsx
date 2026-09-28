@@ -22,10 +22,6 @@ export default function DevelopInspector() {
           <DisclosurePanel>
             <div className="control-stack">
               {<ProfileFields fields={["push", "bleach"]} />}
-              <p className="medium-detail">
-                Push and pull are available only when the film has measured
-                settings. Bleach bypass retains silver in the negative.
-              </p>
             </div>
           </DisclosurePanel>
         </Disclosure>

@@ -147,16 +147,6 @@ export default function PrintInspector() {
                 ]}
               />
             }
-            {selectedStock && (
-              <p className="medium-detail">
-                {(edit.medium || selectedStock.defaultMedium) === "screen"
-                  ? "Direct display rendering without paper or scanning."
-                  : selectedStock.media.find(
-                      (m) =>
-                        m.id === (edit.medium || selectedStock.defaultMedium),
-                    )?.detail}
-              </p>
-            )}
             <div className="info-row">
               <span>Color space</span>
               <span>{colorSpaceLabel(preferredCanvasColorSpace())}</span>
@@ -188,11 +178,6 @@ export default function PrintInspector() {
                   ]}
                 />
               }
-              <p className="medium-detail">
-                {edit.profile?.printerEnabled
-                  ? "A simulated tungsten lamp and colour filters expose the paper through the film. More exposure darkens negative paper and lightens positive paper."
-                  : "Enable Simulated Printer to adjust lamp temperature, paper exposure and filtration."}
-              </p>
             </div>
           </DisclosurePanel>
         </Disclosure>
