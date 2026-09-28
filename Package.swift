@@ -126,6 +126,15 @@ let package = Package(
         // Installing the Resolve and Final Cut plug-ins, shared by the Mac app and Fotufilm Desktop.
         .target(name: "FotufilmPlugins"),
         .target(name: "CFotufilmHost"),
+        // Still images where there is no ImageIO (Linux), through the system's libraries.
+        .systemLibrary(name: "COpenEXR", pkgConfig: "OpenEXR",
+                       providers: [.apt(["libopenexr-dev"])]),
+        .target(name: "CFotufilmCodecs",
+                dependencies: [.target(name: "COpenEXR", condition: .when(platforms: [.linux]))],
+                cxxSettings: [.unsafeFlags(["-std=c++17"])],
+                linkerSettings: ["raw_r", "lcms2", "jpeg", "png", "tiff", "heif"].map {
+                    .linkedLibrary($0, .when(platforms: [.linux]))
+                }),
         .target(name: "FotufilmHost",
                 dependencies: ["CFotufilmHost", "FotufilmCore", "FotufilmImaging",
                                "FotufilmEditModel", "FotufilmStockMatch", "FotufilmPlugins",
@@ -134,6 +143,8 @@ let package = Package(
                                        condition: .when(platforms: [.macOS, .iOS])),
                                // Linux develops through the graph's CUDA and Vulkan entry points.
                                .target(name: "FotufilmHalide",
+                                       condition: .when(platforms: [.linux])),
+                               .target(name: "CFotufilmCodecs",
                                        condition: .when(platforms: [.linux]))]),
         .executableTarget(name: "fotufilm",
                           dependencies: ["FotufilmCore", "FotufilmImaging", "FotufilmEditModel"]),

@@ -1,0 +1,4 @@
+module CFotufilmCodecs {
+  header "fotufilm_codecs.h"
+  export *
+}

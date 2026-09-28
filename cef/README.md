@@ -43,6 +43,12 @@ Views' (`app/windowed_host.h`), painted by Chromium, so the page draws the photo
 The Linux build runs without Chromium's sandbox, as an AppImage cannot carry its setuid helper;
 the editor only loads its own bundled pages.
 
+The engine opens, scans and exports stills through the system's codec libraries
+(`Sources/CFotufilmCodecs`: JPEG, PNG, TIFF, HEIF/AVIF, OpenEXR and camera RAW in; PNG, 16-bit
+TIFF, JPEG and HEIC out, SDR). On Ubuntu: `apt install libjpeg-turbo8-dev libpng-dev libtiff-dev
+libraw-dev liblcms2-dev libopenexr-dev libheif-dev`, with `libheif-plugin-libde265` and
+`libheif-plugin-x265` for HEIC at run time.
+
 Switches:
 
 | Switch | Effect |

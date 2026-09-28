@@ -26,6 +26,27 @@ mkdir -p "$OBJ"
   Sources/FotufilmHalide/FotufilmHalideLinux.cpp \
   -o "$OBJ/FotufilmHalideLinux.o"
 
+# Photographs and stills through the system's codec libraries (Sources/CFotufilmCodecs), linked
+# dynamically: the AppImage carries them.
+CODEC_PACKAGES=(libraw_r lcms2 libjpeg libpng libtiff-4 libheif OpenEXR)
+pkg-config --exists "${CODEC_PACKAGES[@]}" || {
+  echo "error: the codec development packages are missing (cef/README.md lists them)" >&2
+  exit 1
+}
+read -r -a CODEC_CFLAGS <<< "$(pkg-config --cflags "${CODEC_PACKAGES[@]}")"
+# Handed to the linker in order, so --as-needed drops the libraries nothing calls.
+CODEC_LIBS=(-Xlinker --as-needed)
+for flag in $(pkg-config --libs "${CODEC_PACKAGES[@]}"); do
+  [[ "$flag" == -l* || "$flag" == -L* ]] && CODEC_LIBS+=(-Xlinker "$flag")
+done
+CODEC_LIBS+=(-Xlinker --no-as-needed)
+for source in Sources/CFotufilmCodecs/*.cpp; do
+  "${CXX:-clang++}" -std=c++17 -O2 -g1 -fPIC \
+    -fvisibility=hidden -fvisibility-inlines-hidden -ffunction-sections -fdata-sections -c \
+    -ffile-prefix-map="$PWD"=Fotufilm "${CODEC_CFLAGS[@]}" -ISources/CFotufilmCodecs/include \
+    "$source" -o "$OBJ/codecs-$(basename "$source" .cpp).o"
+done
+
 cat > "$OBJ/module.modulemap" <<MAP
 module CFotufilmHost {
   header "$PWD/Sources/CFotufilmHost/include/fotufilm.h"
@@ -44,6 +65,7 @@ swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
   -D FOTUFILM_PACK_KEY_MATERIAL \
   -ISources/FotufilmHalide/include \
   -Xcc -fmodule-map-file="$OBJ/module.modulemap" \
+  -Xcc -fmodule-map-file="$PWD/Sources/CFotufilmCodecs/include/module.modulemap" \
   -swift-version 5 -O -whole-module-optimization -g -parse-as-library \
   -file-prefix-map "$PWD=Fotufilm" \
   -file-prefix-map "$FOTUFILM_CORE_SOURCE_DIR=Fotufilm/Sources/FotufilmCore" \
@@ -59,11 +81,12 @@ swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
   -o "$OBJ/FotufilmHost.o"
 
 swiftc -emit-library -static-stdlib \
-  "$OBJ/FotufilmHost.o" "$OBJ/FotufilmHalideLinux.o" "$KERNELS"/*.a \
+  "$OBJ/FotufilmHost.o" "$OBJ/FotufilmHalideLinux.o" "$OBJ"/codecs-*.o "$KERNELS"/*.a \
   -Xlinker --gc-sections -Xlinker --version-script="$OBJ/exports.map" \
   -Xlinker -soname -Xlinker libfotufilm.so \
   -lFoundationNetworking -l_CFURLSessionInterface -lCoreFoundation -l_FoundationCollections \
-  -lswiftSynchronization -l_FoundationICU -l_FoundationCShims -lcurl -lstdc++ -ldl -lpthread \
+  -lswiftSynchronization -l_FoundationICU -l_FoundationCShims -lcurl \
+  "${CODEC_LIBS[@]}" -lstdc++ -ldl -lpthread \
   -o "$LIBRARY"
 
 # Symbols for crash reports stay beside the library, never in it.
