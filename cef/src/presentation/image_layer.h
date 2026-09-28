@@ -64,7 +64,8 @@ class ImageLayer {
 
   // What to draw at `now` (seconds, any steady clock), bottom first. A slot shows the frame the
   // page placed, or a newer one of the same size and scope, so an edit reaches the screen without
-  // waiting for the page; a slot whose picture changed fades the new one in over the old.
+  // waiting for the page; a slot whose picture changed fades the new one in over the old, unless
+  // the new one is a frame of a playing movie.
   std::vector<Draw> Draws(double now);
   // Whether a fade is still running at `now`, so the compositor keeps drawing.
   bool Fading(double now) const;

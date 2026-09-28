@@ -120,10 +120,11 @@ std::vector<ImageLayer::Draw> ImageLayer::Draws(double now) {
     Draw draw{frame->surface, placement.rect, frame->extended};
     auto found = shown_.find(placement.slot);
     Shown slot = found == shown_.end() ? Shown{draw} : found->second;
-    // A new picture where one was showing fades in over it; the first one simply appears.
+    // A new picture where one was showing fades in over it; the first one simply appears, and
+    // a movie's next frame cuts in.
     if (slot.current.surface != draw.surface) {
-      slot.previous = slot.current;
-      slot.since = now;
+      slot.previous = frame->motion ? Draw{} : slot.current;
+      slot.since = frame->motion ? -1 : now;
     }
     slot.current = draw;
     const double progress = slot.since < 0 ? 1 : (now - slot.since) / kCrossfadeSeconds;

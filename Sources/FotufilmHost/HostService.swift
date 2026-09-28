@@ -547,7 +547,7 @@ public final class HostService {
             return try present(developedFrame, original: withoutOriginal ? nil : originals.last!,
                                region: region,
                                to: presentation.presenter, request: presentation.request,
-                               body: presented, headroom: ceiling)
+                               body: presented, headroom: ceiling, motion: image.pace.realtime)
         }
         func png(_ frame: (key: String, width: Int, height: Int, pixels: [UInt8])) -> [UInt8] {
             frame.pixels.withUnsafeBytes {
@@ -595,11 +595,13 @@ public final class HostService {
                          original: (key: String, width: Int, height: Int, pixels: [UInt8])?,
                          region: (x: Int, y: Int, width: Int, height: Int),
                          to presenter: HostPresenter, request: HostPresentation.Request,
-                         body: [String: Any], headroom: Float?) throws -> Answer {
+                         body: [String: Any], headroom: Float?, motion: Bool) throws -> Answer {
         let extended = developed.format == .rgba16FloatExtendedLinearP3
+        // A frame of a moving picture replaces the last at once, as the Mac app's video preview
+        // does; anything else may fade in over what it replaces.
         let info: [String: Any] = ["scope": request.scope,
                                    "dynamicRange": extended ? "hdr" : "sdr",
-                                   "headroom": Double(headroom ?? 1)]
+                                   "headroom": Double(headroom ?? 1), "motion": motion]
         guard let frame = HostPresentation.present(
             developed.pixels, frameWidth: developed.width, format: developed.format,
             region: region, to: presenter, layer: request.slot, info: info) else {
@@ -614,7 +616,8 @@ public final class HostService {
                 originalFrame = HostPresentation.present(
                     original.pixels, frameWidth: original.width, format: .rgba8DisplayP3,
                     region: region, to: presenter, layer: layer,
-                    info: ["scope": request.scope, "dynamicRange": "sdr", "headroom": 1.0])
+                    info: ["scope": request.scope, "dynamicRange": "sdr", "headroom": 1.0,
+                           "motion": motion])
                 presentedOriginals[layer] = originalFrame.map { (originalKey, $0) }
             }
         }

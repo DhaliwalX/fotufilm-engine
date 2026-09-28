@@ -147,7 +147,8 @@ typedef struct fotufilm_presenter {
     int32_t (*acquire)(void *context, uint32_t width, uint32_t height, int32_t format,
                        fotufilm_surface *surface);
     /* Shows a written surface in `layer`; returns the frame's id, which the page names when it
-     * places the layer. `info_json` is {"scope", "dynamicRange", "headroom"}. Engine thread. */
+     * places the layer. `info_json` is {"scope", "dynamicRange", "headroom", "motion"}; a
+     * `motion` frame, one of a playing movie, replaces the last without a fade. Engine thread. */
     uint64_t (*present)(void *context, const char *layer, const fotufilm_surface *surface,
                         const char *info_json);
     /* Returns a surface that was acquired and not presented. */

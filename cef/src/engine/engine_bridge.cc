@@ -101,8 +101,10 @@ uint64_t PresenterPresent(void* context, const char* layer, const fotufilm_surfa
   frame.surface = std::move(*lent);
   frame.extended = frame.surface->format() == SurfaceFormat::kRgba16FloatExtendedLinearP3;
   CefRefPtr<CefValue> info = CefParseJSON(info_json ? info_json : "{}", JSON_PARSER_RFC);
-  if (info && info->GetType() == VTYPE_DICTIONARY)
+  if (info && info->GetType() == VTYPE_DICTIONARY) {
     frame.scope = info->GetDictionary()->GetString("scope").ToString();
+    frame.motion = info->GetDictionary()->GetBool("motion");
+  }
   return PresenterOf(context)->Present(layer ? layer : "", std::move(frame));
 }
 

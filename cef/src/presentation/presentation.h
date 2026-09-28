@@ -52,6 +52,8 @@ struct PresentedFrame {
   std::string scope;
   // Extended range: values above 1 are light above SDR white.
   bool extended = false;
+  // A frame of a moving picture: it replaces the one before at once rather than fading in.
+  bool motion = false;
 };
 
 // What a platform's compositor offers the engine. Acquire, Present and Headroom are called on the

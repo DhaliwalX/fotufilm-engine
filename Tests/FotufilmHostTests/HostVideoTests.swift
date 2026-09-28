@@ -176,6 +176,7 @@ final class HostVideoTests: XCTestCase {
     private final class LayerLog: HostPresenter {
         var headroom: Float { 1 }
         var shown: [String] = []
+        var motion: [Bool] = []
         func acquire(width: Int, height: Int, format: HostSurfaceFormat) -> HostSurface? {
             let rowBytes = width * format.bytesPerPixel
             return HostSurface(width: width, height: height, format: format,
@@ -185,6 +186,7 @@ final class HostVideoTests: XCTestCase {
         func present(_ surface: HostSurface, layer: String, info: [String: Any]) -> UInt64 {
             surface.pixels.deallocate()
             shown.append(layer)
+            motion.append(info["motion"] as? Bool == true)
             return UInt64(shown.count)
         }
         func discard(_ surface: HostSurface) { surface.pixels.deallocate() }
@@ -208,6 +210,8 @@ final class HostVideoTests: XCTestCase {
         XCTAssertEqual(presenter.shown, ["preview"])
         XCTAssertEqual(try play(0.2, original: true)["original"] as? Int, 3)
         XCTAssertEqual(presenter.shown, ["preview", "preview", "preview.original"])
+        // Played frames cut in rather than fading over the last.
+        XCTAssertEqual(presenter.motion, [true, true, true])
     }
 
     func testImportRenderAndExportThroughTheService() throws {
