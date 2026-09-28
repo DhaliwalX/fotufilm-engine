@@ -16,6 +16,7 @@ import useOutputState from "./useOutputState.js";
 import useNativeCommands from "./useNativeCommands.js";
 import useFilmSuggestion from "./useFilmSuggestion.js";
 import usePlugins from "./usePlugins.js";
+import useDocumentTitle from "./useDocumentTitle.js";
 export default function useEditorModel() {
   let editor = { backend: useBackend() };
   editor = {
@@ -80,5 +81,6 @@ export default function useEditorModel() {
   };
   useFilmSuggestion(editor);
   useNativeCommands(editor);
+  useDocumentTitle(editor);
   return editor;
 }
