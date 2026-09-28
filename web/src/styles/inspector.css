@@ -65,6 +65,20 @@
     line-height: 1.6;
     margin-top: 20px;
   }
+  /* A slider's low and high glyphs either side of its track, as the Mac app's rows draw them. */
+  .adjustment-track {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .adjustment-track .adjustment-slider {
+    flex: 1;
+    min-width: 0;
+  }
+  .adjustment-end {
+    width: 22px;
+    opacity: 0.8;
+  }
   /* A control's help button after its name, as the Mac app's inspector rows carry one. */
   .adjustment-name {
     display: inline-flex;

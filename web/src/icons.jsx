@@ -1,5 +1,6 @@
 import { createIcon } from "@react-spectrum/s2/Icon";
 import symbols from "./material-symbols.json";
+import { ICON_GLYPHS, glyphHref } from "./glyphs.jsx";
 
 // Google Material Symbols Rounded, opsz 40. Bundle paths for offline editing.
 const icons = Object.fromEntries(
@@ -19,8 +20,19 @@ const icons = Object.fromEntries(
     )),
   ]),
 );
+// Where Fotufilm's own glyph set draws an icon, it replaces the generic symbol.
+const glyphs = Object.fromEntries(
+  Object.entries(ICON_GLYPHS).map(([name, glyph]) => [
+    name,
+    createIcon((props) => (
+      <svg {...props} viewBox="0 0 24 24" data-glyph={glyph}>
+        <use href={glyphHref(glyph)} />
+      </svg>
+    )),
+  ]),
+);
 export function Icon({ name, size = 20, ...props }) {
-  const Symbol = icons[name] || icons.film;
+  const Symbol = glyphs[name] || icons[name] || glyphs.film;
   return (
     <Symbol
       {...props}

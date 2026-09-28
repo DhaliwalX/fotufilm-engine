@@ -3,6 +3,7 @@ import { Slider } from "@react-spectrum/s2/Slider";
 import { NumberField } from "@react-spectrum/s2/NumberField";
 import { SLIDERS } from "./editor-state.js";
 import { clamp } from "./color-controls.js";
+import { Glyph, sliderEnds } from "./glyphs.jsx";
 import { controlDetail, controlHelp } from "./editor/ControlHelp.jsx";
 export function Adjustment({
   slider,
@@ -17,6 +18,8 @@ export function Adjustment({
     : slider.label;
   const temperature = slider.key === "temperature";
   const rangeValue = temperature ? 1e6 / value : value;
+  // What the slider's low and high ends look like, as the Mac app draws them beside the track.
+  const ends = sliderEnds(slider.key);
   return (
     <div className="adjustment">
       <div className="adjustment-label">
@@ -48,25 +51,29 @@ export function Adjustment({
           />
         </div>
       </div>
-      <Slider
-        size="S"
-        UNSAFE_className="adjustment-slider"
-        aria-label={accessibleLabel}
-        isDisabled={disabled}
-        minValue={temperature ? 1e6 / slider.max : slider.min}
-        maxValue={temperature ? 1e6 / slider.min : slider.max}
-        step={temperature ? 0.1 : slider.step}
-        value={rangeValue}
-        onChange={(next) =>
-          onChange(temperature ? Math.round(1e6 / next) : next)
-        }
-        onChangeEnd={onEnd}
-        onBlur={onEnd}
-        onDoubleClick={() => {
-          onChange(slider.def);
-          onEnd?.();
-        }}
-      />
+      <div className="adjustment-track">
+        {ends && <Glyph name={ends.low} size={13} className="adjustment-end" />}
+        <Slider
+          size="S"
+          UNSAFE_className="adjustment-slider"
+          aria-label={accessibleLabel}
+          isDisabled={disabled}
+          minValue={temperature ? 1e6 / slider.max : slider.min}
+          maxValue={temperature ? 1e6 / slider.min : slider.max}
+          step={temperature ? 0.1 : slider.step}
+          value={rangeValue}
+          onChange={(next) =>
+            onChange(temperature ? Math.round(1e6 / next) : next)
+          }
+          onChangeEnd={onEnd}
+          onBlur={onEnd}
+          onDoubleClick={() => {
+            onChange(slider.def);
+            onEnd?.();
+          }}
+        />
+        {ends && <Glyph name={ends.high} size={13} className="adjustment-end" />}
+      </div>
     </div>
   );
 }
