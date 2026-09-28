@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { flushSync } from "react-dom";
 import useCompactLayout from "./useCompactLayout.js";
 import { Slider } from "@react-spectrum/s2/Slider";
 import { NumberField } from "@react-spectrum/s2/NumberField";
@@ -17,7 +19,14 @@ export function Adjustment({
     ? `${slider.group} ${slider.label}`
     : slider.label;
   const temperature = slider.key === "temperature";
-  const rangeValue = temperature ? 1e6 / value : value;
+  // The knob follows the pointer on its own, drawn in the frame the pointer moved; the editor
+  // takes the value in its own time, so a large page never holds the knob back.
+  const [dragged, setDragged] = useState(null);
+  const rangeValue = dragged ?? (temperature ? 1e6 / value : value);
+  const settle = () => {
+    setDragged(null);
+    onEnd?.();
+  };
   // What the slider's low and high ends look like, as the Mac app draws them beside the track.
   const ends = sliderEnds(slider.key);
   return (
@@ -62,14 +71,15 @@ export function Adjustment({
           maxValue={temperature ? 1e6 / slider.min : slider.max}
           step={temperature ? 0.1 : slider.step}
           value={rangeValue}
-          onChange={(next) =>
-            onChange(temperature ? Math.round(1e6 / next) : next)
-          }
-          onChangeEnd={onEnd}
-          onBlur={onEnd}
+          onChange={(next) => {
+            flushSync(() => setDragged(next));
+            onChange(temperature ? Math.round(1e6 / next) : next);
+          }}
+          onChangeEnd={settle}
+          onBlur={settle}
           onDoubleClick={() => {
             onChange(slider.def);
-            onEnd?.();
+            settle();
           }}
         />
         {ends && <Glyph name={ends.high} size={20} className="adjustment-end" />}
