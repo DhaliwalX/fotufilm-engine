@@ -1,4 +1,5 @@
 import { installWindowChrome } from "./backend/macos/window-chrome.js";
+import { installLibraryFolders } from "./backend/macos/library-folders.js";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { Provider } from "@react-spectrum/s2/Provider";
@@ -11,6 +12,7 @@ import { createBackend } from "./backend/create.js";
 import "./app.css";
 import { BackendBoundary, BackendFailure } from "./backend/BackendBoundary.jsx";
 if (window.fotufilmNativeTransport) document.documentElement.dataset.nativeHost = "macos";
+installLibraryFolders(window.fotufilmNativeTransport);
 const root = createRoot(document.getElementById("root"));
 createBackend(window.fotufilmNative, window.fotufilmNativeTransport)
   .then((backend) =>

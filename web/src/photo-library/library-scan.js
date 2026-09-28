@@ -40,6 +40,9 @@ export function photoEntry(folder, path, size, modified, file = null) {
 // ".thumbnails", macOS "._" resource forks) are skipped, and a file deleted
 // during the walk is left out.
 export async function scanDirectory(folder, { signal, onProgress } = {}) {
+  // A host lists the whole folder in one call.
+  if (folder.handle.files)
+    return indexedPhotos(folder, await folder.handle.files(signal));
   const photos = [],
     reading = new Set();
   let failure = null;
@@ -113,6 +116,7 @@ export function uploadedFolders(files) {
 // is now.
 export async function currentFile(photo) {
   if (!photo.root) return photo.file;
+  if (photo.root.file) return photo.root.file(photo.path, photo.modified);
   const parts = photo.path.split("/");
   let directory = photo.root;
   for (const part of parts.slice(0, -1))

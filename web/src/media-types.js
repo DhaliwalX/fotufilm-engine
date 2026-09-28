@@ -56,6 +56,12 @@ const LIBRARY_IMAGE_EXTENSIONS = [
 const LIBRARY_VIDEO_EXTENSIONS = ['mp4', 'mov', 'm4v', 'webm', 'mkv']
 // Library folders are scanned by name alone; reading every header would make
 // opening a large folder as slow as importing it.
+// Every extension a library folder shows, for a host that lists folders itself.
+export const LIBRARY_EXTENSIONS = [
+  ...RAW_EXTENSIONS,
+  ...LIBRARY_IMAGE_EXTENSIONS,
+  ...LIBRARY_VIDEO_EXTENSIONS,
+]
 export function libraryMediaKind(name) {
   const extension = name.split('.').at(-1).toLowerCase()
   if (RAW_EXTENSIONS.includes(extension)) return 'raw'
