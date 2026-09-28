@@ -1162,5 +1162,1509 @@
   "web/src/assets/fotufilm-wordmark.svg": {
     "provenance": "Fotufilm wordmark, copied from macos/Resources/FOTUFILM.svg in this repository.",
     "sha256": "ab8aca1bf4a81910e8087c37505cca56d8e733bd57c6774b178f891ab440611e"
+  },
+  "shared/Glyphs/sources/fotu.deck.controls.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a3a122c3d7219a3baaeeade76b0002ddfc5553f43d9a2044e5df7fec4059dbeb"
+  },
+  "shared/Glyphs/sources/fotu.deck.dust.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a78ea59cd42414736cfd9a35ccda022d7ee7efb493cf13df5a812370e3bdfc06"
+  },
+  "shared/Glyphs/sources/fotu.deck.film.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "46f598d2267f422196a4f3332ff98ab136b6e0232e6d284c04d0c4725897176e"
+  },
+  "shared/Glyphs/sources/fotu.deck.frame.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "b49e4f798d26b6f940b496d08009643b1b734c82a47bc751d67df783459b21d9"
+  },
+  "shared/Glyphs/sources/fotu.deck.grade.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "386c9c5c78b674567e385ebe5596df27821c5274968b5acac72366c22b50c70d"
+  },
+  "shared/Glyphs/sources/fotu.deck.lens.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c14fc7f2ece003ae7c34d40739ae60c85f2d5a4a61556ae0e58207ed8bf2c816"
+  },
+  "shared/Glyphs/sources/fotu.deck.light.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "9aa0a1ecc9ac12d338abb3354fb2ffdc62dd4ffbb81e08188ae915f5df134993"
+  },
+  "shared/Glyphs/sources/fotu.deck.print.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "5e9ea169e8e8fc2e0ff2e817a63a1a4d69d776648ff485a87a05b5130e8b639f"
+  },
+  "shared/Glyphs/sources/fotu.slider.autoAdjustment.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e42b62dd5d174b07431ee2445045470ce1ee28edc4f6a30236a40d1c5e29b589"
+  },
+  "shared/Glyphs/sources/fotu.slider.autoAdjustment.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "4c4da874445596f43e3900168b9f8d085eeb0a94d0ece50d5a1fcb1724b8276a"
+  },
+  "shared/Glyphs/sources/fotu.slider.cameraPreflash.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c5e421ae595186e950b15e4fc15d3d03c8a0d5367adb291595468d1801340116"
+  },
+  "shared/Glyphs/sources/fotu.slider.cameraPreflash.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "9eb9e2cd31af24bc5ed32699ffbd5b3888b2a581d262c39180e004371321fc1a"
+  },
+  "shared/Glyphs/sources/fotu.slider.chromaticFringeAmount.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "8d54cd0fd5af81066448272e2e17127698bd17c2f7eb22c07bff72be0e8af351"
+  },
+  "shared/Glyphs/sources/fotu.slider.chromaticFringeAmount.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "5d9df49ca9b04f5334de5781228b0bd6ade6eeab05a4d6bbf0dbc45606a9d6bd"
+  },
+  "shared/Glyphs/sources/fotu.slider.chromaticFringeRadius.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a8240346cbec9ebf57c6980fa79c99ae491467ea92406bf4c6dada2494fe0811"
+  },
+  "shared/Glyphs/sources/fotu.slider.chromaticFringeRadius.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "20bad015752e65be6fad002e69c5bd4456f5fbecb6a9cb856b6661dd24262d6c"
+  },
+  "shared/Glyphs/sources/fotu.slider.couplerGreenBlue.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "598a453215614ff61985b0bb609b52b35d6b8659b3112d05a7eedd8ecf0e3264"
+  },
+  "shared/Glyphs/sources/fotu.slider.couplerGreenBlue.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "02f01185c26e0a7881ae38a7cdf615b18b3b0237ea23717410e7bc37b6f60b9c"
+  },
+  "shared/Glyphs/sources/fotu.slider.couplerReach.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ce9b2178282922967d004d11539bfbb3ce3e2e130414e8d273573dc4e0e9a9ae"
+  },
+  "shared/Glyphs/sources/fotu.slider.couplerReach.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "5cc03e17895ef8ba84230567b91e8f830fa958ecb3fc0a88eaedbd3d96fc6b8a"
+  },
+  "shared/Glyphs/sources/fotu.slider.couplerRedGreen.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "055e2bae315dd47464736cea5622c3a390d1066ca8b7f02348cda3c347e558f4"
+  },
+  "shared/Glyphs/sources/fotu.slider.couplerRedGreen.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "481021d28c0967ee8f0135af96f8db9fc6781392b73fb7744b26c7a7227b8bd4"
+  },
+  "shared/Glyphs/sources/fotu.slider.couplerSelf.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "159d3fe20ccd4bd038c2ea637b2dbbef0726099728664813c6667243593c1e70"
+  },
+  "shared/Glyphs/sources/fotu.slider.couplerSelf.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ee0571343838b423f486aa8d442c35398c0be65fd959f0ae6a615a69cd6c6ab6"
+  },
+  "shared/Glyphs/sources/fotu.slider.couplers.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "54643e69ce8160367301bb3babc68365b5fe8cd06c029f0b7ebebda38c77ab18"
+  },
+  "shared/Glyphs/sources/fotu.slider.couplers.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "4dbb53e022da44fb52599bff49d0b490866475e138be6f6d21df3f6a934cfd55"
+  },
+  "shared/Glyphs/sources/fotu.slider.crop.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a4dc02c63a76b849586afbe5e37613c6f62bebf1703d97a615fcb99e2a6e3154"
+  },
+  "shared/Glyphs/sources/fotu.slider.crop.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "427f1f1669518d73d6e72e8a473c85f5d1befa46564862a56f8011e7bdbca58a"
+  },
+  "shared/Glyphs/sources/fotu.slider.expired.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "86140d02f89a4b21302db4b818d80e6ee4b20cd03fb500f44f0ad848916557e1"
+  },
+  "shared/Glyphs/sources/fotu.slider.expired.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "69f5850f155163d256e7b821992e2fca5cf994a2510497e6a46f710effcf9f8e"
+  },
+  "shared/Glyphs/sources/fotu.slider.exposure.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "d047e4e399368881640dd3e3dc94250759e58bc2c1d586c4e8d86e6fecbad11f"
+  },
+  "shared/Glyphs/sources/fotu.slider.exposure.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "140cb542582635c7b8dbeaa1e6f33a7b46b07ed80cdfc7acebe7bb9a138f57ab"
+  },
+  "shared/Glyphs/sources/fotu.slider.filmBlueLayer.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "fed590b8ea62bbe28bc173d1bae40caf3be55bcd11cef2f009521d98fa114a0c"
+  },
+  "shared/Glyphs/sources/fotu.slider.filmBlueLayer.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "55647339f17623b5cea2b6e9d49b9b7b216d29c16281e906dc0740d03d1a3dd8"
+  },
+  "shared/Glyphs/sources/fotu.slider.filmColourGrain.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ffeb315d56cb65dba0b7881f892601a135c79c408391c5f85edc0afd9bd66474"
+  },
+  "shared/Glyphs/sources/fotu.slider.filmColourGrain.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "f372237920bfffa7e87643dd884ee6b196c488246608c497fc3f8c48923f8d0c"
+  },
+  "shared/Glyphs/sources/fotu.slider.filmGrainSize.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "fdbfd7f36691b15ee81e677880fd3bbf1bdb58efe946a0877d326dc6e20df7ee"
+  },
+  "shared/Glyphs/sources/fotu.slider.filmGrainSize.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "902f7237775d687c9962cade38cc7c8717349512e269570fa25bc2bb682fe96c"
+  },
+  "shared/Glyphs/sources/fotu.slider.filmGreenLayer.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "17f7301bd48c383432e729f4673db5d26ff731a388985f97c2e0b25b6e922ec4"
+  },
+  "shared/Glyphs/sources/fotu.slider.filmGreenLayer.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "82e76770ce8396464382bede5d733515b32a893eea38bb8b3c2f0636fc741c93"
+  },
+  "shared/Glyphs/sources/fotu.slider.filmRedLayer.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "fe1a565b694cb527c5df07a624f8bc94852ce39c3e3120228896b92b6231709e"
+  },
+  "shared/Glyphs/sources/fotu.slider.filmRedLayer.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "331efef2fbf4439c4698f62f7777ce682ed3b57576ae6961d1ac8627fffdce7e"
+  },
+  "shared/Glyphs/sources/fotu.slider.filmScanSoftness.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "da0e443a63b3956e541fa7df5b5584dfc8b883cda1b2b7e4775f07a4add4ad4a"
+  },
+  "shared/Glyphs/sources/fotu.slider.filmScanSoftness.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "bffc1a70ef760ee693873f039fc28a7217a477d6fc4d2571971941e9acd40dde"
+  },
+  "shared/Glyphs/sources/fotu.slider.flare.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "afb95ef1ad85e2261a5a7f55502a2c2d89419c4c6fc4e13bf18fd695e5b2e571"
+  },
+  "shared/Glyphs/sources/fotu.slider.flare.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e7c77245f37c93ca6ab6c6fcdea58cae010bb4c58892fed58762d4ab6d74efc7"
+  },
+  "shared/Glyphs/sources/fotu.slider.focalLength.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "08e0ca9b3686c45013c23bf27373bf1a8dd97388d1ed329828510d5377e17c46"
+  },
+  "shared/Glyphs/sources/fotu.slider.focalLength.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a88b39668f3afdbec6e98ee123a0b964519f03d5b6bf0fc6ac5cec97867266ac"
+  },
+  "shared/Glyphs/sources/fotu.slider.frameCoverage.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "44c5e219dbb3675b9f2a65fba46ff62c3e30e876af41dbe8b531c93b05f43bee"
+  },
+  "shared/Glyphs/sources/fotu.slider.frameCoverage.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "d6be17ac175a60bce94d7caba05a72f5ae56b71a176026f93b05fc6f6dc8d5b2"
+  },
+  "shared/Glyphs/sources/fotu.slider.grain.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "09e55658d50213d46ad00c8a5d1830098fa97a024f5a0f1566fd14d26e4fe054"
+  },
+  "shared/Glyphs/sources/fotu.slider.grain.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "502048453d97c09b040e4dd34bdd3c63924e68ae4b41482deb0562b50299fba7"
+  },
+  "shared/Glyphs/sources/fotu.slider.halation.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "1787da378cbef4397982b39a37da565ab085e949270e7c461e0a54eadb1c7aa2"
+  },
+  "shared/Glyphs/sources/fotu.slider.halation.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "add1f1f70dd2009a0f7de27fc658253aba2c09574ec76de605fc509d1e2f2934"
+  },
+  "shared/Glyphs/sources/fotu.slider.halationColour.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "1c4b685b9f58aaceb4bb3e195bb53b0c1eb5d81f4422637e1654fa4f134c7810"
+  },
+  "shared/Glyphs/sources/fotu.slider.halationColour.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "dadb8695a18ced260f73b188ae7d0bb579a0a5774a47a069741089e38819d955"
+  },
+  "shared/Glyphs/sources/fotu.slider.halationReturn.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "72da1cce7bc67679b9109fcb9d452ad8afa3222f01c40953b1a4189832f8cdc1"
+  },
+  "shared/Glyphs/sources/fotu.slider.halationReturn.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "034b5f3e80066afa3511a2c611745849868cc4ccc690c985b0ac68665ae9a349"
+  },
+  "shared/Glyphs/sources/fotu.slider.highlights.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "39e1e2e760f13a58828efe9407e8c3b7fc38255b969936322c9abb1af4048827"
+  },
+  "shared/Glyphs/sources/fotu.slider.highlights.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ed764154f1acb57fe90db10dc967e858125e519b4da690c2eb911acdb8163026"
+  },
+  "shared/Glyphs/sources/fotu.slider.lensAmount.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "72d921b1f49c5b1b3d6f22031b5831db5eeba85dffa8152e9993f8b33b36c877"
+  },
+  "shared/Glyphs/sources/fotu.slider.lensAmount.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "7968d9077eaa038b0dd8e0868586172a906a42329e848162bef7fda6c05d755e"
+  },
+  "shared/Glyphs/sources/fotu.slider.lensBlueYellow.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "dcca81536e5da4a7e61b610fb49452d0c90e08d11a2b358c745a23ab6b63c063"
+  },
+  "shared/Glyphs/sources/fotu.slider.lensBlueYellow.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "aac754dc47d8be32957a3e9806b75a50010c8eb7ce18f957220890f5905ae1ec"
+  },
+  "shared/Glyphs/sources/fotu.slider.lensDistortion.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "dbe42d448a0ffc76c68d0381a5ecca401d23ff2f0de955a78f0fbfee33106156"
+  },
+  "shared/Glyphs/sources/fotu.slider.lensDistortion.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "7968d9077eaa038b0dd8e0868586172a906a42329e848162bef7fda6c05d755e"
+  },
+  "shared/Glyphs/sources/fotu.slider.lensRedCyan.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a761115720d064ab0a76426902c8f0ceb6a92753e9d70e213fb439adac0326d2"
+  },
+  "shared/Glyphs/sources/fotu.slider.lensRedCyan.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c1aaf0d07cf671a1b136bc3affe19738e95b70ccf60016fdc1fb3b51e3f4417f"
+  },
+  "shared/Glyphs/sources/fotu.slider.lensVignetting.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "92f86257f751bb4d01ed11d35e9e5d093b745639ef78a244e838bd4e9b23bbc6"
+  },
+  "shared/Glyphs/sources/fotu.slider.lensVignetting.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "27df5f672a21f84d128f02d17394d6cda84556b061d423751711f1ecc22954b5"
+  },
+  "shared/Glyphs/sources/fotu.slider.localTone.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "6e3154cfe4a162a08efb68c64bcbdd8bf6ee9788ada038e018ac11b75fea6fdf"
+  },
+  "shared/Glyphs/sources/fotu.slider.localTone.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c0d38f1c888310f26693c9f07405ebd9fdbcfa9bba17a97b11bbcc7e7670e4a8"
+  },
+  "shared/Glyphs/sources/fotu.slider.mottleShare.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "583360eed1a8f4ff829a58e6c2d573b2033eaf68e8fa26f7db54fe4d52d74065"
+  },
+  "shared/Glyphs/sources/fotu.slider.mottleShare.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "2bce1a30e5e06e17b5e1ebdfd1a40541b2057b31e2fc215e1e660f3afb770c0a"
+  },
+  "shared/Glyphs/sources/fotu.slider.perspectiveHorizontal.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "f8a98b7f88af324372296845ea401e8f7bbbeb913df6d9d3f51a704510b37b06"
+  },
+  "shared/Glyphs/sources/fotu.slider.perspectiveHorizontal.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "b6971fdbd46af971500bb36223f5b293e29a690c9b2eeb5b143a5a0ed8250968"
+  },
+  "shared/Glyphs/sources/fotu.slider.perspectiveVertical.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "838195a29fedf1d1e8fa12817a627ba13ce34bb5c93710cc80005b92340d600c"
+  },
+  "shared/Glyphs/sources/fotu.slider.perspectiveVertical.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "334a0d7d9a034c88ea6a9be61be60b85b42265a4a46f777b4410ad7b8fb4de8c"
+  },
+  "shared/Glyphs/sources/fotu.slider.printCorrection.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "5ec8e88f32f67467929902bf6887f058e3f52cef49aeddfc546346c597cbee06"
+  },
+  "shared/Glyphs/sources/fotu.slider.printCorrection.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "d78772024030a05f6ab7dbb101e45c9a0c90d4fdd02757fd2b2bf9ab608c48dc"
+  },
+  "shared/Glyphs/sources/fotu.slider.printerExposure.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c0c2b20b44e549605aec0d6e556cf02eaf6e7ba2d8149672ff783f10447f5b6b"
+  },
+  "shared/Glyphs/sources/fotu.slider.printerExposure.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "747e900a9ab2b77568958e17f217dd045acb338490070b7d3c7c55db2cde7a7c"
+  },
+  "shared/Glyphs/sources/fotu.slider.printerLamp.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "436806951902b31ab23aedd41e9271cf2381fb2edbb15417071ef804b7021716"
+  },
+  "shared/Glyphs/sources/fotu.slider.printerLamp.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "2d5c567167c2fc404bdb05ed4e669967107101acbaff605c910fdccccc8c995d"
+  },
+  "shared/Glyphs/sources/fotu.slider.printerMagenta.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "d6fffdb3e47c0a7c512acc4b8345d7eaa32edb3a8aa532075e8ddfee3af153ae"
+  },
+  "shared/Glyphs/sources/fotu.slider.printerMagenta.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "5bcd8cc19a96ae124a165c2f497a6b336cb09bc0692f29f0a6e0710e8ccd7b9f"
+  },
+  "shared/Glyphs/sources/fotu.slider.printerPreflash.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "90499c48ccd7e94dd9a9fe606f1027ccc1fe0530cc94dd2236e0d52b9cc62759"
+  },
+  "shared/Glyphs/sources/fotu.slider.printerPreflash.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "da1fd6b508fbee5cba1dca4f109e9a516f1fe9e72097815e7f39d80a33409376"
+  },
+  "shared/Glyphs/sources/fotu.slider.printerYellow.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "47bd54fe898f71ba8b65db3a7b4792b82eb70130c6eb77a28015ae808bbaf945"
+  },
+  "shared/Glyphs/sources/fotu.slider.printerYellow.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "5bcd8cc19a96ae124a165c2f497a6b336cb09bc0692f29f0a6e0710e8ccd7b9f"
+  },
+  "shared/Glyphs/sources/fotu.slider.push.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "6e8c7488b3e98343c83c3c6c48beffd04464b5f4ade118f1162285091c79e541"
+  },
+  "shared/Glyphs/sources/fotu.slider.push.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "07f52e91cd2b573addbd6f6fa20e68fbb01246e1975d1cb4b5315ae26cc4fce0"
+  },
+  "shared/Glyphs/sources/fotu.slider.saturation.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "5feb2239fc65abd02fb4cec678cfa402c6e752c5fdca37cae2efb4a17b7622f0"
+  },
+  "shared/Glyphs/sources/fotu.slider.saturation.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "85e4ffc7485dfcea4f1fa6d4feef625b43aa5fbec33a80aa27cb354b6037e49a"
+  },
+  "shared/Glyphs/sources/fotu.slider.sceneLightKelvin.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e002d606808c92c990a5f09593a88d69ac40f49e6bc71835dd307b70ad3c82fe"
+  },
+  "shared/Glyphs/sources/fotu.slider.sceneLightKelvin.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "6d612dd1b78f4953f0dd708073345ae77b33efd533999b26b5a298af9bd28ec6"
+  },
+  "shared/Glyphs/sources/fotu.slider.screenExposure.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a4f3c290d56ee2e65f5f6ec9cfcc72a3787738dd2ceee007ed4dd98c33bb7ca5"
+  },
+  "shared/Glyphs/sources/fotu.slider.screenExposure.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "cb92ee645d72a2bebd62ac2ffc7e4326f18cdc93c349de9765753e2118a78b52"
+  },
+  "shared/Glyphs/sources/fotu.slider.screenGrade.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "8cb326c2a4120f434065a55cafa889a1e1617caf99878e258cedc3b14755e340"
+  },
+  "shared/Glyphs/sources/fotu.slider.screenGrade.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "d3ba5a7de545e47fce882dbaa4d21fe6d2b06674d1610653ab00bd986dc4107b"
+  },
+  "shared/Glyphs/sources/fotu.slider.shadows.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "b1a4da1f0f6a6538efc7e4e18ef3327c48c3a173df945f93c0b29dab9909f83b"
+  },
+  "shared/Glyphs/sources/fotu.slider.shadows.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "4bbe4d7437e1e33388a56f5376e55c507a0f7c131e8b5392a3f32b4e903c7469"
+  },
+  "shared/Glyphs/sources/fotu.slider.tint.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "27a030c8de39a8a7fc2ac1b07544e823d099f89b85eb9856f5719ae43267fe39"
+  },
+  "shared/Glyphs/sources/fotu.slider.tint.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ec49ff7d686fce55fc0301696ec1ec30969c84a017f7733a9cf95381ec949c54"
+  },
+  "shared/Glyphs/sources/fotu.slider.vibrance.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "33d93888a4dc8385adad6857053889e8ebe796b5747056e131c6a14ed1e498d7"
+  },
+  "shared/Glyphs/sources/fotu.slider.vibrance.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "47d6b58988ddcc327ab343e40595455ac165109fc12e8e5694c7bee2f2af8e0b"
+  },
+  "shared/Glyphs/sources/fotu.slider.warmth.high.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "d2014ada1baa5da085dc3d0107fb95b2e16d2d7d462a01e92934aa870f7fc8c7"
+  },
+  "shared/Glyphs/sources/fotu.slider.warmth.low.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "aac754dc47d8be32957a3e9806b75a50010c8eb7ce18f957220890f5905ae1ec"
+  },
+  "shared/Glyphs/sources/fotu.tab.balance.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "3e77aa686b08112406d784c5664ea416a5bf704be7bf837f9c68a538bd6557cd"
+  },
+  "shared/Glyphs/sources/fotu.tab.color.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "df01d530fe52f69eeef17b355e9ee56f1bf8bac6c59091db1503b6481951f50d"
+  },
+  "shared/Glyphs/sources/fotu.tab.correction.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "6d905f824d22987e106eac1642a21c75569820398496a35439d92637f5c99d26"
+  },
+  "shared/Glyphs/sources/fotu.tab.emulsion.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "f0c14b433a2795ba2c862537fb9b476a73625ade82701911dd2f51a4d9038af4"
+  },
+  "shared/Glyphs/sources/fotu.tab.exposure.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "d7dcc04bd103f48904118597735703d1cf1e7f057248f9c83f4a2f72bba6c1c1"
+  },
+  "shared/Glyphs/sources/fotu.tab.films.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "0ad0b3cfe0191a1be97f3fff2c670fe2d56a584be40a4ccf4343751231c20f68"
+  },
+  "shared/Glyphs/sources/fotu.tab.filters.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "0c6524c4a86c125e20674714ebc081e1abaf18d7b44a1cb1852ad34d6fec4b96"
+  },
+  "shared/Glyphs/sources/fotu.tab.geometry.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "82480d349fef1f3082c42cb8f66b91694485c88ebfe3771c959bbc950d8e6d45"
+  },
+  "shared/Glyphs/sources/fotu.tab.grain.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e16ab7288b712677e6318427f3612d63fb48e2f190f50d68c4b4ac6295a1e392"
+  },
+  "shared/Glyphs/sources/fotu.tab.halation.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ed5621ae32c8434628c742db94d343356be0d28ebb9fccf925219e325f7c3b86"
+  },
+  "shared/Glyphs/sources/fotu.tab.lab.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a0c67f631b026925f61f7d4d47a9690b1e144e0e893c5bcf1805ec00f0989bf3"
+  },
+  "shared/Glyphs/sources/fotu.tab.lamp.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "022a0adbb3d04d1e051bbfb6b85876e022652416991cb8198224786a1e6ecba4"
+  },
+  "shared/Glyphs/sources/fotu.tab.lightleak.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "da0a00ae44749d74e483dd03c57f296d8a5d1350f873fa5d89071ffbdb73f4a8"
+  },
+  "shared/Glyphs/sources/fotu.tab.local.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "5b93b264d13becdf5a7b9f8d4931954f065a18bed7babcedd248be254b5da69d"
+  },
+  "shared/Glyphs/sources/fotu.tab.output.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "0f70b8cb09fdfb401816a2ed17ab3c978c593e55257e3783166e9d1ede2e07ee"
+  },
+  "shared/Glyphs/sources/fotu.tab.pipeline.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "4efc1d67476998541a7fc3a3a1c9d04b53ca41ff23b39040defde59a5fa8855f"
+  },
+  "shared/Glyphs/sources/fotu.tab.source.svg": {
+    "provenance": "Fotufilm glyph source, drawn for this project; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "06bfb69f78925cc00e1de2c1633776d7d86eb5536014840cd35a14d4a1b42004"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.deck.controls.symbolset/fotu.deck.controls.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a8e4103976d360e8aeaf89260c60a9947a30d35143105d18895cd9365473b17d"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.deck.dust.symbolset/fotu.deck.dust.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "68bdc3d37b42e1c96b18accc21c508909dd6ecefafd05196de33a4a1ffc9b318"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.deck.film.symbolset/fotu.deck.film.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e52b356fe5cb88e7dfd4624f4236dedc36c84db4c9d0ba422115c88734e8f465"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.deck.frame.symbolset/fotu.deck.frame.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "39c0db6fc03f91a9e4b66a0ce5c3b358c4f7cc43f319ca693b91f27b1beb9ba3"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.deck.grade.symbolset/fotu.deck.grade.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "dc7f3e441673ddbbd34c44a86988c17f3e4e0e2da6390d584823c80cf1f2cef4"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.deck.lens.symbolset/fotu.deck.lens.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "966f935e3df7363466025a075cd79486a42147178a9e6210bef90f6cc09db87d"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.deck.light.symbolset/fotu.deck.light.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "55289262c0312a37e8f9ecaf5ecb44607ce5bc1202cc8f1d4ded0def05889826"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.deck.print.symbolset/fotu.deck.print.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "3a26a0cd735e866e816f330eeb67397d5c51913f4089f04c302003dfeb406918"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.autoAdjustment.high.symbolset/fotu.slider.autoAdjustment.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "71630f6e69dacdd5e8d393e039a4238ec31e161346a4c36a5ada661be234d102"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.autoAdjustment.low.symbolset/fotu.slider.autoAdjustment.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "1242cc644c2e2606cb6a31e29d586acaef4cf9c63f4cfd52812e125a10e65d28"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.cameraPreflash.high.symbolset/fotu.slider.cameraPreflash.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ca8ec0bd167bcc7cd1a71907c17c590f9e9d2ace268451ff6e3f8318b09ea4b8"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.cameraPreflash.low.symbolset/fotu.slider.cameraPreflash.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "4ee357fa20efe71481e2e74739658f18320b38dff1dbf98d17463207d392a316"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.chromaticFringeAmount.high.symbolset/fotu.slider.chromaticFringeAmount.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c67194e98195a772e2218653ff255fc9bfefd676708d6ec32edb4fc212e9e942"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.chromaticFringeAmount.low.symbolset/fotu.slider.chromaticFringeAmount.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "496de469d35ea557f82f9be90c3bf9764f73e4344a76cc13693173685c909f2d"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.chromaticFringeRadius.high.symbolset/fotu.slider.chromaticFringeRadius.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "fe662715b854cdc2ac3dc4d0894536e68b82158f23e0a91c86311da482970cf8"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.chromaticFringeRadius.low.symbolset/fotu.slider.chromaticFringeRadius.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "272a321ca531ec6a332867a0199341222ca9008dd30830429ca3f7f5332de78a"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.couplerGreenBlue.high.symbolset/fotu.slider.couplerGreenBlue.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "3a3d82c71cddad7638e3ee96918136f051fc8c83c9ad215572b0b6d827dea03a"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.couplerGreenBlue.low.symbolset/fotu.slider.couplerGreenBlue.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "dc054da35606d2d28fd0c47500fc0467ff5f4e5076f165002c546928b138232c"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.couplerReach.high.symbolset/fotu.slider.couplerReach.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "b25e369201e1c50f8a1d148ec943d3384dcce4185da0bff595f5c9d516db681a"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.couplerReach.low.symbolset/fotu.slider.couplerReach.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "88c732ec8e436edb45d01356ee0666c6171591b7a7302828348d28cbb5469698"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.couplerRedGreen.high.symbolset/fotu.slider.couplerRedGreen.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "20c7cfe06168eafd1b2cb778ca9e70719257eaeaa8c1f6b004298adb86223032"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.couplerRedGreen.low.symbolset/fotu.slider.couplerRedGreen.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "0d78d63e4a445014244e74ee4fadb9754aabb1f266a3645e69f70173a58a0a8b"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.couplerSelf.high.symbolset/fotu.slider.couplerSelf.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e79658f14ea38cfd692fbdd109c8182c3e693d0ac9b854a15da6fc7d38654cc2"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.couplerSelf.low.symbolset/fotu.slider.couplerSelf.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "08ff74eaa169ad94dbe6763116fb8076e801b1947b83e5b1bde295145e11a856"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.couplers.high.symbolset/fotu.slider.couplers.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "b719664c75d3dff433ccb31c6c736f8cc8f57a6b2b7bf0102a53758437c7c99a"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.couplers.low.symbolset/fotu.slider.couplers.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "14fc86f03d69e2a3ff6d9cfeaa2bc2302e0256f6ac79c9d5a103b6f4048a817e"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.crop.high.symbolset/fotu.slider.crop.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "4dff8aadacc14193160719a5f45914c4f2c3308b3910e34a7e18e9bf2c181b73"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.crop.low.symbolset/fotu.slider.crop.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "be18ec5692fef547f3da38ea064406a783c5d4067f4b756db36b1f0eb2e0b448"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.expired.high.symbolset/fotu.slider.expired.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "d3ddc82285c7e9f2ec8e0c85fca629a26b1ecafac8e477b8c42ef1d434514e2b"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.expired.low.symbolset/fotu.slider.expired.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "6923dea97e38d02c7f81fc6e0150573aeff350a428b7eb0cae7636177b5819bd"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.exposure.high.symbolset/fotu.slider.exposure.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "dae55bf5448a3bd2f0de0ead297834000827a212756849576419840ef9b9ceef"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.exposure.low.symbolset/fotu.slider.exposure.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "f38acfbefe51e3832e6ceece6d5ebbfb4e74dddc18624ce822b54f2db65cfa5f"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.filmBlueLayer.high.symbolset/fotu.slider.filmBlueLayer.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "dbd8c38ee0d953b01b5045971f055aa7a490bf95315cb5d80d4f9d7eeba331fe"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.filmBlueLayer.low.symbolset/fotu.slider.filmBlueLayer.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "b7836231c3868667362c7f6761d677e87f0567b550102eb85dc0b87bc4f7c1a5"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.filmColourGrain.high.symbolset/fotu.slider.filmColourGrain.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "7385e2722013c7c93a407922ee905e00385a80fa21121d813f26f0e55260e358"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.filmColourGrain.low.symbolset/fotu.slider.filmColourGrain.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "cd43312c726e350910048010f5676a1c07e85fc0865efbd4176e692207d40535"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.filmGrainSize.high.symbolset/fotu.slider.filmGrainSize.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "0f5ceccbc2c2da50fc91e2c2d95b0904f91b7fee59d84f3a6c63a21ddaf59b2d"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.filmGrainSize.low.symbolset/fotu.slider.filmGrainSize.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "0116083dee5bef80fc5211388a516afdd2f6dd447a6b56970e37361aec9e1676"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.filmGreenLayer.high.symbolset/fotu.slider.filmGreenLayer.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a1be53b24a430c848c77ea5984aa5f9f3caaedeee7186ee5df14961aaae8a18e"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.filmGreenLayer.low.symbolset/fotu.slider.filmGreenLayer.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "93985b0d937025c751f87888ed14bc563dc2ca9d049633faa285ff5c1e46ad4f"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.filmRedLayer.high.symbolset/fotu.slider.filmRedLayer.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "b3781a58d926111e1c70f0a21f09b5fbc5d1c7e7cb5630d0fa84a5ec51f1a2d4"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.filmRedLayer.low.symbolset/fotu.slider.filmRedLayer.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "7faa48aa69c990d706f793924ab24a6800e3d483bb7803209a1fea6b5e052f28"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.filmScanSoftness.high.symbolset/fotu.slider.filmScanSoftness.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e7e463843cbb9ec1f99d721db9c185718be9d7263c5cf05e2ff040b79f1dd1c2"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.filmScanSoftness.low.symbolset/fotu.slider.filmScanSoftness.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c10146c79eb345ddd5a898581f91a165bbcd18d4b39c020582ff86a78cccb3b0"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.flare.high.symbolset/fotu.slider.flare.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "2c0aa60da6686eb2f1725f1bccbafe74ff1d72c08de07cb2d60cf95f1cb54682"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.flare.low.symbolset/fotu.slider.flare.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "0abba3812678c5a8ed391dd12632bbfd330b1f779cb61aa855c3818ce9e49e61"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.focalLength.high.symbolset/fotu.slider.focalLength.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "dcbfc42b0ed9e1146fc328cac85b3c9f20428e46046b2a8993ddcea3cd7423f3"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.focalLength.low.symbolset/fotu.slider.focalLength.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "fedc40a465e699af076b3a617a517adaf569736d8b13af8fe95cbc4059b54c9c"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.frameCoverage.high.symbolset/fotu.slider.frameCoverage.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "da173b0bc97e978cf63b578f755563a562f6500bc305be39de2b322830d22ddd"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.frameCoverage.low.symbolset/fotu.slider.frameCoverage.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "6c7e5e93842781a3efd1a8d3bbb071f4ef3ab1ca1de207052b6dcc2554ecffee"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.grain.high.symbolset/fotu.slider.grain.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "036039dd2d8fde355cdeb849d40f387f7a74f8e5318d14da2baf4e1082e1122e"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.grain.low.symbolset/fotu.slider.grain.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "dddf99df6e0ecf61edfc55607cb6b009a3b4c9100c5280cc3440e7060f2764a5"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.halation.high.symbolset/fotu.slider.halation.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e2661ab3416ace00ace07eedd8a003cd9504d97a86b6c9bd225134aea1d44053"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.halation.low.symbolset/fotu.slider.halation.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "147839642475fbc495003c443f2adab562645f65fd3a13d4e187ef9cc6faff8f"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.halationColour.high.symbolset/fotu.slider.halationColour.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "55c2ba494a8f548a5ebadf9bf99440e848f79e25e6bb7c0ba2a535ff739c6dec"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.halationColour.low.symbolset/fotu.slider.halationColour.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "dc9f820a2f8089fe717503e86cddf56f1fb04a69fcefc3394254d477aa4490c3"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.halationReturn.high.symbolset/fotu.slider.halationReturn.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ce331cd7bcd1f8123c2d0f7f490aae645ac4934f6f5d67d2196f4e8b3e1af9e7"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.halationReturn.low.symbolset/fotu.slider.halationReturn.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "f770dda176571192dd230f76cd9bda2b9674201789ee7b33471d2dac179a011d"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.highlights.high.symbolset/fotu.slider.highlights.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "575ede4eb9a4c68958a8d8324f6a982d831a1b2986b502cdd9b3248be2bce646"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.highlights.low.symbolset/fotu.slider.highlights.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "95d38ce720d5e725b1398e58240f65167e216141aceb311ed05f7743c8e58f02"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.lensAmount.high.symbolset/fotu.slider.lensAmount.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "3073fbf7920ddcf4add384e37fcaeb7b02835cd5a4090685776bfedd40dd118e"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.lensAmount.low.symbolset/fotu.slider.lensAmount.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "9615b20d313e16bce460fd31c6bdca600395645960c0a935469348ac0f50dd2f"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.lensBlueYellow.high.symbolset/fotu.slider.lensBlueYellow.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "bed63a795ce923f0a5937c274039e92c5a3c14bf3c3765877fc48043b5645778"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.lensBlueYellow.low.symbolset/fotu.slider.lensBlueYellow.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "81f19c3255d69a3086f9dd47fb54306cdb1cd25655ef46505608c79751739d65"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.lensDistortion.high.symbolset/fotu.slider.lensDistortion.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a37b0fa105a0a7fe9591193cab63a7f35f64f42a38a46c3d267470e2aa976d0d"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.lensDistortion.low.symbolset/fotu.slider.lensDistortion.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c872d7b23712e3cd2bb5e6babd1f582a6ff022a6add054a41790e9fb320a6ef3"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.lensRedCyan.high.symbolset/fotu.slider.lensRedCyan.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ae2e59b1e3d24b0a0500cae681517b560ea48ea8ae63398732e314bda30cd599"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.lensRedCyan.low.symbolset/fotu.slider.lensRedCyan.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "4fc32e0b83a4761ce2a5c31801d99466c1567a031f6a995bff418335e98a12b0"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.lensVignetting.high.symbolset/fotu.slider.lensVignetting.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e1dc3c4d3efac4474f08ca4e26f2bcc71a06a28e7dcd3b21d8a905a219726e1f"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.lensVignetting.low.symbolset/fotu.slider.lensVignetting.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "3c6fbbedfd86db7af00e552d1094528d28b4c54c6725bd381c6623901265548a"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.localTone.high.symbolset/fotu.slider.localTone.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "d5a68fa7fb311476da9f978694c8237c27685fdc0a3273e3251dd180aea3fd1d"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.localTone.low.symbolset/fotu.slider.localTone.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "4eaf9b4d65ed25050867125f46566e2c6f6b4f44211da7e40c4928c4925f36d2"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.mottleShare.high.symbolset/fotu.slider.mottleShare.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c0a3391c9fc8be69395f1cc976955d40a210f6a349b448ff894a1fea933916f1"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.mottleShare.low.symbolset/fotu.slider.mottleShare.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "8e664ccb190d7e6b2a2cafba9d943cbd543af408d939b82e7264605189139a4e"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.perspectiveHorizontal.high.symbolset/fotu.slider.perspectiveHorizontal.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e03bbd22d590baf92e3f69a71fb42aad3532f6b7046a68c775910bceafd16929"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.perspectiveHorizontal.low.symbolset/fotu.slider.perspectiveHorizontal.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "13031726c570a224a652f25bf1832f2a02416dac6dd1fbfcfdb1de77b77206ed"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.perspectiveVertical.high.symbolset/fotu.slider.perspectiveVertical.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "5e11376f16ff92936eb1a1846b3e266daf9b01ff023f0c0d53a6f3b99844ef37"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.perspectiveVertical.low.symbolset/fotu.slider.perspectiveVertical.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "42d5d36dfdbac509321004f5624136fe1756447134a06bd58cbf4bc387412135"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.printCorrection.high.symbolset/fotu.slider.printCorrection.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "d5f7e910323a4424966a74bd7dbb15d4e3fe0e205ac929dd1f6a673237aeaeda"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.printCorrection.low.symbolset/fotu.slider.printCorrection.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "bc61abf9da428cf8687515b2012bbcab6e76ebfb6e57f396f30329cfcd171f0c"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.printerExposure.high.symbolset/fotu.slider.printerExposure.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "0ea353b57637aa15fa4903d66bee222674a7c2e29e019620634523ef9c027508"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.printerExposure.low.symbolset/fotu.slider.printerExposure.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e4ca4e73ddbf7706e46b21b30ab4e9fdc870078c11b9746988e2af95977ea18a"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.printerLamp.high.symbolset/fotu.slider.printerLamp.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "82ef6ce1703d2b57b0be42f37d23fb4ff22c84c85effa426966bb91034eb7d9f"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.printerLamp.low.symbolset/fotu.slider.printerLamp.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "4feff4e640a04f0df240e9b56117202dd15109f68e9e05f63239e3f83eac33b7"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.printerMagenta.high.symbolset/fotu.slider.printerMagenta.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "13972b139ae968fb3b0d7ae17d161deed9d00da9f08132177a45b4e583298367"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.printerMagenta.low.symbolset/fotu.slider.printerMagenta.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "7f702a3c7cf1b1a0e69481d2c33c793aeb463d429ea59f481bd942f122f9babb"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.printerPreflash.high.symbolset/fotu.slider.printerPreflash.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ddb1620488d4b0fbd496aad45fec29ca4dc99809f371f474ed445a0ae69dd4fa"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.printerPreflash.low.symbolset/fotu.slider.printerPreflash.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c57f2539bfde141eef8283ccaaf77ece247d41e7667701063897d4c1c054a1ba"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.printerYellow.high.symbolset/fotu.slider.printerYellow.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "9c0069604f19318cf7eacd6102268b54186322b283a340ac2f78d509ca905dd4"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.printerYellow.low.symbolset/fotu.slider.printerYellow.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "51689f84938ff87a8478da742a3a98d3b5ebb9592214ec33b31e101416739674"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.push.high.symbolset/fotu.slider.push.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "b3d945d8650f2f8026e525aaf5aa0a2eec329d4e82a6f927dfb325796378849f"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.push.low.symbolset/fotu.slider.push.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "0b2d7068c567d1978b1d4e963a1484ef5066f30ecb714985682dacd186f877e2"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.saturation.high.symbolset/fotu.slider.saturation.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "65e13c06621418559b957ef4ce96bb3f80ddf288231f7327ac5f44e425ddbffb"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.saturation.low.symbolset/fotu.slider.saturation.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "f688b6941b92b88a559f26a25f5eeae05ff03a3447624378eceef60200a1e453"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.sceneLightKelvin.high.symbolset/fotu.slider.sceneLightKelvin.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "89a4ab339fa9e50e1a5ec7381c8a20bdf5a5656d61d99946acf315b54ee8ab3a"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.sceneLightKelvin.low.symbolset/fotu.slider.sceneLightKelvin.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "3b141f4675b3432da7d42a1765e718afa02ad0ddd1d1e0234844e5c9758e80fa"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.screenExposure.high.symbolset/fotu.slider.screenExposure.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "0da7989c4544498d1d04ffd79ea1444f206efdcbc67e92f67888555faad4ac09"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.screenExposure.low.symbolset/fotu.slider.screenExposure.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "3e6c6244219cf369952aacf6117b53ae4a9a5c58f5db88ea487bd3a6cacce222"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.screenGrade.high.symbolset/fotu.slider.screenGrade.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "53947fdca867217b07e3b1f9d4444a26837aa8dd5acee3e341ad20ba23d81fbf"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.screenGrade.low.symbolset/fotu.slider.screenGrade.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c75bc12558ebcd6d140df80b63d4ea3e3ca811f05e2ef4c6dac337e035cadcf6"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.shadows.high.symbolset/fotu.slider.shadows.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a231a082e7bd997a842763a60ff17a9262f2b437c5d0e83ccb5fc15511cc3f85"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.shadows.low.symbolset/fotu.slider.shadows.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "4fa2ab4fbcb04f064152cb33096a4fed7befe8112b0076cd156a77f6d3c0f025"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.tint.high.symbolset/fotu.slider.tint.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "076624bb82367a7b25bf83f2518e6e26ad427182eead453220542906690a5729"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.tint.low.symbolset/fotu.slider.tint.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c287b9ddad4f1cf85df58d241bffd6ad66cb41370d1071bf1d6c05843b556524"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.vibrance.high.symbolset/fotu.slider.vibrance.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "1077b3d0a3aaf9454834844f4356752e996125ad0b0078b742f17cae6f966bc4"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.vibrance.low.symbolset/fotu.slider.vibrance.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a397227fb2219060ff1d0864589c83b762b86ab194b1ff3870c2c4a4154a8a97"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.warmth.high.symbolset/fotu.slider.warmth.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e22b3fa34b0e8a91dab627d7f869458e40c24b59511e2c3dbcc2f4f7355d882b"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.slider.warmth.low.symbolset/fotu.slider.warmth.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "6aac9cace3a6a89d9780c42ff857bbf72f04f120a5129ca9f67833bde03728e1"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.balance.symbolset/fotu.tab.balance.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c35238b29e1ab52baad2cc3d9d3457e5398d4e659dec28e7e56d829a1a050b85"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.color.symbolset/fotu.tab.color.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e34c3375d2f0b27f2a4089dc0eefbce1554ee71a488b2a8599fa095f5f2697fd"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.correction.symbolset/fotu.tab.correction.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "6b6c4bab433bab827396e4d9d14d359e03a8d0f0bd4ee9a59ace6c750b85efff"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.emulsion.symbolset/fotu.tab.emulsion.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "4fa1bd9c6baf952ca03189b46ea7aa0494204d36d58eb27c64144d2813bac4d8"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.exposure.symbolset/fotu.tab.exposure.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "f0589c7e64c26754db123bd0d5ec7a9414d00d8838cb6f4ee2b79d47218ced5f"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.films.symbolset/fotu.tab.films.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "523890a5efdae7ed8152a66f56b39893dd4f8f900c7459c7036e91e83ae67205"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.filters.symbolset/fotu.tab.filters.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "fbbdb8018cdb4d25abee632b83dcacd16b7f8e83d3f2dc5e685c1ca25a5fec61"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.geometry.symbolset/fotu.tab.geometry.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "3d2a2342c92cc033ed8b54c1ff3b3ce849462147ed22c04151c70c9c4b1c3da8"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.grain.symbolset/fotu.tab.grain.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "9af20196e24a166313a9d3d08e830b87801d208b304bf0adab954a783a5ffae3"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.halation.symbolset/fotu.tab.halation.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ccc773f9e1a17712b50ad75116bd2e0dfa620f63aee9474826a14def44678e64"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.lab.symbolset/fotu.tab.lab.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "7ef13d17e5bd0064fbfcf8def79edea5ce7aa1abf6649a98ea87901c70714c3b"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.lamp.symbolset/fotu.tab.lamp.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "2c7c2df93e35403d293dd3ed21d5f29ca1bf3e5ef6a6cfa0a32380cd4555e00e"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.lightleak.symbolset/fotu.tab.lightleak.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "b4fc93d10af0be2c4b9457d449f21877d7f8797c9402808e137486a5b18212c6"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.local.symbolset/fotu.tab.local.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "380ba7116aea8e82b18570ce8bbdfbdded1b3f3db081afd93f06b2f8c4fa1627"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.output.symbolset/fotu.tab.output.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "bc7d7a24bff4ef241f63ab125f9f0905d2132a32e8fa48afe36635ece332c9a0"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.pipeline.symbolset/fotu.tab.pipeline.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "709e4dbf383d383185c9303a156d360346237ef4918f88cd251ac95eab9a3e9d"
+  },
+  "shared/Glyphs/Glyphs.xcassets/fotu.tab.source.symbolset/fotu.tab.source.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "3945bc55378496fd850b7fdeaf3f404b63b021a117e8ac2f7e9cdca131345852"
+  },
+  "web/public/glyphs/fotu.deck.controls.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e0f10608e29478d315120a8db679f0252bf363df7ff56361d9870144df17a674"
+  },
+  "web/public/glyphs/fotu.deck.dust.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "56eace97c8241b51321c3c74452f043d17adb3028ca82c4bcab85d28355ee553"
+  },
+  "web/public/glyphs/fotu.deck.film.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "399b2488857f9f64aaf21ed9a7d7ffa2b20e18800e6922d27b96bfcc22fd7a63"
+  },
+  "web/public/glyphs/fotu.deck.frame.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "734dd6a9f4c208b1e89ae904cb70258ef4cf2191aac9aeb7d3bcf862fd7d93a3"
+  },
+  "web/public/glyphs/fotu.deck.grade.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "183e4da4376402e94ce8dd6e296618f913423a0075d11ad72c75202acbf724c1"
+  },
+  "web/public/glyphs/fotu.deck.lens.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "8469eae4a74058404fc8e731a7ca60f9658f862af6672fd4f0adfa55d3c7bb45"
+  },
+  "web/public/glyphs/fotu.deck.light.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "b708be85d775dfc804d8a83368fc93706e27e4b6091953f32113af28e16f7ef9"
+  },
+  "web/public/glyphs/fotu.deck.print.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "28aecb0ad6bc612ba03b1dfbb810502d04582a25aad4e7147a8bb4c421dd34a1"
+  },
+  "web/public/glyphs/fotu.slider.autoAdjustment.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "394ace1c08f90f83fc2e9f3eec95ec51437b2ddaba9143785d0be38f30c52e2c"
+  },
+  "web/public/glyphs/fotu.slider.autoAdjustment.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a250da1a9bf0f51c6575f76fb341d3f39eabc9d21d85974b1a345c50739bb561"
+  },
+  "web/public/glyphs/fotu.slider.cameraPreflash.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a9e29c5cba9435c606b0d41085c19ff1b70a346c44b41756ca7265954dd00ab5"
+  },
+  "web/public/glyphs/fotu.slider.cameraPreflash.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "eb3a2cc54d1be04dd1eac526d927c11ce5e1b3c1b0c88dec881e7bd54fc51ea4"
+  },
+  "web/public/glyphs/fotu.slider.chromaticFringeAmount.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "3cb8b0c6b5bb629f374941b37deb90f8befb223312840dc5347a5b902483afb1"
+  },
+  "web/public/glyphs/fotu.slider.chromaticFringeAmount.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "328482e89766cb9e20c79d03d05cbd206a38ca8a573961b5591906b6f1aec22f"
+  },
+  "web/public/glyphs/fotu.slider.chromaticFringeRadius.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "1e16b23ae9e472bb5c83e2a0fbd1d6aa8d8916fe8bd6fa295c76705ae7592191"
+  },
+  "web/public/glyphs/fotu.slider.chromaticFringeRadius.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "9c7c3fbea60e8d3c767c6f4e0c13045969c0b306671e60e306cadf47bc3f3446"
+  },
+  "web/public/glyphs/fotu.slider.couplerGreenBlue.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "8fcbb8c8369482e184b9f6f161a221c5ba1eb4ac8f9d1a86715fdef56c8af510"
+  },
+  "web/public/glyphs/fotu.slider.couplerGreenBlue.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "f529dad124ded581314abf796f087bd4e5bc93898802891db779a7d807581686"
+  },
+  "web/public/glyphs/fotu.slider.couplerReach.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "4983c35f150e756236386b686745c09152cf706fd980842e677b911da07712a9"
+  },
+  "web/public/glyphs/fotu.slider.couplerReach.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "815f86b635619cf27b877eeea21c66aa4a82cf0d5c3a0144165c0ac0bb9f75d6"
+  },
+  "web/public/glyphs/fotu.slider.couplerRedGreen.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "abed72f177ad6e349130b121faf7bb4bdac3241d97bdc1cab389f8792a7bc54c"
+  },
+  "web/public/glyphs/fotu.slider.couplerRedGreen.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "b600e2841f3b411ac8a96447d68e3fffb7efa10051d5086e0dac3bf597dbea50"
+  },
+  "web/public/glyphs/fotu.slider.couplerSelf.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "7e5a407c84d44b1498041351e4df6e77ac0aaea2baadce7d278ddc0425e1e85c"
+  },
+  "web/public/glyphs/fotu.slider.couplerSelf.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "2bd292f24693f5edf81eae538c82897db7e3e23310127b3e9843d420b206787f"
+  },
+  "web/public/glyphs/fotu.slider.couplers.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "d762a99a0977ec99ebe6e38d84eef7749629eb8ee52f5eba5145222dcc318197"
+  },
+  "web/public/glyphs/fotu.slider.couplers.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "32696e3b34c0eddbb26ed9d5e778953033238c22910eeb57e4e323e6260cd03a"
+  },
+  "web/public/glyphs/fotu.slider.crop.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "3df24b82d508e59ba1391c22daab3f95614f3eccbe25cec35c59a3f84385a066"
+  },
+  "web/public/glyphs/fotu.slider.crop.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "8d88d396417b6896f41c9a291092b7d3d9244bb6dcb6fcaf3f4e379ec9dddd99"
+  },
+  "web/public/glyphs/fotu.slider.expired.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "2f8081c63407111cd69bcda537b323970d0f960f9abff790d7dde7be2f8114f3"
+  },
+  "web/public/glyphs/fotu.slider.expired.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ab677637748b361c54e652508c63885dd4c996912a6a4774fb468bbee39fba4b"
+  },
+  "web/public/glyphs/fotu.slider.exposure.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c4e07cb4b0d47cd76babe94472b1fdbaa9e533671d4a7b8b6588a6a2be199f6b"
+  },
+  "web/public/glyphs/fotu.slider.exposure.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "3e57ca322fb67ab8c70087813873114e08e9d29be114d2cc4684532604b22793"
+  },
+  "web/public/glyphs/fotu.slider.filmBlueLayer.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "058ac46c2b8c156d078a9bf419dfef755aa800bf3e7ba2a340cc8d59d26c26c1"
+  },
+  "web/public/glyphs/fotu.slider.filmBlueLayer.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a4bbfcd4518e5317d982acee2fdd2e42d0c0e3de6c58511ece7939d88fca46e0"
+  },
+  "web/public/glyphs/fotu.slider.filmColourGrain.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c4ae12f32dcece71a54e130c166622155f15f8e9776e7082729bd349cf7c4c8d"
+  },
+  "web/public/glyphs/fotu.slider.filmColourGrain.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "7450cc43494551d1447c5b5cbac24f5c15d3ab6f40ec67c7f8130126be2c2835"
+  },
+  "web/public/glyphs/fotu.slider.filmGrainSize.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c0ab1c71094c0b3820c9a4088ddcc999789ad9a371c635e18c1bf72cb3a4f383"
+  },
+  "web/public/glyphs/fotu.slider.filmGrainSize.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "b2715e687c6d635bfd9ef2ed76a72056b3cfdd3f0909e8520ea11449f5a6e9be"
+  },
+  "web/public/glyphs/fotu.slider.filmGreenLayer.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "eddb875421884f04415f94db40609fba2d6e25d6a0f0f9576b333dd8ff96995f"
+  },
+  "web/public/glyphs/fotu.slider.filmGreenLayer.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "65616dd08e29d5c71bc0d411f84609f61d015c791edce6cb360cb8ca4083d36f"
+  },
+  "web/public/glyphs/fotu.slider.filmRedLayer.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "1563987777eaf739c993105f29346568d99b594e749486f069e8d384870e96fb"
+  },
+  "web/public/glyphs/fotu.slider.filmRedLayer.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "687fc44bb3bbf336a1d485d2f466571ba0ce73bc660897704f87737d3559055b"
+  },
+  "web/public/glyphs/fotu.slider.filmScanSoftness.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "4fc6ffb7380f5f9e80b8e732779bd7354dc01d8e5079ada46abf3d3e8fd08747"
+  },
+  "web/public/glyphs/fotu.slider.filmScanSoftness.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e8a0faedcfce4a1c97c6f11da6b551bc8e7831b163e09b6b34eb3075ebbe784f"
+  },
+  "web/public/glyphs/fotu.slider.flare.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "df7538838edc99870d8f219656d9de8fc05fcf038cdff2d3dfa53fb3219b936b"
+  },
+  "web/public/glyphs/fotu.slider.flare.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "bd15c8222a918fdb1c2b44ee06676113ed0ffb4ee6fc36b1d3b563c3d0b7afe8"
+  },
+  "web/public/glyphs/fotu.slider.focalLength.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "cf56237441e78a761bb14724f72abdf7b308c56dfde44dab800a35bc9b7d003a"
+  },
+  "web/public/glyphs/fotu.slider.focalLength.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e5f4c87311e91d0ec676da8b124f6a91ebdabdb7805dd15b196d930bc6e0c629"
+  },
+  "web/public/glyphs/fotu.slider.frameCoverage.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "9b9afcad79affc0ab2245645dd89cd50522e8df4e953df343da45339b76df835"
+  },
+  "web/public/glyphs/fotu.slider.frameCoverage.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "37e986343861aa3f904e05c99f9fe941cc70b7c72445d0d5d19a689805b69a88"
+  },
+  "web/public/glyphs/fotu.slider.grain.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "4a825ec8195848d4e0285f6390af5c362fa86e38bf896e118c18e18fc183b09a"
+  },
+  "web/public/glyphs/fotu.slider.grain.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "360cbbcf21bdc06967783bac16f95834cf035c377738ec9a5b9f96b7ee27171f"
+  },
+  "web/public/glyphs/fotu.slider.halation.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "99727b55c5d97fd22a36a237942dbf7dbbbf7dddb0ac8f08fb54b4a8cd5da5cb"
+  },
+  "web/public/glyphs/fotu.slider.halation.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "0f318eda9a2ff39b3b22552180fc9c096083e6afb669706887bc54cba858509f"
+  },
+  "web/public/glyphs/fotu.slider.halationColour.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "3d526c0607c9192eeae34267d55fee700b5ea84a50fc7a69a12de7e6fd45001a"
+  },
+  "web/public/glyphs/fotu.slider.halationColour.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ba9b5e0cf09bd19b59ec7806c575cc5f60e5d9c3f73112a56797466262122f9a"
+  },
+  "web/public/glyphs/fotu.slider.halationReturn.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "502c5de46b8eb42165f7f4ec4f4f81f1dea5b49e5b216a135c901e66f5b07a3f"
+  },
+  "web/public/glyphs/fotu.slider.halationReturn.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "819f467957a14a30c8200bedd1c9143d451b703a942145fd9519e6c097840128"
+  },
+  "web/public/glyphs/fotu.slider.highlights.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "8594a8da2c5761432881042c36b18fd9aabc7e8d9dfe53a69f1bafa69d2231f2"
+  },
+  "web/public/glyphs/fotu.slider.highlights.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ff179eb843b094e7f459c5514233974e77b9e20206af0b95e8e8dbb19d1529de"
+  },
+  "web/public/glyphs/fotu.slider.lensAmount.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e4b80fe1ed65b48474652a48859b32493a4389c627cc7d33e6f663b2ff345ae2"
+  },
+  "web/public/glyphs/fotu.slider.lensAmount.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "867cea718214903c3c0a39c79b49f6bc2c8c781a4fa69c15ab8792955e099f09"
+  },
+  "web/public/glyphs/fotu.slider.lensBlueYellow.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "b61ed19414f771bc2aa3809a3b2de674660b115dde1a7057e2067a5d38ba23c7"
+  },
+  "web/public/glyphs/fotu.slider.lensBlueYellow.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "8211af195b5f320d39c71a39a7f26336a8113f16fb207ae5955761218d4076e1"
+  },
+  "web/public/glyphs/fotu.slider.lensDistortion.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "a9ab95bda5e2a1b0b05b87cfa2e8073a15ce730c2f78496070746d77819c8144"
+  },
+  "web/public/glyphs/fotu.slider.lensDistortion.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "867cea718214903c3c0a39c79b49f6bc2c8c781a4fa69c15ab8792955e099f09"
+  },
+  "web/public/glyphs/fotu.slider.lensRedCyan.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "724a33764f24aa6edcee234573b6265bfbb9796c63c1b64b284bd61171117aca"
+  },
+  "web/public/glyphs/fotu.slider.lensRedCyan.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "52d029044eda731b823fe7a63584d2404cea1a8e5dc2b0cc9e69f97dc5d246ae"
+  },
+  "web/public/glyphs/fotu.slider.lensVignetting.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "1f45dc7082d7c219468e65a2a76d3c485bd9624de49ae0dac1d091d4ead060ee"
+  },
+  "web/public/glyphs/fotu.slider.lensVignetting.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "1c0c9c3a7ddd483c1492e3073d9328925155d9c4cfd8da67fdb993e096934417"
+  },
+  "web/public/glyphs/fotu.slider.localTone.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ba2edca9d5698a3e4fe58662ebf01119dfe62975570f93f30418ee55bcd0b132"
+  },
+  "web/public/glyphs/fotu.slider.localTone.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "71be89507576eac5a470a2284d7a228a09fecca1dcc7acc1483283a8a6fa41a8"
+  },
+  "web/public/glyphs/fotu.slider.mottleShare.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e5c29737a8626e28bd2bc938e8f95e2697bb73008385463a076f27e0f94cbc5c"
+  },
+  "web/public/glyphs/fotu.slider.mottleShare.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "06f0f0e5882c6a77df1295d3c2690666b40436efb53202383919bce42f1a40e2"
+  },
+  "web/public/glyphs/fotu.slider.perspectiveHorizontal.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "f7413d44c97bd002fbbf9998e81c06808db2e89fa4d0e16b07e77397bb3fdf7a"
+  },
+  "web/public/glyphs/fotu.slider.perspectiveHorizontal.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e3632e7ea494a23334fc2832c3031e4a583101adddb6691a63eceaf63e6fbccc"
+  },
+  "web/public/glyphs/fotu.slider.perspectiveVertical.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "b270d7de9261f99b4436afa29585d5dcf8b5c182a6ca9a901cc0eff6d7f0b368"
+  },
+  "web/public/glyphs/fotu.slider.perspectiveVertical.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "74ce24a16a64243cac3bfbf03b5a46a7746846a4a5496c0ff45e74d6bcd6b1fb"
+  },
+  "web/public/glyphs/fotu.slider.printCorrection.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "79595af3074b585799a1fae8e32f96d510f53f978e3c08784cc5717510d645c4"
+  },
+  "web/public/glyphs/fotu.slider.printCorrection.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "9fc2e12d2e28e55f2a3c7dad9deeeaa1bc93788eba89761b3d733f200e6a527a"
+  },
+  "web/public/glyphs/fotu.slider.printerExposure.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "346f6f3c32d97d5ec818c786c3ee66954e7fe5352dc8a73ef58e2ff1617698c7"
+  },
+  "web/public/glyphs/fotu.slider.printerExposure.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "acd7c723f7c7acf8541919bf9dfc0e06886ec82050b4f242f8c7501af256c8e3"
+  },
+  "web/public/glyphs/fotu.slider.printerLamp.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "4bcf2f30bfab79e4d30f4fb4a46211d1b8d41e163aec2d6ca4c2bf0dc005919c"
+  },
+  "web/public/glyphs/fotu.slider.printerLamp.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "af007e2ad6b669f35c6e9473b959505da1722256ce46153de000e76f3abefd03"
+  },
+  "web/public/glyphs/fotu.slider.printerMagenta.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "3fa5b6cdd60d6728f7b03d68b02bfd0c64014e5e0a9943a5ea92639ef097f4d1"
+  },
+  "web/public/glyphs/fotu.slider.printerMagenta.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "8e87badcd9d38e7a80ba7b6db97573ef4d2bcbbbf197d34db6537d645b49d66a"
+  },
+  "web/public/glyphs/fotu.slider.printerPreflash.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "8926699b7511192b7ca18adbbe6b20af66e70a3c66d5310ee5b6fc96d9e026de"
+  },
+  "web/public/glyphs/fotu.slider.printerPreflash.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "752cce9e89d712a847ad737ddeb674f3fda7b97ca99780c3110a9f601a67b42a"
+  },
+  "web/public/glyphs/fotu.slider.printerYellow.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "7333f9e55c9123d213de459bbae3d5f7e946e2ae5aa705493244ec2501a6b0f0"
+  },
+  "web/public/glyphs/fotu.slider.printerYellow.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "8e87badcd9d38e7a80ba7b6db97573ef4d2bcbbbf197d34db6537d645b49d66a"
+  },
+  "web/public/glyphs/fotu.slider.push.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "17caaafb3d7bd292a05f769c836d5b52c5598fa6aaa04ecf00b19bee9cd389ea"
+  },
+  "web/public/glyphs/fotu.slider.push.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c4edc105a0b3bac8c22c4c3355fb737293bc84caefaae76ecc27e8ddaf60fed2"
+  },
+  "web/public/glyphs/fotu.slider.saturation.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "bf95a6fea2e86937319057259eda797c143e225e13e0ba6ee03037803c47fd46"
+  },
+  "web/public/glyphs/fotu.slider.saturation.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "820506a81e5cd2f81108c2aa3c37a6cb96772ff892c742177e1dd24382c5f1ff"
+  },
+  "web/public/glyphs/fotu.slider.sceneLightKelvin.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "8211af195b5f320d39c71a39a7f26336a8113f16fb207ae5955761218d4076e1"
+  },
+  "web/public/glyphs/fotu.slider.sceneLightKelvin.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "f252d914c3d8ef11c27750495a12fb605c8f8d3b19aff5759d57e92a38f1c101"
+  },
+  "web/public/glyphs/fotu.slider.screenExposure.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "3e5080a995b1b2293e935927986cd10f12c586115d2b510e0fb2740d3dd90c23"
+  },
+  "web/public/glyphs/fotu.slider.screenExposure.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "f7bf7868d4e62812c83169c4bd62a294ded0a2c00708b8a153c8b595de5d6f0d"
+  },
+  "web/public/glyphs/fotu.slider.screenGrade.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ff296095a5453eedaac454207b6d733c04d69b4e275ed052a39497f13a050f69"
+  },
+  "web/public/glyphs/fotu.slider.screenGrade.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "5f75bf7de24bd5d87a7dfb45d188d563ee3c5bb80b24e45bf95c9e761144ca1a"
+  },
+  "web/public/glyphs/fotu.slider.shadows.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "64971261b39b2745b84d023a1093310dbb1da209ff9fa224001d3461e1c26f7f"
+  },
+  "web/public/glyphs/fotu.slider.shadows.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "520b8276737a0ed54c6e8333c122371fe12a1042e6e7c26faf996323986a005f"
+  },
+  "web/public/glyphs/fotu.slider.tint.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "524ab20950f41989a81a3127cc4e9ec77a970e434583f40bf8d1d6abb279c4dd"
+  },
+  "web/public/glyphs/fotu.slider.tint.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "2e89db56d1834d4e2f0cfa285a41d4a289587837d5f3335a3c061349ff91b8be"
+  },
+  "web/public/glyphs/fotu.slider.vibrance.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "25f9376b586ef2712264d9a6b601bc67d68e366cf6f20203727f032e1852f432"
+  },
+  "web/public/glyphs/fotu.slider.vibrance.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "da3777132ba062a8fc592439147a5fdde0c32b7b4c76389d7e48faa35648db1e"
+  },
+  "web/public/glyphs/fotu.slider.warmth.high.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "f252d914c3d8ef11c27750495a12fb605c8f8d3b19aff5759d57e92a38f1c101"
+  },
+  "web/public/glyphs/fotu.slider.warmth.low.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "8211af195b5f320d39c71a39a7f26336a8113f16fb207ae5955761218d4076e1"
+  },
+  "web/public/glyphs/fotu.tab.balance.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "16f244da012bce1d3039b9255755f25d434088c60385604748cd6d472e4f0fc7"
+  },
+  "web/public/glyphs/fotu.tab.color.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "b1f74d4df464af9e555f6ab18cb775eae96f980082ee263367178875ecc06774"
+  },
+  "web/public/glyphs/fotu.tab.correction.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "0b9f13ca0a0a762e61b8c6d614a90a7c71ad456b1616962bde8101bf2beb67bb"
+  },
+  "web/public/glyphs/fotu.tab.emulsion.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "9415e9fe3f3f9203a908675f48773ad4a05b4c8faf819d182ef8a460f53b7d99"
+  },
+  "web/public/glyphs/fotu.tab.exposure.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "187c122e7777492213ea192fbc5be3442ef66b1bf407f59a950f5c5991111bbc"
+  },
+  "web/public/glyphs/fotu.tab.films.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "b4e4821df991f3c57e61872bbadb51abf13ba84fc8f3fc90a98ebc69f6f251f1"
+  },
+  "web/public/glyphs/fotu.tab.filters.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "930b8e4c847724023d3d11a675c858627fee9a87793790b71f3e80ee111d3097"
+  },
+  "web/public/glyphs/fotu.tab.geometry.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "3057fcff531f64fe286be012df841bfa68aea5a1c5cbff1ee26222909f5df117"
+  },
+  "web/public/glyphs/fotu.tab.grain.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "28fce7f6371d17a61308a7a37348e06c4964671334130beb76be6ca774022122"
+  },
+  "web/public/glyphs/fotu.tab.halation.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "e1f5f8579d991179663510f63baf408a7269afa909bd4400c6a8c839c5eb73e6"
+  },
+  "web/public/glyphs/fotu.tab.lab.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "8f038f22ba4c1706d72daf689329dee8e701ff40b43d2aa5f993d320606db14b"
+  },
+  "web/public/glyphs/fotu.tab.lamp.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "be8566c3982ad391df55c828c34da75f09011e9ed6ee78edb7290a2f97a1ea3e"
+  },
+  "web/public/glyphs/fotu.tab.lightleak.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "55f678dcbd0761e9f52e89dc850822bacfbd8da9933cc88ba4831a9dfd9a2438"
+  },
+  "web/public/glyphs/fotu.tab.local.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "fb72a7141258203af7a74b9d2a92c5cb571bdeebbba62ea972f2a39ea2208ed4"
+  },
+  "web/public/glyphs/fotu.tab.output.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "c700aa963a26e7aaf527403b9060187f57de0d521caa0d5acf52a2abc8a768e7"
+  },
+  "web/public/glyphs/fotu.tab.pipeline.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "1f88089c515dc8a90367fc2769b60611e9e3246ce8b203bc47c818d1486a694d"
+  },
+  "web/public/glyphs/fotu.tab.source.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "9503fd4e1050bca6b356e01fb1a2df47db3ffcf86e6925b6e63f016cac47af1b"
+  },
+  "web/public/glyphs/glyphs.svg": {
+    "provenance": "Generated by tools/build-glyphs.py from shared/Glyphs/sources; CC BY-SA 4.0, see licenses/GLYPHS.txt.",
+    "sha256": "ee417cb0a2ed26f960fa781a7dc8368801068f8b55ddad3a53b1e4650ca04596"
   }
 }

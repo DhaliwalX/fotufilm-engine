@@ -319,5 +319,5 @@ the approximate conversion’s limits.
 - [Licensing](LICENSING.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 
-The engine, Mac app, and plugins use [Apache-2.0](LICENSE). Film profiles have
-[separate licences](LICENSING.md).
+The engine, Mac app, and plugins use [Apache-2.0](LICENSE). Film profiles and the
+editor glyphs have [separate licences](LICENSING.md).

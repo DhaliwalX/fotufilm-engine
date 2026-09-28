@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Fotufilm glyphs, Copyright 2026 MUAStudio Inc., CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/), https://fotufilm.com, see licenses/GLYPHS.txt -->
+  <circle cx="7.5" cy="8" r="1.8" data-mode="fill" data-layer="primary" data-colour="systemRed"/>
+  <circle cx="16" cy="7.5" r="1.5" data-mode="fill" data-layer="primary" data-colour="systemGreen"/>
+  <circle cx="12" cy="13" r="1.8" data-mode="fill" data-layer="primary" data-colour="systemBlue"/>
+  <circle cx="7" cy="17" r="1.4" data-mode="fill" data-layer="primary" data-colour="systemGreen"/>
+  <circle cx="17" cy="16.5" r="1.8" data-mode="fill" data-layer="primary" data-colour="systemRed"/>
+</svg>
