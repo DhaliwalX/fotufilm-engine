@@ -1,6 +1,6 @@
 // The page's calls about what the window shows, answered the same way on every platform:
 //
-//   setImageLayer        where the page shows the engine's image layer (web/src/backend/macos),
+//   setImageLayer        where the page shows the engine's image layer (web/src/backend/desktop),
 //                        or the diagnostics page's test pattern
 //   compositorStats      frame counts and the last composite's costs
 //   compositorSnapshot   what the screen shows, page and image together, as a temporary file

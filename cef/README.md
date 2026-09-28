@@ -75,7 +75,7 @@ Latency is decided by what never crosses a boundary:
   never wait for a render.
 
 The transport keeps the contract in `web/src/backend/README.md` and the call shape of
-`web/src/backend/macos/transport.js`, so the editor's native backend needs no second transport.
+`web/src/backend/desktop/transport.js`, so the editor's native backend needs no second transport.
 
 ### Files
 

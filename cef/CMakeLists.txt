@@ -64,6 +64,7 @@ set(FOTUFILM_COMMON_SOURCES
 )
 set(FOTUFILM_BROWSER_SOURCES
   src/app/client.cc
+  src/app/host_capabilities.cc
   src/bridge/dispatcher.cc
   src/presentation/compositor_core.cc
   src/presentation/image_layer.cc

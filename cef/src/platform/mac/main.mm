@@ -4,6 +4,7 @@
 #include <string>
 
 #include "app/browser_app.h"
+#include "app/host_capabilities.h"
 #include "app/scheme.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
@@ -56,21 +57,19 @@ NSArray<NSDictionary*>* Plugins(const std::string& capabilities) {
   return [plugins isKindOfClass:NSArray.class] ? plugins : @[];
 }
 
-// The engine's capabilities with the host's own: this host draws the photograph itself, beneath
-// the page (`imageLayer`), and opens what it saved (`openExport`, web/src/backend/README.md).
-std::string WithHostCapabilities(const std::string& capabilities) {
-  NSData* json = [NSData dataWithBytes:capabilities.data() length:capabilities.size()];
-  NSDictionary* fields = capabilities.empty()
-                             ? nil
-                             : [NSJSONSerialization JSONObjectWithData:json options:0 error:nil];
-  if (![fields isKindOfClass:NSDictionary.class]) return capabilities;
-  NSMutableDictionary* merged = [fields mutableCopy];
-  merged[@"imageLayer"] = @YES;
-  merged[@"openExport"] = @{@"reveal" : @"Show in Finder"};
-  NSData* out = [NSJSONSerialization dataWithJSONObject:merged
-                                                options:NSJSONWritingSortedKeys
-                                                  error:nil];
-  return out ? std::string(static_cast<const char*>(out.bytes), out.length) : capabilities;
+// This host's capabilities (app/host_capabilities.h). With the engine it draws the photograph
+// itself, beneath the page (`imageLayer`), and opens what it saved (`openExport`,
+// web/src/backend/README.md).
+CefRefPtr<CefDictionaryValue> HostCapabilities() {
+  CefRefPtr<CefDictionaryValue> host = CefDictionaryValue::Create();
+  host->SetString("platform", "macos");
+#if defined(FOTUFILM_WITH_ENGINE)
+  host->SetBool("imageLayer", true);
+  CefRefPtr<CefDictionaryValue> open = CefDictionaryValue::Create();
+  open->SetString("reveal", "Show in Finder");
+  host->SetDictionary("openExport", open);
+#endif
+  return host;
 }
 
 // Files the system asked to open before the window existed.
@@ -254,11 +253,7 @@ int main(int argc, char* argv[]) {
                            (dev.port ? ":" + std::string(dev.port.stringValue.UTF8String) : "");
     }
     options.transport_global = fotufilm::switches::kDefaultTransportGlobal;
-#if defined(FOTUFILM_WITH_ENGINE)
-    options.capabilities = WithHostCapabilities(capabilities);
-#else
-    options.capabilities = capabilities;
-#endif
+    options.capabilities = fotufilm::WithHostCapabilities(capabilities, HostCapabilities());
 
     g_dispatcher = std::make_unique<fotufilm::Dispatcher>();
 #if defined(FOTUFILM_WITH_ENGINE)

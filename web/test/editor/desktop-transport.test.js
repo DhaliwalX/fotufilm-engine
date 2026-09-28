@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createTransport } from "../../src/backend/macos/transport.js";
+import { createTransport } from "../../src/backend/desktop/transport.js";
 
 test("macOS IPC passes data, carries failures, and rejects an invalid host", async () => {
   assert.throws(() => createTransport({}), /Invalid/);
@@ -64,7 +64,7 @@ test("already cancelled requests never cross IPC", async () => {
 });
 
 test("a binary channel carries bytes beside the message and returns image views", async () => {
-  const { imageBlob } = await import("../../src/backend/macos/transport.js");
+  const { imageBlob } = await import("../../src/backend/desktop/transport.js");
   const seen = [];
   const call = createTransport({
     binary: true,

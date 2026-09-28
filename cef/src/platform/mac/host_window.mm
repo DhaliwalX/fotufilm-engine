@@ -708,7 +708,7 @@ class MacView : public fotufilm::ViewDelegate {
         reply->Resolve(nullptr);
       });
 
-  // The editor reports its toolbar and the controls on it (web/src/backend/macos/window-chrome.js).
+  // The editor reports its toolbar and the controls on it (web/src/backend/desktop/window-chrome.js).
   _dispatcher->Register(
       "windowChrome", Dispatcher::Thread::kUi,
       [weakSelf](const Call& call, std::shared_ptr<Reply> reply) {

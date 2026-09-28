@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createMacBackend } from "../../src/backend/macos/host.js";
+import { createDesktopBackend } from "../../src/backend/desktop/host.js";
 import { createNativeBackend } from "../../src/backend/native.js";
 import { isFilmPack, packNotice } from "../../src/editor/useFilmPacks.js";
 import { menuState } from "../../src/editor/useNativeCommands.js";
 
 const host = (capabilities, answer = () => ({})) => {
   const calls = [];
-  const backend = createMacBackend({
+  const backend = createDesktopBackend({
     binary: true,
     capabilities,
     async postMessage(message, payload) {

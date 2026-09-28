@@ -1,5 +1,5 @@
 // Installs the native transport before any page script runs. `host` is the renderer's native
-// object; it never reaches the page. The transport matches web/src/backend/macos/transport.js:
+// object; it never reaches the page. The transport matches web/src/backend/desktop/transport.js:
 // postMessage({id, method, params}, payload?) resolves with the host's result, and progress
 // arrives as "fotufilm-native-progress" events.
 (function install(host, globalName, capabilities) {

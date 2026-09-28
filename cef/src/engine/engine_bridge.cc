@@ -5,7 +5,7 @@
 namespace fotufilm {
 namespace {
 
-// web/src/backend/macos/host.js and lenses.js; the engine answers the ones it implements.
+// web/src/backend/desktop/host.js and lenses.js; the engine answers the ones it implements.
 constexpr const char* kMethods[] = {
     "prepare",          "import",         "preview",          "release",
     "render",           "stages",         "analyseNegative",  "convertNegative",
