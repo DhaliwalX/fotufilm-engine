@@ -80,3 +80,30 @@
     }
   }
 }
+
+/* Quieter chrome, as the Mac app draws its controls: fields and switch tracks sit on soft fills,
+   and the selected segment and slider knobs lift on a shadow, instead of 2 px outlines. The
+   Spectrum parts are matched by structure, not by their generated class names. Focus rings are
+   outlines and stay. */
+[role="group"]:has(> input:not([type="range"])) {
+  border-color: transparent !important;
+  background-color: light-dark(rgb(0 0 0 / 0.05), rgb(255 255 255 / 0.08)) !important;
+}
+[role="radiogroup"] [role="radio"][data-selected] > div {
+  border-color: transparent !important;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.16),
+    0 0 0 0.5px rgb(0 0 0 / 0.06);
+}
+div[data-rac]:has(> div > input[type="range"]) > div > div {
+  border-color: transparent !important;
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.35),
+    0 0 0 0.5px rgb(0 0 0 / 0.12);
+}
+label:has(> span > input[role="switch"]) > div > div {
+  border-color: transparent !important;
+}
+label:has(> span > input[role="switch"]):not([data-selected]) > div > div {
+  background-color: light-dark(rgb(0 0 0 / 0.14), rgb(255 255 255 / 0.2)) !important;
+}
