@@ -338,10 +338,10 @@ public final class HostEngine {
     }
 
     /// A video frame's decoded 8-bit Display P3 codes developed in one pass, as the Mac app plays
-    /// a movie; nil where the edit has no film, the film is layered, or the developer has no such
+    /// a movie, and the codes as read; nil where the edit has no film, the film is layered, or the developer has no such
     /// road, and the frame then develops as light.
     func developDisplay8(_ codes: HostVideoCodes, width: Int, height: Int, contentHeadroom: Float,
-                         edit: WebNativeEdit, frameIndex: UInt64) throws -> [UInt8]? {
+                         edit: WebNativeEdit, frameIndex: UInt64) throws -> (developed: [UInt8], original: [UInt8])? {
         guard let film = stock(edit.edit.stock) else { return nil }
         let options = try options(edit, stock: film, contentHeadroom: contentHeadroom)
         guard options.transportConstruction(for: film) == nil else { return nil }

@@ -355,24 +355,29 @@ final class AVFoundationVideoSource: HostVideoSource {
             let rowBytes = CVPixelBufferGetBytesPerRow(buffer)
             let orientation = self.orientation
             let out = destination.assumingMemoryBound(to: UInt8.self)
-            let band = 32
-            DispatchQueue.concurrentPerform(iterations: (pixelHeight + band - 1) / band) { index in
-                for y in (index * band)..<min(pixelHeight, (index + 1) * band) {
-                    let bytes = (base + y * rowBytes).assumingMemoryBound(to: UInt8.self)
-                    for x in 0..<pixelWidth {
-                        let (ux, uy): (Int, Int)
-                        switch orientation {
-                        case .up: (ux, uy) = (x, y)
-                        case .right: (ux, uy) = (pixelHeight - 1 - y, x)
-                        case .left: (ux, uy) = (y, pixelWidth - 1 - x)
-                        case .down: (ux, uy) = (pixelWidth - 1 - x, pixelHeight - 1 - y)
+            // Square tiles, so a quarter turn writes a few cache lines at a time, not a column.
+            let tile = 64
+            let columns = (pixelWidth + tile - 1) / tile
+            DispatchQueue.concurrentPerform(iterations: (pixelHeight + tile - 1) / tile) { row in
+                for column in 0..<columns {
+                    let xs = (column * tile)..<min(pixelWidth, (column + 1) * tile)
+                    for y in (row * tile)..<min(pixelHeight, (row + 1) * tile) {
+                        let bytes = (base + y * rowBytes).assumingMemoryBound(to: UInt8.self)
+                        for x in xs {
+                            let (ux, uy): (Int, Int)
+                            switch orientation {
+                            case .up: (ux, uy) = (x, y)
+                            case .right: (ux, uy) = (pixelHeight - 1 - y, x)
+                            case .left: (ux, uy) = (y, pixelWidth - 1 - x)
+                            case .down: (ux, uy) = (pixelWidth - 1 - x, pixelHeight - 1 - y)
+                            }
+                            // BGRA in, opaque RGBA out.
+                            let i = (uy * outWidth + ux) * 4
+                            out[i] = bytes[x * 4 + 2]
+                            out[i + 1] = bytes[x * 4 + 1]
+                            out[i + 2] = bytes[x * 4]
+                            out[i + 3] = 255
                         }
-                        // BGRA in, opaque RGBA out.
-                        let i = (uy * outWidth + ux) * 4
-                        out[i] = bytes[x * 4 + 2]
-                        out[i + 1] = bytes[x * 4 + 1]
-                        out[i + 2] = bytes[x * 4]
-                        out[i + 3] = 255
                     }
                 }
             }

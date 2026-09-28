@@ -39,14 +39,15 @@ struct MetalDeveloper: HostDeveloper {
 
     /// `processRGBA8`, the Mac app's playback and 8-bit export road.
     func developDisplay8(_ codes: HostVideoCodes, width: Int, height: Int, stock: FilmStock,
-                         options: FotufilmEngine.Options, frameIndex: UInt64) -> [UInt8]? {
+                         options: FotufilmEngine.Options, frameIndex: UInt64) -> (developed: [UInt8], original: [UInt8])? {
         let bytes = width * height * 4
         guard codes.count == bytes, let buffers = playback.take(bytes: bytes) else { return nil }
         codes.write(into: buffers.input.contents())
         guard metal.processRGBA8(input: buffers.input, output: buffers.output, width: width,
                                  height: height, stock: stock, options: options,
                                  frameIndex: frameIndex) else { return nil }
-        return [UInt8](UnsafeRawBufferPointer(start: buffers.output.contents(), count: bytes))
+        return ([UInt8](UnsafeRawBufferPointer(start: buffers.output.contents(), count: bytes)),
+                [UInt8](UnsafeRawBufferPointer(start: buffers.input.contents(), count: bytes)))
     }
 
     var kind: String { "metal" }

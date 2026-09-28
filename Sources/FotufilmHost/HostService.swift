@@ -454,13 +454,13 @@ public final class HostService {
            request.cropMode != true, geometry.isIdentity, sizes.frame == sizes.output,
            let codes = image.video?.displayCodes(width: width, height: height) {
             let developStart = DispatchTime.now().uptimeNanoseconds
-            if let pixels = try engine.developDisplay8(
+            if let frame = try engine.developDisplay8(
                 codes, width: width, height: height, contentHeadroom: image.contentHeadroom,
                 edit: edit, frameIndex: image.pace.frameIndex) {
                 renderMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - developStart) / 1e6
-                developed = (developKey, width, height, .rgba8DisplayP3, pixels)
+                developed = (developKey, width, height, .rgba8DisplayP3, frame.developed)
                 if !originals.contains(where: { $0.key == frameKey }) {
-                    remember(original: (frameKey, width, height, codes.bytes))
+                    remember(original: (frameKey, width, height, frame.original))
                 }
             }
         }
