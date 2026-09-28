@@ -5,6 +5,7 @@
 
 #include "app/browser_app.h"
 #include "app/host_capabilities.h"
+#include "app/library_methods.h"
 #include "app/scheme.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
@@ -57,12 +58,14 @@ NSArray<NSDictionary*>* Plugins(const std::string& capabilities) {
   return [plugins isKindOfClass:NSArray.class] ? plugins : @[];
 }
 
-// This host's capabilities (app/host_capabilities.h). With the engine it draws the photograph
-// itself, beneath the page (`imageLayer`), and opens what it saved (`openExport`,
+// This host's capabilities (app/host_capabilities.h). It reads the photo library's folders
+// (`libraryFolders`, app/library_methods.h); with the engine it draws the photograph itself,
+// beneath the page (`imageLayer`), and opens what it saved (`openExport`,
 // web/src/backend/README.md).
 CefRefPtr<CefDictionaryValue> HostCapabilities() {
   CefRefPtr<CefDictionaryValue> host = CefDictionaryValue::Create();
   host->SetString("platform", "macos");
+  host->SetBool("libraryFolders", true);
 #if defined(FOTUFILM_WITH_ENGINE)
   host->SetBool("imageLayer", true);
   CefRefPtr<CefDictionaryValue> open = CefDictionaryValue::Create();
@@ -293,6 +296,7 @@ int main(int argc, char* argv[]) {
             : ProfilePath();
     CefString(&settings.root_cache_path) = profile;
     CefString(&settings.cache_path) = profile + "/Default";
+    fotufilm::RegisterLibraryMethods(*g_dispatcher, profile + "/library-folders.txt");
     settings.log_severity = LOGSEVERITY_WARNING;
     if (!CefInitialize(arguments, settings, app, nullptr))
       return CefGetExitCode();

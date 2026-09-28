@@ -358,3 +358,57 @@ test("folder scans walk subfolders and skip hidden and unsupported files", async
     ["a.jpg", "sub/b.mov"],
   );
 });
+
+test("a desktop host picks, lists and serves library folders itself", async () => {
+  const { folderAccess, installFolderAccess } = await import(
+    "../../src/photo-library/folder-access.js"
+  );
+  const { installLibraryFolders } = await import(
+    "../../src/backend/desktop/library-folders.js"
+  );
+  const calls = [];
+  const channel = {
+    capabilities: { platform: "linux", libraryFolders: true },
+    async postMessage({ method, params }) {
+      calls.push([method, params]);
+      if (method === "chooseLibraryFolder")
+        return { path: "/home/me/Documents", name: "Documents" };
+      if (method === "listLibraryFolder")
+        return {
+          payload: new TextEncoder().encode(
+            JSON.stringify([["a.jpg", 3, 10], ["trip/b.ARW", 5, 20], ["c.txt", 1, 30]]),
+          ).buffer,
+        };
+      return null;
+    },
+  };
+  installLibraryFolders(channel);
+  try {
+    assert.equal(folderAccess().persistent(), true);
+    const handle = await folderAccess().choose();
+    assert.equal(handle.name, "Documents");
+    const photos = await scanDirectory({ id: "f", handle });
+    assert.deepEqual(
+      photos.map((item) => [item.key, item.kind, item.size, item.modified]),
+      [
+        ["f/a.jpg", "image", 3, 10],
+        ["f/trip/b.ARW", "raw", 5, 20],
+      ],
+    );
+    assert.equal(calls[1][1].path, "/home/me/Documents");
+    assert.ok(calls[1][1].extensions.includes("arw"));
+    // Stored, the handle keeps only its path and name, and comes back usable.
+    const stored = structuredClone(handle);
+    assert.deepEqual(Object.keys(stored).sort(), ["hostPath", "kind", "name"]);
+    const revived = folderAccess().revive(stored);
+    assert.equal(await revived.isSameEntry(handle), true);
+    revived.forget();
+    assert.deepEqual(calls.at(-1), [
+      "forgetLibraryFolder",
+      { path: "/home/me/Documents" },
+    ]);
+  } finally {
+    installFolderAccess(null);
+  }
+  assert.equal(folderAccess().persistent(), false);
+});

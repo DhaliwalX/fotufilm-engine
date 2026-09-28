@@ -82,6 +82,7 @@ The transport keeps the contract in `web/src/backend/README.md` and the call sha
 | Path | Role |
 | --- | --- |
 | `src/app/scheme.*` | `fotufilm://app/` serves the bundled web build: no local server or port. |
+| `src/app/library_folders.*`, `library_methods.*` | The photo library's folders: the host's panel, listing, and the files at `fotufilm://app/.library`. |
 | `src/app/browser_app.*` | CefApp for the browser and child processes; passes switches to renderers. |
 | `src/app/client.*` | One off-screen browser: paint, cursor, keys, context menu, bridge messages. |
 | `src/bridge/protocol.h` | Message names and the shared-memory frame layout. |
@@ -295,8 +296,12 @@ no film, as the Mac app's importer does. Light frames live in
 
 ## Checks
 
-`cef/tests/run.sh` builds and runs the portable presentation checks with the system compiler, no
-CEF or GPU needed, so they run on every platform the host targets.
+`cef/tests/run.sh` builds and runs the portable presentation and library folder checks with the
+system compiler, no CEF or GPU needed, so they run on every platform the host targets.
+
+The photo library's folders are picked, listed and read by the host (`app/library_methods.h`),
+since Chromium's own folder picker refuses a home, Documents, Desktop or Downloads folder as a
+whole. The page reads only folders chosen in the host's panel, which it keeps between launches.
 
 The diagnostics page (`--fotufilm-diagnostics`) measures round trips on both threads, echoes
 64 KB to 4K RGBA16F payloads and verifies their bytes, and draws a moving pattern in the native

@@ -1,4 +1,5 @@
 import { installWindowChrome } from "./backend/desktop/window-chrome.js";
+import { installLibraryFolders } from "./backend/desktop/library-folders.js";
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { Provider } from "@react-spectrum/s2/Provider";
@@ -13,6 +14,7 @@ import { BackendBoundary, BackendFailure } from "./backend/BackendBoundary.jsx";
 // The desktop host's platform ("macos", "linux", "windows"), which its window chrome follows.
 if (window.fotufilmNativeTransport)
   document.documentElement.dataset.nativeHost = window.fotufilmNativeTransport.capabilities.platform;
+installLibraryFolders(window.fotufilmNativeTransport);
 const root = createRoot(document.getElementById("root"));
 createBackend(window.fotufilmNative, window.fotufilmNativeTransport)
   .then((backend) =>

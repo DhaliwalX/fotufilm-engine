@@ -10,4 +10,10 @@ out="${TMPDIR:-/tmp}/fotufilm-presentation-tests"
   src/presentation/image_layer.cc \
   src/presentation/pooled_presenter.cc \
   -lpthread -o "$out"
+"${CXX:-c++}" -std=c++17 -Wall -Wextra -Werror -O1 -g -Isrc \
+  tests/library_folders_tests.cc src/app/library_folders.cc -o "$out-library"
+"$out-library"
 "$out"
+"${CXX:-c++}" -std=c++17 -Wall -Wextra -Werror -O1 -g -Isrc \
+  tests/library_folders_tests.cc src/app/library_folders.cc -o "$out-library"
+"$out-library"
