@@ -191,8 +191,10 @@ func develop(_ scene: Picture, onGPU gpu: Bool, stock: FilmStock, noGrain: Bool,
                 }
             }
         }
+        // Metal and CUDA end in max(value, 0); Vulkan, like the browser, leaves negative
+        // components to the host's display conversion, which floors them.
         for index in 0..<count {
-            for channel in 0..<3 { rgb[index * 3 + channel] = output[index * 4 + channel] }
+            for channel in 0..<3 { rgb[index * 3 + channel] = max(output[index * 4 + channel], 0) }
         }
     } else {
         let plane = { (channel: Int) in (0..<count).map { interleaved[$0 * 4 + channel] } }
@@ -208,7 +210,7 @@ func develop(_ scene: Picture, onGPU gpu: Bool, stock: FilmStock, noGrain: Bool,
             }
         }
         let out = [outR, outG, outB]
-        // The GPU float output ends in max(value, 0); the CPU's does not.
+        // The CPU's float output is not floored either.
         for index in 0..<count {
             for channel in 0..<3 { rgb[index * 3 + channel] = max(out[channel][index], 0) }
         }

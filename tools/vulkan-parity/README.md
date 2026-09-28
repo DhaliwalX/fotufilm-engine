@@ -90,6 +90,34 @@ The current container command targets an arm64 Linux Docker host. Its llvmpipe
 Vulkan driver tests Linux runtime/ABI portability, not GPU performance or a desktop
 window. Keep Android hardware and Linux software results separate.
 
+## Linux desktop GPUs against the Mac
+
+`fotufilm-parity` develops one scene through the desktop graph on each device and compares
+the results. On a Mac, write the scenes and the Metal reference:
+
+```sh
+swift run -c release fotufilm-parity --export-input photo.jpg scene-photo.pfm --max-edge 1500
+swift run -c release fotufilm-parity --chart scene-chart.pfm --size 1536x864
+swift run -c release fotufilm-parity --develop scene-chart.pfm mac.pfm --device gpu --stock portra400 --no-grain
+```
+
+On an x86-64 Linux machine with an NVIDIA GPU, build with a Halide SDK that has the CUDA and
+Vulkan backends and the three Vulkan patches above (`bool-uniforms` needs `patch --fuzz=3` on
+the pinned `third_party/Halide`). Without them Vulkan develops a flat, near-black frame. Then
+develop the same scenes with `--device cpu`, `--device gpu` (CUDA), and
+`FOTUFILM_GPU_DEVICE=vulkan --device gpu`, and run `--compare mac.pfm linux.pfm`.
+
+A container without a display has to load NVIDIA's Vulkan driver through EGL. The stock ICD
+file names `libGLX_nvidia.so.0`, which finds no device there:
+
+```sh
+sed s/libGLX_nvidia/libEGL_nvidia/ /etc/vulkan/icd.d/nvidia_icd.json > nvidia_egl_icd.json
+export VK_ICD_FILENAMES=$PWD/nvidia_egl_icd.json
+```
+
+The Vulkan graph keeps negative components of its linear output for the host's display
+conversion, as the browser's does; the tool floors them, as Metal and CUDA do in the kernel.
+
 ## Release requirements still beyond this harness
 
 Do not publish an AppImage as feature-complete or byte-exact from these results.
