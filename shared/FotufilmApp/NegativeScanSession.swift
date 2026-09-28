@@ -384,11 +384,11 @@ enum NegativeScanOpening {
     static func menu(from presenter: @escaping () -> UIViewController?,
                      editor: @escaping (NegativeScanSource) -> UIViewController) -> UIMenu {
         UIMenu(title: "Convert Negative", children: [
-            UIAction(title: "From Photos", image: UIImage(systemName: "photo.on.rectangle")) { _ in
+            UIAction(title: "From Photos", image: Glyph.image(Glyph.photos)) { _ in
                 guard let presenter = presenter() else { return }
                 pickFromPhotos(from: presenter) { open(editor($0), from: presenter) }
             },
-            UIAction(title: "From Files", image: UIImage(systemName: "folder")) { _ in
+            UIAction(title: "From Files", image: Glyph.image(Glyph.folder)) { _ in
                 guard let presenter = presenter() else { return }
                 pickFromFiles(from: presenter) { open(editor($0), from: presenter) }
             },

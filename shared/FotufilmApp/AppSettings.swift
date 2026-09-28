@@ -67,9 +67,9 @@ final class AppSettings: ObservableObject {
         /// The mark that names this state, the way every camera draws it.
         var symbol: String {
             switch self {
-            case .off: return "bolt.slash.fill"
-            case .auto: return "bolt.badge.automatic.fill"
-            case .on: return "bolt.fill"
+            case .off: return Glyph.flashOff
+            case .auto: return Glyph.flashAuto
+            case .on: return Glyph.flashOn
             }
         }
     }

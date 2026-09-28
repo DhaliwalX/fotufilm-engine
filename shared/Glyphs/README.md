@@ -1,6 +1,6 @@
 # Glyphs
 
-Fotufilm's own symbols for the editor: the deck circles (`fotu.deck.*`), the tabs inside each
+Fotufilm's own symbols: the editor's deck circles (`fotu.deck.*`), the tabs inside each
 deck (`fotu.tab.*`) and a low and high end for every slider (`fotu.slider.<field>.low|high`,
 keyed by the `EditorControlField` raw value).
 

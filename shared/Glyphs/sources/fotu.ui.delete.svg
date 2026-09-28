@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Fotufilm glyphs, Copyright 2026 MUAStudio Inc., CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/), https://fotufilm.com, see licenses/GLYPHS.txt -->
+  <path d="M4 6.25h16M9.25 6.25V4.75a1.25 1.25 0 0 1 1.25-1.25h3a1.25 1.25 0 0 1 1.25 1.25v1.5M6 6.25l.85 12.9A2 2 0 0 0 8.85 21h6.3a2 2 0 0 0 2-1.85L18 6.25" stroke-width="1.5" data-mode="stroke" data-layer="primary"/>
+  <path d="M10 10.25v6.75M14 10.25v6.75" stroke-width="1.5" data-mode="stroke" data-layer="secondary" opacity="0.42"/>
+</svg>
