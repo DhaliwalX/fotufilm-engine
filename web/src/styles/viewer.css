@@ -80,40 +80,12 @@
     inset: -10px;
   }
   .viewer-status {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    min-height: 36px;
-    padding: 0 12px;
-
-    background: var(--panel);
-    color: var(--muted);
-    font-size: 10px;
-    font-variant-numeric: tabular-nums;
-  }
-  .viewer-status [role="status"] {
-    flex: 1;
-    min-width: 0;
+    position: absolute;
+    width: 1px;
+    height: 1px;
     overflow: hidden;
-    line-height: 1.4;
-    white-space: normal;
-  }
-  .document-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
+    clip-path: inset(50%);
     white-space: nowrap;
-    max-width: 38%;
-  }
-  .compare-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    white-space: nowrap;
-    font-size: 11px;
-    padding: 5px;
-  }
-  .backend-label {
-    font-size: 10px;
   }
   .empty-canvas {
     flex: 1;

@@ -32,10 +32,8 @@ test("Spectrum adjustments retain numeric editing, undo and compare", async ({
   ).toHaveValue("0.5");
   await page.getByRole("button", { name: /^Undo \(/ }).click();
   await expect(field).toHaveValue("0");
-  const compare = page.getByRole("button", {
-    name: "Hold to compare with original",
-  });
-  await compare.focus();
+  // Holding Space compares while no button has focus.
+  await page.evaluate(() => document.activeElement?.blur());
   await page.keyboard.down("Space");
   await expect(
     page.getByAltText("Original photo", { exact: true }),
