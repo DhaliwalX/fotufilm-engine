@@ -27,6 +27,16 @@ class BundlePathTests(unittest.TestCase):
         (self.bundle / "asset").write_bytes(b"\x00\xff\xfeFotufilm/Sources/file.swift\x00/home/\x00")
         self.assertEqual(self.scan().returncode, 0)
 
+    def test_home_inside_urls_and_longer_paths_is_not_a_home_directory(self):
+        (self.bundle / "binary").write_bytes(
+            b"\x00https://www.quad9.net/home/privacy/\x00/cast/chromecast/home/wallpaper/image\x00")
+        self.assertEqual(self.scan().returncode, 0)
+        (self.bundle / "binary").write_bytes(
+            b'FS.mkdir("/home");FS.mkdir("/home/web_user")},createDefaultDevices(){FS.mkdir("/dev")')
+        self.assertEqual(self.scan().returncode, 0)
+        (self.bundle / "binary").write_bytes(b"\x00https://example.net/x\x00/home/builder/src\x00")
+        self.assertEqual(self.scan().returncode, 1)
+
     def test_ascii_and_unicode_paths_in_nested_binary_files(self):
         nested = self.bundle / "nested space"
         nested.mkdir()

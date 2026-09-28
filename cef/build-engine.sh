@@ -17,6 +17,7 @@ tools/generate-halide-aot.sh macos "$KERNELS"
 
 python3 tools/compile-if-needed.py xcrun clang++ -std=c++17 -O2 -gline-tables-only \
   -fvisibility=hidden -fvisibility-inlines-hidden -ffunction-sections -fdata-sections -c \
+  -ffile-prefix-map="$PWD"=Fotufilm \
   -isysroot "$SDK" -target arm64-apple-macos14.0 \
   -DFOTUFILM_HALIDE_IOS_AOT=1 -DFOTUFILM_TRANSPORT_REFERENCE_STUBS=1 \
   -I"$KERNELS" -ISources/FotufilmHalide/include \
@@ -42,6 +43,8 @@ python3 tools/compile-if-needed.py xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURC
   -Xcc -fmodule-map-file="$OBJ/module.modulemap" \
   -sdk "$SDK" -target arm64-apple-macos14.0 -swift-version 5 \
   -O -whole-module-optimization -g -parse-as-library \
+  -file-prefix-map "$PWD=Fotufilm" \
+  -file-prefix-map "$FOTUFILM_CORE_SOURCE_DIR=Fotufilm/Sources/FotufilmCore" \
   -module-name FotufilmHost -emit-object \
   "$FOTUFILM_CORE_SOURCE_DIR"/*.swift \
   Sources/FotufilmMetal/*.swift \
@@ -62,6 +65,11 @@ xcrun swiftc -sdk "$SDK" -target arm64-apple-macos14.0 -emit-library \
   -framework Metal -framework CoreImage -framework Accelerate -framework QuartzCore \
   -framework ImageIO -framework CoreGraphics -framework CoreVideo -framework AVFoundation \
   -o "$LIBRARY"
+
+# Symbols for crash reports stay beside the library, never in it: the shipped copy keeps only the
+# C interface it exports.
+xcrun dsymutil "$LIBRARY" -o "$LIBRARY.dSYM"
+xcrun strip -S -x "$LIBRARY"
 
 # The films, the reflectance prior and the camera profiles the engine reads from its bundle.
 tools/copy-shipping-resources.sh "$OUT/Resources" --camera-profiles >/dev/null
