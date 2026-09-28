@@ -60,7 +60,8 @@ extension HostService {
                 in: library.directory, macAppVersion: library.appVersion)
                 != FilmStockPack.installedSealedPackURLs
             if changed { filmsChanged() }
-            return try answer(["packs": installed(library), "changed": changed])
+            return try answer(["packs": installed(library), "changed": changed,
+                               "incompatible": incompatible(library)])
         case "importFilmPack":
             return try answer(importFilmPack(parameters, payload: payload, into: library))
         default:
@@ -109,6 +110,22 @@ extension HostService {
                     "message": FilmPackRelease.Failure.requiresMacApp(version).description]
         } catch {
             return ["added": false, "title": "Pack not added", "message": "\(error)"]
+        }
+    }
+
+    /// Installed packs this release cannot read, each named as the Mac app's launch alert names
+    /// it ("Pack: This pack needs Fotufilm 2.0 or later…").
+    private func incompatible(_ library: HostFilmPackLibrary) -> [String] {
+        FilmPackLibrary.packFiles(in: library.directory).compactMap { url in
+            do {
+                _ = try FilmPackContainer.open(Data(contentsOf: url),
+                                               macAppVersion: library.appVersion)
+                return nil
+            } catch let failure as FilmPackRelease.Failure {
+                return "\(url.deletingPathExtension().lastPathComponent): \(failure)"
+            } catch {
+                return nil
+            }
         }
     }
 

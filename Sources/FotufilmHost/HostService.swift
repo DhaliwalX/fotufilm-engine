@@ -47,6 +47,12 @@ public final class HostService {
     var plugins: HostPluginInstaller? = HostPlatform.current.plugins
     /// What this person has chosen before, for Choose Film Per Photo; tests use their own file.
     var filmPreferences = HostFilmPreferences(file: HostFilmPreferences.defaultFile)
+    /// Check for Updates (`HostUpdates.swift`), where the platform has a release channel.
+    lazy var updates: HostUpdates? = {
+        guard let channel = HostPlatform.current.updates,
+              let digest = HostPlatform.current.fileDigest else { return nil }
+        return HostUpdates(channel: channel, digest: digest)
+    }()
 
     public init(engine: HostEngine) {
         self.engine = engine
@@ -178,6 +184,18 @@ public final class HostService {
                                                     withIntermediateDirectories: true)
             try data.write(to: url, options: .atomic)
             return try answer(value: catalogue.profiles.count)
+        case "updateCheck", "updateStatus", "updateInstall", "updateCancel", "updateNotes":
+            guard let updates else {
+                throw HostEngine.Failure(description: "This host cannot check for updates.")
+            }
+            switch method {
+            case "updateCheck": updates.check()
+            case "updateInstall": try updates.install()
+            case "updateCancel": updates.cancel()
+            case "updateNotes": try updates.openNotes()
+            default: break
+            }
+            return try answer(updates.status())
         case "filmPacks", "importFilmPack", "removeFilmPack":
             return try filmPacks(method, parameters: parameters, payload: payload)
         case "removeLensCatalogue":

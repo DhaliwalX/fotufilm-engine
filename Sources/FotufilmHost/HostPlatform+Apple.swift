@@ -30,6 +30,7 @@ extension HostPlatform {
         #endif
         #if os(macOS)
         platform.plugins = MacPluginInstaller()
+        platform.updates = BundleUpdateChannel()
         #endif
         #if canImport(AVFoundation)
         platform.videoSource = AVFoundationVideoSources()

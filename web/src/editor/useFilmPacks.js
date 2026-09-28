@@ -21,6 +21,7 @@ export function packNotice(results) {
     title: results.every((result) => result.added) ? "Packs added" : "Film packs",
     message: results.map(({ title, message }) => `${title}: ${message}`).join("\n\n"),
     added: results.some((result) => result.added),
+    update: results.some((result) => result.update),
   };
 }
 
@@ -106,9 +107,26 @@ export default function useFilmPacks({
     if (others.length || !packs.length) return acceptFiles(others);
   };
 
+  // At launch, installed packs this release cannot read offer the update, as the Mac app does.
   useEffect(() => {
-    if (filmPacks) refreshPacks().catch(console.error);
-  }, [filmPacks, refreshPacks]);
+    if (!filmPacks) return;
+    filmPacks
+      .list()
+      .then(({ incompatible }) => {
+        if (!incompatible?.length) return;
+        setNotice({
+          title: "Update Fotufilm to use this pack",
+          message: incompatible.join("\n\n"),
+          added: false,
+          update: true,
+        });
+        setDialog("filmPack");
+      })
+      .catch(console.error);
+    refreshPacks().catch(console.error);
+    // Once per launch: later refreshes only follow the list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filmPacks]);
 
   // A pack the Mac app added while this window was in the background shows when it comes back,
   // unless an export holds the engine.

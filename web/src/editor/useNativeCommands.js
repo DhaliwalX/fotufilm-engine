@@ -74,6 +74,9 @@ const COMMANDS = {
   resetEdits: (e) => e.resetEdits(),
   newGrainPattern: (e) => e.newGrainPattern(),
   autoFilm: () => setAppSetting("autoFilm", !appSetting("autoFilm")),
+  checkForUpdates: (e) => e.checkForUpdates?.(),
+  autoUpdates: () =>
+    setAppSetting("updateChecksAutomatically", appSetting("updateChecksAutomatically") === false),
   forgetFilms: (e) => e.backend.forgetFilmChoices().then(forgotFilmChoices).catch(console.error),
   zoomIn: (e) => e.zoomIn(),
   zoomOut: (e) => e.zoomOut(),
@@ -142,6 +145,8 @@ export function menuState(e) {
     resetEdits: photo,
     newGrainPattern: photo && !!e.edit?.stock,
     settings: true,
+    checkForUpdates: !!e.checkForUpdates,
+    autoUpdates: !!e.checkForUpdates,
     plugins: !!e.plugins && !e.exporting,
     importFilmPack: !!e.filmPacks && !e.exporting,
     autoFilm: !!e.backend?.suggestFilm,
@@ -163,6 +168,7 @@ export function menuState(e) {
       id === "selective" ? still : id === "crop" ? photo : !e.libraryOpen;
   const checked = {
     autoFilm: !!e.backend?.suggestFilm && appSetting("autoFilm") === true,
+    autoUpdates: !!e.checkForUpdates && appSetting("updateChecksAutomatically") !== false,
     autoAdjust: !!e.auto.active,
     showOriginal: !!e.compare,
     histogram: !!e.histogram,

@@ -47,6 +47,9 @@ struct HostPlatform {
     /// Reads scanned negatives as the apps do (`HostNegativeScan`); without it a scan opens
     /// through `decoder`, with its file's colour profile.
     var scans: HostScanDecoder?
+    /// The app's own releases (`HostUpdates.swift`): without it the editor offers no Check for
+    /// Updates.
+    var updates: HostUpdateChannel?
 
     static let current: HostPlatform = {
         #if canImport(ImageIO) && canImport(CoreImage)
@@ -72,6 +75,8 @@ struct HostPlatform {
             "imageExportTypes": encoder?.types.sorted() ?? [],
             "hdrExport": encoder?.writesHDR ?? false,
             "filmSuggestion": true,
+            // Check for Updates: a release feed, and a digest to verify what it downloads.
+            "updates": updates != nil && fileDigest != nil,
             "video": videoSource != nil && videoWriter != nil,
             "videoExportTypes": videoWriter?.formats.map(\.json) ?? [],
             "videoBitrates": HostVideoBitrate.allCases.map { ["id": $0.rawValue, "label": $0.label] },

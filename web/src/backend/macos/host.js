@@ -267,6 +267,18 @@ export function createMacBackend(channel) {
       }, { signal: request.signal, onProgress: request.onProgress });
       return { ...saved, dispose() {} };
     },
+    // Check for Updates: the engine reads this app's release feed, and downloads, verifies and
+    // opens the installer it names. Each call answers at once with where things stand
+    // (`{state, current, version?, release?, notes?, bytes?, total?, message?}`).
+    updates: can.updates
+      ? {
+          check: () => call("updateCheck"),
+          status: () => call("updateStatus"),
+          install: () => call("updateInstall"),
+          cancel: () => call("updateCancel"),
+          notes: () => call("updateNotes"),
+        }
+      : undefined,
     // Import Film Pack: the engine installs community packs where this person's films live and
     // reloads its films; `reloadStocks` then makes the next `loadStocks` ask again.
     filmPacks: can.filmPacks

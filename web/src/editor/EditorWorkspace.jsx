@@ -17,6 +17,7 @@ import SupportDialog from "./SupportDialog.jsx";
 import SettingsDialog from "./SettingsDialog.jsx";
 import PluginsDialog from "./PluginsDialog.jsx";
 import FilmPackNotice from "./FilmPackNotice.jsx";
+import UpdateDialog from "./UpdateDialog.jsx";
 import { FILM_PACK_EXTENSION } from "./useFilmPacks.js";
 import { useEditor } from "./EditorContext.jsx";
 import { PhotoLibrary } from "../photo-library/index.js";
@@ -118,6 +119,8 @@ export default function Workspace() {
           <PluginsDialog />
         ) : dialog === "filmPack" ? (
           <FilmPackNotice />
+        ) : dialog === "update" ? (
+          <UpdateDialog />
         ) : null}
       </DialogContainer>
       {videoDownload && (

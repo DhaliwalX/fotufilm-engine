@@ -30,6 +30,10 @@ export function createNativeBackend(host) {
   if (host.videoFrameRates) backend.videoFrameRates = Object.freeze([...host.videoFrameRates]);
   // Optional: Video Quality, whether its movie exports develop Full or Fast (`videoProcessing`).
   if (host.videoProcessing === true) backend.videoProcessing = true;
+  // Optional: Check for Updates, the host's own release feed (backend/README.md).
+  if (host.updates && ["check", "status", "install", "cancel", "notes"].every(
+    (name) => typeof host.updates[name] === "function"))
+    backend.updates = host.updates;
   // Optional: Playback Quality, the long edge a playing movie develops at (`playbackQuality`).
   if (host.playbackQuality === true) backend.playbackQuality = true;
   if (host.negativeContrast === true) backend.negativeContrast = true;

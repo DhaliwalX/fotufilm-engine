@@ -38,6 +38,11 @@ export const APP_SETTINGS = Object.freeze({
   // The settings of the last photo and movie exported, for Use Last Export Settings.
   lastPhotoExport: null,
   lastVideoExport: null,
+  // Check for Updates Automatically: shortly after launch and then daily; the last time the
+  // feed answered, and the release "Skip This Version" was answered for.
+  updateChecksAutomatically: true,
+  updateLastCheck: null,
+  updateSkipped: null,
   // The plug-in build whose launch offer was declined ("Not Now"); a later build asks again.
   pluginOfferDeclined: null,
 });

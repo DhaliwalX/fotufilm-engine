@@ -150,6 +150,9 @@ NSMenu* FotufilmMainMenu(NSArray<NSDictionary*>* plugins) {
   NSMenu* app = Submenu(bar, @"Fotufilm");
   Add(app, @"About Fotufilm", @selector(orderFrontStandardAboutPanel:));
   [app addItem:[NSMenuItem separatorItem]];
+  Command(app, @"Check for Updates…", @"checkForUpdates", @"");
+  Command(app, @"Check for Updates Automatically", @"autoUpdates", @"");
+  [app addItem:[NSMenuItem separatorItem]];
   Command(app, @"Settings…", @"settings", @",");
   [app addItem:[NSMenuItem separatorItem]];
   NSMenu* services = Submenu(app, @"Services");

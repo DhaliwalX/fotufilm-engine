@@ -19,6 +19,9 @@ constexpr const char* kMethods[] = {
     "plugins",          "installPlugin",    "revealPlugin",
     // Community film packs, installed where the Mac app keeps them.
     "filmPacks",        "importFilmPack", "removeFilmPack",
+    // Check for Updates: each answers at once with where the check or download stands.
+    "updateCheck",      "updateStatus",   "updateInstall",    "updateCancel",
+    "updateNotes",
     // The negative-scan session (web/src/negative-scan/): a scan opens once and every preview,
     // border sample and the imported positive is a print of it to the page's recipe.
     "negativeScanOpen", "negativeScanRender", "negativeScanSampleBorder",

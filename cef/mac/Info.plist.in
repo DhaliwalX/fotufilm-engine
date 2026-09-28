@@ -71,6 +71,10 @@
   <string>${FOTUFILM_MARKETING_VERSION}</string>
   <key>CFBundleVersion</key>
   <string>${FOTUFILM_PROJECT_VERSION}</string>
+  <!-- Check for Updates reads one JSON release document (FotufilmUpdate's UpdateManifest) from
+       here. Fotufilm Desktop has a feed of its own: the Mac app's names its AppKit installer. -->
+  <key>FotufilmUpdateFeedURL</key>
+  <string>https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-Desktop-macOS-update.json</string>
   <key>LSMinimumSystemVersion</key>
   <string>12.0</string>
   <key>NSHighResolutionCapable</key>

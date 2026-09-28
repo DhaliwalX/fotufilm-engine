@@ -222,3 +222,10 @@ test("Undo and Redo are named and the Edit History lists every step", () => {
   const untouched = { past: [], present: opened, future: [] };
   assert.equal(menuState(editor({ history: untouched })).titles.undo, "Undo");
 });
+
+test("the Fotufilm menu offers Check for Updates where the host has a feed", () => {
+  assert.equal(menuState(editor()).enabled.checkForUpdates, false);
+  const state = menuState(editor({ checkForUpdates() {} }));
+  assert.equal(state.enabled.checkForUpdates, true);
+  assert.equal(state.checked.autoUpdates, true);
+});
