@@ -601,6 +601,7 @@ constexpr double kPlacementWaitSeconds = 0.05;
 // display link hands one over.
 - (void)drawInto:(id<CAMetalDrawable>)drawable {
   if (_points.width < 1 || _points.height < 1) return;
+  _imageLayer.Tick();
   // A change of range takes effect from the next drawable, which is made in the new format; the
   // one in hand is let go rather than shown in the wrong colour space.
   const BOOL extended = [self wantsExtendedRange];
@@ -620,8 +621,8 @@ constexpr double kPlacementWaitSeconds = 0.05;
   [commands commit];
   _stats.frames++;
   _stats.lastCompositeMicroseconds = Microseconds(acquired, mach_absolute_time());
-  // A crossfade draws every frame until it is done.
-  if (_imageLayer.Fading(CACurrentMediaTime())) {
+  // A crossfade draws every frame until it is done, and a movie's queued frame the next one.
+  if (_imageLayer.Fading(CACurrentMediaTime()) || _imageLayer.Pending()) {
     _dirty = YES;
     BOOL linked = NO;
     if (@available(macOS 14.0, *)) linked = _link != nil;

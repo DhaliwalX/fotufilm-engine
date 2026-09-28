@@ -69,6 +69,12 @@ class ImageLayer {
   std::vector<Draw> Draws(double now);
   // Whether a fade is still running at `now`, so the compositor keeps drawing.
   bool Fading(double now) const;
+  // Called once a composite: a playing movie moves on to its next frame. Frames arrive when the
+  // engine finishes them, not on the display's beat, so two can land within one refresh and none
+  // in the next; shown in turn, every one of them reaches the screen.
+  void Tick();
+  // Whether a playing movie has a frame waiting for the next composite.
+  bool Pending() const;
   const LayerRect& clip() const { return geometry_.clip; }
 
  private:
@@ -85,6 +91,8 @@ class ImageLayer {
   ImageLayerGeometry geometry_;
   std::map<std::string, std::deque<PresentedFrame>> frames_;
   std::map<std::string, Shown> shown_;
+  // The frame of a playing movie on show, per layer.
+  std::map<std::string, uint64_t> paced_;
 };
 
 }  // namespace fotufilm

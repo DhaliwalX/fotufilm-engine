@@ -31,8 +31,14 @@ uint64_t Id(CefRefPtr<CefDictionaryValue> fields, const char* key) {
   return id > 0 ? static_cast<uint64_t>(id) : 0;
 }
 
-// Frames of a layer kept beyond the ones the page names.
-constexpr size_t kKeptFrames = 2;
+// Frames of a layer kept beyond the ones the page names: enough for a playing movie's queue.
+constexpr size_t kKeptFrames = 4;
+
+// Whether `a` would sit where `b` does: the same photograph and tool at the same size.
+bool SamePlace(const PresentedFrame& a, const PresentedFrame& b) {
+  return a.scope == b.scope && a.surface->width() == b.surface->width() &&
+         a.surface->height() == b.surface->height();
+}
 
 // CSS cubic-bezier(0.25, 0.1, 0.25, 1), the Mac app's `Motion.smooth`: progress at time `t`.
 double Smooth(double t) {
@@ -100,12 +106,59 @@ const PresentedFrame* ImageLayer::Choose(const std::string& layer, uint64_t name
                              [named](const PresentedFrame& f) { return f.id == named; });
   // A frame the page has not seen yet stands in for the one it placed when it would sit in the
   // same place: the same size, the same photograph and tool.
-  if (placed == frames.end()) return named < latest.id ? &latest : nullptr;
-  if (latest.id > placed->id && latest.scope == placed->scope &&
-      latest.surface->width() == placed->surface->width() &&
-      latest.surface->height() == placed->surface->height())
-    return &latest;
-  return &*placed;
+  const PresentedFrame* chosen = nullptr;
+  if (placed == frames.end()) chosen = named < latest.id ? &latest : nullptr;
+  else chosen = latest.id > placed->id && SamePlace(latest, *placed) ? &latest : &*placed;
+  // A playing movie shows its frames in turn, at the pace `Tick` sets.
+  auto paced = paced_.find(layer);
+  if (chosen && chosen->motion && paced != paced_.end()) {
+    for (const PresentedFrame& frame : frames)
+      if (frame.id == paced->second && frame.id <= chosen->id && SamePlace(frame, *chosen))
+        return &frame;
+  }
+  return chosen;
+}
+
+// Frames of a playing movie waiting behind `shown` in `frames`, oldest first.
+static std::vector<const PresentedFrame*> Waiting(const std::deque<PresentedFrame>& frames,
+                                                  uint64_t shown) {
+  std::vector<const PresentedFrame*> waiting;
+  const PresentedFrame& latest = frames.back();
+  for (const PresentedFrame& frame : frames)
+    if (frame.motion && frame.id > shown && SamePlace(frame, latest)) waiting.push_back(&frame);
+  return waiting;
+}
+
+void ImageLayer::Tick() {
+  for (const auto& [layer, frames] : frames_) {
+    if (frames.empty() || !frames.back().motion) {
+      paced_.erase(layer);
+      continue;
+    }
+    auto paced = paced_.find(layer);
+    const bool showing = paced != paced_.end() &&
+        std::any_of(frames.begin(), frames.end(),
+                    [&](const PresentedFrame& f) { return f.id == paced->second; });
+    if (!showing) {
+      paced_[layer] = frames.back().id;
+      continue;
+    }
+    // One new frame a composite, so two that arrive within one refresh are both seen; a queue
+    // that has grown past one waiting frame is let go to its last but one, bounding the delay.
+    const auto waiting = Waiting(frames, paced->second);
+    if (!waiting.empty())
+      paced->second = waiting[waiting.size() >= 3 ? waiting.size() - 2 : 0]->id;
+  }
+}
+
+bool ImageLayer::Pending() const {
+  for (const auto& [layer, shown] : paced_) {
+    auto frames = frames_.find(layer);
+    if (frames != frames_.end() && !frames->second.empty() &&
+        !Waiting(frames->second, shown).empty())
+      return true;
+  }
+  return false;
 }
 
 std::vector<ImageLayer::Draw> ImageLayer::Draws(double now) {
@@ -160,10 +213,14 @@ void ImageLayer::Prune() {
   for (auto& [layer, frames] : frames_) {
     auto found = named.find(layer);
     const uint64_t keep = found == named.end() ? 0 : found->second;
+    auto paced = paced_.find(layer);
+    const uint64_t showing = paced == paced_.end() ? 0 : paced->second;
     std::deque<PresentedFrame> kept;
     for (size_t index = 0; index < frames.size(); ++index) {
       const bool recent = index + kKeptFrames >= frames.size();
-      if (recent || (keep && frames[index].id == keep)) kept.push_back(frames[index]);
+      const uint64_t id = frames[index].id;
+      if (recent || (keep && id == keep) || (showing && id == showing))
+        kept.push_back(frames[index]);
     }
     frames.swap(kept);
   }

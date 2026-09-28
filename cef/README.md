@@ -111,7 +111,9 @@ without a render. `presentedImage` returns the last develop as a small PNG for t
 On macOS a surface is an IOSurface, written by the engine and read by Metal without a copy. The
 compositor keeps the last frames of each layer and draws, inside the viewer's clip, the one the
 page placed, or a newer frame of the same size and scope as soon as it arrives. That frame goes
-on screen at the next refresh, with no wait for the page to lay out. A placement takes effect
+on screen at the next refresh, with no wait for the page to lay out. A playing movie's frames
+(`motion` in the present info) cut in rather than fade, one new frame a refresh in the order
+they came, so two finished within one refresh are both seen. A placement takes effect
 with the next browser frame, the one that carries the matching layout, or after 50 ms if none
 comes. Crop handles, masks, the zoom readout and every other overlay are page content drawn over
 the layer. Selection sampling reads the scene through `sampleScene`, not the picture.
