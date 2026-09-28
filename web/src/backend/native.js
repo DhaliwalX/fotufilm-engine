@@ -30,6 +30,8 @@ export function createNativeBackend(host) {
   if (host.videoFrameRates) backend.videoFrameRates = Object.freeze([...host.videoFrameRates]);
   // Optional: Video Quality, whether its movie exports develop Full or Fast (`videoProcessing`).
   if (host.videoProcessing === true) backend.videoProcessing = true;
+  // Optional: Playback Quality, the long edge a playing movie develops at (`playbackQuality`).
+  if (host.playbackQuality === true) backend.playbackQuality = true;
   if (host.negativeContrast === true) backend.negativeContrast = true;
   // Optional: `maxEdge` bounds the cropped picture's long edge rather than the whole picture's.
   if (host.longEdgeOfCrop === true) backend.longEdgeOfCrop = true;

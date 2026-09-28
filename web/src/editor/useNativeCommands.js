@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { inspectorPanels } from "../editor-catalogue.js";
 import { appSetting, setAppSetting } from "../app-settings.js";
 import { canShowNegative } from "../negative-view.js";
-import { PLAYBACK_STATE, PLAYBACK_TOGGLE } from "../video-player/usePlayerShortcuts.js";
+import { PLAYBACK_TOGGLE } from "../video-player/usePlayerShortcuts.js";
+import { usePlaying } from "../video-player/usePlaying.js";
 import { forgotFilmChoices, useFilmLearned } from "../film-learning.js";
 import { editHistory, filmNamer, redoTitle, undoTitle } from "../edit-history.js";
 import { isFilmPack } from "./useFilmPacks.js";
@@ -220,7 +221,7 @@ const editsText = (element) =>
 export default function useNativeCommands(editor) {
   const transport = globalThis.window?.fotufilmNativeTransport;
   const filmLearned = useFilmLearned(editor.backend);
-  const [playing, setPlaying] = useState(false);
+  const playing = usePlaying();
   const current = { ...editor, filmLearned, playing: playing && !!editor.active?.image.video };
   const latest = useRef(current);
   latest.current = current;
@@ -228,12 +229,6 @@ export default function useNativeCommands(editor) {
   const state = transport
     ? JSON.stringify({ ...menuState(current), textInput })
     : null;
-
-  useEffect(() => {
-    const changed = (event) => setPlaying(event.detail?.playing === true);
-    window.addEventListener(PLAYBACK_STATE, changed);
-    return () => window.removeEventListener(PLAYBACK_STATE, changed);
-  }, []);
 
   useEffect(() => {
     if (!state) return;

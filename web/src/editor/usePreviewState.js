@@ -5,6 +5,9 @@ import { useLensCatalogue } from "../useLensCatalogue.js";
 import { fixedStockSettings } from "../stock-settings.js";
 import { previewBudget } from "../preview-budget.js";
 import { negativeViewEdit } from "../negative-view.js";
+import { useAppSetting } from "../app-settings.js";
+import { usePlaying } from "../video-player/usePlaying.js";
+import { playbackEdge } from "../video-player/playback-quality.js";
 export default function usePreviewState({
   backend,
   panel,
@@ -66,12 +69,20 @@ export default function usePreviewState({
   const [interactiveEdge, setInteractiveEdge] = useState(
     budget.initialInteractiveEdge,
   );
+  // A playing movie develops at the chosen Playback Quality where the backend offers one, as
+  // the Mac app plays; paused, at full detail.
+  const playing = usePlaying();
+  const playbackQuality = useAppSetting("videoPlaybackQuality");
+  const playingEdge =
+    backend.playbackQuality && active?.image.video && playing
+      ? playbackEdge(playbackQuality)
+      : null;
   const previewEdge = Math.min(
     Math.max(
       active?.image.naturalWidth || 1600,
       active?.image.naturalHeight || 1600,
     ),
-    previewInteracting ? interactiveEdge : 1600,
+    playingEdge ?? (previewInteracting ? interactiveEdge : 1600),
   );
   const lensCatalogue = useLensCatalogue();
   const previewKey = JSON.stringify([

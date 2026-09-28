@@ -30,6 +30,9 @@ export const APP_SETTINGS = Object.freeze({
   // Video Quality: a native movie export develops the film at the delivered size ("full") or at
   // no more than 1080p ("fast"), where the backend offers the choice (`videoProcessing`).
   videoProcessing: "full",
+  // Playback Quality: the long edge a playing movie develops at, where the backend offers the
+  // choice (`playbackQuality`); a paused frame always develops at full detail.
+  videoPlaybackQuality: "fine",
   // Photo Quality: exports evaluate the film exactly ("accurate") or approximately ("fast").
   photoQuality: "accurate",
   // The settings of the last photo and movie exported, for Use Last Export Settings.

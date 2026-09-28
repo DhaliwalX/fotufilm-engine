@@ -164,6 +164,11 @@ export default function EditorViewer() {
                   disabled={exporting || cropMode}
                   // Retiming is the native exporter's; the browser's keeps the source's rate.
                   cadence={!!backend.videoFrameRates}
+                  playbackQuality={!!backend.playbackQuality}
+                  frameSize={{
+                    width: active.image.naturalWidth,
+                    height: active.image.naturalHeight,
+                  }}
                 />
               )}
             </>

@@ -45,6 +45,7 @@ events and cancellation messages, rather than attempting to serialize functions.
 | `longEdgeOfCrop` | Optional `true` when every `maxEdge` bounds the long edge of the cropped picture it delivers, as the Mac app sizes previews and exports, rather than of the whole upright picture; export sizes are then of the cropped picture. |
 | `subjectSelection` | Optional `true` when the backend detects subjects: an edit's `selective.kind` may then be `"subject"`, selecting the subject under `selective.point` (every subject when the point is on the background), feathered by `softness`. |
 | `previewBudget` | Optional `{settleMs?, initialInteractiveEdge?, minInteractiveEdge?, maxInteractiveEdge?, detailDelayMs?}`: how the editor paces previews while an edit moves (`web/src/preview-budget.js` holds the browser defaults). A backend that develops a full preview within a frame or two raises the edge and shortens the settle. |
+| `playbackQuality` | Optional boolean. The editor offers Playback Quality (Draft 640, Standard 1280, Fine 1920, Full · 4K 3840 px long edge) and asks for playing movie frames at that `maxEdge`; a paused frame develops at full detail. |
 | `makePreview(image, options)` | Decorate that same owned image with `src`; return `{image, url}`. Do not create a second image lease. |
 | `createHistogram()` | `{analyse(renderResult, {signal}), dispose()}`. Return the histogram schema below. |
 | `autoAdjust(request)` | `{image, edit, session, signal, onProgress(text)}` → `{ev, highlights, shadows}`. |

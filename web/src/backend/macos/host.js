@@ -251,6 +251,9 @@ export function createMacBackend(channel) {
     // Video File Size choices, `{id, label}`, and the frame rates an export may retime to.
     videoBitrates: video && can.videoBitrates?.length ? can.videoBitrates : undefined,
     videoFrameRates: video && can.videoFrameRates?.length ? can.videoFrameRates : undefined,
+    // Playback Quality: the engine plays a movie frame by frame, so the long edge it develops at
+    // while playing is chosen, as the Mac app's preview offers it.
+    playbackQuality: video && nativePlayback,
     // Video Quality, Full or Fast: offered where the engine's platform develops movies on a
     // pipeline with a reduced-size road.
     videoProcessing: video && can.videoProcessing === true,

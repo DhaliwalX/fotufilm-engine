@@ -89,6 +89,15 @@
     display: flex;
     animation: player-icon-enter 140ms ease-out;
   }
+  /* The clip at a glance under the transport, as the Mac app prints it. */
+  .video-summary {
+    margin: 2px 0 0;
+    text-align: center;
+    color: var(--muted);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    white-space: pre;
+  }
   .video-speed {
     font-size: 12px;
     font-variant-numeric: tabular-nums;
