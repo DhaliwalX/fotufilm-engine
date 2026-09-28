@@ -1,4 +1,4 @@
-// The grade deck's arithmetic, as the Mac app's (desktop/FotufilmApp/SessionGradeDeck.swift):
+// The grade deck's arithmetic, as the native Mac app's:
 // a two-axis pad, warm against cool across and green against magenta up, and a level under it.
 
 export const GRADE_BANDS = ["Shadows", "Midtones", "Highlights"];

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Builds the plug-ins the desktop apps carry and install: the DaVinci Resolve OFX bundle
 # (build/resolve/Fotufilm.ofx.bundle) and, where Apple's FxPlug SDK is installed, the Final Cut Pro
-# wrapper (build/finalcut/Fotufilm for Final Cut Pro.app). macos/build.sh and cef/build.sh both run
+# wrapper (build/finalcut/Fotufilm for Final Cut Pro.app). cef/build.sh runs
 # it; `--test` is forwarded to resolve/build.sh to run the OFX host harness on the same objects.
 set -euo pipefail
 cd "$(cd "$(dirname "$0")" && pwd -P)/.."

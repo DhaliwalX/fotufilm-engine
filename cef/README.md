@@ -25,9 +25,9 @@ cef/build.sh --no-plugins  # …without the Resolve and Final Cut plug-ins
 `cef/fetch-cef.sh` downloads the CEF version pinned in `cef-version.env` into `build/cef/` and
 checks its SHA-1. `cef/build-engine.sh` builds `build/cef-engine/libfotufilm.dylib` and the
 films and camera profiles it reads, which the app carries in `Frameworks` and `Resources`.
-`tools/build-editor-plugins.sh`, which `macos/build.sh` runs too, builds the DaVinci Resolve OFX
+`tools/build-editor-plugins.sh` builds the DaVinci Resolve OFX
 bundle and, where Apple's FxPlug SDK is installed, the Final Cut Pro wrapper; the app carries them
-in `Resources` as the Mac app does. The app is `build/cef-host/Release/Fotufilm Desktop.app`.
+in `Resources`. The app is `build/cef-host/Release/Fotufilm Desktop.app`.
 Switches:
 
 | Switch | Effect |
@@ -134,7 +134,7 @@ pixels plus a row stride.
 
 ### Menu bar and files
 
-The menu bar is the Mac app's (`macos/FotufilmApp/MacMainMenu.swift`) wherever the editor has the
+The menu bar follows the native Mac app's, item for item, wherever the editor has the
 action. An item sends `fotufilm-native-command` {command}, and the editor runs the handler its own
 toolbar or shortcut uses (`web/src/editor/useNativeCommands.js`); the editor reports which commands
 apply and which are ticked with `menuState`, which the menus validate against. A shortcut goes to

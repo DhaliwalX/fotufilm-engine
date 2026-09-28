@@ -163,36 +163,24 @@ swift run fotufilm --list-stocks
 swift run fotufilm input.jpg output.jpg --stock gold200
 ```
 
-## Build the Mac app and plugins
+## Build Fotufilm Desktop and plugins
 
-The Mac app targets Apple silicon and macOS 14 or newer.
+Fotufilm Desktop targets Apple silicon and macOS 14 or newer.
 
 ```sh
-macos/build.sh --test
+cef/build.sh
 ```
 
-Open `build/macos/Fotufilm.app`. The build also includes the Resolve plugin.
+Open `build/cef-host/Release/Fotufilm Desktop.app`. The build also includes the Resolve plugin.
 To include the Final Cut plugin, install Apple's FxPlug SDK first. See the
 [Resolve guide](resolve/README.md) and [Final Cut guide](finalcut/README.md)
 for separate builds and installation steps.
 
-Mac, Resolve, and Final Cut rebuilds reuse compiled objects after checking source
+Desktop, Resolve, and Final Cut rebuilds reuse compiled objects after checking source
 and header contents, compiler, flags, and SDK dependencies. Linking, bundle assembly,
 signing, audits, and requested tests still run. Set `FOTUFILM_BUILD_CACHE=0` to
-force recompilation, or remove `build/macos/obj`, `build/resolve/obj-*`, and
+force recompilation, or remove `build/cef-engine/obj`, `build/resolve/obj-*`, and
 `build/finalcut/obj-*`.
-
-After building, check camera-log conversion and the full-float video decode path:
-
-```sh
-build/macos/Fotufilm.app/Contents/MacOS/Fotufilm --verify-log-conversion
-build/macos/Fotufilm.app/Contents/MacOS/Fotufilm --verify-preview-depth
-build/macos/Fotufilm.app/Contents/MacOS/Fotufilm --verify-source-illuminant
-```
-
-These checks use synthetic ramps to compare CPU and Metal conversion and measure
-the precision retained through decoding, playback, and paused-frame rendering.
-The source-illuminant check also verifies saved selections and RAW decode-cache isolation.
 
 ## Build the browser editor
 

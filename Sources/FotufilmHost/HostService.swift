@@ -851,7 +851,7 @@ public final class HostService {
     // MARK: Measuring and exporting
 
     /// Exposure, highlights and shadows solved against the film's latitude from the framed
-    /// scene's regional stops, as the Mac app's Auto does (`DesktopEditorModel`).
+    /// scene's regional stops, as the native Mac app's Auto does.
     private func autoAdjust(_ params: Data) throws -> [String: Any] {
         var body = (try? JSONSerialization.jsonObject(with: params)) as? [String: Any] ?? [:]
         let edit = body["edit"] as? [String: Any] ?? [:]

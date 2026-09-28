@@ -1,4 +1,4 @@
-// The menu bar: the native Mac app's (macos/FotufilmApp/MacMainMenu.swift), item for item where the
+// The menu bar: the native Mac app's, item for item where the
 // web editor has the action. Items target nil, so each reaches whichever object answers it: the
 // host view for text editing, the host window for the editor's commands (validated against the
 // state the editor reports), the application delegate for files and help.

@@ -285,13 +285,13 @@ tools/validate-fcp-template.py "$MOTION_TEMPLATE/Fotufilm.moef" --require-previe
 
 # The wrapper is the one part of this a user actually looks at — it is what tells them the plug-in
 # is installed — so it gets the app's icon rather than the generic placeholder.
-if [[ -d macos/AppIcon.icon ]]; then
-  if ! xcrun actool macos/AppIcon.icon \
+if [[ -d cef/mac/AppIcon.icon ]]; then
+  if ! xcrun actool cef/mac/AppIcon.icon \
       --compile "$APP/Contents/Resources" \
       --platform macosx --minimum-deployment-target "$DEPLOYMENT" \
       --app-icon AppIcon \
       --output-partial-info-plist "build/finalcut/icon-partial.plist" >/dev/null 2>&1; then
-    echo "warning: actool could not compile macos/AppIcon.icon (Xcode 26 required); the wrapper will use the generic icon." >&2
+    echo "warning: actool could not compile cef/mac/AppIcon.icon (Xcode 26 required); the wrapper will use the generic icon." >&2
   fi
 fi
 

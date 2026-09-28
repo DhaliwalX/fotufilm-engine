@@ -98,7 +98,7 @@
     align-items: center;
     gap: 2px;
   }
-  /* The grade deck, drawn as the Mac app's (SessionGradeDeck.swift). */
+  /* The grade deck, drawn as the native Mac app's. */
   .grade-deck {
     display: flex;
     flex-direction: column;

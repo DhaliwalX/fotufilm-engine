@@ -1,5 +1,5 @@
 // Playback Quality and the clip summary under the transport, as the Mac app's video preview
-// offers them (desktop/FotufilmApp/SessionVideoPreview.swift, VideoPreviewSimulator.Quality).
+// offers them (VideoPreviewSimulator.Quality).
 
 export const PLAYBACK_QUALITIES = [
   { id: "draft", label: "Draft", edge: 640 },

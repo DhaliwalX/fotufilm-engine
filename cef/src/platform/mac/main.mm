@@ -161,7 +161,7 @@ NSMutableArray<NSURL*>* g_pending_urls = [NSMutableArray array];
   [FotufilmRecentFiles clear];
 }
 
-// The same pages the Mac app opens (FotufilmMacApp.swift).
+// The same pages the native Mac app opens.
 - (void)openHelpPage:(id)sender {
   NSString* page = [sender representedObject];
   [NSWorkspace.sharedWorkspace

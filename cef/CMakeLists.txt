@@ -144,6 +144,11 @@ if(OS_MAC)
                 "${_app}/Contents/Resources/${_plugin_name}")
     endif()
   endforeach()
+  # The app's icon, compiled from its Icon Composer layers.
+  list(APPEND _bundle_commands
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/mac/compile-icon.sh"
+            "${CMAKE_CURRENT_SOURCE_DIR}/mac/AppIcon.icon" "${_app}/Contents/Resources"
+            "${CMAKE_CURRENT_BINARY_DIR}/icon-partial.plist")
   if(EXISTS "${FOTUFILM_WEB_DIST}/index.html")
     list(APPEND _bundle_commands
       COMMAND ${CMAKE_COMMAND} -E rm -rf "${_app}/Contents/Resources/web"

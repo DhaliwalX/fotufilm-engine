@@ -40,7 +40,7 @@ jobs:
       - run: swift build
       - run: finalcut/build.sh --test
         if: github.event_name == 'workflow_dispatch'
-      - run: macos/build.sh --test
+      - run: cef/build.sh
         if: github.event_name == 'workflow_dispatch'
       - run: tools/verify-aot-parity.sh
         if: github.event_name == 'workflow_dispatch'

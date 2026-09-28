@@ -1,5 +1,4 @@
-// The Edit History, named as the Mac app names it (EditHistoryMenuDelegate in
-// macos/FotufilmApp/MacMainMenu.swift): each step is called after what it changed, so Undo and
+// The Edit History, named as the native Mac app names it: each step is called after what it changed, so Undo and
 // Redo can say what they will undo, and the timeline can be read and jumped through.
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);

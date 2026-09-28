@@ -61,6 +61,10 @@
   <string>${EXECUTABLE_NAME}</string>
   <key>CFBundleIdentifier</key>
   <string>com.fotufilm.desktop</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
+  <key>CFBundleIconName</key>
+  <string>AppIcon</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
@@ -81,7 +85,7 @@
   <true/>
   <key>NSSupportsAutomaticGraphicsSwitching</key>
   <true/>
-  <!-- The Mac app's Finder service (macos/FotufilmApp/Info.plist), named for this app. -->
+  <!-- The native Mac app's Finder service, named for this app. -->
   <key>NSServices</key>
   <array>
     <dict>
