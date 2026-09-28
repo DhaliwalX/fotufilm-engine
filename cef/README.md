@@ -342,13 +342,6 @@ The diagnostics page (`--fotufilm-diagnostics`) measures round trips on both thr
 layer behind a hole in the page: the pattern must stay inside the orange frame while the frame is
 resized.
 
-`cef/tests/run.sh` builds and runs the portable host checks with the system compiler, with no CEF:
-which library files the page may read and what a library folder lists.
-
-The photo library's folders are picked, listed and read by the host (`app/library_methods.h`),
-since Chromium's own folder picker refuses a home, Documents, Desktop or Downloads folder as a
-whole. The page reads only folders chosen in the host's panel, which it keeps between launches.
-
 The bridge answers these calls for tests driven over the DevTools protocol:
 
 | Call | Answer |
