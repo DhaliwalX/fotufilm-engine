@@ -13,8 +13,11 @@ extern "C" int32_t fotufilm_negative_scan(const float *in, float *out, int32_t w
     for (int c = 0; c < 3; ++c)
         if (!std::isfinite(p[c]) || !std::isfinite(p[c+3]) || p[c] < 0 || p[c+3] < p[c]) return -1;
     if (!std::isfinite(p[6]) || p[6] < 0.1f || p[6] > 2.0f || !std::isfinite(p[7])) return -1;
-    static std::mutex mutex;
-    static std::unique_ptr<fotufilm::pipelines::NegativeScanPipeline> pipelines[2];
+    // Never destroyed, like every pipeline cache here: a warm-up thread still compiling when the
+    // process exits must not find its cache torn down by the exit-time destructors.
+    static std::mutex &mutex = *new std::mutex;
+    static auto *const pipelines =
+        new std::unique_ptr<fotufilm::pipelines::NegativeScanPipeline>[2]();
     std::lock_guard<std::mutex> lock(mutex);
     try {
         auto target = Halide::get_host_target().with_feature(Halide::Target::StrictFloat);

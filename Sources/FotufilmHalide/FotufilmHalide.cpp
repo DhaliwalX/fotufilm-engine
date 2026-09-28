@@ -58,8 +58,10 @@ namespace {
 DevelopPipeline *develop_pipeline_for(int32_t feature_mask) {
     const int32_t features = fotufilm_develop_features(feature_mask);
     const int variant = fotufilm_develop_variant(features);
-    static std::unordered_map<int, std::unique_ptr<DevelopPipeline>> pipelines;
-    static std::mutex pipelines_mutex;
+    // Never destroyed, like every pipeline cache here: a warm-up thread still compiling when the
+    // process exits must not find its cache torn down by the exit-time destructors.
+    static auto &pipelines = *new std::unordered_map<int, std::unique_ptr<DevelopPipeline>>;
+    static std::mutex &pipelines_mutex = *new std::mutex;
     std::lock_guard<std::mutex> lock(pipelines_mutex);
     auto &pipeline = pipelines[variant];
     if (!pipeline) {
@@ -82,8 +84,8 @@ PlainPipeline *plain_pipeline_for(int32_t feature_mask) {
     const bool monochrome = (feature_mask & FOTUFILM_FRAME_MONOCHROME) != 0;
     const bool encode = (feature_mask & FOTUFILM_FRAME_ENCODE_OUT) != 0;
     const int shape = output_transfer_shape_for(feature_mask);
-    static std::unique_ptr<PlainPipeline> pipelines[16];
-    static std::mutex pipelines_mutex;
+    static auto *const pipelines = new std::unique_ptr<PlainPipeline>[16]();
+    static std::mutex &pipelines_mutex = *new std::mutex;
     std::lock_guard<std::mutex> lock(pipelines_mutex);
     const int variant = (monochrome ? 1 : 0) | (encode ? 2 : 0)
         | ((shape + 1) << 2);
@@ -106,8 +108,8 @@ PrintPipeline *print_pipeline_for(int32_t feature_mask) {
     // be compiled in; without one the shape is read per pixel, exactly as the fused GPU pipeline
     // reads it when the caller asked for no shaped variant.
     const int shape = output_transfer_shape_for(feature_mask);
-    static std::unique_ptr<PrintPipeline> pipelines[32];
-    static std::mutex pipelines_mutex;
+    static auto *const pipelines = new std::unique_ptr<PrintPipeline>[32]();
+    static std::mutex &pipelines_mutex = *new std::mutex;
     std::lock_guard<std::mutex> lock(pipelines_mutex);
     const int variant = (reversal ? 1 : 0) | (monochrome ? 2 : 0)
         | (encode ? 4 : 0) | ((shape + 1) << 3);

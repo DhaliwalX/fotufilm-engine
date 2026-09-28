@@ -220,8 +220,10 @@ extern "C" int32_t fotufilm_transport_convolve(
     }
     if (std::abs(sum - 1) > 1e-5) return -1;
     try {
-        static std::unique_ptr<TransportConvolution> engines[2];
-        static std::mutex preparation;
+        // Never destroyed, like every pipeline cache here: a warm-up thread still compiling
+        // when the process exits must not find its cache torn down by the exit-time destructors.
+        static auto *const engines = new std::unique_ptr<TransportConvolution>[2]();
+        static std::mutex &preparation = *new std::mutex;
         TransportConvolution *engine;
         {
             std::lock_guard<std::mutex> lock(preparation);
@@ -256,8 +258,8 @@ extern "C" int32_t fotufilm_transport_accumulate(
         if (std::abs(sum - 1) > 1e-5) return -1;
     }
     try {
-        static std::unique_ptr<TransportConvolution> engines[2];
-        static std::mutex preparation;
+        static auto *const engines = new std::unique_ptr<TransportConvolution>[2]();
+        static std::mutex &preparation = *new std::mutex;
         TransportConvolution *engine;
         {
             std::lock_guard<std::mutex> lock(preparation);
