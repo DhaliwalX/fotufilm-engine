@@ -79,6 +79,14 @@
   .adjustment-end {
     width: 22px;
   }
+  /* The knob is centred on the track's end, so it reaches half its width past it: the track
+     keeps that clear of an end glyph and the gap still shows with the knob at either end. */
+  .adjustment-track .adjustment-end + .adjustment-slider {
+    margin-left: 9px;
+  }
+  .adjustment-track .adjustment-slider:has(+ .adjustment-end) {
+    margin-right: 9px;
+  }
   /* A control's help button after its name, as the Mac app's inspector rows carry one. */
   .adjustment-name {
     display: inline-flex;
