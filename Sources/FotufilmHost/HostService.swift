@@ -437,9 +437,35 @@ public final class HostService {
         let frameKey = sceneKey + "|" + String(describing: plan?.json["placement"] ?? "")
             + (draft ? "|draft" : "")
 
-        let scene = try sceneFor(image, geometry: geometry, sizes: sizes, draft: draft)
+        // Made only when something below needs it: a played frame may need no light at all.
+        var framedScene: [Float]?
+        func scene() throws -> [Float] {
+            if let framedScene { return framedScene }
+            let made = try sceneFor(image, geometry: geometry, sizes: sizes, draft: draft)
+            framedScene = made
+            return made
+        }
         var renderMilliseconds = 0.0
+        // A playing movie's frame the film takes as decoded — nothing cut, turned, selected or
+        // framed, in standard range — develops from the decoder's codes in one pass, as the Mac
+        // app plays a movie. Its original is those codes.
+        if developed?.key != developKey, image.pace.realtime, presentation != nil, ceiling == nil,
+           plan == nil, body["stage"] as? Int == nil, !hasSelection(body),
+           request.cropMode != true, geometry.isIdentity, sizes.frame == sizes.output,
+           let codes = image.video?.displayCodes(width: width, height: height) {
+            let developStart = DispatchTime.now().uptimeNanoseconds
+            if let pixels = try engine.developDisplay8(
+                codes, width: width, height: height, contentHeadroom: image.contentHeadroom,
+                edit: edit, frameIndex: image.pace.frameIndex) {
+                renderMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - developStart) / 1e6
+                developed = (developKey, width, height, .rgba8DisplayP3, pixels)
+                if !originals.contains(where: { $0.key == frameKey }) {
+                    remember(original: (frameKey, width, height, codes.bytes))
+                }
+            }
+        }
         if developed?.key != developKey {
+            let scene = try scene()
             var pixels = [UInt8](repeating: 0, count: width * height * 4)
             var format = HostSurfaceFormat.rgba8DisplayP3
             let developStart = DispatchTime.now().uptimeNanoseconds
@@ -464,20 +490,24 @@ public final class HostService {
             }
             developed = (developKey, frame.width, frame.height, format, frame.pixels)
         }
+        let originalStart = DispatchTime.now().uptimeNanoseconds
+        defer {
+            if Self.logsTimings {
+                FileHandle.standardError.write(Data(String(
+                    format: "fotufilm develop %.1f ms, original %.1f ms\n", renderMilliseconds,
+                    Double(DispatchTime.now().uptimeNanoseconds - originalStart) / 1e6).utf8))
+            }
+        }
         if let index = originals.firstIndex(where: { $0.key == frameKey }) {
             originals.append(originals.remove(at: index))
         } else {
-            var frame = (pixels: image.display(scene, width: width, height: height),
+            var frame = (pixels: image.display(try scene(), width: width, height: height),
                          width: width, height: height)
             if let plan, let framed = HostFrames.frame(frame.pixels, width: width, height: height,
                                                        plan: plan) {
                 frame = framed
             }
-            originals.append((frameKey, frame.width, frame.height, frame.pixels))
-            while originals.count > Self.sceneLimit.count || originals.count > 1
-                && originals.reduce(0, { $0 + $1.pixels.count }) > Self.sceneLimit.bytes / 2 {
-                originals.removeFirst()
-            }
+            remember(original: (frameKey, frame.width, frame.height, frame.pixels))
         }
         let developedFrame = developed!, originalFrame = originals.last!
         // A frame developed for an EDR layer is shown to the page in standard range.
@@ -538,6 +568,15 @@ public final class HostService {
                                      developedFrame.height, developedFrame.pixels))]
         if body["haveOriginal"] as? String != originalKey { images["original"] = png(originalFrame) }
         return try answer(answerBody, images: images)
+    }
+
+    /// Keeps an undeveloped picture as the newest, within the caches' limits.
+    private func remember(original: (key: String, width: Int, height: Int, pixels: [UInt8])) {
+        originals.append(original)
+        while originals.count > Self.sceneLimit.count || originals.count > 1
+            && originals.reduce(0, { $0 + $1.pixels.count }) > Self.sceneLimit.bytes / 2 {
+            originals.removeFirst()
+        }
     }
 
     /// Hands the region of a render to the host's compositor: the developed frame into the

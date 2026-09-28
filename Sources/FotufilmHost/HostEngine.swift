@@ -337,6 +337,24 @@ public final class HostEngine {
                     into: target)
     }
 
+    /// A video frame's decoded 8-bit Display P3 codes developed in one pass, as the Mac app plays
+    /// a movie; nil where the edit has no film, the film is layered, or the developer has no such
+    /// road, and the frame then develops as light.
+    func developDisplay8(_ codes: HostVideoCodes, width: Int, height: Int, contentHeadroom: Float,
+                         edit: WebNativeEdit, frameIndex: UInt64) throws -> [UInt8]? {
+        guard let film = stock(edit.edit.stock) else { return nil }
+        let options = try options(edit, stock: film, contentHeadroom: contentHeadroom)
+        guard options.transportConstruction(for: film) == nil else { return nil }
+        let started = currentGeneration
+        renderLock.lock()
+        defer { renderLock.unlock() }
+        guard currentGeneration == started else {
+            throw Failure(description: "Cancelled.", cancelled: true)
+        }
+        return developer.developDisplay8(codes, width: width, height: height, stock: film,
+                                         options: options, frameIndex: frameIndex)
+    }
+
     /// The options an edit develops with on `stock`, the scene's recorded range included.
     public func options(_ edit: WebNativeEdit, stock: FilmStock,
                         contentHeadroom: Float) throws -> FotufilmEngine.Options {

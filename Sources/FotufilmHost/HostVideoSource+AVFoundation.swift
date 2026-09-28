@@ -186,7 +186,7 @@ final class AVFoundationVideoSource: HostVideoSource {
     private static let readAhead = 1.0
 
     func frame(at seconds: Double, width: Int, height: Int,
-               interpretation: HostVideoInterpretation) throws -> HostVideoFrame {
+               interpretation: HostVideoInterpretation, displayCodes: Bool) throws -> HostVideoFrame {
         let road = road(interpretation)
         let key = "\(road)|\(width)x\(height)"
         let tolerance = 0.25 / frameRate
@@ -210,8 +210,10 @@ final class AVFoundationVideoSource: HostVideoSource {
         guard let sample = cursor?.current else {
             throw HostEngine.Failure(description: "This video has no frame at \(seconds) s.")
         }
-        return try convert(sample, width: width, height: height, road: road,
-                           interpretation: interpretation)
+        return displayCodes && road == .managed8
+            ? try codes(sample)
+            : try convert(sample, width: width, height: height, road: road,
+                          interpretation: interpretation)
     }
 
     func frames(from start: Double, to end: Double, width: Int, height: Int,

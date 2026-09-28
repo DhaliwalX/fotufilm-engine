@@ -91,7 +91,8 @@ final class HostVideoTests: XCTestCase {
         // Playback steps forward, a scrub jumps back and ahead; every answer is the frame showing.
         for index in [0, 1, 2, 3, 10, 11, 4, 29, 28, 15, 15, 16] {
             let time = (Double(index) + 0.5) / Double(Self.rate)
-            let frame = try source.frame(at: time, width: 32, height: 24, interpretation: .standard)
+            let frame = try source.frame(at: time, width: 32, height: 24, interpretation: .standard,
+                                         displayCodes: false)
             // A reader opened mid-frame reports the frame from where it was opened.
             XCTAssertGreaterThanOrEqual(frame.time, Double(index) / Double(Self.rate) - 1e-3)
             XCTAssertLessThanOrEqual(frame.time, time + 1e-3)
@@ -99,15 +100,17 @@ final class HostVideoTests: XCTestCase {
         }
         // Exactly on a frame's start is that frame.
         let exact = try source.frame(at: 5.0 / Double(Self.rate), width: 32, height: 24,
-                                     interpretation: .standard)
+                                     interpretation: .standard, displayCodes: false)
         XCTAssertEqual(level(exact), level(sequence[5]), accuracy: 1e-6)
     }
 
     func testCameraLogReadsCodeValuesThroughTheCurve() throws {
         let source = try open(movie)
-        let standard = try source.frame(at: 0.5, width: 32, height: 24, interpretation: .standard)
+        let standard = try source.frame(at: 0.5, width: 32, height: 24, interpretation: .standard,
+                                        displayCodes: false)
         let log = try source.frame(at: 0.5, width: 32, height: 24,
-                                   interpretation: HostVideoInterpretation("appleLog"))
+                                   interpretation: HostVideoInterpretation("appleLog"),
+                                   displayCodes: false)
         // Frame 15's code, 120/255, read through the Apple Log curve with diffuse white at 1:
         // the decoder hands the untouched code over, not the colour-managed picture.
         let expected = AppleLogCurve.linear(120 / 255) / 0.9

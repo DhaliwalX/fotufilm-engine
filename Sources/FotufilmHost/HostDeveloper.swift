@@ -34,6 +34,12 @@ protocol HostDeveloper {
                  shouldContinue: @escaping () -> Bool,
                  deliver: (UnsafeBufferPointer<Float>, Range<Int>, Bool) -> Void) throws
 
+    /// Develops upright RGBA8 Display P3 codes, as an 8-bit video decoder delivers them, straight
+    /// to 8-bit Display P3 in one pass, as the Mac app's playback does; nil where this developer
+    /// has no such road, and the frame then develops as light.
+    func developDisplay8(_ codes: HostVideoCodes, width: Int, height: Int, stock: FilmStock,
+                         options: FotufilmEngine.Options, frameIndex: UInt64) -> [UInt8]?
+
     /// Whether a frame this large develops with enough memory left for the rest of the app: the
     /// export sheet offers only the sizes that do.
     func canDevelop(width: Int, height: Int, stock: FilmStock, options: FotufilmEngine.Options,
@@ -52,6 +58,9 @@ extension HostDeveloper {
     /// A developer that states no limit develops every size.
     func canDevelop(width: Int, height: Int, stock: FilmStock, options: FotufilmEngine.Options,
                     exactMath: Bool) -> Bool { true }
+
+    func developDisplay8(_ codes: HostVideoCodes, width: Int, height: Int, stock: FilmStock,
+                         options: FotufilmEngine.Options, frameIndex: UInt64) -> [UInt8]? { nil }
 }
 
 /// The portable developer: the Halide CPU pipeline, whole frame at once.

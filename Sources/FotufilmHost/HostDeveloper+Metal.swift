@@ -1,5 +1,6 @@
 #if canImport(Metal)
 import Foundation
+import Metal
 #if canImport(FotufilmCore)
 import FotufilmCore
 #endif
@@ -11,10 +12,41 @@ import FotufilmMetal
 /// and transfer in the producing kernel when a variant carries them.
 struct MetalDeveloper: HostDeveloper {
     let metal: HalideMetalFilmRenderer
+    private let playback: PlaybackBuffers
 
     init?() {
-        guard let metal = HalideMetalFilmRenderer.shared else { return nil }
+        guard let metal = HalideMetalFilmRenderer.shared,
+              let device = MTLCreateSystemDefaultDevice() else { return nil }
         self.metal = metal
+        playback = PlaybackBuffers(device: device)
+    }
+
+    /// The 8-bit road's frame in and out, kept for the next frame of the same size.
+    private final class PlaybackBuffers {
+        let device: MTLDevice
+        var buffers: (input: MTLBuffer, output: MTLBuffer)?
+        init(device: MTLDevice) { self.device = device }
+
+        func take(bytes: Int) -> (input: MTLBuffer, output: MTLBuffer)? {
+            if let buffers, buffers.input.length == bytes { return buffers }
+            guard let input = device.makeBuffer(length: bytes, options: .storageModeShared),
+                  let output = device.makeBuffer(length: bytes, options: .storageModeShared)
+            else { return nil }
+            buffers = (input, output)
+            return buffers
+        }
+    }
+
+    /// `processRGBA8`, the Mac app's playback and 8-bit export road.
+    func developDisplay8(_ codes: HostVideoCodes, width: Int, height: Int, stock: FilmStock,
+                         options: FotufilmEngine.Options, frameIndex: UInt64) -> [UInt8]? {
+        let bytes = width * height * 4
+        guard codes.count == bytes, let buffers = playback.take(bytes: bytes) else { return nil }
+        codes.write(into: buffers.input.contents())
+        guard metal.processRGBA8(input: buffers.input, output: buffers.output, width: width,
+                                 height: height, stock: stock, options: options,
+                                 frameIndex: frameIndex) else { return nil }
+        return [UInt8](UnsafeRawBufferPointer(start: buffers.output.contents(), count: bytes))
     }
 
     var kind: String { "metal" }

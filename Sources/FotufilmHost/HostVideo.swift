@@ -107,8 +107,9 @@ protocol HostVideoSource: AnyObject {
 
     /// The frame showing at `seconds`, decoded at `width` x `height`. Successive calls moving
     /// forward in small steps, as playback makes them, should read on rather than seek.
+    /// `displayCodes` asks for `display8` where the decode is 8-bit Display P3, as `frames` does.
     func frame(at seconds: Double, width: Int, height: Int,
-               interpretation: HostVideoInterpretation) throws -> HostVideoFrame
+               interpretation: HostVideoInterpretation, displayCodes: Bool) throws -> HostVideoFrame
 
     /// Every frame shown from `start` until `end`, in order, decoded at `width` x `height`.
     /// `displayCodes` asks for `display8` frames where the decode is 8-bit Display P3.
@@ -321,10 +322,10 @@ final class HostVideo {
                                        to: width, height)
         }
         let key = "\(interpretation)|\(frameNumber(time))|\(width)x\(height)"
-        if let cached, cached.key == key { return cached.frame.rgba }
+        if let cached, cached.key == key { return cached.frame.scene }
         do {
             let frame = try source.frame(at: time, width: width, height: height,
-                                         interpretation: interpretation)
+                                         interpretation: interpretation, displayCodes: false)
             let rgba = frame.width == width && frame.height == height ? frame.rgba
                 : AreaResample.reduce(frame.rgba, width: frame.width, height: frame.height,
                                       to: width, height)
@@ -336,6 +337,21 @@ final class HostVideo {
             // it develops as black rather than failing the edit.
             return [Float](repeating: 0, count: width * height * 4)
         }
+    }
+
+    /// The selected frame as the decoder's 8-bit Display P3 codes at this size, for a develop
+    /// that reads them as they are; nil where the source decodes this movie as light, or for a
+    /// frame an export holds.
+    func displayCodes(width: Int, height: Int) -> HostVideoCodes? {
+        guard held == nil else { return nil }
+        let key = "\(interpretation)|\(frameNumber(time))|\(width)x\(height)"
+        if let cached, cached.key == key { return cached.frame.display8 }
+        guard let frame = try? source.frame(at: time, width: width, height: height,
+                                             interpretation: interpretation, displayCodes: true),
+              frame.width == width, frame.height == height else { return nil }
+        // Light decoded here is the frame `pixels` would decode next.
+        cached = (key, frame)
+        return frame.display8
     }
 
     /// The descriptor fields the editor's transport controls read (`image.video`).
