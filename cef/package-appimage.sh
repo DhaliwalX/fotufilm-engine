@@ -25,12 +25,43 @@ mkdir -p "$LIB"
 tar -C "$BUILD" --exclude=chrome-sandbox -cf - . | tar -C "$LIB" -xf -
 strip --strip-unneeded "$LIB/fotufilm" "$LIB/libcef.so" "$LIB/libvk_swiftshader.so"
 
-# Libraries the engine links beyond the ones every desktop has. The executable's RPATH ($ORIGIN)
-# reaches them for the engine too.
-bundled='^lib(raw(_r)?|jpeg|png16|tiff|lcms2|OpenEXR[A-Za-z]*|Imath|Iex|IlmThread|heif|de265|x265|aom|dav1d|webp|webpdemux|webpmux|sharpyuv|deflate|jbig|Lerc|gomp|jxl[a-z_]*|hwy|brotlienc)[-.0-9]*\.so'
-ldd "$LIB/libfotufilm.so" | awk '$2 == "=>" && $3 ~ /^\// {print $1, $3}' | while read -r name path; do
-  if [[ "$name" =~ $bundled ]]; then cp -L "$path" "$LIB/$name"; fi
+# Libraries the engine links beyond the ones every desktop has, and libheif's decoders (HEVC and
+# AV1), which it loads as plug-ins. The executable's RPATH ($ORIGIN) reaches them for the engine
+# and the plug-ins too. Nothing GPL is carried: HEIC export appears where the system has libheif's
+# x265 plug-in, and libtiff (whose Debian build links GPL JBIG-KIT) is the system's, as the GTK
+# that CEF needs already requires it.
+bundled='^lib(raw(_r)?|jpeg|png16|lcms2|OpenEXR[A-Za-z]*|Imath|Iex|IlmThread|heif|de265|aom|dav1d|gomp)[-._0-9]*\.so'
+bundle() {
+  ldd "$1" | awk '$2 == "=>" && $3 ~ /^\// {print $1, $3}' | while read -r name path; do
+    if [[ "$name" =~ $bundled && ! -e "$LIB/$name" ]]; then
+      cp -L "$path" "$LIB/$name"
+      echo "$path"
+    fi
+  done
+}
+bundle "$LIB/libfotufilm.so" > "$OUT/bundled.txt"
+# libheif's plug-in folder, beside its library.
+plugins="$(dirname "$(ldd "$LIB/libfotufilm.so" | awk '$1 ~ /^libheif\.so/ {print $3}')")/libheif/plugins"
+mkdir -p "$LIB/heif-plugins"
+for plugin in libheif-libde265.so libheif-aomdec.so libheif-dav1d.so; do
+  if [[ -f "$plugins/$plugin" ]]; then
+    cp -L "$plugins/$plugin" "$LIB/heif-plugins/"
+    bundle "$plugins/$plugin" >> "$OUT/bundled.txt"
+  fi
 done
+
+# The licences of what the image carries beside the app's own (THIRD_PARTY_NOTICES.md).
+mkdir -p "$APPDIR/usr/share/doc"
+if command -v dpkg >/dev/null; then
+  # dpkg knows merged-/usr paths by their /usr spelling.
+  sed 's#^/lib/#/usr/lib/#' "$OUT/bundled.txt" | sort -u | xargs -r dpkg -S 2>/dev/null |
+    cut -d: -f1 | sort -u | while read -r package; do
+      if [[ -f "/usr/share/doc/$package/copyright" ]]; then
+        install -D -m 0644 "/usr/share/doc/$package/copyright" \
+          "$APPDIR/usr/share/doc/$package/copyright"
+      fi
+    done
+fi
 
 install -m 0644 "$LIB/fotufilm.png" "$APPDIR/fotufilm.png"
 ln -s fotufilm.png "$APPDIR/.DirIcon"
@@ -48,6 +79,12 @@ DESKTOP
 cat > "$APPDIR/AppRun" <<'APPRUN'
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "$0")")"
+# The carried HEIF decoders first, then the system's plug-ins (its HEVC encoder among them).
+LIBHEIF_PLUGIN_PATH="$HERE/usr/lib/fotufilm/heif-plugins${LIBHEIF_PLUGIN_PATH:+:$LIBHEIF_PLUGIN_PATH}"
+for system in /usr/lib/x86_64-linux-gnu/libheif/plugins /usr/lib64/libheif/plugins /usr/lib/libheif/plugins; do
+  [ -d "$system" ] && LIBHEIF_PLUGIN_PATH="$LIBHEIF_PLUGIN_PATH:$system"
+done
+export LIBHEIF_PLUGIN_PATH
 exec "$HERE/usr/lib/fotufilm/fotufilm" "$@"
 APPRUN
 chmod +x "$APPDIR/AppRun"

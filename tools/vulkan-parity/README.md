@@ -103,9 +103,13 @@ swift run -c release fotufilm-parity --develop scene-chart.pfm mac.pfm --device 
 
 On an x86-64 Linux machine with an NVIDIA GPU, build with a Halide SDK that has the CUDA and
 Vulkan backends and the three Vulkan patches above (`bool-uniforms` needs `patch --fuzz=3` on
-the pinned `third_party/Halide`). Without them Vulkan develops a flat, near-black frame. Then
-develop the same scenes with `--device cpu`, `--device gpu` (CUDA), and
-`FOTUFILM_GPU_DEVICE=vulkan --device gpu`, and run `--compare mac.pfm linux.pfm`.
+the pinned `third_party/Halide`). Without them Vulkan develops a flat, near-black frame. Also
+apply `tools/halide-vulkan-readback-staging.patch`: without it a GPU with a host-visible device
+heap reads every frame back uncached, seconds a frame. Then develop the same scenes with
+`--device cpu`, `--device gpu` (CUDA), and `FOTUFILM_GPU_DEVICE=vulkan --device gpu`, and run
+`--compare mac.pfm linux.pfm`. Compare with `--no-grain`: Vulkan draws grain from the reference
+inverse-CDF tables, as the CPU and the browser do, so its grain has Metal's statistics but not
+its exact pattern.
 
 A container without a display has to load NVIDIA's Vulkan driver through EGL. The stock ICD
 file names `libGLX_nvidia.so.0`, which finds no device there:

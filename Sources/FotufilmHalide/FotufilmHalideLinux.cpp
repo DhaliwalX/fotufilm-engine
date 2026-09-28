@@ -133,18 +133,28 @@ const char *preferred_vulkan_device_type() {
     return type;
 }
 
+void release_device();
+
+Device pick_device() {
+    configure_error_handler();
+    const char *setting = std::getenv("FOTUFILM_GPU_DEVICE");
+    const std::string wanted = setting ? setting : "";
+    if (wanted == "cpu") return kNone;
+    if (wanted == "cuda") return answers(kCuda) ? kCuda : kNone;
+    if (wanted != "vulkan" && answers(kCuda)) return kCuda;
+    if (!std::getenv("HL_VK_DEVICE_TYPE"))
+        if (const char *type = preferred_vulkan_device_type())
+            setenv("HL_VK_DEVICE_TYPE", type, 0);
+    return answers(kVulkan) ? kVulkan : kNone;
+}
+
 Device chosen_device() {
     static const Device device = [] {
-        configure_error_handler();
-        const char *setting = std::getenv("FOTUFILM_GPU_DEVICE");
-        const std::string wanted = setting ? setting : "";
-        if (wanted == "cpu") return kNone;
-        if (wanted == "cuda") return answers(kCuda) ? kCuda : kNone;
-        if (wanted != "vulkan" && answers(kCuda)) return kCuda;
-        if (!std::getenv("HL_VK_DEVICE_TYPE"))
-            if (const char *type = preferred_vulkan_device_type())
-                setenv("HL_VK_DEVICE_TYPE", type, 0);
-        return answers(kVulkan) ? kVulkan : kNone;
+        const Device picked = pick_device();
+        // Halide's runtime releases its device from a library destructor, after the driver may
+        // have finalised (NVIDIA's Vulkan driver crashes there); exit handlers run before that.
+        if (picked != kNone) std::atexit(release_device);
+        return picked;
     }();
     return device;
 }
@@ -195,6 +205,18 @@ FilmTileStore &film_tile_store() {
         return shared;
     }();
     return store;
+}
+
+void release_device() {
+    {
+        State &cache = state();
+        std::lock_guard<std::mutex> lock(cache.mutex);
+        for (Buffer<float> *buffer : {&cache.exposure, &cache.film, &cache.paper, &cache.configuration})
+            buffer->device_free();
+        cache.identifier = 0;
+    }
+    film_tile_store().device_free();
+    halide_device_release(nullptr, interface_for(chosen_device()));
 }
 
 bool valid_flare_mean(const float *configuration, int32_t feature_mask) {

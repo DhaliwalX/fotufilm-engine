@@ -1,0 +1,48 @@
+Stage device-to-host copies in cached host memory, not device memory the host maps.
+
+halide_vulkan_copy_to_host copies the result into a staging buffer, maps it and memcpys it out.
+The staging request preferred DEVICE_LOCAL and asked for uncached memory, so on a desktop GPU
+with a host-visible device heap (resizable BAR, NVIDIA's 256 MB window) the allocator placed it
+in video memory, and the CPU read every byte back uncached across PCIe. Measured on an RTX-class
+card with the Linux desktop graph at 1536 x 1024 float RGBA, that read took about five seconds a
+frame; with host-cached staging the whole frame develops in about 60 ms. Read-back staging now
+prefers HOST_CACHED | HOST_COHERENT memory and no longer prefers DEVICE_LOCAL; any host-visible
+type is still accepted when none is cached. Uploads are unchanged. Applies to the pinned
+third_party/Halide with the other halide-vulkan-*.patch files.
+diff --git a/src/runtime/vulkan.cpp b/src/runtime/vulkan.cpp
+index 1a310a7..6c92234 100644
+--- a/src/runtime/vulkan.cpp
++++ b/src/runtime/vulkan.cpp
+@@ -633,7 +633,7 @@ WEAK int halide_vulkan_copy_to_host(void *user_context, halide_buffer_t *halide_
+     MemoryRequest request = {0};
+     request.size = halide_buffer->size_in_bytes();
+     request.properties.usage = MemoryUsage::TransferDst;
+-    request.properties.caching = MemoryCaching::UncachedCoherent;
++    request.properties.caching = MemoryCaching::CachedCoherent;
+     request.properties.visibility = MemoryVisibility::DeviceToHost;
+ 
+     // allocate a new region for staging the transfer
+@@ -870,7 +870,7 @@ WEAK int halide_vulkan_buffer_copy(void *user_context, struct halide_buffer_t *s
+ 
+             // NOTE: We may re-use this buffer so enable both src and dst
+             request.properties.usage = MemoryUsage::TransferSrcDst;
+-            request.properties.caching = MemoryCaching::UncachedCoherent;
++            request.properties.caching = MemoryCaching::CachedCoherent;
+             request.properties.visibility = MemoryVisibility::DeviceToHost;
+ 
+             // allocate a new region
+diff --git a/src/runtime/vulkan_memory.h b/src/runtime/vulkan_memory.h
+index 5601a89..322a1d1 100644
+--- a/src/runtime/vulkan_memory.h
++++ b/src/runtime/vulkan_memory.h
+@@ -871,8 +871,8 @@ uint32_t VulkanMemoryAllocator::preferred_flags_for_memory_properties(
+         preferred_flags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+         break;
+     case MemoryVisibility::DeviceToHost:
+-        preferred_flags |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+-        break;
++        // The host reads this memory back, so it should be host memory the device writes into
++        // (not device memory mapped through the PCIe BAR, which the CPU reads uncached).
+     case MemoryVisibility::HostToDevice:
+     case MemoryVisibility::DefaultVisibility:
+     case MemoryVisibility::DeviceOnly:
