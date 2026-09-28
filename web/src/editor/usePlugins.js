@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { appSetting, setAppSetting } from "../app-settings.js";
 
 // The plug-ins for other editors a native host installs (backend.plugins: DaVinci Resolve and
@@ -123,20 +123,26 @@ export default function usePlugins({ backend, dialog, setDialog }) {
     if (dialog !== "plugins") setOffer(null);
   }, [dialog]);
 
+  const plugins = useMemo(
+    () =>
+      available
+        ? {
+            catalogue: backend.plugins,
+            list,
+            busy,
+            result,
+            offer,
+            refresh,
+            install,
+            reveal,
+            acceptOffer,
+            decline,
+          }
+        : null,
+    [available, backend.plugins, list, busy, result, offer, refresh, install, reveal,
+      acceptOffer, decline],
+  );
   return {
-    plugins: available
-      ? {
-          catalogue: backend.plugins,
-          list,
-          busy,
-          result,
-          offer,
-          refresh,
-          install,
-          reveal,
-          acceptOffer,
-          decline,
-        }
-      : null,
+    plugins,
   };
 }

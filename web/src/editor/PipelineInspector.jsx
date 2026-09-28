@@ -14,10 +14,11 @@ const stageNames = [
 import { Switch } from "@react-spectrum/s2/Switch";
 import { hasProfileSettings } from "../profile-settings.js";
 import { ActionButton } from "@react-spectrum/s2/ActionButton";
-import { useEditor } from "./EditorContext.jsx";
+import { useEditor, useEditorFrame } from "./EditorContext.jsx";
 export default function PipelineInspector() {
-  const { edit, stage, setStage, setDifference, stages, difference, result } =
+  const { edit, stage, setStage, setDifference, stages, difference} =
     useEditor();
+  const { result } = useEditorFrame();
   return (
     <>
       <div className="inspector-title">

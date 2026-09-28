@@ -25,7 +25,7 @@ export function createPlayback(
     disposed = false,
     generation = 0,
     pending = false,
-    lastPaint = -Infinity;
+    lastPublished = null;
   const update = (patch) => {
     state = { ...state, ...patch };
     if (!disposed) onState(state);
@@ -88,15 +88,16 @@ export function createPlayback(
       seek(options.end);
     }
   }
-  function tick(now) {
+  function tick() {
     frame = null;
     if (disposed || video.paused) return;
     if (video.currentTime >= options.end) boundary();
-    else if (now - lastPaint >= 32) {
-      // The preview queue finishes its current frame and coalesces subsequent requests.
-      // Keep it supplied at the display cadence instead of imposing an 8 fps ceiling.
-      publish(video.currentTime);
-      lastPaint = now;
+    else if (video.currentTime !== lastPublished) {
+      // The preview queue finishes its current frame and coalesces subsequent requests, so
+      // every display frame that moved the playhead asks for its picture, as the Mac app's
+      // player develops each new frame the video hands over.
+      lastPublished = video.currentTime;
+      publish(lastPublished);
     }
     if (!video.paused && !disposed) frame = requestFrame(tick);
   }

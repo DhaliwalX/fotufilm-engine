@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import { frameRequest } from "./print-frame.js";
 
 // A keyed result prevents a slow old request from describing a newer frame or file.
+const PENDING = Object.freeze({ pending: true }),
+  IDLE = Object.freeze({ pending: false });
+
 export function usePrintFrame(edit, width = 1, height = 1, enabled = true) {
   const backend = useBackend();
   const key =
@@ -35,5 +38,5 @@ export function usePrintFrame(edit, width = 1, height = 1, enabled = true) {
       current = false;
     };
   }, [key]);
-  return state?.key === key ? state : { pending: !!key };
+  return state?.key === key ? state : key ? PENDING : IDLE;
 }

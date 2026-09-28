@@ -70,81 +70,87 @@ export function renderRequest(request, stocks) {
 export function createSession(call, catalogue, { imageLayer = false } = {}) {
   const lifecycle = new AbortController();
   const pending = [];
-  let running = false;
-  // The render the host is developing, which a newer request cancels once it has gone stale: a
-  // settled refinement never holds up the next edit's draft.
-  let developing = null;
+  // The renders the host is developing, which a newer request cancels once they have gone
+  // stale: a settled refinement never holds up the next edit's draft.
+  const developing = new Set();
   let lastOriginal = null;
-  async function drain() {
-    if (running) return;
-    running = true;
+  // A playing movie keeps its next frame waiting at the host while the last one comes back, so
+  // the host starts it the moment it is free. Anything else waits for the host to be idle.
+  const playing = (request) => !!request.image?.video && !!request.interactive;
+  const startable = (request) =>
+    developing.size === 0 ||
+    (developing.size === 1 &&
+      playing(request) &&
+      [...developing].every((entry) => playing(entry.request)));
+  function drain() {
     while (pending.length) {
-      const foreground = pending.findIndex(
-        ({ request }) => !request.background,
-      );
-      const { request, resolve, reject } = pending.splice(
-        Math.max(0, foreground),
-        1,
-      )[0];
+      const foreground = pending.findIndex(({ request }) => !request.background);
+      const index = Math.max(0, foreground);
+      if (!startable(pending[index].request)) return;
+      develop(pending.splice(index, 1)[0]);
+    }
+  }
+  async function develop({ request, resolve, reject }) {
+    if (lifecycle.signal.aborted || request.stale?.()) {
+      resolve(null);
+      return;
+    }
+    const entry = { request, controller: new AbortController() };
+    developing.add(entry);
+    try {
+      request.onProgress?.("Developing with native Halide/Metal");
+      const present = imageLayer ? presentRequest(request) : undefined;
+      const nativeRequest = {
+        ...renderRequest(request, await catalogue()),
+        haveOriginal: lastOriginal?.key,
+        ...(present ? { present } : {}),
+      };
+      const result = await call("render", nativeRequest, {
+        signal: AbortSignal.any([lifecycle.signal, entry.controller.signal]),
+      });
+      // Shown by the host's compositor: the answer names frames, and no picture crossed.
+      if (result.presented) {
+        resolve(
+          lifecycle.signal.aborted || request.stale?.()
+            ? null
+            : { ...result, viewport: request.viewport, sceneRequest: nativeRequest },
+        );
+        return;
+      }
+      // A host that knows the page holds this original leaves it out of the answer.
+      const original = result.original != null
+        ? imageBlob(result.original, result.previewType)
+        : lastOriginal?.key === result.originalKey
+          ? lastOriginal.blob
+          : null;
+      if (!original) throw new Error("The native host sent no original picture.");
+      if (result.originalKey) lastOriginal = { key: result.originalKey, blob: original };
       if (lifecycle.signal.aborted || request.stale?.()) {
         resolve(null);
-        continue;
+        return;
       }
-      try {
-        request.onProgress?.("Developing with native Halide/Metal");
-        const present = imageLayer ? presentRequest(request) : undefined;
-        const nativeRequest = {
-          ...renderRequest(request, await catalogue()),
-          haveOriginal: lastOriginal?.key,
-          ...(present ? { present } : {}),
-        };
-        developing = { request, controller: new AbortController() };
-        const result = await call("render", nativeRequest, {
-          signal: AbortSignal.any([lifecycle.signal, developing.controller.signal]),
-        });
-        // Shown by the host's compositor: the answer names frames, and no picture crossed.
-        if (result.presented) {
-          resolve(
-            lifecycle.signal.aborted || request.stale?.()
-              ? null
-              : { ...result, viewport: request.viewport, sceneRequest: nativeRequest },
-          );
-          continue;
-        }
-        // A host that knows the page holds this original leaves it out of the answer.
-        const original = result.original != null
-          ? imageBlob(result.original, result.previewType)
-          : lastOriginal?.key === result.originalKey
-            ? lastOriginal.blob
-            : null;
-        if (!original) throw new Error("The native host sent no original picture.");
-        if (result.originalKey) lastOriginal = { key: result.originalKey, blob: original };
-        if (lifecycle.signal.aborted || request.stale?.()) {
-          resolve(null);
-          continue;
-        }
-        resolve({
-          ...result,
-          preview: undefined,
-          blob: imageBlob(result.preview, result.previewType),
-          original,
-          viewport: request.viewport,
-          sceneRequest: nativeRequest,
-        });
-      } catch (error) {
-        if (lifecycle.signal.aborted || request.stale?.()) resolve(null);
-        else reject(error);
-      } finally {
-        developing = null;
-      }
+      resolve({
+        ...result,
+        preview: undefined,
+        blob: imageBlob(result.preview, result.previewType),
+        original,
+        viewport: request.viewport,
+        sceneRequest: nativeRequest,
+      });
+    } catch (error) {
+      if (lifecycle.signal.aborted || request.stale?.()) resolve(null);
+      else reject(error);
+    } finally {
+      developing.delete(entry);
+      drain();
     }
-    running = false;
   }
   return {
     render(request) {
       return new Promise((resolve, reject) => {
         pending.push({ request, resolve, reject });
-        if (developing?.request.stale?.()) developing.controller.abort();
+        for (const entry of developing)
+          if (entry.request.stale?.()) entry.controller.abort();
         drain();
       });
     },

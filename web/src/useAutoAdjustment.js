@@ -1,5 +1,5 @@
 import { useBackend } from "./backend/BackendContext.jsx";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AutoAdjustmentController } from "./auto-adjustment.js";
 import { historyReducer } from "./editor-state.js";
 
@@ -61,10 +61,9 @@ export function useAutoAdjustment({
     owner.current.changed(action, before, after);
   }, []);
   const toggle = useCallback(() => owner.current.toggle(), []);
-  return {
-    ...state,
-    toggle,
-    dispatch: editDispatch,
-    available: !!image && !image.video && !!session && !disabled,
-  };
+  const available = !!image && !image.video && !!session && !disabled;
+  return useMemo(
+    () => ({ ...state, toggle, dispatch: editDispatch, available }),
+    [state, toggle, editDispatch, available],
+  );
 }

@@ -7,7 +7,7 @@ import { evenSize, videoDimensions } from "../video-settings.js";
 import { colorSpaceLabel } from "../canvas-color.js";
 import { Button } from "@react-spectrum/s2/Button";
 import { Switch } from "@react-spectrum/s2/Switch";
-import { useEditor } from "./EditorContext.jsx";
+import { useEditor, useEditorFrame } from "./EditorContext.jsx";
 import { METADATA_LABELS, useExportOptions } from "./useExportOptions.js";
 import { exportSizeOptions, resolutionLimitWarning } from "../export-sizes.js";
 import { setAppSetting, useAppSetting } from "../app-settings.js";
@@ -56,7 +56,6 @@ export default function ExportDialog() {
     height,
     exportEdge,
     exportSourceSize,
-    status,
     videoExportController,
     exportClip,
     exportImage,
@@ -66,6 +65,7 @@ export default function ExportDialog() {
     setExportHDR,
     stockId,
   } = useEditor();
+  const { status } = useEditorFrame();
   const video = !!active?.image.video;
   const originalAvailable =
     !video && !!backend.exportOriginal && !!active?.image.original;

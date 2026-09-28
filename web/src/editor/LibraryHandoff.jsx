@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { useEditor } from "./EditorContext.jsx";
+import { useEditor, useEditorFrame } from "./EditorContext.jsx";
 
 const EASE = [0.2, 0.8, 0.2, 1];
 
@@ -29,9 +29,9 @@ export default function LibraryHandoff() {
     libraryHandoff: handoff,
     endLibraryHandoff,
     active,
-    shownResult,
     visibleError,
   } = useEditor();
+  const { shownResult } = useEditorFrame();
   const [target, setTarget] = useState(null),
     [landed, setLanded] = useState(false);
   useEffect(() => {

@@ -1,20 +1,17 @@
 import { ActionButton } from "@react-spectrum/s2/ActionButton";
 import { Icon } from "../icons.jsx";
 import { Text } from "@react-spectrum/s2/Text";
-import { useEditor } from "./EditorContext.jsx";
+import { useEditor, useEditorFrame } from "./EditorContext.jsx";
 export default function ViewerStatus() {
   const {
     active,
     auto,
-    status,
-    shownResult,
-    previewKey,
     error,
-    interacting,
     compare,
     setCompare,
     detailBackend,
   } = useEditor();
+  const { shownResult, status, previewKey, interacting } = useEditorFrame();
   return (
     <div className="viewer-status">
       <span className="document-name">{active?.name || "No photo open"}</span>

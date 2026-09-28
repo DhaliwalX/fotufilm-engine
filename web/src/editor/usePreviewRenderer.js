@@ -54,7 +54,7 @@ export default function usePreviewRenderer({
           (currentPreview.current.previewInteracting ||
             currentPreview.current.key !== previewKey)),
     };
-    const frame = requestAnimationFrame(() => {
+    const submit = () => {
       const stock = stocks.find((item) => item.id === previewEdit.stock);
       const queued = {
         fileId: active.id,
@@ -79,6 +79,7 @@ export default function usePreviewRenderer({
               onProgress,
             }),
           label,
+          { pipelined: !!active.image.video && previewInteracting },
         )
         .then((next) => {
           if (
@@ -123,7 +124,19 @@ export default function usePreviewRenderer({
             if (!previewQueue.current.running) setStatus(null);
           }
         });
-    });
+    };
+    // A playing movie asks for its frame at once: waiting for the next display frame as well as
+    // the clock's would leave every other frame undeveloped.
+    if (active.image.video && previewInteracting) {
+      let cancelled = false;
+      queueMicrotask(() => {
+        if (!cancelled) submit();
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    const frame = requestAnimationFrame(submit);
     return () => cancelAnimationFrame(frame);
   }, [
     active,

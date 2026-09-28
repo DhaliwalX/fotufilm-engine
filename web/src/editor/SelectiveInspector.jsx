@@ -1,5 +1,5 @@
 import SelectiveControls from "../SelectiveControls.jsx";
-import { useEditor } from "./EditorContext.jsx";
+import { useEditor, useEditorFrame } from "./EditorContext.jsx";
 export default function SelectiveInspector() {
   const {
     exporting,
@@ -11,8 +11,8 @@ export default function SelectiveInspector() {
     setSampling,
     showMask,
     setShowMask,
-    shownResult,
   } = useEditor();
+  const { shownResult } = useEditorFrame();
   return (
     <SelectiveControls
       disabled={exporting || !active}
