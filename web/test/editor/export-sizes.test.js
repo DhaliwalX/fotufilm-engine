@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { exportMaxEdge, exportSizeOptions } from "../../src/export-sizes.js";
+import { exportBasis, exportMaxEdge, exportPixels, exportSizeOptions } from "../../src/export-sizes.js";
 
 test("a photo offers the Mac app's Large, Medium and Small, then the long edges", () => {
   const options = exportSizeOptions(6000, 4000);
@@ -26,4 +26,19 @@ test("an export size becomes the long edge it asks for", () => {
   assert.equal(exportMaxEdge("full", 6000, 4000), Infinity);
   assert.equal(exportMaxEdge("0.5", 6000, 4000), 3000);
   assert.equal(exportMaxEdge("2048", 6000, 4000), 2048);
+});
+
+test("a backend measuring the crop sizes the cropped picture, rounding outward", () => {
+  const crop = { width: 1800, height: 2248 };
+  const options = exportSizeOptions(3000, 4496, false, crop, true);
+  assert.deepEqual(options.map(({ id }) => id), ["full", "0.75", "0.5", "2048", "1600"]);
+  assert.equal(options[0].detail, "1800 × 2248");
+  assert.equal(options.find(({ id }) => id === "1600").detail, "1282 × 1600");
+  assert.equal(exportMaxEdge("0.5", ...exportBasis(3000, 4496, crop, true)), 1124);
+  // 2848 x 512/4288 is 340.06: Core Image delivers 341 rows, as the host does.
+  assert.deepEqual(exportPixels(512, 4288, 2848, { width: 4288, height: 2848 }, true),
+    { width: 512, height: 341 });
+  // Within half a pixel of the picture is the picture.
+  assert.deepEqual(exportPixels(2248, 3000, 4496, { width: 1800, height: 2248.3 }, true),
+    { width: 1800, height: 2248.3 });
 });

@@ -40,6 +40,9 @@ public final class HostImage {
     /// video, a converted scan).
     var decodeStandardRange: (() throws -> HostImage)?
     private var standardRangeImage: HostImage?
+    /// Decodes the file again no larger than needed for a long edge (twice it, for a RAW's
+    /// demosaic), as the Mac app decodes an uncropped preview; nil where it reduces the full decode.
+    var decodeReduced: ((_ longEdge: Int) throws -> (rgba: [Float], width: Int, height: Int))?
     private let lock = NSLock()
     /// The most recent reductions, newest last: an editor asks for one or two sizes at a time.
     private var reductions: [(width: Int, height: Int, rgba: [Float])] = []
@@ -120,8 +123,15 @@ public final class HostImage {
         if let cached = reductions.first(where: { $0.width == targetWidth && $0.height == targetHeight }) {
             return cached.rgba
         }
-        let reduced = AreaResample.reduce(scene, width: width, height: height,
-                                          to: targetWidth, targetHeight)
+        let source = (try? decodeReduced?(max(targetWidth, targetHeight)))
+            ?? (scene, width, height)
+        let reduced = source.width == targetWidth && source.height == targetHeight
+            ? source.rgba
+            : HostPlatform.current.resampler?.reduce(
+                source.rgba, width: source.width, height: source.height,
+                to: targetWidth, targetHeight)
+            ?? AreaResample.reduce(source.rgba, width: source.width, height: source.height,
+                                   to: targetWidth, targetHeight)
         reductions.append((targetWidth, targetHeight, reduced))
         if reductions.count > 2 { reductions.removeFirst() }
         return reduced

@@ -17,7 +17,12 @@ struct CoreImageDecoder: HostImageDecoder {
         image.captureMetadata = HostCaptureMetadata.read(url)
         image.sensorFrame = SensorFrame.read(url: url)
         image.isRAW = RawDecode.isRaw(url: url)
-        if !image.isRAW {
+        if image.isRAW {
+            image.decodeReduced = { longEdge in
+                let scene = try SceneImage.decode(url: url, targetLongEdge: longEdge)
+                return (scene.rgba, scene.width, scene.height)
+            }
+        } else {
             image.decodeStandardRange = {
                 let scene = try SceneImage.decode(url: url, standardRange: true)
                 return HostImage(rgba: scene.rgba, width: scene.width, height: scene.height,

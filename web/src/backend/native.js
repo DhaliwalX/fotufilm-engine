@@ -31,6 +31,8 @@ export function createNativeBackend(host) {
   // Optional: Video Quality, whether its movie exports develop Full or Fast (`videoProcessing`).
   if (host.videoProcessing === true) backend.videoProcessing = true;
   if (host.negativeContrast === true) backend.negativeContrast = true;
+  // Optional: `maxEdge` bounds the cropped picture's long edge rather than the whole picture's.
+  if (host.longEdgeOfCrop === true) backend.longEdgeOfCrop = true;
   if (host.subjectSelection === true) backend.subjectSelection = true;
   if (host.exportImageCancels === true) backend.exportImageCancels = true;
   // Optional: the host draws the photograph itself beneath the page; renders asked to `present`

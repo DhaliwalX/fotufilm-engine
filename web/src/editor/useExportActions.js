@@ -1,4 +1,5 @@
-import { exportMaxEdge } from "../export-sizes.js";
+import { exportBasis, exportMaxEdge } from "../export-sizes.js";
+import { outputSize } from "../geometry.js";
 import { cleanName } from "./file-download.js";
 import { appSetting, setAppSetting } from "../app-settings.js";
 export default function useExportActions({
@@ -24,10 +25,13 @@ export default function useExportActions({
   exportMetadata,
   exportHDR,
 }) {
-  // The picture's upright size, which a fractional export size is a fraction of.
-  const upright = () => {
+  // The long edge an export size asks for, of the picture this backend measures: the upright
+  // one, or its crop.
+  const maxEdge = () => {
     const { naturalWidth: w = 0, naturalHeight: h = 0 } = active?.image ?? {};
-    return edit.rotation % 2 ? [h, w] : [w, h];
+    const [width, height] = edit.rotation % 2 ? [h, w] : [w, h];
+    return exportMaxEdge(exportSize, ...exportBasis(width, height,
+      outputSize(edit.crop, width, height), backend.longEdgeOfCrop === true));
   };
   async function exportClip() {
     if (!active?.image.video || !session || exporting) return;
@@ -51,7 +55,7 @@ export default function useExportActions({
         quality: videoQuality,
         bitrate: appSetting("videoBitrate"),
         videoProcessing: appSetting("videoProcessing"),
-        maxEdge: exportMaxEdge(exportSize, ...upright()),
+        maxEdge: maxEdge(),
         hdr: appSetting("videoHDR") === true,
         signal: controller.signal,
         onProgress: ({ progress, frames, finalizing }) =>
@@ -113,7 +117,7 @@ export default function useExportActions({
         image: active.image,
         edit,
         stock: stockId,
-        maxEdge: exportMaxEdge(exportSize, ...upright()),
+        maxEdge: maxEdge(),
         type: exportType,
         quality: quality / 100,
         metadata: exportMetadata,

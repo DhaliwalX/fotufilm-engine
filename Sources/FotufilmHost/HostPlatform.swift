@@ -16,6 +16,9 @@ import FotufilmImaging
 struct HostPlatform {
     /// Turns a photograph file into scene-linear light.
     var decoder: HostImageDecoder?
+    /// Reduces a photograph to a preview or export size as the platform's own editor does;
+    /// without it the portable box filter (`AreaResample`) reduces.
+    var resampler: HostResampler?
     /// Writes stills to files.
     var encoder: HostStillEncoder?
     /// Copy Photo.
@@ -109,6 +112,14 @@ protocol HostScanDecoder {
     func decodeScan(_ url: URL, linearSamples: Bool) throws -> HostScanFile
     /// The unevenness of the light a photograph of the bare light source shows.
     func measureLight(_ url: URL) throws -> NegativeLightFrame
+}
+
+/// Reduces scene-linear RGBA.
+protocol HostResampler {
+    /// Interleaved RGBA at exactly `targetWidth` x `targetHeight`, or nil to leave it to the
+    /// portable reduction.
+    func reduce(_ rgba: [Float], width: Int, height: Int,
+                to targetWidth: Int, _ targetHeight: Int) -> [Float]?
 }
 
 /// Finds the subjects standing in front of a picture.

@@ -66,20 +66,46 @@ struct SceneGeometry: Decodable, Equatable {
     }
 
     /// The oriented frame at `maxEdge` (0 or nil: full size) and the delivered size after the crop.
+    /// An upright rectangular crop moved out to whole pixels of the oriented frame, as the Mac app
+    /// cuts one (`CGRect.integral`); any other crop is sampled as drawn.
+    func snapped(width: Int, height: Int) -> SceneGeometry {
+        let (left, top, right, bottom) = (crop[0][0], crop[0][1], crop[2][0], crop[2][1])
+        guard crop != Self.fullCrop, !straightenActive, !perspectiveActive,
+              crop[1] == [right, top], crop[3] == [left, bottom], left < right, top < bottom
+        else { return self }
+        let (w, h) = rotation % 2 == 0 ? (Double(width), Double(height))
+                                       : (Double(height), Double(width))
+        func outward(_ low: Double, _ high: Double, _ size: Double) -> (Double, Double) {
+            (max(0, (low * size + 1e-6).rounded(.down)) / size,
+             min(size, (high * size - 1e-6).rounded(.up)) / size)
+        }
+        let (x0, x1) = outward(left, right, w), (y0, y1) = outward(top, bottom, h)
+        var copy = self
+        copy.crop = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+        return copy
+    }
+
+    /// `maxEdge` bounds the delivered picture's long edge, as the Mac app's `FilmRender` reduces
+    /// after the crop: a cropped photograph previews and exports as large as an uncropped one.
+    /// A reduced size rounds outward, as Core Image's resampled extents do, and a limit within
+    /// half a pixel of the picture leaves it at its own size.
     func sizes(width: Int, height: Int, maxEdge: Int?) -> (frame: (Int, Int), output: (Int, Int)) {
         let swapped = rotation % 2 != 0
         let orientedWidth = swapped ? height : width, orientedHeight = swapped ? width : height
-        let limit = Double(maxEdge ?? 0) > 0 ? Double(maxEdge!) : .infinity
-        let scale = min(1, limit / Double(max(orientedWidth, orientedHeight)))
-        let frame = (max(1, Int((Double(orientedWidth) * scale).rounded())),
-                     max(1, Int((Double(orientedHeight) * scale).rounded())))
         func distance(_ a: [Double], _ b: [Double]) -> Double {
-            hypot((a[0] - b[0]) * Double(frame.0), (a[1] - b[1]) * Double(frame.1))
+            hypot((a[0] - b[0]) * Double(orientedWidth), (a[1] - b[1]) * Double(orientedHeight))
         }
-        let output = (
-            max(1, Int(((distance(crop[0], crop[1]) + distance(crop[3], crop[2])) / 2).rounded())),
-            max(1, Int(((distance(crop[0], crop[3]) + distance(crop[1], crop[2])) / 2).rounded())))
-        return (frame, output)
+        let cropped = ((distance(crop[0], crop[1]) + distance(crop[3], crop[2])) / 2,
+                       (distance(crop[0], crop[3]) + distance(crop[1], crop[2])) / 2)
+        let longest = max(cropped.0, cropped.1)
+        guard let limit = maxEdge, limit > 0, Double(limit) < longest - 0.5 else {
+            return ((orientedWidth, orientedHeight),
+                    (max(1, Int(cropped.0.rounded())), max(1, Int(cropped.1.rounded()))))
+        }
+        let scale = Double(limit) / longest
+        func outward(_ length: Double) -> Int { max(1, Int((length * scale - 1e-6).rounded(.up))) }
+        return ((outward(Double(orientedWidth)), outward(Double(orientedHeight))),
+                (outward(cropped.0), outward(cropped.1)))
     }
 
     /// Physical film coverage, before preview dimensions are rounded to whole pixels.

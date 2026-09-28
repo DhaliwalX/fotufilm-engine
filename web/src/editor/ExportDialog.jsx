@@ -3,13 +3,13 @@ import { Dialog, Heading, Content } from "@react-spectrum/s2/Dialog";
 import { PickerItem, Picker } from "@react-spectrum/s2/Picker";
 import { Adjustment } from "../Adjustment.jsx";
 import { VIDEO_LABELS } from "../generated/controls.js";
-import { videoDimensions } from "../video-settings.js";
+import { evenSize, videoDimensions } from "../video-settings.js";
 import { colorSpaceLabel } from "../canvas-color.js";
 import { Button } from "@react-spectrum/s2/Button";
 import { Switch } from "@react-spectrum/s2/Switch";
 import { useEditor } from "./EditorContext.jsx";
 import { METADATA_LABELS, useExportOptions } from "./useExportOptions.js";
-import { exportMaxEdge, exportSizeOptions } from "../export-sizes.js";
+import { exportSizeOptions } from "../export-sizes.js";
 import { setAppSetting, useAppSetting } from "../app-settings.js";
 
 const IMAGE_TYPES = [
@@ -54,7 +54,8 @@ export default function ExportDialog() {
     cropSize,
     width,
     height,
-    exportScale,
+    exportEdge,
+    exportSourceSize,
     status,
     videoExportController,
     exportClip,
@@ -75,7 +76,15 @@ export default function ExportDialog() {
     if (exportType === ORIGINAL && !originalAvailable && !video)
       setExportType((backend.imageExportTypes ?? IMAGE_TYPES)[0].id);
   }, [exportType, originalAvailable, video, backend, setExportType]);
-  const sizes = exportSizeOptions(width, height, video, cropSize);
+  // A native backend measures a size's long edge on the cropped picture, as the Mac app does.
+  const ofCrop = backend.longEdgeOfCrop === true;
+  const sizes = exportSizeOptions(width, height, video, cropSize, ofCrop);
+  // What the chosen size delivers: a movie in whole pairs of pixels, a still with its frame.
+  const delivered = video
+    ? ofCrop
+      ? evenSize(exportSourceSize)
+      : videoDimensions(active.image, edit, exportEdge)
+    : (framedSize.plan?.placement.size ?? exportSourceSize);
   // The settings of the last export of this kind, offered back as the Mac app offers them.
   const last = useAppSetting(video ? "lastVideoExport" : "lastPhotoExport");
   const videoHDR = useAppSetting("videoHDR") === true;
@@ -287,23 +296,7 @@ export default function ExportDialog() {
             </div>
           )}
           <p className="export-detail">
-            {active?.image.video
-              ? videoDimensions(
-                  active.image,
-                  edit,
-                  exportMaxEdge(exportSize, width, height),
-                ).width
-              : (framedSize.plan?.placement.size.width ??
-                Math.max(1, Math.round(cropSize.width * exportScale)))}{" "}
-            ×{" "}
-            {active?.image.video
-              ? videoDimensions(
-                  active.image,
-                  edit,
-                  exportMaxEdge(exportSize, width, height),
-                ).height
-              : (framedSize.plan?.placement.size.height ??
-                Math.max(1, Math.round(cropSize.height * exportScale)))}{" "}
+            {delivered.width} × {delivered.height}{" "}
             pixels ·{" "}
             {colorSpaceLabel(
               active?.image.video

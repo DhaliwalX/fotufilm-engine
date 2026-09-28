@@ -1,7 +1,8 @@
 import { outputSize } from "../geometry.js";
 import { usePrintFrame } from "../usePrintFrame.js";
-import { exportMaxEdge } from "../export-sizes.js";
+import { exportBasis, exportMaxEdge, exportPixels } from "../export-sizes.js";
 export default function useOutputState({
+  backend,
   stocks,
   search,
   active,
@@ -22,15 +23,17 @@ export default function useOutputState({
   const width = edit.rotation % 2 ? rawHeight : rawWidth,
     height = edit.rotation % 2 ? rawWidth : rawHeight;
   const cropSize = outputSize(edit.crop, width, height);
-  const exportScale = Math.min(
-    1,
-    exportMaxEdge(exportSize, width, height) / Math.max(width, height),
-  );
-  const exportSourceSize = outputSize(
-    edit.crop,
-    Math.max(1, Math.round(width * exportScale)),
-    Math.max(1, Math.round(height * exportScale)),
-  );
+  // A native backend measures an export's long edge on the cropped picture, as the Mac app does.
+  const ofCrop = backend?.longEdgeOfCrop === true;
+  const exportEdge = exportMaxEdge(exportSize, ...exportBasis(width, height, cropSize, ofCrop));
+  const exportScale = Math.min(1, exportEdge / Math.max(width, height));
+  const exportSourceSize = ofCrop
+    ? exportPixels(exportEdge, width, height, cropSize, true)
+    : outputSize(
+        edit.crop,
+        Math.max(1, Math.round(width * exportScale)),
+        Math.max(1, Math.round(height * exportScale)),
+      );
   const framedSize = usePrintFrame(
     edit,
     exportSourceSize.width,
@@ -48,7 +51,7 @@ export default function useOutputState({
     width,
     height,
     cropSize,
-    exportScale,
+    exportEdge,
     exportSourceSize,
     framedSize,
     shownResult,

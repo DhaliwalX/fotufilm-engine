@@ -339,19 +339,15 @@ public final class HostService {
         let opened = try self.image(request.handle)
         opened.video?.select(params)
         let image = try opened.interpreted(standardRange: decoded.readsStandardRange)
-        let geometry = request.cropMode == true ? request.edit.uncropped() : request.edit
+        let geometry = (request.cropMode == true ? request.edit.uncropped() : request.edit)
+            .snapped(width: image.width, height: image.height)
         // A viewport asks for part of a larger virtual picture: develop the whole frame at that
         // size, bounded by the photograph's own pixels, and cut the region out of it.
         var maxEdge = request.maxEdge
         let full = geometry.sizes(width: image.width, height: image.height, maxEdge: nil)
-        if let viewport = request.viewport {
-            let ratio = Double(max(viewport.width, viewport.height))
-                / Double(max(full.output.0, full.output.1))
-            maxEdge = ratio >= 1 ? nil
-                : max(1, Int((Double(max(full.frame.0, full.frame.1)) * ratio).rounded()))
-        }
-        // A limit at or past the photograph's own size is no limit, and keys the same develop.
-        if let limit = maxEdge, limit <= 0 || limit >= max(full.frame.0, full.frame.1) { maxEdge = nil }
+        if let viewport = request.viewport { maxEdge = max(viewport.width, viewport.height) }
+        // A limit at or past the picture's own size is no limit, and keys the same develop.
+        if let limit = maxEdge, limit <= 0 || limit >= max(full.output.0, full.output.1) { maxEdge = nil }
         let sizes = geometry.sizes(width: image.width, height: image.height, maxEdge: maxEdge)
         var prepared = Prepared(request: request, edit: decoded, image: image, geometry: geometry,
                                 maxEdge: maxEdge, sizes: sizes)
@@ -951,20 +947,34 @@ public final class HostService {
                           sizes: (frame: (Int, Int), output: (Int, Int))) throws -> [Float] {
         let key = "\(ObjectIdentifier(image))|\(image.frameKey)|\(geometry)|\(sizes.frame)|\(sizes.output)"
         if let sceneCache, sceneCache.key == key { return sceneCache.scene }
-        // Reduce the unrotated photograph to the frame's scale first, so the one bilinear
-        // resample never skips pixels.
         let swapped = geometry.rotation % 2 != 0
-        let frameWidth = swapped ? sizes.frame.1 : sizes.frame.0
-        let frameHeight = swapped ? sizes.frame.0 : sizes.frame.1
-        let reduced = image.scene(width: frameWidth, height: frameHeight)
+        let oriented = swapped ? (image.height, image.width) : (image.width, image.height)
         let table = try geometry.lens.map { try lensPlan(image, $0) }
             .flatMap { $0.identity ? nil : $0.table }
-        let scene = geometry.isIdentity && (frameWidth, frameHeight) == sizes.output
-            ? reduced
-            : geometry.apply(reduced, width: frameWidth, height: frameHeight,
-                             orientedSize: (swapped ? image.height : image.width,
-                                            swapped ? image.width : image.height),
-                             output: sizes.output, lensTable: table)
+        let scene: [Float]
+        if geometry.crop != SceneGeometry.fullCrop, sizes.frame != oriented {
+            // A crop is cut from the whole photograph and then reduced, as the Mac app cuts it.
+            let native = geometry.sizes(width: image.width, height: image.height, maxEdge: nil)
+            let cut = geometry.apply(image.scene(width: image.width, height: image.height),
+                                     width: image.width, height: image.height,
+                                     orientedSize: oriented, output: native.output,
+                                     lensTable: table)
+            let (width, height) = native.output
+            scene = HostPlatform.current.resampler?.reduce(
+                cut, width: width, height: height, to: sizes.output.0, sizes.output.1)
+                ?? AreaResample.reduce(cut, width: width, height: height,
+                                       to: sizes.output.0, sizes.output.1)
+        } else {
+            // Otherwise the unrotated photograph is reduced to the frame's scale first, as the
+            // Mac app decodes it, so the one bilinear resample never skips pixels.
+            let frameWidth = swapped ? sizes.frame.1 : sizes.frame.0
+            let frameHeight = swapped ? sizes.frame.0 : sizes.frame.1
+            let reduced = image.scene(width: frameWidth, height: frameHeight)
+            scene = geometry.isIdentity && (frameWidth, frameHeight) == sizes.output
+                ? reduced
+                : geometry.apply(reduced, width: frameWidth, height: frameHeight,
+                                 orientedSize: oriented, output: sizes.output, lensTable: table)
+        }
         sceneCache = (key, scene)
         return scene
     }

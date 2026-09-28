@@ -60,7 +60,10 @@ public struct SceneImage {
     /// interpretation does (`FilmSourceInterpretation.standardRange`): the platform's SDR
     /// rendition, with nothing above diffuse white for the film to meter. Camera RAW always keeps
     /// its scene-linear latitude.
-    public static func decode(url: URL, standardRange: Bool = false) throws -> SceneImage {
+    /// `targetLongEdge` demosaics a RAW no larger than needed for that size (`RawDecode`), as
+    /// the Mac app's previews do; other files decode whole.
+    public static func decode(url: URL, standardRange: Bool = false,
+                              targetLongEdge: Int? = nil) throws -> SceneImage {
         let path = url.path
         let isRaw = RawDecode.isRaw(url: url)
         let toneMapped = standardRange && !isRaw
@@ -83,7 +86,7 @@ public struct SceneImage {
                 sceneChromaticity = xy
             }
             sceneKelvin = raw.neutralTemperature > 0 ? raw.neutralTemperature : nil
-            RawDecode.configure(raw, recipe: RawDecode.Recipe())
+            RawDecode.configure(raw, recipe: RawDecode.Recipe(targetLongEdge: targetLongEdge))
             profileCorrection = CameraProfileCorrection.resolve(
                 camera: RawDecode.cameraIdentity(url: url),
                 sceneKelvin: sceneKelvin)

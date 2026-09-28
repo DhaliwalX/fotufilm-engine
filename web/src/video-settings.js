@@ -16,7 +16,10 @@ export function videoDimensions(image, edit, maxEdge) {
     Math.round(width * scale),
     Math.round(height * scale),
   )
-  // 4:2:0 codecs require even dimensions. Pad at most one pixel, never change aspect ratio.
+  return evenSize(size)
+}
+// 4:2:0 codecs require even dimensions. Pad at most one pixel, never change aspect ratio.
+export function evenSize(size) {
   return {
     width: Math.max(2, Math.ceil(size.width / 2) * 2),
     height: Math.max(2, Math.ceil(size.height / 2) * 2),

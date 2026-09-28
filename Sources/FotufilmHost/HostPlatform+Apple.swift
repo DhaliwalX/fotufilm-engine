@@ -11,6 +11,7 @@ extension HostPlatform {
     static var apple: HostPlatform {
         var platform = HostPlatform(decoder: CoreImageDecoder(), encoder: ImageIOStillEncoder())
         platform.scans = CoreImageScanDecoder()
+        platform.resampler = CoreImageResampler()
         #if canImport(AppKit)
         platform.clipboard = PasteboardClipboard()
         #endif

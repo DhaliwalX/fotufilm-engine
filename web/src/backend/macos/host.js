@@ -112,6 +112,9 @@ export function createMacBackend(channel) {
     analyseNegative: (image, monochrome) =>
       call("analyseNegative", { handle: image.handle, monochrome }),
     negativeContrast: can.negativeContrast === true,
+    // Every `maxEdge` is the long edge of the cropped picture, as the Mac app sizes previews and
+    // exports.
+    longEdgeOfCrop: true,
     // The negative-scan session: film and automatic readings printed by the engine.
     negativeScans: can.negativeScans
       ? createNegativeScans(call, {
