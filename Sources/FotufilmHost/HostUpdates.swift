@@ -29,7 +29,6 @@ final class HostUpdates {
     private var state: [String: Any] = ["state": "idle"]
     private var manifest: UpdateManifest?
     private var task: URLSessionTask?
-    private var observation: NSKeyValueObservation?
 
     init(channel: HostUpdateChannel, digest: HostFileDigest) {
         self.channel = channel
@@ -46,6 +45,12 @@ final class HostUpdates {
         defer { lock.unlock() }
         var answer = state
         answer["current"] = currentRelease
+        // A download's progress is read as it is asked for.
+        if answer["state"] as? String == "downloading", let task,
+           task.countOfBytesExpectedToReceive > 0 {
+            answer["bytes"] = task.countOfBytesReceived
+            answer["total"] = task.countOfBytesExpectedToReceive
+        }
         return answer
     }
 
@@ -139,15 +144,6 @@ final class HostUpdates {
                 set(["state": "downloadFailed", "verify": true,
                      "message": error.localizedDescription])
             }
-        }
-        observation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
-            guard let self, progress.totalUnitCount > 0 else { return }
-            lock.lock()
-            if state["state"] as? String == "downloading" {
-                state["bytes"] = task.countOfBytesReceived
-                state["total"] = task.countOfBytesExpectedToReceive
-            }
-            lock.unlock()
         }
         lock.lock()
         self.task = task

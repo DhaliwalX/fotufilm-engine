@@ -23,12 +23,14 @@ enum StoredPNG {
         var i = start
         table.withUnsafeBufferPointer { t in
             while i + 8 <= end {
-                let a = crc ^ (UInt32(bytes[i]) | UInt32(bytes[i + 1]) << 8
-                               | UInt32(bytes[i + 2]) << 16 | UInt32(bytes[i + 3]) << 24)
-                crc = t[1792 + Int(a & 255)] ^ t[1536 + Int((a >> 8) & 255)]
+                let low: UInt32 = UInt32(bytes[i]) | UInt32(bytes[i + 1]) << 8
+                let high: UInt32 = UInt32(bytes[i + 2]) << 16 | UInt32(bytes[i + 3]) << 24
+                let a: UInt32 = crc ^ (low | high)
+                let first: UInt32 = t[1792 + Int(a & 255)] ^ t[1536 + Int((a >> 8) & 255)]
                     ^ t[1280 + Int((a >> 16) & 255)] ^ t[1024 + Int(a >> 24)]
-                    ^ t[768 + Int(bytes[i + 4])] ^ t[512 + Int(bytes[i + 5])]
+                let second: UInt32 = t[768 + Int(bytes[i + 4])] ^ t[512 + Int(bytes[i + 5])]
                     ^ t[256 + Int(bytes[i + 6])] ^ t[Int(bytes[i + 7])]
+                crc = first ^ second
                 i += 8
             }
             while i < end {
