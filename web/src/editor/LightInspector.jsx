@@ -1,4 +1,5 @@
 import AdjustmentGroup from "./AdjustmentGroup.jsx";
+import { WithHelp, controlDetail, controlHelp } from "./ControlHelp.jsx";
 import GradeDeck from "./GradeDeck.jsx";
 import {
   Disclosure,
@@ -23,18 +24,20 @@ export default function LightInspector() {
         <DisclosurePanel>
           <div className="control-stack">
             {<AdjustmentGroup group={"Light"} />}
-            <Switch
-              isSelected={edit.localTone}
-              onChange={(value) =>
-                patch({
-                  localTone: value,
-                })
-              }
-              isDisabled={exporting || !active}
-              size="S"
-            >
-              {"Regional"}
-            </Switch>
+            <WithHelp label="Regional" detail={controlDetail("localTone")}>
+              <Switch
+                isSelected={edit.localTone}
+                onChange={(value) =>
+                  patch({
+                    localTone: value,
+                  })
+                }
+                isDisabled={exporting || !active}
+                size="S"
+              >
+                {"Regional"}
+              </Switch>
+            </WithHelp>
           </div>
         </DisclosurePanel>
       </Disclosure>
@@ -49,6 +52,10 @@ export default function LightInspector() {
           <div className="control-stack">
             <Picker
               label={editorControl("sceneLight").title}
+              contextualHelp={controlHelp(
+                editorControl("sceneLight").title,
+                controlDetail("sceneLight"),
+              )}
               size="S"
               value={edit.sceneLight}
               onChange={(sceneLight) => {
@@ -125,18 +132,20 @@ export default function LightInspector() {
         <DisclosureTitle>{"Grade"}</DisclosureTitle>
         <DisclosurePanel>
           <GradeDeck>
-            <Switch
-              isSelected={edit.gradeSpace}
-              onChange={(value) =>
-                patch({
-                  gradeSpace: value,
-                })
-              }
-              isDisabled={exporting || !active}
-              size="S"
-            >
-              {"Encoded Grade"}
-            </Switch>
+            <WithHelp label="Encoded Grade" detail={controlDetail("gradeSpace")}>
+              <Switch
+                isSelected={edit.gradeSpace}
+                onChange={(value) =>
+                  patch({
+                    gradeSpace: value,
+                  })
+                }
+                isDisabled={exporting || !active}
+                size="S"
+              >
+                {"Encoded Grade"}
+              </Switch>
+            </WithHelp>
           </GradeDeck>
         </DisclosurePanel>
       </Disclosure>

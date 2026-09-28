@@ -65,6 +65,17 @@
     line-height: 1.6;
     margin-top: 20px;
   }
+  /* A control's help button after its name, as the Mac app's inspector rows carry one. */
+  .adjustment-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .control-with-help {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
   /* The grade deck, drawn as the Mac app's (SessionGradeDeck.swift). */
   .grade-deck {
     display: flex;

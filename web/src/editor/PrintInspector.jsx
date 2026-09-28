@@ -1,4 +1,5 @@
 import ProfileFields from "./ProfileFields.jsx";
+import { controlDetail, controlHelp } from "./ControlHelp.jsx";
 import {
   Disclosure,
   DisclosureTitle,
@@ -98,6 +99,10 @@ export default function PrintInspector() {
                 ?.screenConversions && (
                 <Picker
                   label={SCREEN_CONVERSION.title}
+                  contextualHelp={controlHelp(
+                    SCREEN_CONVERSION.title,
+                    controlDetail("digitalReference"),
+                  )}
                   size="S"
                   isDisabled={
                     exporting || !active || edit.halationModel === "layered"

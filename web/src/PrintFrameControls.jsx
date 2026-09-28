@@ -1,3 +1,4 @@
+import { controlHelp } from "./editor/ControlHelp.jsx";
 import {
   Disclosure,
   DisclosureTitle,
@@ -33,6 +34,7 @@ export default function PrintFrameControls({
         <div className="control-stack">
           <Picker
             label={control.title}
+            contextualHelp={controlHelp(control.title, control.detail)}
             size="S"
             value={value}
             isDisabled={disabled || pending || !!error}

@@ -3,6 +3,7 @@ import { Picker, PickerItem } from "@react-spectrum/s2/Picker";
 import { Switch } from "@react-spectrum/s2/Switch";
 import { ActionButton } from "@react-spectrum/s2/ActionButton";
 import { Adjustment } from "./Adjustment.jsx";
+import { WithHelp, controlHelp } from "./editor/ControlHelp.jsx";
 import { catalogueSlider } from "./editor-catalogue.js";
 import {
   PROFILE_CONTROLS,
@@ -48,24 +49,26 @@ export default function ProfileControls({
       );
     if (c.kind === "toggle")
       return (
-        <Switch
-          key={c.field}
-          isSelected={value}
-          isDisabled={inactive}
-          onChange={(next) => {
-            onEnd();
-            change(next);
-            onEnd();
-          }}
-        >
-          {c.title}
-        </Switch>
+        <WithHelp key={c.field} label={c.title} detail={c.detail}>
+          <Switch
+            isSelected={value}
+            isDisabled={inactive}
+            onChange={(next) => {
+              onEnd();
+              change(next);
+              onEnd();
+            }}
+          >
+            {c.title}
+          </Switch>
+        </WithHelp>
       );
     if (c.kind === "chips")
       return (
         <Picker
           key={c.field}
           label={c.title}
+          contextualHelp={controlHelp(c.title, c.detail)}
           size="S"
           isDisabled={inactive}
           value={String(value)}
@@ -107,7 +110,7 @@ export default function ProfileControls({
       const stops = c.scale.stops;
       if (c.field === "push" && !stops.includes(value)) value = c.scale.neutral;
       return (
-        <div key={c.field} title={c.detail}>
+        <div key={c.field}>
           <Adjustment
             slider={slider}
             value={value * factor}
@@ -149,6 +152,7 @@ export default function ProfileControls({
       <Picker
         key={c.field}
         label={c.title}
+        contextualHelp={controlHelp(c.title, c.detail)}
         size="S"
         isDisabled={inactive}
         value={value}

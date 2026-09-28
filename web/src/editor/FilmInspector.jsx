@@ -1,4 +1,5 @@
 import ProfileFields from "./ProfileFields.jsx";
+import { controlDetail, controlHelp } from "./ControlHelp.jsx";
 import {
   Disclosure,
   DisclosureTitle,
@@ -116,6 +117,7 @@ export default function FilmInspector() {
             <div className="control-stack">
               <Picker
                 label="Halation Model"
+                contextualHelp={controlHelp("Halation Model", controlDetail("halationModel"))}
                 size="S"
                 value={edit.halationModel || "legacy"}
                 onChange={(halationModel) => {

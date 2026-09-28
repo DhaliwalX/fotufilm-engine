@@ -1,3 +1,4 @@
+import { WithHelp } from "./editor/ControlHelp.jsx";
 import {
   Disclosure,
   DisclosureTitle,
@@ -81,20 +82,25 @@ export default function LensControls({
       <DisclosureTitle>{"Lens"}</DisclosureTitle>
       <DisclosurePanel>
         <div className="control-stack">
-          <Switch
-            isSelected={lens.enabled}
-            isDisabled={disabled}
-            onChange={(enabled) => {
-              onEnd();
-              onChange({
-                ...lens,
-                enabled,
-              });
-              onEnd();
-            }}
+          <WithHelp
+            label={editorControl("lensCorrection").title}
+            detail={editorControl("lensCorrection").detail}
           >
-            {editorControl("lensCorrection").title}
-          </Switch>
+            <Switch
+              isSelected={lens.enabled}
+              isDisabled={disabled}
+              onChange={(enabled) => {
+                onEnd();
+                onChange({
+                  ...lens,
+                  enabled,
+                });
+                onEnd();
+              }}
+            >
+              {editorControl("lensCorrection").title}
+            </Switch>
+          </WithHelp>
           {lens.enabled && (
             <div className="motion-panel-enter lens-adjustments">
               {!!catalogue.profiles.length && (

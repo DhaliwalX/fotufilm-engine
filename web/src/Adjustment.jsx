@@ -3,6 +3,7 @@ import { Slider } from "@react-spectrum/s2/Slider";
 import { NumberField } from "@react-spectrum/s2/NumberField";
 import { SLIDERS } from "./editor-state.js";
 import { clamp } from "./color-controls.js";
+import { controlDetail, controlHelp } from "./editor/ControlHelp.jsx";
 export function Adjustment({
   slider,
   value,
@@ -19,7 +20,10 @@ export function Adjustment({
   return (
     <div className="adjustment">
       <div className="adjustment-label">
-        <span>{slider.label}</span>
+        <span className="adjustment-name">
+          {slider.label}
+          {controlHelp(accessibleLabel, slider.detail ?? controlDetail(slider.key))}
+        </span>
         <div className="number-field">
           <NumberField
             aria-label={`${accessibleLabel} value`}
