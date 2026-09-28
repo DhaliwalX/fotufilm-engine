@@ -31,6 +31,26 @@ resolve/build.sh --install
 The plugin is installed in `/Library/OFX/Plugins`. Restart Resolve, then find
 **Fotufilm** under **OpenFX**. You can also install it through the Fotufilm Mac app.
 
+### Linux (alpha)
+
+The Linux AppImage of Fotufilm Desktop carries the plugin. To install it where DaVinci Resolve
+looks for plugins, `/usr/OFX/Plugins`, run:
+
+```sh
+./Fotufilm-1.10-x86_64.AppImage --install-ofx-plugin
+```
+
+It asks for your password to write there. Restart Resolve afterwards. The plugin develops on
+NVIDIA GPUs through CUDA and on other GPUs through Vulkan. Resolve decodes and encodes the
+timeline's colour on the CPU. The Halation Model control has no effect on Linux yet.
+
+To build it from source instead, you need the same Halide build and packages as the Linux app
+(`cef/README.md`):
+
+```sh
+HALIDE_ROOT=… resolve/build-linux.sh --test --install
+```
+
 ## Use the plugin
 
 To add a pack, open the Fotufilm Mac app and choose **Load custom pack…**.

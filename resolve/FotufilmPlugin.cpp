@@ -604,10 +604,10 @@ void initializeEngine() {
     const std::string &resources = gResourcesPath;
 
     if (fotufilm_bridge_available() == 0) {
-        // The licence, or the pack, said something more specific already. Keep it: "no Metal
-        // device" sends a user who has not activated the app off to look at their hardware.
+        // The licence, or the pack, said something more specific already. Keep it: "no GPU"
+        // sends a user who has not activated the app off to look at their hardware.
         if (gInitializationError.empty()) {
-            gInitializationError = "no Metal device the Halide engine can use";
+            gInitializationError = "no GPU the Halide engine can use";
         }
         report("%s; renders will fail", gInitializationError.c_str());
     } else if (gStockLabels.empty()) {
@@ -2633,7 +2633,7 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
         // the node that made them.
         CopyState copyState{&source, scene, width, 0};
         forRows(0, height, copyRows, &copyState);
-    } else if (cameraInput < 0 && processWidth == width) {
+    } else if (cameraInput < 0 && processWidth == width && fotufilm_bridge_transforms_on_device()) {
         float devicePeak = 0;
         bool deviceRepaired = false;
         if (staged) {
@@ -2664,7 +2664,8 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
         // transcendentals are libm's rather than Metal's and the frame is a few parts in ten
         // million from the one the device would have made. Worth one message: a node that has
         // silently changed decoders is not the same node it was.
-        if (cameraInput < 0 && processWidth == width && !instance->warnedHostDecodeFallback) {
+        if (cameraInput < 0 && processWidth == width && fotufilm_bridge_transforms_on_device()
+            && !instance->warnedHostDecodeFallback) {
             instance->warnedHostDecodeFallback = true;
             char message[512] = "";
             fotufilm_bridge_last_error(instance->bridge, message, sizeof(message));

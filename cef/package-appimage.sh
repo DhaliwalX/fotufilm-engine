@@ -4,6 +4,9 @@
 # GPU (AMD, Intel), the CPU otherwise; FOTUFILM_GPU_DEVICE=cuda, vulkan or cpu chooses instead.
 #   cef/package-appimage.sh [output-directory]      default build/appimage
 #
+# The OFX plugin (resolve/build-linux.sh) rides along when it has been built, and
+# `Fotufilm.AppImage --install-ofx-plugin` puts it where DaVinci Resolve looks, /usr/OFX/Plugins.
+#
 # The image carries CEF, the engine and the image libraries the engine links that a desktop may
 # lack; the C and C++ runtimes, GTK, NSS and the graphics drivers are the system's.
 set -euo pipefail
@@ -24,6 +27,14 @@ mkdir -p "$LIB"
 # Chromium's setuid sandbox helper cannot work from an AppImage; the build runs without it.
 tar -C "$BUILD" --exclude=chrome-sandbox -cf - . | tar -C "$LIB" -xf -
 strip --strip-unneeded "$LIB/fotufilm" "$LIB/libcef.so" "$LIB/libvk_swiftshader.so"
+
+OFX="build/resolve/Fotufilm.ofx.bundle"
+if [[ -f "$OFX/Contents/Linux-x86-64/Fotufilm.ofx" ]]; then
+  mkdir -p "$LIB/ofx"
+  cp -R "$OFX" "$LIB/ofx/"
+else
+  echo "warning: no OFX plugin in $OFX (resolve/build-linux.sh); the image carries none" >&2
+fi
 
 # Libraries the engine links beyond the ones every desktop has, and libheif's decoders (HEVC and
 # AV1), which it loads as plug-ins. The executable's RPATH ($ORIGIN) reaches them for the engine
@@ -85,6 +96,27 @@ for system in /usr/lib/x86_64-linux-gnu/libheif/plugins /usr/lib64/libheif/plugi
   [ -d "$system" ] && LIBHEIF_PLUGIN_PATH="$LIBHEIF_PLUGIN_PATH:$system"
 done
 export LIBHEIF_PLUGIN_PATH
+
+# The OFX plugin into the folder Resolve reads. The image's mount is the user's alone, so the
+# bundle is copied out as the user first and only then, with root's rights, into place.
+if [ "$1" = "--install-ofx-plugin" ]; then
+  SOURCE="$HERE/usr/lib/fotufilm/ofx/Fotufilm.ofx.bundle"
+  TARGET="${FOTUFILM_OFX_DIR:-/usr/OFX/Plugins}"
+  [ -d "$SOURCE" ] || { echo "This Fotufilm carries no OFX plugin." >&2; exit 1; }
+  STAGE="$(mktemp -d)" && cp -R "$SOURCE" "$STAGE/" && chmod -R a+rX "$STAGE" || exit 1
+  INSTALL="mkdir -p '$TARGET' && rm -rf '$TARGET/Fotufilm.ofx.bundle' && cp -R '$STAGE/Fotufilm.ofx.bundle' '$TARGET/'"
+  if mkdir -p "$TARGET" 2>/dev/null && [ -w "$TARGET" ]; then
+    sh -c "$INSTALL"
+  elif [ -t 0 ]; then
+    sudo sh -c "$INSTALL"
+  else
+    pkexec sh -c "$INSTALL"
+  fi
+  STATUS=$?
+  rm -rf "$STAGE"
+  [ $STATUS -eq 0 ] && echo "Installed $TARGET/Fotufilm.ofx.bundle. Restart DaVinci Resolve to load it."
+  exit $STATUS
+fi
 exec "$HERE/usr/lib/fotufilm/fotufilm" "$@"
 APPRUN
 chmod +x "$APPDIR/AppRun"
