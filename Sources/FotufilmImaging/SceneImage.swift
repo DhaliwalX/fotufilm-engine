@@ -124,7 +124,7 @@ public struct SceneImage {
             // HLG/PQ container stands for — when a declaring file decodes to a neutral report.
             // Raw never declares: its above-white light is the negative's own path and is not
             // rolled.
-            if #available(macOS 15.0, *), let decoded = image {
+            if #available(macOS 15.0, iOS 18.0, *), let decoded = image {
                 contentHeadroom = max(1, decoded.contentHeadroom)
             }
             if contentHeadroom <= 1, let declaredHeadroom {
