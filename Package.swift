@@ -131,7 +131,10 @@ let package = Package(
                                "FotufilmEditModel", "FotufilmStockMatch", "FotufilmPlugins",
                                "FotufilmUpdate",
                                .target(name: "FotufilmMetal",
-                                       condition: .when(platforms: [.macOS, .iOS]))]),
+                                       condition: .when(platforms: [.macOS, .iOS])),
+                               // Linux develops through the graph's CUDA and Vulkan entry points.
+                               .target(name: "FotufilmHalide",
+                                       condition: .when(platforms: [.linux]))]),
         .executableTarget(name: "fotufilm",
                           dependencies: ["FotufilmCore", "FotufilmImaging", "FotufilmEditModel"]),
         .executableTarget(name: "fotufilm-controls", dependencies: ["FotufilmEditModel"]),
