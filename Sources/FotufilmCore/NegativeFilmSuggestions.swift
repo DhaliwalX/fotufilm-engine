@@ -210,7 +210,8 @@ public struct NegativeFilmSuggestions: Sendable {
     }
 
     static func alike(_ a: SIMD3<Float>, _ b: SIMD3<Float>, absolute: Bool) -> Bool {
-        let d = absolute ? a - b : (a - mean(a)) - (b - mean(b))
+        let offset = absolute ? 0 : mean(a) - mean(b)
+        let d = a - b - SIMD3(repeating: offset)
         return max(abs(d.x), abs(d.y), abs(d.z)) < indistinguishable
     }
 
