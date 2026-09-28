@@ -68,7 +68,13 @@ public struct SceneImage {
         let isRaw = RawDecode.isRaw(url: url)
         let toneMapped = standardRange && !isRaw
         let declaredHeadroom = isRaw || toneMapped ? nil : GainMapHeadroom.declared(url: url)
-        let context = CIContext(options: [.useSoftwareRenderer: true, .cacheIntermediates: false])
+        // A camera RAW renders through the context the Mac app decodes it with (`FilmRender`'s:
+        // linear Rec.2020 working space in full float), whose demosaic lands a few hundredths of a
+        // percent away from the software renderer's.
+        let context = isRaw
+            ? CIContext(options: [.workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearITUR_2020)!,
+                                  .workingFormat: CIFormat.RGBAf, .cacheIntermediates: false])
+            : CIContext(options: [.useSoftwareRenderer: true, .cacheIntermediates: false])
         var image: CIImage?
         var sceneKelvin: Float?
         var sceneChromaticity: SIMD2<Float>?
