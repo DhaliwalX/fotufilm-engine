@@ -89,7 +89,8 @@
   border-color: transparent !important;
   background-color: light-dark(rgb(0 0 0 / 0.05), rgb(255 255 255 / 0.08)) !important;
 }
-[role="radiogroup"] [role="radio"][data-selected] > div {
+/* The selected segment's pill is its empty indicator; the label's own wrapper stays flat. */
+[role="radiogroup"] [role="radio"][data-selected] > div:empty {
   border-color: transparent !important;
   box-shadow:
     0 1px 3px rgb(0 0 0 / 0.16),
