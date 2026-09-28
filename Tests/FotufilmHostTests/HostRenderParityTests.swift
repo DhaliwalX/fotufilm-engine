@@ -66,6 +66,31 @@ final class HostRenderParityTests: XCTestCase {
     }
     #endif
 
+    func testDraftsReduceFromTheSettledReductionAndNeverStandInForIt() throws {
+        let (width, height) = (240, 120)
+        var rgba = [Float](repeating: 1, count: width * height * 4)
+        for y in 0..<height {
+            for x in 0..<width {
+                let i = (y * width + x) * 4
+                rgba[i] = Float(x % 7) / 6
+                rgba[i + 1] = Float(y % 5) / 4
+                rgba[i + 2] = Float((x + y) % 3) / 2
+            }
+        }
+        let image = HostImage(rgba: rgba, width: width, height: height, contentHeadroom: 1)
+        func reduce(_ source: [Float], _ w: Int, _ h: Int, to tw: Int, _ th: Int) -> [Float] {
+            HostPlatform.current.resampler?.reduce(source, width: w, height: h, to: tw, th)
+                ?? AreaResample.reduce(source, width: w, height: h, to: tw, th)
+        }
+        let settled = image.scene(width: 120, height: 60)
+        XCTAssertEqual(settled, reduce(rgba, width, height, to: 120, 60))
+        let draft = image.scene(width: 50, height: 25, draft: true)
+        XCTAssertEqual(draft, AreaResample.reduce(settled, width: 120, height: 60, to: 50, 25))
+        // A settled picture at the draft's size is still reduced from the photograph itself.
+        XCTAssertEqual(image.scene(width: 50, height: 25), reduce(rgba, width, height, to: 50, 25))
+        XCTAssertNotEqual(image.scene(width: 50, height: 25), draft)
+    }
+
     func testUnspecifiedMediumMatchesTheEditorAndExplicitPaperSurvives() throws {
         let stock = try XCTUnwrap(FilmStock.presets["gold200"])
         XCTAssertEqual(try edit().options(for: stock).paper?.id, PrintPaper.editorDefault.id)

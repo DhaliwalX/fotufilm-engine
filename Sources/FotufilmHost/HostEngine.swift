@@ -44,8 +44,9 @@ public final class HostImage {
     /// demosaic), as the Mac app decodes an uncropped preview; nil where it reduces the full decode.
     var decodeReduced: ((_ longEdge: Int) throws -> (rgba: [Float], width: Int, height: Int))?
     private let lock = NSLock()
-    /// The most recent reductions, newest last: an editor asks for one or two sizes at a time.
-    private var reductions: [(width: Int, height: Int, rgba: [Float])] = []
+    /// The most recent reductions, least recently used first: the settled preview, a moving
+    /// edit's drafts and the film strip's thumbnails. A draft was made from another reduction.
+    private var reductions: [(width: Int, height: Int, rgba: [Float], draft: Bool)] = []
 
     /// What the editor's image descriptor says about the source (`web/src/backend/README.md`).
     var descriptor: [String: Any] {
@@ -115,25 +116,38 @@ public final class HostImage {
         AreaResample.size(width: width, height: height, maxEdge: maxEdge)
     }
 
-    func scene(width targetWidth: Int, height targetHeight: Int) -> [Float] {
+    /// The photograph reduced to a size, kept for the next ask. A `draft` is reduced by area from
+    /// the smallest reduction already made that covers it, where there is one.
+    func scene(width targetWidth: Int, height targetHeight: Int, draft: Bool = false) -> [Float] {
         if let frames { return frames(targetWidth, targetHeight) }
         if targetWidth == width && targetHeight == height { return scene }
         lock.lock()
         defer { lock.unlock() }
-        if let cached = reductions.first(where: { $0.width == targetWidth && $0.height == targetHeight }) {
+        if let index = reductions.firstIndex(where: {
+            $0.width == targetWidth && $0.height == targetHeight && (draft || !$0.draft)
+        }) {
+            let cached = reductions.remove(at: index)
+            reductions.append(cached)
             return cached.rgba
         }
-        let source = (try? decodeReduced?(max(targetWidth, targetHeight)))
+        let covering = draft
+            ? reductions.filter { $0.width >= targetWidth && $0.height >= targetHeight && !$0.draft }
+                .min { $0.width < $1.width }
+            : nil
+        let source: (rgba: [Float], width: Int, height: Int) = covering.map { ($0.rgba, $0.width, $0.height) }
+            ?? (try? decodeReduced?(max(targetWidth, targetHeight)))
             ?? (scene, width, height)
+        // A draft takes the plain area reduction: the platform's resampler may build a filter for
+        // every new ratio, and a moving edit asks for a new size at every step.
         let reduced = source.width == targetWidth && source.height == targetHeight
             ? source.rgba
-            : HostPlatform.current.resampler?.reduce(
+            : (draft ? nil : HostPlatform.current.resampler)?.reduce(
                 source.rgba, width: source.width, height: source.height,
                 to: targetWidth, targetHeight)
             ?? AreaResample.reduce(source.rgba, width: source.width, height: source.height,
                                    to: targetWidth, targetHeight)
-        reductions.append((targetWidth, targetHeight, reduced))
-        if reductions.count > 2 { reductions.removeFirst() }
+        reductions.append((targetWidth, targetHeight, reduced, covering != nil))
+        if reductions.count > 4 { reductions.removeFirst() }
         return reduced
     }
 }

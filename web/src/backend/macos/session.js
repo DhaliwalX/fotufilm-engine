@@ -40,6 +40,9 @@ export function renderRequest(request, stocks) {
   return {
     handle: image.handle,
     previewQuality: image.video && request.interactive ? "playback" : "still",
+    // A picture on its way to a settled one — a moving edit's preview, a film-strip thumbnail —
+    // may be reduced from a smaller copy of the photograph, as the Mac app's drafts are.
+    draft: !image.video && !!(request.interactive || request.background),
     edit,
     maxEdge: Number.isFinite(maxEdge) ? maxEdge : null,
     viewport,
@@ -68,6 +71,9 @@ export function createSession(call, catalogue, { imageLayer = false } = {}) {
   const lifecycle = new AbortController();
   const pending = [];
   let running = false;
+  // The render the host is developing, which a newer request cancels once it has gone stale: a
+  // settled refinement never holds up the next edit's draft.
+  let developing = null;
   let lastOriginal = null;
   async function drain() {
     if (running) return;
@@ -92,7 +98,10 @@ export function createSession(call, catalogue, { imageLayer = false } = {}) {
           haveOriginal: lastOriginal?.key,
           ...(present ? { present } : {}),
         };
-        const result = await call("render", nativeRequest, { signal: lifecycle.signal });
+        developing = { request, controller: new AbortController() };
+        const result = await call("render", nativeRequest, {
+          signal: AbortSignal.any([lifecycle.signal, developing.controller.signal]),
+        });
         // Shown by the host's compositor: the answer names frames, and no picture crossed.
         if (result.presented) {
           resolve(
@@ -125,6 +134,8 @@ export function createSession(call, catalogue, { imageLayer = false } = {}) {
       } catch (error) {
         if (lifecycle.signal.aborted || request.stale?.()) resolve(null);
         else reject(error);
+      } finally {
+        developing = null;
       }
     }
     running = false;
@@ -133,6 +144,7 @@ export function createSession(call, catalogue, { imageLayer = false } = {}) {
     render(request) {
       return new Promise((resolve, reject) => {
         pending.push({ request, resolve, reject });
+        if (developing?.request.stale?.()) developing.controller.abort();
         drain();
       });
     },

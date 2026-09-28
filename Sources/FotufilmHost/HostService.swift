@@ -26,7 +26,9 @@ public final class HostService {
     /// Display P3, or extended-linear half floats when it was developed for an EDR layer.
     private var developed: (key: String, width: Int, height: Int, format: HostSurfaceFormat,
                             pixels: [UInt8])?
-    private var originals: (key: String, width: Int, height: Int, pixels: [UInt8])?
+    /// The undeveloped pictures last delivered, least recently used first: the settled preview,
+    /// a moving edit's drafts and the detail view each keep theirs.
+    private var originals: [(key: String, width: Int, height: Int, pixels: [UInt8])] = []
     /// Where the host draws the photograph itself, when it does (`HostPresentation.swift`).
     public var presenter: HostPresenter?
     /// The undeveloped frame each layer last showed, so it is presented again only when it
@@ -58,8 +60,22 @@ public final class HostService {
         self.engine = engine
     }
 
+    /// Whether every call's duration goes to stderr, as `FOTUFILM_HOST_TIMINGS` asks.
+    static let logsTimings = ProcessInfo.processInfo.environment["FOTUFILM_HOST_TIMINGS"] != nil
+
     public func call(_ method: String, params: Data, payload: UnsafeRawBufferPointer?) throws -> Answer {
         let parameters = (try? JSONSerialization.jsonObject(with: params)) as? [String: Any] ?? [:]
+        let started = DispatchTime.now().uptimeNanoseconds
+        defer {
+            if Self.logsTimings {
+                let ms = Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6
+                let detail = ["maxEdge", "previewQuality", "stage", "present"]
+                    .compactMap { key in parameters[key].map { "\(key)=\($0)" } }
+                    .joined(separator: " ")
+                FileHandle.standardError.write(Data(String(
+                    format: "fotufilm call %@ %.1f ms %@\n", method, ms, detail).utf8))
+            }
+        }
         switch method {
         case "prepare":
             return try answer(["stocks": engine.stockIDs, "backend": engine.backendName,
@@ -417,9 +433,11 @@ public final class HostService {
         let developKey = sceneKey + "|" + String(decoding: (try? JSONSerialization.data(
             withJSONObject: keyed, options: [.sortedKeys])) ?? Data(), as: UTF8.self)
             + (ceiling.map { "|edr \($0)" } ?? "")
+        let draft = body["draft"] as? Bool == true
         let frameKey = sceneKey + "|" + String(describing: plan?.json["placement"] ?? "")
+            + (draft ? "|draft" : "")
 
-        let scene = try sceneFor(image, geometry: geometry, sizes: sizes)
+        let scene = try sceneFor(image, geometry: geometry, sizes: sizes, draft: draft)
         var renderMilliseconds = 0.0
         if developed?.key != developKey {
             var pixels = [UInt8](repeating: 0, count: width * height * 4)
@@ -446,16 +464,22 @@ public final class HostService {
             }
             developed = (developKey, frame.width, frame.height, format, frame.pixels)
         }
-        if originals?.key != frameKey {
+        if let index = originals.firstIndex(where: { $0.key == frameKey }) {
+            originals.append(originals.remove(at: index))
+        } else {
             var frame = (pixels: image.display(scene, width: width, height: height),
                          width: width, height: height)
             if let plan, let framed = HostFrames.frame(frame.pixels, width: width, height: height,
                                                        plan: plan) {
                 frame = framed
             }
-            originals = (frameKey, frame.width, frame.height, frame.pixels)
+            originals.append((frameKey, frame.width, frame.height, frame.pixels))
+            while originals.count > Self.sceneLimit.count || originals.count > 1
+                && originals.reduce(0, { $0 + $1.pixels.count }) > Self.sceneLimit.bytes / 2 {
+                originals.removeFirst()
+            }
         }
-        let developedFrame = developed!, originalFrame = originals!
+        let developedFrame = developed!, originalFrame = originals.last!
         // A frame developed for an EDR layer is shown to the page in standard range.
         if presentation == nil, developedFrame.format != .rgba8DisplayP3 {
             throw HostEngine.Failure(description: "The develop is not in standard range.")
@@ -654,7 +678,7 @@ public final class HostService {
     /// Subject detection over the framed photograph, kept per photograph and geometry: the model
     /// sees the picture at no more than 1024 pixels, so a preview and an export share a reading.
     func subjects(_ scene: [Float], width: Int, height: Int, image: HostImage) -> HostSubject? {
-        let key = sceneCache.map { $0.key.split(separator: "|").prefix(2).joined(separator: "|") }
+        let key = sceneKey.map { $0.split(separator: "|").prefix(2).joined(separator: "|") }
             ?? "\(ObjectIdentifier(image))"
         if let subjectCache, subjectCache.key == key { return subjectCache.subject }
         let scale = min(1, 1024 / Double(max(width, height)))
@@ -967,7 +991,17 @@ public final class HostService {
                                         from: JSONSerialization.data(withJSONObject: request)).plan()
     }
 
-    private var sceneCache: (key: String, scene: [Float])?
+    /// Framed scenes, least recently used first: the preview, the detail view and the film
+    /// strip's thumbnails each keep their own, so one never makes another rebuild. An entry holds
+    /// its photograph weakly, so a released one never answers for a new photograph at its address.
+    private var scenes: [(image: Weak<HostImage>, key: String, scene: [Float])] = []
+    /// The newest framed scene's key, which subject detection reads the photograph from.
+    private var sceneKey: String?
+    private static let sceneLimit = (count: 4, bytes: 512 << 20)
+    final class Weak<Object: AnyObject> {
+        weak var object: Object?
+        init(_ object: Object) { self.object = object }
+    }
 
     /// The photograph through the edit's geometry at the frame's size, scene-linear.
     /// The prepared request's picture through its geometry, scene-linear.
@@ -975,17 +1009,36 @@ public final class HostService {
         try sceneFor(prepared.image, geometry: prepared.geometry, sizes: prepared.sizes)
     }
 
+    /// A `draft` may be reduced from a smaller copy of the photograph already made, where a
+    /// settled picture is always reduced from the photograph itself.
     func sceneFor(_ image: HostImage, geometry: SceneGeometry,
-                          sizes: (frame: (Int, Int), output: (Int, Int))) throws -> [Float] {
+                  sizes: (frame: (Int, Int), output: (Int, Int)), draft: Bool = false) throws -> [Float] {
         let key = "\(ObjectIdentifier(image))|\(image.frameKey)|\(geometry)|\(sizes.frame)|\(sizes.output)"
-        if let sceneCache, sceneCache.key == key { return sceneCache.scene }
+            + (draft ? "|draft" : "")
+        scenes.removeAll { $0.image.object == nil }
+        if let index = scenes.firstIndex(where: { $0.key == key && $0.image.object === image }) {
+            let hit = scenes.remove(at: index)
+            scenes.append(hit)
+            sceneKey = key
+            return hit.scene
+        }
+        let started = DispatchTime.now().uptimeNanoseconds
+        defer {
+            if Self.logsTimings {
+                FileHandle.standardError.write(Data(String(
+                    format: "fotufilm scene %dx%d%@ %.1f ms\n", sizes.output.0, sizes.output.1,
+                    draft ? " draft" : "",
+                    Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6).utf8))
+            }
+        }
         let swapped = geometry.rotation % 2 != 0
         let oriented = swapped ? (image.height, image.width) : (image.width, image.height)
         let table = try geometry.lens.map { try lensPlan(image, $0) }
             .flatMap { $0.identity ? nil : $0.table }
         let scene: [Float]
-        if geometry.crop != SceneGeometry.fullCrop, sizes.frame != oriented {
-            // A crop is cut from the whole photograph and then reduced, as the Mac app cuts it.
+        if !draft, geometry.crop != SceneGeometry.fullCrop, sizes.frame != oriented {
+            // A crop is cut from the whole photograph and then reduced, as the Mac app cuts it;
+            // a draft is cut from a reduced copy.
             let native = geometry.sizes(width: image.width, height: image.height, maxEdge: nil)
             let cut = geometry.apply(image.scene(width: image.width, height: image.height),
                                      width: image.width, height: image.height,
@@ -1001,13 +1054,18 @@ public final class HostService {
             // Mac app decodes it, so the one bilinear resample never skips pixels.
             let frameWidth = swapped ? sizes.frame.1 : sizes.frame.0
             let frameHeight = swapped ? sizes.frame.0 : sizes.frame.1
-            let reduced = image.scene(width: frameWidth, height: frameHeight)
+            let reduced = image.scene(width: frameWidth, height: frameHeight, draft: draft)
             scene = geometry.isIdentity && (frameWidth, frameHeight) == sizes.output
                 ? reduced
                 : geometry.apply(reduced, width: frameWidth, height: frameHeight,
                                  orientedSize: oriented, output: sizes.output, lensTable: table)
         }
-        sceneCache = (key, scene)
+        scenes.append((Weak(image), key, scene))
+        sceneKey = key
+        while scenes.count > Self.sceneLimit.count || scenes.count > 1
+            && scenes.reduce(0, { $0 + $1.scene.count * 4 }) > Self.sceneLimit.bytes {
+            scenes.removeFirst()
+        }
         return scene
     }
 

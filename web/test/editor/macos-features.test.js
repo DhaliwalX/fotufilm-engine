@@ -60,6 +60,32 @@ test('moving video uses compact previews while paused frames and photos stay los
   session.dispose();
 });
 
+test('a newer request cancels the stale render the host is still developing', async () => {
+  const calls = [];
+  let settled = true;
+  const session = createSession((_, request, { signal }) => {
+    calls.push(request.maxEdge);
+    return new Promise((resolve, reject) => {
+      if (request.maxEdge === 1600) signal.addEventListener('abort', () => reject(new DOMException('', 'AbortError')));
+      else resolve({ presented: { frame: 1 } });
+    });
+  }, async () => []);
+  const request = { image: { handle: 'photo' }, edit: defaultEdit(), present: 'preview' };
+  const refinement = session.render({ ...request, maxEdge: 1600, stale: () => !settled });
+  await new Promise((resolve) => setTimeout(resolve));
+  settled = false;
+  const draft = session.render({ ...request, maxEdge: 800, interactive: true });
+  assert.equal(await refinement, null);
+  assert.equal((await draft).presented.frame, 1);
+  // A request still current is never cut short.
+  const current = session.render({ ...request, maxEdge: 900 });
+  const next = session.render({ ...request, maxEdge: 700 });
+  assert.equal((await current).presented.frame, 1);
+  await next;
+  assert.deepEqual(calls, [1600, 800, 900, 700]);
+  session.dispose();
+});
+
 test('an unchanged original crosses the bridge once and is reused', async () => {
   const calls = [];
   const session = createSession(async (_, request) => {
