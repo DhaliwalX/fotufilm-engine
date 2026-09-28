@@ -31,11 +31,16 @@ const FILM_MODEL = [
   "halationModel",
   "estimatedHalation",
   "couplerReach",
+  "couplerRedGreen",
+  "couplerGreenBlue",
   "couplerSelf",
 ];
 
-function SettingSlider({ label, setting }) {
-  const value = useAppSetting(setting);
+// `follows`: the setting shown while this one has never been set on its own.
+function SettingSlider({ label, setting, follows }) {
+  const own = useAppSetting(setting);
+  const followed = useAppSetting(follows ?? setting);
+  const value = own ?? followed;
   return (
     <Adjustment
       slider={{ key: setting, label, min: 0, max: 3, step: 0.1 }}
@@ -304,6 +309,8 @@ function FilmModel() {
     halationModel: useAppSetting("halationModel"),
     estimatedHalation: useAppSetting("estimatedHalation"),
     couplerReach: useAppSetting("couplerReach"),
+    couplerRedGreen: useAppSetting("couplerRedGreen"),
+    couplerGreenBlue: useAppSetting("couplerGreenBlue"),
     couplerSelf: useAppSetting("couplerSelf"),
   };
   const adjusted = FILM_MODEL.some((key) => values[key] !== APP_SETTINGS[key]);
@@ -339,14 +346,17 @@ function FilmModel() {
         label={editorControl("couplerReach").title}
         setting="couplerReach"
       />
+      <SettingSlider label="Red–Green" setting="couplerRedGreen" follows="couplerReach" />
+      <SettingSlider label="Green–Blue" setting="couplerGreenBlue" follows="couplerReach" />
       <SettingSlider
         label={editorControl("couplerSelf").title}
         setting="couplerSelf"
       />
       <p className="medium-detail">
         Separation sets how strongly neighboring film layers affect each other
-        during development. Edge Contrast controls sharpening caused by
-        development.
+        during development, for both color pairs together. Red–Green and
+        Green–Blue adjust each pair separately. Edge Contrast controls
+        sharpening caused by development.
       </p>
       <p className="medium-detail">
         These apply to photos you open from now on; each open photo keeps its

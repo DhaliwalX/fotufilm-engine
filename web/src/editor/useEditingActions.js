@@ -1,3 +1,4 @@
+import { withProfileField } from "../profile-settings.js";
 import { useAutoAdjustment } from "../useAutoAdjustment.js";
 import { useCallback } from "react";
 import { defaultEdit } from "../editor-state.js";
@@ -52,15 +53,7 @@ export default function useEditingActions({
     [dispatch],
   );
   const setProfile = (key, value) => {
-    patch(
-      {
-        profile: {
-          ...edit.profile,
-          [key]: value,
-        },
-      },
-      `profile-${key}`,
-    );
+    patch({ profile: withProfileField(edit.profile, key, value) }, `profile-${key}`);
     setStage(null);
     setDifference(false);
   };

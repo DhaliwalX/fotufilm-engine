@@ -14,8 +14,11 @@ export const APP_SETTINGS = Object.freeze({
   halationModel: "legacy",
   estimatedHalation: false,
   // Color Separation (Settings › Film Model on the Mac): how far the inhibitor reaches between
-  // layers and within one, as multiples of each film's own geometry.
+  // layers and within one, as multiples of each film's own geometry. Red–Green and Green–Blue
+  // reach through one interlayer each; null follows Separation until one is moved on its own.
   couplerReach: 1,
+  couplerRedGreen: null,
+  couplerGreenBlue: null,
   couplerSelf: 1,
   // Whether a HEIC export starts as HDR where the edit allows it.
   photoHDR: false,
@@ -103,5 +106,9 @@ export function newPhotoEdit(base, stockIDs) {
   if (appSetting("estimatedHalation")) edit.profile.estimatedHalation = true;
   for (const key of ["couplerReach", "couplerSelf"])
     if (appSetting(key) !== APP_SETTINGS[key]) edit.profile[key] = appSetting(key);
+  // A pair set on its own starts the photo there; one left linked follows Separation.
+  for (const key of ["couplerRedGreen", "couplerGreenBlue"])
+    if (appSetting(key) != null && appSetting(key) !== appSetting("couplerReach"))
+      edit.profile[key] = appSetting(key);
   return edit;
 }

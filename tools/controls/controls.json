@@ -1945,9 +1945,9 @@
         "app" : "a plugin host's own setting, with no meaning on a photograph",
         "cli" : "the command line renders the full pipeline end to end",
         "desktop" : "a plugin host's own setting, with no meaning on a photograph",
-        "finalcut" : "not yet offered; needs the coupler-geometry gate",
-        "web" : "the demo renders one still through a sealed pack"
+        "finalcut" : "not yet offered; needs the coupler-geometry gate"
       },
+      "persistedKey" : "couplerRedGreen",
       "scale" : {
         "admittedMax" : 3,
         "admittedMin" : 0,
@@ -1959,12 +1959,16 @@
         ],
         "unit" : "multiplier"
       },
-      "scope" : "hostOnly",
+      "scope" : "edit",
       "section" : "filmEmulsion",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
       "surfaces" : [
-        "resolve"
+        "resolve",
+        "web"
       ],
-      "title" : "Red–Green Reach"
+      "title" : "Red–Green Reach",
+      "webTransform" : "profile"
     },
     {
       "availability" : "couplerGeometry",
@@ -2003,9 +2007,9 @@
         "app" : "a plugin host's own setting, with no meaning on a photograph",
         "cli" : "the command line renders the full pipeline end to end",
         "desktop" : "a plugin host's own setting, with no meaning on a photograph",
-        "finalcut" : "not yet offered; needs the coupler-geometry gate",
-        "web" : "the demo renders one still through a sealed pack"
+        "finalcut" : "not yet offered; needs the coupler-geometry gate"
       },
+      "persistedKey" : "couplerGreenBlue",
       "scale" : {
         "admittedMax" : 3,
         "admittedMin" : 0,
@@ -2017,12 +2021,16 @@
         ],
         "unit" : "multiplier"
       },
-      "scope" : "hostOnly",
+      "scope" : "edit",
       "section" : "filmEmulsion",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
       "surfaces" : [
-        "resolve"
+        "resolve",
+        "web"
       ],
-      "title" : "Green–Blue Reach"
+      "title" : "Green–Blue Reach",
+      "webTransform" : "profile"
     },
     {
       "availability" : "interlayerInhibition",

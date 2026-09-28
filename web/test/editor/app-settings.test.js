@@ -72,3 +72,14 @@ test("Color Separation settings seed a new photograph's film profile", () =>
     assert.equal(seeded.profile.couplerReach, 1.5);
     assert.equal(seeded.profile.couplerSelf, 0);
   }));
+
+test("a colour pair set on its own seeds its reach; one left linked follows Separation", () =>
+  withStorage(() => {
+    setAppSetting("couplerReach", 1.5);
+    assert.deepEqual(newPhotoEdit(defaultEdit("portra400")).profile, { couplerReach: 1.5 });
+    setAppSetting("couplerRedGreen", 0.5);
+    assert.deepEqual(newPhotoEdit(defaultEdit("portra400")).profile,
+      { couplerReach: 1.5, couplerRedGreen: 0.5 });
+    resetAppSettings();
+    assert.equal(appSetting("couplerRedGreen"), null);
+  }));
