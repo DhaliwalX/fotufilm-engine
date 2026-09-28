@@ -74,6 +74,12 @@ double Number(CefRefPtr<CefDictionaryValue> fields, const char* key) {
 
 }  // namespace
 
+// The Mac app's unified toolbar: its height before the page reports its own, where the first
+// window button sits and how far apart they are.
+constexpr CGFloat kToolbarHeight = 52;
+constexpr CGFloat kWindowButtonInset = 20;
+constexpr CGFloat kWindowButtonSpacing = 20;
+
 @interface FotufilmHostWindow () <FotufilmMenuActions, FotufilmEditHistory>
 - (void)browserClosed;
 - (CGRect)windowDragRegion:(NSPoint)point;
@@ -497,10 +503,16 @@ class MacView : public fotufilm::ViewDelegate {
   _window = [[NSWindow alloc]
       initWithContentRect:frame
                 styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
-                          NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable
+                          NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable |
+                          NSWindowStyleMaskFullSizeContentView
                   backing:NSBackingStoreBuffered
                     defer:NO];
   _window.title = @"Fotufilm";
+  // No title bar of its own: the page runs to the top edge and its toolbar is the title bar, as
+  // the Mac app's picture runs behind its unified toolbar. The title still names the window in
+  // the Window menu and Mission Control.
+  _window.titlebarAppearsTransparent = YES;
+  _window.titleVisibility = NSWindowTitleHidden;
   _window.releasedWhenClosed = NO;
   _window.delegate = self;
   _window.minSize = NSMakeSize(720, 480);
@@ -514,6 +526,7 @@ class MacView : public fotufilm::ViewDelegate {
   // Its own name, so the two apps each remember their own window.
   if (![_window setFrameUsingName:@"FotufilmDesktopWindow"]) [_window center];
   [_window setFrameAutosaveName:@"FotufilmDesktopWindow"];
+  [self placeWindowButtons];
 
   // The engine writes the photograph into surfaces the compositor draws beneath the page.
   __weak FotufilmHostView* weakView = _view;
@@ -785,6 +798,7 @@ class MacView : public fotufilm::ViewDelegate {
         if (CefRefPtr<CefListValue> controls = fields->GetList("controls"))
           for (size_t index = 0; index < controls->GetSize(); ++index)
             strong->_controls.push_back(rect(controls->GetList(index)));
+        [strong placeWindowButtons];
         reply->Resolve(nullptr);
       });
 }
@@ -905,14 +919,49 @@ class MacView : public fotufilm::ViewDelegate {
   [self screenChanged];
 }
 
+// The close, minimise and zoom buttons, centred on the page's toolbar row and inset as they are in
+// the Mac app's unified toolbar. AppKit lays the title bar out again on a resize or a change of
+// key window, so this follows each of them.
+- (void)placeWindowButtons {
+  NSButton* close = [_window standardWindowButton:NSWindowCloseButton];
+  NSView* titlebar = close.superview;
+  NSView* container = titlebar.superview;
+  if (!container || (_window.styleMask & NSWindowStyleMaskFullScreen)) return;
+  const BOOL reported = !CGRectIsNull(_toolbar) && _toolbar.size.height > 0;
+  const CGFloat row = reported ? CGRectGetMaxY(_toolbar) : kToolbarHeight;
+  const CGFloat centre = reported ? CGRectGetMidY(_toolbar) : kToolbarHeight / 2;
+  NSRect frame = container.frame;
+  frame.size.height = row;
+  frame.origin.y = NSHeight(_window.frame) - row;
+  container.frame = frame;
+  titlebar.frame = container.bounds;
+  CGFloat x = kWindowButtonInset;
+  for (NSWindowButton kind : {NSWindowCloseButton, NSWindowMiniaturizeButton, NSWindowZoomButton}) {
+    NSButton* button = [_window standardWindowButton:kind];
+    // The title bar's coordinates run up from its bottom edge.
+    [button setFrameOrigin:NSMakePoint(x, row - centre - NSHeight(button.frame) / 2)];
+    x += kWindowButtonSpacing;
+  }
+}
+
+- (void)windowDidResize:(NSNotification*)notification {
+  [self placeWindowButtons];
+}
+
+- (void)windowDidExitFullScreen:(NSNotification*)notification {
+  [self placeWindowButtons];
+}
+
 - (void)windowDidBecomeKey:(NSNotification*)notification {
   if (CefRefPtr<CefBrowser> browser = _client->browser())
     browser->GetHost()->SetFocus(_window.firstResponder == _view);
+  [self placeWindowButtons];
 }
 
 - (void)windowDidResignKey:(NSNotification*)notification {
   if (CefRefPtr<CefBrowser> browser = _client->browser())
     browser->GetHost()->SetFocus(false);
+  [self placeWindowButtons];
 }
 
 @end
