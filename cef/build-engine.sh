@@ -64,4 +64,6 @@ xcrun swiftc -sdk "$SDK" -target arm64-apple-macos14.0 -emit-library \
 
 # The films, the reflectance prior and the camera profiles the engine reads from its bundle.
 tools/copy-shipping-resources.sh "$OUT/Resources" --camera-profiles >/dev/null
+# File › Use Sample Photo: the Mac app's generated chart, no photography in it.
+swift tools/generate-example-image.swift "$OUT/Resources/sample.png"
 echo "Built $LIBRARY"

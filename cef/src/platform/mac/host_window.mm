@@ -856,6 +856,13 @@ class MacView : public fotufilm::ViewDelegate {
   [self deliverOpens];
 }
 
+- (void)openSamplePhoto {
+  NSString* path = [NSBundle.mainBundle pathForResource:@"sample" ofType:@"png"];
+  if (!path) return;
+  [_pendingPaths addObject:path];
+  [self deliverOpens];
+}
+
 - (void)deliverOpens {
   CefRefPtr<CefBrowser> browser = _client->browser();
   if (!_pageListening || !_pendingPaths.count || !browser) return;

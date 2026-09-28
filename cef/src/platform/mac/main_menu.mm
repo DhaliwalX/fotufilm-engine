@@ -166,6 +166,7 @@ NSMenu* FotufilmMainMenu(NSArray<NSDictionary*>* plugins) {
   Command(file, @"Import Scanned Negative…", @"importNegative");
   NSMenu* recents = Submenu(file, @"Open Recent");
   recents.delegate = recent;
+  Add(file, @"Use Sample Photo", @selector(useSamplePhoto:));
   [file addItem:[NSMenuItem separatorItem]];
   Add(file, @"Import Film Pack…", @selector(importFilmPack:), @"i", kCommand | kShift);
   [file addItem:[NSMenuItem separatorItem]];

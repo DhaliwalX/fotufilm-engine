@@ -11,6 +11,7 @@
 // Runs the editor command named by the item's representedObject (web/src/editor/useNativeCommands.js).
 - (void)performEditorCommand:(id)sender;
 - (void)openRecentFile:(id)sender;
+- (void)useSamplePhoto:(id)sender;
 // File › Import Film Pack…: an open panel for .fotufilmpack files, which the editor installs.
 - (void)importFilmPack:(id)sender;
 - (void)clearRecentFiles:(id)sender;

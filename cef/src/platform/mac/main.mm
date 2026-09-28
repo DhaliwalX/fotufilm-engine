@@ -153,6 +153,10 @@ NSMutableArray<NSURL*>* g_pending_urls = [NSMutableArray array];
   if (NSURL* url = [sender representedObject]) [self openURLs:@[ url ]];
 }
 
+- (void)useSamplePhoto:(id)sender {
+  [g_window openSamplePhoto];
+}
+
 - (void)clearRecentFiles:(id)sender {
   [FotufilmRecentFiles clear];
 }
@@ -167,7 +171,8 @@ NSMutableArray<NSURL*>* g_pending_urls = [NSMutableArray array];
 - (BOOL)validateMenuItem:(NSMenuItem*)item {
   const SEL action = item.action;
   // Nothing opens while the editor is exporting, as its own import buttons are greyed.
-  if (action == @selector(openDocument:) || action == @selector(openRecentFile:))
+  if (action == @selector(openDocument:) || action == @selector(openRecentFile:) ||
+      action == @selector(useSamplePhoto:))
     return !g_window || [g_window commandEnabled:@"open"];
   // Only an engine that installs packs offers it (the `filmPacks` capability), and never while
   // the editor exports.

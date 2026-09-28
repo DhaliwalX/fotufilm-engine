@@ -27,6 +27,8 @@ class Dispatcher;
 // Opens files in the editor, by path, once it listens; each is noted in Open Recent. The editor
 // installs film packs among them (web/src/editor/useFilmPacks.js).
 - (void)openURLs:(NSArray<NSURL*>*)urls;
+// File › Use Sample Photo: the bundled chart, opened as the Mac app opens it, outside Open Recent.
+- (void)openSamplePhoto;
 // Whether the editor, as it last reported, can run `command` now.
 - (BOOL)commandEnabled:(NSString*)command;
 // Runs one of the editor's commands (web/src/editor/useNativeCommands.js).
