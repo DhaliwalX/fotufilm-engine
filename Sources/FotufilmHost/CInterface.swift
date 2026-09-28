@@ -8,6 +8,17 @@ import FotufilmImaging
 // malloc'd so a C caller frees them with `fotufilm_free`. The Swift names are prefixed so a
 // Swift client importing both modules sees each function once, from the header.
 
+/// Runs one call from C inside its own autorelease pool where the platform has one. A C caller's
+/// thread never drains one, so the frameworks' autoreleased images and textures would otherwise
+/// outlive the call — hundreds of megabytes a photograph.
+private func draining<Result>(_ body: () throws -> Result) rethrows -> Result {
+    #if canImport(ObjectiveC)
+    try autoreleasepool(invoking: body)
+    #else
+    try body()
+    #endif
+}
+
 private func duplicate(_ string: String) -> UnsafeMutablePointer<CChar>? { strdup(string) }
 
 private func report(_ error: Error, into out: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?) {
@@ -67,7 +78,7 @@ public func cdecl_fotufilm_image_open(
         return nil
     }
     do {
-        let image = try HostImage.open(URL(fileURLWithPath: String(cString: path)))
+        let image = try draining { try HostImage.open(URL(fileURLWithPath: String(cString: path))) }
         return OpaquePointer(Unmanaged.passRetained(image).toOpaque())
     } catch let failure {
         report(failure, into: error)
@@ -121,10 +132,13 @@ public func cdecl_fotufilm_render(
     }
     let start = DispatchTime.now().uptimeNanoseconds
     do {
-        let delivered = try engine.render(
-            image, request: Data(bytes: requestJSON, count: strlen(requestJSON)),
-            into: HostEngine.Target(maxEdge: Int(target.max_edge), format: format, pixels: pixels,
-                                    rowBytes: target.row_bytes, capacity: target.capacity))
+        let delivered = try draining {
+            try engine.render(
+                image, request: Data(bytes: requestJSON, count: strlen(requestJSON)),
+                into: HostEngine.Target(maxEdge: Int(target.max_edge), format: format,
+                                        pixels: pixels, rowBytes: target.row_bytes,
+                                        capacity: target.capacity))
+        }
         info?.pointee = fotufilm_render_info(
             width: UInt32(delivered.width), height: UInt32(delivered.height),
             milliseconds: Double(DispatchTime.now().uptimeNanoseconds - start) / 1e6)
@@ -163,11 +177,13 @@ public func cdecl_fotufilm_host_call_progress(
     let params = paramsJSON.map { Data(bytes: $0, count: strlen($0)) } ?? Data("{}".utf8)
     let bytes = payload.map { UnsafeRawBufferPointer(start: $0, count: payloadLength) }
     do {
-        let result = try engine.service.call(String(cString: method), params: params,
-                                             payload: bytes) { report in
-            guard let progress,
-                  let json = try? JSONSerialization.data(withJSONObject: report) else { return }
-            String(decoding: json, as: UTF8.self).withCString { progress(context, $0) }
+        let result = try draining {
+            try engine.service.call(String(cString: method), params: params,
+                                    payload: bytes) { report in
+                guard let progress,
+                      let json = try? JSONSerialization.data(withJSONObject: report) else { return }
+                String(decoding: json, as: UTF8.self).withCString { progress(context, $0) }
+            }
         }
         answer.pointee.json = duplicate(String(decoding: result.json, as: UTF8.self))
         if result.payload.isEmpty {
