@@ -4,7 +4,8 @@
 //
 // These interfaces are the platform-neutral half. A platform supplies the memory (an IOSurface on
 // macOS, a D3D11 shared texture's upload buffer on Windows, a dmabuf on Linux) by implementing
-// PresentationSurface and ImagePresenter, and draws what ImageLayer (image_layer.h) chooses.
+// PresentationSurface and deriving from PooledPresenter (pooled_presenter.h), and draws the plans
+// CompositorCore (compositor_core.h) makes.
 #pragma once
 
 #include <cstddef>
@@ -39,7 +40,9 @@ class PresentationSurface {
   virtual size_t row_bytes() const = 0;
   // The platform's shareable handle (IOSurfaceRef, HANDLE, dmabuf fd), for GPU writers.
   virtual void* native_handle() = 0;
-  // Called once the engine has written it, before the compositor may read it.
+  // Called as the presenter lends it to the engine (to map or lock its memory for the CPU), and
+  // once the engine has written it, before the compositor may read it.
+  virtual void BeginWriting() {}
   virtual void EndWriting() {}
 };
 

@@ -66,13 +66,6 @@ CefRefPtr<CefValue> Dictionary(CefRefPtr<CefDictionaryValue> dictionary) {
   return value;
 }
 
-// JSON numbers arrive as integers when they are whole.
-double Number(CefRefPtr<CefDictionaryValue> fields, const char* key) {
-  if (!fields || !fields->HasKey(key)) return 0;
-  return fields->GetType(key) == VTYPE_INT ? fields->GetInt(key)
-                                           : fields->GetDouble(key);
-}
-
 }  // namespace
 
 // The Mac app's unified toolbar: its height before the page reports its own, where the first
@@ -181,7 +174,8 @@ constexpr CGFloat kWindowButtonSpacing = 20;
 }
 
 - (void)setAnimating:(BOOL)animating {
-  _compositor.continuous = animating;
+  _compositor.core->set_continuous(animating);
+  if (animating) [_compositor setNeedsDisplay];
 }
 
 #pragma mark Mouse
@@ -491,6 +485,7 @@ class MacView : public fotufilm::ViewDelegate {
   // Files to open once the editor listens for them.
   NSMutableArray<NSString*>* _pendingPaths;
   std::shared_ptr<fotufilm::MacImagePresenter> _presenter;
+  std::shared_ptr<fotufilm::MacWindowCompositor> _windowCompositor;
   id _screenObserver;
   BOOL _pageListening;
 }
@@ -534,7 +529,16 @@ class MacView : public fotufilm::ViewDelegate {
   _presenter = std::make_shared<fotufilm::MacImagePresenter>(
       _view.compositor.device,
       [weakView](const std::string& layer, fotufilm::PresentedFrame frame) {
-        [weakView.compositor presentFrame:std::move(frame) layer:layer];
+        FotufilmCompositor* compositor = weakView.compositor;
+        if (!compositor) return;
+        compositor.core->Present(layer, std::move(frame));
+        [compositor setNeedsDisplay];
+      });
+  std::weak_ptr<fotufilm::MacImagePresenter> presenter = _presenter;
+  _windowCompositor = std::make_shared<fotufilm::MacWindowCompositor>(
+      _view.compositor, [presenter] {
+        auto strong = presenter.lock();
+        return strong ? strong->Headroom() : 1.f;
       });
   __weak FotufilmHostWindow* weakSelf = self;
   _screenObserver = [NSNotificationCenter.defaultCenter
@@ -587,8 +591,8 @@ class MacView : public fotufilm::ViewDelegate {
                             std::to_string(CHROME_VERSION_BUILD) + "." +
                             std::to_string(CHROME_VERSION_PATCH));
         if (strong) {
-          const auto stats = strong->_view.compositor.stats;
-          info->SetBool("sharedTextures", stats.sharedTextures);
+          info->SetBool("sharedTextures",
+                        strong->_view.compositor.core->stats().shared_textures);
           info->SetDouble("scale", strong->_window.backingScaleFactor);
           info->SetInt("refreshRate",
                        static_cast<int>(strong->_window.screen.maximumFramesPerSecond));
@@ -625,100 +629,12 @@ class MacView : public fotufilm::ViewDelegate {
         [strong runOpenPanel:@(kind.c_str()) reply:reply];
       });
 
-  _dispatcher->Register(
-      "compositorStats", Dispatcher::Thread::kUi,
-      [weakSelf](const Call&, std::shared_ptr<Reply> reply) {
+  // setImageLayer, the compositor's stats and snapshot, and the latency probe, as on every
+  // platform (presentation/presentation_methods.h).
+  fotufilm::RegisterPresentationMethods(
+      *_dispatcher, [weakSelf]() -> std::shared_ptr<fotufilm::WindowCompositor> {
         FotufilmHostWindow* strong = weakSelf;
-        CefRefPtr<CefDictionaryValue> stats = CefDictionaryValue::Create();
-        if (strong) {
-          const auto values = strong->_view.compositor.stats;
-          stats->SetDouble("frames", double(values.frames));
-          stats->SetDouble("browserFrames", double(values.browserFrames));
-          stats->SetDouble("copyMicroseconds", values.lastCopyMicroseconds);
-          stats->SetDouble("copyGpuMicroseconds", values.lastCopyGpuMicroseconds);
-          stats->SetDouble("drawableWaitMicroseconds",
-                           values.lastDrawableWaitMicroseconds);
-          stats->SetDouble("compositeMicroseconds", values.lastCompositeMicroseconds);
-          stats->SetBool("sharedTextures", values.sharedTextures);
-          stats->SetDouble("imageFrames", double(values.imageFrames));
-          stats->SetBool("extendedRange", values.extendedRange);
-          stats->SetDouble("headroom", strong->_presenter->Headroom());
-        }
-        reply->Resolve(Dictionary(stats));
-      });
-
-  // What the screen shows, page and image layer together, written to a temporary file whose
-  // path is the answer (diagnostics and checks).
-  _dispatcher->Register(
-      "compositorSnapshot", Dispatcher::Thread::kUi,
-      [weakSelf](const Call&, std::shared_ptr<Reply> reply) {
-        FotufilmHostWindow* strong = weakSelf;
-        if (!strong) return reply->Resolve(nullptr);
-        [strong->_view.compositor snapshot:^(NSString* path) {
-          CefRefPtr<CefValue> value = CefValue::Create();
-          if (path)
-            value->SetString(path.UTF8String);
-          else
-            value->SetNull();
-          reply->Resolve(value);
-        }];
-      });
-
-  // The latency probe: {x, y} in CSS pixels arms it at a point of the window ({} stops it);
-  // probeReport answers the changes seen there and the host's clock, in milliseconds.
-  _dispatcher->Register(
-      "probePixel", Dispatcher::Thread::kUi,
-      [weakSelf](const Call& call, std::shared_ptr<Reply> reply) {
-        FotufilmHostWindow* strong = weakSelf;
-        CefRefPtr<CefDictionaryValue> fields =
-            call.params && call.params->GetType() == VTYPE_DICTIONARY
-                ? call.params->GetDictionary()
-                : nullptr;
-        const bool armed = fields && fields->HasKey("x");
-        if (strong)
-          [strong->_view.compositor
-              probePoint:armed ? CGPointMake(Number(fields, "x"), Number(fields, "y"))
-                               : CGPointMake(NAN, NAN)];
-        reply->Resolve(nullptr);
-      });
-  _dispatcher->Register(
-      "probeReport", Dispatcher::Thread::kUi,
-      [weakSelf](const Call&, std::shared_ptr<Reply> reply) {
-        FotufilmHostWindow* strong = weakSelf;
-        CefRefPtr<CefDictionaryValue> report = CefDictionaryValue::Create();
-        report->SetDouble("now", CACurrentMediaTime() * 1000);
-        CefRefPtr<CefListValue> changes = CefListValue::Create();
-        for (NSDictionary* change in strong ? [strong->_view.compositor probeChanges] : @[]) {
-          CefRefPtr<CefDictionaryValue> entry = CefDictionaryValue::Create();
-          entry->SetDouble("time", [change[@"time"] doubleValue]);
-          entry->SetString("value", [change[@"value"] UTF8String]);
-          changes->SetDictionary(changes->GetSize(), entry);
-        }
-        report->SetList("changes", changes);
-        reply->Resolve(Dictionary(report));
-      });
-
-  // Where the page shows the engine's image layer (presentation/image_layer.h): the canvas's
-  // clip, which frames go where and whether the original shows, in CSS pixels from the top left.
-  // The diagnostics page's {x, y, width, height} asks for the moving test pattern instead.
-  _dispatcher->Register(
-      "setImageLayer", Dispatcher::Thread::kUi,
-      [weakSelf](const Call& call, std::shared_ptr<Reply> reply) {
-        FotufilmHostWindow* strong = weakSelf;
-        if (!strong) return reply->Resolve(nullptr);
-        CefRefPtr<CefDictionaryValue> fields =
-            call.params && call.params->GetType() == VTYPE_DICTIONARY
-                ? call.params->GetDictionary()
-                : nullptr;
-        fotufilm::LayerRect pattern;
-        fotufilm::ImageLayerGeometry geometry =
-            fotufilm::ParseImageLayerGeometry(fields, &pattern);
-        FotufilmCompositor* compositor = strong->_view.compositor;
-        const CGRect test = CGRectMake(pattern.x, pattern.y, pattern.width, pattern.height);
-        [compositor showTestPattern:test];
-        [strong->_view setAnimating:!CGRectIsEmpty(test)];
-        [compositor placeImageLayer:std::move(geometry)];
-        reply->Resolve(nullptr);
+        return strong ? strong->_windowCompositor : nullptr;
       });
 
   // Which of the editor's commands apply and which are ticked, and whether a text field has

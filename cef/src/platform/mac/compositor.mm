@@ -9,7 +9,6 @@
 #include <simd/simd.h>
 
 #include <memory>
-#include <optional>
 #include <vector>
 
 #import "platform/mac/image_presenter.h"
@@ -107,8 +106,9 @@ double Microseconds(uint64_t start, uint64_t end) {
   return double(end - start) * timebase.numer / timebase.denom / 1000.0;
 }
 
-// How long a placement waits for the browser frame that carries the page's matching layout.
-constexpr double kPlacementWaitSeconds = 0.05;
+MTLPixelFormat DrawableFormat(bool extended) {
+  return extended ? MTLPixelFormatRGBA16Float : MTLPixelFormatBGRA8Unorm;
+}
 
 }  // namespace
 
@@ -130,24 +130,9 @@ constexpr double kPlacementWaitSeconds = 0.05;
   FotufilmPipelines* _standard;
   FotufilmPipelines* _extended;
   id<MTLTexture> _ui;
-  fotufilm::ImageLayer _imageLayer;
-  // A placement waiting for its browser frame, and when it arrived.
-  std::optional<fotufilm::ImageLayerGeometry> _pendingPlacement;
-  CFTimeInterval _pendingSince;
-  CGRect _patternRect;
-  CGSize _points;
-  CGFloat _scale;
-  uint64_t _start;
-  struct FotufilmCompositorStats _stats;
+  std::unique_ptr<fotufilm::CompositorCore> _core;
   CAMetalDisplayLink* _link API_AVAILABLE(macos(14.0));
-  BOOL _dirty;
-  // The pixel probe: the point in view points, the last value seen and the changes since arming.
-  CGPoint _probe;
-  BOOL _probing;
-  NSString* _probeValue;
-  NSMutableArray<NSDictionary*>* _probeChanges;
   id<MTLTexture> _probeTarget;
-  BOOL _probeScheduled;
 }
 
 - (instancetype)initWithLayer:(CAMetalLayer*)layer {
@@ -155,6 +140,7 @@ constexpr double kPlacementWaitSeconds = 0.05;
   _layer = layer;
   _device = MTLCreateSystemDefaultDevice();
   _queue = [_device newCommandQueue];
+  _core = std::make_unique<fotufilm::CompositorCore>(CACurrentMediaTime());
   _layer.device = _device;
   _layer.framebufferOnly = YES;
   _layer.opaque = YES;
@@ -164,8 +150,6 @@ constexpr double kPlacementWaitSeconds = 0.05;
   // while with two the main thread waited a whole refresh for a drawable.
   _layer.maximumDrawableCount = 3;
   _layer.displaySyncEnabled = YES;
-  _patternRect = CGRectNull;
-  _start = mach_absolute_time();
   if (@available(macOS 14.0, *)) {
     // One frame clock for every composite: it hands over a drawable timed for the next refresh,
     // so the main thread never waits for one, and it sleeps while nothing changes.
@@ -181,9 +165,13 @@ constexpr double kPlacementWaitSeconds = 0.05;
   NSError* error = nil;
   id<MTLLibrary> library = [_device newLibraryWithSource:kShaders options:nil error:&error];
   NSAssert(library, @"Compositor shaders failed: %@", error);
-  _standard = [self pipelines:library format:MTLPixelFormatBGRA8Unorm];
-  _extended = [self pipelines:library format:MTLPixelFormatRGBA16Float];
+  _standard = [self pipelines:library format:DrawableFormat(false)];
+  _extended = [self pipelines:library format:DrawableFormat(true)];
   return self;
+}
+
+- (fotufilm::CompositorCore*)core {
+  return _core.get();
 }
 
 - (FotufilmPipelines*)pipelines:(id<MTLLibrary>)library format:(MTLPixelFormat)format {
@@ -219,7 +207,7 @@ constexpr double kPlacementWaitSeconds = 0.05;
 
 // Switches the drawable between 8-bit Display P3 and extended-linear Display P3 with EDR.
 - (void)useExtendedRange:(BOOL)extended {
-  const MTLPixelFormat format = extended ? MTLPixelFormatRGBA16Float : MTLPixelFormatBGRA8Unorm;
+  const MTLPixelFormat format = DrawableFormat(extended);
   if (_layer.colorspace && _layer.pixelFormat == format) return;
   _layer.pixelFormat = format;
   CGColorSpaceRef space = CGColorSpaceCreateWithName(
@@ -227,16 +215,11 @@ constexpr double kPlacementWaitSeconds = 0.05;
   _layer.colorspace = space;
   CGColorSpaceRelease(space);
   _layer.wantsExtendedDynamicRangeContent = extended;
-  _stats.extendedRange = extended;
-}
-
-- (struct FotufilmCompositorStats)stats {
-  return _stats;
+  _core->SetExtendedRange(extended);
 }
 
 - (void)resizeToPoints:(CGSize)size scale:(CGFloat)scale {
-  _points = size;
-  _scale = scale;
+  _core->Resize(size.width, size.height, scale);
   _layer.contentsScale = scale;
   _layer.drawableSize = CGSizeMake(size.width * scale, size.height * scale);
 }
@@ -281,19 +264,18 @@ constexpr double kPlacementWaitSeconds = 0.05;
   // composite that follows is on the same queue, so it always sees the finished copy.
   CFRetain(surface);
   IOSurfaceIncrementUseCount(surface);
+  __weak FotufilmCompositor* weakSelf = self;
   [commands addCompletedHandler:^(id<MTLCommandBuffer> done) {
     IOSurfaceDecrementUseCount(surface);
     CFRelease(surface);
     const double gpu = (done.GPUEndTime - done.GPUStartTime) * 1e6;
     dispatch_async(dispatch_get_main_queue(), ^{
-      self->_stats.lastCopyGpuMicroseconds = gpu;
+      if (FotufilmCompositor* strong = weakSelf) strong->_core->BrowserCopyFinished(gpu);
     });
   }];
   [commands commit];
-  _stats.lastCopyMicroseconds = Microseconds(start, mach_absolute_time());
-  _stats.browserFrames++;
-  _stats.sharedTextures = true;
-  [self applyPlacement];
+  _core->BrowserFrame(int(width), int(height), true, Microseconds(start, mach_absolute_time()));
+  [self setNeedsDisplay];
 }
 
 - (void)uploadBrowserPixels:(const void*)pixels
@@ -305,65 +287,8 @@ constexpr double kPlacementWaitSeconds = 0.05;
             mipmapLevel:0
               withBytes:pixels
             bytesPerRow:width * 4];
-  _stats.lastCopyMicroseconds = Microseconds(start, mach_absolute_time());
-  _stats.browserFrames++;
-  _stats.sharedTextures = false;
-  [self applyPlacement];
-}
-
-- (void)presentFrame:(fotufilm::PresentedFrame)frame layer:(const std::string&)layer {
-  _imageLayer.Present(layer, std::move(frame));
-  _stats.imageFrames++;
+  _core->BrowserFrame(width, height, false, Microseconds(start, mach_absolute_time()));
   [self setNeedsDisplay];
-}
-
-- (void)placeImageLayer:(fotufilm::ImageLayerGeometry)geometry {
-  _pendingPlacement = std::move(geometry);
-  _pendingSince = CACurrentMediaTime();
-  // Applied with the next browser frame; this is for a layout change that repaints nothing.
-  __weak FotufilmCompositor* weakSelf = self;
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, int64_t(kPlacementWaitSeconds * NSEC_PER_SEC)),
-                 dispatch_get_main_queue(), ^{
-                   FotufilmCompositor* strong = weakSelf;
-                   if (strong && strong->_pendingPlacement &&
-                       CACurrentMediaTime() - strong->_pendingSince >= kPlacementWaitSeconds)
-                     [strong applyPlacement];
-                 });
-}
-
-- (void)applyPlacement {
-  if (_pendingPlacement) {
-    _imageLayer.Place(std::move(*_pendingPlacement));
-    _pendingPlacement.reset();
-  }
-  [self setNeedsDisplay];
-}
-
-- (void)showTestPattern:(CGRect)rect {
-  _patternRect = CGRectIsEmpty(rect) ? CGRectNull : rect;
-  [self setNeedsDisplay];
-}
-
-// Points from the top left to normalised device coordinates.
-- (simd_float4)deviceRect:(CGRect)rect {
-  const CGFloat width = MAX(_points.width, 1), height = MAX(_points.height, 1);
-  return simd_make_float4(rect.origin.x / width * 2 - 1,
-                          1 - rect.origin.y / height * 2,
-                          CGRectGetMaxX(rect) / width * 2 - 1,
-                          1 - CGRectGetMaxY(rect) / height * 2);
-}
-
-- (void)probePoint:(CGPoint)point {
-  _probing = !isnan(point.x) && !isnan(point.y);
-  _probe = point;
-  _probeValue = nil;
-  _probeChanges = [NSMutableArray array];
-  _probeTarget = nil;
-  [self setNeedsDisplay];
-}
-
-- (NSArray<NSDictionary*>*)probeChanges {
-  return [_probeChanges copy] ?: @[];
 }
 
 // While probing, every change is also composited at once into a texture of the drawable's size
@@ -372,28 +297,27 @@ constexpr double kPlacementWaitSeconds = 0.05;
 // frame the screen will show, less at most one refresh; and it holds while the window is covered
 // or the screen is locked, when the system slows the display link down.
 - (void)probeComposite {
-  _probeScheduled = NO;
-  if (!_probing || _points.width < 1 || _points.height < 1) return;
-  const NSUInteger width = NSUInteger(_points.width * _scale),
-                   height = NSUInteger(_points.height * _scale);
-  const MTLPixelFormat format =
-      [self wantsExtendedRange] ? MTLPixelFormatRGBA16Float : MTLPixelFormatBGRA8Unorm;
-  if (_probeTarget.width != width || _probeTarget.height != height ||
-      _probeTarget.pixelFormat != format) {
+  _core->ProbeStarted();
+  if (!_core->probing() || !_core->HasArea()) return;
+  const CFTimeInterval now = CACurrentMediaTime();
+  const bool extended = _core->WantsExtendedRange(now);
+  const fotufilm::CompositePlan plan = _core->Plan(now, extended);
+  const MTLPixelFormat format = DrawableFormat(extended);
+  if (_probeTarget.width != NSUInteger(plan.width) ||
+      _probeTarget.height != NSUInteger(plan.height) || _probeTarget.pixelFormat != format) {
     MTLTextureDescriptor* descriptor =
         [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format
-                                                           width:width
-                                                          height:height
+                                                           width:plan.width
+                                                          height:plan.height
                                                        mipmapped:NO];
     descriptor.usage = MTLTextureUsageRenderTarget;
     descriptor.storageMode = MTLStorageModePrivate;
     _probeTarget = [_device newTextureWithDescriptor:descriptor];
   }
   id<MTLCommandBuffer> commands = [_queue commandBuffer];
-  [self encodeInto:_probeTarget commands:commands];
-  const NSUInteger x = MIN(width - 1, NSUInteger(MAX(0, _probe.x * _scale)));
-  const NSUInteger y = MIN(height - 1, NSUInteger(MAX(0, _probe.y * _scale)));
-  const NSUInteger bytes = format == MTLPixelFormatRGBA16Float ? 8 : 4;
+  [self encode:plan into:_probeTarget commands:commands];
+  const auto [x, y] = _core->ProbePixel();
+  const NSUInteger bytes = extended ? 8 : 4;
   id<MTLBuffer> buffer = [_device newBufferWithLength:bytes options:MTLResourceStorageModeShared];
   id<MTLBlitCommandEncoder> blit = [commands blitCommandEncoder];
   [blit copyFromTexture:_probeTarget
@@ -411,28 +335,27 @@ constexpr double kPlacementWaitSeconds = 0.05;
   __weak FotufilmCompositor* weakSelf = self;
   [commands addCompletedHandler:^(id<MTLCommandBuffer>) {
     const uint8_t* read = static_cast<const uint8_t*>(buffer.contents);
-    NSMutableString* hex = [NSMutableString string];
-    for (NSUInteger i = 0; i < bytes; ++i) [hex appendFormat:@"%02x", read[i]];
+    std::string hex;
+    char digits[3];
+    for (NSUInteger i = 0; i < bytes; ++i) {
+      snprintf(digits, sizeof digits, "%02x", read[i]);
+      hex += digits;
+    }
     dispatch_async(dispatch_get_main_queue(), ^{
-      FotufilmCompositor* strong = weakSelf;
-      if (!strong || !strong->_probing) return;
-      // The first value is recorded too: it is what the changes are measured against.
-      if (![strong->_probeValue isEqualToString:hex])
-        [strong->_probeChanges addObject:@{@"time" : @(committed * 1000), @"value" : hex}];
-      strong->_probeValue = hex;
+      if (FotufilmCompositor* strong = weakSelf) strong->_core->RecordProbe(committed * 1000, hex);
     });
   }];
   [commands commit];
 }
 
 - (void)snapshot:(void (^)(NSString* path))done {
-  const NSUInteger width = NSUInteger(_points.width * _scale),
-                   height = NSUInteger(_points.height * _scale);
-  if (!width || !height) return done(nil);
-  const BOOL extended = [self wantsExtendedRange];
-  const MTLPixelFormat format = extended ? MTLPixelFormatRGBA16Float : MTLPixelFormatBGRA8Unorm;
+  if (!_core->HasArea()) return done(nil);
+  const CFTimeInterval now = CACurrentMediaTime();
+  const bool extended = _core->WantsExtendedRange(now);
+  const fotufilm::CompositePlan plan = _core->Plan(now, extended);
+  const NSUInteger width = plan.width, height = plan.height;
   MTLTextureDescriptor* descriptor =
-      [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format
+      [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:DrawableFormat(extended)
                                                          width:width
                                                         height:height
                                                      mipmapped:NO];
@@ -440,7 +363,7 @@ constexpr double kPlacementWaitSeconds = 0.05;
   descriptor.storageMode = MTLStorageModeShared;
   id<MTLTexture> target = [_device newTextureWithDescriptor:descriptor];
   id<MTLCommandBuffer> commands = [_queue commandBuffer];
-  [self encodeInto:target commands:commands];
+  [self encode:plan into:target commands:commands];
   [commands addCompletedHandler:^(id<MTLCommandBuffer>) {
     const size_t bytes = extended ? 8 : 4, row = width * bytes;
     NSMutableData* pixels = [NSMutableData dataWithLength:row * height];
@@ -481,9 +404,7 @@ constexpr double kPlacementWaitSeconds = 0.05;
 }
 
 - (void)setNeedsDisplay {
-  _dirty = YES;
-  if (_probing && !_probeScheduled) {
-    _probeScheduled = YES;
+  if (_core->Invalidate()) {
     dispatch_async(dispatch_get_main_queue(), ^{
       [self probeComposite];
     });
@@ -504,34 +425,20 @@ constexpr double kPlacementWaitSeconds = 0.05;
   }
 }
 
-- (void)setContinuous:(BOOL)continuous {
-  _continuous = continuous;
-  if (continuous) [self setNeedsDisplay];
-}
-
 - (void)metalDisplayLink:(CAMetalDisplayLink*)link
              needsUpdate:(CAMetalDisplayLinkUpdate*)update API_AVAILABLE(macos(14.0)) {
-  if (_pendingPlacement && CACurrentMediaTime() - _pendingSince >= kPlacementWaitSeconds)
-    [self applyPlacement];
-  if (!_dirty && !_continuous) {
+  if (!_core->Refresh(CACurrentMediaTime())) {
     link.paused = YES;
     return;
   }
   [self drawInto:update.drawable];
 }
 
-// Extended range while a frame on show carries light above SDR white.
-- (BOOL)wantsExtendedRange {
-  if (!CGRectIsNull(_patternRect)) return NO;
-  for (const auto& draw : _imageLayer.Draws(CACurrentMediaTime()))
-    if (draw.extended) return YES;
-  return NO;
-}
-
-// Draws the image layer and the page into `target`, in the target's encoding.
-- (void)encodeInto:(id<MTLTexture>)target commands:(id<MTLCommandBuffer>)commands {
-  const BOOL extended = target.pixelFormat == MTLPixelFormatRGBA16Float;
-  FotufilmPipelines* pipelines = extended ? _extended : _standard;
+// Draws a plan into `target`, in the target's encoding.
+- (void)encode:(const fotufilm::CompositePlan&)plan
+          into:(id<MTLTexture>)target
+      commands:(id<MTLCommandBuffer>)commands {
+  FotufilmPipelines* pipelines = plan.extended ? _extended : _standard;
   MTLRenderPassDescriptor* pass = [MTLRenderPassDescriptor renderPassDescriptor];
   pass.colorAttachments[0].texture = target;
   pass.colorAttachments[0].loadAction = MTLLoadActionClear;
@@ -539,91 +446,77 @@ constexpr double kPlacementWaitSeconds = 0.05;
   pass.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1);
   id<MTLRenderCommandEncoder> encoder = [commands renderCommandEncoderWithDescriptor:pass];
 
-  Quad quad{};
-  quad.time = float(Microseconds(_start, mach_absolute_time()) / 1e6);
-  quad.target = extended ? kLinear : kTransfer;
-  quad.uv = simd_make_float4(0, 0, 1, 1);
-  if (!CGRectIsNull(_patternRect)) {
-    quad.rect = [self deviceRect:_patternRect];
-    [encoder setRenderPipelineState:pipelines.pattern];
-    [encoder setVertexBytes:&quad length:sizeof quad atIndex:0];
-    [encoder setFragmentBytes:&quad length:sizeof quad atIndex:0];
-    [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
-  }
-
-  // The engine's frames, clipped to the page's canvas; the GPU holds each until it has read it.
-  const auto draws = _imageLayer.Draws(CACurrentMediaTime());
-  if (!draws.empty()) {
-    const fotufilm::LayerRect& clip = _imageLayer.clip();
-    const double left = MAX(0, clip.x * _scale), top = MAX(0, clip.y * _scale);
-    const double right = MIN(double(target.width), (clip.x + clip.width) * _scale);
-    const double bottom = MIN(double(target.height), (clip.y + clip.height) * _scale);
-    if (!clip.Empty() && right > left && bottom > top) {
-      [encoder setScissorRect:(MTLScissorRect){NSUInteger(left), NSUInteger(top),
-                                               NSUInteger(right - left),
-                                               NSUInteger(bottom - top)}];
-      auto held = std::make_shared<std::vector<std::shared_ptr<fotufilm::PresentationSurface>>>();
-      [encoder setRenderPipelineState:pipelines.image];
-      for (const auto& draw : draws) {
-        auto* surface = static_cast<fotufilm::MacSurface*>(draw.surface.get());
-        held->push_back(draw.surface);
-        quad.rect = [self deviceRect:CGRectMake(draw.rect.x, draw.rect.y, draw.rect.width,
-                                                draw.rect.height)];
-        quad.source = draw.extended ? kLinear : kTransfer;
-        quad.opacity = draw.opacity;
-        [encoder setVertexBytes:&quad length:sizeof quad atIndex:0];
-        [encoder setFragmentBytes:&quad length:sizeof quad atIndex:0];
-        [encoder setFragmentTexture:surface->texture() atIndex:0];
-        [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+  // The GPU holds the engine's frames until it has read them.
+  auto held = std::make_shared<std::vector<std::shared_ptr<fotufilm::PresentationSurface>>>();
+  const MTLScissorRect whole{0, 0, target.width, target.height};
+  for (const fotufilm::CompositeQuad& item : plan.quads) {
+    using Kind = fotufilm::CompositeQuad::Kind;
+    Quad quad{};
+    quad.rect = simd_make_float4(item.rect.x0, item.rect.y0, item.rect.x1, item.rect.y1);
+    quad.uv = simd_make_float4(0, 0, 1, 1);
+    quad.time = plan.time;
+    quad.target = plan.extended ? kLinear : kTransfer;
+    quad.source = item.linear_source ? kLinear : kTransfer;
+    quad.opacity = item.opacity;
+    id<MTLTexture> texture = nil;
+    switch (item.kind) {
+      case Kind::kPattern:
+        [encoder setRenderPipelineState:pipelines.pattern];
+        break;
+      case Kind::kImage: {
+        if (!plan.scissor) continue;
+        const fotufilm::PixelRect& clip = *plan.scissor;
+        [encoder setScissorRect:(MTLScissorRect){NSUInteger(clip.x), NSUInteger(clip.y),
+                                                 NSUInteger(clip.width), NSUInteger(clip.height)}];
+        [encoder setRenderPipelineState:pipelines.image];
+        texture = static_cast<fotufilm::MacSurface*>(item.surface.get())->texture();
+        held->push_back(item.surface);
+        break;
       }
-      [commands addCompletedHandler:^(id<MTLCommandBuffer>) {
-        held->clear();
-      }];
-      [encoder setScissorRect:(MTLScissorRect){0, 0, target.width, target.height}];
+      case Kind::kPage:
+        [encoder setScissorRect:whole];
+        [encoder setRenderPipelineState:pipelines.page];
+        texture = _ui;
+        break;
     }
-  }
-
-  if (_ui) {
-    // The page's frame at its own pixel size from the top left, so a resize in flight shows an
-    // edge rather than a stretched UI.
-    quad.rect = [self deviceRect:CGRectMake(0, 0, _ui.width / _scale, _ui.height / _scale)];
-    quad.source = kTransfer;
-    [encoder setRenderPipelineState:pipelines.page];
     [encoder setVertexBytes:&quad length:sizeof quad atIndex:0];
     [encoder setFragmentBytes:&quad length:sizeof quad atIndex:0];
-    [encoder setFragmentTexture:_ui atIndex:0];
+    if (texture) [encoder setFragmentTexture:texture atIndex:0];
     [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
   }
   [encoder endEncoding];
+  if (!held->empty()) {
+    [commands addCompletedHandler:^(id<MTLCommandBuffer>) {
+      held->clear();
+    }];
+  }
 }
 
 // Draws the image layer and the page into `drawable`, or into the layer's next drawable where no
 // display link hands one over.
 - (void)drawInto:(id<CAMetalDrawable>)drawable {
-  if (_points.width < 1 || _points.height < 1) return;
-  _imageLayer.Tick();
+  if (!_core->HasArea()) return;
+  _core->Tick();
   // A change of range takes effect from the next drawable, which is made in the new format; the
   // one in hand is let go rather than shown in the wrong colour space.
-  const BOOL extended = [self wantsExtendedRange];
-  if (extended != _stats.extendedRange) {
+  const CFTimeInterval now = CACurrentMediaTime();
+  const bool extended = _core->WantsExtendedRange(now);
+  if (extended != _core->stats().extended_range) {
     [self useExtendedRange:extended];
     if (drawable) return;
   }
-  _dirty = NO;
+  _core->ClearDirty();
   const uint64_t start = mach_absolute_time();
   if (!drawable) drawable = [_layer nextDrawable];
   if (!drawable) return;
   const uint64_t acquired = mach_absolute_time();
-  _stats.lastDrawableWaitMicroseconds = Microseconds(start, acquired);
   id<MTLCommandBuffer> commands = [_queue commandBuffer];
-  [self encodeInto:drawable.texture commands:commands];
+  [self encode:_core->Plan(now, extended) into:drawable.texture commands:commands];
   [commands presentDrawable:drawable];
   [commands commit];
-  _stats.frames++;
-  _stats.lastCompositeMicroseconds = Microseconds(acquired, mach_absolute_time());
+  _core->Composited(Microseconds(start, acquired), Microseconds(acquired, mach_absolute_time()));
   // A crossfade draws every frame until it is done, and a movie's queued frame the next one.
-  if (_imageLayer.Fading(CACurrentMediaTime()) || _imageLayer.Pending()) {
-    _dirty = YES;
+  if (_core->KeepDrawing(CACurrentMediaTime())) {
     BOOL linked = NO;
     if (@available(macOS 14.0, *)) linked = _link != nil;
     if (!linked) {
@@ -636,3 +529,39 @@ constexpr double kPlacementWaitSeconds = 0.05;
 }
 
 @end
+
+namespace fotufilm {
+
+MacWindowCompositor::MacWindowCompositor(FotufilmCompositor* compositor,
+                                         std::function<float()> headroom)
+    : compositor_(compositor), headroom_(std::move(headroom)) {}
+
+CompositorCore& MacWindowCompositor::core() {
+  FotufilmCompositor* compositor = compositor_;
+  return compositor ? *compositor.core : detached_;
+}
+
+void MacWindowCompositor::SetNeedsDisplay() {
+  [compositor_ setNeedsDisplay];
+}
+
+void MacWindowCompositor::RunAfter(double seconds, std::function<void()> task) {
+  auto shared = std::make_shared<std::function<void()>>(std::move(task));
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, int64_t(seconds * NSEC_PER_SEC)),
+                 dispatch_get_main_queue(), ^{
+                   (*shared)();
+                 });
+}
+
+double MacWindowCompositor::Now() { return CACurrentMediaTime(); }
+
+void MacWindowCompositor::Snapshot(std::function<void(const std::string& path)> done) {
+  FotufilmCompositor* compositor = compositor_;
+  if (!compositor) return done("");
+  auto shared = std::make_shared<std::function<void(const std::string&)>>(std::move(done));
+  [compositor snapshot:^(NSString* path) {
+    (*shared)(path ? std::string(path.UTF8String) : std::string());
+  }];
+}
+
+}  // namespace fotufilm

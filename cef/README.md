@@ -90,8 +90,11 @@ The transport keeps the contract in `web/src/backend/README.md` and the call sha
 | `src/renderer/renderer_bridge.*` | Installs the transport in trusted pages; returns replies to their context. |
 | `src/presentation/presentation.h` | The image presenter and its surfaces: the interface every platform implements. |
 | `src/presentation/image_layer.*` | Which presented frame each layer draws, and where the page shows them. |
+| `src/presentation/compositor_core.*` | Every compositor's decisions: when to draw, the plan of quads, EDR, frame pacing, the latency probe. |
+| `src/presentation/pooled_presenter.*` | Surface reuse and the hand-over of presented frames; a platform supplies only its surfaces. |
+| `src/presentation/presentation_methods.*` | The page's `setImageLayer`, compositor stats, snapshot and probe calls, for every platform. |
 | `src/engine/engine_bridge.*` | Loads `libfotufilm`, runs it on the engine thread, lends it the presenter. |
-| `src/platform/mac/` | Window, input forwarding, Metal compositor, app and helper entry points. |
+| `src/platform/mac/` | Window, input forwarding, the Metal half of the compositor, app and helper entry points. |
 | `src/platform/mac/image_presenter.*` | The presenter on macOS: a pool of IOSurfaces shared with Metal. |
 | `src/platform/mac/main_menu.*` | The Mac app's menu bar, Open Recent and the Plugins menu. |
 | `resources/diagnostics/` | Bridge diagnostics: round trips, payloads, native-layer alignment. |
@@ -283,11 +286,17 @@ no film, as the Mac app's importer does. Light frames live in
    headroom changes (a brightness change applies at the next render).
 4. **Windows and Linux.** The same host with a D3D11 compositor (shared handles) and a Vulkan
    compositor (dmabuf), and Halide GPU targets for each; Swift is shipped with the app there.
+   What such a compositor decides is already shared (`compositor_core.h`): a port supplies a
+   `PresentationSurface`, a `PooledPresenter`, a `WindowCompositor` and the draw of each
+   `CompositePlan`, and registers `RegisterPresentationMethods`. `libfotufilm` builds on Linux.
 5. **Host completeness.** IME composition, native `<select>` popups,
    accessibility, window chrome from `window-chrome.js`, and signing and notarisation of the app
    and its helpers.
 
 ## Checks
+
+`cef/tests/run.sh` builds and runs the portable presentation checks with the system compiler, no
+CEF or GPU needed, so they run on every platform the host targets.
 
 The diagnostics page (`--fotufilm-diagnostics`) measures round trips on both threads, echoes
 64 KB to 4K RGBA16F payloads and verifies their bytes, and draws a moving pattern in the native
@@ -301,7 +310,7 @@ The bridge answers these calls for tests driven over the DevTools protocol:
 | `compositorStats` | Frame counts, copy and composite times, `extendedRange` and `headroom`. |
 | `compositorSnapshot` | Path of a composite of page and image layer: PNG, or half-float TIFF while extended. |
 | `probePixel` {x, y} | Watches one point: every change is composited at once and read back (an empty object stops it). |
-| `probeReport` | `now` and each change's commit time (ms, `CACurrentMediaTime`) and pixel value. |
+| `probeReport` | `now` and each change's commit time (ms, the host's clock: `CACurrentMediaTime` on macOS) and pixel value. |
 
 Latency from input to pixels: arm `probePixel` on the photograph, read `probeReport`'s `now`,
 send a key to a slider, and take the first change whose value moved by the step. Changes are

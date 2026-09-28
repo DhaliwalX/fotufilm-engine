@@ -65,7 +65,10 @@ set(FOTUFILM_COMMON_SOURCES
 set(FOTUFILM_BROWSER_SOURCES
   src/app/client.cc
   src/bridge/dispatcher.cc
+  src/presentation/compositor_core.cc
   src/presentation/image_layer.cc
+  src/presentation/pooled_presenter.cc
+  src/presentation/presentation_methods.cc
 )
 set(FOTUFILM_ENGINE_LIBRARY "${FOTUFILM_ENGINE_DIR}/libfotufilm.dylib")
 if(EXISTS "${FOTUFILM_ENGINE_LIBRARY}")
@@ -99,8 +102,10 @@ if(OS_MAC)
     src/platform/mac/image_presenter.mm
     src/platform/mac/main_menu.mm
     src/platform/mac/main.mm)
-  # CEF's flags cover C++ sources only; Objective-C++ needs the same standard.
-  set_source_files_properties(${_mac_sources} PROPERTIES COMPILE_OPTIONS "-fobjc-arc;-std=c++20")
+  # CEF's flags cover C++ sources only; Objective-C++ needs the same standard, and no RTTI, so
+  # its classes can derive from the portable ones compiled as C++.
+  set_source_files_properties(${_mac_sources} PROPERTIES
+    COMPILE_OPTIONS "-fobjc-arc;-std=c++20;-fno-rtti")
 
   add_executable(fotufilm_desktop MACOSX_BUNDLE
     ${FOTUFILM_COMMON_SOURCES} ${FOTUFILM_BROWSER_SOURCES} ${_mac_sources})
