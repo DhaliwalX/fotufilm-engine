@@ -1,4 +1,5 @@
 import AdjustmentGroup from "./AdjustmentGroup.jsx";
+import GradeDeck from "./GradeDeck.jsx";
 import {
   Disclosure,
   DisclosureTitle,
@@ -123,7 +124,7 @@ export default function LightInspector() {
       >
         <DisclosureTitle>{"Grade"}</DisclosureTitle>
         <DisclosurePanel>
-          <div className="control-stack">
+          <GradeDeck>
             <Switch
               isSelected={edit.gradeSpace}
               onChange={(value) =>
@@ -136,18 +137,7 @@ export default function LightInspector() {
             >
               {"Encoded Grade"}
             </Switch>
-            {["Shadows", "Midtones", "Highlights"].map((band) => (
-              <div
-                className="grade-band"
-                key={band}
-                role="group"
-                aria-label={band}
-              >
-                <h3>{band}</h3>
-                {<AdjustmentGroup group={band} />}
-              </div>
-            ))}
-          </div>
+          </GradeDeck>
         </DisclosurePanel>
       </Disclosure>
     </>
