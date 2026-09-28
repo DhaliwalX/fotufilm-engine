@@ -1,7 +1,8 @@
 // The Linux desktop's ahead-of-time kernels (tools/generate-halide-aot-linux.sh): the desktop
 // graph compiled twice, for CUDA and for Vulkan, behind the CUDA entry points the JIT build offers.
 // The device is chosen once, when the app first asks: CUDA where an NVIDIA driver answers, Vulkan
-// on any other GPU, and none otherwise, when the engine develops on the CPU.
+// on any other GPU (a discrete one first), a software Vulkan device when there is no GPU, and
+// none otherwise.
 // FOTUFILM_GPU_DEVICE=cuda, vulkan or cpu chooses instead.
 #if defined(FOTUFILM_HALIDE_LINUX_AOT)
 
@@ -14,6 +15,8 @@
 #include "FotufilmHalide.h"
 #include "FotufilmResolvedFrameParams.h"
 #include "Pipeline/FilmTileStore.h"
+
+#include <dlfcn.h>
 
 #include <algorithm>
 #include <cmath>
@@ -79,6 +82,57 @@ bool answers(Device device) {
     return true;
 }
 
+/// Which kind of Vulkan device to develop on, for Halide's runtime (HL_VK_DEVICE_TYPE): a discrete
+/// GPU over an integrated one, as a laptop with both wants, and a software device (Mesa's
+/// lavapipe) only when there is no GPU at all. Halide alone takes the first GPU it enumerates and
+/// never a software one. Read through the loader directly, with only the fields it needs.
+const char *preferred_vulkan_device_type() {
+    void *loader = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
+    if (!loader) return nullptr;
+    struct ApplicationInfo {
+        int32_t type; const void *next; const char *name; uint32_t version;
+        const char *engine; uint32_t engine_version; uint32_t api;
+    };
+    struct InstanceInfo {
+        int32_t type; const void *next; uint32_t flags; const ApplicationInfo *application;
+        uint32_t layers; const char *const *layer_names; uint32_t extensions;
+        const char *const *extension_names;
+    };
+    using Create = int32_t (*)(const InstanceInfo *, const void *, void **);
+    using Enumerate = int32_t (*)(void *, uint32_t *, void **);
+    using Properties = void (*)(void *, void *);
+    using Destroy = void (*)(void *, const void *);
+    auto create = reinterpret_cast<Create>(dlsym(loader, "vkCreateInstance"));
+    auto enumerate = reinterpret_cast<Enumerate>(dlsym(loader, "vkEnumeratePhysicalDevices"));
+    auto properties = reinterpret_cast<Properties>(dlsym(loader, "vkGetPhysicalDeviceProperties"));
+    auto destroy = reinterpret_cast<Destroy>(dlsym(loader, "vkDestroyInstance"));
+    const char *type = nullptr;
+    void *instance = nullptr;
+    const ApplicationInfo application{0, nullptr, "Fotufilm", 1, "Fotufilm", 1, (1u << 22) | (2u << 12)};
+    const InstanceInfo info{1, nullptr, 0, &application, 0, nullptr, 0, nullptr};
+    if (create && enumerate && properties && destroy && create(&info, nullptr, &instance) == 0) {
+        void *devices[16];
+        uint32_t count = 16;
+        if (enumerate(instance, &count, devices) >= 0) {
+            bool discrete = false, integrated = false, software = false;
+            for (uint32_t index = 0; index < count; ++index) {
+                // VkPhysicalDeviceProperties: four uint32_t, then deviceType.
+                alignas(8) unsigned char device[4096];
+                properties(devices[index], device);
+                int32_t kind;
+                std::memcpy(&kind, device + 16, sizeof(kind));
+                discrete |= kind == 2;
+                integrated |= kind == 1;
+                software |= kind == 4;
+            }
+            type = discrete ? "discrete-gpu" : integrated ? "integrated-gpu" : software ? "cpu" : nullptr;
+        }
+        destroy(instance, nullptr);
+    }
+    dlclose(loader);
+    return type;
+}
+
 Device chosen_device() {
     static const Device device = [] {
         configure_error_handler();
@@ -86,8 +140,10 @@ Device chosen_device() {
         const std::string wanted = setting ? setting : "";
         if (wanted == "cpu") return kNone;
         if (wanted == "cuda") return answers(kCuda) ? kCuda : kNone;
-        if (wanted == "vulkan") return answers(kVulkan) ? kVulkan : kNone;
-        if (answers(kCuda)) return kCuda;
+        if (wanted != "vulkan" && answers(kCuda)) return kCuda;
+        if (!std::getenv("HL_VK_DEVICE_TYPE"))
+            if (const char *type = preferred_vulkan_device_type())
+                setenv("HL_VK_DEVICE_TYPE", type, 0);
         return answers(kVulkan) ? kVulkan : kNone;
     }();
     return device;
