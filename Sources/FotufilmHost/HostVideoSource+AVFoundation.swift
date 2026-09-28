@@ -215,14 +215,17 @@ final class AVFoundationVideoSource: HostVideoSource {
     }
 
     func frames(from start: Double, to end: Double, width: Int, height: Int,
-                interpretation: HostVideoInterpretation) throws -> HostVideoFrameReader {
+                interpretation: HostVideoInterpretation, displayCodes: Bool) throws
+        -> HostVideoFrameReader {
         let road = road(interpretation)
         let range = CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600_000),
                                 end: CMTime(seconds: end, preferredTimescale: 600_000))
         let (reader, output) = try self.reader(road, width: width, height: height, range: range)
         return Frames(cursor: Cursor(key: "", reader: reader, output: output), end: end) { sample in
-            try self.convert(sample, width: width, height: height, road: road,
-                             interpretation: interpretation)
+            displayCodes && road == .managed8
+                ? try self.codes(sample)
+                : try self.convert(sample, width: width, height: height, road: road,
+                                   interpretation: interpretation)
         }
     }
 
@@ -281,9 +284,9 @@ final class AVFoundationVideoSource: HostVideoSource {
                     if road == .managed8 {
                         let bytes = source.assumingMemoryBound(to: UInt8.self)
                         for x in 0..<pixelWidth {
-                            row[x] = SIMD3(Self.srgbTable[Int(bytes[x * 4 + 2])],
-                                           Self.srgbTable[Int(bytes[x * 4 + 1])],
-                                           Self.srgbTable[Int(bytes[x * 4])])
+                            row[x] = SIMD3(HostVideoFrame.srgbTable[Int(bytes[x * 4 + 2])],
+                                           HostVideoFrame.srgbTable[Int(bytes[x * 4 + 1])],
+                                           HostVideoFrame.srgbTable[Int(bytes[x * 4])])
                         }
                     } else {
                         let floats = source.assumingMemoryBound(to: Float.self)
@@ -314,11 +317,68 @@ final class AVFoundationVideoSource: HostVideoSource {
                               width: outWidth, height: outHeight, rgba: rgba)
     }
 
-    /// Linear light for every 8-bit sRGB code.
-    private static let srgbTable: [Float] = (0..<256).map { ColorScience.srgbToLinear(Float($0) / 255) }
+    /// One 8-bit Display P3 sample as upright RGBA codes, untouched: the managed 8-bit road's
+    /// frame for a develop that reads display codes. The codes are written when the develop
+    /// asks, straight from the decoder's buffer into its input.
+    private func codes(_ sample: CMSampleBuffer) throws -> HostVideoFrame {
+        guard let buffer = CMSampleBufferGetImageBuffer(sample) else {
+            throw HostEngine.Failure(description: "A video frame had no pixels.")
+        }
+        let codes = SampleCodes(buffer: buffer, orientation: orientation)
+        let duration = CMSampleBufferGetDuration(sample).seconds
+        return HostVideoFrame(time: sample.time,
+                              duration: duration.isFinite && duration > 0 ? duration : 1 / frameRate,
+                              width: codes.width, height: codes.height, rgba: [], display8: codes)
+    }
+
+    /// A decoded BGRA sample, turned upright and swizzled to RGBA as it is written.
+    private struct SampleCodes: HostVideoCodes {
+        let buffer: CVPixelBuffer
+        let orientation: Orientation
+        var quarterTurn: Bool { orientation == .left || orientation == .right }
+        var width: Int { quarterTurn ? CVPixelBufferGetHeight(buffer) : CVPixelBufferGetWidth(buffer) }
+        var height: Int { quarterTurn ? CVPixelBufferGetWidth(buffer) : CVPixelBufferGetHeight(buffer) }
+        var count: Int { width * height * 4 }
+
+        func write(into destination: UnsafeMutableRawPointer) {
+            let pixelWidth = CVPixelBufferGetWidth(buffer)
+            let pixelHeight = CVPixelBufferGetHeight(buffer)
+            let outWidth = width
+            CVPixelBufferLockBaseAddress(buffer, .readOnly)
+            defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+            guard let base = CVPixelBufferGetBaseAddress(buffer) else {
+                destination.initializeMemory(as: UInt8.self, repeating: 0, count: count)
+                return
+            }
+            let rowBytes = CVPixelBufferGetBytesPerRow(buffer)
+            let orientation = self.orientation
+            let out = destination.assumingMemoryBound(to: UInt8.self)
+            let band = 32
+            DispatchQueue.concurrentPerform(iterations: (pixelHeight + band - 1) / band) { index in
+                for y in (index * band)..<min(pixelHeight, (index + 1) * band) {
+                    let bytes = (base + y * rowBytes).assumingMemoryBound(to: UInt8.self)
+                    for x in 0..<pixelWidth {
+                        let (ux, uy): (Int, Int)
+                        switch orientation {
+                        case .up: (ux, uy) = (x, y)
+                        case .right: (ux, uy) = (pixelHeight - 1 - y, x)
+                        case .left: (ux, uy) = (y, pixelWidth - 1 - x)
+                        case .down: (ux, uy) = (pixelWidth - 1 - x, pixelHeight - 1 - y)
+                        }
+                        // BGRA in, opaque RGBA out.
+                        let i = (uy * outWidth + ux) * 4
+                        out[i] = bytes[x * 4 + 2]
+                        out[i + 1] = bytes[x * 4 + 1]
+                        out[i + 2] = bytes[x * 4]
+                        out[i + 3] = 255
+                    }
+                }
+            }
+        }
+    }
 
     /// The per-pixel step from what the decoder hands over to the working space. The managed
-    /// 8-bit road arrives already linearised through `srgbTable`.
+    /// 8-bit road arrives already linearised through `HostVideoFrame.srgbTable`.
     private func pixelConversion(
         _ road: Road, interpretation: HostVideoInterpretation
     ) throws -> (SIMD3<Float>) -> SIMD3<Float> {

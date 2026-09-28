@@ -16,7 +16,59 @@ struct HostVideoFrame {
     var duration: Double
     var width: Int
     var height: Int
+    /// Upright scene-linear Rec.2020 RGBA; empty when the frame came as `display8`.
     var rgba: [Float]
+    /// Upright RGBA8 Display P3 codes, as an 8-bit decoder delivered them, where a reader was
+    /// asked for them and its road decodes that way: the codes a develop that reads display
+    /// codes takes as they are, with no trip through linear light.
+    var display8: HostVideoCodes? = nil
+}
+
+/// A frame's upright RGBA8 codes, written where they are wanted: a decoder's sample goes straight
+/// into a develop's input rather than through an array first.
+protocol HostVideoCodes {
+    /// Bytes `write` fills: four a pixel.
+    var count: Int { get }
+    func write(into destination: UnsafeMutableRawPointer)
+}
+
+extension HostVideoCodes {
+    var bytes: [UInt8] {
+        [UInt8](unsafeUninitializedCapacity: count) { buffer, initialized in
+            write(into: buffer.baseAddress!)
+            initialized = count
+        }
+    }
+}
+
+extension Array: HostVideoCodes where Element == UInt8 {
+    func write(into destination: UnsafeMutableRawPointer) {
+        withUnsafeBytes { destination.copyMemory(from: $0.baseAddress!, byteCount: $0.count) }
+    }
+}
+
+extension HostVideoFrame {
+    /// Linear light for every 8-bit sRGB code, as the managed 8-bit road reads its codes.
+    static let srgbTable: [Float] = (0..<256).map { ColorScience.srgbToLinear(Float($0) / 255) }
+
+    /// Scene-linear Rec.2020 for 8-bit Display P3 codes, as the managed road converts them: for a
+    /// develop that needs light after all.
+    static func scene(display8: HostVideoCodes) -> [Float] {
+        let codes = display8.bytes
+        var scene = [Float](repeating: 1, count: codes.count)
+        for i in stride(from: 0, to: codes.count, by: 4) {
+            let rgb = ColorScience.linearDisplayP3ToRec2020(
+                SIMD3(srgbTable[Int(codes[i])], srgbTable[Int(codes[i + 1])],
+                      srgbTable[Int(codes[i + 2])]))
+            scene[i] = rgb.x.isFinite ? rgb.x : 0
+            scene[i + 1] = rgb.y.isFinite ? rgb.y : 0
+            scene[i + 2] = rgb.z.isFinite ? rgb.z : 0
+        }
+        return scene
+    }
+
+    /// The frame's light, whichever way it came.
+    var scene: [Float] { display8.map(Self.scene(display8:)) ?? rgba }
 }
 
 /// How a movie's code values are read, the edit's `video.encoding`: the file's own colour tags,
@@ -59,8 +111,10 @@ protocol HostVideoSource: AnyObject {
                interpretation: HostVideoInterpretation) throws -> HostVideoFrame
 
     /// Every frame shown from `start` until `end`, in order, decoded at `width` x `height`.
+    /// `displayCodes` asks for `display8` frames where the decode is 8-bit Display P3.
     func frames(from start: Double, to end: Double, width: Int, height: Int,
-                interpretation: HostVideoInterpretation) throws -> HostVideoFrameReader
+                interpretation: HostVideoInterpretation, displayCodes: Bool) throws
+        -> HostVideoFrameReader
 
     /// The sound as interleaved 16-bit PCM at `sampleRate`, for a playback clock the page's
     /// media element can always play; nil when the movie is silent.
@@ -262,8 +316,8 @@ final class HostVideo {
 
     private func pixels(width: Int, height: Int) -> [Float] {
         if let held {
-            if held.width == width && held.height == height { return held.rgba }
-            return AreaResample.reduce(held.rgba, width: held.width, height: held.height,
+            if held.width == width && held.height == height { return held.scene }
+            return AreaResample.reduce(held.scene, width: held.width, height: held.height,
                                        to: width, height)
         }
         let key = "\(interpretation)|\(frameNumber(time))|\(width)x\(height)"

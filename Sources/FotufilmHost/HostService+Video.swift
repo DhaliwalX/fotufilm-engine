@@ -166,9 +166,14 @@ extension HostService {
             }
         }
         do {
+            // A frame the film takes as it was decoded — nothing turned, cut or resized — skips
+            // light where the pipeline reads the decoder's display codes.
+            let direct = pipeline.takesDisplayCodes && prepared.geometry.isIdentity
+                && developSizes.frame == developSizes.output
             let frames = Prefetch(try source.frames(from: start, to: end, width: frameSize.0,
                                                     height: frameSize.1,
-                                                    interpretation: interpretation))
+                                                    interpretation: interpretation,
+                                                    displayCodes: direct))
             var last = -Double.infinity
             while true {
                 var started = clock.mark()
@@ -191,12 +196,17 @@ extension HostService {
                 }
                 started = clock.mark()
                 video.hold(frame, interpretation: interpretation)
-                let scene = try sceneFor(prepared.image, geometry: prepared.geometry,
-                                         sizes: developSizes)
-                clock.charge("scene", since: started)
-                started = clock.mark()
-                try pipeline.submit(scene, frameIndex: prepared.image.pace.frameIndex)
-                clock.charge("submit", since: started)
+                if let codes = frame.display8 {
+                    try pipeline.submit(display8: codes, frameIndex: prepared.image.pace.frameIndex)
+                    clock.charge("submit", since: started)
+                } else {
+                    let scene = try sceneFor(prepared.image, geometry: prepared.geometry,
+                                             sizes: developSizes)
+                    clock.charge("scene", since: started)
+                    started = clock.mark()
+                    try pipeline.submit(scene, frameIndex: prepared.image.pace.frameIndex)
+                    clock.charge("submit", since: started)
+                }
                 pending.append((times, time + frame.duration - start))
                 last = time
                 // One frame fewer than the pipeline holds stays in flight, so the next submit
@@ -356,29 +366,49 @@ extension HostService {
     }
 
     /// Decodes the next frame while the current one develops.
+    /// Decodes ahead of the develop on a queue of its own. Two frames ahead: a 4K frame's
+    /// conversion sometimes outlasts one develop, and a second frame in hand keeps the GPU's
+    /// two in flight fed.
     private final class Prefetch {
+        private final class Read {
+            var result: Result<HostVideoFrame?, Error>?
+            let done = DispatchSemaphore(value: 0)
+            func get() throws -> HostVideoFrame? {
+                done.wait()
+                done.signal()
+                return try result!.get()
+            }
+        }
+
         private let reader: HostVideoFrameReader
         private let queue = DispatchQueue(label: "fotufilm.video.decode", qos: .userInitiated)
-        private var pending: DispatchWorkItem?
-        private var result: Result<HostVideoFrame?, Error>?
+        private let ahead = 2
+        private var reads: [Read] = []
+        private var ended = false
 
         init(_ reader: HostVideoFrameReader) { self.reader = reader }
 
         func next() throws -> HostVideoFrame? {
-            if pending == nil { read() }
-            pending?.wait()
-            let frame = try result!.get()
-            pending = nil
-            if frame != nil { read() }
+            topUp()
+            guard !reads.isEmpty else { return nil }
+            let frame = try reads.removeFirst().get()
+            if frame == nil { ended = true; reads.removeAll() }
+            topUp()
             return frame
         }
 
-        private func read() {
-            let item = DispatchWorkItem { [self] in result = Result { try reader.next() } }
-            pending = item
-            queue.async(execute: item)
+        private func topUp() {
+            while !ended, reads.count < ahead {
+                let read = Read()
+                queue.async { [reader] in
+                    read.result = Result { try reader.next() }
+                    read.done.signal()
+                }
+                reads.append(read)
+            }
         }
 
-        deinit { pending?.wait() }
+        // The reader outlives no read still decoding from it.
+        deinit { queue.sync {} }
     }
 }

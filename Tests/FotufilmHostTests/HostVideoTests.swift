@@ -80,7 +80,8 @@ final class HostVideoTests: XCTestCase {
         XCTAssertTrue(source.hasAudio)
 
         // The sequential read is the reference each seek must agree with.
-        let reader = try source.frames(from: 0, to: 1, width: 32, height: 24, interpretation: .standard)
+        let reader = try source.frames(from: 0, to: 1, width: 32, height: 24, interpretation: .standard,
+                                       displayCodes: false)
         var sequence: [HostVideoFrame] = []
         while let frame = try reader.next() { sequence.append(frame) }
         XCTAssertEqual(sequence.count, Self.frames)
@@ -378,6 +379,29 @@ final class HostVideoTests: XCTestCase {
                                          "Fast must not introduce a broad tonal shift")
             }
         }
+    }
+
+    /// An 8-bit decoder's codes go into the 8-bit road as they are, and develop to the very codes
+    /// their light would: the direct road only skips the trip.
+    func testDisplayCodesDevelopAsTheirLightDoes() throws {
+        let engine = try makeEngine()
+        guard HostPlatform.current.videoDeveloper != nil else {
+            throw XCTSkip("This platform develops movies frame by frame.")
+        }
+        let roads = try Self.pipelines(engine, .eightBit)
+        XCTAssertTrue(roads.pipeline.takesDisplayCodes)
+        let count = roads.pipeline.development.developWidth
+            * roads.pipeline.development.developHeight
+        var codes = [UInt8](repeating: 255, count: count * 4)
+        for i in codes.indices where i % 4 != 3 { codes[i] = UInt8(truncatingIfNeeded: i * 37 / 4) }
+        try roads.pipeline.submit(display8: codes, frameIndex: 5)
+        var direct: [UInt8] = []
+        try roads.pipeline.receive { direct = Array($0) }
+        let throughLight = try Self.develop(roads.pipeline, HostVideoFrame.scene(display8: codes),
+                                            frameIndex: 5)
+        XCTAssertEqual(direct, throughLight)
+        // A road that reads light takes codes through it.
+        XCTAssertFalse(roads.portable.takesDisplayCodes)
     }
 
     func testSelectionsAndNoFilmTakeTheFrameByFrameDevelop() throws {

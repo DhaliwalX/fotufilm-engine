@@ -98,9 +98,22 @@ protocol HostVideoPipeline: AnyObject {
     var clock: HostVideoClock { get }
     /// Starts a frame: `scene` is at the development's develop size.
     func submit(_ scene: [Float], frameIndex: UInt64) throws
+    /// Whether `submit(display8:)` develops an 8-bit decoder's Display P3 codes as they are,
+    /// rather than through light.
+    var takesDisplayCodes: Bool { get }
+    /// Starts a frame from upright RGBA8 Display P3 codes at the develop size.
+    func submit(display8: HostVideoCodes, frameIndex: UInt64) throws
     func receive(_ deliver: (UnsafeRawBufferPointer) throws -> Void) throws
     /// Waits out every frame still in flight and discards them.
     func drain()
+}
+
+extension HostVideoPipeline {
+    var takesDisplayCodes: Bool { false }
+
+    func submit(display8: HostVideoCodes, frameIndex: UInt64) throws {
+        try submit(HostVideoFrame.scene(display8: display8), frameIndex: frameIndex)
+    }
 }
 
 /// The portable pipeline: each frame develops as it is submitted, one at a time.

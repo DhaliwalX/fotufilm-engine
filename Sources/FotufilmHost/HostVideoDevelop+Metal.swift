@@ -155,14 +155,46 @@ final class MetalVideoPipeline: HostVideoPipeline {
 
     deinit { drain() }
 
+    /// A frame arrives as light, or as the 8-bit decoder's Display P3 codes.
+    private enum Input {
+        case scene([Float])
+        case display8(HostVideoCodes)
+
+        var scene: [Float] {
+            switch self {
+            case .scene(let scene): return scene
+            case .display8(let codes): return HostVideoFrame.scene(display8: codes)
+            }
+        }
+    }
+
+    /// The 8-bit road reads display codes, and the display encoder proves the codes it would
+    /// rebuild from their light are the decoder's own (`MetalVideoDisplayEncoder`): so they go
+    /// in as they are, as the Mac app's 8-bit road takes its decoder's frames.
+    var takesDisplayCodes: Bool {
+        !development.road.deep && !development.hybrid && context.displayEncoder != nil
+    }
+
     func submit(_ scene: [Float], frameIndex: UInt64) throws {
-        precondition(inFlight.count < depth, "receive a frame first")
         precondition(scene.count >= development.developWidth * development.developHeight * 4)
+        start(.scene(scene), frameIndex: frameIndex)
+    }
+
+    func submit(display8: HostVideoCodes, frameIndex: UInt64) throws {
+        guard takesDisplayCodes,
+              display8.count == development.developWidth * development.developHeight * 4 else {
+            return try submit(HostVideoFrame.scene(display8: display8), frameIndex: frameIndex)
+        }
+        start(.display8(display8), frameIndex: frameIndex)
+    }
+
+    private func start(_ input: Input, frameIndex: UInt64) {
+        precondition(inFlight.count < depth, "receive a frame first")
         let slot = slots[nextSlot]
         nextSlot = (nextSlot + 1) % depth
         let context = self.context
         let job = DispatchWorkItem {
-            slot.result = Result { try Self.develop(scene, frameIndex: frameIndex, in: slot,
+            slot.result = Result { try Self.develop(input, frameIndex: frameIndex, in: slot,
                                                     context) }
         }
         slot.job = job
@@ -191,12 +223,24 @@ final class MetalVideoPipeline: HostVideoPipeline {
 
     /// One frame: the scene into the slot, the develop, and the result into the layout the
     /// writer takes.
-    private static func develop(_ scene: [Float], frameIndex: UInt64, in slot: Slot,
+    private static func develop(_ input: Input, frameIndex: UInt64, in slot: Slot,
                                 _ context: Context) throws {
         let (metal, d, clock) = (context.metal, context.development, context.clock)
         let cancelled = HostEngine.Failure(description: "Cancelled.", cancelled: true)
         guard context.proceed() else { throw cancelled }
         var started = clock.mark()
+        if case .display8(let codes) = input, let buffer = slot.input {
+            codes.write(into: buffer.contents())
+        } else {
+            fill(input.scene, slot: slot, context)
+        }
+        clock.charge("fill", since: started)
+        try finish(input, frameIndex: frameIndex, in: slot, context)
+    }
+
+    /// The scene into the slot: the deep road's staging, or display codes for the 8-bit road.
+    private static func fill(_ scene: [Float], slot: Slot, _ context: Context) {
+        let d = context.development
         scene.withUnsafeBufferPointer { scene in
             if let staging = slot.staging {
                 staging.scenePixels.update(from: scene.baseAddress!, count: d.width * d.height * 4)
@@ -211,9 +255,14 @@ final class MetalVideoPipeline: HostVideoPipeline {
                 }
             }
         }
-        clock.charge("fill", since: started)
+    }
 
-        started = clock.mark()
+    /// The develop, and the result into the layout the writer takes.
+    private static func finish(_ input: Input, frameIndex: UInt64, in slot: Slot,
+                               _ context: Context) throws {
+        let (metal, d, clock) = (context.metal, context.development, context.clock)
+        let cancelled = HostEngine.Failure(description: "Cancelled.", cancelled: true)
+        var started = clock.mark()
         var ok = false
         // Light for an 8-bit writer leaves the kernel shouldered and encoded where this build
         // carries that variant; nil after the develop means it came back as light.
@@ -251,7 +300,7 @@ final class MetalVideoPipeline: HostVideoPipeline {
             // A frame this build's road refuses develops the portable way, so the movie never
             // loses it.
             let scratch = slot.scratch(d.deliveredBytes)
-            try d.developFrame(scene, d.developWidth, d.developHeight, frameIndex, scratch)
+            try d.developFrame(input.scene, d.developWidth, d.developHeight, frameIndex, scratch)
             slot.delivered = UnsafeRawBufferPointer(scratch)
             return
         }
