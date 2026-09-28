@@ -1,5 +1,4 @@
 import { DialogContainer } from "@react-spectrum/s2/Dialog";
-import { ActionButton } from "@react-spectrum/s2/ActionButton";
 import EditorToolbar from "./EditorToolbar.jsx";
 import FilmLibrary from "./FilmLibrary.jsx";
 import EditorViewer from "./EditorViewer.jsx";
@@ -11,7 +10,7 @@ import NegativeImportDialog from "../NegativeImportDialog.jsx";
 import NegativeScanDialog from "../negative-scan/NegativeScanDialog.jsx";
 import { useNegativeImportDialog } from "./useNegativeImportDialog.js";
 import ExportDialog from "./ExportDialog.jsx";
-import { VIDEO_LABELS } from "../generated/controls.js";
+import SavedExportNotice from "./SavedExportNotice.jsx";
 import ShortcutsDialog from "./ShortcutsDialog.jsx";
 import SupportDialog from "./SupportDialog.jsx";
 import SettingsDialog from "./SettingsDialog.jsx";
@@ -32,9 +31,6 @@ export default function Workspace() {
     restoreEdit,
     dialog,
     setDialog,
-    videoDownload,
-    videoDownloadRef,
-    setVideoDownload,
     libraryOpen,
     setLibraryOpen,
     openFromLibrary,
@@ -123,27 +119,7 @@ export default function Workspace() {
           <UpdateDialog />
         ) : null}
       </DialogContainer>
-      {videoDownload && (
-        <div className="video-download" role="status">
-          {videoDownload.url ? (
-            <a href={videoDownload.url} download={videoDownload.filename}>
-              Download {videoDownload.filename}
-            </a>
-          ) : (
-            <span>Saved {videoDownload.filename}</span>
-          )}
-          <ActionButton
-            onPress={async () => {
-              await videoDownload.dispose();
-              videoDownloadRef.current = null;
-              setVideoDownload(null);
-            }}
-            size={"S"}
-          >
-            {VIDEO_LABELS.dismiss}
-          </ActionButton>
-        </div>
-      )}
+      <SavedExportNotice />
     </div>
   );
 }

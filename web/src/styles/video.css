@@ -163,7 +163,7 @@
       min-height: 40px;
     }
   }
-  .video-download {
+  .saved-export {
     position: fixed;
     bottom: 24px;
     left: 50%;
@@ -178,7 +178,7 @@
     align-items: center;
     gap: 16px;
   }
-  .video-download a {
+  .saved-export a {
     color: #b9d5ff;
   }
 }

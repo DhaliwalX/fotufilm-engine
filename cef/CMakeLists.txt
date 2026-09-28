@@ -82,6 +82,7 @@ if(OS_MAC)
   set(FOTUFILM_HELPER_NAME "Fotufilm Desktop Helper")
   set(_mac_sources
     src/platform/mac/compositor.mm
+    src/platform/mac/export_files.mm
     src/platform/mac/host_window.mm
     src/platform/mac/image_presenter.mm
     src/platform/mac/main_menu.mm

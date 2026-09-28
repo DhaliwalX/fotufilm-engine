@@ -13,7 +13,7 @@ export default function useRendererLifecycle({
   setStatus,
   setSession,
   videoExportController,
-  videoDownloadRef,
+  savedExportRef,
   imageResources,
   importController,
   loadGeneration,
@@ -79,7 +79,7 @@ export default function useRendererLifecycle({
       previewQueue.current.close();
       renderer.dispose();
       videoExportController.current?.abort();
-      videoDownloadRef.current?.dispose();
+      savedExportRef.current?.dispose();
       for (const image of imageResources.current) backend.releaseImage(image);
       imageResources.current.clear();
       importController.current?.abort();

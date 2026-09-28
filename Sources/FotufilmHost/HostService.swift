@@ -289,7 +289,7 @@ public final class HostService {
             try? FileManager.default.removeItem(at: destination)
             try FileManager.default.copyItem(at: source, to: destination)
         }
-        return ["filename": destination.lastPathComponent]
+        return ["filename": destination.lastPathComponent, "path": destination.path]
     }
 
     /// Keeps a decoded photograph under a new handle and describes it to the editor.
@@ -922,7 +922,8 @@ public final class HostService {
             ?? .default
         let written = try encoder.write(still, type: type, quality: quality,
                                         to: URL(fileURLWithPath: path))
-        return ["filename": URL(fileURLWithPath: path).lastPathComponent, "width": written.width,
+        return ["filename": URL(fileURLWithPath: path).lastPathComponent, "path": path,
+                "width": written.width,
                 "height": written.height, "hdr": still.hlg != nil]
     }
 

@@ -41,6 +41,8 @@ export function createNativeBackend(host) {
   if (host.longEdgeOfCrop === true) backend.longEdgeOfCrop = true;
   if (host.subjectSelection === true) backend.subjectSelection = true;
   if (host.exportImageCancels === true) backend.exportImageCancels = true;
+  // Optional: what the host calls showing a saved export in its file manager (`openExport`).
+  if (typeof host.revealExportLabel === "string") backend.revealExportLabel = host.revealExportLabel;
   // Optional: the host draws the photograph itself beneath the page; renders asked to `present`
   // answer `presented` frames, which the canvas places with `placeImageLayer(geometry)`.
   if (host.imageLayer === true && typeof host.placeImageLayer === "function") {
@@ -66,6 +68,7 @@ export function createNativeBackend(host) {
     "filmChoiceCount",
     "loadEdit",
     "saveEdit",
+    "openExport",
   ])
     if (typeof host[name] === "function") backend[name] = host[name].bind(host);
   // Optional: the negative-scan session, printed by the engine (backend/README.md). Without it

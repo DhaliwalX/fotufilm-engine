@@ -193,6 +193,12 @@ export function createMacBackend(channel) {
     },
     // A still export stops inside the engine when its signal aborts.
     exportImageCancels: true,
+    // Open or Show in Finder for a file an export just saved (`{filename, path}`).
+    openExport: can.openExport
+      ? (path, { reveal = false } = {}) => call("openExport", { path, reveal })
+      : undefined,
+    // What the host calls showing a file in its file manager.
+    revealExportLabel: can.openExport?.reveal,
     // Export Original: a camera RAW opened from a file, copied as it is.
     exportOriginal: (image) =>
       call("exportOriginal", { handle: image.handle, filename: image.original.name, type: "" }),

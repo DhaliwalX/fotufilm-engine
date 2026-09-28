@@ -14,6 +14,7 @@
 #include "include/cef_application_mac.h"
 #include "include/cef_command_line.h"
 #include "include/wrapper/cef_library_loader.h"
+#import "platform/mac/export_files.h"
 #import "platform/mac/host_window.h"
 #import "platform/mac/main_menu.h"
 #include "switches.h"
@@ -56,8 +57,8 @@ NSArray<NSDictionary*>* Plugins(const std::string& capabilities) {
 }
 
 // The engine's capabilities with the host's own: this host draws the photograph itself, beneath
-// the page (`imageLayer`, web/src/backend/README.md).
-std::string WithImageLayer(const std::string& capabilities) {
+// the page (`imageLayer`), and opens what it saved (`openExport`, web/src/backend/README.md).
+std::string WithHostCapabilities(const std::string& capabilities) {
   NSData* json = [NSData dataWithBytes:capabilities.data() length:capabilities.size()];
   NSDictionary* fields = capabilities.empty()
                              ? nil
@@ -65,6 +66,7 @@ std::string WithImageLayer(const std::string& capabilities) {
   if (![fields isKindOfClass:NSDictionary.class]) return capabilities;
   NSMutableDictionary* merged = [fields mutableCopy];
   merged[@"imageLayer"] = @YES;
+  merged[@"openExport"] = @{@"reveal" : @"Show in Finder"};
   NSData* out = [NSJSONSerialization dataWithJSONObject:merged
                                                 options:NSJSONWritingSortedKeys
                                                   error:nil];
@@ -253,7 +255,7 @@ int main(int argc, char* argv[]) {
     }
     options.transport_global = fotufilm::switches::kDefaultTransportGlobal;
 #if defined(FOTUFILM_WITH_ENGINE)
-    options.capabilities = WithImageLayer(capabilities);
+    options.capabilities = WithHostCapabilities(capabilities);
 #else
     options.capabilities = capabilities;
 #endif
@@ -266,19 +268,9 @@ int main(int argc, char* argv[]) {
     g_engine->SetDestinationPicker([export_dir](const std::string& filename,
                                                 const std::string& type,
                                                 std::function<void(const std::string&)> done) {
-      if (!export_dir.empty()) return done(export_dir + "/" + filename);
-      NSSavePanel* panel = [NSSavePanel savePanel];
-      panel.nameFieldStringValue = @(filename.c_str());
-      if (UTType* uti = [UTType typeWithMIMEType:@(type.c_str())])
-        panel.allowedContentTypes = @[ uti ];
-      auto finish = ^(NSModalResponse response) {
-        done(response == NSModalResponseOK && panel.URL ? panel.URL.path.UTF8String : "");
-      };
-      if (NSWindow* window = NSApp.mainWindow)
-        [panel beginSheetModalForWindow:window completionHandler:finish];
-      else
-        finish([panel runModal]);
+      fotufilm::ChooseExportDestination(filename, type, export_dir, std::move(done));
     });
+    fotufilm::RegisterExportFiles(*g_dispatcher);
 #endif
     CefRefPtr<fotufilm::BrowserApp> app =
         new fotufilm::BrowserApp(options, [url] {

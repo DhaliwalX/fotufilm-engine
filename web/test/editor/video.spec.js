@@ -405,8 +405,8 @@ test('video UI imports, seeks, changes log encoding, undoes, trims and exports',
   await expect(
     page.getByRole('link', { name: /Download source-normal.mp4/ }),
   ).toBeVisible()
-  await page.locator('.video-download').getByRole('button', { name: 'Dismiss', exact: true }).click()
-  await expect(page.locator('.video-download')).toHaveCount(0)
+  await page.locator('.saved-export').getByRole('button', { name: 'Dismiss', exact: true }).click()
+  await expect(page.locator('.saved-export')).toHaveCount(0)
 })
 
 test('all log video inputs agree through CPU and WebGPU film rendering', async ({

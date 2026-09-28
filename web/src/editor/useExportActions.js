@@ -17,14 +17,22 @@ export default function useExportActions({
   videoQuality,
   exportSize,
   alive,
-  videoDownloadRef,
-  setVideoDownload,
+  savedExportRef,
+  setSavedExport,
   setDialog,
   exportType,
   quality,
   exportMetadata,
   exportHDR,
 }) {
+  // Shows what an export saved, letting the last one go. A backend that saves by download
+  // answers nothing for a still.
+  const showSaved = async (saved) => {
+    if (!saved?.filename) return;
+    await savedExportRef.current?.dispose?.();
+    savedExportRef.current = saved;
+    setSavedExport(saved);
+  };
   // The long edge an export size asks for, of the picture this backend measures: the upright
   // one, or its crop.
   const maxEdge = () => {
@@ -77,9 +85,7 @@ export default function useExportActions({
         ...(backend.videoProcessing ? { processing: appSetting("videoProcessing") } : {}),
         size: exportSize,
       });
-      await videoDownloadRef.current?.dispose();
-      videoDownloadRef.current = saved;
-      setVideoDownload(saved);
+      await showSaved(saved);
       setDialog(null);
     } catch (error) {
       if (
@@ -106,13 +112,13 @@ export default function useExportActions({
     try {
       if (exportType === "original") {
         // The camera RAW itself: no render, no size, no settings to remember.
-        await backend.exportOriginal(active.image);
+        await showSaved(await backend.exportOriginal(active.image));
         setDialog(null);
         return;
       }
       const extension =
         exportType === "image/jpeg" ? "jpg" : exportType.split("/")[1];
-      await backend.exportImage({
+      const saved = await backend.exportImage({
         session,
         image: active.image,
         edit,
@@ -126,6 +132,7 @@ export default function useExportActions({
         onProgress: setStatus,
         filename: `${cleanName(active.name)}-${edit.stock || "normal"}${edit.medium ? `-${edit.medium}` : ""}.${extension}`,
       });
+      await showSaved(saved);
       setAppSetting("lastPhotoExport", {
         type: exportType,
         size: exportSize,

@@ -228,8 +228,8 @@ extension HostService {
         }
         clock.report("\(pipeline.name), \(width)x\(height) \(format.id)", frames: count,
                      wall: Double(DispatchTime.now().uptimeNanoseconds - began) / 1e9)
-        return ["filename": url.lastPathComponent, "width": paddedWidth, "height": paddedHeight,
-                "frames": count]
+        return ["filename": url.lastPathComponent, "path": url.path, "width": paddedWidth,
+                "height": paddedHeight, "frames": count]
     }
 
     /// The pipeline an export's frames develop on, with the road through the engine the Mac

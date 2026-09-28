@@ -58,10 +58,10 @@ export default function useEditorState({}) {
   const [videoTime, setVideoTime] = useState(0),
     [videoFormat, setVideoFormat] = useState("mp4"),
     [videoQuality, setVideoQuality] = useState("high"),
-    [videoDownload, setVideoDownload] = useState(null);
+    [savedExport, setSavedExport] = useState(null);
   const videoExportController = useRef(null),
     imageResources = useRef(new Set()),
-    videoDownloadRef = useRef(null);
+    savedExportRef = useRef(null);
   const [sampling, setSampling] = useState(false);
   const [showMask, setShowMask] = useState(false);
   useEffect(() => {
@@ -147,11 +147,11 @@ export default function useEditorState({}) {
     setVideoFormat,
     videoQuality,
     setVideoQuality,
-    videoDownload,
-    setVideoDownload,
+    savedExport,
+    setSavedExport,
     videoExportController,
     imageResources,
-    videoDownloadRef,
+    savedExportRef,
     sampling,
     setSampling,
     showMask,
