@@ -1,5 +1,25 @@
 {
   "glyphs": {
+    "fotu.camera.flash.auto": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.camera.flash.off": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.camera.flash.on": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.camera.flip": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.camera.stabilization": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
     "fotu.deck.controls": {
       "colours": [],
       "rendering": "hierarchical"
@@ -594,6 +614,178 @@
       "rendering": "hierarchical"
     },
     "fotu.tab.source": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.add": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.camera": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.check": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.chevron.down": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.chevron.right": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.chevron.up": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.close": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.contactsheet": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.copy": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.delete": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.done": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.duplicate": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.findframe": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.folder": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.format": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.histogram": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.histogram.shown": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.history": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.import": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.lock": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.loop": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.mirror": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.more": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.paste": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.pause": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.photo": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.photos": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.play": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.popup": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.pro": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.redo": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.remove": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.reset": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.rotate": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.settings": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.share": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.sidebar.leading": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.sidebar.trailing": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.stop": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.undo": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.unlock": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.video": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.ui.warning": {
       "colours": [],
       "rendering": "hierarchical"
     }
