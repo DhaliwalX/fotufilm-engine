@@ -5,8 +5,8 @@ import FotufilmCore
 #endif
 import FotufilmHalide
 
-/// Linux's developer: the desktop Halide graph the Mac runs on Metal, on CUDA, or on Vulkan when
-/// `FOTUFILM_GPU_DEVICE=vulkan` asks for it (`GpuConfiguration.h`). It develops the whole frame at
+/// Linux's developer: the desktop Halide graph the Mac runs on Metal, on CUDA or Vulkan: whichever
+/// the Halide build chose (`fotufilm_halide_gpu_device`). It develops the whole frame at
 /// once and hands it over as display-linear Display P3, as `MetalDeveloper` does; films whose
 /// layered transport runs outside the graph, and scanned negatives, develop on the CPU.
 struct HalideGPUDeveloper: HostDeveloper {
@@ -14,9 +14,11 @@ struct HalideGPUDeveloper: HostDeveloper {
     private let device: String
 
     init?() {
-        guard fotufilm_halide_cuda_available() == 1 else { return nil }
-        device = ProcessInfo.processInfo.environment["FOTUFILM_GPU_DEVICE"] == "vulkan"
-            ? "vulkan" : "cuda"
+        switch fotufilm_halide_gpu_device() {
+        case 1: device = "cuda"
+        case 2: device = "vulkan"
+        default: return nil
+        }
     }
 
     var kind: String { device }

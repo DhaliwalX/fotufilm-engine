@@ -823,6 +823,25 @@ public:
         return target;
     }
 
+    /// Linux on x86-64: CUDA for NVIDIA cards, Vulkan for the rest (and with the Android
+    /// target's device features).
+    static Target linux_aot_target(DeviceAPI device) {
+        Target target;
+        target.os = Target::Linux;
+        target.arch = Target::X86;
+        target.bits = 64;
+        target.set_feature(Target::SSE41);
+        if (device == DeviceAPI::Vulkan) {
+            for (auto feature : {Target::Vulkan, Target::VulkanV12, Target::VulkanFloat16,
+                                 Target::VulkanInt8, Target::VulkanInt16, Target::VulkanInt64})
+                target.set_feature(feature);
+        } else {
+            // PTX for Maxwell and later: the driver compiles it for the card it finds.
+            target.set_features({Target::CUDA, Target::CUDACapability50});
+        }
+        return target;
+    }
+
     /// The Android equivalent.
     static Target android_vulkan_aot_target() {
         Target target;

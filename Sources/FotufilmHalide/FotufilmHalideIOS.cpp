@@ -5,6 +5,7 @@
 #endif
 
 #include "FotufilmHalideIOSVariants.h"
+#include "FotufilmAotFrame.h"
 #include "FotufilmFilmTileBuild.h"
 #include "FotufilmNegativeScan.h"
 #include "fotufilm_halide_ios_negative_cpu.h"
@@ -23,6 +24,7 @@
 #include <pthread.h>
 
 #include <algorithm>
+#include <iterator>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -150,23 +152,8 @@ FilmTileStore &film_tile_store() {
     return store;
 }
 
-/// The shape every generated variant shares: the u8 and float libraries differ only in the element
-/// type inside the buffers, which does not reach the signature.
-using FrameFunction = int (*)(
-    halide_buffer_t *, halide_buffer_t *, halide_buffer_t *, halide_buffer_t *,
-    halide_buffer_t *, int32_t, int32_t, float, float, float, float, int32_t,
-    int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, float, int32_t,
-    float, int32_t, float, int32_t, float, int32_t, float, int32_t, float, float, int32_t, int32_t, uint32_t,
-    int32_t, int32_t,
-    int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
-    int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
-    halide_buffer_t *, int32_t, halide_buffer_t *);
-
-struct AotVariant {
-    int32_t mask;
-    FrameFunction function;
-    const char *name;
-};
+using fotufilm::aot::AotVariant;
+using fotufilm::aot::FrameFunction;
 
 const AotVariant kVariants[] = {
 #define FOTUFILM_AOT_SHIM_ENTRY(variant_name, variant_mask) \
@@ -175,66 +162,8 @@ const AotVariant kVariants[] = {
 #undef FOTUFILM_AOT_SHIM_ENTRY
 };
 
-/// Select a compatible generated variant with the fewest extra compiled stages.
 FrameFunction select_variant(int32_t feature_mask) {
-    const int32_t wanted = feature_mask & FOTUFILM_AOT_VARIANT_BITS;
-    const int32_t exact_bits = FOTUFILM_VARIANT_EXACT_BITS;
-    // Diagnostic: choose another compatible variant to compare schedules. Extra compiled
-    // stages are bypassed by the request's runtime gates, preserving its requested image.
-    static const int wanted_rank = [] {
-        const char *env = getenv("FOTUFILM_VARIANT_RANK");
-        return env ? atoi(env) : -1;
-    }();
-    if (wanted_rank >= 0) {
-        std::vector<const AotVariant *> acceptable;
-        for (const AotVariant &variant : kVariants) {
-            if ((variant.mask & exact_bits) != (wanted & exact_bits)) continue;
-            if ((variant.mask & wanted) != wanted) continue;
-            acceptable.push_back(&variant);
-        }
-        std::stable_sort(acceptable.begin(), acceptable.end(),
-                         [&](const AotVariant *a, const AotVariant *b) {
-                             return __builtin_popcount((unsigned)(a->mask & ~wanted))
-                                  < __builtin_popcount((unsigned)(b->mask & ~wanted));
-                         });
-        if (!acceptable.empty()) {
-            const AotVariant *picked =
-                acceptable[std::min<size_t>(wanted_rank, acceptable.size() - 1)];
-            std::fprintf(stderr,
-                         "Fotufilm variant rank %d of %zu: %s (+%d bits)\n",
-                         wanted_rank, acceptable.size(), picked->name,
-                         __builtin_popcount((unsigned)(picked->mask & ~wanted)));
-            return picked->function;
-        }
-    }
-    const AotVariant *best = nullptr;
-    int best_extra = 0;
-    for (const AotVariant &variant : kVariants) {
-        if ((variant.mask & exact_bits) != (wanted & exact_bits)) continue;
-        if ((variant.mask & wanted) != wanted) continue;
-        const int extra = __builtin_popcount(
-            (unsigned)(variant.mask & ~wanted));
-        if (!best || extra < best_extra) {
-            best = &variant;
-            best_extra = extra;
-            if (extra == 0) break;
-        }
-    }
-    // `FOTUFILM_TRACE_VARIANT=1` names what a render actually ran and how far the served variant
-    // overshot what it asked for. The extra bits are stages compiled in and bypassed at run
-    // time. It is printed once per distinct request, not once per frame.
-    static std::set<int32_t> traced;
-    static const bool tracing = [] {
-        const char *env = getenv("FOTUFILM_TRACE_VARIANT");
-        return env && atoi(env) != 0;
-    }();
-    if (tracing && best && traced.insert(wanted).second) {
-        std::fprintf(stderr,
-                     "Fotufilm variant: wanted 0x%x -> %s (0x%x), %d extra bit(s) 0x%x\n",
-                     wanted, best->name, best->mask, best_extra,
-                     (unsigned)(best->mask & ~wanted));
-    }
-    return best ? best->function : nullptr;
+    return fotufilm::aot::select_variant(kVariants, std::size(kVariants), feature_mask);
 }
 
 int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
@@ -297,19 +226,9 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     bool film_on = false;
     Buffer<float> film_tiles = film_tile_store().tiles_for(configuration, film_on);
 #define FOTUFILM_ARGUMENTS \
-    in, cfg, exposure, film, paper, width, height, frame.mtf_sigma_0, frame.mtf_sigma_1, \
-    frame.mtf_sigma_2, frame.mtf_luma_sigma, frame.mtf_radius_0, frame.mtf_radius_1, \
-    frame.mtf_radius_2, frame.mtf_luma_radius, frame.halation_radius_0, frame.halation_radius_1, \
-    frame.halation_radius_2, frame.coupler_sigma, frame.coupler_radius, frame.adjacency_sigma, \
-    frame.adjacency_radius, frame.adjacency_secondary_sigma, frame.adjacency_secondary_radius, \
-    frame.fringe_sigma, frame.fringe_radius, frame.grain_sigma, frame.grain_radius, \
-    frame.grain_lambda, frame.mottle_lambda, frame.mottle_radius, frame.print_mtf_radius, seed, \
-    frame.reversal, origin_x, origin_y, frame.halation_stride_0, frame.halation_stride_1, \
-    frame.halation_stride_2, frame.halation_strided_radius_0, frame.halation_strided_radius_1, \
-    frame.halation_strided_radius_2, frame.diffusion_stride_0, frame.diffusion_stride_1, \
-    frame.diffusion_stride_2, frame.diffusion_strided_radius_0, frame.diffusion_strided_radius_1, \
-    frame.diffusion_strided_radius_2, feature_mask, fotufilm_byte_basis(configuration), \
-    film_tiles.raw_buffer(), film_on ? 1 : 0
+    FOTUFILM_AOT_FRAME_ARGUMENTS(in, cfg, exposure, film, paper, width, height, frame, seed, \
+                                 origin_x, origin_y, feature_mask, configuration, \
+                                 film_tiles.raw_buffer(), film_on ? 1 : 0)
     FrameFunction pipeline = select_variant(feature_mask);
     if (!pipeline) return -3;
 #if FOTUFILM_AOT_WINDOWED_HOST

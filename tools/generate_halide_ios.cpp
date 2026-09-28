@@ -15,8 +15,8 @@ using namespace fotufilm::gpu;
 int main(int argc, char **argv) {
     if (argc < 2) {
         std::cerr << "usage: generate_halide_ios OUTPUT_DIRECTORY "
-                     "[--simulator|--macos|--macos-intel]\n"
-                     "       [--count | --variant=I | --extras]  "
+                     "[--simulator|--macos|--macos-intel|--linux-cuda|--linux-vulkan]\n"
+                     "       [--prefix=NAME] [--count | --variant=I | --extras]  "
                      "(default: every pipeline)\n";
         return 2;
     }
@@ -28,6 +28,9 @@ int main(int argc, char **argv) {
     Work work = Work::Everything;
     int wanted = 0;
     bool count_only = false;
+    // What the generated functions are called: `<prefix><variant>`. Linux links a CUDA and a
+    // Vulkan set side by side, so each set needs a prefix of its own.
+    std::string prefix = "fotufilm_halide_ios_";
     for (int i = 2; i < argc; ++i) {
         const std::string argument = argv[i];
         if (argument == "--count") {
@@ -37,8 +40,11 @@ int main(int argc, char **argv) {
             wanted = std::stoi(argument.substr(std::string("--variant=").size()));
         } else if (argument == "--extras") {
             work = Work::ExtrasOnly;
+        } else if (argument.rfind("--prefix=", 0) == 0) {
+            prefix = argument.substr(std::string("--prefix=").size());
         } else if (argument == "--simulator" || argument == "--macos" ||
-                   argument == "--macos-intel") {
+                   argument == "--macos-intel" || argument == "--linux-cuda" ||
+                   argument == "--linux-vulkan") {
             platform = argument;
         } else {
             std::cerr << "unknown argument: " << argument << "\n";
@@ -48,26 +54,30 @@ int main(int argc, char **argv) {
     const bool simulator = platform == "--simulator";
     const bool macos = platform == "--macos" || platform == "--macos-intel";
     const bool intel = platform == "--macos-intel";
+    const bool linux_cuda = platform == "--linux-cuda";
+    const bool linux_vulkan = platform == "--linux-vulkan";
+    const bool linux = linux_cuda || linux_vulkan;
     const std::filesystem::path output(argv[1]);
     std::filesystem::create_directories(output);
 
     struct Variant {
-        const char *name;
+        std::string name;
         int features;
         bool runtime;
         bool windowed;
     };
 #define FOTUFILM_AOT_GENERATOR_ENTRY(variant_name, variant_mask) \
-    {"fotufilm_halide_ios_" #variant_name, (variant_mask), false, false},
+    {prefix + #variant_name, (variant_mask), false, false},
 #define FOTUFILM_AOT_WINDOWED_ENTRY(variant_name, variant_mask) \
-    {"fotufilm_halide_ios_" #variant_name "_windowed", (variant_mask), false, true},
+    {prefix + #variant_name "_windowed", (variant_mask), false, true},
     Variant variants[] = {
         FOTUFILM_AOT_VARIANTS(FOTUFILM_AOT_GENERATOR_ENTRY)
         FOTUFILM_AOT_WINDOWED_VARIANTS(FOTUFILM_AOT_WINDOWED_ENTRY)
     };
 #undef FOTUFILM_AOT_WINDOWED_ENTRY
 #undef FOTUFILM_AOT_GENERATOR_ENTRY
-    variants[0].runtime = true;
+    // Linux's two sets share one runtime, compiled with --extras.
+    variants[0].runtime = !linux;
     const int variant_count = static_cast<int>(std::size(variants));
     if (count_only) {
         std::cout << variant_count << "\n";
@@ -79,12 +89,14 @@ int main(int argc, char **argv) {
         return 2;
     }
     GpuConfiguration defaults;
-    defaults.half_blur = !macos;
-    defaults.half_lut = !macos;
+    defaults.half_blur = !macos && !linux;
+    defaults.half_lut = !macos && !linux;
+    if (linux) defaults.device = linux_vulkan ? Halide::DeviceAPI::Vulkan : Halide::DeviceAPI::CUDA;
     const auto configuration = resolve_gpu_configuration(defaults);
     const Halide::Target target =
-        macos ? GpuFramePipeline::macos_aot_target(intel)
-              : GpuFramePipeline::ios_aot_target(simulator, configuration.profile);
+        linux ? GpuFramePipeline::linux_aot_target(configuration.device)
+        : macos ? GpuFramePipeline::macos_aot_target(intel)
+                : GpuFramePipeline::ios_aot_target(simulator, configuration.profile);
 
     // Compiled metallib embedding: the default on Halide 22+, FOTUFILM_METAL_PRECOMPILE=0 opts
     // out for local debugging. It cuts macOS archives from 517 MB to 137 MB and takes the
@@ -151,6 +163,8 @@ int main(int argc, char **argv) {
         if (work == Work::ExtrasOnly || (work == Work::OneVariant && index != wanted)) {
             continue;
         }
+        // The Linux shim develops whole frames; the 256-row windowed twins are Apple's.
+        if (linux && variant.windowed) continue;
         try {
             GpuFramePipeline pipeline(variant.features,
                                         "_v" + std::to_string(index), variant.windowed, configuration);
@@ -168,6 +182,28 @@ int main(int argc, char **argv) {
     // Everything past this point is a handful of small one-off pipelines, compiled together by a
     // single `--extras` process. Spreading six short objects over the pool would save nothing.
     if (work == Work::OneVariant) {
+        return 0;
+    }
+    // Linux measures and decodes on the host, so its extra is the one runtime both sets share:
+    // CUDA and Vulkan in one, chosen between when the app starts.
+    if (linux) {
+        Halide::Target runtime = GpuFramePipeline::linux_aot_target(Halide::DeviceAPI::CUDA);
+        for (const auto feature : {Halide::Target::Vulkan, Halide::Target::VulkanV12,
+                                   Halide::Target::VulkanFloat16, Halide::Target::VulkanInt8,
+                                   Halide::Target::VulkanInt16, Halide::Target::VulkanInt64})
+            runtime.set_feature(feature);
+        Halide::compile_standalone_runtime(
+            {{Halide::OutputFileType::static_library,
+              (output / (prefix + "runtime.a")).string()}},
+            runtime);
+        // Scan inversion on the CPU, as the Apple hosts fall back to it.
+        NegativeScanPipeline scan(Halide::DeviceAPI::None);
+        const Halide::Target host(Halide::Target::Linux, Halide::Target::X86, 64,
+                                  {Halide::Target::SSE41, Halide::Target::NoRuntime,
+                                   Halide::Target::StrictFloat});
+        scan.output.compile_to_static_library((output / (prefix + "negative_cpu")).string(),
+                                              {scan.input, scan.parameters},
+                                              prefix + "negative_cpu", host);
         return 0;
     }
 

@@ -301,6 +301,10 @@ int32_t fotufilm_halide_approximate_gaussian(
 /// and come in two pairs: host buffers, and the device pointers below.
 int32_t fotufilm_halide_cuda_available(void);
 
+/// The device the CUDA entry points develop on: 1 for CUDA, 2 for Vulkan (FOTUFILM_GPU_DEVICE, or
+/// on Linux's ahead-of-time build whichever GPU answers), 0 for none.
+int32_t fotufilm_halide_gpu_device(void);
+
 /// The CUDA counterpart of `fotufilm_halide_metal_prepare`.
 int32_t fotufilm_halide_cuda_prepare(
     int32_t feature_mask,
