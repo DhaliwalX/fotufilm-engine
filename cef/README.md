@@ -289,7 +289,12 @@ no film, as the Mac app's importer does. Light frames live in
    compositor (dmabuf), and Halide GPU targets for each; Swift is shipped with the app there.
    What such a compositor decides is already shared (`compositor_core.h`): a port supplies a
    `PresentationSurface`, a `PooledPresenter`, a `WindowCompositor` and the draw of each
-   `CompositePlan`, and registers `RegisterPresentationMethods`. `libfotufilm` builds on Linux.
+   `CompositePlan`, and registers `RegisterPresentationMethods`. `libfotufilm` builds on Linux
+   (`cef/build-engine-linux.sh`) and opens, scans and exports stills through the system's codec
+   libraries (`Sources/CFotufilmCodecs`: JPEG, PNG, TIFF, HEIF/AVIF, OpenEXR and camera RAW in;
+   PNG, 16-bit TIFF, JPEG and HEIC out, SDR). On Ubuntu:
+   `apt install libjpeg-turbo8-dev libpng-dev libtiff-dev libraw-dev liblcms2-dev libopenexr-dev
+   libheif-dev`, with `libheif-plugin-libde265` and `libheif-plugin-x265` for HEIC at run time.
 5. **Host completeness.** IME composition, native `<select>` popups,
    accessibility, window chrome from `window-chrome.js`, and signing and notarisation of the app
    and its helpers.
