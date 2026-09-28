@@ -40,6 +40,9 @@ export function renderRequest(request, stocks) {
   return {
     handle: image.handle,
     previewQuality: image.video && request.interactive ? "playback" : "still",
+    // A movie playing without the comparison shown, as the Mac app plays one, leaves its
+    // undeveloped frame undrawn.
+    original: !(image.video && request.interactive) || !!request.compare,
     // A picture on its way to a settled one — a moving edit's preview, a film-strip thumbnail —
     // may be reduced from a smaller copy of the photograph, as the Mac app's drafts are.
     draft: !image.video && !!(request.interactive || request.background),
@@ -77,6 +80,9 @@ export function createSession(call, catalogue, { imageLayer = false } = {}) {
   // A playing movie keeps its next frame waiting at the host while the last one comes back, so
   // the host starts it the moment it is free. Anything else waits for the host to be idle.
   const playing = (request) => !!request.image?.video && !!request.interactive;
+  // Film-strip thumbnails and other background pictures wait while a movie plays, as the Mac
+  // app's never share its playback queue: one would hold the next frame back by a develop.
+  let moviePlaying = false;
   const startable = (request) =>
     developing.size === 0 ||
     (developing.size === 1 &&
@@ -85,6 +91,7 @@ export function createSession(call, catalogue, { imageLayer = false } = {}) {
   function drain() {
     while (pending.length) {
       const foreground = pending.findIndex(({ request }) => !request.background);
+      if (foreground < 0 && moviePlaying) return;
       const index = Math.max(0, foreground);
       if (!startable(pending[index].request)) return;
       develop(pending.splice(index, 1)[0]);
@@ -149,6 +156,7 @@ export function createSession(call, catalogue, { imageLayer = false } = {}) {
     render(request) {
       return new Promise((resolve, reject) => {
         pending.push({ request, resolve, reject });
+        if (!request.background) moviePlaying = playing(request);
         for (const entry of developing)
           if (entry.request.stale?.()) entry.controller.abort();
         drain();

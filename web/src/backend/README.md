@@ -135,8 +135,10 @@ history reducer's `goTo` action jumps to any step and keeps the timeline whole.
 ### Rendering and analysis
 
 `render(request)` takes `{image, edit, stock, maxEdge, videoTime?, viewport?,
-stage?, difference?, cropMode?, showMask?, background?, comparison?, purpose?,
-bitDepth?, stale?, onProgress?}`. Use the existing saved-edit schema unchanged.
+stage?, difference?, cropMode?, showMask?, background?, comparison?, compare?,
+purpose?, bitDepth?, stale?, onProgress?}`. Use the existing saved-edit schema unchanged.
+`compare` says whether the original is on screen; a host may skip a playing movie's
+original while it is not.
 `maxEdge: Infinity` means original size; encode it explicitly in a JSON transport.
 A viewport is `{width,height,region:{x,y,width,height}}` from `viewport.js`: the
 virtual full-image size and its visible subrectangle, both in output pixels. Render only that area at that size,

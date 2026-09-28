@@ -172,6 +172,44 @@ final class HostVideoTests: XCTestCase {
          "edit": ["stock": "gold200", "video": video], "profileRequest": ["controls": [String: Any]()]]
     }
 
+    /// Keeps the layers it is shown, as the desktop compositor would draw them.
+    private final class LayerLog: HostPresenter {
+        var headroom: Float { 1 }
+        var shown: [String] = []
+        func acquire(width: Int, height: Int, format: HostSurfaceFormat) -> HostSurface? {
+            let rowBytes = width * format.bytesPerPixel
+            return HostSurface(width: width, height: height, format: format,
+                               pixels: .allocate(byteCount: rowBytes * height, alignment: 64),
+                               rowBytes: rowBytes)
+        }
+        func present(_ surface: HostSurface, layer: String, info: [String: Any]) -> UInt64 {
+            surface.pixels.deallocate()
+            shown.append(layer)
+            return UInt64(shown.count)
+        }
+        func discard(_ surface: HostSurface) { surface.pixels.deallocate() }
+    }
+
+    func testAPlayedFrameDrawsItsOriginalOnlyWhenAskedTo() throws {
+        let service = try makeEngine().service
+        let presenter = LayerLog()
+        service.presenter = presenter
+        defer { service.presenter = nil }
+        let (handle, _) = try importMovie(service)
+        func play(_ time: Double, original: Bool) throws -> [String: Any] {
+            var request = renderRequest(handle, time: time)
+            request["present"] = ["slot": "preview", "scope": "movie"]
+            request["original"] = original
+            let body = try json(service.call("render", params: JSONSerialization.data(
+                withJSONObject: request), payload: nil))
+            return try XCTUnwrap(body["presented"] as? [String: Any])
+        }
+        XCTAssertEqual(try play(0.1, original: false)["original"] as? Int, 0)
+        XCTAssertEqual(presenter.shown, ["preview"])
+        XCTAssertEqual(try play(0.2, original: true)["original"] as? Int, 3)
+        XCTAssertEqual(presenter.shown, ["preview", "preview", "preview.original"])
+    }
+
     func testImportRenderAndExportThroughTheService() throws {
         let engine = try makeEngine()
         let service = engine.service

@@ -36,10 +36,11 @@ protocol HostDeveloper {
 
     /// Develops upright RGBA8 Display P3 codes, as an 8-bit video decoder delivers them, straight
     /// to 8-bit Display P3 in one pass, as the Mac app's playback does, with the codes as read
-    /// for the undeveloped picture; nil where this developer has no such road, and the frame then
-    /// develops as light.
+    /// when `keepsCodes` asks for the undeveloped picture; nil where this developer has no such
+    /// road, and the frame then develops as light.
     func developDisplay8(_ codes: HostVideoCodes, width: Int, height: Int, stock: FilmStock,
-                         options: FotufilmEngine.Options, frameIndex: UInt64) -> (developed: [UInt8], original: [UInt8])?
+                         options: FotufilmEngine.Options, frameIndex: UInt64,
+                         keepsCodes: Bool) -> (developed: [UInt8], original: [UInt8]?)?
 
     /// Whether a frame this large develops with enough memory left for the rest of the app: the
     /// export sheet offers only the sizes that do.
@@ -61,7 +62,8 @@ extension HostDeveloper {
                     exactMath: Bool) -> Bool { true }
 
     func developDisplay8(_ codes: HostVideoCodes, width: Int, height: Int, stock: FilmStock,
-                         options: FotufilmEngine.Options, frameIndex: UInt64) -> (developed: [UInt8], original: [UInt8])? {
+                         options: FotufilmEngine.Options, frameIndex: UInt64,
+                         keepsCodes: Bool) -> (developed: [UInt8], original: [UInt8]?)? {
         nil
     }
 }

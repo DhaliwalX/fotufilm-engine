@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { previewLabel } from "../preview-queue.js";
 import { previewBudget } from "../preview-budget.js";
 export default function usePreviewRenderer({
@@ -16,6 +16,7 @@ export default function usePreviewRenderer({
   stage,
   difference,
   cropMode,
+  compare,
   previewInteracting,
   previewKey,
   stocks,
@@ -29,6 +30,10 @@ export default function usePreviewRenderer({
   setStatus,
   retry,
 }) {
+  // Read as each frame is asked for rather than rendering again: a still keeps its original
+  // anyway, and a playing movie picks the change up with its next frame.
+  const comparing = useRef(compare);
+  comparing.current = compare;
   useEffect(() => {
     if (!active || !stockId || !session || exporting) return;
     const currentFile = () =>
@@ -76,6 +81,7 @@ export default function usePreviewRenderer({
           (onProgress) =>
             session.render({
               ...request,
+              compare: comparing.current,
               onProgress,
             }),
           label,

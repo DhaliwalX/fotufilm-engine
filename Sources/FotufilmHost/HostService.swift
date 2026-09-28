@@ -448,20 +448,25 @@ public final class HostService {
         var renderMilliseconds = 0.0
         // A playing movie's frame the film takes as decoded — nothing cut, turned, selected or
         // framed, in standard range — develops from the decoder's codes in one pass, as the Mac
-        // app plays a movie. Its original is those codes.
+        // app plays a movie. Its original is those codes, kept only while the page may show it:
+        // like the Mac app, a movie played without the comparison leaves its original alone.
+        var withoutOriginal = false
         if developed?.key != developKey, image.pace.realtime, presentation != nil, ceiling == nil,
            plan == nil, body["stage"] as? Int == nil, !hasSelection(body),
            request.cropMode != true, geometry.isIdentity, sizes.frame == sizes.output,
            let codes = image.video?.displayCodes(width: width, height: height) {
             let developStart = DispatchTime.now().uptimeNanoseconds
+            let showsOriginal = body["original"] as? Bool != false
+            let kept = originals.contains(where: { $0.key == frameKey })
             if let frame = try engine.developDisplay8(
                 codes, width: width, height: height, contentHeadroom: image.contentHeadroom,
-                edit: edit, frameIndex: image.pace.frameIndex) {
+                edit: edit, frameIndex: image.pace.frameIndex, keepsCodes: showsOriginal && !kept) {
                 renderMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - developStart) / 1e6
                 developed = (developKey, width, height, .rgba8DisplayP3, frame.developed)
-                if !originals.contains(where: { $0.key == frameKey }) {
-                    remember(original: (frameKey, width, height, frame.original))
+                if let original = frame.original {
+                    remember(original: (frameKey, width, height, original))
                 }
+                withoutOriginal = !showsOriginal
             }
         }
         if developed?.key != developKey {
@@ -500,7 +505,7 @@ public final class HostService {
         }
         if let index = originals.firstIndex(where: { $0.key == frameKey }) {
             originals.append(originals.remove(at: index))
-        } else {
+        } else if !withoutOriginal {
             var frame = (pixels: image.display(try scene(), width: width, height: height),
                          width: width, height: height)
             if let plan, let framed = HostFrames.frame(frame.pixels, width: width, height: height,
@@ -509,7 +514,7 @@ public final class HostService {
             }
             remember(original: (frameKey, frame.width, frame.height, frame.pixels))
         }
-        let developedFrame = developed!, originalFrame = originals.last!
+        let developedFrame = developed!
         // A frame developed for an EDR layer is shown to the page in standard range.
         if presentation == nil, developedFrame.format != .rgba8DisplayP3 {
             throw HostEngine.Failure(description: "The develop is not in standard range.")
@@ -539,7 +544,8 @@ public final class HostService {
             if let subjects = subjectCount(body, cropMode: request.cropMode == true) {
                 presented["subjects"] = subjects
             }
-            return try present(developedFrame, original: originalFrame, region: region,
+            return try present(developedFrame, original: withoutOriginal ? nil : originals.last!,
+                               region: region,
                                to: presentation.presenter, request: presentation.request,
                                body: presented, headroom: ceiling)
         }
@@ -562,6 +568,7 @@ public final class HostService {
         }
         // The undeveloped picture changes only with the photograph, geometry and region: the
         // page names the one it holds and it crosses again only when it differs.
+        let originalFrame = originals.last!
         let originalKey = "\(originalFrame.key)|\(region)"
         answerBody["originalKey"] = originalKey
         var images = ["preview": png((developedFrame.key, developedFrame.width,
@@ -581,10 +588,11 @@ public final class HostService {
 
     /// Hands the region of a render to the host's compositor: the developed frame into the
     /// request's layer, and the undeveloped one into "<layer>.original" when it changed. The answer
-    /// names the frames instead of carrying pictures.
+    /// names the frames instead of carrying pictures; with no original it names none, and the
+    /// compositor keeps the last one it has.
     private func present(_ developed: (key: String, width: Int, height: Int,
                                        format: HostSurfaceFormat, pixels: [UInt8]),
-                         original: (key: String, width: Int, height: Int, pixels: [UInt8]),
+                         original: (key: String, width: Int, height: Int, pixels: [UInt8])?,
                          region: (x: Int, y: Int, width: Int, height: Int),
                          to presenter: HostPresenter, request: HostPresentation.Request,
                          body: [String: Any], headroom: Float?) throws -> Answer {
@@ -598,14 +606,17 @@ public final class HostService {
             throw HostEngine.Failure(description: "The display has no room for the picture.")
         }
         let layer = request.slot + ".original"
-        let originalKey = "\(original.key)|\(region)|\(request.scope)"
-        var originalFrame = presentedOriginals[layer].flatMap { $0.key == originalKey ? $0.id : nil }
-        if originalFrame == nil {
-            originalFrame = HostPresentation.present(
-                original.pixels, frameWidth: original.width, format: .rgba8DisplayP3,
-                region: region, to: presenter, layer: layer,
-                info: ["scope": request.scope, "dynamicRange": "sdr", "headroom": 1.0])
-            presentedOriginals[layer] = originalFrame.map { (originalKey, $0) }
+        var originalFrame: UInt64?
+        if let original {
+            let originalKey = "\(original.key)|\(region)|\(request.scope)"
+            originalFrame = presentedOriginals[layer].flatMap { $0.key == originalKey ? $0.id : nil }
+            if originalFrame == nil {
+                originalFrame = HostPresentation.present(
+                    original.pixels, frameWidth: original.width, format: .rgba8DisplayP3,
+                    region: region, to: presenter, layer: layer,
+                    info: ["scope": request.scope, "dynamicRange": "sdr", "headroom": 1.0])
+                presentedOriginals[layer] = originalFrame.map { (originalKey, $0) }
+            }
         }
         var answerBody = body
         answerBody["presented"] = HostPresentation.Presented(

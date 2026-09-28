@@ -338,10 +338,11 @@ public final class HostEngine {
     }
 
     /// A video frame's decoded 8-bit Display P3 codes developed in one pass, as the Mac app plays
-    /// a movie, and the codes as read; nil where the edit has no film, the film is layered, or the developer has no such
+    /// a movie, and the codes as read when `keepsCodes`; nil where the edit has no film, the film is layered, or the developer has no such
     /// road, and the frame then develops as light.
     func developDisplay8(_ codes: HostVideoCodes, width: Int, height: Int, contentHeadroom: Float,
-                         edit: WebNativeEdit, frameIndex: UInt64) throws -> (developed: [UInt8], original: [UInt8])? {
+                         edit: WebNativeEdit, frameIndex: UInt64,
+                         keepsCodes: Bool) throws -> (developed: [UInt8], original: [UInt8]?)? {
         guard let film = stock(edit.edit.stock) else { return nil }
         let options = try options(edit, stock: film, contentHeadroom: contentHeadroom)
         guard options.transportConstruction(for: film) == nil else { return nil }
@@ -352,7 +353,8 @@ public final class HostEngine {
             throw Failure(description: "Cancelled.", cancelled: true)
         }
         return developer.developDisplay8(codes, width: width, height: height, stock: film,
-                                         options: options, frameIndex: frameIndex)
+                                         options: options, frameIndex: frameIndex,
+                                         keepsCodes: keepsCodes)
     }
 
     /// The options an edit develops with on `stock`, the scene's recorded range included.

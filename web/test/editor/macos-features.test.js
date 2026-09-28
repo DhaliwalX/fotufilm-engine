@@ -60,6 +60,38 @@ test('moving video uses compact previews while paused frames and photos stay los
   session.dispose();
 });
 
+test('background pictures wait while a movie plays and follow the paused frame', async () => {
+  const calls = [];
+  const session = createSession(async (_, request) => {
+    calls.push(request.maxEdge);
+    return { presented: { frame: calls.length, original: 0 } };
+  }, async () => []);
+  const movie = { image: { handle: 'video', video: {} }, edit: defaultEdit(), interactive: true, maxEdge: 640 };
+  await session.render(movie);
+  const thumbnail = session.render({ ...movie, interactive: false, background: true, maxEdge: 160 });
+  await session.render(movie);
+  assert.deepEqual(calls, [640, 640]);
+  await session.render({ ...movie, interactive: false, maxEdge: 1600 });
+  await thumbnail;
+  assert.deepEqual(calls, [640, 640, 1600, 160]);
+  session.dispose();
+});
+
+test('a playing movie asks for its original only while the comparison shows it', async () => {
+  const calls = [];
+  const session = createSession(async (_, request) => {
+    calls.push(request);
+    return { presented: { frame: calls.length, original: 0 } };
+  }, async () => []);
+  const request = { image: { handle: 'video', video: {} }, edit: defaultEdit(), interactive: true };
+  await session.render(request);
+  await session.render({ ...request, compare: true });
+  await session.render({ ...request, interactive: false });
+  await session.render({ ...request, image: { handle: 'photo' } });
+  assert.deepEqual(calls.map(request => request.original), [false, true, true, true]);
+  session.dispose();
+});
+
 test('a newer request cancels the stale render the host is still developing', async () => {
   const calls = [];
   let settled = true;
