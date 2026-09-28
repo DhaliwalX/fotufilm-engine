@@ -68,6 +68,14 @@ inline GpuConfiguration resolve_gpu_configuration(GpuConfiguration defaults = {}
         const int value = integer(name, fallback);
         return value >= low && value <= high ? value : fallback;
     };
+#if defined(FOTUFILM_HALIDE_CUDA)
+    // A Linux build develops on CUDA, or on Vulkan when FOTUFILM_GPU_DEVICE=vulkan asks for it.
+    if (const char *device = std::getenv("FOTUFILM_GPU_DEVICE")) {
+        const std::string name = device;
+        if (name == "vulkan") defaults.device = Halide::DeviceAPI::Vulkan;
+        else if (name == "cuda") defaults.device = Halide::DeviceAPI::CUDA;
+    }
+#endif
     // Preserve the existing platform defaults and override ranges.
     const int square = bounded("FOTUFILM_GPU_TILE", kTileSize, 2, 32);
     const bool vulkan = defaults.device == Halide::DeviceAPI::Vulkan;
