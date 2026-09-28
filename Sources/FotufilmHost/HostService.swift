@@ -848,11 +848,22 @@ public final class HostService {
     /// export sheet decides.
     private func exportOptions(_ parameters: [String: Any]) throws -> [String: Any] {
         let prepared = try prepare(JSONSerialization.data(withJSONObject: parameters))
+        // The sizes the sheet offers, `{id, width, height}` of the cropped picture: those past the
+        // developer's memory limit are unavailable, as the Mac app's export sheet marks them.
+        let exact = parameters["photoQuality"] as? String != "fast"
+        let unavailable = (parameters["sizes"] as? [[String: Any]] ?? []).compactMap { size -> String? in
+            guard let id = size["id"] as? String, let width = size["width"] as? Int,
+                  let height = size["height"] as? Int, width > 0, height > 0 else { return nil }
+            return engine.canDevelop(width: width, height: height, edit: prepared.edit,
+                                     contentHeadroom: prepared.image.contentHeadroom,
+                                     exactMath: exact) ? nil : id
+        }
         return [
             "metadata": HostMetadataPolicy.allCases.map(\.rawValue),
             "hdr": (HostPlatform.current.encoder?.writesHDR ?? false)
                 && parameters["printFrame"] as? [String: Any] == nil
                 && deliversHDR(prepared.edit),
+            "unavailable": unavailable,
         ]
     }
 

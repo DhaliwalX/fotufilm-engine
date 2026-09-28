@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { exportBasis, exportMaxEdge, exportPixels, exportSizeOptions } from "../../src/export-sizes.js";
+import {
+  exportBasis,
+  exportMaxEdge,
+  exportPixels,
+  exportSizeOptions,
+  resolutionLimitWarning,
+} from "../../src/export-sizes.js";
 
 test("a photo offers the Mac app's Large, Medium and Small, then the long edges", () => {
   const options = exportSizeOptions(6000, 4000);
@@ -41,4 +47,18 @@ test("a backend measuring the crop sizes the cropped picture, rounding outward",
   // Within half a pixel of the picture is the picture.
   assert.deepEqual(exportPixels(2248, 3000, 4496, { width: 1800, height: 2248.3 }, true),
     { width: 1800, height: 2248.3 });
+});
+
+test("sizes past the backend's memory limit read as the Mac app's export sheet does", () => {
+  const sizes = exportSizeOptions(6000, 4000);
+  assert.deepEqual(sizes[1].pixels, { width: 4500, height: 3000 });
+  assert.equal(resolutionLimitWarning(sizes, "full", []), null);
+  assert.equal(
+    resolutionLimitWarning(sizes, "0.75", ["full"]),
+    "Resolution reduced: Full resolution exceeds this device’s safe memory limit. Large (4500 × 3000) is selected instead, so the export will contain fewer pixels.",
+  );
+  assert.match(
+    resolutionLimitWarning(sizes, "full", sizes.map(({ id }) => id)),
+    /^Resolution unavailable/,
+  );
 });

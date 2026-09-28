@@ -9,7 +9,7 @@ import { Button } from "@react-spectrum/s2/Button";
 import { Switch } from "@react-spectrum/s2/Switch";
 import { useEditor } from "./EditorContext.jsx";
 import { METADATA_LABELS, useExportOptions } from "./useExportOptions.js";
-import { exportSizeOptions } from "../export-sizes.js";
+import { exportSizeOptions, resolutionLimitWarning } from "../export-sizes.js";
 import { setAppSetting, useAppSetting } from "../app-settings.js";
 
 const IMAGE_TYPES = [
@@ -66,7 +66,6 @@ export default function ExportDialog() {
     setExportHDR,
     stockId,
   } = useEditor();
-  const options = useExportOptions({ backend, active, edit, stockId });
   const video = !!active?.image.video;
   const originalAvailable =
     !video && !!backend.exportOriginal && !!active?.image.original;
@@ -79,6 +78,18 @@ export default function ExportDialog() {
   // A native backend measures a size's long edge on the cropped picture, as the Mac app does.
   const ofCrop = backend.longEdgeOfCrop === true;
   const sizes = exportSizeOptions(width, height, video, cropSize, ofCrop);
+  const options = useExportOptions({ backend, active, edit, stockId, sizes });
+  // Sizes past the backend's memory limit, which the Mac app's sheet greys out.
+  const unavailable = options?.unavailable ?? [];
+  const chosenSize = sizes.some(({ id }) => id === exportSize) ? exportSize : "full";
+  // The largest size it can develop stands in for one it cannot, as the Mac app selects.
+  const sizeID = unavailable.includes(chosenSize)
+    ? (sizes.find(({ id }) => !unavailable.includes(id))?.id ?? chosenSize)
+    : chosenSize;
+  const sizeWarning = video ? null : resolutionLimitWarning(sizes, sizeID, unavailable);
+  useEffect(() => {
+    if (sizeID !== chosenSize) setExportSize(sizeID);
+  }, [sizeID, chosenSize, setExportSize]);
   // What the chosen size delivers: a movie in whole pairs of pixels, a still with its frame.
   const delivered = video
     ? ofCrop
@@ -174,17 +185,21 @@ export default function ExportDialog() {
             Size
             <Picker
               aria-label="Size"
-              value={sizes.some(({ id }) => id === exportSize) ? exportSize : "full"}
+              value={sizeID}
               onChange={(e) => setExportSize(e)}
+              disabledKeys={unavailable}
               size={"S"}
             >
               {sizes.map(({ id, label, detail }) => (
                 <PickerItem key={id} id={id} textValue={label}>
-                  {detail ? `${label} · ${detail}` : label}
+                  {[label, detail, unavailable.includes(id) && "Exceeds safe memory limit"]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </PickerItem>
               ))}
             </Picker>
           </div>
+          {sizeWarning && <p className="export-detail">{sizeWarning}</p>}
           {!active?.image.video &&
             LOSSY.includes(exportType) && (
               <Adjustment
@@ -343,7 +358,7 @@ export default function ExportDialog() {
           <Button
             size="S"
             onPress={active?.image.video ? exportClip : exportImage}
-            isDisabled={exporting}
+            isDisabled={exporting || (!video && !original && unavailable.includes(sizeID))}
             variant={"accent"}
           >
             {exporting ? "Exporting…" : original ? "Export Original" : "Export"}

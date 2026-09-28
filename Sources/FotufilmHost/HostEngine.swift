@@ -335,6 +335,17 @@ public final class HostEngine {
 
     public func stock(_ id: String?) -> FilmStock? { id.flatMap { stocks[$0] } }
 
+    /// Whether the edit's film develops a frame this large within the developer's memory limit.
+    /// No film streams in bands and has no limit.
+    public func canDevelop(width: Int, height: Int, edit: WebNativeEdit, contentHeadroom: Float,
+                           exactMath: Bool) -> Bool {
+        guard let stock = stock(edit.edit.stock),
+              let options = try? options(edit, stock: stock, contentHeadroom: contentHeadroom)
+        else { return true }
+        return developer.canDevelop(width: width, height: height, stock: stock, options: options,
+                                    exactMath: exactMath)
+    }
+
     /// Develops with an explicit film and options: a step of the pipeline walk, for instance.
     /// `film` nil develops with no film.
     public func develop(_ scene: [Float], width: Int, height: Int, film: FilmStock?,

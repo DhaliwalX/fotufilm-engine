@@ -279,6 +279,27 @@ extension CInterfaceTests {
         """)
         XCTAssertEqual(options["hdr"] as? Bool, true)
         XCTAssertEqual((options["metadata"] as? [String])?.count, 3)
+        // A film's sizes past the developer's memory limit are unavailable, as the Mac app's
+        // export sheet marks them; no film has no limit. A Mac's frames live on disk, so only a
+        // lowered budget (the engine's own test seam) finds the limit here.
+        setenv("FOTUFILM_STRIP_BUDGET", "1", 1)
+        defer { unsetenv("FOTUFILM_STRIP_BUDGET") }
+        let sizes = #""sizes": [{"id": "full", "width": 60000, "height": 40000}, "#
+            + #"{"id": "0.25", "width": 1500, "height": 1000}]"#
+        let filmed = try call("exportOptions", """
+        {"handle": \(handle), "maxEdge": 256, "edit": {"stock": "gold200", "params": {}},
+         "profileRequest": {"controls": {}}, \(sizes)}
+        """)
+        let developer = Unmanaged<HostEngine>.fromOpaque(UnsafeRawPointer(engine))
+            .takeUnretainedValue().backend
+        XCTAssertEqual(filmed["unavailable"] as? [String],
+                       developer == "metal" ? ["full", "0.25"] : [])
+        let unfilmed = try call("exportOptions", """
+        {"handle": \(handle), "maxEdge": 256, "edit": {"params": {}},
+         "profileRequest": {"controls": {}}, \(sizes)}
+        """)
+        XCTAssertEqual(unfilmed["unavailable"] as? [String], [])
+        unsetenv("FOTUFILM_STRIP_BUDGET")
         let (hdr, answer) = try export("image/heic", #", "hdr": true"#)
         defer { try? FileManager.default.removeItem(at: hdr) }
         XCTAssertEqual(answer["hdr"] as? Bool, true)

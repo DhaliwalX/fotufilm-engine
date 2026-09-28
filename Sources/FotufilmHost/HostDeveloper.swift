@@ -34,6 +34,11 @@ protocol HostDeveloper {
                  shouldContinue: @escaping () -> Bool,
                  deliver: (UnsafeBufferPointer<Float>, Range<Int>, Bool) -> Void) throws
 
+    /// Whether a frame this large develops with enough memory left for the rest of the app: the
+    /// export sheet offers only the sizes that do.
+    func canDevelop(width: Int, height: Int, stock: FilmStock, options: FotufilmEngine.Options,
+                    exactMath: Bool) -> Bool
+
     /// Prints a scanned negative through the print stage: `readScan` fills rows of linear scan
     /// RGBA, the border calibration reads them as the film's record densities, and `writeRows`
     /// receives display-linear Display P3. Samples outside the film's densities print black.
@@ -41,6 +46,12 @@ protocol HostDeveloper {
                    calibration: ApproximateNegativeScan, shouldContinue: @escaping () -> Bool,
                    readScan: (Range<Int>, UnsafeMutableBufferPointer<Float>) -> Void,
                    writeRows: (Range<Int>, UnsafeBufferPointer<Float>) -> Void) throws
+}
+
+extension HostDeveloper {
+    /// A developer that states no limit develops every size.
+    func canDevelop(width: Int, height: Int, stock: FilmStock, options: FotufilmEngine.Options,
+                    exactMath: Bool) -> Bool { true }
 }
 
 /// The portable developer: the Halide CPU pipeline, whole frame at once.

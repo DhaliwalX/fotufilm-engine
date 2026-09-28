@@ -24,6 +24,14 @@ struct MetalDeveloper: HostDeveloper {
         metal.prepare(stock: stock, options: options, frameWidth: width, frameHeight: height)
     }
 
+    /// The Mac app's limit: the least the schedule needs, striped as finely as it goes, within
+    /// the renderer's share of the machine.
+    func canDevelop(width: Int, height: Int, stock: FilmStock, options: FotufilmEngine.Options,
+                    exactMath: Bool) -> Bool {
+        HalideMetalFilmRenderer.canRender(width: width, height: height, stock: stock,
+                                          options: options, exactMath: exactMath)
+    }
+
     func develop(_ scene: [Float], width: Int, height: Int, stock: FilmStock, noFilm: Bool,
                  options: FotufilmEngine.Options, pace: HostDevelopPace, encode: Bool, knee: Float?,
                  shouldContinue: @escaping () -> Bool,

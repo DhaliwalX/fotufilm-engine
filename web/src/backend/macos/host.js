@@ -196,9 +196,19 @@ export function createMacBackend(channel) {
     // Export Original: a camera RAW opened from a file, copied as it is.
     exportOriginal: (image) =>
       call("exportOriginal", { handle: image.handle, filename: image.original.name, type: "" }),
-    // What the native engine can write for this edit: metadata policies and HDR HEIC.
+    // What the native engine can write for this edit: metadata policies, HDR HEIC and the sizes
+    // past its memory limit at this photo quality.
     exportOptions: can.imageExportTypes?.length
-      ? async (request) => call("exportOptions", renderRequest(request, await catalogue()))
+      ? async (request) =>
+          call("exportOptions", {
+            ...renderRequest(request, await catalogue()),
+            sizes: (request.sizes ?? []).map(({ id, width, height }) => ({
+              id,
+              width: Math.round(width),
+              height: Math.round(height),
+            })),
+            photoQuality: request.photoQuality ?? appSetting("photoQuality"),
+          })
       : undefined,
     // Choose Film Per Photo: the engine ranks every film and learns the choices made.
     suggestFilm: can.filmSuggestion
