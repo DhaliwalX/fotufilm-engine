@@ -65,7 +65,8 @@ while IFS= read -r json; do
   [[ ( "${FOTUFILM_SOURCE_BUILD:-0}" == 1 && "$json" == */Stocks/*.json ) || \
      "$json" == */CameraProfiles/*.json || \
      "$json" == *_FotufilmCore.bundle/*.json || \
-     "$json" == */Metadata.appintents/version.json ]] || \
+     "$json" == */Metadata.appintents/version.json || \
+     "$json" == */"Chromium Embedded Framework.framework/Libraries/vk_swiftshader_icd.json" ]] || \
     report "unexpected plaintext JSON reached the bundle: $json"
 done < <(find "$BUNDLE" -type f -name '*.json' -print)
 

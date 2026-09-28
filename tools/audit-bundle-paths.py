@@ -8,8 +8,12 @@ import sys
 
 
 # Search bytes directly, including UTF-8 names that strings(1) can split. A NUL
-# terminates a string; a slash must finish the user component to identify a path.
-LOCAL_PATH = re.compile(rb"/(?:Users|home)/[^/\x00]+/|/\.claude/worktrees/")
+# terminates a string; a slash must finish the user component to identify a path. A home
+# directory starts a path, so /home inside a URL or a longer path (example.net/home/privacy/)
+# is not one, and a user name holds no quote, bracket or code punctuation (an emscripten
+# runtime's FS.mkdir("/home/web_user")},... is not a path either).
+LOCAL_PATH = re.compile(
+    rb"(?<![\w.\-/])/(?:Users|home)/[^/\x00\"'`(){}\[\];,<>|\s]+/|/\.claude/worktrees/")
 
 
 def audit(bundle):

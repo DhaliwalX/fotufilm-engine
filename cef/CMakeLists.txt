@@ -29,6 +29,14 @@ endif()
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
 find_package(CEF REQUIRED)
 SET_CEF_TARGET_OUT_DIR()
+# No path of the machine that built it goes into the app: source paths in assertions are written
+# relative to the checkout and the CEF distribution, and links leave out debug maps and local
+# symbols, as the Mac app's build does.
+get_filename_component(_checkout "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
+add_compile_options("-ffile-prefix-map=${_checkout}=Fotufilm" "-ffile-prefix-map=${CEF_ROOT}=CEF")
+if(APPLE)
+  add_link_options("LINKER:-S" "LINKER:-x")
+endif()
 add_subdirectory(${CEF_LIBCEF_DLL_WRAPPER_PATH} libcef_dll_wrapper)
 
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/../version.env" _versions)
@@ -105,8 +113,10 @@ if(OS_MAC)
     target_include_directories(fotufilm_desktop PRIVATE
       "${CMAKE_CURRENT_SOURCE_DIR}/../Sources/CFotufilmHost/include")
     target_link_libraries(fotufilm_desktop "${FOTUFILM_ENGINE_LIBRARY}")
+    # Only the bundle's own Frameworks: CMake would otherwise add the build folder the library
+    # was linked from.
     set_target_properties(fotufilm_desktop PROPERTIES
-      BUILD_RPATH "@executable_path/../Frameworks" INSTALL_RPATH "@executable_path/../Frameworks")
+      BUILD_WITH_INSTALL_RPATH ON INSTALL_RPATH "@executable_path/../Frameworks")
   endif()
   set(EXECUTABLE_NAME "${FOTUFILM_APP_NAME}")
   set(PRODUCT_NAME "${FOTUFILM_APP_NAME}")
