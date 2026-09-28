@@ -34,6 +34,22 @@ uint64_t Id(CefRefPtr<CefDictionaryValue> fields, const char* key) {
 // Frames of a layer kept beyond the ones the page names.
 constexpr size_t kKeptFrames = 2;
 
+// CSS cubic-bezier(0.25, 0.1, 0.25, 1), the Mac app's `Motion.smooth`: progress at time `t`.
+double Smooth(double t) {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  constexpr double x1 = 0.25, y1 = 0.1, x2 = 0.25, y2 = 1;
+  auto bezier = [](double a, double b, double s) {
+    return 3 * a * s * (1 - s) * (1 - s) + 3 * b * s * s * (1 - s) + s * s * s;
+  };
+  double low = 0, high = 1, s = t;
+  for (int step = 0; step < 32; ++step) {
+    s = (low + high) / 2;
+    (bezier(x1, x2, s) < t ? low : high) = s;
+  }
+  return bezier(y1, y2, s);
+}
+
 }  // namespace
 
 ImageLayerGeometry ParseImageLayerGeometry(CefRefPtr<CefDictionaryValue> fields,
@@ -92,16 +108,44 @@ const PresentedFrame* ImageLayer::Choose(const std::string& layer, uint64_t name
   return &*placed;
 }
 
-std::vector<ImageLayer::Draw> ImageLayer::Draws() const {
+std::vector<ImageLayer::Draw> ImageLayer::Draws(double now) {
   std::vector<Draw> draws;
+  std::map<std::string, Shown> shown;
   for (const LayerPlacement& placement : geometry_.layers) {
     const bool original = geometry_.original;
     const PresentedFrame* frame =
         Choose(original ? placement.slot + ".original" : placement.slot,
                original ? placement.original : placement.frame);
-    if (frame) draws.push_back({frame->surface, placement.rect, frame->extended});
+    if (!frame) continue;
+    Draw draw{frame->surface, placement.rect, frame->extended};
+    auto found = shown_.find(placement.slot);
+    Shown slot = found == shown_.end() ? Shown{draw} : found->second;
+    // A new picture where one was showing fades in over it; the first one simply appears.
+    if (slot.current.surface != draw.surface) {
+      slot.previous = slot.current;
+      slot.since = now;
+    }
+    slot.current = draw;
+    const double progress = slot.since < 0 ? 1 : (now - slot.since) / kCrossfadeSeconds;
+    if (progress < 1 && slot.previous.surface) {
+      draws.push_back(slot.previous);
+      draw.opacity = static_cast<float>(Smooth(progress));
+    } else {
+      slot.previous = {};
+      slot.since = -1;
+    }
+    draws.push_back(draw);
+    shown[placement.slot] = std::move(slot);
   }
+  // A slot the page no longer places lets its pictures go.
+  shown_.swap(shown);
   return draws;
+}
+
+bool ImageLayer::Fading(double now) const {
+  for (const auto& [slot, shown] : shown_)
+    if (shown.previous.surface && now - shown.since < kCrossfadeSeconds) return true;
+  return false;
 }
 
 // Keeps what the page names, anything newer, and the last few of every layer; the rest go back

@@ -32,13 +32,15 @@ struct Quad {
   float time;
   uint32_t source;
   uint32_t target;
+  // How much of the picture covers what is beneath it (a crossfade).
+  float opacity;
 };
 
 NSString* const kShaders = @R"METAL(
 #include <metal_stdlib>
 using namespace metal;
 
-struct Quad { float4 rect; float4 uv; float time; uint source; uint target; };
+struct Quad { float4 rect; float4 uv; float time; uint source; uint target; float opacity; };
 struct Varying { float4 position [[position]]; float2 uv; };
 
 vertex Varying quad_vertex(uint vid [[vertex_id]], constant Quad& quad [[buffer(0)]]) {
@@ -70,7 +72,7 @@ fragment float4 image_fragment(Varying in [[stage_in]], constant Quad& quad [[bu
   constexpr sampler linear(filter::linear, address::clamp_to_edge);
   float3 c = source.sample(linear, in.uv).rgb;
   if (quad.source != quad.target) c = quad.target == 1 ? decode(c) : encode(c);
-  return float4(c, 1.0);
+  return float4(c, quad.opacity);
 }
 
 // The page: premultiplied sRGB, converted to the drawable's Display P3 and blended over the
@@ -190,10 +192,17 @@ constexpr double kPlacementWaitSeconds = 0.05;
   MTLRenderPipelineDescriptor* descriptor = [MTLRenderPipelineDescriptor new];
   descriptor.vertexFunction = [library newFunctionWithName:@"quad_vertex"];
   descriptor.colorAttachments[0].pixelFormat = format;
-  descriptor.fragmentFunction = [library newFunctionWithName:@"image_fragment"];
-  pipelines.image = [_device newRenderPipelineStateWithDescriptor:descriptor error:&error];
   descriptor.fragmentFunction = [library newFunctionWithName:@"pattern_fragment"];
   pipelines.pattern = [_device newRenderPipelineStateWithDescriptor:descriptor error:&error];
+  // A picture fading in covers the one beneath it by its opacity.
+  descriptor.fragmentFunction = [library newFunctionWithName:@"image_fragment"];
+  MTLRenderPipelineColorAttachmentDescriptor* fade = descriptor.colorAttachments[0];
+  fade.blendingEnabled = YES;
+  fade.sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
+  fade.sourceAlphaBlendFactor = MTLBlendFactorOne;
+  fade.destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+  fade.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+  pipelines.image = [_device newRenderPipelineStateWithDescriptor:descriptor error:&error];
   // Chromium's frames are premultiplied.
   descriptor.fragmentFunction = [library newFunctionWithName:@"page_fragment"];
   MTLRenderPipelineColorAttachmentDescriptor* blend = descriptor.colorAttachments[0];
@@ -514,7 +523,7 @@ constexpr double kPlacementWaitSeconds = 0.05;
 // Extended range while a frame on show carries light above SDR white.
 - (BOOL)wantsExtendedRange {
   if (!CGRectIsNull(_patternRect)) return NO;
-  for (const auto& draw : _imageLayer.Draws())
+  for (const auto& draw : _imageLayer.Draws(CACurrentMediaTime()))
     if (draw.extended) return YES;
   return NO;
 }
@@ -543,7 +552,7 @@ constexpr double kPlacementWaitSeconds = 0.05;
   }
 
   // The engine's frames, clipped to the page's canvas; the GPU holds each until it has read it.
-  const auto draws = _imageLayer.Draws();
+  const auto draws = _imageLayer.Draws(CACurrentMediaTime());
   if (!draws.empty()) {
     const fotufilm::LayerRect& clip = _imageLayer.clip();
     const double left = MAX(0, clip.x * _scale), top = MAX(0, clip.y * _scale);
@@ -561,6 +570,7 @@ constexpr double kPlacementWaitSeconds = 0.05;
         quad.rect = [self deviceRect:CGRectMake(draw.rect.x, draw.rect.y, draw.rect.width,
                                                 draw.rect.height)];
         quad.source = draw.extended ? kLinear : kTransfer;
+        quad.opacity = draw.opacity;
         [encoder setVertexBytes:&quad length:sizeof quad atIndex:0];
         [encoder setFragmentBytes:&quad length:sizeof quad atIndex:0];
         [encoder setFragmentTexture:surface->texture() atIndex:0];
@@ -610,6 +620,18 @@ constexpr double kPlacementWaitSeconds = 0.05;
   [commands commit];
   _stats.frames++;
   _stats.lastCompositeMicroseconds = Microseconds(acquired, mach_absolute_time());
+  // A crossfade draws every frame until it is done.
+  if (_imageLayer.Fading(CACurrentMediaTime())) {
+    _dirty = YES;
+    BOOL linked = NO;
+    if (@available(macOS 14.0, *)) linked = _link != nil;
+    if (!linked) {
+      __weak __typeof(self) weak = self;
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 60), dispatch_get_main_queue(), ^{
+        [weak setNeedsDisplay];
+      });
+    }
+  }
 }
 
 @end
