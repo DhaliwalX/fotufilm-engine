@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Dialog, Heading, Content } from "@react-spectrum/s2/Dialog";
+import { Dialog, DialogContainer, Heading, Content } from "@react-spectrum/s2/Dialog";
+import { AlertDialog } from "@react-spectrum/s2/AlertDialog";
 import { PickerItem, Picker } from "@react-spectrum/s2/Picker";
 import {
   SegmentedControl,
@@ -18,6 +19,7 @@ import {
 import { useEditor } from "./EditorContext.jsx";
 import { Adjustment } from "../Adjustment.jsx";
 import { FILM_PACK_EXTENSION, packNotice } from "./useFilmPacks.js";
+import { forgotFilmChoices, useFilmLearned } from "../film-learning.js";
 
 // The Mac app's Settings window: what new photographs start on, how photos export, and the film
 // model. Everything here is kept on this device; open photographs keep their own edits.
@@ -167,6 +169,9 @@ const choices = (field) =>
 
 function General({ backend, stocks }) {
   const [forgotten, setForgotten] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  // Greyed with nothing learned, as the Mac app's is.
+  const learned = useFilmLearned(backend);
   return (
     <>
       <h3>New Photos</h3>
@@ -200,11 +205,14 @@ function General({ backend, stocks }) {
         <Button
           size="S"
           variant={"secondary"}
-          isDisabled={forgotten}
+          isDisabled={forgotten || !learned}
           onPress={() =>
             backend
               .forgetFilmChoices()
-              .then(() => setForgotten(true))
+              .then(() => {
+                forgotFilmChoices();
+                setForgotten(true);
+              })
               .catch(console.error)
           }
         >
@@ -213,9 +221,23 @@ function General({ backend, stocks }) {
       )}
       {backend.filmPacks && <FilmPacks />}
       <h3>Reset</h3>
-      <Button size="S" variant={"negative"} onPress={resetAppSettings}>
+      <Button size="S" variant={"negative"} onPress={() => setConfirmReset(true)}>
         {"Reset All Settings"}
       </Button>
+      <DialogContainer onDismiss={() => setConfirmReset(false)}>
+        {confirmReset && (
+          <AlertDialog
+            title="Reset All Settings?"
+            variant="destructive"
+            primaryActionLabel="Reset"
+            cancelLabel="Cancel"
+            onPrimaryAction={resetAppSettings}
+          >
+            This restores Fotufilm’s original settings. Your photos and edits
+            will not change.
+          </AlertDialog>
+        )}
+      </DialogContainer>
       <p className="medium-detail">
         Restores Fotufilm’s original settings. Your photographs and edits are not
         changed.

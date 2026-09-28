@@ -157,6 +157,9 @@ public final class HostService {
         case "forgetFilmChoices":
             filmPreferences.forget()
             return try answer([:])
+        case "filmChoices":
+            // How many choices it has learned from: nothing to forget greys Forget out.
+            return try answer(["observations": filmPreferences.observationCount])
         case "copyImage":
             return try answer(copyImage(parameters))
         case "plugins", "installPlugin", "revealPlugin":

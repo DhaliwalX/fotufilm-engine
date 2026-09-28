@@ -50,6 +50,9 @@ public enum WebStockCatalogue {
                 "profile": profile, "available": profile["available"] ?? [],
                 "media": media["choices"]!,
                 "defaultMedium": PrintPaper.editorDefault.resolved(for: stock).id,
+                // What Match Film prints on: the film's own medium, and whether it has only that.
+                "filmMedium": PrintPaper.default(for: stock).id,
+                "reflectionPrint": stock.isReflectionPrint,
             ]
             if let format = profile["nativeFormat"] { entry["nativeFormat"] = format }
             return entry

@@ -11,6 +11,10 @@ import { profileMedium } from "../profile-settings.js";
 import PrintFrameControls from "../PrintFrameControls.jsx";
 import { Button } from "@react-spectrum/s2/Button";
 import { useEditor } from "./EditorContext.jsx";
+
+// The Output Medium choice that follows the film, as the Mac app's does.
+const MATCH_FILM = "match-film";
+
 export default function PrintInspector() {
   const {
     exporting,
@@ -24,6 +28,8 @@ export default function PrintInspector() {
     fixedSettings,
     setDialog,
   } = useEditor();
+  // A film that is its own print (instax) has only its own medium to match.
+  const canMatchFilm = !!selectedStock?.filmMedium && !selectedStock.reflectionPrint;
   return (
     <>
       <Disclosure
@@ -44,12 +50,19 @@ export default function PrintInspector() {
                 !edit.stock ||
                 edit.halationModel === "layered"
               }
-              value={edit.medium || selectedStock?.defaultMedium || "screen"}
-              onChange={(medium) => {
+              value={
+                edit.mediumFollowsFilm && canMatchFilm
+                  ? MATCH_FILM
+                  : edit.medium || selectedStock?.defaultMedium || "screen"
+              }
+              onChange={(choice) => {
                 endEdit();
-                patch({
-                  medium,
-                });
+                // Match Film prints on the film's own medium, and on each next film's own.
+                patch(
+                  choice === MATCH_FILM
+                    ? { medium: selectedStock.filmMedium, mediumFollowsFilm: true }
+                    : { medium: choice, mediumFollowsFilm: false },
+                );
                 setStage(null);
                 setDifference(false);
               }}
@@ -57,14 +70,15 @@ export default function PrintInspector() {
                 width: "100%",
               }}
             >
-              {(
-                selectedStock?.media || [
+              {[
+                ...(canMatchFilm ? [{ id: MATCH_FILM, name: "Match Film" }] : []),
+                ...(selectedStock?.media || [
                   {
                     id: "screen",
                     name: "Digital Reference",
                   },
-                ]
-              )
+                ]),
+              ]
                 .map((medium) => ({
                   value: medium.id,
                   label: medium.name,

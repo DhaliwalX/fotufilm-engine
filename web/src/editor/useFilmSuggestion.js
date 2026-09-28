@@ -1,3 +1,4 @@
+import { recordedFilmChoice } from "../film-learning.js";
 import { useEffect, useRef } from "react";
 import { appSetting, useAppSetting } from "../app-settings.js";
 
@@ -36,7 +37,7 @@ export default function useFilmSuggestion({ backend, active, edit, dispatch }) {
   useEffect(() => {
     if (!backend.recordFilmChoice || !photoID || !edit.stock || active?.image.video) return;
     const timer = setTimeout(
-      () => backend.recordFilmChoice(photoID, edit.stock).catch(() => {}),
+      () => backend.recordFilmChoice(photoID, edit.stock).then(recordedFilmChoice).catch(() => {}),
       1500,
     );
     return () => clearTimeout(timer);

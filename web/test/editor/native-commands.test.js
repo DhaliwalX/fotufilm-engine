@@ -129,10 +129,15 @@ test("Choose Film, Grain Model and Estimated Halation run on the loaded film", (
     ["profile", "grainModel", "film"],
     ["profile", "estimatedHalation", true],
   ]);
-  // Layered transport has no estimated shape; a fixed profile has no film model to change.
-  const layered = menuState({ ...e, edit: { ...e.edit, halationModel: "layered" } });
-  assert.equal(layered.enabled.estimatedHalation, false);
-  assert.equal(menuState({ ...e, fixedSettings: true }).enabled["grainModel:film"], false);
+  // App-wide, as on the Mac: available with no photo or a fixed profile, where they set what new
+  // photos start with and leave the open photo alone.
+  const none = menuState({ ...e, active: null });
+  assert.equal(none.enabled["grainModel:film"], true);
+  assert.equal(none.checked["grainModel:clump"], true);
+  assert.equal(none.enabled.estimatedHalation, true);
+  const before = e.calls.length;
+  assert.equal(runCommand({ ...e, fixedSettings: true }, "grainModel:film"), true);
+  assert.equal(e.calls.length, before);
 });
 
 function withPlugins(list, overrides = {}) {
@@ -200,7 +205,10 @@ test("Undo and Redo are named and the Edit History lists every step", () => {
   assert.deepEqual(state.titles, {
     undo: "Undo Crop & Rotate",
     redo: "Redo Portra 400",
+    play: "Play",
   });
+  // View › Play says what it will do next.
+  assert.equal(menuState({ ...e, playing: true }).titles.play, "Pause");
   assert.deepEqual(state.history, ["Opened", "Crop & Rotate", "Portra 400"]);
   assert.equal(state.checked["history:1"], true);
   assert.equal(state.enabled["history:2"], true);

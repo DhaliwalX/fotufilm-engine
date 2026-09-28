@@ -1,7 +1,9 @@
 import { Dialog, Heading, Content } from "@react-spectrum/s2/Dialog";
 import { editorControl } from "../editor-catalogue.js";
-import { shortcutLabel } from "../shortcut-label.js";
+import { exportShortcut, shortcutLabel } from "../shortcut-label.js";
+import { useEditor } from "./EditorContext.jsx";
 export default function ShortcutsDialog() {
+  const { backend } = useEditor();
   return (
     <Dialog aria-label="Keyboard shortcuts" isDismissible size={"M"}>
       <Heading>{"Keyboard shortcuts"}</Heading>
@@ -9,7 +11,7 @@ export default function ShortcutsDialog() {
         <dl className="shortcuts">
           {[
             ["Open images", shortcutLabel("⌘O")],
-            ["Export", shortcutLabel("⌘S")],
+            ["Export", shortcutLabel(exportShortcut(backend))],
             ["Undo", shortcutLabel("⌘Z")],
             ["Redo", shortcutLabel("⇧⌘Z")],
             [editorControl("autoAdjustment").title, shortcutLabel("⇧⌘A")],

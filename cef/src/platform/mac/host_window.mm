@@ -1,6 +1,7 @@
 #import "platform/mac/host_window.h"
 
 #import <QuartzCore/QuartzCore.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #include <cstring>
 #include <map>
@@ -515,7 +516,7 @@ class MacView : public fotufilm::ViewDelegate {
   _window.titleVisibility = NSWindowTitleHidden;
   _window.releasedWhenClosed = NO;
   _window.delegate = self;
-  _window.minSize = NSMakeSize(720, 480);
+  _window.minSize = NSMakeSize(720, 520);
   _window.tabbingMode = NSWindowTabbingModeDisallowed;
   _window.collectionBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
   _pendingPaths = [NSMutableArray array];
@@ -609,6 +610,20 @@ class MacView : public fotufilm::ViewDelegate {
   };
   _dispatcher->Register("echo", Dispatcher::Thread::kEngine, echo);
   _dispatcher->Register("echoUi", Dispatcher::Thread::kUi, echo);
+
+  // The editor's own Open buttons ({kind: "image" | "video" | "all" | "filmPack"}) use the native
+  // open panel, so what they open is in Open Recent as the menu's opens are. The files arrive as
+  // any native open does; the answer is whether anything was chosen.
+  _dispatcher->Register(
+      "openPanel", Dispatcher::Thread::kUi,
+      [weakSelf](const Call& call, std::shared_ptr<Reply> reply) {
+        FotufilmHostWindow* strong = weakSelf;
+        if (!strong) return reply->Resolve(nullptr);
+        std::string kind = "all";
+        if (call.params && call.params->GetType() == VTYPE_DICTIONARY)
+          kind = call.params->GetDictionary()->GetString("kind").ToString();
+        [strong runOpenPanel:@(kind.c_str()) reply:reply];
+      });
 
   _dispatcher->Register(
       "compositorStats", Dispatcher::Thread::kUi,
@@ -804,6 +819,33 @@ class MacView : public fotufilm::ViewDelegate {
 }
 
 #pragma mark Editor commands
+
+- (void)runOpenPanel:(NSString*)kind reply:(std::shared_ptr<fotufilm::Reply>)reply {
+  NSOpenPanel* panel = [NSOpenPanel openPanel];
+  if ([kind isEqualToString:@"filmPack"]) {
+    if (UTType* pack = [UTType typeWithFilenameExtension:@"fotufilmpack"])
+      panel.allowedContentTypes = @[ pack ];
+    panel.prompt = @"Add";
+    panel.message = @"Choose a Fotufilm film pack to add to your library.";
+  } else if ([kind isEqualToString:@"image"]) {
+    panel.allowedContentTypes = @[ UTTypeImage ];
+  } else if ([kind isEqualToString:@"video"]) {
+    panel.allowedContentTypes = @[ UTTypeMovie ];
+  } else {
+    panel.allowedContentTypes = @[ UTTypeImage, UTTypeMovie ];
+  }
+  panel.allowsMultipleSelection = YES;
+  panel.canChooseDirectories = NO;
+  __weak FotufilmHostWindow* weakSelf = self;
+  [panel beginSheetModalForWindow:_window
+                completionHandler:^(NSModalResponse response) {
+                  const bool chosen = response == NSModalResponseOK && panel.URLs.count;
+                  if (chosen) [weakSelf openURLs:panel.URLs];
+                  CefRefPtr<CefValue> value = CefValue::Create();
+                  value->SetBool(chosen);
+                  reply->Resolve(value);
+                }];
+}
 
 - (void)openURLs:(NSArray<NSURL*>*)urls {
   for (NSURL* url in urls) {

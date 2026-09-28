@@ -212,6 +212,11 @@ export function createMacBackend(channel) {
       ? (photoID, film) => call("recordFilmChoice", { photoID, film })
       : undefined,
     forgetFilmChoices: can.filmSuggestion ? () => call("forgetFilmChoices") : undefined,
+    // The native open panel; what is chosen arrives as a native open ("fotufilm-native-open").
+    openPanel: (kind = "all") => call("openPanel", { kind }),
+    filmChoiceCount: can.filmSuggestion
+      ? () => call("filmChoices").then(({ observations }) => observations)
+      : undefined,
     // The developed frame on the system clipboard, written by the engine.
     copyImage: can.copyImage
       ? async (request) =>

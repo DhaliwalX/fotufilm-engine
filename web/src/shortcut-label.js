@@ -18,3 +18,7 @@ export function shortcutLabel(keys, apple = isApplePlatform()) {
   const key = MODIFIERS.reduce((rest, [symbol]) => rest.replaceAll(symbol, ""), keys);
   return [...new Set(held), key].join("+");
 }
+
+// Export's shortcut: the File menu's ⌘E, as the Mac app has it, where the host draws native menus;
+// ⌘S in a browser, where ⌘E is the browser's own.
+export const exportShortcut = (backend) => (backend?.kind === "native" ? "⌘E" : "⌘S");

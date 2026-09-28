@@ -30,7 +30,14 @@ export default function useDocumentActions({
 }) {
   const openFiles = useCallback(
     (kind = "all") => {
-      if (exporting || !input.current) return;
+      if (exporting) return;
+      // A native host's own open panel, whose files arrive as its File › Open's do and are
+      // kept in Open Recent.
+      if (backend.openPanel) {
+        backend.openPanel(kind).catch(console.error);
+        return;
+      }
+      if (!input.current) return;
       input.current.accept =
         kind === "image"
           ? IMAGE_ACCEPT
@@ -39,7 +46,7 @@ export default function useDocumentActions({
             : `${IMAGE_ACCEPT},${VIDEO_ACCEPT}`;
       input.current.click();
     },
-    [exporting, input],
+    [backend, exporting, input],
   );
 
   // A new document starts from its kept edit (useSavedEdits), or from the settings' starting film

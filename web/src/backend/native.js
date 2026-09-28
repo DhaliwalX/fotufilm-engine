@@ -50,12 +50,14 @@ export function createNativeBackend(host) {
   // the edits photographs are left with.
   for (const name of [
     "importPath",
+    "openPanel",
     "copyImage",
     "exportOptions",
     "exportOriginal",
     "suggestFilm",
     "recordFilmChoice",
     "forgetFilmChoices",
+    "filmChoiceCount",
     "loadEdit",
     "saveEdit",
   ])

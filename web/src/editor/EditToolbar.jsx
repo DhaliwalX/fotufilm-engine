@@ -5,7 +5,7 @@ import { ToggleButton } from "@react-spectrum/s2/ToggleButton";
 import { useEditor } from "./EditorContext.jsx";
 import OptionsMenu from "./OptionsMenu.jsx";
 import { filmNamer, redoTitle, undoTitle } from "../edit-history.js";
-import { shortcutLabel } from "../shortcut-label.js";
+import { exportShortcut, shortcutLabel } from "../shortcut-label.js";
 export default function EditToolbar() {
   const {
     toggleInspector,
@@ -19,6 +19,7 @@ export default function EditToolbar() {
     history,
     setDialog,
     stocks,
+    backend,
   } = useEditor();
   // What Undo and Redo will change, as the Edit menu names it.
   const filmName = filmNamer(stocks);
@@ -86,13 +87,13 @@ export default function EditToolbar() {
         <ActionButton
           onPress={() => setDialog("export")}
           isDisabled={!active || !stocks.length || exporting}
-          aria-label={`Export (${shortcutLabel("⌘S")})`}
+          aria-label={`Export (${shortcutLabel(exportShortcut(backend))})`}
           size={"S"}
           isQuiet
         >
           <Icon name={"export"} />
         </ActionButton>
-        <Tooltip>{`Export (${shortcutLabel("⌘S")})`}</Tooltip>
+        <Tooltip>{`Export (${shortcutLabel(exportShortcut(backend))})`}</Tooltip>
       </TooltipTrigger>
       <OptionsMenu />
       <TooltipTrigger>

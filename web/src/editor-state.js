@@ -112,6 +112,8 @@ export const defaultEdit = (stock = null) => ({
   sourceInterpretation: "automatic",
   filterMetering: "throughTheLens",
   medium: null,
+  // Match Film: the medium follows the film, to each film's own, as the Mac app's does.
+  mediumFollowsFilm: false,
   printFrame: "none",
   digitalReference: "auto-levels",
   // `frameRate` is the clip's cadence, the rate it exports at; null keeps the source's.
@@ -323,6 +325,8 @@ export function parseEdit(json, stockIDs) {
     (typeof edit.medium !== "string" || !/^[a-z0-9-]+$/.test(edit.medium))
   )
     throw new Error("Invalid output medium.");
+  if (edit.mediumFollowsFilm != null && typeof edit.mediumFollowsFilm !== "boolean")
+    throw new Error("Invalid output medium.");
   if (
     edit.halationModel != null &&
     !["legacy", "layered"].includes(edit.halationModel)
@@ -380,6 +384,7 @@ export function parseEdit(json, stockIDs) {
     perspectiveH: edit.perspectiveH ?? 0,
     cropShape: edit.cropShape ?? "corners",
     medium: edit.medium ?? null,
+    mediumFollowsFilm: edit.mediumFollowsFilm === true,
     printFrame: parsePrintFrame(edit.printFrame),
     digitalReference: edit.digitalReference ?? "auto-levels",
     video: edit.video ? { ...base.video, ...edit.video } : base.video,

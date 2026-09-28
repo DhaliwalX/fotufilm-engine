@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { inspectorPanels } from "../editor-catalogue.js";
 import { appSetting, setAppSetting } from "../app-settings.js";
 import { canShowNegative } from "../negative-view.js";
-import { PLAYBACK_TOGGLE } from "../video-player/usePlayerShortcuts.js";
+import { PLAYBACK_STATE, PLAYBACK_TOGGLE } from "../video-player/usePlayerShortcuts.js";
+import { forgotFilmChoices, useFilmLearned } from "../film-learning.js";
 import { editHistory, filmNamer, redoTitle, undoTitle } from "../edit-history.js";
 import { isFilmPack } from "./useFilmPacks.js";
 
@@ -72,7 +73,7 @@ const COMMANDS = {
   resetEdits: (e) => e.resetEdits(),
   newGrainPattern: (e) => e.newGrainPattern(),
   autoFilm: () => setAppSetting("autoFilm", !appSetting("autoFilm")),
-  forgetFilms: (e) => e.backend.forgetFilmChoices().catch(console.error),
+  forgetFilms: (e) => e.backend.forgetFilmChoices().then(forgotFilmChoices).catch(console.error),
   zoomIn: (e) => e.zoomIn(),
   zoomOut: (e) => e.zoomOut(),
   zoomToFit: (e) => e.setZoom(1),
@@ -80,8 +81,12 @@ const COMMANDS = {
   histogram: (e) => e.setHistogram((shown) => !shown),
   showNegative: (e) => e.setShowNegative((shown) => !shown),
   play: () => window.dispatchEvent(new CustomEvent(PLAYBACK_TOGGLE)),
-  estimatedHalation: (e) =>
-    e.setProfile("estimatedHalation", e.edit.profile?.estimatedHalation !== true),
+  // App-wide on the Mac, and so here: the setting new photos start with, and the open photo.
+  estimatedHalation: (e) => {
+    const on = !estimatedHalationShown(e);
+    setAppSetting("estimatedHalation", on);
+    if (filmModelled(e)) e.setProfile("estimatedHalation", on);
+  },
   filmSidebar: (e) => e.toggleFilms(),
   inspector: (e) => e.toggleInspector(),
   ...Object.fromEntries(
@@ -101,9 +106,21 @@ function commandFor(command) {
   if (kind === "film" && value)
     return (e) => e.selectStock(value === "none" ? null : value);
   if (kind === "grainModel" && value)
-    return (e) => e.setProfile("grainModel", value);
+    return (e) => {
+      setAppSetting("grainModel", value);
+      if (filmModelled(e)) e.setProfile("grainModel", value);
+    };
   return null;
 }
+
+// A photo is open on a film whose model its settings may change.
+const filmModelled = (e) =>
+  !e.exporting && !e.libraryOpen && !e.dialog && !!e.active && !!e.edit?.stock && !e.fixedSettings;
+// What the Film Model items show: the open photo's, else what a new photo starts with.
+const grainModelShown = (e) =>
+  filmModelled(e) ? (e.edit.profile?.grainModel ?? "clump") : appSetting("grainModel");
+const estimatedHalationShown = (e) =>
+  filmModelled(e) ? e.edit.profile?.estimatedHalation === true : appSetting("estimatedHalation") === true;
 
 // Which commands apply now and which are ticked, by the rules the toolbars use.
 export function menuState(e) {
@@ -127,7 +144,8 @@ export function menuState(e) {
     plugins: !!e.plugins && !e.exporting,
     importFilmPack: !!e.filmPacks && !e.exporting,
     autoFilm: !!e.backend?.suggestFilm,
-    forgetFilms: !!e.backend?.forgetFilmChoices,
+    // Greyed with nothing learned, as the Mac app's is.
+    forgetFilms: !!e.backend?.forgetFilmChoices && e.filmLearned !== false,
     zoomIn: photo && !e.cropMode && e.zoom < 8,
     zoomOut: photo && !e.cropMode && e.zoom > 1,
     zoomToFit: photo && e.zoom !== 1,
@@ -157,14 +175,14 @@ export function menuState(e) {
   const films = [["film:none", "Normal"], ...e.stocks.map(({ id, name }) => [`film:${id}`, name])];
   for (const [command] of films) enabled[command] = photo;
   checked[`film:${e.edit?.stock ?? "none"}`] = true;
-  const modelled = photo && !!e.edit?.stock && !e.fixedSettings;
-  const grainModel = e.edit?.profile?.grainModel ?? "clump";
+  // App-wide, as the Mac app's Film Model items are: available with or without a photo.
+  const grainModel = grainModelShown(e);
   for (const model of ["clump", "film"]) {
-    enabled[`grainModel:${model}`] = modelled;
-    checked[`grainModel:${model}`] = modelled && grainModel === model;
+    enabled[`grainModel:${model}`] = !e.exporting;
+    checked[`grainModel:${model}`] = grainModel === model;
   }
-  enabled.estimatedHalation = modelled && e.edit.halationModel !== "layered";
-  checked.estimatedHalation = modelled && e.edit.profile?.estimatedHalation === true;
+  enabled.estimatedHalation = true;
+  checked.estimatedHalation = estimatedHalationShown(e);
 
   // The Edit History of the photograph shown, as the Mac app's Edit menu lists it.
   const filmName = filmNamer(e.stocks);
@@ -174,6 +192,8 @@ export function menuState(e) {
   const titles = {
       undo: undoTitle(e.history, filmName),
       redo: redoTitle(e.history, filmName),
+      // What it will do next, as the Mac app names it.
+      play: e.playing ? "Pause" : "Play",
     },
     toolTips = {};
   pluginMenuState(e, enabled, titles, toolTips);
@@ -199,12 +219,21 @@ const editsText = (element) =>
 
 export default function useNativeCommands(editor) {
   const transport = globalThis.window?.fotufilmNativeTransport;
-  const latest = useRef(editor);
-  latest.current = editor;
+  const filmLearned = useFilmLearned(editor.backend);
+  const [playing, setPlaying] = useState(false);
+  const current = { ...editor, filmLearned, playing: playing && !!editor.active?.image.video };
+  const latest = useRef(current);
+  latest.current = current;
   const [textInput, setTextInput] = useState(false);
   const state = transport
-    ? JSON.stringify({ ...menuState(editor), textInput })
+    ? JSON.stringify({ ...menuState(current), textInput })
     : null;
+
+  useEffect(() => {
+    const changed = (event) => setPlaying(event.detail?.playing === true);
+    window.addEventListener(PLAYBACK_STATE, changed);
+    return () => window.removeEventListener(PLAYBACK_STATE, changed);
+  }, []);
 
   useEffect(() => {
     if (!state) return;
