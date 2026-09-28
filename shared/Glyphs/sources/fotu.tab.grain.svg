@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Fotufilm glyphs, Copyright 2026 MUAStudio Inc., CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/), https://fotufilm.com, see licenses/GLYPHS.txt -->
+  <circle cx="7" cy="6.8" r="1.7" data-mode="fill" data-layer="primary"/>
+  <circle cx="17.2" cy="8.4" r="2" data-mode="fill" data-layer="primary"/>
+  <circle cx="11" cy="12.2" r="1.35" data-mode="fill" data-layer="primary"/>
+  <circle cx="8.6" cy="18" r="1.9" data-mode="fill" data-layer="primary"/>
+  <circle cx="16.4" cy="16.2" r="1.25" data-mode="fill" data-layer="primary"/>
+  <circle cx="12.8" cy="5.2" r=".9" data-mode="fill" data-layer="secondary" opacity="0.42"/>
+  <circle cx="4.6" cy="12.6" r=".9" data-mode="fill" data-layer="secondary" opacity="0.42"/>
+  <circle cx="19.6" cy="13" r=".75" data-mode="fill" data-layer="secondary" opacity="0.42"/>
+  <circle cx="13.4" cy="19.4" r=".8" data-mode="fill" data-layer="secondary" opacity="0.42"/>
+</svg>

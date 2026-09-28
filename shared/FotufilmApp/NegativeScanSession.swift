@@ -10,6 +10,9 @@ import FotufilmCore
 #if canImport(FotufilmEditModel)
 import FotufilmEditModel
 #endif
+#if canImport(FotufilmImaging)
+import FotufilmImaging
+#endif
 
 /// Where a scan comes from.
 enum NegativeScanSource {

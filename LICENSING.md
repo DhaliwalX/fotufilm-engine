@@ -4,7 +4,7 @@ Project-authored source, documentation, synthetic stock examples, print receiver
 measurements, and artwork are governed by [LICENSE](LICENSE). Third-party components
 retain their respective terms, recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 and accompanying file notices. Project-authored material is licensed under
-Apache-2.0, except the 40 film profiles described below.
+Apache-2.0, except the 40 film profiles and the editor glyphs described below.
 
 ## Film profiles
 
@@ -20,6 +20,20 @@ This licence covers the listed profiles, including their rendering parameters an
 spectral samples. Synthetic examples and engine code remain Apache-2.0. Using a
 profile to render a photograph or video does not impose the profile licence or an
 attribution requirement on that rendered work.
+
+## Glyphs
+
+The editor glyphs in `shared/Glyphs/sources/`, and the symbol templates and SVGs generated
+from them in `shared/Glyphs/Glyphs.xcassets/` and `web/public/glyphs/`, are licensed under
+CC BY-SA 4.0. See the [glyph notice](licenses/GLYPHS.txt) and [full licence](licenses/CC-BY-SA-4.0.txt).
+You may use, modify, and redistribute them, including commercially, with attribution.
+Credit the glyphs to **Fotufilm** and link to **https://fotufilm.com**; retain the
+MUAStudio Inc. copyright notice and identify any changes. Distributed adaptations must use
+CC BY-SA 4.0 or an officially compatible licence.
+
+ShareAlike applies to changed glyphs. Showing the glyphs unchanged in an app, website or
+document does not bring that work under the glyph licence. The generator
+(`tools/build-glyphs.py`) and the manifest (`shared/Glyphs/glyphs.json`) remain Apache-2.0.
 
 ## Measured spectral data
 
@@ -60,6 +74,6 @@ Third-party names remain the trademarks of their respective owners.
 ## Contributions
 
 Code contributions are provided under Apache-2.0. Contributions to the 40 film
-profiles are provided under CC BY-SA 4.0 unless explicitly agreed otherwise. Include only material
+profiles and to the glyphs are provided under CC BY-SA 4.0 unless explicitly agreed otherwise. Include only material
 whose provenance and redistribution rights can be verified, and preserve all
 required notices.

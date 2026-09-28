@@ -1,0 +1,39 @@
+Fotufilm glyphs
+Copyright 2026 MUAStudio Inc.
+
+The Fotufilm glyphs are licensed under Creative Commons
+Attribution-ShareAlike 4.0 International (CC BY-SA 4.0). They are the deck,
+tab and slider symbols drawn for the Fotufilm editor. This license covers:
+
+  shared/Glyphs/sources/          the source drawings, one SVG per glyph
+  shared/Glyphs/Glyphs.xcassets/  the symbol templates generated from them
+  web/public/glyphs/              the outlined SVGs and sprite generated from them
+
+Attribution name: Fotufilm
+Attribution website: https://fotufilm.com
+Source and glyph manifest: https://github.com/DhaliwalX/fotufilm-engine
+License: https://creativecommons.org/licenses/by-sa/4.0/
+The full license is included in CC-BY-SA-4.0.txt.
+
+You may use, copy, modify, and redistribute these glyphs, including
+commercially, with attribution to Fotufilm (https://fotufilm.com), a license
+link, and an indication of changes. Retain the copyright and license notices.
+A credit such as "Glyphs by Fotufilm (https://fotufilm.com), CC BY-SA 4.0"
+in an app's acknowledgements or a project's README is sufficient.
+
+If you distribute adapted glyphs, you must license the adaptations under
+CC BY-SA 4.0 or an officially compatible license. Redrawing, recolouring or
+combining glyphs makes an adaptation. Showing the glyphs unchanged in an app,
+website or document does not make that app, website or document an
+adaptation, and ShareAlike does not extend to it. Private modifications need
+not be published. See the full license for its terms and exceptions.
+
+This license covers the glyph artwork only. It does not cover the generator
+(tools/build-glyphs.py) or the manifest (shared/Glyphs/glyphs.json), which are
+Apache-2.0 with the rest of the engine, and it does not cover Fotufilm's name,
+logo or other branding, which identify official builds and are not licensed
+here.
+
+The glyphs are original drawings. They are not derived from Apple's SF
+Symbols; the symbol templates only follow Apple's published template format
+so that Xcode can compile them. SF Symbols is a trademark of Apple Inc.

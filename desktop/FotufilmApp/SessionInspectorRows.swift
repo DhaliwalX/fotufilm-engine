@@ -64,7 +64,7 @@ struct InspectorRowFactory {
 
     func slider(_ control: EditorControl, scale: EditorControlScale) -> SliderRow {
         let field = control.field
-        return adjustment(control.title, scale.range, scale.unit.format,
+        let row = adjustment(control.title, scale.range, scale.unit.format,
                           { [model] in model.edit.value(of: field) ?? scale.neutral },
                           { [model] value in
                               var next = model.edit
@@ -72,6 +72,12 @@ struct InspectorRowFactory {
                                             of: field)
                               model.edit = next
                           })
+        let ends = Glyph.sliderEndNames(field)
+        if let low = Symbol.image(ends.low, size: 13, weight: .regular),
+           let high = Symbol.image(ends.high, size: 13, weight: .regular) {
+            row.showEnds(low: low, high: high)
+        }
+        return row
     }
 
     static func snapped(_ value: Double, to stops: [Double]) -> Double {
