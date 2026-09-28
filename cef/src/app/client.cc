@@ -7,7 +7,10 @@
 namespace fotufilm {
 
 Client::Client(Dispatcher* dispatcher, ViewDelegate* view)
-    : dispatcher_(dispatcher), view_(view) {}
+    : dispatcher_(dispatcher), off_screen_(true), view_(view), window_(view) {}
+
+Client::Client(Dispatcher* dispatcher, WindowDelegate* window)
+    : dispatcher_(dispatcher), off_screen_(false), view_(nullptr), window_(window) {}
 
 bool Client::OnProcessMessageReceived(CefRefPtr<CefBrowser>,
                                       CefRefPtr<CefFrame> frame,
@@ -41,7 +44,7 @@ void Client::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
 void Client::OnBeforeClose(CefRefPtr<CefBrowser>) {
   CEF_REQUIRE_UI_THREAD();
   browser_ = nullptr;
-  if (view_) view_->BrowserClosed();
+  if (window_) window_->BrowserClosed();
 }
 
 void Client::GetViewRect(CefRefPtr<CefBrowser>, CefRect& rect) {
@@ -95,7 +98,7 @@ void Client::UpdateDragCursor(CefRefPtr<CefBrowser>, DragOperation operation) {
 }
 
 void Client::OnTitleChange(CefRefPtr<CefBrowser>, const CefString& title) {
-  if (view_) view_->SetTitle(title.ToString());
+  if (window_) window_->SetTitle(title.ToString());
 }
 
 bool Client::OnCursorChange(CefRefPtr<CefBrowser>,
@@ -122,8 +125,8 @@ bool Client::OnKeyEvent(CefRefPtr<CefBrowser>,
                         const CefKeyEvent& event,
                         CefEventHandle) {
   // Keys reach the page first; what it leaves unhandled goes to the menu bar (Quit, Close…).
-  return view_ && event.type == KEYEVENT_RAWKEYDOWN &&
-         view_->UnhandledKey(event);
+  return window_ && event.type == KEYEVENT_RAWKEYDOWN &&
+         window_->UnhandledKey(event);
 }
 
 void Client::OnBeforeContextMenu(CefRefPtr<CefBrowser>,

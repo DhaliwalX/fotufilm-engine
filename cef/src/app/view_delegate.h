@@ -1,5 +1,7 @@
-// What the off-screen browser needs from the platform window that shows it. The window owns the
-// compositor: the browser's frames arrive here as textures and are drawn over the engine's image.
+// What the browser needs from the platform window that shows it. An off-screen browser's window
+// (ViewDelegate) owns the compositor: the browser's frames arrive there as textures and are drawn
+// over the engine's image. Off-screen browsers do not return the system event for a key, so that
+// window matches an unhandled key to the one it last sent.
 #pragma once
 
 #include <string>
@@ -8,9 +10,19 @@
 
 namespace fotufilm {
 
-class ViewDelegate {
+// What any window that shows the browser handles, whether Chromium paints into it (Linux and
+// Windows, windowed) or the window composites the browser's frames itself (ViewDelegate).
+class WindowDelegate {
  public:
-  virtual ~ViewDelegate() = default;
+  virtual ~WindowDelegate() = default;
+  // A key the page did not consume, to be offered to the window's shortcuts or menu bar.
+  virtual bool UnhandledKey(const CefKeyEvent& event) = 0;
+  virtual void SetTitle(const std::string& title) = 0;
+  virtual void BrowserClosed() = 0;
+};
+
+class ViewDelegate : public WindowDelegate {
+ public:
 
   // The view in device-independent pixels, and its backing scale.
   virtual CefRect ViewRect() = 0;
@@ -24,14 +36,9 @@ class ViewDelegate {
   virtual void SoftwarePaint(const void* pixels, int width, int height) = 0;
 
   virtual void SetCursor(CefCursorHandle cursor, cef_cursor_type_t type) = 0;
-  // A key the page did not consume, to be offered to the menu bar. Off-screen browsers do not
-  // return the system event, so the window matches it to the key it last sent.
-  virtual bool UnhandledKey(const CefKeyEvent& event) = 0;
-  virtual void SetTitle(const std::string& title) = 0;
   // What the page would do with the files being dragged over it (none, copy, link…), for the
   // platform's drag cursor and to know whether a drop was taken.
   virtual void UpdateDragOperation(cef_drag_operations_mask_t operation) = 0;
-  virtual void BrowserClosed() = 0;
 };
 
 }  // namespace fotufilm

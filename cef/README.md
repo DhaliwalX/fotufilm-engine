@@ -28,6 +28,21 @@ films and camera profiles it reads, which the app carries in `Frameworks` and `R
 `tools/build-editor-plugins.sh` builds the DaVinci Resolve OFX
 bundle and, where Apple's FxPlug SDK is installed, the Final Cut Pro wrapper; the app carries them
 in `Resources`. The app is `build/cef-host/Release/Fotufilm.app`.
+
+### Linux
+
+The same `cef/build.sh` builds `build/cef-host/Release/fotufilm`, with CEF, the web build and the
+engine beside it, and `cef/package-appimage.sh` packs that folder into
+`build/appimage/Fotufilm-<version>-x86_64.AppImage`. The engine library comes from
+`cef/build-engine-linux.sh`: the Swift engine with its runtime linked in, and the desktop graph
+compiled ahead of time for CUDA and for Vulkan (`tools/generate-halide-aot-linux.sh`, which needs
+a Halide build with both backends in `HALIDE_ROOT` and the patches in `tools/vulkan-parity/`).
+When the app starts the engine develops on CUDA where an NVIDIA driver answers and on Vulkan on
+any other GPU; `FOTUFILM_GPU_DEVICE=cuda`, `vulkan` or `cpu` chooses instead. The window is CEF
+Views' (`app/windowed_host.h`), painted by Chromium, so the page draws the photograph itself.
+The Linux build runs without Chromium's sandbox, as an AppImage cannot carry its setuid helper;
+the editor only loads its own bundled pages.
+
 Switches:
 
 | Switch | Effect |
@@ -84,7 +99,9 @@ The transport keeps the contract in `web/src/backend/README.md` and the call sha
 | `src/app/scheme.*` | `fotufilm://app/` serves the bundled web build: no local server or port. |
 | `src/app/library_folders.*`, `library_methods.*` | The photo library's folders: the host's panel, listing, and the files at `fotufilm://app/.library`. |
 | `src/app/browser_app.*` | CefApp for the browser and child processes; passes switches to renderers. |
-| `src/app/client.*` | One off-screen browser: paint, cursor, keys, context menu, bridge messages. |
+| `src/app/client.*` | One browser, off screen or windowed: paint, cursor, keys, context menu, bridge messages. |
+| `src/app/windowed_host.*` | The editor in a CEF Views window Chromium paints: Linux, and Windows to come. |
+| `src/app/file_panels.*` | Open and save panels through CEF's file dialogs, and `openExport`, for windowed hosts. |
 | `src/bridge/protocol.h` | Message names and the shared-memory frame layout. |
 | `src/bridge/dispatcher.*` | Routes calls to UI-thread or engine-thread handlers; replies; cancellation. |
 | `src/renderer/bridge.js` | The page-side transport, compiled into the renderer. |
@@ -98,6 +115,7 @@ The transport keeps the contract in `web/src/backend/README.md` and the call sha
 | `src/platform/mac/` | Window, input forwarding, the Metal half of the compositor, app and helper entry points. |
 | `src/platform/mac/image_presenter.*` | The presenter on macOS: a pool of IOSurfaces shared with Metal. |
 | `src/platform/mac/main_menu.*` | The Mac app's menu bar, Open Recent and the Plugins menu. |
+| `src/platform/linux/` | The Linux entry point (one executable for every CEF process) and the desktop opener. |
 | `resources/diagnostics/` | Bridge diagnostics: round trips, payloads, native-layer alignment. |
 
 ### Image layer
@@ -289,7 +307,8 @@ no film, as the Mac app's importer does. Light frames live in
    compositor (dmabuf), and Halide GPU targets for each; Swift is shipped with the app there.
    What such a compositor decides is already shared (`compositor_core.h`): a port supplies a
    `PresentationSurface`, a `PooledPresenter`, a `WindowCompositor` and the draw of each
-   `CompositePlan`, and registers `RegisterPresentationMethods`. `libfotufilm` builds on Linux.
+   `CompositePlan`, and registers `RegisterPresentationMethods`. Linux runs today as a windowed
+   host (see [Linux](#linux)); its native image layer is still to come.
 5. **Host completeness.** IME composition, native `<select>` popups,
    accessibility, window chrome from `window-chrome.js`, and signing and notarisation of the app
    and its helpers.

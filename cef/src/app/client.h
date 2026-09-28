@@ -1,4 +1,5 @@
-// One editor browser: off-screen rendering into the platform compositor, and the bridge.
+// One editor browser and the bridge: rendered off screen into the platform compositor, or
+// windowed, painted by Chromium into the window it is given.
 #pragma once
 
 #include "bridge/dispatcher.h"
@@ -15,14 +16,19 @@ class Client : public CefClient,
                public CefContextMenuHandler,
                public CefLoadHandler {
  public:
+  // Off screen, into `view`'s compositor.
   Client(Dispatcher* dispatcher, ViewDelegate* view);
+  // Windowed.
+  Client(Dispatcher* dispatcher, WindowDelegate* window);
 
   CefRefPtr<CefBrowser> browser() const { return browser_; }
   // The window is going away; stop calling into it.
-  void DetachView() { view_ = nullptr; }
+  void DetachView() { view_ = nullptr; window_ = nullptr; }
 
   CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
-  CefRefPtr<CefRenderHandler> GetRenderHandler() override { return this; }
+  CefRefPtr<CefRenderHandler> GetRenderHandler() override {
+    return off_screen_ ? this : nullptr;
+  }
   CefRefPtr<CefDisplayHandler> GetDisplayHandler() override { return this; }
   CefRefPtr<CefKeyboardHandler> GetKeyboardHandler() override { return this; }
   CefRefPtr<CefContextMenuHandler> GetContextMenuHandler() override {
@@ -107,7 +113,9 @@ class Client : public CefClient,
 
  private:
   Dispatcher* const dispatcher_;
+  const bool off_screen_;
   ViewDelegate* view_;
+  WindowDelegate* window_;
   CefRefPtr<CefBrowser> browser_;
   IMPLEMENT_REFCOUNTING(Client);
 };
