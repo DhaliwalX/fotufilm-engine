@@ -60,7 +60,7 @@
   <key>CFBundleExecutable</key>
   <string>${EXECUTABLE_NAME}</string>
   <key>CFBundleIdentifier</key>
-  <string>com.fotufilm.desktop</string>
+  <string>${FOTUFILM_BUNDLE_ID}</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleIconName</key>
@@ -78,7 +78,7 @@
   <!-- Check for Updates reads one JSON release document (FotufilmUpdate's UpdateManifest) from
        here. Fotufilm Desktop has a feed of its own: the Mac app's names its AppKit installer. -->
   <key>FotufilmUpdateFeedURL</key>
-  <string>https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-Desktop-macOS-update.json</string>
+  <string>${FOTUFILM_UPDATE_FEED}</string>
   <key>LSMinimumSystemVersion</key>
   <string>12.0</string>
   <key>NSHighResolutionCapable</key>

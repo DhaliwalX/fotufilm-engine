@@ -27,7 +27,7 @@ checks its SHA-1. `cef/build-engine.sh` builds `build/cef-engine/libfotufilm.dyl
 films and camera profiles it reads, which the app carries in `Frameworks` and `Resources`.
 `tools/build-editor-plugins.sh` builds the DaVinci Resolve OFX
 bundle and, where Apple's FxPlug SDK is installed, the Final Cut Pro wrapper; the app carries them
-in `Resources`. The app is `build/cef-host/Release/Fotufilm Desktop.app`.
+in `Resources`. The app is `build/cef-host/Release/Fotufilm.app`.
 Switches:
 
 | Switch | Effect |

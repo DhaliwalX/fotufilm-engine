@@ -171,7 +171,7 @@ Fotufilm Desktop targets Apple silicon and macOS 14 or newer.
 cef/build.sh
 ```
 
-Open `build/cef-host/Release/Fotufilm Desktop.app`. The build also includes the Resolve plugin.
+Open `build/cef-host/Release/Fotufilm.app`. The build also includes the Resolve plugin.
 To include the Final Cut plugin, install Apple's FxPlug SDK first. See the
 [Resolve guide](resolve/README.md) and [Final Cut guide](finalcut/README.md)
 for separate builds and installation steps.
