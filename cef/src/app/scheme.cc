@@ -1,6 +1,7 @@
 #include "app/scheme.h"
 
 #include <filesystem>
+#include <map>
 #include <string_view>
 
 #include "include/cef_parser.h"
@@ -24,6 +25,12 @@ std::string MimeType(const fs::path& path) {
   return type.empty() ? "application/octet-stream" : type;
 }
 
+// Files served from outside the web build, by the name they are asked for under.
+std::map<std::string, AppFileResolver>& Served() {
+  static std::map<std::string, AppFileResolver> served;
+  return served;
+}
+
 class AppSchemeHandlerFactory : public CefSchemeHandlerFactory {
  public:
   explicit AppSchemeHandlerFactory(fs::path root)
@@ -42,6 +49,10 @@ class AppSchemeHandlerFactory : public CefSchemeHandlerFactory {
                            .ToString();
     while (!path.empty() && path.front() == '/') path.erase(0, 1);
     if (path.empty()) path = "index.html";
+    if (auto served = Served().find(path); served != Served().end()) {
+      const std::string named = served->second(CefString(&parts.query).ToString());
+      return named.empty() ? NotFound() : FileResponse(named);
+    }
 
     fs::path file = fs::weakly_canonical(root_ / path);
     // Nothing outside the web build is reachable, whatever the path spells.
@@ -52,7 +63,12 @@ class AppSchemeHandlerFactory : public CefSchemeHandlerFactory {
     if (!fs::is_regular_file(file, error) && !file.has_extension())
       file = root_ / "index.html";
     if (!fs::is_regular_file(file, error)) return NotFound();
+    return FileResponse(file);
+  }
 
+ private:
+  static CefRefPtr<CefResourceHandler> FileResponse(const fs::path& file) {
+    std::error_code error;
     CefRefPtr<CefStreamReader> stream =
         fs::file_size(file, error) == 0 ? nullptr : CefStreamReader::CreateForFile(file.string());
     if (!stream) return NotFound();
@@ -62,7 +78,6 @@ class AppSchemeHandlerFactory : public CefSchemeHandlerFactory {
                                         stream);
   }
 
- private:
   // CEF gives no reader for empty data, and a handler without one crashes when it is read, so
   // the refusal carries a body.
   static CefRefPtr<CefResourceHandler> NotFound() {
@@ -83,6 +98,10 @@ void RegisterCustomSchemes(CefRawPtr<CefSchemeRegistrar> registrar) {
       kScheme, CEF_SCHEME_OPTION_STANDARD | CEF_SCHEME_OPTION_SECURE |
                    CEF_SCHEME_OPTION_CORS_ENABLED |
                    CEF_SCHEME_OPTION_FETCH_ENABLED);
+}
+
+void ServeAppFiles(const std::string& name, AppFileResolver resolve) {
+  Served()[name] = std::move(resolve);
 }
 
 void RegisterAppSchemeHandler(const std::string& web_root) {

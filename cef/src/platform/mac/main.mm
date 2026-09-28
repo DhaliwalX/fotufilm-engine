@@ -4,6 +4,7 @@
 #include <string>
 
 #include "app/browser_app.h"
+#include "app/library_methods.h"
 #include "app/scheme.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
@@ -57,7 +58,8 @@ NSArray<NSDictionary*>* Plugins(const std::string& capabilities) {
 }
 
 // The engine's capabilities with the host's own: this host draws the photograph itself, beneath
-// the page (`imageLayer`), and opens what it saved (`openExport`, web/src/backend/README.md).
+// the page (`imageLayer`), opens what it saved (`openExport`, web/src/backend/README.md), and reads
+// the photo library's folders (`libraryFolders`, app/library_methods.h).
 std::string WithHostCapabilities(const std::string& capabilities) {
   NSData* json = [NSData dataWithBytes:capabilities.data() length:capabilities.size()];
   NSDictionary* fields = capabilities.empty()
@@ -67,6 +69,7 @@ std::string WithHostCapabilities(const std::string& capabilities) {
   NSMutableDictionary* merged = [fields mutableCopy];
   merged[@"imageLayer"] = @YES;
   merged[@"openExport"] = @{@"reveal" : @"Show in Finder"};
+  merged[@"libraryFolders"] = @YES;
   NSData* out = [NSJSONSerialization dataWithJSONObject:merged
                                                 options:NSJSONWritingSortedKeys
                                                   error:nil];
@@ -298,6 +301,7 @@ int main(int argc, char* argv[]) {
             : ProfilePath();
     CefString(&settings.root_cache_path) = profile;
     CefString(&settings.cache_path) = profile + "/Default";
+    fotufilm::RegisterLibraryMethods(*g_dispatcher, profile + "/library-folders.txt");
     settings.log_severity = LOGSEVERITY_WARNING;
     if (!CefInitialize(arguments, settings, app, nullptr))
       return CefGetExitCode();

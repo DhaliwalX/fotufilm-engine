@@ -15,9 +15,9 @@ import {
   scanDirectory,
   uploadedFolders,
 } from "./library-scan.js";
+import { folderAccess } from "./folder-access.js";
 
-export const supportsFolderAccess = () =>
-  typeof globalThis.showDirectoryPicker === "function";
+export const supportsFolderAccess = () => folderAccess().persistent();
 
 const stored = ({ id, name, handle, added }) => ({ id, name, handle, added });
 const message = (error, fallback) =>
@@ -145,6 +145,10 @@ export function usePhotoLibrary(active) {
     loadFolders()
       .then(async (list) => {
         list.sort((a, b) => a.added - b.added);
+        list = list.map((folder) => ({
+          ...folder,
+          handle: folderAccess().revive(folder.handle),
+        }));
         const saved = await Promise.all(
           list.map((folder) =>
             Promise.all([
@@ -179,17 +183,17 @@ export function usePhotoLibrary(active) {
   const addFolder = useCallback(async () => {
     let handle;
     try {
-      handle = await globalThis.showDirectoryPicker({
-        id: "fotufilm-library",
-        mode: "read",
-      });
+      handle = await folderAccess().choose();
     } catch (reason) {
-      if (reason.name !== "AbortError")
-        setError(message(reason, "The folder could not be opened."));
+      setError(message(reason, "The folder could not be opened."));
       return null;
     }
+    if (!handle) return null;
     for (const folder of folders)
-      if (folder.handle && (await folder.handle.isSameEntry(handle))) {
+      if (
+        folder.handle &&
+        (await folder.handle.isSameEntry(handle).catch(() => false))
+      ) {
         scan(folder);
         return folder.id;
       }
@@ -238,6 +242,7 @@ export function usePhotoLibrary(active) {
 
   const removeFolder = useCallback(async (id) => {
     scans.current.get(id)?.abort();
+    folders.find((folder) => folder.id === id)?.handle?.forget?.();
     await forgetFolder(id).catch(() => {});
     setFolders((list) => list.filter((folder) => folder.id !== id));
     setRecords((current) => {
@@ -246,7 +251,7 @@ export function usePhotoLibrary(active) {
         if (key.startsWith(`${id}/`)) next.delete(key);
       return next;
     });
-  }, []);
+  }, [folders]);
 
   // Stars change at once; the records follow when they are saved.
   const rate = useCallback((keys, rating) => {
