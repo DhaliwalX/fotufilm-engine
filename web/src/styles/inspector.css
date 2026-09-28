@@ -75,9 +75,9 @@
     flex: 1;
     min-width: 0;
   }
+  /* Drawn as the Material icons beside them are: the same box, at full strength. */
   .adjustment-end {
     width: 22px;
-    opacity: 0.8;
   }
   /* A control's help button after its name, as the Mac app's inspector rows carry one. */
   .adjustment-name {

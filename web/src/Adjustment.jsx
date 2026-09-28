@@ -52,7 +52,7 @@ export function Adjustment({
         </div>
       </div>
       <div className="adjustment-track">
-        {ends && <Glyph name={ends.low} size={18} className="adjustment-end" />}
+        {ends && <Glyph name={ends.low} size={20} className="adjustment-end" />}
         <Slider
           size="S"
           UNSAFE_className="adjustment-slider"
@@ -72,7 +72,7 @@ export function Adjustment({
             onEnd?.();
           }}
         />
-        {ends && <Glyph name={ends.high} size={18} className="adjustment-end" />}
+        {ends && <Glyph name={ends.high} size={20} className="adjustment-end" />}
       </div>
     </div>
   );
