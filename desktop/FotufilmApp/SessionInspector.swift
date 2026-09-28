@@ -47,17 +47,20 @@ enum InspectorPanel: String, CaseIterable {
     /// The collapsed rail and iPad tabs use glyphs; the Mac darkroom uses visible stage names.
     var symbol: String {
         switch self {
-        case .film: return "film"
         #if canImport(UIKit)
-        case .lens: return "camera.aperture"
-        case .adjustments: return "slider.horizontal.3"
+        case .film: return Glyph.deck(.film)
+        case .lens: return Glyph.deck(.lens)
+        case .adjustments: return Glyph.deck(.light)
+        case .selective: return Glyph.tab(.frameLocal)
+        case .crop: return Glyph.tab(.frameGeometry)
         #else
+        case .film: return "film"
         case .adjustments: return "sun.max"
         case .development: return "flask"
         case .print: return "photo.on.rectangle"
-        #endif
         case .selective: return "circle.dashed"
         case .crop: return "crop.rotate"
+        #endif
         }
     }
 

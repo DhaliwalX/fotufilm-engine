@@ -1,0 +1,810 @@
+{
+  "glyphs": {
+    "fotu.deck.controls": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.deck.dust": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.deck.film": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.deck.frame": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.deck.grade": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.deck.lens": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.deck.light": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.deck.print": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.autoAdjustment.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.autoAdjustment.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.cameraPreflash.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.cameraPreflash.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.chromaticFringeAmount.high": {
+      "colours": [
+        "systemCyan",
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.chromaticFringeAmount.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.chromaticFringeRadius.high": {
+      "colours": [
+        "systemCyan",
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.chromaticFringeRadius.low": {
+      "colours": [
+        "systemCyan",
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.couplerGreenBlue.high": {
+      "colours": [
+        "systemBlue",
+        "systemGreen"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.couplerGreenBlue.low": {
+      "colours": [
+        "systemBlue",
+        "systemGreen"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.couplerReach.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.couplerReach.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.couplerRedGreen.high": {
+      "colours": [
+        "systemGreen",
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.couplerRedGreen.low": {
+      "colours": [
+        "systemGreen",
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.couplerSelf.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.couplerSelf.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.couplers.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.couplers.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.crop.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.crop.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.expired.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.expired.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.exposure.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.exposure.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.filmBlueLayer.high": {
+      "colours": [
+        "systemBlue"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.filmBlueLayer.low": {
+      "colours": [
+        "systemBlue"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.filmColourGrain.high": {
+      "colours": [
+        "systemBlue",
+        "systemGreen",
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.filmColourGrain.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.filmGrainSize.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.filmGrainSize.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.filmGreenLayer.high": {
+      "colours": [
+        "systemGreen"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.filmGreenLayer.low": {
+      "colours": [
+        "systemGreen"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.filmRedLayer.high": {
+      "colours": [
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.filmRedLayer.low": {
+      "colours": [
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.filmScanSoftness.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.filmScanSoftness.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.flare.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.flare.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.focalLength.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.focalLength.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.frameCoverage.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.frameCoverage.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.grain.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.grain.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.halation.high": {
+      "colours": [
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.halation.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.halationColour.high": {
+      "colours": [
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.halationColour.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.halationReturn.high": {
+      "colours": [
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.halationReturn.low": {
+      "colours": [
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.highlights.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.highlights.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.lensAmount.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.lensAmount.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.lensBlueYellow.high": {
+      "colours": [
+        "systemYellow"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.lensBlueYellow.low": {
+      "colours": [
+        "systemBlue"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.lensDistortion.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.lensDistortion.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.lensRedCyan.high": {
+      "colours": [
+        "systemCyan"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.lensRedCyan.low": {
+      "colours": [
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.lensVignetting.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.lensVignetting.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.localTone.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.localTone.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.mottleShare.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.mottleShare.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.perspectiveHorizontal.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.perspectiveHorizontal.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.perspectiveVertical.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.perspectiveVertical.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.printCorrection.high": {
+      "colours": [
+        "systemBlue",
+        "systemGreen",
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.printCorrection.low": {
+      "colours": [
+        "systemBlue",
+        "systemGreen",
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.printerExposure.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.printerExposure.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.printerLamp.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.printerLamp.low": {
+      "colours": [
+        "systemOrange"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.printerMagenta.high": {
+      "colours": [
+        "systemPink"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.printerMagenta.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.printerPreflash.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.printerPreflash.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.printerYellow.high": {
+      "colours": [
+        "systemYellow"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.printerYellow.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.push.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.push.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.saturation.high": {
+      "colours": [
+        "systemCyan",
+        "systemOrange",
+        "systemPink"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.saturation.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.sceneLightKelvin.high": {
+      "colours": [
+        "systemBlue"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.sceneLightKelvin.low": {
+      "colours": [
+        "systemOrange"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.screenExposure.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.screenExposure.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.screenGrade.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.screenGrade.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.shadows.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.shadows.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.tint.high": {
+      "colours": [
+        "systemPink"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.tint.low": {
+      "colours": [
+        "systemGreen"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.vibrance.high": {
+      "colours": [
+        "systemCyan",
+        "systemOrange",
+        "systemPink"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.vibrance.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.warmth.high": {
+      "colours": [
+        "systemOrange"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.warmth.low": {
+      "colours": [
+        "systemBlue"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.tab.balance": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.tab.color": {
+      "colours": [
+        "systemBlue",
+        "systemGreen",
+        "systemOrange",
+        "systemPurple",
+        "systemRed",
+        "systemYellow"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.tab.correction": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.tab.emulsion": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.tab.exposure": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.tab.films": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.tab.filters": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.tab.geometry": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.tab.grain": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.tab.halation": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.tab.lab": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.tab.lamp": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.tab.lightleak": {
+      "colours": [
+        "systemOrange",
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.tab.local": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.tab.output": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.tab.pipeline": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.tab.source": {
+      "colours": [],
+      "rendering": "hierarchical"
+    }
+  },
+  "license": {
+    "attribution": "Fotufilm (https://fotufilm.com)",
+    "copyright": "Copyright 2026 MUAStudio Inc.",
+    "notice": "licenses/GLYPHS.txt",
+    "spdx": "CC-BY-SA-4.0",
+    "url": "https://creativecommons.org/licenses/by-sa/4.0/"
+  },
+  "sliders": {
+    "autoAdjustment": {
+      "high": "fotu.slider.autoAdjustment.high",
+      "low": "fotu.slider.autoAdjustment.low"
+    },
+    "cameraPreflash": {
+      "high": "fotu.slider.cameraPreflash.high",
+      "low": "fotu.slider.cameraPreflash.low"
+    },
+    "chromaticFringeAmount": {
+      "high": "fotu.slider.chromaticFringeAmount.high",
+      "low": "fotu.slider.chromaticFringeAmount.low"
+    },
+    "chromaticFringeRadius": {
+      "high": "fotu.slider.chromaticFringeRadius.high",
+      "low": "fotu.slider.chromaticFringeRadius.low"
+    },
+    "couplerGreenBlue": {
+      "high": "fotu.slider.couplerGreenBlue.high",
+      "low": "fotu.slider.couplerGreenBlue.low"
+    },
+    "couplerReach": {
+      "high": "fotu.slider.couplerReach.high",
+      "low": "fotu.slider.couplerReach.low"
+    },
+    "couplerRedGreen": {
+      "high": "fotu.slider.couplerRedGreen.high",
+      "low": "fotu.slider.couplerRedGreen.low"
+    },
+    "couplerSelf": {
+      "high": "fotu.slider.couplerSelf.high",
+      "low": "fotu.slider.couplerSelf.low"
+    },
+    "couplers": {
+      "high": "fotu.slider.couplers.high",
+      "low": "fotu.slider.couplers.low"
+    },
+    "crop": {
+      "high": "fotu.slider.crop.high",
+      "low": "fotu.slider.crop.low"
+    },
+    "expired": {
+      "high": "fotu.slider.expired.high",
+      "low": "fotu.slider.expired.low"
+    },
+    "exposure": {
+      "high": "fotu.slider.exposure.high",
+      "low": "fotu.slider.exposure.low"
+    },
+    "filmBlueLayer": {
+      "high": "fotu.slider.filmBlueLayer.high",
+      "low": "fotu.slider.filmBlueLayer.low"
+    },
+    "filmColourGrain": {
+      "high": "fotu.slider.filmColourGrain.high",
+      "low": "fotu.slider.filmColourGrain.low"
+    },
+    "filmGrainSize": {
+      "high": "fotu.slider.filmGrainSize.high",
+      "low": "fotu.slider.filmGrainSize.low"
+    },
+    "filmGreenLayer": {
+      "high": "fotu.slider.filmGreenLayer.high",
+      "low": "fotu.slider.filmGreenLayer.low"
+    },
+    "filmRedLayer": {
+      "high": "fotu.slider.filmRedLayer.high",
+      "low": "fotu.slider.filmRedLayer.low"
+    },
+    "filmScanSoftness": {
+      "high": "fotu.slider.filmScanSoftness.high",
+      "low": "fotu.slider.filmScanSoftness.low"
+    },
+    "flare": {
+      "high": "fotu.slider.flare.high",
+      "low": "fotu.slider.flare.low"
+    },
+    "focalLength": {
+      "high": "fotu.slider.focalLength.high",
+      "low": "fotu.slider.focalLength.low"
+    },
+    "frameCoverage": {
+      "high": "fotu.slider.frameCoverage.high",
+      "low": "fotu.slider.frameCoverage.low"
+    },
+    "grain": {
+      "high": "fotu.slider.grain.high",
+      "low": "fotu.slider.grain.low"
+    },
+    "halation": {
+      "high": "fotu.slider.halation.high",
+      "low": "fotu.slider.halation.low"
+    },
+    "halationColour": {
+      "high": "fotu.slider.halationColour.high",
+      "low": "fotu.slider.halationColour.low"
+    },
+    "halationReturn": {
+      "high": "fotu.slider.halationReturn.high",
+      "low": "fotu.slider.halationReturn.low"
+    },
+    "highlights": {
+      "high": "fotu.slider.highlights.high",
+      "low": "fotu.slider.highlights.low"
+    },
+    "lensAmount": {
+      "high": "fotu.slider.lensAmount.high",
+      "low": "fotu.slider.lensAmount.low"
+    },
+    "lensBlueYellow": {
+      "high": "fotu.slider.lensBlueYellow.high",
+      "low": "fotu.slider.lensBlueYellow.low"
+    },
+    "lensDistortion": {
+      "high": "fotu.slider.lensDistortion.high",
+      "low": "fotu.slider.lensDistortion.low"
+    },
+    "lensRedCyan": {
+      "high": "fotu.slider.lensRedCyan.high",
+      "low": "fotu.slider.lensRedCyan.low"
+    },
+    "lensVignetting": {
+      "high": "fotu.slider.lensVignetting.high",
+      "low": "fotu.slider.lensVignetting.low"
+    },
+    "localTone": {
+      "high": "fotu.slider.localTone.high",
+      "low": "fotu.slider.localTone.low"
+    },
+    "mottleShare": {
+      "high": "fotu.slider.mottleShare.high",
+      "low": "fotu.slider.mottleShare.low"
+    },
+    "perspectiveHorizontal": {
+      "high": "fotu.slider.perspectiveHorizontal.high",
+      "low": "fotu.slider.perspectiveHorizontal.low"
+    },
+    "perspectiveVertical": {
+      "high": "fotu.slider.perspectiveVertical.high",
+      "low": "fotu.slider.perspectiveVertical.low"
+    },
+    "printCorrection": {
+      "high": "fotu.slider.printCorrection.high",
+      "low": "fotu.slider.printCorrection.low"
+    },
+    "printerExposure": {
+      "high": "fotu.slider.printerExposure.high",
+      "low": "fotu.slider.printerExposure.low"
+    },
+    "printerLamp": {
+      "high": "fotu.slider.printerLamp.high",
+      "low": "fotu.slider.printerLamp.low"
+    },
+    "printerMagenta": {
+      "high": "fotu.slider.printerMagenta.high",
+      "low": "fotu.slider.printerMagenta.low"
+    },
+    "printerPreflash": {
+      "high": "fotu.slider.printerPreflash.high",
+      "low": "fotu.slider.printerPreflash.low"
+    },
+    "printerYellow": {
+      "high": "fotu.slider.printerYellow.high",
+      "low": "fotu.slider.printerYellow.low"
+    },
+    "push": {
+      "high": "fotu.slider.push.high",
+      "low": "fotu.slider.push.low"
+    },
+    "saturation": {
+      "high": "fotu.slider.saturation.high",
+      "low": "fotu.slider.saturation.low"
+    },
+    "sceneLightKelvin": {
+      "high": "fotu.slider.sceneLightKelvin.high",
+      "low": "fotu.slider.sceneLightKelvin.low"
+    },
+    "screenExposure": {
+      "high": "fotu.slider.screenExposure.high",
+      "low": "fotu.slider.screenExposure.low"
+    },
+    "screenGrade": {
+      "high": "fotu.slider.screenGrade.high",
+      "low": "fotu.slider.screenGrade.low"
+    },
+    "shadows": {
+      "high": "fotu.slider.shadows.high",
+      "low": "fotu.slider.shadows.low"
+    },
+    "tint": {
+      "high": "fotu.slider.tint.high",
+      "low": "fotu.slider.tint.low"
+    },
+    "vibrance": {
+      "high": "fotu.slider.vibrance.high",
+      "low": "fotu.slider.vibrance.low"
+    },
+    "warmth": {
+      "high": "fotu.slider.warmth.high",
+      "low": "fotu.slider.warmth.low"
+    }
+  }
+}

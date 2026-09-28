@@ -219,6 +219,8 @@ final class SliderRow: FormRowView {
     private let readout: PlatformLabel
     private let display: (Double) -> String
     private let read: () -> Double
+    private var sliderLeading: NSLayoutConstraint!
+    private var sliderTrailing: NSLayoutConstraint!
 
     init(_ title: String, range: ClosedRange<Double>,
          display: @escaping (Double) -> String,
@@ -251,6 +253,8 @@ final class SliderRow: FormRowView {
         addSubview(name)
         addSubview(readout)
         addSubview(slider)
+        sliderLeading = slider.leadingAnchor.constraint(equalTo: leadingAnchor)
+        sliderTrailing = slider.trailingAnchor.constraint(equalTo: trailingAnchor)
         NSLayoutConstraint.activate([
             leadingConstraint(for: name),
             name.topAnchor.constraint(equalTo: topAnchor),
@@ -259,13 +263,37 @@ final class SliderRow: FormRowView {
                 equalTo: name.firstBaselineAnchor),
             spacingAfterLabel(readout.leadingAnchor.constraint(
                 greaterThanOrEqualTo: name.trailingAnchor, constant: 8)),
-            slider.leadingAnchor.constraint(equalTo: leadingAnchor),
-            slider.trailingAnchor.constraint(equalTo: trailingAnchor),
+            sliderLeading, sliderTrailing,
             slider.topAnchor.constraint(equalTo: name.bottomAnchor, constant: 3),
             slider.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
         setAXLabel(title)
         refresh()
+    }
+
+    /// Puts a symbol at each end of the slider for what its low and high values look like.
+    func showEnds(low: PlatformImage, high: PlatformImage) {
+        let width: CGFloat = 22
+        for (image, isLow) in [(low, true), (high, false)] {
+            let end = PlatformImageView()
+            end.image = image
+            end.translatesAutoresizingMaskIntoConstraints = false
+            #if canImport(UIKit)
+            end.contentMode = .center
+            end.tintColor = PlatformColor.primaryText.withAlphaComponent(0.8)
+            #else
+            end.contentTintColor = PlatformColor.primaryText.withAlphaComponent(0.8)
+            #endif
+            addSubview(end)
+            NSLayoutConstraint.activate([
+                end.widthAnchor.constraint(equalToConstant: width),
+                end.centerYAnchor.constraint(equalTo: slider.centerYAnchor),
+                isLow ? end.leadingAnchor.constraint(equalTo: leadingAnchor)
+                      : end.trailingAnchor.constraint(equalTo: trailingAnchor),
+            ])
+        }
+        sliderLeading.constant = width + 4
+        sliderTrailing.constant = -(width + 4)
     }
 
     override func refresh() {

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Fotufilm glyphs, Copyright 2026 MUAStudio Inc., CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/), https://fotufilm.com, see licenses/GLYPHS.txt -->
+  <circle cx="12" cy="12" r="9" stroke-width="1.5" data-mode="stroke" data-layer="primary"/>
+  <path d="M5.64 18.36A9 9 0 0 1 18.36 5.64z" data-mode="fill" data-layer="tertiary" opacity="0.16"/>
+  <path d="M5.64 18.36L18.36 5.64" stroke-width="1.5" data-mode="stroke" data-layer="secondary" opacity="0.42"/>
+  <path d="M7.2 9.4h3.6M9 7.6v3.6M13.2 14.6h3.6" stroke-width="1.5" data-mode="stroke" data-layer="primary"/>
+</svg>

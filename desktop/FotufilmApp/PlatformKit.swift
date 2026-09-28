@@ -104,20 +104,29 @@ enum PlatformType {
 // MARK: - Symbols
 
 enum Symbol {
-    /// An SF Symbol at a point size, as an image the platform's image view will take.
+    /// A Fotufilm glyph (see `Glyph`) or an SF Symbol at a point size, as an image the platform's
+    /// image view will take. Glyphs render multicolor so the few that carry system colours keep
+    /// them.
     static func image(_ name: String, size: CGFloat = 15,
                       weight: PlatformFont.Weight = .medium,
                       description: String? = nil) -> PlatformImage? {
         #if canImport(UIKit)
         let configuration = UIImage.SymbolConfiguration(
             pointSize: size, weight: symbolWeight(weight))
-        let image = UIImage(systemName: name)?
-            .withConfiguration(configuration)
+        let image = UIImage(named: name, in: .main,
+                            with: configuration.applying(
+                                UIImage.SymbolConfiguration.preferringMulticolor()))
+            ?? UIImage(systemName: name)?.withConfiguration(configuration)
         image?.accessibilityLabel = description
         return image
         #else
         let configuration = NSImage.SymbolConfiguration(
             pointSize: size, weight: symbolWeight(weight))
+        if let glyph = NSImage(symbolName: name, bundle: .main, variableValue: 1)?
+            .withSymbolConfiguration(configuration.applying(.preferringMulticolor())) {
+            glyph.accessibilityDescription = description
+            return glyph
+        }
         return NSImage(systemSymbolName: name,
                        accessibilityDescription: description)?
             .withSymbolConfiguration(configuration)

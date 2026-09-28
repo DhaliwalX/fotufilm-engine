@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Fotufilm glyphs, Copyright 2026 MUAStudio Inc., CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/), https://fotufilm.com, see licenses/GLYPHS.txt -->
+  <circle cx="12" cy="12" r="8" stroke-width="2.6" stroke-dasharray="6.4 43.87" transform="rotate(-90 12 12)" data-mode="stroke" data-layer="primary" data-colour="systemRed"/>
+  <circle cx="12" cy="12" r="8" stroke-width="2.6" stroke-dasharray="6.4 43.87" stroke-dashoffset="-8.38" transform="rotate(-90 12 12)" data-mode="stroke" data-layer="primary" data-colour="systemOrange"/>
+  <circle cx="12" cy="12" r="8" stroke-width="2.6" stroke-dasharray="6.4 43.87" stroke-dashoffset="-16.76" transform="rotate(-90 12 12)" data-mode="stroke" data-layer="primary" data-colour="systemYellow"/>
+  <circle cx="12" cy="12" r="8" stroke-width="2.6" stroke-dasharray="6.4 43.87" stroke-dashoffset="-25.13" transform="rotate(-90 12 12)" data-mode="stroke" data-layer="primary" data-colour="systemGreen"/>
+  <circle cx="12" cy="12" r="8" stroke-width="2.6" stroke-dasharray="6.4 43.87" stroke-dashoffset="-33.51" transform="rotate(-90 12 12)" data-mode="stroke" data-layer="primary" data-colour="systemBlue"/>
+  <circle cx="12" cy="12" r="8" stroke-width="2.6" stroke-dasharray="6.4 43.87" stroke-dashoffset="-41.89" transform="rotate(-90 12 12)" data-mode="stroke" data-layer="primary" data-colour="systemPurple"/>
+  <circle cx="12" cy="12" r="3.4" data-mode="fill" data-layer="tertiary" opacity="0.16"/>
+</svg>
