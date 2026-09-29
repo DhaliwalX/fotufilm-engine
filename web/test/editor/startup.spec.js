@@ -141,3 +141,32 @@ test("mobile loader fades away after a failed GPU download", async ({
     ),
   ).toBe(false);
 });
+
+test("a stalled negative GPU leaves startup alone and converts on the CPU", async ({
+  page,
+}) => {
+  test.setTimeout(300000);
+  await page.route("**/negative/gpu.mjs*", (route) =>
+    route.fulfill({
+      contentType: "text/javascript",
+      body: "export default () => new Promise(() => {});",
+    }),
+  );
+  await page.goto("/");
+  await expect(
+    page.getByRole("progressbar", { name: "Preparing editor" }),
+  ).toBeHidden({ timeout: 240000 });
+  const backend = await page.evaluate(async () => {
+    const { convertNegative } = await import("/src/negative-conversion.js");
+    const { LinearImage } = await import("/src/linear-image.js");
+    const image = new LinearImage({
+      pixels: new Float32Array(64 * 48 * 4).fill(0.5),
+      width: 64,
+      height: 48,
+    });
+    return (
+      await convertNegative(image, { parameters: [0, 0, 0, 1, 1, 1, 1, 0] })
+    ).backend;
+  });
+  expect(backend).toBe("cpu");
+});

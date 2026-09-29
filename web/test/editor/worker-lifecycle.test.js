@@ -91,6 +91,35 @@ test("failed GPU warmup disposes its worker and unsupported browsers skip it", a
   assert.equal(FakeWorker.instances.length, count);
 });
 
+test("stalled negative GPU warmup sends conversions to the CPU", async (t) => {
+  install(t);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  t.mock.method(console, "warn", () => {});
+  const pool = await import("../../src/negative-worker-pool.js?stall");
+  const ready = pool.prepareNegativeWorker("https://example.test/negative/", {
+    timeoutMs: 1000,
+  });
+  const worker = FakeWorker.instances[0];
+  t.mock.timers.tick(1000);
+  assert.equal(await ready, false);
+  assert.equal(worker.terminated, true);
+  assert.equal(
+    await pool.prepareNegativeWorker("https://example.test/negative/"),
+    false,
+  );
+});
+
+test("negative warmup that fell back to the CPU keeps its worker", async (t) => {
+  install(t);
+  const pool = await import("../../src/negative-worker-pool.js?cpu");
+  const ready = pool.prepareNegativeWorker("https://example.test/negative/");
+  const worker = FakeWorker.instances[0];
+  worker.send({ kind: "done", backend: "cpu" });
+  assert.equal(await ready, false);
+  assert.notEqual(worker.terminated, true);
+  assert.equal(pool.takeNegativeWorker(), worker);
+});
+
 test("stalled GPU preparation restarts on CPU and preserves the pending preview", async (t) => {
   install(t);
   t.mock.timers.enable({ apis: ["setTimeout"] });

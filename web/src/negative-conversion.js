@@ -1,4 +1,5 @@
 import {
+  prepareNegativeWorker,
   takeNegativeWorker,
   returnNegativeWorker,
 } from "./negative-worker-pool.js";
@@ -109,7 +110,7 @@ function planParameters(plan, contrast) {
   return parameters;
 }
 
-export function convertNegative(
+export async function convertNegative(
   image,
   plan,
   {
@@ -120,6 +121,8 @@ export function convertNegative(
     onProgress = () => {},
   } = {},
 ) {
+  // Share the warm worker rather than compiling a second one beside it.
+  const gpu = await prepareNegativeWorker(assetUrl("negative/"));
   return new Promise((resolve, reject) => {
     if (signal?.aborted)
       return reject(new DOMException("Conversion cancelled.", "AbortError"));
@@ -197,7 +200,7 @@ export function convertNegative(
       width: source.width,
       height: source.height,
       parameters: planParameters(plan, contrast),
-      preferGpu,
+      preferGpu: preferGpu && gpu,
       base: assetUrl("negative/"),
     });
   });
