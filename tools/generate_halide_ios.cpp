@@ -145,8 +145,12 @@ int main(int argc, char **argv) {
         const std::string mode = mode_name != nullptr ? mode_name : "safe";
         const std::string math_flag =
             mode == "fast" ? std::string() : " -fmetal-math-mode=" + mode;
-        // Match the Mac app's minimum OS instead of inheriting the installed SDK's target.
-        const std::string deployment_flag = macos ? " -mmacosx-version-min=14.0" : "";
+        // Match each app's minimum OS instead of inheriting the installed SDK's target. Unflagged,
+        // Xcode 26.6 built iOS kernels for ios26.5 (AIR v28) and Xcode 27 for ios27 (AIR v29),
+        // above the iOS app's minimum.
+        const std::string deployment_flag = macos       ? " -mmacosx-version-min=14.0"
+                                            : simulator ? " -mios-simulator-version-min=18.0"
+                                                        : " -mios-version-min=18.0";
         Halide::set_metal_compiler_and_linker(
             std::string("xcrun -sdk ") + metal_sdk + " metal" + deployment_flag + math_flag,
             std::string("xcrun -sdk ") + metal_sdk + " metallib");
