@@ -66,18 +66,28 @@ self.onmessage = async ({ data }) => {
       await initialize(false);
     }
     const result = new Float32Array(data.width * data.height * 4);
+    const read = (x, y) => {
+      const w = Math.min(512, data.width - x),
+        h = Math.min(512, data.height - y);
+      if (warmup) return Promise.resolve(new Float32Array(w * h * 4).fill(0.5));
+      return new Promise((resolve, reject) => {
+        const id = ++serial;
+        waiting.set(id, { resolve, reject });
+        self.postMessage({ kind: "read", id, x, y, width: w, height: h });
+      });
+    };
+    // The page reads the next tile while this one converts.
+    let next = read(0, 0);
     for (let y = 0; y < data.height; y += 512) {
       const h = Math.min(512, data.height - y);
       for (let x = 0; x < data.width; x += 512) {
         const w = Math.min(512, data.width - x),
           count = w * h;
-        const pixels = warmup
-          ? new Float32Array(count * 4).fill(0.5)
-          : await new Promise((resolve, reject) => {
-              const id = ++serial;
-              waiting.set(id, { resolve, reject });
-              self.postMessage({ kind: "read", id, x, y, width: w, height: h });
-            });
+        const pixels = await next;
+        const nextX = x + 512 < data.width ? x + 512 : 0,
+          nextY = nextX ? y : y + 512;
+        next = nextY < data.height ? read(nextX, nextY) : null;
+        next?.catch(() => {});
         // The heap view is replaced when WASM memory grows, so take it per pass.
         const upload = () => {
           const heap = runtime.HEAPF32,

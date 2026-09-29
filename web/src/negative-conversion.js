@@ -1,11 +1,12 @@
 import {
+  prepareNegativeWorker,
   takeNegativeWorker,
   returnNegativeWorker,
 } from "./negative-worker-pool.js";
 import { assetUrl } from "./engine.js";
 import { loadFilmProfile } from "./film-profile.js";
 import { defaultEdit } from "./editor-state.js";
-import { rawSource } from "./raw-source.js";
+import { rawSource, scaledLinearImage } from "./raw-source.js";
 import { LinearImage } from "./linear-image.js";
 import { loadStockIndex } from "./stock-index.js";
 
@@ -16,12 +17,16 @@ const previewScans = new WeakMap();
 function previewScan(image) {
   let scan = previewScans.get(image);
   if (!scan) {
-    const source = rawSource(image, defaultEdit(), PREVIEW_EDGE);
-    scan = new LinearImage({
-      pixels: source.read(0, 0, source.width, source.height),
-      width: source.width,
-      height: source.height,
-    });
+    if (!image.raw && !image.linear) {
+      scan = scaledLinearImage(image, PREVIEW_EDGE);
+    } else {
+      const source = rawSource(image, defaultEdit(), PREVIEW_EDGE);
+      scan = new LinearImage({
+        pixels: source.read(0, 0, source.width, source.height),
+        width: source.width,
+        height: source.height,
+      });
+    }
     previewScans.set(image, scan);
   }
   return scan;
@@ -109,7 +114,7 @@ function planParameters(plan, contrast) {
   return parameters;
 }
 
-export function convertNegative(
+export async function convertNegative(
   image,
   plan,
   {
@@ -120,6 +125,8 @@ export function convertNegative(
     onProgress = () => {},
   } = {},
 ) {
+  // Share the warm worker rather than compiling a second one beside it.
+  const gpu = await prepareNegativeWorker(assetUrl("negative/"));
   return new Promise((resolve, reject) => {
     if (signal?.aborted)
       return reject(new DOMException("Conversion cancelled.", "AbortError"));
@@ -197,7 +204,7 @@ export function convertNegative(
       width: source.width,
       height: source.height,
       parameters: planParameters(plan, contrast),
-      preferGpu,
+      preferGpu: preferGpu && gpu,
       base: assetUrl("negative/"),
     });
   });

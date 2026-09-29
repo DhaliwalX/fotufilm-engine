@@ -21,7 +21,7 @@ import {
 } from './profile-settings.js'
 import { loadMediumBytes } from './output-media.js'
 import { loadSceneExposure } from './scene-light.js'
-import { rawSource } from './raw-source.js'
+import { rawSource, scaledLinearImage } from './raw-source.js'
 import { defaultEdit, fullCrop } from './editor-state.js'
 import { validateStockSettings } from './stock-settings.js'
 import { sourceIlluminant } from './editor-catalogue.js'
@@ -38,7 +38,7 @@ import {
   parsePack,
   loadStages,
 } from './engine.js'
-import { canvasBlob, cropImage, orientImage } from './geometry.js'
+import { canvasBlob, cropImage, orientImage, outputSize } from './geometry.js'
 import { encodePreview } from './canvas-encoder.js'
 
 import { loadStockIndex } from "./stock-index.js";
@@ -68,6 +68,34 @@ function videoFrameSize(image, edit, maxEdge, cropMode, displaySize) {
   }
 }
 
+// Straighten, perspective and lens correction resample a browser-decoded photo in
+// JS. Reading every pixel of a large photo for each preview stalls the page, so
+// these resample a linear copy the browser scaled to the source pixels one output
+// pixel covers. Straighten zooms in by its cover factor.
+function sampledEdge(image, edit, maxEdge, cropMode, displaySize) {
+  const w = image.naturalWidth || image.width,
+    h = image.naturalHeight || image.height
+  const swapped = edit.rotation % 2 !== 0
+  const ow = swapped ? h : w,
+    oh = swapped ? w : h
+  const crop = cropMode ? fullCrop() : edit.crop
+  const full = outputSize(crop, ow, oh)
+  const scale = Math.min(1, maxEdge / Math.max(ow, oh))
+  const output =
+    displaySize ||
+    outputSize(crop, Math.round(ow * scale), Math.round(oh * scale))
+  const angle = (Math.abs(edit.straighten) * Math.PI) / 180
+  const cos = Math.cos(angle),
+    sin = Math.sin(angle)
+  const cover = Math.max((w * cos + h * sin) / w, (h * cos + w * sin) / h)
+  const density =
+    Math.max(output.width / full.width, output.height / full.height) * cover
+  let edge = Math.ceil(Math.max(w, h) * density)
+  // Keep rawSource's frame size: the copy's longer edge covers maxEdge.
+  if (!displaySize) edge = Math.max(edge, maxEdge)
+  return edge < Math.max(w, h) ? edge : null
+}
+
 // WASM instances share a heap. Serialize stock changes, renders, exports and disposal.
 export class RenderSession {
   constructor() {
@@ -77,6 +105,7 @@ export class RenderSession {
     this.packs = new Map()
     this.developer = null
     this.sources = []
+    this.scaledImages = []
     this.scenePacks = new WeakMap()
     this.closed = false
     this.lifecycle = new AbortController()
@@ -255,6 +284,11 @@ export class RenderSession {
       lensTable ||
       perspective ||
       Math.abs(edit.straighten) > 0.001
+    const edge =
+      floating && !input.raw && !input.linear
+        ? sampledEdge(input, edit, maxEdge, cropMode, displaySize)
+        : null
+    const sampled = edge ? this.scaledImage(input, edge) : input
     const oriented = floating ? null : orientImage(input, edit, maxEdge)
     const canvas = floating
       ? null
@@ -265,7 +299,7 @@ export class RenderSession {
     const source = await prepare(
       floating
         ? rawSource(
-            input,
+            sampled,
             edit,
             maxEdge,
             cropMode,
@@ -283,6 +317,21 @@ export class RenderSession {
       this.sources.length = Math.min(3, this.sources.length)
     }
     return entry
+  }
+  // A copy up to twice the size needed serves; a drag and the detail view reuse it.
+  scaledImage(image, edge) {
+    let entry = this.scaledImages.find(
+      (item) =>
+        item.image === image && item.edge >= edge && item.edge <= 2 * edge,
+    )
+    if (!entry) {
+      // A little headroom keeps the copy as straighten's cover factor grows.
+      const size = Math.ceil(edge * 1.25)
+      entry = { image, edge: size, value: scaledLinearImage(image, size) }
+      this.scaledImages.unshift(entry)
+      this.scaledImages.length = Math.min(3, this.scaledImages.length)
+    }
+    return entry.value
   }
   async capturePack(pack, stock, kelvin, report) {
     if (!pack || !Number.isFinite(kelvin) || kelvin <= 0) return pack
@@ -744,6 +793,7 @@ export class RenderSession {
     return this.enqueue(() => {
       this.developer?.dispose()
       this.sources = []
+      this.scaledImages = []
       this.developer = null
       this.packs.clear()
     })

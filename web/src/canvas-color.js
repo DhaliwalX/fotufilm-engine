@@ -104,6 +104,30 @@ export function sourcePixels(context, x, y, width, height) {
 }
 const decode = (value) =>
   value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+// Canvas samples take at most 65536 values, so decode each once. Float64 tables
+// give the same results as decoding every sample, and reading codes avoids
+// indexing a Float16Array per sample.
+let tables8, tables16
+function sampleTables(pixels) {
+  if (pixels instanceof Uint8ClampedArray || pixels instanceof Uint8Array) {
+    tables8 ??= {
+      decoded: Float64Array.from({ length: 256 }, (_, v) => decode(v / 255)),
+      value: Float64Array.from({ length: 256 }, (_, v) => v / 255),
+    }
+    return { ...tables8, codes: pixels }
+  }
+  if (typeof Float16Array !== 'undefined' && pixels instanceof Float16Array) {
+    if (!tables16) {
+      const halves = new Float16Array(65536)
+      new Uint16Array(halves.buffer).forEach((_, i, codes) => (codes[i] = i))
+      const value = Float64Array.from(halves)
+      tables16 = { decoded: value.map(decode), value }
+    }
+    const codes = new Uint16Array(pixels.buffer, pixels.byteOffset, pixels.length)
+    return { ...tables16, codes }
+  }
+  return null
+}
 // Native ColorScience matrices, exported rather than maintained a second time.
 // Canvas samples are unassociated; the engine composites source coverage over black.
 export function decodeCanvasPixels(pixels, space) {
@@ -113,18 +137,26 @@ export function decodeCanvasPixels(pixels, space) {
       ? INGEST_COLOR.linearDisplayP3ToRec2020
       : INGEST_COLOR.linearSRGBToRec2020
   const output = new Float32Array(pixels.length)
-  const maximum =
-    pixels instanceof Uint8ClampedArray || pixels instanceof Uint8Array
-      ? 255
-      : 1
+  const [m0, m1, m2, m3, m4, m5, m6, m7, m8] = matrix
+  const tables = sampleTables(pixels)
+  const { decoded, value } = tables ?? {}
+  const codes = tables?.codes
   for (let i = 0; i < pixels.length; i += 4) {
-    const a = pixels[i + 3] / maximum
-    const r = decode(pixels[i] / maximum) * a,
-      g = decode(pixels[i + 1] / maximum) * a,
-      b = decode(pixels[i + 2] / maximum) * a
-    for (let c = 0; c < 3; c++)
-      output[i + c] =
-        matrix[c * 3] * r + matrix[c * 3 + 1] * g + matrix[c * 3 + 2] * b
+    let a, r, g, b
+    if (tables) {
+      a = value[codes[i + 3]]
+      r = decoded[codes[i]] * a
+      g = decoded[codes[i + 1]] * a
+      b = decoded[codes[i + 2]] * a
+    } else {
+      a = pixels[i + 3]
+      r = decode(pixels[i]) * a
+      g = decode(pixels[i + 1]) * a
+      b = decode(pixels[i + 2]) * a
+    }
+    output[i] = m0 * r + m1 * g + m2 * b
+    output[i + 1] = m3 * r + m4 * g + m5 * b
+    output[i + 2] = m6 * r + m7 * g + m8 * b
     output[i + 3] = a
   }
   return output
