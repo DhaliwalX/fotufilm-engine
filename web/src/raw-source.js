@@ -1,5 +1,12 @@
 import { lensSample } from "./lens-correction.js";
 import { linearSampler } from "./linear-sampler.js";
+import { imageSource } from "./engine.js";
+import {
+  decodeCanvasPixels,
+  sourceContext,
+  sourcePixels,
+} from "./canvas-color.js";
+import { LinearImage } from "./linear-image.js";
 import { fullCrop } from "./editor-state.js";
 import { homography, mapPoint, outputSize } from "./geometry.js";
 
@@ -42,12 +49,8 @@ export function rawSource(
     sceneScale = 1,
     profile,
   } = image.linear || image.raw || {};
-  const sample =
-    lensTable || (!image.raw && !image.linear) ? linearSampler(image) : null;
-  const sampleScale = image.linear ? 1 : sceneScale / 65535;
-  const exactCopy =
+  const identity =
     !lensTable &&
-    image.linear &&
     !edit.rotation &&
     !edit.flip &&
     !angle &&
@@ -55,6 +58,16 @@ export function rawSource(
     width === originalWidth &&
     height === originalHeight &&
     crop.every((point, i) => point.every((v, c) => v === fullCrop()[i][c]));
+  const exactCopy = identity && image.linear;
+  // Samples fall on pixel centres, so a browser-decoded photo is read region by
+  // region rather than pixel by pixel through the sampler.
+  const direct = identity && !image.raw && !image.linear ? imageSource(image) : null;
+  let strip = null;
+  const sample =
+    !direct && (lensTable || (!image.raw && !image.linear))
+      ? linearSampler(image)
+      : null;
+  const sampleScale = image.linear ? 1 : sceneScale / 65535;
   function point(u, v) {
     // Native order: lens correction → orientation → straighten → perspective → crop.
     // Pull pixels through the inverse operations to resample the scene only once.
@@ -80,6 +93,19 @@ export function rawSource(
     width,
     height,
     read(left, top, w, h) {
+      if (direct) {
+        // Canvas reads cost less per pixel in full-width strips than in tiles,
+        // and callers read tiles along a row.
+        if (!strip || strip.top !== top || strip.height !== h)
+          strip = { top, height: h, data: direct.read(0, top, width, h) };
+        const output = new Float32Array(w * h * 4);
+        for (let y = 0; y < h; y++) {
+          const from = (y * width + left) * 4;
+          output.set(strip.data.subarray(from, from + w * 4), y * w * 4);
+        }
+        for (let i = 3; i < output.length; i += 4) output[i] = 1;
+        return output;
+      }
       const output = new Float32Array(w * h * 4);
       if (exactCopy) {
         for (let y = 0; y < h; y++) {
@@ -146,4 +172,26 @@ export function rawSource(
       return output;
     },
   };
+}
+
+// A scene-linear copy of a browser-decoded photo, scaled by the browser so its
+// longer edge is at most `edge` pixels.
+export function scaledLinearImage(image, edge) {
+  const w = image.naturalWidth || image.width,
+    h = image.naturalHeight || image.height;
+  const scale = Math.min(1, edge / Math.max(w, h));
+  const width = Math.max(1, Math.round(w * scale)),
+    height = Math.max(1, Math.round(h * scale));
+  const canvas =
+    typeof OffscreenCanvas !== "undefined"
+      ? new OffscreenCanvas(width, height)
+      : Object.assign(document.createElement("canvas"), { width, height });
+  const context = sourceContext(canvas);
+  context.drawImage(image, 0, 0, width, height);
+  const pixels = sourcePixels(context, 0, 0, width, height);
+  return new LinearImage({
+    pixels: decodeCanvasPixels(pixels.data, pixels.colorSpace),
+    width,
+    height,
+  });
 }

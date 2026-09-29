@@ -6,7 +6,7 @@ import {
 import { assetUrl } from "./engine.js";
 import { loadFilmProfile } from "./film-profile.js";
 import { defaultEdit } from "./editor-state.js";
-import { rawSource } from "./raw-source.js";
+import { rawSource, scaledLinearImage } from "./raw-source.js";
 import { LinearImage } from "./linear-image.js";
 import { loadStockIndex } from "./stock-index.js";
 
@@ -17,12 +17,16 @@ const previewScans = new WeakMap();
 function previewScan(image) {
   let scan = previewScans.get(image);
   if (!scan) {
-    const source = rawSource(image, defaultEdit(), PREVIEW_EDGE);
-    scan = new LinearImage({
-      pixels: source.read(0, 0, source.width, source.height),
-      width: source.width,
-      height: source.height,
-    });
+    if (!image.raw && !image.linear) {
+      scan = scaledLinearImage(image, PREVIEW_EDGE);
+    } else {
+      const source = rawSource(image, defaultEdit(), PREVIEW_EDGE);
+      scan = new LinearImage({
+        pixels: source.read(0, 0, source.width, source.height),
+        width: source.width,
+        height: source.height,
+      });
+    }
     previewScans.set(image, scan);
   }
   return scan;
