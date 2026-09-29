@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(Android)
+import FotufilmCore
+#endif
 
 /// The tone a converted scan is finished with, on linear light: contrast pivots about mid-grey,
 /// then highlights and shadows move the bright and the dark ends on their own. Each works on the
