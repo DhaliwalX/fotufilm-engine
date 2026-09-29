@@ -2,6 +2,7 @@ import { BACKEND_VERSION } from "./contract.js";
 import { RenderSession, loadStockIndex } from "../render-session.js";
 import { prepareEditor } from "./browser-prepare.js";
 import { importMedia } from "./browser-import.js";
+import { thumbnail } from "./browser-thumbnail.js";
 import { exportImage, exportVideo } from "./browser-export.js";
 import { createHistogram } from "./browser-histogram.js";
 import {
@@ -25,6 +26,7 @@ export function createBrowserBackend() {
     prepare: prepareEditor,
     loadStocks: loadStockIndex,
     importMedia,
+    thumbnail,
     releaseImage: (image) => image?.video?.dispose(),
     analyseNegative,
     convertNegative,

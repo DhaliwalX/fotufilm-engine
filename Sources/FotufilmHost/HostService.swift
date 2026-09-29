@@ -116,6 +116,8 @@ public final class HostService {
             return opened
         case "exportOriginal":
             return try answer(exportOriginal(parameters))
+        case "thumbnail":
+            return try thumbnail(parameters, payload: payload)
         case "preview":
             let image = try self.image(parameters["handle"])
             return try answer(image.descriptor, images: ["preview": previewPNG(image)])

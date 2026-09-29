@@ -173,6 +173,23 @@
     height: 100%;
     object-fit: contain;
   }
+  /* A photograph waiting to be opened, before (or without) its thumbnail. */
+  .filmstrip-name {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: 2px;
+    box-sizing: border-box;
+    font-size: 10px;
+    line-height: 1.2;
+    text-align: center;
+    overflow-wrap: anywhere;
+    overflow: hidden;
+    color: var(--muted);
+    background: var(--canvas);
+  }
   .filmstrip-close {
     position: absolute;
     right: -6px;

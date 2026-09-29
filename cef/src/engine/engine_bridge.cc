@@ -13,6 +13,8 @@ constexpr const char* kMethods[] = {
     "sampleScene",      "beginVideo",
     "appendVideo",      "importVideo",    "lensCatalogue",    "importLensCatalogue",
     "removeLensCatalogue", "importPath",   "copyImage",        "exportOptions",
+    // The strip's pictures of photographs opened together, decoded only when chosen.
+    "thumbnail",
     "suggestFilm",      "recordFilmChoice", "forgetFilmChoices",
     // The Resolve and Final Cut plug-ins. An install holds the engine thread until the copy is
     // done and macOS has registered it, as the Mac app's menu item holds its own.

@@ -16,6 +16,9 @@ import FotufilmImaging
 struct HostPlatform {
     /// Turns a photograph file into scene-linear light.
     var decoder: HostImageDecoder?
+    /// Small pictures of stills not yet opened, for the photo strip (`HostThumbnails.swift`);
+    /// without it an unopened photograph shows its name until it is opened.
+    var thumbnails: HostThumbnailer?
     /// Reduces a photograph to a preview or export size as the platform's own editor does;
     /// without it the portable box filter (`AreaResample`) reduces.
     var resampler: HostResampler?
@@ -66,6 +69,7 @@ struct HostPlatform {
     var capabilities: [String: Any] {
         [
             "importPath": decoder != nil,
+            "thumbnails": thumbnails != nil,
             "negativeContrast": true,
             // The negative-scan session: a recipe printed from the scan, film or automatic.
             "negativeScans": decoder != nil || scans != nil,
