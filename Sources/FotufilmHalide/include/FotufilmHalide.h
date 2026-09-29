@@ -67,16 +67,14 @@ enum {
     FOTUFILM_FRAME_DENSITY_IN = 1 << 14,
     /// Compiles the grain-size mixture's second clump field: a coarse crystal
     /// population blurred at its own correlation length and laid under the
-    /// sharp one. Deliberately outside every FOTUFILM_AOT_* variant list — the
-    /// AOT shims mask unknown bits off, so a mobile render carries the fine
-    /// component alone until the realtime variants are regenerated with it.
+    /// sharp one. The Android CPU generator includes it; other AOT backends
+    /// must include it in their own compiled variants before accepting the bit.
     FOTUFILM_FRAME_GRAIN_MOTTLE = 1 << 16,
     /// Compiles the enlarger and paper MTF: one blur in transmittance at the end of develop,
     /// which is where the negative stops being the image and starts being the thing an enlarger
     /// projects. Off when the negative itself is what is being viewed, since then nothing
-    /// images it. Deliberately outside every FOTUFILM_AOT_* variant list, like the mottle — the
-    /// AOT shims mask unknown bits off, so a mobile render prints without it until the realtime
-    /// variants are regenerated.
+    /// images it. The Android CPU generator includes it for combined rendering;
+    /// standalone negative development clears the bit before invoking the kernel.
     FOTUFILM_FRAME_PRINT_MTF = 1 << 17,
     /// Measures global veiling glare on-device: the frame averages its own first stage rather than
     /// reading FOTUFILM_CONFIG_FLARE_MEAN, so only a whole-frame caller may set it. Chosen at run

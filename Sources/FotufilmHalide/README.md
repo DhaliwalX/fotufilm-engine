@@ -27,3 +27,10 @@ Regenerate CPU WebAssembly kernels together with their adapter after changing th
 argument list. The unused legacy mottle-sigma argument has been removed; current grain fields
 read their per-layer sigmas from the packed configuration. Public C entry points and the packed
 configuration layout are unchanged.
+
+The Android CPU generator includes lens diffusion, grain mottling and enlarger MTF.
+Regenerate its kernels and adapter together: these stages use the extended develop arguments.
+`bash tools/verify-android-aot.sh` builds that same generator and adapter for the host and compares
+32 cases against CPU JIT, including each stage, all four print variants, standalone negatives,
+and tile origins. It uses only the public example stock and needs no Android device or emulator.
+This checks shared pipeline construction and bindings; it does not measure Android runtime or performance.

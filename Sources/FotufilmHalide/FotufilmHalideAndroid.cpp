@@ -39,8 +39,6 @@ int run_develop(const float *input_r, const float *input_g, const float *input_b
 
     fotufilm::ResolvedFrameParams resolved(configuration, width, height, seed,
         (feature_mask & FOTUFILM_FRAME_REVERSAL) != 0, origin_x, origin_y);
-    // Standalone development returns a negative before the enlarger.
-    resolved.print_mtf_radius = 0;
     const int32_t monochrome = (feature_mask & FOTUFILM_FRAME_MONOCHROME) != 0;
     bool film_on = false;
     Buffer<float> film_tiles = FilmTileStore::shared().tiles_for(configuration, film_on);
@@ -55,7 +53,12 @@ int run_develop(const float *input_r, const float *input_g, const float *input_b
         resolved.adjacency_secondary_sigma, resolved.adjacency_secondary_radius,
         resolved.fringe_sigma, resolved.fringe_radius,
         resolved.grain_sigma, resolved.grain_radius, resolved.grain_lambda, resolved.print_mtf_radius,
-        seed, resolved.reversal, monochrome, origin_x, origin_y, feature_mask,
+        seed, resolved.reversal, monochrome, origin_x, origin_y,
+        int32_t(configuration[FOTUFILM_CONFIG_GRAIN_MODE]),
+        resolved.mottle_radius, resolved.mottle_lambda,
+        resolved.diffusion_stride_0, resolved.diffusion_stride_1, resolved.diffusion_stride_2,
+        resolved.diffusion_strided_radius_0, resolved.diffusion_strided_radius_1,
+        resolved.diffusion_strided_radius_2, feature_mask,
         film_tiles, film_on ? 1 : 0, density);
 }
 
