@@ -54,6 +54,29 @@ export default function useDocumentActions({
   const startingEdit = (file) =>
     file?.savedEdit ||
     newPhotoEdit(defaultEdit(edit.stock), stocks?.length ? stocks.map((s) => s.id) : null);
+  // Each document's edit as it stands: the one being edited, one edited before as it was left,
+  // and one not opened yet as it would open, with the edit kept for its file (Export All).
+  async function documentEdits(docs) {
+    const unopened = docs.filter((doc) => doc.waiting && !doc.editKey && sourcePath(doc));
+    const identities =
+      unopened.length && backend.fileIdentities
+        ? await backend.fileIdentities(unopened.map(sourcePath)).catch(() => [])
+        : [];
+    const identity = new Map(unopened.map((doc, i) => [doc.id, identities[i] ?? null]));
+    return Promise.all(
+      docs.map(async (doc) => {
+        if (doc.id === activeId) return edit;
+        if (!doc.waiting)
+          return histories.current.get(doc.id)?.present ?? startingEdit(doc);
+        const { savedEdit } = await savedEditFor({
+          editKey: doc.editKey,
+          identity: identity.get(doc.id),
+          file: identity.has(doc.id) ? undefined : doc.source.file,
+        });
+        return startingEdit({ savedEdit });
+      }),
+    );
+  }
   // The newest actions and documents, for a decode that finishes after the editor has moved on.
   const latest = useRef(null),
     // The waiting photograph being decoded because it was chosen.
@@ -317,5 +340,10 @@ export default function useDocumentActions({
     acceptFiles,
     selectFile,
     removeFile,
+    documentEdits,
   };
 }
+
+// Where the host can read a document's file itself: a file it opened, or a library photograph in
+// a folder it serves.
+export const sourcePath = (doc) => doc.source?.path ?? doc.source?.file?.hostPath ?? null;

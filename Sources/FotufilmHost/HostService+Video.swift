@@ -10,11 +10,19 @@ import FotufilmEditModel
 /// arrives in chunks, becomes an image whose pixels are the frame each render selects, and
 /// exports frame by frame through the same geometry and develop as its previews.
 extension HostService {
-    /// `call` for hosts that show progress: an export reports `{progress, frames, finalizing}`.
+    /// `call` for hosts that show progress: a movie export reports `{progress, frames,
+    /// finalizing}`, Export All `{progress, done, total, name?, current?}`.
     public func call(_ method: String, params: Data, payload: UnsafeRawBufferPointer?,
                      progress: @escaping ([String: Any]) -> Void) throws -> Answer {
-        guard method == "exportVideo" else { return try call(method, params: params, payload: payload) }
-        return try video(method, params: params, payload: payload, progress: progress)
+        switch method {
+        case "exportVideo":
+            return try video(method, params: params, payload: payload, progress: progress)
+        case "exportBatch":
+            let parameters = (try? JSONSerialization.jsonObject(with: params)) as? [String: Any] ?? [:]
+            return try answer(exportBatch(parameters, progress: progress))
+        default:
+            return try call(method, params: params, payload: payload)
+        }
     }
 
     func video(_ method: String, params: Data, payload: UnsafeRawBufferPointer?,

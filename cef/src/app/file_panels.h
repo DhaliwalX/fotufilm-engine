@@ -24,7 +24,14 @@ void ChooseExportDestination(CefRefPtr<CefBrowser> browser, const std::string& f
                              const std::string& type, const std::string& fixed_directory,
                              std::function<void(const std::string&)> done);
 
-// "openExport" {path, reveal}: opens a file this run saved, or shows it in its folder, with
+// Where Export All saves: a folder, starting where photographs were last exported. A
+// `fixed_directory` is used without asking. Empty: cancelled.
+void ChooseExportFolder(CefRefPtr<CefBrowser> browser, const std::string& type,
+                        const std::string& fixed_directory,
+                        std::function<void(const std::string&)> done);
+
+// "openExport" {path, reveal}: opens a file this run saved, or one in a folder chosen for Export
+// All, or shows it in its folder, with
 // `open` (the platform's opener). Other paths are refused.
 void RegisterOpenExport(Dispatcher& dispatcher,
                         std::function<bool(const std::string& path, bool reveal)> open);

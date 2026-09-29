@@ -21,9 +21,12 @@ export default function SavedExportNotice() {
       )}
       {openable && (
         <>
-          <ActionButton onPress={() => open(false)} size={"S"}>
-            Open
-          </ActionButton>
+          {/* Export All saved many files: only their folder is shown. */}
+          {!savedExport.count && (
+            <ActionButton onPress={() => open(false)} size={"S"}>
+              Open
+            </ActionButton>
+          )}
           <ActionButton onPress={() => open(true)} size={"S"}>
             {backend.revealExportLabel ?? "Show File"}
           </ActionButton>

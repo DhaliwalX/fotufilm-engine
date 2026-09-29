@@ -68,6 +68,23 @@ export function exportSizeOptions(
 }
 
 /**
+ * The sizes Export All offers, the same ids as one photograph's (`exportSizeOptions`), each
+ * applied to every photograph's own cropped picture; a size at or past a picture's own delivers
+ * the whole picture.
+ */
+export function batchExportSizeOptions() {
+  return [
+    { id: "full", label: "Full resolution" },
+    ...FRACTIONS.map(([label, fraction]) => ({
+      id: String(fraction),
+      label,
+      detail: `${fraction * 100}%`,
+    })),
+    ...STILL_EDGES.map((edge) => ({ id: String(edge), label: `${edge} px long edge` })),
+  ];
+}
+
+/**
  * The long edge an export size asks for, Infinity for the full picture: a fraction is of the
  * picture the backend measures, `width` x `height` (`exportBasis`).
  */

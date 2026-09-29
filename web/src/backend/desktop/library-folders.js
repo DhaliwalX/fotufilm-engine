@@ -32,7 +32,10 @@ class HostFolder {
       throw new DOMException(`${name} could not be read.`, "NotFoundError");
     const blob = await response.blob();
     const type = blob.type === "application/octet-stream" ? "" : blob.type;
-    return new File([blob], name, { type, lastModified: modified });
+    const file = new File([blob], name, { type, lastModified: modified });
+    // Where the host reads it, so Export All can decode it in place.
+    file.hostPath = `${this.hostPath}/${path}`;
+    return file;
   }
   forget() {
     this.#call("forgetLibraryFolder", { path: this.hostPath }).catch(() => {});

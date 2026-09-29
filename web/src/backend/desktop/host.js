@@ -206,6 +206,34 @@ export function createDesktopBackend(channel) {
     },
     // A still export stops inside the engine when its signal aborts.
     exportImageCancels: true,
+    // Export All: the photographs into one folder the host asks for, each with its own edit.
+    // The engine decodes the next ones and writes the last ones while the current one develops.
+    // An item is an open photograph (`image`) or a file not opened yet (`path`).
+    exportImages: can.batchExport
+      ? async ({ items, size, type, quality, metadata, hdr, signal, onProgress }) => {
+          const stocks = await catalogue();
+          return call("exportBatch", {
+            items: items.map(({ image, path, name, filename, ...request }) => ({
+              ...renderRequest({ ...request, image: image ?? {} }, stocks),
+              ...(image ? {} : { path }),
+              name,
+              filename,
+            })),
+            size,
+            type,
+            quality,
+            metadata,
+            hdr: hdr === true,
+            photoQuality: appSetting("photoQuality"),
+          }, { signal, onProgress });
+        }
+      : undefined,
+    // Whether a HEIC may carry HDR, where its film delivers it.
+    hdrExport: can.hdrExport === true,
+    // What each file's kept edit is stored under, for photographs not opened yet.
+    fileIdentities: can.batchExport
+      ? (paths) => call("fileIdentities", { paths }).then(({ identities }) => identities)
+      : undefined,
     // Open or Show in Finder for a file an export just saved (`{filename, path}`).
     openExport: can.openExport
       ? (path, { reveal = false } = {}) => call("openExport", { path, reveal })

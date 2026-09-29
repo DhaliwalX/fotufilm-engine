@@ -15,8 +15,13 @@ void ChooseExportDestination(const std::string& filename, const std::string& typ
                              const std::string& fixed_directory,
                              std::function<void(const std::string&)> done);
 
+// Where Export All saves: a folder chosen in an open panel, starting where photographs were last
+// exported. `fixed_directory` skips the panel. An empty folder is a cancel.
+void ChooseExportFolder(const std::string& type, const std::string& fixed_directory,
+                        std::function<void(const std::string&)> done);
+
 // "openExport" {path, reveal}: opens a file this app saved in its default app, or shows it in
-// Finder. Only files saved since launch are opened.
+// Finder. Only files saved since launch, or put in a folder chosen for Export All, are opened.
 void RegisterExportFiles(Dispatcher& dispatcher);
 
 }  // namespace fotufilm

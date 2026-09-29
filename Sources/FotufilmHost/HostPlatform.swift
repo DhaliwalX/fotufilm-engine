@@ -80,6 +80,8 @@ struct HostPlatform {
             "printFrames": frames != nil,
             "imageExportTypes": encoder?.types.sorted() ?? [],
             "hdrExport": encoder?.writesHDR ?? false,
+            // Export All: the open photographs into one folder, pipelined (`exportBatch`).
+            "batchExport": decoder != nil && encoder != nil,
             "filmSuggestion": true,
             // Check for Updates: a release feed, and a digest to verify what it downloads.
             "updates": updates != nil && fileDigest != nil,
