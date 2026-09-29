@@ -4,6 +4,7 @@
 
 #include "bridge/dispatcher.h"
 #include "include/cef_client.h"
+#include "include/cef_dialog_handler.h"
 #include "app/view_delegate.h"
 
 namespace fotufilm {
@@ -14,6 +15,7 @@ class Client : public CefClient,
                public CefDisplayHandler,
                public CefKeyboardHandler,
                public CefContextMenuHandler,
+               public CefDialogHandler,
                public CefLoadHandler {
  public:
   // Off screen, into `view`'s compositor.
@@ -35,6 +37,7 @@ class Client : public CefClient,
     return this;
   }
   CefRefPtr<CefLoadHandler> GetLoadHandler() override { return this; }
+  CefRefPtr<CefDialogHandler> GetDialogHandler() override { return this; }
 
   bool OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
                                 CefRefPtr<CefFrame> frame,
@@ -103,6 +106,17 @@ class Client : public CefClient,
                            CefRefPtr<CefFrame> frame,
                            CefRefPtr<CefContextMenuParams> params,
                            CefRefPtr<CefMenuModel> model) override;
+
+  // CefDialogHandler: the page's file choosers open in the platform's panel, where the window
+  // offers one (WindowDelegate::ChooseFiles).
+  bool OnFileDialog(CefRefPtr<CefBrowser> browser,
+                    FileDialogMode mode,
+                    const CefString& title,
+                    const CefString& default_file_path,
+                    const std::vector<CefString>& accept_filters,
+                    const std::vector<CefString>& accept_extensions,
+                    const std::vector<CefString>& accept_descriptions,
+                    CefRefPtr<CefFileDialogCallback> callback) override;
 
   // CefLoadHandler
   void OnLoadError(CefRefPtr<CefBrowser> browser,

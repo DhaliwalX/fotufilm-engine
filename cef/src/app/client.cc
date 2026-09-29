@@ -1,6 +1,9 @@
 #include "app/client.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cstdio>
+#include <set>
 
 #include "include/wrapper/cef_helpers.h"
 
@@ -135,6 +138,51 @@ void Client::OnBeforeContextMenu(CefRefPtr<CefBrowser>,
                                  CefRefPtr<CefMenuModel> model) {
   // Keep text editing (cut, copy, paste) in fields; drop Chromium's page menu (Back, Reload…).
   if (!(params->GetTypeFlags() & CM_TYPEFLAG_EDITABLE)) model->Clear();
+}
+
+bool Client::OnFileDialog(CefRefPtr<CefBrowser>,
+                          FileDialogMode mode,
+                          const CefString&,
+                          const CefString&,
+                          const std::vector<CefString>& accept_filters,
+                          const std::vector<CefString>& accept_extensions,
+                          const std::vector<CefString>&,
+                          CefRefPtr<CefFileDialogCallback> callback) {
+  // Only opening is the page's; saving and folders go through the host's own calls.
+  if (!window_ || (mode != FILE_DIALOG_OPEN && mode != FILE_DIALOG_OPEN_MULTIPLE)) return false;
+  // Every accepted type at once. CEF's own dialog offers each filter as a separate format and
+  // starts on the first, so a page that accepts ".tif,.nef,…" greys out everything but TIFF.
+  FileChoice choice;
+  choice.multiple = mode == FILE_DIALOG_OPEN_MULTIPLE;
+  std::set<std::string> extensions, mime_types;
+  auto add_extension = [&](std::string extension) {
+    extension.erase(0, extension.find_first_not_of(" ."));
+    std::transform(extension.begin(), extension.end(), extension.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    if (!extension.empty()) extensions.insert(extension);
+  };
+  for (size_t index = 0; index < accept_filters.size(); ++index) {
+    const std::string filter = accept_filters[index].ToString();
+    if (filter.find('/') != std::string::npos) mime_types.insert(filter);
+    else if (!filter.empty() && filter.find('|') == std::string::npos) add_extension(filter);
+    // A MIME type's known extensions, or a "Description|.a;.b" filter's.
+    std::string expansion = index < accept_extensions.size()
+                                ? accept_extensions[index].ToString()
+                                : std::string();
+    if (const size_t bar = filter.find('|'); bar != std::string::npos && expansion.empty())
+      expansion = filter.substr(bar + 1);
+    for (size_t start = 0; start < expansion.size();) {
+      const size_t end = std::min(expansion.find(';', start), expansion.size());
+      add_extension(expansion.substr(start, end - start));
+      start = end + 1;
+    }
+  }
+  choice.extensions.assign(extensions.begin(), extensions.end());
+  choice.mime_types.assign(mime_types.begin(), mime_types.end());
+  return window_->ChooseFiles(choice, [callback](std::vector<std::string> paths) {
+    if (paths.empty()) return callback->Cancel();
+    callback->Continue(std::vector<CefString>(paths.begin(), paths.end()));
+  });
 }
 
 void Client::OnLoadError(CefRefPtr<CefBrowser>,

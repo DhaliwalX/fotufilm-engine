@@ -456,6 +456,36 @@ class MacView : public fotufilm::ViewDelegate {
     view_.dragOperation = operation;
   }
   void BrowserClosed() override { [owner_ browserClosed]; }
+  bool ChooseFiles(const fotufilm::FileChoice& choice,
+                   std::function<void(std::vector<std::string>)> done) override {
+    NSWindow* window = view_.window;
+    if (!window) return false;
+    NSOpenPanel* panel = [NSOpenPanel openPanel];
+    panel.allowsMultipleSelection = choice.multiple;
+    panel.canChooseDirectories = NO;
+    NSMutableArray<UTType*>* types = [NSMutableArray array];
+    for (const std::string& extension : choice.extensions)
+      if (UTType* type = [UTType typeWithFilenameExtension:@(extension.c_str())])
+        [types addObject:type];
+    for (const std::string& mime : choice.mime_types) {
+      // Wildcards name a whole kind; UTType knows only exact MIME types.
+      UTType* type = mime == "image/*"   ? UTTypeImage
+                     : mime == "video/*" ? UTTypeMovie
+                     : mime == "audio/*" ? UTTypeAudio
+                     : [UTType typeWithMIMEType:@(mime.c_str())];
+      if (type) [types addObject:type];
+    }
+    if (types.count) panel.allowedContentTypes = types;
+    [panel beginSheetModalForWindow:window
+                  completionHandler:^(NSModalResponse response) {
+                    std::vector<std::string> paths;
+                    if (response == NSModalResponseOK)
+                      for (NSURL* url in panel.URLs)
+                        if (url.isFileURL) paths.push_back(url.path.UTF8String);
+                    done(std::move(paths));
+                  }];
+    return true;
+  }
 
  private:
   __weak FotufilmHostView* view_;

@@ -4,11 +4,22 @@
 // window matches an unhandled key to the one it last sent.
 #pragma once
 
+#include <functional>
 #include <string>
+#include <vector>
 
 #include "include/cef_render_handler.h"
 
 namespace fotufilm {
+
+// A file chooser the page opened (`<input type="file">`), with every type it accepts.
+struct FileChoice {
+  bool multiple = false;
+  // Lower-cased extensions without the dot, and MIME types such as "image/*"; both empty accepts
+  // any file.
+  std::vector<std::string> extensions;
+  std::vector<std::string> mime_types;
+};
 
 // What any window that shows the browser handles, whether Chromium paints into it (Linux and
 // Windows, windowed) or the window composites the browser's frames itself (ViewDelegate).
@@ -19,6 +30,12 @@ class WindowDelegate {
   virtual bool UnhandledKey(const CefKeyEvent& event) = 0;
   virtual void SetTitle(const std::string& title) = 0;
   virtual void BrowserClosed() = 0;
+  // Shows the platform's own open panel for a page's file chooser and answers the chosen paths
+  // (none when dismissed). False leaves the chooser to CEF's default dialog.
+  virtual bool ChooseFiles(const FileChoice& choice,
+                           std::function<void(std::vector<std::string>)> done) {
+    return false;
+  }
 };
 
 class ViewDelegate : public WindowDelegate {
