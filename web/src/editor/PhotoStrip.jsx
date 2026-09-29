@@ -19,7 +19,11 @@ export default function PhotoStrip() {
             size={"S"}
           >
             <span className="filmstrip-preview">
-              <img src={file.url} alt="" />
+              {file.url ? (
+                <img src={file.url} alt="" />
+              ) : (
+                <span className="filmstrip-name">{file.name}</span>
+              )}
             </span>
           </ActionButton>
           <span className="filmstrip-close">

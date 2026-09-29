@@ -74,6 +74,10 @@ export function installNativeBackend({ failPreparation = false } = {}) {
         });
       return preview(result);
     },
+    async thumbnail(source) {
+      calls.push("drawThumbnail");
+      return URL.createObjectURL(source.file);
+    },
     releaseImage(value) {
       calls.push("releaseImage");
       buffers.delete(value.handle);

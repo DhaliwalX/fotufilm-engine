@@ -109,6 +109,19 @@ export function createDesktopBackend(channel) {
         }
       : undefined,
     releaseImage,
+    // A file opened with others shows this in the strip until it is chosen (the embedded
+    // preview where the file has one), so only the photograph being edited is decoded.
+    thumbnail: can.thumbnails
+      ? async ({ path, file }, { signal, maxEdge = 256 } = {}) => {
+          if (!path && !channel.binary) return null;
+          const result = await call(
+            "thumbnail",
+            path ? { path, maxEdge } : { name: file.name, maxEdge },
+            { signal, payload: path ? undefined : await file.arrayBuffer() },
+          );
+          return URL.createObjectURL(imageBlob(result.thumbnail));
+        }
+      : undefined,
     analyseNegative: (image, monochrome) =>
       call("analyseNegative", { handle: image.handle, monochrome }),
     negativeContrast: can.negativeContrast === true,

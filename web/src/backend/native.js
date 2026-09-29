@@ -53,11 +53,12 @@ export function createNativeBackend(host) {
   if (host.previewBudget) backend.previewBudget = Object.freeze({ ...host.previewBudget });
   if (typeof host.suggestNegativeFilms === "function")
     backend.suggestNegativeFilms = host.suggestNegativeFilms.bind(host);
-  // Optional: opening files by path, copying the picture and the still-export options, for hosts
-  // with a file system, a pasteboard and an encoder of their own, and a host's own store for
-  // the edits photographs are left with.
+  // Optional: opening files by path and drawing their thumbnails, copying the picture and the
+  // still-export options, for hosts with a file system, a pasteboard and an encoder of their
+  // own, and a host's own store for the edits photographs are left with.
   for (const name of [
     "importPath",
+    "thumbnail",
     "openPanel",
     "copyImage",
     "exportOptions",

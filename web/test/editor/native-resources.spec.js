@@ -129,3 +129,67 @@ test("a cancelled native import releases its late image and retains the current 
     page.getByRole("button", { name: "Close Color chart.png", exact: true }),
   ).toHaveCount(0);
 });
+
+test("opening several photos decodes the first and the others when chosen", async ({
+  page,
+}) => {
+  await page.addInitScript(installNativeBackend);
+  await page.goto("/");
+  await openChart(page, 480, 320);
+  await expect(
+    page.getByAltText("Developed photo", { exact: true }),
+  ).toBeVisible();
+  const bytes = await page.evaluate(async () =>
+    Array.from(
+      new Uint8Array(
+        await (
+          await fetch(document.querySelector('img[alt="Developed photo"]').src)
+        ).arrayBuffer(),
+      ),
+    ),
+  );
+  const imports = () =>
+    page.evaluate(
+      () => window.nativeCalls.filter((call) => call === "importMedia").length,
+    );
+  await page.locator("input[type=file][multiple]").setInputFiles(
+    // A trailing byte after the image makes each a different file from the chart.
+    ["one.png", "two.png", "three.png"].map((name, index) => ({
+      name,
+      mimeType: "image/png",
+      buffer: Buffer.concat([Buffer.from(bytes), Buffer.from([index])]),
+    })),
+  );
+  await expect(page.locator(".filmstrip-item")).toHaveCount(4);
+  await expect(
+    page.getByRole("button", { name: "Select one.png", exact: true }),
+  ).toHaveAttribute("aria-current", "true");
+  expect(await imports()).toBe(2);
+  await expect
+    .poll(() => page.evaluate(() => window.nativeLiveImages()))
+    .toBe(2);
+  // The waiting photographs show thumbnails without being decoded.
+  await expect(page.locator(".filmstrip-preview img")).toHaveCount(4);
+  await page
+    .getByRole("button", { name: "Select three.png", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Select three.png", exact: true }),
+  ).toHaveAttribute("aria-current", "true");
+  expect(await imports()).toBe(3);
+  await expect
+    .poll(() => page.evaluate(() => window.nativeLiveImages()))
+    .toBe(3);
+  // Closing the photo shown opens its waiting neighbour.
+  await page.locator(".filmstrip-item").last().hover();
+  await page
+    .getByRole("button", { name: "Close three.png", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Select two.png", exact: true }),
+  ).toHaveAttribute("aria-current", "true");
+  expect(await imports()).toBe(4);
+  await expect
+    .poll(() => page.evaluate(() => window.nativeLiveImages()))
+    .toBe(3);
+});
