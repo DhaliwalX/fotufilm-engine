@@ -162,7 +162,12 @@ public enum FilmPackLibrary {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let destination = url(forPack: manifest.packID, in: directory)
         let replaced = FileManager.default.fileExists(atPath: destination.path)
+        // WASI has no temporary files, so it cannot write atomically.
+        #if os(WASI)
+        try data.write(to: destination)
+        #else
         try data.write(to: destination, options: [.atomic])
+        #endif
         return ImportResult(packID: manifest.packID, name: manifest.name,
                             stockNames: manifest.stocks.map(\.name), version: manifest.version,
                             replacedExisting: replaced)
