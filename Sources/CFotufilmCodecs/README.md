@@ -20,7 +20,8 @@ default crop. Half-size demosaicing is used only when there are still at least t
 per requested preview pixel. Final preview reduction is bilinear in linear light.
 
 RAW development uses as-shot white balance, no automatic brightness, no dynamic white-level
-adjustment, no tone curve or sharpening, and AHD demosaicing. Scene imports blend clipped
+adjustment, no tone curve or sharpening, and quality-3 demosaicing (AHD for Bayer, three passes
+for X-Trans). Scene imports blend clipped
 highlights; scanned negatives preserve them without reconstruction. The normalized camera-green
 multiplier is undone in float, preserving sensor headroom above diffuse white. Only scene imports
 apply an explicit DNG baseline exposure. DNG matrices and default crops are read from the file.

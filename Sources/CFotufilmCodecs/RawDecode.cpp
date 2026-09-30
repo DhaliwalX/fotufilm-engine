@@ -2,7 +2,7 @@
 // light at its as-shot white, no tone, contrast, sharpening or noise reduction, clipped highlights
 // blended for a scene (untouched for a scan), and a DNG's baseline exposure (none for a scan).
 //
-// Gaps against Core Image's decoder: LibRaw's demosaic (AHD) differs a little from Apple's; a
+// Gaps against Core Image's decoder: LibRaw's demosaic differs from Apple's; a
 // DNG develops through its own two calibrations, but other files through LibRaw's single (Adobe,
 // D65) matrix rather than Apple's profiles; Apple's per-camera exposure offsets, crops and lens
 // corrections for non-DNG files are not applied; temperatures are McCamy's.
@@ -250,7 +250,7 @@ static void developRaw(const std::string &path, uint32_t options, uint32_t longE
     // Keep the sensor range while balancing white; restore its scale in float below. Clipping
     // the balanced channels at diffuse white discards exposure latitude before film development.
     params.highlight = options & FFC_DECODE_SCAN ? 1 : 2;
-    params.user_qual = 3; // AHD, consistently on every host
+    params.user_qual = 3; // AHD for Bayer, three-pass interpolation for X-Trans
     params.user_flip = -1;
     const uint32_t nativeLong = uint32_t(std::max(nativeWidth, nativeHeight));
     // Half size where the Mac's scale factor (`RawDecode.scaleFactor`) is at most one half.
