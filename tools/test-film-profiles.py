@@ -13,12 +13,10 @@ spec.loader.exec_module(module)
 with tempfile.TemporaryDirectory() as temporary:
     resources = Path(temporary) / 'Resources'
     env = {k: v for k, v in os.environ.items() if not k.startswith('FOTUFILM_')}
-    env['FOTUFILM_SOURCE_BUILD'] = '1'
-    env['FOTUFILM_PACK_KEY_SOURCE'] = str(root / 'shared/FotufilmApp/FilmPackKeyMaterial.swift')
     subprocess.run(['bash', 'tools/copy-shipping-resources.sh', str(resources)],
                    cwd=root, env=env, check=True)
     stocks = resources / 'Stocks'
-    assert len(module.STOCKS) == 40
+    assert len(module.STOCKS) == 46
     module.verify(stocks)
     assert not list(resources.glob('*.fotufilmpack'))
     subprocess.run(['bash', 'tools/audit-apple-bundle.sh', str(resources)],
@@ -54,5 +52,5 @@ with tempfile.TemporaryDirectory() as temporary:
     (resources / 'fotufilm.fotufilmpack').write_bytes(b'old catalogue pack')
     result = subprocess.run(['bash', 'tools/audit-apple-bundle.sh', str(resources)],
                             cwd=root, env=env, capture_output=True)
-    assert result.returncode != 0, 'accepted a sealed catalogue in the source bundle'
+    assert result.returncode != 0, 'accepted a film pack in the bundle'
 print('Film profile packaging regression checks passed.')

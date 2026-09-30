@@ -19,8 +19,7 @@ public enum FilmPackLibrary {
     /// pack), so no imported pack may take it.
     public static let ownFilmsPackID = "mine"
 
-    /// Plugins read imported community packs only. Device-local films and untrusted vaults
-    /// are excluded, as are packs requiring a newer release of the app and plugins.
+    /// Plugins read imported community packs only. Device-local films are excluded, as are packs requiring a newer release of the app and plugins.
     public static func compatibleCommunityPacks(
         in directory: URL = directory, macAppVersion: String,
         keyring: FilmPackKeyring = .shared
@@ -48,7 +47,6 @@ public enum FilmPackLibrary {
     /// update; a file that is not a pack at all throws `FilmPackContainer.Failure`.
     public enum Failure: Error, CustomStringConvertible, Equatable {
         case tooLarge
-        case partOfAnApp
         case deviceBound
         case empty
         case collidesWithOwnFilms
@@ -59,8 +57,6 @@ public enum FilmPackLibrary {
             switch self {
             case .tooLarge:
                 return "That pack is too large to be a film pack."
-            case .partOfAnApp:
-                return "That pack is part of an app rather than something to import."
             case .deviceBound:
                 return "That pack was made for a single device and cannot be moved."
             case .empty:
@@ -140,9 +136,7 @@ public enum FilmPackLibrary {
         -> FilmPackManifest {
         guard data.count <= FilmPackContainer.fileLimit else { throw Failure.tooLarge }
         let head = try FilmPackContainer.peek(data)
-        guard head.kind == .community else {
-            throw head.kind == .vault ? Failure.partOfAnApp : Failure.deviceBound
-        }
+        guard head.kind == .community else { throw Failure.deviceBound }
         let manifest = try FilmPackContainer.open(data, keyring: keyring,
                                                   macAppVersion: macAppVersion).manifest
         guard !manifest.stocks.isEmpty else { throw Failure.empty }

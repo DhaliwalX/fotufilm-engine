@@ -22,7 +22,7 @@ final class PackContainerTests: XCTestCase {
         let localIndex = try XCTUnwrap(paths.firstIndex(of:
             URL(fileURLWithPath: "Stocks", isDirectory: true)))
         XCTAssertLessThan(embeddedIndex, localIndex)
-        let pack = try FilmStockPack.load(sealed: [], bundled: [])
+        let pack = try FilmStockPack.load(sealed: [])
         XCTAssertEqual(pack.stocks[id]?.name, "Sample \(id)")
 
         let customDirectory = directory.appendingPathComponent("custom", isDirectory: true)
@@ -37,7 +37,7 @@ final class PackContainerTests: XCTestCase {
             else { unsetenv("FOTUFILM_STOCKS") }
         }
         setenv("FOTUFILM_STOCKS", customDirectory.path, 1)
-        let overridden = try FilmStockPack.load(sealed: [], bundled: [])
+        let overridden = try FilmStockPack.load(sealed: [])
         XCTAssertEqual(overridden.stocks[id]?.name, "Custom override")
     }
 
@@ -49,7 +49,7 @@ final class PackContainerTests: XCTestCase {
         for (id, kind, minimum) in [("current", FilmPackKind.community, "1.7"),
                                     ("legacy", .community, nil),
                                     ("future", .community, "99.0"),
-                                    ("private", .vault, nil), ("mine", .local, nil)] {
+                                    ("mine", .local, nil)] {
             let manifest = FilmPackManifest(packID: id, name: id, minimumMacAppVersion: minimum,
                                             stocks: [sample(id: "one")])
             let bytes = try FilmPackContainer.seal(manifest, kind: kind, keyID: 1, key: key)
@@ -84,8 +84,7 @@ final class PackContainerTests: XCTestCase {
                        "Pack updated")
         for (data, failure) in [(try seal("mine"), FilmPackLibrary.Failure.collidesWithOwnFilms),
                                 (try seal("a.b"), .unstorableID),
-                                (try seal("device", .local), .deviceBound),
-                                (try seal("app", .vault), .partOfAnApp)] {
+                                (try seal("device", .local), .deviceBound)] {
             XCTAssertThrowsError(try FilmPackLibrary.install(data, in: directory,
                                                              macAppVersion: "1.7", keyring: ring)) {
                 XCTAssertEqual($0 as? FilmPackLibrary.Failure, failure)
@@ -103,7 +102,7 @@ final class PackContainerTests: XCTestCase {
 
     private func keyring() -> FilmPackKeyring {
         let ring = FilmPackKeyring()
-        for kind in [FilmPackKind.vault, .community, .local] {
+        for kind in [FilmPackKind.community, .local] {
             ring.register(key, kind: kind, id: 1)
         }
         return ring
@@ -247,11 +246,11 @@ final class PackContainerTests: XCTestCase {
         XCTAssertThrowsError(try FilmPackContainer.open(sealed, keyring: stranger))
     }
 
-    func testRelabellingAVaultPackFails() throws {
+    func testRelabellingADevicePackFails() throws {
         var sealed = try FilmPackContainer.seal(
             FilmPackManifest(packID: "ours", name: "Ours", stocks: [sample(id: "one")]),
-            kind: .vault, keyID: 1, key: key)
-        XCTAssertEqual(try FilmPackContainer.peek(sealed).kind, .vault)
+            kind: .local, keyID: 1, key: key)
+        XCTAssertEqual(try FilmPackContainer.peek(sealed).kind, .local)
 
         sealed[5] = FilmPackKind.community.rawValue
         XCTAssertEqual(try FilmPackContainer.peek(sealed).kind, .community)
@@ -267,28 +266,16 @@ final class PackContainerTests: XCTestCase {
         }
     }
 
-    func testVaultStocksCannotBeShared() {
-        var pack = FilmStockPack()
-        pack.stocks["house-stock"] = sample(id: "house-stock")
-        pack.origins["house-stock"] = .vault
-
-        XCTAssertThrowsError(try FilmStockPack.sealForSharing(
-            stockIDs: ["house-stock"], packID: "leak", name: "Leak",
-            pack: pack, keyring: keyring())) { error in
-            guard case FilmStockPack.ExportRefusal.notShareable = error else {
-                return XCTFail("expected notShareable, got \(error)")
-            }
-        }
-    }
-
-    func testInstalledStocksCannotBeShared() {
+    func testShippedStocksCanBeShared() throws {
         var pack = FilmStockPack()
         pack.stocks["example"] = sample(id: "example")
         pack.origins["example"] = .installed
 
-        XCTAssertThrowsError(try FilmStockPack.sealForSharing(
-            stockIDs: ["example"], packID: "leak", name: "Leak",
-            pack: pack, keyring: keyring()))
+        let data = try FilmStockPack.sealForSharing(
+            stockIDs: ["example"], packID: "sent", name: "Sent",
+            pack: pack, keyring: keyring())
+        let manifest = try FilmPackContainer.open(data, keyring: keyring()).manifest
+        XCTAssertEqual(manifest.stocks.map(\.id), ["example"])
     }
 
     func testAuthoredStocksCanBeShared() throws {
@@ -305,18 +292,23 @@ final class PackContainerTests: XCTestCase {
         XCTAssertEqual(manifest.stocks.map(\.id), ["my-film"])
     }
 
-    func testVaultPackIsRefusedOutsideTheBundle() throws {
-        let sealed = try FilmPackContainer.seal(
-            FilmPackManifest(packID: "ours", name: "Ours", stocks: [sample(id: "one")]),
-            kind: .vault, keyID: 1, key: key)
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("stray.\(FilmStockPack.sealedPathExtension)")
-        try sealed.write(to: url)
-        defer { try? FileManager.default.removeItem(at: url) }
+    func testPublicCommunityKeysOpenPacksWithoutRegistration() throws {
+        for (id, key) in FilmPackKey.community {
+            let sealed = try FilmPackContainer.seal(
+                FilmPackManifest(packID: "shared", name: "Shared", stocks: [sample(id: "one")]),
+                kind: .community, keyID: id, key: key)
+            XCTAssertEqual(try FilmPackContainer.open(sealed).manifest.packID, "shared")
+        }
+    }
 
-        XCTAssertThrowsError(try FilmStockPack.load(sealed: url, trustedVault: false)) { error in
-            guard case FilmStockPack.LoadError.refused = error else {
-                return XCTFail("expected refused, got \(error)")
+    func testRetiredBuiltInPackKindIsNotAPack() throws {
+        var sealed = try FilmPackContainer.seal(
+            FilmPackManifest(packID: "old", name: "Old", stocks: [sample(id: "one")]),
+            kind: .community, keyID: 1, key: key)
+        sealed[5] = 0
+        XCTAssertThrowsError(try FilmPackContainer.peek(sealed)) { error in
+            guard case FilmPackContainer.Failure.unknownKind(0) = error else {
+                return XCTFail("expected unknownKind, got \(error)")
             }
         }
     }

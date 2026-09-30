@@ -234,7 +234,14 @@ final class LensFilterTests: XCTestCase {
     }
 
     func testConversionFiltersMoveTheLayersTheWayTheirNamesSay() {
+        // Creative and infrared films shuffle or broaden which band each layer sees; the names
+        // hold only where the layers centre in the red, green and blue in that order.
+        func centre(_ sensitivity: [Float]) -> Float {
+            zip(SpectralGrid.wavelengths, sensitivity).map(*).reduce(0, +) / max(sensitivity.reduce(0, +), 1e-12)
+        }
         for stock in FilmStock.presets.values where !stock.isMonochrome {
+            let centres = stock.spectralProfile.layerSensitivity.map(centre)
+            guard centres[0] > 600, centres[1] > 500, centres[1] < 600, centres[2] < 500 else { continue }
             let warm = LensFilterStack(.wratten85B).layerTransmittances(stock: stock)
             XCTAssertGreaterThan(warm.x, warm.y, stock.name)
             XCTAssertGreaterThan(warm.y, warm.z, stock.name)

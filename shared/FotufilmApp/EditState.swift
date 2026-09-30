@@ -60,7 +60,7 @@ struct StockPreset: Identifiable {
                 name: definition.name,
                 subtitle: definition.subtitle ?? "",
                 stock: definition.stock,
-                isCustom: FilmStock.origin(of: id)?.isShareable ?? false
+                isCustom: FilmStock.origin(of: id)?.packID != nil
             )
         }
 

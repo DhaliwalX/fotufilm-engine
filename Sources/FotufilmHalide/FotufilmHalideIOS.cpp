@@ -45,7 +45,7 @@ using Halide::Runtime::Buffer;
 
 /// The kStillFast* bits the AOT kernels of this build were generated with. The default must
 /// equal `still_fast_default()` in tools/generate_halide_ios.cpp for device targets; a build
-/// experimenting through FOTUFILM_STILL_FAST overrides both together (ios/build-device.sh).
+/// experimenting through FOTUFILM_STILL_FAST overrides both together.
 #ifndef FOTUFILM_STILL_FAST_BITS
 #define FOTUFILM_STILL_FAST_BITS 0
 #endif

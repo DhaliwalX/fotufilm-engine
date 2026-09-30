@@ -18,25 +18,9 @@ struct HostFilmPackLibrary {
 }
 
 enum HostFilmPacks {
-    /// Registers the container keys this build was given, once. The desktop build compiles the
-    /// same key material the Mac app does (`cef/build-engine.sh`); a build without it opens only
-    /// packs sealed with keys someone else registered, as the tests do.
-    static let registerKeys: Void = {
-        #if FOTUFILM_PACK_KEY_MATERIAL
-        let keyring = FilmPackKeyring.shared
-        if let vault = try? FilmPackKey(bytes: FilmPackKeyMaterial.vaultKey) {
-            keyring.register(vault, kind: .vault, id: FilmPackKeyMaterial.vaultKeyID)
-        }
-        if let community = try? FilmPackKey(bytes: FilmPackKeyMaterial.communityKey) {
-            keyring.register(community, kind: .community, id: FilmPackKeyMaterial.communityKeyID)
-        }
-        #endif
-    }()
-
     /// Offers the installed community packs this release reads, as the plugins do, and reloads
     /// the films. `nil` offers none.
     static func publish(_ library: HostFilmPackLibrary?) {
-        _ = registerKeys
         FilmStockPack.installedSealedPackURLs = library.map {
             FilmPackLibrary.compatibleCommunityPacks(in: $0.directory, macAppVersion: $0.appVersion)
         } ?? []

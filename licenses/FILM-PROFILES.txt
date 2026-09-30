@@ -1,11 +1,12 @@
 Fotufilm film profiles
 Copyright 2026 MUAStudio Inc.
 
-The following 40 runtime film profiles, distributed in
+The following 46 runtime film profiles, distributed in
 Sources/FotufilmCore/Stocks/, are licensed under Creative Commons
 Attribution-ShareAlike 4.0 International (CC BY-SA 4.0).
 
   acros100.json
+  aerochrome1443.json
   aerocolor2460.json
   agfachrome100.json
   agfachrome200.json
@@ -24,13 +25,18 @@ Attribution-ShareAlike 4.0 International (CC BY-SA 4.0).
   fp4plus125.json
   gold200.json
   hp5plus400.json
+  infraredcolor.json
   instaxmini.json
   instaxwide.json
   kodachrome200.json
   kodachrome25.json
   kodachrome64.json
   kodacolor100.json
+  lomochromemetropolis.json
+  lomochromepurple.json
+  lomochrometurquoise.json
   lomocolor100.json
+  phoenix200.json
   portra400.json
   pro160ns.json
   pro400h.json

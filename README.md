@@ -221,7 +221,7 @@ export, and the features that still require the Mac app.
 
 ## Included films
 
-Default source builds include all 40 film profiles, free to use without activation.
+Default source builds include all 46 film profiles, free to use without activation.
 The runtime JSON profiles are available in `Sources/FotufilmCore/Stocks/` under
 [CC BY-SA 4.0](licenses/FILM-PROFILES.txt). You may modify and redistribute them
 with attribution and ShareAlike terms. This licence does not apply to rendered

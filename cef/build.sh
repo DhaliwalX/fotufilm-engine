@@ -26,7 +26,7 @@ if [[ "$(uname -s)" == Darwin ]]; then
 elif [[ "$(uname -s)" == Linux ]]; then
   cef/build-engine-linux.sh
 fi
-# Built with the official packs, the app is the Mac app: its identity and its release feed.
+# An official build (FOTUFILM_SOURCE_BUILD=0) is the Mac app: its identity and its release feed.
 if [[ "${FOTUFILM_SOURCE_BUILD:-1}" == 0 && "${FOTUFILM_USE_SOURCE_IDENTITY:-0}" != 1 ]]; then
   extra+=(-DFOTUFILM_BUNDLE_ID=com.muastudio.fotufilm
           -DFOTUFILM_UPDATE_FEED="${FOTUFILM_UPDATE_FEED_URL:-https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS-update.json}")

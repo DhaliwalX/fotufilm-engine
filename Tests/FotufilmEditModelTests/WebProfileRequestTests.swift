@@ -67,7 +67,7 @@ final class WebProfileRequestTests: XCTestCase {
                                curves: stock.curves)]))
         XCTAssertEqual(try request(["push": 1], definition: definition).configured().1.developmentEV, 1)
         XCTAssertThrowsError(try request(["push": 0.5], definition: definition).configured())
-        XCTAssertThrowsError(try request(["push": 1]).configured())
+        XCTAssertThrowsError(try request(["push": 1], stock: "example-negative-400").configured())
     }
 
     func testShutterUsesOnlyTheStocksStatedChoices() throws {

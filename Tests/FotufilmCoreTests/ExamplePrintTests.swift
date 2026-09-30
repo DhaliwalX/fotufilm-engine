@@ -7,7 +7,7 @@ final class ExamplePrintTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
         let manifest = try JSONDecoder().decode([String: String].self, from: Data(
             contentsOf: root.appendingPathComponent("licenses/FILM-PROFILES.json")))
-        XCTAssertEqual(manifest.count, 40)
+        XCTAssertEqual(manifest.count, 46)
         XCTAssertEqual(Set(FilmStock.presetIDs), Set(manifest.keys))
         for id in manifest.keys.sorted() {
             let definition = try XCTUnwrap(FilmStock.presetDefinitions[id], id)

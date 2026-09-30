@@ -3,7 +3,7 @@ import XCTest
 
 final class StatusADyeUnmixTests: XCTestCase {
     private var dyes: [[Float]] {
-        // Synthetic overlapping absorption bands, independent of private profiles.
+        // Synthetic overlapping absorption bands, independent of any film profile.
         [(650.0, 55.0), (545.0, 43.0), (445.0, 38.0)].map { center, width in
             SpectralGrid.wavelengths.map { wavelength in
                 Float(0.015 + exp(-0.5 * pow((Double(wavelength) - center) / width, 2)))

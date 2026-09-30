@@ -538,30 +538,19 @@ public extension FilmStockDefinition {
     }
 }
 
-/// Assigned by the loader from where the bytes were read, never decoded from the file: a pack
-/// cannot describe itself into a category, which is the only reason the export gate below means
-/// anything.
+/// Assigned by the loader from where the bytes were read, never decoded from the file.
 public enum FilmStockOrigin: Sendable, Equatable {
-    /// Plain JSON on the search path, including `FOTUFILM_STOCKS`.
+    /// Plain JSON on the search path: the films the build ships with and `FOTUFILM_STOCKS`.
     case installed
-    /// A sealed pack from inside the application bundle.
-    case vault
     /// A sealed pack that arrived from another user.
     case community(packID: String)
     /// A sealed pack authored on this device.
     case local(packID: String)
 
-    public var isShareable: Bool {
-        switch self {
-        case .community, .local: return true
-        case .installed, .vault: return false
-        }
-    }
-
     public var packID: String? {
         switch self {
         case let .community(packID), let .local(packID): return packID
-        case .installed, .vault: return nil
+        case .installed: return nil
         }
     }
 }
@@ -592,8 +581,6 @@ public struct FilmStockPack: Sendable {
     public enum LoadError: Error, CustomStringConvertible {
         case unreadable(URL, underlying: Error)
         case malformed(URL, underlying: Error)
-        /// A pack that opened but is not allowed to be where it was found.
-        case refused(URL, reason: String)
 
         public var description: String {
             switch self {
@@ -601,8 +588,6 @@ public struct FilmStockPack: Sendable {
                 return "could not read stock \(url.lastPathComponent): \(error)"
             case let .malformed(url, error):
                 return "invalid stock \(url.lastPathComponent): \(error)"
-            case let .refused(url, reason):
-                return "refused \(url.lastPathComponent): \(reason)"
             }
         }
     }
@@ -682,33 +667,7 @@ public struct FilmStockPack: Sendable {
         set { installedSealedStorage.withLock { $0 = newValue } }
     }
 
-    /// Sealed-pack URLs supplied by plugin bundles, where `Bundle.main` refers to the host.
-    /// Set only by the bundle that owns the files.
-    public static var embeddedSealedPackURLs: [URL] {
-        get { embeddedSealedStorage.withLock { $0 } }
-        set { embeddedSealedStorage.withLock { $0 = newValue } }
-    }
-
-    /// The only place a `vault` pack is accepted, so a file dropped into the custom store cannot
-    /// claim to be part of the build.
-    public static var bundledSealedPackURLs: [URL] {
-        var urls: [URL] = []
-        // `paths(forResourcesOfType:inDirectory:)` rather than `urls(forResourcesWithExtension:)`:
-        // the URL-returning call is typed `[URL]?` by Darwin Foundation but `[NSURL]?` by
-        // swift-corelibs-foundation, so it does not compile off Apple platforms. The path-returning
-        // call is `[String]` on both.
-        #if SWIFT_PACKAGE
-        urls += Bundle.module.paths(forResourcesOfType: sealedPathExtension, inDirectory: nil)
-            .map { URL(fileURLWithPath: $0) }
-        #endif
-        urls += Bundle.main.paths(forResourcesOfType: sealedPathExtension, inDirectory: nil)
-            .map { URL(fileURLWithPath: $0) }
-        urls += embeddedSealedPackURLs
-        return urls
-    }
-
-    /// `trustedVault` is true only for files inside the application bundle.
-    public static func load(sealed url: URL, trustedVault: Bool)
+    public static func load(sealed url: URL)
         throws -> (stocks: [String: FilmStockDefinition],
                    origins: [String: FilmStockOrigin],
                    packName: String) {
@@ -723,19 +682,10 @@ public struct FilmStockPack: Sendable {
             throw LoadError.unreadable(url, underlying: error)
         }
 
-        let head = try FilmPackContainer.peek(data)
-        if head.kind == .vault && !trustedVault {
-            throw LoadError.refused(url, reason:
-                "a vault pack outside the application bundle")
-        }
-        if head.kind != .vault && trustedVault {
-            throw LoadError.refused(url, reason:
-                "a \(head.kind) pack shipped as part of the build")
-        }
-
+        let head: FilmPackContainer.Head
         let manifest: FilmPackManifest
         do {
-            manifest = try FilmPackContainer.open(data).manifest
+            (manifest, head) = try FilmPackContainer.open(data)
         } catch {
             throw LoadError.malformed(url, underlying: error)
         }
@@ -744,40 +694,33 @@ public struct FilmStockPack: Sendable {
         var origins: [String: FilmStockOrigin] = [:]
         let origin: FilmStockOrigin
         switch head.kind {
-        case .vault: origin = .vault
         case .community: origin = .community(packID: manifest.packID)
         case .local: origin = .local(packID: manifest.packID)
         }
 
         for definition in manifest.stocks {
-            if head.kind != .vault {
-                do {
-                    try definition.validate()
-                } catch {
-                    throw LoadError.malformed(url, underlying: error)
-                }
+            do {
+                try definition.validate()
+            } catch {
+                throw LoadError.malformed(url, underlying: error)
             }
-            let key = head.kind == .vault
-                ? definition.id
-                : "\(manifest.packID).\(definition.id)"
+            let key = "\(manifest.packID).\(definition.id)"
             stocks[key] = definition
             origins[key] = origin
         }
         return (stocks, origins, manifest.name)
     }
 
-    /// Custom packs first, plain JSON, then the bundle's vault last, so nothing a user installs can
-    /// stand in front of a shipped stock.
+    /// Custom packs first, then plain JSON. A custom pack's films are named under its pack id, so
+    /// nothing a user installs can stand in for a shipped film.
     public static func load(paths: [URL] = FilmStockPack.searchPaths,
-                            sealed: [URL] = FilmStockPack.installedSealedPackURLs,
-                            bundled: [URL] = FilmStockPack.bundledSealedPackURLs)
+                            sealed: [URL] = FilmStockPack.installedSealedPackURLs)
         throws -> FilmStockPack {
         var pack = FilmStockPack()
 
         for url in sealed.sorted(by: { $0.path < $1.path }) {
             do {
-                let (stocks, origins, packName) = try load(sealed: url,
-                                                           trustedVault: false)
+                let (stocks, origins, packName) = try load(sealed: url)
                 guard !stocks.isEmpty else { continue }
                 pack.stocks.merge(stocks) { _, newer in newer }
                 pack.origins.merge(origins) { _, newer in newer }
@@ -796,14 +739,6 @@ public struct FilmStockPack: Sendable {
             pack.stocks.merge(found) { _, newer in newer }
             for id in found.keys { pack.origins[id] = .installed }
             pack.sources.append(directory)
-        }
-
-        for url in bundled.sorted(by: { $0.path < $1.path }) {
-            let (stocks, origins, _) = try load(sealed: url, trustedVault: true)
-            guard !stocks.isEmpty else { continue }
-            pack.stocks.merge(stocks) { _, newer in newer }
-            pack.origins.merge(origins) { _, newer in newer }
-            pack.sources.append(url)
         }
 
         return pack
@@ -825,7 +760,6 @@ public struct FilmStockPack: Sendable {
 
     private static let sharedCache = FilmStockPackCache { try load() }
     private static let installedSealedStorage = Mutex<[URL]>([])
-    private static let embeddedSealedStorage = Mutex<[URL]>([])
     private static let embeddedStockStorage = Mutex<[URL]>([])
 }
 
@@ -891,9 +825,6 @@ final class FilmStockPackCache: @unchecked Sendable {
 
 public extension FilmStockPack {
     enum ExportRefusal: Error, CustomStringConvertible {
-        case notShareable(id: String, origin: FilmStockOrigin)
-        /// The stock itself is the user's, but its curves were taken from a record that is not.
-        case lineageNotShareable(id: String, source: String)
         case unknownStock(id: String)
         case empty
         case noCommunityKey
@@ -902,20 +833,6 @@ public extension FilmStockPack {
 
         public var description: String {
             switch self {
-            case let .notShareable(id, origin):
-                switch origin {
-                case .vault:
-                    return "\(id) is one of the films this app ships with, and those "
-                        + "are not exportable"
-                case .installed:
-                    return "\(id) came from an installed pack rather than from you, "
-                        + "so it is not yours to share from here"
-                case .community, .local:
-                    return "\(id) cannot be shared"
-                }
-            case let .lineageNotShareable(id, source):
-                return "\(id) carries curves taken from \(source), which is not "
-                    + "yours to share, so a film drawn from them stays too"
             case let .unknownStock(id):
                 return "no stock called \(id) is loaded"
             case .empty:
@@ -948,16 +865,6 @@ public extension FilmStockPack {
                 throw ExportRefusal.unknownStock(id: id)
             }
             let origin = pack.origins[id] ?? .installed
-            guard origin.isShareable else {
-                throw ExportRefusal.notShareable(id: id, origin: origin)
-            }
-            // Export requires every referenced spectral-lineage source to remain loaded and
-            // shareable.
-            if let lineage = definition.spectralLineage {
-                guard pack.origins[lineage]?.isShareable == true else {
-                    throw ExportRefusal.lineageNotShareable(id: id, source: lineage)
-                }
-            }
             var copy = definition
             copy.id = origin.packID.map { qualifier in
                 id.hasPrefix(qualifier + ".")
@@ -1036,10 +943,10 @@ public extension FilmStock {
         FilmStockPack.shared.origins[id]
     }
 
-    /// What a share button may offer.
-    static var shareablePresetIDs: [String] {
+    /// The films from custom packs: the user's own and those shared with them.
+    static var customPresetIDs: [String] {
         FilmStockPack.shared.origins
-            .filter { $0.value.isShareable }
+            .filter { $0.value.packID != nil }
             .keys.sorted()
     }
 

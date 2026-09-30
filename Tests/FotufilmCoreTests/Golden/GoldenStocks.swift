@@ -21,7 +21,7 @@ enum GoldenStocks {
         .deletingLastPathComponent()
         .deletingLastPathComponent()
 
-    /// The published catalogue always takes part; a calibrated stock directory joins it when
+    /// The published catalogue always takes part; another stock directory joins it when
     /// `FOTUFILM_STOCKS` names one, the same variable the engine's own loader honours.
     static var directories: [(GoldenStore.Visibility, URL)] {
         let published = repositoryRoot.appendingPathComponent("Sources/FotufilmCore/Stocks",

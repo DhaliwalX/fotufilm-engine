@@ -198,19 +198,16 @@ public enum FilmPackContainer {
     }
 }
 
-/// The kinds differ only in where their key lives, which is the whole of the
-/// protection this format offers.
+/// The kinds differ only in where their key lives. The community keys are public, so the format
+/// protects only the films a person keeps on one device.
 public enum FilmPackKind: UInt8, Sendable, CustomStringConvertible {
-    /// The shipped pack.
-    case vault = 0
-    /// User to user.
+    /// User to user, under a public `FilmPackKey.community` key.
     case community = 1
     /// At rest on one device, under a key that stays in its keychain.
     case local = 2
 
     public var description: String {
         switch self {
-        case .vault: return "vault"
         case .community: return "community"
         case .local: return "local"
         }
@@ -254,6 +251,14 @@ public struct FilmPackKey: Sendable {
         bytes.map { String(format: "%02x", $0) }.joined()
     }
 
+    /// The keys community packs are sealed with, by id. They are published so that anyone can read
+    /// and write the format; they keep nothing secret. The newest seals; the older opens packs that
+    /// source builds and the downloadable catalogue were sealed with.
+    public static let community: [UInt16: FilmPackKey] = [
+        0: try! FilmPackKey(bytes: [UInt8](repeating: 0, count: byteCount)),
+        1: try! FilmPackKey(hex: "0db10abeca7786aedabeb28a583ac97fa15e5f31c6d305a50fcabae71aef872d"),
+    ]
+
     public static func random() -> FilmPackKey {
         var bytes = [UInt8](repeating: 0, count: byteCount)
         for index in bytes.indices { bytes[index] = UInt8.random(in: 0...255) }
@@ -279,10 +284,14 @@ public struct FilmPackKey: Sendable {
     #endif
 }
 
-/// Empty until a host registers something: an engine build that registers
-/// nothing reads plain JSON packs and no sealed ones.
+/// The shared keyring starts with the public community keys; a host adds the device's own key
+/// for `local` packs. A new keyring starts empty.
 public final class FilmPackKeyring: @unchecked Sendable {
-    public static let shared = FilmPackKeyring()
+    public static let shared: FilmPackKeyring = {
+        let keyring = FilmPackKeyring()
+        for (id, key) in FilmPackKey.community { keyring.register(key, kind: .community, id: id) }
+        return keyring
+    }()
 
     private var keys: [Slot: FilmPackKey] = [:]
     private let lock = NSLock()

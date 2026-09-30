@@ -5,7 +5,7 @@
 # This is not tools/build-halide.sh. That script links against Homebrew's LLVM and LLD directly —
 # fine for building this Mac's own generator, useless for anything that leaves it: the resulting
 # libHalide.dylib depends on /opt/homebrew/opt/llvm and /opt/homebrew/opt/lld at their exact
-# installed paths, which do not exist on a CI runner or an Xcode Cloud image. Halide's own official
+# installed paths, which do not exist on a CI runner. Halide's own official
 # releases avoid this by linking LLVM and LLD in statically; this script does the same.
 #
 #   tools/build-halide-toolchain.sh
