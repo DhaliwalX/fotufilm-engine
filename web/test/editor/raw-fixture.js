@@ -103,7 +103,7 @@ export function makeDNG({
         view.setUint16(
           next + ((y * width + x) * channels + c) * 2,
           Math.max(512, Math.min(value, patch ? 65535 : 65000)),
-          true,
+          littleEndian,
         )
       }
     }

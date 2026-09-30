@@ -16,6 +16,8 @@ for (const mosaic of [false, true]) for (const exposure of [-2, 0, 2]) {
   save(`neutral-${mosaic}-${exposure}`, { mosaic, baselineExposure: exposure,
     asShotNeutral: [0.5, 1, 0.25], patches: [[0.02, 0.02, 0.02], [0.18, 0.18, 0.18], [0.8, 0.8, 0.8]] })
 }
+for (const mosaic of [false, true]) for (const littleEndian of [false, true])
+  save(`byte-order-${mosaic}-${littleEndian}`, { mosaic, littleEndian })
 save('odd', { width: 321, height: 193, mosaic: false })
 save('half', { width: 640, height: 384 })
 save('headroom', { mosaic: false, asShotNeutral: [0.5, 1, 0.25], patches: [[1.6, 0.8, 2.8]] })
