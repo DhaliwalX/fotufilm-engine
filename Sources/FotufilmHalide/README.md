@@ -78,3 +78,8 @@ shared normal field. Run `bash tools/test-grain-sampling.sh` after changes to ra
 or backend bindings; its independent scalar reference covers 216 combinations and 242,352
 samples, including the Poisson/Gaussian transition, unsigned seeds and nonzero origins.
 Regenerate CPU AOT kernels after changing the sampling bindings.
+
+Full-quality Vulkan and WebGPU also use analytic draws. `bash tools/test-portable-grain.sh`
+compiles the actual float still/preview frame pipelines for both portable backends, checking
+that only preview archives contain fine-grain and mottling CDF kernels. This verifies graph
+selection and SPIR-V/WGSL compilation; it does not establish device pixel agreement or speed.
