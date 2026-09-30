@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <cmath>
 
 using Halide::Runtime::Buffer;
 
@@ -29,7 +30,7 @@ int run_develop(const float *input_r, const float *input_g, const float *input_b
                 Buffer<float> &density, int32_t width, int32_t height,
                 const float *configuration, const float *exposure_lut,
                 int32_t feature_mask, uint32_t seed,
-                int32_t origin_x, int32_t origin_y) {
+                int32_t origin_x, int32_t origin_y, const float *additional_exposure = nullptr) {
     Buffer<float> red(const_cast<float *>(input_r), width, height);
     Buffer<float> green(const_cast<float *>(input_g), width, height);
     Buffer<float> blue(const_cast<float *>(input_b), width, height);
@@ -43,6 +44,10 @@ int run_develop(const float *input_r, const float *input_g, const float *input_b
     bool film_on = false;
     Buffer<float> film_tiles = FilmTileStore::shared().tiles_for(configuration, film_on);
 
+    static float zero[4] = {};
+    auto extra = Buffer<float>::make_interleaved(
+        additional_exposure ? const_cast<float *>(additional_exposure) : zero,
+        additional_exposure ? width : 1, additional_exposure ? height : 1, 4);
     return fotufilm_halide_android_develop(
         red, green, blue, config, exposure, width, height,
         resolved.mtf_sigma_0, resolved.mtf_sigma_1, resolved.mtf_sigma_2, resolved.mtf_luma_sigma,
@@ -59,7 +64,7 @@ int run_develop(const float *input_r, const float *input_g, const float *input_b
         resolved.diffusion_stride_0, resolved.diffusion_stride_1, resolved.diffusion_stride_2,
         resolved.diffusion_strided_radius_0, resolved.diffusion_strided_radius_1,
         resolved.diffusion_strided_radius_2, feature_mask,
-        film_tiles, film_on ? 1 : 0, density);
+        film_tiles, film_on ? 1 : 0, extra, additional_exposure ? 1 : 0, density);
 }
 
 int run_print(Buffer<float> &density, Buffer<float> &result,
@@ -179,6 +184,23 @@ extern "C" int32_t fotufilm_halide_process_tile(
     const float *configuration, const float *exposure_lut,
     const float *film_output_lut, const float *paper_output_lut,
     int32_t lut_dimension, int32_t feature_mask, uint32_t seed) {
+    return fotufilm_halide_process_tile_with_exposure(
+        input_r, input_g, input_b, output_r, output_g, output_b,
+        width, height, output_width, output_height, origin_x, origin_y,
+        interior_left, interior_top, interior_width, interior_height,
+        configuration, exposure_lut, film_output_lut, paper_output_lut,
+        lut_dimension, feature_mask, seed, nullptr);
+}
+
+extern "C" int32_t fotufilm_halide_process_tile_with_exposure(
+    const float *input_r, const float *input_g, const float *input_b,
+    float *output_r, float *output_g, float *output_b,
+    int32_t width, int32_t height, int32_t output_width, int32_t output_height,
+    int32_t origin_x, int32_t origin_y, int32_t interior_left, int32_t interior_top,
+    int32_t interior_width, int32_t interior_height,
+    const float *configuration, const float *exposure_lut,
+    const float *film_output_lut, const float *paper_output_lut,
+    int32_t lut_dimension, int32_t feature_mask, uint32_t seed, const float *additional_record_exposure) {
     if (!input_r || !input_g || !input_b || !output_r || !output_g || !output_b ||
         !configuration || !exposure_lut || !film_output_lut ||
         !paper_output_lut || width <= 0 || height <= 0 ||
@@ -189,10 +211,18 @@ extern "C" int32_t fotufilm_halide_process_tile(
         interior_top < 0 || interior_height <= 0 || interior_height > height ||
         interior_top > height - interior_height ||
         lut_dimension != kLutDimension) return -1;
+    if (additional_record_exposure) {
+        const int32_t unsupported = FOTUFILM_FRAME_NO_FILM | FOTUFILM_FRAME_DENSITY_IN
+            | FOTUFILM_FRAME_RECORD_EXPOSURE_IN | FOTUFILM_FRAME_LIGHT_OUT | FOTUFILM_FRAME_TEXTURE;
+        if (feature_mask & unsupported) return -1;
+        for (int64_t i = 0; i < int64_t(width) * height * 4; ++i)
+            if (!std::isfinite(additional_record_exposure[i]) || additional_record_exposure[i] < 0) return -1;
+    }
+
     Buffer<float> density(width, height, 3);
     int error = run_develop(input_r, input_g, input_b, density, width, height,
                             configuration, exposure_lut, feature_mask, seed,
-                            origin_x, origin_y);
+                            origin_x, origin_y, additional_record_exposure);
     if (error) return error;
     Buffer<float> result(interior_width, interior_height, 3);
     result.translate(0, interior_left);

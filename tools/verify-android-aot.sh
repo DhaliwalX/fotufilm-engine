@@ -34,17 +34,22 @@ outputs = []
 for name in ('aot', 'jit'):
     values = array('f')
     values.frombytes(Path(f'build/android-parity/{name}.bin').read_bytes())
-    assert len(values) == n * 32, (name, len(values))
+    assert len(values) == n * 64, (name, len(values))
     assert all(map(isfinite, values)), name
     outputs.append(values)
-for case in range(32):
+for case in range(64):
     error = max(abs(a-b) for a,b in zip(*(v[case*n:(case+1)*n] for v in outputs)))
     assert error < 1e-4, (case, error)
 for name, values in zip(('aot','jit'), outputs):
     for variant in range(4):
-        start = variant * 8 * n
+        start = variant * 16 * n
         for stage in (1,2,3):
             effect = max(abs(values[start+i]-values[start+stage*n+i]) for i in range(n))
             assert effect > 1e-5, (name, variant, stage, effect)
-print('Android AOT / CPU reference: 32 cases pass; diffusion, mottle and print MTF affect all four print variants.')
+        for a, b in ((8,10),(8,11),(8,12),(13,14)):
+            effect = max(abs(values[start+a*n+i]-values[start+b*n+i]) for i in range(n))
+            assert effect > 1e-5, (name, variant, 'record exposure', a, b, effect)
+        zero_error = max(abs(values[start+8*n+i]-values[start+9*n+i]) for i in range(n))
+        assert zero_error < 1e-6, (name, variant, 'zero field', zero_error)
+print('Android AOT / CPU reference: 64 cases pass, including RGB/donor exposure, gate bypass, tile origins and invalid-field rejection.')
 PY

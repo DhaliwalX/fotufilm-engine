@@ -218,7 +218,7 @@ private:
 /// Stages 1-7: scene-linear planar RGB to developed per-layer density.
 class DevelopPipeline : FrameParams {
 public:
-    DevelopPipeline(int32_t features, const std::string &suffix)
+    DevelopPipeline(int32_t features, const std::string &suffix, bool with_additional_exposure = false)
         : FrameParams("develop_", suffix),
           input_r_(Float(32), 2, "develop_input_r" + suffix),
           input_g_(Float(32), 2, "develop_input_g" + suffix),
@@ -229,7 +229,10 @@ public:
           grain_mode_("develop_grain_mode" + suffix),
           film_grain_("develop_film_on" + suffix),
           monochrome_("develop_monochrome" + suffix),
-          features_("develop_features" + suffix) {
+          features_("develop_features" + suffix),
+          additional_exposure_(Float(32), 3, "develop_additional_exposure" + suffix),
+          additional_on_("develop_additional_on" + suffix),
+          with_additional_exposure_(with_additional_exposure) {
         const bool texture = features & FOTUFILM_FRAME_TEXTURE;
         Var x("x"), y("y"), c("c");
         exposure_lut_.dim(0).set_bounds(0, kLutValueCount);
@@ -258,6 +261,17 @@ public:
             "develop_", suffix};
         inputs.film_tiles = &film_tiles_;
         inputs.film_on = film_grain_ != 0;
+        if (with_additional_exposure_) {
+            additional_exposure_.dim(0).set_stride(4);
+            additional_exposure_.dim(2).set_bounds(0, 4).set_stride(1);
+            inputs.additional_record_exposure = [&](Expr px, Expr py, Expr channel) {
+                // A disabled call binds one zero pixel, so bounds stay valid without a frame allocation.
+                Expr value = additional_exposure_(
+                    Halide::clamp(px, 0, additional_exposure_.dim(0).extent() - 1),
+                    Halide::clamp(py, 0, additional_exposure_.dim(1).extent() - 1), channel);
+                return Halide::select(additional_on_ != 0, value, 0.0f);
+            };
+        }
         graph::Developed developed = graph::build_develop(backend, inputs, x, y, c);
 
         Func output = developed.developed;
@@ -272,25 +286,9 @@ public:
         }
         output = backend.store(output, graph::Store::Output, 3);
         pipeline_ = Pipeline(output);
-        cached_.prepare(pipeline_, "develop:" + std::to_string(features),
-            {
-            input_r_, input_g_, input_b_, configuration_, exposure_lut_,
-            width_, height_,
-            mtf_sigma_0_, mtf_sigma_1_, mtf_sigma_2_, mtf_luma_sigma_,
-            mtf_radius_0_, mtf_radius_1_, mtf_radius_2_, mtf_luma_radius_,
-            halation_stride_0_, halation_stride_1_, halation_stride_2_,
-            halation_strided_radius_0_, halation_strided_radius_1_,
-            halation_strided_radius_2_,
-            coupler_sigma_, coupler_radius_, adjacency_sigma_, adjacency_radius_,
-            adjacency_secondary_sigma_, adjacency_secondary_radius_,
-            fringe_sigma_, fringe_radius_,
-            grain_sigma_, grain_radius_, grain_lambda_, print_mtf_radius_,
-            seed_, reversal_, monochrome_, origin_x_, origin_y_,
-                grain_mode_, mottle_radius_, mottle_lambda_,
-                diffusion_stride_0_, diffusion_stride_1_, diffusion_stride_2_,
-                diffusion_strided_radius_0_, diffusion_strided_radius_1_,
-                diffusion_strided_radius_2_, features_, film_tiles_, film_grain_,},
-            reference_target());
+        cached_.prepare(pipeline_, "develop:" + std::to_string(features)
+            + (with_additional_exposure_ ? ":additional-records" : ""),
+            arguments<compiled_cache::Argument>(true), reference_target());
     }
 
     /// Develops into `result`, which the caller owns.
@@ -298,7 +296,8 @@ public:
              Buffer<float> &result,
              int32_t width, int32_t height, const float *configuration,
              const float *exposure_lut, int32_t feature_mask, uint32_t seed,
-             int32_t origin_x = 0, int32_t origin_y = 0) {
+             int32_t origin_x = 0, int32_t origin_y = 0,
+             const float *additional_exposure = nullptr) {
         std::lock_guard<std::mutex> lock(mutex_);
         Buffer<float> red(const_cast<float *>(input_r), width, height);
         Buffer<float> green(const_cast<float *>(input_g), width, height);
@@ -306,6 +305,14 @@ public:
         Buffer<float> config(const_cast<float *>(configuration),
                              FOTUFILM_FRAME_CONFIGURATION_COUNT);
         Buffer<float> lut(const_cast<float *>(exposure_lut), kLutValueCount);
+        if (with_additional_exposure_) {
+            static float zero[4] = {};
+            auto extra = Buffer<float>::make_interleaved(
+                additional_exposure ? const_cast<float *>(additional_exposure) : zero,
+                additional_exposure ? width : 1, additional_exposure ? height : 1, 4);
+            additional_exposure_.set(extra);
+            additional_on_.set(additional_exposure ? 1 : 0);
+        }
         input_r_.set(red);
         input_g_.set(green);
         input_b_.set(blue);
@@ -323,10 +330,10 @@ public:
         else pipeline_.realize(result, reference_target());
     }
 
-#if defined(FOTUFILM_HALIDE_AOT_GENERATOR)
     /// The arguments in the order the generated function takes them.
-    std::vector<Halide::Argument> arguments(bool extended = false) {
-        std::vector<Halide::Argument> args = {
+    template<typename Argument = Halide::Argument>
+    std::vector<Argument> arguments(bool extended = false) {
+        std::vector<Argument> args = {
             input_r_, input_g_, input_b_, configuration_, exposure_lut_,
             width_, height_,
             mtf_sigma_0_, mtf_sigma_1_, mtf_sigma_2_, mtf_luma_sigma_,
@@ -349,9 +356,11 @@ public:
             });
         }
         args.insert(args.end(), {features_, film_tiles_, film_grain_});
+        if (with_additional_exposure_) args.insert(args.end(), {additional_exposure_, additional_on_});
         return args;
     }
 
+#if defined(FOTUFILM_HALIDE_AOT_GENERATOR)
     void compile_aot(const std::string &prefix, const std::string &function_name,
                      bool include_runtime, Halide::Target target, bool extended_arguments = false) {
         target.set_feature(Halide::Target::StrictFloat);
@@ -369,6 +378,9 @@ private:
     Param<int32_t> film_grain_;
     Param<int32_t> monochrome_;
     Param<int32_t> features_;
+    ImageParam additional_exposure_;
+    Param<int32_t> additional_on_;
+    bool with_additional_exposure_;
     Pipeline pipeline_;
     compiled_cache::Pipeline cached_;
     std::mutex mutex_;

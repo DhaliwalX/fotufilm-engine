@@ -55,18 +55,18 @@ extern "C" int32_t fotufilm_halide_available(void) { return 1; }
 
 namespace {
 
-DevelopPipeline *develop_pipeline_for(int32_t feature_mask) {
+DevelopPipeline *develop_pipeline_for(int32_t feature_mask, bool additional_exposure = false) {
     const int32_t features = fotufilm_develop_features(feature_mask);
-    const int variant = fotufilm_develop_variant(features);
+    const int64_t variant = int64_t(fotufilm_develop_variant(features)) * 2 + (additional_exposure ? 1 : 0);
     // Never destroyed, like every pipeline cache here: a warm-up thread still compiling when the
     // process exits must not find its cache torn down by the exit-time destructors.
-    static auto &pipelines = *new std::unordered_map<int, std::unique_ptr<DevelopPipeline>>;
+    static auto &pipelines = *new std::unordered_map<int64_t, std::unique_ptr<DevelopPipeline>>;
     static std::mutex &pipelines_mutex = *new std::mutex;
     std::lock_guard<std::mutex> lock(pipelines_mutex);
     auto &pipeline = pipelines[variant];
     if (!pipeline) {
         pipeline = std::make_unique<DevelopPipeline>(
-            features, "_variant_" + std::to_string(variant));
+            features, "_variant_" + std::to_string(variant), additional_exposure);
     }
     return pipeline.get();
 }
@@ -209,6 +209,23 @@ extern "C" int32_t fotufilm_halide_process_tile(
     const float *configuration, const float *exposure_lut,
     const float *film_output_lut, const float *paper_output_lut,
     int32_t lut_dimension, int32_t feature_mask, uint32_t seed) {
+    return fotufilm_halide_process_tile_with_exposure(
+        input_r, input_g, input_b, output_r, output_g, output_b,
+        width, height, output_width, output_height, origin_x, origin_y,
+        interior_left, interior_top, interior_width, interior_height,
+        configuration, exposure_lut, film_output_lut, paper_output_lut,
+        lut_dimension, feature_mask, seed, nullptr);
+}
+
+extern "C" int32_t fotufilm_halide_process_tile_with_exposure(
+    const float *input_r, const float *input_g, const float *input_b,
+    float *output_r, float *output_g, float *output_b,
+    int32_t width, int32_t height, int32_t output_width, int32_t output_height,
+    int32_t origin_x, int32_t origin_y, int32_t interior_left, int32_t interior_top,
+    int32_t interior_width, int32_t interior_height,
+    const float *configuration, const float *exposure_lut,
+    const float *film_output_lut, const float *paper_output_lut,
+    int32_t lut_dimension, int32_t feature_mask, uint32_t seed, const float *additional_record_exposure) {
     if (!input_r || !input_g || !input_b || !output_r || !output_g || !output_b ||
         !configuration || !exposure_lut || !film_output_lut ||
         !paper_output_lut || width <= 0 || height <= 0 ||
@@ -219,6 +236,14 @@ extern "C" int32_t fotufilm_halide_process_tile(
         interior_top < 0 || interior_height <= 0 || interior_height > height ||
         interior_top > height - interior_height ||
         lut_dimension != kLutDimension) return -1;
+    if (additional_record_exposure) {
+        const int32_t unsupported = FOTUFILM_FRAME_NO_FILM | FOTUFILM_FRAME_DENSITY_IN
+            | FOTUFILM_FRAME_RECORD_EXPOSURE_IN | FOTUFILM_FRAME_LIGHT_OUT | FOTUFILM_FRAME_TEXTURE;
+        if (feature_mask & unsupported) return -1;
+        for (int64_t i = 0; i < int64_t(width) * height * 4; ++i)
+            if (!std::isfinite(additional_record_exposure[i]) || additional_record_exposure[i] < 0) return -1;
+    }
+
     return translate_exceptions([&] {
         // The tile's interior, wherever it came from, laid into the caller's frame planes.
         auto copy_out = [&](Buffer<float> &result) {
@@ -248,9 +273,9 @@ extern "C" int32_t fotufilm_halide_process_tile(
             return;
         }
         Buffer<float> density(width, height, 3);
-        develop_pipeline_for(feature_mask)->run(
+        develop_pipeline_for(feature_mask, additional_record_exposure != nullptr)->run(
             input_r, input_g, input_b, density, width, height, configuration,
-            exposure_lut, feature_mask, seed, origin_x, origin_y);
+            exposure_lut, feature_mask, seed, origin_x, origin_y, additional_record_exposure);
         // `PipelineStage.negative` and `PipelineStage.texture` end here: the first returns the
         // developed negative itself and the second the source the develop's two passes differed
         // on, and neither is a thing the paper prints. The strip's interior is copied out of the
@@ -323,6 +348,11 @@ extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_process_tile(
     int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
     int32_t, int32_t, const float *, const float *, const float *, const float *,
     int32_t, int32_t, uint32_t) { return -1; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_process_tile_with_exposure(
+    const float *, const float *, const float *, float *, float *, float *,
+    int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
+    int32_t, int32_t, const float *, const float *, const float *, const float *,
+    int32_t, int32_t, uint32_t, const float *) { return -1; }
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_gaussian(
     const float *, float *, int32_t, int32_t, float, int32_t) { return -1; }
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_approximate_gaussian(

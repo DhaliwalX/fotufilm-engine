@@ -53,7 +53,8 @@ enum HalideBackend {
                         options: FotufilmEngine.Options,
                         memoryBudget: Int = defaultMemoryBudget,
                         noFilm: Bool = false,
-                        outputTransform: FilmOutputTransform? = nil) throws -> ImageBuffer? {
+                        outputTransform: FilmOutputTransform? = nil,
+                        additionalRecordExposure: FilmRecordExposure? = nil) throws -> ImageBuffer? {
         try image.validate()
         let width = image.width, height = image.height
         guard width > 0, height > 0 else {
@@ -81,7 +82,8 @@ enum HalideBackend {
 
         let apron = max(1, invocation.spatialSupport)
         let tile = try tileSize(width: width, height: height, apron: apron,
-                                budget: memoryBudget)
+                                budget: memoryBudget,
+                                additionalBytesPerPixel: additionalRecordExposure == nil ? 0 : 16)
         if (tile.width < width || tile.height < height),
            invocation.featureMask & FilmEngineFeature.flare != 0 {
             invocation.flareMean = measuredGlare(image: image, invocation: invocation)
@@ -91,6 +93,7 @@ enum HalideBackend {
         var red = [Float](repeating: 0, count: count)
         var green = [Float](repeating: 0, count: count)
         var blue = [Float](repeating: 0, count: count)
+        var exposureFailure: Error?
         let status = withPlanarPointers(image.planes) { inputR, inputG, inputB in
             red.withUnsafeMutableBufferPointer { outputR in
                 green.withUnsafeMutableBufferPointer { outputG in
@@ -110,7 +113,29 @@ enum HalideBackend {
                                         let end = min(width, right + apron)
                                         func render(_ r: UnsafePointer<Float>, _ g: UnsafePointer<Float>,
                                                     _ b: UnsafePointer<Float>) -> Int32 {
-                                            fotufilm_halide_process_tile(
+                                            if let additionalRecordExposure {
+                                                let region = FilmRecordExposure.Region(x: start, y: from,
+                                                    width: end - start, height: to - from,
+                                                    frameWidth: width, frameHeight: height)
+                                                var records = [Float](repeating: 0, count: region.width * region.height * 4)
+                                                do {
+                                                    try records.withUnsafeMutableBufferPointer {
+                                                        try additionalRecordExposure.fill(region: region, into: $0)
+                                                    }
+                                                    return records.withUnsafeBufferPointer { records in
+                                                        return fotufilm_halide_process_tile_with_exposure(
+                                                            r, g, b, outputR.baseAddress, outputG.baseAddress,
+                                                            outputB.baseAddress, Int32(end - start), Int32(to - from),
+                                                            Int32(width), Int32(height), Int32(start), Int32(from),
+                                                            Int32(left - start), Int32(top - from),
+                                                            Int32(right - left), Int32(bottom - top),
+                                                            configuration.baseAddress, exposure, film, paper,
+                                                            Int32(invocation.spectral.exposure.dimension),
+                                                            invocation.featureMask, invocation.seed, records.baseAddress)
+                                                    }
+                                                } catch { exposureFailure = error; return -1 }
+                                            }
+                                            return fotufilm_halide_process_tile(
                                                 r, g, b, outputR.baseAddress, outputG.baseAddress,
                                                 outputB.baseAddress, Int32(end - start), Int32(to - from),
                                                 Int32(width), Int32(height), Int32(start), Int32(from),
@@ -149,6 +174,10 @@ enum HalideBackend {
                 }
             }
         }
+        if let exposureFailure { throw exposureFailure }
+        if status != 0, additionalRecordExposure != nil {
+            throw TransportError.backend("CPU backend could not apply additional photographic record exposure")
+        }
         guard status == 0 else { return nil }
         return ImageBuffer(width: width, height: height, planes: [red, green, blue])
     }
@@ -182,23 +211,27 @@ enum HalideBackend {
     static let processBytesPerPixel = 64
 
     /// Rows of finished output per strip, or zero if even one interior row cannot fit.
-    static func stripRows(width: Int, height: Int, apron: Int, budget: Int) -> Int {
-        let perRow = max(width * processBytesPerPixel, 1)
+    static func stripRows(width: Int, height: Int, apron: Int, budget: Int,
+                          bytesPerPixel: Int = processBytesPerPixel) -> Int {
+        let perRow = max(width * bytesPerPixel, 1)
         if height <= budget / perRow { return height }
         return max(0, min(height, budget / perRow - 2 * apron))
     }
 
     /// Prefer strips that do useful work beyond their blur overlap. Otherwise split both axes,
     /// preserving the complete spatial support instead of silently raising the memory budget.
-    static func tileSize(width: Int, height: Int, apron: Int, budget: Int) throws
+    static func tileSize(width: Int, height: Int, apron: Int, budget: Int,
+                         additionalBytesPerPixel: Int = 0) throws
         -> (width: Int, height: Int) {
-        guard width > 0, height > 0, apron >= 0, budget > 0 else {
+        guard width > 0, height > 0, apron >= 0, budget > 0, additionalBytesPerPixel >= 0 else {
             throw TransportError.invalid("render dimensions and memory budget must be positive")
         }
-        let rows = stripRows(width: width, height: height, apron: apron, budget: budget)
+        let bytesPerPixel = processBytesPerPixel + additionalBytesPerPixel
+        let rows = stripRows(width: width, height: height, apron: apron, budget: budget,
+                             bytesPerPixel: bytesPerPixel)
         if rows == height || rows >= max(64, apron) { return (width, rows) }
 
-        let pixels = budget / (processBytesPerPixel + 3 * MemoryLayout<Float>.stride)
+        let pixels = budget / (bytesPerPixel + 3 * MemoryLayout<Float>.stride)
         let minimumWidth = min(width, 2 * apron + 1)
         let minimumHeight = min(height, 2 * apron + 1)
         guard pixels / minimumWidth >= minimumHeight else {

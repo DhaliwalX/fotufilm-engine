@@ -143,6 +143,10 @@ struct Inputs {
     /// computed and discarded.
     Halide::ImageParam *film_tiles = nullptr;
     Expr film_on = Expr();
+    /// Optional photographic record exposure arriving behind the camera gate (RGB records + donor).
+    /// Coordinates are local to this tile. This light is excluded from lens-glare measurement.
+    std::function<Expr(Expr, Expr, Expr)> additional_record_exposure;
+
 };
 
 struct Developed {
@@ -286,15 +290,23 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
     // glare below — reaches the film only through the camera gate. Everything after it is the
     // film's own and runs over the whole frame, the part the gate shades included.
     Expr gate_pass = gate_transmission(configuration, x + p.origin_x_, y + p.origin_y_);
-    auto through_gate = [&](Func planes, const char *stage) {
+    auto through_gate = [&](Func planes, const char *stage, bool donor = false, bool luma = false) {
         Func gated(name(stage));
-        gated(x, y, c) = planes(x, y, c) * gate_pass;
+        Expr value = planes(x, y, c) * gate_pass;
+        if (in.additional_record_exposure) {
+            auto &extra = in.additional_record_exposure;
+            Expr added = extra(x, y, donor ? Expr(3) : Halide::min(c, 2));
+            if (luma) added = Halide::select(c == 3,
+                (extra(x, y, 0) + extra(x, y, 1) + extra(x, y, 2)) / 3.0f, added);
+            value += added;
+        }
+        gated(x, y, c) = value;
         return gated;
     };
     // Glare is metered on the lens's image as formed, before the gate.
     Func lens_light = light;
     light = through_gate(lens_light, "through_gate");
-    if (use_donor) donor_exposure = through_gate(donor_exposure, "donor_through_gate");
+    if (use_donor) donor_exposure = through_gate(donor_exposure, "donor_through_gate", true);
 
     const bool merged_luma = use_mtf_luma && b.merged_luma();
     const int light_channels = merged_luma ? 4 : 3;
@@ -304,7 +316,7 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
     // The gated light with its neutral: the lens's neutral through the gate, so that no sum
     // takes the gate's products, which a GPU compiler may fuse differently in each kernel.
     auto widened_light = [&](const char *stage, const char *gate_stage) {
-        return merged_luma ? through_gate(widened(lens_light, stage), gate_stage) : light;
+        return merged_luma ? through_gate(widened(lens_light, stage), gate_stage, false, true) : light;
     };
 
     bool materialised = false;

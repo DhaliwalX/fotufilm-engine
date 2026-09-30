@@ -31,6 +31,17 @@ configuration layout are unchanged.
 The Android CPU generator includes lens diffusion, grain mottling and enlarger MTF.
 Regenerate its kernels and adapter together: these stages use the extended develop arguments.
 `bash tools/verify-android-aot.sh` builds that same generator and adapter for the host and compares
-32 cases against CPU JIT, including each stage, all four print variants, standalone negatives,
-and tile origins. It uses only the public example stock and needs no Android device or emulator.
+64 cases against CPU JIT, including each stage, all four print variants, standalone negatives,
+tile origins, additional RGB/donor record exposure, closed gates and invalid fields. It uses only the public example stock and needs no Android device or emulator.
 This checks shared pipeline construction and bindings; it does not measure Android runtime or performance.
+
+`FilmRecordExposure` supplies an optional interleaved four-record exposure field to combined
+Legacy CPU processing. The Swift writer receives absolute tile coordinates and a zeroed buffer;
+the field joins the scene after lens diffusion and the camera gate, before film optics. Lens-glare
+measurement remains based on lens light alone. The extra 16 bytes per tile pixel count toward the
+CPU intermediate-memory estimate. The generic input carries no host-specific exposure model.
+
+Regenerate Android kernels with their adapter after this argument change. Ordinary calls bind a
+single disabled zero pixel. Other AOT generators keep their existing argument list; unsupported
+additional-exposure calls return an error. Layered Transport and separate pipeline stages do not
+accept this input through `processChecked`.

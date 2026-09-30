@@ -89,7 +89,7 @@ int main(int argc, char **argv) {
         std::cout << "Ablating: " << list << "\n";
     }
 
-    DevelopPipeline develop(features, "_android_develop");
+    DevelopPipeline develop(features, "_android_develop", true);
     develop.compile_aot((output / "fotufilm_halide_android_develop").string(),
                         "fotufilm_halide_android_develop", include_runtime, target, true);
 
