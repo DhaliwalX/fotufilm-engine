@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   decodeCanvasPixels,
+  imageDataColorSpace,
   validateColorSpace,
 } from '../../src/canvas-color.js'
 import { INGEST_COLOR } from '../../src/engine-constants.js'
@@ -38,6 +39,15 @@ test('P3 source decoding uses native Rec.2020 primaries and retains deep samples
   )
   assert.notDeepEqual(deep, shallow)
   assert.throws(() => validateColorSpace('made-up'), /Unsupported/)
+})
+test('canvas samples without a colour space (Firefox) decode as sRGB', () => {
+  const data = { data: new Uint8ClampedArray([128, 64, 32, 255]) }
+  assert.equal(imageDataColorSpace(data), 'srgb')
+  assert.equal(imageDataColorSpace({ ...data, colorSpace: 'display-p3' }), 'display-p3')
+  assert.deepEqual(
+    decodeCanvasPixels(data.data, imageDataColorSpace(data)),
+    decodeCanvasPixels(data.data, 'srgb'),
+  )
 })
 test('print delivery preserves P3 values outside sRGB and quantizes directly to 16-bit', () => {
   const p3 = new Uint16Array(4),

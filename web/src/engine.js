@@ -4,6 +4,7 @@ import {
   sourceContext,
   sourcePixels,
   decodeCanvasPixels,
+  imageDataColorSpace,
   validateColorSpace,
 } from './canvas-color.js'
 import { loadMediumBytes } from './output-media.js'
@@ -665,7 +666,7 @@ export function imageSource(image) {
       context.clearRect(0, 0, w, h)
       context.drawImage(image, x, y, w, h, 0, 0, w, h)
       const data = sourcePixels(context, 0, 0, w, h)
-      return decodeCanvasPixels(data.data, data.colorSpace)
+      return decodeCanvasPixels(data.data, imageDataColorSpace(data))
     },
   }
 }
