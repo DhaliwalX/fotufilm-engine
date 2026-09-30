@@ -39,6 +39,14 @@ void close(float got, float want, float tolerance, const std::string &label) {
 int main(int argc, char **argv) {
     require(argc == 2 || argc == 3, "Pass the synthetic fixture directory and optionally the camera fixture directory.");
     root = argv[1];
+    for (bool mosaic : {false, true}) for (uint32_t edge : {0u, 101u}) {
+        const auto prefix = std::string("byte-order-") + (mosaic ? "true-" : "false-");
+        Image little, big;
+        decode(prefix + "true", little, edge); decode(prefix + "false", big, edge);
+        require(little.value.width == big.value.width && little.value.height == big.value.height, "byte-order geometry");
+        const size_t count = size_t(little.value.width) * little.value.height * 4;
+        require(std::equal(little.value.rgba, little.value.rgba + count, big.value.rgba), "big/little endian source radiance");
+    }
     Image original;
     decode("orientation-1", original);
     require(original.value.width == 320 && original.value.height == 192, "native size");
