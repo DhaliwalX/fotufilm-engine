@@ -379,18 +379,32 @@ public struct FotufilmEngine {
         try processChecked(linearRGB: image, cpuMemoryBudget: HalideBackend.defaultMemoryBudget)
     }
 
+    /// Adds a host-supplied photographic exposure field during combined Legacy CPU development.
+    /// The field is evaluated per tile and included in the intermediate-memory budget.
+    public func processChecked(linearRGB image: ImageBuffer,
+                               additionalRecordExposure: FilmRecordExposure) throws -> ImageBuffer {
+        try processChecked(linearRGB: image, cpuMemoryBudget: HalideBackend.defaultMemoryBudget,
+                           additionalRecordExposure: additionalRecordExposure)
+    }
+
     /// Combined Legacy CPU rendering with an explicit intermediate-memory estimate in bytes.
     /// The default overload uses 192 MiB, excluding input/output frames and compilation caches.
     /// Broad spatial effects may need a larger budget; insufficient budgets throw before rendering.
     /// Layered Transport uses its own memory plan and does not use this limit.
-    public func processChecked(linearRGB image: ImageBuffer, cpuMemoryBudget: Int) throws -> ImageBuffer {
+    public func processChecked(linearRGB image: ImageBuffer, cpuMemoryBudget: Int,
+                               additionalRecordExposure: FilmRecordExposure? = nil) throws -> ImageBuffer {
+        if additionalRecordExposure != nil,
+           options.transportConstruction(for: stock) != nil || options.stage != .full {
+            throw TransportError.invalid("additional record exposure requires combined Legacy CPU rendering")
+        }
         if let model = options.transportConstruction(for: stock) {
             return try LayeredTransportRenderer.process(image: image, stock: stock,
                                                          options: options, model: model)
         }
         var plain = stock; plain.layeredTransport = nil
         guard let output = try HalideBackend.process(image: image, stock: plain, options: options,
-                                                    memoryBudget: cpuMemoryBudget) else {
+                                                    memoryBudget: cpuMemoryBudget,
+                                                    additionalRecordExposure: additionalRecordExposure) else {
             throw TransportError.backend(Self.missingEngineMessage)
         }
         return output

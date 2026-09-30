@@ -286,6 +286,21 @@ int32_t fotufilm_halide_process_tile(
     const float *paper_output_lut, int32_t lut_dimension,
     int32_t feature_mask, uint32_t seed);
 
+/// As process_tile, with optional contiguous interleaved R/G/B/donor photographic record exposure
+/// (width * height * 4 floats, finite and nonnegative). Added after diffusion and the camera gate,
+/// before film optics; excluded from lens-glare measurement. Null is the ordinary scene-only path.
+/// The field includes the tile's apron. Unsupported backends return an error rather than ignore it.
+int32_t fotufilm_halide_process_tile_with_exposure(
+    const float *input_r, const float *input_g, const float *input_b,
+    float *output_r, float *output_g, float *output_b,
+    int32_t width, int32_t height, int32_t output_width, int32_t output_height,
+    int32_t origin_x, int32_t origin_y, int32_t interior_left, int32_t interior_top,
+    int32_t interior_width, int32_t interior_height,
+    const float *configuration,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    int32_t feature_mask, uint32_t seed, const float *additional_record_exposure);
+
 /// Single-plane blur kernels used by the public Blur API.
 int32_t fotufilm_halide_gaussian(
     const float *input, float *output, int32_t width, int32_t height,
