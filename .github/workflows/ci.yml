@@ -41,7 +41,7 @@ jobs:
       - run: bash tools/test-stages.sh
       - run: bash tools/test-grain-sampling.sh
       - run: bash tools/test-portable-grain.sh
-      # The runner isolates the largest Metal grain test, then audits the complete suite.
+      # The runner splits the suite across workers, then audits that every test ran.
       - name: Complete release tests
         run: python3 tools/test-engine.py --workers 2
       - name: Shared custom-stock draft round trips
