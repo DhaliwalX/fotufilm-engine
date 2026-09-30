@@ -413,6 +413,10 @@ struct EditState: Equatable {
     /// Unit-space crop in the straightened frame; nil = full frame.
     var crop: CGRect? = nil
     var cornerCrop: QuadrilateralCrop? = nil
+    /// How far the camera had zoomed when it took this photograph, where it kept the whole sensor
+    /// reading and left the zoom to `crop`. That much of the crop is framing, as a longer lens
+    /// would give, rather than an enlargement of the negative.
+    var framingZoom = 1.0
 
     /// Whether to apply lens correction. Disabled by default because correction resamples the image.
     var lensCorrectionEnabled = false
@@ -659,6 +663,7 @@ struct EditState: Equatable {
         perspectiveH = 0
         crop = nil
         cornerCrop = nil
+        framingZoom = 1
     }
 
     mutating func rerollGrain() {
