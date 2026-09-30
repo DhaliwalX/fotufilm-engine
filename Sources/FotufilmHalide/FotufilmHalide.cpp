@@ -217,7 +217,7 @@ extern "C" int32_t fotufilm_halide_process_tile(
         lut_dimension, feature_mask, seed, nullptr);
 }
 
-extern "C" int32_t fotufilm_halide_process_tile_with_exposure(
+static int32_t process_tile_output(
     const float *input_r, const float *input_g, const float *input_b,
     float *output_r, float *output_g, float *output_b,
     int32_t width, int32_t height, int32_t output_width, int32_t output_height,
@@ -225,7 +225,7 @@ extern "C" int32_t fotufilm_halide_process_tile_with_exposure(
     int32_t interior_width, int32_t interior_height,
     const float *configuration, const float *exposure_lut,
     const float *film_output_lut, const float *paper_output_lut,
-    int32_t lut_dimension, int32_t feature_mask, uint32_t seed, const float *additional_record_exposure) {
+    int32_t lut_dimension, int32_t feature_mask, uint32_t seed, const float *additional_record_exposure, bool compact_output) {
     if (!input_r || !input_g || !input_b || !output_r || !output_g || !output_b ||
         !configuration || !exposure_lut || !film_output_lut ||
         !paper_output_lut || width <= 0 || height <= 0 ||
@@ -251,10 +251,10 @@ extern "C" int32_t fotufilm_halide_process_tile_with_exposure(
             for (int channel = 0; channel < 3; ++channel) {
                 for (int row = 0; row < interior_height; ++row) {
                     const float *source = &result(interior_left, interior_top + row, channel);
-                    const int64_t target =
-                        static_cast<int64_t>(origin_y + interior_top + row)
-                            * output_width
-                        + origin_x + interior_left;
+                    const int64_t target = compact_output
+                        ? static_cast<int64_t>(row) * interior_width
+                        : static_cast<int64_t>(origin_y + interior_top + row) * output_width
+                            + origin_x + interior_left;
                     std::copy_n(source, interior_width, destination[channel] + target);
                 }
             }
@@ -300,6 +300,47 @@ extern "C" int32_t fotufilm_halide_process_tile_with_exposure(
         }
         copy_out(result);
     });
+}
+
+extern "C" int32_t fotufilm_halide_process_tile_with_exposure(
+    const float *input_r, const float *input_g, const float *input_b,
+    float *output_r, float *output_g, float *output_b,
+    int32_t width, int32_t height, int32_t output_width, int32_t output_height,
+    int32_t origin_x, int32_t origin_y, int32_t interior_left, int32_t interior_top,
+    int32_t interior_width, int32_t interior_height,
+    const float *configuration, const float *exposure_lut,
+    const float *film_output_lut, const float *paper_output_lut,
+    int32_t lut_dimension, int32_t feature_mask, uint32_t seed, const float *additional_record_exposure) {
+    return process_tile_output(
+        input_r, input_g, input_b, output_r, output_g, output_b,
+        width, height, output_width, output_height, origin_x, origin_y,
+        interior_left, interior_top, interior_width, interior_height,
+        configuration, exposure_lut, film_output_lut, paper_output_lut,
+        lut_dimension, feature_mask, seed, additional_record_exposure, false);
+}
+
+extern "C" int32_t fotufilm_halide_process_region(
+    const float *input_r, const float *input_g, const float *input_b,
+    float *output_r, float *output_g, float *output_b,
+    int32_t width, int32_t height, int32_t output_width, int32_t output_height,
+    int32_t origin_x, int32_t origin_y, int32_t interior_left, int32_t interior_top,
+    int32_t interior_width, int32_t interior_height,
+    const float *configuration, const float *exposure_lut,
+    const float *film_output_lut, const float *paper_output_lut,
+    int32_t lut_dimension, int32_t feature_mask, uint32_t seed, const float *additional_record_exposure) {
+    // The compact CPU contract is combined film development with linear output.
+    // Other stage/encoding variants must not silently run the Android full-film kernel.
+    const int32_t unsupported = FOTUFILM_FRAME_NO_FILM | FOTUFILM_FRAME_DENSITY_IN
+        | FOTUFILM_FRAME_DENSITY_OUT | FOTUFILM_FRAME_RECORD_EXPOSURE_IN
+        | FOTUFILM_FRAME_LIGHT_OUT | FOTUFILM_FRAME_TEXTURE | FOTUFILM_FRAME_ENCODE_OUT
+        | FOTUFILM_FRAME_OUTPUT_LINEAR | FOTUFILM_FRAME_OUTPUT_POWER | FOTUFILM_FRAME_OUTPUT_LOG;
+    if (feature_mask & unsupported) return -1;
+    return process_tile_output(
+        input_r, input_g, input_b, output_r, output_g, output_b,
+        width, height, output_width, output_height, origin_x, origin_y,
+        interior_left, interior_top, interior_width, interior_height,
+        configuration, exposure_lut, film_output_lut, paper_output_lut,
+        lut_dimension, feature_mask, seed, additional_record_exposure, true);
 }
 
 extern "C" int32_t fotufilm_halide_gaussian(
@@ -349,6 +390,11 @@ extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_process_tile(
     int32_t, int32_t, const float *, const float *, const float *, const float *,
     int32_t, int32_t, uint32_t) { return -1; }
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_process_tile_with_exposure(
+    const float *, const float *, const float *, float *, float *, float *,
+    int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
+    int32_t, int32_t, const float *, const float *, const float *, const float *,
+    int32_t, int32_t, uint32_t, const float *) { return -1; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_process_region(
     const float *, const float *, const float *, float *, float *, float *,
     int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
     int32_t, int32_t, const float *, const float *, const float *, const float *,

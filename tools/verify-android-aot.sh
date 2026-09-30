@@ -51,5 +51,5 @@ for name, values in zip(('aot','jit'), outputs):
             assert effect > 1e-5, (name, variant, 'record exposure', a, b, effect)
         zero_error = max(abs(values[start+8*n+i]-values[start+9*n+i]) for i in range(n))
         assert zero_error < 1e-6, (name, variant, 'zero field', zero_error)
-print('Android AOT / CPU reference: 64 cases pass, including RGB/donor exposure, gate bypass, tile origins and invalid-field rejection.')
+print('Android AOT / CPU reference: 64 cases pass, including RGB/donor exposure, gate bypass, tile origins, compact output/guards and invalid-field/region rejection.')
 PY

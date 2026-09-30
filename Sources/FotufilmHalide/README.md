@@ -45,3 +45,20 @@ Regenerate Android kernels with their adapter after this argument change. Ordina
 single disabled zero pixel. Other AOT generators keep their existing argument list; unsupported
 additional-exposure calls return an error. Layered Transport and separate pipeline stages do not
 accept this input through `processChecked`.
+
+
+`fotufilm_halide_process_region` develops an apron-bearing input tile into compact
+output planes containing only its interior. The virtual frame bounds, tile origin,
+configuration, seed and photographic exposure field have the same meaning as
+`fotufilm_halide_process_tile_with_exposure`; only destination storage differs.
+Callers provide whole-frame tone/glare measurements and enough spatial apron. The
+CPU JIT and Android CPU adapters support combined film development with linear
+output through this entry point; separate stages, no-film and encoded output are
+rejected explicitly. Other adapters
+return an error. It does not implement source decoding or an application viewport.
+The existing frame-output tile API still serves full-frame strip/tile assembly.
+
+Compact-output verification includes guard values around every output plane,
+nonzero tile/interior origins, optional RGB/donor exposure, invalid rectangles,
+and comparison with whole-frame development under global metering and seeded grain.
+The Android parity harness exercises compact output in all four print variants.

@@ -301,6 +301,25 @@ int32_t fotufilm_halide_process_tile_with_exposure(
     const float *paper_output_lut, int32_t lut_dimension,
     int32_t feature_mask, uint32_t seed, const float *additional_record_exposure);
 
+/// Develops the same apron-bearing tile as process_tile_with_exposure, but writes only
+/// interior_width * interior_height samples per output plane, tightly packed from (0, 0).
+/// frame_width/frame_height describe the virtual photograph, not destination allocation.
+/// Absolute origin, spatial support, configuration, seed and global measurements retain
+/// their full-frame meaning. The caller supplies sufficient apron and whole-frame metering.
+/// Combined film development only, with scene-linear input and display-linear output.
+/// Separate stages, no-film and encoded output are rejected. No output is written until
+/// rendering succeeds. Unsupported backends return an error.
+int32_t fotufilm_halide_process_region(
+    const float *input_r, const float *input_g, const float *input_b,
+    float *output_r, float *output_g, float *output_b,
+    int32_t width, int32_t height, int32_t frame_width, int32_t frame_height,
+    int32_t origin_x, int32_t origin_y, int32_t interior_left, int32_t interior_top,
+    int32_t interior_width, int32_t interior_height,
+    const float *configuration,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    int32_t feature_mask, uint32_t seed, const float *additional_record_exposure);
+
 /// Single-plane blur kernels used by the public Blur API.
 int32_t fotufilm_halide_gaussian(
     const float *input, float *output, int32_t width, int32_t height,
