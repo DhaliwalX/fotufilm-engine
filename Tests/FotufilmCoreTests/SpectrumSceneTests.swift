@@ -3,8 +3,8 @@ import XCTest
 
 final class SpectrumSceneTests: XCTestCase {
 
-    private func geometryStocks() throws -> [GoldenStocks.Entry] {
-        let candidates = GoldenStocks.all.filter { $0.stock.couplerGeometry != nil }
+    private func geometryStocks() throws -> [CatalogueStocks.Entry] {
+        let candidates = CatalogueStocks.all.filter { $0.stock.couplerGeometry != nil }
         guard !candidates.isEmpty else {
             throw XCTSkip("no stock on disk carries a coupler geometry")
         }

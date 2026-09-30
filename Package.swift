@@ -55,19 +55,16 @@ let halideGPUCXXSettings: [CXXSetting] = halideRoot != nil
 // SwiftPM builds every test file before applying filters; exclude Apple-only fixtures on Linux.
 let appleOnlyTests = [
     // Unguarded CoreGraphics/CoreImage/ImageIO: these five reach Apple's frameworks directly.
-    "Golden/RGBAImage.swift",
+    "RGBAImage.swift",
     "GamutShowcaseTool.swift",
     "LensCorpusHarness.swift",
     "LensCorrectionFilterTests.swift",
     "UnitCropCoordinatesTests.swift",
-    // Golden-image tests use ImageIO through RGBAImage.
-    "Golden/PrintDifference.swift",
-    "Golden/GoldenStore.swift",
-    "Golden/GoldenStocks.swift",
-    "Golden/ReferenceChart.swift",
-    "Golden/ContactSheet.swift",
-    "Golden/InstrumentTests.swift",
-    "GoldenImageTests.swift",
+    // Image comparisons use ImageIO through RGBAImage.
+    "PrintDifference.swift",
+    "CatalogueStocks.swift",
+    "ReferenceChart.swift",
+    "ImageInstrumentTests.swift",
     "SelfRetentionMeasurement.swift",
     "SpectrumSceneTests.swift",
 ]
@@ -166,10 +163,7 @@ let package = Package(
             name: "FotufilmCoreTests",
             dependencies: ["FotufilmCore", "FotufilmMetal", "FotufilmImaging",
                            "FotufilmStockMatch"],
-            // Reference pictures and golden renders, read from the source tree by `#filePath`
-            // rather than from a bundle.
-            exclude: ["Golden/Goldens", "Golden/References", "Golden/README.md"]
-                + appleOnlyTests
+            exclude: appleOnlyTests
         ),
         .testTarget(
             name: "FotufilmEditModelTests",

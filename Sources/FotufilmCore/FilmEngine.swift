@@ -268,9 +268,9 @@ public struct FilmFlareFrame: Sendable {
         var sums = [SIMD3<Double>](repeating: .zero, count: gridWidth * gridHeight)
         var counts = [Int](repeating: 0, count: sums.count)
         // Partition by cell-row bands so workers never share cells or require locks. Each cell
-        // retains the serial top-to-bottom, left-to-right accumulation order required by golden
-        // measurements. Parallelism starts at 0.25 MP; this reduced a 12 MP measurement from about
-        // 130 ms on one core.
+        // retains the serial top-to-bottom, left-to-right accumulation order, so the sums match a
+        // single-threaded measurement exactly. Parallelism starts at 0.25 MP; this reduced a 12 MP
+        // measurement from about 130 ms on one core.
         let parallel = width * height >= 1 << 18
         sums.withUnsafeMutableBufferPointer { sumsBuffer in
             counts.withUnsafeMutableBufferPointer { countsBuffer in

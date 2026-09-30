@@ -56,7 +56,7 @@ final class StageSheetTool: XCTestCase {
             .process(linearRGB: scene)
         try write(RGBAImage(print: textured), "04-texture.png")
 
-        // Amplify the split/full difference by the same 64× factor used by the golden harness.
+        // Amplify the split/full difference 64×.
         try write(RGBAImage.amplifiedDifference(RGBAImage(print: full),
                                                 RGBAImage(print: printed), gain: 64),
                   "05-difference-x64.png")
