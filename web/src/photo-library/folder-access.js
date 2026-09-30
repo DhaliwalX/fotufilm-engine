@@ -5,7 +5,8 @@
 // An access offers `persistent()`, whether added folders outlast the session; `choose()`, a
 // folder handle or null when the picker is dismissed; and `revive(handle)`, a stored handle made
 // usable again. A host's handles also offer `files(signal)`, the folder's [path, size, modified]
-// rows in one call, `file(path, modified)`, and `forget()`.
+// rows in one call, `file(path, modified)`, `thumbnail(path, maxEdge)`, an image blob or null
+// when the host draws none, and `forget()`.
 const browserAccess = {
   persistent: () => typeof globalThis.showDirectoryPicker === "function",
   async choose() {

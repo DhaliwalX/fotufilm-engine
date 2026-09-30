@@ -13,7 +13,8 @@ constexpr const char* kMethods[] = {
     "sampleScene",      "beginVideo",
     "appendVideo",      "importVideo",    "lensCatalogue",    "importLensCatalogue",
     "removeLensCatalogue", "importPath",   "copyImage",        "exportOptions",
-    // The strip's pictures of photographs opened together, decoded only when chosen.
+    // The strip's pictures of photographs opened together, decoded only when chosen, and the
+    // library grid's thumbnails.
     "thumbnail",
     "suggestFilm",      "recordFilmChoice", "forgetFilmChoices",
     // Export All finds the kept edits of photographs that have not been opened yet.

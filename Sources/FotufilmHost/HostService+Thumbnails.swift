@@ -2,7 +2,8 @@ import Foundation
 
 /// The photo strip's pictures of files opened together but not yet decoded
 /// (`web/src/backend/desktop/host.js` `thumbnail`): only the photograph being edited is decoded,
-/// the others show these until they are chosen.
+/// the others show these until they are chosen. The photo library's grid draws the files of the
+/// folders the host reads from these too (`web/src/backend/desktop/library-folders.js`).
 extension HostService {
     func thumbnail(_ parameters: [String: Any], payload: UnsafeRawBufferPointer?) throws -> Answer {
         let maxEdge = max(16, min(1024, parameters["maxEdge"] as? Int ?? 256))

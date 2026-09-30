@@ -1,14 +1,16 @@
 import { installFolderAccess } from "../../photo-library/folder-access.js";
 import { LIBRARY_EXTENSIONS } from "../../media-types.js";
-import { createTransport } from "./transport.js";
+import { createTransport, imageBlob } from "./transport.js";
 
 // A folder the desktop host reads (cef/src/app/library_methods.h). Only its path and name are
 // stored with the library; the host keeps which folders were chosen, and serves only those.
 class HostFolder {
   kind = "directory";
   #call;
-  constructor(call, hostPath, name) {
+  #thumbnails;
+  constructor(call, hostPath, name, thumbnails) {
     this.#call = call;
+    this.#thumbnails = thumbnails;
     this.hostPath = hostPath;
     this.name = name;
   }
@@ -37,6 +39,16 @@ class HostFolder {
     file.hostPath = `${this.hostPath}/${path}`;
     return file;
   }
+  // The file's embedded preview, drawn by the host in place, so a thumbnail does not copy the
+  // whole file into the page. Null when the host draws no thumbnails.
+  async thumbnail(path, maxEdge) {
+    if (!this.#thumbnails) return null;
+    const result = await this.#call("thumbnail", {
+      path: `${this.hostPath}/${path}`,
+      maxEdge,
+    });
+    return imageBlob(result.thumbnail);
+  }
   forget() {
     this.#call("forgetLibraryFolder", { path: this.hostPath }).catch(() => {});
   }
@@ -47,13 +59,16 @@ class HostFolder {
 export function installLibraryFolders(channel) {
   if (channel?.capabilities?.libraryFolders !== true) return;
   const call = createTransport(channel);
+  const thumbnails = channel.capabilities.thumbnails === true;
   installFolderAccess({
     persistent: () => true,
     async choose() {
       const chosen = await call("chooseLibraryFolder");
-      return chosen ? new HostFolder(call, chosen.path, chosen.name) : null;
+      return chosen ? new HostFolder(call, chosen.path, chosen.name, thumbnails) : null;
     },
     revive: (handle) =>
-      handle?.hostPath ? new HostFolder(call, handle.hostPath, handle.name) : handle,
+      handle?.hostPath
+        ? new HostFolder(call, handle.hostPath, handle.name, thumbnails)
+        : handle,
   });
 }
