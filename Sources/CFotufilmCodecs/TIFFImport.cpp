@@ -257,7 +257,11 @@ void importTIFF(const char *path, uint32_t options, uint32_t longEdge, const ffc
     const uint64_t libraryBudget = std::min(limits.max_working_bytes / 3, uint64_t(std::numeric_limits<tmsize_t>::max()));
     if (!libraryBudget) throw Failure("There is not enough memory to open this TIFF.");
     TIFFOpenOptionsSetMaxSingleMemAlloc(settings.get(), tmsize_t(libraryBudget));
+    // libtiff 4.7 adds the cumulative bound; Ubuntu 24.04's 4.5 keeps the per-allocation one and
+    // the working budget below.
+#if TIFFLIB_VERSION >= 20240911
     TIFFOpenOptionsSetMaxCumulatedMemAlloc(settings.get(), tmsize_t(libraryBudget));
+#endif
     TIFFOpenOptionsSetErrorHandlerExtR(settings.get(), Diagnostics::error, &errors);
     TIFFOpenOptionsSetWarningHandlerExtR(settings.get(), Diagnostics::warning, &errors);
     TIFFOwner tiff(TIFFOpenExt(path, "rm", settings.get()), TIFFClose);
