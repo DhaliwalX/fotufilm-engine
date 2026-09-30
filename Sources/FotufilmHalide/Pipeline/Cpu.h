@@ -148,17 +148,14 @@ public:
                                     Expr height, const std::string &prefix,
                                     const std::string &suffix) override {
         graph::GrainFields fields;
-        Func poisson_table = poisson_inverse_cdf(p.grain_lambda_, prefix + "poisson_cdf" + suffix);
-        Func normal_table = normal_inverse_cdf(prefix + "normal_cdf" + suffix);
+        // Full-quality CPU/AOT and Metal must consume the same seeded draws. Quantile-table
+        // sampling has different hash-to-value mapping and is reserved for approximate previews.
         Func noise(prefix + "noise" + suffix);
-        Expr own_draw = poisson_sample_lut(
-            poisson_table, normal_table, x + p.origin_x_, y + p.origin_y_,
+        Expr own_draw = poisson_sample(x + p.origin_x_, y + p.origin_y_,
             p.seed_, p.grain_lambda_, c);
-        Expr shared_draw = poisson_sample_lut(
-            poisson_table, normal_table, x + p.origin_x_, y + p.origin_y_,
+        Expr shared_draw = poisson_sample(x + p.origin_x_, y + p.origin_y_,
             p.seed_, p.grain_lambda_, kGrainSharedLayer);
-        Expr silver_draw = normal_sample_lut(
-            normal_table, x + p.origin_x_, y + p.origin_y_, p.seed_, kGrainSharedLayer);
+        Expr silver_draw = normal_sample(x + p.origin_x_, y + p.origin_y_, p.seed_, kGrainSharedLayer);
         noise(x, y, c) = Halide::select(
             monochrome != 0, silver_draw, grain_mix(configuration, own_draw, shared_draw));
         cpu_pointwise(noise, x, y, c);
@@ -170,16 +167,12 @@ public:
             configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 2),
             p.grain_radius_, width, height, prefix + "grain_field" + suffix);
         if (use_mottle) {
-            Func mottle_table = poisson_inverse_cdf(p.mottle_lambda_, prefix + "mottle_cdf" + suffix);
             Func mottle_noise(prefix + "mottle_noise" + suffix);
-            Expr own_mottle = poisson_sample_lut(
-                mottle_table, normal_table, x + p.origin_x_, y + p.origin_y_,
+            Expr own_mottle = poisson_sample(x + p.origin_x_, y + p.origin_y_,
                 p.seed_, p.mottle_lambda_, c + kGrainMottleLayerBase);
-            Expr shared_mottle = poisson_sample_lut(
-                mottle_table, normal_table, x + p.origin_x_, y + p.origin_y_,
+            Expr shared_mottle = poisson_sample(x + p.origin_x_, y + p.origin_y_,
                 p.seed_, p.mottle_lambda_, kGrainMottleSharedLayer);
-            Expr silver_mottle = normal_sample_lut(
-                normal_table, x + p.origin_x_, y + p.origin_y_, p.seed_,
+            Expr silver_mottle = normal_sample(x + p.origin_x_, y + p.origin_y_, p.seed_,
                 kGrainMottleSharedLayer);
             mottle_noise(x, y, c) = Halide::select(
                 monochrome != 0, silver_mottle,

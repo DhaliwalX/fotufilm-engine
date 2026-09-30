@@ -68,3 +68,13 @@ and comparison with whole-frame development under global metering and seeded gra
 The Android parity harness exercises compact output in all four print variants.
 Delivery tests compare 24 compact rectangles byte-for-byte with whole-frame output
 across both transfer paths, three seeds, edge positions and padded destinations.
+
+
+Full-quality CPU development and its AOT builds use the analytic PCG Poisson/normal draws
+from `Stages/Random.h`, matching full-quality GPU rendering. Quantile-table sampling maps
+hashes to different values and belongs only to the approximate GPU path. Fine grain and
+mottling retain disjoint streams, absolute frame coordinates, correlation and silver's
+shared normal field. Run `bash tools/test-grain-sampling.sh` after changes to random draws
+or backend bindings; its independent scalar reference covers 216 combinations and 242,352
+samples, including the Poisson/Gaussian transition, unsigned seeds and nonzero origins.
+Regenerate CPU AOT kernels after changing the sampling bindings.
