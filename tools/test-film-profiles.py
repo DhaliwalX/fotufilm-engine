@@ -18,7 +18,7 @@ with tempfile.TemporaryDirectory() as temporary:
     subprocess.run(['bash', 'tools/copy-shipping-resources.sh', str(resources)],
                    cwd=root, env=env, check=True)
     stocks = resources / 'Stocks'
-    assert len(module.STOCKS) == 40
+    assert len(module.STOCKS) == 46
     module.verify(stocks)
     assert not list(resources.glob('*.fotufilmpack'))
     subprocess.run(['bash', 'tools/audit-apple-bundle.sh', str(resources)],
