@@ -84,6 +84,24 @@ int32_t ffc_decode_raw(const char *path, uint32_t options, uint32_t long_edge,
                        uint32_t *source_width, uint32_t *source_height,
                        char *error, size_t error_size);
 
+/* Bounded non-RAW TIFF import. Reads the first image, preserving unsigned integer or floating
+ * precision and colour profiles. Preview reduction happens in associated linear light; source
+ * dimensions remain native and upright. Strips/tile bands are decoded without a full-size float
+ * intermediate. LibTIFF 4.7+ also enforces a per-handle allocation budget. Camera-RAW TIFFs must
+ * go through ffc_decode_raw first; this entry point rejects TIFF directories carrying RAW markers.
+ * The capture structure contains basic camera/lens fields, not an opaque full-file EXIF copy.
+ * All limits must be positive. Release successful output with ffc_image_free. */
+typedef struct ffc_tiff_limits {
+    uint64_t max_file_bytes;
+    uint64_t max_pixels;
+    uint64_t max_working_bytes;
+} ffc_tiff_limits;
+enum { FFC_TIFF_OK = 0, FFC_TIFF_UNSUPPORTED = 1, FFC_TIFF_ERROR = 2 };
+int32_t ffc_decode_tiff(const char *path, uint32_t options, uint32_t long_edge,
+                       const ffc_tiff_limits *limits, ffc_image *out,
+                       uint32_t *source_width, uint32_t *source_height,
+                       char *error, size_t error_size);
+
 /* Whether this build writes `mime` ("image/png", "image/jpeg", "image/tiff", "image/heic"). */
 int32_t ffc_can_encode(const char *mime);
 

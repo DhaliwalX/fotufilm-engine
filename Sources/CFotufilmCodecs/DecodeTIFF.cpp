@@ -1,7 +1,7 @@
 // TIFF through libtiff: 8-, 16- and 32-bit float grey or RGB, strips or tiles, chunky or planar,
 // with alpha; other layouts (palette, YCbCr, CMYK, odd depths) through libtiff's 8-bit reader.
 // Apple platforms decode and encode through ImageIO; this target builds empty there.
-#if !defined(__APPLE__)
+#if !defined(__APPLE__) || defined(FFC_PORTABLE_CODECS)
 #include "Codecs.hpp"
 
 #include <algorithm>
@@ -114,6 +114,11 @@ Raster decodeTIFF(const std::string &path, ffc_capture &capture) {
             raster.data[i * 4 + 3] = uint8_t(TIFFGetA(p));
         }
         raster.associated = true;
+        // The fallback has already converted grayscale/CMYK/Lab to device RGB. A source
+        // profile for those channels no longer describes its bytes; retain the legacy sRGB
+        // interpretation. The bounded TIFF entry point handles original samples and profiles.
+        if (photometric != PHOTOMETRIC_RGB && photometric != PHOTOMETRIC_PALETTE
+            && photometric != PHOTOMETRIC_YCBCR) raster.encoding = {};
         return raster;
     }
 
@@ -168,16 +173,20 @@ Raster decodeTIFF(const std::string &path, ffc_capture &capture) {
         for (size_t i = 0; i < pixels; ++i) {
             uint8_t *p = raster.data.data() + i * raster.channels * bytes;
             if (raster.samples == Samples::U8) {
-                p[0] = uint8_t(255 - p[0]);
+                p[0] = uint8_t((raster.associated ? p[1] : 255) - p[0]);
             } else if (raster.samples == Samples::U16) {
                 uint16_t v;
                 std::memcpy(&v, p, 2);
-                v = uint16_t(65535 - v);
+                uint16_t maximum = 65535;
+                if (raster.associated) std::memcpy(&maximum, p + 2, 2);
+                v = uint16_t(maximum - v);
                 std::memcpy(p, &v, 2);
             } else {
                 float v;
                 std::memcpy(&v, p, 4);
-                v = 1 - v;
+                float maximum = 1;
+                if (raster.associated) std::memcpy(&maximum, p + 4, 4);
+                v = maximum - v;
                 std::memcpy(p, &v, 4);
             }
         }

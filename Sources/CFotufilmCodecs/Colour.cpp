@@ -11,6 +11,8 @@
 #include <cstdio>
 #include <cstring>
 #include <memory>
+#include <mutex>
+#include <exception>
 #include <thread>
 
 namespace ffc {
@@ -52,11 +54,15 @@ cmsHPROFILE inputProfile(const Raster &raster) {
                                                      cmsUInt32Number(raster.encoding.icc.size()));
         if (embedded) {
             auto space = cmsGetColorSpace(embedded);
-            if ((grey && space == cmsSigGrayData) || (!grey && space == cmsSigRgbData))
+            if ((grey && space == cmsSigGrayData) || (raster.cmyk && space == cmsSigCmykData)
+                || (!grey && !raster.cmyk && space == cmsSigRgbData))
                 return embedded;
             cmsCloseProfile(embedded);
         }
     }
+    if (raster.encoding.kind == Encoding::Profile)
+        throw Failure("The embedded colour profile is invalid or does not match the image channels.");
+    if (raster.cmyk) throw Failure("A CMYK image requires an embedded CMYK colour profile.");
     // A stated gamut without a power reads through the sRGB curve (an nclx box's usual transfer).
     cmsToneCurve *curve = raster.encoding.kind == Encoding::Power && raster.encoding.gamma > 0
         ? cmsBuildGamma(nullptr, raster.encoding.gamma) : srgbCurve();
@@ -72,38 +78,15 @@ cmsHPROFILE inputProfile(const Raster &raster) {
     return profile;
 }
 
-cmsUInt32Number lcmsFormat(const Raster &raster) {
-    bool grey = raster.channels <= 2, alpha = raster.channels == 2 || raster.channels == 4;
-    cmsUInt32Number format = grey ? (COLORSPACE_SH(PT_GRAY) | CHANNELS_SH(1))
-                                  : (COLORSPACE_SH(PT_RGB) | CHANNELS_SH(3));
-    if (alpha) format |= EXTRA_SH(1);
-    switch (raster.samples) {
-    case Samples::U8: return format | BYTES_SH(1);
-    case Samples::U16: return format | BYTES_SH(2);
-    case Samples::F32: return format | BYTES_SH(4) | FLOAT_SH(1);
-    }
-    return format;
-}
-
 size_t sampleBytes(Samples samples) {
     return samples == Samples::U8 ? 1 : samples == Samples::U16 ? 2 : 4;
 }
-
-float sample(const Raster &raster, size_t index) {
-    switch (raster.samples) {
-    case Samples::U8: return raster.data[index] / 255.0f;
-    case Samples::U16: {
-        uint16_t v;
-        std::memcpy(&v, raster.data.data() + index * 2, 2);
-        return v / 65535.0f;
+float sample(const uint8_t *data, Samples samples, size_t index) {
+    if (samples == Samples::U8) return data[index] / 255.0f;
+    if (samples == Samples::U16) {
+        uint16_t value; std::memcpy(&value, data + index * 2, 2); return value / 65535.0f;
     }
-    case Samples::F32: {
-        float v;
-        std::memcpy(&v, raster.data.data() + index * 4, 4);
-        return v;
-    }
-    }
-    return 0;
+    float value; std::memcpy(&value, data + index * 4, 4); return value;
 }
 
 } // namespace
@@ -180,10 +163,18 @@ void parallelRows(uint32_t rows, const std::function<void(uint32_t, uint32_t)> &
         return;
     }
     std::vector<std::thread> threads;
+    std::exception_ptr failure;
+    std::mutex failureMutex;
     uint32_t step = (rows + workers - 1) / workers;
     try {
         for (uint32_t begin = 0; begin < rows; begin += step)
-            threads.emplace_back(body, begin, std::min(rows, begin + step));
+            threads.emplace_back([&, begin] {
+                try { body(begin, std::min(rows, begin + step)); }
+                catch (...) {
+                    std::lock_guard<std::mutex> lock(failureMutex);
+                    if (!failure) failure = std::current_exception();
+                }
+            });
     } catch (...) {
         // A thread allocation failure must reach the C error boundary, not std::terminate
         // when the already-created joinable threads are destroyed during unwinding.
@@ -191,6 +182,7 @@ void parallelRows(uint32_t rows, const std::function<void(uint32_t, uint32_t)> &
         throw;
     }
     for (auto &thread : threads) thread.join();
+    if (failure) std::rethrow_exception(failure);
 }
 
 std::array<float, 9> toRec2020(const std::array<float, 8> &chromaticities) {
@@ -203,63 +195,85 @@ std::array<float, 9> toRec2020(const std::array<float, 8> &chromaticities) {
     return out;
 }
 
-std::vector<float> sceneLinear(const Raster &raster, bool linearSamples) {
-    const uint32_t width = raster.width, height = raster.height;
-    const int channels = raster.channels;
-    const bool alpha = channels == 2 || channels == 4, grey = channels <= 2;
-    std::vector<float> rgba(size_t(width) * height * 4, 1.0f);
-    const size_t rowBytes = size_t(width) * channels * sampleBytes(raster.samples);
-
-    // Linear light converts by matrix, exactly and without bounds; everything else through lcms2.
-    bool matrix = linearSamples || raster.encoding.kind == Encoding::Linear
-        || (raster.encoding.kind == Encoding::Unstated && raster.samples == Samples::F32);
-    if (matrix) {
-        auto m = toRec2020(linearSamples ? rec709 : raster.encoding.kind == Encoding::Linear
-                                                        ? raster.encoding.chromaticities : rec709);
-        parallelRows(height, [&](uint32_t begin, uint32_t end) {
-            for (uint32_t y = begin; y < end; ++y) {
-                for (uint32_t x = 0; x < width; ++x) {
-                    size_t in = (size_t(y) * width + x) * channels;
-                    float r = sample(raster, in), g = grey ? r : sample(raster, in + 1),
-                          b = grey ? r : sample(raster, in + 2);
-                    float *out = &rgba[(size_t(y) * width + x) * 4];
-                    out[0] = m[0] * r + m[1] * g + m[2] * b;
-                    out[1] = m[3] * r + m[4] * g + m[5] * b;
-                    out[2] = m[6] * r + m[7] * g + m[8] * b;
-                    if (alpha) out[3] = sample(raster, in + channels - 1);
-                }
-            }
-        });
-    } else {
+struct SceneConverter::Impl {
+    int channels, colours;
+    Samples samples;
+    bool alpha, associated, cmyk, matrix;
+    std::array<float, 9> coefficients{};
+    cmsHTRANSFORM transform = nullptr;
+    Impl(const Raster &raster, bool linearSamples)
+        : channels(raster.channels), colours(raster.cmyk ? 4 : raster.channels <= 2 ? 1 : 3),
+          samples(raster.samples), alpha(channels == colours + 1), associated(raster.associated), cmyk(raster.cmyk) {
+        if (channels != colours && channels != colours + 1) throw Failure("Invalid image channel layout.");
+        matrix = !cmyk && (linearSamples || raster.encoding.kind == Encoding::Linear
+            || (raster.encoding.kind == Encoding::Unstated && samples == Samples::F32));
+        if (linearSamples && cmyk) throw Failure("CMYK samples cannot be interpreted as linear RGB.");
+        if (matrix) {
+            coefficients = toRec2020(linearSamples ? rec709 : raster.encoding.kind == Encoding::Linear
+                ? raster.encoding.chromaticities : rec709);
+            return;
+        }
         Profile source(inputProfile(raster));
         cmsToneCurve *linear = cmsBuildGamma(nullptr, 1.0);
         Profile target(rgbProfile(rec2020, linear));
         cmsFreeToneCurve(linear);
         if (!source.handle || !target.handle) throw Failure("The colour profile could not be read.");
-        cmsHTRANSFORM transform = cmsCreateTransform(
-            source.handle, lcmsFormat(raster), target.handle, TYPE_RGB_FLT, INTENT_PERCEPTUAL,
-            cmsFLAGS_NOCACHE | cmsFLAGS_HIGHRESPRECALC);
+        transform = cmsCreateTransform(source.handle, cmyk ? TYPE_CMYK_FLT : colours == 1 ? TYPE_GRAY_FLT : TYPE_RGB_FLT,
+            target.handle, TYPE_RGB_FLT, INTENT_PERCEPTUAL, cmsFLAGS_NOCACHE | cmsFLAGS_NOOPTIMIZE);
         if (!transform) throw Failure("The colour profile could not be applied.");
-        parallelRows(height, [&](uint32_t begin, uint32_t end) {
-            std::vector<float> row(size_t(width) * 3);
-            for (uint32_t y = begin; y < end; ++y) {
-                cmsDoTransform(transform, raster.data.data() + y * rowBytes, row.data(), width);
-                for (uint32_t x = 0; x < width; ++x) {
-                    float *out = &rgba[(size_t(y) * width + x) * 4];
-                    std::memcpy(out, &row[size_t(x) * 3], 3 * sizeof(float));
-                    if (alpha)
-                        out[3] = sample(raster, (size_t(y) * width + x) * channels + channels - 1);
-                }
+    }
+    ~Impl() { if (transform) cmsDeleteTransform(transform); }
+};
+
+SceneConverter::SceneConverter(const Raster &raster, bool linearSamples) : impl_(new Impl(raster, linearSamples)) {}
+SceneConverter::~SceneConverter() = default;
+
+void SceneConverter::row(const void *source, uint32_t count, float *rgba) const {
+    const auto &p = *impl_;
+    const auto *bytes = static_cast<const uint8_t *>(source);
+    std::vector<float> straight(p.matrix ? 0 : size_t(count) * p.colours);
+    std::vector<float> converted(p.matrix ? 0 : size_t(count) * 3);
+    for (uint32_t x = 0; x < count; ++x) {
+        const size_t at = size_t(x) * p.channels;
+        float a = p.alpha ? sample(bytes, p.samples, at + p.colours) : 1;
+        if (!std::isfinite(a) || a < 0 || a > 1) throw Failure("The image contains invalid alpha samples.");
+        rgba[size_t(x) * 4 + 3] = a;
+        float values[4]{};
+        for (int c = 0; c < p.colours; ++c) {
+            values[c] = sample(bytes, p.samples, at + c);
+            if (!std::isfinite(values[c])) throw Failure("The image contains nonfinite colour samples.");
+        }
+        if (p.matrix) {
+            const float r = values[0], g = p.colours == 1 ? r : values[1], b = p.colours == 1 ? r : values[2];
+            const float weight = a == 0 ? 0 : p.associated ? 1 : a;
+            for (int c = 0; c < 3; ++c)
+                rgba[size_t(x) * 4 + c] = (p.coefficients[c * 3] * r + p.coefficients[c * 3 + 1] * g
+                    + p.coefficients[c * 3 + 2] * b) * weight;
+        } else {
+            // Associated encoded values must be unassociated BEFORE the nonlinear profile transform.
+            for (int c = 0; c < p.colours; ++c) {
+                float value = p.associated ? a > 0 ? values[c] / a : 0 : values[c];
+                straight[size_t(x) * p.colours + c] = value * (p.cmyk ? 100 : 1);
             }
-        });
-        cmsDeleteTransform(transform);
+        }
     }
-    if (alpha && !raster.associated) {
-        parallelRows(height, [&](uint32_t begin, uint32_t end) {
-            for (size_t i = size_t(begin) * width; i < size_t(end) * width; ++i)
-                for (int c = 0; c < 3; ++c) rgba[i * 4 + c] *= rgba[i * 4 + 3];
-        });
+    if (!p.matrix) {
+        cmsDoTransform(p.transform, straight.data(), converted.data(), count);
+        for (uint32_t x = 0; x < count; ++x)
+            for (int c = 0; c < 3; ++c) rgba[size_t(x) * 4 + c] = converted[size_t(x) * 3 + c] * rgba[size_t(x) * 4 + 3];
     }
+    for (size_t i = 0; i < size_t(count) * 4; ++i)
+        if (!std::isfinite(rgba[i])) throw Failure("The image colour conversion produced nonfinite samples.");
+}
+
+std::vector<float> sceneLinear(const Raster &raster, bool linearSamples) {
+    SceneConverter converter(raster, linearSamples);
+    std::vector<float> rgba(size_t(raster.width) * raster.height * 4);
+    const size_t rowBytes = size_t(raster.width) * raster.channels * sampleBytes(raster.samples);
+    parallelRows(raster.height, [&](uint32_t begin, uint32_t end) {
+        for (uint32_t y = begin; y < end; ++y)
+            converter.row(raster.data.data() + y * rowBytes, raster.width, rgba.data() + size_t(y) * raster.width * 4);
+    });
     return rgba;
 }
 
