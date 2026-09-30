@@ -1,12 +1,11 @@
 import {
   copySettings,
   deletePreset,
-  pasteSettings,
+  pastedEdit,
   savePreset,
   setCopiedSettings,
   useEditSettings,
 } from "../edit-settings.js";
-import { editText, restoreEdit } from "../saved-edits.js";
 
 // Copy Settings, Paste Settings and presets, shared by the options menu and the native menu bar.
 export default function useSettingsActions({
@@ -20,23 +19,11 @@ export default function useSettingsActions({
 }) {
   const editSettings = useEditSettings();
 
-  // Pasted as a whole edit, through the same checks a kept edit is opened with.
   function apply(settings) {
     try {
-      const pasted = pasteSettings(edit, settings);
-      // A new film keeps a chosen medium only where it offers one, as choosing the film does.
-      if (
-        pasted.stock !== edit.stock &&
-        !settings.sections.includes("printPaper")
-      ) {
-        const stock = stocks.find(({ id }) => id === pasted.stock);
-        if (pasted.mediumFollowsFilm) pasted.medium = stock?.filmMedium ?? null;
-        else if (!stock?.media.some(({ id }) => id === pasted.medium))
-          pasted.medium = null;
-      }
       dispatch({
         type: "edit",
-        patch: restoreEdit(editText(pasted), stocks),
+        patch: pastedEdit(edit, settings, stocks),
         restoring: true,
       });
       setStage(null);

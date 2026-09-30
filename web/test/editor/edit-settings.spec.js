@@ -71,6 +71,21 @@ test("Copy Settings carries the chosen sections to another photo, and presets ke
   await page.getByRole("menuitem", { name: "Bright" }).click();
   await expect(exposure(page)).toHaveValue("0.8");
 
+  // The film column's Presets tab lists them beside the films; the one in effect reads as chosen.
+  await page.getByRole("button", { name: "Reset all edits" }).click();
+  await page.getByRole("radio", { name: "Presets", exact: true }).click();
+  const bright = page.getByRole("button", { name: "Bright Preset", exact: true });
+  await expect(bright).toHaveAttribute("aria-pressed", "false");
+  await bright.click();
+  await expect(bright).toHaveAttribute("aria-pressed", "true");
+  await expect(exposure(page)).toHaveValue("0.8");
+  await expect(bright.locator("img")).toBeVisible({ timeout: 30000 });
+  await page.screenshot({ path: testInfo.outputPath("presets-tab.png"), animations: "disabled" });
+  await page.getByRole("searchbox", { name: "Search presets" }).fill("dark");
+  await expect(page.getByText("No matching presets.")).toBeVisible();
+  await page.getByRole("radio", { name: "Films", exact: true }).click();
+  await expect(page.getByRole("searchbox", { name: "Search films" })).toBeVisible();
+
   // Presets outlive the page; deleting one asks first.
   await page.reload();
   await openEditorWithChart(page);

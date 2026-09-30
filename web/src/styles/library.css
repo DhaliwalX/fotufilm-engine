@@ -42,6 +42,9 @@
     font-weight: 400;
   }
   .search-field {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     margin: 0 12px 12px;
   }
   .stock-list {

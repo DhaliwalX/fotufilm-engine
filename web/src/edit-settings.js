@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { EDITOR_CONTROLS, SETTINGS_SECTIONS } from "./generated/controls.js";
+import { editText, restoreEdit } from "./saved-edits.js";
 
 // Copy Settings, Paste Settings and presets. An edit travels by inspector section, the same
 // sections the Mac and iOS apps copy (EditorControlSection.transferable in the catalogue).
@@ -62,6 +63,18 @@ export function pasteSettings(edit, settings) {
     ...Object.entries(source.profile ?? {}).filter(([field]) => chosen(field)),
   ]);
   return pasted;
+}
+
+/** `pasteSettings` as the editor applies it, through the checks a kept edit is opened with. */
+export function pastedEdit(edit, settings, stocks) {
+  const pasted = pasteSettings(edit, settings);
+  // A new film keeps a chosen medium only where it offers one, as choosing the film does.
+  if (pasted.stock !== edit.stock && !settings.sections.includes("printPaper")) {
+    const stock = stocks.find(({ id }) => id === pasted.stock);
+    if (pasted.mediumFollowsFilm) pasted.medium = stock?.filmMedium ?? null;
+    else if (!stock?.media.some(({ id }) => id === pasted.medium)) pasted.medium = null;
+  }
+  return restoreEdit(editText(pasted), stocks);
 }
 
 // Presets and the sections last ticked are kept on this device, apart from the app settings so
