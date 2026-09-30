@@ -57,8 +57,14 @@ output through this entry point; separate stages, no-film and encoded output are
 rejected explicitly. Other adapters
 return an error. It does not implement source decoding or an application viewport.
 The existing frame-output tile API still serves full-frame strip/tile assembly.
+For SDR delivery, `DisplayEncoding.quantizeRegion8` writes compact RGBA bytes and
+keys dither to the rectangle's absolute origin and virtual frame width. Both
+linear and already encoded inputs retain whole-frame quantization and leave row
+padding untouched.
 
 Compact-output verification includes guard values around every output plane,
 nonzero tile/interior origins, optional RGB/donor exposure, invalid rectangles,
 and comparison with whole-frame development under global metering and seeded grain.
 The Android parity harness exercises compact output in all four print variants.
+Delivery tests compare 24 compact rectangles byte-for-byte with whole-frame output
+across both transfer paths, three seeds, edge positions and padded destinations.
