@@ -211,7 +211,7 @@ public final class HostService {
                 throw HostEngine.Failure(description: "This host cannot check for updates.")
             }
             switch method {
-            case "updateCheck": updates.check()
+            case "updateCheck": updates.check(prereleases: parameters["prereleases"] as? Bool ?? false)
             case "updateInstall": try updates.install()
             case "updateCancel": updates.cancel()
             case "updateNotes": try updates.openNotes()

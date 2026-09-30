@@ -315,11 +315,12 @@ export function createDesktopBackend(channel) {
       return { ...saved, dispose() {} };
     },
     // Check for Updates: the engine reads this app's release feed, and downloads, verifies and
-    // opens the installer it names. Each call answers at once with where things stand
+    // opens the installer it names; with `prereleases`, the newest release's feed, pre-release
+    // or not. Each call answers at once with where things stand
     // (`{state, current, version?, release?, notes?, bytes?, total?, message?}`).
     updates: can.updates
       ? {
-          check: () => call("updateCheck"),
+          check: ({ prereleases = false } = {}) => call("updateCheck", { prereleases }),
           status: () => call("updateStatus"),
           install: () => call("updateInstall"),
           cancel: () => call("updateCancel"),

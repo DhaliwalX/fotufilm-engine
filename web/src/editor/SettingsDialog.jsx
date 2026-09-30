@@ -231,6 +231,16 @@ function General({ backend, stocks }) {
         </Button>
       )}
       {backend.filmPacks && <FilmPacks />}
+      {backend.updates && (
+        <>
+          <h3>Updates</h3>
+          <SettingSwitch
+            label="Check for Updates Automatically"
+            setting="updateChecksAutomatically"
+          />
+          <SettingSwitch label="Include Pre-releases" setting="updatePrereleases" />
+        </>
+      )}
       <h3>Reset</h3>
       <Button size="S" variant={"negative"} onPress={() => setConfirmReset(true)}>
         {"Reset All Settings"}

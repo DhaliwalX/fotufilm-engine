@@ -79,6 +79,10 @@
        here. Fotufilm Desktop has a feed of its own: the Mac app's names its AppKit installer. -->
   <key>FotufilmUpdateFeedURL</key>
   <string>${FOTUFILM_UPDATE_FEED}</string>
+  <!-- Every published release, pre-releases among them, each with its own copy of that document:
+       where Include Pre-releases finds the newest (FotufilmUpdate's ReleaseListing). -->
+  <key>FotufilmReleaseListURL</key>
+  <string>${FOTUFILM_RELEASE_LIST}</string>
   <key>LSMinimumSystemVersion</key>
   <string>12.0</string>
   <key>NSHighResolutionCapable</key>

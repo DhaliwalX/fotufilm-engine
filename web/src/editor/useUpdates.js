@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { appSetting, setAppSetting } from "../app-settings.js";
+import { appSetting, setAppSetting, useAppSetting } from "../app-settings.js";
 
 // Check for Updates, as the Mac app's UpdateCheck runs it: the menu command always answers;
 // the automatic check runs shortly after launch and then daily, and says something only when
 // there is a release this person has not skipped. The backend reads the feed and downloads,
 // verifies and opens the installer (backend.updates); this hook paces it and says what happened.
+// Include Pre-releases widens every check to releases published before they are final.
 
 const DAY = 24 * 60 * 60 * 1000;
 const LAUNCH_DELAY = 5000;
@@ -36,7 +37,10 @@ export function checkOutcome(answer, { manual, skipped = null }) {
     if (!manual && answer.release === skipped) return null;
     return {
       kind: "available",
-      version: answer.version,
+      // A pre-release often keeps the running marketing version; its build tells them apart.
+      version: answer.current?.startsWith(`${answer.version} `)
+        ? answer.release
+        : answer.version,
       release: answer.release,
       current: answer.current,
       notes: answer.notes ?? null,
@@ -68,7 +72,11 @@ export default function useUpdates({ backend, setDialog }) {
       if (!updates || running.current) return;
       running.current = true;
       try {
-        const answer = await settle(updates, await updates.check(), ["checking"]);
+        const answer = await settle(
+          updates,
+          await updates.check({ prereleases: appSetting("updatePrereleases") === true }),
+          ["checking"],
+        );
         if (answer.state === "current" || answer.state === "available")
           setAppSetting("updateLastCheck", Date.now());
         const outcome = checkOutcome(answer, {
@@ -105,6 +113,15 @@ export default function useUpdates({ backend, setDialog }) {
       clearInterval(daily);
     };
   }, [updates, check]);
+
+  // Turning Include Pre-releases on asks at once, rather than up to a day later.
+  const prereleases = useAppSetting("updatePrereleases") === true;
+  const asked = useRef(prereleases);
+  useEffect(() => {
+    if (prereleases && !asked.current && appSetting("updateChecksAutomatically") !== false)
+      check(false);
+    asked.current = prereleases;
+  }, [prereleases, check]);
 
   const install = useCallback(async () => {
     const offer = update;

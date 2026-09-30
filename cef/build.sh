@@ -29,9 +29,11 @@ fi
 # An official build (FOTUFILM_SOURCE_BUILD=0) is the Mac app: its identity and its release feed.
 if [[ "${FOTUFILM_SOURCE_BUILD:-1}" == 0 && "${FOTUFILM_USE_SOURCE_IDENTITY:-0}" != 1 ]]; then
   extra+=(-DFOTUFILM_BUNDLE_ID=com.muastudio.fotufilm
-          -DFOTUFILM_UPDATE_FEED="${FOTUFILM_UPDATE_FEED_URL:-https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS-update.json}")
+          -DFOTUFILM_UPDATE_FEED="${FOTUFILM_UPDATE_FEED_URL:-https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS-update.json}"
+          -DFOTUFILM_RELEASE_LIST="${FOTUFILM_RELEASE_LIST_URL:-https://api.github.com/repos/DhaliwalX/fotufilm-engine/releases?per_page=100}")
 else
-  extra+=(-DFOTUFILM_BUNDLE_ID=com.muastudio.fotufilm.source -DFOTUFILM_UPDATE_FEED=)
+  extra+=(-DFOTUFILM_BUNDLE_ID=com.muastudio.fotufilm.source -DFOTUFILM_UPDATE_FEED=
+          -DFOTUFILM_RELEASE_LIST=)
 fi
 cmake -S cef -B build/cef-host -G Ninja -DCEF_ROOT="$cef_root" "${extra[@]}"
 cmake --build build/cef-host

@@ -11,6 +11,9 @@ import FotufilmUpdate
 protocol HostUpdateChannel {
     /// One JSON release document (`UpdateManifest`); nil when this build names no feed.
     var feedURL: URL? { get }
+    /// Every published release, pre-releases among them (`ReleaseListing`), where each keeps its
+    /// own copy of the feed document; nil when this build names no list.
+    var releaseListURL: URL? { get }
     /// `CFBundleShortVersionString` and `CFBundleVersion`, or the platform's equivalents.
     var version: String { get }
     var build: String { get }
@@ -60,36 +63,47 @@ final class HostUpdates {
         lock.unlock()
     }
 
-    /// Asks the feed; the answer arrives in `status`.
-    func check() {
+    /// Asks the feed; the answer arrives in `status`. With `prereleases`, the newest published
+    /// release's feed is asked instead, whether that release is a pre-release or not.
+    func check(prereleases: Bool = false) {
         guard let feedURL = channel.feedURL else {
             return set(["state": "failed", "message":
                 "This build does not contain the Fotufilm update-feed configuration."])
         }
         set(["state": "checking"])
-        var request = URLRequest(url: feedURL)
-        request.timeoutInterval = 15
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            guard let self else { return }
-            if let error {
-                return set(["state": "failed", "message": error.localizedDescription])
+        guard prereleases else { return read(feedURL) }
+        guard let listURL = channel.releaseListURL else {
+            return set(["state": "failed", "message":
+                "This build does not contain the Fotufilm pre-release configuration."])
+        }
+        fetch(listURL, accept: "application/vnd.github+json", what: "release list") { data in
+            let newest: URL?
+            do {
+                newest = try ReleaseListing.newestFeed(named: feedURL.lastPathComponent, in: data)
+            } catch {
+                return self.set(["state": "failed", "message":
+                    "The release list returned something this copy of Fotufilm cannot read."])
             }
-            // Only HTTP answers carry a status line; a file feed (local testing) has none.
-            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                return set(["state": "failed",
-                            "message": "The update feed answered with status \(http.statusCode)."])
+            guard let newest else {
+                return self.set(["state": "failed",
+                                 "message": "No published release carries an update feed."])
             }
-            guard let data,
-                  let manifest = try? JSONDecoder().decode(UpdateManifest.self, from: data),
+            self.read(newest)
+        }
+    }
+
+    private func read(_ feedURL: URL) {
+        fetch(feedURL, accept: "application/json", what: "update feed") { data in
+            guard let manifest = try? JSONDecoder().decode(UpdateManifest.self, from: data),
                   (try? manifest.validate()) != nil else {
-                return set(["state": "failed", "message":
+                return self.set(["state": "failed", "message":
                     "The update feed returned something this copy of Fotufilm cannot read."])
             }
-            lock.lock()
+            self.lock.lock()
             self.manifest = manifest
-            lock.unlock()
-            let newer = manifest.isNewer(thanVersion: channel.version, build: channel.build)
+            self.lock.unlock()
+            let newer = manifest.isNewer(thanVersion: self.channel.version,
+                                         build: self.channel.build)
             var answer: [String: Any] = [
                 "state": newer ? "available" : "current",
                 "version": manifest.version,
@@ -97,9 +111,28 @@ final class HostUpdates {
                 "release": "\(manifest.version) (build \(manifest.build))",
             ]
             if let notes = manifest.releaseNotes { answer["notes"] = notes.absoluteString }
-            set(answer)
+            self.set(answer)
         }
-        task.resume()
+    }
+
+    /// The body of `url`; a failure to reach it, or an HTTP error, ends the check.
+    private func fetch(_ url: URL, accept: String, what: String,
+                       then use: @escaping (Data) -> Void) {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        request.setValue(accept, forHTTPHeaderField: "Accept")
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            guard let self else { return }
+            if let error {
+                return set(["state": "failed", "message": error.localizedDescription])
+            }
+            // Only HTTP answers carry a status line; a file feed (local testing) has none.
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                return set(["state": "failed",
+                            "message": "The \(what) answered with status \(http.statusCode)."])
+            }
+            use(data ?? Data())
+        }.resume()
     }
 
     /// Downloads the checked release's installer, verifies it and opens it; progress and the
