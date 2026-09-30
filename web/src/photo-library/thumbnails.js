@@ -50,6 +50,21 @@ function videoFrame(file) {
   });
 }
 
+// A folder the host reads also has its thumbnails drawn by the host, from the file in place. Its
+// picture is an uncompressed PNG; it is kept as a JPEG, like the workers' thumbnails. Null when
+// the host draws none.
+async function hostThumbnail(photo) {
+  const drawn = await photo.root?.thumbnail?.(photo.path, THUMBNAIL_EDGE);
+  if (!drawn) return null;
+  const bitmap = await createImageBitmap(drawn);
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  canvas.getContext("2d").drawImage(bitmap, 0, 0);
+  bitmap.close();
+  return {
+    blob: await canvas.convertToBlob({ type: "image/jpeg", quality: 0.86 }),
+  };
+}
+
 // Workers decode and resample; the newest request runs first, because it is the
 // tile the user just scrolled to. Results are cached in the library database under
 // the file's size and date, so a replaced file gets a new thumbnail.
@@ -110,7 +125,7 @@ export function createThumbnails({
       const job = queue.pop();
       slot.job = job;
       job.start().then(
-        (message) => {
+        ({ message, result = null }) => {
           if (message)
             slot.worker.postMessage(
               message,
@@ -118,7 +133,7 @@ export function createThumbnails({
             );
           else {
             slot.job = null;
-            job.done(null);
+            job.done(result);
             pump();
           }
         },
@@ -137,6 +152,8 @@ export function createThumbnails({
         id,
         photo,
         async start() {
+          const result = await hostThumbnail(photo);
+          if (result) return { result };
           job.file = await currentFile(photo);
           job.message = {
             id,
@@ -144,7 +161,7 @@ export function createThumbnails({
             edge: THUMBNAIL_EDGE,
             runtime: runtimeUrl(),
           };
-          return { ...job.message, file: job.file };
+          return { message: { ...job.message, file: job.file } };
         },
         done: resolve,
       };
