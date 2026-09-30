@@ -133,15 +133,6 @@ extern "C" int32_t ffc_decode(const char *path, uint32_t options, uint32_t raw_l
     return 1;
 }
 
-extern "C" void ffc_image_free(ffc_image *image) {
-    if (!image) return;
-    std::free(image->rgba);
-    std::free(image->capture.exif);
-    image->rgba = nullptr;
-    image->capture.exif = nullptr;
-    image->capture.exif_length = 0;
-}
-
 extern "C" int32_t ffc_can_encode(const char *mime) {
     if (!mime) return 0;
     std::string type(mime);

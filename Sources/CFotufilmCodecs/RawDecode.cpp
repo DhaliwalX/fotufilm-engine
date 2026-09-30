@@ -1,13 +1,13 @@
 // Camera RAW through LibRaw, with the choices the Mac's `RawDecode` makes: the sensor's linear
-// light at its as-shot white, no tone, contrast, sharpening or noise reduction, highlights clipped
-// where the sensor clipped, and a DNG's baseline exposure for a scene (none for a scan).
+// light at its as-shot white, no tone, contrast, sharpening or noise reduction, clipped highlights
+// blended for a scene (untouched for a scan), and a DNG's baseline exposure (none for a scan).
 //
-// Gaps against Core Image's decoder: LibRaw's demosaic (AHD) differs a little from Apple's; a
+// Gaps against Core Image's decoder: LibRaw's demosaic differs from Apple's; a
 // DNG develops through its own two calibrations, but other files through LibRaw's single (Adobe,
 // D65) matrix rather than Apple's profiles; Apple's per-camera exposure offsets, crops and lens
 // corrections for non-DNG files are not applied; temperatures are McCamy's.
 // Apple platforms decode and encode through ImageIO; this target builds empty there.
-#if !defined(__APPLE__)
+#if !defined(__APPLE__) || defined(FFC_PORTABLE_CODECS)
 #include "Codecs.hpp"
 
 #if __has_include(<libraw/libraw.h>)
@@ -20,10 +20,29 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <cstdio>
+#include <limits>
 #include <memory>
 
 namespace ffc {
 namespace {
+
+struct UnsupportedRaw {};
+
+std::vector<uint8_t> readRawFile(const std::string &path, uint64_t limit) {
+    std::unique_ptr<FILE, int (*)(FILE *)> file(std::fopen(path.c_str(), "rb"), std::fclose);
+    if (!file) throw Failure("Could not open the RAW file.");
+    if (std::fseek(file.get(), 0, SEEK_END) != 0) throw Failure("Could not measure the RAW file.");
+    const long length = std::ftell(file.get());
+    if (length < 0) throw Failure("Could not measure the RAW file.");
+    if (uint64_t(length) > limit || uint64_t(length) > std::numeric_limits<size_t>::max())
+        throw Failure("The RAW file exceeds the file-size limit.");
+    if (std::fseek(file.get(), 0, SEEK_SET) != 0) throw Failure("Could not read the RAW file.");
+    std::vector<uint8_t> bytes(static_cast<size_t>(length));
+    if (std::fread(bytes.data(), 1, bytes.size(), file.get()) != bytes.size())
+        throw Failure("The RAW file is incomplete.");
+    return bytes;
+}
 
 void check(int status, const char *what) {
     if (status != LIBRAW_SUCCESS)
@@ -164,12 +183,32 @@ bool dngColour(const libraw_colordata_t &color, Matrix &toWide, ffc_image &out) 
 
 } // namespace
 
-void decodeRaw(const std::string &path, uint32_t options, uint32_t longEdge, ffc_image &out) {
-    std::vector<uint8_t> file = readFile(path);
+static void developRaw(const std::string &path, uint32_t options, uint32_t longEdge,
+                       const ffc_raw_limits *limits, ffc_image &out,
+                       uint32_t &sourceWidth, uint32_t &sourceHeight) {
+    std::vector<uint8_t> file = readRawFile(path, limits
+        ? std::min(limits->max_file_bytes, limits->max_working_bytes / 2) : UINT64_MAX);
     auto raw = std::make_unique<LibRaw>(0);
-    check(raw->open_buffer(file.data(), file.size()), "Could not read raw file");
+    if (limits) raw->imgdata.rawparams.max_raw_memory_mb = static_cast<unsigned>(
+        std::min<uint64_t>(UINT32_MAX, std::max<uint64_t>(1, limits->max_working_bytes >> 20)));
+    const int opened = file.empty() ? LIBRAW_FILE_UNSUPPORTED : raw->open_buffer(file.data(), file.size());
+    if (opened == LIBRAW_FILE_UNSUPPORTED) throw UnsupportedRaw{};
+    check(opened, "Could not read raw file");
 
     auto &data = raw->imgdata;
+    const uint64_t sensorPixels = uint64_t(data.sizes.raw_width) * data.sizes.raw_height;
+    if (!sensorPixels || !data.sizes.width || !data.sizes.height)
+        throw Failure("The RAW file has invalid dimensions.");
+    if (limits && sensorPixels > limits->max_sensor_pixels)
+        throw Failure("The RAW sensor exceeds the pixel limit.");
+    // LibRaw expands diamond-layout SuperCCD and non-square pixels before applying EXIF turns.
+    // Its sensor rectangle cannot be used as a crop on that resampled output.
+    const bool diamondLayout = raw->is_fuji_rotated() != 0;
+    int nativeWidth = 0, nativeHeight = 0, nativeColors = 0, nativeBits = 0;
+    raw->get_mem_image_format(&nativeWidth, &nativeHeight, &nativeColors, &nativeBits);
+    if (nativeWidth <= 0 || nativeHeight <= 0 ||
+        (limits && uint64_t(nativeWidth) * nativeHeight > limits->max_sensor_pixels))
+        throw Failure("The RAW developed frame exceeds the pixel limit.");
     // The camera's own record, as ImageIO reads it, for TIFF-based RAW (DNG, CR2, NEF, ARW, ...).
     bool isDNG = data.idata.dng_version != 0;
     std::array<double, 4> crop{};
@@ -204,16 +243,42 @@ void decodeRaw(const std::string &path, uint32_t options, uint32_t longEdge, ffc
     params.gamm[0] = 1;
     params.gamm[1] = 1;
     params.no_auto_bright = 1;
+    params.adjust_maximum_thr = 0;
     params.use_camera_wb = 1;
     params.use_auto_wb = 0;
     params.use_camera_matrix = 1;
-    params.highlight = 0;
+    // Keep the sensor range while balancing white; restore its scale in float below. Clipping
+    // the balanced channels at diffuse white discards exposure latitude before film development.
+    params.highlight = options & FFC_DECODE_SCAN ? 1 : 2;
+    params.user_qual = 3; // AHD for Bayer, three-pass interpolation for X-Trans
     params.user_flip = -1;
-    const uint32_t nativeLong = std::max(visibleWidth, visibleHeight);
+    const uint32_t nativeLong = uint32_t(std::max(nativeWidth, nativeHeight));
     // Half size where the Mac's scale factor (`RawDecode.scaleFactor`) is at most one half.
     params.half_size = longEdge > 0 && 4ull * longEdge <= nativeLong ? 1 : 0;
 
+    // Keep RAW, working camera RGB, demosaic scratch, processed RGB16 and output live together
+    // in this admission estimate. Half-size demosaicing still unpacks the complete sensor.
+    // This intentionally overestimates ordinary Bayer files; compressed formats can use extra
+    // decoder memory, independently capped by LibRaw's max_raw_memory_mb.
+    auto checkWorkingMemory = [&](bool halfSize) {
+        if (!limits) return;
+        const uint64_t fullWorkingPixels = std::max(sensorPixels, uint64_t(nativeWidth) * nativeHeight);
+        const uint64_t workingPixels = halfSize ? (fullWorkingPixels + 3) / 4 : fullWorkingPixels;
+        const uint64_t deliveredPixels = longEdge && longEdge < nativeLong
+            ? std::min<uint64_t>(workingPixels, uint64_t(longEdge) * longEdge) : workingPixels;
+        const long double estimate = static_cast<long double>(file.size()) * 2 + sensorPixels * 8
+            + workingPixels * 80 + deliveredPixels * 16 + (32ull << 20);
+        if (estimate > limits->max_working_bytes)
+            throw Failure("RAW development exceeds available memory. Choose a smaller size or close other apps.");
+    };
+    checkWorkingMemory(params.half_size && data.idata.filters);
+
     check(raw->unpack(), "Could not unpack raw file");
+    // Linear DNG, sRAW and some colour-plane decoders do not shrink during demosaicing. These
+    // pointers become known at unpack; use LibRaw's actual shrink rule before processing them.
+    const auto &unpacked = data.rawdata;
+    checkWorkingMemory(params.half_size && data.idata.filters && !unpacked.color4_image
+        && !unpacked.color3_image && !unpacked.float4_image && !unpacked.float3_image);
     check(raw->dcraw_process(), "Could not develop raw file");
     int status = 0;
     std::unique_ptr<libraw_processed_image_t, void (*)(libraw_processed_image_t *)> image(
@@ -242,24 +307,28 @@ void decodeRaw(const std::string &path, uint32_t options, uint32_t longEdge, ffc
         float baseline = data.color.dng_levels.baseline_exposure;
         if (std::isfinite(baseline) && baseline > -10 && baseline < 10) exposure = std::exp2(baseline);
     }
-    const float scale = exposure / 65535.0f;
+    const float greenScale = data.color.pre_mul[1];
+    if (!(greenScale > 0) || !std::isfinite(greenScale))
+        throw Failure("The RAW file has an invalid white balance.");
+    const float scale = exposure / greenScale / 65535.0f;
     for (int k = 0; k < 9; ++k) matrix[k] *= scale;
 
     // The frame Core Image delivers: a DNG's default crop, else the maker's inset crop, within
     // the sensor's visible area; in the pre-turn frame, then carried through LibRaw's turn.
     const auto &sizes = data.sizes;
-    if (!(crop[2] > 0 && crop[3] > 0 && crop[0] + crop[2] <= visibleWidth
+    if (diamondLayout || !(crop[0] >= 0 && crop[1] >= 0 && crop[2] > 0 && crop[3] > 0 && crop[0] + crop[2] <= visibleWidth
           && crop[1] + crop[3] <= visibleHeight)) {
         crop = {0, 0, double(visibleWidth), double(visibleHeight)};
-        if (inset.cwidth > 0 && inset.cheight > 0 && inset.cwidth != 0xFFFF
+        if (!diamondLayout && inset.cwidth > 0 && inset.cheight > 0 && inset.cwidth != 0xFFFF
             && inset.cleft + inset.cwidth <= visibleWidth && inset.ctop + inset.cheight <= visibleHeight)
             crop = {double(inset.cleft), double(inset.ctop), double(inset.cwidth), double(inset.cheight)};
     }
-    const int iw = sizes.iwidth, ih = sizes.iheight, flip = sizes.flip;
-    const double shrink = double(iw) / std::max<uint32_t>(1, visibleWidth);
-    const int x0 = int(std::lround(crop[0] * shrink)), y0 = int(std::lround(crop[1] * shrink));
-    const int x1 = std::min(iw, x0 + int(std::lround(crop[2] * shrink)));
-    const int y1 = std::min(ih, y0 + int(std::lround(crop[3] * shrink)));
+    const int iw = sizes.width, ih = sizes.height, flip = sizes.flip;
+    const double scaleX = double(iw) / visibleWidth, scaleY = double(ih) / visibleHeight;
+    const int x0 = int(std::lround(crop[0] * scaleX)), y0 = int(std::lround(crop[1] * scaleY));
+    const int x1 = std::min(iw, x0 + int(std::lround(crop[2] * scaleX)));
+    const int y1 = std::min(ih, y0 + int(std::lround(crop[3] * scaleY)));
+    if (x1 <= x0 || y1 <= y0) throw Failure("The RAW default crop is empty.");
     auto turned = [&](int column, int row) {
         if (flip & 1) column = iw - 1 - column;
         if (flip & 2) row = ih - 1 - row;
@@ -267,24 +336,54 @@ void decodeRaw(const std::string &path, uint32_t options, uint32_t longEdge, ffc
     };
     const auto a = turned(x0, y0), b = turned(x1 - 1, y1 - 1);
     const int left = std::min(a[0], b[0]), top = std::min(a[1], b[1]);
-    const uint32_t width = uint32_t(std::abs(b[0] - a[0]) + 1), height = uint32_t(std::abs(b[1] - a[1]) + 1);
-    if (left < 0 || top < 0 || left + width > image->width || top + height > image->height)
+    const uint32_t cropWidth = uint32_t(std::abs(b[0] - a[0]) + 1), cropHeight = uint32_t(std::abs(b[1] - a[1]) + 1);
+    if (left < 0 || top < 0 || left + cropWidth > image->width || top + cropHeight > image->height)
         throw Failure("Could not develop raw file");
+    sourceWidth = uint32_t(std::lround(nativeWidth * crop[flip & 4 ? 3 : 2] / (flip & 4 ? visibleHeight : visibleWidth)));
+    sourceHeight = uint32_t(std::lround(nativeHeight * crop[flip & 4 ? 2 : 3] / (flip & 4 ? visibleWidth : visibleHeight)));
+    uint32_t width = cropWidth, height = cropHeight;
+    if (limits && longEdge && longEdge < std::max(width, height)) {
+        const double factor = double(longEdge) / std::max(width, height);
+        width = std::max(1u, uint32_t(std::lround(width * factor)));
+        height = std::max(1u, uint32_t(std::lround(height * factor)));
+    }
     const uint32_t stride = image->width;
     out.width = width;
     out.height = height;
     out.is_raw = 1;
     out.content_headroom = 1;
+    if (uint64_t(width) * height > std::numeric_limits<size_t>::max() / (4 * sizeof(float)))
+        throw Failure("The RAW output exceeds the addressable size.");
     out.rgba = static_cast<float *>(std::malloc(size_t(width) * height * 4 * sizeof(float)));
     if (!out.rgba) throw Failure("Out of memory.");
     const auto *pixels = reinterpret_cast<const uint16_t *>(image->data);
     float *rgba = out.rgba;
+    const bool resize = width != cropWidth || height != cropHeight;
     parallelRows(height, [&](uint32_t begin, uint32_t end) {
         for (uint32_t y = begin; y < end; ++y) {
-            const uint16_t *row = pixels + ((size_t(top) + y) * stride + size_t(left)) * 3;
             float *o = rgba + size_t(y) * width * 4;
-            for (uint32_t x = 0; x < width; ++x, row += 3, o += 4) {
-                float r = row[0], g = row[1], b = row[2];
+            const double sy = std::max(0.0, (y + 0.5) * cropHeight / height - 0.5);
+            const uint32_t y0 = uint32_t(sy), y1 = std::min(y0 + 1, cropHeight - 1);
+            const float fy = float(sy - y0);
+            for (uint32_t x = 0; x < width; ++x, o += 4) {
+                float rgb[3];
+                if (!resize) {
+                    const uint16_t *pixel = pixels + ((size_t(top) + y) * stride + left + x) * 3;
+                    for (int c = 0; c < 3; ++c) rgb[c] = pixel[c];
+                } else {
+                    const double sx = std::max(0.0, (x + 0.5) * cropWidth / width - 0.5);
+                    const uint32_t x0 = uint32_t(sx), x1 = std::min(x0 + 1, cropWidth - 1);
+                    const float fx = float(sx - x0);
+                    auto sample = [&](uint32_t row, uint32_t column, int c) {
+                        return float(pixels[((size_t(top) + row) * stride + left + column) * 3 + c]);
+                    };
+                    for (int c = 0; c < 3; ++c) {
+                        const float upper = sample(y0, x0, c) * (1 - fx) + sample(y0, x1, c) * fx;
+                        const float lower = sample(y1, x0, c) * (1 - fx) + sample(y1, x1, c) * fx;
+                        rgb[c] = upper * (1 - fy) + lower * fy;
+                    }
+                }
+                const float r = rgb[0], g = rgb[1], b = rgb[2];
                 o[0] = matrix[0] * r + matrix[1] * g + matrix[2] * b;
                 o[1] = matrix[3] * r + matrix[4] * g + matrix[5] * b;
                 o[2] = matrix[6] * r + matrix[7] * g + matrix[8] * b;
@@ -294,6 +393,43 @@ void decodeRaw(const std::string &path, uint32_t options, uint32_t longEdge, ffc
     });
 }
 
+void decodeRaw(const std::string &path, uint32_t options, uint32_t longEdge, ffc_image &out) {
+    uint32_t width = 0, height = 0;
+    try { developRaw(path, options, longEdge, nullptr, out, width, height); }
+    catch (const UnsupportedRaw &) { throw Failure("This RAW file is not supported."); }
+}
+
 } // namespace ffc
+
+extern "C" int32_t ffc_decode_raw(const char *path, uint32_t options, uint32_t longEdge,
+                                 const ffc_raw_limits *limits, ffc_image *out,
+                                 uint32_t *sourceWidth, uint32_t *sourceHeight,
+                                 char *error, size_t errorSize) {
+    if (out) *out = {};
+    if (sourceWidth) *sourceWidth = 0;
+    if (sourceHeight) *sourceHeight = 0;
+    if (error && errorSize) error[0] = 0;
+    auto fail = [&](const char *message) { if (error && errorSize) std::snprintf(error, errorSize, "%s", message); };
+    try {
+        if (!path || !out || !sourceWidth || !sourceHeight || !limits || !limits->max_file_bytes
+            || !limits->max_sensor_pixels || !limits->max_working_bytes || (options & ~FFC_DECODE_SCAN))
+            throw ffc::Failure("Invalid RAW decode request.");
+        ffc::developRaw(path, options, longEdge, limits, *out, *sourceWidth, *sourceHeight);
+        return FFC_RAW_OK;
+    } catch (const ffc::UnsupportedRaw &) {
+        fail("This file is not recognized by the RAW decoder.");
+        return FFC_RAW_UNSUPPORTED;
+    } catch (const std::bad_alloc &) {
+        fail("There is not enough memory to develop this RAW file.");
+    } catch (const std::exception &failure) {
+        fail(failure.what());
+    } catch (...) {
+        fail("The RAW file could not be developed.");
+    }
+    ffc_image_free(out);
+    if (sourceWidth) *sourceWidth = 0;
+    if (sourceHeight) *sourceHeight = 0;
+    return FFC_RAW_ERROR;
+}
 
 #endif
