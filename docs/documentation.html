@@ -373,7 +373,7 @@
 </tbody>
 </table>
 <p>Standard and Film keep grain dimensions in film units, including at high-resolution inspection scales. The fitted film response and the selected output medium still affect colour and tone.</p>
-<p>Standard grain now uses the same seeded analytic samples in CPU and full-quality Metal rendering. This changes the exact texture of earlier CPU renders; film settings, grain size, correlation and density response retain their meanings. Approximate GPU previews may still use table sampling.</p>
+<p>Standard grain now uses the same seeded analytic samples in CPU and full-quality Metal, Vulkan and WebGPU rendering. This changes the exact texture of earlier CPU renders; film settings, grain size, correlation and density response retain their meanings. Approximate GPU previews may still use table sampling.</p>
 <p>Grain comparisons need matching exposure, physical sampling and viewing conditions. An Endura print and a lab scan have different optics and tone responses, even for the same film. The models simulate statistical texture; magnifying them does not reveal measured individual film crystals. See <a href="film-grain.md">the Film grain model and its limits</a>.</p>
 <p>Reversal films use a density-dependent grain curve with cleaner highlights and stronger grain in deep shadows, leveling off near maximum density. Grain strength stays anchored at the film's reference density. Custom packs can set the curve's exponent and shoulder with <code>grainReversalProfile</code>; packs explicitly selecting the legacy Selwyn law retain that behavior.</p>
 <p>Some controls depend on the film or stage you choose. For separate Negative Only and Print Only nodes, match their development settings, including <strong>Long Exposure (s)</strong>.</p>

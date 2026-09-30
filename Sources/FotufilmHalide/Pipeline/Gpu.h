@@ -504,10 +504,9 @@ public:
         // analytic curve, which the table matches within 1e-4 D.
         policy.tabulated_curves = reference_sampling()
             || fast(kStillFastCurves);
-        // The reference CPU draws from these inverse-CDF tables. The browser GPU must
-        // use the same seeded samples, rather than a different analytic approximation.
-        policy.table_grain = reference_sampling()
-            || fast(kStillFastGrainTable);
+        // Full-quality grain shares CPU/native Metal's analytic seeded draws, including
+        // portable GPU backends. Only explicitly approximate/realtime paths use tables.
+        policy.table_grain = fast(kStillFastGrainTable);
         // A folded graph never sees the whole frame, so it can only read the host's mean.
         policy.measure_flare = windowed
             ? Expr(Halide::Internal::const_false())
