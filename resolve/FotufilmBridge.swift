@@ -306,30 +306,10 @@ private func validateDevelopment(_ settings: FotufilmEngine.Options,
     }
 }
 
-/// Open whatever sealed packs sit beside the plugin in its own bundle.
-///
-/// The app gets this for free: its packs are in `Bundle.main` and its key material is compiled in.
-/// A plugin has neither — `Bundle.main` is DaVinci Resolve — so it has to name its own Resources
-/// directory as the trusted vault location and register the vault key itself. Without the key the
-/// pack is an unreadable blob; without the trust it is refused as "a vault pack outside the
-/// application bundle". Both are needed, and only the build that owns the file may do either.
-private func openSealedPacks(in directory: String) {
+/// Offer the community packs a person imported. The films the plugin ships with are plain JSON in
+/// its own Resources (`embeddedStockDirectories`), since `Bundle.main` is the video host.
+private func openCommunityPacks(in directory: String) {
     let resources = URL(fileURLWithPath: directory, isDirectory: true)
-    let entries = (try? FileManager.default.contentsOfDirectory(
-        at: resources, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
-    let packs = entries.filter {
-        $0.pathExtension.lowercased() == FilmStockPack.sealedPathExtension
-    }
-
-    let keyring = FilmPackKeyring.shared
-    if let vault = try? FilmPackKey(bytes: FilmPackKeyMaterial.vaultKey) {
-        keyring.register(vault, kind: .vault, id: FilmPackKeyMaterial.vaultKeyID)
-    }
-    if let community = try? FilmPackKey(bytes: FilmPackKeyMaterial.communityKey) {
-        keyring.register(community, kind: .community, id: FilmPackKeyMaterial.communityKeyID)
-    }
-
-    FilmStockPack.embeddedSealedPackURLs = packs
     // Bundle.main belongs to the video host. Read this plugin's own release version.
     let bundleURL = resources.deletingLastPathComponent().deletingLastPathComponent()
     let version = Bundle(url: bundleURL)?.object(
@@ -368,7 +348,7 @@ func fotufilm_bridge_initialize(_ resources: UnsafePointer<CChar>?) -> Int32 {
         // directory explicitly without changing the host's custom-stock environment.
         FilmStockPack.embeddedStockDirectories = [URL(fileURLWithPath: directory,
             isDirectory: true).appendingPathComponent("Stocks", isDirectory: true)]
-        openSealedPacks(in: directory)
+        openCommunityPacks(in: directory)
     }
 
     FilmStockPack.reload()

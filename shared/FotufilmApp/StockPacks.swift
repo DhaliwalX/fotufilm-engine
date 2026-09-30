@@ -7,7 +7,7 @@ import Security
 import FotufilmCore
 #endif
 
-/// Register container keys and load bundled and imported profiles without network access.
+/// Load the bundled and imported profiles, and the device key for the user's own films, without network access.
 enum StockPacks {
     private static var booted = false
     private static let lock = NSLock()
@@ -24,14 +24,6 @@ enum StockPacks {
         guard !booted else { return }
         booted = true
 
-        let keyring = FilmPackKeyring.shared
-        if let vault = try? FilmPackKey(bytes: FilmPackKeyMaterial.vaultKey) {
-            keyring.register(vault, kind: .vault, id: FilmPackKeyMaterial.vaultKeyID)
-        }
-        if let community = try? FilmPackKey(bytes: FilmPackKeyMaterial.communityKey) {
-            keyring.register(community, kind: .community,
-                             id: FilmPackKeyMaterial.communityKeyID)
-        }
         CustomStockStore.publish()
         FilmStockPack.reload()
 

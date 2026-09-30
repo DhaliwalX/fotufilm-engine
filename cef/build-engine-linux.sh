@@ -77,7 +77,6 @@ MAP
 
 # One module, as on the Mac. Metal's sources stay out; Linux develops through the kernels above.
 swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
-  -D FOTUFILM_PACK_KEY_MATERIAL \
   -ISources/FotufilmHalide/include \
   -Xcc -fmodule-map-file="$OBJ/module.modulemap" \
   -Xcc -fmodule-map-file="$PWD/Sources/CFotufilmCodecs/include/module.modulemap" \
@@ -93,7 +92,6 @@ swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
   Sources/FotufilmPlugins/*.swift \
   Sources/FotufilmUpdate/*.swift \
   Sources/FotufilmHost/*.swift \
-  "$FOTUFILM_PACK_KEY_SOURCE" \
   -o "$OBJ/FotufilmHost.o"
 
 swiftc -emit-library -static-stdlib \

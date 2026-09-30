@@ -127,7 +127,6 @@ for ARCH in "${ARCHS[@]}"; do
     -module-name FotufilmOFX -emit-object \
     "$FOTUFILM_CORE_SOURCE_DIR"/*.swift \
     Sources/FotufilmMetal/*.swift \
-    "$FOTUFILM_PACK_KEY_SOURCE" \
     Sources/FotufilmEditModel/*.swift resolve/FotufilmBridge.swift resolve/FotufilmBridgeControls.swift resolve/FotufilmBridgeRenderer.swift \
     resolve/Generated/FotufilmBridgeSlots.swift \
     -o "$OBJ/FotufilmSwift.o"

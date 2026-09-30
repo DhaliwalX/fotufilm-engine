@@ -53,7 +53,6 @@ swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
   -file-prefix-map "$FOTUFILM_CORE_SOURCE_DIR=Fotufilm/Sources/FotufilmCore" \
   -module-name FotufilmOFX -emit-object -Xcc -fPIC \
   "$FOTUFILM_CORE_SOURCE_DIR"/*.swift \
-  "$FOTUFILM_PACK_KEY_SOURCE" \
   Sources/FotufilmEditModel/*.swift resolve/FotufilmBridge.swift resolve/FotufilmBridgeControls.swift \
   resolve/FotufilmBridgeRenderer.swift resolve/Generated/FotufilmBridgeSlots.swift \
   -o "$OBJ/FotufilmSwift.o"

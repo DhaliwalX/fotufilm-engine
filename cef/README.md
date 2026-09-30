@@ -211,10 +211,9 @@ FotufilmSource/CustomPacks for source builds), which neither app is sandboxed ou
 added in either app, or for the plugins, shows in both. The engine then reloads its films and
 warms the new ones without restarting, and the editor asks for its film list again.
 `filmPacks` lists the installed community packs (and notices packs another app added since),
-`removeFilmPack` {packID} takes one away; Settings › General lists them with Remove. The engine is
-compiled with the same pack key material the Mac app is (`FOTUFILM_PACK_KEY_SOURCE`, defining
-`FOTUFILM_PACK_KEY_MATERIAL`), and the page offers all of this only when the capabilities say
-`filmPacks`.
+`removeFilmPack` {packID} takes one away; Settings › General lists them with Remove. Community
+packs open with the engine's public community keys, and the page offers all of this only when the
+capabilities say `filmPacks`.
 
 Fotufilm › Settings… (⌘,) opens the editor's Settings dialog (`web/src/editor/SettingsDialog.jsx`),
 which every backend shares: the starting film, format and film model of new photographs, film

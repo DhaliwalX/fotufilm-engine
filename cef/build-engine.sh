@@ -35,10 +35,7 @@ nm -gU "$OBJ/FotufilmHalideIOS.o" >/dev/null
 grep -o 'fotufilm_[a-z0-9_]*(' Sources/CFotufilmHost/include/fotufilm.h \
   | tr -d '(' | sort -u | sed 's/^/_/' > "$OBJ/exports.txt"
 
-# The pack container keys the Mac app is built with (tools/desktop-build-config.sh), so the engine
-# opens the same community packs and bundled vault it does (Sources/FotufilmHost/HostFilmPacks.swift).
 python3 tools/compile-if-needed.py xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
-  -D FOTUFILM_PACK_KEY_MATERIAL \
   -ISources/FotufilmHalide/include \
   -Xcc -fmodule-map-file="$OBJ/module.modulemap" \
   -sdk "$SDK" -target arm64-apple-macos14.0 -swift-version 5 \
@@ -54,7 +51,6 @@ python3 tools/compile-if-needed.py xcrun swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURC
   Sources/FotufilmPlugins/*.swift \
   Sources/FotufilmUpdate/*.swift \
   Sources/FotufilmHost/*.swift \
-  "$FOTUFILM_PACK_KEY_SOURCE" \
   -o "$OBJ/FotufilmHost.o"
 
 xcrun swiftc -sdk "$SDK" -target arm64-apple-macos14.0 -emit-library \

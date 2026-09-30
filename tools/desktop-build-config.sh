@@ -1,22 +1,11 @@
 #!/usr/bin/env bash
-# Source from the repository root before building a desktop target.
-# Custom pack builds supply both inputs through absolute paths.
-if [[ "${FOTUFILM_SOURCE_BUILD:-}" == 1 ]]; then
-  [[ -z "${FOTUFILM_SEALED_PACKS:-}" ]] || { echo "error: source build cannot include official packs" >&2; exit 1; }
-elif [[ -n "${FOTUFILM_PACK_KEY_SOURCE:-}" || -n "${FOTUFILM_SEALED_PACKS:-}" ]]; then
-  [[ -f "${FOTUFILM_PACK_KEY_SOURCE:-}" && -d "${FOTUFILM_SEALED_PACKS:-}" ]] || {
-    echo "error: set both FOTUFILM_PACK_KEY_SOURCE and FOTUFILM_SEALED_PACKS to existing pack inputs." >&2
-    exit 1
-  }
-  export FOTUFILM_SOURCE_BUILD=0
-else
-  export FOTUFILM_PACK_KEY_SOURCE="$PWD/shared/FotufilmApp/FilmPackKeyMaterial.swift"
-  export FOTUFILM_SOURCE_BUILD=1
-fi
+# Source from the repository root before building a desktop target. Every build ships the same
+# public film profiles; FOTUFILM_SOURCE_BUILD=0 selects the official app identity.
+export FOTUFILM_SOURCE_BUILD="${FOTUFILM_SOURCE_BUILD:-1}"
 
 SOURCE_BUILD_FLAGS=()
-# A distribution can add supplied packs while retaining the source app's bundle,
-# keychain, and imported-pack identity for existing installations.
+# An official build can keep the source app's bundle, keychain, and imported-pack identity
+# for existing installations.
 if [[ "$FOTUFILM_SOURCE_BUILD" == 1 || "${FOTUFILM_USE_SOURCE_IDENTITY:-0}" == 1 ]]; then
   SOURCE_BUILD_FLAGS=(-D FOTUFILM_SOURCE_BUILD)
 fi

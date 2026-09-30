@@ -107,7 +107,7 @@ final class SpectralControlPointTests: XCTestCase {
 
     private func keyring() -> FilmPackKeyring {
         let ring = FilmPackKeyring()
-        for kind in [FilmPackKind.vault, .community, .local] {
+        for kind in [FilmPackKind.community, .local] {
             ring.register(key, kind: kind, id: 1)
         }
         return ring
@@ -141,30 +141,18 @@ final class SpectralControlPointTests: XCTestCase {
         return definition
     }
 
-    func testLineageToAVaultStockRefusesExport() {
+    func testLineageToAShippedStockExports() throws {
         var pack = FilmStockPack()
         pack.stocks["house-stock"] = sample(id: "house-stock")
-        pack.origins["house-stock"] = .vault
+        pack.origins["house-stock"] = .installed
         pack.stocks["mine.study"] = sample(id: "study", lineage: "house-stock")
         pack.origins["mine.study"] = .local(packID: "mine")
 
-        XCTAssertThrowsError(try FilmStockPack.sealForSharing(
-            stockIDs: ["mine.study"], packID: "leak", name: "Leak",
-            pack: pack, keyring: keyring())) { error in
-            guard case FilmStockPack.ExportRefusal.lineageNotShareable = error else {
-                return XCTFail("expected lineageNotShareable, got \(error)")
-            }
-        }
-    }
-
-    func testLineageToAMissingStockRefusesExport() {
-        var pack = FilmStockPack()
-        pack.stocks["mine.study"] = sample(id: "study", lineage: "gone")
-        pack.origins["mine.study"] = .local(packID: "mine")
-
-        XCTAssertThrowsError(try FilmStockPack.sealForSharing(
-            stockIDs: ["mine.study"], packID: "leak", name: "Leak",
-            pack: pack, keyring: keyring()))
+        let data = try FilmStockPack.sealForSharing(
+            stockIDs: ["mine.study"], packID: "sent", name: "Sent",
+            pack: pack, keyring: keyring())
+        let manifest = try FilmPackContainer.open(data, keyring: keyring()).manifest
+        XCTAssertEqual(manifest.stocks.map(\.spectralLineage), ["house-stock"])
     }
 
     func testLineageToACommunityStockExports() throws {

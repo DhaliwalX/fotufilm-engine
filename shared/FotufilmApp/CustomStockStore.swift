@@ -48,14 +48,11 @@ enum CustomStockStore {
 
     enum StoreError: Error, CustomStringConvertible {
         case duplicateID(String)
-        case notShareable
 
         public var description: String {
             switch self {
             case let .duplicateID(id):
                 return "You already have a film called '\(id)'."
-            case .notShareable:
-                return "Only films you made or were given can be shared."
             }
         }
     }
@@ -114,8 +111,7 @@ enum CustomStockStore {
         StockPacks.refresh()
     }
 
-    /// `stockIDs` are the loaded (qualified) ids. `sealForSharing` is what
-    /// refuses anything the user did not make or receive.
+    /// `stockIDs` are the loaded (qualified) ids.
     static func exportFile(stockIDs: [String], name: String,
                            author: String? = nil) throws -> URL {
         let packID = "pack-" + UUID().uuidString.prefix(8).lowercased()

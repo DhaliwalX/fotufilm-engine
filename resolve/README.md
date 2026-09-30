@@ -244,9 +244,9 @@ major version stable so saved projects can find the effect.
 `FotufilmBridge.h` connect it to the engine. `WorkingSpace.cpp` handles color-space
 conversions and is shared with the Final Cut plugin.
 
-Set `FOTUFILM_STOCKS` to a folder of stock JSON files to load custom films. If a
-custom film and a bundled pack use the same ID, the bundled pack takes precedence.
-See [Build support](../docs/support.html) for custom pack builds and
+Set `FOTUFILM_STOCKS` to a folder of stock JSON files to load custom films. A
+custom film with the same ID as a bundled one replaces it.
+See [Build support](../docs/support.html) for custom builds and
 [Licensing](../LICENSING.md) for applicable terms.
 
 The **Halation Model** menu selects **Legacy** (the default for older projects) or

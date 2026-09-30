@@ -93,7 +93,7 @@ Options:
 
 Pack options (--seal-pack / --open-pack):
   --pack-out <path>  Output file when sealing; output directory when opening
-  --pack-kind <k>    vault, community or local (default: community)
+  --pack-kind <k>    community or local (default: community)
   --pack-id <id>     Pack identity; imported stock ids are qualified with it
   --pack-version <v> Release version, e.g. 1.0.0
   --minimum-mac-app-version <v> Minimum Mac app version, e.g. 1.6
@@ -101,8 +101,9 @@ Pack options (--seal-pack / --open-pack):
   --pack-author <s>  Credit
   --pack-notes <s>   Free text carried with the pack
 
-The key comes from FOTUFILM_PACK_KEY (64 hex characters) and its id from
-FOTUFILM_PACK_KEY_ID, so neither reaches a shell history or a process listing.
+Community packs use the public community key. A local pack's key comes from
+FOTUFILM_PACK_KEY (64 hex characters) and its id from FOTUFILM_PACK_KEY_ID, so
+neither reaches a shell history or a process listing.
 """.replacingOccurrences(of: "@CONTROL_FLAGS@", with: controlUsage)
 
 func fail(_ message: String) -> Never {
@@ -372,9 +373,12 @@ if flags["--check-stocks"] != nil {
 }
 
 /// The key the pack commands work with, out of the environment so it never reaches a shell history
-/// or a process listing.
-func packKeyFromEnvironment() -> (key: FilmPackKey, id: UInt16) {
+/// or a process listing. Community packs default to the public community key.
+func packKeyFromEnvironment(_ kind: FilmPackKind) -> (key: FilmPackKey, id: UInt16) {
     guard let hex = ProcessInfo.processInfo.environment["FOTUFILM_PACK_KEY"] else {
+        if kind == .community, let newest = FilmPackKey.community.keys.max() {
+            return (FilmPackKey.community[newest]!, newest)
+        }
         fail("""
         Set FOTUFILM_PACK_KEY to the 64-character hex key to seal or open with. \
         `fotufilm --make-pack-key` prints a fresh one.
@@ -395,10 +399,9 @@ if let directory = flags["--seal-pack"] {
     let kindName = flags["--pack-kind"] ?? "community"
     let kind: FilmPackKind
     switch kindName {
-    case "vault": kind = .vault
     case "community": kind = .community
     case "local": kind = .local
-    default: fail("Unknown pack kind '\(kindName)'; expected vault, community or local")
+    default: fail("Unknown pack kind '\(kindName)'; expected community or local")
     }
 
     let definitions: [String: FilmStockDefinition]
@@ -421,7 +424,7 @@ if let directory = flags["--seal-pack"] {
 
     let packID = flags["--pack-id"]
         ?? URL(fileURLWithPath: directory).lastPathComponent
-    let (key, keyID) = packKeyFromEnvironment()
+    let (key, keyID) = packKeyFromEnvironment(kind)
     let manifest = FilmPackManifest(
         packID: packID,
         name: flags["--pack-name"] ?? packID,
@@ -443,10 +446,13 @@ if let directory = flags["--seal-pack"] {
 }
 
 if let path = flags["--open-pack"] {
-    let (key, keyID) = packKeyFromEnvironment()
     let keyring = FilmPackKeyring()
-    for kind in [FilmPackKind.vault, .community, .local] {
-        keyring.register(key, kind: kind, id: keyID)
+    for (id, key) in FilmPackKey.community { keyring.register(key, kind: .community, id: id) }
+    if ProcessInfo.processInfo.environment["FOTUFILM_PACK_KEY"] != nil {
+        let (key, keyID) = packKeyFromEnvironment(.local)
+        for kind in [FilmPackKind.community, .local] {
+            keyring.register(key, kind: kind, id: keyID)
+        }
     }
 
     let data: Data

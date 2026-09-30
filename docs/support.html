@@ -57,8 +57,7 @@
 <p>The app and both plugins use the same paper and print-film names in <strong>Output Medium</strong>. Each receiver is digitised from the manufacturer's own published datasheet, and the model descriptions name the publication.</p>
 <p>Negative Only produces density data. To view a negative image, choose Full and set Output Medium to Negative.</p>
 <h2>Custom builds</h2>
-<p>For a custom pack build, set both <code>FOTUFILM_PACK_KEY_SOURCE</code> and <code>FOTUFILM_SEALED_PACKS</code> to absolute paths outside this checkout. Both are required. Keep secret pack keys out of version control.</p>
-<p>To add supplied packs while retaining the source app’s bundle identifier, keychain service, and imported-pack library, set <code>FOTUFILM_USE_SOURCE_IDENTITY=1</code>. This changes identity selection only; the configured sealed packs still determine the bundled catalogue.</p>
+<p>Every build bundles the same film profiles. To keep the source app’s bundle identifier, keychain service, and imported-pack library in an official build, set <code>FOTUFILM_USE_SOURCE_IDENTITY=1</code>.</p>
 <p>Record the source and hash of new images, data, and third-party headers in <code>SOURCE_ASSETS.json</code>.</p>
 <p>Flat Swift builds must add <code>-ISources/FotufilmHalide/include</code> to import the C bridge declarations. The supplied Mac and plugin scripts already do this; Swift Package Manager discovers the module automatically.</p>
 <p><a href="documentation.html">User guide</a> · <a href="../LICENSING.md">Licences</a></p>
