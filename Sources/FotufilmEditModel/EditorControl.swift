@@ -93,6 +93,19 @@ public enum EditorControlSection: String, CaseIterable, Sendable {
         case .pipeline: return "Pipeline"
         }
     }
+
+    /// The sections Copy Settings and presets carry, in the order their chooser lists them.
+    /// Pipeline controls belong to a plugin host, never to a photograph.
+    public static let transferable: [EditorControlSection] = allCases.filter { $0 != .pipeline }
+
+    /// Whether Copy Settings and Save Preset tick this section to begin with: the look, and not
+    /// what belongs to one photograph — its framing, how its source is read, or its local mask.
+    public var transfersByDefault: Bool {
+        switch self {
+        case .sourceInterpretation, .frameGeometry, .frameLocal, .pipeline: return false
+        default: return true
+        }
+    }
 }
 
 public enum EditorControlUnit: String, Sendable, Equatable, Codable {

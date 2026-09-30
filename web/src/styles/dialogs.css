@@ -64,6 +64,38 @@
   .plugin-row + .plugin-row {
     border-top: 1px solid var(--border);
   }
+  .settings-chooser {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .settings-sections {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 16px 24px;
+  }
+  .dialog-actions-spacer {
+    flex: 1;
+  }
+  .presets {
+    align-self: stretch;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .presets li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 12px;
+  }
+  .presets li > span {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .plugin-actions {
     display: flex;
     align-items: center;

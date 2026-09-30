@@ -85,6 +85,7 @@ test("File › Import Film Pack follows the capability and waits out an export",
     libraryOpen: false,
     dialog: null,
     zoom: 1,
+    editSettings: { copied: null, presets: [], sections: [] },
   };
   assert.equal(menuState(base).enabled.importFilmPack, false);
   assert.equal(menuState({ ...base, filmPacks: {} }).enabled.importFilmPack, true);

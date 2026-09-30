@@ -12,6 +12,7 @@ import { editorControl } from "../editor-catalogue.js";
 import { LEGAL_MENU } from "../generated/controls.js";
 import { useEditor } from "./EditorContext.jsx";
 import { editHistory, filmNamer } from "../edit-history.js";
+import { shortcutLabel } from "../shortcut-label.js";
 
 export default function OptionsMenu() {
   const {
@@ -28,7 +29,11 @@ export default function OptionsMenu() {
     stocks,
     filmPacks,
     openFilmPacks,
+    editSettings,
+    pasteSettings,
+    applyPreset,
   } = useEditor();
+  const noPhoto = !active || exporting;
   const imageOnlyDisabled = !active || !!active.image.video || exporting;
   // The Edit History, as the Mac app's Edit menu lists it: every step, the one shown ticked.
   const steps = editHistory(history, filmNamer(stocks));
@@ -91,6 +96,65 @@ export default function OptionsMenu() {
                   <Text>{title}</Text>
                 </MenuItem>
               ))}
+            </Menu>
+          </SubmenuTrigger>
+        </MenuSection>
+        <MenuSection aria-label="Settings">
+          <MenuItem
+            id="copySettings"
+            textValue="Copy Settings…"
+            isDisabled={noPhoto}
+            onAction={() => setDialog("copySettings")}
+          >
+            <Icon slot="icon" name="copySettings" />
+            <Text>Copy Settings…</Text>
+            <Text slot="description">{shortcutLabel("⌥⌘C")}</Text>
+          </MenuItem>
+          <MenuItem
+            id="pasteSettings"
+            textValue="Paste Settings"
+            isDisabled={noPhoto || !editSettings.copied}
+            onAction={pasteSettings}
+          >
+            <Icon slot="icon" name="pasteSettings" />
+            <Text>Paste Settings</Text>
+            <Text slot="description">{shortcutLabel("⌥⌘V")}</Text>
+          </MenuItem>
+          <SubmenuTrigger>
+            <MenuItem id="presets" textValue="Presets">
+              <Icon slot="icon" name="presets" />
+              <Text>Presets</Text>
+            </MenuItem>
+            <Menu aria-label="Presets">
+              <MenuSection aria-label="Apply preset">
+                {editSettings.presets.map((preset) => (
+                  <MenuItem
+                    key={preset.id}
+                    id={`preset-${preset.id}`}
+                    textValue={preset.name}
+                    isDisabled={noPhoto}
+                    onAction={() => applyPreset(preset.id)}
+                  >
+                    <Text>{preset.name}</Text>
+                  </MenuItem>
+                ))}
+              </MenuSection>
+              <MenuSection aria-label="Manage presets">
+                <MenuItem
+                  id="savePreset"
+                  isDisabled={noPhoto}
+                  onAction={() => setDialog("savePreset")}
+                >
+                  <Text>Save Preset…</Text>
+                </MenuItem>
+                <MenuItem
+                  id="managePresets"
+                  isDisabled={!editSettings.presets.length}
+                  onAction={() => setDialog("presets")}
+                >
+                  <Text>Manage Presets…</Text>
+                </MenuItem>
+              </MenuSection>
             </Menu>
           </SubmenuTrigger>
         </MenuSection>

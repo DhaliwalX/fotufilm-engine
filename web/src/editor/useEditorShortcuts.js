@@ -5,7 +5,7 @@ const isTyping = (target) =>
   ) ||
     target.isContentEditable);
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 export default function useEditorShortcuts({
   auto,
   exporting,
@@ -25,7 +25,12 @@ export default function useEditorShortcuts({
   libraryOpen,
   setLibraryOpen,
   setShowNegative,
+  editSettings,
+  pasteSettings,
 }) {
+  // Pastes onto the edit standing when the key is pressed, not the one the listener was added on.
+  const paste = useRef(pasteSettings);
+  paste.current = pasteSettings;
   useEffect(() => {
     function keydown(event) {
       const command = event.metaKey || event.ctrlKey;
@@ -54,6 +59,12 @@ export default function useEditorShortcuts({
         // Show Negative (⌥⌘N); the code, since Option changes the character on a Mac.
         event.preventDefault();
         setShowNegative((shown) => !shown);
+      } else if (command && event.altKey && event.code === "KeyC" && active) {
+        event.preventDefault();
+        setDialog("copySettings");
+      } else if (command && event.altKey && event.code === "KeyV" && active) {
+        event.preventDefault();
+        if (editSettings.copied) paste.current();
       } else if (command && event.key.toLowerCase() === "s" && active) {
         event.preventDefault();
         setDialog("export");
@@ -106,5 +117,6 @@ export default function useEditorShortcuts({
     auto.toggle,
     dispatch,
     libraryOpen,
+    editSettings.copied,
   ]);
 }

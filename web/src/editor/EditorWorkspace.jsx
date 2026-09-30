@@ -17,6 +17,8 @@ import SettingsDialog from "./SettingsDialog.jsx";
 import PluginsDialog from "./PluginsDialog.jsx";
 import FilmPackNotice from "./FilmPackNotice.jsx";
 import UpdateDialog from "./UpdateDialog.jsx";
+import SettingsSectionsDialog from "./SettingsSectionsDialog.jsx";
+import PresetsDialog from "./PresetsDialog.jsx";
 import { FILM_PACK_EXTENSION } from "./useFilmPacks.js";
 import { useEditor } from "./EditorContext.jsx";
 import { PhotoLibrary } from "../photo-library/index.js";
@@ -115,6 +117,12 @@ export default function Workspace() {
           <PluginsDialog />
         ) : dialog === "filmPack" ? (
           <FilmPackNotice />
+        ) : dialog === "copySettings" ? (
+          <SettingsSectionsDialog />
+        ) : dialog === "savePreset" ? (
+          <SettingsSectionsDialog preset />
+        ) : dialog === "presets" ? (
+          <PresetsDialog />
         ) : dialog === "update" ? (
           <UpdateDialog />
         ) : null}

@@ -17,6 +17,8 @@ export default function ShortcutsDialog() {
             [editorControl("autoAdjustment").title, shortcutLabel("⇧⌘A")],
             ["Compare photo", "Hold Space"],
             ["Show negative", shortcutLabel("⌥⌘N")],
+            ["Copy settings", shortcutLabel("⌥⌘C")],
+            ["Paste settings", shortcutLabel("⌥⌘V")],
             ["Video play / pause", "Space / K in viewer"],
             ["Video seek", "← / → or J / L in viewer"],
             ["Mute video preview", "M in viewer"],

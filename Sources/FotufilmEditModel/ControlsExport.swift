@@ -358,6 +358,11 @@ public struct ControlsExport {
                 withJSONObject: EditorControlCatalogue.webSelection, options: [.sortedKeys]), as: UTF8.self) + "\n"
             + "export const HISTOGRAM = " + String(decoding: try! JSONSerialization.data(
                 withJSONObject: EditorControlCatalogue.webHistogram, options: [.sortedKeys]), as: UTF8.self) + "\n"
+            + "export const SETTINGS_SECTIONS = " + String(decoding: try! JSONSerialization.data(
+                withJSONObject: EditorControlSection.transferable.map {
+                    ["id": $0.rawValue, "title": $0.title, "group": $0.group.rawValue,
+                     "groupTitle": $0.group.title, "byDefault": $0.transfersByDefault] as [String: Any]
+                }, options: [.sortedKeys]), as: UTF8.self) + "\n"
             + "export const SCREEN_CONVERSION = " + String(decoding: try! JSONSerialization.data(
                 withJSONObject: ["title": EditorControlCatalogue.control(.digitalReference)!.title,
                                  "default": DigitalReferenceStyle.default.id,
