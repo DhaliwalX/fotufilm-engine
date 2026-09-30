@@ -47,7 +47,10 @@ The engine opens, scans and exports stills through the system's codec libraries
 (`Sources/CFotufilmCodecs`: JPEG, PNG, TIFF, HEIF/AVIF, OpenEXR and camera RAW in; PNG, 16-bit
 TIFF, JPEG and HEIC out, SDR). On Ubuntu: `apt install libjpeg-turbo8-dev libpng-dev libtiff-dev
 libraw-dev liblcms2-dev libopenexr-dev libheif-dev`, with `libheif-plugin-libde265` and
-`libheif-plugin-x265` for HEIC at run time.
+`libheif-plugin-x265` for HEIC at run time. The AppImage carries libjpeg-turbo 3 rather than the
+build host's libjpeg, because the system's libtiff binds to the carried copy and newer
+distributions build libtiff against libjpeg-turbo 3; `cef/build-libjpeg-turbo-linux.sh` builds it
+from the pinned release when the image is packed, which needs `cmake` and `nasm`.
 
 Movies go through the system's FFmpeg (`Sources/CFotufilmVideo`), opened at run time rather than
 linked or bundled: the build needs `libavformat-dev libavcodec-dev libavutil-dev libswscale-dev

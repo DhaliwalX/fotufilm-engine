@@ -40,8 +40,9 @@ fi
 # AV1), which it loads as plug-ins. The executable's RPATH ($ORIGIN) reaches them for the engine
 # and the plug-ins too. Nothing GPL is carried: HEIC export appears where the system has libheif's
 # x265 plug-in, and libtiff (whose Debian build links GPL JBIG-KIT) is the system's, as the GTK
-# that CEF needs already requires it.
-bundled='^lib(raw(_r)?|jpeg|png16|lcms2|OpenEXR[A-Za-z]*|Imath|Iex|IlmThread|heif|de265|aom|dav1d|gomp)[-._0-9]*\.so'
+# that CEF needs already requires it. libjpeg is libjpeg-turbo 3 rather than the build host's,
+# since the system's libtiff binds to the carried copy (cef/build-libjpeg-turbo-linux.sh).
+bundled='^lib(raw(_r)?|png16|lcms2|OpenEXR[A-Za-z]*|Imath|Iex|IlmThread|heif|de265|aom|dav1d|gomp)[-._0-9]*\.so'
 bundle() {
   ldd "$1" | awk '$2 == "=>" && $3 ~ /^\// {print $1, $3}' | while read -r name path; do
     if [[ "$name" =~ $bundled && ! -e "$LIB/$name" ]]; then
@@ -51,6 +52,12 @@ bundle() {
   done
 }
 bundle "$LIB/libfotufilm.so" > "$OUT/bundled.txt"
+ldd "$LIB/libfotufilm.so" | grep -q '^\s*libjpeg\.so\.8 ' || {
+  echo "error: the engine does not link libjpeg.so.8, the libjpeg the image carries" >&2
+  exit 1
+}
+JPEG="$(cef/build-libjpeg-turbo-linux.sh)"
+cp -L "$JPEG" "$LIB/libjpeg.so.8"
 # libheif's plug-in folder, beside its library.
 plugins="$(dirname "$(ldd "$LIB/libfotufilm.so" | awk '$1 ~ /^libheif\.so/ {print $3}')")/libheif/plugins"
 mkdir -p "$LIB/heif-plugins"
@@ -63,6 +70,8 @@ done
 
 # The licences of what the image carries beside the app's own (THIRD_PARTY_NOTICES.md).
 mkdir -p "$APPDIR/usr/share/doc"
+install -D -m 0644 -t "$APPDIR/usr/share/doc/libjpeg-turbo" \
+  "$(dirname "$JPEG")/../LICENSE.md" "$(dirname "$JPEG")/../README.ijg"
 if command -v dpkg >/dev/null; then
   # dpkg knows merged-/usr paths by their /usr spelling.
   sed 's#^/lib/#/usr/lib/#' "$OUT/bundled.txt" | sort -u | xargs -r dpkg -S 2>/dev/null |

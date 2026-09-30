@@ -213,15 +213,18 @@ It uses **@bjorn3/browser_wasi_shim 0.4.2**, without modification, under
 The Linux AppImage (`cef/package-appimage.sh`) carries unmodified shared libraries from the
 distribution it is built on, because a desktop may lack them: LibRaw (LGPL-2.1 or CDDL-1.0),
 libheif and libde265 (LGPL-3.0-or-later), libaom and dav1d (BSD-2-Clause, with the Alliance for
-Open Media patent licence for libaom), libjpeg-turbo (IJG and BSD-3-Clause; this software is
-based in part on the work of the Independent JPEG Group), libpng (libpng licence), Little CMS
-(MIT), OpenEXR and Imath (BSD-3-Clause), and GCC's libgomp (GPL-3.0 with the GCC Runtime Library
-Exception). The engine links them dynamically, so each can be replaced with a compatible build.
-The packaging script copies each package's copyright file into the image under
-`usr/share/doc/`. Their source is the distribution's source package of the version the image was
-built with (for Ubuntu 24.04, <https://launchpad.net/ubuntu/+source/libheif> and the matching
-pages for the others). The image carries no GPL component: the HEVC encoder (x265) and libtiff
-come from the system.
+Open Media patent licence for libaom), libpng (libpng licence), Little CMS (MIT), OpenEXR and
+Imath (BSD-3-Clause), and GCC's libgomp (GPL-3.0 with the GCC Runtime Library Exception). It also
+carries **libjpeg-turbo 3.2.0** (IJG and BSD-3-Clause; this software is based in part on the work
+of the Independent JPEG Group), built unmodified from
+<https://github.com/libjpeg-turbo/libjpeg-turbo/releases/tag/3.2.0> by
+`cef/build-libjpeg-turbo-linux.sh`. The engine links them dynamically, so each can be replaced
+with a compatible build. The packaging script copies each package's copyright file, and
+libjpeg-turbo's `LICENSE.md` and `README.ijg`, into the image under `usr/share/doc/`. The source
+of the distribution's libraries is its source package of the version the image was built with
+(for Ubuntu 24.04, <https://launchpad.net/ubuntu/+source/libheif> and the matching pages for the
+others). The image carries no GPL component: the HEVC encoder (x265) and libtiff come from the
+system.
 
 ## Material Symbols
 
