@@ -19,12 +19,14 @@ jobs:
       - uses: actions/checkout@v4
       - run: xcodebuild -version
       # Package.swift detects Halide while resolving targets, before any SwiftPM build.
-      - run: brew install halide libraw little-cms2
+      - run: brew install halide libraw little-cms2 libtiff
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - name: Portable RAW limits and radiance
         run: tools/test-raw-codec.sh
+      - name: Portable TIFF limits, colour and precision
+        run: tools/test-tiff-codec.sh
       - run: python3 tools/generate-config-layout.py --check
       - run: python3 tools/generate-aot-variants.py --check
       - run: swift run fotufilm-controls --check

@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -40,13 +41,14 @@ struct Encoding {
 };
 
 /// Pixels as a file stores them, before any colour or turn: interleaved, host byte order, one
-/// to four channels (grey, grey+alpha, RGB, RGBA).
+/// to five channels (grey, grey+alpha, RGB, RGBA, CMYK, CMYK+alpha).
 struct Raster {
     uint32_t width = 0, height = 0;
     int channels = 3;
     Samples samples = Samples::U8;
     /// Colour already multiplied by alpha (OpenEXR).
     bool associated = false;
+    bool cmyk = false;
     std::vector<uint8_t> data;
     Encoding encoding;
     /// The Exif orientation still to apply, 1 for none.
@@ -83,6 +85,17 @@ Raster decodeHEIF(const std::string &path, ffc_capture &capture);
 bool heifEncodes();
 /// A camera RAW straight to linear Rec. 2020 (`RawDecode.cpp`).
 void decodeRaw(const std::string &path, uint32_t options, uint32_t longEdge, ffc_image &out);
+
+/// Reusable row colour conversion. Owns its profile transform, never the source raster's data.
+class SceneConverter {
+public:
+    SceneConverter(const Raster &raster, bool linearSamples);
+    ~SceneConverter();
+    void row(const void *source, uint32_t count, float *rgba) const;
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
 
 /// The raster as associated linear Rec. 2020 RGBA, still in the file's orientation.
 std::vector<float> sceneLinear(const Raster &raster, bool linearSamples);
