@@ -1,9 +1,8 @@
 /// Feature policy for the Fotufilm Pro non-consumable purchase. StoreKit state is resolved by the
 /// app layer and passed here as `isPro`.
 public enum ProUnlock {
-    /// App Store product identifier of the unlock. Registered in App Store
-    /// Connect as a non-consumable; mirrored in `ios/Fotufilm.storekit` for
-    /// local testing. The price lives in App Store Connect, not in code.
+    /// App Store product identifier of the unlock, a non-consumable. The price
+    /// lives in App Store Connect, not in code.
     public static let productID = "com.muastudio.fotufilm.pro"
 
     /// Built-in stocks available without purchase, one from each film family.

@@ -11,7 +11,7 @@ final class BrowserColorControlTests: XCTestCase {
     }
 
     func testBrowserWhiteBalanceAndGradeMatchNative() throws {
-        // Consumer packages can expose the engine's Tests directory through a symlink.
+        // A package may reach this Tests directory through a symbolic link.
         let root = URL(fileURLWithPath: #filePath).resolvingSymlinksInPath().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         let fixture = try JSONDecoder().decode(Fixture.self, from: Data(contentsOf:

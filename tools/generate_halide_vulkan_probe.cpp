@@ -7,8 +7,6 @@
 //
 // copy1 measures one-pass cost, copy8 exposes dispatch overhead, and math8 separates arithmetic
 // cost from memory cost.
-//
-// Built by android/tools/probe-passes.sh.
 
 #include <Halide.h>
 

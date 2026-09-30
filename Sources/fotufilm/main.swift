@@ -871,9 +871,8 @@ if FilmStock.allPresetIDs.isEmpty {
         fail("No film stocks could be loaded: \(error)")
     }
     fail("""
-    No film stocks installed. Fotufilm ships the model, not the calibration; \
-    point FOTUFILM_STOCKS at a stock pack directory, or use the example stocks \
-    bundled with the package. See tools/calibration/STOCK_PACKS.md.
+    No film stocks installed. Point FOTUFILM_STOCKS at a stock pack directory, \
+    or use the stocks bundled with the package.
     """)
 }
 

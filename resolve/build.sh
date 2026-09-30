@@ -65,7 +65,7 @@ VERSION_DEFINES=(-DFOTUFILM_VERSION_MAJOR="$VERSION_MAJOR" -DFOTUFILM_VERSION_MI
 # Drift in the checked-in plist is a note, not a failure. The bundle's copy is stamped from
 # version.env further down and that stamped copy is the one the Mac app compares against, so the
 # values at rest here are not load-bearing. CURRENT_PROJECT_VERSION moves with every release —
-# one monotonic build number shared with Xcode Cloud — and CI runs this script, so failing here
+# one monotonic build number across every app — and CI runs this script, so failing here
 # would break the OFX harness on every bump until someone hand-edited the plist.
 for key in "CFBundleShortVersionString $MARKETING_VERSION" "CFBundleVersion $PROJECT_VERSION"; do
   value="$(/usr/libexec/PlistBuddy -c "Print :${key%% *}" resolve/Info.plist 2>/dev/null || true)"

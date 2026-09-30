@@ -22,8 +22,8 @@ KERNELS_ONLY=false
 [[ "${3:-}" == "--kernels" ]] && KERNELS_ONLY=true
 {
   # Every Halide-side source and the generator. Sorted so the hash does not follow the
-  # filesystem's mood. Follow the consumer's engine links: changing a pinned header or kernel
-  # must invalidate the cache just as changing a regular file does.
+  # filesystem's mood. Follow symbolic links: changing a linked header or kernel must
+  # invalidate the cache just as changing a regular file does.
   if $KERNELS_ONLY; then
     # The shim is not included by the generator — the archives are emitted from
     # the `Pipeline/` headers — so it cannot change what generation produces.

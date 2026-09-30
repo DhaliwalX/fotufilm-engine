@@ -5,7 +5,7 @@
 #include <HalideBuffer.h>
 #include <HalideRuntimeVulkan.h>
 
-// Provided by the batched Vulkan runtime (android/tools/halide-vk-batch.patch).
+// Provided by the batched Vulkan runtime this build links.
 extern "C" int32_t halide_vulkan_batch_set(void *user_context, int32_t enabled);
 
 #include "FotufilmHalide.h"
