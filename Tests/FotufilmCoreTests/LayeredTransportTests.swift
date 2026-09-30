@@ -5,7 +5,7 @@ import XCTest
 enum TransportFixtures {
     /// Invented construction for numerical tests, not a measured commercial film.
     static var stack: LayeredTransport {
-        LayeredTransport(constructionID: "synthetic-layered-negative", provenance: "illustrative",
+        LayeredTransport(constructionID: "synthetic-layered-negative",
             layers: [
                 .init(id: "blue", thicknessMM: 0.006, refractiveIndex: [1.52], absorptionPerMM: [0.4]),
                 .init(id: "green", thicknessMM: 0.006, refractiveIndex: [1.52], absorptionPerMM: [0.4]),
@@ -16,7 +16,7 @@ enum TransportFixtures {
             returnedToDirect: [[0.05], [0.02], [0.008]], coreSigmaMM: [0.004, 0.003, 0.0024])
     }
     static var mirror: LayeredTransport {
-        LayeredTransport(constructionID: "analytic-mirror", provenance: "illustrative",
+        LayeredTransport(constructionID: "analytic-mirror",
             layers: [.init(id: "slab", thicknessMM: 0.02, refractiveIndex: [1], absorptionPerMM: [0])],
             rearReflectance: [1], recordDepthMM: [0.005, 0.005, 0.005],
             angularExponent: [[1], [1], [1]], captureProbability: [[1], [1], [1]],

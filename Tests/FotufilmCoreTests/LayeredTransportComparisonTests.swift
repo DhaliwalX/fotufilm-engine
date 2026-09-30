@@ -70,8 +70,7 @@ final class LayeredTransportComparisonTests: XCTestCase {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(TransportFixtures.stack).write(to: directory.appendingPathComponent("construction.json"))
         let report: [String: Any] = ["width": w, "height": h, "scene": "synthetic HDR architectural target",
-            "stock": stock.name, "constructionProvenance": "illustrative",
-            "amount": 1, "returnedToDirect": stock.halationStrength,
+            "stock": stock.name, "amount": 1, "returnedToDirect": stock.halationStrength,
             "format": options.format.name, "metalMaximumAbsoluteDifference": parity,
             "coldCPUAndWarmMetalSeconds": timings,
             "meanAbsoluteABDifference": zip(a.planes.flatMap{$0}, b.planes.flatMap{$0})

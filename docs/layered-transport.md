@@ -82,7 +82,7 @@ error convention.
 
 | Field | Meaning |
 | --- | --- |
-| `constructionID`, `provenance` | Identifier and `illustrative`, `inferred`, or `measured` evidence label |
+| `constructionID` | Construction identifier |
 | `wavelengthsNM` | Exactly the engine's 81 samples, 380–780 nm at 5 nm intervals |
 | `layers` | Front-to-rear layers: unique ID, thickness in mm, refractive index, and absorption in inverse mm |
 | `frontIndex`, `rearIndex` | Surrounding media at the two external interfaces |

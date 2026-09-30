@@ -26,7 +26,7 @@ public extension LayeredTransport {
     /// Generic geometry for model comparison; optical constants are illustrative. The stock
     /// supplies its return ratios and compact response, without modifying its calibration.
     static func illustrative(stock: FilmStock, format: FilmFormat) -> Self {
-        Self(constructionID: "illustrative-generic-stack", provenance: "illustrative",
+        Self(constructionID: "illustrative-generic-stack",
             layers: [
                 .init(id: "blue-coating", thicknessMM: 0.006, refractiveIndex: [1.52], absorptionPerMM: [0.4]),
                 .init(id: "green-coating", thicknessMM: 0.006, refractiveIndex: [1.52], absorptionPerMM: [0.4]),
