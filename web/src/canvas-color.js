@@ -9,6 +9,8 @@ export function validateColorSpace(space) {
 }
 export const contextColorSpace = (context) =>
   context?.getContextAttributes?.().colorSpace || 'srgb'
+// Browsers without ImageData.colorSpace (Firefox) read every canvas as sRGB.
+export const imageDataColorSpace = (data) => data.colorSpace || 'srgb'
 export const canvasColorSpace = (canvas) =>
   canvas ? contextColorSpace(canvas.getContext('2d')) : 'srgb'
 let preferred

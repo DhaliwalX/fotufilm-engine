@@ -3,6 +3,7 @@ import { linearSampler } from "./linear-sampler.js";
 import { imageSource } from "./engine.js";
 import {
   decodeCanvasPixels,
+  imageDataColorSpace,
   sourceContext,
   sourcePixels,
 } from "./canvas-color.js";
@@ -190,7 +191,7 @@ export function scaledLinearImage(image, edge) {
   context.drawImage(image, 0, 0, width, height);
   const pixels = sourcePixels(context, 0, 0, width, height);
   return new LinearImage({
-    pixels: decodeCanvasPixels(pixels.data, pixels.colorSpace),
+    pixels: decodeCanvasPixels(pixels.data, imageDataColorSpace(pixels)),
     width,
     height,
   });
