@@ -169,6 +169,10 @@ public final class HostService {
             })
         case "exportOptions":
             return try answer(exportOptions(parameters))
+        case "exportBatch":
+            return try answer(exportBatch(parameters, progress: { _ in }))
+        case "fileIdentities":
+            return try answer(fileIdentities(parameters))
         case "suggestFilm":
             return try answer(suggestFilm(parameters))
         case "recordFilmChoice":
@@ -332,7 +336,8 @@ public final class HostService {
             var height: Int
             var region: Region
         }
-        var handle: Int
+        /// Nil when the photograph is named another way: a batch export's file.
+        var handle: Int?
         var maxEdge: Int?
         var cropMode: Bool?
         var viewport: Viewport?
@@ -367,7 +372,8 @@ public final class HostService {
         }
     }
 
-    func prepare(_ params: Data) throws -> Prepared {
+    /// `image` stands in for the request's handle: a photograph the call opened itself.
+    func prepare(_ params: Data, image source: HostImage? = nil) throws -> Prepared {
         let request: RenderRequest, decoded: WebNativeEdit
         do {
             request = try JSONDecoder().decode(RenderRequest.self, from: params)
@@ -375,7 +381,7 @@ public final class HostService {
         } catch {
             throw HostEngine.Failure(description: "Unreadable render request: \(error)")
         }
-        let opened = try self.image(request.handle)
+        let opened = try source ?? self.image(request.handle)
         opened.video?.select(params)
         let image = try opened.interpreted(standardRange: decoded.readsStandardRange)
         let geometry = (request.cropMode == true ? request.edit.uncropped() : request.edit)
@@ -429,7 +435,7 @@ public final class HostService {
 
         // Cache keys: everything but the viewport and where the picture goes decides the
         // developed frame, and the range it is delivered in.
-        let sceneKey = "\(request.handle)|\(image.frameKey)|\(maxEdge ?? 0)|\(request.cropMode == true)|\(geometry)"
+        let sceneKey = "\(request.handle ?? 0)|\(image.frameKey)|\(maxEdge ?? 0)|\(request.cropMode == true)|\(geometry)"
         var keyed = body
         for name in ["viewport", "maxEdge", "handle", "haveOriginal", "present"] { keyed[name] = nil }
         let developKey = sceneKey + "|" + String(decoding: (try? JSONSerialization.data(
@@ -978,37 +984,62 @@ public final class HostService {
         -> HostStill {
         var body = parameters
         body["viewport"] = nil
-        var prepared = try prepare(JSONSerialization.data(withJSONObject: body))
+        let prepared = try prepare(JSONSerialization.data(withJSONObject: body))
         let scene = try sceneFor(prepared.image, geometry: prepared.geometry, sizes: prepared.sizes)
+        return try developStill(stillJob(prepared, scene: scene, body: body), deep: deep, hdr: hdr,
+                                exact: parameters["photoQuality"] as? String != "fast")
+    }
+
+    /// A still ready to develop: its framed scene, and the edit a print frame around it decides.
+    struct StillJob {
+        var scene: [Float]
+        var width: Int
+        var height: Int
+        var edit: WebNativeEdit
+        var plan: HostFrames.Plan?
+        var contentHeadroom: Float
+        var capture: [String: Any]?
+    }
+
+    func stillJob(_ prepared: Prepared, scene: [Float], body: [String: Any]) throws -> StillJob {
+        var body = body
         let (width, height) = prepared.sizes.output
         let plan = try (body["printFrame"] as? [String: Any]).flatMap {
             try HostFrames.plan($0, width: width, height: height)
         }
+        var edit = prepared.edit
         if let plan {
             HostFrames.settings(&body, for: plan)
-            prepared.edit = try prepared.edit(body)
+            edit = try prepared.edit(body)
         }
-        // Photo Quality: exact film math unless the page asks for Fast, as the Mac app exports.
-        let exact = parameters["photoQuality"] as? String != "fast"
+        return StillJob(scene: scene, width: width, height: height, edit: edit, plan: plan,
+                        contentHeadroom: prepared.image.contentHeadroom,
+                        capture: prepared.image.captureMetadata)
+    }
+
+    /// Develops a still job. Photo Quality: exact film math unless the page asks for Fast, as the
+    /// Mac app exports.
+    func developStill(_ job: StillJob, deep: Bool, hdr: Bool, exact: Bool) throws -> HostStill {
+        let (width, height) = (job.width, job.height)
         func develop(_ format: HostEngine.PixelFormat) throws -> [UInt8] {
             let stride = format == .rgba8DisplayP3 ? 4 : 16
             var pixels = [UInt8](repeating: 0, count: width * height * stride)
             try pixels.withUnsafeMutableBytes { buffer in
-                try engine.develop(scene, width: width, height: height,
-                                   contentHeadroom: prepared.image.contentHeadroom,
-                                   edit: prepared.edit, exactMath: exact,
+                try engine.develop(job.scene, width: width, height: height,
+                                   contentHeadroom: job.contentHeadroom,
+                                   edit: job.edit, exactMath: exact,
                                    into: .init(maxEdge: 0, format: format,
                                                pixels: buffer.baseAddress!,
                                                rowBytes: width * stride, capacity: buffer.count))
             }
             return pixels
         }
-        let stock = engine.stock(prepared.edit.edit.stock)
+        let stock = engine.stock(job.edit.edit.stock)
         let knee = stock.flatMap { stock in
-            try? engine.options(prepared.edit, stock: stock, contentHeadroom: 1)
+            try? engine.options(job.edit, stock: stock, contentHeadroom: 1)
                 .sdrShoulderKnee(for: stock)
         } ?? FilmSDRDelivery.boundedShoulderKnee
-        let wantsHDR = hdr && plan == nil && deliversHDR(prepared.edit)
+        let wantsHDR = hdr && job.plan == nil && deliversHDR(job.edit)
         // One develop in linear light serves both a deep file and the HDR picture.
         let linear = deep || wantsHDR
             ? try develop(.rgba32FloatLinearP3).withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
@@ -1017,8 +1048,8 @@ public final class HostService {
             pixels: deep ? .display16(HostExport.display16(linear: linear!, width: width,
                                                            height: height, knee: knee))
                          : .display8(try develop(.rgba8DisplayP3)),
-            width: width, height: height, frame: plan?.configuration,
-            capture: prepared.image.captureMetadata)
+            width: width, height: height, frame: job.plan?.configuration,
+            capture: job.capture)
         if wantsHDR, let linear {
             still.hlg = HostExport.hlg16(linear: linear, width: width, height: height)
         }
@@ -1078,6 +1109,20 @@ public final class HostService {
             sceneKey = key
             return hit.scene
         }
+        let scene = try makeScene(image, geometry: geometry, sizes: sizes, draft: draft)
+        scenes.append((Weak(image), key, scene))
+        sceneKey = key
+        while scenes.count > Self.sceneLimit.count || scenes.count > 1
+            && scenes.reduce(0, { $0 + $1.scene.count * 4 }) > Self.sceneLimit.bytes {
+            scenes.removeFirst()
+        }
+        return scene
+    }
+
+    /// The framed scene, made afresh and kept nowhere: safe off the engine thread, as a batch
+    /// export makes the next photograph's while the current one develops.
+    func makeScene(_ image: HostImage, geometry: SceneGeometry,
+                   sizes: (frame: (Int, Int), output: (Int, Int)), draft: Bool = false) throws -> [Float] {
         let started = DispatchTime.now().uptimeNanoseconds
         defer {
             if Self.logsTimings {
@@ -1115,12 +1160,6 @@ public final class HostService {
                 ? reduced
                 : geometry.apply(reduced, width: frameWidth, height: frameHeight,
                                  orientedSize: oriented, output: sizes.output, lensTable: table)
-        }
-        scenes.append((Weak(image), key, scene))
-        sceneKey = key
-        while scenes.count > Self.sceneLimit.count || scenes.count > 1
-            && scenes.reduce(0, { $0 + $1.scene.count * 4 }) > Self.sceneLimit.bytes {
-            scenes.removeFirst()
         }
         return scene
     }

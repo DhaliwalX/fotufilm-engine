@@ -268,6 +268,10 @@ int main(int argc, char* argv[]) {
                                                 std::function<void(const std::string&)> done) {
       fotufilm::ChooseExportDestination(filename, type, export_dir, std::move(done));
     });
+    g_engine->SetFolderPicker(
+        [export_dir](const std::string& type, std::function<void(const std::string&)> done) {
+          fotufilm::ChooseExportFolder(type, export_dir, std::move(done));
+        });
     fotufilm::RegisterExportFiles(*g_dispatcher);
 #endif
     CefRefPtr<fotufilm::BrowserApp> app =

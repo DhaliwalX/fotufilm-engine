@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, Heading, Content } from "@react-spectrum/s2/Dialog";
 import { PickerItem, Picker } from "@react-spectrum/s2/Picker";
 import { Adjustment } from "../Adjustment.jsx";
@@ -9,7 +9,12 @@ import { Button } from "@react-spectrum/s2/Button";
 import { Switch } from "@react-spectrum/s2/Switch";
 import { useEditor, useEditorFrame } from "./EditorContext.jsx";
 import { METADATA_LABELS, useExportOptions } from "./useExportOptions.js";
-import { exportSizeOptions, resolutionLimitWarning } from "../export-sizes.js";
+import {
+  batchExportSizeOptions,
+  exportSizeOptions,
+  resolutionLimitWarning,
+} from "../export-sizes.js";
+import { isMovieDocument } from "./useExportActions.js";
 import { setAppSetting, useAppSetting } from "../app-settings.js";
 
 const IMAGE_TYPES = [
@@ -59,6 +64,8 @@ export default function ExportDialog() {
     videoExportController,
     exportClip,
     exportImage,
+    exportAll,
+    files,
     exportMetadata,
     setExportMetadata,
     exportHDR,
@@ -67,8 +74,15 @@ export default function ExportDialog() {
   } = useEditor();
   const { status } = useEditorFrame();
   const video = !!active?.image.video;
+  // Export All: the stills in the strip, each with its own edit, where the backend exports them
+  // together.
+  const stillCount = backend.exportImages
+    ? files.filter((doc) => !isMovieDocument(doc)).length
+    : 0;
+  const [scope, setScope] = useState("photo");
+  const batch = !video && stillCount > 1 && scope === "all";
   const originalAvailable =
-    !video && !!backend.exportOriginal && !!active?.image.original;
+    !video && !batch && !!backend.exportOriginal && !!active?.image.original;
   const original = originalAvailable && exportType === ORIGINAL;
   // A photograph with no camera RAW behind it has no original to export.
   useEffect(() => {
@@ -77,10 +91,12 @@ export default function ExportDialog() {
   }, [exportType, originalAvailable, video, backend, setExportType]);
   // A native backend measures a size's long edge on the cropped picture, as the Mac app does.
   const ofCrop = backend.longEdgeOfCrop === true;
-  const sizes = exportSizeOptions(width, height, video, cropSize, ofCrop);
+  const sizes = batch
+    ? batchExportSizeOptions()
+    : exportSizeOptions(width, height, video, cropSize, ofCrop);
   const options = useExportOptions({ backend, active, edit, stockId, sizes });
   // Sizes past the backend's memory limit, which the Mac app's sheet greys out.
-  const unavailable = options?.unavailable ?? [];
+  const unavailable = batch ? [] : (options?.unavailable ?? []);
   const chosenSize = sizes.some(({ id }) => id === exportSize) ? exportSize : "full";
   // The largest size it can develop stands in for one it cannot, as the Mac app selects.
   const sizeID = unavailable.includes(chosenSize)
@@ -130,17 +146,32 @@ export default function ExportDialog() {
     }
     setExportSize(last.size);
   };
-  const hdr = exportType === "image/heic" && options?.hdr === true && exportHDR;
+  // Across photographs, HDR applies to each whose film delivers it.
+  const hdrOffered = batch ? backend.hdrExport === true : options?.hdr === true;
+  const hdr = exportType === "image/heic" && hdrOffered && exportHDR;
   const videoType = active?.image.video
     ? videoExportTypes(backend).find(({ id }) => id === videoFormat)
     : null;
   return (
     <Dialog aria-label="Export image" isDismissible size={"M"}>
       <Heading>
-        {active?.image.video ? VIDEO_LABELS.export : "Export image"}
+        {active?.image.video
+          ? VIDEO_LABELS.export
+          : batch
+            ? `Export ${stillCount} photos`
+            : "Export image"}
       </Heading>
       <Content>
         <fieldset disabled={exporting}>
+          {!video && stillCount > 1 && (
+            <div className="select-row">
+              Export
+              <Picker aria-label="Export" value={scope} onChange={setScope} size={"S"}>
+                <PickerItem id="photo">This Photo</PickerItem>
+                <PickerItem id="all">{`All ${stillCount} Photos`}</PickerItem>
+              </Picker>
+            </div>
+          )}
           {last && JSON.stringify(last) !== JSON.stringify(current) && (
             <Button size="S" variant={"secondary"} onPress={applyLast}>
               {"Use Last Export Settings"}
@@ -236,7 +267,7 @@ export default function ExportDialog() {
           )}
           {!active?.image.video &&
             exportType === "image/heic" &&
-            options?.hdr && (
+            hdrOffered && (
               <Switch isSelected={exportHDR} onChange={setExportHDR} size="S">
                 HDR
               </Switch>
@@ -311,8 +342,8 @@ export default function ExportDialog() {
             </div>
           )}
           <p className="export-detail">
-            {delivered.width} × {delivered.height}{" "}
-            pixels ·{" "}
+            {batch ? `${stillCount} photos` : `${delivered.width} × ${delivered.height} pixels`}{" "}
+            ·{" "}
             {colorSpaceLabel(
               active?.image.video
                 ? (videoType?.colorSpace ?? "srgb")
@@ -332,12 +363,14 @@ export default function ExportDialog() {
           <p className="export-detail">
             {active?.image.video
               ? "Exports every frame in the trim range with the current film, crop, and adjustments. Writes directly to disk; no upload. Odd dimensions are padded by one pixel."
-              : "Exports the finished image with the current crop and adjustments."}
+              : batch
+                ? "Exports every photo with its own film, crop and adjustments into one folder."
+                : "Exports the finished image with the current crop and adjustments."}
           </p>
             </>
           )}
         </fieldset>
-        {!active?.image.video && !original && framedSize.error && (
+        {!active?.image.video && !original && !batch && framedSize.error && (
           <p role="alert">{framedSize.error}</p>
         )}
         {exporting && <p role="status">{status || "Preparing export"}</p>}
@@ -357,11 +390,17 @@ export default function ExportDialog() {
           </Button>
           <Button
             size="S"
-            onPress={active?.image.video ? exportClip : exportImage}
+            onPress={active?.image.video ? exportClip : batch ? exportAll : exportImage}
             isDisabled={exporting || (!video && !original && unavailable.includes(sizeID))}
             variant={"accent"}
           >
-            {exporting ? "Exporting…" : original ? "Export Original" : "Export"}
+            {exporting
+              ? "Exporting…"
+              : original
+                ? "Export Original"
+                : batch
+                  ? `Export ${stillCount} Photos`
+                  : "Export"}
           </Button>
         </div>
       </Content>

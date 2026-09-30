@@ -12,6 +12,17 @@ NSMutableSet<NSString*>* Saved() {
   return saved;
 }
 
+// The folders chosen for Export All since launch, whose files "openExport" also opens.
+NSMutableSet<NSString*>* BatchFolders() {
+  static NSMutableSet<NSString*>* folders = [NSMutableSet set];
+  return folders;
+}
+
+BOOL SavedHere(NSString* path) {
+  return [Saved() containsObject:path] ||
+         [BatchFolders() containsObject:path.stringByDeletingLastPathComponent];
+}
+
 NSString* FolderKey(bool movie) {
   return movie ? @"FotufilmMovieExportFolder" : @"FotufilmPhotoExportFolder";
 }
@@ -61,6 +72,34 @@ void ChooseExportDestination(const std::string& filename, const std::string& typ
     finish([panel runModal]);
 }
 
+void ChooseExportFolder(const std::string& type, const std::string& fixed_directory,
+                        std::function<void(const std::string&)> done) {
+  auto chosen = [done](NSString* folder) {
+    if (folder.length) [BatchFolders() addObject:folder.stringByStandardizingPath];
+    done(folder.length ? folder.UTF8String : "");
+  };
+  if (!fixed_directory.empty()) return chosen(@(fixed_directory.c_str()));
+  const bool movie = type.rfind("video/", 0) == 0;
+  NSOpenPanel* panel = [NSOpenPanel openPanel];
+  panel.canChooseFiles = NO;
+  panel.canChooseDirectories = YES;
+  panel.canCreateDirectories = YES;
+  panel.allowsMultipleSelection = NO;
+  panel.prompt = @"Export";
+  panel.message = @"Choose a folder for the exported photos.";
+  panel.directoryURL = StartingFolder(movie);
+  auto finish = ^(NSModalResponse response) {
+    NSURL* url = response == NSModalResponseOK ? panel.URL : nil;
+    if (url)
+      [NSUserDefaults.standardUserDefaults setObject:url.path forKey:FolderKey(movie)];
+    chosen(url.path);
+  };
+  if (NSWindow* window = NSApp.mainWindow)
+    [panel beginSheetModalForWindow:window completionHandler:finish];
+  else
+    finish([panel runModal]);
+}
+
 void RegisterExportFiles(Dispatcher& dispatcher) {
   dispatcher.Register(
       "openExport", Dispatcher::Thread::kUi, [](const Call& call, std::shared_ptr<Reply> reply) {
@@ -70,7 +109,7 @@ void RegisterExportFiles(Dispatcher& dispatcher) {
                 : nullptr;
         NSString* path = fields ? @(fields->GetString("path").ToString().c_str()) : @"";
         path = path.stringByStandardizingPath;
-        if (![Saved() containsObject:path])
+        if (!SavedHere(path))
           return reply->Reject("Only a file this app saved can be opened.");
         if (![NSFileManager.defaultManager fileExistsAtPath:path])
           return reply->Reject("The file is no longer where it was saved.");

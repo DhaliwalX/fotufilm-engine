@@ -88,6 +88,12 @@ std::set<std::string>& Saved() {
   return saved;
 }
 
+// The folders chosen for Export All this run, whose files "openExport" also opens.
+std::set<std::string>& BatchFolders() {
+  static std::set<std::string> folders;
+  return folders;
+}
+
 }  // namespace
 
 void ChooseFilesToOpen(CefRefPtr<CefBrowser> browser, const std::string& kind,
@@ -123,6 +129,28 @@ void ChooseExportDestination(CefRefPtr<CefBrowser> browser, const std::string& f
       }));
 }
 
+void ChooseExportFolder(CefRefPtr<CefBrowser> browser, const std::string& type,
+                        const std::string& fixed_directory,
+                        std::function<void(const std::string&)> done) {
+  auto chosen = [done](const std::string& folder) {
+    if (!folder.empty()) {
+      std::lock_guard<std::mutex> lock(SavedMutex());
+      BatchFolders().insert(fs::path(folder).lexically_normal().string());
+    }
+    done(folder);
+  };
+  if (!fixed_directory.empty()) return chosen(fixed_directory);
+  if (!browser) return done("");
+  const bool movie = type.rfind("video/", 0) == 0;
+  browser->GetHost()->RunFileDialog(
+      FILE_DIALOG_OPEN_FOLDER, "Export All", StartingFolder(movie).string(), {},
+      new Chosen([chosen, movie](std::vector<std::string> paths) {
+        const std::string folder = paths.empty() ? "" : paths.front();
+        if (!folder.empty()) Remember(movie, fs::path(folder));
+        chosen(folder);
+      }));
+}
+
 void RegisterOpenExport(Dispatcher& dispatcher,
                         std::function<bool(const std::string& path, bool reveal)> open) {
   dispatcher.Register(
@@ -136,7 +164,8 @@ void RegisterOpenExport(Dispatcher& dispatcher,
             fs::path(fields->GetString("path").ToString()).lexically_normal().string();
         {
           std::lock_guard<std::mutex> lock(SavedMutex());
-          if (!Saved().count(path))
+          if (!Saved().count(path) &&
+              !BatchFolders().count(fs::path(path).parent_path().string()))
             return reply->Reject("Only a file this app saved can be opened.");
         }
         std::error_code error;

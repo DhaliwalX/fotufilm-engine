@@ -41,6 +41,7 @@ export function createNativeBackend(host) {
   if (host.longEdgeOfCrop === true) backend.longEdgeOfCrop = true;
   if (host.subjectSelection === true) backend.subjectSelection = true;
   if (host.exportImageCancels === true) backend.exportImageCancels = true;
+  if (host.hdrExport === true) backend.hdrExport = true;
   // Optional: what the host calls showing a saved export in its file manager (`openExport`).
   if (typeof host.revealExportLabel === "string") backend.revealExportLabel = host.revealExportLabel;
   // Optional: the host draws the photograph itself beneath the page; renders asked to `present`
@@ -63,6 +64,8 @@ export function createNativeBackend(host) {
     "copyImage",
     "exportOptions",
     "exportOriginal",
+    "exportImages",
+    "fileIdentities",
     "suggestFilm",
     "recordFilmChoice",
     "forgetFilmChoices",

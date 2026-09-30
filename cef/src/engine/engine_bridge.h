@@ -29,6 +29,12 @@ class EngineBridge {
 
   void SetDestinationPicker(DestinationPicker picker) { picker_ = std::move(picker); }
 
+  // Asks for a folder that several exports go into (Export All): the MIME type they are saved as
+  // in, a folder out (empty: cancelled). Called and answered on the UI thread.
+  using FolderPicker = std::function<void(const std::string& type,
+                                          std::function<void(const std::string& folder)> done)>;
+  void SetFolderPicker(FolderPicker picker) { folder_picker_ = std::move(picker); }
+
   // Lends the engine the platform compositor's surfaces, so renders that name a layer go
   // straight to the screen (presentation/presentation.h); null takes them away.
   void SetPresenter(std::shared_ptr<ImagePresenter> presenter);
@@ -42,6 +48,7 @@ class EngineBridge {
 
   Dispatcher& dispatcher_;
   DestinationPicker picker_;
+  FolderPicker folder_picker_;
   fotufilm_engine* engine_ = nullptr;
   std::string failure_;
   // Engine thread.

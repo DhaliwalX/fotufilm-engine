@@ -16,6 +16,8 @@ constexpr const char* kMethods[] = {
     // The strip's pictures of photographs opened together, decoded only when chosen.
     "thumbnail",
     "suggestFilm",      "recordFilmChoice", "forgetFilmChoices",
+    // Export All finds the kept edits of photographs that have not been opened yet.
+    "fileIdentities",
     // The Resolve and Final Cut plug-ins. An install holds the engine thread until the copy is
     // done and macOS has registered it, as the Mac app's menu item holds its own.
     "plugins",          "installPlugin",    "revealPlugin",
@@ -42,7 +44,7 @@ EngineBridge::EngineBridge(Dispatcher& dispatcher) : dispatcher_(dispatcher) {
                           Handle(call, std::move(reply));
                         });
   // Choosing the destination is the host's; encoding and writing are the engine's.
-  for (const char* method : {"export", "exportVideo", "exportOriginal"})
+  for (const char* method : {"export", "exportVideo", "exportOriginal", "exportBatch"})
     dispatcher.Register(method, Dispatcher::Thread::kUi,
                         [this](const Call& call, std::shared_ptr<Reply> reply) {
                           Export(call, std::move(reply));
@@ -146,7 +148,10 @@ fotufilm_engine* EngineBridge::Engine(std::string& error) {
 }
 
 void EngineBridge::Export(const Call& call, std::shared_ptr<Reply> reply) {
-  if (!picker_) return reply->Reject("This host cannot choose where to save.");
+  // Export All saves into a folder, every other export to one file.
+  const bool batch = call.method == "exportBatch";
+  if (batch ? !folder_picker_ : !picker_)
+    return reply->Reject("This host cannot choose where to save.");
   CefRefPtr<CefDictionaryValue> fields =
       call.params && call.params->GetType() == VTYPE_DICTIONARY
           ? call.params->GetDictionary()->Copy(false)
@@ -154,13 +159,17 @@ void EngineBridge::Export(const Call& call, std::shared_ptr<Reply> reply) {
   const std::string filename = fields->GetString("filename").ToString();
   const std::string type = fields->GetString("type").ToString();
   auto pending = std::make_shared<Call>(call);
-  picker_(filename, type, [this, pending, fields, reply](const std::string& path) {
+  auto chosen = [this, pending, fields, reply, batch](const std::string& path) {
     if (path.empty()) return reply->Reject("The export was cancelled.", "AbortError");
-    fields->SetString("path", path);
+    fields->SetString(batch ? "directory" : "path", path);
     pending->params = CefValue::Create();
     pending->params->SetDictionary(fields);
     dispatcher_.PostCall(pending, [this, pending, reply] { Handle(*pending, reply); });
-  });
+  };
+  if (batch)
+    folder_picker_(type, std::move(chosen));
+  else
+    picker_(filename, type, std::move(chosen));
 }
 
 namespace {
