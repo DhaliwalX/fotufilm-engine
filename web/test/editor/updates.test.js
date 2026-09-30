@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { checkOutcome, formatBytes } from "../../src/editor/useUpdates.js";
+import { createDesktopBackend } from "../../src/backend/desktop/host.js";
 
 const available = {
   state: "available",
@@ -37,4 +38,30 @@ test("download sizes read as the Mac's file-size formatter", () => {
   assert.equal(formatBytes(12_345_678), "12.3 MB");
   assert.equal(formatBytes(1_500_000_000), "1.5 GB");
   assert.equal(formatBytes(512_000), "512 KB");
+});
+
+test("a check asks for pre-releases only when they are taken", async () => {
+  const calls = [];
+  const { updates } = createDesktopBackend({
+    capabilities: { updates: true },
+    async postMessage(message) {
+      calls.push([message.method, message.params]);
+      return { state: "checking" };
+    },
+  });
+  await updates.check();
+  await updates.check({ prereleases: true });
+  assert.deepEqual(calls, [
+    ["updateCheck", { prereleases: false }],
+    ["updateCheck", { prereleases: true }],
+  ]);
+});
+
+test("an offer inside the running marketing version names its build", () => {
+  const offer = checkOutcome(
+    { ...available, version: "1.10", release: "1.10 (build 13)" },
+    { manual: true },
+  );
+  assert.equal(offer.version, "1.10 (build 13)");
+  assert.equal(checkOutcome(available, { manual: true }).version, "1.11");
 });

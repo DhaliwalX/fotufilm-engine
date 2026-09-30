@@ -104,6 +104,7 @@ if(OS_MAC)
   # Mac app in place and reads its release feed; a source build is an app of its own, with no feed.
   set(FOTUFILM_BUNDLE_ID "com.muastudio.fotufilm.source" CACHE STRING "The app's bundle identifier")
   set(FOTUFILM_UPDATE_FEED "" CACHE STRING "The release feed Check for Updates reads")
+  set(FOTUFILM_RELEASE_LIST "" CACHE STRING "The release list pre-release updates are read from")
   set(_mac_sources
     src/platform/mac/compositor.mm
     src/platform/mac/export_files.mm

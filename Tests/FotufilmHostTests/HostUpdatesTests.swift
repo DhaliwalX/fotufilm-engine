@@ -7,6 +7,7 @@ import XCTest
 final class HostUpdatesTests: XCTestCase {
     private final class Channel: HostUpdateChannel {
         var feedURL: URL?
+        var releaseListURL: URL?
         var version = "1.10"
         var build = "12"
         var opened: [URL] = []
@@ -25,16 +26,16 @@ final class HostUpdatesTests: XCTestCase {
         try? FileManager.default.removeItem(at: folder)
     }
 
-    private func feed(version: String, build: String, package: Data, digest: String? = nil)
-        throws -> URL {
-        let file = folder.appendingPathComponent("Fotufilm-Desktop.pkg")
+    private func feed(version: String, build: String, package: Data, digest: String? = nil,
+                      named name: String = "feed") throws -> URL {
+        let file = folder.appendingPathComponent("\(name).pkg")
         try package.write(to: file)
         let manifest: [String: Any] = [
             "version": version, "build": build, "downloadURL": file.absoluteString,
             "sha256": try digest ?? CryptoKitFileDigest().sha256(of: file),
             "releaseNotesURL": "https://fotufilm.com/releases",
         ]
-        let url = folder.appendingPathComponent("feed.json")
+        let url = folder.appendingPathComponent("\(name).json")
         try JSONSerialization.data(withJSONObject: manifest).write(to: url)
         return url
     }
@@ -74,6 +75,38 @@ final class HostUpdatesTests: XCTestCase {
         updates.check()
         XCTAssertEqual(settle(updates, from: ["checking"])["message"] as? String,
                        "The update feed returned something this copy of Fotufilm cannot read.")
+    }
+
+    func testPreReleasesAreOfferedOnlyToThoseWhoTakeThem() throws {
+        let channel = Channel()
+        let updates = HostUpdates(channel: channel, digest: CryptoKitFileDigest())
+        channel.feedURL = try feed(version: "1.10", build: "12", package: Data("same".utf8))
+        // The pre-release's own copy of the feed, beside the stable one.
+        let beta = try feed(version: "1.11", build: "1", package: Data("beta".utf8),
+                            named: "beta")
+        let list: [[String: Any]] = [
+            ["draft": false, "prerelease": true, "published_at": "2026-09-28T21:18:09Z",
+             "assets": [["name": "feed.json", "browser_download_url": beta.absoluteString]]],
+            ["draft": false, "prerelease": false, "published_at": "2026-09-27T12:49:59Z",
+             "assets": [["name": "feed.json",
+                         "browser_download_url": channel.feedURL!.absoluteString]]],
+        ]
+
+        updates.check(prereleases: true)
+        XCTAssertEqual(settle(updates, from: ["checking"])["message"] as? String,
+                       "This build does not contain the Fotufilm pre-release configuration.")
+
+        channel.releaseListURL = folder.appendingPathComponent("releases.json")
+        try JSONSerialization.data(withJSONObject: list).write(to: channel.releaseListURL!)
+        updates.check()
+        XCTAssertEqual(settle(updates, from: ["checking"])["state"] as? String, "current")
+        updates.check(prereleases: true)
+        let status = settle(updates, from: ["checking"])
+        XCTAssertEqual(status["state"] as? String, "available")
+        XCTAssertEqual(status["release"] as? String, "1.11 (build 1)")
+        try updates.install()
+        XCTAssertEqual(settle(updates, from: ["downloading"])["state"] as? String, "opened")
+        XCTAssertEqual(try Data(contentsOf: channel.opened[0]), Data("beta".utf8))
     }
 
     func testInstallOpensOnlyAVerifiedPackage() throws {
