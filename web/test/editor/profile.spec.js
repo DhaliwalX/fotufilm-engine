@@ -80,7 +80,7 @@ const cases = [
   },
   {
     stock: "hp5plus400",
-    controls: { grainModel: "crystals", enlarger: "condenser" },
+    controls: { grainModel: "film", enlarger: "condenser" },
   },
   {
     stock: "gold200",

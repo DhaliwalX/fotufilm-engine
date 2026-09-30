@@ -79,7 +79,7 @@ test("native film settings update pixels, undo, save and full-size export", asyn
   expect(saved.edit.format).toBe("16mm");
   expect(saved.edit.profile).toMatchObject({
     expired: 10,
-    grainModel: "crystals",
+    grainModel: "film",
   });
   await page.getByRole("button", { name: /^Export \(/ }).click();
   const exportPromise = page.waitForEvent("download");

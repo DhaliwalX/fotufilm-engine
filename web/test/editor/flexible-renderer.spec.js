@@ -144,7 +144,7 @@ test("new grain, gauge and halation combinations render deterministically", asyn
       },
       {
         stock: "hp5plus400",
-        controls: { grainModel: "crystals", enlarger: "condenser" },
+        controls: { grainModel: "film", enlarger: "condenser" },
       },
     ]) {
       const pack = parsePack(
