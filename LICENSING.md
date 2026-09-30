@@ -4,11 +4,11 @@ Project-authored source, documentation, synthetic stock examples, print receiver
 measurements, and artwork are governed by [LICENSE](LICENSE). Third-party components
 retain their respective terms, recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 and accompanying file notices. Project-authored material is licensed under
-Apache-2.0, except the 40 film profiles and the editor glyphs described below.
+Apache-2.0, except the 46 film profiles and the editor glyphs described below.
 
 ## Film profiles
 
-The 40 runtime film profiles listed in the [release manifest](licenses/FILM-PROFILES.json)
+The 46 runtime film profiles listed in the [release manifest](licenses/FILM-PROFILES.json)
 in `Sources/FotufilmCore/Stocks/` are licensed under CC BY-SA 4.0. See the
 [profile notice](licenses/FILM-PROFILES.txt) and [full licence](licenses/CC-BY-SA-4.0.txt).
 You may use, modify, and redistribute them, including commercially, with attribution.
@@ -73,7 +73,7 @@ Third-party names remain the trademarks of their respective owners.
 
 ## Contributions
 
-Code contributions are provided under Apache-2.0. Contributions to the 40 film
+Code contributions are provided under Apache-2.0. Contributions to the 46 film
 profiles and to the glyphs are provided under CC BY-SA 4.0 unless explicitly agreed otherwise. Include only material
 whose provenance and redistribution rights can be verified, and preserve all
 required notices.

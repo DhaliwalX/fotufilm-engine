@@ -19,6 +19,16 @@
       0
     ]
   ],
+  "crystalGrainPopulation": {
+    "coatingDensityScale": 1,
+    "radiusSpan": 6,
+    "sublayerShares": [
+      0.25,
+      0.25,
+      0.25,
+      0.25
+    ]
+  },
   "curves": [
     {
       "dMin": 0.195926,
@@ -104,16 +114,6 @@
     1.2
   ],
   "grainSizeMM": 0.004,
-  "crystalGrainPopulation": {
-    "radiusSpan": 6,
-    "sublayerShares": [
-      0.25,
-      0.25,
-      0.25,
-      0.25
-    ],
-    "coatingDensityScale": 1
-  },
   "grainStrength": 0.013,
   "halationLookScale": 1,
   "halationStrength": [

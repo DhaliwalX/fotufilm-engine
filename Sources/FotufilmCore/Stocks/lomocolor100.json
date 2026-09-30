@@ -19,6 +19,16 @@
       0.05
     ]
   ],
+  "crystalGrainPopulation": {
+    "coatingDensityScale": 1,
+    "radiusSpan": 6,
+    "sublayerShares": [
+      0.25,
+      0.25,
+      0.25,
+      0.25
+    ]
+  },
   "curves": [
     {
       "dMin": 0.23,
@@ -45,6 +55,81 @@
       "toeWidth": 0.21
     }
   ],
+  "development": {
+    "agitation": "as the process specifies",
+    "conditions": [
+      {
+        "basis": "estimated",
+        "curves": [
+          {
+            "dMin": 0.275892,
+            "gamma": 0.688538,
+            "shoulder": 1.462702,
+            "shoulderWidth": 0.428444,
+            "toe": -1.296477,
+            "toeWidth": 0.214222
+          },
+          {
+            "dMin": 0.645187,
+            "gamma": 0.723166,
+            "shoulder": 1.43786,
+            "shoulderWidth": 0.445818,
+            "toe": -1.288487,
+            "toeWidth": 0.205762
+          },
+          {
+            "dMin": 0.977223,
+            "gamma": 0.725927,
+            "shoulder": 1.498348,
+            "shoulderWidth": 0.423183,
+            "toe": -1.269974,
+            "toeWidth": 0.185143
+          }
+        ],
+        "exposureIndex": 200,
+        "label": "Push 1 · EI 200 · 3:45",
+        "stops": 1,
+        "timeMinutes": 3.75
+      },
+      {
+        "basis": "estimated",
+        "curves": [
+          {
+            "dMin": 0.305205,
+            "gamma": 0.747873,
+            "shoulder": 1.226505,
+            "shoulderWidth": 0.394452,
+            "toe": -1.313765,
+            "toeWidth": 0.197226
+          },
+          {
+            "dMin": 0.678594,
+            "gamma": 0.803744,
+            "shoulder": 1.169507,
+            "shoulderWidth": 0.401123,
+            "toe": -1.283513,
+            "toeWidth": 0.185134
+          },
+          {
+            "dMin": 1.039908,
+            "gamma": 0.780436,
+            "shoulder": 1.322354,
+            "shoulderWidth": 0.393626,
+            "toe": -1.252616,
+            "toeWidth": 0.172211
+          }
+        ],
+        "exposureIndex": 400,
+        "label": "Push 2 · EI 400 · 4:15",
+        "stops": 2,
+        "timeMinutes": 4.25
+      }
+    ],
+    "developer": "C-41 colour developer",
+    "source": "KODAK FLEXICOLOR Chemicals Z-131 push times; Kodak C-41 push curves E-4040, E-4035, E-4029, E-116",
+    "sourcePage": 27,
+    "temperatureC": 37.8
+  },
   "emulsionDiffusionMM": [
     0.0038,
     0.003,
@@ -111,16 +196,6 @@
   ],
   "grainLumaCorrelation": 0.58,
   "grainSizeMM": 0.0042,
-  "crystalGrainPopulation": {
-    "radiusSpan": 6,
-    "sublayerShares": [
-      0.25,
-      0.25,
-      0.25,
-      0.25
-    ],
-    "coatingDensityScale": 1
-  },
   "grainStrength": 0.0065,
   "halationLookScale": 1,
   "halationReturnMatrix": [

@@ -1,12 +1,12 @@
 # Image regression tests
 
-These tests render all 40 film profiles and three synthetic films over four
+These tests render all 46 film profiles and three synthetic films over four
 generated charts: color patches, a step wedge, gamut fields, and spatial detail.
 Every render must contain finite pixels and appears in the generated review sheet.
 Gold 200, Tri-X 400, Provia 100F, and the three synthetic films also have saved
 image baselines, called goldens, that catch changes in rendering. Missing baselines
 for those six films fail the test. Other films need no committed render images;
-`ReleasedProfileRenderingTests` checks CPU/Metal agreement across all 40 profiles.
+`ReleasedProfileRenderingTests` checks CPU/Metal agreement across all 46 profiles.
 
 Run from the repository root:
 

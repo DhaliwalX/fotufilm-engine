@@ -1,6 +1,6 @@
 # Fotufilm for Final Cut Pro
 
-Default builds include all 40 free
+Default builds include all 46 free
 [film profiles](../licenses/FILM-PROFILES.txt), licensed under CC BY-SA 4.0.
 
 This plugin adds Fotufilm to a clip in Final Cut Pro or Motion. It shares the engine,
@@ -74,7 +74,7 @@ updated together; packs that need a newer version are skipped.
 5. Adjust light and colour, lens filters, development, grain, halation, and output medium.
 
 The **Status** line explains input color handling, unavailable controls, and render
-errors. The plugin includes all 40 film profiles and needs no activation.
+errors. The plugin includes all 46 film profiles and needs no activation.
 A saved project retains its menu choices and texture-stage controls when reopened.
 A smaller film gauge makes grain and other spatial effects larger in the image.
 

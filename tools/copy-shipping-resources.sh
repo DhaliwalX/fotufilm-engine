@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copies runtime resources. Default desktop builds include all 40 film
+# Copies runtime resources. Default desktop builds include all 46 film
 # profiles and their license notices. Configured builds use supplied sealed packs.
 set -euo pipefail
 cd "$(dirname "$0")/.."

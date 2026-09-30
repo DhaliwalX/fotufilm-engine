@@ -36,6 +36,16 @@
       0.0
     ]
   ],
+  "crystalGrainPopulation": {
+    "coatingDensityScale": 1,
+    "radiusSpan": 6,
+    "sublayerShares": [
+      0.25,
+      0.25,
+      0.25,
+      0.25
+    ]
+  },
   "curves": [
     {
       "dMin": 0.175499,
@@ -62,6 +72,114 @@
       "toeWidth": 0.2554
     }
   ],
+  "development": {
+    "agitation": "as the process specifies",
+    "conditions": [
+      {
+        "basis": "estimated",
+        "curves": [
+          {
+            "dMin": 0.175499,
+            "gamma": 0.507921,
+            "shoulder": 2.518192,
+            "shoulderWidth": 0.400282,
+            "toe": -1.480254,
+            "toeWidth": 0.170892
+          },
+          {
+            "dMin": 0.576401,
+            "gamma": 0.482997,
+            "shoulder": 2.244019,
+            "shoulderWidth": 0.394624,
+            "toe": -1.871248,
+            "toeWidth": 0.401695
+          },
+          {
+            "dMin": 0.845869,
+            "gamma": 0.507418,
+            "shoulder": 2.467973,
+            "shoulderWidth": 0.365778,
+            "toe": -1.224872,
+            "toeWidth": 0.280709
+          }
+        ],
+        "exposureIndex": 125,
+        "label": "Pull 1 · EI 125 · 2:30",
+        "stops": -1,
+        "timeMinutes": 2.5
+      },
+      {
+        "basis": "estimated",
+        "curves": [
+          {
+            "dMin": 0.221391,
+            "gamma": 0.665548,
+            "shoulder": 1.602374,
+            "shoulderWidth": 0.30548,
+            "toe": -1.449089,
+            "toeWidth": 0.130418
+          },
+          {
+            "dMin": 0.611588,
+            "gamma": 0.632303,
+            "shoulder": 1.379732,
+            "shoulderWidth": 0.301441,
+            "toe": -1.763797,
+            "toeWidth": 0.306843
+          },
+          {
+            "dMin": 0.893092,
+            "gamma": 0.632577,
+            "shoulder": 1.701211,
+            "shoulderWidth": 0.293407,
+            "toe": -1.260982,
+            "toeWidth": 0.225169
+          }
+        ],
+        "exposureIndex": 500,
+        "label": "Push 1 · EI 500 · 3:40",
+        "stops": 1,
+        "timeMinutes": 3.6667
+      },
+      {
+        "basis": "estimated",
+        "curves": [
+          {
+            "dMin": 0.250704,
+            "gamma": 0.722902,
+            "shoulder": 1.355096,
+            "shoulderWidth": 0.281244,
+            "toe": -1.454268,
+            "toeWidth": 0.120071
+          },
+          {
+            "dMin": 0.644995,
+            "gamma": 0.702757,
+            "shoulder": 1.117207,
+            "shoulderWidth": 0.271221,
+            "toe": -1.711172,
+            "toeWidth": 0.276081
+          },
+          {
+            "dMin": 0.955777,
+            "gamma": 0.680077,
+            "shoulder": 1.511048,
+            "shoulderWidth": 0.272914,
+            "toe": -1.244251,
+            "toeWidth": 0.209442
+          }
+        ],
+        "exposureIndex": 1000,
+        "label": "Push 2 · EI 1000 · 4:40",
+        "stops": 2,
+        "timeMinutes": 4.6667
+      }
+    ],
+    "developer": "ECN-2 colour developer SD-49",
+    "source": "Kodak ECN-2 push/pull times (3:00 normal) with the Kodak C-41 push curves E-4040, E-4035, E-4029, E-116",
+    "sourcePage": 27,
+    "temperatureC": 41.1
+  },
   "edgePrinting": [
     {
       "formatID": "35mm",
@@ -192,16 +310,6 @@
   ],
   "grainLumaCorrelation": 0.6,
   "grainSizeMM": 0.004,
-  "crystalGrainPopulation": {
-    "radiusSpan": 6,
-    "sublayerShares": [
-      0.25,
-      0.25,
-      0.25,
-      0.25
-    ],
-    "coatingDensityScale": 1
-  },
   "grainStrength": 0.0063,
   "halationLookScale": 1,
   "halationReturnMatrix": [
