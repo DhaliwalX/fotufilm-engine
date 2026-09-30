@@ -71,6 +71,10 @@ const COMMANDS = {
     e.setSampling(true);
   },
   copyPhoto: (e) => e.copyPhoto(),
+  copySettings: (e) => e.setDialog("copySettings"),
+  pasteSettings: (e) => e.pasteSettings(),
+  savePreset: (e) => e.setDialog("savePreset"),
+  managePresets: (e) => e.setDialog("presets"),
   resetEdits: (e) => e.resetEdits(),
   newGrainPattern: (e) => e.newGrainPattern(),
   autoFilm: () => setAppSetting("autoFilm", !appSetting("autoFilm")),
@@ -101,12 +105,13 @@ const COMMANDS = {
 const HISTORY = /^history:(\d+)$/;
 
 // Commands with an argument: Film › Choose Film ("film:<id>", "film:none"), Film › Grain Model
-// ("grainModel:<id>") and Edit › Edit History ("history:<step>").
+// ("grainModel:<id>"), Edit › Edit History ("history:<step>") and Edit › Presets ("preset:<id>").
 function commandFor(command) {
   if (Object.hasOwn(COMMANDS, command ?? "")) return COMMANDS[command];
   const step = HISTORY.exec(command ?? "");
   if (step) return (e) => e.dispatch({ type: "goTo", index: Number(step[1]) });
   const [kind, value] = String(command).split(":");
+  if (kind === "preset" && value) return (e) => e.applyPreset(value);
   if (kind === "film" && value)
     return (e) => e.selectStock(value === "none" ? null : value);
   if (kind === "grainModel" && value)
@@ -142,6 +147,10 @@ export function menuState(e) {
     autoAdjust: photo && e.auto.available,
     sampleSelection: still && !!e.shownResult,
     copyPhoto: still && !!e.backend.copyImage && !!e.session,
+    copySettings: photo,
+    pasteSettings: photo && !!e.editSettings.copied,
+    savePreset: photo,
+    managePresets: free && e.editSettings.presets.length > 0,
     resetEdits: photo,
     newGrainPattern: photo && !!e.edit?.stock,
     settings: true,
@@ -181,6 +190,8 @@ export function menuState(e) {
   // The film list, and the film model of the one loaded, where its settings are not fixed.
   const films = [["film:none", "Normal"], ...e.stocks.map(({ id, name }) => [`film:${id}`, name])];
   for (const [command] of films) enabled[command] = photo;
+  const presets = e.editSettings.presets.map(({ id, name }) => [`preset:${id}`, name]);
+  for (const [command] of presets) enabled[command] = photo;
   checked[`film:${e.edit?.stock ?? "none"}`] = true;
   // App-wide, as the Mac app's Film Model items are: available with or without a photo.
   const grainModel = grainModelShown(e);
@@ -204,7 +215,7 @@ export function menuState(e) {
     },
     toolTips = {};
   pluginMenuState(e, enabled, titles, toolTips);
-  return { enabled, checked, titles, toolTips, history: history.titles, menus: { films } };
+  return { enabled, checked, titles, toolTips, history: history.titles, menus: { films, presets } };
 }
 
 // Runs a menu command if it still applies; the host's copy of the state may be a frame old.

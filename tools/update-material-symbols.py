@@ -29,7 +29,8 @@ SYMBOLS = {
     'licenses': 'code', 'privacy': 'privacy_tip', 'terms': 'description',
     'library': 'photo_library', 'folder': 'folder', 'addFolder': 'create_new_folder',
     'refresh': 'refresh', 'star': 'star', 'starFilled': 'star_fill1',
-    'edited': 'edit',
+    'edited': 'edit', 'copySettings': 'content_copy', 'pasteSettings': 'content_paste',
+    'presets': 'bookmarks', 'delete': 'delete',
 }
 ROOT = Path(__file__).resolve().parents[1]
 

@@ -42,6 +42,9 @@ function editor(overrides = {}) {
     setHistogram: record("histogram"),
     toggleFilms: record("films"),
     toggleInspector: record("toggleInspector"),
+    editSettings: { copied: null, presets: [], sections: [] },
+    pasteSettings: record("paste"),
+    applyPreset: record("preset"),
     ...overrides,
   };
   return value;
@@ -228,4 +231,37 @@ test("the Fotufilm menu offers Check for Updates where the host has a feed", () 
   const state = menuState(editor({ checkForUpdates() {} }));
   assert.equal(state.enabled.checkForUpdates, true);
   assert.equal(state.checked.autoUpdates, true);
+});
+
+test("Copy Settings, Paste Settings and the presets run on the open photo", () => {
+  const e = editor({
+    editSettings: {
+      copied: null,
+      presets: [{ id: "p1", name: "Warm" }],
+      sections: [],
+    },
+  });
+  const state = menuState(e);
+  assert.equal(state.enabled.copySettings, true);
+  // Nothing copied yet.
+  assert.equal(state.enabled.pasteSettings, false);
+  assert.equal(runCommand(e, "pasteSettings"), false);
+  assert.deepEqual(state.menus.presets, [["preset:p1", "Warm"]]);
+  assert.equal(state.enabled.managePresets, true);
+  assert.ok(runCommand(e, "copySettings"));
+  assert.ok(runCommand(e, "preset:p1"));
+  assert.ok(runCommand(e, "savePreset"));
+  assert.deepEqual(e.calls, [
+    ["dialog", "copySettings"],
+    ["preset", "p1"],
+    ["dialog", "savePreset"],
+  ]);
+  const copied = editor({ editSettings: { copied: {}, presets: [], sections: [] } });
+  assert.ok(runCommand(copied, "pasteSettings"));
+  assert.equal(menuState(copied).enabled.managePresets, false);
+  // Without a photo there is nothing to copy from or paste onto.
+  const none = menuState(editor({ active: null, editSettings: { copied: {}, presets: [{ id: "p1", name: "Warm" }], sections: [] } })).enabled;
+  assert.equal(none.copySettings, false);
+  assert.equal(none.pasteSettings, false);
+  assert.equal(none["preset:p1"], false);
 });

@@ -121,6 +121,13 @@ final class EditSession {
         applyHistory(next)
     }
 
+    /// A whole edit the user asked for at once (Paste Settings, a preset): its own undo step,
+    /// never folded into a change made just before it.
+    func commit(_ state: EditState) {
+        lastUndoPush = .distantPast
+        edit = state
+    }
+
     /// Restores saved state without creating a history entry.
     func restoreEdit(_ state: EditState) {
         withoutHistory { edit = state }

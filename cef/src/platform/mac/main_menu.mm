@@ -96,13 +96,25 @@ static const NSUInteger kRecentLimit = 10;
 
 @end
 
-// A submenu the editor fills (Film › Choose Film), built as it is pulled down from the list the
-// focused window's editor last reported.
+// A submenu the editor fills (Film › Choose Film, Edit › Presets), built as it is pulled down from
+// the list the focused window's editor last reported, above any fixed [command, title] items.
 @interface FotufilmEditorListMenu : NSObject <NSMenuDelegate>
 @property(nonatomic, copy) NSString* list;
+@property(nonatomic, copy) NSString* empty;
+@property(nonatomic, copy) NSArray<NSArray<NSString*>*>* fixed;
 @end
 
 @implementation FotufilmEditorListMenu
+
++ (instancetype)list:(NSString*)list
+               empty:(NSString*)empty
+               fixed:(NSArray<NSArray<NSString*>*>*)fixed {
+  FotufilmEditorListMenu* menu = [self new];
+  menu.list = list;
+  menu.empty = empty;
+  menu.fixed = fixed;
+  return menu;
+}
 
 - (void)menuNeedsUpdate:(NSMenu*)menu {
   [menu removeAllItems];
@@ -111,7 +123,9 @@ static const NSUInteger kRecentLimit = 10;
       [target respondsToSelector:@selector(editorMenuItems:)] ? [target editorMenuItems:self.list]
                                                               : @[];
   for (NSArray<NSString*>* item in items) Command(menu, item[1], item[0]);
-  if (!items.count) [menu addItemWithTitle:@"No Films" action:nil keyEquivalent:@""].enabled = NO;
+  if (!items.count) [menu addItemWithTitle:self.empty action:nil keyEquivalent:@""].enabled = NO;
+  if (self.fixed.count) [menu addItem:[NSMenuItem separatorItem]];
+  for (NSArray<NSString*>* item in self.fixed) Command(menu, item[1], item[0]);
 }
 
 @end
@@ -139,11 +153,13 @@ static const NSUInteger kRecentLimit = 10;
 
 NSMenu* FotufilmMainMenu(NSArray<NSDictionary*>* plugins) {
   static FotufilmRecentMenu* recent = [FotufilmRecentMenu new];
-  static FotufilmEditorListMenu* films = [] {
-    FotufilmEditorListMenu* menu = [FotufilmEditorListMenu new];
-    menu.list = @"films";
-    return menu;
-  }();
+  static FotufilmEditorListMenu* films = [FotufilmEditorListMenu list:@"films"
+                                                                 empty:@"No Films"
+                                                                 fixed:@[]];
+  static FotufilmEditorListMenu* presets = [FotufilmEditorListMenu
+       list:@"presets"
+      empty:@"No Presets"
+      fixed:@[ @[ @"savePreset", @"Save Preset…" ], @[ @"managePresets", @"Manage Presets…" ] ]];
   static FotufilmEditHistoryMenu* history = [FotufilmEditHistoryMenu new];
   NSMenu* bar = [NSMenu new];
 
@@ -194,6 +210,10 @@ NSMenu* FotufilmMainMenu(NSArray<NSDictionary*>* plugins) {
   Add(edit, @"Select All", @selector(selectAll:), @"a");
   [edit addItem:[NSMenuItem separatorItem]];
   Command(edit, @"Copy Photo", @"copyPhoto", @"c", kCommand | kShift);
+  [edit addItem:[NSMenuItem separatorItem]];
+  Command(edit, @"Copy Settings…", @"copySettings", @"c", kCommand | kOption);
+  Command(edit, @"Paste Settings", @"pasteSettings", @"v", kCommand | kOption);
+  Submenu(edit, @"Presets").delegate = presets;
 
   NSMenu* film = Submenu(bar, @"Film");
   Submenu(film, @"Choose Film").delegate = films;
