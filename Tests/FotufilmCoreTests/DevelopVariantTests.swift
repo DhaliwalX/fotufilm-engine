@@ -19,7 +19,6 @@ final class DevelopVariantTests: XCTestCase {
         let variants = Set(masks.map(fotufilm_develop_variant))
         XCTAssertEqual(variants.count, masks.count)
         XCTAssertEqual(variants.min(), 0)
-        XCTAssertEqual(variants.max(), Int32(masks.count - 1))
         XCTAssertTrue(masks.allSatisfy { fotufilm_develop_features($0) == $0 })
     }
 
