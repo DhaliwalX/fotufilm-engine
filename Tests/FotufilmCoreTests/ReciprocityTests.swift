@@ -147,9 +147,7 @@ final class ReciprocityTests: XCTestCase {
     }
 
     func testPackRoundTripCarriesTheStatement() throws {
-        guard var definition = FilmStock.presetDefinitions.values.first else {
-            throw XCTSkip("no stock pack installed")
-        }
+        var definition = try XCTUnwrap(FilmStock.presetDefinitions.values.first)
         definition.reciprocityFailure = ReciprocityFailure(
             thresholdSeconds: 120, lostStopsPerDecade: 0.54,
             statedThroughSeconds: 1000)

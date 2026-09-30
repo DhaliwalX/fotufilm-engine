@@ -84,8 +84,8 @@ final class MeasureKernelTests: XCTestCase {
         options.whiteBalance = .init(kelvin: 5000, tint: 8)
         let invocation = FilmEngineInvocation(
             stock: stock, options: options, width: width, height: height)
-        try XCTSkipUnless(invocation.localToneActive, "local tone must be live to be measured")
-        try XCTSkipUnless(invocation.featureMask & FilmEngineFeature.flare != 0,
+        XCTAssertTrue(invocation.localToneActive, "local tone must be live to be measured")
+        XCTAssertNotEqual(invocation.featureMask & FilmEngineFeature.flare, 0,
                           "flare must be live to be measured")
         return invocation
     }

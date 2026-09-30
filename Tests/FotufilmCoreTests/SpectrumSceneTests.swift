@@ -5,9 +5,7 @@ final class SpectrumSceneTests: XCTestCase {
 
     private func geometryStocks() throws -> [CatalogueStocks.Entry] {
         let candidates = CatalogueStocks.all.filter { $0.stock.couplerGeometry != nil }
-        guard !candidates.isEmpty else {
-            throw XCTSkip("no stock on disk carries a coupler geometry")
-        }
+        _ = try XCTUnwrap(candidates.first, "no bundled stock carries a coupler geometry")
         return candidates
     }
 

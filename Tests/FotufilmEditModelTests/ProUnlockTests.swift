@@ -8,10 +8,12 @@ final class ProUnlockTests: XCTestCase {
     }
 
     func testFreeStockIDsNameShippedPacks() throws {
-        guard let dir = ProcessInfo.processInfo.environment["FOTUFILM_STOCKS"] else {
-            throw XCTSkip("stock sheets not available without FOTUFILM_STOCKS")
-        }
-        let shipped = try FileManager.default.contentsOfDirectory(atPath: dir)
+        let stocks = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/FotufilmCore/Stocks", isDirectory: true)
+        let shipped = try FileManager.default.contentsOfDirectory(atPath: stocks.path)
             .filter { $0.hasSuffix(".json") }
             .map { String($0.dropLast(".json".count)) }
         for id in ProUnlock.freeStockIDs {

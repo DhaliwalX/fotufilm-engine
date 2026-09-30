@@ -227,9 +227,9 @@ final class KernelDeliveryTests: XCTestCase {
         let width = 64, height = 32
         let stock = TestStocks.negative
         let options = self.options()
-        guard gpu.carriesOutputTransform(
-            stock: stock, options: options, width: width, height: height)
-        else { throw XCTSkip("this build has no encoding variant for the frame") }
+        XCTAssertTrue(gpu.carriesOutputTransform(
+            stock: stock, options: options, width: width, height: height),
+            "the GPU does not carry the output transform for this frame")
 
         let source = scene(width: width, height: height)
         var interleaved = [Float](repeating: 0, count: width * height * 4)

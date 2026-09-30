@@ -24,10 +24,9 @@ final class NegativeFilmSuggestionsTests: XCTestCase {
 
     func testBlackAndWhiteBasesAreOneSuggestionUntilALightFrameMeasuresDensity() throws {
         let mono = suggestions.films.filter { $0.base.max() - $0.base.min() < 0.001 }
-        guard mono.count >= 2, let thin = mono.min(by: { $0.base.x < $1.base.x }),
-              let dense = mono.max(by: { $0.base.x < $1.base.x }) else {
-            throw XCTSkip("Needs two black-and-white films")
-        }
+        XCTAssertGreaterThanOrEqual(mono.count, 2, "needs two black-and-white films")
+        let thin = try XCTUnwrap(mono.min(by: { $0.base.x < $1.base.x }))
+        let dense = try XCTUnwrap(mono.max(by: { $0.base.x < $1.base.x }))
         let border = SIMD3<Float>(repeating: pow(10, -dense.base.x))
         let colourOnly = try XCTUnwrap(suggestions.suggest(.init(border: border)).first)
         XCTAssertTrue(colourOnly.films.contains(thin) && colourOnly.films.contains(dense))

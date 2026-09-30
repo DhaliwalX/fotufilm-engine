@@ -153,9 +153,7 @@ final class FilmFormatTests: XCTestCase {
     }
 
     func testUnknownGaugeNameFallsBackRatherThanFailing() throws {
-        guard var definition = FilmStock.presetDefinitions.values.first else {
-            throw XCTSkip("no stock pack installed")
-        }
+        var definition = try XCTUnwrap(FilmStock.presetDefinitions.values.first)
         definition.nativeFormatID = "70mm"
         let data = try JSONEncoder().encode(definition)
         let round = try JSONDecoder().decode(FilmStockDefinition.self, from: data)
