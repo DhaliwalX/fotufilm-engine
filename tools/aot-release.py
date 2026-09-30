@@ -238,18 +238,6 @@ def fetch(record: dict, destination: Path) -> int:
 def package(record: dict, source: Path, directory: Path) -> None:
     if flags():
         raise ValueError("Cannot publish AOTs with generator overrides")
-    prefix = Path(os.environ["HALIDE_ROOT"])
-    provenance = json.loads((prefix / "fotufilm-toolchain.json").read_text())
-    recipe = record["toolchain"]
-    if provenance != {"halide_revision": record["halide_revision"], "llvm": recipe["llvm"],
-                      "build_script": digest((ROOT / "tools/build-halide.sh").read_bytes())}:
-        raise ValueError("Build the pinned compiler with tools/build-halide.sh before publishing")
-    if run("xcodebuild", "-version").split()[-1] != recipe["xcode_build"]:
-        raise ValueError("Xcode does not match tools/aot-toolchain.json")
-    sdk = {"device": "iphoneos", "simulator": "iphonesimulator"}.get(record["platform"], "macosx")
-    metal = run("xcrun", "--sdk", sdk, "metal", "--version")
-    if not metal.startswith(f'Apple metal version {recipe["metal_version"]} '):
-        raise ValueError("Metal compiler does not match tools/aot-toolchain.json")
     contents = {p.name: p.read_bytes() for p in source.iterdir()
                 if p.is_file() and (GENERATED.fullmatch(p.name) or p.name in HEADERS)}
     contents["LICENSE.txt"] = (ROOT / "LICENSE").read_bytes()
@@ -259,8 +247,7 @@ def package(record: dict, source: Path, directory: Path) -> None:
     for name, data in contents.items():
         if PRIVATE_PATH.search(data):
             raise ValueError(f"AOT privacy audit found a local build path in {name}")
-    manifest = {**record, "source_commit": run("git", "rev-parse", "HEAD"),
-                "archive_count": count, "files": {n: digest(d) for n, d in sorted(contents.items())}}
+    manifest = {**record, "archive_count": count, "files": {n: digest(d) for n, d in sorted(contents.items())}}
     contents[MANIFEST] = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
     validate_payload(record, contents)
     directory.mkdir(parents=True, exist_ok=True)

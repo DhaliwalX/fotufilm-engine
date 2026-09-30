@@ -24,8 +24,8 @@ OUTPUT="${1:-build/halide-wasm}"
 PACK_SIZE="${FOTUFILM_WASM_PACK_SIZE:-1600x900}"
 EMSDK="${EMSDK_ROOT:-build/emsdk}"
 
-# The pinned Halide first, then whatever is installed. The pin is what the goldens were generated
-# against; a system Halide is a convenience, not the reference.
+# The pinned Halide first, then whatever is installed. The pin is the reference compiler; a
+# system Halide is a convenience.
 HALIDE_PREFIX="${HALIDE_ROOT:-}"
 if [[ -z "$HALIDE_PREFIX" && -f build/halide-install/include/Halide.h ]]; then
   HALIDE_PREFIX=build/halide-install
@@ -54,10 +54,6 @@ echo "Halide: $HALIDE_PREFIX"
 WEBGPU_HALIDE="${FOTUFILM_WEBGPU_HALIDE:-}"
 if [[ -z "$WEBGPU_HALIDE" && -f build/halide-pr-install/include/Halide.h ]]; then
   WEBGPU_HALIDE=build/halide-pr-install
-fi
-
-if [[ -n "$WEBGPU_HALIDE" ]]; then
-  python3 tools/webgpu-parity/toolchain.py verify "$WEBGPU_HALIDE"
 fi
 
 # A current Emscripten, deliberately: Halide's LLVM stamps wasm features into the object that

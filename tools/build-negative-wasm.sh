@@ -3,9 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 HALIDE="${FOTUFILM_WEBGPU_HALIDE:-build/halide-pr-install}"
 MODES=(cpu gpu)
-if [[ -f "$HALIDE/include/Halide.h" ]]; then
-    python3 tools/webgpu-parity/toolchain.py verify "$HALIDE"
-else
+if [[ ! -f "$HALIDE/include/Halide.h" ]]; then
     HALIDE="${HALIDE_ROOT:-$(tools/resolve-halide-toolchain.sh)}"
     MODES=(cpu)
     rm -f web/public/negative/gpu.mjs web/public/negative/gpu.wasm

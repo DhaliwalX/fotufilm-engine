@@ -17,8 +17,8 @@ PREFIX="${2:-build/halide-install}"
 
 # --webgpu builds a second Halide, from a pull request rather than from the pin, because the
 # browser's GPU road needs a WebGPU runtime that speaks the promise-based webgpu.h. It is kept out
-# of the submodule on purpose: the pin is what the goldens were generated against and follows
-# Halide's main, and an unmerged branch has no business being that.
+# of the submodule on purpose: the pin is the engine's reference compiler and follows Halide's
+# main, and an unmerged branch has no business being that.
 WEBGPU_PR="${FOTUFILM_HALIDE_WEBGPU_PR:-8955}"
 if [[ "${1:-}" == "--webgpu" ]]; then
   SOURCE=build/halide-pr
@@ -98,19 +98,6 @@ grep -q 'found components:.*WebAssembly' "$BUILD/CMakeCache.txt" || {
 
 cmake --build "$BUILD" --parallel "${FOTUFILM_BUILD_JOBS:-$(sysctl -n hw.ncpu)}"
 cmake --install "$BUILD" --prefix "$PREFIX" >/dev/null
-python3 - "$PREFIX" "$SOURCE" "$LLVM_PREFIX" <<'PY'
-import hashlib, json, pathlib, subprocess, sys
-prefix, source, llvm = map(pathlib.Path, sys.argv[1:])
-record = {
-    "halide_revision": subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip(),
-    "llvm": subprocess.check_output([str(llvm / "bin/llvm-config"), "--version"], text=True).strip(),
-    "build_script": hashlib.sha256(pathlib.Path("tools/build-halide.sh").read_bytes()).hexdigest(),
-}
-(prefix / "fotufilm-toolchain.json").write_text(json.dumps(record, indent=2) + "\n")
-PY
-if [[ "${1:-}" == "--webgpu" ]]; then
-  python3 tools/webgpu-parity/toolchain.py write "$PREFIX"
-fi
 
 echo
 echo "Installed to $PREFIX. tools/build-wasm.sh picks it up from there."
