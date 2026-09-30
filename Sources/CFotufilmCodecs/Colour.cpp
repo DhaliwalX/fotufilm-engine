@@ -1,7 +1,7 @@
 // Colour: every decoded raster to associated linear Rec. 2020 through lcms2 (ICC profiles) or
 // exact matrices (linear light), turned upright; and the Display P3 profile exports carry.
 // Apple platforms decode and encode through ImageIO; this target builds empty there.
-#if !defined(__APPLE__)
+#if !defined(__APPLE__) || defined(FFC_PORTABLE_CODECS)
 #include "Codecs.hpp"
 
 #include <lcms2.h>
@@ -181,8 +181,15 @@ void parallelRows(uint32_t rows, const std::function<void(uint32_t, uint32_t)> &
     }
     std::vector<std::thread> threads;
     uint32_t step = (rows + workers - 1) / workers;
-    for (uint32_t begin = 0; begin < rows; begin += step)
-        threads.emplace_back(body, begin, std::min(rows, begin + step));
+    try {
+        for (uint32_t begin = 0; begin < rows; begin += step)
+            threads.emplace_back(body, begin, std::min(rows, begin + step));
+    } catch (...) {
+        // A thread allocation failure must reach the C error boundary, not std::terminate
+        // when the already-created joinable threads are destroyed during unwinding.
+        for (auto &thread : threads) thread.join();
+        throw;
+    }
     for (auto &thread : threads) thread.join();
 }
 

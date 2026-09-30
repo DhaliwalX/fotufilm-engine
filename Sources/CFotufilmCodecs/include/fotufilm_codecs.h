@@ -63,6 +63,27 @@ int32_t ffc_decode(const char *path, uint32_t options, uint32_t raw_long_edge, f
                    char *error, size_t error_size);
 void ffc_image_free(ffc_image *image);
 
+/* RAW-only entry point, linkable without the other image codecs. Identification uses the file's
+ * contents, including when an imported private copy has no extension. All limits must be > 0.
+ * max_working_bytes is a conservative admission estimate, not a process RSS limit; LibRaw also
+ * receives that ceiling for its own RAW allocations. Files and sensor dimensions are checked
+ * before demosaicing. The estimate includes input, sensor/intermediate images, and float output.
+ * long_edge bounds the delivered raster (0 for native size); it never enlarges the source.
+ * source_width/height describe the upright default crop before preview reduction.
+ * Returns FFC_RAW_OK, FFC_RAW_UNSUPPORTED (not recognized by LibRaw), or
+ * FFC_RAW_ERROR. Failure clears out and source dimensions. Release success with ffc_image_free.
+ * options accepts FFC_DECODE_SCENE or FFC_DECODE_SCAN. */
+typedef struct ffc_raw_limits {
+    uint64_t max_file_bytes;
+    uint64_t max_sensor_pixels;
+    uint64_t max_working_bytes;
+} ffc_raw_limits;
+enum { FFC_RAW_OK = 0, FFC_RAW_UNSUPPORTED = 1, FFC_RAW_ERROR = 2 };
+int32_t ffc_decode_raw(const char *path, uint32_t options, uint32_t long_edge,
+                       const ffc_raw_limits *limits, ffc_image *out,
+                       uint32_t *source_width, uint32_t *source_height,
+                       char *error, size_t error_size);
+
 /* Whether this build writes `mime` ("image/png", "image/jpeg", "image/tiff", "image/heic"). */
 int32_t ffc_can_encode(const char *mime);
 

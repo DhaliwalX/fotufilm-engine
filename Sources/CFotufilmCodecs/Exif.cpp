@@ -1,7 +1,7 @@
 // The Exif record: read for the fields the engine uses (orientation, camera, lens, frame), and
 // rewritten for exports the way the Mac app's ImageIO export keeps it.
 // Apple platforms decode and encode through ImageIO; this target builds empty there.
-#if !defined(__APPLE__)
+#if !defined(__APPLE__) || defined(FFC_PORTABLE_CODECS)
 #include "Codecs.hpp"
 
 #include <algorithm>
