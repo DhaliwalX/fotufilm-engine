@@ -368,6 +368,11 @@ extern "C" int32_t fotufilm_halide_process_tile(
     int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
     int32_t, int32_t, const float *, const float *, const float *, const float *,
     int32_t, int32_t, uint32_t) { return -1; }
+extern "C" int32_t fotufilm_halide_process_tile_with_exposure(
+    const float *, const float *, const float *, float *, float *, float *,
+    int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
+    int32_t, int32_t, const float *, const float *, const float *, const float *,
+    int32_t, int32_t, uint32_t, const float *) { return -1; }
 extern "C" int32_t fotufilm_halide_gaussian(
     const float *, float *, int32_t, int32_t, float, int32_t) { return -1; }
 extern "C" int32_t fotufilm_halide_approximate_gaussian(
