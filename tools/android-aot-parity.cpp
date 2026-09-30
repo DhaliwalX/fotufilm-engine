@@ -43,6 +43,41 @@ int main(int argc, char **argv) {
         if (std::fwrite(out.data(), sizeof(float), out.size(), stdout) != out.size())
             throw std::runtime_error("Output write failed");
     };
+    const int tw = w-8, th = h-8;
+    auto compactMatchesFrame = [&](int flags, const float *records) {
+        const int cw = tw-4, ch = th-4, count = cw*ch, stride = count+2;
+        std::vector<float> compact(3*stride, -321.f);
+        auto run = [&](int x, int y, int left, int top, int iw, int ih) {
+            return fotufilm_halide_process_region(rgb.data(), rgb.data()+n, rgb.data()+2*n,
+                compact.data()+1, compact.data()+stride+1, compact.data()+2*stride+1,
+                tw, th, w, h, x, y, left, top, iw, ih,
+                p.data(), f.exposure.data(), f.film.data(), f.paper.data(), 33, flags, f.seed, records);
+        };
+        if (run(3,5,2,2,cw,ch)) throw std::runtime_error("Compact region failed");
+        for (int c=0;c<3;++c) {
+            if (compact[c*stride] != -321.f || compact[(c+1)*stride-1] != -321.f)
+                throw std::runtime_error("Compact region overwrote a guard");
+            for (int y=0;y<ch;++y) for (int x=0;x<cw;++x)
+                if (compact[c*stride+1+y*cw+x] != out[c*n+(y+7)*w+x+5])
+                    throw std::runtime_error("Compact region differs from frame output");
+        }
+        const auto saved = compact;
+        for (int unsupported : {FOTUFILM_FRAME_NO_FILM, FOTUFILM_FRAME_DENSITY_IN,
+                FOTUFILM_FRAME_DENSITY_OUT, FOTUFILM_FRAME_RECORD_EXPOSURE_IN,
+                FOTUFILM_FRAME_LIGHT_OUT, FOTUFILM_FRAME_TEXTURE, FOTUFILM_FRAME_ENCODE_OUT,
+                FOTUFILM_FRAME_OUTPUT_LINEAR, FOTUFILM_FRAME_OUTPUT_POWER, FOTUFILM_FRAME_OUTPUT_LOG}) {
+            if (!fotufilm_halide_process_region(rgb.data(), rgb.data()+n, rgb.data()+2*n,
+                compact.data()+1, compact.data()+stride+1, compact.data()+2*stride+1,
+                tw, th, w, h, 3, 5, 2, 2, cw, ch, p.data(), f.exposure.data(), f.film.data(), f.paper.data(),
+                33, flags | unsupported, f.seed, records) || compact != saved)
+                throw std::runtime_error("Unsupported compact stage modified output");
+        }
+        for (const auto &bounds : {std::vector<int>{-1,5,2,2,cw,ch}, {w,5,2,2,cw,ch},
+                                  {3,5,-1,2,cw,ch}, {3,5,2,2,tw,ch}, {3,5,2,2,cw,0}}) {
+            if (!run(bounds[0],bounds[1],bounds[2],bounds[3],bounds[4],bounds[5]) || compact != saved)
+                throw std::runtime_error("Invalid compact region modified output");
+        }
+    };
     for (int variant = 0; variant < 4; ++variant) {
         int mask = base | ((variant & 1) ? FOTUFILM_FRAME_REVERSAL : 0) |
             ((variant & 2) ? FOTUFILM_FRAME_MONOCHROME : 0);
@@ -66,12 +101,12 @@ int main(int argc, char **argv) {
         }
         // Nonzero global origins and a cropped interior exercise extended bindings in tile calls.
         std::fill(out.begin(), out.end(), -123.f);
-        int tw = w-8, th = h-8;
         int status = fotufilm_halide_process_tile(rgb.data(), rgb.data()+n, rgb.data()+2*n,
             out.data(), out.data()+n, out.data()+2*n, tw, th, w, h, 3, 5,
             2, 2, tw-4, th-4, p.data(), f.exposure.data(), f.film.data(), f.paper.data(),
             33, mask | stages[4], f.seed);
         if (status) return 6;
+        compactMatchesFrame(mask | stages[4], nullptr);
         for (int c=0;c<3;++c) for (int y=0;y<h;++y) for (int x=0;x<w;++x)
             if ((x<5 || x>=tw+1 || y<7 || y>=th+3) && out[c*n+y*w+x] != -123.f) return 7;
         write();
@@ -114,6 +149,7 @@ int main(int argc, char **argv) {
         for (int i=0;i<5;++i) p[FOTUFILM_CONFIG_GATE+i]=savedGate[i];
         std::fill(out.begin(), out.end(), -123.f);
         if (renderExtra(extra.data(), true, extraMask)) return 13;
+        compactMatchesFrame(extraMask, extra.data());
         write();
         const auto unchanged = out;
         for (float bad : {-1.f, std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()}) {

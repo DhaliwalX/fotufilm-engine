@@ -37,19 +37,45 @@ public enum DisplayEncoding {
                   seed: seed) { $0 }
     }
 
+    /// Encodes a compact rectangle while retaining the full frame's dither coordinates.
+    /// Input and destination start at the rectangle's top-left; row padding is untouched.
+    public static func quantizeRegion8(
+        linear rgba: UnsafeBufferPointer<Float>, width: Int, height: Int,
+        originX: Int, originY: Int, frameWidth: Int, knee: Float,
+        into pixels: UnsafeMutableRawPointer, rowBytes: Int, seed: UInt32
+    ) {
+        quantize8(rgba, rows: 0..<height, width: width, into: pixels, rowBytes: rowBytes,
+                  seed: seed, originX: originX, originY: originY, frameWidth: frameWidth) {
+            ColorScience.linearToSrgb(ColorScience.displayShoulder($0, knee: knee))
+        }
+    }
+
+    /// Compact-region counterpart for already encoded output, without another transfer.
+    public static func quantizeRegion8(
+        encoded rgba: UnsafeBufferPointer<Float>, width: Int, height: Int,
+        originX: Int, originY: Int, frameWidth: Int,
+        into pixels: UnsafeMutableRawPointer, rowBytes: Int, seed: UInt32
+    ) {
+        quantize8(rgba, rows: 0..<height, width: width, into: pixels, rowBytes: rowBytes,
+                  seed: seed, originX: originX, originY: originY, frameWidth: frameWidth) { $0 }
+    }
+
     @inline(__always)
     private static func quantize8(
         _ rgba: UnsafeBufferPointer<Float>, rows: Range<Int>, width: Int,
         into pixels: UnsafeMutableRawPointer, rowBytes: Int, seed: UInt32,
+        originX: Int = 0, originY: Int = 0, frameWidth: Int? = nil,
         transfer: (Float) -> Float
     ) {
         precondition(rgba.count >= rows.count * width * 4 && rowBytes >= width * 4)
+        let fullWidth = frameWidth ?? width
+        precondition(originX >= 0 && originY >= 0 && width >= 0 && originX <= fullWidth - width)
         ParallelWork.forEach(iterations: rows.count) { local in
             let y = rows.lowerBound + local
             let row = pixels.advanced(by: y * rowBytes).assumingMemoryBound(to: UInt8.self)
             for x in 0..<width {
                 let source = (local * width + x) * 4
-                let index = UInt32(truncatingIfNeeded: y * width + x)
+                let index = UInt32(truncatingIfNeeded: (y + originY) * fullWidth + x + originX)
                 for c in 0..<3 {
                     let dither = triangularDither(index: index, channel: UInt32(c), seed: seed)
                     row[x * 4 + c] = UInt8(clamp(transfer(rgba[source + c]) * 255 + 0.5 + dither,
