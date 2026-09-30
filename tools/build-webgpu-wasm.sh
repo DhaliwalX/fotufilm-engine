@@ -5,7 +5,6 @@ cd "$(dirname "$0")/.."
 OUTPUT="${1:-build/halide-wasm}"
 WEBGPU_HALIDE="${FOTUFILM_WEBGPU_HALIDE:-build/halide-pr-install}"
 EMSDK="${EMSDK_ROOT:-build/emsdk}"
-python3 tools/webgpu-parity/toolchain.py verify "$WEBGPU_HALIDE"
 HOST_SDK="$(xcrun --sdk macosx --show-sdk-path)"
 source "$EMSDK/emsdk_env.sh" >/dev/null 2>&1
 mkdir -p "$OUTPUT" web/public

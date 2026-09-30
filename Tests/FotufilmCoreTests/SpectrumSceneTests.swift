@@ -3,11 +3,9 @@ import XCTest
 
 final class SpectrumSceneTests: XCTestCase {
 
-    private func geometryStocks() throws -> [GoldenStocks.Entry] {
-        let candidates = GoldenStocks.all.filter { $0.stock.couplerGeometry != nil }
-        guard !candidates.isEmpty else {
-            throw XCTSkip("no stock on disk carries a coupler geometry")
-        }
+    private func geometryStocks() throws -> [CatalogueStocks.Entry] {
+        let candidates = CatalogueStocks.all.filter { $0.stock.couplerGeometry != nil }
+        _ = try XCTUnwrap(candidates.first, "no bundled stock carries a coupler geometry")
         return candidates
     }
 
@@ -161,13 +159,13 @@ final class SpectrumSceneTests: XCTestCase {
                                 SpectrumScene.previewSize,
                                 (width: 768, height: 513)]
 
-    /// Set from the numbers these tests print, not guessed at. Measured over all 20 packs that
+    /// Set from the numbers these tests print, not guessed at. Measured over all 21 packs that
     /// carry a geometry, one control at 1.8:
     ///
-    ///   grey ramp                    0.004 … 0.438
-    ///   weakest third ÷ ramp         10.3 … 687.2    (worst: PRO 160NS under R-G)
-    ///   edge contrast, lit pixels     0.228 … 0.234  across 256×171 … 768×513
-    ///   scene ÷ ColorChecker          0.99×
+    ///   grey ramp                    0.000 … 0.443
+    ///   weakest third ÷ ramp         12.2 or more    (worst: PRO 160NS under R-G)
+    ///   edge contrast, lit pixels     0.268 … 0.277  across 256×171 … 768×513
+    ///   scene ÷ ColorChecker          0.98×
     ///
     private static let rampHolds = 1.0
     private static let rampMargin = 5.0

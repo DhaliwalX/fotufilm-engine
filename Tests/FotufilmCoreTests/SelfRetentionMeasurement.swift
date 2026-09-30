@@ -12,7 +12,7 @@ final class SelfRetentionMeasurement: XCTestCase {
         let charts = ReferenceChart.all.filter { $0.name == "gamut" || $0.name == "spatial" }
         XCTAssertEqual(charts.count, 2, "both charts must be present to compare them")
 
-        let stocks = GoldenStocks.all.filter { $0.stock.couplerGeometry != nil }
+        let stocks = CatalogueStocks.all.filter { $0.stock.couplerGeometry != nil }
         XCTAssertFalse(stocks.isEmpty, "no stock with geometry loaded")
 
         var rows: [String] = []
@@ -25,7 +25,7 @@ final class SelfRetentionMeasurement: XCTestCase {
 
                 let before = RGBAImage(print: develop(chart, with: entry.stock))
                 let after = RGBAImage(print: develop(chart, with: raised))
-                let report = PrintDifference.compare(golden: before, against: after)
+                let report = PrintDifference.compare(reference: before, against: after)
 
                 // With no lateral spread, `blur(a) == a`, so anything left is the diagonal acting
                 // on flat colour rather than across an edge. If the self term really were an edge
@@ -35,7 +35,7 @@ final class SelfRetentionMeasurement: XCTestCase {
                 var flatAfter = raised
                 flatAfter.couplerDiffusionMM = 0
                 let flat = PrintDifference.compare(
-                    golden: RGBAImage(print: develop(chart, with: flatBefore)),
+                    reference: RGBAImage(print: develop(chart, with: flatBefore)),
                     against: RGBAImage(print: develop(chart, with: flatAfter)))
 
                 rows.append(String(

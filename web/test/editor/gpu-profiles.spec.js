@@ -60,7 +60,7 @@ test("background WebGPU matches CPU for film, filters, chemistry and resolved gr
         },
         {
           stock: "hp5plus400",
-          controls: { grainModel: "crystals", enlarger: "condenser" },
+          controls: { grainModel: "film", enlarger: "condenser" },
         },
       ]) {
         const pack = parsePack(

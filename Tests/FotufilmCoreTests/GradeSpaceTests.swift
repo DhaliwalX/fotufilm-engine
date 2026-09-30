@@ -184,8 +184,8 @@ final class GradeSpaceKernelTests: XCTestCase {
         for level: UInt8 in [32, 96, 160] {
             let ungraded = green(render(.neutral, space: .linear, stock: stock,
                                         level: level)) / 255
-            try XCTSkipIf(ungraded > 0.94,
-                          "level \(level) prints into the shoulder")
+            XCTAssertLessThanOrEqual(ungraded, 0.94,
+                                     "level \(level) prints into the shoulder")
             let printLinear = ColorScience.srgbToLinear(Float(ungraded))
             let expected = ColorScience.linearToSrgb(
                 grade.apply(SIMD3(repeating: printLinear), in: .encoded).y) * 255

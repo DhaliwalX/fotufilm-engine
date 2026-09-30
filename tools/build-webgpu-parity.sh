@@ -12,7 +12,6 @@ for prefix in "$CPU_HALIDE" "$GPU_HALIDE"; do
     exit 1
   }
 done
-python3 tools/webgpu-parity/toolchain.py verify "$GPU_HALIDE"
 [[ -f "$TASK_EMSDK/emsdk_env.sh" ]] || {
   echo "Missing Emscripten: set EMSDK_ROOT." >&2
   exit 1

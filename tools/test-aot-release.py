@@ -62,7 +62,7 @@ class ReleaseTests(unittest.TestCase):
 
     def manifest(self):
         self.contents.pop(aot.MANIFEST, None)
-        record = {**self.record, "source_commit": "1" * 40, "archive_count": 1,
+        record = {**self.record, "archive_count": 1,
                   "files": {name: aot.digest(data) for name, data in self.contents.items()}}
         self.contents[aot.MANIFEST] = json.dumps(record).encode()
 

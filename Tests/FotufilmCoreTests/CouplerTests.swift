@@ -377,7 +377,7 @@ final class CouplerTests: XCTestCase {
         let definitions = FilmStock.allPresetIDs
             .compactMap { FilmStock.presetDefinitions[$0] }
             .filter { $0.couplerGeometry != nil }
-        try XCTSkipIf(definitions.isEmpty, "no pack installed carries geometry")
+        XCTAssertFalse(definitions.isEmpty, "no bundled stock carries a coupler geometry")
 
         for definition in definitions {
             let derived = definition.couplerGeometry!.matrix()

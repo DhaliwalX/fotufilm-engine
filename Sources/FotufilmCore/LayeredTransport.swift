@@ -22,7 +22,6 @@ public struct LayeredTransport: Codable, Sendable, Equatable {
     public var revision: Int = 1
     public var kind: String = "conditional-launch"
     public var constructionID: String
-    public var provenance: String
     public var wavelengthsNM: [Double] = SpectralGrid.wavelengths.map(Double.init)
     /// Ordered from the exposing surface to the rear surface.
     public var layers: [Layer]
@@ -39,12 +38,12 @@ public struct LayeredTransport: Codable, Sendable, Equatable {
     /// Independently specified compact no-return response; not added to the old emulsion MTF.
     public var coreSigmaMM: [Double]
 
-    public init(constructionID: String, provenance: String, layers: [Layer],
+    public init(constructionID: String, layers: [Layer],
                 frontIndex: [Double] = [1], rearIndex: [Double] = [1],
                 rearReflectance: [Double]? = nil, recordDepthMM: [Double],
                 angularExponent: [[Double]], captureProbability: [[Double]],
                 returnedToDirect: [[Double]], coreSigmaMM: [Double]) {
-        self.constructionID = constructionID; self.provenance = provenance
+        self.constructionID = constructionID
         self.layers = layers; self.frontIndex = frontIndex; self.rearIndex = rearIndex
         self.rearReflectance = rearReflectance; self.recordDepthMM = recordDepthMM
         self.angularExponent = angularExponent; self.captureProbability = captureProbability
@@ -64,7 +63,6 @@ public struct LayeredTransport: Codable, Sendable, Equatable {
         try require(revision == 1 && kind == "conditional-launch", "unsupported transport revision/kind")
         try require(!constructionID.isEmpty && constructionID.utf8.count <= 128,
                     "invalid construction ID")
-        try require(["illustrative", "inferred", "measured"].contains(provenance), "invalid provenance")
         try require(wavelengthsNM == SpectralGrid.wavelengths.map(Double.init), "transport wavelength grid mismatch")
         try require(!layers.isEmpty && layers.count <= 16, "expected 1...16 optical layers")
         try require(Set(layers.map(\.id)).count == layers.count, "duplicate optical layer IDs")

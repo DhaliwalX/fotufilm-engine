@@ -32,9 +32,7 @@ reassociate the same expressions and produce different bits. The shader does not
 `pow`, division, or square root. The CPU compiler's math differs from platform
 libm, so a correctly rounded system `expf` is not an oracle for this comparison.
 The generated CPU LLVM assembly is retained beside its archive for inspection.
-The polynomial translation includes its upstream Halide license. A toolchain stamp
-records the shader and compiler patch hashes; the build rejects a missing or stale
-stamp instead of silently using ordinary WGSL arithmetic.
+The polynomial translation includes its upstream Halide license.
 
 See [performance measurements and reproduction](../webgpu-performance.md) for the
 production renderer and its native comparison.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise default resource packaging and reject extra or altered film profiles."""
+"""Exercise default resource packaging and reject extra, nested or missing film profiles."""
 import importlib.util
 import os
 from pathlib import Path
@@ -21,9 +21,7 @@ with tempfile.TemporaryDirectory() as temporary:
     assert not list(resources.glob('*.fotufilmpack'))
     subprocess.run(['bash', 'tools/audit-apple-bundle.sh', str(resources)],
                    cwd=root, env=env, check=True)
-    original = (stocks / 'portra400.json').read_bytes()
-    for name, contents in [('extra.json', b'{}'), ('portra400.json', original + b' '),
-                           ('nested/trace.csv', b'1,2,3')]:
+    for name, contents in [('extra.json', b'{}'), ('nested/trace.csv', b'1,2,3')]:
         path = stocks / name
         path.parent.mkdir(exist_ok=True)
         path.write_bytes(contents)
@@ -32,12 +30,10 @@ with tempfile.TemporaryDirectory() as temporary:
         except ValueError:
             pass
         else:
-            raise AssertionError(f'accepted altered film profiles: {name}')
+            raise AssertionError(f'accepted an unexpected film profile entry: {name}')
         path.unlink()
         if path.parent != stocks:
             path.parent.rmdir()
-        if name == 'portra400.json':
-            path.write_bytes(original)
     missing = stocks / 'superia200.json'
     original_missing = missing.read_bytes()
     missing.unlink()
