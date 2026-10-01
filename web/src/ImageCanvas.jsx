@@ -1,5 +1,6 @@
 import { usePhotoNavigation } from "./usePhotoNavigation.js";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import HistogramPanel from "./HistogramPanel.jsx";
 import ViewportDetail from "./ViewportDetail.jsx";
 import { useViewportDetail } from "./useViewportDetail.js";
@@ -7,6 +8,13 @@ import { useImageLayer } from "./useImageLayer.js";
 import { visiblePhotoViewport } from "./viewport.js";
 import CropOverlay from "./CropOverlay.jsx";
 import { clamp } from "./color-controls.js";
+import { anchoredPhotoZoom, centredPhotoZoom } from "./photo-navigation.js";
+
+const FIT = Object.freeze({ zoom: 1, offset: [0, 0] });
+// How long the view rests before the editor hears of its zoom. The whole editor renders for a
+// new zoom, which on every step of a pinch would cost more than a frame.
+const ZOOM_SETTLE_MS = 150;
+
 export function ImageCanvas({
   result,
   detailSession,
@@ -18,6 +26,7 @@ export function ImageCanvas({
   sourceKey,
   zoom,
   setZoom,
+  liveZoom,
   compare,
   setCompare,
   cropMode,
@@ -29,15 +38,35 @@ export function ImageCanvas({
   onEnd,
   showHistogram,
   outputWidth,
-  onZoomReadout,
   onInteraction,
   sampling = false,
   onSample,
 }) {
   const container = useRef(null),
     plane = useRef(null);
-  const [offset, setOffset] = useState([0, 0]),
-    [room, setRoom] = useState([1, 1]),
+  // The view moves with every input event. `latest` holds the newest, and one render an animation
+  // frame shows it, so only the canvas renders while the photograph moves; the editor's `zoom`
+  // follows once the view settles, and a change to it (toolbar, keys, menu) moves the view.
+  const [view, setView] = useState(FIT);
+  const latest = useRef(FIT),
+    frame = useRef(0),
+    committed = useRef(zoom),
+    layout = useRef(null);
+  const jump = useCallback((next) => {
+    latest.current = next;
+    setView(next);
+  }, []);
+  const show = useCallback((next) => {
+    latest.current = next;
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
+      // Rendered within this frame, so the host's image layer moves in the same frame as the page.
+      flushSync(() => setView(latest.current));
+    });
+  }, []);
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
+  const [room, setRoom] = useState([1, 1]),
     [pixelRatio, setPixelRatio] = useState(() => window.devicePixelRatio || 1);
   useEffect(() => {
     let query;
@@ -59,12 +88,23 @@ export function ImageCanvas({
     return () => observer.disconnect();
   }, []);
   useEffect(() => {
-    setOffset([0, 0]);
+    committed.current = 1;
     setZoom(1);
-  }, [sourceKey, setZoom]);
+    jump(FIT);
+  }, [sourceKey, setZoom, jump]);
   useEffect(() => {
-    if (zoom === 1) setOffset([0, 0]);
-  }, [zoom]);
+    if (zoom === committed.current) return;
+    committed.current = zoom;
+    jump(centredPhotoZoom({ ...latest.current, nextZoom: zoom, ...layout.current }));
+  }, [zoom, jump]);
+  useEffect(() => {
+    if (view.zoom === committed.current) return;
+    const timer = setTimeout(() => {
+      committed.current = view.zoom;
+      setZoom(view.zoom);
+    }, ZOOM_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [view.zoom, setZoom]);
   const width = result?.width || original?.naturalWidth || 1,
     height = result?.height || original?.naturalHeight || 1;
   const fit = Math.min(
@@ -74,11 +114,13 @@ export function ImageCanvas({
   );
   const displayWidth = Math.max(1, width * fit),
     displayHeight = Math.max(1, height * fit);
+  layout.current = { display: [displayWidth, displayHeight], room };
+  const { offset } = view;
   const viewport = visiblePhotoViewport({
     room,
     displayWidth,
     displayHeight,
-    zoom: cropMode ? 1 : zoom,
+    zoom: cropMode ? 1 : view.zoom,
     offset: cropMode ? [0, 0] : offset,
     framePlan: cropMode ? null : result?.framePlan,
     pixelRatio,
@@ -97,19 +139,18 @@ export function ImageCanvas({
     ? result?.originalUrl || original?.src
     : result?.url || original?.src;
   const nativeScale = displayWidth / Math.max(1, outputWidth || width);
+  const readout = Math.round(nativeScale * (cropMode ? 1 : view.zoom) * 100);
   useEffect(() => {
-    onZoomReadout?.(Math.round(nativeScale * (cropMode ? 1 : zoom) * 100));
-  }, [nativeScale, cropMode, zoom, onZoomReadout]);
+    liveZoom?.set({ zoom: view.zoom, readout });
+  }, [liveZoom, view.zoom, readout]);
   const navigation = usePhotoNavigation({
     container,
     sourceKey,
     cropMode,
     sampling,
     onSample,
-    zoom,
-    setZoom,
-    offset,
-    setOffset,
+    view: latest,
+    show,
     display: [displayWidth, displayHeight],
     room,
     setCompare,
@@ -122,8 +163,24 @@ export function ImageCanvas({
       tabIndex={0}
       aria-label="Photo preview"
       onDoubleClick={(event) => {
-        if (!cropMode && !event.target.closest(".histogram"))
-          setZoom((z) => (z === 1 ? clamp(1 / nativeScale, 1, 8) : 1));
+        if (cropMode || event.target.closest(".histogram")) return;
+        const current = latest.current;
+        const target = current.zoom === 1 ? clamp(1 / nativeScale, 1, 8) : 1;
+        const box = event.currentTarget.getBoundingClientRect();
+        // About the point clicked, as a wheel or a pinch zooms.
+        const anchor = [
+          event.clientX - box.left - box.width / 2,
+          event.clientY - box.top - box.height / 2,
+        ];
+        jump({
+          ...anchoredPhotoZoom({
+            ...current,
+            ...layout.current,
+            anchor,
+            scale: target / current.zoom,
+          }),
+          zoom: target,
+        });
       }}
       {...navigation}
     >
@@ -134,7 +191,7 @@ export function ImageCanvas({
           style={{
             width: displayWidth,
             height: displayHeight,
-            transform: `translate(${cropMode ? 0 : offset[0]}px, ${cropMode ? 0 : offset[1]}px) scale(${cropMode ? 1 : zoom})`,
+            transform: `translate(${cropMode ? 0 : offset[0]}px, ${cropMode ? 0 : offset[1]}px) scale(${cropMode ? 1 : view.zoom})`,
           }}
         >
           {presented ? (

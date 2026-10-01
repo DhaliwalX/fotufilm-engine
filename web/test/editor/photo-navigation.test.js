@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   anchoredPhotoZoom,
+  centredPhotoZoom,
   constrainPhotoOffset,
   pinchGeometry,
+  wheelZoomScale,
 } from "../../src/photo-navigation.js";
 import { renderViewportImage } from "../../src/viewport-detail-image.js";
 
@@ -47,6 +49,38 @@ test("pan and pinch bounds keep the visible image on screen and return to centre
   assert.equal(
     anchoredPhotoZoom({ ...view, anchor: [0, 0], scale: 100 }).zoom,
     8,
+  );
+});
+
+test("wheel zoom follows the scroll distance and inverts a trackpad pinch exactly", () => {
+  // Chromium sends a pinch as a ctrl wheel event with deltaY = -100·ln(scale).
+  for (const scale of [0.8, 1.05, 1.5])
+    assert.ok(
+      Math.abs(
+        wheelZoomScale({ deltaY: -100 * Math.log(scale), ctrlKey: true }) -
+          scale,
+      ) < 1e-12,
+    );
+  const small = wheelZoomScale({ deltaY: -4 }),
+    notch = wheelZoomScale({ deltaY: -40 });
+  assert.ok(small > 1 && small < 1.02);
+  assert.ok(notch > small);
+  assert.equal(
+    wheelZoomScale({ deltaY: -3, deltaMode: 1 }),
+    wheelZoomScale({ deltaY: -48 }),
+  );
+  assert.equal(wheelZoomScale({ deltaY: 1e6 }), 0.5);
+  assert.equal(wheelZoomScale({ deltaY: -1e6 }), 2);
+});
+
+test("a stepped zoom keeps the centre of the view and lands on the zoom asked for", () => {
+  const next = centredPhotoZoom({ ...view, nextZoom: 3 });
+  assert.equal(next.zoom, 3);
+  assert.deepEqual(next.offset, [30, -15]);
+  // A fitted photograph returns to the centre.
+  assert.deepEqual(
+    centredPhotoZoom({ ...view, display: [550, 350], nextZoom: 1 }),
+    { zoom: 1, offset: [0, 0] },
   );
 });
 

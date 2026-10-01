@@ -3,8 +3,11 @@ import {
   anchoredPhotoZoom,
   constrainPhotoOffset,
   pinchGeometry,
+  wheelZoomScale,
 } from "./photo-navigation.js";
 
+// Wheel, drag and pinch over the photograph. `view` is a ref to the newest {zoom, offset}, which
+// may be ahead of the last render; every change goes to `show`, which renders it once a frame.
 export function usePhotoNavigation(options) {
   const live = useRef(options);
   live.current = options;
@@ -15,11 +18,8 @@ export function usePhotoNavigation(options) {
     clearTimeout(hold.current);
     hold.current = null;
   };
-  const apply = (view) => {
-    Object.assign(live.current, view);
-    live.current.setZoom(view.zoom);
-    live.current.setOffset(view.offset);
-  };
+  const apply = (view) => live.current.show(view);
+  const viewed = () => live.current.view.current;
   const point = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
     return [
@@ -28,7 +28,7 @@ export function usePhotoNavigation(options) {
     ];
   };
   const rebase = () => {
-    const { zoom, offset } = live.current;
+    const { zoom, offset } = viewed();
     const points = [...pointers.current.values()];
     gesture.current =
       points.length > 1
@@ -66,9 +66,11 @@ export function usePhotoNavigation(options) {
       ];
       apply(
         anchoredPhotoZoom({
-          ...current,
+          ...viewed(),
+          display: current.display,
+          room: current.room,
           anchor,
-          scale: event.deltaY > 0 ? 0.9 : 1.1,
+          scale: wheelZoomScale(event, rect.height),
         }),
       );
     };
@@ -104,7 +106,7 @@ export function usePhotoNavigation(options) {
       pointers.current.set(event.pointerId, point(event));
       clearHold();
       rebase();
-      if (pointers.current.size > 1 || current.zoom > 1) {
+      if (pointers.current.size > 1 || viewed().zoom > 1) {
         current.setCompare(false);
         current.onInteraction?.(true);
       } else if (event.pointerType === "touch") {
@@ -123,21 +125,23 @@ export function usePhotoNavigation(options) {
         const pinch = pinchGeometry([...pointers.current.values()]);
         apply(
           anchoredPhotoZoom({
-            ...current,
+            display: current.display,
+            room: current.room,
             ...start,
             nextAnchor: pinch.anchor,
             scale: pinch.distance / start.distance,
           }),
         );
-      } else if (current.zoom > 1) {
+      } else if (viewed().zoom > 1) {
+        const { zoom } = viewed();
         clearHold();
         apply({
-          zoom: current.zoom,
+          zoom,
           offset: constrainPhotoOffset(
             position.map(
               (value, axis) => start.offset[axis] + value - start.anchor[axis],
             ),
-            current.zoom,
+            zoom,
             current.display,
             current.room,
           ),

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { createLiveValue } from "../live-value.js";
 import { fullCrop } from "../editor-state.js";
 import { usePreviewQuality } from "../usePreviewQuality.js";
 import { useLensCatalogue } from "../useLensCatalogue.js";
@@ -28,7 +29,8 @@ export default function usePreviewState({
   showNegative,
 }) {
   const cropMode = panel === "crop" && inspectorOpen;
-  const [zoomReadout, setZoomReadout] = useState(100);
+  // The canvas's zoom as it moves, ahead of `zoom`, which it commits once the view settles.
+  const [liveZoom] = useState(() => createLiveValue({ zoom: 1, readout: 100 }));
   const viewed = negativeViewEdit(
     edit,
     stocks.find((stock) => stock.id === edit.stock),
@@ -132,8 +134,7 @@ export default function usePreviewState({
   const visibleError = error || libraryError;
   return {
     cropMode,
-    zoomReadout,
-    setZoomReadout,
+    liveZoom,
     previewEditJSON,
     viewerMoving,
     setViewerMoving,

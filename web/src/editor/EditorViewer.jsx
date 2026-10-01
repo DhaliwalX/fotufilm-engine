@@ -31,7 +31,7 @@ export default function EditorViewer() {
     cropMode,
     width,
     cropSize,
-    setZoomReadout,
+    liveZoom,
     setZoom,
     compare,
     setCompare,
@@ -119,7 +119,7 @@ export default function EditorViewer() {
                           shownResult.framePlan.placement.image.width
                         : 1)
                 }
-                onZoomReadout={setZoomReadout}
+                liveZoom={liveZoom}
                 setZoom={setZoom}
                 compare={compare}
                 setCompare={setCompare}
