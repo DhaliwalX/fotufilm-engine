@@ -3,7 +3,7 @@ import { useEditor, useEditorFrame } from "./EditorContext.jsx";
 // itself says when a preview lands, and holding the photograph or Space compares it.
 export default function ViewerStatus() {
   const { active, auto, error, detailBackend } = useEditor();
-  const { shownResult, status, previewKey, interacting } = useEditorFrame();
+  const { shownResult, status, previewKey, previewInteracting } = useEditorFrame();
   return (
     <div className="viewer-status">
       <span className="document-name">{active?.name || "No photo open"}</span>
@@ -14,7 +14,7 @@ export default function ViewerStatus() {
             (active && shownResult?.key !== previewKey
               ? error
                 ? "Preview unavailable"
-                : interacting
+                : previewInteracting
                   ? "Waiting for adjustments to settle before full-detail preview"
                   : "Waiting for the next display frame"
               : null) ||

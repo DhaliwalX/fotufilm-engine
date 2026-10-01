@@ -3,8 +3,16 @@ import {
   anchoredPhotoZoom,
   constrainPhotoOffset,
   pinchGeometry,
+  scrolledPhotoView,
+  wheelDistance,
+  wheelZoomScale,
 } from "./photo-navigation.js";
 
+// Wheel, drag and pinch over the photograph, as a native image viewer takes them: a scroll moves
+// a magnified photograph, a pinch (or a scroll with Command, Option or Control) zooms about the
+// pointer, and a double click or a two-finger double tap zooms in and back (`toggle`). `view` is
+// a ref to the newest {zoom, offset}, which may be ahead of the last render; every change goes to
+// `show`, which renders it once a frame.
 export function usePhotoNavigation(options) {
   const live = useRef(options);
   live.current = options;
@@ -15,11 +23,8 @@ export function usePhotoNavigation(options) {
     clearTimeout(hold.current);
     hold.current = null;
   };
-  const apply = (view) => {
-    Object.assign(live.current, view);
-    live.current.setZoom(view.zoom);
-    live.current.setOffset(view.offset);
-  };
+  const apply = (view) => live.current.show(view);
+  const viewed = () => live.current.view.current;
   const point = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
     return [
@@ -28,7 +33,7 @@ export function usePhotoNavigation(options) {
     ];
   };
   const rebase = () => {
-    const { zoom, offset } = live.current;
+    const { zoom, offset } = viewed();
     const points = [...pointers.current.values()];
     gesture.current =
       points.length > 1
@@ -41,7 +46,6 @@ export function usePhotoNavigation(options) {
     clearHold();
     pointers.current.clear();
     gesture.current = null;
-    live.current.onInteraction?.(false);
     live.current.setCompare(false);
   };
   useEffect(() => {
@@ -50,32 +54,55 @@ export function usePhotoNavigation(options) {
   }, [options.sourceKey, options.cropMode, options.sampling]);
   useEffect(() => {
     const surface = options.container.current;
-    const wheel = (event) => {
+    // Where on the photograph a point of the page is, from the viewer's centre; null where the
+    // photograph is not what is under it (another panel, the histogram over it).
+    const anchorAt = (x, y) => {
       const current = live.current;
-      if (
-        current.cropMode ||
-        current.sampling ||
-        event.target.closest(".histogram")
-      )
-        return;
-      event.preventDefault();
+      if (current.cropMode || current.sampling) return null;
+      const under = document.elementFromPoint(x, y);
+      if (!under || !surface.contains(under) || under.closest(".histogram"))
+        return null;
       const rect = surface.getBoundingClientRect();
-      const anchor = [
-        event.clientX - rect.left - rect.width / 2,
-        event.clientY - rect.top - rect.height / 2,
-      ];
-      apply(
-        anchoredPhotoZoom({
-          ...current,
-          anchor,
-          scale: event.deltaY > 0 ? 0.9 : 1.1,
-        }),
-      );
+      return [x - rect.left - rect.width / 2, y - rect.top - rect.height / 2];
+    };
+    const zoom = (anchor, scale) => {
+      const { display, room } = live.current;
+      apply(anchoredPhotoZoom({ ...viewed(), display, room, anchor, scale }));
+    };
+    const wheel = (event) => {
+      const anchor = anchorAt(event.clientX, event.clientY);
+      if (!anchor) return;
+      event.preventDefault();
+      const height = surface.clientHeight;
+      if (event.ctrlKey || event.metaKey || event.altKey)
+        zoom(anchor, wheelZoomScale(event, height));
+      else if (viewed().zoom > 1) {
+        const { display, room } = live.current;
+        apply(
+          scrolledPhotoView(
+            { ...viewed(), display, room },
+            wheelDistance(event, height),
+          ),
+        );
+      }
+    };
+    // The desktop host's exact pinch and two-finger double tap (cef/src/platform/mac).
+    const magnify = ({ detail }) => {
+      const anchor = anchorAt(detail.x, detail.y);
+      if (anchor) zoom(anchor, detail.scale);
+    };
+    const smartMagnify = ({ detail }) => {
+      const anchor = anchorAt(detail.x, detail.y);
+      if (anchor) live.current.toggle(anchor);
     };
     surface.addEventListener("wheel", wheel, { passive: false });
+    window.addEventListener("fotufilm-native-magnify", magnify);
+    window.addEventListener("fotufilm-native-smart-magnify", smartMagnify);
     window.addEventListener("blur", reset);
     return () => {
       surface.removeEventListener("wheel", wheel);
+      window.removeEventListener("fotufilm-native-magnify", magnify);
+      window.removeEventListener("fotufilm-native-smart-magnify", smartMagnify);
       window.removeEventListener("blur", reset);
     };
   }, [options.container]);
@@ -104,9 +131,8 @@ export function usePhotoNavigation(options) {
       pointers.current.set(event.pointerId, point(event));
       clearHold();
       rebase();
-      if (pointers.current.size > 1 || current.zoom > 1) {
+      if (pointers.current.size > 1 || viewed().zoom > 1) {
         current.setCompare(false);
-        current.onInteraction?.(true);
       } else if (event.pointerType === "touch") {
         hold.current = setTimeout(() => live.current.setCompare(true), 180);
       } else current.setCompare(true);
@@ -123,21 +149,23 @@ export function usePhotoNavigation(options) {
         const pinch = pinchGeometry([...pointers.current.values()]);
         apply(
           anchoredPhotoZoom({
-            ...current,
+            display: current.display,
+            room: current.room,
             ...start,
             nextAnchor: pinch.anchor,
             scale: pinch.distance / start.distance,
           }),
         );
-      } else if (current.zoom > 1) {
+      } else if (viewed().zoom > 1) {
+        const { zoom } = viewed();
         clearHold();
         apply({
-          zoom: current.zoom,
+          zoom,
           offset: constrainPhotoOffset(
             position.map(
               (value, axis) => start.offset[axis] + value - start.anchor[axis],
             ),
-            current.zoom,
+            zoom,
             current.display,
             current.room,
           ),

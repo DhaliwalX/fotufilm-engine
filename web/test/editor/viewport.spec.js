@@ -108,10 +108,13 @@ for (const pixelRatio of [1, 2])
       await expect(detail).toBeVisible();
       const viewer = page.getByLabel("Photo preview", { exact: true });
       await viewer.hover();
+      // A scroll with Command zooms, about 10% a step.
+      await page.keyboard.down("Meta");
       for (let i = 0; i < 18; i++) {
-        await page.mouse.wheel(0, -60);
+        await page.mouse.wheel(0, -30);
         await page.waitForTimeout(20);
       }
+      await page.keyboard.up("Meta");
       await expect(detail).toBeVisible();
       const check = async () =>
         detail.evaluate((img) => ({

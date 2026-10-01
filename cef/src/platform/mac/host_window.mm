@@ -3,6 +3,7 @@
 #import <QuartzCore/QuartzCore.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
+#include <algorithm>
 #include <cstring>
 #include <map>
 #include <memory>
@@ -100,6 +101,8 @@ constexpr CGFloat kWindowButtonSpacing = 20;
 
 @implementation FotufilmHostView {
   NSTrackingArea* _tracking;
+  // What a trackpad scrolled past the whole pixels sent so far.
+  NSPoint _scrollRemainder;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame {
@@ -244,20 +247,43 @@ constexpr CGFloat kWindowButtonSpacing = 20;
 
 - (void)scrollWheel:(NSEvent*)event {
   if (!_browser) return;
-  // Trackpads report pixels; wheels report lines, which Chromium scrolls 40 pixels at a time.
-  const CGFloat scale = event.hasPreciseScrollingDeltas ? 1 : 40;
-  _browser->GetHost()->SendMouseWheelEvent(
-      [self mouseEvent:event], static_cast<int>(event.scrollingDeltaX * scale),
-      static_cast<int>(event.scrollingDeltaY * scale));
+  // Wheels report lines, which Chromium scrolls 40 pixels at a time. Trackpads report fractions of
+  // a pixel, and CEF's wheel events carry whole ones: the rest carries over to the next event, so
+  // a slow scroll moves the page as far as the fingers moved.
+  NSPoint delta = NSMakePoint(event.scrollingDeltaX * 40, event.scrollingDeltaY * 40);
+  if (event.hasPreciseScrollingDeltas) {
+    if (event.phase == NSEventPhaseBegan) _scrollRemainder = NSZeroPoint;
+    delta = NSMakePoint(_scrollRemainder.x + event.scrollingDeltaX,
+                        _scrollRemainder.y + event.scrollingDeltaY);
+  }
+  const int x = static_cast<int>(delta.x), y = static_cast<int>(delta.y);
+  _scrollRemainder = event.hasPreciseScrollingDeltas ? NSMakePoint(delta.x - x, delta.y - y)
+                                                     : NSZeroPoint;
+  if (x || y) _browser->GetHost()->SendMouseWheelEvent([self mouseEvent:event], x, y);
 }
 
+// A pinch goes to the page as an event of its own ("fotufilm-native-magnify"), exactly: Chromium
+// would hand it over as a wheel event, whose whole-number delta rounds the 0.5% steps of a slow
+// pinch away. `scale` is this step's, as NSScrollView applies it; x and y are the view's points.
 - (void)magnifyWithEvent:(NSEvent*)event {
   if (!_browser) return;
-  // Chromium hands pages a pinch as a wheel event with Control held; the editor zooms on it.
-  CefMouseEvent mouse = [self mouseEvent:event];
-  mouse.modifiers |= EVENTFLAG_CONTROL_DOWN;
-  _browser->GetHost()->SendMouseWheelEvent(
-      mouse, 0, static_cast<int>(event.magnification * 100));
+  const NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
+  CefRefPtr<CefDictionaryValue> detail = CefDictionaryValue::Create();
+  detail->SetDouble("scale", std::max(0.05, 1.0 + event.magnification));
+  detail->SetDouble("x", point.x);
+  detail->SetDouble("y", point.y);
+  fotufilm::Dispatcher::Emit(_browser->GetMainFrame(), "magnify", Dictionary(detail));
+}
+
+// A two-finger double tap ("fotufilm-native-smart-magnify"), which zooms in and back as a double
+// click does.
+- (void)smartMagnifyWithEvent:(NSEvent*)event {
+  if (!_browser) return;
+  const NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
+  CefRefPtr<CefDictionaryValue> detail = CefDictionaryValue::Create();
+  detail->SetDouble("x", point.x);
+  detail->SetDouble("y", point.y);
+  fotufilm::Dispatcher::Emit(_browser->GetMainFrame(), "smart-magnify", Dictionary(detail));
 }
 
 #pragma mark Keyboard

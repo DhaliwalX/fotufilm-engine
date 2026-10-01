@@ -3,28 +3,34 @@ import { ActionButton } from "@react-spectrum/s2/ActionButton";
 import { Tooltip, TooltipTrigger } from "@react-spectrum/s2/Tooltip";
 import { ToggleButton } from "@react-spectrum/s2/ToggleButton";
 import { useEditor } from "./EditorContext.jsx";
+import { usePhotoView, zoomReach } from "../photo-view.js";
+// Follows a pinch frame by frame, on its own.
+function ZoomReadout({ photoView }) {
+  const { zoom, readout } = usePhotoView(photoView);
+  return (
+    <span className="zoom-readout">{zoom === 1 ? "Fit" : `${readout}%`}</span>
+  );
+}
 export default function ViewToolbar() {
   const {
     exporting,
-    setZoom,
-    zoomIn,
-    zoomOut,
     active,
-    zoom,
     cropMode,
-    zoomReadout,
+    photoView,
     panel,
     inspectorOpen,
     setInspector,
     rawWidth,
     rawHeight,
   } = useEditor();
+  // Renders again only as the view crosses fit or the largest zoom.
+  const reach = usePhotoView(photoView, zoomReach);
   return (
     <div className="toolbar-zoom">
       <TooltipTrigger>
         <ActionButton
-          onPress={zoomOut}
-          isDisabled={!active || zoom === 1 || cropMode}
+          onPress={photoView.zoomOut}
+          isDisabled={!active || reach === "fit" || cropMode}
           aria-label={"Zoom out"}
           size={"S"}
           isQuiet
@@ -33,13 +39,11 @@ export default function ViewToolbar() {
         </ActionButton>
         <Tooltip>{"Zoom out"}</Tooltip>
       </TooltipTrigger>
-      <span className="zoom-readout">
-        {zoom === 1 ? "Fit" : `${zoomReadout}%`}
-      </span>
+      <ZoomReadout photoView={photoView} />
       <TooltipTrigger>
         <ActionButton
-          onPress={zoomIn}
-          isDisabled={!active || zoom === 8 || cropMode}
+          onPress={photoView.zoomIn}
+          isDisabled={!active || reach === "max" || cropMode}
           aria-label={"Zoom in"}
           size={"S"}
           isQuiet
@@ -50,8 +54,8 @@ export default function ViewToolbar() {
       </TooltipTrigger>
       <TooltipTrigger>
         <ActionButton
-          onPress={() => setZoom(1)}
-          isDisabled={!active || zoom === 1}
+          onPress={photoView.fit}
+          isDisabled={!active || reach === "fit"}
           aria-label={"Zoom to fit (0)"}
           size={"S"}
           isQuiet

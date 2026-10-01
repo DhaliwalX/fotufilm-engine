@@ -3,6 +3,7 @@ import { useReducer, useState, useRef, useEffect } from "react";
 import { historyReducer, initialHistory } from "../editor-state.js";
 import { sourceIlluminant } from "../editor-catalogue.js";
 import { setAppSetting, useAppSetting } from "../app-settings.js";
+import { createPhotoView } from "../photo-view.js";
 export default function useEditorState({}) {
   const compactLayout = useCompactLayout();
   const [history, historyDispatch] = useReducer(historyReducer, initialHistory);
@@ -22,7 +23,8 @@ export default function useEditorState({}) {
     }
   }, [compactLayout]);
   const [search, setSearch] = useState(""),
-    [zoom, setZoom] = useState(1),
+    // The canvas owns the photograph's view; the editor steps it through this handle.
+    [photoView] = useState(createPhotoView),
     [compare, setCompare] = useState(false);
   const [histogram, setHistogram] = useState(false),
     [dragOver, setDragOver] = useState(false);
@@ -89,8 +91,7 @@ export default function useEditorState({}) {
     setInspectorOpen,
     search,
     setSearch,
-    zoom,
-    setZoom,
+    photoView,
     compare,
     setCompare,
     histogram,

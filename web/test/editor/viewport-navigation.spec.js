@@ -62,8 +62,10 @@ test.describe("debounced Retina viewport", () => {
     const detail = page.locator(".viewport-detail"),
       viewer = page.getByLabel("Photo preview", { exact: true });
     await viewer.hover();
-    await page.mouse.wheel(0, -100);
-    for (let i = 0; i < 14; i++) await page.mouse.wheel(0, -100);
+    // A scroll with Command zooms, about 10% a step.
+    await page.keyboard.down("Meta");
+    for (let i = 0; i < 15; i++) await page.mouse.wheel(0, -30);
+    await page.keyboard.up("Meta");
     await expect
       .poll(async () => (await pixels(detail)).frame)
       .toBeGreaterThan(2000);

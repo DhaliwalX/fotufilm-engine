@@ -1,5 +1,6 @@
 import { usePhotoNavigation } from "./usePhotoNavigation.js";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import HistogramPanel from "./HistogramPanel.jsx";
 import ViewportDetail from "./ViewportDetail.jsx";
 import { useViewportDetail } from "./useViewportDetail.js";
@@ -7,6 +8,14 @@ import { useImageLayer } from "./useImageLayer.js";
 import { visiblePhotoViewport } from "./viewport.js";
 import CropOverlay from "./CropOverlay.jsx";
 import { clamp } from "./color-controls.js";
+import {
+  MAX_ZOOM,
+  anchoredPhotoZoom,
+  centredPhotoZoom,
+} from "./photo-navigation.js";
+
+const FIT = Object.freeze({ zoom: 1, offset: [0, 0] });
+
 export function ImageCanvas({
   result,
   detailSession,
@@ -16,8 +25,7 @@ export function ImageCanvas({
   onDetailBackend,
   original,
   sourceKey,
-  zoom,
-  setZoom,
+  photoView,
   compare,
   setCompare,
   cropMode,
@@ -29,15 +37,29 @@ export function ImageCanvas({
   onEnd,
   showHistogram,
   outputWidth,
-  onZoomReadout,
-  onInteraction,
   sampling = false,
   onSample,
 }) {
   const container = useRef(null),
     plane = useRef(null);
-  const [offset, setOffset] = useState([0, 0]),
-    [room, setRoom] = useState([1, 1]),
+  // The view is the canvas's own: nothing else renders while the photograph moves. `latest` holds
+  // the newest, which may be ahead of the last render. The toolbar, keys and menus step it through
+  // `photoView`, which hears of every view shown.
+  const [view, setView] = useState(FIT);
+  const latest = useRef(FIT),
+    layout = useRef(null);
+  const jump = useCallback((next) => {
+    latest.current = next;
+    setView(next);
+  }, []);
+  // A move renders at once, inside its input event, so it reaches the next frame. Chromium
+  // coalesces moves while the page is busy, so this is one render a frame at most. Waiting for an
+  // animation frame instead made Chromium hold the input for that frame, a frame later on Linux.
+  const show = useCallback((next) => {
+    latest.current = next;
+    flushSync(() => setView(next));
+  }, []);
+  const [room, setRoom] = useState([1, 1]),
     [pixelRatio, setPixelRatio] = useState(() => window.devicePixelRatio || 1);
   useEffect(() => {
     let query;
@@ -58,13 +80,16 @@ export function ImageCanvas({
     observer.observe(container.current);
     return () => observer.disconnect();
   }, []);
-  useEffect(() => {
-    setOffset([0, 0]);
-    setZoom(1);
-  }, [sourceKey, setZoom]);
-  useEffect(() => {
-    if (zoom === 1) setOffset([0, 0]);
-  }, [zoom]);
+  useEffect(() => jump(FIT), [sourceKey, jump]);
+  useEffect(
+    () =>
+      photoView.attach((zoom) => {
+        const current = latest.current;
+        const nextZoom = typeof zoom === "function" ? zoom(current.zoom) : zoom;
+        jump(centredPhotoZoom({ ...current, nextZoom, ...layout.current }));
+      }),
+    [photoView, jump],
+  );
   const width = result?.width || original?.naturalWidth || 1,
     height = result?.height || original?.naturalHeight || 1;
   const fit = Math.min(
@@ -74,11 +99,13 @@ export function ImageCanvas({
   );
   const displayWidth = Math.max(1, width * fit),
     displayHeight = Math.max(1, height * fit);
+  layout.current = { display: [displayWidth, displayHeight], room };
+  const { offset } = view;
   const viewport = visiblePhotoViewport({
     room,
     displayWidth,
     displayHeight,
-    zoom: cropMode ? 1 : zoom,
+    zoom: cropMode ? 1 : view.zoom,
     offset: cropMode ? [0, 0] : offset,
     framePlan: cropMode ? null : result?.framePlan,
     pixelRatio,
@@ -92,28 +119,47 @@ export function ImageCanvas({
     onBackend: onDetailBackend,
   });
   // The host draws a presented photograph beneath the page; the page leaves it a hole.
-  const presented = useImageLayer({ container, plane, result, detail, compare });
+  const presented = useImageLayer({
+    container,
+    plane,
+    result,
+    detail,
+    compare,
+  });
   const displayUrl = compare
     ? result?.originalUrl || original?.src
     : result?.url || original?.src;
   const nativeScale = displayWidth / Math.max(1, outputWidth || width);
+  const readout = Math.round(nativeScale * (cropMode ? 1 : view.zoom) * 100);
   useEffect(() => {
-    onZoomReadout?.(Math.round(nativeScale * (cropMode ? 1 : zoom) * 100));
-  }, [nativeScale, cropMode, zoom, onZoomReadout]);
+    photoView.publish({ zoom: view.zoom, readout });
+  }, [photoView, view.zoom, readout]);
+  // Fit and the photograph's own pixels (at most the largest zoom), about `anchor`.
+  const toggle = (anchor) => {
+    const current = latest.current;
+    const target = current.zoom === 1 ? clamp(1 / nativeScale, 1, MAX_ZOOM) : 1;
+    jump({
+      ...anchoredPhotoZoom({
+        ...current,
+        ...layout.current,
+        anchor,
+        scale: target / current.zoom,
+      }),
+      zoom: target,
+    });
+  };
   const navigation = usePhotoNavigation({
     container,
     sourceKey,
     cropMode,
     sampling,
     onSample,
-    zoom,
-    setZoom,
-    offset,
-    setOffset,
+    view: latest,
+    show,
+    toggle,
     display: [displayWidth, displayHeight],
     room,
     setCompare,
-    onInteraction,
   });
   return (
     <div
@@ -122,8 +168,12 @@ export function ImageCanvas({
       tabIndex={0}
       aria-label="Photo preview"
       onDoubleClick={(event) => {
-        if (!cropMode && !event.target.closest(".histogram"))
-          setZoom((z) => (z === 1 ? clamp(1 / nativeScale, 1, 8) : 1));
+        if (cropMode || event.target.closest(".histogram")) return;
+        const box = event.currentTarget.getBoundingClientRect();
+        toggle([
+          event.clientX - box.left - box.width / 2,
+          event.clientY - box.top - box.height / 2,
+        ]);
       }}
       {...navigation}
     >
@@ -134,7 +184,7 @@ export function ImageCanvas({
           style={{
             width: displayWidth,
             height: displayHeight,
-            transform: `translate(${cropMode ? 0 : offset[0]}px, ${cropMode ? 0 : offset[1]}px) scale(${cropMode ? 1 : zoom})`,
+            transform: `translate(${cropMode ? 0 : offset[0]}px, ${cropMode ? 0 : offset[1]}px) scale(${cropMode ? 1 : view.zoom})`,
           }}
         >
           {presented ? (

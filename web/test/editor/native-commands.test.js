@@ -21,7 +21,12 @@ function editor(overrides = {}) {
     history: { past: [{}], future: [] },
     auto: { available: true, active: false, toggle: record("auto") },
     shownResult: {},
-    zoom: 1,
+    photoView: {
+      get: () => ({ zoom: 1, readout: 100 }),
+      zoomIn: record("zoomIn"),
+      zoomOut: record("zoomOut"),
+      fit: record("fit"),
+    },
     panel: "film",
     inspectorOpen: true,
     filmOpen: true,
@@ -35,9 +40,6 @@ function editor(overrides = {}) {
     setSampling: record("sampling"),
     copyPhoto: record("copy"),
     resetEdits: record("reset"),
-    zoomIn: record("zoomIn"),
-    zoomOut: record("zoomOut"),
-    setZoom: record("zoom"),
     setCompare: record("compare"),
     setHistogram: record("histogram"),
     toggleFilms: record("films"),
@@ -69,7 +71,7 @@ test("menu commands run the editor's own handlers", () => {
 });
 
 test("commands that do not apply are greyed and refused", () => {
-  const e = editor({ history: { past: [], future: [] }, zoom: 1 });
+  const e = editor({ history: { past: [], future: [] } });
   const { enabled } = menuState(e);
   assert.equal(enabled.undo, false);
   assert.equal(enabled.zoomOut, false);
@@ -108,17 +110,19 @@ test("ticks follow the toolbar toggles and the open tab", () => {
 
 test("Choose Film, Grain Model and Estimated Halation run on the loaded film", () => {
   const e = editor({
-    stocks: [{ id: "gold200", name: "Gold 200" }, { id: "portra400", name: "Portra 400" }],
+    stocks: [
+      { id: "gold200", name: "Gold 200" },
+      { id: "portra400", name: "Portra 400" },
+    ],
     edit: { stock: "gold200", profile: {}, halationModel: "legacy" },
     selectStock: (id) => e.calls.push(["stock", id]),
     setProfile: (key, value) => e.calls.push(["profile", key, value]),
   });
   const state = menuState(e);
-  assert.deepEqual(state.menus.films.map(([command]) => command), [
-    "film:none",
-    "film:gold200",
-    "film:portra400",
-  ]);
+  assert.deepEqual(
+    state.menus.films.map(([command]) => command),
+    ["film:none", "film:gold200", "film:portra400"],
+  );
   assert.equal(state.checked["film:gold200"], true);
   assert.equal(state.checked["grainModel:clump"], true);
   assert.equal(state.checked.estimatedHalation, false);
@@ -139,7 +143,10 @@ test("Choose Film, Grain Model and Estimated Halation run on the loaded film", (
   assert.equal(none.checked["grainModel:clump"], true);
   assert.equal(none.enabled.estimatedHalation, true);
   const before = e.calls.length;
-  assert.equal(runCommand({ ...e, fixedSettings: true }, "grainModel:film"), true);
+  assert.equal(
+    runCommand({ ...e, fixedSettings: true }, "grainModel:film"),
+    true,
+  );
   assert.equal(e.calls.length, before);
 });
 
@@ -160,15 +167,29 @@ function withPlugins(list, overrides = {}) {
 
 test("the Plugins menu installs in the dialog and reveals what is installed", () => {
   const e = withPlugins([
-    { id: "resolve", state: "outdated", bundledVersion: "7", location: "/Library/OFX/Plugins/Fotufilm.ofx.bundle" },
+    {
+      id: "resolve",
+      state: "outdated",
+      bundledVersion: "7",
+      location: "/Library/OFX/Plugins/Fotufilm.ofx.bundle",
+    },
     { id: "finalCut", state: "notInstalled", bundledVersion: "7" },
   ]);
   const { enabled, titles, toolTips } = menuState(e);
-  assert.equal(titles["installPlugin:resolve"], "Reinstall DaVinci Resolve Plug-in…");
-  assert.equal(titles["installPlugin:finalCut"], "Install Final Cut Pro Plug-in…");
+  assert.equal(
+    titles["installPlugin:resolve"],
+    "Reinstall DaVinci Resolve Plug-in…",
+  );
+  assert.equal(
+    titles["installPlugin:finalCut"],
+    "Install Final Cut Pro Plug-in…",
+  );
   assert.equal(enabled["revealPlugin:resolve"], true);
   assert.equal(enabled["revealPlugin:finalCut"], false);
-  assert.equal(toolTips["revealPlugin:resolve"], "/Library/OFX/Plugins/Fotufilm.ofx.bundle");
+  assert.equal(
+    toolTips["revealPlugin:resolve"],
+    "/Library/OFX/Plugins/Fotufilm.ofx.bundle",
+  );
   assert.match(toolTips["revealPlugin:finalCut"], /not installed yet/);
   assert.ok(runCommand(e, "installPlugin:finalCut"));
   assert.ok(runCommand(e, "revealPlugin:resolve"));
@@ -188,7 +209,9 @@ test("a plug-in this build lacks cannot be installed, and one install runs at a 
   );
   assert.equal(lacking.enabled["installPlugin:finalCut"], false);
   assert.match(lacking.toolTips["installPlugin:finalCut"], /does not contain/);
-  const busy = withPlugins([{ id: "resolve", state: "notInstalled", bundledVersion: "7" }]);
+  const busy = withPlugins([
+    { id: "resolve", state: "notInstalled", bundledVersion: "7" },
+  ]);
   busy.plugins.busy = "finalCut";
   assert.equal(menuState(busy).enabled["installPlugin:resolve"], false);
   // A host without plug-ins has no such commands.
@@ -221,7 +244,10 @@ test("Undo and Redo are named and the Edit History lists every step", () => {
   assert.equal(runCommand(e, "history:3"), false);
   // With no photograph there is no history, and a covered photo's steps are greyed.
   assert.deepEqual(menuState(editor({ active: null })).history, []);
-  assert.equal(menuState({ ...e, dialog: "export" }).enabled["history:0"], false);
+  assert.equal(
+    menuState({ ...e, dialog: "export" }).enabled["history:0"],
+    false,
+  );
   const untouched = { past: [], present: opened, future: [] };
   assert.equal(menuState(editor({ history: untouched })).titles.undo, "Undo");
 });
@@ -256,12 +282,46 @@ test("Copy Settings, Paste Settings and the presets run on the open photo", () =
     ["preset", "p1"],
     ["dialog", "savePreset"],
   ]);
-  const copied = editor({ editSettings: { copied: {}, presets: [], sections: [] } });
+  const copied = editor({
+    editSettings: { copied: {}, presets: [], sections: [] },
+  });
   assert.ok(runCommand(copied, "pasteSettings"));
   assert.equal(menuState(copied).enabled.managePresets, false);
   // Without a photo there is nothing to copy from or paste onto.
-  const none = menuState(editor({ active: null, editSettings: { copied: {}, presets: [{ id: "p1", name: "Warm" }], sections: [] } })).enabled;
+  const none = menuState(
+    editor({
+      active: null,
+      editSettings: {
+        copied: {},
+        presets: [{ id: "p1", name: "Warm" }],
+        sections: [],
+      },
+    }),
+  ).enabled;
   assert.equal(none.copySettings, false);
   assert.equal(none.pasteSettings, false);
   assert.equal(none["preset:p1"], false);
+});
+
+test("the zoom items follow the canvas's view, which the editor never holds", () => {
+  const at = (zoom) =>
+    menuState(editor({ photoView: { get: () => ({ zoom, readout: 100 }) } }))
+      .enabled;
+  assert.deepEqual(
+    [1, 2.5, 8].map((zoom) => {
+      const { zoomIn, zoomOut, zoomToFit } = at(zoom);
+      return [zoomIn, zoomOut, zoomToFit];
+    }),
+    [
+      [true, false, false],
+      [true, true, true],
+      [false, true, true],
+    ],
+  );
+  // Zoomed in, all three apply (at Fit, zooming out and fitting are refused).
+  const e = editor();
+  e.photoView = { ...e.photoView, get: () => ({ zoom: 2.5, readout: 100 }) };
+  for (const command of ["zoomIn", "zoomOut", "zoomToFit"])
+    runCommand(e, command);
+  assert.deepEqual(e.calls, [["zoomIn"], ["zoomOut"], ["fit"]]);
 });

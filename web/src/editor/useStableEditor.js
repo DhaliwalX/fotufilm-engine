@@ -11,9 +11,7 @@ export const FRAME_FIELDS = [
   "status",
   "previewKey",
   "detailRequest",
-  "interacting",
   "previewInteracting",
-  "interactionKey",
   "editInteractionKey",
 ];
 const FRAME = new Set(FRAME_FIELDS);

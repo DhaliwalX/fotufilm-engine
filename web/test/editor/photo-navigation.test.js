@@ -2,9 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   anchoredPhotoZoom,
+  MAX_ZOOM,
+  centredPhotoZoom,
   constrainPhotoOffset,
   pinchGeometry,
+  scrolledPhotoView,
+  wheelDistance,
+  wheelZoomScale,
 } from "../../src/photo-navigation.js";
+import { createPhotoView, zoomReach } from "../../src/photo-view.js";
 import { renderViewportImage } from "../../src/viewport-detail-image.js";
 
 const view = {
@@ -50,6 +56,41 @@ test("pan and pinch bounds keep the visible image on screen and return to centre
   );
 });
 
+test("wheel zoom follows the scroll distance and inverts a trackpad pinch exactly", () => {
+  // Chromium sends a pinch as a ctrl wheel event with deltaY = -100·ln(scale).
+  for (const scale of [0.8, 1.05, 1.5])
+    assert.ok(
+      Math.abs(
+        wheelZoomScale({ deltaY: -100 * Math.log(scale), ctrlKey: true }) -
+          scale,
+      ) < 1e-12,
+    );
+  const small = wheelZoomScale({ deltaY: -4 }),
+    notch = wheelZoomScale({ deltaY: -40 });
+  assert.ok(small > 1 && small < 1.02);
+  assert.ok(notch > small);
+  assert.equal(
+    wheelZoomScale({ deltaY: -3, deltaMode: 1 }),
+    wheelZoomScale({ deltaY: -48 }),
+  );
+  // A Windows or Linux mouse notch steps no further than a quarter.
+  assert.equal(wheelZoomScale({ deltaY: -100 }), 1.25);
+  assert.equal(wheelZoomScale({ deltaY: 1e6 }), 0.8);
+  assert.equal(wheelZoomScale({ deltaY: 1e6, ctrlKey: true }), 0.5);
+  assert.equal(wheelZoomScale({ deltaY: -1e6, ctrlKey: true }), 2);
+});
+
+test("a stepped zoom keeps the centre of the view and lands on the zoom asked for", () => {
+  const next = centredPhotoZoom({ ...view, nextZoom: 3 });
+  assert.equal(next.zoom, 3);
+  assert.deepEqual(next.offset, [30, -15]);
+  // A fitted photograph returns to the centre.
+  assert.deepEqual(
+    centredPhotoZoom({ ...view, display: [550, 350], nextZoom: 1 }),
+    { zoom: 1, offset: [0, 0] },
+  );
+});
+
 for (const outcome of ["stale", "decode error", "ready"])
   test(`detail blobs are released after ${outcome}`, async (t) => {
     const revoked = [];
@@ -88,3 +129,52 @@ for (const outcome of ["stale", "decode error", "ready"])
     }
     assert.equal(new Set(revoked).size, 2);
   });
+
+test("the photo view steps the attached canvas and tells listeners only of changes", () => {
+  const view = createPhotoView();
+  view.fit(); // No canvas yet: nothing to step.
+  let zoom = 1;
+  const detach = view.attach((next) => {
+    zoom = typeof next === "function" ? next(zoom) : next;
+  });
+  view.zoomIn();
+  view.zoomIn();
+  assert.equal(zoom, 1.5);
+  view.zoomOut();
+  assert.equal(zoom, 1.25);
+  view.fit();
+  assert.equal(zoom, 1);
+  zoom = MAX_ZOOM;
+  view.zoomIn();
+  assert.equal(zoom, MAX_ZOOM);
+  detach();
+  view.fit();
+  assert.equal(zoom, MAX_ZOOM);
+
+  let heard = 0;
+  view.subscribe(() => heard++);
+  view.publish({ zoom: 2, readout: 40 });
+  view.publish({ zoom: 2, readout: 40 });
+  assert.equal(heard, 1);
+  assert.equal(zoomReach(view.get()), "zoomed");
+  assert.equal(zoomReach({ zoom: 1 }), "fit");
+  assert.equal(zoomReach({ zoom: MAX_ZOOM }), "max");
+});
+
+test("a scroll moves a magnified photograph with the fingers and leaves a fitted one", () => {
+  assert.deepEqual(
+    wheelDistance({ deltaX: 2, deltaY: -3, deltaMode: 1 }),
+    [32, -48],
+  );
+  assert.deepEqual(wheelDistance({ deltaY: 1, deltaMode: 2 }, 500), [0, 500]);
+  // Scrolling down shows more of the bottom: the photograph moves up.
+  assert.deepEqual(scrolledPhotoView(view, [10, 30]).offset, [10, -40]);
+  assert.deepEqual(scrolledPhotoView(view, [1e4, -1e4]).offset, [-500, 400]);
+  assert.deepEqual(
+    scrolledPhotoView(
+      { ...view, zoom: 1, offset: [0, 0], display: [550, 350] },
+      [40, 40],
+    ),
+    { zoom: 1, offset: [0, 0] },
+  );
+});

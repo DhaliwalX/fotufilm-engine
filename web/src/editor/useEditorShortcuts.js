@@ -14,9 +14,7 @@ export default function useEditorShortcuts({
   active,
   setDialog,
   setCompare,
-  setZoom,
-  zoomIn,
-  zoomOut,
+  photoView,
   cropMode,
   setPanel,
   endEdit,
@@ -77,7 +75,7 @@ export default function useEditorShortcuts({
         setCompare(true);
       } else if (event.key === "Escape") {
         setCompare(false);
-        setZoom(1);
+        photoView.fit();
         if (cropMode) setPanel("film");
       } else if (event.key === "Enter" && cropMode) {
         setPanel("film");
@@ -87,9 +85,9 @@ export default function useEditorShortcuts({
       else if (!command && event.key.toLowerCase() === "c") {
         setPanel("crop");
         setInspectorOpen(true);
-      } else if (event.key === "0") setZoom(1);
-      else if (event.key === "+" || event.key === "=") zoomIn();
-      else if (event.key === "-") zoomOut();
+      } else if (event.key === "0") photoView.fit();
+      else if (event.key === "+" || event.key === "=") photoView.zoomIn();
+      else if (event.key === "-") photoView.zoomOut();
       else if (event.key === "Tab") return;
     }
     const release = (event) => {

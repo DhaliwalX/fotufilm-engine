@@ -6,9 +6,7 @@ export default function useRendererLifecycle({
   previewKey,
   exporting,
   cropMode,
-  interacting,
   previewInteracting,
-  interactionKey,
   setRetry,
   setStatus,
   setSession,
@@ -39,9 +37,7 @@ export default function useRendererLifecycle({
     key: previewKey,
     exporting,
     cropMode,
-    interacting,
     previewInteracting,
-    interactionKey,
   };
   useEffect(() => {
     const renderer = backend.createSession();

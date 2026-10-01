@@ -1,14 +1,20 @@
 import { AnimatePresence, motion } from "motion/react";
 import { ActionButton } from "@react-spectrum/s2/ActionButton";
 import { PickerItem, Picker } from "@react-spectrum/s2/Picker";
-import { useLayoutEffect, useRef, useState } from "react";
+import { memo, useLayoutEffect, useRef, useState } from "react";
 import { HISTOGRAM as labels } from "./generated/controls.js";
 import { Icon } from "./icons.jsx";
 import { useHistogram } from "./use-histogram.js";
 import { useFloatingPanel } from "./use-floating-panel.js";
 import HistogramPlot from "./HistogramPlot.jsx";
 import "./histogram.css";
-export default function HistogramPanel({ result, open, onClose, container }) {
+// Memoised: the canvas renders every frame its photograph moves, and the panel's inputs do not.
+export default memo(function HistogramPanel({
+  result,
+  open,
+  onClose,
+  container,
+}) {
   const [scale, setScale] = useState("log");
   const [view, setView] = useState("rgb");
   const { analysis, error } = useHistogram(result, open);
@@ -126,4 +132,4 @@ export default function HistogramPanel({ result, open, onClose, container }) {
       )}
     </AnimatePresence>
   );
-}
+});

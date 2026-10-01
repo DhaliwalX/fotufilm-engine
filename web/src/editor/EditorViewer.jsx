@@ -25,14 +25,11 @@ export default function EditorViewer() {
     setError,
     setDetailBackend,
     session,
+    photoView,
     exporting,
-    setViewerMoving,
-    zoom,
     cropMode,
     width,
     cropSize,
-    setZoomReadout,
-    setZoom,
     compare,
     setCompare,
     activeId,
@@ -108,8 +105,6 @@ export default function EditorViewer() {
                 result={shownResult}
                 original={active.image}
                 sourceKey={active.id}
-                onInteraction={setViewerMoving}
-                zoom={zoom}
                 outputWidth={
                   cropMode
                     ? width
@@ -119,8 +114,7 @@ export default function EditorViewer() {
                           shownResult.framePlan.placement.image.width
                         : 1)
                 }
-                onZoomReadout={setZoomReadout}
-                setZoom={setZoom}
+                photoView={photoView}
                 compare={compare}
                 setCompare={setCompare}
                 cropMode={cropMode}
