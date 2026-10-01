@@ -6,7 +6,7 @@ public enum FilmGrainAsset {
     // Bump algorithmVersion whenever population fitting, calibration, random draws, tile
     // construction, or their numerical constants change. Format changes also bump formatVersion.
     private static let formatVersion: UInt32 = 2
-    private static let algorithmVersion: UInt32 = 2
+    private static let algorithmVersion: UInt32 = 3
     private static let magic = Data("FFGRAIN\0".utf8)
     static let maximumByteCount = 32 * 1024 * 1024
     private static let maximumIdentityBytes = 1024 * 1024
@@ -27,7 +27,7 @@ public enum FilmGrainAsset {
         writer.word(UInt32(FilmGrain.tileLevels))
         writer.word(UInt32(truncatingIfNeeded: FilmGrain.tileSeed))
         writer.word(UInt32(truncatingIfNeeded: FilmGrain.tileSeed >> 32))
-        writer.floats([FilmGrain.tileTexelMM, FilmGrain.tileBlockMM,
+        writer.floats([FilmGrain.tileTexelMM, FilmGrain.tileBlockMM, FilmGrain.tileSeamMM,
                        FilmGrain.dyeCloudDecayMM, FilmGrain.silverGrainEdge,
                        FilmGrain.silverGrainDensity, FilmGrain.fastestCrystalMM,
                        FilmGrain.finestSampleMM])

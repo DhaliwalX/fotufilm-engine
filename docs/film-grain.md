@@ -41,9 +41,9 @@ the CPU and Metal roads at the cost of the standard grain.
 6. **The anchors stay the measurements.** The frame's mean is the pipeline's developed density.
    The dye per crystal is solved on the model's own film so that a flat patch at the sheet's
    read density reads the sheet's RMS granularity through the 48 µm aperture, averaged in
-   transmittance as a microdensitometer does. Frames lay the tile in 64 µm blocks at
-   independent offsets, so the reading counts each lag of the tile's covariance only for the
-   share of pairs that fall in one block. Each step of the solve takes the slope the last one
+   transmittance as a microdensitometer does. Frames lay the tile in 128 µm blocks at
+   independent offsets, cross-faded at their edges, so the reading counts each lag of the
+   tile's covariance only for the share the faded blocks keep between the pair. Each step of the solve takes the slope the last one
    measured, and a scaled population is the same crystals, so the solve converges.
 
 ## How it runs
@@ -60,10 +60,13 @@ the CPU and Metal roads at the cost of the standard grain.
   in Metal (0.8 s in Halide on the CPU, 1.1 s in Swift) and 0.55 s on an iPhone 16 Pro (3.7 s
   in Swift), once per stock; the phone and the Mac lay byte-identical tiles. The frame's grain amount scales the grain in the kernel, so
   moving the slider rebuilds nothing.
-- **Blocks.** The frame is cut into 64 µm blocks. Each takes the tile at its own hashed offset,
-  inside one period so no read wraps, and one of the eight flips and turns of the square, per
-  record and per frame seed. Nothing repeats, and a new seed is another placement of the same
-  coating.
+- **Blocks.** The frame is cut into 128 µm blocks. Each takes the tile at its own hashed offset
+  anywhere in the period, wrapping past its far edge, and one of the eight flips and turns of
+  the square, per record and per frame seed. Nothing repeats, and a new seed is another
+  placement of the same coating. Each placement reaches 64 µm past its block, and over 16 µm
+  either side of an edge the neighbouring blocks' grain cross-fades, renormalised so the fade
+  keeps the variance. A hard edge would cut every cloud along it, and magnified the frame
+  would show the blocks as a grid.
 - **Tone.** For each pitch the host reads every level's mean density through footprints laid
   as the frame's pixels are, and a pixel's grain is its density less that mean. Between the
   two levels either side of its developed density, the pixel blends their grain, renormalised

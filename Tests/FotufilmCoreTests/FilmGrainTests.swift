@@ -51,7 +51,8 @@ final class FilmGrainTests: XCTestCase {
 
     /// The grain reads the sheet: a flat frame at each record's read density, through the 48 µm
     /// aperture in transmittance as a microdensitometer reads it, gives the sheet's RMS
-    /// granularity, whichever form the stock's clouds take.
+    /// granularity, whichever form the stock's clouds take. Four frames pool their readings: one
+    /// frame holds only a few dozen independently placed blocks.
     func testFramesReadTheSheet() {
         for (name, stock) in Self.stocks {
             let grain = FilmGrain(stock: stock)
@@ -64,19 +65,21 @@ final class FilmGrainTests: XCTestCase {
                     [Float](repeating: r == layer ? gross : stock.curves[r].dMin + 0.5,
                             count: side * side)
                 })
-                let plane = grain.apply(to: flat, pxPerMM: 1000, seed: 11).planes[layer]
-                let light = plane.map { pow(10, -$0) }
                 let radius = 24
                 var readings: [Float] = []
-                for cy in stride(from: radius, to: side - radius, by: 12) {
-                    for cx in stride(from: radius, to: side - radius, by: 12) {
-                        var total: Float = 0, count: Float = 0
-                        for dy in -radius...radius {
-                            for dx in -radius...radius where dx * dx + dy * dy <= radius * radius {
-                                total += light[(cy + dy) * side + cx + dx]; count += 1
+                for seed: UInt32 in 11...14 {
+                    let plane = grain.apply(to: flat, pxPerMM: 1000, seed: seed).planes[layer]
+                    let light = plane.map { pow(10, -$0) }
+                    for cy in stride(from: radius, to: side - radius, by: 12) {
+                        for cx in stride(from: radius, to: side - radius, by: 12) {
+                            var total: Float = 0, count: Float = 0
+                            for dy in -radius...radius {
+                                for dx in -radius...radius where dx * dx + dy * dy <= radius * radius {
+                                    total += light[(cy + dy) * side + cx + dx]; count += 1
+                                }
                             }
+                            readings.append(-log10(total / count))
                         }
-                        readings.append(-log10(total / count))
                     }
                 }
                 let sigma = moments(readings).sigma
