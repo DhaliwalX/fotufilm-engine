@@ -69,8 +69,11 @@ test("wheel zoom follows the scroll distance and inverts a trackpad pinch exactl
     wheelZoomScale({ deltaY: -3, deltaMode: 1 }),
     wheelZoomScale({ deltaY: -48 }),
   );
-  assert.equal(wheelZoomScale({ deltaY: 1e6 }), 0.5);
-  assert.equal(wheelZoomScale({ deltaY: -1e6 }), 2);
+  // A Windows or Linux mouse notch steps no further than a quarter.
+  assert.equal(wheelZoomScale({ deltaY: -100 }), 1.25);
+  assert.equal(wheelZoomScale({ deltaY: 1e6 }), 0.8);
+  assert.equal(wheelZoomScale({ deltaY: 1e6, ctrlKey: true }), 0.5);
+  assert.equal(wheelZoomScale({ deltaY: -1e6, ctrlKey: true }), 2);
 });
 
 test("a stepped zoom keeps the centre of the view and lands on the zoom asked for", () => {

@@ -46,7 +46,8 @@ export function centredPhotoZoom({ zoom, offset, nextZoom, display, room }) {
 // How far one wheel event zooms: in proportion to how far it scrolls, as the Mac app's canvas
 // does, so a trackpad's stream of small steps zooms as smoothly as a mouse wheel's notches. A
 // trackpad pinch arrives as a wheel event with ctrlKey and deltaY = -100·ln(scale), which this
-// inverts exactly.
+// inverts exactly. A scroll's step is capped at a quarter: a notch of a mouse wheel scrolls about
+// 40 px on a Mac but 100 px or more on Windows and Linux.
 export function wheelZoomScale(
   { deltaY, deltaMode = 0, ctrlKey = false },
   pageHeight = 800,
@@ -57,7 +58,9 @@ export function wheelZoomScale(
       : deltaMode === 2
         ? deltaY * pageHeight
         : deltaY;
-  return clamp(Math.exp(-pixels / (ctrlKey ? 100 : 300)), 0.5, 2);
+  return ctrlKey
+    ? clamp(Math.exp(-pixels / 100), 0.5, 2)
+    : clamp(Math.exp(-pixels / 300), 0.8, 1.25);
 }
 
 export function pinchGeometry(points) {
