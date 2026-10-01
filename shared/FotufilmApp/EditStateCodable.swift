@@ -29,7 +29,7 @@ extension EditState: Codable {
     static let bespokeKeys: [String] = [
         "stockID", "chosenFormatID", "sourceInterpretation", "captureIlluminantKelvin",
         "filmLightKelvin", "sourceLightIndex", "halationReturnRatio", "grainMottleShare", "grainModel", "couplerGapReach", "paper", "paperFollowsStock",
-        "seed", "shutterSeconds", "printLightKelvin", "printFrame", "negativeViewing", "digitalReference", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop",
+        "seed", "shutterSeconds", "printLightKelvin", "printFrame", "negativeViewing", "digitalReference", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop", "framingZoom",
         "grade", "lensProfileID", "lensAdjustment", "lensFilterIDs", "lensFilterMetering", "selective",
     ]
 
@@ -111,6 +111,7 @@ extension EditState: Codable {
         crop = try c.decodeIfPresent(CGRect.self, forKey: EditKey("crop"))
         cornerCrop = try c.decodeIfPresent(QuadrilateralCrop.self, forKey: EditKey("cornerCrop"))
         if cornerCrop?.isValid == false { cornerCrop = nil }
+        framingZoom = max(1, try c.decodeIfPresent(Double.self, forKey: EditKey("framingZoom")) ?? 1)
         grade = try c.decodeIfPresent(ColorGrade.self, forKey: EditKey("grade")) ?? grade
         selective = try c.decodeIfPresent(SelectiveState.self, forKey: EditKey("selective"))?.saved
         lensProfileID = try c.decodeIfPresent(String.self, forKey: EditKey("lensProfileID"))
@@ -162,6 +163,7 @@ extension EditState: Codable {
         try c.encode(rotation, forKey: EditKey("rotation"))
         try c.encodeIfPresent(crop, forKey: EditKey("crop"))
         try c.encodeIfPresent(cornerCrop, forKey: EditKey("cornerCrop"))
+        if framingZoom != 1 { try c.encode(framingZoom, forKey: EditKey("framingZoom")) }
         try c.encode(grade, forKey: EditKey("grade"))
         try c.encodeIfPresent(lensProfileID, forKey: EditKey("lensProfileID"))
         try c.encode(lensAdjustment, forKey: EditKey("lensAdjustment"))

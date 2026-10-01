@@ -148,6 +148,7 @@ enum FilmRender {
         var perspectiveH: Double
         var crop: CGRect?
         var cornerCrop: QuadrilateralCrop?
+        var framingZoom: Double
         var longEdge: Int?
         var viewport: PreviewViewport? = nil
         var sourceInterpretation: FilmSourceInterpretation
@@ -167,6 +168,7 @@ enum FilmRender {
             perspectiveH = state.perspectiveH
             crop = state.crop
             cornerCrop = state.cornerCrop
+            framingZoom = state.framingZoom
             self.longEdge = longEdge
             self.viewport = viewport
             sourceInterpretation = state.sourceInterpretation
@@ -474,11 +476,13 @@ enum FilmRender {
             // How much of the frame's short edge the geometry kept. Cropping and
             // straightening throw film away; the engine scales every millimetre-sized
             // structure by the enlargement that implies, so the fraction is measured
-            // here where both extents exist and rides the scene to the develop.
+            // here where both extents exist and rides the scene to the develop. The camera's
+            // own zoom is framing, not enlargement, so the film frame is that much smaller.
             let full = min(corrected.extent.width, corrected.extent.height)
+                / CGFloat(max(1, state.framingZoom))
             if full > 0 {
                 frameCoverage = Float(
-                    min(framed.extent.width, framed.extent.height) / full)
+                    min(1, min(framed.extent.width, framed.extent.height) / full))
             }
             guard let requestedViewport else {
                 return resample(framed, longEdge: longEdge)
