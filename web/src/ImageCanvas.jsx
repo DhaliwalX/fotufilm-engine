@@ -43,26 +43,22 @@ export function ImageCanvas({
   const container = useRef(null),
     plane = useRef(null);
   // The view is the canvas's own: nothing else renders while the photograph moves. `latest` holds
-  // the newest, ahead of the render that shows it once an animation frame. The toolbar, keys and
-  // menus step it through `photoView`, which hears of every view shown.
+  // the newest, which may be ahead of the last render. The toolbar, keys and menus step it through
+  // `photoView`, which hears of every view shown.
   const [view, setView] = useState(FIT);
   const latest = useRef(FIT),
-    frame = useRef(0),
     layout = useRef(null);
   const jump = useCallback((next) => {
     latest.current = next;
     setView(next);
   }, []);
+  // A move renders at once, inside its input event, so it reaches the next frame. Chromium
+  // coalesces moves while the page is busy, so this is one render a frame at most. Waiting for an
+  // animation frame instead made Chromium hold the input for that frame, a frame later on Linux.
   const show = useCallback((next) => {
     latest.current = next;
-    if (frame.current) return;
-    frame.current = requestAnimationFrame(() => {
-      frame.current = 0;
-      // Rendered within this frame, so the host's image layer moves in the same frame as the page.
-      flushSync(() => setView(latest.current));
-    });
+    flushSync(() => setView(next));
   }, []);
-  useEffect(() => () => cancelAnimationFrame(frame.current), []);
   const [room, setRoom] = useState([1, 1]),
     [pixelRatio, setPixelRatio] = useState(() => window.devicePixelRatio || 1);
   useEffect(() => {
