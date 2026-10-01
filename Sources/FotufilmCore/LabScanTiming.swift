@@ -23,9 +23,9 @@ public enum LabScanTiming {
     /// for a lamp, a sky or a window, and the share of that excess, at most two stops, that the
     /// white point is lowered by: a backlit subject opens up partway while the sky stays on the
     /// toe, and a specular or the sun does not hold the frame down.
-    static let highlightSpan: Float = 3
-    static let backlightShare: Float = 0.5
-    static let backlightMaxStops: Float = 2
+    public static let highlightSpan: Float = 3
+    public static let backlightShare: Float = 0.5
+    public static let backlightMaxStops: Float = 2
 
     /// The highlight the white point is set on, from the whole-frame measurement, in stops.
     static func highlight(_ scene: AutoAdjustment.SceneStops) -> Float {
