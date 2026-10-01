@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createDesktopBackend } from "../../src/backend/desktop/host.js";
 import { createNativeBackend } from "../../src/backend/native.js";
 import { isFilmPack, packNotice } from "../../src/editor/useFilmPacks.js";
+import { createPhotoView } from "../../src/photo-view.js";
 import { menuState } from "../../src/editor/useNativeCommands.js";
 
 const host = (capabilities, answer = () => ({})) => {
@@ -41,21 +42,25 @@ test("packs go to the engine by path or as bytes, and the film list is asked for
       prepared += 1;
       return { stocks: ["gold200"], catalogue: [{ id: "gold200" }] };
     }
-    return { added: true, title: "Pack added", message: "Pack v1 — Film", packs: [] };
+    return {
+      added: true,
+      title: "Pack added",
+      message: "Pack v1 — Film",
+      packs: [],
+    };
   });
   await backend.loadStocks();
   const added = await backend.filmPacks.importPath("/packs/one.fotufilmpack");
   assert.equal(added.title, "Pack added");
-  await backend.filmPacks.importFile(new File([new Uint8Array([1, 2, 3])], "two.fotufilmpack"));
-  await backend.filmPacks.remove("one");
-  assert.deepEqual(
-    calls.map(([method, params]) => [method, params]).slice(1),
-    [
-      ["importFilmPack", { path: "/packs/one.fotufilmpack" }],
-      ["importFilmPack", { name: "two.fotufilmpack" }],
-      ["removeFilmPack", { packID: "one" }],
-    ],
+  await backend.filmPacks.importFile(
+    new File([new Uint8Array([1, 2, 3])], "two.fotufilmpack"),
   );
+  await backend.filmPacks.remove("one");
+  assert.deepEqual(calls.map(([method, params]) => [method, params]).slice(1), [
+    ["importFilmPack", { path: "/packs/one.fotufilmpack" }],
+    ["importFilmPack", { name: "two.fotufilmpack" }],
+    ["removeFilmPack", { packID: "one" }],
+  ]);
   assert.equal(calls[2][2].byteLength, 3);
   await backend.loadStocks();
   assert.equal(prepared, 1);
@@ -69,9 +74,15 @@ test("pack files are told apart and several results read as one notice", () => {
   assert.equal(isFilmPack("photo.jpg"), false);
   const one = { added: true, title: "Pack added", message: "A v1 — 3 films" };
   assert.equal(packNotice([one]), one);
-  const both = packNotice([one, { added: false, title: "Pack not added", message: "why" }]);
+  const both = packNotice([
+    one,
+    { added: false, title: "Pack not added", message: "why" },
+  ]);
   assert.equal(both.title, "Film packs");
-  assert.equal(both.message, "Pack added: A v1 — 3 films\n\nPack not added: why");
+  assert.equal(
+    both.message,
+    "Pack added: A v1 — 3 films\n\nPack not added: why",
+  );
 });
 
 test("File › Import Film Pack follows the capability and waits out an export", () => {
@@ -84,13 +95,17 @@ test("File › Import Film Pack follows the capability and waits out an export",
     exporting: false,
     libraryOpen: false,
     dialog: null,
-    zoom: 1,
+    photoView: createPhotoView(),
     editSettings: { copied: null, presets: [], sections: [] },
   };
   assert.equal(menuState(base).enabled.importFilmPack, false);
-  assert.equal(menuState({ ...base, filmPacks: {} }).enabled.importFilmPack, true);
   assert.equal(
-    menuState({ ...base, filmPacks: {}, exporting: true }).enabled.importFilmPack,
+    menuState({ ...base, filmPacks: {} }).enabled.importFilmPack,
+    true,
+  );
+  assert.equal(
+    menuState({ ...base, filmPacks: {}, exporting: true }).enabled
+      .importFilmPack,
     false,
   );
 });

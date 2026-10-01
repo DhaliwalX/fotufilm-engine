@@ -1,5 +1,7 @@
 import { clamp } from "./color-controls.js";
 
+export const MAX_ZOOM = 8;
+
 export function constrainPhotoOffset(offset, zoom, display, room) {
   return offset.map((value, axis) => {
     const limit = Math.max(0, (display[axis] * zoom - room[axis]) / 2);
@@ -18,7 +20,7 @@ export function anchoredPhotoZoom({
   display,
   room,
 }) {
-  const nextZoom = clamp(zoom * scale, 1, 8);
+  const nextZoom = clamp(zoom * scale, 1, MAX_ZOOM);
   const ratio = nextZoom / zoom;
   const nextOffset = anchor.map(
     (value, axis) => nextAnchor[axis] - (value - offset[axis]) * ratio,

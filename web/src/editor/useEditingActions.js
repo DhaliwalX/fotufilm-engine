@@ -21,7 +21,6 @@ export default function useEditingActions({
   setInspectorOpen,
   setFilmOpen,
   setCompare,
-  setZoom,
 }) {
   const auto = useAutoAdjustment({
     image: active?.image,
@@ -99,14 +98,6 @@ export default function useEditingActions({
     endEdit();
     setFilmOpen((open) => !open);
   };
-  const zoomIn = useCallback(
-    () => setZoom((z) => Math.min(8, z + 0.25)),
-    [setZoom],
-  );
-  const zoomOut = useCallback(
-    () => setZoom((z) => Math.max(1, z - 0.25)),
-    [setZoom],
-  );
   // A fresh grain pattern: the film's own seed offset by a random one (0 is the film's own).
   const newGrainPattern = useCallback(
     () => patch({ seed: crypto.getRandomValues(new Uint32Array(1))[0] || 1 }),
@@ -123,8 +114,6 @@ export default function useEditingActions({
     resetEdits,
     toggleInspector,
     toggleFilms,
-    zoomIn,
-    zoomOut,
     newGrainPattern,
   };
 }

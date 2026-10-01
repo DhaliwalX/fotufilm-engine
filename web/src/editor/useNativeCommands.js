@@ -5,8 +5,14 @@ import { canShowNegative } from "../negative-view.js";
 import { PLAYBACK_TOGGLE } from "../video-player/usePlayerShortcuts.js";
 import { usePlaying } from "../video-player/usePlaying.js";
 import { forgotFilmChoices, useFilmLearned } from "../film-learning.js";
-import { editHistory, filmNamer, redoTitle, undoTitle } from "../edit-history.js";
+import {
+  editHistory,
+  filmNamer,
+  redoTitle,
+  undoTitle,
+} from "../edit-history.js";
 import { isFilmPack } from "./useFilmPacks.js";
+import { zoomReach } from "../photo-view.js";
 
 // The native menu bar (cef/src/platform/mac) runs the editor's own handlers: the host sends
 // "fotufilm-native-command" {command} and "fotufilm-native-open" {paths}, and the editor reports
@@ -43,11 +49,14 @@ function pluginMenuState(e, enabled, titles, toolTips) {
   for (const { id, name } of e.plugins?.catalogue ?? []) {
     const status = e.plugins.list?.find((plugin) => plugin.id === id);
     const installed =
-      !!status && status.state !== "notInstalled" && status.state !== "notBundled";
+      !!status &&
+      status.state !== "notInstalled" &&
+      status.state !== "notBundled";
     const bundled = !!status?.bundledVersion;
     enabled[`installPlugin:${id}`] = bundled && !e.plugins.busy && !e.exporting;
     enabled[`revealPlugin:${id}`] = installed;
-    titles[`installPlugin:${id}`] = `${installed ? "Reinstall" : "Install"} ${name} Plug-in…`;
+    titles[`installPlugin:${id}`] =
+      `${installed ? "Reinstall" : "Install"} ${name} Plug-in…`;
     if (status && !bundled)
       toolTips[`installPlugin:${id}`] =
         `This copy of Fotufilm does not contain the ${name} plug-in.`;
@@ -80,11 +89,15 @@ const COMMANDS = {
   autoFilm: () => setAppSetting("autoFilm", !appSetting("autoFilm")),
   checkForUpdates: (e) => e.checkForUpdates?.(),
   autoUpdates: () =>
-    setAppSetting("updateChecksAutomatically", appSetting("updateChecksAutomatically") === false),
-  forgetFilms: (e) => e.backend.forgetFilmChoices().then(forgotFilmChoices).catch(console.error),
-  zoomIn: (e) => e.zoomIn(),
-  zoomOut: (e) => e.zoomOut(),
-  zoomToFit: (e) => e.setZoom(1),
+    setAppSetting(
+      "updateChecksAutomatically",
+      appSetting("updateChecksAutomatically") === false,
+    ),
+  forgetFilms: (e) =>
+    e.backend.forgetFilmChoices().then(forgotFilmChoices).catch(console.error),
+  zoomIn: (e) => e.photoView.zoomIn(),
+  zoomOut: (e) => e.photoView.zoomOut(),
+  zoomToFit: (e) => e.photoView.fit(),
   showOriginal: (e) => e.setCompare((shown) => !shown),
   histogram: (e) => e.setHistogram((shown) => !shown),
   showNegative: (e) => e.setShowNegative((shown) => !shown),
@@ -124,12 +137,21 @@ function commandFor(command) {
 
 // A photo is open on a film whose model its settings may change.
 const filmModelled = (e) =>
-  !e.exporting && !e.libraryOpen && !e.dialog && !!e.active && !!e.edit?.stock && !e.fixedSettings;
+  !e.exporting &&
+  !e.libraryOpen &&
+  !e.dialog &&
+  !!e.active &&
+  !!e.edit?.stock &&
+  !e.fixedSettings;
 // What the Film Model items show: the open photo's, else what a new photo starts with.
 const grainModelShown = (e) =>
-  filmModelled(e) ? (e.edit.profile?.grainModel ?? "clump") : appSetting("grainModel");
+  filmModelled(e)
+    ? (e.edit.profile?.grainModel ?? "clump")
+    : appSetting("grainModel");
 const estimatedHalationShown = (e) =>
-  filmModelled(e) ? e.edit.profile?.estimatedHalation === true : appSetting("estimatedHalation") === true;
+  filmModelled(e)
+    ? e.edit.profile?.estimatedHalation === true
+    : appSetting("estimatedHalation") === true;
 
 // Which commands apply now and which are ticked, by the rules the toolbars use.
 export function menuState(e) {
@@ -137,6 +159,8 @@ export function menuState(e) {
   const free = !e.exporting && !e.libraryOpen && !e.dialog;
   const photo = free && !!e.active;
   const still = photo && !e.active.image.video;
+  // Read, not rendered from: the view's zoom moves without the editor (useNativeCommands follows).
+  const reach = zoomReach(e.photoView.get());
   const enabled = {
     open: !e.exporting,
     importNegative: !e.exporting && !e.dialog,
@@ -161,14 +185,18 @@ export function menuState(e) {
     autoFilm: !!e.backend?.suggestFilm,
     // Greyed with nothing learned, as the Mac app's is.
     forgetFilms: !!e.backend?.forgetFilmChoices && e.filmLearned !== false,
-    zoomIn: photo && !e.cropMode && e.zoom < 8,
-    zoomOut: photo && !e.cropMode && e.zoom > 1,
-    zoomToFit: photo && e.zoom !== 1,
+    zoomIn: photo && !e.cropMode && reach !== "max",
+    zoomOut: photo && !e.cropMode && reach !== "fit",
+    zoomToFit: photo && reach !== "fit",
     showOriginal: photo,
     histogram: photo,
     play: photo && !!e.active.image.video,
     showNegative:
-      photo && canShowNegative(e.edit, e.stocks?.find(({ id }) => id === e.edit?.stock)),
+      photo &&
+      canShowNegative(
+        e.edit,
+        e.stocks?.find(({ id }) => id === e.edit?.stock),
+      ),
     filmSidebar: !e.libraryOpen,
     inspector: !e.libraryOpen,
   };
@@ -177,7 +205,8 @@ export function menuState(e) {
       id === "selective" ? still : id === "crop" ? photo : !e.libraryOpen;
   const checked = {
     autoFilm: !!e.backend?.suggestFilm && appSetting("autoFilm") === true,
-    autoUpdates: !!e.checkForUpdates && appSetting("updateChecksAutomatically") !== false,
+    autoUpdates:
+      !!e.checkForUpdates && appSetting("updateChecksAutomatically") !== false,
     autoAdjust: !!e.auto.active,
     showOriginal: !!e.compare,
     histogram: !!e.histogram,
@@ -188,9 +217,15 @@ export function menuState(e) {
   if (e.inspectorOpen) checked[`panel:${e.panel}`] = true;
 
   // The film list, and the film model of the one loaded, where its settings are not fixed.
-  const films = [["film:none", "Normal"], ...e.stocks.map(({ id, name }) => [`film:${id}`, name])];
+  const films = [
+    ["film:none", "Normal"],
+    ...e.stocks.map(({ id, name }) => [`film:${id}`, name]),
+  ];
   for (const [command] of films) enabled[command] = photo;
-  const presets = e.editSettings.presets.map(({ id, name }) => [`preset:${id}`, name]);
+  const presets = e.editSettings.presets.map(({ id, name }) => [
+    `preset:${id}`,
+    name,
+  ]);
   for (const [command] of presets) enabled[command] = photo;
   checked[`film:${e.edit?.stock ?? "none"}`] = true;
   // App-wide, as the Mac app's Film Model items are: available with or without a photo.
@@ -204,7 +239,9 @@ export function menuState(e) {
 
   // The Edit History of the photograph shown, as the Mac app's Edit menu lists it.
   const filmName = filmNamer(e.stocks);
-  const history = e.active ? editHistory(e.history, filmName) : { titles: [], index: -1 };
+  const history = e.active
+    ? editHistory(e.history, filmName)
+    : { titles: [], index: -1 };
   history.titles.forEach((_, step) => (enabled[`history:${step}`] = free));
   if (history.titles.length) checked[`history:${history.index}`] = true;
   const titles = {
@@ -215,7 +252,14 @@ export function menuState(e) {
     },
     toolTips = {};
   pluginMenuState(e, enabled, titles, toolTips);
-  return { enabled, checked, titles, toolTips, history: history.titles, menus: { films, presets } };
+  return {
+    enabled,
+    checked,
+    titles,
+    toolTips,
+    history: history.titles,
+    menus: { films, presets },
+  };
 }
 
 // Runs a menu command if it still applies; the host's copy of the state may be a frame old.
@@ -239,16 +283,19 @@ export default function useNativeCommands(editor) {
   const transport = globalThis.window?.fotufilmNativeTransport;
   const filmLearned = useFilmLearned(editor.backend);
   const playing = usePlaying();
-  const current = { ...editor, filmLearned, playing: playing && !!editor.active?.image.video };
+  const [textInput, setTextInput] = useState(false);
+  const current = {
+    ...editor,
+    filmLearned,
+    playing: playing && !!editor.active?.image.video,
+    textInput,
+  };
   const latest = useRef(current);
   latest.current = current;
-  const [textInput, setTextInput] = useState(false);
-  const state = transport
-    ? JSON.stringify({ ...menuState(current), textInput })
-    : null;
-
-  useEffect(() => {
-    if (!state) return;
+  const sent = useRef(null);
+  const send = (state) => {
+    if (state === sent.current) return;
+    sent.current = state;
     transport
       .postMessage({
         id: crypto.randomUUID(),
@@ -256,19 +303,45 @@ export default function useNativeCommands(editor) {
         params: JSON.parse(state),
       })
       .catch(console.error);
+  };
+  const describe = (e) =>
+    JSON.stringify({ ...menuState(e), textInput: e.textInput });
+  const state = transport ? describe(current) : null;
+
+  useEffect(() => {
+    if (state) send(state);
   }, [transport, state]);
+
+  // The zoom items change as the view crosses fit or the largest zoom, which the canvas moves
+  // without the editor rendering.
+  const { photoView } = editor;
+  useEffect(() => {
+    if (!transport) return;
+    let reach = zoomReach(photoView.get());
+    return photoView.subscribe(() => {
+      const next = zoomReach(photoView.get());
+      if (next === reach) return;
+      reach = next;
+      send(describe(latest.current));
+    });
+  }, [transport, photoView]);
 
   useEffect(() => {
     if (!transport) return;
     // Read after the move, when activeElement names where focus landed.
     const focus = () =>
       queueMicrotask(() => setTextInput(editsText(document.activeElement)));
-    const command = (event) => runCommand(latest.current, event.detail?.command);
+    const command = (event) =>
+      runCommand(latest.current, event.detail?.command);
     const open = (event) => {
       const paths = event.detail?.paths;
       if (!paths?.length) return;
-      const items = paths.map((path) => ({ path, name: path.split("/").pop() }));
-      if (items.some(({ name }) => !isFilmPack(name))) latest.current.setLibraryOpen(false);
+      const items = paths.map((path) => ({
+        path,
+        name: path.split("/").pop(),
+      }));
+      if (items.some(({ name }) => !isFilmPack(name)))
+        latest.current.setLibraryOpen(false);
       latest.current.acceptFiles(items);
     };
     document.addEventListener("focusin", focus);

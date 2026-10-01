@@ -8,12 +8,13 @@ import { useImageLayer } from "./useImageLayer.js";
 import { visiblePhotoViewport } from "./viewport.js";
 import CropOverlay from "./CropOverlay.jsx";
 import { clamp } from "./color-controls.js";
-import { anchoredPhotoZoom, centredPhotoZoom } from "./photo-navigation.js";
+import {
+  MAX_ZOOM,
+  anchoredPhotoZoom,
+  centredPhotoZoom,
+} from "./photo-navigation.js";
 
 const FIT = Object.freeze({ zoom: 1, offset: [0, 0] });
-// How long the view rests before the editor hears of its zoom. The whole editor renders for a
-// new zoom, which on every step of a pinch would cost more than a frame.
-const ZOOM_SETTLE_MS = 150;
 
 export function ImageCanvas({
   result,
@@ -24,9 +25,7 @@ export function ImageCanvas({
   onDetailBackend,
   original,
   sourceKey,
-  zoom,
-  setZoom,
-  liveZoom,
+  photoView,
   compare,
   setCompare,
   cropMode,
@@ -38,19 +37,17 @@ export function ImageCanvas({
   onEnd,
   showHistogram,
   outputWidth,
-  onInteraction,
   sampling = false,
   onSample,
 }) {
   const container = useRef(null),
     plane = useRef(null);
-  // The view moves with every input event. `latest` holds the newest, and one render an animation
-  // frame shows it, so only the canvas renders while the photograph moves; the editor's `zoom`
-  // follows once the view settles, and a change to it (toolbar, keys, menu) moves the view.
+  // The view is the canvas's own: nothing else renders while the photograph moves. `latest` holds
+  // the newest, ahead of the render that shows it once an animation frame. The toolbar, keys and
+  // menus step it through `photoView`, which hears of every view shown.
   const [view, setView] = useState(FIT);
   const latest = useRef(FIT),
     frame = useRef(0),
-    committed = useRef(zoom),
     layout = useRef(null);
   const jump = useCallback((next) => {
     latest.current = next;
@@ -87,24 +84,16 @@ export function ImageCanvas({
     observer.observe(container.current);
     return () => observer.disconnect();
   }, []);
-  useEffect(() => {
-    committed.current = 1;
-    setZoom(1);
-    jump(FIT);
-  }, [sourceKey, setZoom, jump]);
-  useEffect(() => {
-    if (zoom === committed.current) return;
-    committed.current = zoom;
-    jump(centredPhotoZoom({ ...latest.current, nextZoom: zoom, ...layout.current }));
-  }, [zoom, jump]);
-  useEffect(() => {
-    if (view.zoom === committed.current) return;
-    const timer = setTimeout(() => {
-      committed.current = view.zoom;
-      setZoom(view.zoom);
-    }, ZOOM_SETTLE_MS);
-    return () => clearTimeout(timer);
-  }, [view.zoom, setZoom]);
+  useEffect(() => jump(FIT), [sourceKey, jump]);
+  useEffect(
+    () =>
+      photoView.attach((zoom) => {
+        const current = latest.current;
+        const nextZoom = typeof zoom === "function" ? zoom(current.zoom) : zoom;
+        jump(centredPhotoZoom({ ...current, nextZoom, ...layout.current }));
+      }),
+    [photoView, jump],
+  );
   const width = result?.width || original?.naturalWidth || 1,
     height = result?.height || original?.naturalHeight || 1;
   const fit = Math.min(
@@ -134,15 +123,21 @@ export function ImageCanvas({
     onBackend: onDetailBackend,
   });
   // The host draws a presented photograph beneath the page; the page leaves it a hole.
-  const presented = useImageLayer({ container, plane, result, detail, compare });
+  const presented = useImageLayer({
+    container,
+    plane,
+    result,
+    detail,
+    compare,
+  });
   const displayUrl = compare
     ? result?.originalUrl || original?.src
     : result?.url || original?.src;
   const nativeScale = displayWidth / Math.max(1, outputWidth || width);
   const readout = Math.round(nativeScale * (cropMode ? 1 : view.zoom) * 100);
   useEffect(() => {
-    liveZoom?.set({ zoom: view.zoom, readout });
-  }, [liveZoom, view.zoom, readout]);
+    photoView.publish({ zoom: view.zoom, readout });
+  }, [photoView, view.zoom, readout]);
   const navigation = usePhotoNavigation({
     container,
     sourceKey,
@@ -154,7 +149,6 @@ export function ImageCanvas({
     display: [displayWidth, displayHeight],
     room,
     setCompare,
-    onInteraction,
   });
   return (
     <div
@@ -165,7 +159,8 @@ export function ImageCanvas({
       onDoubleClick={(event) => {
         if (cropMode || event.target.closest(".histogram")) return;
         const current = latest.current;
-        const target = current.zoom === 1 ? clamp(1 / nativeScale, 1, 8) : 1;
+        const target =
+          current.zoom === 1 ? clamp(1 / nativeScale, 1, MAX_ZOOM) : 1;
         const box = event.currentTarget.getBoundingClientRect();
         // About the point clicked, as a wheel or a pinch zooms.
         const anchor = [

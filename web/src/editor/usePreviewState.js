@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import { createLiveValue } from "../live-value.js";
 import { fullCrop } from "../editor-state.js";
 import { usePreviewQuality } from "../usePreviewQuality.js";
 import { useLensCatalogue } from "../useLensCatalogue.js";
@@ -19,7 +18,6 @@ export default function usePreviewState({
   difference,
   showMask,
   videoTime,
-  zoom,
   history,
   active,
   stocks,
@@ -29,8 +27,6 @@ export default function usePreviewState({
   showNegative,
 }) {
   const cropMode = panel === "crop" && inspectorOpen;
-  // The canvas's zoom as it moves, ahead of `zoom`, which it commits once the view settles.
-  const [liveZoom] = useState(() => createLiveValue({ zoom: 1, readout: 100 }));
   const viewed = negativeViewEdit(
     edit,
     stocks.find((stock) => stock.id === edit.stock),
@@ -45,7 +41,6 @@ export default function usePreviewState({
         }
       : viewed,
   );
-  const [viewerMoving, setViewerMoving] = useState(false);
   const [detailBackend, setDetailBackend] = useState(null);
   const editInteractionKey = JSON.stringify([
     activeId,
@@ -56,13 +51,7 @@ export default function usePreviewState({
     showMask,
     videoTime,
   ]);
-  const interactionKey = JSON.stringify([editInteractionKey, zoom]);
   const budget = previewBudget(backend);
-  const interacting = usePreviewQuality(
-    interactionKey,
-    !!history.group || viewerMoving,
-    budget.settleMs,
-  );
   const previewInteracting = usePreviewQuality(
     editInteractionKey,
     !!history.group,
@@ -134,15 +123,10 @@ export default function usePreviewState({
   const visibleError = error || libraryError;
   return {
     cropMode,
-    liveZoom,
     previewEditJSON,
-    viewerMoving,
-    setViewerMoving,
     detailBackend,
     setDetailBackend,
     editInteractionKey,
-    interactionKey,
-    interacting,
     previewInteracting,
     interactiveEdge,
     setInteractiveEdge,

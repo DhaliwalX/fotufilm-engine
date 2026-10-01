@@ -2,11 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   anchoredPhotoZoom,
+  MAX_ZOOM,
   centredPhotoZoom,
   constrainPhotoOffset,
   pinchGeometry,
   wheelZoomScale,
 } from "../../src/photo-navigation.js";
+import { createPhotoView, zoomReach } from "../../src/photo-view.js";
 import { renderViewportImage } from "../../src/viewport-detail-image.js";
 
 const view = {
@@ -125,3 +127,34 @@ for (const outcome of ["stale", "decode error", "ready"])
     }
     assert.equal(new Set(revoked).size, 2);
   });
+
+test("the photo view steps the attached canvas and tells listeners only of changes", () => {
+  const view = createPhotoView();
+  view.fit(); // No canvas yet: nothing to step.
+  let zoom = 1;
+  const detach = view.attach((next) => {
+    zoom = typeof next === "function" ? next(zoom) : next;
+  });
+  view.zoomIn();
+  view.zoomIn();
+  assert.equal(zoom, 1.5);
+  view.zoomOut();
+  assert.equal(zoom, 1.25);
+  view.fit();
+  assert.equal(zoom, 1);
+  zoom = MAX_ZOOM;
+  view.zoomIn();
+  assert.equal(zoom, MAX_ZOOM);
+  detach();
+  view.fit();
+  assert.equal(zoom, MAX_ZOOM);
+
+  let heard = 0;
+  view.subscribe(() => heard++);
+  view.publish({ zoom: 2, readout: 40 });
+  view.publish({ zoom: 2, readout: 40 });
+  assert.equal(heard, 1);
+  assert.equal(zoomReach(view.get()), "zoomed");
+  assert.equal(zoomReach({ zoom: 1 }), "fit");
+  assert.equal(zoomReach({ zoom: MAX_ZOOM }), "max");
+});

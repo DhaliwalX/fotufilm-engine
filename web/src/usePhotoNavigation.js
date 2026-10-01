@@ -41,7 +41,6 @@ export function usePhotoNavigation(options) {
     clearHold();
     pointers.current.clear();
     gesture.current = null;
-    live.current.onInteraction?.(false);
     live.current.setCompare(false);
   };
   useEffect(() => {
@@ -108,7 +107,6 @@ export function usePhotoNavigation(options) {
       rebase();
       if (pointers.current.size > 1 || viewed().zoom > 1) {
         current.setCompare(false);
-        current.onInteraction?.(true);
       } else if (event.pointerType === "touch") {
         hold.current = setTimeout(() => live.current.setCompare(true), 180);
       } else current.setCompare(true);
