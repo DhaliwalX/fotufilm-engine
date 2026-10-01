@@ -471,8 +471,13 @@ public struct FilmEngineInvocation {
     public var seed: UInt32
     /// Whether the tone controls may key to the regional base (Options.localTone).
     public let localToneEnabled: Bool
-    var screenMeterStock: FilmStock? = nil
-    var screenMeterLevels: (scale: Float, shift: Float) = (1, 0)
+    /// The stock and medium this develop meters its levels for, when it meters at all: Digital
+    /// Reference's Auto Levels or Lab Scan's timing.
+    var meterStock: FilmStock? = nil
+    var meterMedium: PrintPaper = .screen
+    var meterExposureEV: Float = 0
+    var meterMasking: SIMD3<Float> = .one
+    var meterLevels: (scale: SIMD3<Float>, shift: Float) = (.one, 0)
     /// Pixels of context a tile must carry on each cut edge for its interior to develop exactly as
     /// it would inside the whole frame.
     public let spatialSupport: Int
@@ -1104,11 +1109,21 @@ public struct FilmEngineInvocation {
         // kernel's reversal branch keeps the slide's polarity for the texture it carries back.
         let levelsPositive = printMedium.levelsPositive(
             for: stock, digitalReference: options.digitalReference) && options.stage != .texture
-        let levels = printMedium == .screen && (levelsPositive || !stock.isReversal)
-            ? DigitalReferenceReceiver.levels(for: stock, style: options.digitalReference,
-                                              sceneHighlightStops: options.sceneHighlightStops)
-            : (scale: Float(1), shift: Float(0))
-        contrast = contrast.map { $0 * levels.scale }
+        // Lab Scan times each frame the way a minilab scanner does, in the same slots.
+        let levels: (scale: SIMD3<Float>, shift: Float)
+        let recordContrast = SIMD3(contrast[0], contrast[1], contrast[2])
+        if printMedium == .screen && (levelsPositive || !stock.isReversal) {
+            let screen = DigitalReferenceReceiver.levels(
+                for: stock, style: options.digitalReference,
+                sceneHighlightStops: options.sceneHighlightStops)
+            levels = (SIMD3(repeating: screen.scale), screen.shift)
+        } else if printMedium == .labScan {
+            levels = LabScanTiming.levels(for: stock, sceneHighlightStops: options.sceneHighlightStops,
+                                          exposureEV: options.exposureEV, masking: recordContrast)
+        } else {
+            levels = (.one, 0)
+        }
+        contrast = (0..<3).map { contrast[$0] * levels.scale[$0] }
         // Reverse the positive paper's exposure axis in the existing shared CPU/Metal slots.
         let masking = contrast.map { $0 * printMedium.exposureDirection }
         // The paper's three records, each anchored at its own calibrated
@@ -1477,11 +1492,16 @@ public struct FilmEngineInvocation {
         // all, so there is nothing for it to key and nothing to measure.
         self.localToneEnabled = options.localTone && options.stage.readsScene
         self.configuration = configuration
-        if !noFilm, !showingNegative, printMedium == .screen, !stock.isReflectionPrint,
-           !stock.isReversal || levelsPositive, options.stage.readsScene,
-           options.digitalReference == .autoLevels, options.sceneHighlightStops == nil {
-            self.screenMeterStock = stock
-            self.screenMeterLevels = levels
+        let screenMeters = printMedium == .screen && (!stock.isReversal || levelsPositive)
+            && options.digitalReference == .autoLevels
+        let labScanMeters = printMedium == .labScan && !stock.isReversal
+        if !noFilm, !showingNegative, !stock.isReflectionPrint, screenMeters || labScanMeters,
+           options.stage.readsScene, options.sceneHighlightStops == nil {
+            self.meterStock = stock
+            self.meterMedium = printMedium
+            self.meterExposureEV = options.exposureEV
+            self.meterMasking = recordContrast
+            self.meterLevels = levels
         }
         if noFilm {
             // Nothing samples these: the variant compiles no spectral recovery, no film cube and

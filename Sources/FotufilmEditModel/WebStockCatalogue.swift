@@ -29,6 +29,18 @@ public enum WebStockCatalogue {
                      return conversion
                  }
              }
+             if medium == .labScan && !stock.isReversal && !stock.isReflectionPrint {
+                 // Lab Scan's per-frame levels, a contrast per record and a shift, solved before
+                 // the edit's exposure on the backlight-adjusted highlight.
+                 entry["meter"] = ["min": -6.0, "max": 12.0, "labScan": true,
+                     "adjustments": (0...512).map { i -> [Float] in
+                         let levels = LabScanTiming.levels(
+                             for: stock, sceneHighlightStops: -6 + Float(i) * 18 / 512,
+                             masking: SIMD3(stock.printingContrastScale(correction: 0,
+                                                                        paper: .labScan)))
+                         return [levels.scale.x, levels.scale.y, levels.scale.z, levels.shift]
+                     }]
+             }
              return entry
          }]
     }

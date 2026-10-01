@@ -325,7 +325,7 @@ public final class HalideMetalFilmRenderer {
         if realtime { invocation.featureMask |= FilmEngineFeature.realtime }
         if exactMath { invocation.featureMask |= FilmEngineFeature.exactMath }
 
-        invocation.copyScreenLevels(from: measured.invocation)
+        invocation.copyMeteredLevels(from: measured.invocation)
         if invocation.localToneActive {
             let measuredWidth = Int(measured.invocation.configuration[
                 FilmEngineInvocation.toneGridSizeOffset])
@@ -2057,7 +2057,7 @@ public final class HalideMetalFilmRenderer {
             else { return false }
             // The head meters the scene before developing density. The print must retain those
             // screen levels even when its output raster has a different size.
-            invocation.copyScreenLevels(from: measurements.invocation)
+            invocation.copyMeteredLevels(from: measurements.invocation)
         }
         let densityHandle = UInt64(UInt(bitPattern:
             Unmanaged.passUnretained(density as AnyObject).toOpaque()))
