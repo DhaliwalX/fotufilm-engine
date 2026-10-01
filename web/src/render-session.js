@@ -529,6 +529,7 @@ export class RenderSession {
                   sceneHighlightStops: await sceneHighlightStops(
                     meter.source,
                     controls,
+                    edit.medium === 'lab-scan',
                   ),
                   controls: {
                     ...profileRequestControls(edit, entry.stock),

@@ -257,22 +257,22 @@ extension FilmEngineInvocation {
     /// Whether the tone controls are doing anything *and* asked to be keyed locally.
     public var localToneActive: Bool { localToneEnabled && toneControlsActive }
 
-    /// Auto Levels and local tone share one whole-frame measurement on CPU and Metal.
-    public var sceneMeteringActive: Bool { localToneActive || screenMeterStock != nil }
+    /// Metered levels and local tone share one whole-frame measurement on CPU and Metal.
+    public var sceneMeteringActive: Bool { localToneActive || meterStock != nil }
 
-    public mutating func copyScreenLevels(from measured: FilmEngineInvocation) {
-        guard screenMeterStock != nil else { return }
-        applyScreenLevels(measured.screenMeterLevels)
+    public mutating func copyMeteredLevels(from measured: FilmEngineInvocation) {
+        guard meterStock != nil else { return }
+        applyMeteredLevels(measured.meterLevels)
     }
 
-    private mutating func applyScreenLevels(_ levels: (scale: Float, shift: Float)) {
-        let ratio = levels.scale / screenMeterLevels.scale
-        for c in 0..<3 { configuration[Int(FOTUFILM_CONFIG_MASKING) + c] *= ratio }
+    private mutating func applyMeteredLevels(_ levels: (scale: SIMD3<Float>, shift: Float)) {
+        let ratio = levels.scale / meterLevels.scale
+        for c in 0..<3 { configuration[Int(FOTUFILM_CONFIG_MASKING) + c] *= ratio[c] }
         for offset in [Int(FOTUFILM_CONFIG_PAPER_MIDPOINT), Self.paperMidpointRedOffset,
                        Self.paperMidpointBlueOffset] {
-            configuration[offset] += levels.shift - screenMeterLevels.shift
+            configuration[offset] += levels.shift - meterLevels.shift
         }
-        screenMeterLevels = levels
+        meterLevels = levels
     }
 
     /// A fresh accumulator sized and weighted for this invocation's frame,
@@ -287,22 +287,31 @@ extension FilmEngineInvocation {
             exposureGain: configuration[Self.exposureGainOffset])
     }
 
-    /// The Auto Levels reading this develop takes from a whole-frame measurement, or nil where it
-    /// does not meter for levels. A host hands it to the develops that must print on the same
-    /// levels as this frame, such as its unexposed edge.
+    /// The highlight reading this develop's levels take from a whole-frame measurement, or nil
+    /// where it does not meter for levels. A host hands it to the develops that must print on the
+    /// same levels as this frame, such as its unexposed edge.
     public func sceneHighlightStops(_ measurement: ToneBaseMeasurement) -> Float? {
-        guard screenMeterStock != nil else { return nil }
-        return AutoAdjustment.SceneStops(regionStops: measurement.regionStops())?.bright
+        guard meterStock != nil,
+              let scene = AutoAdjustment.SceneStops(regionStops: measurement.regionStops())
+        else { return nil }
+        return meterMedium == .labScan ? LabScanTiming.highlight(scene) : scene.bright
     }
 
     /// Solves the accumulated measurement and pins the grid into the packed
     /// configuration, replacing the identity default.
     public mutating func setToneBase(_ measurement: ToneBaseMeasurement) {
-        if let stock = screenMeterStock, let bright = sceneHighlightStops(measurement) {
-            applyScreenLevels(DigitalReferenceReceiver.levels(
-                for: stock, style: .autoLevels, sceneHighlightStops: bright))
+        if let stock = meterStock, let bright = sceneHighlightStops(measurement) {
+            if meterMedium == .labScan {
+                applyMeteredLevels(LabScanTiming.levels(
+                    for: stock, sceneHighlightStops: bright, exposureEV: meterExposureEV,
+                    masking: meterMasking))
+            } else {
+                let screen = DigitalReferenceReceiver.levels(for: stock, style: .autoLevels,
+                                                             sceneHighlightStops: bright)
+                applyMeteredLevels((SIMD3(repeating: screen.scale), screen.shift))
+            }
         }
-        // Auto Levels meters the same regions even when local tone is disabled. Keep the
+        // Levels meter the same regions even when local tone is disabled. Keep the
         // identity key in that case: automatic headroom adjustment can still supply a
         // nonzero highlight control, which must remain keyed by each pixel's own brightness.
         guard localToneActive else { return }

@@ -269,8 +269,11 @@ a separate historical coating is not simulated.
 A sheet that publishes one characteristic curve develops all three records along it;
 E-7020, E-4070, 2383, 2393 and ETERNA-CP publish three and are carried per record. The lab scan and
 telecine are inversions rather than sheets, and are described in `PrintPaperTables.swift`.
-Lab Scan produces an editable positive with gentle contrast and smooth shadow/highlight
-transitions. Native photo export defaults to a lossless 16-bit Display P3 TIFF with its
+Lab Scan produces an editable positive and sets up each frame the way a minilab scanner
+does: the film base scans black and the frame's brightest content near white, a backlit
+subject opens up partway while the sky stays on the curve's toe, and contrast rises, at most
+1.5 times the stock's, only as far as reaching both points needs. Red and blue are steepened
+only where their base would otherwise show the film's mask, so blacks stay neutral. Native photo export defaults to a lossless 16-bit Display P3 TIFF with its
 color profile. Telecine retains its finished Rec.709 transfer. Existing Lab Scan edits
 render differently with the new curve.
 

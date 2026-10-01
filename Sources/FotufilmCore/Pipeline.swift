@@ -210,9 +210,10 @@ public struct FotufilmEngine {
         /// base or its brightest content to white. Other media and integral prints ignore it.
         public var digitalReference: DigitalReferenceStyle = .default
         /// The frame's brightest content, metered by the host as scene stops over mid-grey after
-        /// `exposureEV`, for `.autoLevels` to place near white. Nil requests the shared renderer's
-        /// whole-frame meter. An invocation without scene pixels falls back to the fixed graded
-        /// print. Video hosts can supply a temporally smoothed measurement.
+        /// `exposureEV`, as `FilmEngineInvocation.sceneHighlightStops` reads it, for Digital
+        /// Reference's `.autoLevels` and Lab Scan's levels to place near white. Nil requests the
+        /// shared renderer's whole-frame meter. An invocation without scene pixels falls back to
+        /// the fixed print. Video hosts can supply a temporally smoothed measurement.
         public var sceneHighlightStops: Float? = nil
         /// Set when this develop is the unexposed film just outside the camera gate, which the
         /// Emulsion Border prints around the photograph. See `UnexposedEdge`.

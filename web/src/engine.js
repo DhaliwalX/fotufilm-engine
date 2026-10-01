@@ -10,7 +10,7 @@ import {
 import { loadMediumBytes } from './output-media.js'
 import { yieldToBrowser } from './yield.js'
 import { measureTone, toneKey } from './tone-base.js'
-import { applyScreenLevels } from './screen-conversion.js'
+import { applyScreenLevels, meteredHighlight } from './screen-conversion.js'
 import { CONFIG } from './engine-constants.js'
 import {
   runtimeAssetUrl,
@@ -79,22 +79,13 @@ export async function measuredTone(
   return grid
 }
 
-export async function sceneHighlightStops(source, controls) {
+export async function sceneHighlightStops(source, controls, labScan = false) {
   const grid = await measuredTone(
     source,
     controls,
     whiteBalanceGains(controls.temperature, controls.tint),
   )
-  const values = Array.from(grid.regionStops)
-    .filter(Number.isFinite)
-    .sort((a, b) => a - b)
-  if (!values.length) return null
-  const p = 0.995 * (values.length - 1),
-    i = Math.floor(p)
-  return (
-    values[i] +
-    (p - i) * (values[Math.min(i + 1, values.length - 1)] - values[i])
-  )
+  return meteredHighlight(grid.regionStops, labScan)
 }
 
 function loadModule(kind) {
@@ -892,6 +883,7 @@ class Developer {
         ),
         this.pack?.screenMeter,
         grid.regionStops,
+        controls.ev ?? controls.exposure ?? 0,
       )
       this.module.HEAPF32[offset + CONFIG.TONE_GRID_WIDTH] = grid.width
       this.module.HEAPF32[offset + CONFIG.TONE_GRID_HEIGHT] = grid.height
