@@ -138,6 +138,20 @@ export function ImageCanvas({
   useEffect(() => {
     photoView.publish({ zoom: view.zoom, readout });
   }, [photoView, view.zoom, readout]);
+  // Fit and the photograph's own pixels (at most the largest zoom), about `anchor`.
+  const toggle = (anchor) => {
+    const current = latest.current;
+    const target = current.zoom === 1 ? clamp(1 / nativeScale, 1, MAX_ZOOM) : 1;
+    jump({
+      ...anchoredPhotoZoom({
+        ...current,
+        ...layout.current,
+        anchor,
+        scale: target / current.zoom,
+      }),
+      zoom: target,
+    });
+  };
   const navigation = usePhotoNavigation({
     container,
     sourceKey,
@@ -146,6 +160,7 @@ export function ImageCanvas({
     onSample,
     view: latest,
     show,
+    toggle,
     display: [displayWidth, displayHeight],
     room,
     setCompare,
@@ -158,24 +173,11 @@ export function ImageCanvas({
       aria-label="Photo preview"
       onDoubleClick={(event) => {
         if (cropMode || event.target.closest(".histogram")) return;
-        const current = latest.current;
-        const target =
-          current.zoom === 1 ? clamp(1 / nativeScale, 1, MAX_ZOOM) : 1;
         const box = event.currentTarget.getBoundingClientRect();
-        // About the point clicked, as a wheel or a pinch zooms.
-        const anchor = [
+        toggle([
           event.clientX - box.left - box.width / 2,
           event.clientY - box.top - box.height / 2,
-        ];
-        jump({
-          ...anchoredPhotoZoom({
-            ...current,
-            ...layout.current,
-            anchor,
-            scale: target / current.zoom,
-          }),
-          zoom: target,
-        });
+        ]);
       }}
       {...navigation}
     >

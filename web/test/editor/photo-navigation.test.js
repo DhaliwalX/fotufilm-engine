@@ -6,6 +6,8 @@ import {
   centredPhotoZoom,
   constrainPhotoOffset,
   pinchGeometry,
+  scrolledPhotoView,
+  wheelDistance,
   wheelZoomScale,
 } from "../../src/photo-navigation.js";
 import { createPhotoView, zoomReach } from "../../src/photo-view.js";
@@ -157,4 +159,22 @@ test("the photo view steps the attached canvas and tells listeners only of chang
   assert.equal(zoomReach(view.get()), "zoomed");
   assert.equal(zoomReach({ zoom: 1 }), "fit");
   assert.equal(zoomReach({ zoom: MAX_ZOOM }), "max");
+});
+
+test("a scroll moves a magnified photograph with the fingers and leaves a fitted one", () => {
+  assert.deepEqual(
+    wheelDistance({ deltaX: 2, deltaY: -3, deltaMode: 1 }),
+    [32, -48],
+  );
+  assert.deepEqual(wheelDistance({ deltaY: 1, deltaMode: 2 }, 500), [0, 500]);
+  // Scrolling down shows more of the bottom: the photograph moves up.
+  assert.deepEqual(scrolledPhotoView(view, [10, 30]).offset, [10, -40]);
+  assert.deepEqual(scrolledPhotoView(view, [1e4, -1e4]).offset, [-500, 400]);
+  assert.deepEqual(
+    scrolledPhotoView(
+      { ...view, zoom: 1, offset: [0, 0], display: [550, 350] },
+      [40, 40],
+    ),
+    { zoom: 1, offset: [0, 0] },
+  );
 });

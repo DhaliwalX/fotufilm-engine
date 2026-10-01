@@ -108,10 +108,13 @@ test("zoom waits for movement to settle before requesting high resolution", asyn
     window.developmentRequests = [];
   });
   await page.getByLabel("Photo preview", { exact: true }).hover();
+  // A scroll with Command zooms, about 10% a step.
+  await page.keyboard.down("Meta");
   for (let i = 0; i < 12; i++) {
-    await page.mouse.wheel(0, -60);
+    await page.mouse.wheel(0, -30);
     await page.waitForTimeout(30);
   }
+  await page.keyboard.up("Meta");
   const during = await page.evaluate(() => window.developmentRequests);
   expect(during.every(request => !request.region)).toBe(true);
   await expect(page.locator(".viewport-detail")).toBeVisible();

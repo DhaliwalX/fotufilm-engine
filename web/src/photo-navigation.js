@@ -45,24 +45,40 @@ export function centredPhotoZoom({ zoom, offset, nextZoom, display, room }) {
   };
 }
 
-// How far one wheel event zooms: in proportion to how far it scrolls, as the Mac app's canvas
-// does, so a trackpad's stream of small steps zooms as smoothly as a mouse wheel's notches. A
-// trackpad pinch arrives as a wheel event with ctrlKey and deltaY = -100·ln(scale), which this
-// inverts exactly. A scroll's step is capped at a quarter: a notch of a mouse wheel scrolls about
-// 40 px on a Mac but 100 px or more on Windows and Linux.
-export function wheelZoomScale(
-  { deltaY, deltaMode = 0, ctrlKey = false },
+// A wheel event's distance in pixels, whatever unit it came in.
+export function wheelDistance(
+  { deltaX = 0, deltaY = 0, deltaMode = 0 },
   pageHeight = 800,
 ) {
-  const pixels =
-    deltaMode === 1
-      ? deltaY * 16
-      : deltaMode === 2
-        ? deltaY * pageHeight
-        : deltaY;
-  return ctrlKey
+  const unit = deltaMode === 1 ? 16 : deltaMode === 2 ? pageHeight : 1;
+  return [deltaX * unit, deltaY * unit];
+}
+
+// How far one zooming wheel event zooms: in proportion to how far it scrolls, as the Mac app's
+// canvas does, so a trackpad's stream of small steps zooms as smoothly as a mouse wheel's
+// notches. A pinch reaches the page as a wheel event with ctrlKey and deltaY = -100·ln(scale)
+// (where the host does not send it exactly: usePhotoNavigation.js), which this inverts. A
+// scroll's step is capped at a quarter: a notch of a mouse wheel scrolls about 40 px on a Mac but
+// 100 px or more on Windows and Linux.
+export function wheelZoomScale(event, pageHeight = 800) {
+  const pixels = wheelDistance(event, pageHeight)[1];
+  return event.ctrlKey
     ? clamp(Math.exp(-pixels / 100), 0.5, 2)
     : clamp(Math.exp(-pixels / 300), 0.8, 1.25);
+}
+
+// A scroll moves a magnified photograph the way the fingers or the wheel move, as a scroll view
+// does; a fitted one stays put.
+export function scrolledPhotoView({ zoom, offset, display, room }, distance) {
+  return {
+    zoom,
+    offset: constrainPhotoOffset(
+      offset.map((value, axis) => value - distance[axis]),
+      zoom,
+      display,
+      room,
+    ),
+  };
 }
 
 export function pinchGeometry(points) {

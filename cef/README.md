@@ -170,6 +170,17 @@ A Linux or Windows port implements `ImagePresenter` (dmabuf or a D3D11 shared ha
 the `ImageLayer`'s frames in its compositor. The engine side is platform-neutral: surfaces are
 pixels plus a row stride.
 
+### Trackpad
+
+CEF's wheel events carry whole pixels. The Mac host carries a trackpad scroll's fractions over to
+the next event, and sends a pinch to the page as `fotufilm-native-magnify` {scale, x, y} (the
+step's scale, as NSScrollView applies it, at a point of the view) rather than as Chromium's
+Control-wheel, whose whole-number delta rounds away the sub-percent steps of a slow pinch. A
+two-finger double tap is `fotufilm-native-smart-magnify` {x, y}. The canvas
+(`web/src/usePhotoNavigation.js`) takes both. Elsewhere Chromium's own Control-wheel pinch reaches
+it. A scroll moves a magnified photograph, and a pinch or a scroll with Command, Option or Control
+zooms it.
+
 ### Menu bar and files
 
 The menu bar follows the native Mac app's, item for item, wherever the editor has the
