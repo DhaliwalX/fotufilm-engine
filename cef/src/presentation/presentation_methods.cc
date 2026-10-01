@@ -156,6 +156,36 @@ void RegisterPresentationMethods(Dispatcher& dispatcher,
         }
         reply->Resolve(nullptr);
       });
+  // The composite trace (CompositorCore::TraceComposites): {on} starts it afresh or stops it.
+  dispatcher.Register(
+      "traceComposites", Thread::kUi, [window](const Call& call, std::shared_ptr<Reply> reply) {
+        if (auto compositor = window()) {
+          CefRefPtr<CefDictionaryValue> fields = Fields(call);
+          compositor->core().TraceComposites(fields && fields->GetBool("on"));
+        }
+        reply->Resolve(nullptr);
+      });
+  dispatcher.Register(
+      "compositeTrace", Thread::kUi, [window](const Call&, std::shared_ptr<Reply> reply) {
+        CefRefPtr<CefDictionaryValue> trace = CefDictionaryValue::Create();
+        auto list = [](const std::vector<TracedPosition>& positions) {
+          CefRefPtr<CefListValue> entries = CefListValue::Create();
+          for (const TracedPosition& at : positions) {
+            CefRefPtr<CefListValue> entry = CefListValue::Create();
+            entry->SetDouble(0, at.time_ms);
+            entry->SetDouble(1, at.x);
+            entry->SetDouble(2, at.y);
+            entry->SetInt(3, at.note);
+            entries->SetList(entries->GetSize(), entry);
+          }
+          return entries;
+        };
+        if (auto compositor = window()) {
+          trace->SetList("composites", list(compositor->core().traced_composites()));
+          trace->SetList("placements", list(compositor->core().traced_placements()));
+        }
+        reply->Resolve(Dictionary(trace));
+      });
   dispatcher.Register(
       "probeReport", Thread::kUi, [window](const Call&, std::shared_ptr<Reply> reply) {
         CefRefPtr<CefDictionaryValue> report = CefDictionaryValue::Create();
