@@ -84,9 +84,10 @@ for consistent exposure across a video or a batch, use one of the fixed modes. E
 hosts can supply a temporally smoothed `sceneHighlightStops` measurement for video.
 
 Choose **Color Newsprint** or **B&W Newsprint** in Output Medium for vintage newspaper
-halftone dots on warm, matte paper. Color uses overlapping CMYK screens; B&W uses
-black ink. The dot scale follows the image size in previews and exports. These are
-stylized SDR ink simulations, with a fixed paper color rather than a measured press
+halftone dots. Color uses opaque colored dots on black matte paper; B&W uses
+black ink on warm matte paper. The dot scale follows the image size in previews
+and exports. These are stylized SDR ink simulations, with a fixed paper color
+rather than a measured press
 profile. CLI: `--paper newsprint-color` or `--paper newsprint-bw`.
 
 ## Profiles and model limits

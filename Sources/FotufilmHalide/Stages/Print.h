@@ -63,9 +63,9 @@ inline Halide::Expr newsprint_dot(Halide::Expr coverage, Halide::Expr x, Halide:
                               amount + resolved * (ink - amount)));
 }
 
-// A display-linear P3 approximation of warm paper and subtractive process inks.
-// The incoming positive is formed by the existing print receiver (or direct slide
-// view); these constants describe a creative newspaper look, not measured press data.
+// Display-linear P3 approximations of opaque colored dots on black paper and
+// black ink on warm paper. The positive comes from the existing print receiver
+// (or direct slide view); neither style claims measured press or pigment data.
 inline Halide::Expr newsprint_read(Halide::ImageParam &configuration,
                                    Halide::Expr x, Halide::Expr y, Halide::Expr channel,
                                    Halide::Expr red, Halide::Expr green, Halide::Expr blue) {
@@ -73,24 +73,17 @@ inline Halide::Expr newsprint_read(Halide::ImageParam &configuration,
     Expr pitch = configuration(FOTUFILM_CONFIG_NEWSPRINT + 1);
     Expr r = clamp(red, 0.0f, 1.0f), g = clamp(green, 0.0f, 1.0f);
     Expr b = clamp(blue, 0.0f, 1.0f);
-    Expr peak = max(r, max(g, b));
-    Expr black = 1.0f - peak;
-    Expr divisor = max(peak, 1.0e-6f);
-    Expr cyan = (peak - r) / divisor, magenta = (peak - g) / divisor;
-    Expr yellow = (peak - b) / divisor;
-    // C 15 degrees, M 75 degrees, Y 0 degrees, K 45 degrees.
-    Expr c = newsprint_dot(cyan, x, y, pitch, 0.965925826f, 0.258819045f);
-    Expr m = newsprint_dot(magenta, x, y, pitch, 0.258819045f, 0.965925826f);
-    Expr yy = newsprint_dot(yellow, x, y, pitch, 1.0f, 0.0f);
+    // Opaque RGB ink coverage grows toward the highlights, revealing the black
+    // substrate between dots. Subtractive CMYK cannot brighten a black sheet.
+    Expr rr = newsprint_dot(r, x, y, pitch, 0.965925826f, 0.258819045f);
+    Expr gg = newsprint_dot(g, x, y, pitch, 0.258819045f, 0.965925826f);
+    Expr bb = newsprint_dot(b, x, y, pitch, 1.0f, 0.0f);
+    Expr colored = 0.003f + 0.877f * mux(channel, {rr, gg, bb});
     Expr luma = 0.22897456f * r + 0.69173852f * g + 0.07928691f * b;
-    Expr k = newsprint_dot(select(configuration(FOTUFILM_CONFIG_NEWSPRINT) > 1.5f,
-                                  1.0f - luma, black),
-                          x, y, pitch, 0.707106781f, 0.707106781f);
-    Expr color_ink = mux(channel, {c, m, yy});
-    Expr colored = select(configuration(FOTUFILM_CONFIG_NEWSPRINT) > 1.5f,
-                          1.0f, 1.0f - 0.88f * color_ink);
+    Expr k = newsprint_dot(1.0f - luma, x, y, pitch, 0.707106781f, 0.707106781f);
     Expr paper = mux(channel, {0.88f, 0.84f, 0.73f});
-    return paper * colored * (1.0f - 0.935f * k);
+    Expr monochrome = paper * (1.0f - 0.935f * k);
+    return select(configuration(FOTUFILM_CONFIG_NEWSPRINT) > 1.5f, monochrome, colored);
 }
 
 inline Halide::Expr texture_carry(Halide::Expr source, Halide::Expr developed,

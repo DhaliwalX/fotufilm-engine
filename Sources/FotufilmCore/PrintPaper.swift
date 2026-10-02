@@ -91,7 +91,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         case .ilfochromeCLM1K:
             return "Medium-contrast positive paper for slide film, softer than CPS.1K. Approximate color response."
         case .newsprintColor:
-            return "Vintage color newspaper: overlapping CMYK halftone dots on warm, matte paper. Stylized ink response."
+            return "Opaque colored halftone dots on black, matte paper. Stylized ink response."
         case .newsprintBW:
             return "Vintage black-and-white newspaper: black halftone dots on warm, matte paper. Stylized ink response."
         case .negative:

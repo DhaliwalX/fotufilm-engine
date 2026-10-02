@@ -1499,7 +1499,7 @@ public enum EditorControlCatalogue {
                     + "negative, the stock's native release print for a motion negative, and the "
                     + "direct positive for reversal film. Digital Reference is the HDR path; paper, "
                     + "projection, Lab Scan, Telecine and Negative are SDR. Slide film also supports Ilfochrome/Cibachrome positive paper. Negative is available "
-                    + "only for negative film. Color Newsprint and B&W Newsprint add vintage halftone dots on warm paper.",
+                    + "only for negative film. Color Newsprint prints colored dots on black paper; B&W Newsprint prints black dots on warm paper.",
                 kind: .choice(.dynamic(.papers), value: -1), order: 10),
             commandLine: CommandLineFlag("--paper", placeholder: "<name>",
                                          help: "Output medium: ektacolor-edge (default), endura-premier, "
@@ -1509,7 +1509,7 @@ public enum EditorControlCatalogue {
                                              + "published datasheets; Ilfochrome uses published tone specifications with approximate color. Reversal stocks support "
                                              + "screen, Ilfochrome and newsprint; instant sheets use screen.",
                                          generic: false),
-            documentation: "Selects the print paper, projection print, scan, display reference or the negative itself. Color Newsprint uses CMYK halftone dots; B&W Newsprint uses black ink. Both use warm matte paper and a stylized, fixed ink response."),
+            documentation: "Selects the print paper, projection print, scan, display reference or the negative itself. Color Newsprint uses opaque colored halftone dots on black matte paper; B&W Newsprint uses black ink on warm matte paper. Both use a stylized, fixed ink response."),
         EditorControl(
             .printLight, title: "Viewing Illuminant",
             detail: "Choose the light used to view the print.",

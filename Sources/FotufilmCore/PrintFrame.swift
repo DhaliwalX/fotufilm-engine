@@ -451,7 +451,9 @@ extension PrintPaper {
         func pick(_ curve: CharacteristicCurve) -> Float { dense ? curve.dMax - curve.dMin : 0 }
         func maximum(_ curve: CharacteristicCurve) -> Float { curve.dMax - curve.dMin }
         switch self {
-        case .newsprintColor, .newsprintBW:
+        case .newsprintColor:
+            return SIMD3<Float>(repeating: 0.003)
+        case .newsprintBW:
             return SIMD3<Float>(0.88, 0.84, 0.73) * (dense ? 0.065 : 1)
         case .ektacolorEdge:
             density = SIMD3(pick(Self.ra4PrintCurveRed), pick(Self.ra4PrintCurve), pick(Self.ra4PrintCurveBlue))

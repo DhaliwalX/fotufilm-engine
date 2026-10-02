@@ -240,9 +240,9 @@ enum {
     /// the two axes multiply. A negative radius is no gate, and the light passes unchanged.
     /// Appended without renumbering earlier fields.
     FOTUFILM_CONFIG_GATE = 18220,
-    /// Stylized halftone output: mode (0 off, 1 CMYK, 2 black ink) and screen pitch in pixels. The
-    /// pitch spans 100 cells across the shorter full-frame dimension; subpixel screens blend toward
-    /// their mean coverage.
+    /// Stylized halftone output: mode (0 off, 1 opaque color on black paper, 2 black ink on warm
+    /// paper) and screen pitch in pixels. The pitch spans 100 cells across the shorter full-frame
+    /// dimension; subpixel screens blend toward their mean coverage.
     FOTUFILM_CONFIG_NEWSPRINT = 18225,
 };
 

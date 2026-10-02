@@ -197,6 +197,15 @@ std::vector<std::pair<std::string, std::function<Func(Stage &)>>> stages() {
                                         s.c, s.ramp(0.0f, 1.0f), 0.4f, 0.7f);
             return f;
         }},
+        {"newsprint_black_paper", [](Stage &s) {
+            s.values(FOTUFILM_CONFIG_NEWSPRINT) = 1;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT + 1) = 12;
+            Func f("newsprint_black_paper_test");
+            Expr light = Halide::select(s.x < kSamples / 2, 0.0f, 1.0f);
+            f(s.x, s.c) = newsprint_read(s.config, s.x % 64, s.x / 64,
+                                        s.c, light, light, light);
+            return f;
+        }},
         {"newsprint_bw", [](Stage &s) {
             s.values(FOTUFILM_CONFIG_NEWSPRINT) = 2;
             s.values(FOTUFILM_CONFIG_NEWSPRINT + 1) = 12;
@@ -284,6 +293,11 @@ void verify(const std::string &name, Stage &s, const Buffer<float> &out) {
         }
         check(near(total / kSamples, 0.53f, 0.03f), name + ": mean tint includes dot gain");
         check(low < 0.01f && high > 0.99f, name + ": visible dots, not a flat tint");
+    } else if (name == "newsprint_black_paper") {
+        for (int i = 0; i < kSamples; ++i)
+            for (int c = 0; c < 3; ++c)
+                check(near(at(i, c), i < kSamples / 2 ? 0.003f : 0.88f, 1e-6f),
+                      name + ": shadows expose black paper; solid opaque ink can print highlights");
     } else if (name == "newsprint_color" || name == "newsprint_bw") {
         for (int i = 0; i < kSamples; ++i) {
             for (int c = 0; c < 3; ++c)

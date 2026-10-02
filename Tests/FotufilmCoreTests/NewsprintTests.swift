@@ -30,7 +30,8 @@ final class NewsprintTests: XCTestCase {
                 stockID: "portra400", paper: paper)
             XCTAssertEqual(frame.frame, .paper)
             XCTAssertFalse(frame.hasLustre)
-            XCTAssertEqual(frame.baseRGB, SIMD3<Float>(0.88, 0.84, 0.73))
+            XCTAssertEqual(frame.baseRGB, paper == .newsprintColor
+                ? SIMD3<Float>(repeating: 0.003) : SIMD3<Float>(0.88, 0.84, 0.73))
             XCTAssertTrue(frame.detail.contains("matte"))
             let invocation = try FilmEngineInvocation(validating: TestStocks.negative,
                 options: options(paper), width: 1200, height: 800)
