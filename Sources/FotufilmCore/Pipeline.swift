@@ -244,6 +244,11 @@ public struct FotufilmEngine {
         /// with the sign a screen expects; on a positive it is the scanner's gain. Other media
         /// ignore it.
         public var screenExposureEV: Float = 0
+
+        /// Digital Reference colour-negative correction, in relative units (-1...1).
+        /// Positive cyan/magenta/yellow reduces red/green/blue after metering, before the
+        /// receiver curve. Equal corrections change density; no brightness compensation.
+        public var screenCMY: SIMD3<Float> = .zero
         /// Which span of the pipeline this render performs. `.full` — the default — is scene
         /// light in and a finished image out, and is what every render did before the seam had a
         /// name. The other three cut the pipeline at the density boundary the engine has always

@@ -19,6 +19,17 @@ final class CommandLineControlsTests: XCTestCase {
         XCTAssertEqual(try applying(.screenExposure, "-1.5").screenExposureEV, -1.5)
     }
 
+    func testCMYFlagsReachIndependentChannelsAndRejectInvalidValues() throws {
+        for (channel, field) in [EditorControlField.screenCyan, .screenMagenta, .screenYellow].enumerated() {
+            var expected = SIMD3<Float>.zero
+            expected[channel] = -0.25
+            XCTAssertEqual(try applying(field, "-0.25").screenCMY, expected)
+            for invalid in ["-1.01", "1.01", "nan", "inf"] {
+                XCTAssertThrowsError(try applying(field, invalid))
+            }
+        }
+    }
+
     func testFringeFlagsKeepTheirExistingLimits() throws {
         for value in ["-0.1", "1.1", "nan", "inf", "1e300"] {
             XCTAssertThrowsError(try applying(.chromaticFringeAmount, value), value)

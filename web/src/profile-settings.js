@@ -52,6 +52,10 @@ export function profileControlAvailable(c, edit, stock) {
       return (medium?.viewingLights.length || 0) > 1;
     case "screenExposure":
       return !!medium?.screenConversion;
+    case "screenCyan":
+    case "screenMagenta":
+    case "screenYellow":
+      return !!medium?.screenCMY;
     case "screenGrade":
       return (
         !!medium?.screenGrade && edit.digitalReference !== "reference-exposure"

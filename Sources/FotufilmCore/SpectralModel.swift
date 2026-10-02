@@ -2300,7 +2300,8 @@ extension SpectralRuntime {
                                  digitalReference: DigitalReferenceStyle = .default,
                                  sceneHighlightStops: Float? = nil,
                                  screenGrade: Float = 2,
-                                 screenExposureEV: Float = 0) -> [Float] {
+                                 screenExposureEV: Float = 0,
+                                 screenCMY: SIMD3<Float> = .zero) -> [Float] {
         let paper = paper.resolved(for: stock)
         let callier = callierCoefficient(callier, stock: stock, paper: paper)
         let grade = effectiveScreenGrade(screenGrade, stock: stock, paper: paper,
@@ -2404,6 +2405,8 @@ extension SpectralRuntime {
             masking = masking.map { $0 * levels.scale }
             xMids = xMids.map { $0 + paper.exposureDirection * (levels.shift + exposureShift) }
         }
+        let colourShift = DigitalReferenceReceiver.colourShift(screenCMY, stock: stock, paper: paper)
+        for channel in 0..<3 { xMids[channel] += colourShift[channel] }
         let viewingLight = referenceViewingLight(for: paper)
         let receiver = printReceiver(stock: stock, paper: paper,
                                      viewingLight: viewingLight)

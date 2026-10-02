@@ -378,6 +378,9 @@ struct EditState: Equatable {
     var digitalReference = DigitalReferenceStyle.default
     var screenGrade = Double(FotufilmEngine.Options().screenGrade)
     var screenExposure = Double(FotufilmEngine.Options().screenExposureEV)
+    var screenCyan = 0.0
+    var screenMagenta = 0.0
+    var screenYellow = 0.0
     var enlarger = Enlarger.default
     /// Retain lamp settings when switched off; older edits keep the original print model.
     var printerEnabled = false

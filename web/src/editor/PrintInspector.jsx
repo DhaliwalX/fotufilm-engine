@@ -144,9 +144,25 @@ export default function PrintInspector() {
                   "negativeViewing",
                   "screenGrade",
                   "screenExposure",
+                  "screenCyan",
+                  "screenMagenta",
+                  "screenYellow",
                 ]}
               />
             }
+            {!fixedSettings && profileMedium(edit, selectedStock)?.screenCMY && (
+              <Button
+                size="S"
+                isDisabled={exporting || !active || edit.halationModel === "layered" ||
+                  !["screenCyan", "screenMagenta", "screenYellow"].some((field) => edit.profile?.[field])}
+                onPress={() => {
+                  endEdit();
+                  const profile = { ...edit.profile };
+                  for (const field of ["screenCyan", "screenMagenta", "screenYellow"]) delete profile[field];
+                  patch({ profile });
+                }}
+              >Reset CMY</Button>
+            )}
             <div className="info-row">
               <span>Color space</span>
               <span>{colorSpaceLabel(preferredCanvasColorSpace())}</span>

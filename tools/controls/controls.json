@@ -228,7 +228,7 @@
       "text" : "Not yet examined"
     }
   ],
-  "bridgeSlotCount" : 64,
+  "bridgeSlotCount" : 67,
   "bridgeSlots" : [
     "EXPOSURE_EV",
     "TEMPERATURE",
@@ -293,7 +293,10 @@
     "FILM_RED_LAYER",
     "FILM_GREEN_LAYER",
     "FILM_BLUE_LAYER",
-    "FILM_SCAN_SOFTNESS"
+    "FILM_SCAN_SOFTNESS",
+    "SCREEN_CYAN",
+    "SCREEN_MAGENTA",
+    "SCREEN_YELLOW"
   ],
   "controls" : [
     {
@@ -5077,6 +5080,216 @@
         "cli"
       ],
       "title" : "Screen Exposure",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "colourNegative",
+      "binding" : "screenCMY(0)",
+      "commandLineFlag" : "--screen-cyan",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Digital Reference cyan/red correction, -1...1 (default: 0); positive adds cyan",
+      "commandLinePlaceholder" : "<value>",
+      "detail" : "Positive adds cyan by reducing red; negative adds red.",
+      "documentation" : "Digital Reference colour negatives only. Positive reduces red, negative adds it, after Auto Levels and before the output curve. Relative units -1 to +1, not scanner steps.",
+      "drives" : [
+
+      ],
+      "field" : "screenCyan",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1,
+        "clampMin" : -1,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 100,
+        "group" : "output",
+        "hint" : "Digital Reference colour negatives: positive adds cyan, negative adds red. Manual correction after Auto Levels; relative units, not scanner steps.",
+        "kind" : "double",
+        "label" : "Cyan / Red",
+        "max" : 1,
+        "min" : -1,
+        "ofxName" : "screenCyan",
+        "order" : 29,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 64,
+        "slotSymbol" : "SCREEN_CYAN",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+
+      },
+      "persistedKey" : "screenCyan",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Cyan / Red",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "colourNegative",
+      "binding" : "screenCMY(1)",
+      "commandLineFlag" : "--screen-magenta",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Digital Reference magenta/green correction, -1...1 (default: 0); positive adds magenta",
+      "commandLinePlaceholder" : "<value>",
+      "detail" : "Positive adds magenta by reducing green; negative adds green.",
+      "documentation" : "Digital Reference colour negatives only. Positive reduces green, negative adds it, after Auto Levels and before the output curve. Relative units -1 to +1, not scanner steps.",
+      "drives" : [
+
+      ],
+      "field" : "screenMagenta",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1,
+        "clampMin" : -1,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 101,
+        "group" : "output",
+        "hint" : "Digital Reference colour negatives: positive adds magenta, negative adds green. Manual correction after Auto Levels; relative units, not scanner steps.",
+        "kind" : "double",
+        "label" : "Magenta / Green",
+        "max" : 1,
+        "min" : -1,
+        "ofxName" : "screenMagenta",
+        "order" : 30,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 65,
+        "slotSymbol" : "SCREEN_MAGENTA",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+
+      },
+      "persistedKey" : "screenMagenta",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Magenta / Green",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "colourNegative",
+      "binding" : "screenCMY(2)",
+      "commandLineFlag" : "--screen-yellow",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Digital Reference yellow/blue correction, -1...1 (default: 0); positive adds yellow",
+      "commandLinePlaceholder" : "<value>",
+      "detail" : "Positive adds yellow by reducing blue; negative adds blue.",
+      "documentation" : "Digital Reference colour negatives only. Positive reduces blue, negative adds it, after Auto Levels and before the output curve. Relative units -1 to +1, not scanner steps.",
+      "drives" : [
+
+      ],
+      "field" : "screenYellow",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1,
+        "clampMin" : -1,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 102,
+        "group" : "output",
+        "hint" : "Digital Reference colour negatives: positive adds yellow, negative adds blue. Manual correction after Auto Levels; relative units, not scanner steps.",
+        "kind" : "double",
+        "label" : "Yellow / Blue",
+        "max" : 1,
+        "min" : -1,
+        "ofxName" : "screenYellow",
+        "order" : 31,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 66,
+        "slotSymbol" : "SCREEN_YELLOW",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+
+      },
+      "persistedKey" : "screenYellow",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : -1,
+        "max" : 1,
+        "min" : -1,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "signed"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Yellow / Blue",
       "webTransform" : "profile"
     },
     {
