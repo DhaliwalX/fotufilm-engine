@@ -131,6 +131,40 @@ export async function updatePhotoRecords(keys, patch) {
   for (const listener of listeners) listener(records);
   return records;
 }
+// A renamed photo keeps its rating, edit and thumbnail under its new key.
+export async function movePhoto(from, to) {
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(["photos", "thumbnails"], "readwrite");
+    for (const name of ["photos", "thumbnails"]) {
+      const store = transaction.objectStore(name);
+      store.get(from).onsuccess = ({ target }) => {
+        if (!target.result) return;
+        store.put({ ...target.result, key: to });
+        store.delete(from);
+      };
+    }
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = transaction.onabort = () =>
+      reject(transaction.error || new Error("The photo could not be renamed."));
+  });
+}
+// A photo moved to the trash takes its records with it.
+export async function forgetPhotos(keys) {
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(["photos", "thumbnails"], "readwrite");
+    for (const key of keys) {
+      transaction.objectStore("photos").delete(key);
+      transaction.objectStore("thumbnails").delete(key);
+    }
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = transaction.onabort = () =>
+      reject(
+        transaction.error || new Error("The photos could not be forgotten."),
+      );
+  });
+}
 export async function forgetFolder(id) {
   const db = await openDatabase();
   return new Promise((resolve, reject) => {

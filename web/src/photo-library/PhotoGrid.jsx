@@ -35,6 +35,7 @@ export default function PhotoGrid({
   onPress,
   onOpen,
   onRate,
+  onMenu,
   onKeyDown,
   contentKey,
   reflowKey,
@@ -183,6 +184,7 @@ export default function PhotoGrid({
         onPress={onPress}
         onOpen={onOpen}
         onRate={onRate}
+        onMenu={onMenu}
       />,
     );
   }

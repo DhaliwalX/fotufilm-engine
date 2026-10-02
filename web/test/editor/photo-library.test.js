@@ -368,11 +368,22 @@ test("a desktop host picks, lists and serves library folders itself", async () =
   );
   const calls = [];
   const channel = {
-    capabilities: { platform: "linux", libraryFolders: true },
+    capabilities: {
+      platform: "linux",
+      libraryFolders: true,
+      libraryFiles: { reveal: "Show in Folder", trash: "Move to Trash" },
+    },
     async postMessage({ method, params }) {
       calls.push([method, params]);
       if (method === "chooseLibraryFolder")
         return { path: "/home/me/Documents", name: "Documents" };
+      if (method === "renameLibraryFile")
+        return { path: "/home/me/Documents/trip/c.ARW", name: "c.ARW" };
+      if (method === "trashLibraryFiles")
+        return {
+          trashed: ["/home/me/Documents/a.jpg"],
+          failed: [{ path: "/home/me/Documents/trip/b.ARW", message: "Locked." }],
+        };
       if (method === "listLibraryFolder")
         return {
           payload: new TextEncoder().encode(
@@ -402,6 +413,25 @@ test("a desktop host picks, lists and serves library folders itself", async () =
     assert.deepEqual(Object.keys(stored).sort(), ["hostPath", "kind", "name"]);
     const revived = folderAccess().revive(stored);
     assert.equal(await revived.isSameEntry(handle), true);
+    // File actions name absolute paths to the host and answer paths inside the folder.
+    assert.deepEqual(revived.fileActions, {
+      reveal: "Show in Folder",
+      trash: "Move to Trash",
+    });
+    assert.equal(await revived.rename("trip/b.ARW", "c.ARW"), "trip/c.ARW");
+    assert.deepEqual(calls.at(-1), [
+      "renameLibraryFile",
+      { path: "/home/me/Documents/trip/b.ARW", name: "c.ARW" },
+    ]);
+    await revived.reveal(["a.jpg"]);
+    assert.deepEqual(calls.at(-1), [
+      "revealLibraryFiles",
+      { paths: ["/home/me/Documents/a.jpg"] },
+    ]);
+    assert.deepEqual(await revived.trash(["a.jpg", "trip/b.ARW"]), {
+      trashed: ["a.jpg"],
+      failed: [{ path: "trip/b.ARW", message: "Locked." }],
+    });
     revived.forget();
     assert.deepEqual(calls.at(-1), [
       "forgetLibraryFolder",

@@ -59,12 +59,17 @@ std::string Origin(const std::string& url) {
   return url.substr(0, path);
 }
 
-// This host's capabilities (app/host_capabilities.h): it reads the photo library's folders and
+// This host's capabilities (app/host_capabilities.h): it reads the photo library's folders, shows
+// and trashes their photos (`libraryFiles`, with the menu's words), and
 // opens or shows what it saved; the page draws the photograph itself.
 CefRefPtr<CefDictionaryValue> HostCapabilities() {
   CefRefPtr<CefDictionaryValue> host = CefDictionaryValue::Create();
   host->SetString("platform", "linux");
   host->SetBool("libraryFolders", true);
+  CefRefPtr<CefDictionaryValue> files = CefDictionaryValue::Create();
+  files->SetString("reveal", "Show in Folder");
+  files->SetString("trash", "Move to Trash");
+  host->SetDictionary("libraryFiles", files);
 #if defined(FOTUFILM_WITH_ENGINE)
   CefRefPtr<CefDictionaryValue> open = CefDictionaryValue::Create();
   open->SetString("reveal", "Show in Folder");
@@ -135,7 +140,14 @@ NO_STACK_PROTECTOR int main(int argc, char* argv[]) {
   window.url = url;
   window.icon = (directory / "fotufilm.png").string();
   auto host = std::make_unique<fotufilm::WindowedHost>(*dispatcher, window);
-  fotufilm::RegisterLibraryMethods(*dispatcher, profile + "/library-folders.txt");
+  fotufilm::LibraryFileActions files;
+  // The file manager shows one folder: the first photo's, with it selected.
+  files.reveal = [](const std::vector<std::string>& paths) {
+    return fotufilm::OpenWithSystem(paths.front(), true);
+  };
+  files.trash = fotufilm::TrashWithSystem;
+  fotufilm::RegisterLibraryMethods(*dispatcher, profile + "/library-folders.txt",
+                                   std::move(files));
 #if defined(FOTUFILM_WITH_ENGINE)
   auto engine = std::make_unique<fotufilm::EngineBridge>(*dispatcher);
   const std::string export_dir =

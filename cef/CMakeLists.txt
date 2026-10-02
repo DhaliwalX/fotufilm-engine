@@ -110,6 +110,7 @@ if(OS_MAC)
     src/platform/mac/export_files.mm
     src/platform/mac/host_window.mm
     src/platform/mac/image_presenter.mm
+    src/platform/mac/library_files.mm
     src/platform/mac/main_menu.mm
     src/platform/mac/main.mm)
   # CEF's flags cover C++ sources only; Objective-C++ needs the same standard, and no RTTI, so

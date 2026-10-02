@@ -108,6 +108,35 @@ std::string LibraryFolders::Resolve(const std::string& path) const {
   return {};
 }
 
+std::string LibraryFolders::Rename(const std::string& path, const std::string& name,
+                                   std::string& error) const {
+  const std::string from = Resolve(path);
+  std::error_code status;
+  if (from.empty() || !fs::is_regular_file(fs::path(from), status)) {
+    error = "The photo is no longer in its folder.";
+    return {};
+  }
+  // One visible name in the photo's own folder: no separators, and no hidden or relative names,
+  // which the library would not list.
+  if (name.empty() || name.front() == '.' || name.size() > 255 ||
+      name.find_first_of(std::string("/\\:\0\n", 5)) != std::string::npos) {
+    error = "Use a name without “/” or “:” that does not start with a dot.";
+    return {};
+  }
+  const fs::path to = fs::path(from).parent_path() / name;
+  // A change of case only is the same file on a case-insensitive volume.
+  if (fs::exists(to, status) && !fs::equivalent(fs::path(from), to, status)) {
+    error = "Another file is already named “" + name + "”.";
+    return {};
+  }
+  fs::rename(fs::path(from), to, status);
+  if (status) {
+    error = status.message();
+    return {};
+  }
+  return Utf8(to);
+}
+
 bool LibraryFolders::List(const std::string& folder, const std::set<std::string>& extensions,
                           const std::atomic<bool>& cancelled, std::string& json,
                           std::string& error) {

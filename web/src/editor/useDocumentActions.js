@@ -303,12 +303,16 @@ export default function useDocumentActions({
     setStage(null);
     setDifference(false);
   }
-  function removeFile(file) {
+  // Closes photos; when the shown one closes, the nearest one before it that stays is shown.
+  function removeFiles(closing) {
     if (exporting) return;
-    const remaining = files.filter((item) => item.id !== file.id);
+    const ids = new Set(closing.map((file) => file.id));
+    const remaining = files.filter((item) => !ids.has(item.id));
     let next = null;
-    if (file.id === activeId) {
-      next = remaining[Math.max(0, files.indexOf(file) - 1)] || null;
+    if (ids.has(activeId)) {
+      const shown = files.findIndex((item) => item.id === activeId);
+      next =
+        files.slice(0, shown).findLast((item) => !ids.has(item.id)) || remaining[0] || null;
       // A waiting neighbour is shown once it has decoded.
       const shownNext = next?.waiting ? null : next;
       setActiveId(shownNext?.id || null);
@@ -322,24 +326,28 @@ export default function useDocumentActions({
       });
       replaceResult(null);
     }
-    if (file.image) {
-      backend.releaseImage(file.image);
-      imageResources.current.delete(file.image);
+    for (const file of files.filter((item) => ids.has(item.id))) {
+      if (file.image) {
+        backend.releaseImage(file.image);
+        imageResources.current.delete(file.image);
+      }
+      histories.current.delete(file.id);
+      if (file.url) {
+        URL.revokeObjectURL(file.url);
+        urls.current.delete(file.url);
+      }
     }
-    histories.current.delete(file.id);
     setFiles(remaining);
-    if (file.url) {
-      URL.revokeObjectURL(file.url);
-      urls.current.delete(file.url);
-    }
     if (next?.waiting) openWaiting(next);
   }
+  const removeFile = (file) => removeFiles([file]);
   latest.current = { files, selectFile, removeFile };
   return {
     openFiles,
     acceptFiles,
     selectFile,
     removeFile,
+    removeFiles,
     documentEdits,
   };
 }

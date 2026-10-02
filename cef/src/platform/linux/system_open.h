@@ -9,4 +9,8 @@ namespace fotufilm {
 // False when no opener could be started.
 bool OpenWithSystem(const std::string& path, bool reveal);
 
+// Moves a file to the desktop's trash (`gio trash`, the freedesktop.org Trash), where the file
+// manager can put it back. Waits for it; false with `error` set when it was not moved.
+bool TrashWithSystem(const std::string& path, std::string& error);
+
 }  // namespace fotufilm

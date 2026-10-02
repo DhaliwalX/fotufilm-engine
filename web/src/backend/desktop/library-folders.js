@@ -8,11 +8,17 @@ class HostFolder {
   kind = "directory";
   #call;
   #thumbnails;
-  constructor(call, hostPath, name, thumbnails) {
+  #fileActions;
+  constructor(call, hostPath, name, { thumbnails, fileActions }) {
     this.#call = call;
     this.#thumbnails = thumbnails;
+    this.#fileActions = fileActions;
     this.hostPath = hostPath;
     this.name = name;
+  }
+  // The menu's words for showing and trashing a photo, or null where the host does neither.
+  get fileActions() {
+    return this.#fileActions;
   }
   async isSameEntry(other) {
     return other?.hostPath === this.hostPath;
@@ -52,6 +58,33 @@ class HostFolder {
   forget() {
     this.#call("forgetLibraryFolder", { path: this.hostPath }).catch(() => {});
   }
+  // The photo's path in the folder once it is called `name`.
+  async rename(path, name) {
+    const renamed = await this.#call("renameLibraryFile", {
+      path: `${this.hostPath}/${path}`,
+      name,
+    });
+    return renamed.path.slice(this.hostPath.length + 1);
+  }
+  reveal(paths) {
+    return this.#call("revealLibraryFiles", {
+      paths: paths.map((path) => `${this.hostPath}/${path}`),
+    });
+  }
+  // {trashed, failed: [{path, message}]}, in paths inside the folder.
+  async trash(paths) {
+    const result = await this.#call("trashLibraryFiles", {
+      paths: paths.map((path) => `${this.hostPath}/${path}`),
+    });
+    const inside = (path) => path.slice(this.hostPath.length + 1);
+    return {
+      trashed: result.trashed.map(inside),
+      failed: result.failed.map((failure) => ({
+        ...failure,
+        path: inside(failure.path),
+      })),
+    };
+  }
 }
 
 // Chromium's own picker refuses a home, Documents, Desktop or Downloads folder as a whole, so a
@@ -59,16 +92,19 @@ class HostFolder {
 export function installLibraryFolders(channel) {
   if (channel?.capabilities?.libraryFolders !== true) return;
   const call = createTransport(channel);
-  const thumbnails = channel.capabilities.thumbnails === true;
+  const host = {
+    thumbnails: channel.capabilities.thumbnails === true,
+    fileActions: channel.capabilities.libraryFiles ?? null,
+  };
   installFolderAccess({
     persistent: () => true,
     async choose() {
       const chosen = await call("chooseLibraryFolder");
-      return chosen ? new HostFolder(call, chosen.path, chosen.name, thumbnails) : null;
+      return chosen ? new HostFolder(call, chosen.path, chosen.name, host) : null;
     },
     revive: (handle) =>
       handle?.hostPath
-        ? new HostFolder(call, handle.hostPath, handle.name, thumbnails)
+        ? new HostFolder(call, handle.hostPath, handle.name, host)
         : handle,
   });
 }

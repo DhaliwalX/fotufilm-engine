@@ -60,4 +60,21 @@ bool OpenWithSystem(const std::string& path, bool reveal) {
   return started || Start({"xdg-open", folder});
 }
 
+bool TrashWithSystem(const std::string& path, std::string& error) {
+  std::vector<std::string> arguments = {"gio", "trash", "--", path};
+  std::vector<char*> argv;
+  for (std::string& argument : arguments) argv.push_back(argument.data());
+  argv.push_back(nullptr);
+  pid_t pid = 0;
+  if (posix_spawnp(&pid, argv[0], nullptr, nullptr, argv.data(), environ) != 0) {
+    error = "Moving to the Trash needs the gio tool (GLib).";
+    return false;
+  }
+  int status = 0;
+  waitpid(pid, &status, 0);
+  if (WIFEXITED(status) && WEXITSTATUS(status) == 0) return true;
+  error = "It could not be moved to the Trash.";
+  return false;
+}
+
 }  // namespace fotufilm

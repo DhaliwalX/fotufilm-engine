@@ -18,6 +18,7 @@
 #include "include/wrapper/cef_library_loader.h"
 #import "platform/mac/export_files.h"
 #import "platform/mac/host_window.h"
+#import "platform/mac/library_files.h"
 #import "platform/mac/main_menu.h"
 #include "switches.h"
 
@@ -59,13 +60,18 @@ NSArray<NSDictionary*>* Plugins(const std::string& capabilities) {
 }
 
 // This host's capabilities (app/host_capabilities.h). It reads the photo library's folders
-// (`libraryFolders`, app/library_methods.h); with the engine it draws the photograph itself,
+// (`libraryFolders`, app/library_methods.h), shows and trashes their photos in Finder
+// (`libraryFiles`, with the menu's words for each); with the engine it draws the photograph itself,
 // beneath the page (`imageLayer`), and opens what it saved (`openExport`,
 // web/src/backend/README.md).
 CefRefPtr<CefDictionaryValue> HostCapabilities() {
   CefRefPtr<CefDictionaryValue> host = CefDictionaryValue::Create();
   host->SetString("platform", "macos");
   host->SetBool("libraryFolders", true);
+  CefRefPtr<CefDictionaryValue> files = CefDictionaryValue::Create();
+  files->SetString("reveal", "Show in Finder");
+  files->SetString("trash", "Move to Trash");
+  host->SetDictionary("libraryFiles", files);
 #if defined(FOTUFILM_WITH_ENGINE)
   host->SetBool("imageLayer", true);
   CefRefPtr<CefDictionaryValue> open = CefDictionaryValue::Create();
@@ -300,7 +306,8 @@ int main(int argc, char* argv[]) {
             : ProfilePath();
     CefString(&settings.root_cache_path) = profile;
     CefString(&settings.cache_path) = profile + "/Default";
-    fotufilm::RegisterLibraryMethods(*g_dispatcher, profile + "/library-folders.txt");
+    fotufilm::RegisterLibraryMethods(*g_dispatcher, profile + "/library-folders.txt",
+                                     fotufilm::MacLibraryFileActions());
     settings.log_severity = LOGSEVERITY_WARNING;
     if (!CefInitialize(arguments, settings, app, nullptr))
       return CefGetExitCode();
