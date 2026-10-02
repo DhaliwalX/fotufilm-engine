@@ -160,5 +160,15 @@ int main(int argc, char **argv) {
         for (int unsupported : {FOTUFILM_FRAME_NO_FILM, FOTUFILM_FRAME_DENSITY_IN,
                                 FOTUFILM_FRAME_RECORD_EXPOSURE_IN, FOTUFILM_FRAME_TEXTURE})
             if (!renderExtra(extra.data(), false, extraMask | unsupported) || out != unchanged) return 15;
+        // Ink screens must keep their phase in both full-frame and compact tile storage.
+        for (int mode : {1, 2}) {
+            p[FOTUFILM_CONFIG_NEWSPRINT] = float(mode);
+            p[FOTUFILM_CONFIG_NEWSPRINT + 1] = 8;
+            std::fill(out.begin(), out.end(), -123.f);
+            if (renderExtra(nullptr, true, mask)) return 16;
+            compactMatchesFrame(mask, nullptr);
+            write();
+        }
+        p[FOTUFILM_CONFIG_NEWSPRINT] = 0;
     }
 }

@@ -679,6 +679,7 @@ struct PrintInputs {
     bool monochrome;
     std::string prefix;
     std::string suffix;
+    Expr origin_x = 0, origin_y = 0;
 };
 
 inline Func build_print(Backend &b, const PrintInputs &in, Func developed, Var x, Var y, Var c) {
@@ -711,7 +712,13 @@ inline Func build_print(Backend &b, const PrintInputs &in, Func developed, Var x
         ? (display_view(x, y, 0) + display_view(x, y, 1) + display_view(x, y, 2)) / 3.0f
         : display_view(x, y, c);
     printed(x, y, c) = color_grade(configuration, c, composed);
-    return printed;
+    Func screened(name("print_newsprint"));
+    Expr mode = configuration(FOTUFILM_CONFIG_NEWSPRINT);
+    screened(x, y, c) = Halide::select(mode > 0.0f,
+        newsprint_read(configuration, x + in.origin_x, y + in.origin_y, c,
+                       printed(x, y, 0), printed(x, y, 1), printed(x, y, 2)),
+        printed(x, y, c));
+    return screened;
 }
 
 }

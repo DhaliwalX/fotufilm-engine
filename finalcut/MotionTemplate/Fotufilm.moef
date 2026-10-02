@@ -245,7 +245,7 @@
           </parameter>
           <parameter name="Output" id="36" flags="8594198560">
             <foldFlags>4</foldFlags>
-            <parameter name="Output Medium" id="4" flags="12901744656" default="12" value="12"/>
+            <parameter name="Output Medium" id="4" flags="12901744656" default="14" value="14"/>
             <parameter name="Viewing Illuminant" id="25" flags="12901744656" default="0" value="0"/>
             <parameter name="Enlarger" id="91" flags="12901744656" default="0" value="0"/>
             <parameter name="Screen Conversion" id="95" flags="12901744656" default="2" value="2"/>

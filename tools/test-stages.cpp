@@ -183,6 +183,37 @@ std::vector<std::pair<std::string, std::function<Func(Stage &)>>> stages() {
             f(s.x, s.c) = density_of(transmittance_of(s.ramp(0.0f, 4.0f)));
             return f;
         }},
+        {"newsprint_dot", [](Stage &s) {
+            Func f("newsprint_dot_test");
+            Expr coverage = Halide::mux(s.c, {0.0f, 0.5f, 1.0f});
+            f(s.x, s.c) = newsprint_dot(coverage, s.x % 64, s.x / 64, 16.0f, 1.0f, 0.0f);
+            return f;
+        }},
+        {"newsprint_color", [](Stage &s) {
+            s.values(FOTUFILM_CONFIG_NEWSPRINT) = 1;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT + 1) = 12;
+            Func f("newsprint_color_test");
+            f(s.x, s.c) = newsprint_read(s.config, s.x % 64 + 79, s.x / 64 + 43,
+                                        s.c, s.ramp(0.0f, 1.0f), 0.4f, 0.7f);
+            return f;
+        }},
+        {"newsprint_black_paper", [](Stage &s) {
+            s.values(FOTUFILM_CONFIG_NEWSPRINT) = 1;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT + 1) = 12;
+            Func f("newsprint_black_paper_test");
+            Expr light = Halide::select(s.x < kSamples / 2, 0.0f, 1.0f);
+            f(s.x, s.c) = newsprint_read(s.config, s.x % 64, s.x / 64,
+                                        s.c, light, light, light);
+            return f;
+        }},
+        {"newsprint_bw", [](Stage &s) {
+            s.values(FOTUFILM_CONFIG_NEWSPRINT) = 2;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT + 1) = 12;
+            Func f("newsprint_bw_test");
+            f(s.x, s.c) = newsprint_read(s.config, s.x % 64 + 79, s.x / 64 + 43,
+                                        s.c, s.ramp(0.0f, 1.0f), 0.4f, 0.7f);
+            return f;
+        }},
         {"print_mtf_read", [](Stage &s) {
             Func f("read");
             f(s.x, s.c) = print_mtf_read(s.config, s.ramp(1.0f, 1.0f), 0.5f);
@@ -253,6 +284,28 @@ void verify(const std::string &name, Stage &s, const Buffer<float> &out) {
             const float density = 4.0f * float(i) / float(kSamples - 1);
             check(near(at(i, 0), density, 2e-5f * (1.0f + density)),
                   name + ": density survives the transmittance round trip");
+        }
+    } else if (name == "newsprint_dot") {
+        float total = 0, low = 1, high = 0;
+        for (int i = 0; i < kSamples; ++i) {
+            check(at(i, 0) == 0 && at(i, 2) == 1, name + ": clear and solid ink endpoints");
+            total += at(i, 1); low = std::min(low, at(i, 1)); high = std::max(high, at(i, 1));
+        }
+        check(near(total / kSamples, 0.53f, 0.03f), name + ": mean tint includes dot gain");
+        check(low < 0.01f && high > 0.99f, name + ": visible dots, not a flat tint");
+    } else if (name == "newsprint_black_paper") {
+        for (int i = 0; i < kSamples; ++i)
+            for (int c = 0; c < 3; ++c)
+                check(near(at(i, c), i < kSamples / 2 ? 0.003f : 0.88f, 1e-6f),
+                      name + ": shadows expose black paper; solid opaque ink can print highlights");
+    } else if (name == "newsprint_color" || name == "newsprint_bw") {
+        for (int i = 0; i < kSamples; ++i) {
+            for (int c = 0; c < 3; ++c)
+                check(std::isfinite(at(i, c)) && at(i, c) >= 0 && at(i, c) <= 0.881f,
+                      name + ": bounded ink reflectance");
+            if (name == "newsprint_bw")
+                check(near(at(i, 0) / 0.88f, at(i, 2) / 0.73f, 1e-6f),
+                      name + ": one black screen on tinted paper");
         }
     } else if (name == "print_mtf_read") {
         check(near(at(7, 0), 0.75f, 1e-6f), name + ": keep 0.5 returns half the detail");

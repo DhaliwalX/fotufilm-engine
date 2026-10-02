@@ -458,6 +458,11 @@
       "name": "GATE",
       "count": 5,
       "doc": "The camera gate, for a frame larger than the aperture (Emulsion Border's film beyond the gate): the aperture's left, top, right and bottom edges in frame pixels, then the radius in pixels of the lens pupil's shadow of its edge. Light the lens formed \u2014 the direct image, a diffusion filter's halo, veiling glare, a camera preflash \u2014 reaches the film only through it: each edge passes the share of a uniform disc on the open side of a straight line, and the two axes multiply. A negative radius is no gate, and the light passes unchanged. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "NEWSPRINT",
+      "count": 2,
+      "doc": "Stylized halftone output: mode (0 off, 1 opaque color on black paper, 2 black ink on warm paper) and screen pitch in pixels. The pitch spans 100 cells across the shorter full-frame dimension; subpixel screens blend toward their mean coverage."
     }
   ]
 }

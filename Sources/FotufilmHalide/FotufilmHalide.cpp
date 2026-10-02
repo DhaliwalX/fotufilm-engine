@@ -294,9 +294,13 @@ static int32_t process_tile_output(
                 }
             }
         } else {
+            // The print screen is fixed to the full frame, including compact tile output.
+            density.translate(0, origin_x); density.translate(1, origin_y);
+            result.translate(0, origin_x); result.translate(1, origin_y);
             print_pipeline_for(feature_mask)->run(
                 density, result, width, interior_height, configuration,
                 film_output_lut, paper_output_lut, feature_mask);
+            result.translate(0, -origin_x); result.translate(1, -origin_y);
         }
         copy_out(result);
     });

@@ -1499,17 +1499,17 @@ public enum EditorControlCatalogue {
                     + "negative, the stock's native release print for a motion negative, and the "
                     + "direct positive for reversal film. Digital Reference is the HDR path; paper, "
                     + "projection, Lab Scan, Telecine and Negative are SDR. Slide film also supports Ilfochrome/Cibachrome positive paper. Negative is available "
-                    + "only for negative film.",
+                    + "only for negative film. Color Newsprint prints colored dots on black paper; B&W Newsprint prints black dots on warm paper.",
                 kind: .choice(.dynamic(.papers), value: -1), order: 10),
             commandLine: CommandLineFlag("--paper", placeholder: "<name>",
                                          help: "Output medium: ektacolor-edge (default), endura-premier, "
                                              + "crystal-archive, vision-2383, vision-2393, eterna-cp, "
-                                             + "lab-scan, telecine, screen, negative or ilfochrome-cps-1k/ilfochrome-clm-1k (cibachrome alias). Photo and "
+                                             + "lab-scan, telecine, screen, negative, newsprint-color, newsprint-bw or ilfochrome-cps-1k/ilfochrome-clm-1k (cibachrome alias). Photo and "
                                              + "projection variants are digitised from the manufacturers' "
                                              + "published datasheets; Ilfochrome uses published tone specifications with approximate color. Reversal stocks support "
-                                             + "screen and Ilfochrome; instant sheets use screen.",
+                                             + "screen, Ilfochrome and newsprint; instant sheets use screen.",
                                          generic: false),
-            documentation: "Selects the print paper, projection print, scan, display reference or the negative itself."),
+            documentation: "Selects the print paper, projection print, scan, display reference or the negative itself. Color Newsprint uses opaque colored halftone dots on black matte paper; B&W Newsprint uses black ink on warm matte paper. Both use a stylized, fixed ink response."),
         EditorControl(
             .printLight, title: "Viewing Illuminant",
             detail: "Choose the light used to view the print.",

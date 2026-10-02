@@ -31,6 +31,13 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     case ilfochromeCPS1K = "ilfochrome-cps-1k"
     case ilfochromeCLM1K = "ilfochrome-clm-1k"
 
+    /// Stylized ink-on-paper screens, not measured photographic emulsions.
+    /// Append after existing media to preserve saved plugin indices.
+    case newsprintColor = "newsprint-color"
+    case newsprintBW = "newsprint-bw"
+
+    public var isNewsprint: Bool { self == .newsprintColor || self == .newsprintBW }
+
     /// Default for engine and headless callers.
     public static let `default`: PrintPaper = .ektacolorEdge
 
@@ -50,6 +57,8 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         case .eternaCP: return "Fujifilm ETERNA-CP Color Positive Film 3513DI"
         case .labScan: return "Lab Scan"
         case .telecine: return "Telecine"
+        case .newsprintColor: return "Color Newsprint"
+        case .newsprintBW: return "B&W Newsprint"
         case .screen: return "Digital Reference"
         case .negative: return "Negative"
         case .ilfochromeCPS1K: return "Ilfochrome Classic CPS.1K (Cibachrome)"
@@ -81,6 +90,10 @@ public enum PrintPaper: String, CaseIterable, Sendable {
             return "Normal-contrast positive paper for slide film. Approximate color response; more paper exposure lightens the print."
         case .ilfochromeCLM1K:
             return "Medium-contrast positive paper for slide film, softer than CPS.1K. Approximate color response."
+        case .newsprintColor:
+            return "Opaque colored halftone dots on black, matte paper. Stylized ink response."
+        case .newsprintBW:
+            return "Vintage black-and-white newspaper: black halftone dots on warm, matte paper. Stylized ink response."
         case .negative:
             return "View the developed negative before printing or conversion to a positive."
         }
@@ -131,7 +144,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// Transparent positives print onto positive paper. Integral instant sheets are already prints.
     public static func choices(for stock: FilmStock) -> [PrintPaper] {
         if stock.isReflectionPrint { return [.screen] }
-        if stock.isReversal { return [.screen, .ilfochromeCPS1K, .ilfochromeCLM1K] }
+        if stock.isReversal { return [.screen, .ilfochromeCPS1K, .ilfochromeCLM1K, .newsprintColor, .newsprintBW] }
         return allCases.filter { !$0.isPositivePaper }
     }
 
@@ -158,7 +171,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     public static func stripChoices(for stock: FilmStock,
                                     gauge: FilmFormat) -> [PrintPaper] {
         if stock.isReflectionPrint { return [.screen] }
-        if stock.isReversal { return [.ilfochromeCPS1K, .ilfochromeCLM1K, .screen] }
+        if stock.isReversal { return [.ilfochromeCPS1K, .ilfochromeCLM1K, .newsprintColor, .newsprintBW, .screen] }
         var media: [PrintPaper] = gauge.isMotionPicture
             ? [.vision2383, .vision2393, .eternaCP, .telecine]
             : [.ektacolorEdge, .enduraPremier, .crystalArchive]
@@ -167,7 +180,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
             media.remove(at: index)
             media.insert(native, at: 0)
         }
-        return media + [.screen]
+        return media + [.newsprintColor, .newsprintBW, .screen]
     }
 
     /// Whether this finished positive is projected rather than held: a transparency on a screen
@@ -195,7 +208,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         switch self {
         case .ektacolorEdge, .enduraPremier, .crystalArchive, .ilfochromeCPS1K, .ilfochromeCLM1K, .vision2383, .vision2393, .eternaCP:
             return true
-        case .labScan, .telecine, .screen, .negative:
+        case .labScan, .telecine, .screen, .negative, .newsprintColor, .newsprintBW:
             return false
         }
     }
@@ -235,7 +248,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         // is a 0.013 mm sample pitch on the film, and a Gaussian of half that
         // pitch carries the pixel footprint with the imaging lens on top.
         case .telecine: return 0.0065
-        case .screen, .negative: return 0
+        case .screen, .negative, .newsprintColor, .newsprintBW: return 0
         }
     }
 
@@ -253,7 +266,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         // like, and short of undoing the aperture entirely.
         case .telecine: return 0.8
         case .ektacolorEdge, .enduraPremier, .crystalArchive, .vision2383, .vision2393, .eternaCP,
-             .screen, .negative, .ilfochromeCPS1K, .ilfochromeCLM1K:
+             .screen, .negative, .ilfochromeCPS1K, .ilfochromeCLM1K, .newsprintColor, .newsprintBW:
             return 0
         }
     }
