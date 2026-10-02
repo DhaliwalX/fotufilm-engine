@@ -36,6 +36,33 @@ export default function ProfileControls({
       (c.field === "printCorrection" && edit.profile?.printerEnabled);
     let value = edit.profile?.[c.field] ?? profileDefault(c);
     const change = (next) => onChange(c.field, next);
+    if (c.field === "paperColor")
+      return (
+        <WithHelp key={c.field} label={c.title} detail={c.detail}>
+          <div className="paper-color-control">
+            <label>
+              <span>{c.title}</span>
+              <input
+                type="color"
+                aria-label={c.title}
+                value={value ?? c.paperColor}
+                disabled={inactive}
+                onFocus={onEnd}
+                onChange={(event) => change(event.target.value)}
+                onBlur={onEnd}
+              />
+            </label>
+            <ActionButton
+              size="S"
+              isQuiet
+              isDisabled={inactive || !Object.hasOwn(edit.profile || {}, c.field)}
+              onPress={() => { onEnd(); onReset(c.field); onEnd(); }}
+            >
+              Use Default Paper
+            </ActionButton>
+          </div>
+        </WithHelp>
+      );
     if (c.curve)
       return (
         <SpectrumCurve

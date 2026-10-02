@@ -214,6 +214,96 @@ std::vector<std::pair<std::string, std::function<Func(Stage &)>>> stages() {
                                         s.c, s.ramp(0.0f, 1.0f), 0.4f, 0.7f);
             return f;
         }},
+        {"newsprint_custom_color_white", [](Stage &s) {
+            s.values(FOTUFILM_CONFIG_NEWSPRINT) = 1;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT + 1) = 12;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER) = 1.0f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 1) = 1.0f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 2) = 1.0f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 3) = 1;
+            Func f("newsprint_custom_color_white_test");
+            // Matching paper, black, white, then a spatially screened midtone.
+            Expr r = Halide::select(s.x < 1024, 1.0f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            Expr g = Halide::select(s.x < 1024, 1.0f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            Expr b = Halide::select(s.x < 1024, 1.0f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            f(s.x, s.c) = newsprint_read(s.config, s.x % 64 + 79, s.x / 64 + 43, s.c, r, g, b);
+            return f;
+        }},
+        {"newsprint_custom_color_black", [](Stage &s) {
+            s.values(FOTUFILM_CONFIG_NEWSPRINT) = 1;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT + 1) = 12;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER) = 0.0f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 1) = 0.0f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 2) = 0.0f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 3) = 1;
+            Func f("newsprint_custom_color_black_test");
+            // Matching paper, black, white, then a spatially screened midtone.
+            Expr r = Halide::select(s.x < 1024, 0.0f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            Expr g = Halide::select(s.x < 1024, 0.0f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            Expr b = Halide::select(s.x < 1024, 0.0f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            f(s.x, s.c) = newsprint_read(s.config, s.x % 64 + 79, s.x / 64 + 43, s.c, r, g, b);
+            return f;
+        }},
+        {"newsprint_custom_color_tint", [](Stage &s) {
+            s.values(FOTUFILM_CONFIG_NEWSPRINT) = 1;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT + 1) = 12;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER) = 0.7f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 1) = 0.5f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 2) = 0.3f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 3) = 1;
+            Func f("newsprint_custom_color_tint_test");
+            // Matching paper, black, white, then a spatially screened midtone.
+            Expr r = Halide::select(s.x < 1024, 0.7f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            Expr g = Halide::select(s.x < 1024, 0.5f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            Expr b = Halide::select(s.x < 1024, 0.3f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            f(s.x, s.c) = newsprint_read(s.config, s.x % 64 + 79, s.x / 64 + 43, s.c, r, g, b);
+            return f;
+        }},
+        {"newsprint_custom_bw_white", [](Stage &s) {
+            s.values(FOTUFILM_CONFIG_NEWSPRINT) = 2;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT + 1) = 12;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER) = 1.0f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 1) = 1.0f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 2) = 1.0f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 3) = 1;
+            Func f("newsprint_custom_bw_white_test");
+            // Matching paper, black, white, then a spatially screened midtone.
+            Expr r = Halide::select(s.x < 1024, 1.0f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            Expr g = Halide::select(s.x < 1024, 1.0f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            Expr b = Halide::select(s.x < 1024, 1.0f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            f(s.x, s.c) = newsprint_read(s.config, s.x % 64 + 79, s.x / 64 + 43, s.c, r, g, b);
+            return f;
+        }},
+        {"newsprint_custom_bw_black", [](Stage &s) {
+            s.values(FOTUFILM_CONFIG_NEWSPRINT) = 2;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT + 1) = 12;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER) = 0.0f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 1) = 0.0f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 2) = 0.0f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 3) = 1;
+            Func f("newsprint_custom_bw_black_test");
+            // Matching paper, black, white, then a spatially screened midtone.
+            Expr r = Halide::select(s.x < 1024, 0.0f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            Expr g = Halide::select(s.x < 1024, 0.0f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            Expr b = Halide::select(s.x < 1024, 0.0f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            f(s.x, s.c) = newsprint_read(s.config, s.x % 64 + 79, s.x / 64 + 43, s.c, r, g, b);
+            return f;
+        }},
+        {"newsprint_custom_bw_tint", [](Stage &s) {
+            s.values(FOTUFILM_CONFIG_NEWSPRINT) = 2;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT + 1) = 12;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER) = 0.7f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 1) = 0.5f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 2) = 0.3f;
+            s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 3) = 1;
+            Func f("newsprint_custom_bw_tint_test");
+            // Matching paper, black, white, then a spatially screened midtone.
+            Expr r = Halide::select(s.x < 1024, 0.7f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            Expr g = Halide::select(s.x < 1024, 0.5f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            Expr b = Halide::select(s.x < 1024, 0.3f, s.x < 2048, 0.0f, s.x < 3072, 1.0f, 0.45f);
+            f(s.x, s.c) = newsprint_read(s.config, s.x % 64 + 79, s.x / 64 + 43, s.c, r, g, b);
+            return f;
+        }},
         {"print_mtf_read", [](Stage &s) {
             Func f("read");
             f(s.x, s.c) = print_mtf_read(s.config, s.ramp(1.0f, 1.0f), 0.5f);
@@ -298,6 +388,21 @@ void verify(const std::string &name, Stage &s, const Buffer<float> &out) {
             for (int c = 0; c < 3; ++c)
                 check(near(at(i, c), i < kSamples / 2 ? 0.003f : 0.88f, 1e-6f),
                       name + ": shadows expose black paper; solid opaque ink can print highlights");
+    } else if (name.rfind("newsprint_custom_", 0) == 0) {
+        float low = 1, high = 0;
+        for (int i = 0; i < kSamples; ++i) {
+            for (int c = 0; c < 3; ++c) {
+                const float value = at(i, c);
+                check(std::isfinite(value) && value >= 0 && value <= 1, name + ": bounded ink");
+                if (i < 3072) {
+                    const float expected = i < 1024 ? s.values(FOTUFILM_CONFIG_NEWSPRINT_PAPER + c)
+                                                   : i < 2048 ? 0.0f : 1.0f;
+                    check(near(value, expected, 2e-6f), name + ": matching tones expose the sheet; ink reaches black/white");
+                }
+            }
+            if (i >= 3072) { low = std::min(low, at(i, 0)); high = std::max(high, at(i, 0)); }
+        }
+        check(high - low > 0.2f, name + ": midtones contain visible dots");
     } else if (name == "newsprint_color" || name == "newsprint_bw") {
         for (int i = 0; i < kSamples; ++i) {
             for (int c = 0; c < 3; ++c)

@@ -86,9 +86,13 @@ hosts can supply a temporally smoothed `sceneHighlightStops` measurement for vid
 Choose **Color Newsprint** or **B&W Newsprint** in Output Medium for vintage newspaper
 halftone dots. Color uses opaque colored dots on black matte paper; B&W uses
 black ink on warm matte paper. The dot scale follows the image size in previews
-and exports. These are stylized SDR ink simulations, with a fixed paper color
-rather than a measured press
-profile. CLI: `--paper newsprint-color` or `--paper newsprint-bw`.
+and exports. In the desktop and browser editors, **Paper Color** chooses any sheet
+color and matches the paper border to it. Dots use dark or light ink as needed,
+letting matching image tones blend into the sheet. **Use Default Paper** restores
+the medium’s original color. The choice is saved with the edit. These are stylized
+SDR ink simulations, not measured press profiles.
+CLI: `--paper newsprint-color` or `--paper newsprint-bw`, with optional
+`--paper-color '#ffffff'` (sRGB hex).
 
 ## Profiles and model limits
 

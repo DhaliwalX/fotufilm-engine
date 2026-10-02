@@ -244,6 +244,9 @@ enum {
     /// paper) and screen pitch in pixels. The pitch spans 100 cells across the shorter full-frame
     /// dimension; subpixel screens blend toward their mean coverage.
     FOTUFILM_CONFIG_NEWSPRINT = 18225,
+    /// Optional newsprint paper color: display-linear P3 red, green, blue, then enabled (0 retains
+    /// the original medium, 1 uses this sheet).
+    FOTUFILM_CONFIG_NEWSPRINT_PAPER = 18227,
 };
 
 enum {
@@ -345,8 +348,9 @@ enum {
     FOTUFILM_CONFIG_FILM_TILE_COUNT = 166,
     FOTUFILM_CONFIG_GATE_COUNT = 5,
     FOTUFILM_CONFIG_NEWSPRINT_COUNT = 2,
+    FOTUFILM_CONFIG_NEWSPRINT_PAPER_COUNT = 4,
 };
 
-enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18227 };
+enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18231 };
 
 #endif

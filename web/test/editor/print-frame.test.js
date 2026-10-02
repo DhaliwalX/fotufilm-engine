@@ -77,3 +77,10 @@ test("material noise is stable and bounded across negative and positive coordina
   }
   assert.notEqual(frameNoise(3, 4, 409), frameNoise(3, 4, 613));
 });
+
+
+test("frame planning receives the saved paper color and clears it on reset", () => {
+  const edit = { ...defaultEdit("gold200"), medium: "newsprint-color", profile: { paperColor: "#d6c2a0" } };
+  assert.equal(frameRequest(edit).paperColor, "#d6c2a0");
+  assert.equal(frameRequest({ ...edit, profile: {} }).paperColor, null);
+});

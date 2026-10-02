@@ -15,6 +15,7 @@ export function frameRequest(edit, width = 1, height = 1) {
     frame: edit.printFrame || "none",
     format: edit.format || null,
     medium: edit.medium || null,
+    paperColor: edit.profile?.paperColor || null,
     viewingKelvin:
       PROFILE_MENUS.printLight.find((c) => c.id === edit.profile?.printLight)
         ?.value ?? null,

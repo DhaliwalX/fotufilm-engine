@@ -4611,6 +4611,36 @@
     },
     {
       "availability" : "printStage",
+      "commandLineFlag" : "--paper-color",
+      "commandLineGeneric" : false,
+      "commandLineHelp" : "Newsprint paper color as quoted sRGB hex, e.g. '#ffffff'; omission uses the medium default",
+      "commandLinePlaceholder" : "<#RRGGBB>",
+      "detail" : "Choose the newsprint sheet color. The paper border uses the same color.",
+      "documentation" : "Sets any newsprint paper color with a color picker. The paper border matches the sheet. Dots adapt to use dark ink on lighter areas of the sheet and light ink on darker areas. Reset restores the medium's default color. Saved with the edit and used for preview and export; other output media ignore it.",
+      "drives" : [
+        "newsprintPaperColor"
+      ],
+      "field" : "paperColor",
+      "group" : "print",
+      "kind" : "takeover",
+      "omitted" : {
+        "android" : "Custom newsprint color is offered by the desktop and browser editors.",
+        "app" : "Custom newsprint color is offered by the desktop and browser editors.",
+        "finalcut" : "Custom newsprint color is offered by the photo editors.",
+        "resolve" : "Custom newsprint color is offered by the photo editors."
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "surfaces" : [
+        "desktop",
+        "web",
+        "cli"
+      ],
+      "title" : "Paper Color",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "printStage",
       "binding" : "printViewingKelvin",
       "commandLineFlag" : "--print-light",
       "commandLineGeneric" : false,

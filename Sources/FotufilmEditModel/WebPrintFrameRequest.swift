@@ -10,6 +10,7 @@ public struct WebPrintFrameRequest: Decodable {
     public let frame: PrintFrame
     public let format: String?
     public let medium: String?
+    public let paperColor: String?
     public let viewingKelvin: Float?
     public let width: Int
     public let height: Int
@@ -32,6 +33,10 @@ public struct WebPrintFrameRequest: Decodable {
               viewingKelvin == nil || (viewingKelvin!.isFinite && (1000...25000).contains(viewingKelvin!)) else {
             throw WebProfileRequest.Failure(description: "Invalid print frame dimensions or viewing light.")
         }
+        let customColor = paperColor.flatMap(NewsprintPaperColor.init(hex:))
+        guard paperColor == nil || customColor != nil else {
+            throw WebProfileRequest.Failure(description: "Invalid newsprint paper color.")
+        }
         let definition = try stock?.validated()
         let film = definition?.stock
         let format = format ?? definition?.nativeFormatID ?? FilmFormat.houseDefaultID
@@ -47,7 +52,7 @@ public struct WebPrintFrameRequest: Decodable {
             PrintFrameConfiguration(frame: choice == .emulsion ? .none : choice, formatID: format,
                 definition: definition,
                 paper: paper, viewingKelvin: choice.viewsTransparency ? nil : viewingKelvin,
-                negativeViewing: .lightBox)
+                negativeViewing: .lightBox, newsprintPaperColor: customColor)
         }
         let config = configuration(frame)
         let placement = PrintFramePlacement.layout(width: width, height: height, configuration: config)

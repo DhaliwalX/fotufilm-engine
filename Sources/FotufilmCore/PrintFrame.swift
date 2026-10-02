@@ -280,15 +280,20 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
 
     public init(frame: PrintFrame, formatID: String?, stockID: String,
                 paper: PrintPaper, viewingKelvin: Float? = nil,
-                negativeViewing: NegativeViewing = .lightBox) {
+                negativeViewing: NegativeViewing = .lightBox,
+                newsprintPaperColor: NewsprintPaperColor? = nil) {
         self.init(frame: frame, formatID: formatID, definition: FilmStock.presetDefinitions[stockID],
-                  paper: paper, viewingKelvin: viewingKelvin, negativeViewing: negativeViewing)
+                  paper: paper, viewingKelvin: viewingKelvin, negativeViewing: negativeViewing,
+                  newsprintPaperColor: newsprintPaperColor)
     }
 
     /// Explicit stock metadata also supports isolated runtimes without a process-wide pack registry.
     public init(frame: PrintFrame, formatID: String?, definition: FilmStockDefinition?,
                 paper: PrintPaper, viewingKelvin: Float? = nil,
-                negativeViewing: NegativeViewing = .lightBox) {
+                negativeViewing: NegativeViewing = .lightBox,
+                newsprintPaperColor: NewsprintPaperColor? = nil) {
+        let paperBase = paper.isNewsprint ? (newsprintPaperColor?.linearRGB
+            ?? paper.frameBaseRGB(viewingKelvin: viewingKelvin)) : paper.frameBaseRGB(viewingKelvin: viewingKelvin)
         let nativeID = definition?.nativeFormatID
         let motionStock = nativeID.flatMap(FilmFormat.preset(id:))?.isMotionPicture == true
         let nativeInstant = nativeID.flatMap { FilmBorderGeometry.preset($0) }?.isInstant == true
@@ -398,25 +403,25 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
                 detail = "Choose a slide film in 35mm or 120."
             }
         case .paper, .paper5x7, .paper8x10, .paper5x5:
-            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? .zero
+            baseRGB = paperBase ?? .zero
             let size = sheet.map { "\(Int(($0.widthMM / 25.4).rounded())) × \(Int(($0.heightMM / 25.4).rounded())) in" } ?? ""
             detail = reflective ? "\(paper.name) · \(paper.isNewsprint ? "matte" : (hasLustre ? "lustre" : "high gloss")) · \(size)"
                 : "Choose a reflection paper such as Ektacolor Edge or Ilfochrome."
         case .carrier:
-            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? .zero
+            baseRGB = paperBase ?? .zero
             detail = carrierAvailable
                 ? "\(paper.name) · filed carrier · 8 × 10 in"
                 : "Choose a negative film and a reflection paper such as Ektacolor Edge."
         case .emulsion:
             // The band itself is developed by the host; the margin around it is the paper's white.
-            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? SIMD3(repeating: 0.91)
+            baseRGB = paperBase ?? SIMD3(repeating: 0.91)
             detail = edgeAvailable
                 ? "\(name) · \(definition?.name ?? "Film") · unexposed edge"
                 : "Choose a film and a roll or sheet film format."
         case .mount:
             // Reflection outputs retain their modelled paper white. Other outputs use a
             // neutral presentation mount; this style does not identify a manufactured stock.
-            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? SIMD3(repeating: 0.91)
+            baseRGB = paperBase ?? SIMD3(repeating: 0.91)
             detail = frame.detail
         case .darkMount:
             // A neutral presentation board, not the paper's own maximum density.

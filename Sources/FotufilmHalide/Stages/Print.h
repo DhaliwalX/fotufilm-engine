@@ -37,7 +37,7 @@ inline Halide::Expr paper_activation(Halide::ImageParam &configuration,
 // unit square cell, so a flat tint has the requested ink coverage even as dots join.
 // All coordinates are absolute frame pixels; there is no random or per-tile phase.
 inline Halide::Expr newsprint_dot(Halide::Expr coverage, Halide::Expr x, Halide::Expr y,
-                                  Halide::Expr pitch, float cosine, float sine) {
+                                  Halide::Expr pitch, Halide::Expr cosine, Halide::Expr sine) {
     using namespace Halide;
     Expr amount = clamp(coverage, 0.0f, 1.0f);
     // Modest, explicitly stylized dot gain on absorbent newsprint.
@@ -63,6 +63,14 @@ inline Halide::Expr newsprint_dot(Halide::Expr coverage, Halide::Expr x, Halide:
                               amount + resolved * (ink - amount)));
 }
 
+// Cover the selected sheet with darker or lighter opaque ink as needed. Matching
+// the sheet needs no ink, so those image tones meet the paper border without a seam.
+inline Halide::Expr newsprint_custom_coverage(Halide::Expr value, Halide::Expr paper) {
+    using namespace Halide;
+    Expr range = select(value >= paper, 1.0f - paper, paper);
+    return clamp(abs(value - paper) / max(range, 1.0e-6f), 0.0f, 1.0f);
+}
+
 // Display-linear P3 approximations of opaque colored dots on black paper and
 // black ink on warm paper. The positive comes from the existing print receiver
 // (or direct slide view); neither style claims measured press or pigment data.
@@ -83,7 +91,22 @@ inline Halide::Expr newsprint_read(Halide::ImageParam &configuration,
     Expr k = newsprint_dot(1.0f - luma, x, y, pitch, 0.707106781f, 0.707106781f);
     Expr paper = mux(channel, {0.88f, 0.84f, 0.73f});
     Expr monochrome = paper * (1.0f - 0.935f * k);
-    return select(configuration(FOTUFILM_CONFIG_NEWSPRINT) > 1.5f, monochrome, colored);
+    Expr bw = configuration(FOTUFILM_CONFIG_NEWSPRINT) > 1.5f;
+    Expr pr = clamp(configuration(FOTUFILM_CONFIG_NEWSPRINT_PAPER), 0.0f, 1.0f);
+    Expr pg = clamp(configuration(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 1), 0.0f, 1.0f);
+    Expr pb = clamp(configuration(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 2), 0.0f, 1.0f);
+    Expr sheet = mux(channel, {pr, pg, pb});
+    Expr sheet_luma = 0.22897456f * pr + 0.69173852f * pg + 0.07928691f * pb;
+    Expr target = select(bw, luma, mux(channel, {r, g, b}));
+    Expr reference = select(bw, sheet_luma, sheet);
+    Expr coverage = newsprint_custom_coverage(target, reference);
+    Expr cosine = select(bw, 0.707106781f, mux(channel, {0.965925826f, 0.258819045f, 1.0f}));
+    Expr sine = select(bw, 0.707106781f, mux(channel, {0.258819045f, 0.965925826f, 0.0f}));
+    Expr dots = newsprint_dot(coverage, x, y, pitch, cosine, sine);
+    Expr ink = select(target >= reference, 1.0f, 0.0f);
+    Expr custom = sheet + dots * (ink - sheet);
+    return select(configuration(FOTUFILM_CONFIG_NEWSPRINT_PAPER + 3) != 0.0f, custom,
+                  select(bw, monochrome, colored));
 }
 
 inline Halide::Expr texture_carry(Halide::Expr source, Halide::Expr developed,

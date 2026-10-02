@@ -37,6 +37,7 @@ public enum WebProfileCatalogue {
     }
 
     private struct Medium: Encodable {
+        let paperColor: String?
         let viewingLights: [ControlsManifest.Choice]
         let enlarger, correction, screenConversion, screenGrade, negative: Bool
     }
@@ -68,6 +69,7 @@ public enum WebProfileCatalogue {
                                                   digitalReference: .autoLevels)
                 }
                 return (paper.id, Medium(
+                    paperColor: paper.isNewsprint ? (paper == .newsprintColor ? "#0a0a0a" : "#f2ecdd") : nil,
                     viewingLights: EditorControlCatalogue.viewingLights(for: paper).map(encodedChoice),
                     enlarger: offers(.enlarger),
                     correction: offers(.printCorrection),

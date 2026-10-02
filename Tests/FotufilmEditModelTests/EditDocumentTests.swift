@@ -16,6 +16,17 @@ final class EditDocumentTests: XCTestCase {
         XCTAssertEqual(decoded, document)
     }
 
+    func testNewsprintPaperColorSurvivesSaveLoadAndRejectsInvalidColors() throws {
+        let document = EditDocument([.paper: .choice("newsprint-color"), .paperColor: .choice("#D6C2A0")])
+        let decoded = try JSONDecoder().decode(EditDocument.self, from: JSONEncoder().encode(document))
+        XCTAssertEqual(decoded, document)
+        XCTAssertEqual(try decoded.options(for: stock()).newsprintPaperColor?.hex, "#d6c2a0")
+        XCTAssertNil(try EditDocument().options(for: stock()).newsprintPaperColor)
+        for value in [EditDocument.Value.choice("#fff"), .choice("white"), .number(1)] {
+            XCTAssertThrowsError(try EditDocument([.paperColor: value]).options(for: stock()))
+        }
+    }
+
     func testUnknownFieldIsRefused() {
         XCTAssertThrowsError(try JSONDecoder().decode(EditDocument.self, from: Data(#"{"nope": 1}"#.utf8)))
     }

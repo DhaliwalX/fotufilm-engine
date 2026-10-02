@@ -26,6 +26,8 @@ const stock = {
         correction: true,
         viewingLights: [{ id: "reference" }, { id: "tungsten" }],
       },
+      "newsprint-color": { paperColor: "#0a0a0a", viewingLights: [] },
+      "newsprint-bw": { paperColor: "#f2ecdd", viewingLights: [] },
       negative: {
         negative: true,
         viewingLights: [{ id: "reference" }, { id: "d50" }],
@@ -126,4 +128,21 @@ test("a photo's Separation sets both colour pairs, as the Mac app's does", () =>
     { couplerReach: 1.2, couplerSelf: 2 });
   assert.deepEqual(withProfileField(profile, "couplerSelf", undefined),
     { couplerReach: 1, couplerRedGreen: 0.5, couplerGreenBlue: 2 });
+});
+
+
+test("newsprint paper color persists, follows the medium, and resets to its default", () => {
+  const edit = { ...defaultEdit("gold200"), medium: "newsprint-color", profile: { paperColor: "#D6C2A0" } };
+  const restored = parseEdit(JSON.stringify({ version: 1, edit }), ["gold200"]);
+  assert.deepEqual(restored.profile, edit.profile);
+  assert.deepEqual(profileRequestControls(restored, stock), edit.profile);
+  assert.deepEqual(profileRequestControls({ ...restored, medium: "newsprint-bw" }, stock), edit.profile);
+  assert.deepEqual(profileRequestControls({ ...restored, medium: "screen" }, stock), {});
+  assert.equal(hasProfileSettings(restored), true);
+  const reset = { ...restored, profile: withProfileField(restored.profile, "paperColor", undefined) };
+  assert.deepEqual(profileRequestControls(reset, stock), {});
+  assert.equal(hasProfileSettings(reset), false);
+  for (const paperColor of ["#fff", "ffffff", "white", "#gg0000", 123, null]) {
+    assert.throws(() => parseEdit(JSON.stringify({ version: 1, edit: { ...edit, profile: { paperColor } } }), ["gold200"]));
+  }
 });

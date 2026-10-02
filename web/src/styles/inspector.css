@@ -432,3 +432,36 @@
     text-overflow: ellipsis;
   }
 }
+
+@layer editor {
+  .paper-color-control {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .paper-color-control label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+  }
+  .paper-color-control input[type="color"] {
+    width: 56px;
+    height: 32px;
+    padding: 3px;
+    border: 1px solid currentColor;
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .paper-color-control input:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  .paper-color-control input:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+  }
+}

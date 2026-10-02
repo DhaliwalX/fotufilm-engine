@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "count": 18227,
+  "count": 18231,
   "fields": {
     "CURVES": {
       "offset": 0,
@@ -393,6 +393,10 @@
     "NEWSPRINT": {
       "offset": 18225,
       "count": 2
+    },
+    "NEWSPRINT_PAPER": {
+      "offset": 18227,
+      "count": 4
     }
   }
 }

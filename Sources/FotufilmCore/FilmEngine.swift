@@ -1413,6 +1413,9 @@ public struct FilmEngineInvocation {
         configuration += options.gateConfiguration(width: width, height: height)
         configuration += [printMedium == .newsprintColor ? 1 : (printMedium == .newsprintBW ? 2 : 0),
                           Float(min(width, height)) / 100]
+        let paperColor = printMedium.isNewsprint ? options.newsprintPaperColor : nil
+        let paperRGB = paperColor?.linearRGB ?? .zero
+        configuration += [paperRGB.x, paperRGB.y, paperRGB.z, paperColor == nil ? 0 : 1]
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0

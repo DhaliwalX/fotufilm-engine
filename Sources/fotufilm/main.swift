@@ -964,6 +964,11 @@ if let path = flags["--transport"] {
         options.layeredTransport = model
     } catch { fail("Invalid transport construction: \(error.localizedDescription)") }
 }
+if let hex = flags["--paper-color"] {
+    guard let color = NewsprintPaperColor(hex: hex) else { fail("--paper-color requires '#RRGGBB'") }
+    options.newsprintPaperColor = color
+}
+
 if let backend = flags["--transport-backend"] {
     switch backend {
     case "cpu": options.transportBackend = .cpu

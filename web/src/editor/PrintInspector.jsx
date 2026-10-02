@@ -139,6 +139,7 @@ export default function PrintInspector() {
             {
               <ProfileFields
                 fields={[
+                  "paperColor",
                   "printLight",
                   "printCorrection",
                   "negativeViewing",

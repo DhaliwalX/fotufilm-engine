@@ -111,6 +111,7 @@ extension EditorControlField {
             return .bespoke { !$0.paperFollowsStock }
         case .printFrame:
             return .bespoke { $0.printFrame != .none }
+        case .paperColor: return .unstored("a desktop/browser photo editor setting")
         case .printLight:
             return .bespoke { $0.printLightKelvin != nil }
         case .digitalReference:

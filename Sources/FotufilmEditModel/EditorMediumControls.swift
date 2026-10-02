@@ -18,6 +18,7 @@ extension EditorControlCatalogue {
             return stock.map { Enlarger.illuminates(stock: $0, paper: paper) } ?? false
         }
         switch field {
+        case .paperColor: return stock != nil && paper.isNewsprint
         case .printLight:
             return stock != nil && viewingLights(for: paper).count > 1
         case .printCorrection:

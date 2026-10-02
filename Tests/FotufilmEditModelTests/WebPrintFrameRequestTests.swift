@@ -4,9 +4,10 @@ import FotufilmCore
 
 final class WebPrintFrameRequestTests: XCTestCase {
     private func request(_ frame: PrintFrame, stock: String? = "gold200", format: String = "35mm",
-                         medium: String = "ektacolor-edge", width: Int = 300, height: Int = 200) throws -> Data {
+                         medium: String = "ektacolor-edge", width: Int = 300, height: Int = 200, paperColor: String? = nil) throws -> Data {
         var value: [String: Any] = ["kind": "print-frame", "frame": frame.rawValue,
             "format": format, "medium": medium, "width": width, "height": height]
+        if let paperColor { value["paperColor"] = paperColor }
         if let stock {
             value["stock"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(
                 XCTUnwrap(FilmStock.presetDefinitions[stock])))
@@ -59,6 +60,17 @@ final class WebPrintFrameRequestTests: XCTestCase {
             let plan = try result(request(.film, format: format))
             XCTAssertEqual(plan.configuration.geometry, FilmBorderGeometry.preset(format))
         }
+    }
+
+    func testNewsprintBorderUsesTheSelectedSRGBColor() throws {
+        for medium in ["newsprint-color", "newsprint-bw"] {
+            let actual = try result(request(.paper, medium: medium, paperColor: "#d6c2a0"))
+            XCTAssertEqual(actual.configuration.baseRGB, NewsprintPaperColor(hex: "#d6c2a0")!.linearRGB)
+            for (component, byte) in zip(actual.palette["base"]!, [214, 194, 160]) {
+                XCTAssertEqual(component, Float(byte) / 255, accuracy: 0.00001)
+            }
+        }
+        XCTAssertThrowsError(try result(request(.paper, medium: "newsprint-color", paperColor: "#xyz")))
     }
 
     func testInvalidDimensionsAndUnknownMaterialAreRejectedWithoutLosingWorker() throws {

@@ -35,6 +35,7 @@ export function profileControl(c, edit, stock) {
   return {
     ...c,
     scale: stock?.profile?.scales?.[c.field] || c.scale,
+    paperColor: c.field === "paperColor" ? medium?.paperColor : undefined,
     choices:
       c.field === "printLight"
         ? medium?.viewingLights || c.choices
@@ -46,6 +47,8 @@ export function profileControlAvailable(c, edit, stock) {
   const medium = profileMedium(edit, stock);
   if (c.section === "printLamp") return !!medium?.enlarger;
   switch (c.field) {
+    case "paperColor":
+      return !!medium?.paperColor;
     case "printLight":
       return (medium?.viewingLights.length || 0) > 1;
     case "screenExposure":
@@ -101,7 +104,9 @@ export function parseProfileSettings(edit) {
   for (const [field, value] of Object.entries(edit.profile || {})) {
     const c = PROFILE_CONTROLS.find((c) => c.field === field);
     let valid = false;
-    if (c?.scale)
+    if (c?.field === "paperColor")
+      valid = typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+    else if (c?.scale)
       valid =
         Number.isFinite(value) &&
         value >= c.scale.admittedMin &&

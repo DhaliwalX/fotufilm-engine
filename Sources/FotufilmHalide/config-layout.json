@@ -463,6 +463,11 @@
       "name": "NEWSPRINT",
       "count": 2,
       "doc": "Stylized halftone output: mode (0 off, 1 opaque color on black paper, 2 black ink on warm paper) and screen pitch in pixels. The pitch spans 100 cells across the shorter full-frame dimension; subpixel screens blend toward their mean coverage."
+    },
+    {
+      "name": "NEWSPRINT_PAPER",
+      "count": 4,
+      "doc": "Optional newsprint paper color: display-linear P3 red, green, blue, then enabled (0 retains the original medium, 1 uses this sheet)."
     }
   ]
 }

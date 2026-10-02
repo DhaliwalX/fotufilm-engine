@@ -39,6 +39,29 @@ final class NewsprintTests: XCTestCase {
         }
     }
 
+    func testCustomPaperColorMatchesBorderAndOnlyAffectsNewsprint() throws {
+        for hex in ["#ffffff", "#000000", "#D6C2A0", "#236A92"] {
+            let color = try XCTUnwrap(NewsprintPaperColor(hex: hex))
+            XCTAssertEqual(color.hex, hex.lowercased())
+            for paper in papers + [.ektacolorEdge] {
+                var o = options(paper)
+                o.newsprintPaperColor = color
+                let invocation = try FilmEngineInvocation(validating: TestStocks.negative,
+                    options: o, width: 500, height: 400)
+                let start = Int(FOTUFILM_CONFIG_NEWSPRINT_PAPER)
+                let rgb = paper.isNewsprint ? color.linearRGB : .zero
+                XCTAssertEqual(Array(invocation.configuration[start..<start + 4]),
+                    [rgb.x, rgb.y, rgb.z, paper.isNewsprint ? 1 : 0])
+                let frame = PrintFrameConfiguration(frame: .paper, formatID: "35mm",
+                    stockID: "portra400", paper: paper, newsprintPaperColor: color)
+                XCTAssertEqual(frame.baseRGB, paper.isNewsprint ? color.linearRGB : paper.frameBaseRGB(viewingKelvin: nil))
+            }
+        }
+        for invalid in ["white", "#fff", "ffffff", "#fffffff", "#gg0000", "#12345 "] {
+            XCTAssertNil(NewsprintPaperColor(hex: invalid))
+        }
+    }
+
     func testTintIsScreenedAndBWUsesOneInk() throws {
         try XCTSkipUnless(HalideBackend.isAvailable)
         let stock = TestStocks.negative
@@ -71,7 +94,8 @@ final class NewsprintTests: XCTestCase {
         var image = ImageBuffer(width: width, height: height)
         for c in 0..<3 { image.planes[c] = Array(repeating: [Float(0.5), 0.18, 0.07][c], count: image.pixelCount) }
         for paper in papers {
-            let o = options(paper)
+            var o = options(paper)
+            o.newsprintPaperColor = NewsprintPaperColor(hex: "#d6c2a0")
             let whole = try XCTUnwrap(HalideBackend.process(image: image, stock: TestStocks.negative, options: o))
             let invocation = try FilmEngineInvocation(validating: TestStocks.negative, options: o, width: width, height: height)
             let count = tw * th
@@ -115,7 +139,9 @@ final class NewsprintTests: XCTestCase {
         } } }
         for stock in [TestStocks.negative, TestStocks.monochrome, TestStocks.reversal] {
             for paper in papers {
-                let o = options(paper)
+              for hex in [nil, "#ffffff", "#000000", "#d6c2a0"] as [String?] {
+                var o = options(paper)
+                o.newsprintPaperColor = hex.flatMap(NewsprintPaperColor.init(hex:))
                 let cpu = try XCTUnwrap(HalideBackend.process(image: input, stock: stock, options: o))
                 let metal = try XCTUnwrap(gpu.processLinearFloat(rgba, width: width, height: height,
                     stock: stock, options: o, frameIndex: 0))
@@ -123,7 +149,8 @@ final class NewsprintTests: XCTestCase {
                 for c in 0..<3 { for i in 0..<input.pixelCount {
                     worst = max(worst, abs(cpu.planes[c][i] - metal[i * 4 + c]))
                 } }
-                XCTAssertLessThan(worst, 0.002, "\(paper.name) / \(stock.name)")
+                XCTAssertLessThan(worst, 0.002, "\(paper.name) / \(stock.name) / \(hex ?? "default")")
+              }
             }
         }
     }

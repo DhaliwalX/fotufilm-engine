@@ -173,6 +173,8 @@ public struct FotufilmEngine {
         ///
         /// Read it through `paper(for:)`; the stored value is the request, not the answer.
         public var paper: PrintPaper? = nil
+        /// Custom sheet color for newsprint; nil preserves the medium's original paper.
+        public var newsprintPaperColor: NewsprintPaperColor? = nil
         /// The lamp a physical print is viewed under, as a correlated colour temperature in
         /// kelvin: the CIE daylight series from 4000 K up (5003 is D50), and the Planckian
         /// radiator below it (2856 is CIE A). Bradford adaptation carries the lamp white to the

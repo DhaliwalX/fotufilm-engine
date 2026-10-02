@@ -29,7 +29,7 @@ public struct EditDocument: Equatable, Sendable {
     /// Controls resolved here rather than through an engine binding: they choose presets, compose
     /// with each other, or only mean something once the output medium is known.
     static let composed: Set<EditorControlField> = [
-        .gauge, .paper, .sceneLight, .sceneLightKelvin, .lensFilterStack, .metering,
+        .gauge, .paper, .paperColor, .sceneLight, .sceneLightKelvin, .lensFilterStack, .metering,
         .printerEnabled, .printerLamp, .printerExposure, .printerMagenta, .printerYellow,
         .couplerRedGreen, .couplerGreenBlue,
     ]
@@ -52,6 +52,10 @@ public struct EditDocument: Equatable, Sendable {
         }
         let paper = (options.paper ?? .default(for: stock)).resolved(for: stock)
 
+        if let hex = try choice(.paperColor) {
+            guard let color = NewsprintPaperColor(hex: hex) else { throw invalid(.paperColor) }
+            options.newsprintPaperColor = color
+        }
         options.sceneIlluminantKelvin = try sourceLight()
 
         let fitted = EditorLensFilters.resolve(try choices(.lensFilterStack) ?? [])
