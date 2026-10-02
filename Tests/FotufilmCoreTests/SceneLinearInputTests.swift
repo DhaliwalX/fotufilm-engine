@@ -24,33 +24,6 @@ final class SceneLinearInputTests: XCTestCase {
         }
     }
 
-    func testAutomaticSourceInterpretationPreservesDecodedRange() {
-        XCTAssertEqual(
-            FilmSourceInterpretation.automatic.resolvedConversion(
-                isRaw: false),
-            .preserveHDR)
-    }
-
-    func testSourceInterpretationOverridesResolveAtEngineBoundary() {
-        XCTAssertEqual(
-            FilmSourceInterpretation.fullRange.resolvedConversion(
-                isRaw: false),
-            .preserveHDR)
-        XCTAssertEqual(
-            FilmSourceInterpretation.standardRange.resolvedConversion(
-                isRaw: false),
-            .platformToneMap)
-    }
-
-    func testRawAlwaysUsesSceneLinearInterpretation() {
-        for interpretation in FilmSourceInterpretation.allCases {
-            XCTAssertEqual(
-                interpretation.resolvedConversion(
-                    isRaw: true),
-                .preserveHDR)
-        }
-    }
-
     func testClientSuppliedConverterRunsAtEngineInputBoundary() {
         let source: [Float] = [0.1, 0.2, 0.3, 1]
         var destination = [Float](repeating: 0, count: source.count)

@@ -49,16 +49,46 @@ final class HeadroomPlacementTests: XCTestCase {
         XCTAssertEqual(previous, -1)
     }
 
+    // MARK: The kept range
+
+    func testTheWholeRangeKeptChangesNothing() {
+        XCTAssertEqual(HDRHighlightRange.curvature(headroom: 8, range: 1), 0)
+        XCTAssertEqual(HDRHighlightRange.curvature(headroom: 1, range: 0), 0)
+        XCTAssertEqual(HDRHighlightRange.keptHeadroom(1, range: 0.3), 1)
+        XCTAssertEqual(HDRHighlightRange.gain(peak: 7, curvature: 0), 1)
+    }
+
+    func testTheDeclaredPeakLandsOnTheKeptHeadroom() {
+        for range in [Float](arrayLiteral: 0, 0.25, 0.5, 0.75) {
+            let kept = HDRHighlightRange.keptHeadroom(8, range: range)
+            XCTAssertEqual(log2(kept), 3 * range, accuracy: 1e-5)
+            let curvature = HDRHighlightRange.curvature(headroom: 8, range: range)
+            XCTAssertEqual(8 * HDRHighlightRange.gain(peak: 8, curvature: curvature), kept,
+                           accuracy: kept * 1e-4, "range \(range)")
+            // Below the knee nothing moves; above it the tones keep their order.
+            XCTAssertEqual(HDRHighlightRange.gain(peak: 0.5, curvature: curvature), 1)
+            var previous: Float = 0
+            for peak in stride(from: Float(0.75), through: 16, by: 0.25) {
+                let compressed = peak * HDRHighlightRange.gain(peak: peak, curvature: curvature)
+                XCTAssertGreaterThan(compressed, previous)
+                previous = compressed
+            }
+        }
+    }
+
     // MARK: The developed print
 
     private func developedGreen(
         _ exposure: Float, stock: FilmStock, headroom: Float,
+        range: Float = 1, rollOff: Float = 1,
         _ gpu: HalideMetalFilmRenderer
     ) throws -> Float {
         let side = 64
         var options = FotufilmEngine.Options()
         options.grainScale = 0
         options.sceneHeadroom = headroom
+        options.hdrRange = range
+        options.hdrRollOff = rollOff
         var pixels = [Float](repeating: 1, count: side * side * 4)
         for index in 0..<(side * side) {
             pixels[index * 4] = exposure
@@ -95,6 +125,33 @@ final class HeadroomPlacementTests: XCTestCase {
             XCTAssertLessThan(placedHigh, flatHigh,
                               "\(stock.name): the brightest light did not come down")
         }
+    }
+
+    func testAKeptRangeCompressesOnlyTheLightAboveTheKnee() throws {
+        guard let gpu = HalideMetalFilmRenderer.shared else { throw XCTSkip("no Metal") }
+        let stock = TestStocks.negative
+        // With no roll-off the range is the only thing that moves: light under the knee prints
+        // the same, the brightest light prints lower the less range is kept.
+        let below = try developedGreen(0.5, stock: stock, headroom: 8, range: 1, rollOff: 0, gpu)
+        let belowKept = try developedGreen(0.5, stock: stock, headroom: 8, range: 0, rollOff: 0, gpu)
+        XCTAssertEqual(belowKept, below, "light under the knee moved")
+        let whole = try developedGreen(6, stock: stock, headroom: 8, range: 1, rollOff: 0, gpu)
+        let half = try developedGreen(6, stock: stock, headroom: 8, range: 0.5, rollOff: 0, gpu)
+        let none = try developedGreen(6, stock: stock, headroom: 8, range: 0, rollOff: 0, gpu)
+        XCTAssertLessThan(half, whole)
+        XCTAssertLessThan(none, half)
+    }
+
+    func testRollOffScalesTheHighlightFit() throws {
+        guard let gpu = HalideMetalFilmRenderer.shared else { throw XCTSkip("no Metal") }
+        let stock = TestStocks.negative
+        let none = try developedGreen(6, stock: stock, headroom: 6, rollOff: 0, gpu)
+        let automatic = try developedGreen(6, stock: stock, headroom: 6, gpu)
+        let strong = try developedGreen(6, stock: stock, headroom: 6, rollOff: 2, gpu)
+        XCTAssertEqual(none, try developedGreen(6, stock: stock, headroom: 1, gpu),
+                       "no roll-off develops as if nothing were declared")
+        XCTAssertLessThan(automatic, none)
+        XCTAssertLessThan(strong, automatic)
     }
 
     func testMidGreyStaysAnchoredUnderDeclaredHeadroom() throws {

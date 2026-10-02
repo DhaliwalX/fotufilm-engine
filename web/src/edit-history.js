@@ -58,7 +58,7 @@ function stepKind(before, after) {
     return "Crop & Rotate";
   if (changed(before, after, ["filters", "filterMetering"])) return "Lens Filters";
   if (changed(before, after, ["lens"])) return "Lens Correction";
-  if (changed(before, after, ["sourceInterpretation"])) return "Source Interpretation";
+  if (profileChanged(before, after, (field) => field.startsWith("hdr"))) return "HDR Highlights";
   if (
     changed(before, after, ["sceneLight"]) ||
     paramsChanged(before, after, ["sceneLightKelvin"])

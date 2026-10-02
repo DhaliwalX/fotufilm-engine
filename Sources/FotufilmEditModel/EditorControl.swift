@@ -9,7 +9,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case autoAdjustment
     case saturation, vibrance
     case sceneLight, sceneLightKelvin, cameraPreflash
-    case sourceInterpretation
+    case hdrRange, hdrRollOff
 
     case stock, gauge, frameCoverage
     case grain, grainMottle, mottleOverride, mottleShare, grainModel, grainAnimation, seed
@@ -57,7 +57,7 @@ public enum EditorControlSection: String, CaseIterable, Sendable {
     case filmStock, filmGrain, filmEmulsion, filmLab
     case lensGlass, lensCorrection
     case lightExposure, lightBalance, lightColor, lightGrade
-    case sourceInterpretation
+    case hdrHighlights
     case printPaper, printLamp
     case frameGeometry, frameLocal
     case pipeline
@@ -66,7 +66,7 @@ public enum EditorControlSection: String, CaseIterable, Sendable {
         switch self {
         case .filmStock, .filmGrain, .filmEmulsion, .filmLab: return .film
         case .lensGlass, .lensCorrection: return .lens
-        case .lightExposure, .lightBalance, .lightColor, .lightGrade, .sourceInterpretation: return .light
+        case .lightExposure, .lightBalance, .lightColor, .lightGrade, .hdrHighlights: return .light
         case .printPaper, .printLamp: return .print
         case .frameGeometry, .frameLocal: return .frame
         case .pipeline: return .pipeline
@@ -82,7 +82,7 @@ public enum EditorControlSection: String, CaseIterable, Sendable {
         case .lensGlass: return "Filters"
         case .lensCorrection: return "Correction"
         case .lightExposure: return "Exposure"
-        case .sourceInterpretation: return "Source Interpretation"
+        case .hdrHighlights: return "HDR Highlights"
         case .lightBalance: return "Balance"
         case .lightColor: return "Color"
         case .lightGrade: return "Grade"
@@ -102,7 +102,7 @@ public enum EditorControlSection: String, CaseIterable, Sendable {
     /// what belongs to one photograph — its framing, how its source is read, or its local mask.
     public var transfersByDefault: Bool {
         switch self {
-        case .sourceInterpretation, .frameGeometry, .frameLocal, .pipeline: return false
+        case .hdrHighlights, .frameGeometry, .frameLocal, .pipeline: return false
         default: return true
         }
     }

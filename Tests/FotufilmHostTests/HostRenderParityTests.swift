@@ -110,25 +110,17 @@ final class HostRenderParityTests: XCTestCase {
                        .legacy)
     }
 
-    func testStandardRangeIsDecodedOnceAndKeepsCaptureFacts() throws {
-        let image = HostImage(rgba: [2, 1, 0.5, 1], width: 1, height: 1, contentHeadroom: 4)
-        let standard = HostImage(rgba: [0.8, 0.5, 0.3, 1], width: 1, height: 1, contentHeadroom: 1)
-        image.sensorFrame = SensorFrame.equivalentFocal(focalLengthMM: 6, equivalent35mmMM: 26,
-                                                     pixelWidth: 4000, pixelHeight: 3000)
-        image.originalFile = URL(fileURLWithPath: "/synthetic/photo.heic")
-        var count = 0
-        image.decodeStandardRange = { count += 1; return standard }
-        XCTAssertTrue(try image.interpreted(standardRange: false) === image)
-        XCTAssertEqual(count, 0)
-        XCTAssertTrue(try image.interpreted(standardRange: true) === standard)
-        XCTAssertTrue(try image.interpreted(standardRange: true) === standard)
-        XCTAssertEqual(count, 1)
-        XCTAssertEqual(standard.sensorFrame, image.sensorFrame)
-        XCTAssertEqual(standard.originalFile, image.originalFile)
-        XCTAssertEqual(standard.contentHeadroom, 1)
-        XCTAssertTrue(try image.interpreted(standardRange: false) === image)
-        XCTAssertTrue(try edit(#", "sourceInterpretation":"standardRange""#).readsStandardRange)
-        XCTAssertFalse(try edit(#", "sourceInterpretation":"fullRange""#).readsStandardRange)
+    func testHDRRangeAndRollOffReachTheEngine() throws {
+        let stock = try XCTUnwrap(FilmStock.presets["gold200"])
+        let options = try JSONDecoder().decode(WebNativeEdit.self, from: Data("""
+        {"edit":{"stock":"gold200","params":{}},
+         "profileRequest":{"controls":{"hdrRange":0.25,"hdrRollOff":2}}}
+        """.utf8)).options(for: stock)
+        XCTAssertEqual(options.hdrRange, 0.25)
+        XCTAssertEqual(options.hdrRollOff, 2)
+        let plain = try edit().options(for: stock)
+        XCTAssertEqual(plain.hdrRange, 1)
+        XCTAssertEqual(plain.hdrRollOff, 1)
     }
 
     func testCropCoverageDoesNotChangeWithPreviewRounding() throws {

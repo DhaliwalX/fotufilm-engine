@@ -42,6 +42,8 @@ export function profileControl(c, edit, stock) {
   };
 }
 export function profileControlAvailable(c, edit, stock) {
+  // An HDR source's range is read the same with or without a film.
+  if (c.section === "hdrHighlights") return true;
   if (!stock?.available.includes(c.field)) return false;
   const medium = profileMedium(edit, stock);
   if (c.section === "printLamp") return !!medium?.enlarger;

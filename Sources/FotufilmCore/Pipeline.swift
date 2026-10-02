@@ -11,6 +11,13 @@ public struct FotufilmEngine {
         /// Source range above diffuse white as a linear multiple. One is SDR identity. HDR values
         /// drive `AutoAdjustment.headroomHighlights` to fit declared range into measured latitude.
         public var sceneHeadroom: Float = 1
+        /// The fraction of `sceneHeadroom`'s stops above white that reaches the film, 0...1; the
+        /// rest is compressed into it (`HDRHighlightRange`). 1 keeps the whole declared range.
+        public var hdrRange: Float = 1
+        /// How strongly the kept range is rolled off into the film's latitude, 0...2: a multiple
+        /// of the automatic highlight shaping `AutoAdjustment.headroomHighlights` solves. 0 adds
+        /// none, and the film's own shoulder takes the light.
+        public var hdrRollOff: Float = 1
         /// Spectral scene-light edit: Kelvin is a mired displacement from D65 when capture
         /// light is supplied; tint adds locus-relative delta-uv units. Input RGB must already
         /// be neutralized for its capture light. These controls never apply RGB correction.

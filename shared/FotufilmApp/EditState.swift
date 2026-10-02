@@ -11,27 +11,6 @@ import FotufilmCore
 import FotufilmEditModel
 #endif
 
-extension FilmSourceInterpretation {
-    var label: String {
-        switch self {
-        case .automatic: return "Automatic"
-        case .fullRange: return "Full Range"
-        case .standardRange: return "Standard Range"
-        }
-    }
-
-    var detail: String {
-        switch self {
-        case .automatic:
-            return "Preserve the file’s decoded highlight range"
-        case .fullRange:
-            return "Preserve all decoded highlight range"
-        case .standardRange:
-            return "Tone-map HDR before film exposure"
-        }
-    }
-}
-
 /// A selectable film stock with UI metadata.
 struct StockPreset: Identifiable {
     let id: String
@@ -270,9 +249,10 @@ struct EditState: Equatable {
     /// The gauge the user asked for, or nil to let the film choose.
     var chosenFormatID: String? = AppSettings.storedFormatID
 
-    /// How this document interprets a still source's dynamic range. Automatic follows metadata;
-    /// overrides stay with this edit and never change the app's defaults.
-    var sourceInterpretation = FilmSourceInterpretation.automatic
+    /// Share of an HDR source's stops above white kept, and the strength of the highlight fit
+    /// that eases them into the film. Both stay with this edit.
+    var hdrRange = 1.0
+    var hdrRollOff = 1.0
 
     var exposure = 0.0  // EV
     /// Scene illuminant, in mireds so the slider is perceptually even.

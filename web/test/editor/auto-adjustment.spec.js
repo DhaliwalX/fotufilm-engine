@@ -128,16 +128,10 @@ test("Auto measures neutrally and uses the current crop and source interpretatio
         ],
       },
     });
-    const sdr = await solveAutoAdjustment({
-      image,
-      session,
-      edit: { ...edit, sourceInterpretation: "standardRange" },
-    });
-    return { original, modified, cropped, sdr };
+    return { original, modified, cropped };
   });
   expect(measured.original).toEqual(measured.modified);
   expect(measured.cropped.ev).toBeGreaterThan(measured.original.ev + 2);
-  expect(measured.sdr.ev).toBeGreaterThan(measured.original.ev + 2);
 });
 
 test("Auto menu and shortcut apply undoable settings, re-solve on film changes and disengage for manual edits", async ({ page }, testInfo) => {

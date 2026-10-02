@@ -11,7 +11,6 @@ import { loadPrintFrame } from './backend/browser-print-frame.js'
 import { renderPrintFrame16 } from './print-frame-16.js'
 import { renderPrintFrame } from './print-frame-renderer.js'
 import { lensIsActive } from './lens-correction.js'
-import { interpretedImage } from './source-interpretation.js'
 import { resolveLensPlan } from './lens-plan.js'
 import { loadLensCatalogue } from './lens-catalogue.js'
 import { loadFilmProfile } from './film-profile.js'
@@ -255,7 +254,6 @@ export class RenderSession {
     const catalogue = lensIsActive(edit.lens) ? await loadLensCatalogue() : null
     const key = JSON.stringify([
       catalogue?.revision,
-      edit.sourceInterpretation,
       maxEdge,
       displaySize,
       cropMode,
@@ -275,7 +273,7 @@ export class RenderSession {
       ? await resolveLensPlan(image, edit.lens, onProgress)
       : null
     const lensTable = lensPlan && !lensPlan.identity ? lensPlan.table : null
-    const input = interpretedImage(image, edit.sourceInterpretation)
+    const input = image
     const perspective = await loadPerspective(input, edit, onProgress)
     const floating =
       displaySize ||

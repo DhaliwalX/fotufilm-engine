@@ -297,6 +297,22 @@
       ],
       "rendering": "multicolor"
     },
+    "fotu.slider.hdrRange.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.hdrRange.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.hdrRollOff.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.hdrRollOff.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
     "fotu.slider.highlights.high": {
       "colours": [],
       "rendering": "hierarchical"
@@ -897,6 +913,14 @@
     "halationReturn": {
       "high": "fotu.slider.halationReturn.high",
       "low": "fotu.slider.halationReturn.low"
+    },
+    "hdrRange": {
+      "high": "fotu.slider.hdrRange.high",
+      "low": "fotu.slider.hdrRange.low"
+    },
+    "hdrRollOff": {
+      "high": "fotu.slider.hdrRollOff.high",
+      "low": "fotu.slider.hdrRollOff.low"
     },
     "highlights": {
       "high": "fotu.slider.highlights.high",

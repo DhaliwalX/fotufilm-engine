@@ -200,6 +200,7 @@ public enum EditorControlCatalogue {
     ]
 
     static let webBaked: String = "reshapes the sealed pack rather than a configuration slot"
+    static let hdrInputOmission: String = "the host hands over its own scene-referred range"
     static let noCurveFlag: String = "no flag carries a curve"
     static let filmModelSetting: String = "Film Model settings choose it for every photograph"
 
@@ -1454,20 +1455,35 @@ public enum EditorControlCatalogue {
             documentation: "Grades the sRGB-encoded signal, where a grading suite's corrector works, instead of display-linear light."),
     ] + gradeBands + [
         EditorControl(
-            .sourceInterpretation, title: "Highlights",
-            detail: "Choose how the decoded highlight range enters film exposure.",
-            section: .sourceInterpretation,
-            kind: .menu(.fixed([
-                EditorMenuChoice(0, "Automatic", detail: "Preserve the file’s decoded highlight range", id: "automatic"),
-                EditorMenuChoice(1, "Full Range", detail: "Preserve all decoded highlight range", id: "fullRange"),
-                EditorMenuChoice(2, "Standard Range", detail: "Tone-map HDR before film exposure", id: "standardRange"),
-            ])),
-            surfaces: [.app, .desktop, .web],
-            omitted: hostsOwnIt.filter { $0.key != .web }.merging([
-                .android: "processed HDR interpretation is not offered on Android yet",
-            ]) { $1 },
-            web: .runtime,
-            documentation: "Automatic and Full Range preserve decoded HDR highlights. Standard Range uses the platform SDR rendition before film exposure. RAW always remains scene-linear."),
+            .hdrRange, title: "Range",
+            detail: "Choose how much of an HDR photo's range above white reaches the film. The rest is compressed smoothly into it.",
+            section: .hdrHighlights,
+            kind: .slider(EditorControlScale(0...1, neutral: 1, unit: .percent)),
+            binding: .hdrRange,
+            surfaces: [.app, .desktop, .web, .cli],
+            omitted: [
+                .resolve: hdrInputOmission, .finalcut: hdrInputOmission,
+                .android: "Android reads no HDR headroom yet",
+            ],
+            web: .profile,
+            commandLine: CommandLineFlag("--hdr-range", placeholder: "<f>",
+                                         help: "Share of an HDR source's stops above white kept, 0...1 (default: 1)"),
+            documentation: "Keeps a share of the stops an HDR photograph records above diffuse white. Light above a knee just under white is compressed in log2 so the brightest highlight lands at the kept range, hue held; 0% fits it to white, 100% keeps all of it."),
+        EditorControl(
+            .hdrRollOff, title: "Roll-Off",
+            detail: "Adjust how strongly the kept HDR highlights are eased into the film's latitude.",
+            section: .hdrHighlights,
+            kind: .slider(EditorControlScale(0...2, neutral: 1, unit: .multiplier)),
+            binding: .hdrRollOff,
+            surfaces: [.app, .desktop, .web, .cli],
+            omitted: [
+                .resolve: hdrInputOmission, .finalcut: hdrInputOmission,
+                .android: "Android reads no HDR headroom yet",
+            ],
+            web: .profile,
+            commandLine: CommandLineFlag("--hdr-roll-off", placeholder: "<f>",
+                                         help: "Strength of the automatic HDR highlight shaping, 0...2 (default: 1)"),
+            documentation: "Scales the highlight shaping that fits an HDR photograph's kept range into the film's latitude: 0 adds none and leaves the highlights to the film's shoulder, 1 is the automatic fit, 2 doubles it."),
     ]
 
     private static let print: [EditorControl] = [
@@ -2079,8 +2095,7 @@ public extension EngineOptionCoverage {
         "sceneHighlightStops": .derived("whole-frame highlight meter, optionally smoothed by a video host"),
         "unexposedEdge": .derived(
             "set by the host on the piece of film larger than the aperture it develops for Emulsion Border"),
-        "sceneHeadroom": .derived(
-            "the source interpretation the overflow menu sets, against the source's declared range"),
+        "sceneHeadroom": .derived("the range the source declares above diffuse white"),
         "grainMottleSizeRatio": .derived(
             "how coarse the mottle is, as a multiple of the emulsion's own clump; a still keeps the "
             + "sheet's figure and a clip's roads complete an explicit share with the coarser delivery ratio"),

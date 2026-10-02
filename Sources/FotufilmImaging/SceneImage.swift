@@ -56,18 +56,12 @@ public struct SceneImage {
         return CGImagePropertyOrientation(rawValue: value.uint32Value)
     }
 
-    /// `standardRange` reads a processed photograph as the apps' Standard Range source
-    /// interpretation does (`FilmSourceInterpretation.standardRange`): the platform's SDR
-    /// rendition, with nothing above diffuse white for the film to meter. Camera RAW always keeps
-    /// its scene-linear latitude.
     /// `targetLongEdge` demosaics a RAW no larger than needed for that size (`RawDecode`), as
     /// the Mac app's previews do; other files decode whole.
-    public static func decode(url: URL, standardRange: Bool = false,
-                              targetLongEdge: Int? = nil) throws -> SceneImage {
+    public static func decode(url: URL, targetLongEdge: Int? = nil) throws -> SceneImage {
         let path = url.path
         let isRaw = RawDecode.isRaw(url: url)
-        let toneMapped = standardRange && !isRaw
-        let declaredHeadroom = isRaw || toneMapped ? nil : GainMapHeadroom.declared(url: url)
+        let declaredHeadroom = isRaw ? nil : GainMapHeadroom.declared(url: url)
         // A camera RAW renders through the context the Mac app decodes it with (`FilmRender`'s:
         // linear Rec.2020 working space in full float), whose demosaic lands a few hundredths of a
         // percent away from the software renderer's.
@@ -97,9 +91,6 @@ public struct SceneImage {
                 camera: RawDecode.cameraIdentity(url: url),
                 sceneKelvin: sceneKelvin)
             image = raw.outputImage
-        } else if toneMapped {
-            associatedEXRColor = associatedOpenEXRColor(url: url)
-            image = CIImage(contentsOf: url, options: [.toneMapHDRtoSDR: true])
         } else {
             associatedEXRColor = associatedOpenEXRColor(url: url)
             if #available(macOS 14.0, *) {
@@ -132,7 +123,7 @@ public struct SceneImage {
             }
         }
         // An HLG or PQ file decodes as display light; its range is the scene's, stated by its transfer.
-        let hdrTransfer = isRaw || toneMapped ? nil : GainMapHeadroom.transfer(url: url)
+        let hdrTransfer = isRaw ? nil : GainMapHeadroom.transfer(url: url)
         if let hdrTransfer { contentHeadroom = hdrTransfer.sceneHeadroom }
         guard var ci = image else {
             throw Failure(description: "Could not read image: \(path)")

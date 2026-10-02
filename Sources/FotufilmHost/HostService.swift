@@ -267,17 +267,7 @@ public final class HostService {
         let data = Data(bytes: bytes.baseAddress!, count: bytes.count)
         try data.write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
-        let image = try HostImage.open(file)
-        // Keep uploaded bytes for a later source-interpretation change. Restore the decoder's
-        // private URL only while it reads; do not decode the full-range image a second time.
-        if let decode = image.decodeStandardRange {
-            image.decodeStandardRange = {
-                try data.write(to: file, options: .atomic)
-                defer { try? FileManager.default.removeItem(at: file) }
-                return try decode()
-            }
-        }
-        return try imported(image)
+        return try imported(HostImage.open(file))
     }
 
     /// Export Original: the camera RAW file itself, copied where the save panel chose. No edit
@@ -381,9 +371,8 @@ public final class HostService {
         } catch {
             throw HostEngine.Failure(description: "Unreadable render request: \(error)")
         }
-        let opened = try source ?? self.image(request.handle)
-        opened.video?.select(params)
-        let image = try opened.interpreted(standardRange: decoded.readsStandardRange)
+        let image = try source ?? self.image(request.handle)
+        image.video?.select(params)
         let geometry = (request.cropMode == true ? request.edit.uncropped() : request.edit)
             .snapped(width: image.width, height: image.height)
         // A viewport asks for part of a larger virtual picture: develop the whole frame at that

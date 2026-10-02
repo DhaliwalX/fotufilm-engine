@@ -135,6 +135,12 @@ struct CreativeScene {
 /// tone masks key to, the luminance the chroma is taken about, and the colourfulness vibrance
 /// weighs. A grey card lit by the declared illuminant is then grey to all three, and desaturating
 /// it leaves it grey rather than the colour of the adaptation. Gains of exactly 1 change no bit.
+///
+/// Before them, an HDR source's light above the knee is compressed into the headroom its edit
+/// keeps (FOTUFILM_CONFIG_HDR_RANGE, `HDRHighlightRange`): s stops above the knee become
+/// s / (1 + c s), each pixel scaled by its brightest channel's gain so highlight hue holds. It
+/// reads the source as decoded, which is what its declared headroom describes. Curvature 0, a
+/// full range or an SDR source, changes no bit.
 inline CreativeScene creative_exposure(Halide::ImageParam &configuration,
                                        Halide::Expr red, Halide::Expr green,
                                        Halide::Expr blue, Halide::Expr frame_x,
@@ -144,9 +150,19 @@ inline CreativeScene creative_exposure(Halide::ImageParam &configuration,
     // No clamp: the only clamp on the scene path is the exposure domain's physical-light
     // boundary. Everything here — tone gain, the luma lerp, the white-balance gains — is linear,
     // so rare out-of-Rec.2020 components pass through intact to be judged there.
-    Expr r0 = red * configuration(FOTUFILM_CONFIG_WHITE_BALANCE);
-    Expr g0 = green * configuration(FOTUFILM_CONFIG_WHITE_BALANCE + 1);
-    Expr b0 = blue * configuration(FOTUFILM_CONFIG_WHITE_BALANCE + 2);
+    Expr knee = configuration(FOTUFILM_CONFIG_HDR_RANGE);
+    Expr curvature = configuration(FOTUFILM_CONFIG_HDR_RANGE + 1);
+    Expr source_peak = Halide::max(red, Halide::max(green, blue));
+    Expr over = fs_log(Halide::max(source_peak / knee, 1.0f), approximate)
+        * (1.0f / 0.6931472f);
+    Expr range_ev = over / (1.0f + curvature * over) - over;
+    Expr range_gain = Halide::select(
+        curvature > 0.0f && source_peak > knee,
+        approximate ? Halide::fast_exp(range_ev * 0.6931472f) : Halide::pow(2.0f, range_ev),
+        1.0f);
+    Expr r0 = red * range_gain * configuration(FOTUFILM_CONFIG_WHITE_BALANCE);
+    Expr g0 = green * range_gain * configuration(FOTUFILM_CONFIG_WHITE_BALANCE + 1);
+    Expr b0 = blue * range_gain * configuration(FOTUFILM_CONFIG_WHITE_BALANCE + 2);
 
     constexpr float kToneEV = 3.0f;
     constexpr float kToneWindowStops = 6.0f;

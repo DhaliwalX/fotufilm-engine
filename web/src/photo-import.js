@@ -70,7 +70,7 @@ export async function importPhoto(
           throw new Error(
             "The HDR and standard image orientations do not match.",
           );
-        image = new LinearImage(decoded, standard);
+        image = new LinearImage(decoded);
         image.hdr = {
           format: "JPEG gain map",
           referenceGain: decoded.referenceGain,

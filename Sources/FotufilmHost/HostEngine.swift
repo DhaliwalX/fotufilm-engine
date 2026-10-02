@@ -35,11 +35,6 @@ public final class HostImage {
     var originalFile: URL?
     /// The frame the file says its camera exposed, which a gauge nobody picked follows.
     var sensorFrame: SensorFrame?
-    /// Decodes the file again as the Standard Range source interpretation reads it: the
-    /// platform's SDR rendition, nothing above white. Nil where it reads the same (camera RAW, a
-    /// video, a converted scan).
-    var decodeStandardRange: (() throws -> HostImage)?
-    private var standardRangeImage: HostImage?
     /// Decodes the file again no larger than needed for a long edge (twice it, for a RAW's
     /// demosaic), as the Mac app decodes an uncropped preview; nil where it reduces the full decode.
     var decodeReduced: ((_ longEdge: Int) throws -> (rgba: [Float], width: Int, height: Int))?
@@ -93,23 +88,6 @@ public final class HostImage {
         self.height = height
         self.contentHeadroom = contentHeadroom
         self.frames = frames
-    }
-
-    /// The photograph as an edit with this source interpretation develops it, decoded once and
-    /// kept: the Mac app tone-maps a processed photograph to SDR for Standard Range.
-    func interpreted(standardRange: Bool) throws -> HostImage {
-        guard standardRange, let decodeStandardRange else { return self }
-        lock.lock()
-        defer { lock.unlock() }
-        if let standardRangeImage { return standardRangeImage }
-        let image = try decodeStandardRange()
-        image.lensShot = lensShot
-        image.captureMetadata = captureMetadata
-        image.sensorFrame = sensorFrame
-        image.isRAW = isRAW
-        image.originalFile = originalFile
-        standardRangeImage = image
-        return image
     }
 
     public func renderSize(maxEdge: Int) -> (width: Int, height: Int) {
