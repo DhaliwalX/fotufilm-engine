@@ -1153,6 +1153,7 @@ public struct FilmEngineInvocation {
             levels = (SIMD3(repeating: screen.scale), screen.shift)
         } else if printMedium == .labScan {
             levels = LabScanTiming.levels(for: stock, sceneHighlightStops: options.sceneHighlightStops,
+                                          sceneMedianStops: options.sceneToneStops?.x,
                                           exposureEV: options.exposureEV, masking: recordContrast)
         } else {
             levels = (.one, 0)

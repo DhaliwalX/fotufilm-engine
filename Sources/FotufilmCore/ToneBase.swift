@@ -482,7 +482,7 @@ extension FilmEngineInvocation {
             let dodge = LabScanTiming.dodge(scene, strength: meterDodging)
             let levels = LabScanTiming.levels(
                 for: stock, sceneHighlightStops: LabScanTiming.highlight(scene),
-                exposureEV: meterExposureEV, masking: meterMasking)
+                sceneMedianStops: scene.median, exposureEV: meterExposureEV, masking: meterMasking)
             applyMeteredLevels(MeteredLevels(scale: levels.scale,
                                              shift: SIMD3(repeating: levels.shift),
                                              toneKey: dodge.key, shadowLift: dodge.lift,

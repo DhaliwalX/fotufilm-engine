@@ -55,6 +55,39 @@ final class LabScanTimingTests: XCTestCase {
         XCTAssertEqual(metered.scale.y, unexposed.scale.y, accuracy: 1e-5)
     }
 
+    func testFlatFrameKeepsItsKeyInsteadOfPrintingItsHighlightWhite() throws {
+        let film = try XCTUnwrap(FilmStock.named("portra400"))
+        // A frame whose brightest content is only two stops over its mid-grey median.
+        let placed = LabScanTiming.levels(for: film, sceneHighlightStops: 2)
+        let keyed = LabScanTiming.levels(for: film, sceneHighlightStops: 2, sceneMedianStops: 0)
+        XCTAssertEqual(keyed.scale, placed.scale)
+        XCTAssertGreaterThan(keyed.shift, placed.shift)
+        // Its median scans where the fixed profile scans mid-grey.
+        let median = LabScanTiming.reads(for: film, stops: 0).y
+        XCTAssertEqual(scanDensity(film, read: median, scale: keyed.scale.y, shift: keyed.shift),
+                       scanDensity(film, read: median, scale: 1, shift: 0), accuracy: 0.005)
+        // The highlight then scans short of white.
+        let high = LabScanTiming.reads(for: film, stops: 2).y
+        XCTAssertGreaterThan(scanDensity(film, read: high, scale: keyed.scale.y, shift: keyed.shift),
+                             LabScanTiming.whiteDensity + 0.05)
+    }
+
+    func testKeyTakesOutHalfAMisexposureAndNeverLiftsPastThePoints() throws {
+        let film = try XCTUnwrap(FilmStock.named("portra400"))
+        let fixed = { (stops: Float) in
+            self.scanDensity(film, read: LabScanTiming.reads(for: film, stops: stops).y,
+                             scale: 1, shift: 0)
+        }
+        // Two stops under: the median scans as one stop under would at the fixed profile.
+        let under = LabScanTiming.levels(for: film, sceneHighlightStops: 0, sceneMedianStops: -2)
+        XCTAssertEqual(scanDensity(film, read: LabScanTiming.reads(for: film, stops: -2).y,
+                                   scale: under.scale.y, shift: under.shift),
+                       fixed(-1), accuracy: 0.005)
+        // A bright highlight bounds the key: the frame is never lighter than its placement.
+        let wide = LabScanTiming.levels(for: film, sceneHighlightStops: 6, sceneMedianStops: -4)
+        XCTAssertEqual(wide.shift, LabScanTiming.levels(for: film, sceneHighlightStops: 6).shift)
+    }
+
     func testBacklitFrameOpensUpPartway() {
         XCTAssertEqual(LabScanTiming.highlight(.init(median: 0, bright: 2, dark: -3)), 2)
         XCTAssertEqual(LabScanTiming.highlight(.init(median: 0, bright: 5, dark: -3)), 4)

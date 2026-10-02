@@ -1,10 +1,11 @@
 import Foundation
 
 /// Lab Scan's per-frame levels: the auto setup a minilab scanner runs on every frame before the
-/// operator sees it. The scanner sets the frame's black point on the film base and its white
-/// point on the frame's brightest content, steepening the scan within a limit to reach both; a
-/// frame too dense to need it keeps the stock's contrast and only shifts. It has no controls; an
-/// unmetered frame scans at the fixed profile.
+/// operator sees it. The scanner steepens the scan, within a limit, until the frame's brightest
+/// content would reach white and the film base black, and sets its density on the frame's median,
+/// taking out part of the frame's misexposure; neither the highlight nor the base may then scan
+/// past its point. A flat frame keeps its key instead of having its brightest content printed
+/// white. An unmetered frame scans at the fixed profile.
 ///
 /// The levels ride the print stage's existing slots, as Digital Reference's do: `scale`
 /// multiplies the records' contrast and `shift` moves the scan curve's exposure origin, both in
@@ -26,6 +27,9 @@ public enum LabScanTiming {
     public static let highlightSpan: Float = 3
     public static let backlightShare: Float = 0.5
     public static let backlightMaxStops: Float = 2
+
+    /// The share of the median's distance from mid-grey the scanner's density takes out.
+    public static let keyShare: Float = 0.5
 
     /// The highlight the white point is set on, from the whole-frame measurement, in stops.
     static func highlight(_ scene: AutoAdjustment.SceneStops) -> Float {
@@ -93,13 +97,15 @@ public enum LabScanTiming {
     }
 
 
-    /// The levels for a frame whose highlight was metered at `sceneHighlightStops`, after the
-    /// edit's `exposureEV`, printed through records of contrast `masking`. The scanner sets up the
-    /// negative as it was exposed, so the edit's exposure is taken back out of the reading and
-    /// still lightens or darkens the scan. Green sets both points; red and blue keep the timed
-    /// mid-grey and are steepened only where their base would otherwise scan lighter than black,
-    /// the way a scanner's black point keeps the film's mask out of the shadows.
+    /// The levels for a frame whose highlight and median were metered at `sceneHighlightStops`
+    /// and `sceneMedianStops`, after the edit's `exposureEV`, printed through records of contrast
+    /// `masking`. The scanner sets up the negative as it was exposed, so the edit's exposure is
+    /// taken back out of the reading and still lightens or darkens the scan. Green sets both
+    /// points; red and blue keep the timed mid-grey and are steepened only where their base would
+    /// otherwise scan lighter than black, the way a scanner's black point keeps the film's mask
+    /// out of the shadows. Without a median the frame is placed on its points alone.
     public static func levels(for stock: FilmStock, sceneHighlightStops: Float?,
+                              sceneMedianStops: Float? = nil,
                               exposureEV: Float = 0, masking: SIMD3<Float> = .one)
         -> (scale: SIMD3<Float>, shift: Float) {
         guard let measured = sceneHighlightStops, measured.isFinite, !stock.isReversal,
@@ -112,12 +118,30 @@ public enum LabScanTiming {
         let green = min(max((black - white) / max(base.y - high, 0.05), 1), maxStretch)
         // Whichever point the scale cannot also reach gives way: a dense frame's base scans
         // past black, a thin frame's highlight short of white.
-        let shift = max(white - green * high, black - green * base.y)
+        let placed = max(white - green * high, black - green * base.y)
         // A red or blue base that would scan lighter than black is steepened onto it; one that
         // already scans black keeps the green contrast, and with it the film's colour.
         let toBlack = { (read: Float) in
-            min(max((black - shift) / max(read, 0.05), green), green * maxStretch) }
-        return (SIMD3(toBlack(base.x), green, toBlack(base.z)), shift)
+            min(max((black - placed) / max(read, 0.05), green), green * maxStretch) }
+        let scale = SIMD3(toBlack(base.x), green, toBlack(base.z))
+        guard let median = sceneMedianStops, median.isFinite else { return (scale, placed) }
+        return (scale, max(placed, keyShift(for: stock, medianStops: median - exposureEV,
+                                            green: green, masking: masking.y)))
+    }
+
+    /// The shift that sets the scan's density on a frame whose median sits `medianStops` from
+    /// mid-grey before the edit's exposure, scanned at contrast `green`: the median scans where
+    /// the fixed profile scans a patch `keyShare` of the way back to mid-grey.
+    public static func keyShift(for stock: FilmStock, medianStops: Float, green: Float,
+                                masking: Float) -> Float {
+        let stops = min(max(medianStops, -12), 12)
+        return masking * (keyRead(for: stock, stops: (1 - keyShare) * stops)
+            - green * keyRead(for: stock, stops: stops))
+    }
+
+    /// The green record's read of a neutral patch `stops` from mid-grey, at the stock's contrast.
+    public static func keyRead(for stock: FilmStock, stops: Float) -> Float {
+        reads(for: stock, stops: stops).y
     }
 
     /// The scan curve's log exposure, relative to its mid-grey origin, that scans `density`.

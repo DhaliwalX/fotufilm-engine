@@ -33,7 +33,8 @@ test('automatic levels meter bright regions and preserve channel ratios', () => 
 test('lab scan levels each record from the backlight-adjusted highlight before exposure', () => {
   // median 0, highlight 9.9: lowered by the two-stop cap to 7.9, then the edit's +1.9 EV taken out
   assert.ok(Math.abs(labScanHighlight([-20, 0, 10]) - 7.9) < 1e-9)
-  const meter = {min: 0, max: 10, labScan: true, adjustments: [[1, 1, 1, 0], [2, 1.5, 3, 1]]}
+  const meter = {min: 0, max: 10, labScan: true, keyShare: .5,
+    adjustments: [[1, 1, 1, 0], [2, 1.5, 3, 1]], reads: [0, -1]}
   const config = new Float32Array(9000)
   config.set([1, 1, 1], CONFIG.MASKING)
   assert.equal(applyScreenLevels(config, meter, [-20, 0, 10], 1.9), 0)
@@ -44,6 +45,18 @@ test('lab scan levels each record from the backlight-adjusted highlight before e
   assert.ok(Math.abs(config[CONFIG.MASKING + 1] - (1 + .5 * t)) < 1e-6)
   assert.ok(Math.abs(config[CONFIG.MASKING + 2] - (1 + 2 * t)) < 1e-6)
   assert.ok(Math.abs(config[CONFIG.PAPER_MIDPOINT_RED] - t) < 1e-6)
+})
+
+test('lab scan keys its density on the median, never past the placed points', () => {
+  const meter = {min: 0, max: 10, labScan: true, keyShare: .5,
+    adjustments: [[1, 1, 1, 0], [2, 1.5, 3, 1]], reads: [0, -4]}
+  const config = new Float32Array(9000)
+  config.set([1, 1, 1], CONFIG.MASKING)
+  applyScreenLevels(config, meter, [4, 5, 6], 0)
+  // median 5: the fixed profile's read of 2.5 stops, less the timed read of 5 stops
+  const green = 1 + .5 * labScanHighlight([4, 5, 6]) / 10
+  assert.ok(Math.abs(config[CONFIG.PAPER_MIDPOINT] - (-1 + 2 * green)) < 1e-5)
+  assert.ok(Math.abs(config[CONFIG.MASKING + 1] - green) < 1e-6)
 })
 
 test('lab scan dodges only a frame reaching past the print, keyed on its median', () => {
