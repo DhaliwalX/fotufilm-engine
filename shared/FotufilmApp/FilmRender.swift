@@ -151,7 +151,6 @@ enum FilmRender {
         var framingZoom: Double
         var longEdge: Int?
         var viewport: PreviewViewport? = nil
-        var sourceInterpretation: FilmSourceInterpretation
         /// Camera RAW is decoded at the same fixed illuminant as its live/video acquisition.
         var captureIlluminantKelvin: Double?
         /// Everything about the lens correction that changes the pixels. It belongs in the key
@@ -171,7 +170,6 @@ enum FilmRender {
             framingZoom = state.framingZoom
             self.longEdge = longEdge
             self.viewport = viewport
-            sourceInterpretation = state.sourceInterpretation
             captureIlluminantKelvin = state.captureIlluminantKelvin
             lens = state.lensSettings
         }
@@ -407,17 +405,10 @@ enum FilmRender {
         let lens = state.lensPlan(for: source.lensShot, dng: source.originalDNGData)
         // Read once: the probe opens the file, and the answer is wanted three times below.
         let declaredHeadroom = source.isRaw ? nil : source.declaredHeadroom
-        let inputConversion = state.sourceInterpretation.resolvedConversion(
-            isRaw: source.isRaw)
-        let decodeMode: PhotoSource.DecodeMode
-        switch inputConversion {
-        case .platformToneMap: decodeMode = .coreImageToneMappedSDR
-        case .preserveHDR, .engineLinearToneMap: decodeMode = .expandedHDR
-        }
         guard var decoded = time(.decode, source.detail, {
             source.decoded(longEdge: decodeLongEdge, neutralKelvin: fixedCaptureIlluminant,
                            upright: upright,
-                           decodeMode: decodeMode,
+                           decodeMode: .expandedHDR,
                            correctingLens: lens.supersedesDecoder ? false : nil)
         }) else { return nil }
 
@@ -425,8 +416,7 @@ enum FilmRender {
         // radiometry. Keep the expanded, linear pixels and their above-white ratios, but remove
         // the rendition's global exposure lift using the companion SDR rendering as one scalar
         // reference. No tone-mapped reference pixel enters the scene buffer.
-        if inputConversion != .platformToneMap,
-           ProcessedHDRExposure.isEligible(
+        if ProcessedHDRExposure.isEligible(
                isRaw: source.isRaw, declaredHeadroom: declaredHeadroom) {
             let gain = processedHDRExposureGain(
                 source: source, upright: upright)
@@ -435,7 +425,7 @@ enum FilmRender {
         // An HLG or PQ file decodes as display light — reference white at 1.0, HLG's system gamma
         // applied — and the film is exposed to the scene. Taken after the processed-HDR exposure,
         // which compares two renditions of the same display light.
-        let hdrTransfer = source.isRaw || inputConversion == .platformToneMap ? nil
+        let hdrTransfer = source.isRaw ? nil
             : GainMapHeadroom.transfer(profileName: source.descriptor.sourceColorProfile)
         if hdrTransfer != nil {
             decoded = GainMapHeadroom.sceneLight(decoded)
@@ -443,14 +433,7 @@ enum FilmRender {
 
         var contentHeadroom: Float = 1
         if !source.isRaw {
-            if inputConversion == .platformToneMap {
-                // The pixels are now SDR, but the source fact remains available to the editor so
-                // another interpretation can be chosen without losing the metadata signal. It is
-                // the file's own ceiling, not the container's: a phone's gain map runs anywhere
-                // from about 2.4x to 5.8x, and standing in one number for all of them meters the
-                // recovery against a range the picture never had.
-                contentHeadroom = declaredHeadroom ?? 1
-            } else if #available(iOS 18.0, macOS 15.0, *) {
+            if #available(iOS 18.0, macOS 15.0, *) {
                 contentHeadroom = max(1, decoded.contentHeadroom)
             }
             // Some ImageIO builds expand a gain map but still report neutral headroom on the
@@ -622,7 +605,6 @@ enum FilmRender {
                      sceneKelvin: sceneKelvin,
                      sceneChromaticity: fixedCaptureIlluminant == nil ? source.descriptor.asShotChromaticity : nil,
                      contentHeadroom: contentHeadroom,
-                     inputConversion: inputConversion,
                      frameCoverage: frameCoverage,
                      viewport: viewport,
                      sensorFrame: usesSourceFrame ? source.sensorFrame : nil,
@@ -865,10 +847,8 @@ enum FilmRender {
         // state.options selects stock-native or explicit source light. Capture white remains
         // attached to the decoded scene for provenance, not as an implicit rendering override.
         // The recorded range above diffuse white, so an HDR source's highlights are metered
-        // into the film's latitude instead of printing to paper white. Only when the decode
-        // kept that light: a tone-mapped scene still carries the metadata fact in
-        // `contentHeadroom` for the editor's sake, but its pixels are already SDR and there
-        // is nothing left to place.
+        // into the film's latitude instead of printing to paper white. Only when the scene
+        // kept that light: an engine tone-mapped scene is already SDR.
         options.sceneHeadroom = scene.inputConversion == .preserveHDR
             ? scene.contentHeadroom : 1
         if stock != nil { options.paper = state.resolvedPaper }

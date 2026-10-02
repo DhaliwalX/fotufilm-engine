@@ -27,7 +27,7 @@ extension EditState: Codable {
     }
 
     static let bespokeKeys: [String] = [
-        "stockID", "chosenFormatID", "sourceInterpretation", "captureIlluminantKelvin",
+        "stockID", "chosenFormatID", "captureIlluminantKelvin",
         "filmLightKelvin", "sourceLightIndex", "halationReturnRatio", "grainMottleShare", "grainModel", "couplerGapReach", "paper", "paperFollowsStock",
         "seed", "shutterSeconds", "printLightKelvin", "printFrame", "negativeViewing", "digitalReference", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop", "framingZoom",
         "grade", "lensProfileID", "lensAdjustment", "lensFilterIDs", "lensFilterMetering", "selective",
@@ -60,9 +60,6 @@ extension EditState: Codable {
         }
         stockID = try c.decodeIfPresent(String.self, forKey: EditKey("stockID")) ?? stockID
         chosenFormatID = try c.decodeIfPresent(String.self, forKey: EditKey("chosenFormatID"))
-        sourceInterpretation = try c.decodeIfPresent(
-            FilmSourceInterpretation.self, forKey: EditKey("sourceInterpretation"))
-            ?? sourceInterpretation
         captureIlluminantKelvin = try c.decodeIfPresent(Double.self, forKey: EditKey("captureIlluminantKelvin"))
         filmLightKelvin = try c.decodeIfPresent(Double.self, forKey: EditKey("filmLightKelvin"))
         if let index = try c.decodeIfPresent(Int.self, forKey: EditKey("sourceLightIndex")) {
@@ -142,7 +139,6 @@ extension EditState: Codable {
         }
         try c.encode(stockID, forKey: EditKey("stockID"))
         try c.encodeIfPresent(chosenFormatID, forKey: EditKey("chosenFormatID"))
-        try c.encode(sourceInterpretation, forKey: EditKey("sourceInterpretation"))
         try c.encodeIfPresent(captureIlluminantKelvin, forKey: EditKey("captureIlluminantKelvin"))
         try c.encodeIfPresent(filmLightKelvin, forKey: EditKey("filmLightKelvin"))
         try c.encode(sourceLightIndex, forKey: EditKey("sourceLightIndex"))

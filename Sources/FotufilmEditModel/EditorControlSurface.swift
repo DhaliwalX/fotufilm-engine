@@ -219,6 +219,8 @@ public enum EngineBinding: Equatable, Sendable {
     /// One record's share of the film grain: 0 red, 1 green, 2 blue sensitive.
     case filmGrainLayer(Int)
     case filmScanSoftness
+    case hdrRange
+    case hdrRollOff
 
     public var optionNames: [String] {
         switch self {
@@ -268,6 +270,8 @@ public enum EngineBinding: Equatable, Sendable {
         case .cameraPreflash: return ["cameraPreflash"]
         case .printerPreflash: return ["printerPreflash"]
         case .filmGrainSize, .filmColourGrain, .filmGrainLayer, .filmScanSoftness: return ["filmGrain"]
+        case .hdrRange: return ["hdrRange"]
+        case .hdrRollOff: return ["hdrRollOff"]
         }
     }
 
@@ -405,6 +409,10 @@ public enum EngineBinding: Equatable, Sendable {
             if let number = value.number { options.filmGrain.layers[record] = Float(number) }
         case .filmScanSoftness:
             if let number = value.number { options.filmGrain.softness = Float(number) }
+        case .hdrRange:
+            if let number = value.number { options.hdrRange = Float(number) }
+        case .hdrRollOff:
+            if let number = value.number { options.hdrRollOff = Float(number) }
         }
     }
 }

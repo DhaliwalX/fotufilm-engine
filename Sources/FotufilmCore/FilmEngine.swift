@@ -1276,12 +1276,15 @@ public struct FilmEngineInvocation {
             donor: donorActive ? donor : nil)
         let balance = noFilm ? options.sceneLightGains : (r: Float(1), g: Float(1), b: Float(1))
         configuration += [balance.r, balance.g, balance.b]
-        // A source that declares recorded light above diffuse white has that range metered
-        // into the film's window with the highlight shaping the one-tap solve drives — the
-        // engine's pre-emulsion light path — stacked under whatever the user already asked
-        // for. Headroom 1, every SDR source, adds exactly 0 and skips the latitude walk.
+        // A source that declares recorded light above diffuse white has the range its edit keeps
+        // (`hdrRange`, compressed by the HDR_RANGE slot) metered into the film's window with the
+        // highlight shaping the one-tap solve drives — the engine's pre-emulsion light path —
+        // at the strength the edit asks (`hdrRollOff`), stacked under whatever the user already
+        // asked for. Headroom 1, every SDR source, adds exactly 0 and skips the latitude walk.
         var highlights = options.highlights
-        if options.sceneHeadroom > 1 {
+        let keptHeadroom = HDRHighlightRange.keptHeadroom(options.sceneHeadroom,
+                                                          range: options.hdrRange)
+        if keptHeadroom > 1 {
             // With no film there is no emulsion latitude to absorb the declared range first, so
             // the window is the only one this path has: the SDR ceiling at diffuse white. This
             // is the one creative slot that would otherwise read the stock, and it is why a
@@ -1293,8 +1296,9 @@ public struct FilmEngineInvocation {
                                           paper: printMedium,
                                           callier: options.enlarger.callierCoefficient(
                                               for: stock, paper: printMedium))
-            highlights = max(-1, min(1, highlights + AutoAdjustment.headroomHighlights(
-                contentHeadroom: options.sceneHeadroom, window: window)))
+            highlights = max(-1, min(1, highlights + options.hdrRollOff
+                * AutoAdjustment.headroomHighlights(contentHeadroom: keptHeadroom,
+                                                    window: window)))
         }
         configuration += [highlights, options.shadows,
                           options.saturation, options.vibrance]
@@ -1426,6 +1430,9 @@ public struct FilmEngineInvocation {
             configuration += [Float](repeating: 0, count: Int(FOTUFILM_CONFIG_FILM_TILE_COUNT))
         }
         configuration += options.gateConfiguration(width: width, height: height)
+        configuration += [HDRHighlightRange.knee,
+                          HDRHighlightRange.curvature(headroom: options.sceneHeadroom,
+                                                      range: options.hdrRange)]
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0

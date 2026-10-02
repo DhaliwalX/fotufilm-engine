@@ -7,7 +7,7 @@ import {
   calibrateHDR,
 } from "../../src/hdr-color.js";
 import { defaultEdit, parseEdit } from "../../src/editor-state.js";
-import { interpretedImage } from "../../src/source-interpretation.js";
+import { profileRequestControls } from "../../src/profile-settings.js";
 
 test("half-float import preserves highlights, signs and subnormals", () => {
   assert.equal(halfFloat(0x4000), 2);
@@ -82,29 +82,14 @@ test("exposure placement ignores the SDR shoulder, rejects sparse pairs and neve
   assert.equal(scene[3], 1);
 });
 
-test("source interpretation round-trips, defaults old edits, rejects invalid values and leaves RAW linear", () => {
-  const edit = defaultEdit(),
+test("HDR range and roll-off round-trip, reject values out of range and reach the host without a film", () => {
+  const edit = { ...defaultEdit(), profile: { hdrRange: 0.4, hdrRollOff: 1.5 } },
     saved = (value) => JSON.stringify({ version: 1, edit: value });
-  for (const sourceInterpretation of [
-    "automatic",
-    "fullRange",
-    "standardRange",
-  ])
-    assert.equal(
-      parseEdit(saved({ ...edit, sourceInterpretation }), [])
-        .sourceInterpretation,
-      sourceInterpretation,
-    );
-  delete edit.sourceInterpretation;
-  assert.equal(parseEdit(saved(edit), []).sourceInterpretation, "automatic");
-  assert.throws(
-    () => parseEdit(saved({ ...edit, sourceInterpretation: "bogus" }), []),
-    /interpretation/,
-  );
-  const standardImage = {},
-    hdr = { standardImage },
-    raw = { raw: {}, standardImage };
-  assert.equal(interpretedImage(hdr, "standardRange"), standardImage);
-  assert.equal(interpretedImage(hdr, "automatic"), hdr);
-  assert.equal(interpretedImage(raw, "standardRange"), raw);
+  assert.deepEqual(parseEdit(saved(edit), []).profile, { hdrRange: 0.4, hdrRollOff: 1.5 });
+  assert.throws(() => parseEdit(saved({ ...edit, profile: { hdrRange: 1.2 } }), []));
+  assert.throws(() => parseEdit(saved({ ...edit, profile: { hdrRollOff: -1 } }), []));
+  assert.deepEqual(profileRequestControls(edit, undefined), {
+    hdrRange: 0.4,
+    hdrRollOff: 1.5,
+  });
 });

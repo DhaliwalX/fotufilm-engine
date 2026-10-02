@@ -30,7 +30,8 @@ extension EditorControlField {
         case .saturation: return .number(\.saturation)
         case .vibrance: return .number(\.vibrance)
         case .sceneLight: return .bespoke { $0.sourceLightIndex != 0 }
-        case .sourceInterpretation: return .bespoke { $0.sourceInterpretation != .automatic }
+        case .hdrRange: return .number(\.hdrRange)
+        case .hdrRollOff: return .number(\.hdrRollOff)
         case .sceneLightKelvin: return .number(\.sourceLightKelvin)
 
         case .stock:

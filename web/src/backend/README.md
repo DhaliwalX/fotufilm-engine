@@ -85,7 +85,8 @@ An image is a JavaScript descriptor with `naturalWidth`, `naturalHeight`, and a
 bounded display-preview `src`. Native descriptors can carry an opaque `handle`;
 full-resolution pixel arrays are not required in React or across the bridge.
 Optional source metadata uses the existing shape: `raw: {profile?}`, `linear`,
-`hdr`, `standardImage`, `exr`, and `lensMetadata`. These describe the input and
+`hdr`, `exr`, and `lensMetadata`. A native host's `hdr` is `{headroom}`, the linear multiple of
+diffuse white the source declares; the HDR Highlights controls appear only when it is above 1. These describe the input and
 control availability; native descriptors must not expose huge pixel buffers here.
 Video descriptors also include `video: {start,duration,playbackUrl}` for the shared
 transport controls. Provide a webview-playable proxy URL if the original codec

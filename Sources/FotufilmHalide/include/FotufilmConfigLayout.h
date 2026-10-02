@@ -240,6 +240,10 @@ enum {
     /// the two axes multiply. A negative radius is no gate, and the light passes unchanged.
     /// Appended without renumbering earlier fields.
     FOTUFILM_CONFIG_GATE = 18220,
+    /// The knee, in units of diffuse white, and the log2 curvature that compress an HDR source's
+    /// light above the knee into the headroom its edit keeps (HDRHighlightRange), before the white
+    /// balance. Curvature 0 changes nothing. Appended without renumbering earlier fields.
+    FOTUFILM_CONFIG_HDR_RANGE = 18225,
 };
 
 enum {
@@ -340,8 +344,9 @@ enum {
     FOTUFILM_CONFIG_GRAIN_DENSITY_RECORDS_COUNT = 18,
     FOTUFILM_CONFIG_FILM_TILE_COUNT = 166,
     FOTUFILM_CONFIG_GATE_COUNT = 5,
+    FOTUFILM_CONFIG_HDR_RANGE_COUNT = 2,
 };
 
-enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18225 };
+enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18227 };
 
 #endif

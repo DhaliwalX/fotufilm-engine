@@ -22,12 +22,6 @@ struct CoreImageDecoder: HostImageDecoder {
                 let scene = try SceneImage.decode(url: url, targetLongEdge: longEdge)
                 return (scene.rgba, scene.width, scene.height)
             }
-        } else {
-            image.decodeStandardRange = {
-                let scene = try SceneImage.decode(url: url, standardRange: true)
-                return HostImage(rgba: scene.rgba, width: scene.width, height: scene.height,
-                                 contentHeadroom: 1)
-            }
         }
         return image
     }

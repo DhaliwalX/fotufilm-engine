@@ -16,32 +16,6 @@ public protocol FilmInputConverter: Sendable {
     )
 }
 
-/// How a document asks the app to interpret a still image's dynamic range.
-///
-/// Automatic preserves the decoded range. Standard range is the explicit opt-in for display-
-/// referred SDR preparation.
-public enum FilmSourceInterpretation: String, CaseIterable, Codable,
-                                      Identifiable, Sendable {
-    case automatic
-    case fullRange
-    case standardRange
-
-    public var id: String { rawValue }
-
-    /// Resolves the document-level choice to the conversion performed at the engine boundary.
-    /// Camera raw always keeps its scene-linear latitude; it has no display-referred rendering to
-    /// reinterpret as SDR.
-    public func resolvedConversion(isRaw: Bool) -> FilmInputConversion {
-        if isRaw { return .preserveHDR }
-        switch self {
-        case .automatic, .fullRange:
-            return .preserveHDR
-        case .standardRange:
-            return .platformToneMap
-        }
-    }
-}
-
 /// Runtime type erasure for clients that select converters from plug-ins or configuration.
 public struct AnyFilmInputConverter: FilmInputConverter {
     private let conversion: @Sendable (
@@ -77,17 +51,12 @@ public struct AnyFilmInputConverter: FilmInputConverter {
 /// Container decoding and ICC/color-space conversion are platform responsibilities. Once pixels
 /// are in the engine working space, this policy is shared by the app, CLI, web and other clients.
 public enum FilmInputConversion: String, CaseIterable, Identifiable, FilmInputConverter {
-    /// Preserve scene exposure, including values above diffuse white.
+    /// Preserve scene exposure, including values above diffuse white. An edit's HDR range is
+    /// applied by the develop itself (`HDRHighlightRange`).
     case preserveHDR
-    /// The platform decoder already converted HDR range to SDR before supplying working-space RGB.
-    case platformToneMap
-    /// Convert full-range working-space RGB to SDR with the engine's hue-preserving shoulder.
-    ///
-    /// No document-level interpretation resolves to this one — `FilmSourceInterpretation`'s
-    /// standard-range choice hands the range mapping to the platform decoder instead, because a
-    /// still arrives already decoded. It is here for the clients that select a converter directly
-    /// rather than through an interpretation: the CLI, the web build, and anything reaching the
-    /// engine boundary through `AnyFilmInputConverter`.
+    /// Convert full-range working-space RGB to SDR with the engine's hue-preserving shoulder,
+    /// for the clients that select a converter directly: the CLI, the web build, and anything
+    /// reaching the engine boundary through `AnyFilmInputConverter`.
     case engineLinearToneMap
     public var id: String { rawValue }
 
@@ -101,7 +70,7 @@ public enum FilmInputConversion: String, CaseIterable, Identifiable, FilmInputCo
         case .engineLinearToneMap:
             SceneLinearInput.toneMapToSDR(
                 source, from: sourceOffset, count: count, into: destination)
-        case .preserveHDR, .platformToneMap:
+        case .preserveHDR:
             SceneLinearInput.widen(
                 source, from: sourceOffset, count: count, into: destination)
         }

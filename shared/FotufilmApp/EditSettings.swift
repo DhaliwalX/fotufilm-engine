@@ -48,7 +48,6 @@ extension EditState {
         "lensProfileID": .lensCorrection, "lensAdjustment": .lensCorrection,
         "sourceLightIndex": .lightBalance,
         "grade": .lightGrade,
-        "sourceInterpretation": .sourceInterpretation,
         "paper": .printPaper, "paperFollowsStock": .printPaper, "printFrame": .printPaper,
         "negativeViewing": .printPaper, "digitalReference": .printPaper, "printLightKelvin": .printPaper,
         "enlarger": .printLamp, "printerProfile": .printLamp,

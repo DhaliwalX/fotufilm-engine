@@ -13,6 +13,8 @@ public struct PlainDevelop {
     let grade: ColorGrade
     let gradeSpace: ColorGrade.Space
     let localTone: Bool
+    /// HDR_RANGE's curvature: the source's light above the knee compressed to the kept headroom.
+    let rangeCurvature: Float
 
     /// Whether the tone and chroma controls would leave the scene exactly as they found it, which is
     /// the common case and skips both the metering and the masks.
@@ -37,13 +39,17 @@ public struct PlainDevelop {
         // only window this path has, the SDR ceiling at diffuse white, since with nothing
         // loaded there is no emulsion latitude to absorb the range first.
         var shapedHighlights = options.highlights
-        if options.sceneHeadroom > 1 {
-            shapedHighlights = max(-1, min(1, shapedHighlights
-                + AutoAdjustment.headroomHighlights(
-                    contentHeadroom: options.sceneHeadroom,
+        let keptHeadroom = HDRHighlightRange.keptHeadroom(options.sceneHeadroom,
+                                                          range: options.hdrRange)
+        if keptHeadroom > 1 {
+            shapedHighlights = max(-1, min(1, shapedHighlights + options.hdrRollOff
+                * AutoAdjustment.headroomHighlights(
+                    contentHeadroom: keptHeadroom,
                     window: (shadows: 0,
                              highlights: AutoAdjustment.kDiffuseWhiteStops))))
         }
+        rangeCurvature = HDRHighlightRange.curvature(headroom: options.sceneHeadroom,
+                                                     range: options.hdrRange)
         highlights = shapedHighlights
         shadows = options.shadows
         saturation = options.saturation
@@ -52,7 +58,7 @@ public struct PlainDevelop {
         gradeSpace = options.gradeSpace
         localTone = options.localTone
         isNeutral = highlights == 0 && shadows == 0
-            && saturation == 1 && vibrance == 0
+            && saturation == 1 && vibrance == 0 && rangeCurvature == 0
     }
 
     /// Whether the local masks are doing anything, and so whether the frame needs the whole-frame
@@ -129,6 +135,7 @@ public struct PlainDevelop {
         }
 
         let luma = ColorScience.luminanceWeights
+        let curvature = rangeCurvature
         /// The metering gain the tone grid was measured through: mid-grey lands on 0 stops.
         let meterGain = gain / 0.18
         let highlights = self.highlights, shadows = self.shadows
@@ -140,9 +147,12 @@ public struct PlainDevelop {
             let start = row * width * 4
             for x in 0..<width {
                 let index = start + x * 4
-                let r0 = base[index] * balance.x
-                let g0 = base[index + 1] * balance.y
-                let b0 = base[index + 2] * balance.z
+                let range = HDRHighlightRange.gain(
+                    peak: max(base[index], max(base[index + 1], base[index + 2])),
+                    curvature: curvature)
+                let r0 = base[index] * range * balance.x
+                let g0 = base[index + 1] * range * balance.y
+                let b0 = base[index + 2] * range * balance.z
                 let metered = (luma.0 * r0 + luma.1 * g0 + luma.2 * b0) * meterGain
                 let keyed = key(log2(max(metered, 1e-6)), x, y)
                 let high = min(max(keyed * (1.0 / 6.0), 0), 1)

@@ -31,9 +31,6 @@ public struct WebNativeEdit: Decodable {
         public var seed: UInt32?
         /// Legacy or Layered Transport, which the editor keeps beside the film settings.
         public var halationModel: String?
-        /// How a still's dynamic range is read (`FilmSourceInterpretation`); the host decodes the
-        /// photograph to match before it develops.
-        public var sourceInterpretation: String?
     }
 
     public var edit: Edit
@@ -43,10 +40,6 @@ public struct WebNativeEdit: Decodable {
     public var frameCoverage: Float?
 
     private enum CodingKeys: String, CodingKey { case edit, profileRequest }
-
-    /// Whether the edit reads a processed photograph as Standard Range: tone-mapped to SDR before
-    /// the film is exposed, where Automatic and Full Range keep the decoded highlight range.
-    public var readsStandardRange: Bool { edit.sourceInterpretation == "standardRange" }
 
     /// Web slider keys and the controls they stand for, with the web's unit converted to the
     /// catalogue's. Temperature and tint use the conversions the plug-ins' Kelvin and Δuv

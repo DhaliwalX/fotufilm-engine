@@ -95,7 +95,7 @@ enum Glyph {
         case .lightBalance: return "fotu.tab.balance"
         case .lightColor: return "fotu.tab.color"
         case .lightGrade: return "fotu.deck.grade"
-        case .sourceInterpretation: return "fotu.tab.source"
+        case .hdrHighlights: return "fotu.tab.source"
         case .printPaper: return "fotu.tab.output"
         case .printLamp: return "fotu.tab.lamp"
         case .frameGeometry: return "fotu.tab.geometry"

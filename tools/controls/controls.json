@@ -4405,49 +4405,93 @@
     },
     {
       "availability" : "always",
-      "choices" : [
-        {
-          "detail" : "Preserve the file’s decoded highlight range",
-          "id" : "automatic",
-          "label" : "Automatic",
-          "value" : 0
-        },
-        {
-          "detail" : "Preserve all decoded highlight range",
-          "id" : "fullRange",
-          "label" : "Full Range",
-          "value" : 1
-        },
-        {
-          "detail" : "Tone-map HDR before film exposure",
-          "id" : "standardRange",
-          "label" : "Standard Range",
-          "value" : 2
-        }
-      ],
-      "detail" : "Choose how the decoded highlight range enters film exposure.",
-      "documentation" : "Automatic and Full Range preserve decoded HDR highlights. Standard Range uses the platform SDR rendition before film exposure. RAW always remains scene-linear.",
+      "binding" : "hdrRange",
+      "commandLineFlag" : "--hdr-range",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Share of an HDR source's stops above white kept, 0...1 (default: 1)",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Choose how much of an HDR photo's range above white reaches the film. The rest is compressed smoothly into it.",
+      "documentation" : "Keeps a share of the stops an HDR photograph records above diffuse white. Light above a knee just under white is compressed in log2 so the brightest highlight lands at the kept range, hue held; 0% fits it to white, 100% keeps all of it.",
       "drives" : [
 
       ],
-      "field" : "sourceInterpretation",
+      "field" : "hdrRange",
       "group" : "light",
-      "kind" : "menu",
+      "kind" : "slider",
       "omitted" : {
-        "android" : "processed HDR interpretation is not offered on Android yet",
-        "cli" : "the command line renders the whole frame as given",
-        "finalcut" : "the host owns the frame's geometry and its colour corrector",
-        "resolve" : "the host owns the frame's geometry and its colour corrector"
+        "android" : "Android reads no HDR headroom yet",
+        "finalcut" : "the host hands over its own scene-referred range",
+        "resolve" : "the host hands over its own scene-referred range"
+      },
+      "persistedKey" : "hdrRange",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : 0,
+        "max" : 1,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
       },
       "scope" : "edit",
-      "section" : "sourceInterpretation",
+      "section" : "hdrHighlights",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
       "surfaces" : [
         "app",
         "desktop",
-        "web"
+        "web",
+        "cli"
       ],
-      "title" : "Highlights",
-      "webTransform" : "runtime"
+      "title" : "Range",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "always",
+      "binding" : "hdrRollOff",
+      "commandLineFlag" : "--hdr-roll-off",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Strength of the automatic HDR highlight shaping, 0...2 (default: 1)",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Adjust how strongly the kept HDR highlights are eased into the film's latitude.",
+      "documentation" : "Scales the highlight shaping that fits an HDR photograph's kept range into the film's latitude: 0 adds none and leaves the highlights to the film's shoulder, 1 is the automatic fit, 2 doubles it.",
+      "drives" : [
+
+      ],
+      "field" : "hdrRollOff",
+      "group" : "light",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "Android reads no HDR headroom yet",
+        "finalcut" : "the host hands over its own scene-referred range",
+        "resolve" : "the host hands over its own scene-referred range"
+      },
+      "persistedKey" : "hdrRollOff",
+      "scale" : {
+        "admittedMax" : 2,
+        "admittedMin" : 0,
+        "max" : 2,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "multiplier"
+      },
+      "scope" : "edit",
+      "section" : "hdrHighlights",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web",
+        "cli"
+      ],
+      "title" : "Roll-Off",
+      "webTransform" : "profile"
     },
     {
       "availability" : "always",
@@ -6503,8 +6547,8 @@
     {
       "group" : "light",
       "groupTitle" : "Light & Color",
-      "id" : "sourceInterpretation",
-      "title" : "Source Interpretation"
+      "id" : "hdrHighlights",
+      "title" : "HDR Highlights"
     },
     {
       "group" : "print",

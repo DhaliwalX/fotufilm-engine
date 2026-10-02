@@ -109,7 +109,8 @@
   <tr><td>Highlights Warmth</td><td>Cool to warm, in the highlights</td><td>+0.00</td></tr>
   <tr><td>Highlights Tint</td><td>Magenta to green, in the highlights</td><td>+0.00</td></tr>
   <tr><td>Highlights Level</td><td>Adjust the brightness of the highlights.</td><td>+0.00</td></tr>
-  <tr><td>Highlights</td><td>Automatic and Full Range preserve decoded HDR highlights. Standard Range uses the platform SDR rendition before film exposure. RAW always remains scene-linear.</td><td>Automatic</td></tr>
+  <tr><td>Range</td><td>Keeps a share of the stops an HDR photograph records above diffuse white. Light above a knee just under white is compressed in log2 so the brightest highlight lands at the kept range, hue held; 0% fits it to white, 100% keeps all of it.</td><td>100%</td></tr>
+  <tr><td>Roll-Off</td><td>Scales the highlight shaping that fits an HDR photograph's kept range into the film's latitude: 0 adds none and leaves the highlights to the film's shoulder, 1 is the automatic fit, 2 doubles it.</td><td>1.00×</td></tr>
 </tbody>
 </table>
 <h3>Print</h3>
