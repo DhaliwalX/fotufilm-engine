@@ -468,11 +468,7 @@ export default function PhotoLibrary({
             primaryActionLabel={fileActions(trashing)?.trash ?? "Move to Trash"}
             cancelLabel="Cancel"
             onPrimaryAction={() => trash(trashing)}
-          >
-            {trashing.length === 1
-              ? "Fotufilm forgets its rating and saved edit. The file can be put back from the Trash."
-              : "Fotufilm forgets their ratings and saved edits. The files can be put back from the Trash."}
-          </AlertDialog>
+          />
         )}
       </DialogContainer>
       <DialogContainer onDismiss={() => setRemoving(null)}>
