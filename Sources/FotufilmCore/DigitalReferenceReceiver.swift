@@ -16,10 +16,13 @@ public enum DigitalReferenceStyle: String, CaseIterable, Sendable, Identifiable,
     /// grade-2 contrast that rolls into paper white through a soft shoulder and into paper black
     /// through a firm toe. A uniform highlight roll-off across stocks.
     case gradedPrint = "graded-print"
-    /// Per-frame levels on the graded curve: the frame's brightest content sets white and the film
-    /// base sets black, the way a minilab scanner normalises each frame. Resolves bright windows
-    /// and skies by re-exposing the rest of the frame around them. On a positive, the frame's
-    /// brightest content sets white and nothing else moves.
+    /// Per-frame timing on the graded curve, the way a minilab scanner re-times each frame: the
+    /// whole frame shifts until its brightest content sits at white, at the stock's own contrast,
+    /// with white held two and a half to three and a half stops over the frame's median so a lamp
+    /// clips and a dusk stays dusk. A normal or dense negative keeps its base black; a thin one's
+    /// base lifts toward a soft dark grey. A colour negative's red and blue are re-timed half way
+    /// toward a neutral frame. On a positive, the frame's brightest content sets white and
+    /// nothing else moves.
     case autoLevels = "auto-levels"
 
     public static let `default`: DigitalReferenceStyle = .autoLevels
@@ -28,10 +31,20 @@ public enum DigitalReferenceStyle: String, CaseIterable, Sendable, Identifiable,
 
     /// Affine receiver placement for hosts that prepare their own packed configurations.
     /// The scene measurement is in stops over mid-grey, after input exposure.
-    public func receiverLevels(for stock: FilmStock, sceneHighlightStops: Float? = nil)
-        -> (scale: Float, shift: Float) {
+    public func receiverLevels(for stock: FilmStock, sceneHighlightStops: Float? = nil,
+                               exposureEV: Float = 0) -> (scale: Float, shift: Float) {
         DigitalReferenceReceiver.levels(for: stock, style: self,
-                                       sceneHighlightStops: sceneHighlightStops)
+                                       sceneHighlightStops: sceneHighlightStops,
+                                       exposureEV: exposureEV)
+    }
+
+    /// The read Auto Levels balances a colour negative's records on, at a scene exposure `stops`
+    /// over mid-grey and the graded contrast it prints at, for hosts that tabulate it. Nil where
+    /// Auto Levels leaves the stock's colour alone.
+    public static func autoLevelsColourRead(for stock: FilmStock, stops: Float) -> Float? {
+        guard DigitalReferenceReceiver.metersColour(stock) else { return nil }
+        return DigitalReferenceReceiver.gradedBaseRead / DigitalReferenceReceiver.baseRead(for: stock)
+            * DigitalReferenceReceiver.read(for: stock, stops: stops)
     }
 
     public var name: String {
@@ -50,7 +63,7 @@ public enum DigitalReferenceStyle: String, CaseIterable, Sendable, Identifiable,
             return "Fixed exposure through a graded paper curve with a soft highlight shoulder; "
                 + "a positive's clear base sets white."
         case .autoLevels:
-            return "The frame's brightest content sets white and a negative's film base sets black."
+            return "Re-times each frame like a lab scan: its brightest content sets white."
         }
     }
 
@@ -207,16 +220,24 @@ enum DigitalReferenceReceiver {
     // MARK: Levels
 
     /// The affine the kernel applies to the receiver's relative log exposure for the graded
-    /// styles, in the paper mid-point and contrast slots: `read' = scale * read + shift`. The film
-    /// base always lands on `gradedBaseRead`. `.gradedPrint` holds the anchor and scales only for
-    /// the base; `.autoLevels` also places the frame's metered highlight on `gradedWhiteRead`,
-    /// falling back to the fixed graded print when no measurement is available.
+    /// styles, in the paper mid-point and contrast slots: `read' = scale * read + shift`. Both
+    /// graded styles print at the stock's graded contrast, the scale that puts its film base on
+    /// `gradedBaseRead`. `.gradedPrint` holds the anchor. `.autoLevels` re-times the frame the way
+    /// a lab scanner does, shifting every record alike so the metered highlight lands on
+    /// `gradedWhiteRead`; the base then falls wherever the frame's exposure puts it. It falls back
+    /// to the graded print when no measurement is available.
     ///
     /// A transparent positive has no curve to grade, only a gain: its levels are a shift alone,
     /// `positiveLevels`. An integral print is already a print and takes none.
+    ///
+    /// `sceneHighlightStops` is metered after the edit's `exposureEV`, as hosts supply it. The
+    /// re-time takes the frame as the camera made it, before that exposure, so the edit's
+    /// exposure still brightens or darkens the result rather than being timed back out.
     static func levels(for stock: FilmStock, style: DigitalReferenceStyle,
-                       sceneHighlightStops: Float?) -> (scale: Float, shift: Float) {
+                       sceneHighlightStops: Float?,
+                       exposureEV: Float = 0) -> (scale: Float, shift: Float) {
         guard style.usesGradedCurve, !stock.isReflectionPrint else { return (1, 0) }
+        let sceneHighlightStops = sceneHighlightStops.map { $0 - exposureEV }
         if stock.isReversal {
             return (1, positiveShift(for: stock, style: style,
                                      sceneHighlightStops: sceneHighlightStops))
@@ -228,17 +249,112 @@ enum DigitalReferenceReceiver {
         case .gradedPrint:
             return (gradedBaseRead / base, 0)
         case .autoLevels:
-            guard let measured = sceneHighlightStops, measured.isFinite else {
-                return (gradedBaseRead / base, 0)
-            }
-            let stops = min(max(measured, 0.5), 12)
-            let high = read(for: stock, stops: stops)
-            // Bounded so a flat frame is not stretched without limit; a metered highlight
-            // within half a stop of mid-grey is treated as no highlight at all.
-            let scale = min(max((gradedBaseRead - gradedWhiteRead) / max(base - high, 0.1),
-                                0.5), 2.0)
-            return (scale, gradedBaseRead - scale * base)
+            let scale = gradedBaseRead / base
+            guard let measured = sceneHighlightStops, measured.isFinite else { return (scale, 0) }
+            return (scale, retimeShift(for: stock, highlightStops: measured))
         }
+    }
+
+    /// The shift that lands a highlight `highlightStops` over mid-grey on the graded white, at
+    /// the stock's graded contrast.
+    static func retimeShift(for stock: FilmStock, highlightStops: Float) -> Float {
+        let scale = gradedBaseRead / baseRead(for: stock)
+        return gradedWhiteRead - scale * read(for: stock, stops: min(max(highlightStops, -12), 12))
+    }
+
+    /// The print's room in stops of scene light: its white, where `.autoLevels` re-times a frame's
+    /// highlight (L* 95), sits `printWhiteOverGrey` over the stop it prints mid-grey, and its
+    /// black with detail `printRange` under that white, where the shadow toe reaches L* 5 on a
+    /// typical negative, about 3.3 stops under grey.
+    static let printWhiteOverGrey: Float = 3
+    static let printRange: Float = 6.3
+    /// Stops over the frame's median `.autoLevels` places white at: the frame's own highlight
+    /// (its 99.5th percentile), held inside this span. The median prints within half a stop of
+    /// mid-grey: lighter on a frame whose highlights sit close to it, a fog or a white flower,
+    /// which keeps its lightness without being stretched to white, and darker on one whose
+    /// highlights reach far, which keeps its shadows deep.
+    static let retimeWhiteSpan: ClosedRange<Float> = 2.5...3.5
+    /// The most `.autoLevels` brightens a frame over the exposure it was taken at, in stops: a
+    /// night, a stage or a candle-lit room the photographer exposed for its lights stays dark, as
+    /// a scanner's auto-exposure leaves a frame it cannot lift without plainly getting it wrong.
+    static let retimeLiftLimit: Float = 2.5
+
+    /// The highlight `.autoLevels` re-times a frame on, from the whole-frame measurement, which
+    /// `exposureEV`, the edit's exposure, already brightened.
+    static func retimeHighlight(_ scene: AutoAdjustment.SceneStops, exposureEV: Float = 0) -> Float {
+        let white = min(max(scene.bright, scene.median + retimeWhiteSpan.lowerBound),
+                        scene.median + retimeWhiteSpan.upperBound)
+        return max(white, exposureEV + printWhiteOverGrey - retimeLiftLimit)
+    }
+
+    /// The scene stop `.autoLevels` prints mid-grey, for the highlight it re-times on. The
+    /// highlight hold and the shadow lift are keyed on it.
+    static func toneKey(white: Float) -> Float { white - printWhiteOverGrey }
+
+    /// The film exposure `.autoLevels` gives a negative over the one it was taken at, in stops:
+    /// what puts the stop it prints mid-grey on the film's own mid-grey, more for an under-exposed
+    /// frame and less for an over-exposed one, and the print is re-timed to take it back out. A negative keeps a highlight many stops over, but its shadows end a few
+    /// stops under, on the base; placed so, every frame's dark end lies on the film as its bright
+    /// end does, and the shadow toe reads it the same way. `exposureEV` is the edit's, which the
+    /// meter's reading holds.
+    static func filmBoost(for stock: FilmStock, white: Float, exposureEV: Float = 0) -> Float {
+        guard keysTone(stock) else { return 0 }
+        return exposureEV - toneKey(white: white)
+    }
+
+    /// Whether `.autoLevels` keys the tone controls on its print grey: a negative's, whose print
+    /// it places.
+    static func keysTone(_ stock: FilmStock) -> Bool { !stock.isReversal && !stock.isReflectionPrint }
+
+    /// The scene-referred highlight hold and shadow lift, 0...1, `.autoLevels` gives a negative
+    /// whose ends reach past the print from `white`, the highlight it re-times on. Each end is
+    /// treated alike, its control pulling it in by the stops it reaches past and the print's grey
+    /// keeping its place; the shadows by `shadowLiftShare` of them. None for an end that fits.
+    /// How much of its overflow the shadow end is lifted by. A print gives its shadows a firmer
+    /// landing than its highlights and keeps its blacks rich; lifted the whole way, deep shade
+    /// flattens into grey.
+    static let shadowLiftShare: Float = 0.75
+
+    static func toneCompression(for stock: FilmStock, _ scene: AutoAdjustment.SceneStops,
+                                white: Float) -> (hold: Float, lift: Float) {
+        guard keysTone(stock) else { return (0, 0) }
+        // The tone masks move a pixel `reach` stops from the key by 3 · amount · smoothstep(reach / 6).
+        func amount(overflow: Float, room: Float) -> Float {
+            guard overflow > 0 else { return 0 }
+            let t = min((room + overflow) / 6, 1)
+            return min(overflow / (3 * t * t * (3 - 2 * t)), 1)
+        }
+        return (amount(overflow: scene.bright - white, room: printWhiteOverGrey),
+                shadowLiftShare * amount(overflow: white - printRange - scene.dark,
+                                         room: printRange - printWhiteOverGrey))
+    }
+
+    /// The share of a frame's cast `.autoLevels` takes out of a colour negative, re-timing red
+    /// and blue toward where the frame's lit median prints neutral. Half the way, as a lab
+    /// scanner's automatic colour leaves part of a sunset or a lamp-lit room, and the stock its
+    /// own palette.
+    static let autoColourShare: Float = 0.5
+    /// The largest cast it reads, in stops of scene light per record.
+    static let autoColourReach: Float = 2
+
+    /// The per-record shifts added to the levels' own. `channelMedians` is
+    /// `ToneBaseMeasurement.channelMedians`, in stops over mid-grey metered like the highlight.
+    static func autoColourShift(for stock: FilmStock, channelMedians: SIMD3<Float>?,
+                                exposureEV: Float = 0) -> SIMD3<Float> {
+        guard metersColour(stock), let medians = channelMedians,
+              medians.x.isFinite, medians.y.isFinite, medians.z.isFinite else { return .zero }
+        let read = { DigitalReferenceStyle.autoLevelsColourRead(for: stock, stops: $0) ?? 0 }
+        let green = medians.y - exposureEV
+        func shift(_ median: Float) -> Float {
+            let cast = min(max(median - exposureEV - green, -autoColourReach), autoColourReach)
+            return read(green) - read(green + cast)
+        }
+        return autoColourShare * SIMD3(shift(medians.x), 0, shift(medians.z))
+    }
+
+    /// Whether `.autoLevels` balances this stock's colour, and so meters each record.
+    static func metersColour(_ stock: FilmStock) -> Bool {
+        !stock.isReversal && !stock.isMonochrome && !stock.isReflectionPrint
     }
 
     // MARK: Positive levels
@@ -369,6 +485,20 @@ enum DigitalReferenceReceiver {
                 return highlight * (1 - blend) + shadow * blend
             }
             let relative = density - anchorDensity
+            // Auto Levels' shadows fall along its log toe instead of the stretched reference
+            // curve, joined to the graded highlights through mid-grey the same way.
+            if style == .autoLevels {
+                let toe = ScreenShadowToe.shared(for: stock)
+                func logged(_ relative: Float, _ value: Float) -> Float {
+                    let highlight = gradedTransmittance(val: value, grade: grade)
+                    let shadow = toe.transmittance(relative: relative)
+                    let t = min(max((relative + 0.04) / 0.08, 0), 1)
+                    let blend = t * t * (3 - 2 * t)
+                    return highlight * (1 - blend) + shadow * blend
+                }
+                return SIMD3(logged(relative.x, val.x), logged(relative.y, val.y),
+                             logged(relative.z, val.z))
+            }
             return SIMD3(mixed(relative.x, val.x), mixed(relative.y, val.y),
                          mixed(relative.z, val.z))
         }
@@ -376,5 +506,101 @@ enum DigitalReferenceReceiver {
         let t = SIMD3(pow(10, -density.x), pow(10, -density.y), pow(10, -density.z))
         let c = (t - floor) / (1 - floor)
         return SIMD3(max(c.x, 0), max(c.y, 0), max(c.z, 0))
+    }
+}
+
+/// Auto Levels' shadow half on the screen: a log curve in the stops of scene light under
+/// mid-grey. Each stop down gives up a little less lightness than the one above it, so the
+/// shadows keep their separation all the way down to where the negative stops recording, rather
+/// than meeting black a few stops under grey, and black stays black. The output table is indexed
+/// by the levelled read, so the toe reads it back through the stock's own curve, where every
+/// screen negative is placed with its print grey on the film's grey, undoing the negative's toe
+/// before laying its own.
+struct ScreenShadowToe {
+    /// The toe's slope at mid-grey, in L* per stop.
+    static let greySlope: Float = 30
+    /// The share of its base read past which a negative records no more shadow: the toe reaches
+    /// black there.
+    static let recordedShare: Float = 0.9
+
+    private static let stride: Float = 0.02
+    private static let lowest: Float = -16
+    /// The levelled read at each film stop from `lowest` up, which falls as the stops rise.
+    private let reads: [Float]
+    /// The film stop the print takes for mid-grey, where the levelled read is zero.
+    private let anchorStops: Float
+    /// Stops under mid-grey where the toe reaches black, its width, and the L* it starts from.
+    private let depth: Float
+    private let width: Float
+    private let grey: Float
+
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var cache = BoundedCache<UInt64, ScreenShadowToe>(limit: 16)
+
+    static func shared(for stock: FilmStock) -> ScreenShadowToe {
+        let key = SpectralRuntime.cacheIdentifier(for: stock, paper: .screen)
+        lock.lock()
+        if let found = cache.value(for: key) {
+            lock.unlock()
+            return found
+        }
+        lock.unlock()
+        let toe = ScreenShadowToe(stock: stock)
+        lock.lock()
+        cache.insert(toe, for: key)
+        lock.unlock()
+        return toe
+    }
+
+    private init(stock: FilmStock) {
+        let base = DigitalReferenceReceiver.baseRead(for: stock)
+        let scale = DigitalReferenceReceiver.gradedBaseRead / base
+        let shift = DigitalReferenceReceiver.retimeShift(
+            for: stock, highlightStops: DigitalReferenceReceiver.printWhiteOverGrey)
+        let count = Int((6 - Self.lowest) / Self.stride) + 1
+        let reads = (0..<count).map {
+            scale * DigitalReferenceReceiver.read(for: stock,
+                                                  stops: Self.lowest + Float($0) * Self.stride)
+                + shift
+        }
+        self.reads = reads
+        anchorStops = Self.stops(relative: 0, in: reads)
+        depth = anchorStops - Self.stops(relative: scale * Self.recordedShare * base + shift,
+                                         in: reads)
+        let y = DigitalReferenceReceiver.gradedTransmittance(
+            val: DigitalReferenceReceiver.gradedAnchorVal)
+        let grey = 116 * cbrt(y) - 16
+        // The width that gives the toe `greySlope` at mid-grey.
+        var low: Float = 1e-3, high: Float = 20
+        for _ in 0..<60 {
+            let mid = (low + high) / 2
+            if grey / (mid * log(1 + depth / mid)) > Self.greySlope { low = mid } else { high = mid }
+        }
+        width = (low + high) / 2
+        self.grey = grey
+    }
+
+    /// The film stop whose levelled read is `relative`, held at the ends of the table.
+    private static func stops(relative: Float, in reads: [Float]) -> Float {
+        guard relative < reads[0] else { return lowest }
+        guard relative > reads[reads.count - 1] else {
+            return lowest + Float(reads.count - 1) * stride
+        }
+        var low = 0, high = reads.count - 1
+        while high - low > 1 {
+            let mid = (low + high) / 2
+            if reads[mid] > relative { low = mid } else { high = mid }
+        }
+        let span = reads[low] - reads[high]
+        let fraction = span > 0 ? (reads[low] - relative) / span : 0
+        return lowest + (Float(low) + fraction) * stride
+    }
+
+    /// Display-linear output for a levelled read on the shadow side of mid-grey.
+    func transmittance(relative: Float) -> Float {
+        let under = max(anchorStops - Self.stops(relative: relative, in: reads), 0)
+        let lightness = under >= depth ? 0
+            : grey * (1 - log(1 + under / width) / log(1 + depth / width))
+        return lightness > 8 ? pow((lightness + 16) / 116, 3) : lightness / (24389 / 27)
     }
 }

@@ -671,19 +671,25 @@ public enum SpectralRuntime {
             // contrast stays its own. The graded styles level the whole read in the kernel.
             let shadowScale = screenShadowScale(stock: stock, paper: paper,
                                                 digitalReference: digitalReference)
-            printing = buildDensityLUT(stock: stock) { density in
+            func relativeEnergy(_ density: [Float]) -> SIMD3<Float> {
                 let energy = paperExposure(density: aligned(density).map { $0 * callier },
                                            stock: stock,
                                            lamp: lamp, paperSensitivity: paperSensitivity,
                                            neutralDensity: silverCallier * retainedSilverDensity(
                                                density, dMin: dMin,
                                                fraction: bleachBypass), densityScale: callier)
-                let relative = SIMD3<Float>(
+                return SIMD3<Float>(
                     log10(max(energy.x, 1e-12) / max(midEnergy.x, 1e-12)),
                     log10(max(energy.y, 1e-12) / max(midEnergy.y, 1e-12)),
                     log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12))) + castOffset
+            }
+            let toeBalance = screenToeBalance(
+                stock: stock, digitalReference: paper == .screen ? digitalReference : .gradedPrint,
+                read: { DigitalReferenceReceiver.read(relativeEnergy($0)) })
+            printing = buildDensityLUT(stock: stock) { density in
+                let relative = relativeEnergy(density)
                 guard paper == .screen else { return relative }
-                let read = DigitalReferenceReceiver.read(relative)
+                let read = toeBalance(DigitalReferenceReceiver.read(relative))
                 return SIMD3((0..<3).map {
                     DigitalReferenceReceiver.stretchShadows(read[$0], scale: shadowScale) })
             }
@@ -1937,6 +1943,30 @@ public enum SpectralRuntime {
             stops: min(max(stops, -6), 6), stock: stock, style: digitalReference, grade: grade)
     }
 
+    /// Auto Levels balances the toe per record the way a lab scanner's per-channel black point
+    /// does: along the stock's own neutral wedge each record's toe is carried onto green's, so the
+    /// base reads where green's does.
+    /// Its re-time can lift a thin frame's base off black, where a stock's unequal toes would
+    /// otherwise print as a cast. `read` is the receiver's read of a developed density; every
+    /// other style keeps the stock's own shadow balance.
+    static func screenToeBalance(stock: FilmStock, digitalReference: DigitalReferenceStyle,
+                                 read: ([Float]) -> SIMD3<Float>) -> ScreenToeBalance {
+        guard !stock.isReversal, !stock.isMonochrome, digitalReference == .autoLevels else {
+            return ScreenToeBalance(wedges: nil)
+        }
+        let wedge = (0...256).map { i -> SIMD3<Float> in
+            let logExposure = -8 * Float(i) / 256
+            return read((0..<3).map { stock.developedDensity(layer: $0, logExposure: logExposure) })
+        }
+        return ScreenToeBalance(wedges: (0..<3).map { channel in
+            var samples: [SIMD2<Float>] = []
+            for r in wedge where samples.last.map({ r[channel] > $0.x + 1e-5 }) ?? true {
+                samples.append(SIMD2(r[channel], r.y - r[channel]))
+            }
+            return samples
+        })
+    }
+
     static func screenShadowScale(stock: FilmStock, paper: PrintPaper,
                                   digitalReference: DigitalReferenceStyle) -> Float {
         guard paper == .screen, !stock.isReversal,
@@ -2348,6 +2378,25 @@ extension SpectralRuntime {
                                                   paper: paper)
         let shadowScale = screenShadowScale(stock: stock, paper: paper,
                                             digitalReference: digitalReference)
+        func relativeEnergy(_ density: [Float]) -> SIMD3<Float> {
+            let energy = paperExposure(density: aligned(density).map { $0 * callier },
+                                       stock: stock,
+                                       lamp: lamp, paperSensitivity: paperSensitivity, densityScale: callier)
+            // The same reference cast the printing LUT carries — this
+            // mirror walks a neutral wedge, and on a profiled medium a
+            // neutral wedge does not print neutral.
+            return SIMD3<Float>(
+                log10(max(energy.x, 1e-12) / max(midEnergy.x, 1e-12)),
+                log10(max(energy.y, 1e-12) / max(midEnergy.y, 1e-12)),
+                log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12)))
+                + referenceCastOffset(midEnergy: midEnergy, stock: stock,
+                                      paper: paper)
+        }
+        let toeBalance = screenToeBalance(
+            stock: stock,
+            digitalReference: paper == .screen && !paper.readsLayersDirectly(for: stock)
+                ? digitalReference : .gradedPrint,
+            read: { DigitalReferenceReceiver.read(relativeEnergy($0)) })
         if paper == .screen {
             // The same levels the kernel applies through its mid-point and contrast slots.
             let levels = DigitalReferenceReceiver.levels(
@@ -2370,20 +2419,9 @@ extension SpectralRuntime {
                         neutralMid - neutralDensity(stock, exposure), scale: shadowScale)
                 })
             } else {
-                let energy = paperExposure(density: aligned(density).map { $0 * callier },
-                                           stock: stock,
-                                           lamp: lamp, paperSensitivity: paperSensitivity, densityScale: callier)
-                // The same reference cast the printing LUT carries — this
-                // mirror walks a neutral wedge, and on a profiled medium a
-                // neutral wedge does not print neutral.
-                relative = SIMD3<Float>(
-                    log10(max(energy.x, 1e-12) / max(midEnergy.x, 1e-12)),
-                    log10(max(energy.y, 1e-12) / max(midEnergy.y, 1e-12)),
-                    log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12)))
-                    + referenceCastOffset(midEnergy: midEnergy, stock: stock,
-                                          paper: paper)
+                relative = relativeEnergy(density)
                 if paper == .screen {
-                    let read = DigitalReferenceReceiver.read(relative)
+                    let read = toeBalance(DigitalReferenceReceiver.read(relative))
                     relative = SIMD3((0..<3).map {
                         DigitalReferenceReceiver.stretchShadows(read[$0], scale: shadowScale) })
                 }
@@ -3018,5 +3056,34 @@ final class MeasuredReflectanceTable: @unchecked Sendable {
         }
         return MeasuredReflectanceTable(dimension: dimension, bandCount: bandCount,
                                         sourceCount: sourceCount, anchor: anchor, data: data)
+    }
+}
+
+/// Each record's toe carried onto green's along a neutral wedge. `wedges` holds, per record, its
+/// own read ascending from mid-grey to the base against green's minus its own there. The balance
+/// fades in over the toe, from `start` of the way to the base, so the mid-shadows keep the stock's
+/// own layer balance and only a thin frame's lifted base and deep toe are neutralised.
+struct ScreenToeBalance {
+    let wedges: [[SIMD2<Float>]]?
+    static let start: Float = 0.5
+
+    func callAsFunction(_ read: SIMD3<Float>) -> SIMD3<Float> {
+        guard let wedges else { return read }
+        return SIMD3((0..<3).map { channel in
+            let samples = wedges[channel]
+            let v = read[channel]
+            guard let first = samples.first, let last = samples.last, last.x > first.x else {
+                return v
+            }
+            let from = first.x + Self.start * (last.x - first.x)
+            guard v > from else { return v }
+            var offset = last.y
+            if let upper = samples.firstIndex(where: { $0.x >= v }) {
+                let a = samples[upper - 1], b = samples[upper]
+                offset = a.y + (b.y - a.y) * (v - a.x) / (b.x - a.x)
+            }
+            let t = min((v - from) / (last.x - from), 1)
+            return v + t * t * (3 - 2 * t) * (offset - first.y)
+        })
     }
 }

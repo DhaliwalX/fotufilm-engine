@@ -59,11 +59,20 @@ selects the simulated scene light. In the Mac app and plugins, choose a preset o
 **Digital Reference** converts colour negatives with a shared spectral receiver and
 three **Screen Conversion** choices. **Reference Exposure** holds calibrated mid-grey
 and the film's contrast. **Graded Print** keeps film-base blacks and uses a gentler
-highlight curve. **Auto Levels** (default) meters the frame's bright regions and places
-them near white, retaining highlight separation by darkening the rest of a bright scene.
-All three use one green-record scale to preserve colour differences between layers;
-they do not balance each colour channel independently. The film base anchors display
-black. These are idealized conversion models, not measured scanner profiles.
+highlight curve. **Auto Levels** (default) re-times each frame the way a lab scanner
+does: it shifts the whole frame at the stock's own contrast until its bright regions sit
+near white, holding white two and a half to three and a half stops above the scene's median
+so a lamp clips and a fog is not stretched, and brightening a night or a stage by two and a
+half stops at most. It meters the frame before the Exposure control, so Exposure still acts,
+and on a colour negative re-times red and blue half way toward a neutral frame. It treats
+highlights and shadows alike: each negative gets the film exposure that places its mid-grey
+normally, and either end of a frame that reaches past the print, a sky past white or deep
+shade past black, is pulled back toward it by the same rule, the shadows most of the way so
+blacks stay rich. The other two move the colour records together to preserve colour
+differences between layers. The film base anchors display black. Below mid-grey, Auto
+Levels prints along a logarithmic curve in scene stops, so shadows darken gradually and
+keep their detail until the film stops recording, with each record's toe balanced so dark
+greys stay neutral. These are idealized conversion models, not measured scanner profiles.
 Monochrome negatives take the same three choices on their own neutral curve. A
 transparent positive has no print curve to choose: Reference Exposure is the slide
 itself, mid-grey at 18% with the clear base above display white, while Graded Print

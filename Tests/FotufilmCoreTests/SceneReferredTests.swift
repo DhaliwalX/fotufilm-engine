@@ -203,7 +203,6 @@ final class SceneReferredTests: XCTestCase {
         guard let gpu = HalideMetalFilmRenderer.shared else { throw XCTSkip("no Metal") }
         let width = 640, height = 3000
         let pixels = scene(width: width, height: height, peak: 9)
-        let stock = TestStocks.negative
         var levelled = FotufilmEngine.Options()
         levelled.paper = .screen
         levelled.digitalReference = .autoLevels
@@ -214,10 +213,12 @@ final class SceneReferredTests: XCTestCase {
         global.localTone = false
         setenv("FOTUFILM_FORCE_FIELDS", "1", 1)
         defer { unsetenv("FOTUFILM_FORCE_FIELDS") }
-        for (name, options, onTheBands) in [
-            ("auto levels", levelled, true),
-            ("local tone", keyed, false),
-            ("global tone", global, false),
+        let slide = try XCTUnwrap(FilmStock.named("provia100f"))
+        for (name, stock, options, onTheBands) in [
+            ("auto levels on a slide", slide, levelled, true),
+            ("auto levels on a negative", TestStocks.negative, levelled, false),
+            ("local tone", TestStocks.negative, keyed, false),
+            ("global tone", TestStocks.negative, global, false),
         ] {
             let invocation = FilmEngineInvocation(
                 stock: stock, options: options, width: width, height: height)
@@ -237,6 +238,113 @@ final class SceneReferredTests: XCTestCase {
             XCTAssertEqual(maxDifference(whole, fielded), 0,
                            "\(name) strays from the whole frame")
         }
+    }
+
+    /// Auto Levels on the Metal road meters each record through the tone kernel and re-times a
+    /// cast frame toward neutral, as the CPU walk does.
+    func testAutoLevelsEasesACastOnMetalAsOnTheCPU() throws {
+        guard let gpu = HalideMetalFilmRenderer.shared else { throw XCTSkip("no Metal") }
+        let width = 96, height = 64
+        var pixels = [Float](repeating: 1, count: width * height * 4)
+        for i in 0..<(width * height) {
+            let light = 0.02 + 0.3 * Float(i % width) / Float(width)
+            pixels[i * 4] = light * 1.6
+            pixels[i * 4 + 1] = light
+            pixels[i * 4 + 2] = light * 0.55
+        }
+        let stock = try XCTUnwrap(FilmStock.named("gold200"))
+        var options = FotufilmEngine.Options()
+        options.paper = .screen
+        options.digitalReference = .autoLevels
+        options.grainScale = 0
+        func cast(_ print: [Float]) -> Float {
+            var red = 0.0, blue = 0.0
+            for i in 0..<(width * height) {
+                red += Double(log2(max(print[i * 4], 1e-4) / max(print[i * 4 + 1], 1e-4)))
+                blue += Double(log2(max(print[i * 4 + 2], 1e-4) / max(print[i * 4 + 1], 1e-4)))
+            }
+            return Float(abs(red) + abs(blue)) / Float(width * height)
+        }
+        let timed = try XCTUnwrap(gpu.processLinearFloat(
+            pixels, width: width, height: height, stock: stock,
+            options: options, memoryBudget: 1 << 30))
+        // The CPU walk's measurement, handed over as a host would, prints the same frame.
+        var invocation = FilmEngineInvocation(stock: stock, options: options,
+                                              width: width, height: height)
+        var measurement = invocation.toneBaseMeasurement()
+        XCTAssertTrue(measurement.metersColour)
+        pixels.withUnsafeBufferPointer {
+            measurement.add(linearRGBA: $0.baseAddress!, rows: 0..<height)
+        }
+        invocation.setToneBase(measurement)
+        options.sceneHighlightStops = invocation.sceneHighlightStops(measurement)
+        options.sceneChannelMedians = invocation.sceneChannelMedians(measurement)
+        options.sceneToneStops = invocation.sceneToneStops(measurement)
+        let handed = try XCTUnwrap(gpu.processLinearFloat(
+            pixels, width: width, height: height, stock: stock,
+            options: options, memoryBudget: 1 << 30))
+        XCTAssertLessThan(maxDifference(handed, timed), 2e-3)
+        // A neutral reading leaves the stock's cast where it was.
+        let medians = try XCTUnwrap(options.sceneChannelMedians)
+        options.sceneChannelMedians = SIMD3(repeating: medians.y)
+        let kept = try XCTUnwrap(gpu.processLinearFloat(
+            pixels, width: width, height: height, stock: stock,
+            options: options, memoryBudget: 1 << 30))
+        XCTAssertLessThan(cast(timed), 0.8 * cast(kept), "Auto Levels left the cast in place")
+    }
+
+    /// A frame wider than the print has its deep shade lifted and its sky held, each by as many
+    /// stops as it reaches past: the Metal road meters it as the CPU walk does, the shadow prints
+    /// lighter and the sky under white where withholding the frame's ends leaves them, while the
+    /// mid-tones barely move.
+    func testAutoLevelsOpensShadowsAndHoldsTheSky() throws {
+        guard let gpu = HalideMetalFilmRenderer.shared else { throw XCTSkip("no Metal") }
+        let width = 96, height = 64
+        var pixels = [Float](repeating: 1, count: width * height * 4)
+        for y in 0..<height {
+            for x in 0..<width {
+                // A rock in shade four stops under grey, lit ground, and a sky well past white.
+                let light: Float = x < width / 3 ? 0.18 / 16 * (1 + 0.3 * Float(y % 8) / 8)
+                    : x < 2 * width / 3 ? 0.06 + 0.4 * Float(x) / Float(width)
+                    : 8 * (1 + 0.5 * Float(y % 8) / 8)
+                for c in 0..<3 { pixels[(y * width + x) * 4 + c] = light }
+            }
+        }
+        let stock = try XCTUnwrap(FilmStock.named("portra400"))
+        var options = FotufilmEngine.Options()
+        options.paper = .screen
+        options.digitalReference = .autoLevels
+        options.grainScale = 0
+        let metered = try XCTUnwrap(gpu.processLinearFloat(
+            pixels, width: width, height: height, stock: stock,
+            options: options, memoryBudget: 1 << 30))
+        var invocation = FilmEngineInvocation(stock: stock, options: options,
+                                              width: width, height: height)
+        var measurement = invocation.toneBaseMeasurement()
+        pixels.withUnsafeBufferPointer {
+            measurement.add(linearRGBA: $0.baseAddress!, rows: 0..<height)
+        }
+        options.sceneHighlightStops = invocation.sceneHighlightStops(measurement)
+        options.sceneChannelMedians = invocation.sceneChannelMedians(measurement)
+        options.sceneToneStops = invocation.sceneToneStops(measurement)
+        let handed = try XCTUnwrap(gpu.processLinearFloat(
+            pixels, width: width, height: height, stock: stock,
+            options: options, memoryBudget: 1 << 30))
+        XCTAssertLessThan(maxDifference(handed, metered), 2e-3)
+        options.sceneToneStops = nil
+        let withheld = try XCTUnwrap(gpu.processLinearFloat(
+            pixels, width: width, height: height, stock: stock,
+            options: options, memoryBudget: 1 << 30))
+        func mean(_ print: [Float], _ columns: Range<Int>) -> Float {
+            var sum: Float = 0
+            for y in 0..<height { for x in columns { sum += print[(y * width + x) * 4 + 1] } }
+            return sum / Float(height * columns.count)
+        }
+        let rock = 4..<(width / 3 - 4), lit = (width / 3 + 4)..<(2 * width / 3 - 4)
+        let sky = (2 * width / 3 + 4)..<(width - 4)
+        XCTAssertGreaterThan(mean(metered, rock), 1.5 * mean(withheld, rock))
+        XCTAssertEqual(mean(metered, lit), mean(withheld, lit), accuracy: 0.25 * mean(withheld, lit))
+        XCTAssertLessThan(mean(metered, sky), mean(withheld, sky) - 0.03)
     }
 
     func testStillRendererRespondsToHDRExposure() throws {

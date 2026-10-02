@@ -27,7 +27,7 @@ import { sourceIlluminant } from './editor-catalogue.js'
 import { compositeSelection } from './backend/browser-selective.js'
 import {
   assetUrl,
-  sceneHighlightStops,
+  sceneScreenMeter,
   prepareLinearSource,
   developNormal,
   imageSource,
@@ -524,11 +524,11 @@ export class RenderSession {
                   sceneKelvin,
                   filters: edit.filters,
                   filterMetering: edit.filterMetering,
-                  sceneHighlightStops: await sceneHighlightStops(
+                  ...(await sceneScreenMeter(
                     meter.source,
                     controls,
                     edit.medium === 'lab-scan',
-                  ),
+                  )),
                   controls: {
                     ...profileRequestControls(edit, entry.stock),
                     digitalReference: edit.digitalReference || 'auto-levels',

@@ -190,13 +190,18 @@ final class DigitalReferenceReceiverTests: XCTestCase {
         func luminance(_ rgb: SIMD3<Float>) -> Float {
             weights.0 * rgb.x + weights.1 * rgb.y + weights.2 * rgb.z
         }
-        // Without a meter the frame renders as the graded print.
-        for stops: Float in [-3, 0, 2] {
+        // Without a meter the frame renders as the graded print from mid-grey up, the toe joining
+        // it through grey; under it the shadows fall along the log toe, lighter than the graded
+        // print's, to the same black.
+        for (stops, tolerance) in [(Float(0), Float(0.006)), (2, 1 / (255 * 12.92))] {
             let exposure = SIMD3<Float>(repeating: stops * log10(2))
             XCTAssertLessThan(distance(positive(film, exposure: exposure, style: .autoLevels),
                                        positive(film, exposure: exposure, style: .gradedPrint)),
-                              1e-5)
+                              tolerance)
         }
+        let shade = SIMD3<Float>(repeating: -2 * log10(2))
+        XCTAssertGreaterThan(positive(film, exposure: shade, style: .autoLevels).y,
+                             positive(film, exposure: shade, style: .gradedPrint).y)
         // A frame whose brightest content sits eight stops up lands that content near white and
         // moves its mid-grey down; one whose brightest content is two stops up brightens it.
         let bright = SIMD3<Float>(repeating: 8 * log10(2))
@@ -207,10 +212,95 @@ final class DigitalReferenceReceiverTests: XCTestCase {
                                              sceneHighlightStops: 8)), 0.12)
         XCTAssertGreaterThan(luminance(positive(film, exposure: .zero, style: .autoLevels,
                                                 sceneHighlightStops: 2)), 0.25)
-        // The base is black whatever the frame holds.
-        for stops: Float in [1, 4, 10] {
-            XCTAssertLessThan(positive(film, exposure: SIMD3(repeating: -8), style: .autoLevels,
-                                       sceneHighlightStops: stops).y, 1.5 / (255 * 12.92))
+        // A re-time, not a stretch: the same scene exposed k stops over or under, metered k stops
+        // over or under, prints its mid-grey where the normal frame does — exactly while the
+        // negative stays on its straight line, which is within a stop either side for Gold 200.
+        let normal = positive(film, exposure: .zero, style: .autoLevels, sceneHighlightStops: 2.5)
+        for k: Float in [-1, 1] {
+            let retimed = positive(film, exposure: SIMD3(repeating: k * log10(2)),
+                                   style: .autoLevels, sceneHighlightStops: 2.5 + k)
+            XCTAssertLessThan(distance(retimed, normal), 0.02, "\(k) stops")
+        }
+        // A frame placed as Auto Levels places every negative, white three stops over the film's
+        // grey, keeps its base black, and its toe near neutral down to it: each record's deep toe
+        // is balanced onto green's, while the mid-shadows keep the stock's own layer balance.
+        XCTAssertLessThan(positive(film, exposure: SIMD3(repeating: -8), style: .autoLevels,
+                                   sceneHighlightStops: 3).y, 1.5 / (255 * 12.92))
+        for id in ["portra400", "gold200"] {
+            let stock = try XCTUnwrap(FilmStock.named(id))
+            for stops: Float in [-1.5, -2.5] {
+                let toe = positive(stock, exposure: SIMD3(repeating: stops * log10(2)),
+                                   style: .autoLevels, sceneHighlightStops: 3)
+                XCTAssertLessThan(toe.max() / toe.min(), 1.3, "\(id) \(stops)")
+            }
+        }
+    }
+
+    func testAutoLevelsTimesAFrameItself() throws {
+        let film = try XCTUnwrap(FilmStock.named("gold200"))
+
+        // White sits at the frame's own highlight, held two and a half to three and a half stops
+        // over its median: a lamp clips, and a flat frame is not stretched until it is white. A frame
+        // exposed for its lights is lifted two and a half stops at most. The film is given what
+        // puts the print's grey on its own: more for a dark frame, less for a bright one.
+        func highlight(_ bright: Float, median: Float = 0, ev: Float = 0) -> Float {
+            DigitalReferenceReceiver.retimeHighlight(
+                AutoAdjustment.SceneStops(median: median, bright: median + bright, dark: median - 4),
+                exposureEV: ev)
+        }
+        XCTAssertEqual(highlight(6), 3.5)
+        XCTAssertEqual(highlight(2.8), 2.8)
+        XCTAssertEqual(highlight(1), 2.5)
+        XCTAssertEqual(highlight(6, median: -6.7), 0.5, "a candle-lit frame stays dark")
+        XCTAssertEqual(highlight(6, median: -6.7, ev: 1), 1.5)
+        XCTAssertEqual(DigitalReferenceReceiver.filmBoost(for: film, white: highlight(6, median: -2)), 1.5)
+        XCTAssertEqual(DigitalReferenceReceiver.filmBoost(for: film, white: highlight(6, median: -6.7)), 2.5)
+        XCTAssertEqual(DigitalReferenceReceiver.filmBoost(for: film, white: highlight(6, median: 1)), -1.5)
+
+        // Each end that reaches past the print is pulled in by the stops it reaches, by the same
+        // rule at both ends, the shadows by three quarters of them; a frame that fits is left
+        // alone, and so is a slide.
+        func compression(dark: Float, bright: Float) -> (hold: Float, lift: Float) {
+            let scene = AutoAdjustment.SceneStops(median: 0, bright: bright, dark: dark)
+            return DigitalReferenceReceiver.toneCompression(
+                for: film, scene, white: DigitalReferenceReceiver.retimeHighlight(scene))
+        }
+        XCTAssertTrue(compression(dark: -2.3, bright: 3) == (0, 0))
+        let wide = compression(dark: -5.7, bright: 5)
+        XCTAssertGreaterThan(wide.hold, 0.5)
+        XCTAssertGreaterThan(wide.lift, 0.5)
+        // Pulled in by its own overflow, the end lands on the print: 3 * amount * smoothstep.
+        func landed(_ amount: Float, reach: Float) -> Float {
+            let t = min(reach / 6, 1)
+            return reach - 3 * amount * t * t * (3 - 2 * t)
+        }
+        XCTAssertEqual(landed(wide.hold, reach: 5 - 0.5), DigitalReferenceReceiver.printWhiteOverGrey,
+                       accuracy: 1e-4)
+        let room = DigitalReferenceReceiver.printRange - DigitalReferenceReceiver.printWhiteOverGrey
+        XCTAssertEqual(landed(wide.lift / DigitalReferenceReceiver.shadowLiftShare,
+                              reach: 5.7 + 0.5), room, accuracy: 1e-3)
+        XCTAssertEqual(compression(dark: -2.5, bright: 5).lift, 0)
+        XCTAssertEqual(compression(dark: -9, bright: 3).hold, 0)
+        XCTAssertEqual(compression(dark: -12, bright: 12).hold, 1, "a sun clips past the reach")
+        XCTAssertTrue(DigitalReferenceReceiver.toneCompression(
+            for: try XCTUnwrap(FilmStock.named("provia100f")),
+            AutoAdjustment.SceneStops(median: 0, bright: 6, dark: -9), white: 3) == (0, 0))
+
+        // Colour: nothing on a neutral frame; a warm frame's red is printed denser and its blue
+        // lighter, half the way, green untouched. A slide and black-and-white keep their own.
+        let warm = SIMD3<Float>(0.8, 0, -0.9)
+        XCTAssertEqual(DigitalReferenceReceiver.autoColourShift(
+            for: film, channelMedians: .zero), .zero)
+        let shift = DigitalReferenceReceiver.autoColourShift(for: film, channelMedians: warm)
+        XCTAssertGreaterThan(shift.x, 0)
+        XCTAssertLessThan(shift.z, 0)
+        XCTAssertEqual(shift.y, 0)
+        let read = { DigitalReferenceStyle.autoLevelsColourRead(for: film, stops: $0)! }
+        XCTAssertEqual(shift.x, 0.5 * (read(0) - read(0.8)), accuracy: 1e-6)
+        for id in ["provia100f", "hp5plus400"] {
+            let stock = try XCTUnwrap(FilmStock.named(id))
+            XCTAssertEqual(DigitalReferenceReceiver.autoColourShift(
+                for: stock, channelMedians: warm), .zero, id)
         }
     }
 

@@ -477,7 +477,7 @@ public struct FilmEngineInvocation {
     var meterMedium: PrintPaper = .screen
     var meterExposureEV: Float = 0
     var meterMasking: SIMD3<Float> = .one
-    var meterLevels: (scale: SIMD3<Float>, shift: Float) = (.one, 0)
+    var meterLevels = MeteredLevels()
     /// Pixels of context a tile must carry on each cut edge for its interior to develop exactly as
     /// it would inside the whole frame.
     public let spatialSupport: Int
@@ -848,6 +848,10 @@ public struct FilmEngineInvocation {
         var options = options
         // A larger piece of film than the aperture prints on the photograph's own levels.
         if let stops = options.unexposedEdge?.sceneHighlightStops { options.sceneHighlightStops = stops }
+        if let tone = options.unexposedEdge?.sceneToneStops { options.sceneToneStops = tone }
+        if let medians = options.unexposedEdge?.sceneChannelMedians {
+            options.sceneChannelMedians = medians
+        }
         // A development condition supplies the fresh roll's curves before age and reciprocity.
         let developed = try stock.pushed(stops: options.developmentEV)
         // The same roll at the pack's reference process, aged and reciprocity-shifted alike:
@@ -1109,13 +1113,32 @@ public struct FilmEngineInvocation {
         // kernel's reversal branch keeps the slide's polarity for the texture it carries back.
         let levelsPositive = printMedium.levelsPositive(
             for: stock, digitalReference: options.digitalReference) && options.stage != .texture
+        // A host that metered the frame hands Auto Levels its tone reading with the highlight:
+        // the film boost an under-exposed frame takes, which the print is re-timed to take back
+        // out; the print grey the tone controls are keyed on; and the frame's ends, which a
+        // frame wider than the print has held and lifted onto it.
+        let white = !noFilm && printMedium == .screen && options.digitalReference == .autoLevels
+            && options.stage.readsScene && DigitalReferenceReceiver.keysTone(stock)
+            ? options.sceneHighlightStops : nil
+        let filmBoost = white.map {
+            DigitalReferenceReceiver.filmBoost(for: stock, white: $0, exposureEV: options.exposureEV)
+        } ?? 0
+        let toneKey = white.map { DigitalReferenceReceiver.toneKey(white: $0) + filmBoost }
+        let compression = white.flatMap { white in
+            options.sceneToneStops.map {
+                DigitalReferenceReceiver.toneCompression(
+                    for: stock, AutoAdjustment.SceneStops(median: $0.x, bright: $0.z, dark: $0.y),
+                    white: white)
+            }
+        }
         // Lab Scan times each frame the way a minilab scanner does, in the same slots.
         let levels: (scale: SIMD3<Float>, shift: Float)
         let recordContrast = SIMD3(contrast[0], contrast[1], contrast[2])
         if printMedium == .screen && (levelsPositive || !stock.isReversal) {
             let screen = DigitalReferenceReceiver.levels(
                 for: stock, style: options.digitalReference,
-                sceneHighlightStops: options.sceneHighlightStops)
+                sceneHighlightStops: options.sceneHighlightStops.map { $0 + filmBoost },
+                exposureEV: options.exposureEV)
             levels = (SIMD3(repeating: screen.scale), screen.shift)
         } else if printMedium == .labScan {
             levels = LabScanTiming.levels(for: stock, sceneHighlightStops: options.sceneHighlightStops,
@@ -1123,6 +1146,12 @@ public struct FilmEngineInvocation {
         } else {
             levels = (.one, 0)
         }
+        // Auto Levels re-times red and blue apart from green, in the same midpoint slots.
+        let autoColour = printMedium == .screen && options.digitalReference == .autoLevels
+            ? DigitalReferenceReceiver.autoColourShift(
+                for: stock, channelMedians: options.sceneChannelMedians.map { $0 + filmBoost },
+                exposureEV: options.exposureEV)
+            : SIMD3<Float>.zero
         contrast = (0..<3).map { contrast[$0] * levels.scale[$0] }
         // Reverse the positive paper's exposure axis in the existing shared CPU/Metal slots.
         let masking = contrast.map { $0 * printMedium.exposureDirection }
@@ -1139,7 +1168,7 @@ public struct FilmEngineInvocation {
             digitalReference: options.digitalReference, screenGrade: options.screenGrade)
         var xMids = printMedium.printExposureMidpoints(
             for: stock, digitalReference: options.digitalReference)
-            .map { $0 + printMedium.exposureDirection * screenShift }
+            .enumerated().map { $1 + printMedium.exposureDirection * (screenShift + autoColour[$0]) }
         // Paper exposure shifts log light after film transmission, before the paper curves.
         // Reuse the midpoint slots to preserve the packed ABI and avoid rebuilding spectral LUTs.
         if let printer, printer.exposureEV != 0 {
@@ -1263,7 +1292,7 @@ public struct FilmEngineInvocation {
         configuration += [grainSigma, Float(grainRadius)]
         configuration += [veilingGlare, couplerScale,
                           stock.adjacencyStrength * couplerScale,
-                          clumpsPerPixel, exp2(options.exposureEV), xMid]
+                          clumpsPerPixel, exp2(options.exposureEV + filmBoost), xMid]
         configuration += [-1, -1, -1]
         // The warp mirrors exactly what a neutral pixel releases per-pixel: the matrix only
         // when the coupler stage runs, the donor row only when the donor does.
@@ -1300,7 +1329,9 @@ public struct FilmEngineInvocation {
                 * AutoAdjustment.headroomHighlights(contentHeadroom: keptHeadroom,
                                                     window: window)))
         }
-        configuration += [highlights, options.shadows,
+        let shadowLift = min(compression?.lift ?? 0, max(1 - options.shadows, 0))
+        let held = max(highlights - (compression?.hold ?? 0), -1)
+        configuration += [held, options.shadows + shadowLift,
                           options.saturation, options.vibrance]
         configuration += halation.weights.flatMap { $0 }
         configuration += [stock.grainLumaCorrelation]
@@ -1311,6 +1342,7 @@ public struct FilmEngineInvocation {
         configuration += [1, 1]
         var toneGrid = [Float](repeating: 0, count: 2 * Self.toneGridCells)
         toneGrid[0] = 1
+        toneGrid[Self.toneGridCells] = -(toneKey ?? 0)
         configuration += toneGrid
 
         // The film grain model needs no variant: its tiles are a runtime input.
@@ -1508,7 +1540,14 @@ public struct FilmEngineInvocation {
             self.meterMedium = printMedium
             self.meterExposureEV = options.exposureEV
             self.meterMasking = recordContrast
-            self.meterLevels = levels
+            self.meterLevels = MeteredLevels(
+                scale: levels.scale, shift: SIMD3(repeating: levels.shift) + autoColour)
+        } else if toneKey != nil {
+            // A host handed the reading on: what Auto Levels added is not the user's tone.
+            self.meterLevels = MeteredLevels(
+                scale: levels.scale, shift: SIMD3(repeating: levels.shift) + autoColour,
+                filmBoost: filmBoost, toneKey: toneKey, shadowLift: shadowLift,
+                highlightHold: highlights - held)
         }
         if noFilm {
             // Nothing samples these: the variant compiles no spectral recovery, no film cube and

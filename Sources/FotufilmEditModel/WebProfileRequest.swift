@@ -14,6 +14,8 @@ public struct WebProfileRequest: Decodable {
     public let medium: String?
     public let sceneKelvin: Float?
     public let sceneHighlightStops: Float?
+    public let sceneChannelMedians: [Float]?
+    public let sceneToneStops: [Float]?
     public let controls: [String: Value]
 
     public enum Value: Decodable {
@@ -59,6 +61,21 @@ public struct WebProfileRequest: Decodable {
                 throw Failure(description: "Invalid scene measurement.")
             }
             options.sceneHighlightStops = sceneHighlightStops
+        }
+        if let sceneChannelMedians {
+            guard sceneChannelMedians.count == 3,
+                  sceneChannelMedians.allSatisfy({ $0.isFinite && (-64...64).contains($0) }) else {
+                throw Failure(description: "Invalid scene measurement.")
+            }
+            options.sceneChannelMedians = SIMD3(sceneChannelMedians[0], sceneChannelMedians[1],
+                                                sceneChannelMedians[2])
+        }
+        if let sceneToneStops {
+            guard sceneToneStops.count == 3,
+                  sceneToneStops.allSatisfy({ $0.isFinite && (-64...64).contains($0) }) else {
+                throw Failure(description: "Invalid scene measurement.")
+            }
+            options.sceneToneStops = SIMD3(sceneToneStops[0], sceneToneStops[1], sceneToneStops[2])
         }
         return (stock, options)
     }

@@ -19,10 +19,18 @@ public enum UnexposedEdge {
         /// The photograph's Auto Levels reading, so the frame prints on the photograph's levels
         /// rather than on levels metered over film the gate shaded.
         public var sceneHighlightStops: Float?
+        /// The photograph's Auto Levels colour reading, for the same reason.
+        public var sceneChannelMedians: SIMD3<Float>?
+        /// The photograph's Auto Levels tone reading, for the same reason.
+        public var sceneToneStops: SIMD3<Float>?
 
-        public init(margins: Margins, sceneHighlightStops: Float? = nil) {
+        public init(margins: Margins, sceneHighlightStops: Float? = nil,
+                    sceneChannelMedians: SIMD3<Float>? = nil,
+                    sceneToneStops: SIMD3<Float>? = nil) {
             self.margins = margins
             self.sceneHighlightStops = sceneHighlightStops
+            self.sceneChannelMedians = sceneChannelMedians
+            self.sceneToneStops = sceneToneStops
         }
     }
 
