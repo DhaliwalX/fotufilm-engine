@@ -29,9 +29,48 @@ void CompositorCore::Present(const std::string& layer, PresentedFrame frame) {
   dirty_ = true;
 }
 
+namespace {
+
+bool SameRect(const LayerRect& a, const LayerRect& b) {
+  return a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height;
+}
+
+// The part of the clip the photograph covers: what the page cuts out of its backgrounds.
+LayerRect Hole(const ImageLayerGeometry& geometry) {
+  if (geometry.layers.empty()) return {};
+  const LayerRect& photo = geometry.layers.front().rect;
+  const LayerRect& clip = geometry.clip;
+  const double x = std::max(photo.x, clip.x), y = std::max(photo.y, clip.y);
+  const double right = std::min(photo.x + photo.width, clip.x + clip.width);
+  const double bottom = std::min(photo.y + photo.height, clip.y + clip.height);
+  if (right <= x || bottom <= y) return {};
+  return {x, y, right - x, bottom - y};
+}
+
+LayerRect Origin(const ImageLayerGeometry& geometry) {
+  return geometry.layers.empty() ? LayerRect{} : geometry.layers.front().rect;
+}
+
+}  // namespace
+
 void CompositorCore::Place(ImageLayerGeometry geometry, double now) {
+  const ImageLayerGeometry& shown = image_layer_.geometry();
+  if (tracing_) {
+    const LayerRect at = Origin(geometry);
+    const int note = pending_placement_ ? 3 : !SameRect(geometry.clip, shown.clip) ? 1
+                     : !SameRect(Hole(geometry), Hole(shown)) ? 2 : 0;
+    traced_placements_.push_back({now * 1000, at.x, at.y, note});
+  }
+  if (!pending_placement_) {
+    if (SameRect(geometry.clip, shown.clip) && SameRect(Hole(geometry), Hole(shown))) {
+      image_layer_.Place(std::move(geometry));
+      dirty_ = true;
+      return;
+    }
+    pending_since_ = now;
+  }
+  // A newer placement replaces one still waiting, and waits no longer than it would have.
   pending_placement_ = std::move(geometry);
-  pending_since_ = now;
 }
 
 bool CompositorCore::PlacementDue(double now) const {
@@ -143,6 +182,18 @@ CompositePlan CompositorCore::Plan(double now, bool extended) {
     plan.quads.push_back(quad);
   }
   return plan;
+}
+
+void CompositorCore::TraceComposites(bool on) {
+  tracing_ = on;
+  traced_composites_.clear();
+  traced_placements_.clear();
+}
+
+void CompositorCore::TraceComposite(double now) {
+  if (!tracing_) return;
+  const LayerRect at = Origin(image_layer_.geometry());
+  traced_composites_.push_back({now * 1000, at.x, at.y});
 }
 
 void CompositorCore::Composited(double drawable_wait_us, double composite_us) {

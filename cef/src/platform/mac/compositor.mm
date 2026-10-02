@@ -514,6 +514,7 @@ MTLPixelFormat DrawableFormat(bool extended) {
   [self encode:_core->Plan(now, extended) into:drawable.texture commands:commands];
   [commands presentDrawable:drawable];
   [commands commit];
+  _core->TraceComposite(now);
   _core->Composited(Microseconds(start, acquired), Microseconds(acquired, mach_absolute_time()));
   // A crossfade draws every frame until it is done, and a movie's queued frame the next one.
   if (_core->KeepDrawing(CACurrentMediaTime())) {

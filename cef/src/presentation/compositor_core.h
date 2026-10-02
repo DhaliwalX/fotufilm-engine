@@ -42,6 +42,15 @@ struct CompositorStats {
   bool extended_range = false;
 };
 
+// Where the photograph stood at a moment, for the composite trace: a composite drawn, or a
+// placement the page sent. The first layer's top left, in view points. A placement notes why it
+// waited for the page: 0 it did not, 1 a new clip, 2 a new hole, 3 behind one already waiting.
+struct TracedPosition {
+  double time_ms = 0;
+  double x = 0, y = 0;
+  int note = 0;
+};
+
 // One change the latency probe saw: when its composite was committed (ms, the host's clock) and
 // the pixel's bytes in hex (BGRA8 or RGBA16F, as the drawable stores them).
 struct ProbeChange {
@@ -104,8 +113,12 @@ class CompositorCore {
 
   // A frame the engine presented (presentation/presentation.h).
   void Present(const std::string& layer, PresentedFrame frame);
-  // Where the page shows the image layer now. It waits for the next browser frame, or until
-  // PlacementDue says it has waited long enough for a layout change that repaints nothing.
+  // Where the page shows the image layer now. A placement that leaves the page as it was — the
+  // same clip, and the same hole cut in the page's backgrounds for the photograph — takes effect
+  // at once: a pan or zoom inside a filled canvas repaints nothing of the page, and waiting for a
+  // browser frame held the photograph still for a refresh and then jumped it. Any other waits
+  // for the next browser frame, which carries the page's matching layout, or until PlacementDue
+  // says it has waited long enough for a layout change that repaints nothing.
   void Place(ImageLayerGeometry geometry, double now);
   bool PlacementDue(double now) const;
   void ApplyPlacement();
@@ -121,6 +134,13 @@ class CompositorCore {
   // A probe composite's value, committed at `time_ms`: kept when it differs from the last.
   void RecordProbe(double time_ms, const std::string& value);
   const std::vector<ProbeChange>& probe_changes() const { return probe_changes_; }
+
+  // The composite trace: while on, every composite the frame clock draws and every placement the
+  // page sends is recorded with where the photograph stood, so a drag's pacing can be read.
+  void TraceComposites(bool on);
+  void TraceComposite(double now);
+  const std::vector<TracedPosition>& traced_composites() const { return traced_composites_; }
+  const std::vector<TracedPosition>& traced_placements() const { return traced_placements_; }
 
   // Something changed: the platform composites at its next refresh. Answers whether it should
   // also run a probe composite now (once per change while probing; see ProbeStarted).
@@ -170,6 +190,8 @@ class CompositorCore {
   double probe_x_ = 0, probe_y_ = 0;
   std::optional<std::string> probe_value_;
   std::vector<ProbeChange> probe_changes_;
+  bool tracing_ = false;
+  std::vector<TracedPosition> traced_composites_, traced_placements_;
   CompositorStats stats_;
 };
 

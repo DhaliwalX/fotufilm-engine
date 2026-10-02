@@ -167,6 +167,25 @@ void PlacementWaitsForTheBrowserFrame() {
   CHECK(Images(core.Plan(101.2, false)).empty());
 }
 
+void PanUnderAnUnchangedHolePlacesAtOnce() {
+  CompositorCore core(100);
+  core.Resize(200, 100, 2);
+  core.Present("preview", Frame(1, Surface()));
+  core.Place(Placed(1, {-50, -50, 400, 300}), 100);
+  core.BrowserFrame(400, 200, true, 12);
+  // Zoomed past the clip, the hole stays the clip: nothing on the page moves with the photo.
+  core.Place(Placed(1, {-80, -60, 400, 300}), 100.01);
+  CHECK(!core.PlacementDue(100.01));
+  auto images = Images(core.Plan(100.01, false));
+  CHECK(images.size() == 1 && Near(images[0].rect.x0, -1.8));
+  // A photo smaller than the clip moves its hole, so it still waits for the page.
+  core.Place(Placed(1, {10, 20, 64, 48}), 100.02);
+  core.Place(Placed(1, {12, 20, 64, 48}), 100.03);
+  CHECK(Near(Images(core.Plan(100.03, false))[0].rect.x0, -1.8));
+  CHECK(core.PlacementDue(100.02 + CompositorCore::kPlacementWaitSeconds + 1e-6));
+}
+
+
 void PlanPlacesInDeviceAndPixelSpace() {
   CompositorCore core(0);
   core.Resize(200, 100, 2);
@@ -292,6 +311,7 @@ int main() {
   SurfacePoolReuses();
   PresenterNumbersAndHandsOver();
   PlacementWaitsForTheBrowserFrame();
+  PanUnderAnUnchangedHolePlacesAtOnce();
   PlanPlacesInDeviceAndPixelSpace();
   ExtendedRangeFollowsTheFrames();
   ReplacedStillsCrossfade();
