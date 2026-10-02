@@ -341,6 +341,19 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertFalse(offers(.screen, .digitalReference, nil))
     }
 
+    func testCMYIsOfferedOnlyForColourNegativeDigitalReference() throws {
+        for field: EditorControlField in [.screenCyan, .screenMagenta, .screenYellow] {
+            for style in DigitalReferenceStyle.allCases {
+                XCTAssertTrue(offers(.screen, field, try preset("example-negative-400"), style: style))
+            }
+            XCTAssertFalse(offers(.screen, field, nil))
+            for id in ["example-monochrome-100", "example-reversal-64", "instaxmini"] {
+                XCTAssertFalse(offers(.screen, field, try preset(id)))
+            }
+            XCTAssertFalse(offers(.ektacolorEdge, field, try preset("example-negative-400")))
+        }
+    }
+
     func testPaperGradeFollowsTheGradedCurveOfANegative() throws {
         let negative = try preset("example-negative-400")
         XCTAssertTrue(offers(.screen, .screenGrade, negative))
@@ -390,7 +403,7 @@ final class EditorControlCatalogueTests: XCTestCase {
                 .map(\.field),
                        [.printFrame, .paper, .printLight, .printCorrection, .negativeViewing,
                         .digitalReference,
-                        .screenGrade, .screenExposure])
+                        .screenGrade, .screenExposure, .screenCyan, .screenMagenta, .screenYellow])
         XCTAssertEqual(EditorControlCatalogue.controls(in: .printLamp, for: negative).map(\.field),
                        [.enlarger, .printerEnabled, .printerLamp, .printerExposure,
                         .printerMagenta, .printerYellow, .printerPreflash])

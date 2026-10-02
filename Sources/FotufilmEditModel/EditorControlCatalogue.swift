@@ -182,7 +182,7 @@ public enum EditorControlCatalogue {
 
     public static let retiredFxplugIDs: [Int] = [33]
     public static let fxplugTextureStageIDs: ClosedRange<Int> = 40...71
-    public static let bridgeSlotCount = 64
+    public static let bridgeSlotCount = 67
 
     static let hostOnly: [EditorSurface: String] = [
         .app: "a plugin host's own setting, with no meaning on a photograph",
@@ -1662,6 +1662,60 @@ public enum EditorControlCatalogue {
             documentation: "Exposure of the Digital Reference conversion in stops, on top of the "
                 + "chosen style; positive lightens. On a negative it is the print exposure, on a "
                 + "positive the scanner's gain."),
+        EditorControl(
+            .screenCyan, title: "Cyan / Red",
+            detail: "Positive adds cyan by reducing red; negative adds red.",
+            section: .printPaper,
+            kind: .slider(EditorControlScale(-1...1, neutral: 0, unit: .signed)),
+            availability: .colourNegative, binding: .screenCMY(0),
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .web, .cli],
+            host: HostParameter(
+                slot: 64, slotSymbol: "SCREEN_CYAN", ofxName: "screenCyan",
+                fxplugID: 100, group: .output, label: "Cyan / Red",
+                hint: "Digital Reference colour negatives: positive adds cyan, negative adds red. "
+                    + "Manual correction after Auto Levels; relative units, not scanner steps.",
+                kind: .double(min: -1, max: 1, value: 0), clamp: -1...1, order: 29),
+            web: .profile,
+            commandLine: CommandLineFlag("--screen-cyan", placeholder: "<value>",
+                help: "Digital Reference cyan/red correction, -1...1 (default: 0); positive adds cyan"),
+            documentation: "Digital Reference colour negatives only. Positive reduces red, negative adds it, "
+                + "after Auto Levels and before the output curve. Relative units -1 to +1, not scanner steps."),
+        EditorControl(
+            .screenMagenta, title: "Magenta / Green",
+            detail: "Positive adds magenta by reducing green; negative adds green.",
+            section: .printPaper,
+            kind: .slider(EditorControlScale(-1...1, neutral: 0, unit: .signed)),
+            availability: .colourNegative, binding: .screenCMY(1),
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .web, .cli],
+            host: HostParameter(
+                slot: 65, slotSymbol: "SCREEN_MAGENTA", ofxName: "screenMagenta",
+                fxplugID: 101, group: .output, label: "Magenta / Green",
+                hint: "Digital Reference colour negatives: positive adds magenta, negative adds green. "
+                    + "Manual correction after Auto Levels; relative units, not scanner steps.",
+                kind: .double(min: -1, max: 1, value: 0), clamp: -1...1, order: 30),
+            web: .profile,
+            commandLine: CommandLineFlag("--screen-magenta", placeholder: "<value>",
+                help: "Digital Reference magenta/green correction, -1...1 (default: 0); positive adds magenta"),
+            documentation: "Digital Reference colour negatives only. Positive reduces green, negative adds it, "
+                + "after Auto Levels and before the output curve. Relative units -1 to +1, not scanner steps."),
+        EditorControl(
+            .screenYellow, title: "Yellow / Blue",
+            detail: "Positive adds yellow by reducing blue; negative adds blue.",
+            section: .printPaper,
+            kind: .slider(EditorControlScale(-1...1, neutral: 0, unit: .signed)),
+            availability: .colourNegative, binding: .screenCMY(2),
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .web, .cli],
+            host: HostParameter(
+                slot: 66, slotSymbol: "SCREEN_YELLOW", ofxName: "screenYellow",
+                fxplugID: 102, group: .output, label: "Yellow / Blue",
+                hint: "Digital Reference colour negatives: positive adds yellow, negative adds blue. "
+                    + "Manual correction after Auto Levels; relative units, not scanner steps.",
+                kind: .double(min: -1, max: 1, value: 0), clamp: -1...1, order: 31),
+            web: .profile,
+            commandLine: CommandLineFlag("--screen-yellow", placeholder: "<value>",
+                help: "Digital Reference yellow/blue correction, -1...1 (default: 0); positive adds yellow"),
+            documentation: "Digital Reference colour negatives only. Positive reduces blue, negative adds it, "
+                + "after Auto Levels and before the output curve. Relative units -1 to +1, not scanner steps."),
         EditorControl(
             .enlarger, title: "Enlarger",
             detail: "Choose the enlarger lighting used to make the print.",

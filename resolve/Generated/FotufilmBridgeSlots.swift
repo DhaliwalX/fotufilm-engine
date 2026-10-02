@@ -63,5 +63,8 @@ enum BridgeSlot {
     static let filmGreenLayer = 61
     static let filmBlueLayer = 62
     static let filmScanSoftness = 63
-    static let count = 64
+    static let screenCyan = 64
+    static let screenMagenta = 65
+    static let screenYellow = 66
+    static let count = 67
 }

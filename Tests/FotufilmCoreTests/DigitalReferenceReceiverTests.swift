@@ -12,7 +12,8 @@ final class DigitalReferenceReceiverTests: XCTestCase {
     private func positive(_ stock: FilmStock, exposure: SIMD3<Float>,
                           style: DigitalReferenceStyle = .default,
                           sceneHighlightStops: Float? = nil,
-                          grade: Float = 2, screenExposure: Float = 0) -> SIMD3<Float> {
+                          grade: Float = 2, screenExposure: Float = 0,
+                          cmy: SIMD3<Float> = .zero) -> SIMD3<Float> {
         let tables = SpectralRuntime.tables(for: stock, paper: .screen, digitalReference: style,
                                             screenGrade: grade, screenExposureEV: screenExposure)
         let activation = SIMD3<Float>((0..<3).map { c in
@@ -33,10 +34,84 @@ final class DigitalReferenceReceiverTests: XCTestCase {
             screenGrade: grade)
         let printed = SIMD3<Float>((0..<3).map { c in
             let curve = curves[c]
-            let x = midpoints[c] + shift + levels.scale * relative[c]
+            let correction = DigitalReferenceReceiver.colourShift(cmy, stock: stock, paper: .screen)
+            let x = midpoints[c] + shift + correction[c] + levels.scale * relative[c]
             return (curve.density(logExposure: x) - curve.dMin) / (curve.dMax - curve.dMin)
         })
         return paperOutput.sample(printed)
+    }
+
+    func testCMYDirectionDensityAndNeutralToneScaleAcrossStyles() {
+        for style in Self.styles {
+            let baseline = positive(stock, exposure: .zero, style: style)
+            XCTAssertEqual(baseline, positive(stock, exposure: .zero, style: style, cmy: .zero))
+            for channel in 0..<3 {
+                var correction = SIMD3<Float>.zero
+                correction[channel] = 0.25
+                let added = positive(stock, exposure: .zero, style: style, cmy: correction)
+                let removed = positive(stock, exposure: .zero, style: style, cmy: -correction)
+                XCTAssertLessThan(added[channel], baseline[channel] - 0.01, "\(style) / \(channel)")
+                XCTAssertGreaterThan(removed[channel], baseline[channel] + 0.01)
+                for other in 0..<3 where other != channel {
+                    XCTAssertEqual(added[other], baseline[other], accuracy: 0.002)
+                }
+            }
+            let darkened = positive(stock, exposure: .zero, style: style,
+                                    cmy: SIMD3(repeating: 0.25))
+            for c in 0..<3 { XCTAssertLessThan(darkened[c], baseline[c]) }
+            let corrections: [SIMD3<Float>] = [.zero, SIMD3(0.25, -0.15, 0.1), SIMD3(-1, 1, -1)]
+            let stops: [Float] = [-8, -4, -1, 0, 2, 5, 8]
+            let weights = ColorScience.displayP3LuminanceWeights
+            for cmy in corrections {
+                let tone = SpectralRuntime.neutralToneScale(stops: stops, stock: stock,
+                    paper: .screen, printCorrection: 0, digitalReference: style, screenCMY: cmy)
+                var previous: Float = -1
+                for (i, stop) in stops.enumerated() {
+                    let rgb = positive(stock, exposure: SIMD3(repeating: stop * log10(2)),
+                                       style: style, cmy: cmy)
+                    XCTAssertTrue((0..<3).allSatisfy { rgb[$0].isFinite && rgb[$0] >= 0 })
+                    let y = weights.0 * rgb.x + weights.1 * rgb.y + weights.2 * rgb.z
+                    XCTAssertGreaterThanOrEqual(y + 0.002, previous)
+                    XCTAssertEqual(y, tone[i], accuracy: 0.012)
+                    previous = y
+                }
+            }
+        }
+    }
+
+    func testCMYIsIgnoredOutsideColourNegativeScreenAndClampsFiniteValues() throws {
+        for id in ["example-monochrome-100", "example-reversal-64", "instaxmini"] {
+            let film = try XCTUnwrap(FilmStock.named(id))
+            XCTAssertEqual(DigitalReferenceReceiver.colourShift(SIMD3(repeating: 1),
+                stock: film, paper: .screen), .zero)
+        }
+        for paper: PrintPaper in [.ektacolorEdge, .labScan, .negative] {
+            XCTAssertEqual(DigitalReferenceReceiver.colourShift(SIMD3(repeating: 1),
+                stock: stock, paper: paper), .zero)
+        }
+        XCTAssertEqual(DigitalReferenceReceiver.colourShift(SIMD3(2, -2, .nan),
+            stock: stock, paper: .screen), SIMD3(0.3, -0.3, 0))
+    }
+
+    func testCMYSurvivesRepeatedAutoLevelsWithoutRebuildingTables() throws {
+        var options = FotufilmEngine.Options()
+        options.paper = .screen
+        var baseline = try FilmEngineInvocation(validating: stock, options: options, width: 16, height: 16)
+        options.screenCMY = SIMD3(0.2, -0.1, 0.3)
+        var corrected = try FilmEngineInvocation(validating: stock, options: options, width: 16, height: 16)
+        XCTAssertEqual(baseline.spectralCacheID, corrected.spectralCacheID)
+        let delta = zip(corrected.configuration, baseline.configuration).map(-)
+        XCTAssertEqual(delta.filter { abs($0) > 1e-6 }.count, 3)
+        for level: Float in [0.18, 8, 0.02, 8] {
+            let pixels = [Float](repeating: level, count: 16 * 16 * 4)
+            var measurement = baseline.toneBaseMeasurement()
+            pixels.withUnsafeBufferPointer { measurement.add(linearRGBA: $0.baseAddress!, rows: 0..<16) }
+            baseline.setToneBase(measurement)
+            corrected.setToneBase(measurement)
+            for i in delta.indices {
+                XCTAssertEqual(corrected.configuration[i] - baseline.configuration[i], delta[i], accuracy: 1e-6)
+            }
+        }
     }
 
     private static let styles = DigitalReferenceStyle.allCases
@@ -538,6 +613,7 @@ final class DigitalReferenceReceiverTests: XCTestCase {
         }}
         var options = FotufilmEngine.Options()
         options.paper = .screen; options.grainScale = 0; options.halationScale = 0
+        options.screenCMY = SIMD3(0.25, -0.15, 0.1)
         options.localTone = false
         for style in Self.styles {
             options.digitalReference = style

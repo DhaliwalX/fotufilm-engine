@@ -110,7 +110,10 @@
       <target object="9001001" channel="./36/95" name="Screen Conversion"/>
       <target object="9001001" channel="./36/96" name="Paper Grade"/>
       <target object="9001001" channel="./36/97" name="Screen Exposure"/>
+      <target object="9001001" channel="./36/100" name="Cyan / Red"/>
       <target object="9001001" channel="./36/20" name="Channel Contrast Match"/>
+      <target object="9001001" channel="./36/101" name="Magenta / Green"/>
+      <target object="9001001" channel="./36/102" name="Yellow / Blue"/>
       <target object="9001001" channel="./36/99" name="Printer Preflash"/>
       <target object="9001001" channel="./36/80" name="Negative Viewing"/>
       <target object="9001001" channel="./30/1" name="Stage"/>
@@ -251,7 +254,10 @@
             <parameter name="Screen Conversion" id="95" flags="12901744656" default="2" value="2"/>
             <parameter name="Paper Grade" id="96" flags="12901679120" default="2" value="2"/>
             <parameter name="Screen Exposure" id="97" flags="12901679120" default="0" value="0"/>
+            <parameter name="Cyan / Red" id="100" flags="12901679120" default="0" value="0"/>
             <parameter name="Channel Contrast Match" id="20" flags="12901679120" default="0" value="0"/>
+            <parameter name="Magenta / Green" id="101" flags="12901679120" default="0" value="0"/>
+            <parameter name="Yellow / Blue" id="102" flags="12901679120" default="0" value="0"/>
             <parameter name="Printer Preflash" id="99" flags="12901679120" default="0" value="0"/>
             <parameter name="Negative Viewing" id="80" flags="12901744656" default="0" value="0"/>
           </parameter>

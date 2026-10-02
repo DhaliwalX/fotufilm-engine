@@ -19,6 +19,7 @@ const stock = {
       screen: {
         screenConversion: true,
         screenGrade: true,
+        screenCMY: true,
         viewingLights: [{ id: "reference" }],
       },
       paper: {
@@ -126,4 +127,21 @@ test("a photo's Separation sets both colour pairs, as the Mac app's does", () =>
     { couplerReach: 1.2, couplerSelf: 2 });
   assert.deepEqual(withProfileField(profile, "couplerSelf", undefined),
     { couplerReach: 1, couplerRedGreen: 0.5, couplerGreenBlue: 2 });
+});
+
+test("CMY edits round trip, remain saved on paper, and resume on Digital Reference", () => {
+  const profile = { screenCyan: 0.25, screenMagenta: -0.15, screenYellow: 0.1 };
+  const edit = parseEdit(JSON.stringify({ version: 1, edit: { ...defaultEdit("gold200"), profile } }), ["gold200"]);
+  assert.deepEqual(edit.profile, profile);
+  assert.deepEqual(profileRequestControls(edit, stock), profile);
+  edit.medium = "paper";
+  assert.deepEqual(profileRequestControls(edit, stock), {});
+  assert.deepEqual(edit.profile, profile);
+  edit.medium = "screen";
+  assert.deepEqual(profileRequestControls(edit, stock), profile);
+  for (const field of Object.keys(profile)) {
+    assert.throws(() => parseEdit(JSON.stringify({ version: 1, edit: { ...edit, profile: { [field]: 1.1 } } }), ["gold200"]));
+    delete edit.profile[field];
+  }
+  assert.equal(hasProfileSettings(edit), false);
 });

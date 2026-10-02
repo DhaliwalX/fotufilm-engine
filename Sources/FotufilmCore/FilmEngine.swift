@@ -1169,6 +1169,11 @@ public struct FilmEngineInvocation {
         var xMids = printMedium.printExposureMidpoints(
             for: stock, digitalReference: options.digitalReference)
             .enumerated().map { $1 + printMedium.exposureDirection * (screenShift + autoColour[$0]) }
+        // Manual receiver balance follows metering, so Auto Levels cannot cancel the cast.
+        // The existing per-record midpoint slots are shared by CPU, Metal and AOT kernels.
+        let colourShift = DigitalReferenceReceiver.colourShift(options.screenCMY,
+                                                               stock: stock, paper: printMedium)
+        for channel in 0..<3 { xMids[channel] += colourShift[channel] }
         // Paper exposure shifts log light after film transmission, before the paper curves.
         // Reuse the midpoint slots to preserve the packed ABI and avoid rebuilding spectral LUTs.
         if let printer, printer.exposureEV != 0 {

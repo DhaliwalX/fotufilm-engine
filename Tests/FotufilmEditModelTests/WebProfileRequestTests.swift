@@ -15,6 +15,14 @@ final class WebProfileRequestTests: XCTestCase {
         return try JSONDecoder().decode(WebProfileRequest.self, from: JSONSerialization.data(withJSONObject: input))
     }
 
+    func testCMYProfileReachesReceiverAndFollowsMedium() throws {
+        let values: [String: Any] = ["screenCyan": 0.25, "screenMagenta": -0.15, "screenYellow": 0.1]
+        XCTAssertEqual(try request(values, medium: "screen").configured().1.screenCMY, SIMD3(0.25, -0.15, 0.1))
+        XCTAssertEqual(try request(values, medium: "ektacolor-edge").configured().1.screenCMY, SIMD3(0.25, -0.15, 0.1))
+        XCTAssertEqual(try request(values, stock: "example-reversal-64", medium: "screen").configured().1.screenCMY, SIMD3(0.25, -0.15, 0.1))
+        XCTAssertThrowsError(try request(["screenCyan": 1.1], medium: "screen").configured())
+    }
+
     func testPrinterControlsComposeAndDisablingRestoresDefaultPath() throws {
         var values: [String: Any] = ["printerEnabled": true, "printerLamp": 3400,
             "printerExposure": 1.25, "printerMagenta": 0.6, "printerYellow": 0.7,

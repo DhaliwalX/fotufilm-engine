@@ -118,6 +118,9 @@ extension EditorControlField {
             return .bespoke { $0.digitalReference != .default }
         case .screenGrade: return .number(\.screenGrade)
         case .screenExposure: return .number(\.screenExposure)
+        case .screenCyan: return .number(\.screenCyan)
+        case .screenMagenta: return .number(\.screenMagenta)
+        case .screenYellow: return .number(\.screenYellow)
         case .enlarger:
             return .bespoke { $0.enlarger != .default }
         case .printerEnabled: return .flag(\.printerEnabled)

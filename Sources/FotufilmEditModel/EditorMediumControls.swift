@@ -28,6 +28,10 @@ extension EditorControlCatalogue {
         case .digitalReference, .screenExposure:
             guard let stock else { return false }
             return paper == .screen && !stock.isReflectionPrint
+        case .screenCyan, .screenMagenta, .screenYellow:
+            guard let stock else { return false }
+            return paper == .screen && !stock.isReversal && !stock.isMonochrome
+                && !stock.isReflectionPrint
         case .screenGrade:
             // The grade shapes the graded curve, which only a negative is printed through, and
             // Reference Exposure keeps the calibrated curve without one.
