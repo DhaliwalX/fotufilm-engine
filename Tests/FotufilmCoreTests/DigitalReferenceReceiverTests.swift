@@ -85,10 +85,13 @@ final class DigitalReferenceReceiverTests: XCTestCase {
             XCTAssertEqual(DigitalReferenceReceiver.colourShift(SIMD3(repeating: 1),
                 stock: film, paper: .screen), .zero)
         }
-        for paper: PrintPaper in [.ektacolorEdge, .labScan, .negative] {
+        for paper: PrintPaper in [.ektacolorEdge, .negative] {
             XCTAssertEqual(DigitalReferenceReceiver.colourShift(SIMD3(repeating: 1),
                 stock: stock, paper: paper), .zero)
         }
+        // Lab Scan takes the same keys.
+        XCTAssertEqual(DigitalReferenceReceiver.colourShift(SIMD3(1, 0, -1),
+            stock: stock, paper: .labScan), SIMD3(0.3, 0, -0.3))
         XCTAssertEqual(DigitalReferenceReceiver.colourShift(SIMD3(2, -2, .nan),
             stock: stock, paper: .screen), SIMD3(0.3, -0.3, 0))
     }

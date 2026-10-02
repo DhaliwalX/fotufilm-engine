@@ -899,6 +899,7 @@ class Developer {
         grid.regionStops,
         controls.ev ?? controls.exposure ?? 0,
         grid.channelStops,
+        controls.labScanDodging ?? 1,
       )
       // The user's tone controls and Lab Scan's dodging key regionally, Lab Scan's on the frame's
       // median; otherwise the key is whole-frame, offset to the stop Auto Levels prints mid-grey,

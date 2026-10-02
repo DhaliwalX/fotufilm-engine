@@ -108,42 +108,39 @@ export function autoColourShift(meter, medians, exposureEV = 0) {
 // Lab Scan's dodging, as LabScanTiming.dodge reads it: a frame whose ends reach further from its
 // median than a print holds has its bright regions held and its dark regions lifted, in the tone
 // controls' units, keyed regionally on the median. Null for an empty measurement.
-const DODGE_HIGHLIGHT_SPAN = 2.5, DODGE_SHADOW_SPAN = 3.5, DODGE_RAMP = 3
-const DODGE_MAX_HOLD = .25, DODGE_MAX_LIFT = .2
-export function labScanDodge(regionStops) {
+const DODGE_HIGHLIGHT_SPAN = 3, DODGE_SHADOW_SPAN = 3.5, DODGE_RAMP = 3
+const DODGE_MAX_HOLD = .15, DODGE_MAX_LIFT = .2
+export function labScanDodge(regionStops, strength = 1) {
   const percentile = percentiles(regionStops)
   if (!percentile) return null
   const median = percentile(.5)
+  const share = Number.isFinite(strength) ? Math.min(Math.max(strength, 0), 2) : 1
   const ramp = (reach, span) => Math.min(Math.max((reach - span) / DODGE_RAMP, 0), 1)
   return {
-    hold: DODGE_MAX_HOLD * ramp(percentile(.995) - median, DODGE_HIGHLIGHT_SPAN),
-    lift: DODGE_MAX_LIFT * ramp(median - percentile(.005), DODGE_SHADOW_SPAN),
+    hold: Math.min(share * DODGE_MAX_HOLD * ramp(percentile(.995) - median, DODGE_HIGHLIGHT_SPAN), 1),
+    lift: Math.min(share * DODGE_MAX_LIFT * ramp(median - percentile(.005), DODGE_SHADOW_SPAN), 1),
     key: median,
   }
 }
 
-// The highlight Lab Scan sets its white point on, as LabScanTiming.meteredHighlight reads it from
-// the same regional log-luminances: the 99.5th percentile, lowered by half its excess over three
-// stops above the median, at most two stops, then by what the dodge's hold takes from it. Null for
-// an empty measurement.
+// The highlight Lab Scan sets its white point on, as LabScanTiming.highlight reads it from the
+// same regional log-luminances: the 99.5th percentile, lowered by half its excess over three stops
+// above the median, at most two stops. Null for an empty measurement.
 export function labScanHighlight(regionStops) {
   const percentile = percentiles(regionStops)
   if (!percentile) return null
   const bright = percentile(.995)
   const excess = Math.max(0, bright - percentile(.5) - 3)
-  const highlight = bright - Math.min(2, .5 * excess)
-  const { hold, key } = labScanDodge(regionStops)
-  const reach = Math.min(Math.max((highlight - key) / 6, 0), 1)
-  return highlight - 3 * hold * reach * reach * (3 - 2 * reach)
+  return bright - Math.min(2, .5 * excess)
 }
 
 // Lab Scan's levels: its table carries a contrast per record and is solved before the edit's
-// exposure, so `exposureEV` is taken out of the reading. Its dodge rides the tone controls; returns
-// the median it keys them on while it dodges, or null.
-function applyLabScanLevels(configuration, meter, regionStops, exposureEV) {
+// exposure, so `exposureEV` is taken out of the reading. Its dodge, `dodging` times the scanner's,
+// rides the tone controls; returns the median it keys them on while it dodges, or null.
+function applyLabScanLevels(configuration, meter, regionStops, exposureEV, dodging) {
   const metered = labScanHighlight(regionStops)
   if (metered === null) return null
-  const { hold, lift, key } = labScanDodge(regionStops)
+  const { hold, lift, key } = labScanDodge(regionStops, dodging)
   const samples = meter.adjustments
   if (!Array.isArray(samples) || samples.length < 2) throw new Error('Invalid screen conversion profile.')
   const row = tabulated(meter, samples, metered - exposureEV)
@@ -164,9 +161,11 @@ function applyLabScanLevels(configuration, meter, regionStops, exposureEV) {
 // still shows, as DigitalReferenceReceiver.levels does. Returns the scene stop a negative's print
 // takes for mid-grey, which keys the tone controls, or null where nothing keys them.
 export function applyScreenLevels(configuration, meter, regionStops, exposureEV = 0,
-                                  channelStops = null) {
+                                  channelStops = null, labScanDodging = 1) {
   if (!meter) return null
-  if (meter.labScan) return applyLabScanLevels(configuration, meter, regionStops, exposureEV)
+  if (meter.labScan) {
+    return applyLabScanLevels(configuration, meter, regionStops, exposureEV, labScanDodging)
+  }
   const metered = retimeHighlight(regionStops, exposureEV)
   if (metered === null) return null
   const samples = meter.adjustments

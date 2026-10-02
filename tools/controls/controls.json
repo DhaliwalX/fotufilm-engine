@@ -228,7 +228,7 @@
       "text" : "Not yet examined"
     }
   ],
-  "bridgeSlotCount" : 67,
+  "bridgeSlotCount" : 69,
   "bridgeSlots" : [
     "EXPOSURE_EV",
     "TEMPERATURE",
@@ -296,7 +296,9 @@
     "FILM_SCAN_SOFTNESS",
     "SCREEN_CYAN",
     "SCREEN_MAGENTA",
-    "SCREEN_YELLOW"
+    "SCREEN_YELLOW",
+    "LAB_SCAN_DODGING",
+    "LAB_SCAN_LOOK"
   ],
   "controls" : [
     {
@@ -5018,10 +5020,10 @@
       "binding" : "screenExposureStops",
       "commandLineFlag" : "--screen-exposure",
       "commandLineGeneric" : true,
-      "commandLineHelp" : "Screen conversion exposure, -3...3 stops (default: 0); positive lightens.",
+      "commandLineHelp" : "Digital Reference or Lab Scan exposure, -3...3 stops (default: 0); positive lightens.",
       "commandLinePlaceholder" : "<ev>",
-      "detail" : "Lighten or darken the screen conversion on top of the chosen style.",
-      "documentation" : "Exposure of the Digital Reference conversion in stops, on top of the chosen style; positive lightens. On a negative it is the print exposure, on a positive the scanner's gain.",
+      "detail" : "Lighten or darken the conversion: Digital Reference's exposure, Lab Scan's density.",
+      "documentation" : "Exposure of the Digital Reference conversion in stops, on top of the chosen style; positive lightens. On a negative it is the print exposure, on a positive the scanner's gain. On Lab Scan it is the scanner's density key: the negative's scan lightens or darkens at mid-grey by the stops, after its per-frame setup, without changing the film's exposure.",
       "drives" : [
 
       ],
@@ -5036,9 +5038,9 @@
         "delta" : 0.01,
         "fxplugID" : 97,
         "group" : "output",
-        "hint" : "Exposure of the Digital Reference conversion in stops on top of the chosen style; positive lightens. A negative's print exposure, a slide's scanner gain.",
+        "hint" : "Exposure of the Digital Reference conversion in stops on top of the chosen style, or of a Lab Scan at mid-grey; positive lightens. A negative's print exposure, a slide's scanner gain, a lab scanner's density key.",
         "kind" : "double",
-        "label" : "Screen Exposure",
+        "label" : "Scan Exposure",
         "max" : 3,
         "min" : -3,
         "ofxName" : "screenExposure",
@@ -5079,7 +5081,7 @@
         "web",
         "cli"
       ],
-      "title" : "Screen Exposure",
+      "title" : "Scan Exposure",
       "webTransform" : "profile"
     },
     {
@@ -5087,10 +5089,10 @@
       "binding" : "screenCMY(0)",
       "commandLineFlag" : "--screen-cyan",
       "commandLineGeneric" : true,
-      "commandLineHelp" : "Digital Reference cyan/red correction, -1...1 (default: 0); positive adds cyan",
+      "commandLineHelp" : "Digital Reference or Lab Scan cyan/red correction, -1...1 (default: 0); positive adds cyan",
       "commandLinePlaceholder" : "<value>",
       "detail" : "Positive adds cyan by reducing red; negative adds red.",
-      "documentation" : "Digital Reference colour negatives only. Positive reduces red, negative adds it, after Auto Levels and before the output curve. Relative units -1 to +1, not scanner steps.",
+      "documentation" : "Digital Reference and Lab Scan colour negatives only. Positive reduces red, negative adds it, after the per-frame levels and before the output curve. Relative units -1 to +1, not scanner steps.",
       "drives" : [
 
       ],
@@ -5105,7 +5107,7 @@
         "delta" : 0.01,
         "fxplugID" : 100,
         "group" : "output",
-        "hint" : "Digital Reference colour negatives: positive adds cyan, negative adds red. Manual correction after Auto Levels; relative units, not scanner steps.",
+        "hint" : "Digital Reference and Lab Scan colour negatives: positive adds cyan, negative adds red. Manual correction after Auto Levels; relative units, not scanner steps.",
         "kind" : "double",
         "label" : "Cyan / Red",
         "max" : 1,
@@ -5157,10 +5159,10 @@
       "binding" : "screenCMY(1)",
       "commandLineFlag" : "--screen-magenta",
       "commandLineGeneric" : true,
-      "commandLineHelp" : "Digital Reference magenta/green correction, -1...1 (default: 0); positive adds magenta",
+      "commandLineHelp" : "Digital Reference or Lab Scan magenta/green correction, -1...1 (default: 0); positive adds magenta",
       "commandLinePlaceholder" : "<value>",
       "detail" : "Positive adds magenta by reducing green; negative adds green.",
-      "documentation" : "Digital Reference colour negatives only. Positive reduces green, negative adds it, after Auto Levels and before the output curve. Relative units -1 to +1, not scanner steps.",
+      "documentation" : "Digital Reference and Lab Scan colour negatives only. Positive reduces green, negative adds it, after the per-frame levels and before the output curve. Relative units -1 to +1, not scanner steps.",
       "drives" : [
 
       ],
@@ -5175,7 +5177,7 @@
         "delta" : 0.01,
         "fxplugID" : 101,
         "group" : "output",
-        "hint" : "Digital Reference colour negatives: positive adds magenta, negative adds green. Manual correction after Auto Levels; relative units, not scanner steps.",
+        "hint" : "Digital Reference and Lab Scan colour negatives: positive adds magenta, negative adds green. Manual correction after Auto Levels; relative units, not scanner steps.",
         "kind" : "double",
         "label" : "Magenta / Green",
         "max" : 1,
@@ -5227,10 +5229,10 @@
       "binding" : "screenCMY(2)",
       "commandLineFlag" : "--screen-yellow",
       "commandLineGeneric" : true,
-      "commandLineHelp" : "Digital Reference yellow/blue correction, -1...1 (default: 0); positive adds yellow",
+      "commandLineHelp" : "Digital Reference or Lab Scan yellow/blue correction, -1...1 (default: 0); positive adds yellow",
       "commandLinePlaceholder" : "<value>",
       "detail" : "Positive adds yellow by reducing blue; negative adds blue.",
-      "documentation" : "Digital Reference colour negatives only. Positive reduces blue, negative adds it, after Auto Levels and before the output curve. Relative units -1 to +1, not scanner steps.",
+      "documentation" : "Digital Reference and Lab Scan colour negatives only. Positive reduces blue, negative adds it, after the per-frame levels and before the output curve. Relative units -1 to +1, not scanner steps.",
       "drives" : [
 
       ],
@@ -5245,7 +5247,7 @@
         "delta" : 0.01,
         "fxplugID" : 102,
         "group" : "output",
-        "hint" : "Digital Reference colour negatives: positive adds yellow, negative adds blue. Manual correction after Auto Levels; relative units, not scanner steps.",
+        "hint" : "Digital Reference and Lab Scan colour negatives: positive adds yellow, negative adds blue. Manual correction after Auto Levels; relative units, not scanner steps.",
         "kind" : "double",
         "label" : "Yellow / Blue",
         "max" : 1,
@@ -5290,6 +5292,146 @@
         "cli"
       ],
       "title" : "Yellow / Blue",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "transparentFilm",
+      "binding" : "labScanDodging",
+      "commandLineFlag" : "--lab-scan-dodging",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Lab Scan dodging, 0...2 times the scanner's own (default: 1)",
+      "commandLinePlaceholder" : "<share>",
+      "detail" : "Hold broad highlights and open deep shadows on a frame wider than a print.",
+      "documentation" : "Lab Scan negatives only. On a frame whose content reaches further from its median than a print holds, the scanner holds broad highlights down and opens deep shadows, each region by its own brightness, keeping local contrast. 0 turns it off, 1 is the scanner's own, 2 doubles it.",
+      "drives" : [
+
+      ],
+      "field" : "labScanDodging",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 2,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 103,
+        "group" : "output",
+        "hint" : "Lab Scan negatives: the scanner's regional dodging, 0 off, 1 its own, 2 double.",
+        "kind" : "double",
+        "label" : "Dodging",
+        "max" : 2,
+        "min" : 0,
+        "ofxName" : "labScanDodging",
+        "order" : 32,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 67,
+        "slotSymbol" : "LAB_SCAN_DODGING",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+
+      },
+      "persistedKey" : "labScanDodging",
+      "scale" : {
+        "admittedMax" : 2,
+        "admittedMin" : 0,
+        "max" : 2,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "multiplier"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Dodging",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "transparentFilm",
+      "binding" : "labScanLook",
+      "commandLineFlag" : "--lab-scan-look",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Lab Scan finish, 0 neutral ... 1 the minilab scanner's (default: 1)",
+      "commandLinePlaceholder" : "<share>",
+      "detail" : "From a neutral scan to the minilab scanner's finished colour and tone.",
+      "documentation" : "Lab Scan negatives only. 1 finishes the scan the way a minilab scanner's processing does: a steeper, print-like gradation with open highlights and a deep black, shadows cooler than the highlights, richer yellows, oranges and blues, and foliage turned toward teal. 0 delivers the neutral characterized scan.",
+      "drives" : [
+
+      ],
+      "field" : "labScanLook",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 104,
+        "group" : "output",
+        "hint" : "Lab Scan negatives: 0 is the neutral scan, 1 the minilab scanner's finish.",
+        "kind" : "double",
+        "label" : "Scanner Look",
+        "max" : 1,
+        "min" : 0,
+        "ofxName" : "labScanLook",
+        "order" : 33,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 68,
+        "slotSymbol" : "LAB_SCAN_LOOK",
+        "value" : 1,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+
+      },
+      "persistedKey" : "labScanLook",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : 0,
+        "max" : 1,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Scanner Look",
       "webTransform" : "profile"
     },
     {

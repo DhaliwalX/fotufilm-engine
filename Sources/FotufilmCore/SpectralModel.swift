@@ -373,9 +373,11 @@ public enum SpectralRuntime {
                               printer: PrinterProfile? = nil,
                               digitalReference: DigitalReferenceStyle = .default,
                               screenGrade: Float = 2,
-                              screenExposureEV: Float = 0)
+                              screenExposureEV: Float = 0,
+                              labScanLook: Float = 1)
         -> SpectralPipelineTables {
         let paper = paper.resolved(for: stock)
+        let labScanLook = effectiveLabScanLook(labScanLook, paper: paper)
         let printer = PrinterProfile.resolved(printer, stock: stock, paper: paper)
         let bleachBypass = retainedSilverFraction(bleachBypass, stock: stock)
         let screenGrade = effectiveScreenGrade(screenGrade, stock: stock, paper: paper,
@@ -388,7 +390,8 @@ public enum SpectralRuntime {
         let key = cacheIdentifier(for: stock, paper: paper, bleachBypass: bleachBypass,
                                   printViewingKelvin: printViewingKelvin, callier: callier,
                                   printer: printer, digitalReference: digitalReference,
-                                  screenGrade: screenGrade, screenExposureEV: screenExposureEV)
+                                  screenGrade: screenGrade, screenExposureEV: screenExposureEV,
+                                  labScanLook: labScanLook)
         lock.lock()
         while true {
             if let found = cache.value(for: key) {
@@ -407,7 +410,8 @@ public enum SpectralRuntime {
         let built = buildTables(for: stock, paper: paper, bleachBypass: bleachBypass,
                                 printViewingKelvin: printViewingKelvin, callier: callier,
                                 printer: printer, digitalReference: digitalReference,
-                                screenGrade: screenGrade, screenExposureEV: screenExposureEV)
+                                screenGrade: screenGrade, screenExposureEV: screenExposureEV,
+                                labScanLook: labScanLook)
 
         lock.lock()
         cache.insert(built, for: key)
@@ -479,7 +483,8 @@ public enum SpectralRuntime {
                                        printer: PrinterProfile? = nil,
                                        digitalReference: DigitalReferenceStyle = .default,
                                        screenGrade: Float = 2,
-                                       screenExposureEV: Float = 0)
+                                       screenExposureEV: Float = 0,
+                                       labScanLook: Float = 1)
         -> UInt64 {
         let paper = paper.resolved(for: stock)
         var h = stock.spectralProfile.signature
@@ -530,6 +535,9 @@ public enum SpectralRuntime {
         let directExposure = directViewExposure(screenExposureEV, stock: stock, paper: paper,
                                                 digitalReference: digitalReference)
         if directExposure != 0 { add(directExposure + 1024) }
+        // Lab Scan's finish is baked into its output table; hashed only away from the full finish.
+        let look = effectiveLabScanLook(labScanLook, paper: paper)
+        if look != 1 { add(look + 2048) }
         // Hashed only away from their off positions, so every identity that existed before
         // these levers is exactly the identity it was.
         let bleach = retainedSilverFraction(bleachBypass, stock: stock)
@@ -563,7 +571,8 @@ public enum SpectralRuntime {
                                     printer: PrinterProfile? = nil,
                                     digitalReference: DigitalReferenceStyle = .default,
                                     screenGrade: Float = 2,
-                                    screenExposureEV: Float = 0)
+                                    screenExposureEV: Float = 0,
+                                    labScanLook: Float = 1)
         -> SpectralPipelineTables {
         // Output characterization is fixed at the stock's reference light. The invocation
         // replaces this exposure table with the scene spectrum after calibration is built.
@@ -731,7 +740,7 @@ public enum SpectralRuntime {
             let calibration = stock.isMonochrome
                 ? nil
                 : ScanOutputCalibration(paper: paper, stock: stock, exposure: exposure,
-                                        printing: printing)
+                                        printing: printing, finish: labScanLook)
             paperOutput = buildLUT { activation in
                 let density = SIMD3(activation.x * paperRanges[0],
                                     activation.y * paperRanges[1],
@@ -742,7 +751,9 @@ public enum SpectralRuntime {
                 // A monochrome scan carries no chroma to characterize, so the receiver is the
                 // programme, finished on Lab Scan's gradation. A video transfer still delivers it
                 // inside Rec.709.
-                if paper == .labScan { return LabScanFinish.apply(rgb, chromatic: false) }
+                if paper == .labScan {
+                    return LabScanFinish.apply(rgb, strength: labScanLook, chromatic: false)
+                }
                 return paper.deliversRec709
                     ? ColorScience.linearSRGBToDisplayP3(rgb) : rgb
             }
@@ -920,8 +931,8 @@ public enum SpectralRuntime {
         let inverse: SpectralResponseInverse
         let range: Float
         let deliversRec709: Bool
-        /// Whether the characterized scan takes Lab Scan's finish.
-        let finishes: Bool
+        /// How much of Lab Scan's finish the characterized scan takes; 0 on other scans.
+        let finish: Float
         /// Actual no-light receiver level for an editable scan. A film's finite base response
         /// can sit above the receiver curve's mathematical D-max floor.
         let shadowFloor: Float
@@ -929,12 +940,12 @@ public enum SpectralRuntime {
         let clipInterval: (Float, Float) = (0.76, 0.84)
 
         init(paper: PrintPaper, stock: FilmStock, exposure: SpectralLUT,
-             printing: SpectralLUT) {
+             printing: SpectralLUT, finish: Float = 1) {
             let curve = paper.printCurve(for: stock)
             let scanRange = curve.dMax - curve.dMin
             range = scanRange
             deliversRec709 = paper.deliversRec709
-            finishes = paper == .labScan
+            self.finish = paper == .labScan ? finish : 0
             let midpoint = curve.logExposure(
                 density: curve.dMin + paper.anchorDensity)
             let masking = stock.printingContrastScale(
@@ -1022,8 +1033,8 @@ public enum SpectralRuntime {
                 var scanned = calibrated
                     + hold * (SIMD3(repeating: outputLuminance) - calibrated)
                 var scannedLuminance = outputLuminance
-                if finishes {
-                    scanned = LabScanFinish.apply(scanned)
+                if finish > 0 {
+                    scanned = LabScanFinish.apply(scanned, strength: finish)
                     scannedLuminance = luminance(scanned)
                 }
                 // Keep highlight color; only compress chroma the delivery gamut cannot hold.
@@ -1940,9 +1951,21 @@ public enum SpectralRuntime {
     }
 
     /// The screen exposure the paper slots carry, as a log exposure added to every read.
+    /// The share of Lab Scan's finish a table bakes: the request in 0...1 on Lab Scan, the full
+    /// finish for an invalid request, and 1 on every other medium so their identities hold.
+    static func effectiveLabScanLook(_ look: Float, paper: PrintPaper) -> Float {
+        guard paper == .labScan else { return 1 }
+        return look.isFinite ? min(max(look, 0), 1) : 1
+    }
+
     static func screenExposureShift(_ stops: Float, stock: FilmStock, paper: PrintPaper,
                                     digitalReference: DigitalReferenceStyle,
                                     screenGrade: Float) -> Float {
+        if paper == .labScan {
+            // Lab Scan's density key: a negative's scan lightened at mid-grey by the stops.
+            guard !stock.isReversal, !stock.isReflectionPrint else { return 0 }
+            return LabScanTiming.densityShift(stops: stops, stock: stock)
+        }
         guard paper == .screen, !stock.isReflectionPrint, stops.isFinite,
               !paper.viewsFilmDirectly(for: stock)
                 || paper.levelsPositive(for: stock, digitalReference: digitalReference)

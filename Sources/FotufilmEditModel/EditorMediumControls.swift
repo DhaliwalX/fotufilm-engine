@@ -25,13 +25,20 @@ extension EditorControlCatalogue {
             return !stock.isReversal && !stock.isMonochrome && paper.acceptsPrintCorrection
         case .negativeViewing:
             return paper.isNegative
-        case .digitalReference, .screenExposure:
+        case .digitalReference:
             guard let stock else { return false }
             return paper == .screen && !stock.isReflectionPrint
+        case .screenExposure:
+            // Digital Reference's exposure, and Lab Scan's density key for a negative's scan.
+            guard let stock, !stock.isReflectionPrint else { return false }
+            return paper == .screen || (paper == .labScan && !stock.isReversal)
         case .screenCyan, .screenMagenta, .screenYellow:
             guard let stock else { return false }
-            return paper == .screen && !stock.isReversal && !stock.isMonochrome
-                && !stock.isReflectionPrint
+            return (paper == .screen || paper == .labScan) && !stock.isReversal
+                && !stock.isMonochrome && !stock.isReflectionPrint
+        case .labScanDodging, .labScanLook:
+            guard let stock else { return false }
+            return paper == .labScan && !stock.isReversal && !stock.isReflectionPrint
         case .screenGrade:
             // The grade shapes the graded curve, which only a negative is printed through, and
             // Reference Exposure keeps the calibrated curve without one.

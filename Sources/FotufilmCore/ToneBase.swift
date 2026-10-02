@@ -438,7 +438,7 @@ extension FilmEngineInvocation {
     public func sceneHighlightStops(_ measurement: ToneBaseMeasurement) -> Float? {
         if meterStock != nil, meterMedium == .labScan {
             return AutoAdjustment.SceneStops(regionStops: measurement.regionStops())
-                .map(LabScanTiming.meteredHighlight)
+                .map(LabScanTiming.highlight)
         }
         let exposureEV = log2(configuration[Self.exposureGainOffset]) - meterLevels.filmBoost
         return screenScene(measurement).map {
@@ -479,9 +479,9 @@ extension FilmEngineInvocation {
         // regional key.
         if let stock = meterStock, meterMedium == .labScan,
            let scene = AutoAdjustment.SceneStops(regionStops: measurement.regionStops()) {
-            let dodge = LabScanTiming.dodge(scene)
+            let dodge = LabScanTiming.dodge(scene, strength: meterDodging)
             let levels = LabScanTiming.levels(
-                for: stock, sceneHighlightStops: LabScanTiming.meteredHighlight(scene),
+                for: stock, sceneHighlightStops: LabScanTiming.highlight(scene),
                 exposureEV: meterExposureEV, masking: meterMasking)
             applyMeteredLevels(MeteredLevels(scale: levels.scale,
                                              shift: SIMD3(repeating: levels.shift),

@@ -12,7 +12,7 @@ import Foundation
 /// kernel runs it and every renderer shares it.
 public enum LabScanFinish {
     /// Lift of the upper tones at their peak, in cube-root luminance; zero at mid-grey and white.
-    static let highlightLift: Float = 0.04
+    static let highlightLift: Float = 0.02
     /// Pull on the deepest tones at black, in cube-root luminance.
     static let blackPull: Float = 0.012
     /// Shadow and mid-tone cooling from the records' crossover, in Oklab a/b.
@@ -40,10 +40,13 @@ public enum LabScanFinish {
         HueCorrection(hue: 310, width: 25, chroma: 1, turn: -15),     // violet toward blue
     ]
 
-    /// The finished colour of a scan pixel, linear Display P3 in and out. A monochrome scan takes
-    /// the gradation alone and stays neutral.
-    public static func apply(_ colour: SIMD3<Float>, chromatic: Bool = true) -> SIMD3<Float> {
-        let toned = graded(colour)
+    /// The finished colour of a scan pixel, linear Display P3 in and out, `strength` of the way
+    /// from the neutral scan. A monochrome scan takes the gradation alone and stays neutral.
+    public static func apply(_ colour: SIMD3<Float>, strength: Float = 1,
+                             chromatic: Bool = true) -> SIMD3<Float> {
+        let strength = strength.isFinite ? min(max(strength, 0), 1) : 1
+        guard strength > 0 else { return colour }
+        let toned = graded(colour, strength: strength)
         guard chromatic else { return toned }
         var lab = oklab(ColorScience.linearDisplayP3ToSRGB(toned))
         let l = lab.x
@@ -52,22 +55,22 @@ public enum LabScanFinish {
         // black floor nor at white.
         let shadow = clamp((0.75 - l) / 0.45, 0, 1) * clamp((l - 0.04) / 0.16, 0, 1)
         let high = clamp((l - 0.75) / 0.15, 0, 1) * clamp((1 - l) / 0.08, 0, 1)
-        lab.y += -shadowCool * shadow + 0.5 * highlightWarmth * high
-        lab.z += -0.6 * shadowCool * shadow + highlightWarmth * high
+        lab.y += strength * (-shadowCool * shadow + 0.5 * highlightWarmth * high)
+        lab.z += strength * (-0.6 * shadowCool * shadow + highlightWarmth * high)
 
         // Saturation and the hue corrections, faded out in the deepest shadows and toward white,
         // which a scanner keeps clean.
         var chroma = (lab.y * lab.y + lab.z * lab.z).squareRoot()
         var hue = atan2(lab.z, lab.y) * 180 / .pi
-        var gain = 1 + saturation
+        var gain = 1 + strength * saturation
         var turn: Float = 0
         for correction in corrections {
             var distance = (hue - correction.hue).truncatingRemainder(dividingBy: 360)
             if distance > 180 { distance -= 360 }
             if distance < -180 { distance += 360 }
             let weight = exp(-0.5 * (distance / correction.width) * (distance / correction.width))
-            gain *= 1 + (correction.chroma - 1) * weight
-            turn += correction.turn * weight
+            gain *= 1 + strength * (correction.chroma - 1) * weight
+            turn += strength * correction.turn * weight
         }
         let fade = clamp(l / 0.25, 0, 1) * clamp((1 - l) / 0.08, 0, 1)
         chroma *= 1 + (gain - 1) * fade
@@ -79,14 +82,14 @@ public enum LabScanFinish {
     }
 
     /// The gradation alone: luminance re-placed on a steeper print-like curve, hue untouched.
-    static func graded(_ colour: SIMD3<Float>) -> SIMD3<Float> {
+    static func graded(_ colour: SIMD3<Float>, strength: Float = 1) -> SIMD3<Float> {
         let weights = ColorScience.displayP3LuminanceWeights
         let luminance = weights.0 * colour.x + weights.1 * colour.y + weights.2 * colour.z
         guard luminance > 1e-6 else { return colour }
         let level = cbrt(luminance)
         let upper = clamp((level - 0.55) / 0.45, 0, 1)
-        let lifted = level + highlightLift * sin(.pi * upper)
-            - blackPull * clamp(1 - level / 0.35, 0, 1)
+        let lifted = level + strength * (highlightLift * sin(.pi * upper)
+            - blackPull * clamp(1 - level / 0.35, 0, 1))
         let target = max(lifted, 0)
         return colour * (target * target * target / luminance)
     }

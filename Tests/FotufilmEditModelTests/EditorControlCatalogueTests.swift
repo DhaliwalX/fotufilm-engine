@@ -394,7 +394,7 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertEqual(offered.map(\.field),
                        [.printFrame, .paper, .printLight, .printCorrection, .negativeViewing,
                         .digitalReference,
-                        .screenGrade, .screenExposure])
+                        .screenGrade, .screenExposure, .labScanDodging, .labScanLook])
         XCTAssertTrue(EditorControlCatalogue.control(.printFrame)!.availability.admits(stock: nil))
 
         let negative = try preset("example-negative-400")
@@ -403,7 +403,8 @@ final class EditorControlCatalogueTests: XCTestCase {
                 .map(\.field),
                        [.printFrame, .paper, .printLight, .printCorrection, .negativeViewing,
                         .digitalReference,
-                        .screenGrade, .screenExposure, .screenCyan, .screenMagenta, .screenYellow])
+                        .screenGrade, .screenExposure, .screenCyan, .screenMagenta, .screenYellow,
+                        .labScanDodging, .labScanLook])
         XCTAssertEqual(EditorControlCatalogue.controls(in: .printLamp, for: negative).map(\.field),
                        [.enlarger, .printerEnabled, .printerLamp, .printerExposure,
                         .printerMagenta, .printerYellow, .printerPreflash])

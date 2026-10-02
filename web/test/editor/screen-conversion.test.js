@@ -30,17 +30,16 @@ test('automatic levels meter bright regions and preserve channel ratios', () => 
   assert.deepEqual(config, fixed)
 })
 
-test('lab scan levels each record from the backlight-adjusted, dodged highlight before exposure', () => {
-  // median 0, highlight 9.9: lowered by the two-stop cap to 7.9, then by the full hold's
-  // 3 x 0.25 stops, then the edit's +1.9 EV taken out
-  assert.ok(Math.abs(labScanHighlight([-20, 0, 10]) - 7.15) < 1e-9)
+test('lab scan levels each record from the backlight-adjusted highlight before exposure', () => {
+  // median 0, highlight 9.9: lowered by the two-stop cap to 7.9, then the edit's +1.9 EV taken out
+  assert.ok(Math.abs(labScanHighlight([-20, 0, 10]) - 7.9) < 1e-9)
   const meter = {min: 0, max: 10, labScan: true, adjustments: [[1, 1, 1, 0], [2, 1.5, 3, 1]]}
   const config = new Float32Array(9000)
   config.set([1, 1, 1], CONFIG.MASKING)
   assert.equal(applyScreenLevels(config, meter, [-20, 0, 10], 1.9), 0)
-  assert.ok(Math.abs(config[CONFIG.HIGHLIGHTS] + .25) < 1e-6)
+  assert.ok(Math.abs(config[CONFIG.HIGHLIGHTS] + .15) < 1e-6)
   assert.ok(Math.abs(config[CONFIG.SHADOWS] - .2) < 1e-6)
-  const t = 0.525
+  const t = 0.6
   assert.ok(Math.abs(config[CONFIG.MASKING] - (1 + t)) < 1e-6)
   assert.ok(Math.abs(config[CONFIG.MASKING + 1] - (1 + .5 * t)) < 1e-6)
   assert.ok(Math.abs(config[CONFIG.MASKING + 2] - (1 + 2 * t)) < 1e-6)
@@ -51,8 +50,10 @@ test('lab scan dodges only a frame reaching past the print, keyed on its median'
   assert.deepEqual(labScanDodge([-1, 0, 1]), {hold: 0, lift: 0, key: 0})
   const {hold, lift, key} = labScanDodge([-2, 1, 5])
   assert.ok(Math.abs(key - 1) < 1e-9)
-  assert.ok(Math.abs(hold - .25 * (3.96 - 2.5) / 3) < 1e-9)
+  assert.ok(Math.abs(hold - .15 * (3.96 - 3) / 3) < 1e-9)
   assert.equal(lift, 0)
+  assert.equal(labScanDodge([-2, 1, 5], 0).hold, 0)
+  assert.ok(Math.abs(labScanDodge([-2, 1, 5], 2).hold - 2 * hold) < 1e-9)
 })
 
 test('auto levels holds white between two and a half and three and a half stops over the median', () => {

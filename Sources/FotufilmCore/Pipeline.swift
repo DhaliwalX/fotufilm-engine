@@ -241,11 +241,18 @@ public struct FotufilmEngine {
         public var screenGrade: Float = 2
         /// The exposure of the screen conversion, in stops on top of the chosen style: positive
         /// lightens, the way a scanner's exposure does. On a negative it is the printer's exposure
-        /// with the sign a screen expects; on a positive it is the scanner's gain. Other media
+        /// with the sign a screen expects; on a positive it is the scanner's gain. On Lab Scan it
+        /// is the scanner's density key, lightening a negative's scan at mid-grey. Other media
         /// ignore it.
         public var screenExposureEV: Float = 0
 
-        /// Digital Reference colour-negative correction, in relative units (-1...1).
+        /// Lab Scan's dodging, as a share of the scanner's own: 0 turns it off, 2 doubles it.
+        public var labScanDodging: Float = 1
+        /// Lab Scan's finish, as a share of the minilab scanner's colour and tone: 0 delivers the
+        /// neutral characterized scan.
+        public var labScanLook: Float = 1
+
+        /// Digital Reference and Lab Scan colour-negative correction, in relative units (-1...1).
         /// Positive cyan/magenta/yellow reduces red/green/blue after metering, before the
         /// receiver curve. Equal corrections change density; no brightness compensation.
         public var screenCMY: SIMD3<Float> = .zero

@@ -1474,9 +1474,14 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
     const BOOL screen = gating.prints && (capabilities & FOTUFILM_CONTROL_SCREEN_CONVERSION);
     [setting setParameterFlags:screen ? kFxParameterFlag_DEFAULT : kFxParameterFlag_DISABLED
                    toParameter:kFotufilmParam_DigitalReference];
-    [setting setParameterFlags:screen ? kFxParameterFlag_DEFAULT : kFxParameterFlag_DISABLED
+    const BOOL labScan = gating.prints && (capabilities & FOTUFILM_CONTROL_LAB_SCAN);
+    [setting setParameterFlags:(screen || labScan) ? kFxParameterFlag_DEFAULT : kFxParameterFlag_DISABLED
                    toParameter:kFotufilmParam_ScreenExposure];
-    const BOOL screenCMY = screen && (capabilities & FOTUFILM_CONTROL_COLOUR_NEGATIVE);
+    for (UInt32 parameter : {(UInt32)kFotufilmParam_LabScanDodging, (UInt32)kFotufilmParam_LabScanLook}) {
+        [setting setParameterFlags:labScan ? kFxParameterFlag_DEFAULT : kFxParameterFlag_DISABLED
+                       toParameter:parameter];
+    }
+    const BOOL screenCMY = (screen || labScan) && (capabilities & FOTUFILM_CONTROL_COLOUR_NEGATIVE);
     for (UInt32 parameter : {(UInt32)kFotufilmParam_ScreenCyan, (UInt32)kFotufilmParam_ScreenMagenta,
                              (UInt32)kFotufilmParam_ScreenYellow}) {
         [setting setParameterFlags:screenCMY ? kFxParameterFlag_DEFAULT : kFxParameterFlag_DISABLED

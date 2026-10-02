@@ -476,6 +476,8 @@ public struct FilmEngineInvocation {
     var meterStock: FilmStock? = nil
     var meterMedium: PrintPaper = .screen
     var meterExposureEV: Float = 0
+    /// Lab Scan's dodging strength for the metered frame.
+    var meterDodging: Float = 1
     var meterMasking: SIMD3<Float> = .one
     var meterLevels = MeteredLevels()
     /// Pixels of context a tile must carry on each cut edge for its interior to develop exactly as
@@ -1128,7 +1130,8 @@ public struct FilmEngineInvocation {
         let labScanReading = !noFilm && printMedium == .labScan && options.stage.readsScene
             && !stock.isReversal && !stock.isReflectionPrint && options.sceneHighlightStops != nil
         let dodge = labScanReading ? options.sceneToneStops.map {
-            LabScanTiming.dodge(AutoAdjustment.SceneStops(median: $0.x, bright: $0.z, dark: $0.y))
+            LabScanTiming.dodge(AutoAdjustment.SceneStops(median: $0.x, bright: $0.z, dark: $0.y),
+                                strength: options.labScanDodging)
         } : nil
         let toneKey = white.map { DigitalReferenceReceiver.toneKey(white: $0) + filmBoost }
             ?? dodge?.key
@@ -1552,6 +1555,7 @@ public struct FilmEngineInvocation {
             self.meterStock = stock
             self.meterMedium = printMedium
             self.meterExposureEV = options.exposureEV
+            self.meterDodging = options.labScanDodging
             self.meterMasking = recordContrast
             self.meterLevels = MeteredLevels(
                 scale: levels.scale, shift: SIMD3(repeating: levels.shift) + autoColour)
@@ -1587,14 +1591,16 @@ public struct FilmEngineInvocation {
                 printViewingKelvin: options.printViewingKelvin,
                 callier: callier, printer: printer,
                 digitalReference: options.digitalReference,
-                screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV)
+                screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV,
+                labScanLook: options.labScanLook)
             self.spectralCacheID = SpectralRuntime.cacheIdentifier(
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
                 printViewingKelvin: options.printViewingKelvin,
                 callier: callier, printer: printer,
                 digitalReference: options.digitalReference,
-                screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV)
+                screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV,
+                labScanLook: options.labScanLook)
         }
         // One resolved spectrum controls both integration and upload identity. Source pixels
         // have already been neutralized at capture; applying RGB WB here would count light twice.

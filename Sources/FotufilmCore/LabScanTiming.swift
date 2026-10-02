@@ -36,7 +36,9 @@ public enum LabScanTiming {
     /// The scanner's dodging: a frame whose content reaches further from its median than a print
     /// holds has its bright regions held down and its dark regions opened up, each region by its
     /// own brightness, so broad highlights keep their detail and shadows their texture while local
-    /// contrast stays. A frame inside the print's range is not dodged. The hold and lift ride the
+    /// contrast stays. The white point is still set on the undodged highlight, so the mid-tones
+    /// print where they would and the held highlights come in under white. A frame inside the
+    /// print's range is not dodged. The hold and lift ride the
     /// highlight and shadow controls' masks, keyed regionally on the frame's median.
     public struct Dodge: Equatable, Sendable {
         /// Highlight hold and shadow lift, in the tone controls' units.
@@ -48,38 +50,48 @@ public enum LabScanTiming {
 
     /// Stops past the median the frame's ends may reach before they are dodged, and the further
     /// stops over which the dodge comes in fully.
-    static let dodgeHighlightSpan: Float = 2.5
+    static let dodgeHighlightSpan: Float = 3
     static let dodgeShadowSpan: Float = 3.5
     static let dodgeRamp: Float = 3
     /// The fullest hold and lift.
-    static let dodgeMaxHold: Float = 0.25
+    static let dodgeMaxHold: Float = 0.15
     static let dodgeMaxLift: Float = 0.2
-    /// The tone masks' reach at full control and the window their smoothstep spans, in stops;
-    /// mirrors `creative_exposure` and `ExposureSampler`.
-    static let toneMaskEV: Float = 3
-    static let toneMaskWindow: Float = 6
 
-    /// The dodge for a frame with this whole-frame measurement.
-    public static func dodge(_ scene: AutoAdjustment.SceneStops) -> Dodge {
+    /// The most of the scanner's own dodge a frame may take.
+    public static let dodgingRange: ClosedRange<Float> = 0...2
+
+    /// The dodge for a frame with this whole-frame measurement, `strength` times the scanner's.
+    public static func dodge(_ scene: AutoAdjustment.SceneStops, strength: Float = 1) -> Dodge {
         func ramp(_ reach: Float, _ span: Float) -> Float {
             min(max((reach - span) / dodgeRamp, 0), 1)
         }
-        return Dodge(hold: dodgeMaxHold * ramp(scene.bright - scene.median, dodgeHighlightSpan),
-                     lift: dodgeMaxLift * ramp(scene.median - scene.dark, dodgeShadowSpan),
-                     key: scene.median)
+        let share = strength.isFinite
+            ? min(max(strength, dodgingRange.lowerBound), dodgingRange.upperBound) : 1
+        return Dodge(
+            hold: min(share * dodgeMaxHold * ramp(scene.bright - scene.median, dodgeHighlightSpan), 1),
+            lift: min(share * dodgeMaxLift * ramp(scene.median - scene.dark, dodgeShadowSpan), 1),
+            key: scene.median)
     }
 
-    /// The white point's highlight once the frame is dodged: the hold darkens the brightest
-    /// regions by what their highlight mask gives them, and the scanner meters what it prints.
-    static func dodgedHighlight(_ highlight: Float, _ dodge: Dodge) -> Float {
-        let reach = min(max((highlight - dodge.key) / toneMaskWindow, 0), 1)
-        return highlight - toneMaskEV * dodge.hold * reach * reach * (3 - 2 * reach)
+    /// The scan curve's read shift that lightens mid-grey by `stops`: the scanner's density key,
+    /// on the axis the timing's shift rides.
+    static func densityShift(stops: Float, stock: FilmStock) -> Float {
+        guard stops != 0, stops.isFinite else { return 0 }
+        let curve = PrintPaper.labScan.printCurve(for: stock)
+        let mid = PrintPaper.labScan.printExposureMidpoints(for: stock)[1]
+        func output(_ shift: Float) -> Float {
+            pow(10, -(curve.density(logExposure: mid + shift) - curve.dMin))
+        }
+        let target = output(0) * exp2(min(max(stops, -6), 6))
+        // Output falls as the read rises; bisect the read for the target.
+        var low: Float = -3, high: Float = 3
+        for _ in 0..<40 {
+            let middle = (low + high) / 2
+            if output(middle) > target { low = middle } else { high = middle }
+        }
+        return (low + high) / 2
     }
 
-    /// The highlight a whole-frame measurement sets the white point on, dodged.
-    public static func meteredHighlight(_ scene: AutoAdjustment.SceneStops) -> Float {
-        dodgedHighlight(highlight(scene), dodge(scene))
-    }
 
     /// The levels for a frame whose highlight was metered at `sceneHighlightStops`, after the
     /// edit's `exposureEV`, printed through records of contrast `masking`. The scanner sets up the

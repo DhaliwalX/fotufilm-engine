@@ -136,11 +136,13 @@ starts closed. Start with these settings:
   <tr><td>Enlarger</td><td>Output</td><td>The lamp house a reflection print is enlarged under.</td></tr>
   <tr><td>Screen Conversion</td><td>Output</td><td>Reference Exposure holds calibrated exposure; Graded Print softens highlights; Auto Levels meters frame highlights.</td></tr>
   <tr><td>Paper Grade</td><td>Output</td><td>Variable-contrast paper grade 0–5 for Graded Print and Auto Levels on Digital Reference: grade 2 is the calibrated curve, softer grades roll highlights off earlier, harder grades later.</td></tr>
-  <tr><td>Screen Exposure</td><td>Output</td><td>Exposure of the Digital Reference conversion in stops on top of the chosen style; positive lightens.</td></tr>
-  <tr><td>Cyan / Red</td><td>Output</td><td>Digital Reference colour negatives: positive adds cyan, negative adds red.</td></tr>
+  <tr><td>Scan Exposure</td><td>Output</td><td>Exposure of the Digital Reference conversion in stops on top of the chosen style, or of a Lab Scan at mid-grey; positive lightens.</td></tr>
+  <tr><td>Cyan / Red</td><td>Output</td><td>Digital Reference and Lab Scan colour negatives: positive adds cyan, negative adds red.</td></tr>
   <tr><td>Channel Contrast Match</td><td>Output</td><td>Digital correction of channel-contrast mismatch, not physical printer timing.</td></tr>
-  <tr><td>Magenta / Green</td><td>Output</td><td>Digital Reference colour negatives: positive adds magenta, negative adds green.</td></tr>
-  <tr><td>Yellow / Blue</td><td>Output</td><td>Digital Reference colour negatives: positive adds yellow, negative adds blue.</td></tr>
+  <tr><td>Magenta / Green</td><td>Output</td><td>Digital Reference and Lab Scan colour negatives: positive adds magenta, negative adds green.</td></tr>
+  <tr><td>Yellow / Blue</td><td>Output</td><td>Digital Reference and Lab Scan colour negatives: positive adds yellow, negative adds blue.</td></tr>
+  <tr><td>Dodging</td><td>Output</td><td>Lab Scan negatives: the scanner's regional dodging, 0 off, 1 its own, 2 double.</td></tr>
+  <tr><td>Scanner Look</td><td>Output</td><td>Lab Scan negatives: 0 is the neutral scan, 1 the minilab scanner's finish.</td></tr>
   <tr><td>Printer Preflash</td><td>Output</td><td>Pre-exposure of the print paper in relative log exposure units, softening highlights without lifting maximum density.</td></tr>
   <tr><td>Negative Viewing</td><td>Output</td><td>How the developed negative is read when Output Medium is Negative.</td></tr>
   <tr><td>Stage</td><td>Pipeline</td><td>Which span of the pipeline this node performs.</td></tr>

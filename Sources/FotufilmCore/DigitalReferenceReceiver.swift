@@ -114,11 +114,12 @@ public enum DigitalReferenceStyle: String, CaseIterable, Sendable, Identifiable,
 /// on the graded styles is read as its own transmittance and levelled in the same slots
 /// (`PrintPaper.levelsPositive`).
 enum DigitalReferenceReceiver {
-    /// Independent receiver offsets after automatic levels. One relative unit is 0.30
-    /// log10 receiver-exposure units, not a calibrated scanner step or optical filter density.
+    /// Independent receiver offsets after automatic levels, on Digital Reference and Lab Scan. One
+    /// relative unit is 0.30 log10 receiver-exposure units, not a calibrated scanner step or
+    /// optical filter density.
     static func colourShift(_ cmy: SIMD3<Float>, stock: FilmStock,
                             paper: PrintPaper) -> SIMD3<Float> {
-        guard paper == .screen, !stock.isReversal, !stock.isMonochrome,
+        guard paper == .screen || paper == .labScan, !stock.isReversal, !stock.isMonochrome,
               !stock.isReflectionPrint else { return .zero }
         return SIMD3((0..<3).map { channel in
             let value = cmy[channel]

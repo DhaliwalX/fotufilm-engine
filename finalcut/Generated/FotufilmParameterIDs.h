@@ -47,6 +47,8 @@ enum {
     kFotufilmParam_PrintCorrection = 20,
     kFotufilmParam_ScreenMagenta = 101,
     kFotufilmParam_ScreenYellow = 102,
+    kFotufilmParam_LabScanDodging = 103,
+    kFotufilmParam_LabScanLook = 104,
     kFotufilmParam_PrinterPreflash = 99,
     kFotufilmParam_NegativeViewing = 80,
     kFotufilmParam_Stage = 1,

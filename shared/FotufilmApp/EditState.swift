@@ -381,6 +381,8 @@ struct EditState: Equatable {
     var screenCyan = 0.0
     var screenMagenta = 0.0
     var screenYellow = 0.0
+    var labScanDodging = Double(FotufilmEngine.Options().labScanDodging)
+    var labScanLook = Double(FotufilmEngine.Options().labScanLook)
     var enlarger = Enlarger.default
     /// Retain lamp settings when switched off; older edits keep the original print model.
     var printerEnabled = false

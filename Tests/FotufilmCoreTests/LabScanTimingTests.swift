@@ -65,24 +65,24 @@ final class LabScanTimingTests: XCTestCase {
         let dodge = LabScanTiming.dodge(.init(median: 0, bright: 2, dark: -3))
         XCTAssertEqual(dodge.hold, 0)
         XCTAssertEqual(dodge.lift, 0)
-        XCTAssertEqual(LabScanTiming.meteredHighlight(.init(median: 0, bright: 2, dark: -3)), 2)
     }
 
     func testWideFrameHoldsItsHighlightsAndLiftsItsShadowsAboutItsMedian() {
         let partial = LabScanTiming.dodge(.init(median: 1, bright: 5, dark: -4))
         XCTAssertEqual(partial.key, 1)
-        XCTAssertEqual(partial.hold, LabScanTiming.dodgeMaxHold * 1.5 / 3, accuracy: 1e-6)
-        XCTAssertEqual(partial.lift, LabScanTiming.dodgeMaxLift * 1.5 / 3, accuracy: 1e-6)
+        XCTAssertEqual(partial.hold, LabScanTiming.dodgeMaxHold
+                       * (4 - LabScanTiming.dodgeHighlightSpan) / LabScanTiming.dodgeRamp,
+                       accuracy: 1e-6)
+        XCTAssertEqual(partial.lift, LabScanTiming.dodgeMaxLift
+                       * (5 - LabScanTiming.dodgeShadowSpan) / LabScanTiming.dodgeRamp,
+                       accuracy: 1e-6)
+        // The strength scales both, and 0 turns the dodge off.
+        let doubled = LabScanTiming.dodge(.init(median: 1, bright: 5, dark: -4), strength: 2)
+        XCTAssertEqual(doubled.hold, 2 * partial.hold, accuracy: 1e-6)
+        XCTAssertEqual(LabScanTiming.dodge(.init(median: 0, bright: 9, dark: -9), strength: 0).hold, 0)
         let full = LabScanTiming.dodge(.init(median: 0, bright: 9, dark: -9))
         XCTAssertEqual(full.hold, LabScanTiming.dodgeMaxHold)
         XCTAssertEqual(full.lift, LabScanTiming.dodgeMaxLift)
-        // The white point is set on the highlight as the hold prints it: four stops, opened up
-        // to 3.5 for the backlight, then held.
-        let scene = AutoAdjustment.SceneStops(median: 0, bright: 4, dark: -2)
-        let reach: Float = 3.5 / 6
-        let hold = LabScanTiming.dodgeMaxHold * 1.5 / 3
-        XCTAssertEqual(LabScanTiming.meteredHighlight(scene),
-                       3.5 - 3 * hold * reach * reach * (3 - 2 * reach), accuracy: 1e-5)
     }
 
     func testDodgeKeysTheToneGridRegionallyOnTheMedian() throws {

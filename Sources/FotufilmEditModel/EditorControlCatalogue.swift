@@ -182,7 +182,7 @@ public enum EditorControlCatalogue {
 
     public static let retiredFxplugIDs: [Int] = [33]
     public static let fxplugTextureStageIDs: ClosedRange<Int> = 40...71
-    public static let bridgeSlotCount = 67
+    public static let bridgeSlotCount = 69
 
     static let hostOnly: [EditorSurface: String] = [
         .app: "a plugin host's own setting, with no meaning on a photograph",
@@ -1642,8 +1642,8 @@ public enum EditorControlCatalogue {
             documentation: "Variable-contrast paper grade, 0–5, for Graded Print and Auto Levels on "
                 + "Digital Reference; grade 2 is the calibrated curve. Negatives only."),
         EditorControl(
-            .screenExposure, title: "Screen Exposure",
-            detail: "Lighten or darken the screen conversion on top of the chosen style.",
+            .screenExposure, title: "Scan Exposure",
+            detail: "Lighten or darken the conversion: Digital Reference's exposure, Lab Scan's density.",
             section: .printPaper,
             kind: .slider(EditorControlScale(-3...3, neutral: 0, unit: .stops)),
             availability: .transparentFilm,
@@ -1652,16 +1652,19 @@ public enum EditorControlCatalogue {
             omitted: [.android: screenCurveOmission],
             host: HostParameter(
                 slot: 55, slotSymbol: "SCREEN_EXPOSURE", ofxName: "screenExposure",
-                fxplugID: 97, group: .output, label: "Screen Exposure",
+                fxplugID: 97, group: .output, label: "Scan Exposure",
                 hint: "Exposure of the Digital Reference conversion in stops on top of the chosen "
-                    + "style; positive lightens. A negative's print exposure, a slide's scanner gain.",
+                    + "style, or of a Lab Scan at mid-grey; positive lightens. A negative's print "
+                    + "exposure, a slide's scanner gain, a lab scanner's density key.",
                 kind: .double(min: -3, max: 3, value: 0), clamp: -6...6, order: 28),
             web: .profile,
             commandLine: CommandLineFlag("--screen-exposure", placeholder: "<ev>",
-                help: "Screen conversion exposure, -3...3 stops (default: 0); positive lightens."),
+                help: "Digital Reference or Lab Scan exposure, -3...3 stops (default: 0); positive lightens."),
             documentation: "Exposure of the Digital Reference conversion in stops, on top of the "
                 + "chosen style; positive lightens. On a negative it is the print exposure, on a "
-                + "positive the scanner's gain."),
+                + "positive the scanner's gain. On Lab Scan it is the scanner's density key: the "
+                + "negative's scan lightens or darkens at mid-grey by the stops, after its "
+                + "per-frame setup, without changing the film's exposure."),
         EditorControl(
             .screenCyan, title: "Cyan / Red",
             detail: "Positive adds cyan by reducing red; negative adds red.",
@@ -1672,14 +1675,14 @@ public enum EditorControlCatalogue {
             host: HostParameter(
                 slot: 64, slotSymbol: "SCREEN_CYAN", ofxName: "screenCyan",
                 fxplugID: 100, group: .output, label: "Cyan / Red",
-                hint: "Digital Reference colour negatives: positive adds cyan, negative adds red. "
+                hint: "Digital Reference and Lab Scan colour negatives: positive adds cyan, negative adds red. "
                     + "Manual correction after Auto Levels; relative units, not scanner steps.",
                 kind: .double(min: -1, max: 1, value: 0), clamp: -1...1, order: 29),
             web: .profile,
             commandLine: CommandLineFlag("--screen-cyan", placeholder: "<value>",
-                help: "Digital Reference cyan/red correction, -1...1 (default: 0); positive adds cyan"),
-            documentation: "Digital Reference colour negatives only. Positive reduces red, negative adds it, "
-                + "after Auto Levels and before the output curve. Relative units -1 to +1, not scanner steps."),
+                help: "Digital Reference or Lab Scan cyan/red correction, -1...1 (default: 0); positive adds cyan"),
+            documentation: "Digital Reference and Lab Scan colour negatives only. Positive reduces red, negative adds it, "
+                + "after the per-frame levels and before the output curve. Relative units -1 to +1, not scanner steps."),
         EditorControl(
             .screenMagenta, title: "Magenta / Green",
             detail: "Positive adds magenta by reducing green; negative adds green.",
@@ -1690,14 +1693,14 @@ public enum EditorControlCatalogue {
             host: HostParameter(
                 slot: 65, slotSymbol: "SCREEN_MAGENTA", ofxName: "screenMagenta",
                 fxplugID: 101, group: .output, label: "Magenta / Green",
-                hint: "Digital Reference colour negatives: positive adds magenta, negative adds green. "
+                hint: "Digital Reference and Lab Scan colour negatives: positive adds magenta, negative adds green. "
                     + "Manual correction after Auto Levels; relative units, not scanner steps.",
                 kind: .double(min: -1, max: 1, value: 0), clamp: -1...1, order: 30),
             web: .profile,
             commandLine: CommandLineFlag("--screen-magenta", placeholder: "<value>",
-                help: "Digital Reference magenta/green correction, -1...1 (default: 0); positive adds magenta"),
-            documentation: "Digital Reference colour negatives only. Positive reduces green, negative adds it, "
-                + "after Auto Levels and before the output curve. Relative units -1 to +1, not scanner steps."),
+                help: "Digital Reference or Lab Scan magenta/green correction, -1...1 (default: 0); positive adds magenta"),
+            documentation: "Digital Reference and Lab Scan colour negatives only. Positive reduces green, negative adds it, "
+                + "after the per-frame levels and before the output curve. Relative units -1 to +1, not scanner steps."),
         EditorControl(
             .screenYellow, title: "Yellow / Blue",
             detail: "Positive adds yellow by reducing blue; negative adds blue.",
@@ -1708,14 +1711,52 @@ public enum EditorControlCatalogue {
             host: HostParameter(
                 slot: 66, slotSymbol: "SCREEN_YELLOW", ofxName: "screenYellow",
                 fxplugID: 102, group: .output, label: "Yellow / Blue",
-                hint: "Digital Reference colour negatives: positive adds yellow, negative adds blue. "
+                hint: "Digital Reference and Lab Scan colour negatives: positive adds yellow, negative adds blue. "
                     + "Manual correction after Auto Levels; relative units, not scanner steps.",
                 kind: .double(min: -1, max: 1, value: 0), clamp: -1...1, order: 31),
             web: .profile,
             commandLine: CommandLineFlag("--screen-yellow", placeholder: "<value>",
-                help: "Digital Reference yellow/blue correction, -1...1 (default: 0); positive adds yellow"),
-            documentation: "Digital Reference colour negatives only. Positive reduces blue, negative adds it, "
-                + "after Auto Levels and before the output curve. Relative units -1 to +1, not scanner steps."),
+                help: "Digital Reference or Lab Scan yellow/blue correction, -1...1 (default: 0); positive adds yellow"),
+            documentation: "Digital Reference and Lab Scan colour negatives only. Positive reduces blue, negative adds it, "
+                + "after the per-frame levels and before the output curve. Relative units -1 to +1, not scanner steps."),
+        EditorControl(
+            .labScanDodging, title: "Dodging",
+            detail: "Hold broad highlights and open deep shadows on a frame wider than a print.",
+            section: .printPaper,
+            kind: .slider(EditorControlScale(0...2, neutral: 1, unit: .multiplier)),
+            availability: .transparentFilm, binding: .labScanDodging,
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .web, .cli],
+            host: HostParameter(
+                slot: 67, slotSymbol: "LAB_SCAN_DODGING", ofxName: "labScanDodging",
+                fxplugID: 103, group: .output, label: "Dodging",
+                hint: "Lab Scan negatives: the scanner's regional dodging, 0 off, 1 its own, 2 double.",
+                kind: .double(min: 0, max: 2, value: 1), clamp: 0...2, order: 32),
+            web: .profile,
+            commandLine: CommandLineFlag("--lab-scan-dodging", placeholder: "<share>",
+                help: "Lab Scan dodging, 0...2 times the scanner's own (default: 1)"),
+            documentation: "Lab Scan negatives only. On a frame whose content reaches further from "
+                + "its median than a print holds, the scanner holds broad highlights down and "
+                + "opens deep shadows, each region by its own brightness, keeping local contrast. "
+                + "0 turns it off, 1 is the scanner's own, 2 doubles it."),
+        EditorControl(
+            .labScanLook, title: "Scanner Look",
+            detail: "From a neutral scan to the minilab scanner's finished colour and tone.",
+            section: .printPaper,
+            kind: .slider(EditorControlScale(0...1, neutral: 1, unit: .percent)),
+            availability: .transparentFilm, binding: .labScanLook,
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .web, .cli],
+            host: HostParameter(
+                slot: 68, slotSymbol: "LAB_SCAN_LOOK", ofxName: "labScanLook",
+                fxplugID: 104, group: .output, label: "Scanner Look",
+                hint: "Lab Scan negatives: 0 is the neutral scan, 1 the minilab scanner's finish.",
+                kind: .double(min: 0, max: 1, value: 1), clamp: 0...1, order: 33),
+            web: .profile,
+            commandLine: CommandLineFlag("--lab-scan-look", placeholder: "<share>",
+                help: "Lab Scan finish, 0 neutral ... 1 the minilab scanner's (default: 1)"),
+            documentation: "Lab Scan negatives only. 1 finishes the scan the way a minilab "
+                + "scanner's processing does: a steeper, print-like gradation with open highlights "
+                + "and a deep black, shadows cooler than the highlights, richer yellows, oranges "
+                + "and blues, and foliage turned toward teal. 0 delivers the neutral characterized scan."),
         EditorControl(
             .enlarger, title: "Enlarger",
             detail: "Choose the enlarger lighting used to make the print.",
