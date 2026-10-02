@@ -47,6 +47,34 @@ public enum DigitalReferenceStyle: String, CaseIterable, Sendable, Identifiable,
             * DigitalReferenceReceiver.read(for: stock, stops: stops)
     }
 
+    /// Auto Levels' metering rule, for hosts that meter it on their own GPU as
+    /// `FilmEngineInvocation.setToneBase` does on the CPU.
+    public enum AutoLevelsRule {
+        /// White's span over the scene's median and the most a frame is lifted, in stops.
+        public static let whiteSpan = DigitalReferenceReceiver.retimeWhiteSpan
+        public static let liftLimit = DigitalReferenceReceiver.retimeLiftLimit
+        /// The print's white over the stop it prints mid-grey, and its black with detail under
+        /// white, in stops of scene light.
+        public static let printWhiteOverGrey = DigitalReferenceReceiver.printWhiteOverGrey
+        public static let printRange = DigitalReferenceReceiver.printRange
+        public static let shadowLiftShare = DigitalReferenceReceiver.shadowLiftShare
+        /// The share of a colour negative's cast taken out, the largest cast read, and the floor a
+        /// lit cell clears, in stops.
+        public static let colourShare = DigitalReferenceReceiver.autoColourShare
+        public static let colourReach = DigitalReferenceReceiver.autoColourReach
+        public static let litFloorStops = ToneBaseMeasurement.litFloorStops
+
+        /// Whether the rule places a stock's film exposure and moves its tone.
+        public static func placesFilm(_ stock: FilmStock) -> Bool {
+            DigitalReferenceReceiver.keysTone(stock)
+        }
+
+        /// Whether the rule balances a stock's records.
+        public static func metersColour(_ stock: FilmStock) -> Bool {
+            DigitalReferenceReceiver.metersColour(stock)
+        }
+    }
+
     public var name: String {
         switch self {
         case .referenceExposure: return "Reference Exposure"
