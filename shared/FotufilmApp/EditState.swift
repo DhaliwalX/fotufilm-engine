@@ -375,7 +375,7 @@ struct EditState: Equatable {
     /// The lamp house a reflection print is enlarged under. `.diffuser` is the sheets' own
     /// diffuse read and changes nothing; `.condenser` prints a silver negative harder through
     /// the Callier effect. Read only where `Enlarger.illuminates` the medium.
-    var digitalReference = DigitalReferenceStyle.default
+    var digitalReference = EditState.defaultDigitalReference
     var screenGrade = Double(FotufilmEngine.Options().screenGrade)
     var screenExposure = Double(FotufilmEngine.Options().screenExposureEV)
     var screenCyan = 0.0
@@ -414,6 +414,16 @@ struct EditState: Equatable {
     var lensAdjustment = LensAdjustment.neutral
 
     static let defaults = EditState()
+
+    /// The screen conversion new edits and the camera develop with: Graded Print on iPhone and
+    /// iPad, the engine's default elsewhere.
+    static let defaultDigitalReference: DigitalReferenceStyle = {
+        #if os(iOS)
+        return .gradedPrint
+        #else
+        return .default
+        #endif
+    }()
 
     /// The flat return spectrum: the engine's own ladder, at rest.
     ///

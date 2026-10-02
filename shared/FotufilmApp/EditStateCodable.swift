@@ -99,7 +99,8 @@ extension EditState: Codable {
         seed = try c.decodeIfPresent(UInt64.self, forKey: EditKey("seed")) ?? seed
         shutterSeconds = try c.decodeIfPresent(Double.self, forKey: EditKey("shutterSeconds"))
         printLightKelvin = try c.decodeIfPresent(Double.self, forKey: EditKey("printLightKelvin"))
-        digitalReference = try c.decodeIfPresent(DigitalReferenceStyle.self, forKey: EditKey("digitalReference")) ?? .default
+        digitalReference = try c.decodeIfPresent(DigitalReferenceStyle.self, forKey: EditKey("digitalReference"))
+            ?? EditState.defaultDigitalReference
         enlarger = try c.decodeIfPresent(String.self, forKey: EditKey("enlarger"))
             .flatMap(Enlarger.preset(id:)) ?? .default
         printerProfile = try c.decodeIfPresent(PrinterProfile.self, forKey: EditKey("printerProfile"))?
