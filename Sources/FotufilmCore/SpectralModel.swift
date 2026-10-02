@@ -740,7 +740,9 @@ public enum SpectralRuntime {
                 let rgb = SIMD3(pow(10, -density.x), pow(10, -density.y),
                                 pow(10, -density.z))
                 // A monochrome scan carries no chroma to characterize, so the receiver is the
-                // programme. A video transfer still delivers it inside Rec.709.
+                // programme, finished on Lab Scan's gradation. A video transfer still delivers it
+                // inside Rec.709.
+                if paper == .labScan { return LabScanFinish.apply(rgb, chromatic: false) }
                 return paper.deliversRec709
                     ? ColorScience.linearSRGBToDisplayP3(rgb) : rgb
             }
@@ -918,6 +920,8 @@ public enum SpectralRuntime {
         let inverse: SpectralResponseInverse
         let range: Float
         let deliversRec709: Bool
+        /// Whether the characterized scan takes Lab Scan's finish.
+        let finishes: Bool
         /// Actual no-light receiver level for an editable scan. A film's finite base response
         /// can sit above the receiver curve's mathematical D-max floor.
         let shadowFloor: Float
@@ -930,6 +934,7 @@ public enum SpectralRuntime {
             let scanRange = curve.dMax - curve.dMin
             range = scanRange
             deliversRec709 = paper.deliversRec709
+            finishes = paper == .labScan
             let midpoint = curve.logExposure(
                 density: curve.dMin + paper.anchorDensity)
             let masking = stock.printingContrastScale(
@@ -1014,11 +1019,16 @@ public enum SpectralRuntime {
                 let shadow = clamp((shadowFloor * 2 - outputLuminance)
                     / max(shadowFloor * 0.5, 1e-9), 0, 1)
                 let hold = shadow * shadow * (3 - 2 * shadow)
-                let scanned = calibrated
+                var scanned = calibrated
                     + hold * (SIMD3(repeating: outputLuminance) - calibrated)
+                var scannedLuminance = outputLuminance
+                if finishes {
+                    scanned = LabScanFinish.apply(scanned)
+                    scannedLuminance = luminance(scanned)
+                }
                 // Keep highlight color; only compress chroma the delivery gamut cannot hold.
                 return SpectralRuntime.compressedToDisplayGamut(
-                    scanned, luminance: outputLuminance)
+                    scanned, luminance: scannedLuminance)
             }
 
             // The receiver's toe and shoulder densities hold no invertible chromatic signal, so

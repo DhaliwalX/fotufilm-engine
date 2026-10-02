@@ -1123,14 +1123,22 @@ public struct FilmEngineInvocation {
         let filmBoost = white.map {
             DigitalReferenceReceiver.filmBoost(for: stock, white: $0, exposureEV: options.exposureEV)
         } ?? 0
+        // Lab Scan's dodging takes the same reading: the frame's median, which keys it, and the
+        // ends that set how far it holds and lifts.
+        let labScanReading = !noFilm && printMedium == .labScan && options.stage.readsScene
+            && !stock.isReversal && !stock.isReflectionPrint && options.sceneHighlightStops != nil
+        let dodge = labScanReading ? options.sceneToneStops.map {
+            LabScanTiming.dodge(AutoAdjustment.SceneStops(median: $0.x, bright: $0.z, dark: $0.y))
+        } : nil
         let toneKey = white.map { DigitalReferenceReceiver.toneKey(white: $0) + filmBoost }
+            ?? dodge?.key
         let compression = white.flatMap { white in
             options.sceneToneStops.map {
                 DigitalReferenceReceiver.toneCompression(
                     for: stock, AutoAdjustment.SceneStops(median: $0.x, bright: $0.z, dark: $0.y),
                     white: white)
             }
-        }
+        } ?? dodge.map { (hold: $0.hold, lift: $0.lift) }
         // Lab Scan times each frame the way a minilab scanner does, in the same slots.
         let levels: (scale: SIMD3<Float>, shift: Float)
         let recordContrast = SIMD3(contrast[0], contrast[1], contrast[2])

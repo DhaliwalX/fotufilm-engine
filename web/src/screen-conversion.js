@@ -105,22 +105,45 @@ export function autoColourShift(meter, medians, exposureEV = 0) {
   return [shift(medians[0]), shift(medians[2])]
 }
 
-// The highlight Lab Scan sets its white point on, as LabScanTiming.highlight reads it from the
-// same regional log-luminances: the 99.5th percentile, lowered by half its excess over three stops
-// above the median, at most two stops. Null for an empty measurement.
+// Lab Scan's dodging, as LabScanTiming.dodge reads it: a frame whose ends reach further from its
+// median than a print holds has its bright regions held and its dark regions lifted, in the tone
+// controls' units, keyed regionally on the median. Null for an empty measurement.
+const DODGE_HIGHLIGHT_SPAN = 2.5, DODGE_SHADOW_SPAN = 3.5, DODGE_RAMP = 3
+const DODGE_MAX_HOLD = .25, DODGE_MAX_LIFT = .2
+export function labScanDodge(regionStops) {
+  const percentile = percentiles(regionStops)
+  if (!percentile) return null
+  const median = percentile(.5)
+  const ramp = (reach, span) => Math.min(Math.max((reach - span) / DODGE_RAMP, 0), 1)
+  return {
+    hold: DODGE_MAX_HOLD * ramp(percentile(.995) - median, DODGE_HIGHLIGHT_SPAN),
+    lift: DODGE_MAX_LIFT * ramp(median - percentile(.005), DODGE_SHADOW_SPAN),
+    key: median,
+  }
+}
+
+// The highlight Lab Scan sets its white point on, as LabScanTiming.meteredHighlight reads it from
+// the same regional log-luminances: the 99.5th percentile, lowered by half its excess over three
+// stops above the median, at most two stops, then by what the dodge's hold takes from it. Null for
+// an empty measurement.
 export function labScanHighlight(regionStops) {
   const percentile = percentiles(regionStops)
   if (!percentile) return null
   const bright = percentile(.995)
   const excess = Math.max(0, bright - percentile(.5) - 3)
-  return bright - Math.min(2, .5 * excess)
+  const highlight = bright - Math.min(2, .5 * excess)
+  const { hold, key } = labScanDodge(regionStops)
+  const reach = Math.min(Math.max((highlight - key) / 6, 0), 1)
+  return highlight - 3 * hold * reach * reach * (3 - 2 * reach)
 }
 
 // Lab Scan's levels: its table carries a contrast per record and is solved before the edit's
-// exposure, so `exposureEV` is taken out of the reading. Nothing keys the tone controls.
+// exposure, so `exposureEV` is taken out of the reading. Its dodge rides the tone controls; returns
+// the median it keys them on while it dodges, or null.
 function applyLabScanLevels(configuration, meter, regionStops, exposureEV) {
   const metered = labScanHighlight(regionStops)
   if (metered === null) return null
+  const { hold, lift, key } = labScanDodge(regionStops)
   const samples = meter.adjustments
   if (!Array.isArray(samples) || samples.length < 2) throw new Error('Invalid screen conversion profile.')
   const row = tabulated(meter, samples, metered - exposureEV)
@@ -129,7 +152,10 @@ function applyLabScanLevels(configuration, meter, regionStops, exposureEV) {
   if (![...scales, shift].every(Number.isFinite)) throw new Error('Invalid screen conversion levels.')
   for (let c=0;c<3;c++) configuration[CONFIG.MASKING+c] *= scales[c]
   for (const slot of [CONFIG.PAPER_MIDPOINT, CONFIG.PAPER_MIDPOINT_RED, CONFIG.PAPER_MIDPOINT_BLUE]) configuration[slot] += shift
-  return null
+  const shadows = configuration[CONFIG.SHADOWS], highlights = configuration[CONFIG.HIGHLIGHTS]
+  configuration[CONFIG.SHADOWS] = shadows + Math.min(lift, Math.max(1 - shadows, 0))
+  configuration[CONFIG.HIGHLIGHTS] = highlights - Math.min(hold, Math.max(highlights + 1, 0))
+  return hold || lift ? key : null
 }
 
 // Native exporter supplies the receiver affine. Meter once over the same regional

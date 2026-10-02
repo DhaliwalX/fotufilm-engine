@@ -364,11 +364,24 @@ extension FilmEngineInvocation {
     /// Whether the tone controls are doing anything *and* asked to be keyed locally.
     public var localToneActive: Bool { localToneEnabled && toneControlsActive }
 
+    /// Whether Lab Scan's dodging is holding or lifting this frame.
+    var labScanDodges: Bool {
+        meterMedium == .labScan && (meterLevels.highlightHold != 0 || meterLevels.shadowLift != 0)
+    }
+
+    /// Whether the tone grid carries a regional base: the tone controls keyed locally, or Lab
+    /// Scan's dodging, which is regional by nature. A host copying a measured frame's levels onto
+    /// another develop copies the grid with them when this is true.
+    public var toneKeyedLocally: Bool { localToneEnabled && (toneControlsActive || labScanDodges) }
+
     /// Whether Auto Levels' reading reaches the light a scene forms, and not the print alone: a
     /// negative's sets its film exposure and keys and moves its tone.
     public var screenLevelsReachLight: Bool {
         meterMedium == .screen && (meterStock.map(DigitalReferenceReceiver.keysTone) ?? false)
     }
+
+    /// Whether Lab Scan meters this frame, whose dodge reaches the light a scene forms.
+    public var labScanMeters: Bool { meterMedium == .labScan && meterStock != nil }
 
     /// Metered levels and local tone share one whole-frame measurement on CPU and Metal.
     public var sceneMeteringActive: Bool { localToneActive || meterStock != nil }
@@ -425,7 +438,7 @@ extension FilmEngineInvocation {
     public func sceneHighlightStops(_ measurement: ToneBaseMeasurement) -> Float? {
         if meterStock != nil, meterMedium == .labScan {
             return AutoAdjustment.SceneStops(regionStops: measurement.regionStops())
-                .map(LabScanTiming.highlight)
+                .map(LabScanTiming.meteredHighlight)
         }
         let exposureEV = log2(configuration[Self.exposureGainOffset]) - meterLevels.filmBoost
         return screenScene(measurement).map {
@@ -437,7 +450,10 @@ extension FilmEngineInvocation {
     /// not meter: the frame's median and its two ends, the 0.5th and 99.5th percentiles. A host
     /// hands it on with `sceneHighlightStops`.
     public func sceneToneStops(_ measurement: ToneBaseMeasurement) -> SIMD3<Float>? {
-        screenScene(measurement).map { SIMD3($0.median, $0.dark, $0.bright) }
+        let scene = meterMedium == .labScan && meterStock != nil
+            ? AutoAdjustment.SceneStops(regionStops: measurement.regionStops())
+            : screenScene(measurement)
+        return scene.map { SIMD3($0.median, $0.dark, $0.bright) }
     }
 
     /// The stock Auto Levels meters for, when this develop meters on the screen.
@@ -459,15 +475,20 @@ extension FilmEngineInvocation {
     /// configuration, replacing the identity default.
     public mutating func setToneBase(_ measurement: ToneBaseMeasurement) {
         // Auto Levels' own hold and lift are keyed on its print grey, as a host that hands the
-        // reading on gets them; only the user's tone controls ask for the regional key.
-        let keyedLocally = localToneActive
+        // reading on gets them; the user's tone controls and Lab Scan's dodging take the
+        // regional key.
         if let stock = meterStock, meterMedium == .labScan,
-           let bright = sceneHighlightStops(measurement) {
-            let levels = LabScanTiming.levels(for: stock, sceneHighlightStops: bright,
-                                              exposureEV: meterExposureEV, masking: meterMasking)
+           let scene = AutoAdjustment.SceneStops(regionStops: measurement.regionStops()) {
+            let dodge = LabScanTiming.dodge(scene)
+            let levels = LabScanTiming.levels(
+                for: stock, sceneHighlightStops: LabScanTiming.meteredHighlight(scene),
+                exposureEV: meterExposureEV, masking: meterMasking)
             applyMeteredLevels(MeteredLevels(scale: levels.scale,
-                                             shift: SIMD3(repeating: levels.shift)))
+                                             shift: SIMD3(repeating: levels.shift),
+                                             toneKey: dodge.key, shadowLift: dodge.lift,
+                                             highlightHold: dodge.hold))
         }
+        let keyedLocally = toneKeyedLocally
         if let stock = screenMeterStock, let scene = screenScene(measurement) {
             // The meter reads the frame after the edit's exposure and before any film boost.
             let exposureEV = log2(configuration[Self.exposureGainOffset])
@@ -495,11 +516,13 @@ extension FilmEngineInvocation {
         // nonzero highlight control, which must remain keyed by each pixel's own brightness.
         guard keyedLocally else { return }
         let (a, b) = measurement.solvedCoefficients()
+        // Lab Scan keys its regions on the frame's median, as its whole-frame key does.
+        let key = meterMedium == .labScan ? meterLevels.toneKey ?? 0 : 0
         configuration[Self.toneGridSizeOffset] = Float(measurement.gridWidth)
         configuration[Self.toneGridSizeOffset + 1] = Float(measurement.gridHeight)
         for i in 0..<a.count {
             configuration[Self.toneGridAOffset + i] = a[i]
-            configuration[Self.toneGridBOffset + i] = b[i]
+            configuration[Self.toneGridBOffset + i] = b[i] - key
         }
     }
 
