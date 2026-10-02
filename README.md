@@ -70,9 +70,9 @@ normally, and either end of a frame that reaches past the print, a sky past whit
 shade past black, is pulled back toward it by the same rule, the shadows most of the way so
 blacks stay rich. The other two move the colour records together to preserve colour
 differences between layers. The film base anchors display black. Below mid-grey, Auto
-Levels prints along a logarithmic curve in scene stops, so shadows darken gradually and
-keep their detail until the film stops recording, with each record's toe balanced so dark
-greys stay neutral. These are idealized conversion models, not measured scanner profiles.
+Levels prints along a logarithmic curve in scene stops, so shadows darken gradually, keep
+their detail while the film records them, and ease onto black where it stops, with each
+record's toe balanced so dark greys stay neutral. These are idealized conversion models, not measured scanner profiles.
 Monochrome negatives take the same three choices on their own neutral curve. A
 transparent positive has no print curve to choose: Reference Exposure is the slide
 itself, mid-grey at 18% with the clear base above display white, while Graded Print

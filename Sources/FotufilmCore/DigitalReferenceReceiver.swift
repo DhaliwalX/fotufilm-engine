@@ -547,9 +547,17 @@ enum DigitalReferenceReceiver {
 struct ScreenShadowToe {
     /// The toe's slope at mid-grey, in L* per stop.
     static let greySlope: Float = 30
-    /// The share of its base read past which a negative records no more shadow: the toe reaches
-    /// black there.
+    /// The share of its base read past which a negative records no more shadow: the log curve
+    /// would reach black there.
     static let recordedShare: Float = 0.9
+    /// The lightness under which the toe finishes on the film's read instead of its stops,
+    /// falling to black at the film base. The film packs its last stops into a sliver of read,
+    /// so finished on stops the curve would reach black inside one cell of the print table and
+    /// leave a corner there, a record clipping while the others carry on.
+    static let finishLightness: Float = 6
+    /// The share of its base read where the finish reaches black: a cell of the print table
+    /// short of the base, so the base itself prints black.
+    static let blackShare: Float = 0.92
 
     private static let stride: Float = 0.02
     private static let lowest: Float = -16
@@ -557,10 +565,16 @@ struct ScreenShadowToe {
     private let reads: [Float]
     /// The film stop the print takes for mid-grey, where the levelled read is zero.
     private let anchorStops: Float
-    /// Stops under mid-grey where the toe reaches black, its width, and the L* it starts from.
+    /// Stops under mid-grey where the log curve would reach black, its width, and the L* it
+    /// starts from.
     private let depth: Float
     private let width: Float
     private let grey: Float
+    /// The finish: the levelled reads where it starts and where it reaches black, and the power
+    /// it falls with, which matches the log curve's slope where they meet.
+    private let finishRead: Float
+    private let blackRead: Float
+    private let finishPower: Float
 
     private static let lock = NSLock()
     nonisolated(unsafe) private static var cache = BoundedCache<UInt64, ScreenShadowToe>(limit: 16)
@@ -604,8 +618,23 @@ struct ScreenShadowToe {
             let mid = (low + high) / 2
             if grey / (mid * log(1 + depth / mid)) > Self.greySlope { low = mid } else { high = mid }
         }
-        width = (low + high) / 2
+        let width = (low + high) / 2
+        self.width = width
         self.grey = grey
+        let span = log(1 + depth / width)
+        let under = width * (exp((1 - Self.finishLightness / grey) * span) - 1)
+        let stop = anchorStops - under
+        func read(_ stop: Float) -> Float {
+            let position = (stop - Self.lowest) / Self.stride
+            let index = min(max(Int(position), 0), reads.count - 2)
+            return reads[index] + (position - Float(index)) * (reads[index + 1] - reads[index])
+        }
+        finishRead = read(stop)
+        blackRead = scale * Self.blackShare * base + shift
+        let lightnessPerStop = grey / ((width + under) * span)
+        let readPerStop = (read(stop - 0.01) - read(stop + 0.01)) / 0.02
+        finishPower = max(lightnessPerStop / readPerStop * (blackRead - finishRead)
+                            / Self.finishLightness, 1)
     }
 
     /// The film stop whose levelled read is `relative`, held at the ends of the table.
@@ -626,9 +655,14 @@ struct ScreenShadowToe {
 
     /// Display-linear output for a levelled read on the shadow side of mid-grey.
     func transmittance(relative: Float) -> Float {
-        let under = max(anchorStops - Self.stops(relative: relative, in: reads), 0)
-        let lightness = under >= depth ? 0
-            : grey * (1 - log(1 + under / width) / log(1 + depth / width))
+        let lightness: Float
+        if relative >= finishRead {
+            let toBlack = max(blackRead - relative, 0) / max(blackRead - finishRead, 1e-6)
+            lightness = Self.finishLightness * pow(min(toBlack, 1), finishPower)
+        } else {
+            let under = max(anchorStops - Self.stops(relative: relative, in: reads), 0)
+            lightness = grey * (1 - log(1 + under / width) / log(1 + depth / width))
+        }
         return lightness > 8 ? pow((lightness + 16) / 116, 3) : lightness / (24389 / 27)
     }
 }
