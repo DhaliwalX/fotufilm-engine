@@ -44,6 +44,9 @@ export async function measureTone(
   )
   const sums = new Float64Array(gw * gh),
     counts = new Uint32Array(gw * gh)
+  // Each record metered alone, for Auto Colour: ToneBaseMeasurement.channelLogSum.
+  const channelSums = [0, 1, 2].map(() => new Float64Array(gw * gh))
+  const channelWeights = balance.map((v) => (v * 2 ** (controls.ev || 0)) / 0.18)
   const weights = [0.2627002, 0.6779981, 0.0593017].map(
     (v, i) => (v * balance[i] * 2 ** (controls.ev || 0)) / 0.18,
   )
@@ -63,6 +66,8 @@ export async function measureTone(
           weights[1] * Math.max(pixels[i + 1], 0) +
           weights[2] * Math.max(pixels[i + 2], 0)
         sums[cell] += Math.log2(Math.max(metered, 1e-6))
+        for (let c = 0; c < 3; c++)
+          channelSums[c][cell] += Math.log2(Math.max(channelWeights[c] * Math.max(pixels[i + c], 0), 1e-6))
         counts[cell]++
       }
     await yieldToBrowser()
@@ -83,6 +88,8 @@ export async function measureTone(
   const b = mean.map((v, i) => (1 - a[i]) * v)
   return {
     regionStops: Float32Array.from(g),
+    // Region for region with `regionStops`.
+    channelStops: channelSums.map((plane) => plane.map((v, i) => (counts[i] ? v / counts[i] : 0))),
     width: gw,
     height: gh,
     a: Float32Array.from(boxMean(a, gw, gh, radius)),

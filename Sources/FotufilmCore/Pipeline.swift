@@ -218,10 +218,18 @@ public struct FotufilmEngine {
         public var digitalReference: DigitalReferenceStyle = .default
         /// The frame's brightest content, metered by the host as scene stops over mid-grey after
         /// `exposureEV`, as `FilmEngineInvocation.sceneHighlightStops` reads it, for Digital
-        /// Reference's `.autoLevels` and Lab Scan's levels to place near white. Nil requests the
-        /// shared renderer's whole-frame meter. An invocation without scene pixels falls back to
-        /// the fixed print. Video hosts can supply a temporally smoothed measurement.
+        /// Reference's `.autoLevels` to re-time the frame on and Lab Scan's levels to place near
+        /// white. Both remove `exposureEV` again, so the edit's exposure is not timed out. Nil
+        /// requests the shared renderer's whole-frame meter. An invocation without scene pixels
+        /// falls back to the fixed print. Video hosts can supply a temporally smoothed measurement.
         public var sceneHighlightStops: Float? = nil
+        /// The frame's per-record medians, in stops over mid-grey metered like
+        /// `sceneHighlightStops`, for Auto Levels' colour. Nil requests the shared meter, as that does.
+        public var sceneChannelMedians: SIMD3<Float>? = nil
+        /// The frame's median, darker tenth and brighter twentieth, in stops over mid-grey
+        /// metered like `sceneHighlightStops` and read only alongside it: where Auto Levels reads
+        /// whether a negative's shadows sit on its base and its sky past white.
+        public var sceneToneStops: SIMD3<Float>? = nil
         /// Set when this develop is the unexposed film just outside the camera gate, which the
         /// Emulsion Border prints around the photograph. See `UnexposedEdge`.
         public var unexposedEdge: UnexposedEdge.Develop? = nil

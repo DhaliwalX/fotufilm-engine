@@ -24,9 +24,16 @@ public struct ToneBaseMeasurement {
 
     var logSum: [Double]
     var counts: [Int]
+    /// Auto Levels' per-record log sums, red, green and blue planes of one sum per cell, each
+    /// record metered alone with the same white balance and exposure. Empty when not metered.
+    var channelLogSum: [Double]
+    /// Each record's own metering weight, white-balance gain x exposure gain / 0.18.
+    let channelWeights: SIMD3<Float>
+
+    public var metersColour: Bool { !channelLogSum.isEmpty }
 
     public init(frameWidth: Int, frameHeight: Int,
-                balance: SIMD3<Float>, exposureGain: Float) {
+                balance: SIMD3<Float>, exposureGain: Float, metersColour: Bool = false) {
         self.frameWidth = max(frameWidth, 1)
         self.frameHeight = max(frameHeight, 1)
         let long = max(self.frameWidth, self.frameHeight)
@@ -42,6 +49,21 @@ public struct ToneBaseMeasurement {
         self.weightB = luma.2 * balance.z * gain
         self.logSum = [Double](repeating: 0, count: gridWidth * gridHeight)
         self.counts = [Int](repeating: 0, count: gridWidth * gridHeight)
+        self.channelWeights = balance * gain
+        self.channelLogSum = metersColour
+            ? [Double](repeating: 0, count: 3 * gridWidth * gridHeight) : []
+    }
+
+    /// The white balance a kernel metering one record alone is handed, in place of the frame's:
+    /// the kernel weighs each record by luminance weight x this, so the record's own luminance
+    /// weight is divided out and the other two are zeroed.
+    public static func channelMeteringBalance(_ balance: SIMD3<Float>,
+                                              channel: Int) -> SIMD3<Float> {
+        let luma = ColorScience.luminanceWeights
+        let weights = SIMD3(luma.0, luma.1, luma.2)
+        var isolated = SIMD3<Float>.zero
+        isolated[channel] = balance[channel] / weights[channel]
+        return isolated
     }
 
     /// Frame rows `rows` as interleaved linear RGBA, `pixels` pointing at the first of them.
@@ -127,6 +149,19 @@ public struct ToneBaseMeasurement {
     /// same order.
     public mutating func add(cellRowSums sums: UnsafePointer<Float>,
                              rows: Range<Int>) {
+        add(cellRowSums: sums, rows: rows, channel: nil)
+    }
+
+    /// One record's cell sums, from the kernel run on `channelMeteringBalance`. Cell counts are
+    /// the luminance sums' to keep; the record planes share them.
+    public mutating func add(channel: Int, cellRowSums sums: UnsafePointer<Float>,
+                             rows: Range<Int>) {
+        guard metersColour else { return }
+        add(cellRowSums: sums, rows: rows, channel: channel)
+    }
+
+    private mutating func add(cellRowSums sums: UnsafePointer<Float>,
+                              rows: Range<Int>, channel: Int?) {
         guard !rows.isEmpty else { return }
         let (gw, gh) = (gridWidth, gridHeight)
         let (fw, fh) = (frameWidth, frameHeight)
@@ -134,6 +169,10 @@ public struct ToneBaseMeasurement {
             let cy = y * gh / fh
             let row = (y - rows.lowerBound) * gw
             for cx in 0..<gw {
+                if let channel {
+                    channelLogSum[channel * gw * gh + cy * gw + cx] += Double(sums[row + cx])
+                    continue
+                }
                 let xLow = (cx * fw + gw - 1) / gw
                 let xHigh = ((cx + 1) * fw + gw - 1) / gw
                 logSum[cy * gw + cx] += Double(sums[row + cx])
@@ -150,8 +189,11 @@ public struct ToneBaseMeasurement {
         let (gw, gh) = (gridWidth, gridHeight)
         let (fw, fh) = (frameWidth, frameHeight)
         let (wr, wg, wb) = (weightR, weightG, weightB)
+        let colour = metersColour, channelWeights = self.channelWeights
+        let plane = gw * gh
         let firstCell = rows.lowerBound * gh / fh
         let lastCell = (rows.upperBound - 1) * gh / fh
+        channelLogSum.withUnsafeMutableBufferPointer { channelSums in
         logSum.withUnsafeMutableBufferPointer { sums in
             counts.withUnsafeMutableBufferPointer { counts in
                 ParallelWork.forEach(
@@ -166,18 +208,33 @@ public struct ToneBaseMeasurement {
                             let xLow = (cx * fw + gw - 1) / gw
                             let xHigh = ((cx + 1) * fw + gw - 1) / gw
                             var sum = 0.0
+                            var channelSum = SIMD3<Double>.zero
                             for x in xLow..<xHigh {
                                 let rgb = sample(row + x)
                                 let metered = wr * max(rgb.x, 0)
                                     + wg * max(rgb.y, 0) + wb * max(rgb.z, 0)
                                 sum += Double(log2(max(metered, 1e-6)))
+                                if colour {
+                                    let each = channelWeights * SIMD3(max(rgb.x, 0),
+                                                                      max(rgb.y, 0),
+                                                                      max(rgb.z, 0))
+                                    channelSum += SIMD3(Double(log2(max(each.x, 1e-6))),
+                                                        Double(log2(max(each.y, 1e-6))),
+                                                        Double(log2(max(each.z, 1e-6))))
+                                }
                             }
                             sums[cy * gw + cx] += sum
                             counts[cy * gw + cx] += xHigh - xLow
+                            if colour {
+                                for c in 0..<3 {
+                                    channelSums[c * plane + cy * gw + cx] += channelSum[c]
+                                }
+                            }
                         }
                     }
                 }
             }
+        }
         }
     }
 
@@ -190,6 +247,43 @@ public struct ToneBaseMeasurement {
             stops.append(Float(logSum[i] / Double(counts[i])))
         }
         return stops
+    }
+
+    /// The frame's colour as Auto Levels reads it, in stops from metered mid-grey: green's median
+    /// over the lit cells, and red and blue that far off it by the median of each lit cell's own
+    /// ratio to green. A cell is lit above the frame's lower quartile and clear of the meter's
+    /// floor, so a frame that is mostly black is read by what the light falls on. Nil when colour
+    /// was not metered or nothing is lit.
+    public func channelMedians() -> SIMD3<Float>? {
+        guard metersColour else { return nil }
+        let plane = logSum.count
+        var luma: [Float] = [], cells: [SIMD3<Float>] = []
+        for i in 0..<plane where counts[i] > 0 {
+            luma.append(Float(logSum[i] / Double(counts[i])))
+            cells.append(SIMD3((0..<3).map {
+                Float(channelLogSum[$0 * plane + i] / Double(counts[i]))
+            }))
+        }
+        guard let floor = Self.percentile(luma, 0.25).map({ max($0, Self.litFloorStops) })
+        else { return nil }
+        let lit = zip(luma, cells).filter { $0.0 >= floor }.map(\.1)
+        guard let green = Self.percentile(lit.map(\.y), 0.5),
+              let red = Self.percentile(lit.map { $0.x - $0.y }, 0.5),
+              let blue = Self.percentile(lit.map { $0.z - $0.y }, 0.5) else { return nil }
+        return SIMD3(green + red, green, green + blue)
+    }
+
+    /// Cells darker than this, in stops from mid-grey, are too near the meter's floor to carry
+    /// colour.
+    static let litFloorStops: Float = -12
+
+    private static func percentile(_ values: [Float], _ q: Float) -> Float? {
+        AutoAdjustment.SceneStops(regionStops: values).map { _ in
+            let sorted = values.sorted()
+            let position = q * Float(sorted.count - 1)
+            let low = Int(position), high = min(low + 1, sorted.count - 1)
+            return sorted[low] + (position - Float(low)) * (sorted[high] - sorted[low])
+        }
     }
 
     /// The self-guided filter over the accumulated cells, returning the two
@@ -245,17 +339,36 @@ public struct ToneBaseMeasurement {
     }
 }
 
+/// Where metered levels place a frame, in the kernel's contrast and paper mid-point slots: a
+/// scale and a shift for each record, red, green and blue. Auto Levels also gives the extra film
+/// exposure, in the exposure slot; the stop it prints mid-grey, which keys the tone controls; and
+/// the highlight hold and shadow lift that bring a frame wider than the print onto it.
+struct MeteredLevels {
+    var scale: SIMD3<Float> = .one
+    var shift: SIMD3<Float> = .zero
+    var filmBoost: Float = 0
+    var toneKey: Float? = nil
+    var shadowLift: Float = 0
+    var highlightHold: Float = 0
+}
+
 extension FilmEngineInvocation {
     /// Whether the highlight and shadow controls are moving anything. The tone grid keys
     /// those two masks and nothing else, so this is also whether the light a scene forms reads
     /// the metered base: at rest, the masks lift nothing whatever the grid holds.
     public var toneControlsActive: Bool {
-        configuration[Self.sceneAdjustOffset] != 0
-            || configuration[Self.sceneAdjustOffset + 1] != 0
+        configuration[Self.sceneAdjustOffset] + meterLevels.highlightHold != 0
+            || configuration[Self.sceneAdjustOffset + 1] - meterLevels.shadowLift != 0
     }
 
     /// Whether the tone controls are doing anything *and* asked to be keyed locally.
     public var localToneActive: Bool { localToneEnabled && toneControlsActive }
+
+    /// Whether Auto Levels' reading reaches the light a scene forms, and not the print alone: a
+    /// negative's sets its film exposure and keys and moves its tone.
+    public var screenLevelsReachLight: Bool {
+        meterMedium == .screen && (meterStock.map(DigitalReferenceReceiver.keysTone) ?? false)
+    }
 
     /// Metered levels and local tone share one whole-frame measurement on CPU and Metal.
     public var sceneMeteringActive: Bool { localToneActive || meterStock != nil }
@@ -265,13 +378,31 @@ extension FilmEngineInvocation {
         applyMeteredLevels(measured.meterLevels)
     }
 
-    private mutating func applyMeteredLevels(_ levels: (scale: SIMD3<Float>, shift: Float)) {
+    private mutating func applyMeteredLevels(_ levels: MeteredLevels) {
         let ratio = levels.scale / meterLevels.scale
         for c in 0..<3 { configuration[Int(FOTUFILM_CONFIG_MASKING) + c] *= ratio[c] }
-        for offset in [Int(FOTUFILM_CONFIG_PAPER_MIDPOINT), Self.paperMidpointRedOffset,
-                       Self.paperMidpointBlueOffset] {
-            configuration[offset] += levels.shift - meterLevels.shift
+        // Green keeps the legacy mid-point slot; red and blue ride the appended ones.
+        let offsets = [Self.paperMidpointRedOffset, Int(FOTUFILM_CONFIG_PAPER_MIDPOINT),
+                       Self.paperMidpointBlueOffset]
+        for c in 0..<3 {
+            configuration[offsets[c]] += levels.shift[c] - meterLevels.shift[c]
         }
+        configuration[Self.exposureGainOffset] *= exp2(levels.filmBoost - meterLevels.filmBoost)
+        // The tone controls are keyed on the stop the print takes for mid-grey, unless they are
+        // keyed regionally.
+        if configuration[Self.toneGridSizeOffset] == 1, configuration[Self.toneGridSizeOffset + 1] == 1 {
+            configuration[Self.toneGridBOffset] = -(levels.toneKey ?? 0)
+        }
+        let shadows = Self.sceneAdjustOffset + 1
+        let userShadows = configuration[shadows] - meterLevels.shadowLift
+        var levels = levels
+        levels.shadowLift = min(levels.shadowLift, max(1 - userShadows, 0))
+        configuration[shadows] = userShadows + levels.shadowLift
+        // The highlight hold, likewise, stops where the highlight control does.
+        let highlights = Self.sceneAdjustOffset
+        let userHighlights = configuration[highlights] + meterLevels.highlightHold
+        levels.highlightHold = min(levels.highlightHold, max(userHighlights + 1, 0))
+        configuration[highlights] = userHighlights - levels.highlightHold
         meterLevels = levels
     }
 
@@ -284,37 +415,85 @@ extension FilmEngineInvocation {
             frameHeight: Int(configuration[Self.frameSizeOffset + 1]),
             balance: SIMD3(configuration[offset], configuration[offset + 1],
                            configuration[offset + 2]),
-            exposureGain: configuration[Self.exposureGainOffset])
+            exposureGain: configuration[Self.exposureGainOffset],
+            metersColour: screenMeterStock.map(DigitalReferenceReceiver.metersColour) ?? false)
     }
 
     /// The highlight reading this develop's levels take from a whole-frame measurement, or nil
     /// where it does not meter for levels. A host hands it to the develops that must print on the
     /// same levels as this frame, such as its unexposed edge.
     public func sceneHighlightStops(_ measurement: ToneBaseMeasurement) -> Float? {
-        guard meterStock != nil,
-              let scene = AutoAdjustment.SceneStops(regionStops: measurement.regionStops())
-        else { return nil }
-        return meterMedium == .labScan ? LabScanTiming.highlight(scene) : scene.bright
+        if meterStock != nil, meterMedium == .labScan {
+            return AutoAdjustment.SceneStops(regionStops: measurement.regionStops())
+                .map(LabScanTiming.highlight)
+        }
+        let exposureEV = log2(configuration[Self.exposureGainOffset]) - meterLevels.filmBoost
+        return screenScene(measurement).map {
+            DigitalReferenceReceiver.retimeHighlight($0, exposureEV: exposureEV)
+        }
+    }
+
+    /// The tone reading Auto Levels takes from a whole-frame measurement, or nil where it does
+    /// not meter: the frame's median and its two ends, the 0.5th and 99.5th percentiles. A host
+    /// hands it on with `sceneHighlightStops`.
+    public func sceneToneStops(_ measurement: ToneBaseMeasurement) -> SIMD3<Float>? {
+        screenScene(measurement).map { SIMD3($0.median, $0.dark, $0.bright) }
+    }
+
+    /// The stock Auto Levels meters for, when this develop meters on the screen.
+    private var screenMeterStock: FilmStock? { meterMedium == .screen ? meterStock : nil }
+
+    private func screenScene(_ measurement: ToneBaseMeasurement) -> AutoAdjustment.SceneStops? {
+        guard screenMeterStock != nil else { return nil }
+        return AutoAdjustment.SceneStops(regionStops: measurement.regionStops())
+    }
+
+    /// The colour reading Auto Levels takes from a whole-frame measurement, or nil where it does
+    /// not meter colour. A host hands it on with `sceneHighlightStops`.
+    public func sceneChannelMedians(_ measurement: ToneBaseMeasurement) -> SIMD3<Float>? {
+        guard screenMeterStock != nil else { return nil }
+        return measurement.channelMedians()
     }
 
     /// Solves the accumulated measurement and pins the grid into the packed
     /// configuration, replacing the identity default.
     public mutating func setToneBase(_ measurement: ToneBaseMeasurement) {
-        if let stock = meterStock, let bright = sceneHighlightStops(measurement) {
-            if meterMedium == .labScan {
-                applyMeteredLevels(LabScanTiming.levels(
-                    for: stock, sceneHighlightStops: bright, exposureEV: meterExposureEV,
-                    masking: meterMasking))
-            } else {
-                let screen = DigitalReferenceReceiver.levels(for: stock, style: .autoLevels,
-                                                             sceneHighlightStops: bright)
-                applyMeteredLevels((SIMD3(repeating: screen.scale), screen.shift))
-            }
+        // Auto Levels' own hold and lift are keyed on its print grey, as a host that hands the
+        // reading on gets them; only the user's tone controls ask for the regional key.
+        let keyedLocally = localToneActive
+        if let stock = meterStock, meterMedium == .labScan,
+           let bright = sceneHighlightStops(measurement) {
+            let levels = LabScanTiming.levels(for: stock, sceneHighlightStops: bright,
+                                              exposureEV: meterExposureEV, masking: meterMasking)
+            applyMeteredLevels(MeteredLevels(scale: levels.scale,
+                                             shift: SIMD3(repeating: levels.shift)))
+        }
+        if let stock = screenMeterStock, let scene = screenScene(measurement) {
+            // The meter reads the frame after the edit's exposure and before any film boost.
+            let exposureEV = log2(configuration[Self.exposureGainOffset])
+                - meterLevels.filmBoost
+            let white = DigitalReferenceReceiver.retimeHighlight(scene, exposureEV: exposureEV)
+            let boost = DigitalReferenceReceiver.filmBoost(for: stock, white: white,
+                                                           exposureEV: exposureEV)
+            let levels = DigitalReferenceReceiver.levels(
+                for: stock, style: .autoLevels, sceneHighlightStops: white + boost,
+                exposureEV: exposureEV)
+            let colour = DigitalReferenceReceiver.autoColourShift(
+                for: stock, channelMedians: sceneChannelMedians(measurement).map { $0 + boost },
+                exposureEV: exposureEV)
+            let compression = DigitalReferenceReceiver.toneCompression(for: stock, scene,
+                                                                           white: white)
+            applyMeteredLevels(MeteredLevels(
+                scale: SIMD3(repeating: levels.scale), shift: SIMD3(repeating: levels.shift) + colour,
+                filmBoost: boost,
+                toneKey: DigitalReferenceReceiver.keysTone(stock)
+                    ? DigitalReferenceReceiver.toneKey(white: white) + boost : nil,
+                shadowLift: compression.lift, highlightHold: compression.hold))
         }
         // Levels meter the same regions even when local tone is disabled. Keep the
-        // identity key in that case: automatic headroom adjustment can still supply a
+        // whole-frame key in that case: automatic headroom adjustment can still supply a
         // nonzero highlight control, which must remain keyed by each pixel's own brightness.
-        guard localToneActive else { return }
+        guard keyedLocally else { return }
         let (a, b) = measurement.solvedCoefficients()
         configuration[Self.toneGridSizeOffset] = Float(measurement.gridWidth)
         configuration[Self.toneGridSizeOffset + 1] = Float(measurement.gridHeight)

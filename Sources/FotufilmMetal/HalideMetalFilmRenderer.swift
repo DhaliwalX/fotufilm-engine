@@ -1441,12 +1441,13 @@ public final class HalideMetalFilmRenderer {
     /// in a walk of its own. The road walks the whole frame for its light anyway, and the base
     /// can ride those bands when the light cannot read what the metering writes: the tone grid
     /// keys the highlight and shadow masks, which are at rest, and the screen levels land in the
-    /// print stage. The glare mean is scene light and has to be in hand before the light is
+    /// print stage alone, as a slide's do; a negative's also set its film exposure and tone. The
+    /// glare mean is scene light and has to be in hand before the light is
     /// formed, so a host-measured flare keeps the separate walk — and meters on it, since the
     /// rows are going by regardless.
     static func metersOnLightBands(_ invocation: FilmEngineInvocation, fields: Bool) -> Bool {
         fields && invocation.sceneMeteringActive
-            && !invocation.toneControlsActive
+            && !invocation.toneControlsActive && !invocation.screenLevelsReachLight
             && (invocation.featureMask & FilmEngineFeature.flare == 0
                 || invocation.featureMask & FilmEngineFeature.flareMeasure != 0)
     }
@@ -1493,6 +1494,33 @@ public final class HalideMetalFilmRenderer {
                 cellSums.withUnsafeBufferPointer {
                     measurement.add(cellRowSums: $0.baseAddress! + skipped * gridWidth,
                                     rows: rows)
+                }
+                // Auto Levels meters each record alone through the same kernel, handed a white
+                // balance that weighs that record and zeroes the other two.
+                guard measurement.metersColour else { return true }
+                let offset = FilmEngineInvocation.whiteBalanceOffset
+                let balance = SIMD3(invocation.configuration[offset],
+                                    invocation.configuration[offset + 1],
+                                    invocation.configuration[offset + 2])
+                var configuration = invocation.configuration
+                for channel in 0..<3 {
+                    let isolated = ToneBaseMeasurement.channelMeteringBalance(balance,
+                                                                              channel: channel)
+                    for c in 0..<3 { configuration[offset + c] = isolated[c] }
+                    let measured = cellSums.withUnsafeMutableBufferPointer { out in
+                        configuration.withUnsafeBufferPointer { configuration in
+                            fotufilm_halide_metal_measure_tone_rows(
+                                handle, handle == 0 ? host : nil, out.baseAddress,
+                                Int32(gridWidth), Int32(width),
+                                Int32(measuredRows), configuration.baseAddress) == 0
+                        }
+                    }
+                    guard measured else { return false }
+                    cellSums.withUnsafeBufferPointer {
+                        measurement.add(channel: channel,
+                                        cellRowSums: $0.baseAddress! + skipped * gridWidth,
+                                        rows: rows)
+                    }
                 }
                 return true
             }

@@ -62,12 +62,48 @@ final class ToneBaseTests: XCTestCase {
         var measured = invocation.toneBaseMeasurement()
         pixels.withUnsafeBufferPointer { measured.add(linearRGBA: $0.baseAddress!, rows: 0..<height) }
         invocation.setToneBase(measured)
-        let grid = FilmEngineInvocation.toneGridSizeOffset..<(FilmEngineInvocation.toneGridBOffset
-            + FilmEngineInvocation.toneGridCells)
+        // The key stays whole-frame: only its offset moves, to the stop the print takes for grey.
+        let grid = FilmEngineInvocation.toneGridSizeOffset..<FilmEngineInvocation.toneGridBOffset
         XCTAssertEqual(Array(invocation.configuration[grid]), Array(original[grid]))
+        let offsets = (FilmEngineInvocation.toneGridBOffset + 1)..<(FilmEngineInvocation.toneGridBOffset
+            + FilmEngineInvocation.toneGridCells)
+        XCTAssertEqual(Array(invocation.configuration[offsets]), Array(original[offsets]))
         XCTAssertNotEqual(invocation.configuration[FilmEngineInvocation.paperMidpointRedOffset],
                           original[FilmEngineInvocation.paperMidpointRedOffset],
                           "Auto Levels must still adapt the receiver")
+    }
+
+    func testAutoColourMetersEachRecordAlone() {
+        let width = 64, height = 32
+        var pixels = [Float](repeating: 1, count: width * height * 4)
+        for i in 0..<(width * height) {
+            let light = Float(i % width) / Float(width) + 0.5
+            pixels[i * 4] = 0.36 * light
+            pixels[i * 4 + 1] = 0.18 * light
+            pixels[i * 4 + 2] = 0.09 * light
+        }
+        var plain = ToneBaseMeasurement(frameWidth: width, frameHeight: height,
+                                        balance: SIMD3(1, 1, 1), exposureGain: 1)
+        XCTAssertFalse(plain.metersColour)
+        var measured = ToneBaseMeasurement(frameWidth: width, frameHeight: height,
+                                           balance: SIMD3(1, 1, 1), exposureGain: 1,
+                                           metersColour: true)
+        pixels.withUnsafeBufferPointer {
+            plain.add(linearRGBA: $0.baseAddress!, rows: 0..<height)
+            measured.add(linearRGBA: $0.baseAddress!, rows: 0..<height)
+        }
+        XCTAssertNil(plain.channelMedians())
+        XCTAssertEqual(measured.regionStops(), plain.regionStops(),
+                       "metering colour leaves the luminance grid as it was")
+        let medians = try! XCTUnwrap(measured.channelMedians())
+        XCTAssertEqual(medians.x - medians.y, 1, accuracy: 1e-4)
+        XCTAssertEqual(medians.z - medians.y, -1, accuracy: 1e-4)
+        // A kernel handed the isolating balance weighs one record alone.
+        let isolated = ToneBaseMeasurement.channelMeteringBalance(SIMD3(2, 1, 0.5), channel: 2)
+        let luma = ColorScience.luminanceWeights
+        XCTAssertEqual(isolated.x, 0)
+        XCTAssertEqual(isolated.y, 0)
+        XCTAssertEqual(isolated.z * luma.2, 0.5, accuracy: 1e-6)
     }
 
     func testGridFollowsAspect() {

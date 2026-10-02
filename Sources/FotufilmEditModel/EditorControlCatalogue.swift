@@ -2093,6 +2093,8 @@ public enum EngineOptionCoverage: Sendable, Equatable {
 public extension EngineOptionCoverage {
     static let unbound: [String: EngineOptionCoverage] = [
         "sceneHighlightStops": .derived("whole-frame highlight meter, optionally smoothed by a video host"),
+        "sceneToneStops": .derived("whole-frame median and ends, 0.5th and 99.5th percentiles, Auto Levels brings onto the print by, taken with the highlight"),
+        "sceneChannelMedians": .derived("whole-frame per-record meter Auto Levels balances colour on, taken with the highlight"),
         "unexposedEdge": .derived(
             "set by the host on the piece of film larger than the aperture it develops for Emulsion Border"),
         "sceneHeadroom": .derived("the range the source declares above diffuse white"),

@@ -1275,6 +1275,8 @@ enum FilmRender {
             pixelsPerMM: options.pixelsPerMM(width: scene.width, height: scene.height))
         // The photograph's own Auto Levels reading, metered as its develop meters it.
         var stops = options.sceneHighlightStops
+        var medians = options.sceneChannelMedians
+        var tone = options.sceneToneStops
         if stops == nil, invocation.sceneMeteringActive {
             var measurement = invocation.toneBaseMeasurement()
             let bandRows = max(1, 262_144 / scene.width)
@@ -1292,6 +1294,8 @@ enum FilmRender {
                 }
             }
             stops = invocation.sceneHighlightStops(measurement)
+            medians = invocation.sceneChannelMedians(measurement)
+            tone = invocation.sceneToneStops(measurement)
         }
         let width = scene.width + margins.left + margins.right
         let height = scene.height + margins.top + margins.bottom
@@ -1310,7 +1314,8 @@ enum FilmRender {
             sceneKelvin: scene.sceneKelvin, sceneChromaticity: scene.sceneChromaticity,
             contentHeadroom: scene.contentHeadroom, inputConversion: scene.inputConversion,
             frameCoverage: scene.frameCoverage, viewport: nil, sensorFrame: scene.sensorFrame,
-            unexposedEdge: .init(margins: margins, sceneHighlightStops: stops))
+            unexposedEdge: .init(margins: margins, sceneHighlightStops: stops,
+                                 sceneChannelMedians: medians, sceneToneStops: tone))
         func print(_ state: EditState) -> Rendered? {
             develop(film, state: state, hdr: hdr, dynamicRange: dynamicRange, exact: exact,
                     negative: negative, shouldContinue: shouldContinue)?.image

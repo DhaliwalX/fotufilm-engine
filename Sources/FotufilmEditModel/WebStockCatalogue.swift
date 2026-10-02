@@ -19,12 +19,23 @@ public enum WebStockCatalogue {
                      if style == .autoLevels {
                          // Native-solved affine samples; browser hosts interpolate the small table
                          // rather than reproducing film characteristic curves in JavaScript.
-                         conversion["meter"] = ["min": 0.5, "max": 12.0,
-                             "adjustments": (0...512).map { i -> [Float] in
+                         // A colour negative's `reads` let them balance its records too.
+                         let stops = (0...512).map { -12 + Float($0) * 24 / 512 }
+                         var meter: [String: Any] = ["min": -12.0, "max": 12.0,
+                             "adjustments": stops.map { stops -> [Float] in
                                  let levels = style.receiverLevels(for: stock,
-                                     sceneHighlightStops: 0.5 + Float(i) * 11.5 / 512)
+                                                                   sceneHighlightStops: stops)
                                  return [levels.scale / fixed.scale, levels.shift - fixed.shift]
                              }]
+                         // A negative's film is given more exposure where its shadows sit on
+                         // the base.
+                         if !stock.isReversal, !stock.isReflectionPrint { meter["placesFilm"] = true }
+                         if DigitalReferenceStyle.autoLevelsColourRead(for: stock, stops: 0) != nil {
+                             meter["reads"] = stops.map {
+                                 DigitalReferenceStyle.autoLevelsColourRead(for: stock, stops: $0)!
+                             }
+                         }
+                         conversion["meter"] = meter
                      }
                      return conversion
                  }
