@@ -10,7 +10,7 @@ extension PrintPaper {
     /// Ilfochrome uses the Ektacolor spectra as a provisional receiver, not measured azo dyes.
     var dyes: [[Float]] {
         switch self {
-        case .ektacolorEdge, .screen, .negative, .ilfochromeCPS1K, .ilfochromeCLM1K: return SpectralGrid.paperDyes
+        case .newsprintColor, .newsprintBW, .ektacolorEdge, .screen, .negative, .ilfochromeCPS1K, .ilfochromeCLM1K: return SpectralGrid.paperDyes
         case .enduraPremier: return SpectralGrid.enduraPremierDyes
         case .crystalArchive: return SpectralGrid.crystalArchiveDyes
         case .vision2383: return SpectralGrid.vision2383Dyes
@@ -27,7 +27,7 @@ extension PrintPaper {
     /// been unmixed; `dyes` stays the partitioned basis the neutral axis is built on.
     var analyticalDyes: [[Float]] {
         switch self {
-        case .ektacolorEdge, .screen, .negative, .labScan, .telecine, .ilfochromeCPS1K, .ilfochromeCLM1K:
+        case .newsprintColor, .newsprintBW, .ektacolorEdge, .screen, .negative, .labScan, .telecine, .ilfochromeCPS1K, .ilfochromeCLM1K:
             return SpectralGrid.paperDyeAmounts
         case .enduraPremier: return SpectralGrid.enduraPremierDyeAmounts
         case .crystalArchive: return SpectralGrid.crystalArchiveDyeAmounts
@@ -44,7 +44,7 @@ extension PrintPaper {
     var sensitivity: [[Float]] {
         switch self {
         case .screen: return DigitalReferenceReceiver.sensitivity
-        case .ektacolorEdge, .negative, .ilfochromeCPS1K, .ilfochromeCLM1K: return SpectralGrid.paperSensitivity
+        case .newsprintColor, .newsprintBW, .ektacolorEdge, .negative, .ilfochromeCPS1K, .ilfochromeCLM1K: return SpectralGrid.paperSensitivity
         case .enduraPremier: return SpectralGrid.enduraPremierSensitivity
         case .crystalArchive: return SpectralGrid.crystalArchiveSensitivity
         case .vision2383: return SpectralGrid.vision2383Sensitivity
@@ -142,7 +142,7 @@ extension PrintPaper {
             return Array(repeating: Self.ilfochromeNormalCurve, count: 3)
         case .ilfochromeCLM1K:
             return Array(repeating: Self.ilfochromeMediumCurve, count: 3)
-        case .ektacolorEdge:
+        case .ektacolorEdge, .newsprintColor, .newsprintBW:
             return [PrintPaper.ra4PrintCurveRed, PrintPaper.ra4PrintCurve,
                     PrintPaper.ra4PrintCurveBlue]
         case .enduraPremier:

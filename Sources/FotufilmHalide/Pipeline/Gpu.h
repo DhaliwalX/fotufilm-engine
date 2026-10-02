@@ -601,7 +601,7 @@ public:
             // the 33-node cube caused 1.37 codes of contouring; separate stages measured 0.003
             // codes in DenseRampTests. The 2048-sample curve table avoids per-pixel
             // transcendental functions.
-            graph::PrintInputs print{configuration_, Expr(reversal_), monochrome, "frame_", suffix};
+            graph::PrintInputs print{configuration_, Expr(reversal_), monochrome, "frame_", suffix, Expr(origin_x_), Expr(origin_y_)};
             Func printed = graph::build_print(backend, print, developed, x, y, channel);
             display_linear(x, y, channel) = printed(x, y, channel);
         }

@@ -294,8 +294,8 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
         let nativeInstant = nativeID.flatMap { FilmBorderGeometry.preset($0) }?.isInstant == true
         let film = formatID.flatMap { FilmBorderGeometry.preset($0, motionPictureStock: motionStock) }
         let name = formatID.flatMap(FilmFormat.preset(id:))?.name ?? "Film"
-        let reflective = paper.acceptsViewingIlluminant && !paper.isProjected
-        hasLustre = !paper.isPositivePaper
+        let reflective = (paper.acceptsViewingIlluminant && !paper.isProjected) || paper.isNewsprint
+        hasLustre = !paper.isPositivePaper && !paper.isNewsprint
         let filmAvailable = definition != nil && film != nil
             && ((film?.isInstant != true && !nativeInstant) || nativeID == formatID)
         let mount = formatID.flatMap(SlideMountGeometry.preset)
@@ -400,7 +400,7 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
         case .paper, .paper5x7, .paper8x10, .paper5x5:
             baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? .zero
             let size = sheet.map { "\(Int(($0.widthMM / 25.4).rounded())) × \(Int(($0.heightMM / 25.4).rounded())) in" } ?? ""
-            detail = reflective ? "\(paper.name) · \(hasLustre ? "lustre" : "high gloss") · \(size)"
+            detail = reflective ? "\(paper.name) · \(paper.isNewsprint ? "matte" : (hasLustre ? "lustre" : "high gloss")) · \(size)"
                 : "Choose a reflection paper such as Ektacolor Edge or Ilfochrome."
         case .carrier:
             baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? .zero
@@ -451,6 +451,8 @@ extension PrintPaper {
         func pick(_ curve: CharacteristicCurve) -> Float { dense ? curve.dMax - curve.dMin : 0 }
         func maximum(_ curve: CharacteristicCurve) -> Float { curve.dMax - curve.dMin }
         switch self {
+        case .newsprintColor, .newsprintBW:
+            return SIMD3<Float>(0.88, 0.84, 0.73) * (dense ? 0.065 : 1)
         case .ektacolorEdge:
             density = SIMD3(pick(Self.ra4PrintCurveRed), pick(Self.ra4PrintCurve), pick(Self.ra4PrintCurveBlue))
         case .enduraPremier:

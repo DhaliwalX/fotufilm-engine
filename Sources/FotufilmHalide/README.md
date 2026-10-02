@@ -31,8 +31,8 @@ configuration layout are unchanged.
 The Android CPU generator includes lens diffusion, grain mottling and enlarger MTF.
 Regenerate its kernels and adapter together: these stages use the extended develop arguments.
 `bash tools/verify-android-aot.sh` builds that same generator and adapter for the host and compares
-64 cases against CPU JIT, including each stage, all four print variants, standalone negatives,
-tile origins, additional RGB/donor record exposure, closed gates and invalid fields. It uses only the public example stock and needs no Android device or emulator.
+72 cases against CPU JIT, including each stage, all four print variants, standalone negatives,
+tile origins, color/B&W newsprint screens, additional RGB/donor record exposure, closed gates and invalid fields. It uses only the public example stock and needs no Android device or emulator.
 This checks shared pipeline construction and bindings; it does not measure Android runtime or performance.
 
 `FilmRecordExposure` supplies an optional interleaved four-record exposure field to combined

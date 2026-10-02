@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "count": 18225,
+  "count": 18227,
   "fields": {
     "CURVES": {
       "offset": 0,
@@ -389,6 +389,10 @@
     "GATE": {
       "offset": 18220,
       "count": 5
+    },
+    "NEWSPRINT": {
+      "offset": 18225,
+      "count": 2
     }
   }
 }

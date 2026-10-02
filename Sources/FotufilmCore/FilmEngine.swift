@@ -1411,6 +1411,8 @@ public struct FilmEngineInvocation {
             configuration += [Float](repeating: 0, count: Int(FOTUFILM_CONFIG_FILM_TILE_COUNT))
         }
         configuration += options.gateConfiguration(width: width, height: height)
+        configuration += [printMedium == .newsprintColor ? 1 : (printMedium == .newsprintBW ? 2 : 0),
+                          Float(min(width, height)) / 100]
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0

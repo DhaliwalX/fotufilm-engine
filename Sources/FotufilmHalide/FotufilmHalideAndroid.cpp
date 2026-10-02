@@ -227,8 +227,11 @@ static int32_t process_tile_output(
     Buffer<float> result(interior_width, interior_height, 3);
     result.translate(0, interior_left);
     result.translate(1, interior_top);
+    density.translate(0, origin_x); density.translate(1, origin_y);
+    result.translate(0, origin_x); result.translate(1, origin_y);
     error = run_print(density, result, configuration, film_output_lut,
                       paper_output_lut, feature_mask);
+    result.translate(0, -origin_x); result.translate(1, -origin_y);
     if (error) return error;
     float *destination[3] = {output_r, output_g, output_b};
     for (int channel = 0; channel < 3; ++channel) {
