@@ -36,6 +36,8 @@ export default function Workspace() {
     libraryOpen,
     setLibraryOpen,
     openFromLibrary,
+    libraryPhotoRenamed,
+    libraryPhotosTrashed,
     filmPacks,
     packInput,
     importFilmPacks,
@@ -55,6 +57,8 @@ export default function Workspace() {
       <PhotoLibrary
         open={libraryOpen}
         onOpenPhotos={openFromLibrary}
+        onPhotoRenamed={libraryPhotoRenamed}
+        onPhotosTrashed={libraryPhotosTrashed}
         onClose={() => setLibraryOpen(false)}
       />
       <LibraryHandoff />

@@ -26,6 +26,11 @@ class LibraryFolders {
   // The file a chosen folder holds at `path` (absolute), or empty for anything outside them.
   std::string Resolve(const std::string& path) const;
 
+  // Renames the file at `path` (absolute, inside a chosen folder) to `name` in the same folder,
+  // and answers its new absolute path. Empty with `error` set for a name that is not a plain,
+  // visible file name, a name another file has, or a file that cannot be renamed.
+  std::string Rename(const std::string& path, const std::string& name, std::string& error) const;
+
   // Every file under `folder` whose extension, lowercased, is in `extensions`, depth first, as a
   // JSON array of [relative path, size, modified milliseconds]. Hidden files and folders are left
   // out, as the browser's walk leaves them. False with `error` set when the folder cannot be read

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   forgetFolder,
+  forgetPhotos,
   loadFolders,
   loadIndex,
   loadPhotoRecords,
+  movePhoto,
   onRecordChange,
   saveFolder,
   saveIndex,
@@ -12,6 +14,7 @@ import {
 import {
   indexRows,
   indexedPhotos,
+  photoEntry,
   scanDirectory,
   uploadedFolders,
 } from "./library-scan.js";
@@ -253,6 +256,88 @@ export function usePhotoLibrary(active) {
     });
   }, [folders]);
 
+  // A folder's photos replaced, and kept as its index.
+  const replacePhotos = useCallback(
+    (folder, photos) => {
+      patchFolder(folder.id, { photos });
+      saveIndex(folder.id, indexRows(photos)).catch(() => {});
+    },
+    [patchFolder],
+  );
+
+  // Renames a photo in its folder; its rating, edit and thumbnail follow it. Resolves
+  // {from, to, name}, its old and new keys, or null when the folder's host refused.
+  const renamePhoto = useCallback(
+    async (photo, name) => {
+      const folder = folders.find((item) => item.id === photo.folderId);
+      let path;
+      try {
+        path = await photo.root.rename(photo.path, name);
+      } catch (reason) {
+        setError(message(reason, `${photo.name} could not be renamed.`));
+        return null;
+      }
+      const renamed = photoEntry(folder, path, photo.size, photo.modified);
+      replacePhotos(
+        folder,
+        folder.photos.map((item) => (item.key === photo.key ? renamed : item)),
+      );
+      await movePhoto(photo.key, renamed.key).catch(() => {});
+      setRecords((current) => {
+        if (!current.has(photo.key)) return current;
+        const next = new Map(current);
+        next.set(renamed.key, { ...current.get(photo.key), key: renamed.key });
+        next.delete(photo.key);
+        return next;
+      });
+      return { from: photo.key, to: renamed.key, name: renamed.name };
+    },
+    [folders, replacePhotos],
+  );
+
+  // Moves photos to the trash, folder by folder; they leave the library with their records.
+  // Resolves the keys of the photos trashed.
+  const trashPhotos = useCallback(
+    async (photos) => {
+      const removed = [],
+        problems = [];
+      for (const folder of folders) {
+        const chosen = photos.filter((photo) => photo.folderId === folder.id);
+        if (!chosen.length) continue;
+        let result;
+        try {
+          result = await folder.handle.trash(chosen.map((photo) => photo.path));
+        } catch (reason) {
+          problems.push(message(reason, "The photos could not be moved to the Trash."));
+          continue;
+        }
+        const trashed = new Set(result.trashed);
+        for (const failure of result.failed)
+          problems.push(`${failure.path.split("/").at(-1)}: ${failure.message}`);
+        if (!trashed.size) continue;
+        const keys = chosen
+          .filter((photo) => trashed.has(photo.path))
+          .map((photo) => photo.key);
+        removed.push(...keys);
+        replacePhotos(
+          folder,
+          folder.photos.filter((photo) => !trashed.has(photo.path)),
+        );
+      }
+      if (removed.length) {
+        await forgetPhotos(removed).catch(() => {});
+        setRecords((current) => {
+          const next = new Map(current);
+          for (const key of removed) next.delete(key);
+          return next;
+        });
+      }
+      if (problems.length) setError(problems.join(" "));
+      return removed;
+    },
+    [folders, replacePhotos],
+  );
+
   // Stars change at once; the records follow when they are saved.
   const rate = useCallback((keys, rating) => {
     setRecords((current) => {
@@ -276,5 +361,7 @@ export function usePhotoLibrary(active) {
     removeFolder,
     rescan: (folder) => (folder.handle ? connect(folder, true) : null),
     rate,
+    renamePhoto,
+    trashPhotos,
   };
 }

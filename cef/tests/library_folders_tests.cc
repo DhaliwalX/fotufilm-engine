@@ -72,8 +72,19 @@ int main() {
     CHECK(!LibraryFolders::List(photos.string(), {"jpg"}, cancelled, json, error));
     cancelled = false;
     CHECK(!LibraryFolders::List((root / "missing").string(), {"jpg"}, cancelled, json, error));
+    // A photo is renamed in its own folder, to a visible name no other file has.
+    std::string renamed = folders.Rename((photos / "a.JPG").string(), "first.jpg", error);
+    CHECK(renamed == (photos / "first.jpg").string());
+    CHECK(fs::exists(photos / "first.jpg") && !fs::exists(photos / "a.JPG"));
+    CHECK(folders.Rename((photos / "first.jpg").string(), "trip/x.jpg", error).empty());
+    CHECK(folders.Rename((photos / "first.jpg").string(), ".hidden2.jpg", error).empty());
+    CHECK(folders.Rename((photos / "first.jpg").string(), "notes.txt", error).empty());
+    CHECK(error.find("notes.txt") != std::string::npos);
+    CHECK(folders.Rename((root / "Other" / "d.jpg").string(), "e.jpg", error).empty());
+    CHECK(fs::exists(root / "Other" / "d.jpg"));
+    CHECK(folders.Rename((photos / "missing.jpg").string(), "e.jpg", error).empty());
     folders.Forget(photos.string());
-    CHECK(folders.Resolve((photos / "a.JPG").string()).empty());
+    CHECK(folders.Resolve((photos / "first.jpg").string()).empty());
   }
   CHECK(!LibraryFolders(store).Granted(photos.string()));
   fs::remove_all(root);

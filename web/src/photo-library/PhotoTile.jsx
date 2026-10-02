@@ -61,6 +61,7 @@ export default memo(function PhotoTile({
   onPress,
   onOpen,
   onRate,
+  onMenu,
 }) {
   const { url, fresh } = useThumbnail(thumbnails, photo);
   const [loaded, setLoaded] = useState(false);
@@ -79,6 +80,10 @@ export default memo(function PhotoTile({
       }}
       onPointerDown={(event) => event.button === 0 && onPress(photo.key, event)}
       onDoubleClick={() => onOpen(photo.key)}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onMenu(photo.key, event);
+      }}
     >
       <div className="library-thumb">
         {url ? (

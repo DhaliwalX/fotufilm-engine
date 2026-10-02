@@ -2,12 +2,15 @@ import { useCallback, useState } from "react";
 
 // Connects the photo library to the editor: a photo opens under its library key, from which
 // useSavedEdits restores its kept edit and keeps later changes, and a photo already open is
-// shown rather than opened twice.
+// shown rather than opened twice. An open photo renamed in the library keeps its edit under
+// the new key and is read from its new name; one moved to the trash is closed.
 export default function useLibraryDocuments({
   files,
   exporting,
   acceptFiles,
   selectFile,
+  removeFiles,
+  setFiles,
   setError,
   setLibraryOpen,
 }) {
@@ -37,8 +40,46 @@ export default function useLibraryDocuments({
     [exporting, files, acceptFiles, selectFile, setError, setLibraryOpen],
   );
 
+  const libraryPhotoRenamed = useCallback(
+    ({ from, to, name }) =>
+      setFiles((current) =>
+        current.map((doc) => {
+          if (doc.editKey !== from) return doc;
+          const { file } = doc.source;
+          const renamed = file
+            ? Object.assign(
+                new File([file], name, {
+                  type: file.type,
+                  lastModified: file.lastModified,
+                }),
+                file.hostPath
+                  ? { hostPath: file.hostPath.replace(/[^/]*$/, name) }
+                  : {},
+              )
+            : file;
+          return {
+            ...doc,
+            name,
+            editKey: to,
+            source: { ...doc.source, file: renamed, name, editKey: to },
+          };
+        }),
+      ),
+    [setFiles],
+  );
+  const libraryPhotosTrashed = useCallback(
+    (keys) => {
+      const gone = new Set(keys);
+      const closing = files.filter((doc) => gone.has(doc.editKey));
+      if (closing.length) removeFiles(closing);
+    },
+    [files, removeFiles],
+  );
+
   return {
     openFromLibrary,
+    libraryPhotoRenamed,
+    libraryPhotosTrashed,
     libraryHandoff: handoff,
     endLibraryHandoff: useCallback(() => setHandoff(null), []),
   };

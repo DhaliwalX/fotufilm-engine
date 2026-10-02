@@ -59,9 +59,59 @@ void List(std::string folder, std::set<std::string> extensions,
   reply->Resolve(result, json.data(), json.size());
 }
 
+// The absolute paths a call names, each inside a chosen folder; empty when any is not.
+std::vector<std::string> ChosenPaths(const LibraryFolders& folders, const Call& call) {
+  std::vector<std::string> paths;
+  CefRefPtr<CefListValue> list = Fields(call)->GetList("paths");
+  if (!list) return {};
+  for (size_t index = 0; index < list->GetSize(); ++index) {
+    std::string path = folders.Resolve(list->GetString(index).ToString());
+    if (path.empty()) return {};
+    paths.push_back(std::move(path));
+  }
+  return paths;
+}
+
+void Rename(std::shared_ptr<LibraryFolders> folders, std::string path, std::string name,
+            std::shared_ptr<Reply> reply) {
+  std::string error;
+  const std::string renamed = folders->Rename(path, name, error);
+  if (renamed.empty()) return reply->Reject(error);
+  CefRefPtr<CefDictionaryValue> answer = CefDictionaryValue::Create();
+  answer->SetString("path", renamed);
+  answer->SetString("name", name);
+  CefRefPtr<CefValue> result = CefValue::Create();
+  result->SetDictionary(answer);
+  reply->Resolve(result);
+}
+
+void Trash(std::vector<std::string> paths,
+           std::function<bool(const std::string&, std::string&)> trash,
+           std::shared_ptr<Reply> reply) {
+  CefRefPtr<CefListValue> trashed = CefListValue::Create(), failed = CefListValue::Create();
+  for (const std::string& path : paths) {
+    std::string error;
+    if (trash(path, error)) {
+      trashed->SetString(trashed->GetSize(), path);
+      continue;
+    }
+    CefRefPtr<CefDictionaryValue> failure = CefDictionaryValue::Create();
+    failure->SetString("path", path);
+    failure->SetString("message", error.empty() ? "It could not be moved to the Trash." : error);
+    failed->SetDictionary(failed->GetSize(), failure);
+  }
+  CefRefPtr<CefDictionaryValue> answer = CefDictionaryValue::Create();
+  answer->SetList("trashed", trashed);
+  answer->SetList("failed", failed);
+  CefRefPtr<CefValue> result = CefValue::Create();
+  result->SetDictionary(answer);
+  reply->Resolve(result);
+}
+
 }  // namespace
 
-void RegisterLibraryMethods(Dispatcher& dispatcher, const std::string& store) {
+void RegisterLibraryMethods(Dispatcher& dispatcher, const std::string& store,
+                            LibraryFileActions actions) {
   using Thread = Dispatcher::Thread;
   auto folders = std::make_shared<LibraryFolders>(store);
 
@@ -106,6 +156,34 @@ void RegisterLibraryMethods(Dispatcher& dispatcher, const std::string& store) {
                         folders->Forget(Fields(call)->GetString("path").ToString());
                         reply->Resolve(nullptr);
                       });
+
+  dispatcher.Register(
+      "renameLibraryFile", Thread::kUi, [folders](const Call& call, std::shared_ptr<Reply> reply) {
+        CefRefPtr<CefDictionaryValue> fields = Fields(call);
+        CefPostTask(TID_FILE_USER_BLOCKING,
+                    base::BindOnce(&Rename, folders, fields->GetString("path").ToString(),
+                                   fields->GetString("name").ToString(), reply));
+      });
+
+  if (actions.reveal)
+    dispatcher.Register("revealLibraryFiles", Thread::kUi,
+                        [folders, reveal = actions.reveal](const Call& call,
+                                                           std::shared_ptr<Reply> reply) {
+                          const std::vector<std::string> paths = ChosenPaths(*folders, call);
+                          if (paths.empty() || !reveal(paths))
+                            return reply->Reject("The photos could not be shown.");
+                          reply->Resolve(nullptr);
+                        });
+
+  if (actions.trash)
+    dispatcher.Register(
+        "trashLibraryFiles", Thread::kUi,
+        [folders, trash = actions.trash](const Call& call, std::shared_ptr<Reply> reply) {
+          std::vector<std::string> paths = ChosenPaths(*folders, call);
+          if (paths.empty()) return reply->Reject("Only photos in the library can be trashed.");
+          CefPostTask(TID_FILE_USER_BLOCKING, base::BindOnce(&Trash, std::move(paths), trash,
+                                                             reply));
+        });
 }
 
 }  // namespace fotufilm

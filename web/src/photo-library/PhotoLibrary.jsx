@@ -14,6 +14,8 @@ import { Icon } from "../icons.jsx";
 import LibraryBar from "./LibraryBar.jsx";
 import LibraryFolders from "./LibraryFolders.jsx";
 import PhotoGrid, { tileId } from "./PhotoGrid.jsx";
+import PhotoMenu, { menuTargets } from "./PhotoMenu.jsx";
+import RenameDialog from "./RenameDialog.jsx";
 import { currentFile } from "./library-scan.js";
 import {
   ALL_FOLDERS,
@@ -80,8 +82,16 @@ function EmptyState({ folders, filtered, onAdd, onClear }) {
 // The library view. `onOpenPhotos({items, origin})` receives
 // {key, name, file} per photo, the key its edit is kept under
 // (loadLibraryEdit/saveLibraryEdit), and the first tile's on-screen rectangle
-// and thumbnail.
-export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
+// and thumbnail. A photo renamed here is reported to `onPhotoRenamed({from,
+// to, name})`, its old and new keys; photos moved to the trash to
+// `onPhotosTrashed(keys)`.
+export default function PhotoLibrary({
+  open,
+  onOpenPhotos,
+  onPhotoRenamed,
+  onPhotosTrashed,
+  onClose,
+}) {
   const library = usePhotoLibrary(open);
   const [thumbnails, setThumbnails] = useState(null);
   const [scope, setScope] = useState(allPhotos);
@@ -95,6 +105,9 @@ export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
   });
   const [focusKey, setFocusKey] = useState(null);
   const [removing, setRemoving] = useState(null);
+  const [menu, setMenu] = useState(null),
+    [renaming, setRenaming] = useState(null),
+    [trashing, setTrashing] = useState(null);
   const upload = useRef(null),
     grid = useRef(null);
 
@@ -211,6 +224,60 @@ export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
     [library.rate, selection],
   );
 
+  const showMenu = useCallback((key, event) => {
+    setFocusKey(key);
+    setMenu({ key, x: event.clientX, y: event.clientY });
+  }, []);
+  const menuPhotos = menu
+    ? menuTargets(photos, selection.selected, menu.key)
+    : [];
+  const fileActions = (list) =>
+    list.length && list.every((photo) => photo.root?.fileActions)
+      ? list[0].root.fileActions
+      : null;
+  const revealPhotos = (list) => {
+    for (const root of new Set(list.map((photo) => photo.root)))
+      root
+        .reveal(
+          list
+            .filter((photo) => photo.root === root)
+            .map((photo) => photo.path),
+        )
+        .catch(() => {});
+  };
+  const menuAction = (action) => {
+    if (action === "open") openPhotos(menuPhotos);
+    else if (action === "reveal") revealPhotos(menuPhotos);
+    else if (action === "select")
+      setSelection((current) =>
+        nextSelection(photos, current, menu.key, { toggle: true }),
+      );
+    else if (action === "rename") setRenaming(menuPhotos[0]);
+    else if (action === "trash") setTrashing(menuPhotos);
+  };
+  const rename = async (photo, name) => {
+    const renamed = await library.renamePhoto(photo, name);
+    if (!renamed) return;
+    const swap = (key) => (key === renamed.from ? renamed.to : key);
+    setSelection((current) => ({
+      selected: new Set([...current.selected].map(swap)),
+      anchor: swap(current.anchor),
+    }));
+    setFocusKey(swap);
+    onPhotoRenamed?.(renamed);
+  };
+  const trash = async (list) => {
+    const removed = new Set(await library.trashPhotos(list));
+    if (!removed.size) return;
+    setSelection((current) => ({
+      selected: new Set(
+        [...current.selected].filter((key) => !removed.has(key)),
+      ),
+      anchor: removed.has(current.anchor) ? null : current.anchor,
+    }));
+    onPhotosTrashed?.([...removed]);
+  };
+
   const keyDown = (event, layout) => {
     const command = event.metaKey || event.ctrlKey;
     const pageRows = Math.max(
@@ -244,6 +311,23 @@ export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
     } else if (event.key === "Enter") {
       event.preventDefault();
       openPhotos(selectedPhotos);
+    } else if (
+      command &&
+      event.key === "Backspace" &&
+      fileActions(selectedPhotos)?.trash
+    ) {
+      event.preventDefault();
+      setTrashing(selectedPhotos);
+    } else if (event.key === "ContextMenu" && focusKey) {
+      // The menu key opens the focused photo's menu beside it.
+      event.preventDefault();
+      const rect = document
+        .getElementById(
+          tileId(photos.findIndex((photo) => photo.key === focusKey)),
+        )
+        ?.getBoundingClientRect();
+      if (rect)
+        showMenu(focusKey, { clientX: rect.left + 24, clientY: rect.top + 24 });
     } else if (
       !command &&
       /^[0-5]$/.test(event.key) &&
@@ -324,6 +408,7 @@ export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
           onPress={press}
           onOpen={openKey}
           onRate={rate}
+          onMenu={showMenu}
           onKeyDown={keyDown}
           contentKey={`${scope.folderId}/${scope.path}`}
           reflowKey={`${filters.sort}|${filters.minRating}|${filters.editedOnly}|${search}`}
@@ -355,6 +440,41 @@ export default function PhotoLibrary({ open, onOpenPhotos, onClose }) {
           if (id) setScope({ folderId: id, path: "" });
         }}
       />
+      <PhotoMenu
+        menu={menu}
+        targets={menuPhotos}
+        actions={fileActions(menuPhotos)}
+        selected={selection.selected}
+        onAction={menuAction}
+        onClose={() => setMenu(null)}
+      />
+      <DialogContainer onDismiss={() => setRenaming(null)}>
+        {renaming && (
+          <RenameDialog
+            photo={renaming}
+            onRename={(name) => rename(renaming, name)}
+          />
+        )}
+      </DialogContainer>
+      <DialogContainer onDismiss={() => setTrashing(null)}>
+        {trashing && (
+          <AlertDialog
+            title={
+              trashing.length === 1
+                ? `Move “${trashing[0].name}” to the Trash?`
+                : `Move ${trashing.length} photos to the Trash?`
+            }
+            variant="destructive"
+            primaryActionLabel={fileActions(trashing)?.trash ?? "Move to Trash"}
+            cancelLabel="Cancel"
+            onPrimaryAction={() => trash(trashing)}
+          >
+            {trashing.length === 1
+              ? "Fotufilm forgets its rating and saved edit. The file can be put back from the Trash."
+              : "Fotufilm forgets their ratings and saved edits. The files can be put back from the Trash."}
+          </AlertDialog>
+        )}
+      </DialogContainer>
       <DialogContainer onDismiss={() => setRemoving(null)}>
         {removing && (
           <AlertDialog
