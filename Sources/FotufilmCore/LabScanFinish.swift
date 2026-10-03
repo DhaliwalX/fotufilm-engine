@@ -1,12 +1,12 @@
 import Foundation
 
 /// Lab Scan's finish: the colour and tone a minilab scanner's processing gives a frame after it
-/// has set it up, measured as the difference between such a scan and a neutral scan of the same
-/// negative. The scanner prints its scan rather than measuring it: a steeper gradation with
+/// has set it up, fitted to the median difference between such scans and neutral scans of the same
+/// negatives. The scanner prints its scan rather than measuring it: a steeper gradation with
 /// bright, open highlights and a deeper black; records whose contrasts do not quite match, which
-/// cools the shadows against neutral highlights; a saturation matrix; and colour corrections that
-/// turn foliage toward teal and violet toward blue, hold back pure reds and enrich yellows,
-/// oranges and blues.
+/// leaves near-neutral shadows cyan and near-neutral upper tones warm; and colour corrections that
+/// enrich reds and oranges, mute yellows, cyans and blues, and turn foliage toward teal, cyan and
+/// violet toward blue.
 ///
 /// It is applied to the characterized scan, so it is baked into the medium's output table: no
 /// kernel runs it and every renderer shares it.
@@ -15,12 +15,12 @@ public enum LabScanFinish {
     static let highlightLift: Float = 0.02
     /// Pull on the deepest tones at black, in cube-root luminance.
     static let blackPull: Float = 0.012
-    /// Shadow and mid-tone cooling from the records' crossover, in Oklab a/b.
-    static let shadowCool: Float = 0.010
-    /// Highlight warmth from the same crossover, in Oklab b.
-    static let highlightWarmth: Float = 0.005
-    /// Overall chroma gain of the saturation matrix.
-    static let saturation: Float = 0.06
+    /// The records' crossover on near-neutral colours, in Oklab a/b: a cyan cast below the upper
+    /// tones and a warm one through them, neither at the black floor nor at white.
+    static let shadowCast = SIMD2<Float>(-0.024, -0.0035)
+    static let upperCast = SIMD2<Float>(0.032, 0.010)
+    /// Oklab chroma over which the crossover fades out: a coloured patch keeps its own colour.
+    static let castChroma: Float = 0.04
 
     /// A hue-selective correction: a chroma gain and a hue turn in degrees, both fading over a
     /// Gaussian window of `width` degrees about `hue` on the Oklab hue circle.
@@ -32,11 +32,12 @@ public enum LabScanFinish {
     }
 
     static let corrections: [HueCorrection] = [
-        HueCorrection(hue: 25, width: 15, chroma: 0.90, turn: 0),     // pure reds
-        HueCorrection(hue: 70, width: 25, chroma: 1.10, turn: 0),     // oranges, skin
-        HueCorrection(hue: 105, width: 20, chroma: 1.10, turn: 0),    // yellows
-        HueCorrection(hue: 145, width: 25, chroma: 0.92, turn: 12),   // foliage toward teal
-        HueCorrection(hue: 245, width: 30, chroma: 1.10, turn: 0),    // blues, sky
+        HueCorrection(hue: 40, width: 20, chroma: 1.20, turn: 1.5),   // reds, oranges
+        HueCorrection(hue: 75, width: 20, chroma: 1.04, turn: -3.7),  // oranges toward red
+        HueCorrection(hue: 105, width: 20, chroma: 0.88, turn: -3.3), // yellows, muted
+        HueCorrection(hue: 135, width: 20, chroma: 0.99, turn: 8.3),  // foliage toward teal
+        HueCorrection(hue: 225, width: 20, chroma: 0.80, turn: 12),   // cyan toward blue, muted
+        HueCorrection(hue: 260, width: 20, chroma: 0.81, turn: 0),    // blues, muted
         HueCorrection(hue: 310, width: 25, chroma: 1, turn: -15),     // violet toward blue
     ]
 
@@ -51,18 +52,19 @@ public enum LabScanFinish {
         var lab = oklab(ColorScience.linearDisplayP3ToSRGB(toned))
         let l = lab.x
 
-        // The crossover: cooler shadows and mid-tones, faintly warm highlights, neither at the
-        // black floor nor at white.
+        // The crossover, on near-neutral colours: cyan shadows and mid-tones, warm upper tones.
         let shadow = clamp((0.75 - l) / 0.45, 0, 1) * clamp((l - 0.04) / 0.16, 0, 1)
-        let high = clamp((l - 0.75) / 0.15, 0, 1) * clamp((1 - l) / 0.08, 0, 1)
-        lab.y += strength * (-shadowCool * shadow + 0.5 * highlightWarmth * high)
-        lab.z += strength * (-0.6 * shadowCool * shadow + highlightWarmth * high)
+        let upper = clamp((l - 0.44) / 0.2, 0, 1) * clamp((1 - l) / 0.07, 0, 1)
+        let neutral = exp(-(lab.y * lab.y + lab.z * lab.z).squareRoot() / castChroma)
+        let cast = strength * neutral * (shadowCast * shadow + upperCast * upper)
+        lab.y += cast.x
+        lab.z += cast.y
 
-        // Saturation and the hue corrections, faded out in the deepest shadows and toward white,
-        // which a scanner keeps clean.
+        // The hue corrections, faded out in the deepest shadows and toward white, which a scanner
+        // keeps clean.
         var chroma = (lab.y * lab.y + lab.z * lab.z).squareRoot()
         var hue = atan2(lab.z, lab.y) * 180 / .pi
-        var gain = 1 + strength * saturation
+        var gain: Float = 1
         var turn: Float = 0
         for correction in corrections {
             var distance = (hue - correction.hue).truncatingRemainder(dividingBy: 360)

@@ -34,14 +34,15 @@ final class LabScanFinishTests: XCTestCase {
         XCTAssertLessThan(luminance(LabScanFinish.apply(SIMD3(repeating: 0.01))), 0.01)
     }
 
-    func testShadowsAreCoolerThanHighlights() {
+    func testNearNeutralShadowsTurnCyanAndUpperTonesWarm() {
         let shadow = LabScanFinish.oklab(ColorScience.linearDisplayP3ToSRGB(
             LabScanFinish.apply(SIMD3(repeating: 0.05))))
-        let highlight = LabScanFinish.oklab(ColorScience.linearDisplayP3ToSRGB(
-            LabScanFinish.apply(SIMD3(repeating: 0.7))))
-        XCTAssertLessThan(shadow.y, 0)
+        let upper = LabScanFinish.oklab(ColorScience.linearDisplayP3ToSRGB(
+            LabScanFinish.apply(SIMD3(repeating: 0.4))))
+        XCTAssertLessThan(shadow.y, -0.005)
         XCTAssertLessThan(shadow.z, 0)
-        XCTAssertGreaterThan(highlight.z, shadow.z)
+        XCTAssertGreaterThan(upper.y, 0.005)
+        XCTAssertGreaterThan(upper.z, 0)
     }
 
     func testMonochromeTakesTheGradationAndStaysNeutral() {
@@ -57,11 +58,11 @@ final class LabScanFinishTests: XCTestCase {
         XCTAssertGreaterThan(lch(LabScanFinish.apply(foliage)).h, lch(foliage).h + 5,
                              "foliage turns toward teal")
         let yellow = SIMD3<Float>(0.55, 0.45, 0.08)
-        XCTAssertGreaterThan(lch(LabScanFinish.apply(yellow)).c, lch(yellow).c * 1.1)
+        XCTAssertLessThan(lch(LabScanFinish.apply(yellow)).c, lch(yellow).c * 0.95)
         let sky = SIMD3<Float>(0.12, 0.22, 0.5)
-        XCTAssertGreaterThan(lch(LabScanFinish.apply(sky)).c, lch(sky).c * 1.1)
-        let red = SIMD3<Float>(0.35, 0.03, 0.04)
-        XCTAssertLessThan(lch(LabScanFinish.apply(red)).c, lch(red).c)
+        XCTAssertLessThan(lch(LabScanFinish.apply(sky)).c, lch(sky).c * 0.95)
+        let red = SIMD3<Float>(0.35, 0.06, 0.04)
+        XCTAssertGreaterThan(lch(LabScanFinish.apply(red)).c, lch(red).c * 1.05)
     }
 
     func testStrengthRunsFromTheNeutralScanToTheFullFinish() {

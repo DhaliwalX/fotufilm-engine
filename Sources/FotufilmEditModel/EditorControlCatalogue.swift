@@ -1755,8 +1755,9 @@ public enum EditorControlCatalogue {
                 help: "Lab Scan finish, 0 neutral ... 1 the minilab scanner's (default: 1)"),
             documentation: "Lab Scan negatives only. 1 finishes the scan the way a minilab "
                 + "scanner's processing does: a steeper, print-like gradation with open highlights "
-                + "and a deep black, shadows cooler than the highlights, richer yellows, oranges "
-                + "and blues, and foliage turned toward teal. 0 delivers the neutral characterized scan."),
+                + "and a deep black, cyan shadows and warm upper tones in near-neutral colours, "
+                + "richer reds and oranges, muted yellows, cyans and blues, and foliage turned "
+                + "toward teal. 0 delivers the neutral characterized scan."),
         EditorControl(
             .enlarger, title: "Enlarger",
             detail: "Choose the enlarger lighting used to make the print.",
