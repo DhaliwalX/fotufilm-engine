@@ -490,6 +490,7 @@ export class RenderSession {
           gradeSpace: edit.gradeSpace,
           seed: edit.seed,
           localTone: edit.localTone,
+          labScanDodging: edit.profile?.labScanDodging ?? 1,
         }
         const needsMeter =
           dynamic ||

@@ -26,6 +26,12 @@ public struct CharacteristicCurveComponent: Sendable {
 
     var densityRange: Float { gamma * (shoulder - toe) }
 
+    /// The population on a shifted exposure axis, as `CharacteristicCurve.reexposed`.
+    func reexposed(offset: Float) -> Self {
+        Self(gamma: gamma, toe: toe - offset, toeWidth: toeWidth, shoulder: shoulder - offset,
+             shoulderWidth: shoulderWidth)
+    }
+
     func density(logExposure x: Float) -> Float {
         let t = toeWidth * softplus((x - toe) / toeWidth)
         let s = shoulderWidth * softplus((x - shoulder) / shoulderWidth)
@@ -84,6 +90,17 @@ public struct CharacteristicCurve: Sendable {
         let s = shoulderWidth * softplus((x - shoulder) / shoulderWidth)
         return dMin + gamma * min(max(t - s, 0), shoulder - toe)
             + (secondary?.density(logExposure: x) ?? 0)
+    }
+
+    /// The curve on a shifted exposure axis: it forms at log exposure x the density it formed
+    /// at `x + offset`, so its density range and base are unchanged.
+    public func reexposed(offset: Float) -> CharacteristicCurve {
+        guard offset != 0 else { return self }
+        return CharacteristicCurve(
+            dMin: dMin, gamma: gamma, toe: toe - offset, toeWidth: toeWidth,
+            shoulder: shoulder - offset, shoulderWidth: shoulderWidth,
+            secondary: secondary?.reexposed(offset: offset),
+            sampled: sampled?.reexposed(offset: offset))
     }
 
     /// Finds an exposure for the requested density via bisection. Sampled records can

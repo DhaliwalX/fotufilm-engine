@@ -209,6 +209,8 @@ public enum EngineBinding: Equatable, Sendable {
     case screenGrade
     case screenExposureStops
     case screenCMY(Int)
+    case labScanDodging
+    case labScanLook
     case enlargerIndex
     case whiteBalanceKelvin
     case whiteBalanceDuv
@@ -266,6 +268,8 @@ public enum EngineBinding: Equatable, Sendable {
         case .screenGrade: return ["screenGrade"]
         case .screenExposureStops: return ["screenExposureEV"]
         case .screenCMY: return ["screenCMY"]
+        case .labScanDodging: return ["labScanDodging"]
+        case .labScanLook: return ["labScanLook"]
         case .enlargerIndex: return ["enlarger"]
         case .whiteBalanceKelvin, .whiteBalanceDuv: return ["whiteBalance"]
         case .halationScale: return ["halationScale"]
@@ -391,6 +395,10 @@ public enum EngineBinding: Equatable, Sendable {
             if let number = value.number { options.screenExposureEV = Float(number) }
         case .screenCMY(let channel):
             if let number = value.number { options.screenCMY[channel] = Float(number) }
+        case .labScanDodging:
+            if let number = value.number { options.labScanDodging = Float(number) }
+        case .labScanLook:
+            if let number = value.number { options.labScanLook = Float(number) }
         case .enlargerIndex:
             if let index = value.choice, Enlarger.allCases.indices.contains(index) {
                 options.enlarger = Enlarger.allCases[index]

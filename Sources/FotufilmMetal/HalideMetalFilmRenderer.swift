@@ -326,7 +326,7 @@ public final class HalideMetalFilmRenderer {
         if exactMath { invocation.featureMask |= FilmEngineFeature.exactMath }
 
         invocation.copyMeteredLevels(from: measured.invocation)
-        if invocation.localToneActive {
+        if invocation.toneKeyedLocally {
             let measuredWidth = Int(measured.invocation.configuration[
                 FilmEngineInvocation.toneGridSizeOffset])
             let measuredHeight = Int(measured.invocation.configuration[
@@ -1441,13 +1441,15 @@ public final class HalideMetalFilmRenderer {
     /// in a walk of its own. The road walks the whole frame for its light anyway, and the base
     /// can ride those bands when the light cannot read what the metering writes: the tone grid
     /// keys the highlight and shadow masks, which are at rest, and the screen levels land in the
-    /// print stage alone, as a slide's do; a negative's also set its film exposure and tone. The
+    /// print stage alone, as a slide's do; a negative's also set its film exposure and tone, and
+    /// Lab Scan's dodge moves its tone. The
     /// glare mean is scene light and has to be in hand before the light is
     /// formed, so a host-measured flare keeps the separate walk — and meters on it, since the
     /// rows are going by regardless.
     static func metersOnLightBands(_ invocation: FilmEngineInvocation, fields: Bool) -> Bool {
         fields && invocation.sceneMeteringActive
             && !invocation.toneControlsActive && !invocation.screenLevelsReachLight
+            && !invocation.labScanMeters
             && (invocation.featureMask & FilmEngineFeature.flare == 0
                 || invocation.featureMask & FilmEngineFeature.flareMeasure != 0)
     }

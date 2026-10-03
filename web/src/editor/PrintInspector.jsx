@@ -147,6 +147,8 @@ export default function PrintInspector() {
                   "screenCyan",
                   "screenMagenta",
                   "screenYellow",
+                  "labScanLook",
+                  "labScanDodging",
                 ]}
               />
             }

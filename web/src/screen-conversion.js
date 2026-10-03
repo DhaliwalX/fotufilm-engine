@@ -105,6 +105,24 @@ export function autoColourShift(meter, medians, exposureEV = 0) {
   return [shift(medians[0]), shift(medians[2])]
 }
 
+// Lab Scan's dodging, as LabScanTiming.dodge reads it: a frame whose ends reach further from its
+// median than a print holds has its bright regions held and its dark regions lifted, in the tone
+// controls' units, keyed regionally on the median. Null for an empty measurement.
+const DODGE_HIGHLIGHT_SPAN = 3, DODGE_SHADOW_SPAN = 3.5, DODGE_RAMP = 3
+const DODGE_MAX_HOLD = .15, DODGE_MAX_LIFT = .2
+export function labScanDodge(regionStops, strength = 1) {
+  const percentile = percentiles(regionStops)
+  if (!percentile) return null
+  const median = percentile(.5)
+  const share = Number.isFinite(strength) ? Math.min(Math.max(strength, 0), 2) : 1
+  const ramp = (reach, span) => Math.min(Math.max((reach - span) / DODGE_RAMP, 0), 1)
+  return {
+    hold: Math.min(share * DODGE_MAX_HOLD * ramp(percentile(.995) - median, DODGE_HIGHLIGHT_SPAN), 1),
+    lift: Math.min(share * DODGE_MAX_LIFT * ramp(median - percentile(.005), DODGE_SHADOW_SPAN), 1),
+    key: median,
+  }
+}
+
 // The highlight Lab Scan sets its white point on, as LabScanTiming.highlight reads it from the
 // same regional log-luminances: the 99.5th percentile, lowered by half its excess over three stops
 // above the median, at most two stops. Null for an empty measurement.
@@ -116,20 +134,53 @@ export function labScanHighlight(regionStops) {
   return bright - Math.min(2, .5 * excess)
 }
 
-// Lab Scan's levels: its table carries a contrast per record and is solved before the edit's
-// exposure, so `exposureEV` is taken out of the reading. Nothing keys the tone controls.
-function applyLabScanLevels(configuration, meter, regionStops, exposureEV) {
+// Lab Scan's setup, as LabScanTiming.setup reads the frame, on a pack built at the fixed profile:
+// the frame is steepened about the film's toe until its highlight would scan at white, within
+// `maxStretch`, then darkened toward its key, `keyShare` of the median's distance from mid-grey
+// taken out, or until the highlight scans at white. Each scan record takes a contrast and a shift
+// that land its own reads of the two greys bracketing the frame where the fixed profile reads the
+// greys the setup places them on. `exposureEV` is taken out of the reading. Its dodge, `dodging`
+// times the scanner's, rides the tone controls; returns the median it keys them on while it
+// dodges, or null.
+function applyLabScanLevels(configuration, meter, regionStops, exposureEV, dodging) {
   const metered = labScanHighlight(regionStops)
   if (metered === null) return null
-  const samples = meter.adjustments
-  if (!Array.isArray(samples) || samples.length < 2) throw new Error('Invalid screen conversion profile.')
-  const row = tabulated(meter, samples, metered - exposureEV)
-  const scales = row.length === 4 ? row.slice(0, 3) : [row[0], row[0], row[0]]
-  const shift = row[row.length-1]
-  if (![...scales, shift].every(Number.isFinite)) throw new Error('Invalid screen conversion levels.')
-  for (let c=0;c<3;c++) configuration[CONFIG.MASKING+c] *= scales[c]
-  for (const slot of [CONFIG.PAPER_MIDPOINT, CONFIG.PAPER_MIDPOINT_RED, CONFIG.PAPER_MIDPOINT_BLUE]) configuration[slot] += shift
-  return null
+  const { hold, lift, key } = labScanDodge(regionStops, dodging)
+  const { white, toe, keyShare, maxStretch, anchorBelow, anchorSpan, anchorToeClearance,
+    reads } = meter
+  if (![white, toe, keyShare, maxStretch, anchorBelow, anchorSpan, anchorToeClearance, meter.min,
+    meter.max].every(Number.isFinite) || !Array.isArray(reads) || reads.length < 2)
+    throw new Error('Invalid screen conversion profile.')
+  const clamp = (value, low, high) => Math.min(Math.max(value, low), high)
+  const middle = clamp(key - exposureEV, -12, 12)
+  const highlight = Math.max(clamp(metered - exposureEV, -12, 12), middle)
+  const reach = highlight - toe
+  const contrast = reach > 1e-3 ? clamp((white - toe) / reach, 1, maxStretch) : maxStretch
+  const placed = stops => toe + contrast * (stops - toe)
+  const stops = Math.min(0, (1 - keyShare) * middle - placed(middle), white - placed(highlight))
+  // A grey at stop x reaches the film at x + ev, and each record scans it where the fixed profile
+  // scans the grey at placed(x) + ev + stops, exactly at the two greys bracketing the frame. The
+  // shadows' grey rises, at most to the median, until it is placed clear of the toe.
+  const read = stops => tabulated(meter, reads, stops)
+  const low = Math.min(Math.max(middle - anchorBelow,
+    toe + (anchorToeClearance - exposureEV - stops) / contrast), middle)
+  const high = Math.max(highlight, middle + anchorSpan)
+  const readLow = read(low + exposureEV), readHigh = read(high + exposureEV)
+  const targetLow = read(placed(low) + exposureEV + stops)
+  const targetHigh = read(placed(high) + exposureEV + stops)
+  const scale = [0, 1, 2].map(c => Math.abs(readHigh[c] - readLow[c]) > 1e-3
+    ? (targetHigh[c] - targetLow[c]) / (readHigh[c] - readLow[c]) : 1)
+  const print = [0, 1, 2].map(c => targetLow[c] - scale[c] * readLow[c])
+  if (![...scale, ...print].every(Number.isFinite)) throw new Error('Invalid screen conversion levels.')
+  const slots = [CONFIG.PAPER_MIDPOINT_RED, CONFIG.PAPER_MIDPOINT, CONFIG.PAPER_MIDPOINT_BLUE]
+  for (let c=0;c<3;c++) {
+    configuration[CONFIG.MASKING+c] *= scale[c]
+    configuration[slots[c]] += print[c]
+  }
+  const shadows = configuration[CONFIG.SHADOWS], highlights = configuration[CONFIG.HIGHLIGHTS]
+  configuration[CONFIG.SHADOWS] = shadows + Math.min(lift, Math.max(1 - shadows, 0))
+  configuration[CONFIG.HIGHLIGHTS] = highlights - Math.min(hold, Math.max(highlights + 1, 0))
+  return hold || lift ? key : null
 }
 
 // Native exporter supplies the receiver affine. Meter once over the same regional
@@ -138,9 +189,11 @@ function applyLabScanLevels(configuration, meter, regionStops, exposureEV) {
 // still shows, as DigitalReferenceReceiver.levels does. Returns the scene stop a negative's print
 // takes for mid-grey, which keys the tone controls, or null where nothing keys them.
 export function applyScreenLevels(configuration, meter, regionStops, exposureEV = 0,
-                                  channelStops = null) {
+                                  channelStops = null, labScanDodging = 1) {
   if (!meter) return null
-  if (meter.labScan) return applyLabScanLevels(configuration, meter, regionStops, exposureEV)
+  if (meter.labScan) {
+    return applyLabScanLevels(configuration, meter, regionStops, exposureEV, labScanDodging)
+  }
   const metered = retimeHighlight(regionStops, exposureEV)
   if (metered === null) return null
   const samples = meter.adjustments

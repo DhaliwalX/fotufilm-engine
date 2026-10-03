@@ -41,15 +41,18 @@ public enum WebStockCatalogue {
                  }
              }
              if medium == .labScan && !stock.isReversal && !stock.isReflectionPrint {
-                 // Lab Scan's per-frame levels, a contrast per record and a shift, solved before
-                 // the edit's exposure on the backlight-adjusted highlight.
-                 entry["meter"] = ["min": -6.0, "max": 12.0, "labScan": true,
-                     "adjustments": (0...512).map { i -> [Float] in
-                         let levels = LabScanTiming.levels(
-                             for: stock, sceneHighlightStops: -6 + Float(i) * 18 / 512,
-                             masking: SIMD3(stock.printingContrastScale(correction: 0,
-                                                                        paper: .labScan)))
-                         return [levels.scale.x, levels.scale.y, levels.scale.z, levels.shift]
+                 // Lab Scan's per-frame setup, which the browser solves from the frame's median
+                 // and highlight, before the edit's exposure, through each record's reads.
+                 let points = LabScanTiming.profilePoints(for: stock)
+                 entry["meter"] = ["labScan": true, "white": points.white, "toe": points.toe,
+                     "keyShare": LabScanTiming.keyShare, "maxStretch": LabScanTiming.maxStretch,
+                     "anchorBelow": LabScanTiming.recordAnchorBelow,
+                     "anchorSpan": LabScanTiming.recordAnchorSpan,
+                     "anchorToeClearance": LabScanTiming.recordAnchorToeClearance,
+                     "min": -16.0, "max": 16.0,
+                     "reads": (0...1024).map { -16 + Float($0) * 32 / 1024 }.map { stops -> [Float] in
+                         let read = LabScanTiming.reads(for: stock, stops: stops) * points.masking
+                         return [read.x, read.y, read.z]
                      }]
              }
              return entry

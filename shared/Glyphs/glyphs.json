@@ -321,6 +321,25 @@
       "colours": [],
       "rendering": "hierarchical"
     },
+    "fotu.slider.labScanDodging.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.labScanDodging.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.labScanLook.high": {
+      "colours": [
+        "systemCyan",
+        "systemOrange"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.labScanLook.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
     "fotu.slider.lensAmount.high": {
       "colours": [],
       "rendering": "hierarchical"
@@ -495,6 +514,18 @@
       ],
       "rendering": "multicolor"
     },
+    "fotu.slider.screenCyan.high": {
+      "colours": [
+        "systemCyan"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.screenCyan.low": {
+      "colours": [
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
     "fotu.slider.screenExposure.high": {
       "colours": [],
       "rendering": "hierarchical"
@@ -510,6 +541,30 @@
     "fotu.slider.screenGrade.low": {
       "colours": [],
       "rendering": "hierarchical"
+    },
+    "fotu.slider.screenMagenta.high": {
+      "colours": [
+        "systemPink"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.screenMagenta.low": {
+      "colours": [
+        "systemGreen"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.screenYellow.high": {
+      "colours": [
+        "systemYellow"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.screenYellow.low": {
+      "colours": [
+        "systemBlue"
+      ],
+      "rendering": "multicolor"
     },
     "fotu.slider.shadows.high": {
       "colours": [],
@@ -926,6 +981,14 @@
       "high": "fotu.slider.highlights.high",
       "low": "fotu.slider.highlights.low"
     },
+    "labScanDodging": {
+      "high": "fotu.slider.labScanDodging.high",
+      "low": "fotu.slider.labScanDodging.low"
+    },
+    "labScanLook": {
+      "high": "fotu.slider.labScanLook.high",
+      "low": "fotu.slider.labScanLook.low"
+    },
     "lensAmount": {
       "high": "fotu.slider.lensAmount.high",
       "low": "fotu.slider.lensAmount.low"
@@ -998,6 +1061,10 @@
       "high": "fotu.slider.sceneLightKelvin.high",
       "low": "fotu.slider.sceneLightKelvin.low"
     },
+    "screenCyan": {
+      "high": "fotu.slider.screenCyan.high",
+      "low": "fotu.slider.screenCyan.low"
+    },
     "screenExposure": {
       "high": "fotu.slider.screenExposure.high",
       "low": "fotu.slider.screenExposure.low"
@@ -1005,6 +1072,14 @@
     "screenGrade": {
       "high": "fotu.slider.screenGrade.high",
       "low": "fotu.slider.screenGrade.low"
+    },
+    "screenMagenta": {
+      "high": "fotu.slider.screenMagenta.high",
+      "low": "fotu.slider.screenMagenta.low"
+    },
+    "screenYellow": {
+      "high": "fotu.slider.screenYellow.high",
+      "low": "fotu.slider.screenYellow.low"
     },
     "shadows": {
       "high": "fotu.slider.shadows.high",

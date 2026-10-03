@@ -81,14 +81,20 @@ export async function measuredTone(
 
 // The whole-frame reading levels take for a host that develops natively. Auto Levels takes the
 // highlight it re-times on, each record's median, which it balances colour on, and the tone
-// reading it opens shadows and holds a sky by; Lab Scan takes its highlight alone.
+// reading it opens shadows and holds a sky by; Lab Scan takes its highlight and the tone reading
+// it dodges by.
 export async function sceneScreenMeter(source, controls, labScan = false) {
   const grid = await measuredTone(
     source,
     controls,
     whiteBalanceGains(controls.temperature, controls.tint),
   )
-  if (labScan) return { sceneHighlightStops: labScanHighlight(grid.regionStops) }
+  if (labScan) {
+    return {
+      sceneHighlightStops: labScanHighlight(grid.regionStops),
+      sceneToneStops: toneStops(grid.regionStops),
+    }
+  }
   return {
     sceneHighlightStops: retimeHighlight(grid.regionStops, controls.ev ?? controls.exposure ?? 0),
     sceneChannelMedians: channelMedians(grid.regionStops, grid.channelStops),
@@ -893,14 +899,21 @@ class Developer {
         grid.regionStops,
         controls.ev ?? controls.exposure ?? 0,
         grid.channelStops,
+        controls.labScanDodging ?? 1,
       )
-      // The user's tone controls key regionally; otherwise the key is whole-frame, offset to the
-      // stop Auto Levels prints mid-grey, as FilmEngineInvocation.setToneBase leaves it.
-      const regional = controls.localTone && (controls.highlights || controls.shadows)
+      // The user's tone controls and Lab Scan's dodging key regionally, Lab Scan's on the frame's
+      // median; otherwise the key is whole-frame, offset to the stop Auto Levels prints mid-grey,
+      // as FilmEngineInvocation.setToneBase leaves it.
+      const labScanKey = this.pack?.screenMeter?.labScan ? key : null
+      const regional = controls.localTone
+        && (controls.highlights || controls.shadows || labScanKey !== null)
       this.module.HEAPF32[offset + CONFIG.TONE_GRID_WIDTH] = regional ? grid.width : 1
       this.module.HEAPF32[offset + CONFIG.TONE_GRID_HEIGHT] = regional ? grid.height : 1
       this.module.HEAPF32.set(regional ? grid.a : [1], offset + CONFIG.TONE_GRID_A)
-      this.module.HEAPF32.set(regional ? grid.b : [-(key ?? 0)], offset + CONFIG.TONE_GRID_B)
+      this.module.HEAPF32.set(
+        regional ? grid.b.map((b) => b - (labScanKey ?? 0)) : [-(key ?? 0)],
+        offset + CONFIG.TONE_GRID_B,
+      )
     }
     const PixelArray = bitDepth === 16 ? Uint16Array : Uint8ClampedArray
     const count = destination.width * destination.height * 4

@@ -115,12 +115,14 @@ extension EditorControlField {
         case .printLight:
             return .bespoke { $0.printLightKelvin != nil }
         case .digitalReference:
-            return .bespoke { $0.digitalReference != .default }
+            return .bespoke { $0.digitalReference != EditState.defaultDigitalReference }
         case .screenGrade: return .number(\.screenGrade)
         case .screenExposure: return .number(\.screenExposure)
         case .screenCyan: return .number(\.screenCyan)
         case .screenMagenta: return .number(\.screenMagenta)
         case .screenYellow: return .number(\.screenYellow)
+        case .labScanDodging: return .number(\.labScanDodging)
+        case .labScanLook: return .number(\.labScanLook)
         case .enlarger:
             return .bespoke { $0.enlarger != .default }
         case .printerEnabled: return .flag(\.printerEnabled)
@@ -274,7 +276,7 @@ extension EditState {
     }
 
     mutating func reset(_ field: EditorControlField) {
-        if field == .digitalReference { digitalReference = .default; return }
+        if field == .digitalReference { digitalReference = EditState.defaultDigitalReference; return }
         if field == .printFrame { printFrame = .none; return }
         if field == .negativeViewing { negativeViewing = .lightBox; return }
         if field == .halationReturn { halationReturnRatio = nil; return }

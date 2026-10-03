@@ -25,6 +25,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case lensDistortion, lensVignetting, lensRedCyan, lensBlueYellow
 
     case screenCyan, screenMagenta, screenYellow
+    case labScanDodging, labScanLook
     case paper, digitalReference, screenGrade, screenExposure, printFrame, printLight, enlarger, printCorrection,
          negativeViewing, gradeSpace
     case printerEnabled, printerLamp, printerExposure, printerMagenta, printerYellow, printerPreflash

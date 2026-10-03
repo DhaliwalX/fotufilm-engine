@@ -476,7 +476,10 @@ public struct FilmEngineInvocation {
     var meterStock: FilmStock? = nil
     var meterMedium: PrintPaper = .screen
     var meterExposureEV: Float = 0
-    var meterMasking: SIMD3<Float> = .one
+    /// Lab Scan's dodging strength, density key and colour keys for the metered frame.
+    var meterDodging: Float = 1
+    var meterScanExposure: Float = 0
+    var meterKeys: SIMD3<Float> = .zero
     var meterLevels = MeteredLevels()
     /// Pixels of context a tile must carry on each cut edge for its interior to develop exactly as
     /// it would inside the whole frame.
@@ -1123,28 +1126,42 @@ public struct FilmEngineInvocation {
         let filmBoost = white.map {
             DigitalReferenceReceiver.filmBoost(for: stock, white: $0, exposureEV: options.exposureEV)
         } ?? 0
+        // Lab Scan's dodging takes the same reading: the frame's median, which keys it, and the
+        // ends that set how far it holds and lifts.
+        let labScanReading = !noFilm && printMedium == .labScan && options.stage.readsScene
+            && !stock.isReversal && !stock.isReflectionPrint && options.sceneHighlightStops != nil
+        let dodge = labScanReading ? options.sceneToneStops.map {
+            LabScanTiming.dodge(AutoAdjustment.SceneStops(median: $0.x, bright: $0.z, dark: $0.y),
+                                strength: options.labScanDodging)
+        } : nil
         let toneKey = white.map { DigitalReferenceReceiver.toneKey(white: $0) + filmBoost }
+            ?? dodge?.key
         let compression = white.flatMap { white in
             options.sceneToneStops.map {
                 DigitalReferenceReceiver.toneCompression(
                     for: stock, AutoAdjustment.SceneStops(median: $0.x, bright: $0.z, dark: $0.y),
                     white: white)
             }
-        }
-        // Lab Scan times each frame the way a minilab scanner does, in the same slots.
-        let levels: (scale: SIMD3<Float>, shift: Float)
-        let recordContrast = SIMD3(contrast[0], contrast[1], contrast[2])
+        } ?? dodge.map { (hold: $0.hold, lift: $0.lift) }
+        // Lab Scan levels each frame on its scan, and takes the operator's colour keys and
+        // lightening on the light its film receives (`LabScanTiming`).
+        let labScanSetup = printMedium == .labScan && !noFilm && !showingNegative
+            ? LabScanTiming.setup(for: stock,
+                                  sceneHighlightStops: labScanReading ? options.sceneHighlightStops : nil,
+                                  sceneMedianStops: options.sceneToneStops?.x,
+                                  exposureEV: options.exposureEV,
+                                  scanExposure: options.screenExposureEV, keys: options.screenCMY)
+            : .identity
+        let filmCurves = labScanSetup.curves(for: stock)
+        let levels: (scale: SIMD3<Float>, shift: SIMD3<Float>)
         if printMedium == .screen && (levelsPositive || !stock.isReversal) {
             let screen = DigitalReferenceReceiver.levels(
                 for: stock, style: options.digitalReference,
                 sceneHighlightStops: options.sceneHighlightStops.map { $0 + filmBoost },
                 exposureEV: options.exposureEV)
-            levels = (SIMD3(repeating: screen.scale), screen.shift)
-        } else if printMedium == .labScan {
-            levels = LabScanTiming.levels(for: stock, sceneHighlightStops: options.sceneHighlightStops,
-                                          exposureEV: options.exposureEV, masking: recordContrast)
+            levels = (SIMD3(repeating: screen.scale), SIMD3(repeating: screen.shift))
         } else {
-            levels = (.one, 0)
+            levels = (labScanSetup.scale, labScanSetup.print)
         }
         // Auto Levels re-times red and blue apart from green, in the same midpoint slots.
         let autoColour = printMedium == .screen && options.digitalReference == .autoLevels
@@ -1168,7 +1185,7 @@ public struct FilmEngineInvocation {
             digitalReference: options.digitalReference, screenGrade: options.screenGrade)
         var xMids = printMedium.printExposureMidpoints(
             for: stock, digitalReference: options.digitalReference)
-            .enumerated().map { $1 + printMedium.exposureDirection * (screenShift + autoColour[$0]) }
+            .enumerated().map { $1 + printMedium.exposureDirection * (screenShift[$0] + autoColour[$0]) }
         // Manual receiver balance follows metering, so Auto Levels cannot cancel the cast.
         // The existing per-record midpoint slots are shared by CPU, Metal and AOT kernels.
         let colourShift = DigitalReferenceReceiver.colourShift(options.screenCMY,
@@ -1283,7 +1300,7 @@ public struct FilmEngineInvocation {
         // no-film render simply needs no apron.
         if noFilm { featureMask = FilmEngineFeature.noFilm }
 
-        var configuration = stock.curves.flatMap(Self.parameters)
+        var configuration = filmCurves.flatMap(Self.parameters)
         configuration += halationMix
         configuration += inhibition.flatMap { $0 }
         configuration += grainStrength
@@ -1388,7 +1405,7 @@ public struct FilmEngineInvocation {
         configuration += diffusionRadii.map(Float.init)
         // The donor capture layer's own curve and its per-receiver release. Read only when
         // FOTUFILM_FRAME_DONOR_LAYER is set, so a stock without one leaves harmless zeros.
-        configuration += donorActive ? Self.parameters(donor!.curve)
+        configuration += donorActive ? Self.parameters(labScanSetup.uncoloured(donor!.curve))
                                      : [Float](repeating: 0, count: 6)
         configuration += donorActive ? donor!.inhibition : [0, 0, 0]
         configuration += halationRingRadii
@@ -1402,7 +1419,7 @@ public struct FilmEngineInvocation {
         }
         // Optional second H&D population, followed by the two-scale MTF profile. These are
         // appended so every legacy configuration offset remains stable.
-        configuration += stock.curves.flatMap(Self.secondaryParameters)
+        configuration += filmCurves.flatMap(Self.secondaryParameters)
         configuration += mtfSecondarySigmas
         configuration += mtfSecondaryRadii.map(Float.init)
         configuration += mtfPrimaryShare
@@ -1424,18 +1441,7 @@ public struct FilmEngineInvocation {
         // replaces it with the stated delivery's before enabling an `encodeOut` variant.
         configuration += [options.sdrShoulderKnee(for: stock)]
         configuration += [0, 0, 0, 0] // optional output gamut fit
-        for curve in stock.curves {
-            var record = [Float](repeating: 0, count: Self.sampledCurveStride)
-            if let sampled = curve.sampled {
-                record[0] = Float(sampled.logExposure.count)
-                for i in sampled.logExposure.indices {
-                    record[1 + i * 3] = sampled.logExposure[i]
-                    record[2 + i * 3] = sampled.density[i]
-                    record[3 + i * 3] = sampled.slopes[i]
-                }
-            }
-            configuration += record
-        }
+        for curve in filmCurves { configuration += Self.sampledParameters(curve) }
         configuration += [screenedAdjacency ? 1 : 0,
                           adjacencySecondarySigma, Float(adjacencySecondaryRadius)]
         configuration += [fringeActive ? fringeAmount : 0, fringeSigma, Float(fringeRadius)]
@@ -1544,13 +1550,15 @@ public struct FilmEngineInvocation {
             self.meterStock = stock
             self.meterMedium = printMedium
             self.meterExposureEV = options.exposureEV
-            self.meterMasking = recordContrast
+            self.meterDodging = options.labScanDodging
+            self.meterScanExposure = options.screenExposureEV
+            self.meterKeys = options.screenCMY
             self.meterLevels = MeteredLevels(
-                scale: levels.scale, shift: SIMD3(repeating: levels.shift) + autoColour)
+                scale: levels.scale, shift: levels.shift + autoColour, film: labScanSetup)
         } else if toneKey != nil {
             // A host handed the reading on: what Auto Levels added is not the user's tone.
             self.meterLevels = MeteredLevels(
-                scale: levels.scale, shift: SIMD3(repeating: levels.shift) + autoColour,
+                scale: levels.scale, shift: levels.shift + autoColour, film: labScanSetup,
                 filmBoost: filmBoost, toneKey: toneKey, shadowLift: shadowLift,
                 highlightHold: highlights - held)
         }
@@ -1579,14 +1587,16 @@ public struct FilmEngineInvocation {
                 printViewingKelvin: options.printViewingKelvin,
                 callier: callier, printer: printer,
                 digitalReference: options.digitalReference,
-                screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV)
+                screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV,
+                labScanLook: options.labScanLook)
             self.spectralCacheID = SpectralRuntime.cacheIdentifier(
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
                 printViewingKelvin: options.printViewingKelvin,
                 callier: callier, printer: printer,
                 digitalReference: options.digitalReference,
-                screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV)
+                screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV,
+                labScanLook: options.labScanLook)
         }
         // One resolved spectrum controls both integration and upload identity. Source pixels
         // have already been neutralized at capture; applying RGB WB here would count light twice.
@@ -1874,6 +1884,34 @@ public struct FilmEngineInvocation {
         guard nonnegative > 1 else { return nonnegative }
         let overdrive = nonnegative - 1
         return 1 + overdrive / (1 + overdrive)
+    }
+
+    private static func sampledParameters(_ curve: CharacteristicCurve) -> [Float] {
+        var record = [Float](repeating: 0, count: sampledCurveStride)
+        if let sampled = curve.sampled {
+            record[0] = Float(sampled.logExposure.count)
+            for i in sampled.logExposure.indices {
+                record[1 + i * 3] = sampled.logExposure[i]
+                record[2 + i * 3] = sampled.density[i]
+                record[3 + i * 3] = sampled.slopes[i]
+            }
+        }
+        return record
+    }
+
+    /// Re-packs the film's records, and the donor's when it has one, as `setup` exposes them:
+    /// every slot a curve occupies, so a metered frame's setup reaches each renderer.
+    mutating func packFilmCurves(of stock: FilmStock, setup: LabScanTiming.Setup) {
+        let curves = setup.curves(for: stock)
+        func write(_ values: [Float], at offset: Int) {
+            configuration.replaceSubrange(offset..<(offset + values.count), with: values)
+        }
+        write(curves.flatMap(Self.parameters), at: Int(FOTUFILM_CONFIG_CURVES))
+        write(curves.flatMap(Self.secondaryParameters), at: Self.curveSecondaryOffset)
+        write(curves.flatMap(Self.sampledParameters), at: Self.sampledCurvesOffset)
+        if let donor = stock.donorLayers.first, featureMask & FilmEngineFeature.donorLayer != 0 {
+            write(Self.parameters(setup.uncoloured(donor.curve)), at: Int(FOTUFILM_CONFIG_DONOR_CURVE))
+        }
     }
 
     private static func secondaryParameters(_ curve: CharacteristicCurve) -> [Float] {

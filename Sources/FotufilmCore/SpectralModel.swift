@@ -373,9 +373,11 @@ public enum SpectralRuntime {
                               printer: PrinterProfile? = nil,
                               digitalReference: DigitalReferenceStyle = .default,
                               screenGrade: Float = 2,
-                              screenExposureEV: Float = 0)
+                              screenExposureEV: Float = 0,
+                              labScanLook: Float = 1)
         -> SpectralPipelineTables {
         let paper = paper.resolved(for: stock)
+        let labScanLook = effectiveLabScanLook(labScanLook, paper: paper)
         let printer = PrinterProfile.resolved(printer, stock: stock, paper: paper)
         let bleachBypass = retainedSilverFraction(bleachBypass, stock: stock)
         let screenGrade = effectiveScreenGrade(screenGrade, stock: stock, paper: paper,
@@ -388,7 +390,8 @@ public enum SpectralRuntime {
         let key = cacheIdentifier(for: stock, paper: paper, bleachBypass: bleachBypass,
                                   printViewingKelvin: printViewingKelvin, callier: callier,
                                   printer: printer, digitalReference: digitalReference,
-                                  screenGrade: screenGrade, screenExposureEV: screenExposureEV)
+                                  screenGrade: screenGrade, screenExposureEV: screenExposureEV,
+                                  labScanLook: labScanLook)
         lock.lock()
         while true {
             if let found = cache.value(for: key) {
@@ -407,7 +410,8 @@ public enum SpectralRuntime {
         let built = buildTables(for: stock, paper: paper, bleachBypass: bleachBypass,
                                 printViewingKelvin: printViewingKelvin, callier: callier,
                                 printer: printer, digitalReference: digitalReference,
-                                screenGrade: screenGrade, screenExposureEV: screenExposureEV)
+                                screenGrade: screenGrade, screenExposureEV: screenExposureEV,
+                                labScanLook: labScanLook)
 
         lock.lock()
         cache.insert(built, for: key)
@@ -479,7 +483,8 @@ public enum SpectralRuntime {
                                        printer: PrinterProfile? = nil,
                                        digitalReference: DigitalReferenceStyle = .default,
                                        screenGrade: Float = 2,
-                                       screenExposureEV: Float = 0)
+                                       screenExposureEV: Float = 0,
+                                       labScanLook: Float = 1)
         -> UInt64 {
         let paper = paper.resolved(for: stock)
         var h = stock.spectralProfile.signature
@@ -530,6 +535,9 @@ public enum SpectralRuntime {
         let directExposure = directViewExposure(screenExposureEV, stock: stock, paper: paper,
                                                 digitalReference: digitalReference)
         if directExposure != 0 { add(directExposure + 1024) }
+        // Lab Scan's finish is baked into its output table; hashed only away from the full finish.
+        let look = effectiveLabScanLook(labScanLook, paper: paper)
+        if look != 1 { add(look + 2048) }
         // Hashed only away from their off positions, so every identity that existed before
         // these levers is exactly the identity it was.
         let bleach = retainedSilverFraction(bleachBypass, stock: stock)
@@ -563,7 +571,8 @@ public enum SpectralRuntime {
                                     printer: PrinterProfile? = nil,
                                     digitalReference: DigitalReferenceStyle = .default,
                                     screenGrade: Float = 2,
-                                    screenExposureEV: Float = 0)
+                                    screenExposureEV: Float = 0,
+                                    labScanLook: Float = 1)
         -> SpectralPipelineTables {
         // Output characterization is fixed at the stock's reference light. The invocation
         // replaces this exposure table with the scene spectrum after calibration is built.
@@ -731,7 +740,7 @@ public enum SpectralRuntime {
             let calibration = stock.isMonochrome
                 ? nil
                 : ScanOutputCalibration(paper: paper, stock: stock, exposure: exposure,
-                                        printing: printing)
+                                        printing: printing, finish: labScanLook)
             paperOutput = buildLUT { activation in
                 let density = SIMD3(activation.x * paperRanges[0],
                                     activation.y * paperRanges[1],
@@ -740,7 +749,11 @@ public enum SpectralRuntime {
                 let rgb = SIMD3(pow(10, -density.x), pow(10, -density.y),
                                 pow(10, -density.z))
                 // A monochrome scan carries no chroma to characterize, so the receiver is the
-                // programme. A video transfer still delivers it inside Rec.709.
+                // programme, finished on Lab Scan's gradation. A video transfer still delivers it
+                // inside Rec.709.
+                if paper == .labScan {
+                    return LabScanFinish.apply(rgb, strength: labScanLook, chromatic: false)
+                }
                 return paper.deliversRec709
                     ? ColorScience.linearSRGBToDisplayP3(rgb) : rgb
             }
@@ -796,76 +809,134 @@ public enum SpectralRuntime {
         return table[low] + (x - Float(low)) * (table[high] - table[low])
     }
 
-    /// Newton inverse of a three-record spectral response. The response cube is the same
-    /// tetrahedrally interpolated table the renderer uses, so this corrects the nonlinear model
+    /// Newton inverse of a three-record spectral response, which corrects the nonlinear model
     /// rather than fitting a matrix to one exposure level.
     private struct SpectralResponseInverse: Sendable {
-        /// Indexed in the exposure table's locus-enclosing basis, as every exposure cube is.
-        let response: SpectralLUT
+        /// The response to a light in the exposure table's locus-enclosing basis: the renderer's
+        /// own exposure table, film curves, printing table and receiver curve, evaluated rather
+        /// than resampled, so the solve answers exactly what the renderer forms. A table of the
+        /// whole chain sampled linearly in light spends its first cell on everything from two
+        /// and a half stops under mid-grey down, where density is nowhere near linear in light,
+        /// and the solve read a film's toe there as a record that saw no light at all.
+        let response: @Sendable (SIMD3<Float>) -> SIMD3<Float>
 
         /// The solve itself walks linear Rec.2020 — the reflectance region a characterisation
         /// recovers, and the cube it clamps to — and steps into the table's basis only to read
         /// the response. A solution beyond Rec.2020 would be a light no reflectance makes,
         /// which is not what a receiver's inversion is asking for.
         private func sample(_ scene: SIMD3<Float>) -> SIMD3<Float> {
-            response.sample(ColorScience.linearRec2020ToExposureDomain(scene))
+            response(ColorScience.linearRec2020ToExposureDomain(scene))
         }
 
-        func solve(target: SIMD3<Float>, initial: SIMD3<Float>) -> SIMD3<Float> {
-            var scene = clamped(initial)
-            for _ in 0..<8 {
-                let recovered = sample(scene)
-                let residual = recovered - target
-                let cost = dot(residual, residual)
-                if cost < 1e-10 { break }
+        /// The darkest scene component the solve walks to, about twenty stops under white.
+        static let floor: Float = 1e-6
+        /// How firmly a colour the response cannot resolve is held neutral, in activation per unit
+        /// of natural-log chroma. A step the scan resolves moves the activation by far more than
+        /// this, and is inverted almost exactly; the film's toe and the receiver's shoulder barely
+        /// move it, and there the solve keeps the colour neutral instead of magnifying a few
+        /// thousandths of density into a saturated one.
+        static let neutralWeight: Float = 0.005
 
-                let epsilon: Float = 1e-3
+        /// The scene, in linear Rec.2020 inside the unit cube, whose response is closest to
+        /// `target`, with log chroma the response cannot resolve held neutral. The walk is
+        /// regularized Gauss-Newton on log scene: the film answers log exposure, so a step means
+        /// the same at every level, and the neutral weight keeps every system well posed, so the
+        /// solution moves smoothly with its target everywhere, the toe included.
+        func solve(target: SIMD3<Float>, initial: SIMD3<Float>) -> SIMD3<Float> {
+            let low = log(Self.floor)
+            let weight = Self.neutralWeight * Self.neutralWeight
+            func bounded(_ x: SIMD3<Float>) -> SIMD3<Float> {
+                SIMD3(clamp(x.x, low, 0), clamp(x.y, low, 0), clamp(x.z, low, 0))
+            }
+            func chroma(_ x: SIMD3<Float>) -> SIMD3<Float> {
+                x - SIMD3(repeating: (x.x + x.y + x.z) / 3)
+            }
+            func response(_ x: SIMD3<Float>) -> SIMD3<Float> {
+                sample(SIMD3(exp(x.x), exp(x.y), exp(x.z)))
+            }
+            func cost(_ x: SIMD3<Float>, _ residual: SIMD3<Float>) -> Float {
+                let c = chroma(x)
+                return dot(residual, residual) + weight * dot(c, c)
+            }
+            var x = bounded(SIMD3(log(max(initial.x, Self.floor)), log(max(initial.y, Self.floor)),
+                                  log(max(initial.z, Self.floor))))
+            var residual = response(x) - target
+            var current = cost(x, residual)
+            for _ in 0..<24 {
+                let epsilon: Float = 0.01
                 var columns = [SIMD3<Float>](repeating: .zero, count: 3)
                 for channel in 0..<3 {
-                    var low = scene
-                    var high = scene
-                    low[channel] = max(scene[channel] - epsilon, 0)
-                    high[channel] = min(scene[channel] + epsilon, 1)
-                    let span = max(high[channel] - low[channel], 1e-6)
-                    columns[channel] = (sample(high) - sample(low)) / span
+                    var below = x
+                    var above = x
+                    below[channel] = max(x[channel] - epsilon, low)
+                    above[channel] = min(x[channel] + epsilon, 0)
+                    let span = max(above[channel] - below[channel], 1e-6)
+                    columns[channel] = (response(above) - response(below)) / span
                 }
-                guard let delta = linearSolve(columns: columns, rhs: residual) else { break }
-
+                // Normal equations of the data term and the neutral prior, whose chroma
+                // projector is its own square, with a vanishing ridge for the luminance a
+                // response at the floor cannot see either.
+                let gradient = SIMD3((0..<3).map { dot(columns[$0], residual) })
+                    + weight * chroma(x)
+                var normal = (0..<3).map { row in
+                    SIMD3((0..<3).map { column in dot(columns[row], columns[column]) })
+                }
+                for row in 0..<3 {
+                    for column in 0..<3 {
+                        normal[row][column] += weight * ((row == column ? 1 : 0) - 1.0 / 3)
+                    }
+                    normal[row][row] += 1e-8
+                }
+                guard let delta = normalSolve(normal, gradient) else { break }
                 var step: Float = 1
                 var accepted = false
-                for _ in 0..<8 {
-                    let candidate = clamped(scene - step * delta)
-                    let error = sample(candidate) - target
-                    if dot(error, error) < cost {
-                        scene = candidate
+                for _ in 0..<10 {
+                    let candidate = bounded(x - step * delta)
+                    let candidateResidual = response(candidate) - target
+                    let candidateCost = cost(candidate, candidateResidual)
+                    if candidateCost < current {
+                        x = candidate
+                        residual = candidateResidual
+                        current = candidateCost
                         accepted = true
                         break
                     }
                     step *= 0.5
                 }
-                if !accepted { break }
+                if !accepted || step * dot(delta, delta).squareRoot() < 1e-5 { break }
             }
-            return scene
+            return SIMD3(exp(x.x), exp(x.y), exp(x.z))
         }
 
-        private func clamped(_ value: SIMD3<Float>) -> SIMD3<Float> {
-            SIMD3(clamp(value.x, 0, 1), clamp(value.y, 0, 1), clamp(value.z, 0, 1))
-        }
-
-        /// Solves a 3×3 system whose matrix is supplied by columns.
-        private func linearSolve(columns: [SIMD3<Float>], rhs: SIMD3<Float>)
-            -> SIMD3<Float>? {
-            let determinant = dot(columns[0], cross(columns[1], columns[2]))
-            guard abs(determinant) > 1e-9 else { return nil }
-            return SIMD3(dot(rhs, cross(columns[1], columns[2])) / determinant,
-                         dot(columns[0], cross(rhs, columns[2])) / determinant,
-                         dot(columns[0], cross(columns[1], rhs)) / determinant)
-        }
-
-        private func cross(_ lhs: SIMD3<Float>, _ rhs: SIMD3<Float>) -> SIMD3<Float> {
-            SIMD3(lhs.y * rhs.z - lhs.z * rhs.y,
-                  lhs.z * rhs.x - lhs.x * rhs.z,
-                  lhs.x * rhs.y - lhs.y * rhs.x)
+        /// Solves the symmetric positive-definite normal equations by Cholesky, in double
+        /// precision: the toe's systems are dominated by the prior and nearly singular in the
+        /// luminance their response cannot see.
+        private func normalSolve(_ matrix: [SIMD3<Float>], _ rhs: SIMD3<Float>) -> SIMD3<Float>? {
+            var a = matrix.map { row in (0..<3).map { Double(row[$0]) } }
+            for j in 0..<3 {
+                var diagonal = a[j][j]
+                for k in 0..<j { diagonal -= a[j][k] * a[j][k] }
+                guard diagonal > 0 else { return nil }
+                a[j][j] = diagonal.squareRoot()
+                for i in (j + 1)..<3 {
+                    var value = a[i][j]
+                    for k in 0..<j { value -= a[i][k] * a[j][k] }
+                    a[i][j] = value / a[j][j]
+                }
+            }
+            var y = [Double](repeating: 0, count: 3)
+            for i in 0..<3 {
+                var value = Double(rhs[i])
+                for k in 0..<i { value -= a[i][k] * y[k] }
+                y[i] = value / a[i][i]
+            }
+            var x = [Double](repeating: 0, count: 3)
+            for i in stride(from: 2, through: 0, by: -1) {
+                var value = y[i]
+                for k in (i + 1)..<3 { value -= a[k][i] * x[k] }
+                x[i] = value / a[i][i]
+            }
+            return SIMD3(Float(x[0]), Float(x[1]), Float(x[2]))
         }
 
         private func dot(_ lhs: SIMD3<Float>, _ rhs: SIMD3<Float>) -> Float {
@@ -918,32 +989,40 @@ public enum SpectralRuntime {
         let inverse: SpectralResponseInverse
         let range: Float
         let deliversRec709: Bool
+        /// How much of Lab Scan's finish the characterized scan takes; 0 on other scans.
+        let finish: Float
         /// Actual no-light receiver level for an editable scan. A film's finite base response
         /// can sit above the receiver curve's mathematical D-max floor.
         let shadowFloor: Float
         /// The finished video transfer gives up highlight chroma near its white point.
         let clipInterval: (Float, Float) = (0.76, 0.84)
+        /// Stops above an editable scan's no-light floor at which its colour starts to come in,
+        /// and the stops over which it does.
+        static let shadowOnset: Float = 0.5
+        static let shadowFade: Float = 3
 
         init(paper: PrintPaper, stock: FilmStock, exposure: SpectralLUT,
-             printing: SpectralLUT) {
+             printing: SpectralLUT, finish: Float = 1) {
             let curve = paper.printCurve(for: stock)
             let scanRange = curve.dMax - curve.dMin
             range = scanRange
             deliversRec709 = paper.deliversRec709
+            self.finish = paper == .labScan ? finish : 0
             let midpoint = curve.logExposure(
                 density: curve.dMin + paper.anchorDensity)
             let masking = stock.printingContrastScale(
                 correction: FotufilmEngine.Options().printCorrection, paper: paper)
-            let filmRanges = stock.curves.map { $0.dMax - $0.dMin }
-            let response = SpectralRuntime.buildLUT { scene in
-                let records = exposure.sample(scene) / 0.18
-                let filmDensity = (0..<3).map { channel in
-                    stock.curves[channel].density(
-                        logExposure: log10(max(records[channel], 1e-6)))
-                }
+            let filmCurves = stock.curves
+            let response: @Sendable (SIMD3<Float>) -> SIMD3<Float> = { scene in
+                // On the table's face with the light scaled back out, as the renderer reads it:
+                // inside the cube a dim colour's cell spans every hue, and its exposures would
+                // not be the ones the renderer gives the same light.
+                let radiance = max(scene.x, scene.y, scene.z, 1e-6)
+                let records = exposure.sample(scene / radiance) * (radiance / 0.18)
                 let activation = SIMD3<Float>((0..<3).map { channel in
-                    (filmDensity[channel] - stock.curves[channel].dMin)
-                        / filmRanges[channel]
+                    let film = filmCurves[channel]
+                    return (film.density(logExposure: log10(max(records[channel], 1e-6)))
+                        - film.dMin) / (film.dMax - film.dMin)
                 })
                 let receiver = printing.sample(activation)
                 return SIMD3<Float>((0..<3).map { channel in
@@ -955,7 +1034,7 @@ public enum SpectralRuntime {
             if deliversRec709 {
                 shadowFloor = pow(10, -scanRange)
             } else {
-                let black = response.sample(.zero) * scanRange
+                let black = response(.zero) * scanRange
                 let w = ColorScience.displayP3LuminanceWeights
                 shadowFloor = w.0 * pow(10, -black.x) + w.1 * pow(10, -black.y)
                     + w.2 * pow(10, -black.z)
@@ -978,10 +1057,12 @@ public enum SpectralRuntime {
 
             // Reapply the medium's own balance at the recovered tone level. This retains its
             // intentional stock-dependent neutral cast without letting the receiver bands define
-            // the hue of chromatic subjects.
-            let sceneLuminance = clamp(luminance(calibrated), 0, 1)
-            let neutralDensity = inverse.response.sample(
-                SIMD3(repeating: sceneLuminance)) * range
+            // the hue of chromatic subjects. Lab Scan's machine times its own black point, so
+            // under the lower mid-tones the cast holds where they leave it rather than following
+            // the receiver's records into the film's toe, where they part into a warm crossover.
+            let balanceFloor: Float = deliversRec709 ? 0 : 0.045
+            let sceneLuminance = clamp(luminance(calibrated), balanceFloor, 1)
+            let neutralDensity = inverse.response(SIMD3(repeating: sceneLuminance)) * range
             let neutralReceiver = SIMD3(pow(10, -neutralDensity.x),
                                         pow(10, -neutralDensity.y),
                                         pow(10, -neutralDensity.z))
@@ -1009,16 +1090,24 @@ public enum SpectralRuntime {
             let outputLuminance = luminance(uncalibrated)
             calibrated *= outputLuminance / recoveredLuminance
             if !deliversRec709 {
-                // Near the modeled no-light floor the inverse becomes poorly conditioned.
-                // Suppress its false chroma while preserving every luminance step.
-                let shadow = clamp((shadowFloor * 2 - outputLuminance)
-                    / max(shadowFloor * 0.5, 1e-9), 0, 1)
+                // Colour comes in over three stops from half a stop above the scan's no-light floor,
+                // where the film's toe leaves less and less of it to recover, rather than all at
+                // once at the edge of the floor; the floor and the table's cell above it stay
+                // neutral, as under the finish's crossover. Every luminance step is kept.
+                let above = log2(max(outputLuminance, 1e-12) / max(shadowFloor, 1e-12))
+                    - Self.shadowOnset
+                let shadow = clamp(1 - above / Self.shadowFade, 0, 1)
                 let hold = shadow * shadow * (3 - 2 * shadow)
-                let scanned = calibrated
+                var scanned = calibrated
                     + hold * (SIMD3(repeating: outputLuminance) - calibrated)
+                var scannedLuminance = outputLuminance
+                if finish > 0 {
+                    scanned = LabScanFinish.apply(scanned, strength: finish, floor: shadowFloor)
+                    scannedLuminance = luminance(scanned)
+                }
                 // Keep highlight color; only compress chroma the delivery gamut cannot hold.
                 return SpectralRuntime.compressedToDisplayGamut(
-                    scanned, luminance: outputLuminance)
+                    scanned, luminance: scannedLuminance)
             }
 
             // The receiver's toe and shoulder densities hold no invertible chromatic signal, so
@@ -1927,6 +2016,13 @@ public enum SpectralRuntime {
               !paper.levelsPositive(for: stock, digitalReference: digitalReference),
               stops.isFinite else { return 0 }
         return min(max(stops, -6), 6)
+    }
+
+    /// The share of Lab Scan's finish a table bakes: the request in 0...1 on Lab Scan, the full
+    /// finish for an invalid request, and 1 on every other medium so their identities hold.
+    static func effectiveLabScanLook(_ look: Float, paper: PrintPaper) -> Float {
+        guard paper == .labScan else { return 1 }
+        return look.isFinite ? min(max(look, 0), 1) : 1
     }
 
     /// The screen exposure the paper slots carry, as a log exposure added to every read.

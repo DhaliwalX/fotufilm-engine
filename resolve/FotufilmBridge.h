@@ -93,6 +93,7 @@ enum {
     FOTUFILM_CONTROL_INTERLAYER_INHIBITION = 256,
     FOTUFILM_CONTROL_SCREEN_CONVERSION = 512,
     FOTUFILM_CONTROL_SCREEN_GRADE = 1024,
+    FOTUFILM_CONTROL_LAB_SCAN = 2048,
 };
 int32_t fotufilm_bridge_control_capabilities(int32_t stock, int32_t paper);
 

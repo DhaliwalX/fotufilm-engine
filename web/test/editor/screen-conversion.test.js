@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { SHADOW_LIFT_SHARE, applyScreenLevels, autoColourShift, channelMedians, filmBoost, labScanHighlight, retimeHighlight, toneCompression, toneStops } from '../../src/screen-conversion.js'
+import { SHADOW_LIFT_SHARE, applyScreenLevels, autoColourShift, channelMedians, filmBoost, labScanDodge, labScanHighlight, retimeHighlight, toneCompression, toneStops } from '../../src/screen-conversion.js'
 import { CONFIG } from '../../src/engine-constants.js'
 import { defaultEdit, parseEdit } from '../../src/editor-state.js'
 
@@ -30,18 +30,103 @@ test('automatic levels meter bright regions and preserve channel ratios', () => 
   assert.deepEqual(config, fixed)
 })
 
-test('lab scan levels each record from the backlight-adjusted highlight before exposure', () => {
-  // median 0, highlight 9.9: lowered by the two-stop cap to 7.9, then the edit's +1 EV taken out
+// A Lab Scan meter whose profile scans white two stops over mid-grey, with its toe four under,
+// and whose records read a stop as `slopes` of log light: straight, so a record's levels come out
+// in closed form.
+const slopes = [.25, .3, .35]
+const labScanMeter = {labScan: true, white: 2, toe: -4, keyShare: .5, maxStretch: 1.5,
+  anchorBelow: 2, anchorSpan: 1.5, anchorToeClearance: 1.5, min: -16, max: 16,
+  reads: Array.from({length: 33}, (_, i) => slopes.map(slope => -slope * (i - 16)))}
+function labScanConfiguration() {
+  const config = new Float32Array(CONFIG.FOTUFILM_FRAME_CONFIGURATION_COUNT)
+  config.set([.9, 1, 1.1], CONFIG.MASKING)
+  config.set([.2, .6, -2, .3, 1, .4], CONFIG.CURVES)
+  return config
+}
+const close = (a, b) => Math.abs(a - b) < 1e-5
+const midpoints = [CONFIG.PAPER_MIDPOINT_RED, CONFIG.PAPER_MIDPOINT, CONFIG.PAPER_MIDPOINT_BLUE]
+
+// Each record scans a grey at x where the fixed profile scans it at toe + contrast (x - toe) + ev
+// + stops: on straight reads, the record's contrast is the setup's, and its shift carries the rest.
+function assertLabScanLevels(config, fixed, contrast, stops, exposureEV) {
+  slopes.forEach((slope, c) => {
+    assert.ok(close(config[CONFIG.MASKING + c], fixed[CONFIG.MASKING + c] * contrast), `scale ${c}`)
+    const shift = -slope * ((labScanMeter.toe + exposureEV) * (1 - contrast) + stops)
+    assert.ok(close(config[midpoints[c]], shift), `shift ${c}`)
+    config[CONFIG.MASKING + c] = fixed[CONFIG.MASKING + c]
+    config[midpoints[c]] = 0
+  })
+  // The film keeps the exposure it had.
+  assert.deepEqual(config, fixed)
+}
+
+test('lab scan steepens each scan record about the toe and darkens it toward the key', () => {
+  // median 0, highlight 9.9: lowered by the two-stop cap to 7.9
   assert.ok(Math.abs(labScanHighlight([-20, 0, 10]) - 7.9) < 1e-9)
-  const meter = {min: 0, max: 10, labScan: true, adjustments: [[1, 1, 1, 0], [2, 1.5, 3, 1]]}
-  const config = new Float32Array(9000)
-  config.set([1, 1, 1], CONFIG.MASKING)
-  applyScreenLevels(config, meter, [-20, 0, 10], 1.9)
-  const t = 0.6
-  assert.ok(Math.abs(config[CONFIG.MASKING] - (1 + t)) < 1e-6)
-  assert.ok(Math.abs(config[CONFIG.MASKING + 1] - (1 + .5 * t)) < 1e-6)
-  assert.ok(Math.abs(config[CONFIG.MASKING + 2] - (1 + 2 * t)) < 1e-6)
-  assert.ok(Math.abs(config[CONFIG.PAPER_MIDPOINT_RED] - t) < 1e-6)
+  const config = labScanConfiguration(), fixed = config.slice()
+  // median 0 and highlight 0.99: steepened until the highlight would scan at white, then
+  // darkened toward the key, half the median's distance from mid-grey, which lands it on 0.
+  assert.equal(applyScreenLevels(config, labScanMeter, [-1, 0, 1]), null)
+  const contrast = 6 / 4.99
+  assertLabScanLevels(config, fixed, contrast, 4 - contrast * 4, 0)
+})
+
+test('lab scan darkens a frame already past white on the scan alone, before the edit exposure', () => {
+  for (const [exposureEV, stops] of [[0, -2.99], [1, -1.99]]) {
+    const config = labScanConfiguration(), fixed = config.slice()
+    // median 4, highlight 4.99: past white at the stock's contrast, so the records keep their
+    // contrast and the scan darkens until the highlight scans at white.
+    applyScreenLevels(config, labScanMeter, [3, 4, 5], exposureEV)
+    assertLabScanLevels(config, fixed, 1, stops, exposureEV)
+  }
+})
+
+// Curved reads: each record flattens toward its base under -3 stops.
+const curved = {...labScanMeter, reads: Array.from({length: 33}, (_, i) =>
+  slopes.map(slope => -slope * Math.max(i - 16, -3 + (i - 13) / 4)))}
+const curvedRead = (stops, c) => {
+  const x = Math.min(Math.max(stops, -16), 16) + 16, i = Math.min(Math.floor(x), 31), t = x - i
+  return curved.reads[i][c] * (1 - t) + curved.reads[i + 1][c] * t
+}
+
+test('lab scan lands each record on the fixed profile at the greys bracketing the frame', () => {
+  const read = curvedRead
+  const config = labScanConfiguration(), fixed = config.slice()
+  // median 0 and highlight 0.99, as above: the greys at -2 and 1.5 stops land where the profile
+  // scans the greys the setup places them on.
+  applyScreenLevels(config, curved, [-1, 0, 1])
+  const contrast = 6 / 4.99, stops = 4 - contrast * 4
+  const placed = x => -4 + contrast * (x + 4) + stops
+  slopes.forEach((_, c) => {
+    const scale = config[CONFIG.MASKING + c] / fixed[CONFIG.MASKING + c]
+    for (const x of [-2, 1.5])
+      assert.ok(close(scale * read(x, c) + config[midpoints[c]], read(placed(x), c)), `record ${c} at ${x}`)
+  })
+})
+
+test('lab scan levels the shadows clear of the toe, at most at the median', () => {
+  const config = labScanConfiguration(), fixed = config.slice()
+  // median 0 and highlight 7.9 after the sun's cap: darkened 5.9 stops, so the grey two stops
+  // under the median would be placed far under the toe, where the reads flatten; the median and
+  // the highlight are levelled instead.
+  applyScreenLevels(config, curved, [-20, 0, 10])
+  slopes.forEach((_, c) => {
+    const scale = config[CONFIG.MASKING + c] / fixed[CONFIG.MASKING + c]
+    for (const x of [0, 7.9]) {
+      assert.ok(close(scale * curvedRead(x, c) + config[midpoints[c]], curvedRead(x - 5.9, c)),
+        `record ${c} at ${x}`)
+    }
+  })
+})
+
+test('lab scan dodges only a frame reaching past the print, keyed on its median', () => {
+  assert.deepEqual(labScanDodge([-1, 0, 1]), {hold: 0, lift: 0, key: 0})
+  const {hold, lift, key} = labScanDodge([-2, 1, 5])
+  assert.ok(Math.abs(key - 1) < 1e-9)
+  assert.ok(Math.abs(hold - .15 * (3.96 - 3) / 3) < 1e-9)
+  assert.equal(lift, 0)
+  assert.equal(labScanDodge([-2, 1, 5], 0).hold, 0)
+  assert.ok(Math.abs(labScanDodge([-2, 1, 5], 2).hold - 2 * hold) < 1e-9)
 })
 
 test('auto levels holds white between two and a half and three and a half stops over the median', () => {

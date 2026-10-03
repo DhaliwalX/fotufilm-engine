@@ -56,6 +56,9 @@ export function profileControlAvailable(c, edit, stock) {
     case "screenMagenta":
     case "screenYellow":
       return !!medium?.screenCMY;
+    case "labScanDodging":
+    case "labScanLook":
+      return !!medium?.labScan;
     case "screenGrade":
       return (
         !!medium?.screenGrade && edit.digitalReference !== "reference-exposure"

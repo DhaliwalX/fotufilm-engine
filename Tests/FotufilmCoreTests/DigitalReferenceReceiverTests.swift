@@ -85,6 +85,7 @@ final class DigitalReferenceReceiverTests: XCTestCase {
             XCTAssertEqual(DigitalReferenceReceiver.colourShift(SIMD3(repeating: 1),
                 stock: film, paper: .screen), .zero)
         }
+        // Lab Scan takes its keys on the film's exposure (`LabScanTiming`).
         for paper: PrintPaper in [.ektacolorEdge, .labScan, .negative] {
             XCTAssertEqual(DigitalReferenceReceiver.colourShift(SIMD3(repeating: 1),
                 stock: stock, paper: paper), .zero)

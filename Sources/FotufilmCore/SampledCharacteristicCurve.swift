@@ -46,6 +46,12 @@ public struct SampledCharacteristicCurve: Codable, Sendable {
              density: density.map { $0 + fog }, slopes: slopes)
     }
 
+    /// The record on a shifted exposure axis: it forms at log exposure x the density it formed
+    /// at `x + offset`.
+    func reexposed(offset: Float) -> Self {
+        Self(logExposure: logExposure.map { $0 - offset }, density: density, slopes: slopes)
+    }
+
     private init(logExposure: [Float], density: [Float], slopes: [Float]) {
         self.logExposure = logExposure
         self.density = density
