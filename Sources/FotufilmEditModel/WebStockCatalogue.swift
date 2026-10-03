@@ -41,24 +41,16 @@ public enum WebStockCatalogue {
                  }
              }
              if medium == .labScan && !stock.isReversal && !stock.isReflectionPrint {
-                 // Lab Scan's per-frame levels, solved before the edit's exposure on the
-                 // backlight-adjusted highlight, as green's contrast and shift; and each record's
-                 // reads, which key the density on the median and time red and blue to green's
-                 // exposures.
-                 let masking = SIMD3(stock.printingContrastScale(correction: 0, paper: .labScan))
-                 entry["meter"] = ["min": -6.0, "max": 12.0, "labScan": true,
-                     "keyShare": LabScanTiming.keyShare,
+                 // Lab Scan's per-frame setup, which the browser solves from the frame's median
+                 // and highlight, before the edit's exposure, through each record's reads.
+                 let points = LabScanTiming.profilePoints(for: stock)
+                 entry["meter"] = ["labScan": true, "white": points.white, "toe": points.toe,
+                     "keyShare": LabScanTiming.keyShare, "maxStretch": LabScanTiming.maxStretch,
                      "anchorBelow": LabScanTiming.recordAnchorBelow,
                      "anchorSpan": LabScanTiming.recordAnchorSpan,
-                     "adjustments": (0...512).map { i -> [Float] in
-                         let levels = LabScanTiming.levels(
-                             for: stock, sceneHighlightStops: -6 + Float(i) * 18 / 512,
-                             masking: masking)
-                         return [levels.scale.y, levels.shift.y]
-                     },
-                     "readMin": -16.0, "readMax": 16.0,
+                     "min": -16.0, "max": 16.0,
                      "reads": (0...1024).map { -16 + Float($0) * 32 / 1024 }.map { stops -> [Float] in
-                         let read = LabScanTiming.reads(for: stock, stops: stops) * masking
+                         let read = LabScanTiming.reads(for: stock, stops: stops) * points.masking
                          return [read.x, read.y, read.z]
                      }]
              }

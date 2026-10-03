@@ -1662,9 +1662,9 @@ public enum EditorControlCatalogue {
                 help: "Digital Reference or Lab Scan exposure, -3...3 stops (default: 0); positive lightens."),
             documentation: "Exposure of the Digital Reference conversion in stops, on top of the "
                 + "chosen style; positive lightens. On a negative it is the print exposure, on a "
-                + "positive the scanner's gain. On Lab Scan it is the scanner's density key: the "
-                + "negative's scan lightens or darkens at mid-grey by the stops, after its "
-                + "per-frame setup, without changing the film's exposure."),
+                + "positive the scanner's gain. On Lab Scan it is the scanner's density key, "
+                + "after its per-frame setup: lightening moves the frame up the film's own curve, "
+                + "darkening deepens the scan, so shadows keep their separation."),
         EditorControl(
             .screenCyan, title: "Cyan / Red",
             detail: "Positive adds cyan by reducing red; negative adds red.",
@@ -1681,8 +1681,10 @@ public enum EditorControlCatalogue {
             web: .profile,
             commandLine: CommandLineFlag("--screen-cyan", placeholder: "<value>",
                 help: "Digital Reference or Lab Scan cyan/red correction, -1...1 (default: 0); positive adds cyan"),
-            documentation: "Digital Reference and Lab Scan colour negatives only. Positive reduces red, negative adds it, "
-                + "after the per-frame levels and before the output curve. Relative units -1 to +1, not scanner steps."),
+            documentation: "Digital Reference and Lab Scan colour negatives only. Positive reduces red, negative adds it: "
+                + "on Digital Reference after the per-frame levels and before the output curve, on Lab Scan in the "
+                + "light the film's red-sensitive layer receives, so a correction is the same from shadows to "
+                + "highlights. Relative units -1 to +1, not scanner steps."),
         EditorControl(
             .screenMagenta, title: "Magenta / Green",
             detail: "Positive adds magenta by reducing green; negative adds green.",
@@ -1699,8 +1701,10 @@ public enum EditorControlCatalogue {
             web: .profile,
             commandLine: CommandLineFlag("--screen-magenta", placeholder: "<value>",
                 help: "Digital Reference or Lab Scan magenta/green correction, -1...1 (default: 0); positive adds magenta"),
-            documentation: "Digital Reference and Lab Scan colour negatives only. Positive reduces green, negative adds it, "
-                + "after the per-frame levels and before the output curve. Relative units -1 to +1, not scanner steps."),
+            documentation: "Digital Reference and Lab Scan colour negatives only. Positive reduces green, negative adds it: "
+                + "on Digital Reference after the per-frame levels and before the output curve, on Lab Scan in the "
+                + "light the film's green-sensitive layer receives, so a correction is the same from shadows to "
+                + "highlights. Relative units -1 to +1, not scanner steps."),
         EditorControl(
             .screenYellow, title: "Yellow / Blue",
             detail: "Positive adds yellow by reducing blue; negative adds blue.",
@@ -1717,8 +1721,10 @@ public enum EditorControlCatalogue {
             web: .profile,
             commandLine: CommandLineFlag("--screen-yellow", placeholder: "<value>",
                 help: "Digital Reference or Lab Scan yellow/blue correction, -1...1 (default: 0); positive adds yellow"),
-            documentation: "Digital Reference and Lab Scan colour negatives only. Positive reduces blue, negative adds it, "
-                + "after the per-frame levels and before the output curve. Relative units -1 to +1, not scanner steps."),
+            documentation: "Digital Reference and Lab Scan colour negatives only. Positive reduces blue, negative adds it: "
+                + "on Digital Reference after the per-frame levels and before the output curve, on Lab Scan in the "
+                + "light the film's blue-sensitive layer receives, so a correction is the same from shadows to "
+                + "highlights. Relative units -1 to +1, not scanner steps."),
         EditorControl(
             .labScanDodging, title: "Dodging",
             detail: "Hold broad highlights and open deep shadows on a frame wider than a print.",

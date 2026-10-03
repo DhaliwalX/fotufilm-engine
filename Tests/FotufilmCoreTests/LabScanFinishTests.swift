@@ -84,16 +84,4 @@ final class LabScanFinishTests: XCTestCase {
         XCTAssertGreaterThan(half, lch(foliage).h)
         XCTAssertLessThan(half, lch(LabScanFinish.apply(foliage)).h)
     }
-
-    func testDensityKeyLightensMidGreyByItsStops() throws {
-        let film = try XCTUnwrap(FilmStock.named("portra400"))
-        let curve = PrintPaper.labScan.printCurve(for: film)
-        let mid = PrintPaper.labScan.printExposureMidpoints(for: film)[1]
-        func output(_ shift: Float) -> Float {
-            pow(10, -(curve.density(logExposure: mid + shift) - curve.dMin))
-        }
-        let shift = LabScanTiming.densityShift(stops: 1, stock: film)
-        XCTAssertLessThan(shift, 0)
-        XCTAssertEqual(output(shift) / output(0), 2, accuracy: 0.01)
-    }
 }

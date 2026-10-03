@@ -30,41 +30,76 @@ test('automatic levels meter bright regions and preserve channel ratios', () => 
   assert.deepEqual(config, fixed)
 })
 
-// Records whose reads are 0.8, 1 and 1.2 times green's at every stop: red and blue keep green's
-// contrast and take 0.8 and 1.2 times its shift, the same exposure through their own reads.
-const linearReads = slope => ({readMin: -40, readMax: 40,
-  reads: [[32 * slope, 40 * slope, 48 * slope], [-32 * slope, -40 * slope, -48 * slope]]})
+// A Lab Scan meter whose profile scans white two stops over mid-grey, with its toe four under,
+// and whose records read a stop as `slopes` of log light: straight, so a record's levels come out
+// in closed form.
+const slopes = [.25, .3, .35]
+const labScanMeter = {labScan: true, white: 2, toe: -4, keyShare: .5, maxStretch: 1.5,
+  anchorBelow: 2, anchorSpan: 1.5, min: -16, max: 16,
+  reads: Array.from({length: 33}, (_, i) => slopes.map(slope => -slope * (i - 16)))}
+function labScanConfiguration() {
+  const config = new Float32Array(CONFIG.FOTUFILM_FRAME_CONFIGURATION_COUNT)
+  config.set([.9, 1, 1.1], CONFIG.MASKING)
+  config.set([.2, .6, -2, .3, 1, .4], CONFIG.CURVES)
+  return config
+}
+const close = (a, b) => Math.abs(a - b) < 1e-5
+const midpoints = [CONFIG.PAPER_MIDPOINT_RED, CONFIG.PAPER_MIDPOINT, CONFIG.PAPER_MIDPOINT_BLUE]
 
-test('lab scan times every record to the same exposure from the backlight-adjusted highlight', () => {
-  // median 0, highlight 9.9: lowered by the two-stop cap to 7.9, then the edit's +1.9 EV taken out
+// Each record scans a grey at x where the fixed profile scans it at toe + contrast (x - toe) + ev
+// + stops: on straight reads, the record's contrast is the setup's, and its shift carries the rest.
+function assertLabScanLevels(config, fixed, contrast, stops, exposureEV) {
+  slopes.forEach((slope, c) => {
+    assert.ok(close(config[CONFIG.MASKING + c], fixed[CONFIG.MASKING + c] * contrast), `scale ${c}`)
+    const shift = -slope * ((labScanMeter.toe + exposureEV) * (1 - contrast) + stops)
+    assert.ok(close(config[midpoints[c]], shift), `shift ${c}`)
+    config[CONFIG.MASKING + c] = fixed[CONFIG.MASKING + c]
+    config[midpoints[c]] = 0
+  })
+  // The film keeps the exposure it had.
+  assert.deepEqual(config, fixed)
+}
+
+test('lab scan steepens each scan record about the toe and darkens it toward the key', () => {
+  // median 0, highlight 9.9: lowered by the two-stop cap to 7.9
   assert.ok(Math.abs(labScanHighlight([-20, 0, 10]) - 7.9) < 1e-9)
-  const meter = {min: 0, max: 10, labScan: true, keyShare: .5, anchorBelow: 2, anchorSpan: 1.5,
-    adjustments: [[1, 0], [1.5, 1]], ...linearReads(.1)}
-  const config = new Float32Array(9000)
-  config.set([1, 1, 1], CONFIG.MASKING)
-  assert.equal(applyScreenLevels(config, meter, [-20, 0, 10], 1.9), 0)
-  assert.ok(Math.abs(config[CONFIG.HIGHLIGHTS] + .15) < 1e-6)
-  assert.ok(Math.abs(config[CONFIG.SHADOWS] - .2) < 1e-6)
-  const t = 0.6
-  for (let c = 0; c < 3; c++) assert.ok(Math.abs(config[CONFIG.MASKING + c] - (1 + .5 * t)) < 1e-4)
-  assert.ok(Math.abs(config[CONFIG.PAPER_MIDPOINT] - t) < 1e-4)
-  assert.ok(Math.abs(config[CONFIG.PAPER_MIDPOINT_RED] - .8 * t) < 1e-4)
-  assert.ok(Math.abs(config[CONFIG.PAPER_MIDPOINT_BLUE] - 1.2 * t) < 1e-4)
+  const config = labScanConfiguration(), fixed = config.slice()
+  // median 0 and highlight 0.99: steepened until the highlight would scan at white, then
+  // darkened toward the key, half the median's distance from mid-grey, which lands it on 0.
+  assert.equal(applyScreenLevels(config, labScanMeter, [-1, 0, 1]), null)
+  const contrast = 6 / 4.99
+  assertLabScanLevels(config, fixed, contrast, 4 - contrast * 4, 0)
 })
 
-test('lab scan keys its density on the median, never past the placed points', () => {
-  const meter = {min: 0, max: 10, labScan: true, keyShare: .5, anchorBelow: 2, anchorSpan: 1.5,
-    adjustments: [[1, 0], [1.5, 1]], ...linearReads(.4)}
-  const config = new Float32Array(9000)
-  config.set([1, 1, 1], CONFIG.MASKING)
-  applyScreenLevels(config, meter, [4, 5, 6], 0)
-  // median 5: the fixed profile's read of 2.5 stops, less the timed read of 5 stops
-  const green = 1 + .5 * labScanHighlight([4, 5, 6]) / 10
-  const shift = -1 + 2 * green
-  assert.ok(Math.abs(config[CONFIG.PAPER_MIDPOINT] - shift) < 1e-4)
-  assert.ok(Math.abs(config[CONFIG.PAPER_MIDPOINT_RED] - .8 * shift) < 1e-4)
-  assert.ok(Math.abs(config[CONFIG.PAPER_MIDPOINT_BLUE] - 1.2 * shift) < 1e-4)
-  for (let c = 0; c < 3; c++) assert.ok(Math.abs(config[CONFIG.MASKING + c] - green) < 1e-4)
+test('lab scan darkens a frame already past white on the scan alone, before the edit exposure', () => {
+  for (const [exposureEV, stops] of [[0, -2.99], [1, -1.99]]) {
+    const config = labScanConfiguration(), fixed = config.slice()
+    // median 4, highlight 4.99: past white at the stock's contrast, so the records keep their
+    // contrast and the scan darkens until the highlight scans at white.
+    applyScreenLevels(config, labScanMeter, [3, 4, 5], exposureEV)
+    assertLabScanLevels(config, fixed, 1, stops, exposureEV)
+  }
+})
+
+test('lab scan lands each record on the fixed profile at the greys bracketing the frame', () => {
+  // Curved reads: each record flattens toward its base under -3 stops.
+  const curved = {...labScanMeter, reads: Array.from({length: 33}, (_, i) =>
+    slopes.map(slope => -slope * Math.max(i - 16, -3 + (i - 13) / 4)))}
+  const read = (stops, c) => {
+    const x = Math.min(Math.max(stops, -16), 16) + 16, i = Math.min(Math.floor(x), 31), t = x - i
+    return curved.reads[i][c] * (1 - t) + curved.reads[i + 1][c] * t
+  }
+  const config = labScanConfiguration(), fixed = config.slice()
+  // median 0 and highlight 0.99, as above: the greys at -2 and 1.5 stops land where the profile
+  // scans the greys the setup places them on.
+  applyScreenLevels(config, curved, [-1, 0, 1])
+  const contrast = 6 / 4.99, stops = 4 - contrast * 4
+  const placed = x => -4 + contrast * (x + 4) + stops
+  slopes.forEach((_, c) => {
+    const scale = config[CONFIG.MASKING + c] / fixed[CONFIG.MASKING + c]
+    for (const x of [-2, 1.5])
+      assert.ok(close(scale * read(x, c) + config[midpoints[c]], read(placed(x), c)), `record ${c} at ${x}`)
+  })
 })
 
 test('lab scan dodges only a frame reaching past the print, keyed on its median', () => {

@@ -45,8 +45,9 @@ public enum LabScanFinish {
 
     /// The finished colour of a scan pixel, linear Display P3 in and out, `strength` of the way
     /// from the neutral scan. A monochrome scan takes the gradation alone and stays neutral.
+    /// `floor` is the scan's no-light luminance, the black the machine times neutral.
     public static func apply(_ colour: SIMD3<Float>, strength: Float = 1,
-                             chromatic: Bool = true) -> SIMD3<Float> {
+                             chromatic: Bool = true, floor: Float = 0) -> SIMD3<Float> {
         let strength = strength.isFinite ? min(max(strength, 0), 1) : 1
         guard strength > 0 else { return colour }
         let toned = graded(colour, strength: strength)
@@ -55,7 +56,12 @@ public enum LabScanFinish {
         let l = lab.x
 
         // The crossover, on near-neutral colours: cyan shadows and mid-tones, warm upper tones.
-        let shadow = clamp((0.70 - l) / 0.40, 0, 1) * clamp((l - 0.04) / 0.16, 0, 1)
+        // It comes in over a stop from half a stop above the floor, so the black itself, and the
+        // output table's cell above it, stay neutral.
+        let weights = ColorScience.displayP3LuminanceWeights
+        let level = weights.0 * colour.x + weights.1 * colour.y + weights.2 * colour.z
+        let onset = floor > 0 ? clamp(log2(max(level, 1e-12) / floor) - 0.5, 0, 1) : 1
+        let shadow = clamp((0.70 - l) / 0.40, 0, 1) * clamp((l - 0.04) / 0.16, 0, 1) * onset
         let upper = clamp((l - 0.44) / 0.2, 0, 1) * clamp((1 - l) / 0.15, 0, 1)
         let saturation = (lab.y * lab.y + lab.z * lab.z).squareRoot() / max(l, 1e-3)
         let neutral = l * exp(-saturation / castSaturation)
@@ -117,6 +123,6 @@ public enum LabScanFinish {
         let (l3, m3, s3) = (l * l * l, m * m * m, s * s * s)
         return SIMD3(4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3,
                      -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3,
-                     -0.0041960863 * l3 - 0.7034186147 * m3 + 1.7076724896 * s3)
+                     -0.0041960863 * l3 - 0.7034186147 * m3 + 1.7076147010 * s3)
     }
 }

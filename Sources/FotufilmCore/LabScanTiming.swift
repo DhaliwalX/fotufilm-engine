@@ -1,23 +1,24 @@
 import Foundation
 
-/// Lab Scan's per-frame levels: the auto setup a minilab scanner runs on every frame before the
-/// operator sees it. The scanner steepens the scan, within a limit, until the frame's brightest
-/// content would reach white and the film base black, and sets its density on the frame's median,
-/// taking out part of the frame's misexposure; neither the highlight nor the base may then scan
-/// past its point. A flat frame keeps its key instead of having its brightest content printed
-/// white. An unmetered frame scans at the fixed profile.
+/// Lab Scan's per-frame setup: the auto setup a minilab scanner runs on every frame before the
+/// operator sees it, and the operator's own density and colour keys. The scanner sets the frame's
+/// density on its median, taking out part of the frame's misexposure, and steepens it about the
+/// film's toe, within a limit, until its brightest content would reach white; that content never
+/// scans past white. A flat frame keeps its key instead of having its brightest content printed
+/// white. An unmetered frame scans at the fixed profile, keyed by the operator alone.
 ///
-/// The levels ride the print stage's existing slots, as Digital Reference's do: `scale`
-/// multiplies the records' contrast and `shift` moves the scan curve's exposure origin, both in
-/// the scan's log-exposure units relative to mid-grey, so no table is rebuilt per frame.
+/// The scanner levels its scan, not the film: each record's contrast and shift are set where its
+/// own read of a grey lands the frame's shadows and highlight where the fixed profile scans the
+/// greys the setup places them on, so a grey stays grey through records whose curves differ, and
+/// the film keeps the exposure it had. Exposing the film further to steepen it would carry bright
+/// colours into its shoulder, which turns them. The colour keys ride the light the film's layers
+/// receive, so a key is the same colour from the shadows to the highlights, and so does the
+/// operator's lightening, so the film base still scans black.
 public enum LabScanTiming {
     /// Scan density the metered highlight lands on: a bright white short of paper white, so
     /// broad highlights keep the curve's toe separation instead of bleaching.
     static let whiteDensity: Float = 0.08
-    /// Scan density the film base lands on: where a normally exposed negative's base scans at
-    /// the fixed profile.
-    static let blackDensity: Float = 2.2
-    /// The most a frame is steepened past the stock's contrast to reach both points.
+    /// The most a frame is steepened past the stock's contrast to bring its highlight to white.
     public static let maxStretch: Float = 1.5
 
     /// How far over the scene's median the metered highlight may sit before the excess is taken
@@ -30,6 +31,10 @@ public enum LabScanTiming {
 
     /// The share of the median's distance from mid-grey the scanner's density takes out.
     public static let keyShare: Float = 0.5
+
+    /// A full colour key's change to its layer's exposure, in log10 units: about the change a
+    /// CC30 filter makes to a print's exposure, carried back through a negative's contrast.
+    public static let keyReach: Float = 0.5
 
     /// The highlight the white point is set on, from the whole-frame measurement, in stops.
     static func highlight(_ scene: AutoAdjustment.SceneStops) -> Float {
@@ -77,115 +82,152 @@ public enum LabScanTiming {
             key: scene.median)
     }
 
-    /// The scan curve's read shift that lightens mid-grey by `stops`: the scanner's density key,
-    /// on the axis the timing's shift rides.
-    static func densityShift(stops: Float, stock: FilmStock) -> Float {
-        guard stops != 0, stops.isFinite else { return 0 }
-        let curve = PrintPaper.labScan.printCurve(for: stock)
-        let mid = PrintPaper.labScan.printExposureMidpoints(for: stock)[1]
-        func output(_ shift: Float) -> Float {
-            pow(10, -(curve.density(logExposure: mid + shift) - curve.dMin))
+    /// A frame's setup: each of the film's layers forms at log exposure x the density it would
+    /// form at `x + shift + keys[layer]`, and each of the scan's records reads `scale[record]`
+    /// times its read, plus `print[record]`, on the print stage's axis.
+    public struct Setup: Equatable, Sendable {
+        /// The film's exposure change in log10 units: the operator's lightening.
+        public var shift: Float
+        /// The colour keys, each layer's own log10 exposure change.
+        public var keys: SIMD3<Float>
+        /// The scan's levels: each record's contrast and shift.
+        public var scale: SIMD3<Float>
+        public var print: SIMD3<Float>
+
+        public static let identity = Setup(shift: 0, keys: .zero)
+
+        public init(shift: Float, keys: SIMD3<Float>, scale: SIMD3<Float> = .one,
+                    print: SIMD3<Float> = .zero) {
+            self.shift = shift
+            self.keys = keys
+            self.scale = scale
+            self.print = print
         }
-        let target = output(0) * exp2(min(max(stops, -6), 6))
-        // Output falls as the read rises; bisect the read for the target.
-        var low: Float = -3, high: Float = 3
-        for _ in 0..<40 {
-            let middle = (low + high) / 2
-            if output(middle) > target { low = middle } else { high = middle }
+
+        /// The stock's records as this setup exposes them.
+        public func curves(for stock: FilmStock) -> [CharacteristicCurve] {
+            stock.curves.enumerated().map { $1.reexposed(offset: shift + keys[$0]) }
         }
-        return (low + high) / 2
+
+        /// A capture layer that answers no colour key, such as a donor layer: the lightening
+        /// alone.
+        public func uncoloured(_ curve: CharacteristicCurve) -> CharacteristicCurve {
+            curve.reexposed(offset: shift)
+        }
     }
 
-
-    /// The levels for a frame whose highlight and median were metered at `sceneHighlightStops`
-    /// and `sceneMedianStops`, after the edit's `exposureEV`, printed through records of contrast
-    /// `masking`. The scanner sets up the negative as it was exposed, so the edit's exposure is
-    /// taken back out of the reading and still lightens or darkens the scan. Green sets both
-    /// points and the key; red and blue are timed to the same exposures through their own reads
-    /// (`recordLevels`), so a grey the fixed profile scans neutral still scans neutral. Without a
-    /// median the frame is placed on its points alone and every record takes green's levels.
-    public static func levels(for stock: FilmStock, sceneHighlightStops: Float?,
-                              sceneMedianStops: Float? = nil,
-                              exposureEV: Float = 0, masking: SIMD3<Float> = .one)
-        -> (scale: SIMD3<Float>, shift: SIMD3<Float>) {
-        guard let measured = sceneHighlightStops, measured.isFinite, !stock.isReversal,
-              !stock.isReflectionPrint else { return (.one, .zero) }
-        let white = scanExposure(stock, density: whiteDensity)
-        let black = scanExposure(stock, density: blackDensity)
-        let highStops = min(max(measured - exposureEV, -12), 12)
-        let high = reads(for: stock, stops: highStops).y * masking.y
-        let base = reads(for: stock, stops: nil).y * masking.y
-        let green = min(max((black - white) / max(base - high, 0.05), 1), maxStretch)
-        // Whichever point the scale cannot also reach gives way: a dense frame's base scans
-        // past black, a thin frame's highlight short of white.
-        let placed = max(white - green * high, black - green * base)
-        guard let median = sceneMedianStops, median.isFinite else {
-            return (SIMD3(repeating: green), SIMD3(repeating: placed))
-        }
-        let medianStops = min(max(median - exposureEV, -12), 12)
-        let shift = max(placed, keyShift(for: stock, medianStops: medianStops, green: green,
-                                         masking: masking.y))
-        return recordLevels(for: stock, green: green, shift: shift, medianStops: medianStops,
-                            highlightStops: highStops, masking: masking)
-    }
-
-    /// Stops under the median, and the least span over it, of the two exposures red and blue are
-    /// timed at: they bracket the frame's shadows and its highlight.
+    /// Stops under the median, and the least span over it, of the two greys each record is
+    /// levelled at: they bracket the frame's shadows and its highlight.
     public static let recordAnchorBelow: Float = 2
     public static let recordAnchorSpan: Float = 1.5
 
-    /// Red's and blue's levels for green's `green` and `shift`: each record scans the frame's
-    /// shadow and highlight anchors where its own read of the exposures green times them to would
-    /// scan at the fixed profile. A record's curve differs from green's, so an equal shift on
-    /// every record would scan bright greys one colour and dark greys another.
-    public static func recordLevels(for stock: FilmStock, green: Float, shift: Float,
-                                    medianStops: Float, highlightStops: Float,
-                                    masking: SIMD3<Float>)
-        -> (scale: SIMD3<Float>, shift: SIMD3<Float>) {
-        let low = medianStops - recordAnchorBelow
-        let high = max(highlightStops, medianStops + recordAnchorSpan)
-        let readLow = reads(for: stock, stops: low) * masking
-        let readHigh = reads(for: stock, stops: high) * masking
-        let timedLow = reads(for: stock, stops: greenStops(
-            for: stock, read: (green * readLow.y + shift) / masking.y)) * masking
-        let timedHigh = reads(for: stock, stops: greenStops(
-            for: stock, read: (green * readHigh.y + shift) / masking.y)) * masking
-        var scale = SIMD3(repeating: green)
-        var shifts = SIMD3(repeating: shift)
-        for c in [0, 2] where abs(readHigh[c] - readLow[c]) > 1e-3 {
-            scale[c] = (timedHigh[c] - timedLow[c]) / (readHigh[c] - readLow[c])
-            shifts[c] = timedLow[c] - scale[c] * readLow[c]
+    /// The setup for a frame metered at `sceneHighlightStops` and `sceneMedianStops` after the
+    /// edit's `exposureEV`, lightened by the operator's `scanExposure` stops and keyed by `keys`
+    /// (cyan, magenta and yellow, each −1…1, taking out red, green and blue). The scanner sets up
+    /// the negative as it was exposed, so the edit's exposure is taken back out of the reading and
+    /// still lightens or darkens the scan by its own stops; so does the operator's density.
+    ///
+    /// The steepening pivots on the film's toe, where its straight line meets the base: the base
+    /// stays black and the frame opens upward until its highlight would scan at white. The
+    /// density then darkens the frame toward its key, `keyShare` of the median's distance from
+    /// mid-grey taken out, but never lightens it: lifting a frame past its own toe would lift the
+    /// black a dark frame is made of. A highlight already past white at the stock's contrast
+    /// darkens the frame until it scans at white. A frame lightened past its setup takes the rest
+    /// on the film.
+    public static func setup(for stock: FilmStock, sceneHighlightStops: Float?,
+                             sceneMedianStops: Float?, exposureEV: Float = 0,
+                             scanExposure: Float = 0, keys: SIMD3<Float> = .zero) -> Setup {
+        guard !stock.isReversal, !stock.isReflectionPrint else { return .identity }
+        let colour = stock.isMonochrome ? SIMD3<Float>.zero : SIMD3((0..<3).map { layer in
+            keys[layer].isFinite ? -keyReach * min(max(keys[layer], -1), 1) : 0
+        })
+        let points = profilePoints(for: stock)
+        let ev = exposureEV.isFinite ? exposureEV : 0
+        var contrast: Float = 1
+        var middle: Float = 0
+        var highlight: Float = 0
+        var stops = scanExposure.isFinite ? min(max(scanExposure, -6), 6) : 0
+        let metered = sceneHighlightStops?.isFinite == true && sceneMedianStops?.isFinite == true
+        if metered, let high = sceneHighlightStops, let median = sceneMedianStops {
+            middle = min(max(median - ev, -12), 12)
+            highlight = max(min(max(high - ev, -12), 12), middle)
+            let reach = highlight - points.toe
+            contrast = reach > 1e-3
+                ? min(max((points.white - points.toe) / reach, 1), maxStretch) : maxStretch
+        } else if stops == 0 {
+            return Setup(shift: 0, keys: colour)
         }
-        return (scale, shifts)
+        func placed(_ stops: Float) -> Float { points.toe + contrast * (stops - points.toe) }
+        if metered {
+            stops += min(0, (1 - keyShare) * middle - placed(middle),
+                         points.white - placed(highlight))
+        }
+        // A grey at stop x reaches the film at x + ev, lightened by `lift`, and each record scans
+        // it where the fixed profile scans the grey at placed(x) + ev + stops, exactly at the two
+        // greys bracketing the frame.
+        let lift = max(stops, 0)
+        let low = middle - recordAnchorBelow
+        let high = max(highlight, middle + recordAnchorSpan)
+        func read(_ stops: Float) -> SIMD3<Float> { reads(for: stock, stops: stops) * points.masking }
+        let (readLow, readHigh) = (read(low + ev + lift), read(high + ev + lift))
+        let targetLow = read(placed(low) + ev + stops)
+        let targetHigh = read(placed(high) + ev + stops)
+        var scale = SIMD3<Float>.one
+        for c in 0..<3 where abs(readHigh[c] - readLow[c]) > 1e-3 {
+            scale[c] = (targetHigh[c] - targetLow[c]) / (readHigh[c] - readLow[c])
+        }
+        return Setup(shift: lift * Float(log10(2.0)), keys: colour, scale: scale,
+                     print: targetLow - scale * readLow)
     }
 
-    /// The stop, from mid-grey, whose green read is `read`: the green read falls as exposure
-    /// rises.
-    static func greenStops(for stock: FilmStock, read: Float) -> Float {
+    /// The fixed profile's points: where it scans a neutral at `whiteDensity` and the film's toe,
+    /// where its green record's straight line through mid-grey meets the read of the bare base,
+    /// both in stops over mid-grey; and each record's contrast on the print stage.
+    public struct Points: Equatable, Sendable {
+        public var white: Float
+        public var toe: Float
+        public var masking: SIMD3<Float>
+    }
+
+    public static func profilePoints(for stock: FilmStock) -> Points {
+        let key = SpectralRuntime.cacheIdentifier(for: stock, paper: .labScan)
+        if let cached = pointsCache.value(for: key) { return cached }
+        let curve = PrintPaper.labScan.printCurve(for: stock)
+        let masking = SIMD3(stock.printingContrastScale(
+            correction: FotufilmEngine.Options().printCorrection, paper: .labScan))
+        let read = (curve.logExposure(density: curve.dMin + whiteDensity)
+            - PrintPaper.labScan.printExposureMidpoints(for: stock)[1]) / masking.y
+        // The green read falls as exposure rises; bisect the stop for the read.
         var low: Float = -16, high: Float = 16
-        for _ in 0..<32 {
+        for _ in 0..<40 {
             let middle = (low + high) / 2
             if reads(for: stock, stops: middle).y > read { low = middle } else { high = middle }
         }
-        return (low + high) / 2
+        let stop = reads(for: stock, stops: -0.5).y - reads(for: stock, stops: 0.5).y
+        let toe = -(reads(for: stock, stops: nil).y - reads(for: stock, stops: 0).y)
+            / max(stop, 1e-3)
+        let points = Points(white: (low + high) / 2, toe: min(toe, -1), masking: masking)
+        pointsCache.store(points, for: key)
+        return points
     }
 
-    /// The shift that sets the scan's density on a frame whose median sits `medianStops` from
-    /// mid-grey before the edit's exposure, scanned at contrast `green`: the median scans where
-    /// the fixed profile scans a patch `keyShare` of the way back to mid-grey.
-    public static func keyShift(for stock: FilmStock, medianStops: Float, green: Float,
-                                masking: Float) -> Float {
-        let stops = min(max(medianStops, -12), 12)
-        return masking * (reads(for: stock, stops: (1 - keyShare) * stops).y
-            - green * reads(for: stock, stops: stops).y)
-    }
+    private static let pointsCache = PointsCache()
 
+    private final class PointsCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var values: [UInt64: Points] = [:]
 
-    /// The scan curve's log exposure, relative to its mid-grey origin, that scans `density`.
-    static func scanExposure(_ stock: FilmStock, density: Float) -> Float {
-        let curve = PrintPaper.labScan.printCurve(for: stock)
-        return curve.logExposure(density: curve.dMin + density)
-            - PrintPaper.labScan.printExposureMidpoints(for: stock)[1]
+        func value(for key: UInt64) -> Points? {
+            lock.lock()
+            defer { lock.unlock() }
+            return values[key]
+        }
+
+        func store(_ value: Points, for key: UInt64) {
+            lock.lock()
+            values[key] = value
+            lock.unlock()
+        }
     }
 
     /// What the scanner's records read of a neutral patch `stops` over mid-grey, or of the bare

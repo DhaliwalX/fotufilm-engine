@@ -134,49 +134,45 @@ export function labScanHighlight(regionStops) {
   return bright - Math.min(2, .5 * excess)
 }
 
-// Lab Scan's levels: its table carries green's contrast and shift, solved before the edit's
-// exposure, so `exposureEV` is taken out of the reading. Its density is keyed on the frame's
-// median, as LabScanTiming.keyShift reads it from the meter's record reads, and never lets the
-// highlight or the base scan past the table's points; red and blue are then timed to green's
-// exposures through their own reads, as LabScanTiming.recordLevels does. Its dodge, `dodging`
+// Lab Scan's setup, as LabScanTiming.setup reads the frame, on a pack built at the fixed profile:
+// the frame is steepened about the film's toe until its highlight would scan at white, within
+// `maxStretch`, then darkened toward its key, `keyShare` of the median's distance from mid-grey
+// taken out, or until the highlight scans at white. Each scan record takes a contrast and a shift
+// that land its own reads of the two greys bracketing the frame where the fixed profile reads the
+// greys the setup places them on. `exposureEV` is taken out of the reading. Its dodge, `dodging`
 // times the scanner's, rides the tone controls; returns the median it keys them on while it
 // dodges, or null.
 function applyLabScanLevels(configuration, meter, regionStops, exposureEV, dodging) {
   const metered = labScanHighlight(regionStops)
   if (metered === null) return null
   const { hold, lift, key } = labScanDodge(regionStops, dodging)
-  const samples = meter.adjustments
-  if (!Array.isArray(samples) || samples.length < 2 || !Array.isArray(meter.reads)
-      || meter.reads.length < 2) throw new Error('Invalid screen conversion profile.')
-  const [green, placed] = tabulated(meter, samples, metered - exposureEV)
-  const readRange = {min: meter.readMin, max: meter.readMax}
-  const read = stops => tabulated(readRange, meter.reads, stops)
-  // The stop whose green read is `value`: the green read falls as exposure rises.
-  const greenStops = value => {
-    let low = meter.readMin, high = meter.readMax
-    for (let i = 0; i < 32; i++) {
-      const middle = (low + high) / 2
-      if (read(middle)[1] > value) low = middle; else high = middle
-    }
-    return (low + high) / 2
-  }
-  const median = Math.min(Math.max(key - exposureEV, -12), 12)
-  const shift = Math.max(placed, read((1 - meter.keyShare) * median)[1] - green * read(median)[1])
-  const low = median - meter.anchorBelow
-  const high = Math.max(Math.min(Math.max(metered - exposureEV, -12), 12), median + meter.anchorSpan)
-  const readLow = read(low), readHigh = read(high)
-  const timedLow = read(greenStops(green * readLow[1] + shift))
-  const timedHigh = read(greenStops(green * readHigh[1] + shift))
-  const scales = [green, green, green], shifts = [shift, shift, shift]
-  for (const c of [0, 2]) {
-    if (Math.abs(readHigh[c] - readLow[c]) <= 1e-3) continue
-    scales[c] = (timedHigh[c] - timedLow[c]) / (readHigh[c] - readLow[c])
-    shifts[c] = timedLow[c] - scales[c] * readLow[c]
-  }
-  if (![...scales, ...shifts].every(Number.isFinite)) throw new Error('Invalid screen conversion levels.')
-  for (let c=0;c<3;c++) configuration[CONFIG.MASKING+c] *= scales[c]
+  const { white, toe, keyShare, maxStretch, anchorBelow, anchorSpan, reads } = meter
+  if (![white, toe, keyShare, maxStretch, anchorBelow, anchorSpan, meter.min, meter.max]
+    .every(Number.isFinite) || !Array.isArray(reads) || reads.length < 2)
+    throw new Error('Invalid screen conversion profile.')
+  const clamp = (value, low, high) => Math.min(Math.max(value, low), high)
+  const middle = clamp(key - exposureEV, -12, 12)
+  const highlight = Math.max(clamp(metered - exposureEV, -12, 12), middle)
+  const reach = highlight - toe
+  const contrast = reach > 1e-3 ? clamp((white - toe) / reach, 1, maxStretch) : maxStretch
+  const placed = stops => toe + contrast * (stops - toe)
+  const stops = Math.min(0, (1 - keyShare) * middle - placed(middle), white - placed(highlight))
+  // A grey at stop x reaches the film at x + ev, and each record scans it where the fixed profile
+  // scans the grey at placed(x) + ev + stops, exactly at the two greys bracketing the frame.
+  const read = stops => tabulated(meter, reads, stops)
+  const low = middle - anchorBelow, high = Math.max(highlight, middle + anchorSpan)
+  const readLow = read(low + exposureEV), readHigh = read(high + exposureEV)
+  const targetLow = read(placed(low) + exposureEV + stops)
+  const targetHigh = read(placed(high) + exposureEV + stops)
+  const scale = [0, 1, 2].map(c => Math.abs(readHigh[c] - readLow[c]) > 1e-3
+    ? (targetHigh[c] - targetLow[c]) / (readHigh[c] - readLow[c]) : 1)
+  const print = [0, 1, 2].map(c => targetLow[c] - scale[c] * readLow[c])
+  if (![...scale, ...print].every(Number.isFinite)) throw new Error('Invalid screen conversion levels.')
   const slots = [CONFIG.PAPER_MIDPOINT_RED, CONFIG.PAPER_MIDPOINT, CONFIG.PAPER_MIDPOINT_BLUE]
-  for (let c=0;c<3;c++) configuration[slots[c]] += shifts[c]
+  for (let c=0;c<3;c++) {
+    configuration[CONFIG.MASKING+c] *= scale[c]
+    configuration[slots[c]] += print[c]
+  }
   const shadows = configuration[CONFIG.SHADOWS], highlights = configuration[CONFIG.HIGHLIGHTS]
   configuration[CONFIG.SHADOWS] = shadows + Math.min(lift, Math.max(1 - shadows, 0))
   configuration[CONFIG.HIGHLIGHTS] = highlights - Math.min(hold, Math.max(highlights + 1, 0))

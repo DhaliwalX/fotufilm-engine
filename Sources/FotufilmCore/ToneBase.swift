@@ -346,6 +346,8 @@ public struct ToneBaseMeasurement {
 struct MeteredLevels {
     var scale: SIMD3<Float> = .one
     var shift: SIMD3<Float> = .zero
+    /// Lab Scan's keys and lightening on the film's exposure; its levels ride `scale` and `shift`.
+    var film: LabScanTiming.Setup = .identity
     var filmBoost: Float = 0
     var toneKey: Float? = nil
     var shadowLift: Float = 0
@@ -401,6 +403,10 @@ extension FilmEngineInvocation {
             configuration[offsets[c]] += levels.shift[c] - meterLevels.shift[c]
         }
         configuration[Self.exposureGainOffset] *= exp2(levels.filmBoost - meterLevels.filmBoost)
+        if levels.film.shift != meterLevels.film.shift || levels.film.keys != meterLevels.film.keys,
+           let stock = meterStock {
+            packFilmCurves(of: stock, setup: levels.film)
+        }
         // The tone controls are keyed on the stop the print takes for mid-grey, unless they are
         // keyed regionally.
         if configuration[Self.toneGridSizeOffset] == 1, configuration[Self.toneGridSizeOffset + 1] == 1 {
@@ -480,13 +486,13 @@ extension FilmEngineInvocation {
         if let stock = meterStock, meterMedium == .labScan,
            let scene = AutoAdjustment.SceneStops(regionStops: measurement.regionStops()) {
             let dodge = LabScanTiming.dodge(scene, strength: meterDodging)
-            let levels = LabScanTiming.levels(
+            let setup = LabScanTiming.setup(
                 for: stock, sceneHighlightStops: LabScanTiming.highlight(scene),
-                sceneMedianStops: scene.median, exposureEV: meterExposureEV, masking: meterMasking)
-            applyMeteredLevels(MeteredLevels(scale: levels.scale,
-                                             shift: levels.shift,
-                                             toneKey: dodge.key, shadowLift: dodge.lift,
-                                             highlightHold: dodge.hold))
+                sceneMedianStops: scene.median, exposureEV: meterExposureEV,
+                scanExposure: meterScanExposure, keys: meterKeys)
+            applyMeteredLevels(MeteredLevels(scale: setup.scale, shift: setup.print, film: setup,
+                                             toneKey: dodge.key,
+                                             shadowLift: dodge.lift, highlightHold: dodge.hold))
         }
         let keyedLocally = toneKeyedLocally
         if let stock = screenMeterStock, let scene = screenScene(measurement) {
