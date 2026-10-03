@@ -994,6 +994,8 @@ public enum SpectralRuntime {
         /// Actual no-light receiver level for an editable scan. A film's finite base response
         /// can sit above the receiver curve's mathematical D-max floor.
         let shadowFloor: Float
+        /// The raw scan's colour for greys, as log luminance against each channel's share of it.
+        let greyAxis: [(logLuminance: Float, share: SIMD3<Float>)]
         /// The finished video transfer gives up highlight chroma near its white point.
         let clipInterval: (Float, Float) = (0.76, 0.84)
         /// Stops above an editable scan's no-light floor at which its colour starts to come in,
@@ -1039,6 +1041,28 @@ public enum SpectralRuntime {
                 shadowFloor = w.0 * pow(10, -black.x) + w.1 * pow(10, -black.y)
                     + w.2 * pow(10, -black.z)
             }
+            let weights = ColorScience.displayP3LuminanceWeights
+            greyAxis = stride(from: Float(-20), through: 6, by: 0.125).map { stops in
+                let read = response(SIMD3(repeating: 0.18 * pow(2, stops))) * scanRange
+                let raw = SIMD3(pow(10, -read.x), pow(10, -read.y), pow(10, -read.z))
+                let level = weights.0 * raw.x + weights.1 * raw.y + weights.2 * raw.z
+                return (log(max(level, 1e-12)), raw / max(level, 1e-12))
+            }.sorted { $0.logLuminance < $1.logLuminance }
+        }
+
+        func greyShare(at luminance: Float) -> SIMD3<Float> {
+            let x = log(max(luminance, 1e-12))
+            guard let first = greyAxis.first, let last = greyAxis.last else { return .one }
+            if x <= first.logLuminance { return first.share }
+            if x >= last.logLuminance { return last.share }
+            var low = 0, high = greyAxis.count - 1
+            while high - low > 1 {
+                let middle = (low + high) / 2
+                if greyAxis[middle].logLuminance <= x { low = middle } else { high = middle }
+            }
+            let a = greyAxis[low], b = greyAxis[high]
+            let t = (x - a.logLuminance) / max(b.logLuminance - a.logLuminance, 1e-9)
+            return a.share + t * (b.share - a.share)
         }
 
         func callAsFunction(_ density: SIMD3<Float>) -> SIMD3<Float> {
@@ -1090,16 +1114,21 @@ public enum SpectralRuntime {
             let outputLuminance = luminance(uncalibrated)
             calibrated *= outputLuminance / recoveredLuminance
             if !deliversRec709 {
-                // Colour comes in over three stops from half a stop above the scan's no-light floor,
-                // where the film's toe leaves less and less of it to recover, rather than all at
-                // once at the edge of the floor; the floor and the table's cell above it stay
-                // neutral, as under the finish's crossover. Every luminance step is kept.
+                // Over three stops from half a stop above the scan's no-light floor, where the
+                // film's toe leaves the inversion less and less to recover, the characterized colour
+                // gives way to the colour the scan itself reads: each colour keeps the difference
+                // between its raw read and a grey's of the same brightness. Shadows keep their
+                // colour and the operator's keys tint them as smoothly as the mid-tones, and greys
+                // and the floor itself, which that colour fades out over a quarter stop, stay
+                // neutral. Every luminance step is kept.
                 let above = log2(max(outputLuminance, 1e-12) / max(shadowFloor, 1e-12))
-                    - Self.shadowOnset
-                let shadow = clamp(1 - above / Self.shadowFade, 0, 1)
+                let shadow = clamp(1 - (above - Self.shadowOnset) / Self.shadowFade, 0, 1)
                 let hold = shadow * shadow * (3 - 2 * shadow)
-                var scanned = calibrated
-                    + hold * (SIMD3(repeating: outputLuminance) - calibrated)
+                let neutral = SIMD3(repeating: outputLuminance)
+                var read = uncalibrated / greyShare(at: outputLuminance)
+                read *= outputLuminance / max(luminance(read), 1e-12)
+                let held = neutral + clamp(above / 0.25, 0, 1) * (read - neutral)
+                var scanned = calibrated + hold * (held - calibrated)
                 var scannedLuminance = outputLuminance
                 if finish > 0 {
                     scanned = LabScanFinish.apply(scanned, strength: finish, floor: shadowFloor)
