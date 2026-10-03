@@ -140,14 +140,14 @@ NO_STACK_PROTECTOR int main(int argc, char* argv[]) {
   window.url = url;
   window.icon = (directory / "fotufilm.png").string();
   auto host = std::make_unique<fotufilm::WindowedHost>(*dispatcher, window);
-  fotufilm::LibraryFileActions files;
+  fotufilm::LibraryFileActions file_actions;
   // The file manager shows one folder: the first photo's, with it selected.
-  files.reveal = [](const std::vector<std::string>& paths) {
+  file_actions.reveal = [](const std::vector<std::string>& paths) {
     return fotufilm::OpenWithSystem(paths.front(), true);
   };
-  files.trash = fotufilm::TrashWithSystem;
+  file_actions.trash = fotufilm::TrashWithSystem;
   fotufilm::RegisterLibraryMethods(*dispatcher, profile + "/library-folders.txt",
-                                   std::move(files));
+                                   std::move(file_actions));
 #if defined(FOTUFILM_WITH_ENGINE)
   auto engine = std::make_unique<fotufilm::EngineBridge>(*dispatcher);
   const std::string export_dir =
