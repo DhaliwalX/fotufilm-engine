@@ -48,6 +48,7 @@ public enum WebStockCatalogue {
                      "keyShare": LabScanTiming.keyShare, "maxStretch": LabScanTiming.maxStretch,
                      "anchorBelow": LabScanTiming.recordAnchorBelow,
                      "anchorSpan": LabScanTiming.recordAnchorSpan,
+                     "anchorToeClearance": LabScanTiming.recordAnchorToeClearance,
                      "min": -16.0, "max": 16.0,
                      "reads": (0...1024).map { -16 + Float($0) * 32 / 1024 }.map { stops -> [Float] in
                          let read = LabScanTiming.reads(for: stock, stops: stops) * points.masking

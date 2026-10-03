@@ -1760,10 +1760,10 @@ public enum EditorControlCatalogue {
             commandLine: CommandLineFlag("--lab-scan-look", placeholder: "<share>",
                 help: "Lab Scan finish, 0 neutral ... 1 the minilab scanner's (default: 1)"),
             documentation: "Lab Scan negatives only. 1 finishes the scan the way a minilab "
-                + "scanner's processing does: a steeper, print-like gradation with open highlights "
-                + "and a deep black, cyan shadows and warm upper tones in near-neutral colours, "
-                + "richer reds and oranges, muted yellows, cyans and blues, and foliage turned "
-                + "toward teal. 0 delivers the neutral characterized scan."),
+                + "scanner's processing does: a deeper black, cool cyan-blue shadows in "
+                + "near-neutral colours, foliage turned toward teal and muted, cyans and blues "
+                + "turned toward cyan, and reds and oranges turned slightly toward yellow. 0 "
+                + "delivers the neutral characterized scan."),
         EditorControl(
             .enlarger, title: "Enlarger",
             detail: "Choose the enlarger lighting used to make the print.",

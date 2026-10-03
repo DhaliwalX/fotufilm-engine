@@ -72,7 +72,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         case .eternaCP:
             return "Fujifilm cinema print film with a cooler color balance and softer contrast than Kodak print films."
         case .labScan:
-            return "A minilab scan: each frame set up and finished with print-like colour, open highlights, cyan shadows and warm upper tones. Choose TIFF for a 16-bit master."
+            return "A minilab scan: each frame set up and finished with a deeper black, cool shadows, teal foliage and cyan-leaning blues. Choose TIFF for a 16-bit master."
         case .telecine:
             return "A Rec.709 video transfer with timed color, raised blacks and a finished contrast curve."
         case .screen:

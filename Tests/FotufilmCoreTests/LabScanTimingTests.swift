@@ -33,6 +33,20 @@ final class LabScanTimingTests: XCTestCase {
         return { placed($0 - exposureEV) + exposureEV + stops }
     }
 
+    /// The two greys each record is levelled at: the shadows' grey under the median, raised at
+    /// most to the median until the setup places it clear of the toe, and the highlight's.
+    private func anchors(_ film: FilmStock, highlight: Float, median: Float) -> (Float, Float) {
+        let points = LabScanTiming.profilePoints(for: film)
+        let place = placement(film, highlight: highlight, median: median)
+        let clear = points.toe + LabScanTiming.recordAnchorToeClearance
+        var low = median - LabScanTiming.recordAnchorBelow
+        if place(low) < clear {
+            // The placement is linear in the grey's stop.
+            low = min((clear - place(0)) / (place(1) - place(0)), median)
+        }
+        return (low, max(highlight, median + LabScanTiming.recordAnchorSpan))
+    }
+
     func testUnmeteredFrameScansAtTheFixedProfile() throws {
         let film = try XCTUnwrap(FilmStock.named("portra400"))
         XCTAssertEqual(LabScanTiming.setup(for: film, sceneHighlightStops: nil,
@@ -52,7 +66,9 @@ final class LabScanTimingTests: XCTestCase {
                                          scanExposure: -1, keys: SIMD3(1, 0, -0.5))
         XCTAssertEqual(darker.shift, 0)
         XCTAssertEqual(darker.keys, keyed.keys)
-        for stops in [-LabScanTiming.recordAnchorBelow, LabScanTiming.recordAnchorSpan] {
+        let clear = LabScanTiming.profilePoints(for: film).toe
+            + LabScanTiming.recordAnchorToeClearance + 1
+        for stops in [max(-LabScanTiming.recordAnchorBelow, clear), LabScanTiming.recordAnchorSpan] {
             XCTAssertEqual(landed(darker, stops, film), stops - 1, accuracy: 1e-3)
         }
         // Every layer forms at the exposure the keys give it.
@@ -82,8 +98,8 @@ final class LabScanTimingTests: XCTestCase {
                 let setup = LabScanTiming.setup(for: film, sceneHighlightStops: high,
                                                 sceneMedianStops: median)
                 let place = placement(film, highlight: high, median: median)
-                for stops in [median - LabScanTiming.recordAnchorBelow,
-                              max(high, median + LabScanTiming.recordAnchorSpan)] {
+                let (low, top) = anchors(film, highlight: high, median: median)
+                for stops in [low, top] {
                     let scanned = setup.scale * LabScanTiming.reads(for: film, stops: stops) * masking
                         + setup.print
                     let target = LabScanTiming.reads(for: film, stops: place(stops)) * masking
@@ -102,7 +118,37 @@ final class LabScanTimingTests: XCTestCase {
             let white = LabScanTiming.profilePoints(for: film).white
             let setup = LabScanTiming.setup(for: film, sceneHighlightStops: 7, sceneMedianStops: 1)
             XCTAssertEqual(landed(setup, 7, film), white, accuracy: 1e-3, id)
-            XCTAssertEqual(landed(setup, -1, film), white - 8, accuracy: 1e-3, id)
+            let (low, _) = anchors(film, highlight: 7, median: 1)
+            XCTAssertEqual(landed(setup, low, film), white - (7 - low), accuracy: 1e-3, id)
+        }
+    }
+
+    func testScanExposureDarkensTheMidTonesByItsStops() throws {
+        // Darkened in its levels, a frame's shadows are placed toward the toe, where the
+        // profile's reads flatten into the base; levelled there, the mid-tones would stay light.
+        for id in ["portra400", "gold200", "superia400"] {
+            let film = try XCTUnwrap(FilmStock.named(id), id)
+            let normal = LabScanTiming.setup(for: film, sceneHighlightStops: 2, sceneMedianStops: 0)
+            let darker = LabScanTiming.setup(for: film, sceneHighlightStops: 2, sceneMedianStops: 0,
+                                             scanExposure: -3)
+            for stops: Float in [0, 1, 2] {
+                XCTAssertEqual(landed(darker, stops, film), landed(normal, stops, film) - 3,
+                               accuracy: 0.1, "\(id) at \(stops)")
+            }
+        }
+    }
+
+    func testFrameHeldDownByItsHighlightLandsItsMedianOnThePlacement() throws {
+        // Held down for a sun on the water, the frame's shadows are placed under the toe.
+        for id in ["portra400", "gold200", "superia400"] {
+            let film = try XCTUnwrap(FilmStock.named(id), id)
+            let (median, high): (Float, Float) = (-0.6, 8)
+            let setup = LabScanTiming.setup(for: film, sceneHighlightStops: high,
+                                            sceneMedianStops: median)
+            let place = placement(film, highlight: high, median: median)
+            XCTAssertLessThan(place(median - LabScanTiming.recordAnchorBelow),
+                              LabScanTiming.profilePoints(for: film).toe, id)
+            XCTAssertEqual(landed(setup, median, film), place(median), accuracy: 0.05, id)
         }
     }
 
@@ -153,15 +199,17 @@ final class LabScanTimingTests: XCTestCase {
                                           exposureEV: 1)
         let unexposed = LabScanTiming.setup(for: film, sceneHighlightStops: 2,
                                             sceneMedianStops: -1)
+        // To within the profile's curvature: a lighter scan places its shadows further over the
+        // toe, which can move the grey they are levelled at.
         for stops: Float in [-3, 2] {
             XCTAssertEqual(landed(exposed, stops + 1, film), landed(unexposed, stops, film) + 1,
-                           accuracy: 1e-3)
+                           accuracy: 0.02)
         }
         let lighter = LabScanTiming.setup(for: film, sceneHighlightStops: 2, sceneMedianStops: -1,
                                           scanExposure: 0.5)
         for stops: Float in [-3, 2] {
             XCTAssertEqual(landed(lighter, stops, film), landed(unexposed, stops, film) + 0.5,
-                           accuracy: 1e-3)
+                           accuracy: 0.02)
         }
     }
 

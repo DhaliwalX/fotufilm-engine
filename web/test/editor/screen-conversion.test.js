@@ -35,7 +35,7 @@ test('automatic levels meter bright regions and preserve channel ratios', () => 
 // in closed form.
 const slopes = [.25, .3, .35]
 const labScanMeter = {labScan: true, white: 2, toe: -4, keyShare: .5, maxStretch: 1.5,
-  anchorBelow: 2, anchorSpan: 1.5, min: -16, max: 16,
+  anchorBelow: 2, anchorSpan: 1.5, anchorToeClearance: 1.5, min: -16, max: 16,
   reads: Array.from({length: 33}, (_, i) => slopes.map(slope => -slope * (i - 16)))}
 function labScanConfiguration() {
   const config = new Float32Array(CONFIG.FOTUFILM_FRAME_CONFIGURATION_COUNT)
@@ -81,14 +81,16 @@ test('lab scan darkens a frame already past white on the scan alone, before the 
   }
 })
 
+// Curved reads: each record flattens toward its base under -3 stops.
+const curved = {...labScanMeter, reads: Array.from({length: 33}, (_, i) =>
+  slopes.map(slope => -slope * Math.max(i - 16, -3 + (i - 13) / 4)))}
+const curvedRead = (stops, c) => {
+  const x = Math.min(Math.max(stops, -16), 16) + 16, i = Math.min(Math.floor(x), 31), t = x - i
+  return curved.reads[i][c] * (1 - t) + curved.reads[i + 1][c] * t
+}
+
 test('lab scan lands each record on the fixed profile at the greys bracketing the frame', () => {
-  // Curved reads: each record flattens toward its base under -3 stops.
-  const curved = {...labScanMeter, reads: Array.from({length: 33}, (_, i) =>
-    slopes.map(slope => -slope * Math.max(i - 16, -3 + (i - 13) / 4)))}
-  const read = (stops, c) => {
-    const x = Math.min(Math.max(stops, -16), 16) + 16, i = Math.min(Math.floor(x), 31), t = x - i
-    return curved.reads[i][c] * (1 - t) + curved.reads[i + 1][c] * t
-  }
+  const read = curvedRead
   const config = labScanConfiguration(), fixed = config.slice()
   // median 0 and highlight 0.99, as above: the greys at -2 and 1.5 stops land where the profile
   // scans the greys the setup places them on.
@@ -99,6 +101,21 @@ test('lab scan lands each record on the fixed profile at the greys bracketing th
     const scale = config[CONFIG.MASKING + c] / fixed[CONFIG.MASKING + c]
     for (const x of [-2, 1.5])
       assert.ok(close(scale * read(x, c) + config[midpoints[c]], read(placed(x), c)), `record ${c} at ${x}`)
+  })
+})
+
+test('lab scan levels the shadows clear of the toe, at most at the median', () => {
+  const config = labScanConfiguration(), fixed = config.slice()
+  // median 0 and highlight 7.9 after the sun's cap: darkened 5.9 stops, so the grey two stops
+  // under the median would be placed far under the toe, where the reads flatten; the median and
+  // the highlight are levelled instead.
+  applyScreenLevels(config, curved, [-20, 0, 10])
+  slopes.forEach((_, c) => {
+    const scale = config[CONFIG.MASKING + c] / fixed[CONFIG.MASKING + c]
+    for (const x of [0, 7.9]) {
+      assert.ok(close(scale * curvedRead(x, c) + config[midpoints[c]], curvedRead(x - 5.9, c)),
+        `record ${c} at ${x}`)
+    }
   })
 })
 

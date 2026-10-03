@@ -117,9 +117,13 @@ public enum LabScanTiming {
     }
 
     /// Stops under the median, and the least span over it, of the two greys each record is
-    /// levelled at: they bracket the frame's shadows and its highlight.
+    /// levelled at: they bracket the frame's shadows and its highlight. The shadows' grey rises,
+    /// at most to the median, until the setup places it `recordAnchorToeClearance` stops over the
+    /// film's toe: nearer the toe the profile's reads curve into the base, and levels set on them
+    /// would leave the frame lighter than its placement.
     public static let recordAnchorBelow: Float = 2
     public static let recordAnchorSpan: Float = 1.5
+    public static let recordAnchorToeClearance: Float = 1.5
 
     /// The setup for a frame metered at `sceneHighlightStops` and `sceneMedianStops` after the
     /// edit's `exposureEV`, lightened by the operator's `scanExposure` stops and keyed by `keys`
@@ -166,7 +170,8 @@ public enum LabScanTiming {
         // it where the fixed profile scans the grey at placed(x) + ev + stops, exactly at the two
         // greys bracketing the frame.
         let lift = max(stops, 0)
-        let low = middle - recordAnchorBelow
+        let low = min(max(middle - recordAnchorBelow,
+                          points.toe + (recordAnchorToeClearance - ev - stops) / contrast), middle)
         let high = max(highlight, middle + recordAnchorSpan)
         func read(_ stops: Float) -> SIMD3<Float> { reads(for: stock, stops: stops) * points.masking }
         let (readLow, readHigh) = (read(low + ev + lift), read(high + ev + lift))

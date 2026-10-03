@@ -146,9 +146,10 @@ function applyLabScanLevels(configuration, meter, regionStops, exposureEV, dodgi
   const metered = labScanHighlight(regionStops)
   if (metered === null) return null
   const { hold, lift, key } = labScanDodge(regionStops, dodging)
-  const { white, toe, keyShare, maxStretch, anchorBelow, anchorSpan, reads } = meter
-  if (![white, toe, keyShare, maxStretch, anchorBelow, anchorSpan, meter.min, meter.max]
-    .every(Number.isFinite) || !Array.isArray(reads) || reads.length < 2)
+  const { white, toe, keyShare, maxStretch, anchorBelow, anchorSpan, anchorToeClearance,
+    reads } = meter
+  if (![white, toe, keyShare, maxStretch, anchorBelow, anchorSpan, anchorToeClearance, meter.min,
+    meter.max].every(Number.isFinite) || !Array.isArray(reads) || reads.length < 2)
     throw new Error('Invalid screen conversion profile.')
   const clamp = (value, low, high) => Math.min(Math.max(value, low), high)
   const middle = clamp(key - exposureEV, -12, 12)
@@ -158,9 +159,12 @@ function applyLabScanLevels(configuration, meter, regionStops, exposureEV, dodgi
   const placed = stops => toe + contrast * (stops - toe)
   const stops = Math.min(0, (1 - keyShare) * middle - placed(middle), white - placed(highlight))
   // A grey at stop x reaches the film at x + ev, and each record scans it where the fixed profile
-  // scans the grey at placed(x) + ev + stops, exactly at the two greys bracketing the frame.
+  // scans the grey at placed(x) + ev + stops, exactly at the two greys bracketing the frame. The
+  // shadows' grey rises, at most to the median, until it is placed clear of the toe.
   const read = stops => tabulated(meter, reads, stops)
-  const low = middle - anchorBelow, high = Math.max(highlight, middle + anchorSpan)
+  const low = Math.min(Math.max(middle - anchorBelow,
+    toe + (anchorToeClearance - exposureEV - stops) / contrast), middle)
+  const high = Math.max(highlight, middle + anchorSpan)
   const readLow = read(low + exposureEV), readHigh = read(high + exposureEV)
   const targetLow = read(placed(low) + exposureEV + stops)
   const targetHigh = read(placed(high) + exposureEV + stops)
