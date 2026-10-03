@@ -43,6 +43,18 @@ final class LabScanFinishTests: XCTestCase {
         XCTAssertLessThan(shadow.z, 0)
         XCTAssertGreaterThan(upper.y, 0.005)
         XCTAssertGreaterThan(upper.z, 0)
+        // A deep shadow takes the cast in proportion to its lightness, so it stays near neutral.
+        let deep = LabScanFinish.oklab(ColorScience.linearDisplayP3ToSRGB(
+            LabScanFinish.apply(SIMD3(repeating: 0.003))))
+        XCTAssertLessThan((deep.y * deep.y + deep.z * deep.z).squareRoot(), 0.006)
+    }
+
+    func testDarkColouredPatchKeepsItsOwnColour() {
+        // A dark red is near-neutral in absolute chroma but not relative to its lightness.
+        let red = SIMD3<Float>(0.02, 0.004, 0.003)
+        let before = LabScanFinish.oklab(ColorScience.linearDisplayP3ToSRGB(red))
+        let after = LabScanFinish.oklab(ColorScience.linearDisplayP3ToSRGB(LabScanFinish.apply(red)))
+        XCTAssertGreaterThan(after.y, before.y * 0.95, "no cyan pulled into a dark red")
     }
 
     func testMonochromeTakesTheGradationAndStaysNeutral() {

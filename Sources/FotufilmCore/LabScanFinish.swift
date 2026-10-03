@@ -15,12 +15,14 @@ public enum LabScanFinish {
     static let highlightLift: Float = 0.02
     /// Pull on the deepest tones at black, in cube-root luminance.
     static let blackPull: Float = 0.012
-    /// The records' crossover on near-neutral colours, in Oklab a/b: a cyan cast below the upper
-    /// tones and a warm one through them, neither at the black floor nor at white.
-    static let shadowCast = SIMD2<Float>(-0.024, -0.0035)
-    static let upperCast = SIMD2<Float>(0.032, 0.010)
-    /// Oklab chroma over which the crossover fades out: a coloured patch keeps its own colour.
-    static let castChroma: Float = 0.04
+    /// The records' crossover on near-neutral colours, in Oklab a/b per unit of Oklab lightness,
+    /// so a deep shadow takes it in proportion: a cyan cast below the upper tones and a warm one
+    /// through them, neither at the black floor nor at white.
+    static let shadowCast = SIMD2<Float>(-0.045, -0.0065)
+    static let upperCast = SIMD2<Float>(0.028, 0.0095)
+    /// Oklab chroma relative to lightness over which the crossover fades out: a coloured patch,
+    /// however dark, keeps its own colour.
+    static let castSaturation: Float = 0.1
 
     /// A hue-selective correction: a chroma gain and a hue turn in degrees, both fading over a
     /// Gaussian window of `width` degrees about `hue` on the Oklab hue circle.
@@ -53,9 +55,10 @@ public enum LabScanFinish {
         let l = lab.x
 
         // The crossover, on near-neutral colours: cyan shadows and mid-tones, warm upper tones.
-        let shadow = clamp((0.75 - l) / 0.45, 0, 1) * clamp((l - 0.04) / 0.16, 0, 1)
-        let upper = clamp((l - 0.44) / 0.2, 0, 1) * clamp((1 - l) / 0.07, 0, 1)
-        let neutral = exp(-(lab.y * lab.y + lab.z * lab.z).squareRoot() / castChroma)
+        let shadow = clamp((0.70 - l) / 0.40, 0, 1) * clamp((l - 0.04) / 0.16, 0, 1)
+        let upper = clamp((l - 0.44) / 0.2, 0, 1) * clamp((1 - l) / 0.15, 0, 1)
+        let saturation = (lab.y * lab.y + lab.z * lab.z).squareRoot() / max(l, 1e-3)
+        let neutral = l * exp(-saturation / castSaturation)
         let cast = strength * neutral * (shadowCast * shadow + upperCast * upper)
         lab.y += cast.x
         lab.z += cast.y
