@@ -12,7 +12,7 @@ final class LabScanTimingTests: XCTestCase {
         let film = try XCTUnwrap(FilmStock.named("portra400"))
         let levels = LabScanTiming.levels(for: film, sceneHighlightStops: nil)
         XCTAssertEqual(levels.scale, .one)
-        XCTAssertEqual(levels.shift, 0)
+        XCTAssertEqual(levels.shift, .zero)
     }
 
     func testDenseFrameShiftsItsHighlightToWhiteAtTheStockContrast() throws {
@@ -21,7 +21,7 @@ final class LabScanTimingTests: XCTestCase {
             let levels = LabScanTiming.levels(for: film, sceneHighlightStops: 6)
             XCTAssertEqual(levels.scale.y, 1, id)
             let high = LabScanTiming.reads(for: film, stops: 6).y
-            XCTAssertEqual(scanDensity(film, read: high, scale: 1, shift: levels.shift),
+            XCTAssertEqual(scanDensity(film, read: high, scale: 1, shift: levels.shift.y),
                            LabScanTiming.whiteDensity, accuracy: 0.005, id)
             // Its base scans at or past black, so red and blue keep close to the green contrast.
             XCTAssertLessThan(levels.scale.x, 1.1, id)
@@ -36,13 +36,10 @@ final class LabScanTimingTests: XCTestCase {
                 let levels = LabScanTiming.levels(for: film, sceneHighlightStops: stops)
                 XCTAssertGreaterThan(levels.scale.y, 1, "\(id) \(stops)")
                 XCTAssertLessThanOrEqual(levels.scale.y, LabScanTiming.maxStretch, "\(id) \(stops)")
-                let base = LabScanTiming.reads(for: film, stops: nil)
-                for c in 0..<3 {
-                    XCTAssertGreaterThanOrEqual(levels.scale[c], levels.scale.y)
-                    XCTAssertGreaterThanOrEqual(
-                        scanDensity(film, read: base[c], scale: levels.scale[c], shift: levels.shift),
-                        LabScanTiming.blackDensity - 0.01, "\(id) \(stops) record \(c)")
-                }
+                let base = LabScanTiming.reads(for: film, stops: nil).y
+                XCTAssertGreaterThanOrEqual(
+                    scanDensity(film, read: base, scale: levels.scale.y, shift: levels.shift.y),
+                    LabScanTiming.blackDensity - 0.01, "\(id) \(stops)")
             }
         }
     }
@@ -51,7 +48,7 @@ final class LabScanTimingTests: XCTestCase {
         let film = try XCTUnwrap(FilmStock.named("portra400"))
         let metered = LabScanTiming.levels(for: film, sceneHighlightStops: 5, exposureEV: 1)
         let unexposed = LabScanTiming.levels(for: film, sceneHighlightStops: 4)
-        XCTAssertEqual(metered.shift, unexposed.shift, accuracy: 1e-5)
+        XCTAssertEqual(metered.shift.y, unexposed.shift.y, accuracy: 1e-5)
         XCTAssertEqual(metered.scale.y, unexposed.scale.y, accuracy: 1e-5)
     }
 
@@ -61,14 +58,14 @@ final class LabScanTimingTests: XCTestCase {
         let placed = LabScanTiming.levels(for: film, sceneHighlightStops: 2)
         let keyed = LabScanTiming.levels(for: film, sceneHighlightStops: 2, sceneMedianStops: 0)
         XCTAssertEqual(keyed.scale.y, placed.scale.y)
-        XCTAssertGreaterThan(keyed.shift, placed.shift)
+        XCTAssertGreaterThan(keyed.shift.y, placed.shift.y)
         // Its median scans where the fixed profile scans mid-grey.
         let median = LabScanTiming.reads(for: film, stops: 0).y
-        XCTAssertEqual(scanDensity(film, read: median, scale: keyed.scale.y, shift: keyed.shift),
+        XCTAssertEqual(scanDensity(film, read: median, scale: keyed.scale.y, shift: keyed.shift.y),
                        scanDensity(film, read: median, scale: 1, shift: 0), accuracy: 0.005)
         // The highlight then scans short of white.
         let high = LabScanTiming.reads(for: film, stops: 2).y
-        XCTAssertGreaterThan(scanDensity(film, read: high, scale: keyed.scale.y, shift: keyed.shift),
+        XCTAssertGreaterThan(scanDensity(film, read: high, scale: keyed.scale.y, shift: keyed.shift.y),
                              LabScanTiming.whiteDensity + 0.05)
     }
 
@@ -81,30 +78,30 @@ final class LabScanTimingTests: XCTestCase {
         // Two stops under: the median scans as one stop under would at the fixed profile.
         let under = LabScanTiming.levels(for: film, sceneHighlightStops: 0, sceneMedianStops: -2)
         XCTAssertEqual(scanDensity(film, read: LabScanTiming.reads(for: film, stops: -2).y,
-                                   scale: under.scale.y, shift: under.shift),
+                                   scale: under.scale.y, shift: under.shift.y),
                        fixed(-1), accuracy: 0.005)
         // A bright highlight bounds the key: the frame is never lighter than its placement.
         let wide = LabScanTiming.levels(for: film, sceneHighlightStops: 6, sceneMedianStops: -4)
-        XCTAssertEqual(wide.shift, LabScanTiming.levels(for: film, sceneHighlightStops: 6).shift)
+        XCTAssertEqual(wide.shift.y, LabScanTiming.levels(for: film, sceneHighlightStops: 6).shift.y)
     }
 
-    func testRedAndBlueAreSteepenedOnlyForTheKeyedShift() throws {
-        let film = try XCTUnwrap(FilmStock.named("portra400"))
-        // A thin frame whose median keys the scan darker than its placement: at that shift the
-        // bases already scan black, so red and blue keep green's contrast instead of splitting
-        // bright tones toward cyan and dark ones toward orange.
-        let placed = LabScanTiming.levels(for: film, sceneHighlightStops: 1.87)
-        let keyed = LabScanTiming.levels(for: film, sceneHighlightStops: 1.87,
-                                         sceneMedianStops: -0.4)
-        XCTAssertGreaterThan(keyed.shift, placed.shift)
-        XCTAssertGreaterThan(placed.scale.x, placed.scale.y)
-        let base = LabScanTiming.reads(for: film, stops: nil)
-        XCTAssertLessThan(keyed.scale.x, placed.scale.x)
-        for c in [0, 2] {
-            XCTAssertLessThanOrEqual(keyed.scale[c], placed.scale[c], "record \(c)")
-            XCTAssertGreaterThanOrEqual(
-                scanDensity(film, read: base[c], scale: keyed.scale[c], shift: keyed.shift),
-                LabScanTiming.blackDensity - 0.01, "record \(c)")
+    func testEveryRecordScansAGreyAtGreensExposure() throws {
+        for id in ["portra400", "gold200", "ektar100"] {
+            let film = try XCTUnwrap(FilmStock.named(id), id)
+            // A frame keyed darker than its placement, where an equal shift on every record
+            // scanned bright greys cyan and dark ones orange.
+            let median: Float = -0.4, highlight: Float = 1.87
+            let levels = LabScanTiming.levels(for: film, sceneHighlightStops: highlight,
+                                              sceneMedianStops: median)
+            for stops: Float in [median - 2, median - 1, median, 1, highlight] {
+                let read = LabScanTiming.reads(for: film, stops: stops)
+                let timed = levels.scale * read + levels.shift
+                let exposure = LabScanTiming.greenStops(for: film, read: timed.y)
+                let neutral = LabScanTiming.reads(for: film, stops: exposure)
+                for c in [0, 2] {
+                    XCTAssertEqual(timed[c], neutral[c], accuracy: 0.02, "\(id) \(stops) record \(c)")
+                }
+            }
         }
     }
 

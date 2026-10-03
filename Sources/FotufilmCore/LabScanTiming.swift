@@ -101,48 +101,73 @@ public enum LabScanTiming {
     /// and `sceneMedianStops`, after the edit's `exposureEV`, printed through records of contrast
     /// `masking`. The scanner sets up the negative as it was exposed, so the edit's exposure is
     /// taken back out of the reading and still lightens or darkens the scan. Green sets both
-    /// points; red and blue keep the timed mid-grey and are steepened only where their base would
-    /// otherwise scan lighter than black, the way a scanner's black point keeps the film's mask
-    /// out of the shadows. Without a median the frame is placed on its points alone.
+    /// points and the key; red and blue are timed to the same exposures through their own reads
+    /// (`recordLevels`), so a grey the fixed profile scans neutral still scans neutral. Without a
+    /// median the frame is placed on its points alone and every record takes green's levels.
     public static func levels(for stock: FilmStock, sceneHighlightStops: Float?,
                               sceneMedianStops: Float? = nil,
                               exposureEV: Float = 0, masking: SIMD3<Float> = .one)
-        -> (scale: SIMD3<Float>, shift: Float) {
+        -> (scale: SIMD3<Float>, shift: SIMD3<Float>) {
         guard let measured = sceneHighlightStops, measured.isFinite, !stock.isReversal,
-              !stock.isReflectionPrint else { return (.one, 0) }
+              !stock.isReflectionPrint else { return (.one, .zero) }
         let white = scanExposure(stock, density: whiteDensity)
         let black = scanExposure(stock, density: blackDensity)
-        let high = reads(for: stock, stops: min(max(measured - exposureEV, -12), 12)).y
-            * masking.y
-        let base = reads(for: stock, stops: nil) * masking
-        let green = min(max((black - white) / max(base.y - high, 0.05), 1), maxStretch)
+        let highStops = min(max(measured - exposureEV, -12), 12)
+        let high = reads(for: stock, stops: highStops).y * masking.y
+        let base = reads(for: stock, stops: nil).y * masking.y
+        let green = min(max((black - white) / max(base - high, 0.05), 1), maxStretch)
         // Whichever point the scale cannot also reach gives way: a dense frame's base scans
         // past black, a thin frame's highlight short of white.
-        let placed = max(white - green * high, black - green * base.y)
-        let shift = sceneMedianStops.flatMap { median in
-            median.isFinite ? max(placed, keyShift(for: stock, medianStops: median - exposureEV,
-                                                   green: green, masking: masking.y)) : nil
-        } ?? placed
-        // A red or blue base that would scan lighter than black at the timed shift is steepened
-        // onto it; one that already scans black keeps the green contrast, and with it the film's
-        // colour.
-        let toBlack = { (read: Float) in
-            recordScale(baseRead: read, green: green, shift: shift, black: black) }
-        return (SIMD3(toBlack(base.x), green, toBlack(base.z)), shift)
+        let placed = max(white - green * high, black - green * base)
+        guard let median = sceneMedianStops, median.isFinite else {
+            return (SIMD3(repeating: green), SIMD3(repeating: placed))
+        }
+        let medianStops = min(max(median - exposureEV, -12), 12)
+        let shift = max(placed, keyShift(for: stock, medianStops: medianStops, green: green,
+                                         masking: masking.y))
+        return recordLevels(for: stock, green: green, shift: shift, medianStops: medianStops,
+                            highlightStops: highStops, masking: masking)
     }
 
-    /// The contrast of a red or blue record whose base reads `baseRead`, at green contrast `green`
-    /// and scan shift `shift`: steepened only as far as its base needs to reach `black`.
-    public static func recordScale(baseRead: Float, green: Float, shift: Float,
-                                   black: Float) -> Float {
-        min(max((black - shift) / max(baseRead, 0.05), green), green * maxStretch)
+    /// Stops under the median, and the least span over it, of the two exposures red and blue are
+    /// timed at: they bracket the frame's shadows and its highlight.
+    public static let recordAnchorBelow: Float = 2
+    public static let recordAnchorSpan: Float = 1.5
+
+    /// Red's and blue's levels for green's `green` and `shift`: each record scans the frame's
+    /// shadow and highlight anchors where its own read of the exposures green times them to would
+    /// scan at the fixed profile. A record's curve differs from green's, so an equal shift on
+    /// every record would scan bright greys one colour and dark greys another.
+    public static func recordLevels(for stock: FilmStock, green: Float, shift: Float,
+                                    medianStops: Float, highlightStops: Float,
+                                    masking: SIMD3<Float>)
+        -> (scale: SIMD3<Float>, shift: SIMD3<Float>) {
+        let low = medianStops - recordAnchorBelow
+        let high = max(highlightStops, medianStops + recordAnchorSpan)
+        let readLow = reads(for: stock, stops: low) * masking
+        let readHigh = reads(for: stock, stops: high) * masking
+        let timedLow = reads(for: stock, stops: greenStops(
+            for: stock, read: (green * readLow.y + shift) / masking.y)) * masking
+        let timedHigh = reads(for: stock, stops: greenStops(
+            for: stock, read: (green * readHigh.y + shift) / masking.y)) * masking
+        var scale = SIMD3(repeating: green)
+        var shifts = SIMD3(repeating: shift)
+        for c in [0, 2] where abs(readHigh[c] - readLow[c]) > 1e-3 {
+            scale[c] = (timedHigh[c] - timedLow[c]) / (readHigh[c] - readLow[c])
+            shifts[c] = timedLow[c] - scale[c] * readLow[c]
+        }
+        return (scale, shifts)
     }
 
-    /// The scan's black point and the film base's record reads at contrast `masking`, on the axis
-    /// `levels` times them on, for hosts that steepen red and blue themselves.
-    public static func blackPoint(for stock: FilmStock, masking: SIMD3<Float>)
-        -> (black: Float, base: SIMD3<Float>) {
-        (scanExposure(stock, density: blackDensity), reads(for: stock, stops: nil) * masking)
+    /// The stop, from mid-grey, whose green read is `read`: the green read falls as exposure
+    /// rises.
+    static func greenStops(for stock: FilmStock, read: Float) -> Float {
+        var low: Float = -16, high: Float = 16
+        for _ in 0..<32 {
+            let middle = (low + high) / 2
+            if reads(for: stock, stops: middle).y > read { low = middle } else { high = middle }
+        }
+        return (low + high) / 2
     }
 
     /// The shift that sets the scan's density on a frame whose median sits `medianStops` from
@@ -151,14 +176,10 @@ public enum LabScanTiming {
     public static func keyShift(for stock: FilmStock, medianStops: Float, green: Float,
                                 masking: Float) -> Float {
         let stops = min(max(medianStops, -12), 12)
-        return masking * (keyRead(for: stock, stops: (1 - keyShare) * stops)
-            - green * keyRead(for: stock, stops: stops))
+        return masking * (reads(for: stock, stops: (1 - keyShare) * stops).y
+            - green * reads(for: stock, stops: stops).y)
     }
 
-    /// The green record's read of a neutral patch `stops` from mid-grey, at the stock's contrast.
-    public static func keyRead(for stock: FilmStock, stops: Float) -> Float {
-        reads(for: stock, stops: stops).y
-    }
 
     /// The scan curve's log exposure, relative to its mid-grey origin, that scans `density`.
     static func scanExposure(_ stock: FilmStock, density: Float) -> Float {
@@ -169,7 +190,7 @@ public enum LabScanTiming {
 
     /// What the scanner's records read of a neutral patch `stops` over mid-grey, or of the bare
     /// film base for nil: log light relative to mid-grey, the print stage's own axis.
-    static func reads(for stock: FilmStock, stops: Float?) -> SIMD3<Float> {
+    public static func reads(for stock: FilmStock, stops: Float?) -> SIMD3<Float> {
         let paper = PrintPaper.labScan
         let callier = SpectralRuntime.callierCoefficient(1, stock: stock, paper: paper)
         let logExposure = (stops ?? -40) * Float(log10(2.0))

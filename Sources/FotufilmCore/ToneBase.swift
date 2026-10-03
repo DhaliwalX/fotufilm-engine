@@ -484,7 +484,7 @@ extension FilmEngineInvocation {
                 for: stock, sceneHighlightStops: LabScanTiming.highlight(scene),
                 sceneMedianStops: scene.median, exposureEV: meterExposureEV, masking: meterMasking)
             applyMeteredLevels(MeteredLevels(scale: levels.scale,
-                                             shift: SIMD3(repeating: levels.shift),
+                                             shift: levels.shift,
                                              toneKey: dodge.key, shadowLift: dodge.lift,
                                              highlightHold: dodge.hold))
         }

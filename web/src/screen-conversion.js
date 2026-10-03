@@ -134,12 +134,13 @@ export function labScanHighlight(regionStops) {
   return bright - Math.min(2, .5 * excess)
 }
 
-// Lab Scan's levels: its table carries a contrast per record and is solved before the edit's
+// Lab Scan's levels: its table carries green's contrast and shift, solved before the edit's
 // exposure, so `exposureEV` is taken out of the reading. Its density is keyed on the frame's
-// median, as LabScanTiming.keyShift reads it from the meter's green reads, and never lets the
-// highlight or the base scan past the table's points; red and blue are then steepened onto the
-// meter's black at that shift. Its dodge, `dodging` times the scanner's,
-// rides the tone controls; returns the median it keys them on while it dodges, or null.
+// median, as LabScanTiming.keyShift reads it from the meter's record reads, and never lets the
+// highlight or the base scan past the table's points; red and blue are then timed to green's
+// exposures through their own reads, as LabScanTiming.recordLevels does. Its dodge, `dodging`
+// times the scanner's, rides the tone controls; returns the median it keys them on while it
+// dodges, or null.
 function applyLabScanLevels(configuration, meter, regionStops, exposureEV, dodging) {
   const metered = labScanHighlight(regionStops)
   if (metered === null) return null
@@ -147,20 +148,35 @@ function applyLabScanLevels(configuration, meter, regionStops, exposureEV, dodgi
   const samples = meter.adjustments
   if (!Array.isArray(samples) || samples.length < 2 || !Array.isArray(meter.reads)
       || meter.reads.length < 2) throw new Error('Invalid screen conversion profile.')
-  const row = tabulated(meter, samples, metered - exposureEV)
-  const scales = row.slice(0, 3)
-  const read = stops => tabulated(meter, meter.reads, stops)
-  const median = Math.min(Math.max(key - exposureEV, -12), 12)
-  const shift = Math.max(row[3], read((1 - meter.keyShare) * median) - scales[1] * read(median))
-  // Red and blue are steepened onto black at the keyed shift, as LabScanTiming.recordScale does.
-  const green = scales[1]
-  for (const c of [0, 2]) {
-    scales[c] = Math.min(Math.max((meter.black - shift) / Math.max(meter.base[c], .05), green),
-                         green * meter.maxStretch)
+  const [green, placed] = tabulated(meter, samples, metered - exposureEV)
+  const readRange = {min: meter.readMin, max: meter.readMax}
+  const read = stops => tabulated(readRange, meter.reads, stops)
+  // The stop whose green read is `value`: the green read falls as exposure rises.
+  const greenStops = value => {
+    let low = meter.readMin, high = meter.readMax
+    for (let i = 0; i < 32; i++) {
+      const middle = (low + high) / 2
+      if (read(middle)[1] > value) low = middle; else high = middle
+    }
+    return (low + high) / 2
   }
-  if (![...scales, shift].every(Number.isFinite)) throw new Error('Invalid screen conversion levels.')
+  const median = Math.min(Math.max(key - exposureEV, -12), 12)
+  const shift = Math.max(placed, read((1 - meter.keyShare) * median)[1] - green * read(median)[1])
+  const low = median - meter.anchorBelow
+  const high = Math.max(Math.min(Math.max(metered - exposureEV, -12), 12), median + meter.anchorSpan)
+  const readLow = read(low), readHigh = read(high)
+  const timedLow = read(greenStops(green * readLow[1] + shift))
+  const timedHigh = read(greenStops(green * readHigh[1] + shift))
+  const scales = [green, green, green], shifts = [shift, shift, shift]
+  for (const c of [0, 2]) {
+    if (Math.abs(readHigh[c] - readLow[c]) <= 1e-3) continue
+    scales[c] = (timedHigh[c] - timedLow[c]) / (readHigh[c] - readLow[c])
+    shifts[c] = timedLow[c] - scales[c] * readLow[c]
+  }
+  if (![...scales, ...shifts].every(Number.isFinite)) throw new Error('Invalid screen conversion levels.')
   for (let c=0;c<3;c++) configuration[CONFIG.MASKING+c] *= scales[c]
-  for (const slot of [CONFIG.PAPER_MIDPOINT, CONFIG.PAPER_MIDPOINT_RED, CONFIG.PAPER_MIDPOINT_BLUE]) configuration[slot] += shift
+  const slots = [CONFIG.PAPER_MIDPOINT_RED, CONFIG.PAPER_MIDPOINT, CONFIG.PAPER_MIDPOINT_BLUE]
+  for (let c=0;c<3;c++) configuration[slots[c]] += shifts[c]
   const shadows = configuration[CONFIG.SHADOWS], highlights = configuration[CONFIG.HIGHLIGHTS]
   configuration[CONFIG.SHADOWS] = shadows + Math.min(lift, Math.max(1 - shadows, 0))
   configuration[CONFIG.HIGHLIGHTS] = highlights - Math.min(hold, Math.max(highlights + 1, 0))

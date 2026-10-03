@@ -1143,20 +1143,20 @@ public struct FilmEngineInvocation {
             }
         } ?? dodge.map { (hold: $0.hold, lift: $0.lift) }
         // Lab Scan times each frame the way a minilab scanner does, in the same slots.
-        let levels: (scale: SIMD3<Float>, shift: Float)
+        let levels: (scale: SIMD3<Float>, shift: SIMD3<Float>)
         let recordContrast = SIMD3(contrast[0], contrast[1], contrast[2])
         if printMedium == .screen && (levelsPositive || !stock.isReversal) {
             let screen = DigitalReferenceReceiver.levels(
                 for: stock, style: options.digitalReference,
                 sceneHighlightStops: options.sceneHighlightStops.map { $0 + filmBoost },
                 exposureEV: options.exposureEV)
-            levels = (SIMD3(repeating: screen.scale), screen.shift)
+            levels = (SIMD3(repeating: screen.scale), SIMD3(repeating: screen.shift))
         } else if printMedium == .labScan {
             levels = LabScanTiming.levels(for: stock, sceneHighlightStops: options.sceneHighlightStops,
                                           sceneMedianStops: options.sceneToneStops?.x,
                                           exposureEV: options.exposureEV, masking: recordContrast)
         } else {
-            levels = (.one, 0)
+            levels = (.one, .zero)
         }
         // Auto Levels re-times red and blue apart from green, in the same midpoint slots.
         let autoColour = printMedium == .screen && options.digitalReference == .autoLevels
@@ -1180,7 +1180,7 @@ public struct FilmEngineInvocation {
             digitalReference: options.digitalReference, screenGrade: options.screenGrade)
         var xMids = printMedium.printExposureMidpoints(
             for: stock, digitalReference: options.digitalReference)
-            .enumerated().map { $1 + printMedium.exposureDirection * (screenShift + autoColour[$0]) }
+            .enumerated().map { $1 + printMedium.exposureDirection * (screenShift[$0] + autoColour[$0]) }
         // Manual receiver balance follows metering, so Auto Levels cannot cancel the cast.
         // The existing per-record midpoint slots are shared by CPU, Metal and AOT kernels.
         let colourShift = DigitalReferenceReceiver.colourShift(options.screenCMY,
@@ -1559,11 +1559,11 @@ public struct FilmEngineInvocation {
             self.meterDodging = options.labScanDodging
             self.meterMasking = recordContrast
             self.meterLevels = MeteredLevels(
-                scale: levels.scale, shift: SIMD3(repeating: levels.shift) + autoColour)
+                scale: levels.scale, shift: levels.shift + autoColour)
         } else if toneKey != nil {
             // A host handed the reading on: what Auto Levels added is not the user's tone.
             self.meterLevels = MeteredLevels(
-                scale: levels.scale, shift: SIMD3(repeating: levels.shift) + autoColour,
+                scale: levels.scale, shift: levels.shift + autoColour,
                 filmBoost: filmBoost, toneKey: toneKey, shadowLift: shadowLift,
                 highlightHold: highlights - held)
         }

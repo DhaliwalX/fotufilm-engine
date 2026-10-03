@@ -41,23 +41,26 @@ public enum WebStockCatalogue {
                  }
              }
              if medium == .labScan && !stock.isReversal && !stock.isReflectionPrint {
-                 // Lab Scan's per-frame levels, a contrast per record and a shift, solved before
-                 // the edit's exposure on the backlight-adjusted highlight; the green reads its
-                 // density is keyed on the median with; and the black point and base reads red
-                 // and blue are steepened onto at the keyed shift.
+                 // Lab Scan's per-frame levels, solved before the edit's exposure on the
+                 // backlight-adjusted highlight, as green's contrast and shift; and each record's
+                 // reads, which key the density on the median and time red and blue to green's
+                 // exposures.
                  let masking = SIMD3(stock.printingContrastScale(correction: 0, paper: .labScan))
-                 let stops = (0...512).map { -6 + Float($0) * 18 / 512 }
-                 let point = LabScanTiming.blackPoint(for: stock, masking: masking)
                  entry["meter"] = ["min": -6.0, "max": 12.0, "labScan": true,
-                     "keyShare": LabScanTiming.keyShare, "black": point.black,
-                     "base": [point.base.x, point.base.y, point.base.z],
-                     "maxStretch": LabScanTiming.maxStretch,
-                     "adjustments": stops.map { stops -> [Float] in
+                     "keyShare": LabScanTiming.keyShare,
+                     "anchorBelow": LabScanTiming.recordAnchorBelow,
+                     "anchorSpan": LabScanTiming.recordAnchorSpan,
+                     "adjustments": (0...512).map { i -> [Float] in
                          let levels = LabScanTiming.levels(
-                             for: stock, sceneHighlightStops: stops, masking: masking)
-                         return [levels.scale.x, levels.scale.y, levels.scale.z, levels.shift]
+                             for: stock, sceneHighlightStops: -6 + Float(i) * 18 / 512,
+                             masking: masking)
+                         return [levels.scale.y, levels.shift.y]
                      },
-                     "reads": stops.map { masking.y * LabScanTiming.keyRead(for: stock, stops: $0) }]
+                     "readMin": -16.0, "readMax": 16.0,
+                     "reads": (0...1024).map { -16 + Float($0) * 32 / 1024 }.map { stops -> [Float] in
+                         let read = LabScanTiming.reads(for: stock, stops: stops) * masking
+                         return [read.x, read.y, read.z]
+                     }]
              }
              return entry
          }]
