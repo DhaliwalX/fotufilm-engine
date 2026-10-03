@@ -60,7 +60,7 @@ final class LabScanTimingTests: XCTestCase {
         // A frame whose brightest content is only two stops over its mid-grey median.
         let placed = LabScanTiming.levels(for: film, sceneHighlightStops: 2)
         let keyed = LabScanTiming.levels(for: film, sceneHighlightStops: 2, sceneMedianStops: 0)
-        XCTAssertEqual(keyed.scale, placed.scale)
+        XCTAssertEqual(keyed.scale.y, placed.scale.y)
         XCTAssertGreaterThan(keyed.shift, placed.shift)
         // Its median scans where the fixed profile scans mid-grey.
         let median = LabScanTiming.reads(for: film, stops: 0).y
@@ -86,6 +86,26 @@ final class LabScanTimingTests: XCTestCase {
         // A bright highlight bounds the key: the frame is never lighter than its placement.
         let wide = LabScanTiming.levels(for: film, sceneHighlightStops: 6, sceneMedianStops: -4)
         XCTAssertEqual(wide.shift, LabScanTiming.levels(for: film, sceneHighlightStops: 6).shift)
+    }
+
+    func testRedAndBlueAreSteepenedOnlyForTheKeyedShift() throws {
+        let film = try XCTUnwrap(FilmStock.named("portra400"))
+        // A thin frame whose median keys the scan darker than its placement: at that shift the
+        // bases already scan black, so red and blue keep green's contrast instead of splitting
+        // bright tones toward cyan and dark ones toward orange.
+        let placed = LabScanTiming.levels(for: film, sceneHighlightStops: 1.87)
+        let keyed = LabScanTiming.levels(for: film, sceneHighlightStops: 1.87,
+                                         sceneMedianStops: -0.4)
+        XCTAssertGreaterThan(keyed.shift, placed.shift)
+        XCTAssertGreaterThan(placed.scale.x, placed.scale.y)
+        let base = LabScanTiming.reads(for: film, stops: nil)
+        XCTAssertLessThan(keyed.scale.x, placed.scale.x)
+        for c in [0, 2] {
+            XCTAssertLessThanOrEqual(keyed.scale[c], placed.scale[c], "record \(c)")
+            XCTAssertGreaterThanOrEqual(
+                scanDensity(film, read: base[c], scale: keyed.scale[c], shift: keyed.shift),
+                LabScanTiming.blackDensity - 0.01, "record \(c)")
+        }
     }
 
     func testBacklitFrameOpensUpPartway() {

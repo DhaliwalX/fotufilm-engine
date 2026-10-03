@@ -42,12 +42,16 @@ public enum WebStockCatalogue {
              }
              if medium == .labScan && !stock.isReversal && !stock.isReflectionPrint {
                  // Lab Scan's per-frame levels, a contrast per record and a shift, solved before
-                 // the edit's exposure on the backlight-adjusted highlight, and the green reads
-                 // its density is keyed on the median with.
+                 // the edit's exposure on the backlight-adjusted highlight; the green reads its
+                 // density is keyed on the median with; and the black point and base reads red
+                 // and blue are steepened onto at the keyed shift.
                  let masking = SIMD3(stock.printingContrastScale(correction: 0, paper: .labScan))
                  let stops = (0...512).map { -6 + Float($0) * 18 / 512 }
+                 let point = LabScanTiming.blackPoint(for: stock, masking: masking)
                  entry["meter"] = ["min": -6.0, "max": 12.0, "labScan": true,
-                     "keyShare": LabScanTiming.keyShare,
+                     "keyShare": LabScanTiming.keyShare, "black": point.black,
+                     "base": [point.base.x, point.base.y, point.base.z],
+                     "maxStretch": LabScanTiming.maxStretch,
                      "adjustments": stops.map { stops -> [Float] in
                          let levels = LabScanTiming.levels(
                              for: stock, sceneHighlightStops: stops, masking: masking)

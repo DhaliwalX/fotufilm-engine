@@ -137,7 +137,8 @@ export function labScanHighlight(regionStops) {
 // Lab Scan's levels: its table carries a contrast per record and is solved before the edit's
 // exposure, so `exposureEV` is taken out of the reading. Its density is keyed on the frame's
 // median, as LabScanTiming.keyShift reads it from the meter's green reads, and never lets the
-// highlight or the base scan past the table's points. Its dodge, `dodging` times the scanner's,
+// highlight or the base scan past the table's points; red and blue are then steepened onto the
+// meter's black at that shift. Its dodge, `dodging` times the scanner's,
 // rides the tone controls; returns the median it keys them on while it dodges, or null.
 function applyLabScanLevels(configuration, meter, regionStops, exposureEV, dodging) {
   const metered = labScanHighlight(regionStops)
@@ -151,6 +152,12 @@ function applyLabScanLevels(configuration, meter, regionStops, exposureEV, dodgi
   const read = stops => tabulated(meter, meter.reads, stops)
   const median = Math.min(Math.max(key - exposureEV, -12), 12)
   const shift = Math.max(row[3], read((1 - meter.keyShare) * median) - scales[1] * read(median))
+  // Red and blue are steepened onto black at the keyed shift, as LabScanTiming.recordScale does.
+  const green = scales[1]
+  for (const c of [0, 2]) {
+    scales[c] = Math.min(Math.max((meter.black - shift) / Math.max(meter.base[c], .05), green),
+                         green * meter.maxStretch)
+  }
   if (![...scales, shift].every(Number.isFinite)) throw new Error('Invalid screen conversion levels.')
   for (let c=0;c<3;c++) configuration[CONFIG.MASKING+c] *= scales[c]
   for (const slot of [CONFIG.PAPER_MIDPOINT, CONFIG.PAPER_MIDPOINT_RED, CONFIG.PAPER_MIDPOINT_BLUE]) configuration[slot] += shift

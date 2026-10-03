@@ -18,7 +18,7 @@ public enum LabScanTiming {
     /// the fixed profile.
     static let blackDensity: Float = 2.2
     /// The most a frame is steepened past the stock's contrast to reach both points.
-    static let maxStretch: Float = 1.5
+    public static let maxStretch: Float = 1.5
 
     /// How far over the scene's median the metered highlight may sit before the excess is taken
     /// for a lamp, a sky or a window, and the share of that excess, at most two stops, that the
@@ -119,14 +119,30 @@ public enum LabScanTiming {
         // Whichever point the scale cannot also reach gives way: a dense frame's base scans
         // past black, a thin frame's highlight short of white.
         let placed = max(white - green * high, black - green * base.y)
-        // A red or blue base that would scan lighter than black is steepened onto it; one that
-        // already scans black keeps the green contrast, and with it the film's colour.
+        let shift = sceneMedianStops.flatMap { median in
+            median.isFinite ? max(placed, keyShift(for: stock, medianStops: median - exposureEV,
+                                                   green: green, masking: masking.y)) : nil
+        } ?? placed
+        // A red or blue base that would scan lighter than black at the timed shift is steepened
+        // onto it; one that already scans black keeps the green contrast, and with it the film's
+        // colour.
         let toBlack = { (read: Float) in
-            min(max((black - placed) / max(read, 0.05), green), green * maxStretch) }
-        let scale = SIMD3(toBlack(base.x), green, toBlack(base.z))
-        guard let median = sceneMedianStops, median.isFinite else { return (scale, placed) }
-        return (scale, max(placed, keyShift(for: stock, medianStops: median - exposureEV,
-                                            green: green, masking: masking.y)))
+            recordScale(baseRead: read, green: green, shift: shift, black: black) }
+        return (SIMD3(toBlack(base.x), green, toBlack(base.z)), shift)
+    }
+
+    /// The contrast of a red or blue record whose base reads `baseRead`, at green contrast `green`
+    /// and scan shift `shift`: steepened only as far as its base needs to reach `black`.
+    public static func recordScale(baseRead: Float, green: Float, shift: Float,
+                                   black: Float) -> Float {
+        min(max((black - shift) / max(baseRead, 0.05), green), green * maxStretch)
+    }
+
+    /// The scan's black point and the film base's record reads at contrast `masking`, on the axis
+    /// `levels` times them on, for hosts that steepen red and blue themselves.
+    public static func blackPoint(for stock: FilmStock, masking: SIMD3<Float>)
+        -> (black: Float, base: SIMD3<Float>) {
+        (scanExposure(stock, density: blackDensity), reads(for: stock, stops: nil) * masking)
     }
 
     /// The shift that sets the scan's density on a frame whose median sits `medianStops` from
