@@ -8,6 +8,8 @@
 
 #include "FotufilmAotFrame.h"
 #include "fotufilm_aot_negative_cpu.h"
+#include "fotufilm_aot_transport_cpu.h"
+#include "FotufilmTransport.h"
 #include <HalideBuffer.h>
 #include <HalideRuntimeCuda.h>
 #include <HalideRuntimeVulkan.h>
@@ -336,6 +338,27 @@ extern "C" int32_t fotufilm_negative_scan(const float *in, float *out, int32_t w
     return fotufilm_aot_negative_cpu(input, params, output);
 }
 
+// Layered Transport's spreading on the CPU; the desktop has no Metal (1).
+extern "C" int32_t fotufilm_transport_available(int32_t backend) { return backend == 0; }
+
+extern "C" int32_t fotufilm_transport_component(
+    const float *exposure, float *accumulated, int32_t width, int32_t height, int32_t channels,
+    const float *stencils, int32_t backend) {
+    if (int32_t status = fotufilm_transport_validate(exposure, accumulated, width, height, channels,
+                                                     stencils, backend)) return status;
+    if (backend != 0) return -3;
+    int32_t r[FOTUFILM_TRANSPORT_LEVELS];
+    for (int l = 0; l < FOTUFILM_TRANSPORT_LEVELS; ++l) r[l] = int32_t(stencils[l]);
+    Buffer<float> input(const_cast<float *>(exposure), width, height, channels);
+    Buffer<float> sum(accumulated, width, height, channels);
+    Buffer<float> table(const_cast<float *>(stencils), FOTUFILM_TRANSPORT_TABLE_FLOATS);
+    Buffer<float> output(width, height, channels);
+    int status = fotufilm_aot_transport_cpu(input, sum, table, r[0], r[1], r[2], r[3], r[4], r[5],
+                                            r[6], r[7], r[8], r[9], r[10], r[11], r[12], output);
+    if (!status) std::copy_n(output.data(), int64_t(width) * height * channels, accumulated);
+    return status;
+}
+
 extern "C" int32_t fotufilm_halide_available(void) { return 0; }
 // The Film tile builder needs the Halide compiler; the engine builds tiles in Swift instead.
 extern "C" int32_t fotufilm_film_tile_build(int32_t, int32_t, int32_t, const float *, int32_t,
@@ -378,9 +401,4 @@ extern "C" int32_t fotufilm_halide_gaussian(
 extern "C" int32_t fotufilm_halide_approximate_gaussian(
     const float *, float *, int32_t, int32_t, int32_t) { return -1; }
 
-#endif
-
-// The portable layered transport runs in Swift; keep the reference ABI linked for it.
-#if defined(FOTUFILM_HALIDE_LINUX_AOT) && defined(FOTUFILM_TRANSPORT_REFERENCE_STUBS)
-#include "FotufilmTransport.cpp"
 #endif

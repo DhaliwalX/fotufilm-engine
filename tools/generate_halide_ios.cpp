@@ -2,6 +2,7 @@
 #define FOTUFILM_HALIDE_AOT_GENERATOR 1
 #include "../Sources/FotufilmHalide/Pipeline/Gpu.h"
 #include "../Sources/FotufilmHalide/Pipeline/NegativeScan.h"
+#include "../Sources/FotufilmHalide/Pipeline/Transport.h"
 
 using namespace fotufilm;
 using namespace fotufilm::pipelines;
@@ -208,6 +209,10 @@ int main(int argc, char **argv) {
         scan.output.compile_to_static_library((output / (prefix + "negative_cpu")).string(),
                                               {scan.input, scan.parameters},
                                               prefix + "negative_cpu", host);
+        // Layered Transport's spreading, on the CPU too.
+        TransportPipeline transport(Halide::DeviceAPI::None);
+        transport.output.compile_to_static_library((output / (prefix + "transport_cpu")).string(),
+                                                   transport.arguments(), prefix + "transport_cpu", host);
         return 0;
     }
 
@@ -258,6 +263,14 @@ int main(int argc, char **argv) {
         auto scan_target = target.with_feature(Halide::Target::NoRuntime).with_feature(Halide::Target::StrictFloat);
         pipeline.output.compile_to_static_library((output / name).string(),
             {pipeline.input, pipeline.parameters}, name, scan_target);
+    }
+    // Layered Transport spreads each component's light with the same pipeline as the JIT hosts.
+    for (const bool metal : {false, true}) {
+        const std::string name = metal ? "fotufilm_halide_ios_transport_metal" : "fotufilm_halide_ios_transport_cpu";
+        TransportPipeline pipeline(metal ? Halide::DeviceAPI::Metal : Halide::DeviceAPI::None);
+        auto transport_target = target.with_feature(Halide::Target::NoRuntime).with_feature(Halide::Target::StrictFloat);
+        pipeline.output.compile_to_static_library((output / name).string(), pipeline.arguments(), name,
+                                                  transport_target);
     }
     return 0;
 }

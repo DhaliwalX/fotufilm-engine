@@ -34,7 +34,7 @@ mkdir -p "$OBJ" "$BUNDLE/Contents/$PLATFORM_DIR" "$BUNDLE/Contents/Resources"
 "$CXX" -std=c++17 -O2 -g1 -fPIC \
   -fvisibility=hidden -fvisibility-inlines-hidden -ffunction-sections -fdata-sections -c \
   -ffile-prefix-map="$PWD"=Fotufilm \
-  -DFOTUFILM_HALIDE_LINUX_AOT=1 -DFOTUFILM_TRANSPORT_REFERENCE_STUBS=1 \
+  -DFOTUFILM_HALIDE_LINUX_AOT=1 \
   -I"$KERNELS" -ISources/FotufilmHalide/include -ISources/FotufilmHalide \
   Sources/FotufilmHalide/FotufilmHalideLinux.cpp \
   -o "$OBJ/FotufilmHalideLinux.o"
