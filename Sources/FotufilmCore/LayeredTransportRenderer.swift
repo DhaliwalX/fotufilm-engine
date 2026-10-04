@@ -320,6 +320,9 @@ public extension FilmEngineInvocation {
         configuration[Int(FOTUFILM_CONFIG_MTF_LUMA_SHARE)] = 0
         for c in 0..<9 { configuration[Int(FOTUFILM_CONFIG_HALATION_MATRIX)+c] = 0 }
         if !keepLens {
+            // The transported exposure passed the camera gate in the head; gating it again
+            // would square the penumbra and cut off the light scattered past the aperture.
+            configuration[Int(FOTUFILM_CONFIG_GATE) + 4] = -1
             configuration[Int(FOTUFILM_CONFIG_FLARE)] = 0
             configuration[Int(FOTUFILM_CONFIG_DIFFUSION_DIRECT)] = 1
             for c in 0..<9 { configuration[Int(FOTUFILM_CONFIG_DIFFUSION_KERNEL)+c] = 0 }
