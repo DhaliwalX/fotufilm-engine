@@ -18,7 +18,7 @@ fi
 : > "$PROBE/fotufilm_wasm_variants.inc"
 source "$EMSDK/emsdk_env.sh" >/dev/null 2>&1
 em++ -std=c++17 -O1 web/engine/fotufilm_wasm_cpu.cpp \
-  "$CPU"/develop_*.a "$CPU"/print_*.a "$CPU"/plain_float.a \
+  "$CPU"/develop_*.a "$CPU"/print_*.a "$CPU"/plain_float.a "$CPU"/transport.a \
   -I Sources/FotufilmHalide/include -I "$PROBE" -I "$CPU" \
   -msimd128 -sALLOW_MEMORY_GROWTH=1 \
   -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,worker \

@@ -64,8 +64,8 @@ swift run -c release fotufilm input.exr output.png --stock example-negative-400 
 ```
 
 Use an existing stock ID from `--list-stocks`. `--transport-backend metal` runs the
-transport convolutions through Halide Metal JIT; spectral scene preparation and
-development use the CPU reference with either backend. This is not an end-to-end GPU
+transport pipeline on Metal; spectral scene preparation and development use the CPU
+reference with either backend. This is not an end-to-end GPU
 renderer. `cpu` is the default. An unavailable backend produces a render error.
 
 Use `--iterations 31` to measure 30 repeated warm frames after the first render.
@@ -147,9 +147,17 @@ quadrature node. Narrow and broad radial bands use separate grid scales, so a
 distant tail cannot blur the inner shoulder. Each stencil is positive and
 normalized. Reduction uses positive area weights and reconstruction uses smooth,
 positive cubic B-spline weights at reduced scales; stride one keeps the original
-pixel samples. Camera, native Metal, Halide, and portable reconstruction agree.
-The image boundary extends the nearest true edge pixel. Components and
-radial bands stream one at a time; amount changes reuse cached endpoint tables.
+pixel samples. The image boundary extends the nearest true edge pixel.
+
+One Halide pipeline spreads a component: it averages the component's light over a
+2 x 2 pyramid of power-of-two cells, applies each stride's stencil (the bands at one
+stride added, each scaled by its share), reconstructs every stride at the pixel
+centres and adds the result to the running exposure. A component's bands therefore
+travel as one table of up to 13 strides with stencils of radius 12 or less. The
+same pipeline runs on the CPU, on Metal (just-in-time or compiled ahead of time) and
+in the browser's SIMD WebAssembly, and they agree. Components stream one at a time,
+each with its own head render, so the lens effects stay exact per component; amount
+changes reuse cached endpoint tables.
 
 ## Scope and limitations
 
@@ -161,8 +169,7 @@ scene-photon absorption measurement.
 
 The current execution paths use whole-frame intermediates with streamed components.
 A fixed working-memory budget and transport strip scheduling are not implemented.
-Donor capture layers, additional Gaussian support haze and stage-sequence exports
-are rejected. Apple camera capture encodes transport in the same command buffer as
+Additional Gaussian support haze and stage-sequence exports are rejected. Apple camera capture encodes transport in the same command buffer as
 its existing HDR frame graph; the editor and plugin hosts use the AOT transport path.
 Browser transport packs use SIMD WebAssembly. Model selection and export details
 are described below.
@@ -191,14 +198,17 @@ spread. This fallback is not a measured stock calibration.
 
 Mac and iOS persist the selector in Film Model settings. Resolve appends bridge slot
 49, and Final Cut appends parameter 88; zero retains Legacy for existing projects.
-Apple hosts use AOT scene/development passes and native Metal transport convolution.
-The reference API retains CPU and Metal JIT convolution for validation. Native zoomed
+Apple hosts use AOT scene/development passes and the transport pipeline compiled ahead
+of time for Metal; Linux hosts compile it ahead of time for the CPU. Native zoomed
 previews currently develop the complete virtual frame before cropping to preserve
 transport tails and reduction-grid alignment. This increases memory use at high zoom.
 
-`--halation-model legacy|layered` selects the CLI model. Browser pack version 3 adds
-head/tail configurations, component exposure LUTs and positive weighted stencils to
-the version 2 size-ladder layout. `tools/build-wasm.sh` exports both `.pack` and
+`--halation-model legacy|layered` selects the CLI model. Browser pack version 4 adds
+the head mask, the stages the continuation leaves off, head/tail configurations,
+component exposure LUTs and each component's stencil table (its nonempty strides
+only) to the version 2 size-ladder layout. The browser lays the head and tail
+configurations over the frame's own, so the controls, local tone and screen levels
+apply, and shares the camera preflash among the heads as native hosts do. `tools/build-wasm.sh` exports both `.pack` and
 `.layered.pack` for supported stocks. Browser packs carry three records, so the index
 declares `layeredTransport: false` for donor-layer stocks, which require Legacy in the
 browser. The browser reports that limitation without substituting models. Layered packs use the SIMD backend,

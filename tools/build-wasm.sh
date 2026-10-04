@@ -96,20 +96,29 @@ while IFS=$'\t' read -r id name format layered; do
   # carries one per rung: a stock switches stages on as the frame grows — the emulsion MTF is
   # below a pixel at 240 px and several at 12000 — so the browser needs a kernel for each. See
   # --dump-wasm-pack in main.swift for the layout.
-  masks="$(python3 - "web/public/packs/$id.pack" <<'PY'
+  # A layered pack's continuation develops each rung with the stages the transport replaced
+  # cleared, so it needs those masks too: the word after the head mask names them.
+  masks="$(python3 - "web/public/packs/$id.pack" "$layered" <<'PY'
 import struct, sys
-b = open(sys.argv[1], 'rb').read()
-n = struct.unpack_from('<i', b, 24)[0]
-lut = struct.unpack_from('<i', b, 32)[0]
-masks = {struct.unpack_from('<i', b, 16)[0]}
-off = 40 + 4 * (n + 3 * lut)
-count = struct.unpack_from('<i', b, off)[0]
-off += 4
-for _ in range(count):
-    edge, mask, seed, support, changed = struct.unpack_from('<iiIii', b, off)
-    masks.add(mask)
-    off += 20 + 8 * changed
+def ladder(path):
+    b = open(path, 'rb').read()
+    n = struct.unpack_from('<i', b, 24)[0]
+    lut = struct.unpack_from('<i', b, 32)[0]
+    masks = {struct.unpack_from('<i', b, 16)[0]}
+    off = 40 + 4 * (n + 3 * lut)
+    count = struct.unpack_from('<i', b, off)[0]
+    off += 4
+    for _ in range(count):
+        edge, mask, seed, support, changed = struct.unpack_from('<iiIii', b, off)
+        masks.add(mask)
+        off += 20 + 8 * changed
+    return b, off, masks
+b, off, masks = ladder(sys.argv[1])
 assert off == len(b), 'pack has trailing bytes'
+if sys.argv[2] == 'true':
+    b, off, layered = ladder(sys.argv[1].removesuffix('.pack') + '.layered.pack')
+    clears = struct.unpack_from('<i', b, off + 4)[0]
+    masks |= {m & ~clears for m in layered}
 print(' '.join(str(m) for m in sorted(masks)))
 PY
 )"
@@ -197,7 +206,7 @@ echo "Linking the WebAssembly module…"
 source "$EMSDK/emsdk_env.sh" >/dev/null 2>&1
 mkdir -p web/public
 em++ -std=c++17 -O3 web/engine/fotufilm_wasm_cpu.cpp \
-  "$OUTPUT"/cpu/develop_*.a "$OUTPUT"/cpu/print_*.a "$OUTPUT"/cpu/plain_float.a \
+  "$OUTPUT"/cpu/develop_*.a "$OUTPUT"/cpu/print_*.a "$OUTPUT"/cpu/plain_float.a "$OUTPUT"/cpu/transport.a \
   -I Sources/FotufilmHalide/include -I "$OUTPUT/cpu" \
   -msimd128 -sALLOW_MEMORY_GROWTH=1 \
   -sMODULARIZE=1 -sEXPORT_ES6=1 -sENVIRONMENT=web,worker \

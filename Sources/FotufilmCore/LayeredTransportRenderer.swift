@@ -73,6 +73,12 @@ public enum LayeredTransportRenderer {
     }
 
     /// Solved inputs for portable AOT hosts. The browser stores these alongside its base pack.
+    /// The stages the continuation leaves off: the heads already ran the optics, and the
+    /// transport took the place of the halation and the emulsion's MTF.
+    public static let continuationClears = FilmEngineFeature.flare | FilmEngineFeature.diffusion
+        | FilmEngineFeature.mtf | FilmEngineFeature.mtfLuma | FilmEngineFeature.halation
+        | FilmEngineFeature.annularHalation | FilmEngineFeature.texture
+
     public static func renderPlan(stock: FilmStock, options: FotufilmEngine.Options,
                                   width: Int, height: Int) throws -> TransportRenderPlan {
         guard stock.donorLayers.isEmpty else {
@@ -90,6 +96,7 @@ public enum LayeredTransportRenderer {
         head.clearTransportOptics(keepLens: true)
         head.featureMask &= FilmEngineFeature.flare | FilmEngineFeature.diffusion
         head.featureMask |= FilmEngineFeature.lightOut
+        tail.featureMask &= ~continuationClears
         tail.clearTransportOptics(keepLens: false)
         tail.configuration[Int(FOTUFILM_CONFIG_RECORD_INPUT)] = 1
         let pitch = options.pixelPitchMM(width: width, height: height)
@@ -97,7 +104,7 @@ public enum LayeredTransportRenderer {
             let table = prepared.exposure.table(component: k, interpolation: t)
             guard table.values.contains(where: { $0 > 0 }) else { return nil }
             let bands = try prepared.compilation.kernels[k].stencils(pixelPitchMM: pitch)
-            return .init(exposure: table.values, bands: bands.map { .init(weight: $0.weight, stencil: $0.stencil) })
+            return try .init(exposure: table.values, bands: bands.map { .init(weight: $0.weight, stencil: $0.stencil) })
         }
         head.sharePreflash(among: components.count)
         return TransportRenderPlan(head: head, tail: tail, components: components)
@@ -170,9 +177,7 @@ public enum LayeredTransportRenderer {
             throw TransportError.backend("transport produced invalid record exposure")
         }
         var continuation = invocation
-        continuation.featureMask &= ~(FilmEngineFeature.flare | FilmEngineFeature.diffusion
-            | FilmEngineFeature.mtf | FilmEngineFeature.mtfLuma | FilmEngineFeature.halation
-            | FilmEngineFeature.annularHalation | FilmEngineFeature.texture)
+        continuation.featureMask &= ~continuationClears
         continuation.clearTransportOptics(keepLens: false)
         continuation.configuration[Int(FOTUFILM_CONFIG_RECORD_INPUT)] = 1
         if texture {
@@ -342,7 +347,18 @@ public extension FilmEngineInvocation {
 
 public struct TransportRenderPlan {
     public struct Band { public let weight: Float; public let stencil: TransportStencil }
-    public struct Component { public let exposure: [Float]; public let bands: [Band] }
+    public struct Component {
+        public let exposure: [Float]
+        public let bands: [Band]
+        /// The bands as the transport pipeline takes them (`TransportRadialKernel.transportTable`).
+        public let stencils: [Float]
+
+        public init(exposure: [Float], bands: [Band]) throws {
+            self.exposure = exposure; self.bands = bands
+            stencils = try TransportRadialKernel.transportTable(
+                bands: bands.map { TransportWeightedStencil(weight: $0.weight, stencil: $0.stencil) })
+        }
+    }
     public let head: FilmEngineInvocation
     public let tail: FilmEngineInvocation
     public let components: [Component]

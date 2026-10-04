@@ -165,20 +165,28 @@ public enum TransportKernelCompiler {
 }
 
 extension TransportRadialKernel {
+    /// The pipeline's strides, 1 through 4096, and the largest stencil radius at any of them.
+    public static let transportLevels = Int(FOTUFILM_TRANSPORT_LEVELS)
+    public static let transportStencilRadius = Int(FOTUFILM_TRANSPORT_STENCIL_RADIUS)
     /// FOTUFILM_TRANSPORT_TABLE_FLOATS, which Swift cannot import.
-    public static let transportTableCount = Int(FOTUFILM_TRANSPORT_LEVELS)
-        * (1 + (2 * Int(FOTUFILM_TRANSPORT_STENCIL_RADIUS) + 1) * (2 * Int(FOTUFILM_TRANSPORT_STENCIL_RADIUS) + 1))
+    public static let transportTableCount = transportLevels
+        * (1 + (2 * transportStencilRadius + 1) * (2 * transportStencilRadius + 1))
 
     /// The transport pipeline's table for this component: its bands, one per power-of-two
     /// stride, each stride's weights in a centred 25 x 25 slot scaled by the band's share, and
     /// one radius per stride ahead of them. Bands landing on one stride add.
     public func transportTable(pixelPitchMM: Double) throws -> [Float] {
-        let levels = Int(FOTUFILM_TRANSPORT_LEVELS), limit = Int(FOTUFILM_TRANSPORT_STENCIL_RADIUS)
-        let side = 2 * limit + 1
-        var table = [Float](repeating: 0, count: Self.transportTableCount)
-        for band in try stencils(pixelPitchMM: pixelPitchMM, maximumRadius: limit) {
+        try Self.transportTable(bands: stencils(pixelPitchMM: pixelPitchMM, maximumRadius: Self.transportStencilRadius))
+    }
+
+    /// The table for any positive weighted stencils at power-of-two strides of 4096 or less.
+    public static func transportTable(bands: [TransportWeightedStencil]) throws -> [Float] {
+        let levels = transportLevels, limit = transportStencilRadius, side = 2 * limit + 1
+        var table = [Float](repeating: 0, count: transportTableCount)
+        for band in bands {
             let stencil = band.stencil, level = stencil.stride.trailingZeroBitCount
-            guard stencil.stride.nonzeroBitCount == 1, level < levels, (1...limit).contains(stencil.radius) else {
+            guard stencil.stride.nonzeroBitCount == 1, level < levels, (1...limit).contains(stencil.radius),
+                  band.weight.isFinite, band.weight >= 0 else {
                 throw TransportError.unsupported("transport band outside the pipeline's strides")
             }
             table[level] = max(table[level], Float(stencil.radius))

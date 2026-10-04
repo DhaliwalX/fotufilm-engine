@@ -40,6 +40,11 @@ const FILM_TILE_AMOUNT = 3
 const PACK_MAGIC = 'FSWP'
 const STAGES_MAGIC = 'FSSQ'
 const LUT_COUNT = 33 * 33 * 33 * 4
+/// The transport pipeline's stencil table (FotufilmTransport.h): a radius for each power-of-two
+/// stride from 1 to 4096, then each stride's weights in a centred 25 x 25 slot.
+const TRANSPORT_LEVELS = 13
+const TRANSPORT_RADIUS = 12
+const TRANSPORT_TABLE_FLOATS = TRANSPORT_LEVELS * (1 + (2 * TRANSPORT_RADIUS + 1) ** 2)
 
 // The two paths into the same Halide schedule. `webgpu` is the fused kernel the phones run,
 // dispatched through WGSL compute shaders; `simd` is the same physics compiled for the CPU. Both
@@ -125,7 +130,7 @@ export function parsePack(bytes) {
   const magic = String.fromCharCode(...new Uint8Array(bytes, 0, 4))
   if (magic !== PACK_MAGIC) throw new Error(`not a film pack: ${magic}`)
   const version = view.getUint32(4, true)
-  if (version !== 1 && version !== 2 && version !== 3)
+  if (version !== 1 && version !== 2 && version !== 4)
     throw new Error(`unsupported pack version ${version}`)
 
   const width = view.getInt32(8, true)
@@ -189,44 +194,50 @@ export function parsePack(bytes) {
     }
   }
   let transport
-  if (version === 3) {
+  if (version === 4) {
     const integer = () => {
       const n = view.getInt32(offset, true)
       offset += 4
       return n
     }
     const headMask = integer(),
+      tailClears = integer(),
       headConfiguration = take(configCount),
       tailConfiguration = take(configCount)
     const count = integer()
     if (count < 1 || count > 11)
       throw new Error('invalid transport component count')
-    const readBands = () => {
-      const bands = [],
+    // A component's stencil table, as fotufilm_wasm_transport takes it, from the levels the pack
+    // stores; `reach` is how far a pixel's light travels, the bicubic's two cells included.
+    const readStencils = () => {
+      const table = new Float32Array(TRANSPORT_TABLE_FLOATS),
         n = integer()
-      if (n < 1 || n > 64) throw new Error('invalid transport band count')
-      for (let b = 0; b < n; ++b) {
-        const weight = take(1)[0],
-          radius = integer(),
-          stride = integer()
+      if (n < 1 || n > TRANSPORT_LEVELS)
+        throw new Error('invalid transport level count')
+      let reach = 0
+      for (let i = 0; i < n; ++i) {
+        const level = integer(),
+          radius = integer()
         if (
-          !Number.isFinite(weight) ||
-          weight < 0 ||
+          level < 0 ||
+          level >= TRANSPORT_LEVELS ||
+          table[level] !== 0 ||
           radius < 1 ||
-          radius > 128 ||
-          stride < 1 ||
-          stride > 4096 ||
-          stride & (stride - 1)
+          radius > TRANSPORT_RADIUS
         )
           throw new Error('invalid transport stencil')
-        bands.push({
-          weight,
-          radius,
-          stride,
-          weights: take((radius * 2 + 1) ** 2),
-        })
+        table[level] = radius
+        const side = 2 * TRANSPORT_RADIUS + 1,
+          base = TRANSPORT_LEVELS + level * side * side
+        for (let dy = -radius; dy <= radius; ++dy) {
+          const row = take(2 * radius + 1)
+          if (!row.every((w) => Number.isFinite(w) && w >= 0))
+            throw new Error('invalid transport stencil')
+          table.set(row, base + (dy + TRANSPORT_RADIUS) * side + TRANSPORT_RADIUS - radius)
+        }
+        reach = Math.max(reach, (radius + 2) << level)
       }
-      return bands
+      return { table, reach }
     }
     const delta = (base) => {
       const result = base.slice(),
@@ -243,7 +254,7 @@ export function parsePack(bytes) {
     }
     const components = Array.from({ length: count }, () => ({
       exposure: take(lutCount),
-      bands: readBands(),
+      stencils: readStencils(),
     }))
     const sizes = [],
       sizeCount = integer()
@@ -259,12 +270,13 @@ export function parsePack(bytes) {
         tailConfiguration: tailConfigurationAtSize,
         components: components.map((component) => ({
           exposure: component.exposure,
-          bands: readBands(),
+          stencils: readStencils(),
         })),
       })
     }
     transport = {
       headMask,
+      tailClears,
       headConfiguration,
       tailConfiguration,
       components,
@@ -782,12 +794,7 @@ class Developer {
         const plan =
           root.sizes.find((size) => size.shortEdge === this.rung.shortEdge) ??
           root
-        apron += Math.max(
-          0,
-          ...plan.components.flatMap((c) =>
-            c.bands.map((b) => b.radius * b.stride),
-          ),
-        )
+        apron += Math.max(0, ...plan.components.map((c) => c.stencils.reach))
       }
       this.tiles = planRegionTiles(
         this.width,
@@ -1232,8 +1239,7 @@ export class SimdDeveloper extends Developer {
     this.transportPtrs = this.pack.transport
       ? [
           this.module._malloc(pixels * 3 * 4),
-          this.module._malloc(pixels * 3 * 4),
-          this.module._malloc(257 * 257 * 4),
+          this.module._malloc(TRANSPORT_TABLE_FLOATS * 4),
         ]
       : []
     this.inputPtr = this.module._malloc(pixels * 3 * 4)
@@ -1301,14 +1307,33 @@ export class SimdDeveloper extends Developer {
     )
   }
 
+  /// Layered Transport: each spectral component's light, spread by its stencils into one record
+  /// exposure, then developed and printed once. The heads and the continuation run on the frame's
+  /// own configuration — its controls, tone grid and screen levels — with the slots the transport
+  /// plan changes laid over it. The camera's preflash is shared among the heads, as natively.
   runTransport(region) {
     const { module, pack } = this
     const root = pack.transport
     const plan =
       root.sizes.find((size) => size.shortEdge === this.rung.shortEdge) ?? root
-    const [sumPtr, filteredPtr, kernelPtr] = this.transportPtrs
-    const count = region.width * region.height * 3
-    module.HEAPF32.fill(0, sumPtr / 4, sumPtr / 4 + count)
+    const [sumPtr, tablePtr] = this.transportPtrs
+    module.HEAPF32.fill(0, sumPtr / 4, sumPtr / 4 + region.width * region.height * 3)
+    const offset = this.configPtr / 4,
+      n = this.configuration.length
+    const live = module.HEAPF32.slice(offset, offset + n)
+    const preflash = live[CONFIG.CAMERA_PREFLASH]
+    const configure = (values, flash) => {
+      const heap = module.HEAPF32.subarray(offset, offset + n)
+      heap.set(live)
+      for (let i = 0; i < n; ++i)
+        if (
+          i !== this.frameSizeSlot &&
+          i !== this.frameSizeSlot + 1 &&
+          !Object.is(values[i], this.configuration[i])
+        )
+          heap[i] = values[i]
+      heap[CONFIG.CAMERA_PREFLASH] = flash
+    }
     const render = (input, mask) =>
       this.renderCall(
         input,
@@ -1325,46 +1350,26 @@ export class SimdDeveloper extends Developer {
         mask,
         this.seed,
       )
-    const original = this.configuration
-    const configure = (values) => {
-      this.configuration = values.slice()
-      this.configuration[this.frameSizeSlot] = this.width
-      this.configuration[this.frameSizeSlot + 1] = this.height
-      this.applyControls(this.controls)
-    }
     try {
       for (const component of plan.components) {
-        configure(plan.headConfiguration)
+        configure(plan.headConfiguration, preflash / plan.components.length)
         module.HEAPF32.set(component.exposure, this.exposurePtr / 4)
-        const status = render(this.inputPtr, root.headMask)
+        let status = render(this.inputPtr, root.headMask)
         if (status !== 0) return status
-        for (const band of component.bands) {
-          module.HEAPF32.set(band.weights, kernelPtr / 4)
-          const status = module.ccall(
-            'fotufilm_wasm_transport',
-            'number',
-            Array(7).fill('number'),
-            [
-              this.outputPtr,
-              filteredPtr,
-              region.width,
-              region.height,
-              kernelPtr,
-              band.radius,
-              band.stride,
-            ],
-          )
-          if (status !== 0) return status
-          const heap = module.HEAPF32
-          for (let i = 0; i < count; ++i)
-            heap[sumPtr / 4 + i] += band.weight * heap[filteredPtr / 4 + i]
-        }
+        module.HEAPF32.set(component.stencils.table, tablePtr / 4)
+        status = module.ccall(
+          'fotufilm_wasm_transport',
+          'number',
+          Array(6).fill('number'),
+          [this.outputPtr, sumPtr, region.width, region.height, 3, tablePtr],
+        )
+        if (status !== 0) return status
       }
-      configure(plan.tailConfiguration)
+      configure(plan.tailConfiguration, 0)
       module.HEAPF32.set(pack.exposure, this.exposurePtr / 4)
-      return render(sumPtr, this.featureMask)
+      return render(sumPtr, this.featureMask & ~root.tailClears)
     } finally {
-      this.configuration = original
+      module.HEAPF32.set(live, offset)
     }
   }
 
