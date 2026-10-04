@@ -1182,13 +1182,12 @@ extern "C" int32_t fotufilm_transport_component(
     Buffer<float> input(const_cast<float *>(exposure), width, height, channels);
     Buffer<float> sum(accumulated, width, height, channels);
     Buffer<float> table(const_cast<float *>(stencils), FOTUFILM_TRANSPORT_TABLE_FLOATS);
-    Buffer<float> output(width, height, channels);
     input.set_host_dirty(); sum.set_host_dirty(); table.set_host_dirty();
     auto run = backend ? fotufilm_halide_ios_transport_metal : fotufilm_halide_ios_transport_cpu;
+    // The sum is read only at the point written, so the pipeline adds into it in place.
     int status = run(input, sum, table, r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9],
-                     r[10], r[11], r[12], output);
-    if (!status) status = output.copy_to_host();
-    if (!status) std::copy_n(output.data(), int64_t(width) * height * channels, accumulated);
+                     r[10], r[11], r[12], sum);
+    if (!status) status = sum.copy_to_host();
     return status;
 }
 

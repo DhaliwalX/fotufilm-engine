@@ -13,49 +13,115 @@ public enum LayeredMetalTransport {
                                invocation: FilmEngineInvocation? = nil, pixelPitchMM: Double? = nil) throws -> [Float] {
         guard pixels.count == width * height * 4, let model = options.transportConstruction(for: stock),
               TransportBackend.metal.isAvailable else { throw TransportError.backend("Metal transport unavailable") }
+        let n = width * height
         var input = ImageBuffer(width: width, height: height)
-        for c in 0..<3 { for i in 0..<input.pixelCount { input.planes[c][i] = pixels[4*i+c] } }
-        let execution = TransportExecution(render: render, backend: .metal)
-        let result = try LayeredTransportRenderer.process(image: input, stock: stock, options: options,
+        // Every head exposes the same scene: it is packed once, opaque, as `render` packs it.
+        var scene = pixels
+        pixels.withUnsafeBufferPointer { source in
+            scene.withUnsafeMutableBufferPointer { packed in
+                withPlanes(&input.planes) { planes in
+                    rows(height) { range in
+                        for i in range.lowerBound * width..<range.upperBound * width {
+                            for c in 0..<3 { planes[c][i] = source[4 * i + c] }
+                            packed[4 * i + 3] = 1
+                        }
+                    }
+                }
+            }
+        }
+        var grid = [Float](repeating: 0, count: n * 3)
+        let light = { (head: FilmEngineInvocation, destination: UnsafeMutablePointer<Float>) throws in
+            try lightGrid(scene, width: width, height: height, head, into: &grid)
+            grid.withUnsafeBufferPointer { grid in
+                rows(height) { range in
+                    for i in range.lowerBound * width..<range.upperBound * width {
+                        for c in 0..<3 { destination[c * n + i] = grid[3 * i + c] }
+                    }
+                }
+            }
+        }
+        let execution = TransportExecution(render: render, backend: .metal, light: light)
+        var result = try LayeredTransportRenderer.process(image: input, stock: stock, options: options,
             model: model, frameIndex: frameIndex, execution: execution,
             invocation: invocation, pixelPitchMM: pixelPitchMM)
         var output = pixels
-        for c in 0..<3 { for i in 0..<input.pixelCount { output[4*i+c] = result.planes[c][i] } }
+        output.withUnsafeMutableBufferPointer { output in
+            withPlanes(&result.planes) { planes in
+                rows(height) { range in
+                    for i in range.lowerBound * width..<range.upperBound * width {
+                        for c in 0..<3 { output[4 * i + c] = planes[c][i] }
+                    }
+                }
+            }
+        }
         return output
+    }
+
+    /// The scene's light under a head invocation, as the three-channel grid LIGHT_OUT produces.
+    /// Transport clears the legacy halation radii, so the grid has unit stride and retains every
+    /// source pixel. The ordinary float entry point promises RGBA and cannot receive this variant.
+    private static func lightGrid(_ scene: [Float], width: Int, height: Int,
+                                  _ supplied: FilmEngineInvocation, into output: inout [Float]) throws {
+        var invocation = supplied
+        invocation.featureMask |= FilmEngineFeature.floatIO
+        let status = scene.withUnsafeBufferPointer { source in
+            if invocation.featureMask & FilmEngineFeature.flare != 0 {
+                invocation.flareMean = invocation.measuredAreaWeightedFlareMean(
+                    linearRGBA: source.baseAddress!, width: width, height: height)
+            }
+            return output.withUnsafeMutableBufferPointer { destination in
+                invocation.configuration.withUnsafeBufferPointer { config in
+                    invocation.withSpectralPointers { exposure, film, paper in
+                        fotufilm_halide_metal_process_light_grid(
+                            source.baseAddress, destination.baseAddress,
+                            Int32(width), Int32(height), 0, Int32(height),
+                            0, 0, config.baseAddress, exposure, film, paper,
+                            Int32(invocation.spectral.exposure.dimension),
+                            invocation.spectralCacheID, invocation.featureMask, invocation.seed)
+                    }
+                }
+            }
+        }
+        guard status == 0 else { throw TransportError.backend("Metal transport stage failed (\(status))") }
     }
 
     private static func render(_ image: ImageBuffer, _ supplied: FilmEngineInvocation,
                                _ lightOnly: Bool) throws -> ImageBuffer {
+        let width = image.width, height = image.height, n = image.pixelCount
+        var input = Array(repeating: Float(1), count: n * 4)
+        // A fourth plane is a donor stock's fourth record, read from the record input's alpha.
+        let carried = image.planes.count
+        input.withUnsafeMutableBufferPointer { input in
+            reading(image.planes[...]) { planes in
+                rows(height) { range in
+                    for i in range.lowerBound * width..<range.upperBound * width {
+                        for c in 0..<carried { input[4 * i + c] = planes[c][i] }
+                    }
+                }
+            }
+        }
+        var result = ImageBuffer(width: width, height: height)
+        if lightOnly {
+            var grid = [Float](repeating: 0, count: n * 3)
+            try lightGrid(input, width: width, height: height, supplied, into: &grid)
+            unpack(grid, channels: 3, into: &result)
+            return result
+        }
         var invocation = supplied
         invocation.featureMask |= FilmEngineFeature.floatIO
-        var input = Array(repeating: Float(1), count: image.pixelCount * 4)
-        // A fourth plane is a donor stock's fourth record, read from the record input's alpha.
-        for c in 0..<image.planes.count { for i in 0..<image.pixelCount { input[4*i+c] = image.planes[c][i] } }
         if invocation.featureMask & FilmEngineFeature.flare != 0 {
             input.withUnsafeBufferPointer {
                 invocation.flareMean = invocation.measuredAreaWeightedFlareMean(
-                    linearRGBA: $0.baseAddress!, width: image.width, height: image.height)
+                    linearRGBA: $0.baseAddress!, width: width, height: height)
             }
         }
-        // LIGHT_OUT produces a three-channel light grid. Transport clears the legacy
-        // halation radii, so its grid has unit stride and retains every source pixel.
-        // The ordinary float entry point promises RGBA and cannot receive this AOT variant.
-        let channels = lightOnly ? 3 : 4
-        var output = [Float](repeating: 0, count: image.pixelCount * channels)
+        var output = [Float](repeating: 0, count: n * 4)
         let status = input.withUnsafeBufferPointer { source in
             output.withUnsafeMutableBufferPointer { destination in
                 invocation.configuration.withUnsafeBufferPointer { config in
                     invocation.withSpectralPointers { exposure, film, paper in
-                        if lightOnly {
-                            return fotufilm_halide_metal_process_light_grid(
-                                source.baseAddress, destination.baseAddress,
-                                Int32(image.width), Int32(image.height), 0, Int32(image.height),
-                                0, 0, config.baseAddress, exposure, film, paper,
-                                Int32(invocation.spectral.exposure.dimension),
-                                invocation.spectralCacheID, invocation.featureMask, invocation.seed)
-                        }
-                        return fotufilm_halide_metal_process_linear_float(source.baseAddress, destination.baseAddress,
-                            Int32(image.width), Int32(image.height), 0, 0, config.baseAddress,
+                        fotufilm_halide_metal_process_linear_float(source.baseAddress, destination.baseAddress,
+                            Int32(width), Int32(height), 0, 0, config.baseAddress,
                             exposure, film, paper, Int32(invocation.spectral.exposure.dimension),
                             invocation.spectralCacheID, invocation.featureMask, invocation.seed)
                     }
@@ -63,8 +129,51 @@ public enum LayeredMetalTransport {
             }
         }
         guard status == 0 else { throw TransportError.backend("Metal transport stage failed (\(status))") }
-        var result = image
-        for c in 0..<3 { for i in 0..<image.pixelCount { result.planes[c][i] = output[channels*i+c] } }
+        unpack(output, channels: 4, into: &result)
         return result
+    }
+
+    private static func unpack(_ interleaved: [Float], channels: Int, into image: inout ImageBuffer) {
+        let width = image.width
+        interleaved.withUnsafeBufferPointer { source in
+            withPlanes(&image.planes) { planes in
+                rows(image.height) { range in
+                    for i in range.lowerBound * width..<range.upperBound * width {
+                        for c in 0..<3 { planes[c][i] = source[channels * i + c] }
+                    }
+                }
+            }
+        }
+    }
+
+    /// The first three planes' storage, writable from several threads at once.
+    private static func withPlanes(_ planes: inout [[Float]],
+                                   _ body: ([UnsafeMutablePointer<Float>]) -> Void) {
+        // Swapped out so each plane is borrowed alone, without a copy.
+        var r = [Float](), g = [Float](), b = [Float]()
+        swap(&r, &planes[0]); swap(&g, &planes[1]); swap(&b, &planes[2])
+        defer { swap(&r, &planes[0]); swap(&g, &planes[1]); swap(&b, &planes[2]) }
+        r.withUnsafeMutableBufferPointer { r in
+            g.withUnsafeMutableBufferPointer { g in
+                b.withUnsafeMutableBufferPointer { b in
+                    body([r.baseAddress!, g.baseAddress!, b.baseAddress!])
+                }
+            }
+        }
+    }
+
+    /// Every plane's storage, read from several threads at once.
+    private static func reading(_ planes: ArraySlice<[Float]>, _ gathered: [UnsafePointer<Float>] = [],
+                                _ body: ([UnsafePointer<Float>]) -> Void) {
+        guard let first = planes.first else { return body(gathered) }
+        first.withUnsafeBufferPointer { reading(planes.dropFirst(), gathered + [$0.baseAddress!], body) }
+    }
+
+    /// Runs `body` over bands of rows in parallel.
+    private static func rows(_ height: Int, _ body: (Range<Int>) -> Void) {
+        let bands = min(height, 64)
+        DispatchQueue.concurrentPerform(iterations: bands) { band in
+            body(band * height / bands..<(band + 1) * height / bands)
+        }
     }
 }

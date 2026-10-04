@@ -74,18 +74,26 @@ struct TransportPipeline {
             const int base = kTransportLevels + l * kTransportStencilFloats;
             RDom tap(0, side, 0, side, "transport_tap" + tag);
             Expr dx = tap.x - radius, dy = tap.y - radius;
-            Func spread("transport_spread" + tag);
-            spread(x, y, c) = 0.0f;
-            spread(x, y, c) += stencils(base + (dy + kTransportStencilRadius) * kTransportStencilSide
-                                        + dx + kTransportStencilRadius)
-                * level(clamp(x + dx, 0, grid_width - 1), clamp(y + dy, 0, grid_height - 1), c);
-            schedule(spread);
+            // One pure definition, summed in the update's order (taps along x innermost), so
+            // a GPU tile can stage the cells it reads in its threadgroup's memory.
+            Func cells("transport_staged" + tag), spread("transport_spread" + tag);
+            cells(x, y, c) = level(clamp(x, 0, grid_width - 1), clamp(y, 0, grid_height - 1), c);
+            spread(x, y, c) = sum(stencils(base + (dy + kTransportStencilRadius) * kTransportStencilSide
+                                           + dx + kTransportStencilRadius)
+                                  * cells(x + dx, y + dy, c), "transport_sum" + tag);
             if (gpu) {
-                Var bx, by, tx, ty;
-                spread.update().gpu_tile(x, y, bx, by, tx, ty, 16, 8, TailStrategy::GuardWithIf,
-                                         device);
+                // Each thread sums four neighbouring cells, so one stencil load serves four.
+                Var bx, by, tx, ty, tv;
+                spread.compute_root()
+                    .tile(x, y, bx, by, tx, ty, 64, 16, TailStrategy::GuardWithIf)
+                    .split(tx, tx, tv, 4, TailStrategy::GuardWithIf).vectorize(tv)
+                    .gpu_blocks(bx, by, device).gpu_threads(tx, ty, device);
+                Var cx, cy, cxi, cyi;
+                cells.compute_at(spread, bx).store_in(MemoryType::GPUShared)
+                    .tile(x, y, cx, cy, cxi, cyi, 16, 16, TailStrategy::GuardWithIf)
+                    .gpu_threads(cxi, cyi, device);
             } else {
-                spread.update().vectorize(x, 8, TailStrategy::GuardWithIf).parallel(y);
+                spread.compute_root().vectorize(x, 8, TailStrategy::GuardWithIf).parallel(y);
             }
             Expr reconstructed;
             if (stride == 1) {
@@ -107,6 +115,9 @@ struct TransportPipeline {
         } else {
             output.vectorize(x, 8, TailStrategy::GuardWithIf).parallel(y);
         }
+        // A variant per finest unused level: a component reconstructs only the levels it has.
+        Stage unused = output;
+        for (int l = kTransportLevels - 1; l > 0; --l) unused = unused.specialize(radii[l] == 0);
     }
 
     std::vector<Halide::Argument> arguments() {

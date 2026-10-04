@@ -52,7 +52,6 @@ extern "C" int32_t fotufilm_transport_component(
         Halide::Buffer<float> input(const_cast<float *>(exposure), width, height, channels);
         Halide::Buffer<float> sum(accumulated, width, height, channels);
         Halide::Buffer<float> table(const_cast<float *>(stencils), FOTUFILM_TRANSPORT_TABLE_FLOATS);
-        Halide::Buffer<float> output(width, height, channels);
         input.set_host_dirty(); sum.set_host_dirty(); table.set_host_dirty();
         pipeline->exposure.set(input);
         pipeline->accumulated.set(sum);
@@ -64,10 +63,9 @@ extern "C" int32_t fotufilm_transport_component(
                 pipeline.exposure.reset(); pipeline.accumulated.reset(); pipeline.stencils.reset();
             }
         } unbind{*pipeline};
-        pipeline->output.realize(output, target);
-        if (int copied = output.copy_to_host()) return copied;
-        std::copy_n(output.data(), int64_t(width) * height * channels, accumulated);
-        return 0;
+        // The sum is read only at the point written, so the pipeline adds into it in place.
+        pipeline->output.realize(sum, target);
+        return sum.copy_to_host();
     } catch (const Halide::Error &error) {
         std::fprintf(stderr, "Layered transport: %s\n", error.what());
         return -2;

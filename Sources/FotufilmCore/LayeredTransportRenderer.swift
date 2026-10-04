@@ -15,9 +15,13 @@ public struct TransportExecution {
     /// fourth plane carries a donor stock's fourth record beside the three.
     public let render: (ImageBuffer, FilmEngineInvocation, Bool) throws -> ImageBuffer
     public let backend: TransportBackend
+    /// The scene's light under a head invocation, written as three contiguous planes of the
+    /// frame's pixel count. Optional: without it the heads go through `render`.
+    public let light: ((FilmEngineInvocation, UnsafeMutablePointer<Float>) throws -> Void)?
     public init(render: @escaping (ImageBuffer, FilmEngineInvocation, Bool) throws -> ImageBuffer,
-                backend: TransportBackend) {
-        self.render = render; self.backend = backend
+                backend: TransportBackend,
+                light: ((FilmEngineInvocation, UnsafeMutablePointer<Float>) throws -> Void)? = nil) {
+        self.render = render; self.backend = backend; self.light = light
     }
 }
 
@@ -149,34 +153,62 @@ public enum LayeredTransportRenderer {
         }
         let pitch = pixelPitchMM ?? options.pixelPitchMM(width: image.width, height: image.height)
         let donated = !plain.donorLayers.isEmpty
-        // The running sum; a donor stock's fourth record accumulates beside the three.
-        var exposure = ImageBuffer(width: image.width, height: image.height)
-        if donated { exposure.planes.append(Array(repeating: 0, count: image.pixelCount)) }
+        let n = image.pixelCount, channels = donated ? 4 : 3
+        // The running sum and each component, planar and contiguous as the transport takes
+        // them; a donor stock's fourth record accumulates beside the three.
+        var sum = [Float](repeating: 0, count: n * channels)
+        var component = [Float](repeating: 0, count: n * channels)
+        var fourth = [Float](repeating: 0, count: donated ? n * 3 : 0)
+        func light(_ head: FilmEngineInvocation, into destination: UnsafeMutablePointer<Float>) throws {
+            if let light = execution?.light { return try light(head, destination) }
+            let planes = try render(image, head, true).planes
+            for c in 0..<3 {
+                planes[c].withUnsafeBufferPointer { destination.advanced(by: c * n).update(from: $0.baseAddress!, count: n) }
+            }
+        }
         let tables = prepared.compilation.kernels.indices.map { k -> SpectralLUT? in
             let table = prepared.exposure.table(component: k, interpolation: t)
             return table.values.contains(where: { $0 > 0 }) ? table : nil
         }
         let active = tables.compactMap { $0 }.count
-        for k in prepared.compilation.kernels.indices {
-            guard let table = tables[k] else { continue }
-            var head = invocation
-            head.featureMask &= FilmEngineFeature.flare | FilmEngineFeature.diffusion
-            head.featureMask |= FilmEngineFeature.lightOut
-            head.clearTransportOptics(keepLens: true)
-            head.sharePreflash(among: active)
-            head.setTransportExposure(table)
-            var component = try render(image, head, true)
-            component.planes = Array(component.planes.prefix(3))
-            if donated {
-                head.setTransportExposure(Self.fourthRecord(of: table))
-                component.planes.append(try render(image, head, true).planes[0])
+        try component.withUnsafeMutableBufferPointer { component in
+            try sum.withUnsafeMutableBufferPointer { sum in
+                for k in prepared.compilation.kernels.indices {
+                    guard let table = tables[k] else { continue }
+                    var head = invocation
+                    head.featureMask &= FilmEngineFeature.flare | FilmEngineFeature.diffusion
+                    head.featureMask |= FilmEngineFeature.lightOut
+                    head.clearTransportOptics(keepLens: true)
+                    head.sharePreflash(among: active)
+                    head.setTransportExposure(table)
+                    try light(head, into: component.baseAddress!)
+                    if donated {
+                        head.setTransportExposure(Self.fourthRecord(of: table))
+                        try fourth.withUnsafeMutableBufferPointer {
+                            try light(head, into: $0.baseAddress!)
+                            component.baseAddress!.advanced(by: 3 * n).update(from: $0.baseAddress!, count: n)
+                        }
+                    }
+                    try transport(component.baseAddress!, into: sum.baseAddress!, width: image.width,
+                                  height: image.height, channels: channels,
+                                  stencils: prepared.compilation.kernels[k].transportTable(pixelPitchMM: pitch),
+                                  backend: backend)
+                }
             }
-            try transport(component, stencils: prepared.compilation.kernels[k].transportTable(pixelPitchMM: pitch),
-                          into: &exposure, backend: backend)
         }
-        guard exposure.planes.allSatisfy({ $0.allSatisfy { $0.isFinite && $0 >= 0 } }) else {
+        let bands = 64, valid = UnsafeMutableBufferPointer<Bool>.allocate(capacity: bands)
+        defer { valid.deallocate() }
+        sum.withUnsafeBufferPointer { sum in
+            DispatchQueue.concurrentPerform(iterations: bands) { band in
+                valid[band] = sum[band * sum.count / bands..<(band + 1) * sum.count / bands]
+                    .allSatisfy { $0.isFinite && $0 >= 0 }
+            }
+        }
+        guard valid.allSatisfy({ $0 }) else {
             throw TransportError.backend("transport produced invalid record exposure")
         }
+        var exposure = ImageBuffer(width: image.width, height: image.height)
+        exposure.planes = (0..<channels).map { Array(sum[$0 * n..<($0 + 1) * n]) }
         var continuation = invocation
         continuation.featureMask &= ~continuationClears
         continuation.clearTransportOptics(keepLens: false)
@@ -225,13 +257,26 @@ public enum LayeredTransportRenderer {
         }
         let input = component.planes.flatMap { $0 }
         var accumulated = sum.planes.flatMap { $0 }
-        let status = accumulated.withUnsafeMutableBufferPointer {
-            fotufilm_transport_component(input, $0.baseAddress!, Int32(sum.width), Int32(sum.height),
-                                         Int32(sum.planes.count), stencils, backend.rawValue)
+        try input.withUnsafeBufferPointer { input in
+            try accumulated.withUnsafeMutableBufferPointer {
+                try transport(input.baseAddress!, into: $0.baseAddress!, width: sum.width, height: sum.height,
+                              channels: sum.planes.count, stencils: stencils, backend: backend)
+            }
         }
-        guard status == 0 else { throw TransportError.backend("transport failed (\(status))") }
         let count = sum.pixelCount
         for c in sum.planes.indices { sum.planes[c] = Array(accumulated[c * count..<(c + 1) * count]) }
+    }
+
+    /// `transport(_:stencils:into:backend:)` on planar, contiguous records.
+    static func transport(_ component: UnsafePointer<Float>, into sum: UnsafeMutablePointer<Float>,
+                          width: Int, height: Int, channels: Int, stencils: [Float],
+                          backend: TransportBackend) throws {
+        guard stencils.count == TransportRadialKernel.transportTableCount else {
+            throw TransportError.invalid("invalid transport stencils")
+        }
+        let status = fotufilm_transport_component(component, sum, Int32(width), Int32(height),
+                                                  Int32(channels), stencils, backend.rawValue)
+        guard status == 0 else { throw TransportError.backend("transport failed (\(status))") }
     }
 
     /// A table exposing its fourth record, a donor stock's, in each of the three it renders.
