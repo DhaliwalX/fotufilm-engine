@@ -230,6 +230,8 @@ export function createDesktopBackend(channel) {
       : undefined,
     // Whether a HEIC may carry HDR, where its film delivers it.
     hdrExport: can.hdrExport === true,
+    // Whether an Accurate still lays its Film grain over the whole frame, which takes longer.
+    filmGrainFrames: can.filmGrainFrames === true,
     // What each file's kept edit is stored under, for photographs not opened yet.
     fileIdentities: can.batchExport
       ? (paths) => call("fileIdentities", { paths }).then(({ identities }) => identities)
