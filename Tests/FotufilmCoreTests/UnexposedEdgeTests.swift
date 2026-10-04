@@ -33,12 +33,17 @@ final class UnexposedEdgeTests: XCTestCase {
 
     func testMarginsTurnWithTheCamera() throws {
         let still = try XCTUnwrap(UnexposedEdge.Geometry.preset("35mm"))
-        let landscape = still.margins(photoWidth: 3600, photoHeight: 2400, pixelsPerMM: 100)
+        let landscape = still.margins(photoWidth: 3600, photoHeight: 2400, pixelsPerMM: 100, carrier: false)
         XCTAssertEqual(landscape, .init(left: 100, right: 100, top: 70, bottom: 70))
-        let portrait = still.margins(photoWidth: 2400, photoHeight: 3600, pixelsPerMM: 100)
+        let portrait = still.margins(photoWidth: 2400, photoHeight: 3600, pixelsPerMM: 100, carrier: false)
         XCTAssertEqual(portrait, .init(left: 70, right: 70, top: 100, bottom: 100))
-        let square = still.margins(photoWidth: 2400, photoHeight: 2400, pixelsPerMM: 100)
+        let square = still.margins(photoWidth: 2400, photoHeight: 2400, pixelsPerMM: 100, carrier: false)
         XCTAssertEqual(square, landscape, "a square crop keeps the film's orientation")
+        // A negative is printed in a carrier filed out to the band, and the film reaches past it.
+        let printed = still.margins(photoWidth: 3600, photoHeight: 2400, pixelsPerMM: 100, carrier: true)
+        let reach = Int((UnexposedEdge.carrierReachMM * 100).rounded(.up))
+        XCTAssertEqual(printed, .init(left: 100 + reach, right: 100 + reach, top: 70 + reach,
+                                      bottom: 70 + reach, carrier: reach))
     }
 
     func testGatePenumbraIsTheShareOfTheLensPupilPastTheEdge() {
@@ -98,11 +103,38 @@ final class UnexposedEdgeTests: XCTestCase {
         let gate = options.gateConfiguration(width: 380, height: 254)
         XCTAssertEqual(Array(gate[0..<4]), [10, 7, 370, 247])
         XCTAssertEqual(gate[4], UnexposedEdge.gateRadiusMM * 10, accuracy: 1e-6)
+        XCTAssertEqual(options.gateCornerConfiguration(width: 380, height: 254),
+                       UnexposedEdge.gateCornerRadiusMM * 10, accuracy: 1e-6)
+        XCTAssertEqual(options.carrierConfiguration(width: 380, height: 254)[5], -1, "no carrier")
+        options.unexposedEdge = .init(margins: .init(left: 14, right: 14, top: 11, bottom: 11, carrier: 4))
+        let carrier = options.carrierConfiguration(width: 388, height: 262)
+        XCTAssertEqual(Array(carrier[0..<4]), [4, 4, 384, 258], "the opening is filed out to the band")
+        XCTAssertEqual(carrier[5], UnexposedEdge.carrierShadowRadiusMM * 10, accuracy: 1e-5)
+        options.unexposedEdge = nil
+        XCTAssertEqual(options.gateCornerConfiguration(width: 360, height: 240), 0)
+    }
+
+    func testTheGatesCornersAreRounded() {
+        let aperture = (left: Float(10), top: Float(10), right: Float(110), bottom: Float(60))
+        func distance(_ x: Float, _ y: Float, corner: Float = 4) -> Float {
+            UnexposedEdge.gateDistance(x: x, y: y, aperture: aperture, corner: corner)
+        }
+        // Along a side the distance is that side's alone, inside and out.
+        XCTAssertEqual(distance(60, 7), 3, accuracy: 1e-5)
+        XCTAssertEqual(distance(60, 12), -2, accuracy: 1e-5)
+        XCTAssertEqual(distance(113, 35), 3, accuracy: 1e-5)
+        // The rectangle's own corner lies beyond the rounded one by the radius's diagonal excess.
+        let root2 = Float(2).squareRoot()
+        XCTAssertEqual(distance(10, 10), 4 * (root2 - 1), accuracy: 1e-5)
+        XCTAssertEqual(distance(10, 10, corner: 0), 0, accuracy: 1e-5)
+        XCTAssertEqual(distance(14 - 4 / root2, 14 - 4 / root2), 0, accuracy: 1e-5,
+                       "the arc passes the radius from its centre")
     }
 
     /// Develops a uniform photograph of `scene` light on a larger piece of film and returns the
     /// red record of the middle column: the band above the photograph, then its top rows.
-    private func develop(scene: Float, _ configure: (inout FotufilmEngine.Options) -> Void = { _ in })
+    private func develop(scene: Float, carrier: Bool = false,
+                         _ configure: (inout FotufilmEngine.Options) -> Void = { _ in })
         throws -> (column: [Float], margins: UnexposedEdge.Margins) {
         var options = FotufilmEngine.Options()
         options.grainScale = 0
@@ -111,7 +143,7 @@ final class UnexposedEdgeTests: XCTestCase {
         let width = 720, height = 480
         let margins = try XCTUnwrap(UnexposedEdge.Geometry.preset("120"))
             .margins(photoWidth: width, photoHeight: height,
-                     pixelsPerMM: options.pixelsPerMM(width: width, height: height))
+                     pixelsPerMM: options.pixelsPerMM(width: width, height: height), carrier: carrier)
         options.unexposedEdge = .init(margins: margins)
         let outerWidth = width + margins.left + margins.right
         let outerHeight = height + margins.top + margins.bottom
@@ -148,6 +180,20 @@ final class UnexposedEdgeTests: XCTestCase {
                              "the transported light returns past the gate")
         XCTAssertGreaterThan(bright.column[top - 1] - dark.column[top - 1],
                              bright.column[top / 2] - dark.column[top / 2])
+    }
+
+    func testTheCarrierHoldsThePrintingLightOffBeyondItsOpening() throws {
+        let open = try develop(scene: 0)
+        let printed = try develop(scene: 0, carrier: true)
+        let reach = printed.margins.carrier
+        XCTAssertGreaterThan(reach, 0)
+        XCTAssertEqual(printed.margins.top, open.margins.top + reach)
+        // The unexposed band prints as before inside the opening, and the paper beyond the carrier
+        // saw no light: it is far lighter than the band.
+        let band = printed.column[reach + open.margins.top / 2]
+        XCTAssertEqual(band, open.column[open.margins.top / 2], accuracy: 1e-4)
+        XCTAssertGreaterThan(printed.column[0], band + 0.5, "paper beyond the carrier")
+        XCTAssertLessThan(printed.column[reach], printed.column[0], "the shadow falls across the edge")
     }
 
     func testLensSideLightStopsAtTheGate() throws {

@@ -1476,6 +1476,8 @@ public struct FilmEngineInvocation {
         configuration += [HDRHighlightRange.knee,
                           HDRHighlightRange.curvature(headroom: options.sceneHeadroom,
                                                       range: options.hdrRange)]
+        configuration.append(options.gateCornerConfiguration(width: width, height: height))
+        configuration += options.carrierConfiguration(width: width, height: height)
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0

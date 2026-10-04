@@ -1272,7 +1272,8 @@ enum FilmRender {
         else { return nil }
         let margins = geometry.margins(
             photoWidth: scene.width, photoHeight: scene.height,
-            pixelsPerMM: options.pixelsPerMM(width: scene.width, height: scene.height))
+            pixelsPerMM: options.pixelsPerMM(width: scene.width, height: scene.height),
+            carrier: !stock.isReversal)
         // The photograph's own Auto Levels reading, metered as its develop meters it.
         var stops = options.sceneHighlightStops
         var medians = options.sceneChannelMedians

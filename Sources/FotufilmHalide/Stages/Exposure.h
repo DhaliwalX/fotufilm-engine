@@ -3,6 +3,7 @@
 
 #include "FotufilmHalide.h"
 #include "Math.h"
+#include "Random.h"
 #include "Sampling.h"
 #include "Transfer.h"
 
@@ -323,30 +324,84 @@ inline Halide::Expr scene_exposure(Halide::ImageParam &configuration,
     return Halide::select(flash > 0.0f, raw_exp + flash, raw_exp);
 }
 
+/// Share of a uniform disc of `radius` on the open side of a straight edge `distance` beyond it
+/// (negative inside): `(acos(v) - v sqrt(1 - v^2)) / pi` for `v` the distance in radii, with acos by
+/// Abramowitz and Stegun 4.4.45 so that every renderer computes it in the same exact arithmetic.
+inline Halide::Expr disc_edge_share(Halide::Expr distance, Halide::Expr radius) {
+    Halide::Expr u = Halide::clamp(distance / Halide::max(radius, 1.0e-6f), -1.0f, 1.0f);
+    Halide::Expr v = Halide::abs(u);
+    Halide::Expr arc = Halide::sqrt(1.0f - v)
+        * (1.5707288f + v * (-0.2121144f + v * (0.0742610f + v * -0.0187293f)));
+    Halide::Expr shaded = (arc - v * Halide::sqrt(1.0f - v * v)) * 0.318309886f;
+    return Halide::select(u >= 0.0f, shaded, 1.0f - shaded);
+}
+
+/// Signed distance from the pixel centre (`frame_x`, `frame_y`) to the edge of the rectangle
+/// `left`, `top`, `right`, `bottom` with its corners rounded to `corner`: positive beyond it.
+/// Along the straight sides it is the one axis's distance alone.
+inline Halide::Expr rounded_rect_distance(Halide::Expr frame_x, Halide::Expr frame_y,
+                                          Halide::Expr left, Halide::Expr top,
+                                          Halide::Expr right, Halide::Expr bottom,
+                                          Halide::Expr corner) {
+    Halide::Expr cx = Halide::cast<float>(frame_x) + 0.5f;
+    Halide::Expr cy = Halide::cast<float>(frame_y) + 0.5f;
+    Halide::Expr qx = Halide::max(left - cx, cx - right) + corner;
+    Halide::Expr qy = Halide::max(top - cy, cy - bottom) + corner;
+    Halide::Expr ox = Halide::max(qx, 0.0f), oy = Halide::max(qy, 0.0f);
+    return Halide::sqrt(ox * ox + oy * oy) + Halide::min(Halide::max(qx, qy), 0.0f) - corner;
+}
+
 /// Share of the lens's light the camera gate passes at frame pixel (`frame_x`, `frame_y`): 1 with
-/// no gate (FOTUFILM_CONFIG_GATE's radius negative), otherwise the product of each axis's edge
-/// shadow. Each edge passes the share of the uniform pupil disc on the open side of a straight
-/// line, `(acos(v) - v sqrt(1 - v^2)) / pi` for `v` the pixel centre's distance beyond the edge in
-/// radii, with acos by Abramowitz and Stegun 4.4.45 so that every renderer computes it in the same
-/// exact arithmetic. Mirrors `UnexposedEdge.gateTransmission` and Metal's `optics_gate`.
+/// no gate (FOTUFILM_CONFIG_GATE's radius negative), otherwise the share of the lens pupil's disc
+/// on the open side of the aperture's edge, its corners rounded to FOTUFILM_CONFIG_GATE_CORNER.
+/// Mirrors `UnexposedEdge.gateTransmission` and Metal's `optics_gate`.
 inline Halide::Expr gate_transmission(Halide::ImageParam &configuration,
                                       Halide::Expr frame_x, Halide::Expr frame_y) {
     Halide::Expr radius = configuration(FOTUFILM_CONFIG_GATE + 4);
-    auto edge = [&](Halide::Expr position, Halide::Expr low, Halide::Expr high) {
-        Halide::Expr centre = Halide::cast<float>(position) + 0.5f;
-        Halide::Expr beyond = Halide::max(low - centre, centre - high);
-        Halide::Expr u = Halide::clamp(beyond / Halide::max(radius, 1.0e-6f), -1.0f, 1.0f);
-        Halide::Expr v = Halide::abs(u);
-        Halide::Expr arc = Halide::sqrt(1.0f - v)
-            * (1.5707288f + v * (-0.2121144f + v * (0.0742610f + v * -0.0187293f)));
-        Halide::Expr shaded = (arc - v * Halide::sqrt(1.0f - v * v)) * 0.318309886f;
-        return Halide::select(u >= 0.0f, shaded, 1.0f - shaded);
+    Halide::Expr distance = rounded_rect_distance(
+        frame_x, frame_y, configuration(FOTUFILM_CONFIG_GATE),
+        configuration(FOTUFILM_CONFIG_GATE + 1), configuration(FOTUFILM_CONFIG_GATE + 2),
+        configuration(FOTUFILM_CONFIG_GATE + 3), configuration(FOTUFILM_CONFIG_GATE_CORNER));
+    return Halide::select(radius >= 0.0f, disc_edge_share(distance, radius), 1.0f);
+}
+
+/// Smooth value noise in about -1...1 on a unit lattice, for a hand-filed edge.
+inline Halide::Expr filing_noise(Halide::Expr x, Halide::Expr y) {
+    Halide::Expr fx = Halide::floor(x), fy = Halide::floor(y);
+    Halide::Expr ix = Halide::cast<int32_t>(fx), iy = Halide::cast<int32_t>(fy);
+    Halide::Expr tx = x - fx, ty = y - fy;
+    Halide::Expr u = tx * tx * (3.0f - 2.0f * tx), v = ty * ty * (3.0f - 2.0f * ty);
+    auto sample = [&](Halide::Expr a, Halide::Expr b) {
+        Halide::Expr hash = pcg(Halide::cast<uint32_t>(a) ^ pcg(Halide::cast<uint32_t>(b)));
+        return Halide::cast<float>(hash >> 8) * (2.0f / 16777216.0f) - 1.0f;
     };
-    Halide::Expr pass =
-        edge(frame_x, configuration(FOTUFILM_CONFIG_GATE), configuration(FOTUFILM_CONFIG_GATE + 2))
-        * edge(frame_y, configuration(FOTUFILM_CONFIG_GATE + 1),
-               configuration(FOTUFILM_CONFIG_GATE + 3));
-    return Halide::select(radius >= 0.0f, pass, 1.0f);
+    Halide::Expr low = sample(ix, iy) + (sample(ix + 1, iy) - sample(ix, iy)) * u;
+    Halide::Expr high = sample(ix, iy + 1) + (sample(ix + 1, iy + 1) - sample(ix, iy + 1)) * u;
+    return low + (high - low) * v;
+}
+
+/// Density the enlarger's negative carrier adds at frame pixel (`frame_x`, `frame_y`), to every
+/// record alike: 0 inside its opening and with no carrier (FOTUFILM_CONFIG_CARRIER's shadow radius
+/// negative), rising to 6 where it holds the light off the paper. The opening is a rectangle
+/// rounded at its corners and filed by hand a little inside it — its edge wanders by up to the
+/// filing depth on a noise lattice of the given cell — and its edge casts the shadow of a disc of
+/// the shadow radius, the enlarger's cone of light across the carrier's step from the film.
+/// Mirrors Metal's `optics_carrier`.
+inline Halide::Expr carrier_density(Halide::ImageParam &configuration,
+                                    Halide::Expr frame_x, Halide::Expr frame_y) {
+    Halide::Expr radius = configuration(FOTUFILM_CONFIG_CARRIER + 5);
+    Halide::Expr depth = configuration(FOTUFILM_CONFIG_CARRIER + 6);
+    Halide::Expr cell = Halide::max(configuration(FOTUFILM_CONFIG_CARRIER + 7), 1.0f);
+    Halide::Expr distance = rounded_rect_distance(
+        frame_x, frame_y, configuration(FOTUFILM_CONFIG_CARRIER),
+        configuration(FOTUFILM_CONFIG_CARRIER + 1), configuration(FOTUFILM_CONFIG_CARRIER + 2),
+        configuration(FOTUFILM_CONFIG_CARRIER + 3), configuration(FOTUFILM_CONFIG_CARRIER + 4));
+    Halide::Expr wobble = filing_noise((Halide::cast<float>(frame_x) + 0.5f) / cell,
+                                       (Halide::cast<float>(frame_y) + 0.5f) / cell);
+    Halide::Expr filed = distance + depth * Halide::clamp(0.5f + 0.5f * wobble, 0.0f, 1.0f);
+    Halide::Expr passed = disc_edge_share(filed, radius);
+    Halide::Expr density = -Halide::log(Halide::max(passed, 1.0e-6f)) * (1.0f / 2.3025851f);
+    return Halide::select(radius >= 0.0f, density, 0.0f);
 }
 
 /// Luminance of a three-plane Func at one pixel, in the renderer's working primaries.
