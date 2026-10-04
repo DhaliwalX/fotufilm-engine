@@ -32,11 +32,17 @@ public enum TransportKernelCompiler {
     /// `donorDepthMM` adds a donor stock's fourth record as a fourth receiver, solved at its own
     /// depth. It is coated against the green record and sensitive on that record's short-wave
     /// side, so it takes the green receiver's launch, capture, return and core.
+    ///
+    /// `hazeMM` blurs the returned light with the support's impurity scatter, a Gaussian sigma.
+    /// `reference` is the film's own construction when `model` adjusts its geometry or absorbers;
+    /// see `adjustedReturn` for how the return ratios follow.
     public static func compile(_ model: LayeredTransport, returnGain: [Float] = [],
                                sourceColour: Float = 0, hazeMM: Double = 0, donorDepthMM: Double? = nil,
+                               reference: LayeredTransport? = nil,
                                maximumComponents: Int = 8, edgeTolerance: Double = 0.005,
                                angularSamples: Int = 512) throws -> TransportCompilation {
         try model.validate()
+        try reference?.validate()
         guard (1...24).contains(maximumComponents), edgeTolerance.isFinite,
               edgeTolerance > 0 && edgeTolerance <= 0.02,
               returnGain.isEmpty || (returnGain.count == SpectralGrid.count && returnGain.allSatisfy { $0.isFinite && $0 >= 0 }),
@@ -44,15 +50,17 @@ public enum TransportKernelCompiler {
               hazeMM.isFinite && (0...0.5).contains(hazeMM) else {
             throw TransportError.invalid("invalid kernel compilation settings")
         }
-        // A separate physical haze model is needed before composing it with arbitrary radial
-        // distributions. Reject it rather than quietly adding a Gaussian variance to a ring.
-        guard hazeMM == 0 else { throw TransportError.unsupported("additional haze with layered transport") }
         let bands = SpectralGrid.count
         // Each receiver solves as one of the construction's three: the donor as green, moved.
-        var donorModel = model
-        if let donorDepthMM {
-            donorModel.recordDepthMM[1] = donorDepthMM
-            try donorModel.validate()
+        func donor(_ model: LayeredTransport) throws -> LayeredTransport {
+            var moved = model
+            if let donorDepthMM { moved.recordDepthMM[1] = donorDepthMM; try moved.validate() }
+            return moved
+        }
+        let donorModel = try donor(model)
+        let references = try reference.map { reference in
+            let lossless = try reference.adjusted(antiHalation: 0, baseThickness: 1, pressurePlate: 0)
+            return (film: [reference, try donor(reference)], lossless: [lossless, try donor(lossless)])
         }
         let receivers = donorDepthMM == nil ? 3 : 4
         func like(_ c: Int) -> Int { c < 3 ? c : 1 }
@@ -62,30 +70,41 @@ public enum TransportKernelCompiler {
         var solveCache = [String: TransportSolveResult]()
         var worstUnresolved = 0.0
         var compressionBound = 0.0
+        func solve(_ solving: LayeredTransport, _ r: Int, _ band: Int) throws -> TransportSolveResult {
+            var signature: [Double] = [Double(r), solving.recordDepthMM[r],
+                             LayeredTransport.sample(solving.angularExponent[r], band),
+                             LayeredTransport.sample(solving.captureProbability[r], band),
+                             LayeredTransport.sample(solving.frontIndex, band),
+                             LayeredTransport.sample(solving.rearIndex, band),
+                             solving.rearReflectance.map { LayeredTransport.sample($0, band) } ?? -1,
+                             solving.rearPlateReflectance.map { LayeredTransport.sample($0, band) } ?? -1]
+            for layer in solving.layers {
+                signature += [layer.thicknessMM, LayeredTransport.sample(layer.refractiveIndex, band),
+                              LayeredTransport.sample(layer.absorptionPerMM, band)]
+            }
+            let key = signature.map { String($0.bitPattern) }.joined(separator: ":")
+            if let found = solveCache[key] { return found }
+            let solved = try LayeredTransportSolver.solve(solving, receiver: r, band: band,
+                                                          angularSamples: angularSamples)
+            solveCache[key] = solved
+            return solved
+        }
         for c in 0..<receivers {
             let solving = c < 3 ? model : donorModel, r = like(c)
             for band in 0..<bands {
-                var signature = [Double(r), solving.recordDepthMM[r],
-                                 LayeredTransport.sample(model.angularExponent[r], band),
-                                 LayeredTransport.sample(model.captureProbability[r], band),
-                                 LayeredTransport.sample(model.frontIndex, band),
-                                 LayeredTransport.sample(model.rearIndex, band),
-                                 model.rearReflectance.map { LayeredTransport.sample($0, band) } ?? -1]
-                for layer in model.layers {
-                    signature += [layer.thicknessMM, LayeredTransport.sample(layer.refractiveIndex, band),
-                                  LayeredTransport.sample(layer.absorptionPerMM, band)]
-                }
-                let key = signature.map { String($0.bitPattern) }.joined(separator: ":")
-                let solved: TransportSolveResult
-                if let found = solveCache[key] { solved = found }
-                else {
-                    solved = try LayeredTransportSolver.solve(solving, receiver: r, band: band,
-                                                              angularSamples: angularSamples)
-                    solveCache[key] = solved
-                }
+                let solved = try solve(solving, r, band)
                 worstUnresolved = max(worstUnresolved, solved.unresolved)
-                let ratio = LayeredTransport.sample(model.returnedToDirect[r], band)
+                var ratio = LayeredTransport.sample(model.returnedToDirect[r], band)
                     * (returnGain.isEmpty ? 1 : Double(returnGain[band]))
+                if ratio > 0, let references {
+                    let side = c < 3 ? 0 : 1
+                    let film = try solve(references.film[side], r, band)
+                    let lossless = try solve(references.lossless[side], r, band)
+                    worstUnresolved = max(worstUnresolved, film.unresolved, lossless.unresolved)
+                    ratio *= adjustedReturn(
+                        filmRatio: LayeredTransport.sample(references.film[side].returnedToDirect[r], band),
+                        film: film.captured, adjusted: solved.captured, lossless: lossless.captured)
+                }
                 shares[c][band] = ratio / (1 + ratio)
                 if ratio > 0 && solved.kernel == nil {
                     throw TransportError.invalid("nonzero return ratio has no reflected capture")
@@ -97,6 +116,8 @@ public enum TransportKernelCompiler {
                 else { targetIndex[c][band] = targets.count; targets.append(kernel) }
             }
         }
+        // A hazed basis is compressed again, more finely, and that adds its own bound.
+        if hazeMM > 0 { compressionBound += 0.5 / Double(TransportRadialKernel.hazedNodes) }
         let support = max(targets.map { $0.quantile(0.9999) }.max() ?? 0, 1e-5)
         let distances = (1...128).map { support * pow(Double($0) / 128, 2) }
         let vectors = targets.map { target in distances.map { target.edgeSpread(distanceMM: $0) } }
@@ -119,7 +140,9 @@ public enum TransportKernelCompiler {
             selected.append(worstIndex)
         }
         var kernels = try model.coreSigmaMM.map { try TransportRadialKernel.gaussian(sigmaMM: $0) }
-        kernels += selected.map { targets[$0] }
+        // The returned light alone crosses the support, so the haze blurs the selected basis and
+        // never the cores. A blur cannot raise the fitted edge error.
+        kernels += try selected.map { hazeMM > 0 ? try targets[$0].hazed(sigmaMM: hazeMM) : targets[$0] }
         let maxShare = shares.flatMap { $0 }.max() ?? 0
         var core = Array(repeating: Array(repeating: Array(repeating: Float(0), count: bands), count: receivers),
                          count: kernels.count)
@@ -149,6 +172,27 @@ public enum TransportKernelCompiler {
                                     maximumReturnedShare: maxShare, maximumEdgeError: worstError + compressionBound,
                                     radialCompressionErrorBound: compressionBound,
                                     maximumUnresolvedPower: worstUnresolved)
+    }
+
+    /// Returned light per unit of light launched, measured where it is not hidden behind an
+    /// absorber: CineStill 800T's red return over the red capture of its construction.
+    static let measuredLaunch = 0.44
+
+    /// The factor an adjusted construction scales a film's return ratio by. A ratio is returned
+    /// light `launch × capture`. A film's constructions place its returns' geometry, but their
+    /// absorbers are fitted to the halo's shape, so `filmRatio / film` overstates the launch
+    /// behind a dense one; scaling by the capture alone would let a thinned backing return
+    /// thousands of times the light. The launch therefore moves, in log capture, from the film's
+    /// own at its capture to the measured launch at the capture of the same stack without
+    /// absorbers. The film's construction returns its own ratio; an adjusted one, the physics
+    /// between those two calibrated ends. User gains multiply on top.
+    static func adjustedReturn(filmRatio: Double, film: Double, adjusted: Double,
+                               lossless: Double) -> Double {
+        guard adjusted > 0, film > 0 else { return 0 }
+        guard filmRatio > 0, lossless > film * (1 + 1e-9) else { return adjusted / film }
+        let launch = filmRatio / film
+        let w = log(lossless / adjusted) / log(lossless / film)
+        return adjusted / film * pow(measuredLaunch / launch, 1 - w)
     }
 
     /// The convex pair with the smallest largest error, the measure the compiler accepts by.
@@ -237,6 +281,31 @@ extension TransportRadialKernel {
     }
 
     /// Equal-mass quadrature compression, preserving nonnegative weights and their total.
+    /// Nodes a hazed kernel keeps: finer than a solved target's, since it is compressed again.
+    static let hazedNodes = 2048
+
+    /// The kernel convolved with an isotropic Gaussian of `sigmaMM`. Each ring spreads over the
+    /// distances from the centre of points a Gaussian offset from it, by deterministic
+    /// equal-probability quadrature in the offset's radius and direction.
+    func hazed(sigmaMM: Double, radialSamples: Int = 32, angularSamples: Int = 16) throws -> Self {
+        guard sigmaMM > 0 else { return self }
+        let offsets = (0..<radialSamples).map {
+            sigmaMM * sqrt(-2 * log(1 - (Double($0) + 0.5) / Double(radialSamples)))
+        }
+        // Distance from the centre is symmetric in the offset's direction, so half a turn serves.
+        let turns = (0..<angularSamples).map { cos(.pi * (Double($0) + 0.5) / Double(angularSamples)) }
+        var radii = [Double](), weights = [Double]()
+        radii.reserveCapacity(mass.count * radialSamples * angularSamples)
+        weights.reserveCapacity(radii.capacity)
+        for (r, m) in zip(radiusMM, mass) {
+            let share = m / Double(radialSamples * angularSamples)
+            for s in offsets { for c in turns {
+                radii.append(sqrt(max(r * r + s * s + 2 * r * s * c, 0))); weights.append(share)
+            } }
+        }
+        return try Self(radiusMM: radii, mass: weights).coarsened(maximumNodes: Self.hazedNodes)
+    }
+
     func coarsened(maximumNodes: Int) throws -> Self {
         if mass.count <= maximumNodes { return self }
         let capacity = 1 / Double(maximumNodes)

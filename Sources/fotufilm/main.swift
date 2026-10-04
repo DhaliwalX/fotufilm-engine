@@ -73,8 +73,6 @@ Options:
   --transport-backend <cpu|metal> Transport convolution backend (default: cpu)
   --iterations <n>  Render n times; the first warms caches, remaining runs report
                      processing time and throughput (31 measures 30 warm frames)
-  --halation-haze <mm> Support impurity scatter as a Gaussian sigma in
-                     millimeters (default: the stock's own figure)
   --adjacency-model <m> gaussian or screened-diffusion (default: stock's model)
   --stages           Instead of one render, write the frame the film would make
                      with only the physics enabled up to each stage, into the
@@ -955,7 +953,6 @@ if let text = flags["--halation-return"] {
     }
     options.halationReturnRatio = percent / 100
 }
-if let z = flags["--halation-haze"] { options.halationHazeMM = Float(z) }
 if let path = flags["--transport"] {
     do {
         let model = try JSONDecoder().decode(LayeredTransport.self,

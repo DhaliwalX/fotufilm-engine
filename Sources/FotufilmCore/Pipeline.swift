@@ -94,6 +94,15 @@ public struct FotufilmEngine {
         /// otherwise. Supported by the checked planar renderer, not legacy realtime/AOT APIs.
         public var layeredTransport: LayeredTransport? = nil
         public var transportBackend: TransportBackend = .cpu
+        /// Layered Transport: multiplier on the absorption of every layer of the construction but
+        /// its support — the anti-halation layer, or the dyed coating standing in for one. 0
+        /// removes them. Legacy ignores it.
+        public var antiHalationScale: Float = 1
+        /// Layered Transport: multiplier on the support's thickness. Legacy ignores it.
+        public var baseThicknessScale: Float = 1
+        /// Layered Transport: reflectance of a pressure plate against the back of the film, 0…1.
+        /// 0 — the default — leaves the back open. Legacy ignores it.
+        public var pressurePlateReflectance: Float = 0
         /// Multiplier on taking-lens veiling glare. The default is 0 because photographic inputs
         /// already include lens glare. Enable it for synthetic light or to model additional glare
         /// relative to the capture lens.

@@ -545,8 +545,7 @@ final class EditorControlCatalogueTests: XCTestCase {
             .keys.sorted()
 
         XCTAssertEqual(unexposedOrGlobal,
-                       ["adjacencyModel", "couplerRangeScale", "halationHazeMM",
-                        "layeredTransport", "transportBackend"])
+                       ["adjacencyModel", "couplerRangeScale", "layeredTransport", "transportBackend"])
     }
 
     func testTheAuditedGapsAreAllOffered() {

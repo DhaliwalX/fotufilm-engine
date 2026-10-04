@@ -15,6 +15,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case grain, grainMottle, mottleOverride, mottleShare, grainModel, grainAnimation, seed
     case filmGrainSize, filmColourGrain, filmRedLayer, filmGreenLayer, filmBlueLayer, filmScanSoftness
     case halation, halationReturn, halationColour, halationSpectrum, halationModel, estimatedHalation
+    case halationHaze, antiHalation, baseThickness, pressurePlate
     case couplers, couplerReach, couplerSelf, couplerRedGreen, couplerGreenBlue
     case chromaticFringeAmount, chromaticFringeRadius
     case push, bleach, expired, shutter

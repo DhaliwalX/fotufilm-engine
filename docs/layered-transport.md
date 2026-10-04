@@ -49,6 +49,28 @@ and the red's 15.5 µm. It is sensitive on the green record's short-wave side, s
 light it receives back from the base is green light: it takes the green receiver's
 launch, capture, return strength and core, and only its depth differs.
 
+## Construction controls
+
+Four controls under Halation reshape the construction itself. Base Haze applies to
+both models; the other three apply to Layered Transport and leave Legacy unchanged.
+
+| Control | Effect |
+| --- | --- |
+| Base Haze | Blurs the returned light by the base's internal scatter, a Gaussian sigma in µm. 0 keeps the film's own figure |
+| Anti-Halation | Scales the absorption of every layer except the base: the anti-halation layer, or the dyed coating standing in for one. 0 removes them |
+| Base Thickness | Scales the base's thickness. The ring widens; the amount does not change |
+| Pressure Plate | A reflecting plate pressed against an open back. Light the back surface lets out returns from it. An opaque backing hides it |
+
+A film's return ratio is calibrated, but its construction's absorber is fitted to
+the halo's shape rather than its amount. Scaling the return by the capture alone
+would let a thinned backing return thousands of times the light. An adjusted
+construction's return therefore runs between two calibrated ends: the film's own
+ratio at its own construction, and, for the same stack without absorbers, a measured
+launch of 0.44 times its capture. The physics sets the curve between them. Removing
+the backing from a film calibrated at 0.55% returns about 12% of the direct exposure.
+A strongly adjusted construction that eight components cannot fit within the 0.005
+edge error is fitted within 0.02.
+
 The inferred fields share the film profiles' CC BY-SA 4.0 license. Aerocolor's
 generic PET optical constants use the CC0
 [RefractiveIndex.INFO Zhang dataset](https://refractiveindex.info/?shelf=organic&book=polyethylene_terephthalate&page=Zhang).
@@ -98,6 +120,7 @@ error convention.
 | `layers` | Front-to-rear layers: unique ID, thickness in mm, refractive index, and absorption in inverse mm |
 | `frontIndex`, `rearIndex` | Surrounding media at the two external interfaces |
 | `rearReflectance` | Optional opaque backing reflectance; the complement is absorbed. Omit for the dielectric rear interface |
+| `rearPlateReflectance` | Optional reflectance of a plate against the dielectric rear interface; not allowed with `rearReflectance` |
 | `recordDepthMM` | Three capture planes measured from the exposing surface, in R/G/B record order |
 | `angularExponent` | Three cosine-power conditional launch distributions |
 | `captureProbability` | Three probabilities of capture per subsequent crossing of the receiver plane |

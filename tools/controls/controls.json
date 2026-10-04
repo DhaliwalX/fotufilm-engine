@@ -1712,6 +1712,198 @@
     },
     {
       "availability" : "film",
+      "binding" : "halationHazeMicrometers",
+      "commandLineFlag" : "--halation-haze",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Scatter inside the base as a Gaussian sigma, 0-500 micrometers (default: 0, the stock's own figure)",
+      "commandLineMax" : 500,
+      "commandLineMin" : 0,
+      "commandLinePlaceholder" : "<um>",
+      "detail" : "Soften the halo with scatter inside the film base.",
+      "documentation" : "Blurs the returned light by the base's impurity scatter, a Gaussian sigma in micrometres. Both halation models apply it; 0 keeps the film's own figure.",
+      "drives" : [
+
+      ],
+      "field" : "halationHaze",
+      "foldsUnder" : "halation",
+      "group" : "film",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "the Android editor does not yet offer the construction's controls",
+        "finalcut" : "plugin hosts do not yet offer the construction's controls",
+        "resolve" : "plugin hosts do not yet offer the construction's controls"
+      },
+      "persistedKey" : "halationHaze",
+      "scale" : {
+        "admittedMax" : 100,
+        "admittedMin" : 0,
+        "max" : 100,
+        "min" : 0,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "micrometers"
+      },
+      "scope" : "edit",
+      "section" : "filmEmulsion",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web",
+        "cli"
+      ],
+      "title" : "Base Haze",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "film",
+      "binding" : "antiHalationScale",
+      "commandLineFlag" : "--anti-halation",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Layered Transport: absorption of the construction's anti-halation layers, 0-4 (default: 1; 0 removes them)",
+      "commandLineMax" : 4,
+      "commandLineMin" : 0,
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Set the strength of the film's anti-halation layer. Layered Transport only.",
+      "documentation" : "Scales the absorption of the Layered Transport construction's anti-halation layer, or the dyed coating standing in for one. Lower lets more light return from the base, so the halo brightens and widens; 0 removes the layer, as on a film with its backing taken off. The amount moves between the film's own calibrated return and the return of the same stack without absorbers at a measured launch.",
+      "drives" : [
+
+      ],
+      "field" : "antiHalation",
+      "foldsUnder" : "halation",
+      "group" : "film",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "the Android editor does not yet offer the construction's controls",
+        "finalcut" : "plugin hosts do not yet offer the construction's controls",
+        "resolve" : "plugin hosts do not yet offer the construction's controls"
+      },
+      "persistedKey" : "antiHalation",
+      "scale" : {
+        "admittedMax" : 1.5,
+        "admittedMin" : 0,
+        "max" : 1.5,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "filmEmulsion",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web",
+        "cli"
+      ],
+      "title" : "Anti-Halation",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "film",
+      "binding" : "baseThicknessScale",
+      "commandLineFlag" : "--base-thickness",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Layered Transport: multiplier on the support's thickness, 0.25-3 (default: 1)",
+      "commandLineMax" : 3,
+      "commandLineMin" : 0.25,
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Make the film base thinner or thicker. Layered Transport only.",
+      "documentation" : "Scales the Layered Transport construction's support. Light returning from the base's back surface travels farther through a thicker base, so the halo's ring widens.",
+      "drives" : [
+
+      ],
+      "field" : "baseThickness",
+      "foldsUnder" : "halation",
+      "group" : "film",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "the Android editor does not yet offer the construction's controls",
+        "finalcut" : "plugin hosts do not yet offer the construction's controls",
+        "resolve" : "plugin hosts do not yet offer the construction's controls"
+      },
+      "persistedKey" : "baseThickness",
+      "scale" : {
+        "admittedMax" : 2,
+        "admittedMin" : 0.5,
+        "max" : 2,
+        "min" : 0.5,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "multiplier"
+      },
+      "scope" : "edit",
+      "section" : "filmEmulsion",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web",
+        "cli"
+      ],
+      "title" : "Base Thickness",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "film",
+      "binding" : "pressurePlateReflectance",
+      "commandLineFlag" : "--pressure-plate",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Layered Transport: reflectance of a pressure plate behind the film, 0-1 (default: 0)",
+      "commandLineMax" : 1,
+      "commandLineMin" : 0,
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Reflect light back from a plate behind the film. Layered Transport only.",
+      "documentation" : "Places a camera's pressure plate against the back of a Layered Transport construction. Light the base's back surface lets out returns from the plate, adding to the halo; a film with an opaque backing hides it.",
+      "drives" : [
+
+      ],
+      "field" : "pressurePlate",
+      "foldsUnder" : "halation",
+      "group" : "film",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "the Android editor does not yet offer the construction's controls",
+        "finalcut" : "plugin hosts do not yet offer the construction's controls",
+        "resolve" : "plugin hosts do not yet offer the construction's controls"
+      },
+      "persistedKey" : "pressurePlate",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : 0,
+        "max" : 1,
+        "min" : 0,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "filmEmulsion",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web",
+        "cli"
+      ],
+      "title" : "Pressure Plate",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "film",
       "binding" : "couplerScale",
       "commandLineFlag" : "--couplers",
       "commandLineGeneric" : true,

@@ -370,8 +370,11 @@ final class LayeredTransportTests: XCTestCase {
         let identity = try FotufilmEngine(stock: TestStocks.negative, options: options).processChecked(linearRGB: image)
         let identityError = zip(identity.planes.flatMap{$0}, image.planes.flatMap{$0}).map { abs($0-$1) }.max() ?? 0
         XCTAssertLessThan(identityError, 0.0001)
-        options.stage = .full; options.halationHazeMM = 0.01
-        XCTAssertThrowsError(try FotufilmEngine(stock: TestStocks.negative, options: options).processChecked(linearRGB: image))
+        // The base's haze blurs the returned light only.
+        options.stage = .full; options.halationHazeMM = 0.05
+        let hazed = try FotufilmEngine(stock: TestStocks.negative, options: options).processChecked(linearRGB: image)
+        XCTAssertTrue(hazed.planes.flatMap { $0 }.allSatisfy(\.isFinite))
+        XCTAssertGreaterThan(zip(hazed.planes[0], full.planes[0]).map { abs($0 - $1) }.max() ?? 0, 0)
     }
 
     /// A uniform field is untouched by the film's optics, so Layered develops it as Legacy does.
@@ -438,5 +441,97 @@ final class LayeredTransportTests: XCTestCase {
         var options = TransportFixtures.quiet
         options.cameraPreflash = 0.05
         _ = try assertUniformFieldsMatchLegacy(stock: stock, options: options)
+    }
+}
+
+final class LayeredConstructionControlTests: XCTestCase {
+    private func captured(_ model: LayeredTransport, band: Int = 40) throws -> Double {
+        try LayeredTransportSolver.solve(model, receiver: 0, band: band).captured
+    }
+
+    func testTheFilmsOwnSettingsLeaveItsConstructionAlone() throws {
+        let model = TransportFixtures.stack
+        XCTAssertEqual(try model.adjusted(antiHalation: 1, baseThickness: 1, pressurePlate: 0), model)
+        // An opaque backing hides a plate behind it.
+        XCTAssertEqual(try TransportFixtures.mirror.adjusted(antiHalation: 1, baseThickness: 1, pressurePlate: 1),
+                       TransportFixtures.mirror)
+        XCTAssertThrowsError(try model.adjusted(antiHalation: -1, baseThickness: 1, pressurePlate: 0))
+        XCTAssertThrowsError(try model.adjusted(antiHalation: 1, baseThickness: 1, pressurePlate: 2))
+    }
+
+    func testEachControlMovesTheReturnedLightTheWayItsPhysicsDoes() throws {
+        let model = TransportFixtures.stack
+        let film = try captured(model)
+        // Less absorption, and a plate behind the open back, return more light.
+        XCTAssertGreaterThan(try captured(model.adjusted(antiHalation: 0.5, baseThickness: 1, pressurePlate: 0)), film)
+        XCTAssertLessThan(try captured(model.adjusted(antiHalation: 1.5, baseThickness: 1, pressurePlate: 0)), film)
+        let plated = try captured(model.adjusted(antiHalation: 1, baseThickness: 1, pressurePlate: 0.5))
+        XCTAssertGreaterThan(plated, film)
+        XCTAssertGreaterThan(try captured(model.adjusted(antiHalation: 1, baseThickness: 1, pressurePlate: 1)), plated)
+        // A thicker base carries the same light farther.
+        let thin = try LayeredTransportSolver.solve(model, receiver: 0, band: 40)
+        let thick = try LayeredTransportSolver.solve(
+            model.adjusted(antiHalation: 1, baseThickness: 2, pressurePlate: 0), receiver: 0, band: 40)
+        XCTAssertGreaterThan(try XCTUnwrap(thick.kernel).quantile(0.5), try XCTUnwrap(thin.kernel).quantile(0.5))
+        // A perfect plate lets nothing out of the back: what escapes leaves through the front.
+        let open = try LayeredTransportSolver.solve(
+            model.adjusted(antiHalation: 0, baseThickness: 1, pressurePlate: 0), receiver: 0, band: 40)
+        let mirrored = try LayeredTransportSolver.solve(
+            model.adjusted(antiHalation: 0, baseThickness: 1, pressurePlate: 1), receiver: 0, band: 40)
+        XCTAssertLessThan(mirrored.escaped, open.escaped)
+    }
+
+    func testAnAdjustedReturnRunsFromTheFilmsOwnToTheMeasuredLaunch() {
+        let ratio = 0.0055, film = 1.6e-4, lossless = 0.27
+        func scaled(_ adjusted: Double) -> Double {
+            ratio * TransportKernelCompiler.adjustedReturn(filmRatio: ratio, film: film,
+                                                            adjusted: adjusted, lossless: lossless)
+        }
+        XCTAssertEqual(scaled(film), ratio, accuracy: ratio * 1e-12)
+        XCTAssertEqual(scaled(lossless), TransportKernelCompiler.measuredLaunch * lossless, accuracy: 1e-12)
+        var last = 0.0
+        for c in stride(from: 1e-5, through: 0.27, by: 0.003) {
+            XCTAssertGreaterThan(scaled(c), last); last = scaled(c)
+        }
+        // With nothing to remove, the return follows the capture.
+        XCTAssertEqual(TransportKernelCompiler.adjustedReturn(filmRatio: ratio, film: 0.2, adjusted: 0.3, lossless: 0.2),
+                       1.5, accuracy: 1e-12)
+    }
+
+    func testHazeBlursTheReturnedBasisAndNeverTheCores() throws {
+        let model = TransportFixtures.stack
+        let clear = try TransportKernelCompiler.compile(model)
+        let hazed = try TransportKernelCompiler.compile(model, hazeMM: 0.05)
+        XCTAssertEqual(clear.kernels.count, hazed.kernels.count)
+        XCTAssertEqual(clear.saturated, hazed.saturated)
+        XCTAssertLessThanOrEqual(hazed.maximumEdgeError, 0.005)
+        for k in 0..<3 { XCTAssertEqual(clear.kernels[k], hazed.kernels[k]) }
+        // A two-dimensional Gaussian adds twice its variance to the mean squared radius.
+        func spread(_ kernel: TransportRadialKernel) -> Double {
+            zip(kernel.radiusMM, kernel.mass).reduce(0) { $0 + $1.0 * $1.0 * $1.1 }
+        }
+        for k in 3..<clear.kernels.count {
+            XCTAssertEqual(spread(hazed.kernels[k]) - spread(clear.kernels[k]), 2 * 0.05 * 0.05,
+                           accuracy: 0.05 * 2 * 0.05 * 0.05)
+        }
+        let point = try TransportRadialKernel(radiusMM: [0], mass: [1]).hazed(sigmaMM: 0.1)
+        XCTAssertEqual(spread(point), 2 * 0.1 * 0.1, accuracy: 0.05 * 2 * 0.1 * 0.1)
+    }
+
+    func testTheEditorsControlsReachALayeredRender() throws {
+        var options = TransportFixtures.quiet
+        options.localTone = false
+        options.layeredTransport = TransportFixtures.stack
+        var image = ImageBuffer(width: 48, height: 1, planes: Array(repeating: Array(repeating: 0.02, count: 48), count: 3))
+        image.planes[0][24] = 60; image.planes[1][24] = 60; image.planes[2][24] = 60
+        let film = try FotufilmEngine(stock: TestStocks.negative, options: options).processChecked(linearRGB: image)
+        for adjust: (inout FotufilmEngine.Options) -> Void in [
+            { $0.antiHalationScale = 0.25 }, { $0.baseThicknessScale = 2 }, { $0.pressurePlateReflectance = 1 },
+        ] {
+            var adjusted = options; adjust(&adjusted)
+            let render = try FotufilmEngine(stock: TestStocks.negative, options: adjusted).processChecked(linearRGB: image)
+            XCTAssertTrue(render.planes.flatMap { $0 }.allSatisfy(\.isFinite))
+            XCTAssertGreaterThan(zip(render.planes[0], film.planes[0]).map { abs($0 - $1) }.max() ?? 0, 1e-5)
+        }
     }
 }

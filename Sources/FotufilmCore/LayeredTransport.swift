@@ -29,6 +29,9 @@ public struct LayeredTransport: Codable, Sendable, Equatable {
     public var rearIndex: [Double]
     /// Reflectance of an opaque backing; its complement is absorbed. Nil uses the dielectric boundary.
     public var rearReflectance: [Double]?
+    /// Reflectance of a plate pressed against an open rear surface, as a camera's pressure plate
+    /// is. Light the rear surface transmits returns from it, re-crossing that surface in place.
+    public var rearPlateReflectance: [Double]?
     /// Capture/launch planes measured down from the exposing surface, in R,G,B order.
     public var recordDepthMM: [Double]
     public var angularExponent: [[Double]]
@@ -40,12 +43,14 @@ public struct LayeredTransport: Codable, Sendable, Equatable {
 
     public init(constructionID: String, layers: [Layer],
                 frontIndex: [Double] = [1], rearIndex: [Double] = [1],
-                rearReflectance: [Double]? = nil, recordDepthMM: [Double],
+                rearReflectance: [Double]? = nil, rearPlateReflectance: [Double]? = nil,
+                recordDepthMM: [Double],
                 angularExponent: [[Double]], captureProbability: [[Double]],
                 returnedToDirect: [[Double]], coreSigmaMM: [Double]) {
         self.constructionID = constructionID
         self.layers = layers; self.frontIndex = frontIndex; self.rearIndex = rearIndex
-        self.rearReflectance = rearReflectance; self.recordDepthMM = recordDepthMM
+        self.rearReflectance = rearReflectance; self.rearPlateReflectance = rearPlateReflectance
+        self.recordDepthMM = recordDepthMM
         self.angularExponent = angularExponent; self.captureProbability = captureProbability
         self.returnedToDirect = returnedToDirect; self.coreSigmaMM = coreSigmaMM
     }
@@ -76,6 +81,10 @@ public struct LayeredTransport: Codable, Sendable, Equatable {
         try spectrum(frontIndex, 1...4, "frontIndex")
         try spectrum(rearIndex, 1...4, "rearIndex")
         if let rearReflectance { try spectrum(rearReflectance, 0...1, "rearReflectance") }
+        if let rearPlateReflectance {
+            try require(rearReflectance == nil, "an opaque backing leaves no rear surface for a plate")
+            try spectrum(rearPlateReflectance, 0...1, "rearPlateReflectance")
+        }
         let thickness = layers.reduce(0) { $0 + $1.thicknessMM }
         try require(recordDepthMM.count == 3 && recordDepthMM.allSatisfy {
             $0.isFinite && $0 > 0 && $0 < thickness
@@ -271,11 +280,20 @@ public enum LayeredTransportSolver {
                     if next >= count, let override = model.rearReflectance {
                         let value = LayeredTransport.sample(override, band)
                         reflectance = (value, value)
+                    } else if next >= count, let plate = model.rearPlateReflectance {
+                        // The plate returns what the surface transmits, and the surface
+                        // reflects part of that back again: the incoherent sum of the bounces.
+                        let plated = LayeredTransport.sample(plate, band)
+                        func behind(_ r: Double) -> Double {
+                            r >= 1 ? 1 : r + (1 - r) * (1 - r) * plated / (1 - r * plated)
+                        }
+                        reflectance = (behind(reflectance.s), behind(reflectance.p))
                     }
                     let reflectedS = packet.s * reflectance.s, reflectedP = packet.p * reflectance.p
                     let transmittedS = packet.s - reflectedS, transmittedP = packet.p - reflectedP
-                    if next >= count && model.rearReflectance != nil {
-                        // An effective opaque backing reflects this fraction and absorbs the rest.
+                    if next >= count && (model.rearReflectance != nil || model.rearPlateReflectance != nil) {
+                        // An effective opaque backing, or the plate, reflects this fraction and
+                        // absorbs the rest.
                         absorbed += transmittedS + transmittedP
                     } else if exterior { escaped += transmittedS + transmittedP }
                     else if transmittedS + transmittedP > 0 {

@@ -30,16 +30,19 @@ public enum LayeredTransportRenderer {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var cache = BoundedCache<UInt64, Prepared>(limit: 4)
 
-    private static func prepare(model: LayeredTransport, stock: FilmStock,
+    private static func prepare(model film: LayeredTransport, stock: FilmStock,
                                 options: FotufilmEngine.Options) throws -> Prepared {
-        let model = try HalationReturn.applying(options.halationReturnRatio, to: model)
+        let model = try HalationReturn.applying(options.halationReturnRatio, to: film)
+        let haze = options.halationHazeMM ?? stock.halationHazeMM
         let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
         var key: UInt64 = 0xcbf29ce484222325
-        for byte in try encoder.encode(model) { key = (key ^ UInt64(byte)) &* 0x100000001b3 }
+        for byte in try encoder.encode(film) { key = (key ^ UInt64(byte)) &* 0x100000001b3 }
+        key = (key ^ UInt64((options.halationReturnRatio ?? -1).bitPattern)) &* 0x100000001b3
         key ^= SpectralRuntime.cacheIdentifier(for: stock)
         key ^= options.lensFilters.signature
         for values in [options.resolvedSceneSpectrum(referenceKelvin: stock.referenceIlluminantKelvin), options.halationReturnGain,
-                       [options.sceneIlluminantKelvin ?? 0, options.halationSourceColour, options.halationHazeMM ?? 0]] {
+                       [options.sceneIlluminantKelvin ?? 0, options.halationSourceColour, haze],
+                       [options.antiHalationScale, options.baseThicknessScale, options.pressurePlateReflectance]] {
             key = (key ^ UInt64(values.count)) &* 0x100000001b3
             for value in values { key = (key ^ UInt64(value.bitPattern)) &* 0x100000001b3 }
         }
@@ -47,9 +50,22 @@ public enum LayeredTransportRenderer {
         if let found { return found }
         // A donor's fourth record is solved at its own depth; one without a depth sits at green's.
         let donorDepth = stock.donorLayers.first.map { $0.depthUM.map { Double($0) / 1000 } ?? model.recordDepthMM[1] }
-        let compilation = try TransportKernelCompiler.compile(model, returnGain: options.halationReturnGain,
-            sourceColour: options.halationSourceColour, hazeMM: Double(options.halationHazeMM ?? 0),
-            donorDepthMM: donorDepth)
+        let adjusted = try model.adjusted(antiHalation: options.antiHalationScale,
+                                          baseThickness: options.baseThicknessScale,
+                                          pressurePlate: options.pressurePlateReflectance)
+        func compile(edgeTolerance: Double) throws -> TransportCompilation {
+            try TransportKernelCompiler.compile(adjusted, returnGain: options.halationReturnGain,
+                sourceColour: options.halationSourceColour, hazeMM: Double(haze),
+                donorDepthMM: donorDepth, reference: adjusted == model ? nil : film,
+                edgeTolerance: edgeTolerance)
+        }
+        // Every film's own construction fits the renderer's components within 0.005. A strongly
+        // adjusted one may not, and takes the compiler's widest tolerance rather than failing.
+        let compilation: TransportCompilation
+        do { compilation = try compile(edgeTolerance: 0.005) }
+        catch TransportError.convergence where adjusted != model {
+            compilation = try compile(edgeTolerance: 0.02)
+        }
         let exposure = try SpectralRuntime.transportExposureTables(stock: stock, options: options,
             compilation: compilation)
         let result = Prepared(compilation: compilation, exposure: exposure)
