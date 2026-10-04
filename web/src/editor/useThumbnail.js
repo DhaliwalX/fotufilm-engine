@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 
+// Thumbnails show the film's colour and tone only: halation and grain are left off.
+export const thumbnailEdit = (edit) => ({
+  ...edit,
+  halationModel: "legacy",
+  profile: { ...edit.profile, halation: 0 },
+  params: { ...edit.params, grain: 0 },
+});
+
 // A small background render of `image` under `edit` once `ref`'s element scrolls into view, for the
 // film column and the format grid. The last thumbnail stays up until the next one arrives, and
 // another photograph's never stands in for this one's.
@@ -21,7 +29,7 @@ export function useThumbnail({ image, session, edit, stock, videoTime, maxEdge }
             .render({
               image,
               stock,
-              edit: JSON.parse(shown),
+              edit: thumbnailEdit(JSON.parse(shown)),
               videoTime,
               maxEdge,
               background: true,
