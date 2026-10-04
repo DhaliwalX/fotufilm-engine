@@ -233,12 +233,15 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
         return b.film_curve(configuration, curves, channel, log_exposure);
     };
 
+    // A record input's fourth channel is a donor stock's fourth record.
+    Expr donor_record = use_donor ? in.decoded(3) : Expr();
     Func exposure(name("exposure"));
     exposure(x, y, c) = in.record_in
-        ? Halide::mux(c, {in.decoded(0), in.decoded(1), in.decoded(2)})
+        ? (use_donor ? Halide::mux(c, {in.decoded(0), in.decoded(1), in.decoded(2), donor_record})
+                     : Halide::mux(c, {in.decoded(0), in.decoded(1), in.decoded(2)}))
         : scene_exposure(configuration, in.exposure_lut, in.decoded(0), in.decoded(1),
                          in.decoded(2), c, x + p.origin_x_, y + p.origin_y_,
-                         approximate, b.half_lut_math());
+                         approximate, b.half_lut_math(), donor_record);
 
     const int exposure_channels = use_donor ? 4 : 3;
     Func light = exposure;
@@ -282,7 +285,7 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
             donor_exposure(x, y, c) = scene_exposure(
                 configuration, in.exposure_lut, in.decoded(0), in.decoded(1),
                 in.decoded(2), 3, x + p.origin_x_, y + p.origin_y_, approximate,
-                b.half_lut_math());
+                b.half_lut_math(), donor_record);
         }
     }
 

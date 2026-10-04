@@ -238,8 +238,9 @@ public:
         graph::Inputs inputs{
             configuration_, exposure_lut_, *this, features_, features,
             [&](int channel) {
+                // Planar input has no fourth record: a donor's arrives as additional exposure.
                 return channel == 0 ? input_r_(x, y) : channel == 1 ? input_g_(x, y)
-                                                                    : input_b_(x, y);
+                     : channel == 2 ? input_b_(x, y) : Expr(0.0f);
             },
             source, source,
             Expr(monochrome_), Expr(grain_mode_), texture,

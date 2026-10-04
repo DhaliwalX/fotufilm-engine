@@ -355,8 +355,62 @@ final class LayeredTransportTests: XCTestCase {
         XCTAssertLessThan(identityError, 0.0001)
         options.stage = .full; options.halationHazeMM = 0.01
         XCTAssertThrowsError(try FotufilmEngine(stock: TestStocks.negative, options: options).processChecked(linearRGB: image))
-        options.halationHazeMM = nil
-        var donor = TestStocks.negative; donor.donorLayers = [TestStocks.donor]
-        XCTAssertThrowsError(try FotufilmEngine(stock: donor, options: options).processChecked(linearRGB: image))
+    }
+
+    /// A uniform field is untouched by the film's optics, so Layered develops it as Legacy does.
+    private func assertUniformFieldsMatchLegacy(stock: FilmStock, options configured: FotufilmEngine.Options,
+                                                file: StaticString = #filePath, line: UInt = #line) throws -> [Float] {
+        var options = configured
+        options.layeredTransport = TransportFixtures.stack
+        var legacy = options; legacy.layeredTransport = nil
+        var outputs = [Float]()
+        for colour: [Float] in [[0.18, 0.18, 0.18], [2, 0.04, 0.1], [0.2, 1.5, 0.05], [0.002, 0.003, 0.004]] {
+            let image = ImageBuffer(width: 9, height: 7, planes: colour.map { Array(repeating: $0, count: 63) })
+            let expected = try FotufilmEngine(stock: stock, options: legacy).processChecked(linearRGB: image)
+            for amount: Float in [0, 1] {
+                options.halationScale = amount
+                let layered = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: image)
+                for c in 0..<3 {
+                    XCTAssertEqual(layered.planes[c][31], expected.planes[c][31], accuracy: 0.00005,
+                                   "colour \(colour) amount \(amount)", file: file, line: line)
+                }
+            }
+            outputs += (0..<3).map { expected.planes[$0][31] }
+        }
+        return outputs
+    }
+
+    func testDonorStocksCarryTheirFourthRecordThroughTransport() throws {
+        guard TransportBackend.cpu.isAvailable else { throw XCTSkip("Halide unavailable") }
+        var stock = TestStocks.negative; stock.adjacencyStrength = 0
+        var options = TransportFixtures.quiet; options.couplerScale = 1
+        let plain = try assertUniformFieldsMatchLegacy(stock: stock, options: options)
+        stock.donorLayers = [TestStocks.donor]
+        let donated = try assertUniformFieldsMatchLegacy(stock: stock, options: options)
+        XCTAssertGreaterThan(zip(plain, donated).map { abs($0 - $1) }.max() ?? 0, 0.002,
+                             "the fourth record changes what develops")
+    }
+
+    func testTheDonorTakesTheReceiversEitherSideOfItsDepth() {
+        var stock = TestStocks.negative
+        var model = TransportFixtures.stack
+        model.recordDepthMM = [0.015, 0.009, 0.003]
+        XCTAssertNil(LayeredTransportRenderer.donorReceivers(model: model, stock: stock))
+        var layer = TestStocks.donor
+        for (depth, expected): (Float, [Float]) in [(11, [1.0 / 3, 2.0 / 3, 0]), (9, [0, 1, 0]),
+                                                    (1, [0, 0, 1]), (20, [1, 0, 0]), (6, [0, 0.5, 0.5])] {
+            layer.depthUM = depth; stock.donorLayers = [layer]
+            let weights = LayeredTransportRenderer.donorReceivers(model: model, stock: stock) ?? []
+            XCTAssertEqual(weights.count, 3)
+            for c in 0..<3 { XCTAssertEqual(weights[c], expected[c], accuracy: 1e-6, "depth \(depth)") }
+        }
+    }
+
+    func testPreflashExposesTheFilmOnce() throws {
+        guard TransportBackend.cpu.isAvailable else { throw XCTSkip("Halide unavailable") }
+        var stock = TestStocks.negative; stock.adjacencyStrength = 0
+        var options = TransportFixtures.quiet
+        options.cameraPreflash = 0.05
+        _ = try assertUniformFieldsMatchLegacy(stock: stock, options: options)
     }
 }

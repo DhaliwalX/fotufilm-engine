@@ -7,11 +7,8 @@ layered transport.
 
 ## Included inferred constructions
 
-The catalogue includes inferred constructions for 22 films: Acros 100, Aerocolor
-2460, Agfachrome 50/100/200, Astia 100F, CineStill 400D/800T, Delta 3200,
-Double-X 5222, Eterna 500, Eterna Vivid 500, F64D, FP4 Plus 125, HP5 Plus 400,
-Kodachrome 25/64/200, T-Max 100, Tri-X 400, and VISION3 250D/500T. Select
-**Layered Transport** to use them. Legacy remains the default and retains its
+Every film in the catalogue except Instax Mini and Instax Wide includes an inferred
+construction. Select **Layered Transport** to use them. Legacy remains the default and retains its
 separate halation parameters.
 
 These constructions transfer existing estimated halo shapes into an optical
@@ -31,12 +28,23 @@ thinner support produces a different shape from the previous acetate estimate;
 the numerical checks pass, but the fit exceeds the 0.02 normalized edge-error
 screen used for the other profiles.
 
+Aerochrome 1443, Infrared Color, the three LomoChromes and Phoenix 200 have no halo
+shape estimate. Legacy renders them with a Lambertian launch whose round-trip
+transmittance returns the film's strength, and their constructions are fitted to
+that shape instead.
+
 All included constructions pass the renderer's existing eight-component,
 0.005 edge-error limit, nonnegative partition checks, power accounting and
 angular-quadrature checks. Those checks establish numerical behavior, not
-agreement with real film. Candidates exceeding the component limit are not
-included. Instax has no inferred candidate; donor-layer films still require
-Legacy. Other films retain the illustrative fallback described below.
+agreement with real film. Instax has no inferred candidate and retains the
+illustrative fallback described below.
+
+Donor-layer films transport their fourth record with the other three. The
+construction solves three receivers, so the donor takes their spectral partitions
+interpolated by its published depth in the coating: at 11 µm it lies between the
+green (9 µm) and red (15 µm) receivers and takes two thirds of the green partition
+and one third of the red. That interpolation is an assumption, not a solved
+fourth receiver.
 
 The inferred fields share the film profiles' CC BY-SA 4.0 license. Aerocolor's
 generic PET optical constants use the CC0
@@ -127,6 +135,7 @@ Return Spectrum changes the wavelength ratios before normalization. Source Colou
 blends toward a common positive spatial endpoint as an explicit creative control.
 
 The compiler fits convex pairs from at most eight solved radial basis kernels,
+choosing for each solved kernel the pair and share with the smallest largest error,
 plus the three compact no-return kernels. It checks the edge-spread fit at 128
 distances and adds the uniform error bound from equal-mass radial compression
 (`0.5/512` when compression is used). The default combined threshold is 0.005.
@@ -190,9 +199,9 @@ transport tails and reduction-grid alignment. This increases memory use at high 
 `--halation-model legacy|layered` selects the CLI model. Browser pack version 3 adds
 head/tail configurations, component exposure LUTs and positive weighted stencils to
 the version 2 size-ladder layout. `tools/build-wasm.sh` exports both `.pack` and
-`.layered.pack` for supported stocks. The index declares `layeredTransport: false` for
-donor-layer stocks, which currently require Legacy on every host. The browser reports
-that limitation without substituting models. Layered packs use the SIMD backend,
+`.layered.pack` for supported stocks. Browser packs carry three records, so the index
+declares `layeredTransport: false` for donor-layer stocks, which require Legacy in the
+browser. The browser reports that limitation without substituting models. Layered packs use the SIMD backend,
 including when WebGPU is available;
 Legacy keeps its existing WebGPU/SIMD selection. Runtime exposure, colour and grain
 controls work with either model. Layered stage-sequence exports and browser lens

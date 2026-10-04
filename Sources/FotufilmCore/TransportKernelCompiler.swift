@@ -135,18 +135,25 @@ public enum TransportKernelCompiler {
                                     maximumUnresolvedPower: worstUnresolved)
     }
 
+    /// The convex pair with the smallest largest error, the measure the compiler accepts by.
     private static func convexPairFit(basis: [[Double]], target: [Double]) -> [Double] {
         var best = Array(repeating: 0.0, count: basis.count)
         var bestCost = Double.infinity
+        func worst(_ a: Double, _ j: Int, _ k: Int) -> Double {
+            var e = 0.0
+            for d in target.indices { e = max(e, abs(a * basis[j][d] + (1 - a) * basis[k][d] - target[d])) }
+            return e
+        }
         for j in basis.indices { for k in j..<basis.count {
-            var numerator = 0.0, denominator = 0.0
-            for d in target.indices {
-                let v = basis[j][d] - basis[k][d]
-                numerator += (target[d] - basis[k][d]) * v; denominator += v * v
+            var lo = 0.0, hi = 1.0
+            if j != k {
+                for _ in 0..<48 {
+                    let m1 = lo + (hi - lo) / 3, m2 = hi - (hi - lo) / 3
+                    if worst(m1, j, k) <= worst(m2, j, k) { hi = m2 } else { lo = m1 }
+                }
             }
-            let a = denominator > 0 ? min(max(numerator / denominator, 0), 1) : 1
-            var cost = 0.0
-            for d in target.indices { cost += pow(a * basis[j][d] + (1-a) * basis[k][d] - target[d], 2) }
+            let a = j == k ? 1 : (lo + hi) / 2
+            let cost = worst(a, j, k)
             if cost < bestCost {
                 bestCost = cost; best = Array(repeating: 0, count: basis.count)
                 best[j] += a; best[k] += 1 - a

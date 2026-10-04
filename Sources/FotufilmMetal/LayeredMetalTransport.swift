@@ -30,7 +30,8 @@ public enum LayeredMetalTransport {
         var invocation = supplied
         invocation.featureMask |= FilmEngineFeature.floatIO
         var input = Array(repeating: Float(1), count: image.pixelCount * 4)
-        for c in 0..<3 { for i in 0..<image.pixelCount { input[4*i+c] = image.planes[c][i] } }
+        // A fourth plane is a donor stock's fourth record, read from the record input's alpha.
+        for c in 0..<image.planes.count { for i in 0..<image.pixelCount { input[4*i+c] = image.planes[c][i] } }
         if invocation.featureMask & FilmEngineFeature.flare != 0 {
             input.withUnsafeBufferPointer {
                 invocation.flareMean = invocation.measuredAreaWeightedFlareMean(

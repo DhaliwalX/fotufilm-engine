@@ -11,6 +11,8 @@ public enum TransportBackend: Int32, Sendable, Codable {
 /// Backend injection keeps optical preparation portable while Apple hosts use their AOT
 /// scene/development kernels and Metal convolution. The reference API uses the CPU implementation.
 public struct TransportExecution {
+    /// Renders an image, an invocation and whether to stop at the light. A record input with a
+    /// fourth plane carries a donor stock's fourth record beside the three.
     public let render: (ImageBuffer, FilmEngineInvocation, Bool) throws -> ImageBuffer
     public let convolve: (ImageBuffer, TransportStencil) throws -> ImageBuffer
     public init(render: @escaping (ImageBuffer, FilmEngineInvocation, Bool) throws -> ImageBuffer,
@@ -46,17 +48,35 @@ public enum LayeredTransportRenderer {
         let compilation = try TransportKernelCompiler.compile(model, returnGain: options.halationReturnGain,
             sourceColour: options.halationSourceColour, hazeMM: Double(options.halationHazeMM ?? 0))
         let exposure = try SpectralRuntime.transportExposureTables(stock: stock, options: options,
-                                                                  compilation: compilation)
+            compilation: compilation, donorReceivers: donorReceivers(model: model, stock: stock))
         let result = Prepared(compilation: compilation, exposure: exposure)
         lock.lock(); cache.insert(result, for: key); lock.unlock()
         return result
+    }
+
+    /// How a donor stock's fourth record takes the three receivers' transport: by its depth in
+    /// the coating, interpolated between the receivers either side of it and held beyond the
+    /// outermost. The construction solves three receivers; the fourth lies among them.
+    static func donorReceivers(model: LayeredTransport, stock: FilmStock) -> [Float]? {
+        guard let layer = stock.donorLayers.first else { return nil }
+        let depths = model.recordDepthMM
+        let order = depths.indices.sorted { depths[$0] < depths[$1] }
+        let depth = layer.depthUM.map { Double($0) / 1000 } ?? depths[1]
+        var weights: [Float] = [0, 0, 0]
+        if depth <= depths[order[0]] { weights[order[0]] = 1; return weights }
+        if depth >= depths[order[2]] { weights[order[2]] = 1; return weights }
+        let upper = depth < depths[order[1]] ? 1 : 2
+        let a = order[upper - 1], b = order[upper]
+        let t = depths[b] > depths[a] ? (depth - depths[a]) / (depths[b] - depths[a]) : 0
+        weights[a] = Float(1 - t); weights[b] = Float(t)
+        return weights
     }
 
     /// Solved inputs for portable AOT hosts. The browser stores these alongside its base pack.
     public static func renderPlan(stock: FilmStock, options: FotufilmEngine.Options,
                                   width: Int, height: Int) throws -> TransportRenderPlan {
         guard stock.donorLayers.isEmpty else {
-            throw TransportError.unsupported("Layered Transport does not yet support donor-layer stocks; select Legacy for this stock")
+            throw TransportError.unsupported("transport packs do not yet carry a donor stock's fourth record")
         }
         guard let model = options.transportConstruction(for: stock),
               options.stage == .full, !options.localTone else {
@@ -73,12 +93,14 @@ public enum LayeredTransportRenderer {
         tail.clearTransportOptics(keepLens: false)
         tail.configuration[Int(FOTUFILM_CONFIG_RECORD_INPUT)] = 1
         let pitch = options.pixelPitchMM(width: width, height: height)
-        return TransportRenderPlan(head: head, tail: tail, components: try prepared.compilation.kernels.indices.compactMap { k in
+        let components: [TransportRenderPlan.Component] = try prepared.compilation.kernels.indices.compactMap { k in
             let table = prepared.exposure.table(component: k, interpolation: t)
             guard table.values.contains(where: { $0 > 0 }) else { return nil }
             let bands = try prepared.compilation.kernels[k].stencils(pixelPitchMM: pitch)
             return .init(exposure: table.values, bands: bands.map { .init(weight: $0.weight, stencil: $0.stencil) })
-        })
+        }
+        head.sharePreflash(among: components.count)
+        return TransportRenderPlan(head: head, tail: tail, components: components)
     }
 
     public static func process(image: ImageBuffer, stock: FilmStock, options: FotufilmEngine.Options,
@@ -89,9 +111,6 @@ public enum LayeredTransportRenderer {
         try image.validate()
         guard execution != nil || (HalideBackend.isAvailable && options.transportBackend.isAvailable) else {
             throw TransportError.backend("requested transport backend is unavailable")
-        }
-        guard stock.donorLayers.isEmpty else {
-            throw TransportError.unsupported("Layered Transport does not yet support donor-layer stocks; select Legacy for this stock")
         }
         guard image.width > 0 && image.height > 0,
               options.halationScale.isFinite && options.halationScale >= 0,
@@ -121,31 +140,49 @@ public enum LayeredTransportRenderer {
         }
         let pitch = pixelPitchMM ?? options.pixelPitchMM(width: image.width, height: image.height)
         var exposure = ImageBuffer(width: image.width, height: image.height)
-        for k in prepared.compilation.kernels.indices {
+        let donated = !plain.donorLayers.isEmpty
+        // The donor accumulates beside the records, in a buffer of its own.
+        var donorExposure = ImageBuffer(width: donated ? image.width : 0, height: donated ? image.height : 0)
+        let tables = prepared.compilation.kernels.indices.map { k -> SpectralLUT? in
             let table = prepared.exposure.table(component: k, interpolation: t)
-            if !table.values.contains(where: { $0 > 0 }) { continue }
+            return table.values.contains(where: { $0 > 0 }) ? table : nil
+        }
+        let active = tables.compactMap { $0 }.count
+        for k in prepared.compilation.kernels.indices {
+            guard let table = tables[k] else { continue }
             var head = invocation
             head.featureMask &= FilmEngineFeature.flare | FilmEngineFeature.diffusion
             head.featureMask |= FilmEngineFeature.lightOut
             head.clearTransportOptics(keepLens: true)
-            head.setTransportExposure(table)
-            let component = try render(image, head, true)
-            if let customConvolve = execution?.convolve {
-                let bands = try prepared.compilation.kernels[k].stencils(pixelPitchMM: pitch)
-                for band in bands {
-                    let filtered = try customConvolve(component, band.stencil)
-                    for c in 0..<3 { for i in 0..<image.pixelCount {
-                        exposure.planes[c][i] += band.weight * filtered.planes[c][i]
-                    } }
+            head.sharePreflash(among: active)
+            let bands = try prepared.compilation.kernels[k].stencils(pixelPitchMM: pitch)
+            func transport(_ head: FilmEngineInvocation, into target: inout ImageBuffer) throws {
+                let component = try render(image, head, true)
+                if let customConvolve = execution?.convolve {
+                    for band in bands {
+                        let filtered = try customConvolve(component, band.stencil)
+                        for c in 0..<3 { for i in 0..<image.pixelCount {
+                            target.planes[c][i] += band.weight * filtered.planes[c][i]
+                        } }
+                    }
+                } else {
+                    try accumulate(component: component, bands: bands, into: &target, backend: options.transportBackend)
                 }
-            } else {
-                let bands = try prepared.compilation.kernels[k].stencils(pixelPitchMM: pitch)
-                try accumulate(component: component, bands: bands, into: &exposure, backend: options.transportBackend)
+            }
+            head.setTransportExposure(table)
+            try transport(head, into: &exposure)
+            if donated {
+                head.setTransportExposure(Self.fourthRecord(of: table))
+                try transport(head, into: &donorExposure)
             }
         }
-        guard exposure.planes.allSatisfy({ $0.allSatisfy { $0.isFinite && $0 >= 0 } }) else {
+        guard (exposure.planes + (donated ? [donorExposure.planes[0]] : [])).allSatisfy({
+            $0.allSatisfy { $0.isFinite && $0 >= 0 } }) else {
             throw TransportError.backend("transport produced invalid record exposure")
         }
+        // A donor stock's fourth record lies in the same coating and is transported with the
+        // other three. It rides into development as a fourth plane.
+        if donated { exposure.planes.append(donorExposure.planes[0]) }
         var continuation = invocation
         continuation.featureMask &= ~(FilmEngineFeature.flare | FilmEngineFeature.diffusion
             | FilmEngineFeature.mtf | FilmEngineFeature.mtfLuma | FilmEngineFeature.halation
@@ -159,7 +196,12 @@ public enum LayeredTransportRenderer {
             referenceHead.featureMask &= FilmEngineFeature.flare | FilmEngineFeature.diffusion
             referenceHead.featureMask |= FilmEngineFeature.lightOut
             referenceHead.clearTransportOptics(keepLens: true)
-            let referenceExposure = try render(image, referenceHead, true)
+            var referenceExposure = try render(image, referenceHead, true)
+            if donated {
+                var donorHead = referenceHead
+                donorHead.setTransportExposure(Self.fourthRecord(of: invocation.spectral.exposure))
+                referenceExposure.planes.append(try render(image, donorHead, true).planes[0])
+            }
             var reference = continuation
             reference.featureMask &= ~(FilmEngineFeature.grain | FilmEngineFeature.adjacency
                 | FilmEngineFeature.couplerDiffusion | FilmEngineFeature.printMTF)
@@ -262,8 +304,18 @@ public enum LayeredTransportRenderer {
         guard status == 0 else { throw TransportError.backend("transport accumulate failed (\(status))") }
     }
 
+    /// A table exposing its fourth record, a donor stock's, in each of the three it renders.
+    private static func fourthRecord(of table: SpectralLUT) -> SpectralLUT {
+        var values = table.values
+        for i in stride(from: 0, to: values.count, by: 4) {
+            values[i] = values[i + 3]; values[i + 1] = values[i + 3]; values[i + 2] = values[i + 3]
+        }
+        return SpectralLUT(dimension: table.dimension, values: values)
+    }
+
     private static func run(image: ImageBuffer, invocation: FilmEngineInvocation,
                             developOnly: Bool = false) throws -> ImageBuffer {
+        if image.planes.count == 4 && !developOnly { return try runWithDonor(image: image, invocation: invocation) }
         var output = ImageBuffer(width: image.width, height: image.height)
         let status = withPlanes(image.planes) { r, g, b in
             withMutablePlanes(&output.planes) { rr, gg, bb in
@@ -278,6 +330,31 @@ public enum LayeredTransportRenderer {
                             Int32(image.width), Int32(image.height), config.baseAddress,
                             exposure, film, paper, Int32(invocation.spectral.exposure.dimension),
                             invocation.featureMask, invocation.seed)
+                    }
+                }
+            }
+        }
+        guard status == 0 else { throw TransportError.backend("exposure/development failed (\(status))") }
+        return output
+    }
+
+    /// Develops three records with a donor stock's fourth beside them. The planar input has no
+    /// fourth channel, so the donor arrives as additional record exposure.
+    private static func runWithDonor(image: ImageBuffer, invocation: FilmEngineInvocation) throws -> ImageBuffer {
+        var output = ImageBuffer(width: image.width, height: image.height)
+        var donor = [Float](repeating: 0, count: image.pixelCount * 4)
+        for i in 0..<image.pixelCount { donor[4 * i + 3] = image.planes[3][i] }
+        let w = Int32(image.width), h = Int32(image.height)
+        let status = withPlanes(image.planes) { r, g, b in
+            withMutablePlanes(&output.planes) { rr, gg, bb in
+                invocation.configuration.withUnsafeBufferPointer { config in
+                    donor.withUnsafeBufferPointer { donor in
+                        invocation.withSpectralPointers { exposure, film, paper in
+                            fotufilm_halide_process_tile_with_exposure(r, g, b, rr, gg, bb,
+                                w, h, w, h, 0, 0, 0, 0, w, h, config.baseAddress,
+                                exposure, film, paper, Int32(invocation.spectral.exposure.dimension),
+                                invocation.featureMask, invocation.seed, donor.baseAddress)
+                        }
                     }
                 }
             }
@@ -310,6 +387,12 @@ public extension FilmEngineInvocation {
         for value in table.values { spectralCacheID = (spectralCacheID ^ UInt64(value.bitPattern)) &* 0x100000001b3 }
     }
 
+    /// Each component head exposes its share of a uniform preflash. Every kernel is normalized,
+    /// so the transported shares add back to one flash.
+    mutating func sharePreflash(among components: Int) {
+        configuration[Int(FOTUFILM_CONFIG_CAMERA_PREFLASH)] /= Float(max(components, 1))
+    }
+
     mutating func clearTransportOptics(keepLens: Bool) {
         for c in 0..<3 {
             configuration[Int(FOTUFILM_CONFIG_MTF_RADIUS)+c] = 0
@@ -320,9 +403,11 @@ public extension FilmEngineInvocation {
         configuration[Int(FOTUFILM_CONFIG_MTF_LUMA_SHARE)] = 0
         for c in 0..<9 { configuration[Int(FOTUFILM_CONFIG_HALATION_MATRIX)+c] = 0 }
         if !keepLens {
-            // The transported exposure passed the camera gate in the head; gating it again
-            // would square the penumbra and cut off the light scattered past the aperture.
+            // The transported exposure passed the camera gate in the head and carries its
+            // preflash; gating it again would square the penumbra and cut off the light
+            // scattered past the aperture, and flashing it again would double the flash.
             configuration[Int(FOTUFILM_CONFIG_GATE) + 4] = -1
+            configuration[Int(FOTUFILM_CONFIG_CAMERA_PREFLASH)] = 0
             configuration[Int(FOTUFILM_CONFIG_FLARE)] = 0
             configuration[Int(FOTUFILM_CONFIG_DIFFUSION_DIRECT)] = 1
             for c in 0..<9 { configuration[Int(FOTUFILM_CONFIG_DIFFUSION_KERNEL)+c] = 0 }

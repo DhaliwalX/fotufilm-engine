@@ -286,11 +286,17 @@ inline Halide::Expr scene_exposure(Halide::ImageParam &configuration,
                                    Halide::Expr blue, Halide::Expr channel,
                                    Halide::Expr frame_x, Halide::Expr frame_y,
                                    bool approximate = false,
-                                   bool half_lut_math = false) {
+                                   bool half_lut_math = false,
+                                   Halide::Expr donor_record = Halide::Expr()) {
     CreativeScene scene = creative_exposure(configuration, red, green, blue,
                                             frame_x, frame_y, approximate);
+    // A record input carries the exposed records themselves; a donor stock's fourth arrives
+    // beside them as `donor_record`.
+    Halide::Expr record = donor_record.defined()
+        ? Halide::mux(channel, {red, green, blue, donor_record})
+        : Halide::mux(Halide::min(channel, 2), {red, green, blue});
     Halide::Expr raw_exp = Halide::select(configuration(FOTUFILM_CONFIG_RECORD_INPUT) != 0.0f,
-        Halide::mux(Halide::min(channel, 2), {red, green, blue}),
+        record,
         recover_exposure(configuration, exposure_lut, scene.r, scene.g,
                          scene.b, channel, half_lut_math));
     Halide::Expr flash = configuration(FOTUFILM_CONFIG_CAMERA_PREFLASH);

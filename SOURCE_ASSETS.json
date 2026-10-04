@@ -229,11 +229,11 @@
   },
   "Sources/FotufilmCore/Stocks/gold200.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-7022 (2016) density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "21678e2b4e96590af7edb15b2bbe1cf70c61ed813830b4d1d86cfd9845e5f888"
+    "sha256": "197f932013e2a4339d0f22741e08544606fb1a0db0bf4d20fc5a734db2860203"
   },
   "Sources/FotufilmCore/Stocks/provia100f.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-036E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "8d59b4d02dc91c74f7769ed688e7397ade085d166e73f9421ba56a1e5bd01613"
+    "sha256": "d0c4d89a6a6343d02ce04c7b673925e80d2e2c54e1492e11c3a72d9676bb713e"
   },
   "Sources/FotufilmCore/Stocks/trix400.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak F-4017 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
@@ -345,7 +345,7 @@
   },
   "Sources/FotufilmCore/Stocks/c200.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0249E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "a777af671b5fca4af671fae07792e1a48f7a763a1b8f1798bcd15aeb165c5f54"
+    "sha256": "ca890aac7b8b235e2ad335fbfa27ba3d82f8608f456f8b0144236ba21fe0004b"
   },
   "Sources/FotufilmCore/Stocks/cinestill400d.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
@@ -365,11 +365,11 @@
   },
   "Sources/FotufilmCore/Stocks/ektachromee100.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-4000 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "a09171c8ef49e891c89787d1332991e14af0f466b2eea597eb2bf3eeda486253"
+    "sha256": "b3d331bb725f047f377c387484a396f380a3ff39bf000b3a9bdc3e481e54b19f"
   },
   "Sources/FotufilmCore/Stocks/ektar100.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-4046 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "6492c8b3a712f68ba9b0738199da684adb64bbfaedc71366e40e8b19e9fd48d0"
+    "sha256": "d7b97da0f0ee01c80dc7d8dbffe2bc282a04627dcd71a0ad6a89029e4a7c5f5a"
   },
   "Sources/FotufilmCore/Stocks/eterna500.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm KB-501E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
@@ -413,35 +413,35 @@
   },
   "Sources/FotufilmCore/Stocks/kodacolor100.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-7022 (2016), shared Gold 200 curve retained by Kodacolor 100 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "39c3a06950b498fcd61db5805f538332a9ad53af2a368d6d7613061c4e5e4c2d"
+    "sha256": "788af185da7e2ffc3bde435b40ab114014788793b872dbe30fbe8a414bb52c58"
   },
   "Sources/FotufilmCore/Stocks/lomocolor100.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "df2b73f39254b6921baf4d1396a846ee1473cb7f7d9d6845f5171672bbf55967"
+    "sha256": "d49e6e4f69793ec854ddb2063d3ac9601b4e397127e94f5a7fb65d7879ce97ee"
   },
   "Sources/FotufilmCore/Stocks/portra400.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-4050 density records with C1 interpolation. Above +1.6 log E the normal-development records follow a measured highlight response up to +2.6 log E, then approach D-max exponentially; the toe keeps the datasheet's monotonic extrapolation. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "45d49530740b3bfc1371742d716c7ced17d3636238233d593c1c486266761669"
+    "sha256": "146236dc03d8067abf9323cbac9f7178fbd819e9e74bc54d6e37fa5e87953a35"
   },
   "Sources/FotufilmCore/Stocks/pro160ns.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0232E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "6250710b67a2fb942ba7638187975f64d666e184c07416663e1f3d0db0886c98"
+    "sha256": "49077f283876d52c8a398568681220261d46624df40e43f9f61104981d7ccd58"
   },
   "Sources/FotufilmCore/Stocks/pro400h.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-176E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "9b4a216830c9581acb0a971b52779e0e8159aef45affd252f269d69120f2915e"
+    "sha256": "f37145cb31a28054c6739754124e18eb03850274e801bc6e244b74046d539689"
   },
   "Sources/FotufilmCore/Stocks/reala500d.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm KB-111E3 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "d625b629047407435a527d478d9ebff9ca04ba172065edbf13726b366d68a36c"
+    "sha256": "149b2b75298470ffd735620ba046c6d03554450a7465f3dcaa4fddb3ba931ed0"
   },
   "Sources/FotufilmCore/Stocks/superia200.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-026E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "eb9528cea136e43827da7b78960f11446aeba49465b4c9c5d693f674390aa9c4"
+    "sha256": "3c263022be941e5a330fa5193b3c901f95bd2148bad77a34d085b8308a4174ce"
   },
   "Sources/FotufilmCore/Stocks/superia400.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0217E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "78faf1495264350f2f89f770ef3dc46bf368d12030408633d3fc7ff5a587027b"
+    "sha256": "63989d124e8b488547050fcb584328dc8a0df3e0dab3d40378b56656a5965da0"
   },
   "Sources/FotufilmCore/Stocks/tmax100.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
@@ -449,15 +449,15 @@
   },
   "Sources/FotufilmCore/Stocks/ultramax400.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-7023 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "a753fffc63a77bf04622b00da0980a392447a905af24cc0d40b12d88637520c7"
+    "sha256": "e64b75e2dae8d7a51bb6f2c456ab266dee3993289b79284ddaf84d56f20fb3cd"
   },
   "Sources/FotufilmCore/Stocks/velvia50.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0221E2 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "5af335fee868ce19b247f6b15c5011ea48f63ab070367e55d7c7d43750b9d942"
+    "sha256": "b70b578713f730552a41a3b15b1f7908fee5818837ba59b819c84c5fbf3597d7"
   },
   "Sources/FotufilmCore/Stocks/verita200d.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak H-1-5206 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "38a175f1d73c8aa93bd51bb07fc8f24c4b9c8c0e986df89a5d53ea4ae1a3ddff"
+    "sha256": "cdfe597216f32673b5a1fb5723821b29ea9a0e693a94174ac277e71cac373e08"
   },
   "Sources/FotufilmCore/Stocks/vision250d.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
@@ -469,27 +469,27 @@
   },
   "Sources/FotufilmCore/Stocks/aerochrome1443.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "64a9cc7250ff25f1e6cbc4d203813e166a2802fc58aa083e263b73162946d1d5"
+    "sha256": "7b74e60d9052aa0141767815604603e66efc5b15dab85b1aaa89cd187d6b6271"
   },
   "Sources/FotufilmCore/Stocks/infraredcolor.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "31653853055cddb65fefe80fd0645cbf0018dce0ba79898d10d772d039c28fa7"
+    "sha256": "43eb4ba9eaaf36c8aea9b8d9efb77ebe0dea94253b9ea4eb54e5196bcc036891"
   },
   "Sources/FotufilmCore/Stocks/lomochromemetropolis.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "381608f4a6ad2d73b0d26d26b76e8c43dd379c223f9e346d66a00607f7b66b11"
+    "sha256": "0aa0aaf6ec60460f0ba1438762c19356d3b8d486d219b188043a6a9332a1d7f7"
   },
   "Sources/FotufilmCore/Stocks/lomochromepurple.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "2e04bfde509bcb5d4bb0cdeeb68f913dabddd5f1b2904ded9feb43aa48167a45"
+    "sha256": "0453a39be03171a50be965da18e18bfadc893c4e211824fbc90929b8bbd8c228"
   },
   "Sources/FotufilmCore/Stocks/lomochrometurquoise.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "cba466d2104355597e673ccf817f4ba6301cc8886d1d6f980d45d8e816fa6fce"
+    "sha256": "fe0814def1007d8db95cce881f73079d9a94f634465281a553f39f4a86c0df7d"
   },
   "Sources/FotufilmCore/Stocks/phoenix200.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "7a2a597bfaa30f934d5ed170e704a5d1e5b32a58d2e90afe31899ff28c349404"
+    "sha256": "145fb0394d2181497ca36e3f0542c999aa6a7ba811f0cc5820defb745a7aa250"
   },
   "web/src/assets/fotufilm-wordmark.svg": {
     "provenance": "Project-authored Fotufilm wordmark; no photography or manufacturer artwork.",
